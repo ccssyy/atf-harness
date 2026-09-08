@@ -1,0 +1,21 @@
+{
+  "name": "atf-harness",
+  "version": "0.1.0-dev",
+  "private": true,
+  "type": "module",
+  "description": "ATF 独立训练 Harness（R2a：TS L2-L4 + Python 内核经 stdio JSONL 桥接，零 npm 运行时依赖）",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "smoke:s1": "npm run build && node dist/bridge/smoke.js"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  }
+}

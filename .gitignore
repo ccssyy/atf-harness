@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.atf-pinned/
+.env*
+coverage/
+*.log

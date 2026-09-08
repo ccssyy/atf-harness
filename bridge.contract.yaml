@@ -1,0 +1,112 @@
+# =====================================================================
+# bridge.contract.yaml — atf-harness 对 ATF 内核认知的唯一真相源
+#
+# 内容：JSONL 帧格式定义 + S1 协议常量 + atf CLI 对接面 + atf_upstream pin。
+#       S3 工具子命令签名与 canonical output schema 随 S3 slice 在此登记。
+#
+# 变更纪律（AGENTS.md §4 / 任务书 §8.2）：
+#   本文件任何变更 = 显式 PR + 双仓契约测试 + owner review；
+#   双侧 contract_version 同步 bump，禁止任何一侧悄悄改。
+#   pin 只落 ATF 发版 tag，禁止自动追新。
+# =====================================================================
+
+contract_version: 1
+
+protocol:
+  name: atf-bridge-jsonl
+  version: 1
+  transport: stdio            # TS harness 父进程 ↔ atf 子进程
+  encoding: utf-8
+  framing: 严格 LF 分帧——每行恰好一帧 JSON；行内不得出现裸 LF；CR 不预期出现
+  max_frame_bytes: 1048576    # 单帧上限；超限按协议级失败处理（防御性常量，非协商项）
+
+# ---------------------------------------------------------------------
+# 帧定义（恰好三类。request: TS→内核；response/event: 内核→TS）
+# ---------------------------------------------------------------------
+frames:
+  request:
+    type: { const: request }
+    id: { type: integer, rule: TS 侧自增，从 1 开始，单连接内唯一 }
+    method: { type: string }
+    params: { type: object, required: false }
+  response:
+    type: { const: response }
+    id: { type: integer, rule: 必须回显对应 request 的 id }
+    ok: { type: boolean }
+    result: { rule: 仅当 ok=true 存在 }
+    error:
+      rule: 仅当 ok=false 存在
+      fields:
+        code: { type: string, rule: 机器可读错误码 }
+        message: { type: string, rule: 人读摘要 }
+        detail: { required: false }
+  event:
+    type: { const: event }
+    name: { type: string }
+    payload: { required: false }
+    rule: 单向通知——无 id、不要求应答；不得影响 request/response 的 id 配对
+
+# 协议级失败（坏 JSON 行 / 未知帧 type / 超限帧 / 对端意外退出）不设独立线缆帧：
+# 一律在 TS 侧折算为 Result err（fail-closed，不重试、不猜测成功）。
+# 【错误帧语义说明】本协议三类帧 = request / response / event（Phase 1 任务书 S1）；
+# "错误帧"由 response 携带 ok=false 表达，不引入第四类线缆帧。
+
+# ---------------------------------------------------------------------
+# 生命周期
+# ---------------------------------------------------------------------
+lifecycle:
+  spawn: TS 侧 spawn 子进程后立即执行握手；任一步失败 = err 并回收子进程
+  handshake:
+    method: atf.version
+    params: null
+    expect_result:
+      name: { const: atf }
+      version: { type: string, rule: 内核侧版本串，harness 不解析内容 }
+      contract_version: { type: integer, rule: 与本文件 contract_version 不一致 = err(handshake_failed) }
+  ready: 握手 response 收到且校验通过
+  request_timeout_ms: 30000   # 初值常量；harness 内部实现细节，永不进入模型可见 schema
+  timeout_semantics: 超时请求 = err(timeout)；连接随即标记失败并回收，后续请求 = err(closed)
+  graceful_close:
+    steps: TS 侧 end stdin → 等待对端退出
+    ok_condition: 退出码 0
+    else: err(peer_exit)
+  unexpected_exit: 请求挂起期间对端退出 → 挂起请求 err(peer_exit) 并附 stderr 尾部摘要；不重试、不猜测成功
+
+# ---------------------------------------------------------------------
+# 方法面（S1 仅握手；S3 工具子命令签名在此登记）
+# ---------------------------------------------------------------------
+methods:
+  atf.version:
+    direction: ts_to_kernel
+    params: null
+    result:
+      name: atf
+      version: string
+      contract_version: integer
+
+# ---------------------------------------------------------------------
+# atf CLI 对接面（pin v0.2.0b7 实测于 2026-09-08）
+# ---------------------------------------------------------------------
+atf_cli:
+  path_env: ATF_CLI_PATH      # 指向 checkout 在 pin 上的 ATF 只读副本（目录）
+  pin_check: 契约测试前置校验 `git -C "$ATF_CLI_PATH" rev-parse HEAD` 等于 atf_upstream.commit_sha，不一致直接 fail
+  derive_command:             # 一次性调用由 ATF_CLI_PATH 派生，不依赖全局安装
+    cwd: $ATF_CLI_PATH
+    argv: [python3, -m, agentic_training_flow]
+    env:
+      PYTHONPATH: $ATF_CLI_PATH/src
+      PYTHONDONTWRITEBYTECODE: "1"
+  known_gaps:                 # 消除路径 = 按 AGENTS.md §4 / 任务书 §8.3.3 在 ATF 仓排队，本仓不阻塞、不插队
+    - 无 --version 旗标（argparse 直接报"arguments are required: command"）→ 版本握手暂由会话方法 atf.version 承载
+    - 无 JSONL 会话模式（当前为一次性子命令形态）→ S1 会话协议由契约忠实 mock 对端承载（harness 侧测试基建）；
+      真实 CLI 的契约测试范围 = pin 校验 + derive_command 冒烟（--help 退出码 0）
+
+# ---------------------------------------------------------------------
+# 上游 pin（只落 ATF 发版 tag；re-pin 三步见 AGENTS.md §4，禁止自动追新）
+# ---------------------------------------------------------------------
+atf_upstream:
+  tag: v0.2.0b7
+  commit_sha: a628f8b8e23beff104b42b5c80088416ea78b394
+  pinned_at: "2026-09-08"
+  baseline: 全量基线 970 passed / 129 skipped（任务书 §8.4）
+  contract_version: 1

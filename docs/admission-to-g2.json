@@ -1,0 +1,104 @@
+{
+  "scenario_id": "admission-to-g2",
+  "version": "draft-v0",
+  "status": "草案（供 codex 在 S5 实现时校准，字段名以实际实现为准，语义不变）",
+  "provider": "faux",
+  "description": "全链路业务冒烟：数据准入 → G2 实验门。四分支覆盖成功路径与三类失败语义（block 自纠 / 无审批 exit 78 / T0 引用拒绝）。",
+  "notes": [
+    "FauxProvider 按脚本线性回放 assistant 决策序列，对工具结果无反应、无网络调用；分支 B2 的'自纠'由脚本顺序表达（gate 先行 → 收 block → surface_scan → 重提），不依赖 Faux 智能理解 block。",
+    "所有 bundle_ref / run_id / ledger_entry_id 为占位符，S5 实现时替换为 ATF fake adapter 的真实 fixture 引用。",
+    "expectations 由冒烟断言器逐项校验，任一不满足 = 该分支 FAIL。"
+  ],
+  "branches": [
+    {
+      "branch_id": "B1_success_path",
+      "purpose": "成功路径：账本预录 → 准入 → 补证据 → G2 PASS → T0→T1 晋升演示",
+      "setup": {
+        "ledger_pre_record": [
+          { "operation": "admit_data", "binding": "DatasetBundle/v1:ten_doc_round3@<fixture_sha>" }
+        ],
+        "scratch_fixture": { "file": "analysis_badcase_scan.py", "provenance": { "trigger_instruction": "scenario B1", "model_id": "faux" } },
+        "gate_state": "G2: not_reached"
+      },
+      "steps": [
+        { "type": "assistant_message", "text": "开始执行数据准入并推进 G2 实验门。" },
+        { "type": "tool_call", "tool": "atf_workspace_status", "arguments": { "run_id": "<run_fixture>" } },
+        { "type": "tool_call", "tool": "atf_admit_data", "arguments": { "bundle_ref": "DatasetBundle/v1:ten_doc_round3" } },
+        { "type": "tool_call", "tool": "atf_surface_scan", "arguments": { "scope": "g2_evidence" } },
+        { "type": "tool_call", "tool": "atf_gate", "arguments": { "gate": "G2", "action": "evaluate" } },
+        { "type": "tool_call", "tool": "atf_promote_scratch", "arguments": { "scratch_path": "scratch/analysis_badcase_scan.py", "repro_command": "python scratch/analysis_badcase_scan.py --dry-run" } },
+        { "type": "final_answer", "text": "数据准入完成，G2 实验门 PASS，晋升演示完成。" }
+      ],
+      "expectations": {
+        "exit_code": 0,
+        "gate_result": "G2=PASS",
+        "domain_refs_valid": true,
+        "promoted_artifact_registered_sha": true,
+        "session_replayable": true,
+        "ledger_consumed_once": true
+      }
+    },
+    {
+      "branch_id": "B2_block_then_self_correct",
+      "purpose": "缺证据 → block 回填 → 补证据 → 重提 PASS（验证 fail-closed + 自纠回路）",
+      "setup": {
+        "ledger_pre_record": [
+          { "operation": "admit_data", "binding": "DatasetBundle/v1:ten_doc_round3@<fixture_sha>" }
+        ],
+        "gate_state": "G2: not_reached（证据未扫描）"
+      },
+      "steps": [
+        { "type": "tool_call", "tool": "atf_gate", "arguments": { "gate": "G2", "action": "evaluate" } },
+        { "type": "tool_call", "tool": "atf_surface_scan", "arguments": { "scope": "g2_evidence" } },
+        { "type": "tool_call", "tool": "atf_gate", "arguments": { "gate": "G2", "action": "evaluate" } },
+        { "type": "final_answer", "text": "首次评估因证据缺失被 block，补扫描后重提 PASS。" }
+      ],
+      "expectations": {
+        "exit_code": 0,
+        "first_gate_call_result": "block(reason=evidence_missing)",
+        "second_gate_call_result": "G2=PASS",
+        "block_backfilled_to_session": true,
+        "session_replayable": true
+      }
+    },
+    {
+      "branch_id": "B3_no_approval_exit78",
+      "purpose": "无账本预录 → approval_missing block → exit 78（铁律：fails closed）",
+      "setup": {
+        "ledger_pre_record": [],
+        "gate_state": "G2: not_reached"
+      },
+      "steps": [
+        { "type": "tool_call", "tool": "atf_admit_data", "arguments": { "bundle_ref": "DatasetBundle/v1:ten_doc_round3" } },
+        { "type": "final_answer", "text": "无审批记录，流程终止。" }
+      ],
+      "expectations": {
+        "exit_code": 78,
+        "tool_call_never_executed": true,
+        "block_reason": "approval_missing",
+        "ledger_untouched": true,
+        "session_replayable": true
+      }
+    },
+    {
+      "branch_id": "B4_t0_ref_forbidden",
+      "purpose": "T0 scratch 产物被引用为证据 → 校验拒绝（ADR-08 铁律一）",
+      "setup": {
+        "ledger_pre_record": [
+          { "operation": "admit_data", "binding": "DatasetBundle/v1:ten_doc_round3@<fixture_sha>" }
+        ],
+        "scratch_fixture": { "file": "unverified_claim.json", "provenance": { "trigger_instruction": "scenario B4", "model_id": "faux" } }
+      },
+      "steps": [
+        { "type": "tool_call", "tool": "atf_gate", "arguments": { "gate": "G2", "action": "evaluate", "evidence_refs": ["scratch/unverified_claim.json"] } },
+        { "type": "final_answer", "text": "T0 产物引用被拒绝，流程终止。" }
+      ],
+      "expectations": {
+        "exit_code_nonzero": true,
+        "block_reason": "t0_ref_forbidden",
+        "gate_never_reached": true,
+        "session_replayable": true
+      }
+    }
+  ]
+}
