@@ -14,7 +14,8 @@
     "smoke:s1": "npm run build && node dist/bridge/smoke.js",
     "smoke:s2": "npm run build && node dist/session/smoke.js",
     "smoke:s3": "npm run build && node dist/tools/smoke.js",
-    "smoke:s4": "npm run build && node dist/workspace/smoke.js"
+    "smoke:s4": "npm run build && node dist/workspace/smoke.js",
+    "smoke:s5": "npm run build && node dist/run/smoke.js"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",

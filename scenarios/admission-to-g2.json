@@ -1,0 +1,112 @@
+{
+  "scenario_id": "admission-to-g2",
+  "version": 1,
+  "provider": "faux",
+  "description": "全链路业务冒烟：数据准入 → G2 实验门。四分支覆盖成功路径与三类失败语义（block 自纠 / 无审批 exit 78 / T0 引用拒绝）。",
+  "notes": [
+    "v1 = draft-v0 校准定稿（docs/admission-to-g2.json → scenarios/admission-to-g2.json），字段名对齐 src/llm/scenario.ts；逐字段对照表见《Phase1_S5执行报告暨Phase1闭合报告》。语义不变。",
+    "FauxProvider 按脚本线性回放决策序列，对工具结果无反应、无网络调用；B2 的自纠由脚本顺序表达（gate 先行 → 收业务 block 回填会话 → 补准入 → 重提），不依赖 Faux 智能理解 block（owner 口径 #5）。",
+    "promote / scratch_write / cite_t0 为 runner 内置步骤（harness 本地工作区动作与 T0 引用尝试），不进工具注册表——严格 4 工具与内核方法面不变（owner 口径 #1）。",
+    "复现命令为 harness 侧 node -e 生成器（stdout 字节 = 产物字节，S4 晋升闸 A 语义），不调用真实内核（owner 口径 #3）。",
+    "B3/B4 的 final_answer 步骤按 draft 保留作叙事存档；执行中分支在 approval_missing / t0_ref_forbidden 终局，不会回放该步骤。"
+  ],
+  "branches": {
+    "B1_success_path": {
+      "branch_id": "B1_success_path",
+      "run_id": "s5-b1-admission-g2",
+      "trigger_instruction": "读取工作区状态，准入数据集 ds-ten-doc-round3，推进 G2 实验门，并将 T0 分析产物晋升为 T1 证据。",
+      "purpose": "成功路径：账本预录 → 准入 → 证据扫描 → G2 PASS → T0→T1 晋升演示",
+      "setup": {
+        "ledger": [
+          { "tool": "atf_admit_data", "params": { "dataset_id": "ds-ten-doc-round3" } },
+          { "tool": "atf_gate", "params": { "gate": "G2", "action": "advance", "evidence_refs": ["fact-ds-ten-doc-round3"] } }
+        ]
+      },
+      "steps": [
+        { "type": "assistant_message", "text": "开始执行数据准入并推进 G2 实验门。" },
+        { "type": "scratch_write", "path": "analysis_badcase_scan.md", "content": "G2 证据分析报告（T0）——数据集 ds-ten-doc-round3 badcase 扫描结论：具备准入条件。\n" },
+        { "type": "tool_call", "tool": "atf_workspace_status", "params": {} },
+        { "type": "tool_call", "tool": "atf_admit_data", "params": { "dataset_id": "ds-ten-doc-round3" } },
+        { "type": "tool_call", "tool": "atf_surface_scan", "params": {} },
+        { "type": "tool_call", "tool": "atf_gate", "params": { "gate": "G2", "action": "advance", "evidence_refs": ["fact-ds-ten-doc-round3"] }, "cite_admitted_fact": true },
+        { "type": "promote", "source": "analysis_badcase_scan.md", "command": ["node", "-e", "process.stdout.write(\"G2 证据分析报告（T0）——数据集 ds-ten-doc-round3 badcase 扫描结论：具备准入条件。\\n\")"] },
+        { "type": "final_answer", "text": "数据准入完成，G2 实验门 PASS，T0 分析产物已晋升并登记 sha。" }
+      ],
+      "expect": {
+        "outcome": "completed",
+        "exit_code": 0,
+        "gate_status": "pass",
+        "promoted": true,
+        "replayable": true,
+        "domain_refs_valid": true
+      }
+    },
+    "B2_block_then_self_correct": {
+      "branch_id": "B2_block_then_self_correct",
+      "run_id": "s5-b2-block-self-correct",
+      "trigger_instruction": "推进 G2 实验门；若证据缺失被 block，补齐准入证据后重提。",
+      "purpose": "缺证据 → block 回填会话 → 补证据 → 重提 PASS（验证 fail-closed + 自纠回路）",
+      "setup": {
+        "ledger": [
+          { "tool": "atf_gate", "params": { "gate": "G2", "action": "advance" } },
+          { "tool": "atf_gate", "params": { "gate": "G2", "action": "advance" } },
+          { "tool": "atf_admit_data", "params": { "dataset_id": "ds-ten-doc-round3" } }
+        ]
+      },
+      "steps": [
+        { "type": "tool_call", "tool": "atf_gate", "params": { "gate": "G2", "action": "advance" } },
+        { "type": "tool_call", "tool": "atf_admit_data", "params": { "dataset_id": "ds-ten-doc-round3" } },
+        { "type": "tool_call", "tool": "atf_surface_scan", "params": {} },
+        { "type": "tool_call", "tool": "atf_gate", "params": { "gate": "G2", "action": "advance" }, "cite_admitted_fact": true },
+        { "type": "final_answer", "text": "首次推进因证据缺失被 block，补准入后重提 PASS。" }
+      ],
+      "expect": {
+        "outcome": "completed",
+        "exit_code": 0,
+        "first_gate_status": "blocked",
+        "gate_status": "pass",
+        "replayable": true,
+        "domain_refs_valid": true
+      }
+    },
+    "B3_no_approval_exit78": {
+      "branch_id": "B3_no_approval_exit78",
+      "run_id": "s5-b3-no-approval",
+      "trigger_instruction": "准入数据集 ds-ten-doc-round3 并推进流程。",
+      "purpose": "无账本预录 → approval_missing block → exit 78（铁律：fails closed）",
+      "setup": {
+        "ledger": []
+      },
+      "steps": [
+        { "type": "tool_call", "tool": "atf_admit_data", "params": { "dataset_id": "ds-ten-doc-round3" } },
+        { "type": "final_answer", "text": "无审批记录，流程终止。" }
+      ],
+      "expect": {
+        "outcome": "approval_missing",
+        "exit_code": 78,
+        "block_reason": "approval_missing",
+        "replayable": true
+      }
+    },
+    "B4_t0_ref_forbidden": {
+      "branch_id": "B4_t0_ref_forbidden",
+      "run_id": "s5-b4-t0-ref",
+      "trigger_instruction": "评估 G2 实验门 readiness 并引用支撑证据。",
+      "purpose": "T0 scratch 产物被引用为证据 → 会话层校验拒绝（ADR-08 铁律一，exit 1）",
+      "setup": {
+        "ledger": []
+      },
+      "steps": [
+        { "type": "scratch_write", "path": "unverified_claim.json", "content": "{\"claim\": \"G2 已满足\", \"basis\": \"口头结论，未经检验（T0 自由区产物）\"}\n" },
+        { "type": "cite_t0", "source": "unverified_claim.json", "text": "G2 readiness 证据：scratch/unverified_claim.json（未晋升产物）。" },
+        { "type": "final_answer", "text": "T0 产物引用被拒绝，流程终止。" }
+      ],
+      "expect": {
+        "outcome": "session_rejected",
+        "exit_code": 1,
+        "block_reason": "t0_ref_forbidden",
+        "replayable": true
+      }
+    }
+  }
+}
