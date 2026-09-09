@@ -162,7 +162,7 @@
 |---|---|---|
 | 层 | L1 内核，Python | L2–L4，TS |
 | 分支模型 | **主干直改**（已核实，2026-09-08）：日常开发直接提交 main；特殊工作线开短命 `work/` 分支（现存 3 条历史 + work/20260909-experiment-rollup）。远程 origin = github.com/ccssyy/AgenticTrainingFlow。版本节奏：tag v0.2.0b0–**b7**（b7 = `a628f8b`，main tip 250ccd3 为其上 docs 提交） | **trunk-based**：main + 短命分支，S1–S5 各一个 PR 顺序合入 |
-| 运行环境 | A800_5005 为主 | 纯本地 Mac（无 GPU 依赖，天然并行） |
+| 运行环境 | <INFRA_HOST>_<INFRA_PORT> 为主 | 纯本地 Mac（无 GPU 依赖，天然并行） |
 | 版本标记 | 沿用现有 gate 体系 | milestone tag：v0.1.0 = Phase 1 冒烟 7 项验收通过 |
 | 长期关系 | 不合并仓库；最终集成形态 = ACP/skills 双入口（与 TEM 独立仓同构） | 同左 |
 

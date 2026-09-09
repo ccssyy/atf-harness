@@ -8,7 +8,7 @@
 本仓实现 **atf-harness**：把 ATF 训练内核变成一个可独立运行的训练 Agent（R2a 路线——TS harness 借鉴 Pi 设计 + Python 内核经 stdio JSONL 桥接）。
 
 - **本仓（atf-harness）**：L2–L4 层。TypeScript，trunk-based（main + 短命分支）。
-- **内核仓（ATF）**：L1 层，位于 `/data/sam/AgenticTrainingFlow`。harness 通过 spawn 其 `atf` CLI 子进程驱动它，**不做任何代码级依赖**（无 submodule、无 pip/npm 依赖、不 import）。
+- **内核仓（ATF）**：L1 层，位于 `<ATF_KERNEL_DIR>`。harness 通过 spawn 其 `atf` CLI 子进程驱动它，**不做任何代码级依赖**（无 submodule、无 pip/npm 依赖、不 import）。
 - **长期路线**（Phase 0–4，详见决策文档 §路线图）：0 决策 ✅ → 1 headless 冒烟 → 2 深水区 → 3 宿主嵌入（ACP server）→ 4 表面壳（条件阶段）。最终集成形态 = ACP / skills 双入口，**两仓永不合并**。
 
 ## 2. 权威文档体系（docs/）
@@ -37,8 +37,8 @@
 - **当前 pin：tag `v0.2.0b7`（commit `a628f8b`，2026-09-08；含 --run 自动发现修复与全量基线）**。pin 只落在 ATF 发版 tag 上，不追 main 中间态。
 - contract tests 运行前提：`ATF_CLI_PATH` 指向一份 **checkout 在 pin 上的 ATF 只读副本**，测试先校验其 HEAD sha 与 pin 一致，不一致直接 fail：
   ```bash
-  git -C /data/sam/AgenticTrainingFlow worktree add /data/sam/ATF-Harness/.atf-pinned v0.2.0b7
-  export ATF_CLI_PATH=/data/sam/ATF-Harness/.atf-pinned
+  git -C <ATF_KERNEL_DIR> worktree add <HARNESS_DIR>/.atf-pinned v0.2.0b7
+  export ATF_CLI_PATH=<HARNESS_DIR>/.atf-pinned
   ```
   （`.atf-pinned/` 加入 .gitignore，不进本仓。）
 - **re-pin 三步**（唯一合法的升级路径，禁止自动追新）：
