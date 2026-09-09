@@ -1,0 +1,97 @@
+# =====================================================================
+# session.contract.yaml — atf-harness 会话事件流（schema v0）与落盘形态契约
+#
+# 定位说明：bridge.contract.yaml 是 harness 对 ATF 内核认知的唯一真相源；
+# 本文件登记的是 harness 本地会话层的 schema 与落盘形态（ADR-06 / Phase 1
+# 任务书 S2 / owner 启动指令口径 #4），不涉及内核对接面。二者互不隶属，
+# 任何一侧变更各自走显式 PR + owner review。
+#
+# 依据：ADR-06（双层引用，附三条落地细则）+ Phase 1 任务书 §2 +
+#       《ATF-Harness_Owner启动指令_Phase1_S2_20260909.md》口径 #1–#4。
+# =====================================================================
+
+contract_version: 1
+schema_version: 0            # 事件 schema v0 起步（owner 口径 #3）
+
+# ---------------------------------------------------------------------
+# 事件类型枚举（严格白名单——任务书 S2-1 列出的 7 类，无第八类）
+# ---------------------------------------------------------------------
+event_types:
+  - user/message             # 用户输入
+  - assistant/message         # 助手对模型历史的正式输出
+  - assistant/attempt         # 失败尝试：落盘但不进模型历史（transformContext 过滤）
+  - tool/call                 # 工具调用发起
+  - tool/result               # 工具结果回填
+  - turn/start                # 轮次开始
+  - turn/end                  # 轮次结束
+  rule: 白名单外 type 一律拒绝写入（append err(schema_violation)）；
+        replay 遇白名单外 type = err(schema_violation)（fail-closed，视为文件被篡改）
+
+# ---------------------------------------------------------------------
+# 事件 schema（每条事件恰好一行 JSON）
+# ---------------------------------------------------------------------
+event:
+  id: { type: integer, rule: 从 1 自增；落盘流内严格连续递增，replay 校验，违反 = err(corrupt_stream) }
+  ts: { type: string, rule: ISO 8601 UTC（Date.parse 可解析），由 harness 写入时生成 }
+  type: { type: string, rule: 须 ∈ event_types 白名单 }
+  payload: { type: any, required: true, rule: 任意 JSON 值（含 null）；写入时须可被 JSON 序列化 }
+  projection:
+    required: true
+    fields:
+      evidence_event: { type: [string, "null"], rule: Phase 3 前恒为 null（ADR-06 细则 3 字段位）；
+                        值非 null = err(schema_violation)，防止提前激活 }
+  domain_refs:                # 可选；双层引用（ADR-06 细则 1）：digest 是唯一合法引用形态
+    type: array
+    items:
+      journal_type: { type: string, minLength: 1, rule: 内核侧 journal 类型名，harness v0 不做枚举收敛 }
+      fact_id: { type: string, minLength: 1 }
+      sha256_digest: { type: string, rule: 64 位小写 hex（^[0-9a-f]{64}$ 语法校验） }
+    rule: 空数组语义 = 无引用（不触发校验）；事件不含事实内容副本
+  ui: { type: object, required: false, rule: UI-only 命名空间——仅供界面/诊断，convertToLlm 白名单投影时永不输出 }
+  ref_invalid: { type: array, required: false, rule: digest 校验失败标记（见下）；存在即表示该事件引用未通过校验 }
+
+# ---------------------------------------------------------------------
+# domain_refs digest 校验（任务书 S2-2 + owner 口径 #1/#2）
+# ---------------------------------------------------------------------
+digest_check:
+  resolver:                  # "引用前向 ATF 查询该 fact 的当前 digest" 本阶段的承载方式
+    kind: injected           # DigestResolver 注入式接口（harness 侧定义）
+    reason: 真实对端 = 内核 fact digest 查询能力，尚未落地——按 owner 决议 ②1 同口径在 ATF 仓排队，
+            不阻塞、不插队；S2 提供契约 mock 实现（可配置返回指定 digest / 缺失），内核落地 re-pin 后接入
+  semantics:
+    found + digest 一致      → 校验通过（事件不带任何校验标记）
+    found + digest 不一致    → 该事件标记 ref_invalid + 触发 block（fail-closed）
+    not_found               → 该事件标记 ref_invalid + 触发 block（fail-closed）
+    resolver 查询自身失败    → err(resolver_failure)：不落盘、不标记、不猜测（基础设施故障 ≠ 引用无效）
+  check_points:
+    append: 写入前实时校验；失败事件仍落盘（ref_invalid 标记 = 事实留痕），但返回结构化 block
+    replay: 逐事件重新校验（落盘文件可能被篡改）；被篡改事件内存中标记 ref_invalid 并报告 block，
+            文件本身只读不改写（会话流是事实记录）
+  block:                     # owner 口径 #2：本阶段 block = 返回结构化 block 结果（审批 UI 属后续 slice）
+    reason: ref_invalid
+    fields: { event_id, invalid_refs: [{ index, journal_type, fact_id, claimed_digest, cause }] }
+    cause 枚举: [digest_mismatch, fact_not_found]
+
+# ---------------------------------------------------------------------
+# 落盘形态（owner 口径 #4：append-only JSONL，与会话事件流同构）
+# ---------------------------------------------------------------------
+persistence:
+  format: JSONL              # 每行恰好一个完整事件 JSON，UTF-8，行尾 LF；中间空行 = 损坏流
+  mode: append-only          # 只追加、不改写不删除；崩溃可重建（replay）
+  durability: 每次追加 = 独立打开 O_APPEND 写入并等待写完成（先落盘再继续）；
+              fsync 策略 Phase 2 评估（Phase 1 冒烟量级不依赖断电级持久性）
+  path: 由调用方注入（库不内置路径策略）；S4 工作区落地后默认约定 runs/<run_id>/session.jsonl
+  write_order: id 必须与落盘顺序一致且严格连续（续写打开时从文件尾部 id 续接）
+
+# ---------------------------------------------------------------------
+# 双管道占位（任务书 S2-3：函数签名定死，内部逻辑 Phase 2 再长）
+# ---------------------------------------------------------------------
+pipeline:
+  transformContext:
+    signature: (events: readonly SessionEvent[]) => LlmContextEvent[]
+    behavior_v0: 拼接 + 过滤 assistant/attempt（失败尝试落盘但不进模型历史）
+  convertToLlm:
+    signature: (event: SessionEvent) => LlmContextEvent
+    behavior_v0: 白名单投影——输出仅 { id, ts, type, payload, domain_refs? }；
+                 ui / projection / ref_invalid 及未来任何新增字段一律不出现（内部字段不发模型）
+  llm_context_event_fields: [id, ts, type, payload, domain_refs?]
