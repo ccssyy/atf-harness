@@ -50,6 +50,8 @@ frames:
 # 一律在 TS 侧折算为 Result err（fail-closed，不重试、不猜测成功）。
 # 【错误帧语义说明】本协议三类帧 = request / response / event（Phase 1 任务书 S1）；
 # "错误帧"由 response 携带 ok=false 表达，不引入第四类线缆帧。
+# 【决议登记 2026-09-08】owner 决议 ①1：三类帧 = request / response / event 维持不变，
+# 不引入第四类独立 error 线缆帧（错误由 response.ok=false 表达）。
 
 # ---------------------------------------------------------------------
 # 生命周期
@@ -100,6 +102,9 @@ atf_cli:
     - 无 --version 旗标（argparse 直接报"arguments are required: command"）→ 版本握手暂由会话方法 atf.version 承载
     - 无 JSONL 会话模式（当前为一次性子命令形态）→ S1 会话协议由契约忠实 mock 对端承载（harness 侧测试基建）；
       真实 CLI 的契约测试范围 = pin 校验 + derive_command 冒烟（--help 退出码 0）
+  decision_20260908:           # owner 决议 ②1：批准在 ATF 仓立项排队（JSONL RPC 会话模式 + 版本子命令）
+    atf_side_backlog: approved_pending_queue   # 立项与排期由 owner 主线按 §8.3.3 流程处理，本仓不插队
+    harness_side: 本仓契约测试占位不变；内核落地后 re-pin 即启用真实 CLI 会话断言
 
 # ---------------------------------------------------------------------
 # 上游 pin（只落 ATF 发版 tag；re-pin 三步见 AGENTS.md §4，禁止自动追新）
