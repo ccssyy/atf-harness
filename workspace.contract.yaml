@@ -1,0 +1,121 @@
+# =====================================================================
+# workspace.contract.yaml — atf-harness 三层工作区（T0/T1/T2）与晋升闸 A 契约
+#
+# 定位说明：bridge.contract.yaml 是 harness 对 ATF 内核认知的唯一真相源；
+# 本文件登记 harness 本地工作区层的目录形状、provenance、Artifact Catalog
+# 与晋升闸 A 语义（ADR-08 / Phase 1 任务书 §4 / owner 启动指令口径 #1–#6），
+# 不涉及内核对接面。新建本文件沿用 S2 分文件登记先例（session.contract.yaml），
+# owner 口径 #6 授权二选一之"新建 workspace.contract.yaml"。
+#
+# 变更纪律：本文件任何变更 = 显式 PR + owner review；与 bridge/session 契约互不隶属。
+# =====================================================================
+
+contract_version: 1
+schema_version: 0            # 工作区 schema v0 起步
+
+# ---------------------------------------------------------------------
+# run 目录结构 v0（任务书 §4.1；owner 口径 #1）
+# ---------------------------------------------------------------------
+# owner 口径 #1：run 目录宿主 = harness 仓测试工作区，不在内核仓 runs/ 内物理写入；
+# "在 ATF 现有 run 目录内扩展" = 语义对齐——目录形状与命名沿用任务书登记的内核惯例。
+run_dir:
+  host: <repo>/tmp/runs/<run_id>/   # harness 仓内（tmp/ 已 gitignore）；库本身不内置路径策略，
+                                    # 根路径由调用方注入（与 session.contract.yaml persistence.path 同口径）
+  kernel_isolation: 内核仓 runs/ 只读纪律不变——harness 永不向内核仓写入任何文件
+  layout:
+    scratch/:      T0 agent 自由区（provenance.json + 待晋升产物 + 产物元数据 sidecar）
+    artifacts/:    T1 不可变产物（写入即登记；任何既有文件一律拒绝覆盖）
+    contracts/:    T2 本阶段只读展示（目录存在 + 条目清点；晋升闸 B 不实现 = Phase 2 顺延项）
+    session.jsonl: 会话事件流默认约定路径（session.contract.yaml persistence.path 之 S4 落地）；
+                   由 SessionLog 按需创建，工作区层不预创建
+  provenance:
+    path: scratch/provenance.json
+    schema:
+      run_id: { type: string, minLength: 1 }
+      trigger_instruction: { type: string, minLength: 1 }
+      model_id: { type: string, minLength: 1 }   # 冒烟阶段 = "faux"（owner 口径 #2）
+      created_at: { type: string, rule: ISO 8601 UTC }
+    rules:
+      - 工作区创建时自动生成（先落盘再继续）
+      - 目录已有 provenance 时 = 重开语义：四元组逐字段比对（created_at 以既有为准），
+        形状非法或任一字段不一致 = err(provenance_conflict)（fail-closed，不猜测同源）
+      - owner 口径 #2：trigger_instruction / run_id 本 slice 由测试/冒烟直接给定，S5 起由场景脚本注入
+
+# ---------------------------------------------------------------------
+# Artifact Catalog（owner 口径 #6：sha 指纹登记由 harness 侧 JSON 清单承载）
+# ---------------------------------------------------------------------
+artifact_catalog:
+  path: artifacts/catalog.json
+  schema:
+    schema_version: { const: 0 }
+    artifacts:
+      - artifact_id: { type: string, rule: = 源文件在 scratch/ 内的相对路径，run 内唯一 }
+        source: { type: string, rule: 晋升来源（"scratch/" 前缀路径，登记留痕） }
+        sha256: { type: string, rule: 64 位小写 hex，对晋升产物字节计算 }
+        bytes: { type: integer }
+        promoted_at: { type: string, rule: ISO 8601 UTC }
+        reproduce:
+          command: { type: array, items: { type: string }, rule: 复现命令登记（owner 口径 #3），argv 形态 }
+  rules:
+    - 读入严格校验：schema_version 非 0 / 字段缺失 / digest 非法 / artifact_id 重复 = err(corrupt_catalog)
+    - catalog 已登记但产物文件缺失 = err(corrupt_catalog)（登记/文件失配，fail-closed）
+    - artifacts/ 存在未登记文件 = err(corrupt_catalog)（晋升路径上遇同名即拒绝，不覆盖不吸收）
+    - catalog 写入 = 临时文件 + rename（避免撕裂清单）；写失败则回滚本次刚写的产物文件并 err，
+      回滚自身失败如实报告（不静默留不一致）
+
+# ---------------------------------------------------------------------
+# 晋升闸 A（任务书 §4.3：可复现 + 幂等 + sha 指纹，三项任一失败 → block）
+# ---------------------------------------------------------------------
+promotion_gate_a:
+  entry: promote(scratch 内相对路径)
+  ordering: 输入守卫 → 读 catalog 校验 → 幂等闸 → 复现闸 → sha 计算 → 写产物文件 → 写 catalog
+  reproduce_check:                 # owner 口径 #3：本阶段由 harness 侧子进程执行，不调用真实内核
+    command_source: 产物元数据 sidecar <path>.meta.json（登记 { artifact, reproduce: {command}, registered_at }），
+                    登记一次性（已存在 = 不覆盖）；源产物不存在 / sidecar 缺失或与源不符 = err(invalid_input)
+    semantics: 子进程执行恰好一次（argv 形态、无 shell、cwd = run 根），
+               stdout 字节的 sha256 必须与源产物字节 sha256 一致
+    block: 对端退出码非 0 或 hash 不一致 → blocked(not_reproducible)（闸门裁决）
+    err: spawn 失败 / 超时（REPRODUCE_TIMEOUT_MS = 30000，库内常量可注入覆盖）/ stdout 超限
+         （MAX_REPRODUCE_STDOUT_BYTES = 10 MiB）→ err(reproduce_failure)——基础设施故障 ≠ 闸门裁决，不猜测
+  idempotency_check: catalog 已登记同 artifact_id → blocked(already_promoted)，已有 Artifact 一律不覆盖
+  sha_fingerprint: 通过两闸后写入 artifacts/<相对路径> 并对产物字节计算 sha256 登记 catalog
+  outcome:
+    promoted: { artifact: CatalogEntry }
+    blocked:
+      reason 枚举: [already_promoted, not_reproducible]
+      fields: { reason, message, source, detail? }
+  error_codes: [invalid_input, provenance_conflict, corrupt_catalog, reproduce_failure, io_error]
+
+# ---------------------------------------------------------------------
+# 铁律一：T0 不可引用为证据（ADR-08 / 任务书 §4.4；owner 口径 #4）
+# ---------------------------------------------------------------------
+# owner 口径 #4：S2 校验器代码以扩展方式接入（包装校验器），不修改 src/session/ 既有语义；
+# 判定为"无需改 S2 代码"——接线形态 = 包装 SessionLog 会话校验入口（见下）。
+t0_ref_forbidden:
+  wiring: GuardedSessionLog 包装 SessionLog（src/workspace/t0Guard.ts）——src/session/ 零改动
+  why_not_resolver_channel: S2 checkRefs 把 resolver 的 err 统一包装为 resolver_failure（基础设施故障语义），
+                            策略拒绝经该通道会被错误标注且归因深埋；S2 ref_invalid cause 枚举固定
+                            （digest_mismatch | fact_not_found）无法承载 t0_ref_forbidden——
+                            包装会话入口是唯一不改 src/session/、又不复用/污染既有语义的扩展点
+  rule: domain_refs 任一 fact_id 引用路径解析后落于 scratch/ 前缀内 → 校验拒绝
+  path_semantics:
+    - 词法前缀：引用为 "scratch" 或 "scratch/..."（run 相对形态）→ 命中
+    - 包含判定：绝对引用 resolve 后落于 scratchRoot 内 → 命中；
+      相对引用以 run 根（scratchRoot 父目录）为基解析后再判定
+    - 不限 journal_type（fail-closed：任何携带 scratch 路径形态的引用一律拒绝）
+  enforcement:
+    append: 写入前前置校验；命中 → GuardedAppendOutcome{ status: "rejected",
+            block: { reason: "t0_ref_forbidden", message, invalid_refs: [{ index, journal_type, fact_id }] } }，
+            事件不落盘（直接拒绝）；未命中 → 原样委托 S2（digest 校验等既有语义零改动）
+    replay: 先委托 S2 replay 重建，再对重建事件逐条扫描；流内出现 scratch 引用 →
+            GuardedReplayOutcome{ kind: "blocked", block 同上 }（流不可信，fail-closed；
+            文件本身只读不改写）
+  note: 任务书 §4.4 以 tool/result 为叙事场景；按 fail-closed 原则规则作用于全部携带 domain_refs
+        的事件类型（更严方向），S5 B4 断言口径（block 原因 = t0_ref_forbidden）不受影响
+
+# ---------------------------------------------------------------------
+# T2 contracts 层（owner 口径 #5：只读展示，晋升闸 B 不实现）
+# ---------------------------------------------------------------------
+contracts_layer:
+  t2_readonly: 工作区层对 contracts/ 只做目录存在性检查与条目清点（status().contracts），永不写入；
+               晋升闸 B = Phase 2 顺延项（任务书 §7 登记）
