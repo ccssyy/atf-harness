@@ -75,8 +75,30 @@ lifecycle:
   unexpected_exit: 请求挂起期间对端退出 → 挂起请求 err(peer_exit) 并附 stderr 尾部摘要；不重试、不猜测成功
 
 # ---------------------------------------------------------------------
-# 方法面（S1 仅握手；S3 工具子命令签名在此登记）
-# ---------------------------------------------------------------------
+# 方法面（S1 握手；S3 工具子命令签名 + ledger 方法在此登记）
+#
+# 【S3 登记 2026-09-09】owner 决议：v1 的完整方法面 = 握手 + 4 工具 + ledger 方法；
+# 本次为任务书 §8.2 计划内方法面补登（签名 + canonical output schema），
+# contract_version 维持 1 不 bump——仅帧格式 / 握手 schema / 既有方法语义变更才 bump。
+#
+# canonical output 纪律（任务书 §3.2 / owner 口径 #4）：
+#   每个成功 response 的 result 必须通过其 canonical output schema 校验；
+#   校验失败 = harness 侧 err(schema_violation)，结构化回填 ok:false，不猜测成功。
+#
+# 审批账本（ADR-07 账本轨；owner 口径 #1）：
+#   ledger 查询/消费经桥接方法承载（harness 不直读文件），本阶段由契约 mock 对端
+#   承载（MockLedger：预录 ledger_record / 查询 ledger_query / 消费 ledger_consume，
+#   一次性消费语义在对端强制）；真实对端待内核能力落地 re-pin 后接入，不阻塞、不插队。
+#   ledger_record 仅为测试/冒烟 setup 基建，非运行时方法面。
+#
+# 【exit 78 语义登记 2026-09-09】owner 口径 #3：approval_missing block 发生时，
+#   由 harness 主进程以 exit code 78 终止（headless 冒烟断言锚点，
+#   harness 侧 resolveHeadlessExitCode 为唯一出口）；"exit 78 由 atf 侧返回"
+#   理解为内核侧真实实现时的语义约定，本阶段由 mock 承载。
+#
+# 【审批键 digest 算法登记】params_digest = sha256( hex, 小写 ) over
+#   stableParamsJson = JSON.stringify( 键序递归排序后的 params )；
+#   harness 侧与对端 MockLedger 同构实现，防审批键漂移。
 methods:
   atf.version:
     direction: ts_to_kernel
@@ -85,6 +107,133 @@ methods:
       name: atf
       version: string
       contract_version: integer
+
+  # ---------------- 工具方法面（严格 4 个，owner 口径 #5；工具名即方法名） ----------------
+  atf_admit_data:
+    direction: ts_to_kernel
+    requires_approval: true        # 写动作：数据准入（高危推进类，须账本预录）
+    params:
+      type: object
+      required: [dataset_id]
+      properties:
+        dataset_id: { type: string }
+        source: { type: string, required: false }
+    result:                        # canonical output
+      type: object
+      required: [ok, journal_type, fact_id, sha256_digest]
+      properties:
+        ok: { const: true }
+        journal_type: { type: string }
+        fact_id: { type: string }
+        sha256_digest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        dataset_id: { type: string, required: false }
+
+  atf_gate:
+    direction: ts_to_kernel
+    requires_approval: true        # 闸门推进/查询（闸门语义，须账本预录；查询读态同为收敛面）
+    params:
+      type: object
+      required: [gate, action]
+      properties:
+        gate: { type: string }
+        action: { enum: [query, advance] }
+        evidence_refs: { type: array, required: false, items: { type: string } }
+    result:                        # canonical output——blocked 是合法业务产出（非错误）
+      type: object
+      required: [ok, gate, status]
+      properties:
+        ok: { const: true }
+        gate: { type: string }
+        status: { enum: [pass, blocked] }
+        reason: { type: string, required: false }
+        missing: { type: array, required: false, items: { type: string } }
+
+  atf_surface_scan:
+    direction: ts_to_kernel
+    requires_approval: false       # 只读扫描
+    params: { type: object, required: [], properties: {} }
+    result:
+      type: object
+      required: [ok, surface, count]
+      properties:
+        ok: { const: true }
+        count: { type: integer }
+        surface:
+          type: array
+          items:
+            type: object
+            required: [journal_type, fact_id, sha256_digest]
+            properties:
+              journal_type: { type: string }
+              fact_id: { type: string }
+              sha256_digest: { type: string, pattern: "^[0-9a-f]{64}$" }
+
+  atf_workspace_status:
+    direction: ts_to_kernel
+    requires_approval: false       # 只读查询
+    params: { type: object, required: [], properties: {} }
+    result:
+      type: object
+      required: [ok, run_id, admitted_count]
+      properties:
+        ok: { const: true }
+        run_id: { type: string }
+        admitted_count: { type: integer }
+
+  # ---------------- 账本方法面（ADR-07 账本轨；本阶段 mock 承载） ----------------
+  ledger_query:
+    direction: ts_to_kernel
+    params:
+      type: object
+      required: [tool, params_digest]
+      properties:
+        tool: { type: string }
+        params_digest: { type: string, pattern: "^[0-9a-f]{64}$" }
+    result:
+      type: object
+      required: [ok, entries]
+      properties:
+        ok: { const: true }
+        entries:
+          type: array
+          items:
+            type: object
+            required: [record_id, tool, params_digest, consumed]
+            properties:
+              record_id: { type: string }
+              tool: { type: string }
+              params_digest: { type: string }
+              consumed: { type: boolean }
+
+  ledger_consume:
+    direction: ts_to_kernel
+    params:
+      type: object
+      required: [record_id]
+      properties:
+        record_id: { type: string }
+    result:
+      type: object
+      required: [ok, record_id, consumed]
+      properties:
+        ok: { const: true }
+        record_id: { type: string }
+        consumed: { const: true }
+
+  ledger_record:                   # mock 测试/冒烟 setup 基建，非运行时方法面
+    direction: ts_to_kernel
+    params:
+      type: object
+      required: [tool, params_digest]
+      properties:
+        tool: { type: string }
+        params_digest: { type: string, pattern: "^[0-9a-f]{64}$" }
+    result:
+      type: object
+      required: [ok, record_id]
+      properties:
+        ok: { const: true }
+        record_id: { type: string }
 
 # ---------------------------------------------------------------------
 # atf CLI 对接面（pin v0.2.0b7 实测于 2026-09-08）
