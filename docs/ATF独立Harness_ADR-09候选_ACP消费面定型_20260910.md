@@ -1,6 +1,6 @@
-# ATF 独立 Harness——ADR-09 候选:ACP 消费面定型
+# ATF 独立 Harness——ADR-09:ACP 消费面定型
 
-> **日期**:2026-09-10 ｜ **状态**:候选(DRAFT)——待 owner review,通过后升格 ADR-09 ACCEPTED
+> **日期**:2026-09-10 ｜ **状态**:ACCEPTED(ADR-09)——owner review 通过(2026-09-10),v1.1 修订依据《ATF-Harness_Owner决议与启动指令_D1闭合_P2S1启动_20260910.md》
 > **依据**:《ATF-Harness_Owner启动指令_Phase2_D1_20260910.md》+《ATF独立Harness_Phase2任务书_20260910.md》§1 +《ATF-Harness_Owner决议_Phase2范围确认与任务书签发_20260910.md》§1.2/§1.6 +《ATF-Harness_P2S2审批应答语义设计草案_20260910.md》§5 + Phase 0 四项 ADR(05/06/07/08)+ S5 决议①
 > **抽象层级声明**(指令口径 #2):本文档只定**消费面形态**——调用载荷、事件投影、审批往返、配置注入、resume 语义;**不定传输层协议与实现选型**(JSON-RPC 帧格式、进程模型、鉴权机制均属 Phase 3)。
 > **引用约定**:结论编号 C1–C12(P2-S2 / P2-S3 任务书条款细化时逐条引用)。
@@ -15,14 +15,14 @@
 | # | 结论 | 一句话口径 |
 |---|---|---|
 | C1 | dispatch 形态 | 一次 dispatch = 创建一次 run;载荷 = trigger_instruction(必填)+ external_ref + approval_surface + provider 覆盖;run_id 由 harness 生成 |
-| C2 | run 状态机 | running / suspended(非终态)+ 终态四类 completed / blocked / aborted / failed;退出码锚点 0 / 78 / 1 不变,`resolveHeadlessExitCode()` 单出口 |
+| C2 | run 状态机 | running / suspended(非终态)+ 终态四类 completed / blocked / aborted / failed;退出码 0 / 78 / 1 / 75 / 79(suspended=75 可恢复、aborted=79 主动终止,两码为新增枚举补登,既有 0/78/1 语义不变),`resolveHeadlessExitCode()` 单出口 |
 | C3 | resume 语义 | resume 仅对 suspended 有效,三动作 = answer / wait / abort;不新建 run、不重放已确认事件、不改 approval_session_id |
 | C4 | schema v1 事件集合 | 11 类一次定死 = v0 七类 + `approval/request` + `approval/response` + `session/compaction` + `provider/switch`;P2-S1 一次 bump,S2/S3 不再 bump 版本 |
 | C5 | 投影白名单 | 分层子集:必投 6 类 + 选投 4 类 + 不投 1 类(`assistant/attempt`);payload 原样透传,`ui` 不入事实投影,`projection.evidence_event` 保持 null |
 | C6 | 审批会话模型 | 吸收 P2S2 §5 全部结论:`approval_session_id` ↔ `tool_call_id` 配对、统一 `approval/response` + `verdict` 六枚举、`supersedes` 演化链、`actor` 身份;增补 `request_event_ref` 兑现可审计配对 |
-| C7 | 应答回流 = 落账本 | ADR-07 铁律落点:granted 回流后先经 `ledger_record` 落一次性 ApprovalRecord,再走既有账本轨消费路径放行;宿主只是录入前端,无第二真相源 |
+| C7 | 应答即授权凭据 | 授权真相源 = **账本记录 ∪ 已 granted 且未消费的问答会话**,两类依据并列、各自留痕、互不替代;`ledger_record` 为 setup-only 基建,不作运行时路径;fails-closed 逐条保持 |
 | C8 | 超时分流 | 未声明 approval_surface = 账本轨-only,未命中 blocked(78),与 Phase 1 完全一致;已声明但对端超时 = `timeout` → suspended(非否决,可 resume) |
-| C9 | provider 配置注入 | 双模式并列(宿主注入 / harness 自管),建议「自管为基线、dispatch 覆盖为增强」;凭据与端点不进载荷明文、不进会话事件;**最终由 owner 裁决** |
+| C9 | provider 配置注入 | **owner 已裁决:B(harness 自管)基线 + A(宿主注入)Phase 3 增强**;凭据与端点不进载荷明文、不进会话事件 |
 | C10 | 多轮审批透出 | 审批会话为透出一等单元:必投事件内联 + 按 `approval_session_id` 聚合重建;聚合视图是派生物,真相源唯一(磁盘 append-only log) |
 | C11 | 不实现项 | 见 §3,与任务书 §5 条件项登记一致;本 ADR 结论**不触发闸 B、不触发 re-pin** |
 | C12 | 条款对账 | 与 P2-S1/S2/S3 任务书条款**无冲突,无需条款级修订**;三个 payload 级开放点移交 S2 任务书(§5) |
@@ -51,17 +51,17 @@ dispatch 返回 run 句柄:`run_id`(harness 生成,即工作区目录名,Phase 1
 | 状态 | 性质 | 进入条件 | 离开路径 |
 |---|---|---|---|
 | `running` | 非终态 | dispatch 成功;或 resume(answer/wait) | 正常收束 / 审批超时 / 故障 / 终止 |
-| `suspended` | 非终态 | 已声明 approval_surface 且应答等待超时(`timeout` 落盘) | resume(answer)→ running;resume(wait)→ running;resume(abort)→ aborted |
+| `suspended` | 非终态 | 已声明 approval_surface 且应答等待超时(`timeout` 落盘) | `resume(answer)`→ running;`resume(wait)`→ running;`resume(abort)`→ aborted。进程表达 = **exit 75**(EX_TEMPFAIL 语义:暂时无法继续,可恢复) |
 | `completed` | 终态 | `final_answer` 正常收束 | exit 0 |
 | `blocked` | 终态 | 账本轨 `approval_missing`(含 approval_surface 未声明场景) | exit **78**(锚点不挪用) |
-| `aborted` | 终态 | 应答 verdict=abort;或宿主 resume(abort) | 退出码映射见 §5 开放点(b) |
+| `aborted` | 终态 | 应答 verdict=abort;或宿主 resume(abort) | exit **79**(主动终止,harness 自定义码,登记入契约) |
 | `failed` | 终态 | 会话拒绝(t0_ref_forbidden)/ 对端拒绝 / provider / 桥接 / 工作区故障,携带结构化原因 | exit 1 |
 
-状态机与 Phase 1 的关系:`BranchOutcome` 四态(completed / approval_missing / session_rejected / failed)全部保留;本 ADR 仅新增 `suspended`(非终态)与 `aborted`(终态,由问答轨引入),两者均不经由 78 表达。
+状态机与 Phase 1 的关系:`BranchOutcome` 四态(completed / approval_missing / session_rejected / failed)全部保留;本 ADR 仅新增 `suspended`(非终态)与 `aborted`(终态,由问答轨引入),两者分别以 75(可恢复)与 79(主动终止)表达,均不经由 78。
 
 **resume 语义(C3)**:resume 是 suspended 唯一的离开入口,三种动作:
 
-- `answer`:注入迟到的应答(载荷 = `approval/response` 同构,回流路径与 §1.3 完全一致——含落账本步骤,不因迟到而豁免);
+- `answer`:注入迟到的应答(载荷 = `approval/response` 同构,回流路径与 §1.3 完全一致——凭据化处置同规则,不因迟到而豁免);
 - `wait`:不注入应答,仅恢复等待(超时时钟语义属 S2 细化,见 §5 开放点);
 - `abort`:宿主显式终止 → aborted 终态。
 
@@ -135,8 +135,10 @@ approval/response payload:
 模型提案(tool/call 落盘,须审批)
   → harness 落 approval/request(白名单必投 → 宿主转达人)
   → 等待应答:
-      granted      → harness 经 ledger_record 落一次性 ApprovalRecord(C7)
-                     → 既有账本轨消费路径(ledger_query → ledger_consume)放行执行
+      granted      → 应答凭据化(C7:granted 且未消费 = 授权凭据·依据二)
+                     → 审批检查点核对凭据 → 放行执行
+                       (账本轨 record/consume 不在此路径;ledger_record 为 setup-only,
+                        不作运行时使用——owner 决议 §2.1)
                      → tool/result 落盘 → 继续
       advised      → 意见原文回填模型 → 模型重新提案(新 request 带 supersedes)→ 回到等待
       denied       → 结构化 block 回填 → 模型可换路径(同提案重提计数 +1,≥2 升级)
@@ -146,12 +148,19 @@ approval/response payload:
                      → resume(answer) 注入迟到应答 → 按其 verdict 处置(含落账本)
 ```
 
-**应答回流 = 落账本(C7,ADR-07 铁律的消费面落点)**:问答轨的一次 granted **不直接**放行执行——回流后 harness 先经桥接 `ledger_record` 落一条一次性 ApprovalRecord(v1,sha 绑定),再经既有账本轨消费路径(`ledger_query` → `ledger_consume`)放行。由此:
+**应答即授权凭据(C7,owner 决议 §2.1 改判)**:问答轨的一次 granted **不以写入内核账本为前置**——应答事件本身(`approval/response`,带 `actor` / `request_event_ref` / `approval_key`)即**授权凭据**,与账本记录并列成为审批检查点的两类依据:
 
-- ApprovalRecord/v1 仍是唯一真相源,宿主/问答 UI 只是账本的录入前端(ADR-07 原文逐字成立);
-- 一次 granted 恰好一条一次性记录,无配额复用(P2S2 不变量 2);
-- 执行器四终态管线(executed / blocked / rejected / failed)零改动——问答轨对 ToolExecutor 透明;
-- **宿主/外部的「自动应答」配置对闸门永远无效**:没有真实应答事件落盘,就没有账本记录,就没有执行(fails-closed)。
+- **依据一(账本轨)**:`ledger_query` 命中且未消费的记录 → 消费放行(**语义零改动**);
+- **依据二(问答轨)**:本 run 内同一 `approval_session_id` 的 `granted` 应答事件,且未被消费(一次性)。
+
+**ADR-07 表述精化**(owner 决议 §2.1 第 2 款,文字级增补,不动机制):授权真相源 = **账本记录 ∪ 已 granted 且未消费的问答会话**;两类来源各自留痕、互不替代、互不豁免。
+
+fails-closed 性质逐条保持(owner 决议 §2.1 第 4 款):
+
+- **没有真实应答事件落盘 → 无授权凭据 → 不执行**;账本查询故障 → 不猜测通过(Phase 1 既有口径);
+- 一次 granted 一次性消费,无配额复用(P2S2 不变量 2);凭据消费状态的记录形态见 §5.3 开放点(d);
+- **`ledger_record` 为 setup-only 基建**(`bridge.contract.yaml` 既有登记:仅测试/冒烟 setup 用途),Phase 2 一律不得作为运行时路径使用;「问答授权是否并入内核账本(`ledger_record` 运行时化)」登记为 **C1 re-pin 后议题**,由内核实际能力实测后决议,本轮不做、不探索;
+- **宿主/外部的「自动应答」配置对闸门永远无效**:没有真实应答事件落盘、且账本无未消费记录,就没有执行(fails-closed)。
 
 **超时分流(C8)**:
 
@@ -162,7 +171,7 @@ approval/response payload:
 
 **双轨并存**(决议六 F,消费面表达):审批检查点先查账本(ledger_query),命中未消费 → 走消费放行(问答轨不启用);未命中且 approval_surface 已声明 → 发 approval/request;未命中且未声明 → blocked(78)。账本轨语义(一次性消费、78 锚点)零改动。
 
-### 1.4 provider 配置的注入来源(C9,双模式并列,最终 owner 裁决)
+### 1.4 provider 配置的注入来源(C9,双模式对照;owner 已裁决 B 基线 + A 增强)
 
 | 维度 | 模式 A:宿主注入 | 模式 B:harness 自管 |
 |---|---|---|
@@ -174,7 +183,7 @@ approval/response payload:
 
 **注入/覆盖语义(两模式下一致)**:dispatch 载荷未携带 `provider` → 回退自管基线;携带 → harness 校验后覆盖,生效仍受热切换规则约束(仅 turn 边界、切换前后 `domain_refs` digest 校验连续、`provider/switch` 事件落盘——P2-S3 条款不动)。
 
-**建议**(待 owner 裁决,本 ADR 不定案):**B 为基线,A 为 Phase 3 增强**。理由:① Phase 2 全程无真实宿主,自管是唯一可验证路径,冒烟先行验证不阻塞;② 凭据经 dispatch 载荷明文传递与 TCB/脱敏纪律有张力,句柄机制成型前不宜把注入做成主路径;③ 覆盖语义已定义,Phase 3 启用 A 模式时消费面零改动,只是填上凭据句柄的传输机制。
+**裁决(owner,2026-09-10,决议 §2.3)**:**B 为基线,A 为 Phase 3 增强**。Phase 2 只实现自管路径;dispatch 载荷的覆盖语义按下述口径保留,Phase 3 启用 A 模式时消费面零改动。理由:① Phase 2 全程无真实宿主,自管是唯一可验证路径,冒烟先行验证不阻塞;② 凭据经 dispatch 载荷明文传递与 TCB/脱敏纪律有张力,句柄机制成型前不宜把注入做成主路径;③ 覆盖语义已定义,Phase 3 启用 A 模式时消费面零改动,只是填上凭据句柄的传输机制。
 
 **红线(两模式共同)**:凭据与端点**不进 dispatch 载荷明文**(载荷只到 provider_id + profile 引用粒度)、**不进会话事件**(payload / ui 均不得出现);provider 配置的实际取值变更必须以 `provider/switch` 事件落盘留痕。
 
@@ -321,14 +330,15 @@ interface ProviderConfigOverride {
 | S1 要求 3(append-only,replay 投影一致) | C5、C10 | 一致;compaction 不影响宿主投影(§1.2 纪律②) |
 | S1 要求 6/7(fsync 双档) | 不涉 | 无冲突;「已确认事件不丢」durability 语义是 suspended/resume 可信的前提 |
 | S2 要求 1(审批会话模型落 schema v1;字段含四项) | C4、C6 | 一致;D1 增补 `request_event_ref`(任务书「字段含」为下限,增量非冲突) |
-| S2 要求 2(六类应答分支处置) | C6、C7、C8 | 一致(verdict 枚举与处置路径逐条吻合);granted 分支补明「先落账本再执行」 |
+| S2 要求 2(六类应答分支处置) | C6、C7、C8 | 一致(verdict 枚举与处置路径逐条吻合);granted 分支为**凭据化放行(依据二)**,不以落账本为前置(决议 §2.1 改判) |
 | S2 要求 3(拒绝循环阈值 2 次常量) | C10 | 一致 |
-| S2 要求 4(无配额复用) | C7 | 一致且强化(一次 granted = 一条一次性 ApprovalRecord) |
-| S2 要求 5(双轨并存,账本轨优先,账本轨零改动) | C7、C8 | 一致;消费面表达见 §1.3 双轨并存段 |
+| S2 要求 4(无配额复用) | C7 | 一致(一次 granted 一次性消费;凭据即授权,消费状态记录形态见 §5.3 开放点(d)) |
+| S2 要求 5(双轨并存,账本轨优先,账本轨零改动) | C7、C8 | 一致;消费面表达见 §1.3 双轨并存段;executor 审批检查点接受第二类依据属 S2 实现范围(决议 §2.1 第 6 款) |
 | S2 要求 6(headless 等价性) | C8 | 一致(未声明 approval_surface = Phase 1 逐位等价) |
 | S2 要求 8(退出码单出口、终局语义保护) | C2 | 一致;`suspended` 非终态不经 78 表达 |
 | S3 要求 2(热切换、切换事件暂名「如 provider/switch」) | C4 | 一致;事件名就此定死 `provider/switch`(暂名转正,非冲突) |
-| S3 要求 1/3(第二 provider、R2b) | C9 | 一致;S3 实现自管路径,注入模式待 owner 裁决后为 Phase 3 预留 |
+| S3 要求 1/3(第二 provider、R2b) | C9 | 一致;S3 实现自管路径(B 基线已裁决),注入模式为 Phase 3 增强 |
+| 退出码映射(决议 §2.2 定案) | C2 | 定案:completed=0 / blocked=78 / failed=1 / suspended=75 / aborted=79,映射仍经 `resolveHeadlessExitCode()` 单出口;75/79 为新增码登记入契约,不改既有 0/78/1 语义(枚举补登,不触发 `contract_version` bump);终局语义保护条款延续 |
 
 ### 5.2 条款级修订建议
 
@@ -336,14 +346,35 @@ interface ProviderConfigOverride {
 
 ### 5.3 移交 P2-S2 任务书的 payload 级开放点(非 D1 缺口,登记防遗漏)
 
+> 原开放点 (b)(suspended/aborted 退出码映射)已由决议 §2.2 **定案**(75/79),移入正文(C2、§1.1 状态机表),不再是开放点。
+
 | # | 开放点 | 建议方向 |
 |---|---|---|
 | a | `approval_session_id` 生成形态(唯一性、可读性) | harness 侧单调标识或 UUID,形态 S2 定;消费面只要求全局唯一且落盘 |
-| b | `suspended` / `aborted` 在 headless 进程上的表达 | 退出码映射经 `resolveHeadlessExitCode()` 单出口细化;suspended 非终态建议以结构化原因 + 非零非 78 退出表达,aborted 建议 1 + 结构化原因;**78 锚点不挪用** |
 | c | advise 意见原文与 clarification 载荷的字段命名细化 | 本 ADR 以 `advice_text` / `question` 表意,S2 可改命名,语义锚点不变 |
+| d | **问答授权凭据的消费状态记录形态**(决议 §2.1 新增) | 本 run 内「granted 且未消费」的追踪(一次性语义)与留痕方式由 S2 定;须满足:无凭据不执行、消费后不可复用、可审计配对 |
 
 ---
 
 ## 6. 参考资料(仅形态对照,零依赖)
 
 - Agent Client Protocol(ACP)公开规范:agentclientprotocol.com——`session/new`(对应 dispatch)、`session/load`(对应宿主重挂/恢复消费)、`session/prompt`(对应 trigger_instruction 驱动)、`session/request_permission`(对应审批转达)、`session/update`(对应事件投影)。Phase 3 传输选型时作对照,本文档不以其为依赖前提。
+
+---
+
+## 修订说明
+
+- **v1.0**(2026-09-10,commit `fc1fda2`):初版,候选(DRAFT),交 owner review。
+- **v1.1**(2026-09-10):依据《ATF-Harness_Owner决议与启动指令_D1闭合_P2S1启动_20260910.md》升格 **ACCEPTED(ADR-09)**。改动仅限决议 §3 清单位置:
+  1. 文首状态块:DRAFT → ACCEPTED(ADR-09),注明决议日期与文档名(文件名按登记保持不变);
+  2. §0 C7 行改判:**应答即授权凭据**(账本记录 ∪ 已 granted 未消费的问答会话,两类依据并列;`ledger_record` setup-only);
+  3. §0 C2 行补退出码映射 0 / 78 / 1 / 75 / 79;
+  4. §0 C9 行标注 owner 已裁决(B 基线 + A 增强);
+  5. §1.3 C7 段按决议 §2.1 口径重写,新增「ADR-07 表述精化」小节,删除运行时落账本表述,保留 fails-closed 论证;
+  6. §1.3 往返时序图 granted 分支改为「凭据化 → 审批检查点依据二 → 放行执行」,标注 `ledger_record` setup-only;
+  7. §1.1 状态机表落定 suspended=75、aborted=79(连同 §1.1 resume `answer` 行的同步一致性微调);
+  8. §1.4 「建议(待 owner 裁决)」→「裁决:B 基线 + A 增强」;
+  9. §5.1 更新 C7/S2 要求 2/4/5 行对账结论,新增退出码映射对账行;
+  10. §5.3 原开放点 (b) 定案移入正文,新增 (d) 授权凭据消费状态记录形态;
+  11. 本修订说明块。
+- C1–C12 结论编号体系保持,未新增编号;§1.1 载荷四要素、§1.2 事件集合与投影白名单、§1.5 透出模型、§3 不实现项、§4 边界声明未改动。
