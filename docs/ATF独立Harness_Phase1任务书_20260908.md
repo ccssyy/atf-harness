@@ -1,5 +1,7 @@
 # ATF 独立 Harness Phase 1 任务书——headless 冒烟最小闭环（Codex 直接执行）
 
+> **状态：CLOSED（2026-09-10）** —— Phase 1 五切片（S1–S5）全部验收闭合，milestone tag `v0.1.0`。终验数字：109 passed / 2 skipped，smoke:s1–s5 全过。后续工作转 Phase 2（待 owner 启动指令），见《ATF独立Harness_Phase1_S5执行报告暨Phase1闭合报告_20260909.md》§8。
+
 > 日期：2026-09-08 ｜ 前置：**Phase 0 已拍板 ACCEPTED**（ADR-05/06/07/08，见《ATF独立Harness_Phase0决策文档_20260907.md》）
 > 执行方：Codex ｜ 执行环境：本地 Mac 开发目录，**不依赖 A800 GPU**（⚠️ ATF 仓现行工作流以 owner 当前约定为准，任务书引用的 08-10 梳理报告中 C02/Comet Native 状态已过时）
 > 决策基线：R2a（TS harness 仅借鉴设计、零外部运行时依赖）+ 双层引用（A）+ 双轨审批（C）+ 三层工作区（A）
