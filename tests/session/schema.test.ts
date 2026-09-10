@@ -3,11 +3,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MockDigestResolver } from "../../src/session/digestResolver.js";
-import { SESSION_EVENT_TYPES, SESSION_SCHEMA_VERSION } from "../../src/session/schema.js";
+import {
+  SESSION_ENABLED_EVENT_TYPES,
+  SESSION_EVENT_TYPES,
+  SESSION_RESERVED_EVENT_TYPES,
+  SESSION_SCHEMA_VERSION,
+} from "../../src/session/schema.js";
 import { SessionLog } from "../../src/session/sessionLog.js";
 
 /**
- * S2 补充语义——schema v0 白名单（owner 口径 #3）、projection 字段位、落盘流损坏 fail-closed。
+ * schema 常量与白名单（v0 语义 owner 口径 #3 → P2-S1 bump v1：11 类一次定死 + 保留位拒写）
+ * + projection 字段位、落盘流损坏 fail-closed、v0 → v1 迁移向后兼容。
  */
 
 const DIGEST_A = "a".repeat(64);
@@ -27,9 +33,13 @@ const resolver = MockDigestResolver.withDigests([
   { journal_type: "run_journal", fact_id: "fact-1", sha256_digest: DIGEST_A },
 ]);
 
-describe("schema v0 常量与白名单", () => {
-  it("白名单恰好 7 类（任务书 S2-1），schema 版本 0", () => {
-    expect(SESSION_SCHEMA_VERSION).toBe(0);
+const createAndWrite = async (lines: string[], path: string = logPath()): Promise<void> => {
+  await writeFile(path, lines.join("\n"), "utf8");
+};
+
+describe("schema v1 常量与白名单（P2-S1 bump：11 类一次定死 + 启用位）", () => {
+  it("白名单 11 类一次定死（owner 口径 #1），启用 8 类，保留位 3 类，schema 版本 1", () => {
+    expect(SESSION_SCHEMA_VERSION).toBe(1);
     expect(SESSION_EVENT_TYPES).toEqual([
       "user/message",
       "assistant/message",
@@ -38,7 +48,66 @@ describe("schema v0 常量与白名单", () => {
       "tool/result",
       "turn/start",
       "turn/end",
+      "session/compaction",
+      "approval/request",
+      "approval/response",
+      "provider/switch",
     ]);
+    expect(SESSION_ENABLED_EVENT_TYPES).toEqual([
+      "user/message",
+      "assistant/message",
+      "assistant/attempt",
+      "tool/call",
+      "tool/result",
+      "turn/start",
+      "turn/end",
+      "session/compaction",
+    ]);
+    expect(SESSION_RESERVED_EVENT_TYPES).toEqual(["approval/request", "approval/response", "provider/switch"]);
+  });
+
+  it("保留位类型拒绝写入（owner 口径 #1：未实现类型不得被写入）——err 且文件零增长", async () => {
+    const path = logPath();
+    const log = await SessionLog.create(path, resolver).then((r) => (r.ok ? r.value : undefined));
+    expect(log).toBeDefined();
+    if (log === undefined) return;
+
+    for (const reserved of SESSION_RESERVED_EVENT_TYPES) {
+      const rejected = await log.append({ type: reserved, payload: {} });
+      expect(rejected.ok, `${reserved} 应被拒绝`).toBe(false);
+      if (!rejected.ok) {
+        expect(rejected.error.code).toBe("schema_violation");
+        expect(rejected.error.message).toContain("未启用");
+        expect(rejected.error.message).toContain(reserved);
+      }
+    }
+
+    const raw = await readFile(path, "utf8").catch((cause: NodeJS.ErrnoException) => (cause.code === "ENOENT" ? "" : "<exists>"));
+    expect(raw).toBe(""); // 保留位类型一条都没落盘
+  });
+
+  it("保留位类型出现于落盘流 → replay err(schema_violation)（fail-closed：视为篡改/超前版本）", async () => {
+    await createAndWrite([
+      JSON.stringify({ id: 1, ts: new Date().toISOString(), type: "approval/request", payload: {}, projection: { evidence_event: null } }),
+    ]);
+    const replayed = await SessionLog.replay(logPath(), resolver);
+    expect(replayed.ok).toBe(false);
+    if (!replayed.ok) {
+      expect(replayed.error.code).toBe("schema_violation");
+      expect(replayed.error.message).toContain("未启用");
+    }
+  });
+
+  it("schema v1 迁移：v0 形态落盘流（7 类事件）可 replay——向后兼容，无需改写", async () => {
+    const mk = (id: number, type: string): string =>
+      JSON.stringify({ id, ts: new Date().toISOString(), type, payload: { v0: true }, projection: { evidence_event: null } });
+    await createAndWrite([mk(1, "turn/start"), mk(2, "user/message"), mk(3, "assistant/message"), mk(4, "turn/end")]);
+    const replayed = await SessionLog.replay(logPath(), resolver);
+    expect(replayed.ok).toBe(true);
+    if (replayed.ok) {
+      expect(replayed.value.events.map((event) => event.type)).toEqual(["turn/start", "user/message", "assistant/message", "turn/end"]);
+      expect(replayed.value.blocks).toEqual([]);
+    }
   });
 
   it("未知 type 拒绝写入（owner 口径 #3）——err 且文件零增长", async () => {
@@ -110,10 +179,6 @@ describe("schema v0 常量与白名单", () => {
 });
 
 describe("落盘流损坏（fail-closed：replay / 续写一律拒绝）", () => {
-  const createAndWrite = async (lines: string[], path = logPath()): Promise<void> => {
-    await writeFile(path, lines.join("\n"), "utf8");
-  };
-
   it("坏 JSON 行 → replay err(corrupt_stream)", async () => {
     await createAndWrite(["{not json"]);
     const replayed = await SessionLog.replay(logPath(), resolver);

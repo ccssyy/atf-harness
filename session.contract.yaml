@@ -1,31 +1,40 @@
 # =====================================================================
-# session.contract.yaml — atf-harness 会话事件流（schema v0）与落盘形态契约
+# session.contract.yaml — atf-harness 会话事件流（schema v1）与落盘形态契约
 #
 # 定位说明：bridge.contract.yaml 是 harness 对 ATF 内核认知的唯一真相源；
 # 本文件登记的是 harness 本地会话层的 schema 与落盘形态（ADR-06 / Phase 1
-# 任务书 S2 / owner 启动指令口径 #4），不涉及内核对接面。二者互不隶属，
-# 任何一侧变更各自走显式 PR + owner review。
+# 任务书 S2 / owner 启动指令口径 #4 / Phase 2 P2-S1），不涉及内核对接面。
+# 二者互不隶属，任何一侧变更各自走显式 PR + owner review。
 #
 # 依据：ADR-06（双层引用，附三条落地细则）+ Phase 1 任务书 §2 +
-#       《ATF-Harness_Owner启动指令_Phase1_S2_20260909.md》口径 #1–#4。
+#       《ATF-Harness_Owner启动指令_Phase1_S2_20260909.md》口径 #1–#4 +
+#       Phase 2 任务书 §2 + 《ATF-Harness_Owner决议与启动指令_D1闭合_P2S1启动_20260910.md》口径 #1–#5
+#       + ADR-09（ACP 消费面定型）C4/C5。
 # =====================================================================
 
 contract_version: 1
-schema_version: 0            # 事件 schema v0 起步（owner 口径 #3）
+schema_version: 1            # P2-S1 完成 v0 → v1 显式 bump（迁移说明见 migration 节）
 
 # ---------------------------------------------------------------------
-# 事件类型枚举（严格白名单——任务书 S2-1 列出的 7 类，无第八类）
+# 事件类型枚举（schema v1：11 类一次定死，owner 口径 #1 / ADR-09 C4）
+# enabled = 本 slice 可写入；reserved = 已登记未启用（P2-S2/S3 启用），
+# 写入与落盘流中出现一律拒绝（未启用 type 一律拒绝，沿用 v0 白名单纪律）
 # ---------------------------------------------------------------------
 event_types:
-  - user/message             # 用户输入
-  - assistant/message         # 助手对模型历史的正式输出
-  - assistant/attempt         # 失败尝试：落盘但不进模型历史（transformContext 过滤）
-  - tool/call                 # 工具调用发起
-  - tool/result               # 工具结果回填
-  - turn/start                # 轮次开始
-  - turn/end                  # 轮次结束
-  rule: 白名单外 type 一律拒绝写入（append err(schema_violation)）；
-        replay 遇白名单外 type = err(schema_violation)（fail-closed，视为文件被篡改）
+  - user/message             # 用户输入                      [enabled]
+  - assistant/message         # 助手对模型历史的正式输出        [enabled]
+  - assistant/attempt        # 失败尝试：落盘但不进模型历史（transformContext 过滤）[enabled]
+  - tool/call                # 工具调用发起                  [enabled]
+  - tool/result              # 工具结果回填                  [enabled]
+  - turn/start               # 轮次开始                     [enabled]
+  - turn/end                 # 轮次结束                     [enabled]
+  - session/compaction       # 压缩动作审计留痕（P2-S1）      [enabled]
+  - approval/request         # 审批请求（保留位，P2-S2 启用） [reserved]
+  - approval/response        # 审批应答（保留位，P2-S2 启用） [reserved]
+  - provider/switch          # provider 热切换（保留位，P2-S3 启用）[reserved]
+  rule: 未知 type 一律拒绝写入（append err(schema_violation)）；
+        reserved type 写入与出现于落盘流均 err(schema_violation)（未启用即拒，fail-closed）；
+        replay 遇上述两类 type = err(schema_violation)（fail-closed，视为文件被篡改/超前版本）
 
 # ---------------------------------------------------------------------
 # 事件 schema（每条事件恰好一行 JSON）
@@ -78,20 +87,79 @@ digest_check:
 persistence:
   format: JSONL              # 每行恰好一个完整事件 JSON，UTF-8，行尾 LF；中间空行 = 损坏流
   mode: append-only          # 只追加、不改写不删除；崩溃可重建（replay）
-  durability: 每次追加 = 独立打开 O_APPEND 写入并等待写完成（先落盘再继续）；
-              fsync 策略 Phase 2 评估（Phase 1 冒烟量级不依赖断电级持久性）
+  durability:                # P2-S1 定死（owner 决议四 / 任务书 §2 设计要求 6–8）
+    contract: durability 契约按档表述「已确认事件」，确认点不同、承诺同强度：
+              逐条档 ack = 已 fsync（已确认事件永不丢）；批量档持久化确认点 = 刷盘水位线
+    default: per-append      # 默认逐条 fsync：每条事件 write + fsync 后 ack（durability 优先）
+    batch:                   # 批量窗口性能档（收在常量层，模型不可见）
+      flush_when: 攒满 N 条立即 fsync，否则自首条未刷事件起 T 毫秒窗口到期 fsync（二者先到）
+      constants: { batch_max_events: 32, batch_window_ms: 50 }
+      ack_semantics: ack = write 完成已入 OS（顺序保留，进程崩溃不丢）；断电级持久性
+                     以刷盘水位线为准（unsyncedEvents 归零）——适用于可容忍丢尾部的场景
+    crash_recovery: 两档均有「写入中途 kill 进程 → replay 校验确认点内事件无缺失」用例
   path: 由调用方注入（库不内置路径策略）；S4 工作区落地后默认约定 runs/<run_id>/session.jsonl
   write_order: id 必须与落盘顺序一致且严格连续（续写打开时从文件尾部 id 续接）
 
 # ---------------------------------------------------------------------
-# 双管道占位（任务书 S2-3：函数签名定死，内部逻辑 Phase 2 再长）
+# compaction（P2-S1，任务书 §2 设计要求 1–5 / ADR-09 C4；常量层，模型不可见）
+# ---------------------------------------------------------------------
+compaction:
+  invariants:
+    - append-only 不变：压缩只影响投给模型的投影视图（transformContext），磁盘事件流不删不改
+    - 计划为纯函数：live 与 replay 对同一事件序列计算结果逐条一致（重建一致、幂等重放）
+    - 承证白名单：携带 domain_refs 的事件及其相邻因果链永不折叠，引用链留在模型上下文
+  trigger:                    # 双指标，先到者生效（owner 口径 #2；初值选取理由如下）
+    event_count: 128          # 实质事件数门：Phase 1 冒烟单分支 ≤ 50 事件，128 留 2 倍以上
+                              # 余量——小会话零压缩开销，长会话在可控粒度折叠
+    token_budget: 24000       # 估算 token 门（兜底「事件少但单条超长」形态）；
+                              # 估算 = ceil(payload JSON 字符串长度 / 2) 求和——中文约 0.6–1
+                              # token/字符，取 1/2 为偏保守估计（宁可早压，不冒溢出险）
+    note: 实质事件 = 除 session/compaction 审计事件外的全部事件（审计对算法透明）
+  algorithm:
+    keep_recent: 32           # 保留窗：最近 32 条实质事件永不折叠（模型保有最新原文上下文）
+    chunk: 32                 # 折叠边界按 32 的整数倍推进（滞后防逐条重折叠）
+    whitelist: domain_refs 命中事件 + 其配对事件（tool/result ↔ 往前最近同名工具 tool/call，
+                tool/call ↔ 往后最近同名工具 tool/result）永不折叠，原文保留于投影
+    projection_form: [压缩摘要(session/compaction), 折叠区间白名单豁免原文…, 保留窗原文…]
+  audit_event:
+    type: session/compaction
+    written_by: SessionLog.append 自动落盘（同一折叠边界按 covers.to_id 判重只记一次）
+    payload_fields: [kind, covers{from_id,to_id}, folded_count, kept_ids, type_counts,
+                     trigger{events,estimated_tokens,reason}, text]
+    purpose: 可审计（哪次压缩吃掉了哪些事件）+ 计划重建锚；审计事件不进入模型投影
+
+# ---------------------------------------------------------------------
+# schema v0 → v1 迁移说明（任务书 §2 设计要求 2：旧会话可 replay）
+# ---------------------------------------------------------------------
+migration:
+  v0_to_v1:
+    compatibility: 向后兼容——v0 落盘流的全部事件类型与字段在 v1 规则下原样合法
+    action: 无需迁移/改写；v1 代码直接 replay v0 会话（新增类型在 v0 流中不出现）
+    validation: v1 校验器对 v0 流逐行通过；启用位检查对 v0 七类全部放行
+    version_carrier: 落盘流无版本头（逐行自描述）；版本语义由读取方（本契约）承载
+
+# ---------------------------------------------------------------------
+# headless run 退出码枚举（决议 §2.2 补登）
+# 性质：run 级语义登记；0/78/1 为既有语义原样补登，75/79 为新增码（枚举补登，
+# 不触发 contract_version bump）；映射统一经 resolveHeadlessExitCode() 单出口
+# ---------------------------------------------------------------------
+headless_exit_codes:
+  0:  completed —— 正常收束
+  78: blocked —— approval_missing（headless 审批锚点，不挪用）
+  1:  failed —— 系统/对端/桥接/工作区故障（含会话层拒绝 t0_ref_forbidden）
+  75: suspended —— 非终态，审批应答等待超时挂起（EX_TEMPFAIL 语义：暂时无法继续，resume 可续）
+  79: aborted —— 终态，主动终止（应答 verdict=abort 或宿主 resume(abort)）
+
+# ---------------------------------------------------------------------
+# 双管道（任务书 S2-3 定签名；P2-S1 起真实实现，登记于 pipeline 节）
 # ---------------------------------------------------------------------
 pipeline:
   transformContext:
     signature: (events: readonly SessionEvent[]) => LlmContextEvent[]
-    behavior_v0: 拼接 + 过滤 assistant/attempt（失败尝试落盘但不进模型历史）
+    behavior_v1: 过滤 assistant/attempt + compaction 投影（未触发 = v0 语义原样；
+                 触发 = [压缩摘要] + [白名单豁免原文] + [保留窗原文]，审计事件不进入投影）
   convertToLlm:
     signature: (event: SessionEvent) => LlmContextEvent
-    behavior_v0: 白名单投影——输出仅 { id, ts, type, payload, domain_refs? }；
+    behavior_v1: 白名单投影——输出仅 { id, ts, type, payload, domain_refs? }；
                  ui / projection / ref_invalid 及未来任何新增字段一律不出现（内部字段不发模型）
   llm_context_event_fields: [id, ts, type, payload, domain_refs?]

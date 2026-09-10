@@ -1,10 +1,14 @@
 /**
- * S2 会话层公开出口。后续 slice（S3 工具层 / S5 冒烟）只从这里 import。
+ * 会话层公开出口。后续 slice（工具层 / 冒烟 / runner）只从这里 import。
  */
 export {
+  SESSION_ENABLED_EVENT_TYPES,
   SESSION_EVENT_TYPES,
+  SESSION_RESERVED_EVENT_TYPES,
   SESSION_SCHEMA_VERSION,
   asSessionEvent,
+  hasDomainRefs,
+  isEnabledEventType,
   isSessionEventType,
   validateDomainRef,
   validateEventEnvelope,
@@ -15,6 +19,29 @@ export {
   type SessionEventInput,
   type SessionEventType,
 } from "./schema.js";
+export {
+  COMPACTION_CHUNK,
+  COMPACTION_KEEP_RECENT,
+  COMPACTION_TRIGGER_EVENTS,
+  COMPACTION_TRIGGER_TOKENS,
+  FSYNC_BATCH_MAX_EVENTS,
+  FSYNC_BATCH_WINDOW_MS,
+  FSYNC_DEFAULT_MODE,
+  TOKEN_ESTIMATE_DIVISOR,
+} from "./constants.js";
+export {
+  buildCompactionRecord,
+  computeCompactionWhitelist,
+  convertToLlm,
+  estimateTokens,
+  materialOf,
+  planCompaction,
+  projectContext,
+  type CompactionPlan,
+  type CompactionRecordPayload,
+  type CompactionTriggerReason,
+  type LlmContextEvent,
+} from "./compaction.js";
 export {
   sessionError,
   type InvalidRef,
@@ -27,9 +54,10 @@ export { MockDigestResolver, type DigestLookup, type DigestResolver } from "./di
 export {
   MAX_SESSION_LINE_BYTES,
   SessionLog,
-  hasDomainRefs,
   type AppendOutcome,
+  type FsyncMode,
+  type FsyncOptions,
   type ReplayOutcome,
   type SessionLogOptions,
 } from "./sessionLog.js";
-export { convertToLlm, transformContext, type LlmContextEvent } from "./pipeline.js";
+export { transformContext } from "./pipeline.js";

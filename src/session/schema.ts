@@ -1,13 +1,15 @@
 /**
- * 会话事件 schema v0（ADR-06 + Phase 1 任务书 S2-1，登记于 session.contract.yaml）。
- * 事件类型严格白名单；未知 type 拒绝写入（owner 口径 #3）。
+ * 会话事件 schema v1（ADR-06 + Phase 2 任务书 §2 / owner 决议口径 #1，登记于 session.contract.yaml）。
+ * v1 = v0 七类 + session/compaction（P2-S1 启用）+ approval/request、approval/response、
+ * provider/switch（P2-S2/S3 启用，本 slice 为保留位——不得写入、落盘流出现即拒，白名单纪律沿用 v0）。
+ * 事件类型严格白名单；未知或未启用 type 拒绝写入。
  * 本模块只做结构与语法的运行时校验；digest 与领域事实的一致性校验在 sessionLog.ts。
  */
 
-/** 事件 schema 版本（v0 起步，owner 口径 #3）。 */
-export const SESSION_SCHEMA_VERSION = 0;
+/** 事件 schema 版本（P2-S1 完成 v0 → v1 显式 bump；v1 对 v0 落盘流向后兼容，迁移说明见 session.contract.yaml）。 */
+export const SESSION_SCHEMA_VERSION = 1;
 
-/** 事件类型白名单——任务书 S2-1 列出的 7 类，无第八类。 */
+/** schema v1 事件类型白名单——11 类一次定死（owner 口径 #1 / D1 结论 C4）。 */
 export const SESSION_EVENT_TYPES = [
   "user/message",
   "assistant/message",
@@ -16,12 +18,35 @@ export const SESSION_EVENT_TYPES = [
   "tool/result",
   "turn/start",
   "turn/end",
+  "session/compaction", // P2-S1：压缩动作审计留痕（哪次压缩吃掉了哪些事件）
+  "approval/request", // 保留位：P2-S2 启用
+  "approval/response", // 保留位：P2-S2 启用
+  "provider/switch", // 保留位：P2-S3 启用
 ] as const;
 
 export type SessionEventType = (typeof SESSION_EVENT_TYPES)[number];
 
+/** 本 slice 可写入（启用）类型：v0 七类 + session/compaction（owner 口径 #1：未实现类型不得被写入）。 */
+export const SESSION_ENABLED_EVENT_TYPES = [
+  "user/message",
+  "assistant/message",
+  "assistant/attempt",
+  "tool/call",
+  "tool/result",
+  "turn/start",
+  "turn/end",
+  "session/compaction",
+] as const;
+
+/** schema v1 保留位类型：已登记未启用——写入与落盘流中出现一律拒绝（fail-closed）。 */
+export const SESSION_RESERVED_EVENT_TYPES = ["approval/request", "approval/response", "provider/switch"] as const;
+
 export const isSessionEventType = (value: unknown): value is SessionEventType =>
   typeof value === "string" && (SESSION_EVENT_TYPES as readonly string[]).includes(value);
+
+/** 是否为当前可写入（已启用）的事件类型。 */
+export const isEnabledEventType = (value: unknown): value is SessionEventType =>
+  isSessionEventType(value) && !(SESSION_RESERVED_EVENT_TYPES as readonly string[]).includes(value);
 
 /** 双层引用三元组（ADR-06 细则 1）：digest 是唯一合法引用形态，不含事实内容副本。 */
 export interface DomainRef {
@@ -102,11 +127,15 @@ export const validateEventEnvelope = (value: unknown): string | null => {
     return "事件 ts 非法（须为可解析的 ISO 8601 时间串）";
   }
   if (!isSessionEventType(value["type"])) {
-    return `未知事件 type: ${String(value["type"])}（schema v0 白名单外一律拒绝）`;
+    return `未知事件 type: ${String(value["type"])}（schema v1 白名单外一律拒绝）`;
+  }
+  if (!isEnabledEventType(value["type"])) {
+    // 保留位类型（approval/*、provider/switch）在启用 slice（P2-S2/S3）前不得写入或出现于落盘流
+    return `事件 type 未启用（schema v1 保留位）: ${String(value["type"])}`;
   }
   if (!("payload" in value)) return "事件缺少 payload 字段";
   if (!isPlainObject(value["projection"]) || !("evidence_event" in value["projection"])) {
-    return "事件缺少 projection 字段位（schema v0 要求必须存在）";
+    return "事件缺少 projection 字段位（schema v1 要求必须存在）";
   }
   if ((value["projection"] as Record<string, unknown>)["evidence_event"] !== null) {
     return "projection.evidence_event 非 null（Phase 3 前恒为 null，非 null 视为 schema 提前激活）";
@@ -149,3 +178,7 @@ export const asSessionEvent = (value: Record<string, unknown>): SessionEvent => 
   if ("ref_invalid" in value) event.ref_invalid = value["ref_invalid"] as InvalidRefEntry[];
   return event;
 };
+
+/** domain_refs 类型收窄的便利判断（空数组语义 = 无引用）。 */
+export const hasDomainRefs = (event: SessionEvent): boolean =>
+  event.domain_refs !== undefined && event.domain_refs.length > 0;

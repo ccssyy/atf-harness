@@ -4,7 +4,7 @@
  */
 
 export type SessionErrorCode =
-  | "schema_violation" // 事件结构违反 schema v0（未知 type / 字段缺失 / digest 格式非法 / payload 不可序列化 / projection 提前激活）
+  | "schema_violation" // 事件结构违反 schema v1（未知/未启用 type / 字段缺失 / digest 格式非法 / payload 不可序列化 / projection 提前激活）
   | "resolver_failure" // DigestResolver 查询自身失败——不落盘、不标记、不猜测（基础设施故障 ≠ 引用无效）
   | "corrupt_stream" // 落盘流损坏（坏 JSON 行 / 中间空行 / id 不连续 / 行超限）
   | "io_error"; // 落盘读写失败
