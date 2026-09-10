@@ -22,8 +22,10 @@ import { hasDomainRefs, type SessionEvent } from "./schema.js";
 
 /**
  * 模型上下文事件——convertToLlm 的白名单输出形态（session.contract.yaml pipeline 节）。
- * 仅 { id, ts, type, payload, domain_refs? }；ui / projection / ref_invalid 及
+ * 仅 { id, ts, type, payload, domain_refs?, synthetic? }；ui / projection / ref_invalid 及
  * 任何其他内部字段一律不出现（内部字段不发模型，与 S3 工具 schema 同一收敛哲学）。
+ * synthetic 仅出现在投影合成的压缩摘要条目上（P1-2 修复：与同 id 的白名单豁免原文区分，
+ * 投影消费者按 (id, synthetic) 唯一识别条目——ADR-09 §1.2 投影形态纪律）。
  */
 export interface LlmContextEvent {
   id: number;
@@ -31,6 +33,7 @@ export interface LlmContextEvent {
   type: SessionEvent["type"];
   payload: unknown;
   domain_refs?: SessionEvent["domain_refs"];
+  synthetic?: boolean;
 }
 
 /** 单事件白名单投影：剔除 UI-only 与内部字段。 */
@@ -85,9 +88,12 @@ export interface CompactionRecordPayload {
   text: string;
 }
 
-/** 实质事件序列：session/compaction 审计事件对压缩算法透明（不计数、不折叠、不投影）。 */
+/**
+ * 实质事件序列：session/compaction（压缩审计）与 session/repair（S1a 尾部修复留痕）
+ * 均为运维留痕而非对话内容——对压缩算法透明（不计数、不折叠、不投影）。
+ */
 export const materialOf = (events: readonly SessionEvent[]): SessionEvent[] =>
-  events.filter((event) => event.type !== "session/compaction");
+  events.filter((event) => event.type !== "session/compaction" && event.type !== "session/repair");
 
 /** payload 估算 token（启发式，常量层理由见 TOKEN_ESTIMATE_DIVISOR）。 */
 const estimateEventTokens = (event: SessionEvent): number =>
@@ -214,7 +220,8 @@ export const projectContext = (events: readonly SessionEvent[]): LlmContextEvent
   const out: LlmContextEvent[] = [];
   const record = buildCompactionRecord(material, plan);
   const anchor = material[plan.boundary - 1] as SessionEvent;
-  out.push({ id: anchor.id, ts: anchor.ts, type: "session/compaction", payload: record });
+  // synthetic 标记（P1-2 修复）：摘要条目是投影合成物，可能与同 id 的白名单豁免原文并存
+  out.push({ id: anchor.id, ts: anchor.ts, type: "session/compaction", payload: record, synthetic: true });
 
   const pushOriginal = (event: SessionEvent): void => {
     if (event.type !== "assistant/attempt") out.push(convertToLlm(event));

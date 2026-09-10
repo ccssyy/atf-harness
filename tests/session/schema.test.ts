@@ -34,11 +34,13 @@ const resolver = MockDigestResolver.withDigests([
 ]);
 
 const createAndWrite = async (lines: string[], path: string = logPath()): Promise<void> => {
-  await writeFile(path, lines.join("\n"), "utf8");
+  // 完整流语义:每行以 LF 结尾(S1a 起,无结尾 LF 的末段 = 未确认尾部,走容忍路径,
+  // 属 tailRepair.test.ts 的管辖范围——本文件全部损坏用例均为 LF 结尾的完整行)
+  await writeFile(path, `${lines.join("\n")}\n`, "utf8");
 };
 
 describe("schema v1 常量与白名单（P2-S1 bump：11 类一次定死 + 启用位）", () => {
-  it("白名单 11 类一次定死（owner 口径 #1），启用 8 类，保留位 3 类，schema 版本 1", () => {
+  it("白名单 12 类（S1a 定义修正 11→12），启用 9 类，保留位 3 类，schema 版本仍 1（不 bump）", () => {
     expect(SESSION_SCHEMA_VERSION).toBe(1);
     expect(SESSION_EVENT_TYPES).toEqual([
       "user/message",
@@ -49,6 +51,7 @@ describe("schema v1 常量与白名单（P2-S1 bump：11 类一次定死 + 启�
       "turn/start",
       "turn/end",
       "session/compaction",
+      "session/repair",
       "approval/request",
       "approval/response",
       "provider/switch",
@@ -62,6 +65,7 @@ describe("schema v1 常量与白名单（P2-S1 bump：11 类一次定死 + 启�
       "turn/start",
       "turn/end",
       "session/compaction",
+      "session/repair",
     ]);
     expect(SESSION_RESERVED_EVENT_TYPES).toEqual(["approval/request", "approval/response", "provider/switch"]);
   });
@@ -223,25 +227,33 @@ describe("落盘流损坏（fail-closed：replay / 续写一律拒绝）", () =>
     if (!replayed.ok) expect(replayed.error.code).toBe("corrupt_stream");
   });
 
-  it("末行残缺（崩溃半行：无结尾 LF）→ replay 与续写打开一律 err(corrupt_stream)，不猜测", async () => {
+  it("末行残缺（崩溃半行：无结尾 LF）→ S1a 尾部策略：未确认尾部被容忍（replay 成功 + truncated_tail；详细用例见 tailRepair.test.ts）", async () => {
     const log = await SessionLog.create(logPath(), resolver).then((r) => (r.ok ? r.value : undefined));
     expect(log).toBeDefined();
     if (log === undefined) return;
     await log.append({ type: "turn/start", payload: {} });
     await log.append({ type: "user/message", payload: { text: "hi" } });
 
-    // 模拟崩溃：追加半行（JSON 前缀，无 LF）——不可信字节，fail-closed 拒绝解读
+    // 模拟崩溃：追加半行（JSON 前缀，无 LF）——从未被 ack 的残段，S1a 起容忍并丢弃
     const raw = await readFile(logPath(), "utf8");
     await writeFile(logPath(), `${raw}{"id":3,"ts":"2`, "utf8");
 
     const replayed = await SessionLog.replay(logPath(), resolver);
-    expect(replayed.ok).toBe(false);
-    if (!replayed.ok) expect(replayed.error.code).toBe("corrupt_stream");
+    expect(replayed.ok).toBe(true);
+    if (replayed.ok) {
+      expect(replayed.value.events).toHaveLength(2);
+      expect(replayed.value.truncated_tail).toEqual({ dropped_bytes: 15, dropped_from_offset: expect.any(Number) });
+    }
 
-    // 续写打开同样拒绝：在残缺流上继续追加会产生合并坏行
+    // 续写打开：截断修复 + repair 留痕（成对动作）
     const reopened = await SessionLog.create(logPath(), resolver);
-    expect(reopened.ok).toBe(false);
-    if (!reopened.ok) expect(reopened.error.code).toBe("corrupt_stream");
+    expect(reopened.ok).toBe(true);
+    if (reopened.ok) {
+      expect(reopened.value.truncatedTail).not.toBeNull();
+      const appended = await reopened.value.append({ type: "turn/end", payload: {} });
+      expect(appended.ok).toBe(true);
+      if (appended.ok) expect(appended.value.event.id).toBe(4); // repair 留痕占 id 3，新事件续接
+    }
   });
 
   it("不存在的文件 → replay err(io_error)；空文件 → ok 空序列", async () => {
@@ -253,7 +265,7 @@ describe("落盘流损坏（fail-closed：replay / 续写一律拒绝）", () =>
     await writeFile(emptyPath, "", "utf8");
     const empty = await SessionLog.replay(emptyPath, resolver);
     expect(empty.ok).toBe(true);
-    if (empty.ok) expect(empty.value).toEqual({ events: [], blocks: [] });
+    if (empty.ok) expect(empty.value).toEqual({ events: [], blocks: [], truncated_tail: null });
   });
 
   it("父目录不存在 → create 自动建目录；续写打开从既有尾部 id 续接", async () => {

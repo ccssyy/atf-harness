@@ -1,15 +1,18 @@
 /**
  * 会话事件 schema v1（ADR-06 + Phase 2 任务书 §2 / owner 决议口径 #1，登记于 session.contract.yaml）。
- * v1 = v0 七类 + session/compaction（P2-S1 启用）+ approval/request、approval/response、
- * provider/switch（P2-S2/S3 启用，本 slice 为保留位——不得写入、落盘流出现即拒，白名单纪律沿用 v0）。
+ * v1 = v0 七类 + session/compaction + session/repair（P2-S1/S1a 启用）+ approval/request、
+ * approval/response、provider/switch（P2-S2/S3 启用，本阶段为保留位——不得写入、落盘流
+ * 出现即拒，白名单纪律沿用 v0）。
+ * v1 定义修正（S1a，决议 §2.1.6）：P2-S1 未闭合前 v1 仍在修正窗口内，集合 11 → 12 类属
+ * v1 定义修正，不构成 v1 → v2。
  * 事件类型严格白名单；未知或未启用 type 拒绝写入。
  * 本模块只做结构与语法的运行时校验；digest 与领域事实的一致性校验在 sessionLog.ts。
  */
 
-/** 事件 schema 版本（P2-S1 完成 v0 → v1 显式 bump；v1 对 v0 落盘流向后兼容，迁移说明见 session.contract.yaml）。 */
+/** 事件 schema 版本（v1；S1a 定义修正 11 → 12 类，不 bump 版本号）。 */
 export const SESSION_SCHEMA_VERSION = 1;
 
-/** schema v1 事件类型白名单——11 类一次定死（owner 口径 #1 / D1 结论 C4）。 */
+/** schema v1 事件类型白名单——12 类（S1a 定义修正后定死）。 */
 export const SESSION_EVENT_TYPES = [
   "user/message",
   "assistant/message",
@@ -19,6 +22,7 @@ export const SESSION_EVENT_TYPES = [
   "turn/start",
   "turn/end",
   "session/compaction", // P2-S1：压缩动作审计留痕（哪次压缩吃掉了哪些事件）
+  "session/repair", // S1a：尾部残段截断修复留痕（与截断成对写入）
   "approval/request", // 保留位：P2-S2 启用
   "approval/response", // 保留位：P2-S2 启用
   "provider/switch", // 保留位：P2-S3 启用
@@ -26,7 +30,7 @@ export const SESSION_EVENT_TYPES = [
 
 export type SessionEventType = (typeof SESSION_EVENT_TYPES)[number];
 
-/** 本 slice 可写入（启用）类型：v0 七类 + session/compaction（owner 口径 #1：未实现类型不得被写入）。 */
+/** 本阶段可写入（启用）类型：v0 七类 + session/compaction + session/repair（owner 口径 #1：未实现类型不得被写入）。 */
 export const SESSION_ENABLED_EVENT_TYPES = [
   "user/message",
   "assistant/message",
@@ -36,6 +40,7 @@ export const SESSION_ENABLED_EVENT_TYPES = [
   "turn/start",
   "turn/end",
   "session/compaction",
+  "session/repair",
 ] as const;
 
 /** schema v1 保留位类型：已登记未启用——写入与落盘流中出现一律拒绝（fail-closed）。 */

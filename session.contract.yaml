@@ -13,11 +13,12 @@
 # =====================================================================
 
 contract_version: 1
-schema_version: 1            # P2-S1 完成 v0 → v1 显式 bump（迁移说明见 migration 节）
+schema_version: 1            # v1（P2-S1 完成 v0 → v1 bump；S1a 定义修正：集合 11 → 12 类，
+                             # 依决议 §2.1.6 属 v1 修正窗口内，不构成 v1 → v2，版本号不 bump）
 
 # ---------------------------------------------------------------------
-# 事件类型枚举（schema v1：11 类一次定死，owner 口径 #1 / ADR-09 C4）
-# enabled = 本 slice 可写入；reserved = 已登记未启用（P2-S2/S3 启用），
+# 事件类型枚举（schema v1：12 类，S1a 定义修正后定死；原口径 #1 / ADR-09 C4）
+# enabled = 本阶段可写入；reserved = 已登记未启用（P2-S2/S3 启用），
 # 写入与落盘流中出现一律拒绝（未启用 type 一律拒绝，沿用 v0 白名单纪律）
 # ---------------------------------------------------------------------
 event_types:
@@ -29,6 +30,7 @@ event_types:
   - turn/start               # 轮次开始                     [enabled]
   - turn/end                 # 轮次结束                     [enabled]
   - session/compaction       # 压缩动作审计留痕（P2-S1）      [enabled]
+  - session/repair           # 尾部残段截断修复留痕（S1a，与截断成对写入）[enabled]
   - approval/request         # 审批请求（保留位，P2-S2 启用） [reserved]
   - approval/response        # 审批应答（保留位，P2-S2 启用） [reserved]
   - provider/switch          # provider 热切换（保留位，P2-S3 启用）[reserved]
@@ -87,16 +89,24 @@ digest_check:
 persistence:
   format: JSONL              # 每行恰好一个完整事件 JSON，UTF-8，行尾 LF；中间空行 = 损坏流
   mode: append-only          # 只追加、不改写不删除；崩溃可重建（replay）
-  durability:                # P2-S1 定死（owner 决议四 / 任务书 §2 设计要求 6–8）
-    contract: durability 契约按档表述「已确认事件」，确认点不同、承诺同强度：
-              逐条档 ack = 已 fsync（已确认事件永不丢）；批量档持久化确认点 = 刷盘水位线
-    default: per-append      # 默认逐条 fsync：每条事件 write + fsync 后 ack（durability 优先）
-    batch:                   # 批量窗口性能档（收在常量层，模型不可见）
+  durability:                # P2-S1 定死；S1a 按决议 §2.2 修正措辞（两档强度不同）
+    contract: durability 契约按档表述「已确认事件」，两档强度不同：
+              逐条档 ack = 已 fsync——已确认事件具备断电级持久性（永不丢）；
+              批量档 ack = write 完成已入 OS（进程崩溃不丢）——ack 不含断电级持久性，
+              断电级确认点 = 刷盘水位线（unsyncedEvents 归零）
+    default: per-append      # 默认恒为逐条 fsync（决议 §2.2 三条件之一：批量档不得为默认档）
+    batch:                   # 批量窗口性能档（收在常量层，模型不可见；仅显式选择时启用）
       flush_when: 攒满 N 条立即 fsync，否则自首条未刷事件起 T 毫秒窗口到期 fsync（二者先到）
       constants: { batch_max_events: 32, batch_window_ms: 50 }
       ack_semantics: ack = write 完成已入 OS（顺序保留，进程崩溃不丢）；断电级持久性
                      以刷盘水位线为准（unsyncedEvents 归零）——适用于可容忍丢尾部的场景
-    crash_recovery: 两档均有「写入中途 kill 进程 → replay 校验确认点内事件无缺失」用例
+    consumer_discipline:     # 决议 §2.2 三条件之三：消费者纪律
+      需要证据级持久性的消费者（P2-S2 的 suspended/resume 状态推进、未来 TEM 回灌）
+      必须使用 per-append 档，或在推进状态前显式调用 flush() 并确认成功
+    audit_note: 批量档下 session/compaction 审计事件同样仅到 write 级——压缩摘要可由
+                算法从事件流确定性重建，审计事件不承担唯一副本职责
+    crash_recovery: 两档均有「写入中途 kill 进程 → replay 校验确认点内事件无缺失」用例；
+                    S1a 起另含 kill 后注入半行尾的修复路径用例（见 tail_repair 节）
   path: 由调用方注入（库不内置路径策略）；S4 工作区落地后默认约定 runs/<run_id>/session.jsonl
   write_order: id 必须与落盘顺序一致且严格连续（续写打开时从文件尾部 id 续接）
 
@@ -127,6 +137,28 @@ compaction:
     payload_fields: [kind, covers{from_id,to_id}, folded_count, kept_ids, type_counts,
                      trigger{events,estimated_tokens,reason}, text]
     purpose: 可审计（哪次压缩吃掉了哪些事件）+ 计划重建锚；审计事件不进入模型投影
+    note: 审计事件（含 session/repair）对压缩算法透明；批量档下审计事件仅到 write 级，
+          摘要可由算法确定性重建（见 durability.audit_note）
+
+# ---------------------------------------------------------------------
+# 尾部残段修复（S1a，决议 §2.1：容忍 + 截断留痕）
+# ---------------------------------------------------------------------
+tail_repair:
+  judgement: 文件非空且不以 LF 结尾 → 末段为「未确认尾部」（write 未完成的残段，从未被
+             ack）；无论残段内容是否可解析，一律判为残段
+  scope: 容忍仅限文件末尾；中间行不可解析 / id 断裂仍 fail-closed corrupt_stream（原语义不变）
+  action:
+    replay: 只读——内存中丢弃残段，以 truncated_tail 报告，文件不动
+    create: 先物理截断该残段（UTF-8 字节精确，不触及任何已确认事件）再续写
+  paired_audit:
+    type: session/repair
+    rule: 截断与留痕必须成对；留痕写失败 = 修复失败上报（fail-closed）
+    payload_fields: [dropped_bytes, dropped_from_offset, tail_excerpt(前64字符), tail_sha256]
+  return_shape:
+    replay: ReplayOutcome.truncated_tail = { dropped_bytes, dropped_from_offset } | null
+    create: SessionLog 实例属性 truncatedTail 同构（包装层透传属 S2 run 层）
+  transparency: session/repair 对压缩算法透明（同 session/compaction：不计触发指标、
+                不参与折叠、不进入投影）
 
 # ---------------------------------------------------------------------
 # schema v0 → v1 迁移说明（任务书 §2 设计要求 2：旧会话可 replay）
@@ -160,6 +192,9 @@ pipeline:
                  触发 = [压缩摘要] + [白名单豁免原文] + [保留窗原文]，审计事件不进入投影）
   convertToLlm:
     signature: (event: SessionEvent) => LlmContextEvent
-    behavior_v1: 白名单投影——输出仅 { id, ts, type, payload, domain_refs? }；
+    behavior_v1: 白名单投影——输出仅 { id, ts, type, payload, domain_refs?, synthetic? }；
                  ui / projection / ref_invalid 及未来任何新增字段一律不出现（内部字段不发模型）
-  llm_context_event_fields: [id, ts, type, payload, domain_refs?]
+  llm_context_event_fields: [id, ts, type, payload, domain_refs?, synthetic?]
+  synthetic_semantics: 投影合成的压缩摘要条目携带 synthetic: true（P1-2 修复，S1a）；
+                       与同 id 的白名单豁免原文区分，投影消费者按 (id, synthetic) 唯一识别；
+                       原文条目不携带该键（ADR-09 §1.2 投影形态纪律）

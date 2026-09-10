@@ -1,5 +1,5 @@
 import { spawn, execSync, type ChildProcess } from "node:child_process";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { appendFile, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -214,4 +214,34 @@ describe("fsync 双档写入时机（进程内，非 kill）", () => {
     expect(afterClose.ok).toBe(false);
     if (!afterClose.ok) expect(afterClose.error.code).toBe("io_error");
   });
+});
+
+describe("kill 后注入半行尾（S1a 修复路径，决议 §3 测试 7）", () => {
+  it.each(["per-append", "batch"] as const)("kill 后人为伪造未确认尾部 → replay 容忍 + create 截断留痕（%s）", async (mode) => {
+    const run = await crashRun(mode, 30, 10);
+    expect(run.killed).toBe(true);
+    expect(run.acked.length).toBeGreaterThanOrEqual(10);
+
+    // 人为注入半行尾（真实 SIGKILL 不产生残段，此处补齐该形态）
+    const raw = await readFile(run.logPath, "utf8");
+    const fragment = raw.endsWith("\n") ? '\n{"id":999,"ty' : '{"id":999,"ty';
+    await appendFile(run.logPath, fragment, "utf8");
+
+    const replayed = await SessionLog.replay(run.logPath, MockDigestResolver.withDigests([]));
+    expect(replayed.ok).toBe(true);
+    if (!replayed.ok) return;
+    expect(replayed.value.truncated_tail?.dropped_bytes).toBe(Buffer.byteLength(fragment, "utf8"));
+    expect(replayed.value.events.length).toBeGreaterThanOrEqual(run.acked.length);
+
+    // create 触发截断修复 + repair 留痕；修复后流干净可续写
+    const reopened = await SessionLog.create(run.logPath, MockDigestResolver.withDigests([]));
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    expect(reopened.value.truncatedTail).not.toBeNull();
+    const finalReplay = await SessionLog.replay(run.logPath, MockDigestResolver.withDigests([]));
+    expect(finalReplay.ok).toBe(true);
+    if (!finalReplay.ok) return;
+    expect(finalReplay.value.truncated_tail).toBeNull();
+    expect(finalReplay.value.events.some((event) => event.type === "session/repair")).toBe(true);
+  }, 30_000);
 });

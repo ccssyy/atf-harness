@@ -138,6 +138,37 @@ describe("承证白名单（domain_refs + 相邻因果链永不折叠）", () =>
     const view = transformContext(events);
     expect(view.some((item) => item.id === 122)).toBe(true); // 承证事件原文在投影中
   });
+
+  it("投影 id 语义（S1a P1-2）：anchor 命中白名单时，摘要(synthetic)与原文并存且按 (id, synthetic) 唯一识别", () => {
+    const events: SessionEvent[] = [];
+    for (let i = 0; i < 95; i += 1) events.push(ev("user/message", { seq: i }));
+    events.push(ev("tool/call", { tool: "anchor", params: {} })); // 位置 95（id 96）
+    events.push(
+      ev("tool/result", { tool: "anchor", ok: true }, {
+        domain_refs: [{ journal_type: "run_journal", fact_id: "fact-1", sha256_digest: DIGEST_A }],
+      }),
+    ); // 位置 96（id 97）
+    for (let i = 0; i < 33; i += 1) events.push(ev("user/message", { seq: 500 + i })); // 共 130
+    const plan = planCompaction(events);
+    expect(plan.boundary).toBe(96);
+    expect(plan.keptPositions.has(95)).toBe(true); // anchor（配对豁免）在折叠区间内
+
+    const view = transformContext(events);
+    const sameId = view.filter((item) => item.id === 96);
+    expect(sameId).toHaveLength(2); // 摘要条目 + 白名单豁免原文并存
+    expect(sameId[0]?.synthetic).toBe(true); // 摘要 = 投影合成物
+    expect(sameId[0]?.type).toBe("session/compaction");
+    expect(sameId[1]?.synthetic).toBeUndefined(); // 原文条目不携带该键
+    expect(sameId[1]?.type).toBe("tool/call"); // anchor 原文 = 白名单豁免的配对 tool/call
+
+    // 全投影 (id, synthetic) 组合唯一——按 id 消费投影无歧义
+    const seen = new Set<string>();
+    for (const item of view) {
+      const key = `${String(item.id)}|${item.synthetic === true ? "S" : "O"}`;
+      expect(seen.has(key)).toBe(false);
+      seen.add(key);
+    }
+  });
 });
 
 describe("压缩审计与重建一致（端到端：SessionLog 落盘 → replay → 投影逐条一致）", () => {

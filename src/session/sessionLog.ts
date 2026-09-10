@@ -18,6 +18,7 @@
  * - 禁止异常穿越边界：一切可能失败的路径返回 Result。
  */
 import { open, mkdir, readFile, type FileHandle } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { dirname } from "node:path";
 import { err, ok, type Result } from "../bridge/index.js";
 import {
@@ -63,10 +64,22 @@ export type AppendOutcome =
   | { status: "appended"; event: SessionEvent }
   | { status: "appended_blocked"; event: SessionEvent; block: SessionBlock };
 
-/** replay 结果：完整事件序列 + 校验发现的全部 block（events 与磁盘逐条对应，文件只读不改写）。 */
+/** replay 结果：完整事件序列 + 校验发现的全部 block + 尾部修复事实（events 与磁盘逐条对应，文件只读不改写）。 */
 export interface ReplayOutcome {
   events: SessionEvent[];
   blocks: SessionBlock[];
+  /**
+   * S1a：末尾未确认残段被丢弃的事实（replay 只读不改写，null = 无残段）。
+   * 可选的原因：包装层（GuardedSessionLog）在 S1a 范围外、其字面量不透传该字段——
+   * 会话层 SessionLog.replay 恒显式赋值；字段透传收紧属 S2 run 层。
+   */
+  truncated_tail?: TruncatedTail | null;
+}
+
+/** 尾部未确认残段的丢弃事实（S1a，决议 §2.1.5）。 */
+export interface TruncatedTail {
+  dropped_bytes: number;
+  dropped_from_offset: number;
 }
 
 interface ResolvedFsync {
@@ -86,6 +99,8 @@ export class SessionLog {
   private unsyncedCount = 0;
   private flushTimer: NodeJS.Timeout | null = null;
   private closed = false;
+  /** S1a：create 时对尾部未确认残段执行截断修复的事实（null = 无残段）。 */
+  public readonly truncatedTail: TruncatedTail | null;
 
   private constructor(
     private readonly filePath: string,
@@ -93,6 +108,7 @@ export class SessionLog {
     nextId: number,
     options: SessionLogOptions,
     history: SessionEvent[],
+    truncatedTail: TruncatedTail | null,
   ) {
     this.nextId = nextId;
     this.history.push(...history);
@@ -102,14 +118,17 @@ export class SessionLog {
       batchMaxEvents: options.fsync?.batchMaxEvents ?? FSYNC_BATCH_MAX_EVENTS,
       batchWindowMs: options.fsync?.batchWindowMs ?? FSYNC_BATCH_WINDOW_MS,
     };
+    this.truncatedTail = truncatedTail;
   }
 
   /**
    * 打开（或创建）一个会话日志。digest 校验对端（resolver）为必要依赖——
    * 会话层自创建起即具备 domain_refs 校验能力。
    * 若文件已存在，从既有行续接 id 序列并装载内存历史（崩溃恢复语义；
-   * 压缩审计判重依赖历史，重开后不会对同一折叠边界重复记审计）；
-   * 既有行结构损坏 = err（fail-closed，不在损坏流上继续追加）。
+   * 压缩审计判重依赖历史，重开后不会对同一折叠边界重复记审计）。
+   * S1a 尾部策略：末尾未确认残段（无结尾 LF）按 §2.1 判定为从未 ack 的不完整写入——
+   * 先物理截断该残段，再成对写入 session/repair 审计留痕（留痕写失败 = 修复失败上报，
+   * fail-closed），修复事实经实例 truncatedTail 携带；中间行损坏仍 fail-closed。
    * 注意：打开阶段只校验结构，不做 digest 校验——那是 replay 的职责。
    */
   public static async create(
@@ -123,11 +142,12 @@ export class SessionLog {
         cause.code === "ENOENT" ? ok(null) : err(sessionError("io_error", `读取会话日志失败: ${String(cause.message)}`, { code: cause.code })),
     );
     if (!read.ok) return read;
-    if (read.value === null) return ok(new SessionLog(filePath, resolver, 1, options, []));
+    if (read.value === null) return ok(new SessionLog(filePath, resolver, 1, options, [], null));
 
+    const scan = scanTailFragment(read.value);
     const history: SessionEvent[] = [];
     let maxId = 0;
-    for (const line of splitLines(read.value)) {
+    for (const line of splitLines(scan.bodyText)) {
       const parsed = SessionLog.parseLine(line);
       if (!parsed.ok) return parsed;
       if (parsed.value.event.id !== maxId + 1) {
@@ -136,13 +156,43 @@ export class SessionLog {
       maxId = parsed.value.event.id;
       history.push(parsed.value.event);
     }
-    return ok(new SessionLog(filePath, resolver, maxId + 1, options, history));
+
+    let truncatedTail: TruncatedTail | null = null;
+    if (scan.tail !== null) {
+      // 物理截断：丢弃从未 ack 过的残段（不触及任何已确认事件）
+      const truncated = await truncateTail(filePath, scan.tail);
+      if (!truncated.ok) return truncated;
+      truncatedTail = { dropped_bytes: scan.tail.droppedBytes, dropped_from_offset: scan.tail.droppedFromOffset };
+    }
+    const log = new SessionLog(filePath, resolver, maxId + 1, options, history, truncatedTail);
+
+    if (scan.tail !== null) {
+      // 成对留痕：截断与 session/repair 事件必须成对；留痕写失败 = 修复失败上报（fail-closed）
+      const recorded = await log.append({
+        type: "session/repair",
+        payload: {
+          dropped_bytes: scan.tail.droppedBytes,
+          dropped_from_offset: scan.tail.droppedFromOffset,
+          tail_excerpt: scan.tail.excerpt,
+          tail_sha256: scan.tail.sha256,
+        },
+      });
+      if (!recorded.ok) {
+        return err(sessionError("io_error", "尾部截断修复的留痕写入失败（fail-closed，修复未完成上报）", {
+          stage: "tail_repair_audit",
+          truncated_tail: truncatedTail,
+          cause: recorded.error,
+        }));
+      }
+    }
+    return ok(log);
   }
 
   /**
    * 从磁盘全量重建会话（验收用例 1 的承载），并逐事件重新做 digest 校验（验收用例 2）。
    * 文件本身只读不改写；校验失败的事件在内存中带 ref_invalid 标记并出现在 blocks 中。
-   * 结构损坏（坏行 / id 断裂 / schema 违规，含保留位类型出现于流内）= err——文件被篡改到
+   * S1a 尾部策略：末尾未确认残段在内存中丢弃并以 truncated_tail 报告（文件不动）；
+   * 中间行损坏（坏行 / id 断裂 / schema 违规，含保留位类型出现于流内）= err——文件被篡改到
    * 不可信，fail-closed。
    */
   public static async replay(filePath: string, resolver: DigestResolver): Promise<Result<ReplayOutcome, SessionError>> {
@@ -154,10 +204,11 @@ export class SessionLog {
       return err(sessionError("io_error", `读取会话日志失败: ${(cause as Error).message}`, { code: errno }));
     }
 
+    const scan = scanTailFragment(text);
     const events: SessionEvent[] = [];
     const blocks: SessionBlock[] = [];
     let expectedId = 1;
-    for (const line of splitLines(text)) {
+    for (const line of splitLines(scan.bodyText)) {
       const parsed = SessionLog.parseLine(line);
       if (!parsed.ok) return parsed;
       const event = parsed.value.event;
@@ -174,7 +225,11 @@ export class SessionLog {
       }
       events.push(event);
     }
-    return ok({ events, blocks });
+    return ok({
+      events,
+      blocks,
+      truncated_tail: scan.tail === null ? null : { dropped_bytes: scan.tail.droppedBytes, dropped_from_offset: scan.tail.droppedFromOffset },
+    });
   }
 
   /**
@@ -460,6 +515,58 @@ interface ParsedLine {
 
 const ioFailure = (summary: string, cause: unknown): Result<never, SessionError> =>
   err(sessionError("io_error", `${summary}: ${(cause as Error).message}`, { code: (cause as NodeJS.ErrnoException).code }));
+
+/** 尾部残段（S1a）：从未被 ack 的不完整写入的度量与取证信息。 */
+interface TailFragment {
+  droppedBytes: number;
+  droppedFromOffset: number;
+  excerpt: string;
+  sha256: string;
+}
+
+interface StreamScan {
+  bodyText: string;
+  tail: TailFragment | null;
+}
+
+/**
+ * S1a 尾部策略：文件非空且不以 LF 结尾 → 末段为「未确认尾部」（write 未完成的残段，
+ * 从未被 ack），无论其内容是否可解析一律判为残段；紧邻残段的空行（\n\n）同属未确认
+ * 尾部一并丢弃（否则该形态会落入中间空行损坏规则）；容忍仅限文件末尾——中间行不可
+ * 解析 / id 断裂不在此列（仍 fail-closed corrupt_stream）。
+ */
+const scanTailFragment = (text: string): StreamScan => {
+  if (text === "" || text.endsWith("\n")) return { bodyText: text, tail: null };
+  let cut = text.lastIndexOf("\n");
+  while (cut > 0 && text[cut - 1] === "\n") cut -= 1;
+  if (cut <= 0) {
+    // 整个文件不含任何完整行：全部判为未确认残段
+    return { bodyText: "", tail: makeFragment(text, 0) };
+  }
+  const bodyText = text.slice(0, cut + 1);
+  return { bodyText, tail: makeFragment(text.slice(cut + 1), Buffer.byteLength(bodyText, "utf8")) };
+};
+
+const makeFragment = (fragment: string, droppedFromOffset: number): TailFragment => ({
+  droppedBytes: Buffer.byteLength(fragment, "utf8"),
+  droppedFromOffset,
+  excerpt: fragment.slice(0, 64),
+  sha256: createHash("sha256").update(fragment, "utf8").digest("hex"),
+});
+
+/** 物理截断尾部残段（UTF-8 字节精确；只作用于从未 ack 的残段，不触及任何已确认事件）。 */
+const truncateTail = async (filePath: string, tail: TailFragment): Promise<Result<void, SessionError>> => {
+  let handle: FileHandle | null = null;
+  try {
+    handle = await open(filePath, "r+");
+    await handle.truncate(tail.droppedFromOffset);
+    await handle.close();
+    return ok(undefined);
+  } catch (cause) {
+    if (handle !== null) await handle.close().catch(() => undefined);
+    return ioFailure("尾部残段截断失败", cause);
+  }
+};
 
 /** 按行切分落盘文本：容忍结尾 LF；中间空行视为损坏流（严格 LF 分帧，与会话协议同口径）。 */
 function* splitLines(text: string): Generator<string> {

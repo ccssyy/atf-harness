@@ -59,5 +59,6 @@ export {
   type FsyncOptions,
   type ReplayOutcome,
   type SessionLogOptions,
+  type TruncatedTail,
 } from "./sessionLog.js";
 export { transformContext } from "./pipeline.js";

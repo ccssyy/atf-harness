@@ -9,7 +9,7 @@
  *
  * 退出码：全部通过 = 0；任一步失败 = 1。
  */
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, appendFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { err, ok, type Result } from "../bridge/index.js";
@@ -30,7 +30,7 @@ const smoke = async (): Promise<Result<undefined, SessionError>> => {
     { journal_type: "run_journal", fact_id: "fact-1", sha256_digest: DIGEST_GOOD },
   ]);
   try {
-    console.log(`[1/5] schema v1：保留位类型拒写（${SESSION_RESERVED_EVENT_TYPES.join(" / ")}）`);
+    console.log(`[1/6] schema v1：保留位类型拒写（${SESSION_RESERVED_EVENT_TYPES.join(" / ")}）`);
     {
       const probe = await SessionLog.create(join(dir, "probe.jsonl"), resolver);
       if (!probe.ok) return probe;
@@ -41,7 +41,7 @@ const smoke = async (): Promise<Result<undefined, SessionError>> => {
       console.log(`      ${String(SESSION_RESERVED_EVENT_TYPES.length)} 类保留位全部拒写 ✓`);
     }
 
-    console.log(`[2/5] append ${String(COMPACTION_TRIGGER_EVENTS + 4)} 条（含承证对，触发压缩）: ${path}`);
+    console.log(`[2/6] append ${String(COMPACTION_TRIGGER_EVENTS + 4)} 条（含承证对，触发压缩）: ${path}`);
     const log = await SessionLog.create(path, resolver, { fsync: { mode: "per-append" } });
     if (!log.ok) return log;
     const written: SessionEvent[] = [];
@@ -67,7 +67,7 @@ const smoke = async (): Promise<Result<undefined, SessionError>> => {
     if (!closed.ok) return closed;
     console.log(`      落盘 ${String(written.length)} 条（逐条 fsync）✓`);
 
-    console.log("[3/5] 压缩投影：摘要 + 承证白名单豁免原文 + 保留窗");
+    console.log("[3/6] 压缩投影：摘要 + 承证白名单豁免原文 + 保留窗");
     const view = transformContext(written);
     const summary = view[0];
     if (summary?.type !== "session/compaction") {
@@ -79,7 +79,7 @@ const smoke = async (): Promise<Result<undefined, SessionError>> => {
     }
     console.log(`      折叠 ${String(payload.folded_count)} 条、豁免承证 ${String(payload.kept_ids.length)} 条 ✓`);
 
-    console.log("[4/5] 审计留痕 + replay 重建投影一致");
+    console.log("[4/6] 审计留痕 + replay 重建投影一致");
     const replayed = await SessionLog.replay(path, resolver);
     if (!replayed.ok) return replayed;
     const audits = replayed.value.events.filter((event) => event.type === "session/compaction");
@@ -89,7 +89,24 @@ const smoke = async (): Promise<Result<undefined, SessionError>> => {
     }
     console.log(`      审计 ${String(audits.length)} 条（covers=${JSON.stringify((audits[0]?.payload as { covers: unknown }).covers)}），重建一致 ✓`);
 
-    console.log("[5/5] fsync 批量档：攒满 N 条即刷、ack 即持久化");
+    console.log("[5/6] 尾部半行修复：伪造未确认尾部 → create 截断 + session/repair 留痕");
+    {
+      const fragment = '{"id":999,"ty';
+      await appendFile(path, fragment, "utf8");
+      const repaired = await SessionLog.create(path, resolver);
+      if (!repaired.ok) return repaired;
+      if (repaired.value.truncatedTail === null) {
+        return err(sessionError("io_error", "半行尾未被识别为未确认尾部"));
+      }
+      const checked = await SessionLog.replay(path, resolver);
+      if (!checked.ok) return checked;
+      if (!checked.value.events.some((event) => event.type === "session/repair")) {
+        return err(sessionError("io_error", "截断修复未成对写入 repair 留痕"));
+      }
+      console.log(`      丢弃 ${String(repaired.value.truncatedTail.dropped_bytes)} 字节残段，留痕成对 ✓`);
+    }
+
+    console.log("[6/6] fsync 批量档：攒满 N 条即刷、ack 即持久化");
     const batchPath = join(dir, "batch.jsonl");
     const batch = await SessionLog.create(batchPath, resolver, {
       fsync: { mode: "batch", batchMaxEvents: 4, batchWindowMs: 500 },
