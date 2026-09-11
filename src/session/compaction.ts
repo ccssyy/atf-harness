@@ -188,8 +188,8 @@ export const buildCompactionRecord = (
     folded.push(event);
     typeCounts[event.type] = (typeCounts[event.type] ?? 0) + 1;
   }
-  const from = folded[0] ?? material[0];
-  const to = folded[folded.length - 1] ?? material[plan.boundary - 1];
+  const from = material[0];
+  const to = material[plan.boundary - 1];
   const distribution = Object.entries(typeCounts)
     .map(([type, count]) => `${type}×${String(count)}`)
     .join("、");

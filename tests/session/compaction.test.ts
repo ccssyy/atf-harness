@@ -244,4 +244,35 @@ describe("压缩审计与重建一致（端到端：SessionLog 落盘 → replay
     expect(planCompaction(base)).toEqual(planCompaction([...base, fakeAudit]));
     expect(transformContext([...base, fakeAudit])).toEqual(transformContext(base));
   });
+
+  it("S2 判重回归：折叠边界事件为白名单豁免时，同一边界只写一条审计（covers 端点稳定）", async () => {
+    const resolver = MockDigestResolver.withDigests([
+      { journal_type: "run_journal", fact_id: "fact-1", sha256_digest: DIGEST_A },
+    ]);
+    const logPath = join(workDir, "audit-dedup.jsonl");
+    const created = await SessionLog.create(logPath, resolver);
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const log = created.value;
+    const push = async (input: Parameters<SessionLog["append"]>[0]): Promise<void> => {
+      const appended = await log.append(input);
+      if (!appended.ok) throw new Error("unreachable");
+    };
+    // 让折叠边界末端（第 96 条实质事件）成为承证对：covers.to_id 端点为白名单豁免事件
+    for (let i = 0; i < 95; i += 1) await push({ type: "user/message", payload: { seq: i } });
+    await push({ type: "tool/call", payload: { tool: "t", params: {} } });
+    await push({
+      type: "tool/result",
+      payload: { tool: "t", ok: true, call_ref: 97 },
+      domain_refs: [{ journal_type: "run_journal", fact_id: "fact-1", sha256_digest: DIGEST_A }],
+    });
+    for (let i = 0; i < 100; i += 1) await push({ type: "user/message", payload: { seq: 1000 + i } });
+
+    const replayed = await SessionLog.replay(logPath, resolver);
+    expect(replayed.ok).toBe(true);
+    if (!replayed.ok) return;
+    const audits = replayed.value.events.filter((event) => event.type === "session/compaction");
+    const toIds = audits.map((event) => (event.payload as { covers: { to_id: number } }).covers.to_id);
+    expect(new Set(toIds).size).toBe(toIds.length); // 同一边界只写一条审计
+  });
 });
