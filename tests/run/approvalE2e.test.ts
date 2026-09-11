@@ -104,6 +104,9 @@ describe("P2-S2 e2e——advised 重提案(supersedes 演化链)", () => {
     expect(requestEvents[1]?.payload).toMatchObject({ attempt: 2, supersedes: requestEvents[0]?.id });
     const advised = payloads.find((payload) => payload["verdict"] === "advised");
     expect((advised?.["advice_text"] as string).length).toBeGreaterThan(0); // 意见原文必留
+    // S2a 区分性:advised 轮的结构化回填 reason = approval_advised(≠ denied 的 approval_denied)
+    const advisedResult = report.events.find((event) => event.type === "tool/result" && (event.payload as { reason?: string }).reason === "approval_advised");
+    expect(advisedResult).toBeDefined();
     // 审计可回答:最终执行的 request2 基于 request1 的意见(supersedes 指回)
   });
 });

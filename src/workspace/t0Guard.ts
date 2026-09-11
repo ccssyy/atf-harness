@@ -76,6 +76,15 @@ export class GuardedSessionLog {
     return this.inner.truncatedTail;
   }
 
+  /**
+   * S2a（决议 §3.3，C-2）：透传内层句柄显式关闭（批量档冲刷 + close；关闭后 append 一律
+   * err，fail-closed）——消除 FileHandle 依赖 GC 回收的 DeprecationWarning。纯新增透传，
+   * 不触及 append/replay 任何既有语义。
+   */
+  public async close(): Promise<Result<void, SessionError>> {
+    return this.inner.close();
+  }
+
   /** 打开（或创建）挂载铁律一规则的会话日志。resolver 为 S2 既有注入口（digest 校验），原样透传。 */
   public static async create(
     filePath: string,

@@ -29,12 +29,15 @@ export const toolErrorFromBridge = (cause: BridgeError): ToolError =>
 /** 审批 block 原因枚举：approval_missing 为账本轨既有语义（exit 78 锚点不挪用）；
  *  其余为 P2-S2 问答轨新增（决议 §3.2 口径 #6 / 门 2 A3）：
  *  - approval_denied / credential_consumed / credential_invalid：结构化 block 回填，模型可换路径（exit 1）；
+ *  - approval_advised：修改意见回填（S2a 决议 §3.2：与 denied 在 block 面区分——「给意见」≠「被否决」，
+ *    非终局，模型重新提案；exit 1）；
  *  - credential_indeterminate：事实缺口，run 终态（exit 1，A3：不得被后续写失败覆盖）；
  *  - credential_persist_failed / approval_track_failed：harness 侧持久化/写路径失败，不放行（exit 1）；
  *  - approval_timeout（exit 75，suspended 非终态可恢复）/ approval_aborted（exit 79，终态主动终止）。 */
 export type ToolBlockReason =
   | "approval_missing"
   | "approval_denied"
+  | "approval_advised"
   | "credential_consumed"
   | "credential_invalid"
   | "credential_indeterminate"

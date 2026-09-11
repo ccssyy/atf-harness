@@ -487,6 +487,10 @@ export class ScenarioRunner {
         if (closed !== null) turnOpen = false;
       }
 
+      // S2a C-2：会话句柄显式关闭（决议 §3.3，消除 FileHandle GC 回收警告）。
+      // 逐条档 flush 为空操作；关闭失败仅留此注记、不改写既有终局语义（零行为变化）。
+      await session.close().catch(() => undefined);
+
       // ---------------- 会话重建 + catalog（验收承载；resolver 仍经存活连接查询 mock 状态） ----------------
       const replayed = await GuardedSessionLog.replay(ws.sessionLogPath, resolver, ws.scratchDir);
       if (replayed.ok) replay = replayed.value;

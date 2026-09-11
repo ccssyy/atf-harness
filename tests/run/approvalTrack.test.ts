@@ -238,6 +238,28 @@ describe("advised——重提案与 supersedes 演化链", () => {
   });
 });
 
+describe("S2a 区分性——advised 与 denied 在 block 面可区分(决议 §3.2)", () => {
+  it("advise → approval_advised / deny → approval_denied;两者均非终局(exit 1,可继续)", async () => {
+    const h = await makeHarness(
+      scriptStub([
+        { verdict: "advised", actor: "stub-host", advice_text: "用正式编号" },
+        { verdict: "denied", actor: "stub-host", reason: "未备案" },
+      ]),
+    );
+    const advised = await call(h);
+    expect(advised.kind).toBe("reproposal"); // 非终局:模型重新提案
+    if (advised.kind !== "reproposal") return;
+    expect(advised.block.reason).toBe("approval_advised");
+    expect(advised.block.exit_code).toBe(1); // 非 75/79:既非挂起也非终止
+
+    const denied = await call(h);
+    expect(denied.kind).toBe("denied"); // 非终局:模型可换路径
+    if (denied.kind !== "denied") return;
+    expect(denied.block.reason).toBe("approval_denied");
+    expect(denied.block.exit_code).toBe(1);
+  });
+});
+
 describe("clarification——同会话多轮往返", () => {
   it("clarification 轮:同 session 重发 request(attempt 不变、无 supersedes),次轮 granted", async () => {
     const h = await makeHarness(

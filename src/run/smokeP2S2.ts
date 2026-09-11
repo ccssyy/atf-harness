@@ -99,8 +99,19 @@ const smoke = async (): Promise<Result<undefined, SessionError>> => {
   return ok(undefined);
 };
 
+// S2a C-2 验收断言:会话句柄必须显式关闭——出现 DEP0137(FileHandle 被 GC 回收关闭)警告即判失败
+// (进程内 tripwire,先于退出观察到者即失败;全量输出的 grep 核验另在 VERIFY 执行)
+const gcHandleWarnings: string[] = [];
+process.on("warning", (warning) => {
+  if ((warning as NodeJS.ErrnoException).code === "DEP0137") gcHandleWarnings.push(warning.message);
+});
+
 const result = await smoke();
 if (!result.ok) {
   console.error(`P2-S2 冒烟失败: ${result.error.message}`);
   process.exitCode = 1;
-} else console.log("P2-S2 冒烟通过 ✓(六类应答 + 升级 + headless 等价)");
+} else if (gcHandleWarnings.length > 0) {
+  console.error(`P2-S2 冒烟失败: 出现 ${String(gcHandleWarnings.length)} 条 FileHandle GC 回收警告(句柄未显式 close)`);
+  for (const message of gcHandleWarnings) console.error(`  - ${message}`);
+  process.exitCode = 1;
+} else console.log("P2-S2 冒烟通过 ✓(六类应答 + 升级 + headless 等价 + 无句柄警告)");

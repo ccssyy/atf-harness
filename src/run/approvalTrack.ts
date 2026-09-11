@@ -4,8 +4,9 @@
  * 职责:账本未命中且已声明审批面时,以 handler 形态被 ToolExecutor 调用——
  * 发起/延续审批会话(approval/request → 桩对端应答 → approval/response)→ 六类分支处置:
  *   granted   → 凭据预检(available)+ 持久化前置(R2)→ 放行执行
- *   advised   → 意见原文回填(非终局;模型重新提案,新 request 带 supersedes)
- *   denied    → 结构化 block 回填(非终局;模型可换路径,同提案重提计数 +1)
+ *   advised   → 意见原文回填(block reason = approval_advised,S2a 决议 §3.2:与 denied 区分;
+ *               非终局;模型重新提案,新 request 带 supersedes)
+ *   denied    → 结构化 block 回填(approval_denied;非终局;模型可换路径,同提案重提计数 +1)
  *   aborted   → run 终态(79)
  *   clarification → 同会话补上下文重发 request(多轮往返)
  *   timeout   → verdict=timeout + actor="harness" 落盘 → run 挂起(75,「超时非否决」)
@@ -245,10 +246,12 @@ export const createApprovalTrackHandler = (deps: ApprovalTrackDeps): ApprovalHan
           };
         }
         case "advised": {
-          // 意见原文必留(payload.advice_text);非终局——模型重新提案,新 request 将带 supersedes
+          // 意见原文必留(payload.advice_text);非终局——模型重新提案,新 request 将带 supersedes。
+          // S2a(C-1):block reason 用独立 approval_advised——「给意见」与「被否决」在 block 面可区分
+          // (权威记录 approval/response 的 verdict 语义不变)
           return {
             kind: "reproposal",
-            block: trackBlock(tool, "approval_denied", `问答轨修改意见(重新提案):${stubResponse.advice_text ?? ""}`, {
+            block: trackBlock(tool, "approval_advised", `问答轨修改意见(重新提案):${stubResponse.advice_text ?? ""}`, {
               approval_session_id: st.approval_session_id,
               request_event_ref: currentRequest.id,
               advice_text: stubResponse.advice_text ?? "",
