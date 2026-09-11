@@ -1,19 +1,25 @@
 /**
  * 场景脚本 schema v1（任务书 §5 / owner 口径 #2：draft-v0 校准定稿入库 scenarios/）。
  *
- * 六类步骤白名单（严格收口，未知 type / 未声明字段一律拒绝——与全仓 schema 同哲学）：
+ * 七类步骤白名单（严格收口，未知 type / 未声明字段一律拒绝——与全仓 schema 同哲学）：
  * - assistant_message / final_answer：Faux 的会话输出（assistant/message 事件 + 收束）
  * - tool_call：严格 4 工具面调用（params 与账本预录严格绑定——审批键 = tool + params digest）
  * - scratch_write / promote / cite_t0：runner 内置步骤——harness 本地工作区动作与 T0 引用尝试，
  *   **不属于工具注册表**（owner 口径 #1：晋升走晋升闸 A，严格 4 工具与内核方法面不变）
+ * - provider_switch（P2-S3）：越界切换请求的表达——段内（turn 内）出现即被 runner 以
+ *   provider_switch_out_of_boundary 拒绝（不落 switch 事件，非终局；合法切换由分支级
+ *   segments 段边界声明，不经此步骤）
  *
+ * P2-S3 分支级 segments（多 provider 段）：一段 = 一个 turn = 一个 provider 的决策脚本；
+ * 段间切换即合法 turn 边界（runner 落 provider/switch 事件）。声明 segments 时 steps 须为
+ * 空数组；segments[0].provider_id 须与 scenario.provider 一致（初始 provider 一致性）。
  * 本模块只做结构与语法校验；语义（步骤顺序、账本绑定一致性）由 runner 执行期承载。
  */
 import { err, ok, type Result } from "../bridge/index.js";
 
 export const SCENARIO_VERSION = 1;
 
-/** 步骤类型白名单（v1，六类，无第七类）。 */
+/** 步骤类型白名单（P2-S3 起七类；provider_switch = 越界切换请求的表达）。 */
 export const SCENARIO_STEP_TYPES = [
   "assistant_message",
   "tool_call",
@@ -21,6 +27,7 @@ export const SCENARIO_STEP_TYPES = [
   "promote",
   "cite_t0",
   "final_answer",
+  "provider_switch",
 ] as const;
 
 export type ScenarioStepType = (typeof SCENARIO_STEP_TYPES)[number];
@@ -40,7 +47,18 @@ export type ScenarioStep =
   | { type: "scratch_write"; path: string; content: string }
   | { type: "promote"; source: string; command: string[] }
   | { type: "cite_t0"; source: string; text: string }
-  | { type: "final_answer"; text: string };
+  | { type: "final_answer"; text: string }
+  /** P2-S3：越界切换请求（turn 内出现即被拒；合法切换由 segments 段边界声明） */
+  | { type: "provider_switch"; to: string; reason?: string };
+
+/** P2-S3 多 provider 段：一段 = 一个 turn = 一个 provider 名下的决策脚本；段间切换 = 合法 turn 边界。 */
+export interface ProviderSegment {
+  /** 注册面内的 provider 标识（注册表外由 runner 结构化拒绝） */
+  provider_id: string;
+  /** 段间切换原因（写入本段切换的 provider/switch 事件 payload.reason；首段无切换不写） */
+  reason?: string;
+  steps: ScenarioStep[];
+}
 
 /** 账本预录条目（owner 口径：审批键与工具调用 params 严格一致，脚本内显式重复以可审计）。 */
 export interface LedgerPreRecord {
@@ -69,6 +87,9 @@ export interface ScenarioBranch {
   purpose: string;
   setup: { ledger: LedgerPreRecord[] };
   steps: ScenarioStep[];
+  /** P2-S3：多 provider 段（缺省 = 单 provider 单 turn，与既有形态逐位一致；
+   *  声明时 steps 须为空数组，首段 provider_id 须与 scenario.provider 一致） */
+  segments?: ProviderSegment[];
   expect: ScenarioExpect;
 }
 
@@ -160,6 +181,17 @@ const parseStep = (value: unknown, path: string): Result<ScenarioStep, ScenarioE
       if (!isNonEmptyString(value["text"])) return err(scenarioError(`${path}.text 非法（须为非空字符串）`));
       return ok({ type: "cite_t0", source: value["source"], text: value["text"] });
     }
+    case "provider_switch": {
+      const violation = rejectUndeclared(value, ["type", "to", "reason"], path);
+      if (violation !== null) return err(scenarioError(violation));
+      if (!isNonEmptyString(value["to"])) return err(scenarioError(`${path}.to 非法（须为非空 provider_id）`));
+      const step: Extract<ScenarioStep, { type: "provider_switch" }> = { type: "provider_switch", to: value["to"] };
+      if (value["reason"] !== undefined) {
+        if (!isNonEmptyString(value["reason"])) return err(scenarioError(`${path}.reason 非法（须为非空字符串）`));
+        step.reason = value["reason"];
+      }
+      return ok(step);
+    }
   }
 };
 
@@ -217,7 +249,7 @@ const parseBranch = (branchId: string, value: unknown): Result<ScenarioBranch, S
   if (!isPlainObject(value)) return err(scenarioError(`branch ${branchId} 不是 JSON 对象`));
   const violation = rejectUndeclared(
     value,
-    ["branch_id", "run_id", "trigger_instruction", "purpose", "setup", "steps", "expect"],
+    ["branch_id", "run_id", "trigger_instruction", "purpose", "setup", "steps", "segments", "expect"],
     `branch ${branchId}`,
   );
   if (violation !== null) return err(scenarioError(violation));
@@ -247,18 +279,54 @@ const parseBranch = (branchId: string, value: unknown): Result<ScenarioBranch, S
       ledger.push({ tool: entry["tool"], params: entry["params"] });
     }
   }
-  if (!Array.isArray(value["steps"]) || value["steps"].length === 0) {
+  if (value["steps"] === undefined || !Array.isArray(value["steps"])) {
+    return err(scenarioError(`branch ${branchId}.steps 非法（须为数组）`));
+  }
+  // P2-S3：segments 与 steps 互斥——声明 segments 时 steps 须为空数组（决策全部在各段内）
+  let segments: ProviderSegment[] | undefined;
+  if (value["segments"] !== undefined) {
+    if (!Array.isArray(value["segments"]) || value["segments"].length === 0) {
+      return err(scenarioError(`branch ${branchId}.segments 非法（须为非空数组）`));
+    }
+    segments = [];
+    for (let i = 0; i < value["segments"].length; i += 1) {
+      const seg = value["segments"][i];
+      const segPath = `branch ${branchId}.segments[${String(i)}]`;
+      if (!isPlainObject(seg)) return err(scenarioError(`${segPath} 不是 JSON 对象`));
+      const segViolation = rejectUndeclared(seg, ["provider_id", "reason", "steps"], segPath);
+      if (segViolation !== null) return err(scenarioError(segViolation));
+      if (!isNonEmptyString(seg["provider_id"])) return err(scenarioError(`${segPath}.provider_id 非法（须为非空 provider_id）`));
+      if (seg["reason"] !== undefined && !isNonEmptyString(seg["reason"])) {
+        return err(scenarioError(`${segPath}.reason 非法（须为非空字符串）`));
+      }
+      if (!Array.isArray(seg["steps"]) || seg["steps"].length === 0) {
+        return err(scenarioError(`${segPath}.steps 非法（须为非空数组——每段至少一个决策）`));
+      }
+      const segSteps: ScenarioStep[] = [];
+      for (let j = 0; j < seg["steps"].length; j += 1) {
+        const parsedSegStep = parseStep(seg["steps"][j], `${segPath}.steps[${String(j)}]`);
+        if (!parsedSegStep.ok) return parsedSegStep;
+        segSteps.push(parsedSegStep.value);
+      }
+      const segment: ProviderSegment = { provider_id: seg["provider_id"], steps: segSteps };
+      if (seg["reason"] !== undefined) segment.reason = seg["reason"];
+      segments.push(segment);
+    }
+    if (value["steps"].length !== 0) {
+      return err(scenarioError(`branch ${branchId} 声明 segments 时 steps 须为空数组（决策全部在各段内，二者互斥）`));
+    }
+  } else if (value["steps"].length === 0) {
     return err(scenarioError(`branch ${branchId}.steps 非法（须为非空数组）`));
   }
-  const steps: ScenarioStep[] = [];
-  for (let i = 0; i < value["steps"].length; i += 1) {
-    const parsed = parseStep(value["steps"][i], `branch ${branchId}.steps[${String(i)}]`);
+  const steps: ScenarioStep[] = value["steps"] as ScenarioStep[];
+  for (let i = 0; i < steps.length; i += 1) {
+    const parsed = parseStep(steps[i], `branch ${branchId}.steps[${String(i)}]`);
     if (!parsed.ok) return parsed;
-    steps.push(parsed.value);
+    steps[i] = parsed.value;
   }
   const expectResult = parseExpect(value["expect"], `branch ${branchId}.expect`);
   if (!expectResult.ok) return expectResult;
-  return ok({
+  const branch: ScenarioBranch = {
     branch_id: branchId,
     run_id: value["run_id"],
     trigger_instruction: value["trigger_instruction"],
@@ -266,7 +334,9 @@ const parseBranch = (branchId: string, value: unknown): Result<ScenarioBranch, S
     setup: { ledger },
     steps,
     expect: expectResult.value,
-  });
+  };
+  if (segments !== undefined) branch.segments = segments;
+  return ok(branch);
 };
 
 /** 场景脚本解析与严格校验（v1；占位符纪律：含 "<" 占位符的值在 parse 层不拒——真实值由 v1 文件给出）。 */
@@ -285,6 +355,10 @@ export const parseScenario = (value: unknown): Result<Scenario, ScenarioError> =
   for (const [branchId, branchValue] of Object.entries(value["branches"])) {
     const parsed = parseBranch(branchId, branchValue);
     if (!parsed.ok) return parsed;
+    // P2-S3：段声明分支的初始 provider 须与 scenario.provider 一致（一致性交叉校验）
+    if (parsed.value.segments !== undefined && parsed.value.segments[0]?.provider_id !== value["provider"]) {
+      return err(scenarioError(`branch ${branchId} 的 segments[0].provider_id（${String(parsed.value.segments[0]?.provider_id)}）须与 scenario.provider（${String(value["provider"])}）一致`));
+    }
     branches[branchId] = parsed.value;
   }
   const scenario: Scenario = {

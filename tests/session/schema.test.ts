@@ -39,8 +39,8 @@ const createAndWrite = async (lines: string[], path: string = logPath()): Promis
   await writeFile(path, `${lines.join("\n")}\n`, "utf8");
 };
 
-describe("schema v1 常量与白名单（P2-S1 bump：11 类一次定死 + 启用位）", () => {
-  it("白名单 12 类，启用 11 类（P2-S2 启用位推进 9→11），保留位 1 类（provider/switch，S3），schema 版本仍 1", () => {
+describe("schema v1 常量与白名单（P2-S3 启用位推进：12/12 全启用，保留位集合为空）", () => {
+  it("白名单 12 类，启用 12 类（P2-S3 推进 11→12：provider/switch），保留位机制保留但集合为空，schema 版本仍 1", () => {
     expect(SESSION_SCHEMA_VERSION).toBe(1);
     expect(SESSION_EVENT_TYPES).toEqual([
       "user/message",
@@ -68,11 +68,13 @@ describe("schema v1 常量与白名单（P2-S1 bump：11 类一次定死 + 启�
       "session/repair",
       "approval/request",
       "approval/response",
+      "provider/switch",
     ]);
-    expect(SESSION_RESERVED_EVENT_TYPES).toEqual(["provider/switch"]);
+    // P2-S3 后保留位机制保留、集合为空（后续新增类型先进保留位）
+    expect(SESSION_RESERVED_EVENT_TYPES).toEqual([]);
   });
 
-  it("保留位类型拒绝写入（owner 口径 #1：未实现类型不得被写入）——err 且文件零增长", async () => {
+  it("保留位拒绝写入机制保留（当前集合为空——循环空转即断言通过）+ provider/switch 已可写入", async () => {
     const path = logPath();
     const log = await SessionLog.create(path, resolver).then((r) => (r.ok ? r.value : undefined));
     expect(log).toBeDefined();
@@ -88,20 +90,29 @@ describe("schema v1 常量与白名单（P2-S1 bump：11 类一次定死 + 启�
       }
     }
 
-    const raw = await readFile(path, "utf8").catch((cause: NodeJS.ErrnoException) => (cause.code === "ENOENT" ? "" : "<exists>"));
-    expect(raw).toBe(""); // 保留位类型一条都没落盘
+    // P2-S3 启用位推进：provider/switch 可写入（载荷形态由 runner/契约承载）
+    const appended = await log.append({ type: "provider/switch", payload: { from: { provider_id: "faux" }, to: { provider_id: "faux-alt" }, boundary: { turn_index: 1, after_event_id: 1 } } });
+    expect(appended.ok).toBe(true);
+
+    const raw = await readFile(path, "utf8");
+    expect(raw.split("\n").filter((line) => line !== "")).toHaveLength(1); // 只有 switch 事件落盘
   });
 
-  it("保留位类型出现于落盘流 → replay err(schema_violation)（fail-closed：视为篡改/超前版本）", async () => {
+  it("provider/switch 出现于落盘流 → replay 通过（P2-S3 启用位推进的向后兼容正例）", async () => {
     await createAndWrite([
-      // P2-S2 启用位推进后,现保留位仅 provider/switch(S3 启用);approval/* 已启用可写入
-      JSON.stringify({ id: 1, ts: new Date().toISOString(), type: "provider/switch", payload: {}, projection: { evidence_event: null } }),
+      JSON.stringify({
+        id: 1,
+        ts: new Date().toISOString(),
+        type: "provider/switch",
+        payload: { from: { provider_id: "faux" }, to: { provider_id: "faux-alt" }, boundary: { turn_index: 1, after_event_id: 1 } },
+        projection: { evidence_event: null },
+      }),
     ]);
     const replayed = await SessionLog.replay(logPath(), resolver);
-    expect(replayed.ok).toBe(false);
-    if (!replayed.ok) {
-      expect(replayed.error.code).toBe("schema_violation");
-      expect(replayed.error.message).toContain("未启用");
+    expect(replayed.ok).toBe(true);
+    if (replayed.ok) {
+      expect(replayed.value.events).toHaveLength(1);
+      expect(replayed.value.events[0]?.type).toBe("provider/switch");
     }
   });
 

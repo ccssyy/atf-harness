@@ -16,10 +16,14 @@ import { join } from "node:path";
 import { err, ok, type Result } from "../bridge/index.js";
 import { AtfBridgeConnection } from "../bridge/index.js";import {
   FauxProvider,
+  createDefaultProviderRegistry,
+  type ProviderSegment,
+  type ProviderRegistry,
   type Scenario,
   type ScenarioBranch,
   type ScenarioExpect,
 } from "../llm/index.js";
+import type { LlmProvider } from "../llm/index.js";
 import {
   approvalKeyFor,
   resolveHeadlessExitCode,
@@ -51,6 +55,12 @@ import {
   readStreamMaxId,
   type ApprovalStub,
 } from "./approvalTrack.js";
+import {
+  buildSwitchPayload,
+  checkSwitchBoundary,
+  verifyDigestContinuity,
+  type ProviderSwitchBlock,
+} from "./providerSwitch.js";
 import { type ApprovalGate } from "../tools/index.js";
 import { SurfaceScanResolver } from "./surfaceScanResolver.js";
 
@@ -128,6 +138,24 @@ export interface CredentialIndeterminateReport {
   window: { granted_id: number | null; watermark: number };
 }
 
+/** P2-S3:turn 归属(多 provider 段分支报告;一个 provider 段 = 一个 turn)。 */
+export interface TurnAttribution {
+  /** 从 1 起,按落盘 turn/start 顺序 */
+  turn_index: number;
+  provider_id: string;
+  /** 本 turn 的 turn/start 事件 id */
+  first_event_id: number;
+  /** 本 turn 的 turn/end 事件 id(收口后回填) */
+  last_event_id: number;
+  /** 本 turn 内由该 provider 产出的决策数(含被拒的 provider_switch 请求) */
+  decision_count: number;
+}
+
+/** P2-S3:切换记录(switched = 事件已落盘且新 provider 已生效;rejected = 未落任何事件,非终局)。 */
+export type SwitchRecord =
+  | { status: "switched"; from: string; to: string; event_id: number; turn_index: number; reason?: string }
+  | { status: "rejected"; to: string; block: ProviderSwitchBlock };
+
 export interface BranchRunReport {
   scenario_id: string;
   branch_id: string;
@@ -148,6 +176,9 @@ export interface BranchRunReport {
   expect_violations: string[];
   /** A3:问答轨 indeterminate 终态的上报材料(仅该终态出现) */
   credential_indeterminate?: CredentialIndeterminateReport;
+  /** P2-S3:turn 归属与切换记录(仅多 provider 段分支或发生过切换请求时携带) */
+  turns?: TurnAttribution[];
+  switches?: SwitchRecord[];
 }
 
 export interface RunBranchOptions {
@@ -202,6 +233,10 @@ export class ScenarioRunner {
     let replayError: SessionError | null = null;
     let catalog: CatalogEntry[] = [];
     let catalogError: WorkspaceError | null = null;
+    /** P2-S3:turn 归属与切换记录(finalize 组装报告用;仅段分支/有切换请求时非空) */
+    const turnRecords: TurnAttribution[] = [];
+    const switchRecords: SwitchRecord[] = [];
+    const segmentMode = (branch.segments?.length ?? 0) > 0;
 
     try {
       // ---------------- setup：账本预录（经桥接，owner 口径 #3） ----------------
@@ -232,7 +267,22 @@ export class ScenarioRunner {
       }
       const session = guarded.value;
       const executor = new ToolExecutor(connection, ToolRegistry.createDefault());
-      const provider = FauxProvider.fromBranch(branch);
+
+      // P2-S3:多 provider 段分支(segments)= 一段一个 turn,段边界即合法切换边界;
+      // 缺省 = 单 provider 分支(FauxProvider.fromBranch 既有路径逐位不变)。
+      const segments: readonly ProviderSegment[] = branch.segments ?? [];
+      const registry: ProviderRegistry | null = segmentMode ? createDefaultProviderRegistry() : null;
+      let segIdx = 0;
+      let provider: LlmProvider | null = segmentMode && registry !== null
+        ? registry.create((segments[0] as ProviderSegment).provider_id, branch.branch_id, (segments[0] as ProviderSegment).steps)
+        : FauxProvider.fromBranch(branch);
+      if (segmentMode && provider === null) {
+        // 注册面未命中(防御路径,parseScenario 已拦一致性与非空;此处兜底 fail-closed)
+        outcome = {
+          kind: "failed",
+          error: runError("invalid_input", `初始 provider 未注册: ${(segments[0] as ProviderSegment).provider_id}`, { registered: registry?.ids() ?? [] }),
+        };
+      }
 
       // A2:恢复水位线——打开会话后立即取值并固定(流内最大事件 id,全新 run = 0,含 session/repair
       // 审计事件);取值后不随后续 append 变化,问答轨凭据判定以此区分旧遗留与新注入。
@@ -274,6 +324,7 @@ export class ScenarioRunner {
         const appended = await session.append({ type: "turn/end", payload: { reason } });
         if (appended.ok && appended.value.status === "appended") {
           events.push(appended.value.event);
+          closeTurnRecord();
           return;
         }
         // 收口写失败：不覆盖既有终局语义（78 / 会话拒绝 / 1 锚点与原因优先留痕）；
@@ -286,14 +337,89 @@ export class ScenarioRunner {
         }
       };
 
-      await appendEvent({ type: "turn/start", payload: { scenario_id: scenario.scenario_id, branch_id: branch.branch_id } });
-      await appendEvent({ type: "user/message", payload: { text: branch.trigger_instruction } });
+      // ---------------- P2-S3:turn 归属与切换协议(多 provider 段) ----------------
+      let currentTurn: TurnAttribution | null = null;
+      let turnDecisionCount = 0;
+
+      const openTurnRecord = (turnProvider: LlmProvider): void => {
+        const first = events[events.length - 1];
+        currentTurn = {
+          turn_index: turnRecords.length + 1,
+          provider_id: turnProvider.providerId,
+          first_event_id: first?.id ?? 0,
+          last_event_id: first?.id ?? 0,
+          decision_count: 0,
+        };
+        turnDecisionCount = 0;
+      };
+
+      const closeTurnRecord = (): void => {
+        if (currentTurn === null) return;
+        currentTurn.decision_count = turnDecisionCount;
+        const last = events[events.length - 1];
+        currentTurn.last_event_id = last?.id ?? currentTurn.first_event_id;
+        turnRecords.push(currentTurn);
+        currentTurn = null;
+        turnDecisionCount = 0;
+      };
+
+      /**
+       * 段边界切换协议(口径 #5–#7,顺序固定):注册面 → 边界复核 → digest 前复核 →
+       * 落盘 switch 事件 → digest 后复核 → 激活新 provider。任一前置失败 = 不落事件、
+       * 不切换;落盘后复核失败 = 流不可信 → run 终局(新 provider 不激活,无半生效)。
+       */
+      const performSwitch = async (
+        fromProvider: LlmProvider,
+        segment: ProviderSegment,
+      ): Promise<{ kind: "switched"; provider: LlmProvider; eventId: number } | { kind: "rejected"; block: ProviderSwitchBlock } | { kind: "failed"; error: ReturnType<typeof runError> }> => {
+        if (registry === null) return { kind: "failed", error: runError("invalid_input", "非段分支不得切换") };
+        const next = registry.create(segment.provider_id, branch.branch_id, segment.steps);
+        if (next === null) {
+          return {
+            kind: "rejected",
+            block: {
+              reason: "provider_switch_unknown_provider",
+              message: `切换目标 provider 未注册: ${segment.provider_id}(不落 switch 事件,不放行切换)`,
+              detail: { provider_id: segment.provider_id, registered: registry.ids() },
+            },
+          };
+        }
+        const boundaryBlock = checkSwitchBoundary(turnOpen, { to: segment.provider_id });
+        if (boundaryBlock !== null) return { kind: "rejected", block: boundaryBlock };
+        const pre = await verifyDigestContinuity(events, resolver, "pre");
+        if (!pre.ok) return { kind: "rejected", block: pre.error };
+        const closedTurnIndex = currentTurn?.turn_index ?? turnRecords.length;
+        const lastEvent = events[events.length - 1];
+        const payload = buildSwitchPayload(
+          fromProvider.providerId,
+          segment.provider_id,
+          closedTurnIndex,
+          lastEvent?.id ?? 0,
+          segment.reason,
+        );
+        const appended = await appendEvent({ type: "provider/switch", payload });
+        if (appended === null) {
+          return { kind: "failed", error: runError("session_failure", "provider/switch 事件落盘失败(fail-closed,不切换)") };
+        }
+        const post = await verifyDigestContinuity(events, resolver, "post");
+        if (!post.ok) {
+          return { kind: "failed", error: runError("session_failure", "provider/switch 落盘后 digest 复核失败(流不可信,新 provider 不激活)", post.error) };
+        }
+        return { kind: "switched", provider: next, eventId: appended.id };
+      };
+
+      if (provider !== null) {
+        await appendEvent({ type: "turn/start", payload: { scenario_id: scenario.scenario_id, branch_id: branch.branch_id } });
+        await appendEvent({ type: "user/message", payload: { text: branch.trigger_instruction } });
+        openTurnRecord(provider);
+      }
 
       let lastAdmittedFact: DomainRef | undefined;
-      let turnOpen = true;
+      let turnOpen = provider !== null;
 
-      // ---------------- 决策循环（Faux 线性回放，owner 口径 #5） ----------------
+      // ---------------- 决策循环（Faux 线性回放，owner 口径 #5；P2-S3 起支持多 provider 段） ----------------
       for (;;) {
+        if (provider === null) break; // 初始注册失败已折算(防御路径,不进入决策)
         const decided = await provider.decide(transformContext(events));
         if (!decided.ok) {
           outcome = { kind: "failed", error: runError("provider_failure", `provider 决策失败: ${decided.error.message}`, decided.error) };
@@ -301,7 +427,51 @@ export class ScenarioRunner {
         }
         const step = decided.value;
         if (step === null) {
+          // P2-S3:段分支脚本耗尽 = 段边界——非末段执行切换协议;末段/单 provider 分支 = 既有未收束终局
+          if (segmentMode && segIdx < segments.length - 1) {
+            const nextSegment = segments[segIdx + 1] as ProviderSegment;
+            await appendTurnEnd("provider_switch");
+            turnOpen = false;
+            const switched = await performSwitch(provider, nextSegment);
+            if (switched.kind === "switched") {
+              switchRecords.push({
+                status: "switched",
+                from: provider.providerId,
+                to: nextSegment.provider_id,
+                event_id: switched.eventId,
+                turn_index: turnRecords.length,
+                ...(nextSegment.reason !== undefined ? { reason: nextSegment.reason } : {}),
+              });
+              provider = switched.provider;
+              segIdx += 1;
+              await appendEvent({ type: "turn/start", payload: { scenario_id: scenario.scenario_id, branch_id: branch.branch_id } });
+              openTurnRecord(provider);
+              turnOpen = true;
+              continue;
+            }
+            if (switched.kind === "rejected") {
+              // 段边界切换被拒:不落 switch 事件、不放行切换——无决策可用,分支按故障终局(fail-closed)
+              switchRecords.push({ status: "rejected", to: nextSegment.provider_id, block: switched.block });
+              outcome = { kind: "failed", error: runError("provider_failure", `段边界切换被拒(${switched.block.reason}): ${switched.block.message}`, switched.block) };
+              break;
+            }
+            outcome = { kind: "failed", error: switched.error };
+            break;
+          }
           outcome = { kind: "failed", error: runError("provider_failure", "分支决策序列耗尽而未收束（须以 final_answer 收尾或以 block 终局）") };
+          break;
+        }
+        turnDecisionCount += 1;
+
+        if (step.type === "provider_switch") {
+          // 越界切换请求(turn 内,口径 #5):拒绝,不落 switch 事件,非终局——同 provider 继续
+          const block = checkSwitchBoundary(turnOpen, { to: step.to, ...(step.reason !== undefined ? { reason: step.reason } : {}) });
+          if (block !== null) {
+            switchRecords.push({ status: "rejected", to: step.to, block });
+            continue;
+          }
+          // 决策循环内 turn 恒开——到达此处 = harness 不变式违反,折算故障(fail-closed)
+          outcome = { kind: "failed", error: runError("session_failure", "不变式违反:决策循环内出现已收口 turn(切换请求无边界可依)") };
           break;
         }
 
@@ -484,7 +654,10 @@ export class ScenarioRunner {
       if (turnOpen) {
         // 循环以故障退出时补收口（尽量保留完整 turn 形态；写失败不改写既有终局语义）
         const closed = await appendEvent({ type: "turn/end", payload: { reason: outcome.kind } });
-        if (closed !== null) turnOpen = false;
+        if (closed !== null) {
+          closeTurnRecord();
+          turnOpen = false;
+        }
       }
 
       // S2a C-2：会话句柄显式关闭（决议 §3.3，消除 FileHandle GC 回收警告）。
@@ -527,6 +700,9 @@ export class ScenarioRunner {
           catalog,
         }),
         ...(credentialIndeterminate !== undefined ? { credential_indeterminate: credentialIndeterminate } : {}),
+        ...(segmentMode || switchRecords.length > 0
+          ? { turns: [...turnRecords], switches: [...switchRecords] }
+          : {}),
       };
       return ok(report);
     }

@@ -1,9 +1,9 @@
 /**
- * LLM Provider 接口（任务书 §5-1 / 顺延项登记"LLM 接口已抽象，单实现即可"）。
+ * LLM Provider 接口（任务书 §5-1 / P2-S3 多 provider 扩展）。
  *
  * 边界纪律与全仓一致：decide 永不抛出，一切失败走 Result err。
- * Phase 1 唯一实现 = FauxProvider（脚本化决策序列，零网络调用）；
- * 多 provider / 热切换 = Phase 2 顺延项，接口面本 slice 定死不再扩。
+ * Phase 2 实现注册面 = FauxProvider（"faux"）+ FauxVariantProvider（"faux-alt"），
+ * 均为脚本化 Faux（零网络调用）；真实 Provider 不在本阶段（C9：B 自管基线）。
  */
 import { type Result } from "../bridge/index.js";
 import { type LlmContextEvent } from "../session/index.js";
@@ -31,10 +31,13 @@ export const llmError = (message: string, detail?: unknown): LlmError => {
 };
 
 export interface LlmProvider {
+  /** 注册面内的 provider 标识（P2-S3：切换事件 from/to 与报告 turn 归属的依据）。 */
+  readonly providerId: string;
   /**
    * 依据模型可见上下文产出下一个决策。
    * - ok(decision) —— 下一个决策步骤
-   * - ok(null)     —— 决策序列耗尽（runner 视为分支未正常收束 → failed，不猜测成功）
+   * - ok(null)     —— 决策序列耗尽（单 provider 分支 = runner 判未收束；多 provider 段
+   *                   分支 = 段边界，runner 按 segments 推进切换）
    * - err          —— provider 自身故障
    */
   decide(context: readonly LlmContextEvent[]): Promise<Result<LlmDecision | null, LlmError>>;

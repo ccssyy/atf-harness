@@ -9,6 +9,8 @@ import { type LlmDecision, type LlmError, type LlmProvider } from "./provider.js
 import { type ScenarioBranch, type ScenarioStep } from "./scenario.js";
 
 export class FauxProvider implements LlmProvider {
+  public readonly providerId = "faux";
+
   private constructor(
     public readonly branchId: string,
     private readonly script: readonly ScenarioStep[],
@@ -18,6 +20,11 @@ export class FauxProvider implements LlmProvider {
   /** 以场景分支构造：决策序列 = branch.steps 原样回放。 */
   public static fromBranch(branch: ScenarioBranch): FauxProvider {
     return new FauxProvider(branch.branch_id, branch.steps, 0);
+  }
+
+  /** 以步骤序列构造（P2-S3：provider 注册面 / segments 段使用）。 */
+  public static fromSteps(branchId: string, steps: readonly ScenarioStep[]): FauxProvider {
+    return new FauxProvider(branchId, steps, 0);
   }
 
   /** 线性回放：每次调用弹出下一个预编排决策；context 仅满足接口保真（Faux 不读）。 */

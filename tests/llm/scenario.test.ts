@@ -68,3 +68,71 @@ describe("S5 场景脚本 v1 定稿解析", () => {
     expect(parseScenario({ ...base, branches: badPromote }).ok).toBe(false);
   });
 });
+
+describe("P2-S3 场景 schema：provider_switch 步骤与 segments 段声明", () => {
+  const baseBranch = {
+    branch_id: "seg",
+    run_id: "run-seg",
+    trigger_instruction: "t",
+    purpose: "P2-S3",
+    setup: { ledger: [] },
+    expect: { outcome: "completed", exit_code: 0 },
+  };
+  const mkScenario = (branch: Record<string, unknown>): unknown => ({
+    scenario_id: "s",
+    version: 1,
+    provider: "faux",
+    description: "d",
+    branches: { seg: branch },
+  });
+  const seg = (providerId: string, steps: unknown[], reason?: string): unknown => ({
+    provider_id: providerId,
+    steps,
+    ...(reason !== undefined ? { reason } : {}),
+  });
+
+  it("provider_switch 步骤合法解析（to 必填 / reason 可选 / 未声明字段拒绝）", () => {
+    const okParse = parseScenario(
+      mkScenario({ ...baseBranch, steps: [{ type: "provider_switch", to: "faux-alt", reason: "r" }] }),
+    );
+    expect(okParse.ok).toBe(true);
+    if (okParse.ok) {
+      expect(okParse.value.branches["seg"]?.steps[0]).toEqual({ type: "provider_switch", to: "faux-alt", reason: "r" });
+    }
+
+    expect(parseScenario(mkScenario({ ...baseBranch, steps: [{ type: "provider_switch" }] })).ok).toBe(false);
+    expect(parseScenario(mkScenario({ ...baseBranch, steps: [{ type: "provider_switch", to: "" }] })).ok).toBe(false);
+    expect(parseScenario(mkScenario({ ...baseBranch, steps: [{ type: "provider_switch", to: "faux-alt", evil: 1 }] })).ok).toBe(false);
+  });
+
+  it("segments 段声明解析通过；首段 provider_id 与 scenario.provider 一致", () => {
+    const okParse = parseScenario(
+      mkScenario({
+        ...baseBranch,
+        steps: [],
+        segments: [seg("faux", [{ type: "final_answer", text: "x" }]), seg("faux-alt", [{ type: "final_answer", text: "y" }], "r")],
+      }),
+    );
+    expect(okParse.ok, !okParse.ok ? JSON.stringify(okParse.error) : "").toBe(true);
+    if (okParse.ok) {
+      const segments = okParse.value.branches["seg"]?.segments ?? [];
+      expect(segments).toHaveLength(2);
+      expect(segments[0]?.provider_id).toBe("faux");
+      expect(segments[1]?.reason).toBe("r");
+    }
+
+    const mismatch = parseScenario(
+      mkScenario({ ...baseBranch, steps: [], segments: [seg("faux-other", [{ type: "final_answer", text: "x" }])] }),
+    );
+    expect(mismatch.ok).toBe(false); // 初始 provider 一致性交叉校验
+  });
+
+  it("segments 反例族：空数组 / 段 steps 空 / steps 未清空（互斥）/ 未声明字段 一律拒绝", () => {
+    expect(parseScenario(mkScenario({ ...baseBranch, steps: [], segments: [] })).ok).toBe(false);
+    expect(parseScenario(mkScenario({ ...baseBranch, steps: [], segments: [seg("faux", [])] })).ok).toBe(false);
+    expect(
+      parseScenario(mkScenario({ ...baseBranch, steps: [{ type: "final_answer", text: "x" }], segments: [seg("faux", [{ type: "final_answer", text: "y" }])] })).ok,
+    ).toBe(false);
+    expect(parseScenario(mkScenario({ ...baseBranch, steps: [], segments: [{ provider_id: "faux", steps: [{ type: "final_answer", text: "x" }], evil: 1 }] })).ok).toBe(false);
+  });
+});

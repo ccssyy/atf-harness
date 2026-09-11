@@ -18,8 +18,10 @@ schema_version: 1            # v1（P2-S1 完成 v0 → v1 bump；S1a 定义修�
 
 # ---------------------------------------------------------------------
 # 事件类型枚举（schema v1：12 类，S1a 定义修正后定死；原口径 #1 / ADR-09 C4）
-# enabled = 本阶段可写入；reserved = 已登记未启用（P2-S2/S3 启用），
-# 写入与落盘流中出现一律拒绝（未启用 type 一律拒绝，沿用 v0 白名单纪律）
+# enabled = 本阶段可写入；reserved = 已登记未启用（写入与落盘流中出现一律拒绝）
+# P2-S3 启用位推进：provider/switch 移出保留位（enabled 11 → 12，12/12 全启用）；
+# 保留位机制保留但集合为空（后续新增类型先进保留位）；schema_version 保持 1
+# （类型集合未变，仅启用位推进，不 bump）
 # ---------------------------------------------------------------------
 event_types:
   - user/message             # 用户输入                      [enabled]
@@ -33,11 +35,12 @@ event_types:
   - session/repair           # 尾部残段截断修复留痕（S1a，与截断成对写入）[enabled]
   - approval/request         # 审批请求（P2-S2 启用位推进）   [enabled]
   - approval/response        # 审批应答（P2-S2 启用位推进）   [enabled]
-  - provider/switch          # provider 热切换（保留位，P2-S3 启用）[reserved]
+  - provider/switch          # provider 热切换落盘（P2-S3 启用位推进）[enabled]
   rule: 未知 type 一律拒绝写入（append err(schema_violation)）；
         reserved type 写入与出现于落盘流均 err(schema_violation)（未启用即拒，fail-closed）；
-        replay 遇上述两类 type = err(schema_violation)（fail-closed，视为文件被篡改/超前版本）
-  note: schema_version 保持 1——P2-S2 仅启用位推进（enabled 9 → 11），类型集合未变（不 bump）
+        replay 遇上述两类 type = err(schema_violation)（fail-closed，视为文件被篡改/超前版本）；
+        当前 reserved 集合为空（P2-S3 后 12/12 全启用）
+  note: schema_version 保持 1——P2-S2/S3 均仅启用位推进（9→11→12），类型集合未变（不 bump）
 
 # ---------------------------------------------------------------------
 # 事件 schema（每条事件恰好一行 JSON）
@@ -226,6 +229,39 @@ approval_track:
     persist_precondition: 放行前 granted 必须已持久化（per-append 档断言或显式 flush 成功；
              失败 → 不放行）——契约 durability.consumer_discipline 的消费者落地
   stub: 问答对端 Phase 2 为测试注入桩（ ApprovalStub），属测试基建，非运行时依赖路径
+
+# ---------------------------------------------------------------------
+# provider 热切换（P2-S3，任务书 §4 / 启动决议 §4 口径 #1–#8 / ADR-09 §1.4 C9）
+# ---------------------------------------------------------------------
+provider_switch:
+  baseline: B 自管基线（C9 定案）——provider 由 harness 本地声明（场景分支 segments 段）；
+            S3 不实现宿主注入（dispatch 覆盖语义保留给 Phase 3，消费面已定，届时零改动）
+  registry: ProviderRegistry 至少注册两个 provider_id（Phase 2 = "faux" 脚本回放 /
+            "faux-alt" 脚本化 Faux 变体）；零网络调用、零依赖；注册面外 id 一律结构化拒绝
+  event_payload:                          # provider/switch 事件载荷（口径 #4 定死形态）
+    from: { provider_id: string, profile?: string }
+    to: { provider_id: string, profile?: string }
+    boundary:
+      turn_index: integer                 # 被本切换关闭的 turn 序号（1 起；边界位于该 turn 之后）
+      after_event_id: integer             # 落盘前流内最后事件 id（= 关闭 turn 的 turn/end 事件 id）
+    reason: string?                       # 切换原因（场景声明，可选）
+    红线: 凭据与端点不进载荷明文（载荷只到 provider_id 粒度，ADR-09 §1.4 红线延续）
+  boundary_discipline: 仅 turn 边界合法（无 open turn）；越界请求（turn 内 / 无 turn 上下文）
+              → 结构化 block provider_switch_out_of_boundary（exit 1，非终局）且不落 switch 事件
+  digest_continuity: 切换落盘前后必须复跑 digest 校验（等价断言：ref_invalid 为零 + resolver
+              可用）；失败 → 不落 switch 事件 + 结构化 block provider_switch_digest_broken
+              （不放行切换）
+  atomicity: 不得半生效——switch 事件落盘成功且新 provider 生效，要么完全不切；
+              落盘后复核失败 = 流不可信 → run 终局 failed(1)（新 provider 不激活）；
+              切换后首个 turn 必须由新 provider 出决策（冒烟断言经报告 turns 归属核验）
+  unknown_provider: 注册表未命中（预拍口径未覆盖的防御路径，fail-closed 处理并报告）→
+              结构化 block provider_switch_unknown_provider，不落事件、非终局
+  scenario_expression: 分支以 segments: [{provider_id, reason?, steps}] 声明 provider 段
+              （一段 = 一个 turn；段间切换即合法边界）；段内 provider_switch 步骤 = 越界
+              切换请求（被拒后同 provider 继续本 turn）；steps 与 segments 互斥（声明
+              segments 时 steps 须为空数组）；segments[0].provider_id 须与 scenario.provider 一致
+  projection: provider/switch 为宿主选投类（ADR-09 C5，默认投）；对压缩算法为可折叠实质
+              事件（无 domain_refs）——切换事实以磁盘 append-only 流为真相源，投影折叠不影响
 
 # ---------------------------------------------------------------------
 # headless run 退出码（S1b 挪移，决议 §2.3）：exit code 属进程/运行面语义，

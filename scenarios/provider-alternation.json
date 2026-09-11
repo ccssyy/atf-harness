@@ -1,0 +1,66 @@
+{
+  "scenario_id": "provider-alternation",
+  "version": 1,
+  "provider": "faux",
+  "description": "P2-S3 多 provider 热切换冒烟：同会话两 provider 交替完成三个 turn + 一次越界切换被拒（启动决议口径 #9）",
+  "branches": {
+    "ALT_two_provider_alternation": {
+      "branch_id": "ALT_two_provider_alternation",
+      "run_id": "run-alt-alternation",
+      "trigger_instruction": "两 provider 交替完成三个 turn（段边界合法切换）",
+      "purpose": "P2-S3",
+      "setup": {
+        "ledger": [
+          { "tool": "atf_admit_data", "params": { "dataset_id": "ds-alt" } }
+        ]
+      },
+      "steps": [],
+      "segments": [
+        {
+          "provider_id": "faux",
+          "steps": [
+            { "type": "assistant_message", "text": "faux T1：开始准入" },
+            { "type": "tool_call", "tool": "atf_admit_data", "params": { "dataset_id": "ds-alt" } },
+            { "type": "tool_call", "tool": "atf_surface_scan", "params": {}, "cite_admitted_fact": true }
+          ]
+        },
+        {
+          "provider_id": "faux-alt",
+          "reason": "轮换到备选 provider 执行核对",
+          "steps": [
+            { "type": "assistant_message", "text": "faux-alt T2：核对工作区状态" },
+            { "type": "tool_call", "tool": "atf_workspace_status", "params": {} }
+          ]
+        },
+        {
+          "provider_id": "faux",
+          "reason": "切回主 provider 收束",
+          "steps": [
+            { "type": "assistant_message", "text": "faux T3：收束" },
+            { "type": "final_answer", "text": "交替完成" }
+          ]
+        }
+      ],
+      "expect": { "outcome": "completed", "exit_code": 0 }
+    },
+    "ALT_out_of_boundary_rejected": {
+      "branch_id": "ALT_out_of_boundary_rejected",
+      "run_id": "run-alt-oob",
+      "trigger_instruction": "turn 内切换请求被拒后由原 provider 继续",
+      "purpose": "P2-S3",
+      "setup": { "ledger": [] },
+      "steps": [],
+      "segments": [
+        {
+          "provider_id": "faux",
+          "steps": [
+            { "type": "provider_switch", "to": "faux-alt", "reason": "越界切换请求反例（turn 内）" },
+            { "type": "assistant_message", "text": "切换被拒，原 provider 继续" },
+            { "type": "final_answer", "text": "完成" }
+          ]
+        }
+      ],
+      "expect": { "outcome": "completed", "exit_code": 0 }
+    }
+  }
+}
