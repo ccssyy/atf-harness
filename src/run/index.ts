@@ -9,8 +9,20 @@ export {
   runError,
   type BranchOutcome,
   type BranchRunReport,
+  type CredentialIndeterminateReport,
   type RunBranchOptions,
   type RunError,
   type RunErrorCode,
   type ToolResultPayload,
 } from "./runner.js";
+export {
+  createApprovalTrackHandler,
+  readStreamMaxId,
+  DENIAL_LOOP_LIMIT,
+  type ApprovalHandler,
+  type ApprovalStub,
+  type ApprovalStubResponse,
+  type ApprovalTrackDeps,
+  type ApprovalTrackInput,
+  type ApprovalVerdict,
+} from "./approvalTrack.js";

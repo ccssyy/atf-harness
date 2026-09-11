@@ -354,7 +354,8 @@ interface ProviderConfigOverride {
 |---|---|---|
 | a | `approval_session_id` 生成形态(唯一性、可读性) | harness 侧单调标识或 UUID,形态 S2 定;消费面只要求全局唯一且落盘 |
 | c | advise 意见原文与 clarification 载荷的字段命名细化 | 本 ADR 以 `advice_text` / `question` 表意,S2 可改命名,语义锚点不变 |
-| d | **问答授权凭据的消费状态记录形态**(决议 §2.1 新增) | **状态更新(S1b 决议 §2.2):由 P2-S2 首发交付小设计(先设计后实现,owner review 通过后再实现;S1b 不预写)。四条约束:① 重启幂等——run 恢复后同一凭据不得重复消费(防双执行);② 不新增第 13 类事件——若无解,走 schema v2 定义修订并报 owner(不得夹带);③ 禁 setup 基建——不得以 `ledger_record` 等承载消费事实;④ fail-closed 优先——执行与消费事实的先后顺序必须明示,不确定即阻断,不得「猜已执行」** |
+| d | **问答授权凭据的消费状态记录形态**(决议 §2.1 新增) | **已裁决(P2-S2 门 1 评审通过,设计 v1.1):消费 = 事件流推导(被授权调用的 `tool/result` 落盘,`call_ref` 显式配对);四值纯函数判定;`indeterminate` = run 终态 failed(1) + `credential_indeterminate` + 五字段上报;放行前 granted 持久化前置。实现落点 P2-S2** |
+| e | **内核方法幂等键前瞻**(S1b 决议 §3.3 新增,2026-09-11):若内核工具方法支持幂等键(如以 `approval_key` / `request_id` 去重),凭据崩溃窗口内可由「不重放 + 人工核对」升级为「安全重放、无需人工介入」 | **登记为 re-pin 后可谈项(C1 专项时一并评估);Phase 2 不实现、不探索**。主流对标:幂等键是 durable execution 框架处理副作用确定性的通用解(Temporal 幂等配方) |
 
 ---
 

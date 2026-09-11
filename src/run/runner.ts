@@ -46,6 +46,12 @@ import {
   type SessionEvent,
   type SessionEventInput,
 } from "../session/index.js";
+import {
+  createApprovalTrackHandler,
+  readStreamMaxId,
+  type ApprovalStub,
+} from "./approvalTrack.js";
+import { type ApprovalGate } from "../tools/index.js";
 import { SurfaceScanResolver } from "./surfaceScanResolver.js";
 
 export type RunErrorCode =
@@ -54,7 +60,8 @@ export type RunErrorCode =
   | "setup_failure" // 账本预录等 setup 失败
   | "workspace_failure" // 工作区创建 / scratch 写入 / 晋升失败
   | "session_failure" // 会话事件写入失败 / 铁律一意外缺位
-  | "provider_failure"; // provider 故障 / 决策序列耗尽而未收束
+  | "provider_failure" // provider 故障 / 决策序列耗尽而未收束
+  | "credential_indeterminate"; // 问答轨凭据状态不确定（A3：run 终态，需人工核对，exit 1）
 
 export interface RunError {
   code: RunErrorCode;
@@ -68,11 +75,14 @@ export const runError = (code: RunErrorCode, message: string, detail?: unknown):
   return error;
 };
 
-/** 分支终局（四态穷尽互斥；业务级 gate blocked 是合法 canonical 产出，不是终局——B2 语义）。 */
+/** 分支终局(六态穷尽互斥;业务级 gate blocked 是合法 canonical 产出,不是终局——B2 语义):
+ *  Phase 1 四态 + P2-S2 问答轨两终态 suspended(75,非终态可恢复)/ aborted(79)。 */
 export type BranchOutcome =
   | { kind: "completed" }
   | { kind: "approval_missing"; block: ToolBlock }
   | { kind: "session_rejected"; block: T0RefBlockShape }
+  | { kind: "suspended"; block: ToolBlock }
+  | { kind: "aborted"; block: ToolBlock }
   | { kind: "failed"; error: RunError };
 
 // 避免与 workspace 层类型产生导入环的轻量别名（结构同构于 T0RefBlock）
@@ -83,10 +93,11 @@ interface T0RefBlockShape {
 }
 
 /**
- * runner 统一出口（owner 口径 #4，本文件登记）：0 = completed；
- * 78 = approval_missing（经 S3 锚点决出，78 不扩用）；会话层拒绝 / 故障 = 1。
+ * runner 统一出口(owner 口径 #4 + 决议 §3.2 口径 #9,单一出口):0 = completed;
+ * 78 = approval_missing(S3 锚点,不挪用);75 = suspended;79 = aborted;
+ * 会话层拒绝 / credential_indeterminate / 各类故障 = 1。
  */
-export const resolveRunExitCode = (outcome: BranchOutcome): 0 | 1 | 78 => {
+export const resolveRunExitCode = (outcome: BranchOutcome): 0 | 1 | 75 | 78 | 79 => {
   switch (outcome.kind) {
     case "completed":
       return 0;
@@ -95,13 +106,27 @@ export const resolveRunExitCode = (outcome: BranchOutcome): 0 | 1 | 78 => {
     case "session_rejected":
     case "failed":
       return 1;
+    case "suspended":
+      return 75;
+    case "aborted":
+      return 79;
   }
 };
 
-/** tool/result 事件 payload 形态（结构化回填，供 Faux 断言失败路径与 B2 block 回填验证）。 */
+/** tool/result 事件 payload 形态(结构化回填,供 Faux 断言失败路径与 B2 block 回填验证)。
+ *  P2-S2(A1/R3):call_ref = 被回填的 tool/call 事件 id——凭据消费事实的显式配对键。 */
 export type ToolResultPayload =
-  | { tool: string; ok: true; result: unknown }
-  | { tool: string; ok: false; reason: string; block?: ToolBlock; detail?: unknown };
+  | { tool: string; ok: true; result: unknown; call_ref: number }
+  | { tool: string; ok: false; reason: string; call_ref: number; block?: ToolBlock; detail?: unknown };
+
+/** A3:credential_indeterminate 终态的人工核对上报材料(固定五项)。 */
+export interface CredentialIndeterminateReport {
+  approval_session_id: string;
+  tool_call_id: number;
+  tool: string;
+  approval_key: string;
+  window: { granted_id: number | null; watermark: number };
+}
 
 export interface BranchRunReport {
   scenario_id: string;
@@ -110,7 +135,7 @@ export interface BranchRunReport {
   purpose: string;
   workspace_root: string;
   outcome: BranchOutcome;
-  exit_code: 0 | 1 | 78;
+  exit_code: 0 | 1 | 75 | 78 | 79;
   /** 本次分支实际落盘的事件序列（内存序列，与磁盘 replay 对账） */
   events: SessionEvent[];
   /** GuardedSessionLog.replay 结果（null = replay 基础设施故障，见 replay_error） */
@@ -121,6 +146,8 @@ export interface BranchRunReport {
   catalog_error: WorkspaceError | null;
   /** 期望核验违例清单（空 = 分支验收通过） */
   expect_violations: string[];
+  /** A3:问答轨 indeterminate 终态的上报材料(仅该终态出现) */
+  credential_indeterminate?: CredentialIndeterminateReport;
 }
 
 export interface RunBranchOptions {
@@ -132,6 +159,9 @@ export interface RunBranchOptions {
   fresh?: boolean;
   /** 时间源注入（默认 UTC ISO 8601） */
   now?: () => string;
+  /** P2-S2:问答轨审批面声明。缺省 = 账本轨-only(Phase 1 行为逐位一致,headless 等价性);
+   *  声明后:账本轨优先,未命中走问答轨(桩对端应答,决议 §3.2 口径 #6/#8)。 */
+  approvalSurface?: { stub: ApprovalStub };
 }
 
 export class ScenarioRunner {
@@ -167,6 +197,7 @@ export class ScenarioRunner {
 
     let outcome: BranchOutcome = { kind: "failed", error: runError("provider_failure", "分支未执行（占位，不应外泄）") };
     const events: SessionEvent[] = [];
+    let credentialIndeterminate: CredentialIndeterminateReport | undefined;
     let replay: GuardedReplayOutcome | null = null;
     let replayError: SessionError | null = null;
     let catalog: CatalogEntry[] = [];
@@ -202,6 +233,27 @@ export class ScenarioRunner {
       const session = guarded.value;
       const executor = new ToolExecutor(connection, ToolRegistry.createDefault());
       const provider = FauxProvider.fromBranch(branch);
+
+      // A2:恢复水位线——打开会话后立即取值并固定(流内最大事件 id,全新 run = 0,含 session/repair
+      // 审计事件);取值后不随后续 append 变化,问答轨凭据判定以此区分旧遗留与新注入。
+      const recoveryWatermark = await readStreamMaxId(async () =>
+        readFile(ws.sessionLogPath, "utf8").then(
+          (text) => text,
+          () => "",
+        ),
+      );
+      const approvalHandler = options.approvalSurface === undefined
+        ? undefined
+        : createApprovalTrackHandler({
+            appendEvent: async (input) => await appendEvent(input),
+            events,
+            // R2 持久化前置:runner 的会话恒为逐条 fsync 档(未注入 fsync 选项),ack 即已持久化——
+            // 「档位断言」路径成立,此处恒确认成功;批量档下的 flush 确认由 handler 层注入测试覆盖
+            // (SessionLog.flush 公开口),跨进程恢复的批量档语义属 Phase 3 run-resume。
+            flush: async () => ({ ok: true }),
+            recoveryWatermark,
+            stub: options.approvalSurface.stub,
+          });
 
       /** 追加事件（无引用步骤不应触发铁律一——命中即 harness 故障）。 */
       const appendEvent = async (input: SessionEventInput): Promise<SessionEvent | null> => {
@@ -268,7 +320,12 @@ export class ScenarioRunner {
         if (step.type === "tool_call") {
           const call = await appendEvent({ type: "tool/call", payload: { tool: step.tool, params: step.params } });
           if (call === null) break;
-          const result: ToolCallOutcome = await executor.execute(step.tool, step.params);
+          // P2-S2:审批面缺省 = 账本轨-only(Phase 1 逐位一致,headless 等价性);
+          // 声明后账本轨优先,未命中走问答轨(handler 发起/延续审批会话)。
+          const gate: ApprovalGate | undefined = approvalHandler === undefined
+            ? undefined
+            : { handler: (gateInput) => approvalHandler({ ...gateInput, tool_call_id: call.id }) };
+          const result: ToolCallOutcome = await executor.execute(step.tool, step.params, gate);
 
           // 证据链：cite_admitted_fact = 把最近一次成功准入的三元组作为本 tool/result 的 domain_refs
           let refs: DomainRef[] | undefined;
@@ -279,14 +336,25 @@ export class ScenarioRunner {
             }
             refs = [lastAdmittedFact];
           }
+
+          // 问答轨终态先行处理:调用未执行,无结果回填——审批链(tool/call + request + response)即事实
+          if (result.kind === "suspended" || result.kind === "aborted") {
+            outcome = result.kind === "suspended"
+              ? { kind: "suspended", block: result.block }
+              : { kind: "aborted", block: result.block };
+            turnOpen = false;
+            await appendTurnEnd(outcome.kind);
+            break;
+          }
+
           const payload: ToolResultPayload =
             result.kind === "executed"
-              ? { tool: step.tool, ok: true, result: result.result }
-              : result.kind === "blocked"
-                ? { tool: step.tool, ok: false, reason: result.block.reason, block: result.block }
-                : result.kind === "rejected"
-                  ? { tool: step.tool, ok: false, reason: result.reason, detail: result.detail }
-                  : { tool: step.tool, ok: false, reason: "failed", detail: result.error };
+              ? { tool: step.tool, ok: true, result: result.result, call_ref: call.id }
+              : result.kind === "rejected"
+                ? { tool: step.tool, ok: false, reason: result.reason, call_ref: call.id, detail: result.detail }
+                : result.kind === "failed"
+                  ? { tool: step.tool, ok: false, reason: "failed", call_ref: call.id, detail: result.error }
+                  : { tool: step.tool, ok: false, reason: result.block.reason, call_ref: call.id, block: result.block };
           const appended = await appendEvent({ type: "tool/result", payload, domain_refs: refs });
           if (appended === null) break;
 
@@ -299,11 +367,51 @@ export class ScenarioRunner {
             continue;
           }
           if (result.kind === "blocked") {
-            // headless 账本轨终局（ADR-07）：approval_missing 即终止——无自动应答、不重试
-            outcome = { kind: "approval_missing", block: result.block };
-            turnOpen = false;
-            await appendTurnEnd("approval_missing");
-            break;
+            if (result.block.reason === "approval_missing") {
+              // headless 账本轨终局(ADR-07):approval_missing 即终止——无自动应答、不重试(语义零改动)
+              outcome = { kind: "approval_missing", block: result.block };
+              turnOpen = false;
+              await appendTurnEnd("approval_missing");
+              break;
+            }
+            if (result.block.reason === "credential_indeterminate") {
+              // A3:事实缺口 → run 终态 failed(1) + 固定五项上报材料;终态不被后续写失败覆盖(既有收口规则)
+              const detail = (result.block.detail ?? {}) as {
+                credential?: { approval_session_id: string; request_event_ref: number };
+                window?: { granted_id: number | null; watermark: number };
+              };
+              outcome = {
+                kind: "failed",
+                error: runError("credential_indeterminate", result.block.message, result.block.detail),
+              };
+              credentialIndeterminate = {
+                approval_session_id: detail.credential?.approval_session_id ?? "",
+                tool_call_id: call.id,
+                tool: step.tool,
+                approval_key: detail.credential !== undefined ? (result.block.detail as { approval_key?: string }).approval_key ?? "" : "",
+                window: {
+                  granted_id: detail.window?.granted_id ?? null,
+                  watermark: detail.window?.watermark ?? recoveryWatermark,
+                },
+              };
+              turnOpen = false;
+              await appendTurnEnd("credential_indeterminate");
+              break;
+            }
+            if (result.block.reason === "credential_persist_failed" || result.block.reason === "approval_track_failed") {
+              // harness 侧持久化/编排失败:不放行且不可安全继续 → 终局(fail-closed)
+              outcome = {
+                kind: "failed",
+                error: runError("session_failure", result.block.message, result.block.detail),
+              };
+              turnOpen = false;
+              await appendTurnEnd("approval_track_failed");
+              break;
+            }
+            // approval_denied / credential_consumed / credential_invalid:结构化回填已落盘,
+            // 模型可换路径(重提计数由编排器状态承载,达阈值升级)——非终局
+            if (outcome.kind === "failed" && outcome.error.code === "session_failure") break; // 会话写路径已真实折算失败(初始占位不算)
+            continue;
           }
           // rejected / failed：结构化回填已落盘，分支按故障终局（不猜测成功）
           outcome =
@@ -414,6 +522,7 @@ export class ScenarioRunner {
           replay,
           catalog,
         }),
+        ...(credentialIndeterminate !== undefined ? { credential_indeterminate: credentialIndeterminate } : {}),
       };
       return ok(report);
     }
@@ -438,7 +547,7 @@ export const evaluateExpectations = (
   expect: ScenarioExpect,
   actual: {
     outcome: BranchOutcome;
-    exit_code: 0 | 1 | 78;
+    exit_code: 0 | 1 | 75 | 78 | 79;
     events: readonly SessionEvent[];
     replay: GuardedReplayOutcome | null;
     catalog: readonly CatalogEntry[];

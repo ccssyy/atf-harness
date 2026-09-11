@@ -30,7 +30,9 @@ export const SESSION_EVENT_TYPES = [
 
 export type SessionEventType = (typeof SESSION_EVENT_TYPES)[number];
 
-/** 本阶段可写入（启用）类型：v0 七类 + session/compaction + session/repair（owner 口径 #1：未实现类型不得被写入）。 */
+/** 本阶段可写入（启用）类型：v0 七类 + session/compaction + session/repair + approval/request
+ *  + approval/response（P2-S2 启用位推进 9 → 11，owner 口径 #1：schema_version 保持 1，
+ *  类型集合未变仅启用位推进）；provider/switch 仍为保留位（S3 启用）。 */
 export const SESSION_ENABLED_EVENT_TYPES = [
   "user/message",
   "assistant/message",
@@ -41,10 +43,14 @@ export const SESSION_ENABLED_EVENT_TYPES = [
   "turn/end",
   "session/compaction",
   "session/repair",
+  "approval/request",
+  "approval/response",
 ] as const;
 
-/** schema v1 保留位类型：已登记未启用——写入与落盘流中出现一律拒绝（fail-closed）。 */
-export const SESSION_RESERVED_EVENT_TYPES = ["approval/request", "approval/response", "provider/switch"] as const;
+/** schema v1 保留位类型：已登记未启用——写入与落盘流中出现一律拒绝（fail-closed）。
+ *  P2-S2 启用位推进：approval/request、approval/response 移出保留位（enabled 9 → 11）；
+ *  provider/switch 仍为保留位（S3 启用）。 */
+export const SESSION_RESERVED_EVENT_TYPES = ["provider/switch"] as const;
 
 export const isSessionEventType = (value: unknown): value is SessionEventType =>
   typeof value === "string" && (SESSION_EVENT_TYPES as readonly string[]).includes(value);

@@ -1,9 +1,10 @@
 /**
- * S3 工具层公开出口。后续 slice（S4 工作区 / S5 冒烟）只从这里 import。
+ * S3 工具层公开出口。后续 slice（S4 工作区 / S5 冒烟 / P2-S2 问答轨）只从这里 import。
  */
 export { checkSchema, validateCanonicalOutput, type SchemaNode } from "./canonical.js";
 export {
   approvalMissingBlock,
+  approvalTrackBlock,
   toolError,
   toolErrorFromBridge,
   type ToolBlock,
@@ -21,4 +22,17 @@ export {
 export { TOOL_DEFINITIONS, TOOL_NAMES, toModelVisible, type ModelVisibleTool, type ToolDefinition } from "./toolDefinition.js";
 export { ToolRegistry } from "./registry.js";
 export type { BridgeTransport } from "./executor.js";
-export { ToolExecutor, resolveHeadlessExitCode, type ToolCallOutcome } from "./executor.js";
+export {
+  ToolExecutor,
+  resolveHeadlessExitCode,
+  type ApprovalGate,
+  type ApprovalTrackVerdict,
+  type ToolCallOutcome,
+} from "./executor.js";
+export {
+  findExistingCredential,
+  resolveCredentialState,
+  type CredentialContext,
+  type CredentialRef,
+  type CredentialState,
+} from "./credentialState.js";

@@ -40,7 +40,7 @@ const createAndWrite = async (lines: string[], path: string = logPath()): Promis
 };
 
 describe("schema v1 常量与白名单（P2-S1 bump：11 类一次定死 + 启用位）", () => {
-  it("白名单 12 类（S1a 定义修正 11→12），启用 9 类，保留位 3 类，schema 版本仍 1（不 bump）", () => {
+  it("白名单 12 类，启用 11 类（P2-S2 启用位推进 9→11），保留位 1 类（provider/switch，S3），schema 版本仍 1", () => {
     expect(SESSION_SCHEMA_VERSION).toBe(1);
     expect(SESSION_EVENT_TYPES).toEqual([
       "user/message",
@@ -66,8 +66,10 @@ describe("schema v1 常量与白名单（P2-S1 bump：11 类一次定死 + 启�
       "turn/end",
       "session/compaction",
       "session/repair",
+      "approval/request",
+      "approval/response",
     ]);
-    expect(SESSION_RESERVED_EVENT_TYPES).toEqual(["approval/request", "approval/response", "provider/switch"]);
+    expect(SESSION_RESERVED_EVENT_TYPES).toEqual(["provider/switch"]);
   });
 
   it("保留位类型拒绝写入（owner 口径 #1：未实现类型不得被写入）——err 且文件零增长", async () => {
@@ -92,7 +94,8 @@ describe("schema v1 常量与白名单（P2-S1 bump：11 类一次定死 + 启�
 
   it("保留位类型出现于落盘流 → replay err(schema_violation)（fail-closed：视为篡改/超前版本）", async () => {
     await createAndWrite([
-      JSON.stringify({ id: 1, ts: new Date().toISOString(), type: "approval/request", payload: {}, projection: { evidence_event: null } }),
+      // P2-S2 启用位推进后,现保留位仅 provider/switch(S3 启用);approval/* 已启用可写入
+      JSON.stringify({ id: 1, ts: new Date().toISOString(), type: "provider/switch", payload: {}, projection: { evidence_event: null } }),
     ]);
     const replayed = await SessionLog.replay(logPath(), resolver);
     expect(replayed.ok).toBe(false);
