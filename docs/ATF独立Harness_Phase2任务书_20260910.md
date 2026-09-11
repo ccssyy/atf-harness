@@ -1,5 +1,7 @@
 # ATF 独立 Harness Phase 2 任务书——能力扩展（Codex 直接执行）
 
+> **状态：CLOSED（2026-09-11）** —— Phase 2 四切片（D1 / S1 / S2 / S3）全部验收闭合，milestone tag `v0.2.0`。终验数字：186 passed / 2 skipped，smoke:p2s1 / p2s2 / p2s3 / s5 全过。条件项 P2-S4（闸 B）、C1（re-pin）未触发，状态见《P2-S3验收暨Phase2闭合决议》§5。
+
 > 日期：2026-09-10 ｜ 前置：**Phase 1 已 CLOSED**（tag `v0.1.0`，109 passed / 2 skipped，S1–S5 全闭）
 > 执行方：Codex ｜ 执行环境：本地 Mac 开发目录，**不依赖 A800 GPU**
 > 决策基线：Phase 0 四项 ADR（05/06/07/08）＋《ATF-Harness_Phase2规划设计_20260910.md》＋《ATF-Harness_Owner决议_Phase2范围确认与任务书签发_20260910.md》＋《ATF-Harness_P2S2审批应答语义设计草案_20260910.md》
