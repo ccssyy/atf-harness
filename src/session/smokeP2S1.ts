@@ -106,7 +106,7 @@ const smoke = async (): Promise<Result<undefined, SessionError>> => {
       console.log(`      丢弃 ${String(repaired.value.truncatedTail.dropped_bytes)} 字节残段，留痕成对 ✓`);
     }
 
-    console.log("[6/6] fsync 批量档：攒满 N 条即刷、ack 即持久化");
+    console.log("[6/6] fsync 批量档：ack = 已写入；攒满 N 条触发 fsync 后水位线归零");
     const batchPath = join(dir, "batch.jsonl");
     const batch = await SessionLog.create(batchPath, resolver, {
       fsync: { mode: "batch", batchMaxEvents: 4, batchWindowMs: 500 },
@@ -125,7 +125,8 @@ const smoke = async (): Promise<Result<undefined, SessionError>> => {
     if (!closedBatch.ok) return closedBatch;
     const lines = (await readFile(batchPath, "utf8")).split("\n").filter((line) => line !== "");
     if (lines.length !== 6) return err(sessionError("io_error", "批量档刷盘后行数不符"));
-    console.log("      批量档 6 条全部刷盘 ✓");
+    if (batch.value.unsyncedEvents !== 0) return err(sessionError("io_error", "批量档刷盘后水位线未归零"));
+    console.log("      批量档水位线归零、6 条全部落盘 ✓");
     return ok(undefined);
   } finally {
     await rm(dir, { recursive: true, force: true });

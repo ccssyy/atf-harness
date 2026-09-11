@@ -68,12 +68,8 @@ export type AppendOutcome =
 export interface ReplayOutcome {
   events: SessionEvent[];
   blocks: SessionBlock[];
-  /**
-   * S1a：末尾未确认残段被丢弃的事实（replay 只读不改写，null = 无残段）。
-   * 可选的原因：包装层（GuardedSessionLog）在 S1a 范围外、其字面量不透传该字段——
-   * 会话层 SessionLog.replay 恒显式赋值；字段透传收紧属 S2 run 层。
-   */
-  truncated_tail?: TruncatedTail | null;
+  /** S1a：末尾未确认残段被丢弃的事实（replay 只读不改写，null = 无残段）；S1b 收紧为必填。 */
+  truncated_tail: TruncatedTail | null;
 }
 
 /** 尾部未确认残段的丢弃事实（S1a，决议 §2.1.5）。 */

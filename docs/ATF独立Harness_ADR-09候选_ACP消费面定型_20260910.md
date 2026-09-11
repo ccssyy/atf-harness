@@ -317,7 +317,8 @@ interface ProviderConfigOverride {
 2. **传输层协议与实现选型全部归 Phase 3**:JSON-RPC 帧格式、进程模型(spawn / 常驻)、鉴权机制、凭据句柄传输、事件流通道(推送/拉取/重连)、`external_ref` 幂等索引的存储形态。本文档对这些只字不选。
 3. ACP 公开规范(`session/new` / `session/load` / `session/prompt` / `session/request_permission` / `session/update`,agentclientprotocol.com)仅作**形态参考**——本 ADR 的 dispatch/resume/审批往返与其语义同构,便于 Phase 3 选型时映射;**不构成本仓任何依赖**(R2a 零依赖纪律),Phase 3 是否采用 ACP 作为传输协议属选型决策,另行评审。
 4. `projection`(TEM 回灌)激活、闸 B 触发判定、re-pin 均不在本文档范围(§3)。
-5. **生效方式**:owner review 通过 → 本文档升格 ADR-09 ACCEPTED;S2/S3 任务书按 C1–C12 细化条款(细化属条款级修订,不改范围,如需修订任务书原文按指令口径 #6 书面提出)。
+5. (S1b 登记)**会话流无防篡改链**:这是已知边界,不是待办承诺——「整条尾部完整事件被连同 LF 删除」在结构上不可检测(文件以更早的 LF 结尾、不构成残段),发现此类删除需外部锚(run journal 事实 / catalog sha);Phase 2 不实现会话流 hash chain。
+6. **生效方式**:owner review 通过 → 本文档升格 ADR-09 ACCEPTED;S2/S3 任务书按 C1–C12 细化条款(细化属条款级修订,不改范围,如需修订任务书原文按指令口径 #6 书面提出)。
 
 ---
 
@@ -353,7 +354,7 @@ interface ProviderConfigOverride {
 |---|---|---|
 | a | `approval_session_id` 生成形态(唯一性、可读性) | harness 侧单调标识或 UUID,形态 S2 定;消费面只要求全局唯一且落盘 |
 | c | advise 意见原文与 clarification 载荷的字段命名细化 | 本 ADR 以 `advice_text` / `question` 表意,S2 可改命名,语义锚点不变 |
-| d | **问答授权凭据的消费状态记录形态**(决议 §2.1 新增) | 本 run 内「granted 且未消费」的追踪(一次性语义)与留痕方式由 S2 定;须满足:无凭据不执行、消费后不可复用、可审计配对 |
+| d | **问答授权凭据的消费状态记录形态**(决议 §2.1 新增) | **状态更新(S1b 决议 §2.2):由 P2-S2 首发交付小设计(先设计后实现,owner review 通过后再实现;S1b 不预写)。四条约束:① 重启幂等——run 恢复后同一凭据不得重复消费(防双执行);② 不新增第 13 类事件——若无解,走 schema v2 定义修订并报 owner(不得夹带);③ 禁 setup 基建——不得以 `ledger_record` 等承载消费事实;④ fail-closed 优先——执行与消费事实的先后顺序必须明示,不确定即阻断,不得「猜已执行」** |
 
 ---
 
@@ -380,3 +381,4 @@ interface ProviderConfigOverride {
   11. 本修订说明块。
 - C1–C12 结论编号体系保持,未新增编号;§1.1 载荷四要素、§1.2 事件集合与投影白名单、§1.5 透出模型、§3 不实现项、§4 边界声明未改动。
 - **v1.2**(2026-09-10):依据《ATF-Harness_Owner决议与启动指令_P2S1验收_S1a修复_20260910.md》§3 第 5 项,§1.2 投影形态纪律补一条(投影摘要条目携带 `synthetic: true`,投影消费者按 `(id, synthetic)` 唯一识别);仅此一处,不改 C5 三层白名单结论。
+- **v1.3**(2026-09-11):依据《ATF-Harness_Owner决议与启动指令_S1a验收_S1b收尾_20260911.md》§3 第 4/5 项——§4 边界声明补第 5 条(会话流无防篡改链,已知边界非承诺);§5.3 开放点 (d) 标注为「P2-S2 首发小设计」并附四条约束摘要;仅此两处。

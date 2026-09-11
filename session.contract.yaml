@@ -159,6 +159,11 @@ tail_repair:
     create: SessionLog 实例属性 truncatedTail 同构（包装层透传属 S2 run 层）
   transparency: session/repair 对压缩算法透明（同 session/compaction：不计触发指标、
                 不参与折叠、不进入投影）
+  boundary: 已知边界，非待办承诺（S1b 登记，决议 §1.2/§2.3）：会话流无防篡改链
+            （hash chain），「整条尾部完整事件被连同 LF 删除」在结构上不可检测——
+            文件以更早的 LF 结尾、不构成残段；本节留痕（tail_excerpt/tail_sha256）
+            仅对「残段」类截断具备取证能力。发现整条删除需外部锚（run journal 事实 /
+            catalog sha）；Phase 2 不实现会话流 hash chain。
 
 # ---------------------------------------------------------------------
 # schema v0 → v1 迁移说明（任务书 §2 设计要求 2：旧会话可 replay）
@@ -171,16 +176,11 @@ migration:
     version_carrier: 落盘流无版本头（逐行自描述）；版本语义由读取方（本契约）承载
 
 # ---------------------------------------------------------------------
-# headless run 退出码枚举（决议 §2.2 补登）
-# 性质：run 级语义登记；0/78/1 为既有语义原样补登，75/79 为新增码（枚举补登，
-# 不触发 contract_version bump）；映射统一经 resolveHeadlessExitCode() 单出口
+# headless run 退出码（S1b 挪移，决议 §2.3）：exit code 属进程/运行面语义，
+# 全表登记于 bridge.contract.yaml 头部「exit 78 语义登记」+「exit 75/79 枚举补登」
+# （2026-09-11）区块；此处仅保留指向性引用，不并存同义内容。
 # ---------------------------------------------------------------------
-headless_exit_codes:
-  0:  completed —— 正常收束
-  78: blocked —— approval_missing（headless 审批锚点，不挪用）
-  1:  failed —— 系统/对端/桥接/工作区故障（含会话层拒绝 t0_ref_forbidden）
-  75: suspended —— 非终态，审批应答等待超时挂起（EX_TEMPFAIL 语义：暂时无法继续，resume 可续）
-  79: aborted —— 终态，主动终止（应答 verdict=abort 或宿主 resume(abort)）
+headless_exit_codes: 见 bridge.contract.yaml 头部登记（0/78/1 既有语义 + 75 suspended / 79 aborted 枚举补登）
 
 # ---------------------------------------------------------------------
 # 双管道（任务书 S2-3 定签名；P2-S1 起真实实现，登记于 pipeline 节）

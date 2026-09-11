@@ -26,6 +26,7 @@ import {
   type SessionEventInput,
   type SessionLogOptions,
   type ReplayOutcome,
+  type TruncatedTail,
 } from "../session/index.js";
 
 /** 铁律一拒绝归因（workspace.contract.yaml t0_ref_forbidden 节登记）。 */
@@ -70,6 +71,11 @@ export class GuardedSessionLog {
     private readonly scratchRoot: string,
   ) {}
 
+  /** S1b（L-2）：透传内层的尾部修复事实——run 层经包装实例亦可读，不再静默丢失。 */
+  public get truncatedTail(): TruncatedTail | null {
+    return this.inner.truncatedTail;
+  }
+
   /** 打开（或创建）挂载铁律一规则的会话日志。resolver 为 S2 既有注入口（digest 校验），原样透传。 */
   public static async create(
     filePath: string,
@@ -109,6 +115,7 @@ export class GuardedSessionLog {
   /**
    * 从磁盘全量重建：先委托 S2 replay（结构校验 + digest 校验），再对重建出的事件逐条
    * 扫描铁律一——流内出现 scratch 引用 = 流不可信 → blocked（文件只读不改写）。
+   * S1b（L-2）：透传 truncated_tail（尾部修复事实），拦截语义逐位不变。
    */
   public static async replay(
     filePath: string,
@@ -132,7 +139,15 @@ export class GuardedSessionLog {
         },
       };
     }
-    return { ok: true, value: { kind: "replayed", events: delegated.value.events, blocks: delegated.value.blocks } };
+    return {
+      ok: true,
+      value: {
+        kind: "replayed",
+        events: delegated.value.events,
+        blocks: delegated.value.blocks,
+        truncated_tail: delegated.value.truncated_tail,
+      },
+    };
   }
 }
 

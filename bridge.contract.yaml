@@ -96,6 +96,13 @@ lifecycle:
 #   harness 侧 resolveHeadlessExitCode 为唯一出口）；"exit 78 由 atf 侧返回"
 #   理解为内核侧真实实现时的语义约定，本阶段由 mock 承载。
 #
+# 【exit 75/79 枚举补登 2026-09-11】《ATF-Harness_Owner决议与启动指令_S1a验收_S1b收尾_20260911.md》
+#   §2.3（承接 D1 闭合决议 §2.2 定案）：75 = suspended（非终态，审批应答等待超时挂起，
+#   EX_TEMPFAIL 语义，resume 可续）；79 = aborted（终态，主动终止：应答 verdict=abort
+#   或宿主 resume(abort)）。两码为枚举补登，不改既有 0/78/1 语义，不 bump contract_version；
+#   映射仍经 harness 侧 resolveHeadlessExitCode() 单出口，终局语义保护条款延续。
+#   退出码全表以本登记为准（session.contract.yaml 仅保留指向性引用，S1b 起不再单列）。
+#
 # 【审批键 digest 算法登记】params_digest = sha256( hex, 小写 ) over
 #   stableParamsJson = JSON.stringify( 键序递归排序后的 params )；
 #   harness 侧与对端 MockLedger 同构实现，防审批键漂移。
