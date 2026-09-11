@@ -201,8 +201,10 @@ approval_track:
     question: string?                # clarification 补充上下文要求
   six_verdict_handling:
     granted: 凭据预检（resolveCredentialState = available）→ 持久化前置（R2）→ 放行执行
-    advised: 意见原文回填模型 → 重新提案（新 request 带 supersedes；非终局）
-    denied: 结构化 block 回填 → 模型可换路径（同提案重提计数 +1；非终局）
+    advised: 意见原文回填模型 → 重新提案（新 request 带 supersedes；非终局）；
+             block reason = approval_advised（S2a 决议 §3.2：与 denied 的 approval_denied
+             在 block 面区分——「给意见」≠「被否决」；approval/response 的 verdict 权威记录不变）
+    denied: 结构化 block 回填（reason = approval_denied）→ 模型可换路径（同提案重提计数 +1；非终局）
     aborted: run 终态（exit 79）
     clarification: 同会话补上下文重发 request（多轮往返；attempt 不变、无 supersedes）
     timeout: verdict=timeout + actor="harness" → run 挂起 suspended（exit 75，超时非否决）
@@ -214,7 +216,8 @@ approval_track:
     carrier: 无显式消费事件——消费 = 被授权调用的完成事实（tool/result 落盘）
     pairing: tool/result.payload.call_ref = 被回填的 tool/call 事件 id（显式引用，A1/R3）；
              tool/call.payload 侧的自指 call_ref 因 append-only 无法预写自身 id 而不落盘
-             （判定仅认 result 侧；偏离已登记 S2 报告）
+             （判定仅认 result 侧；偏离已登记 S2 报告，owner 采纳裁决见决议 §3.1——
+             对称配对键（写入方预生成 call_uid）登记 ADR-09 §5.3 开放点 (f)，可选增强，暂不做）
     judge: resolveCredentialState(events, credential, {recoveryWatermark}) 纯函数四值：
            consumed（结果已落盘，拒）/ available（granted.id > watermark，放行）/
            indeterminate（id ≤ watermark，run 终态 failed(1) + credential_indeterminate，

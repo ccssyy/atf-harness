@@ -356,6 +356,7 @@ interface ProviderConfigOverride {
 | c | advise 意见原文与 clarification 载荷的字段命名细化 | 本 ADR 以 `advice_text` / `question` 表意,S2 可改命名,语义锚点不变 |
 | d | **问答授权凭据的消费状态记录形态**(决议 §2.1 新增) | **已裁决(P2-S2 门 1 评审通过,设计 v1.1):消费 = 事件流推导(被授权调用的 `tool/result` 落盘,`call_ref` 显式配对);四值纯函数判定;`indeterminate` = run 终态 failed(1) + `credential_indeterminate` + 五字段上报;放行前 granted 持久化前置。实现落点 P2-S2** |
 | e | **内核方法幂等键前瞻**(S1b 决议 §3.3 新增,2026-09-11):若内核工具方法支持幂等键(如以 `approval_key` / `request_id` 去重),凭据崩溃窗口内可由「不重放 + 人工核对」升级为「安全重放、无需人工介入」 | **登记为 re-pin 后可谈项(C1 专项时一并评估);Phase 2 不实现、不探索**。主流对标:幂等键是 durable execution 框架处理副作用确定性的通用解(Temporal 幂等配方) |
+| f | **预生成 `call_uid` 对称配对键**(P2-S2 验收决议 §3.1 新增,2026-09-11):凭据配对现仅认 result 侧 `call_ref`(payload 自由 JSON 携带被回填的 tool/call 事件 id;tool/call 侧不自指——与 Temporal `ActivityTaskCompleted.scheduled_event_id` 的结果侧回指形态一致,非妥协)。对称形态 = runner 在 append 前预生成 `call_uid` 写入 tool/call 与 tool/result 两侧 payload(OpenTelemetry `span_id` / LangGraph `task_id` 的写入方预生成模式),无需动 session 层 | **可选增强,暂不做**:当前无跨 run 引用需求、防篡改不在承诺内(§4 已登记会话流无 hash chain 边界);留待事件标识 uid 化或跨 run 引用需求出现时一并考虑 |
 
 ---
 
@@ -383,3 +384,4 @@ interface ProviderConfigOverride {
 - C1–C12 结论编号体系保持,未新增编号;§1.1 载荷四要素、§1.2 事件集合与投影白名单、§1.5 透出模型、§3 不实现项、§4 边界声明未改动。
 - **v1.2**(2026-09-10):依据《ATF-Harness_Owner决议与启动指令_P2S1验收_S1a修复_20260910.md》§3 第 5 项,§1.2 投影形态纪律补一条(投影摘要条目携带 `synthetic: true`,投影消费者按 `(id, synthetic)` 唯一识别);仅此一处,不改 C5 三层白名单结论。
 - **v1.3**(2026-09-11):依据《ATF-Harness_Owner决议与启动指令_S1a验收_S1b收尾_20260911.md》§3 第 4/5 项——§4 边界声明补第 5 条(会话流无防篡改链,已知边界非承诺);§5.3 开放点 (d) 标注为「P2-S2 首发小设计」并附四条约束摘要;仅此两处。
+- **v1.4**(2026-09-11):依据《ATF-Harness_Owner决议与启动指令_P2S2验收_S2a清项_20260911.md》§3.1——§5.3 新增开放点 (f)(预生成 `call_uid` 对称配对键,可选增强暂不做,含主流对标与理由);仅此一处。
