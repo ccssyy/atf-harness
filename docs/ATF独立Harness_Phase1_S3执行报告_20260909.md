@@ -1,5 +1,7 @@
 # ATF 独立 Harness — Phase 1 / S3 工具层 任务执行报告
 
+> 【时代说明（2026-09-13 契约 v2 修订）】本文为历史存档：文中"严格 4 工具面"的 `atf_surface_scan` 为 v1 时名，自契约 v2 起改名 `atf_fact_scan`（数组字段 `surface` → `facts`），现行登记见 `bridge.contract.yaml` v2。
+
 > 日期：2026-09-09 ｜ 执行方：zcode（本仓唯一开发 agent）｜ 报告对象：owner
 > 执行依据：《ATF-Harness_Owner决议与启动指令_S2闭合_S3启动_20260909.md》（§1 闭合决议 + §2 执行序列 + §3 owner 口径 #1–#5）+《ATF独立Harness_Phase1任务书_20260908.md》§3（S3）
 > 结论：**S2 已按决议闭合 push（tip `b68539c`）；S3 全部验收用例通过，本轮产出本地提交未 push，停在 S4 前；S4 未获指令不得启动。**

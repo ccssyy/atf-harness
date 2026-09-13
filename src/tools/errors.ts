@@ -6,6 +6,7 @@ import { type BridgeError } from "../bridge/index.js";
 export type ToolErrorCode =
   | "schema_violation" // canonical output 校验失败（owner 口径 #4）/ 参数违反模型可见 schema
   | "unknown_tool" // 请求了注册表面之外的工具（工具面收敛，owner 口径 #5）
+  | "scope_ref_missing" // 契约 v2：审批账本查询缺少 scope_ref（harness 配置故障，fail-closed）
   | "bridge_failure"; // 桥接层故障透传（连接不可用 / 超时 / 协议违规等），原始 BridgeError 附于 detail
 
 export interface ToolError {

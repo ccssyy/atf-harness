@@ -21,7 +21,7 @@
           "steps": [
             { "type": "assistant_message", "text": "faux T1：开始准入" },
             { "type": "tool_call", "tool": "atf_admit_data", "params": { "dataset_id": "ds-alt" } },
-            { "type": "tool_call", "tool": "atf_surface_scan", "params": {}, "cite_admitted_fact": true }
+            { "type": "tool_call", "tool": "atf_fact_scan", "params": {}, "cite_admitted_fact": true }
           ]
         },
         {

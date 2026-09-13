@@ -1,5 +1,7 @@
 # Owner 决议与启动指令：S3 闭合（push 授权）+ Phase 1 / S4 启动
 
+> 【时代说明（2026-09-13 契约 v2 修订）】本文为历史存档：文中"严格 4 工具面"的 `atf_surface_scan` 为 v1 时名，自契约 v2 起改名 `atf_fact_scan`（数组字段 `surface` → `facts`），现行登记见 `bridge.contract.yaml` v2。
+
 > 日期：2026-09-09 ｜ 签发：owner ｜ 执行方：zcode
 > 依据：《ATF独立Harness_Phase1_S3执行报告_20260909.md》+ owner review（独立核验通过：76 passed / 2 skipped 复跑一致、改动范围仅计划内文件、pin a628f8b 干净、smoke:s3 exit 0、executor.ts 抽审达标）。
 > 结论先行：**S3 审查通过。决议：报告 §5 决策点 ①–⑥ 全部同意为正式口径；批准 push；S4 现在启动。S4 完成即停，S5 未获指令不得启动。**

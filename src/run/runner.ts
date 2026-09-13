@@ -8,8 +8,12 @@
  * - 会话层拒绝（t0_ref_forbidden）与各类故障 = 1（不走 78）；
  * - 分支级归约在本文件登记（resolveRunExitCode），工具面锚点仍在 src/tools/executor.ts。
  *
- * 账本/setup 纪律：预录经桥接 ledger_record（owner 口径 #3：mock 对端进程内状态承载）；
- * 预录 params 与工具调用 params 严格一致（审批键 = tool + params digest，脚本内显式重复可审计）。
+ * 账本/setup 纪律（契约 v2，2026-09-13 契约修订）：预录经桥接 ledger_record（owner 口径 #3：
+ * mock 对端进程内状态承载），形态 = {scope_ref, tool, params_digest}（审批链键模型下
+ * tool + params_digest 为审计检索辅助）；账本查询/消费以 scope_ref 定位 +
+ * {approval_ref, record_id} 消费（executor 承载）。本 runner 以
+ * {project_id: scenario_id, scope_type: "run", scope_id: run_id, scope_mode: "headless"}
+ * 确定性派生 scope_ref，setup 预录与执行期查询天然同域。
  */
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -25,10 +29,11 @@ import { AtfBridgeConnection } from "../bridge/index.js";import {
 } from "../llm/index.js";
 import type { LlmProvider } from "../llm/index.js";
 import {
-  approvalKeyFor,
+  approvalParamsDigest,
   resolveHeadlessExitCode,
   ToolExecutor,
   ToolRegistry,
+  type ScopeRef,
   type ToolBlock,
   type ToolCallOutcome,
 } from "../tools/index.js";
@@ -62,7 +67,7 @@ import {
   type ProviderSwitchBlock,
 } from "./providerSwitch.js";
 import { type ApprovalGate } from "../tools/index.js";
-import { SurfaceScanResolver } from "./surfaceScanResolver.js";
+import { FactScanResolver } from "./factScanResolver.js";
 
 export type RunErrorCode =
   | "invalid_input" // 场景/分支/选项非法（分支不存在、run_id 逃逸等）
@@ -239,9 +244,19 @@ export class ScenarioRunner {
     const segmentMode = (branch.segments?.length ?? 0) > 0;
 
     try {
-      // ---------------- setup：账本预录（经桥接，owner 口径 #3） ----------------
+      // ---------------- setup：账本预录（经桥接，owner 口径 #3；契约 v2 审批链形态） ----------------
+      const scopeRef: ScopeRef = {
+        project_id: scenario.scenario_id,
+        scope_type: "run",
+        scope_id: branch.run_id,
+        scope_mode: "headless",
+      };
       for (const entry of branch.setup.ledger) {
-        const recorded = await connection.request("ledger_record", approvalKeyFor(entry.tool, entry.params));
+        const recorded = await connection.request("ledger_record", {
+          scope_ref: scopeRef,
+          tool: entry.tool,
+          params_digest: approvalParamsDigest(entry.params),
+        });
         if (!recorded.ok) {
           outcome = { kind: "failed", error: runError("setup_failure", `账本预录失败（${entry.tool}）`, recorded.error) };
           return finalize();
@@ -259,14 +274,14 @@ export class ScenarioRunner {
         return finalize();
       }
       const ws = workspace.value;
-      const resolver = new SurfaceScanResolver(connection);
+      const resolver = new FactScanResolver(connection);
       const guarded = await GuardedSessionLog.create(ws.sessionLogPath, resolver, ws.scratchDir, { now });
       if (!guarded.ok) {
         outcome = { kind: "failed", error: runError("session_failure", "会话日志创建失败", guarded.error) };
         return finalize();
       }
       const session = guarded.value;
-      const executor = new ToolExecutor(connection, ToolRegistry.createDefault());
+      const executor = new ToolExecutor(connection, ToolRegistry.createDefault(), scopeRef);
 
       // P2-S3:多 provider 段分支(segments)= 一段一个 turn,段边界即合法切换边界;
       // 缺省 = 单 provider 分支(FauxProvider.fromBranch 既有路径逐位不变)。

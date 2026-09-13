@@ -17,7 +17,8 @@ export {
   approvalParamsDigest,
   stableStringify,
   type ApprovalKey,
-  type LedgerEntry,
+  type LedgerRecord,
+  type ScopeRef,
 } from "./approvalKey.js";
 export { TOOL_DEFINITIONS, TOOL_NAMES, toModelVisible, type ModelVisibleTool, type ToolDefinition } from "./toolDefinition.js";
 export { ToolRegistry } from "./registry.js";

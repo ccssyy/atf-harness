@@ -53,12 +53,13 @@ describe("S5 验收 · B1 成功路径（读状态 → 准入 → 扫描 → G2 
       "turn/end",
     ]);
 
-    // 证据链闭合：gate tool/result 携带准入事实三元组（digest 经 SurfaceScanResolver 校验通过）
+    // 证据链闭合：gate tool/result 携带准入事实三元组（契约 v2：dataset-registry / <dataset_id>@<pin>，
+    // digest 经 FactScanResolver 校验通过）
     const gateResult = r.events.find((event) => event.type === "tool/result" && (event.payload as { tool?: string }).tool === "atf_gate");
     expect(gateResult).toBeDefined();
     expect((gateResult?.payload as { result?: { status?: string } }).result?.status).toBe("pass");
     expect(gateResult?.domain_refs).toEqual([
-      { journal_type: "run_journal", fact_id: "fact-ds-ten-doc-round3", sha256_digest: expect.stringMatching(/^[0-9a-f]{64}$/) },
+      { journal_type: "dataset-registry", fact_id: expect.stringMatching(/^ds-ten-doc-round3@[0-9a-f]{12}$/), sha256_digest: expect.stringMatching(/^[0-9a-f]{64}$/) },
     ]);
 
     // T0→T1 晋升演示：catalog 恰一条登记，sha256 = artifacts 产物字节
@@ -84,11 +85,11 @@ describe("S5 验收 · B2 缺证据 → block 回填 → 自纠 → PASS", () =>
 
     const gateResults = r.events
       .filter((event) => event.type === "tool/result" && (event.payload as { tool?: string }).tool === "atf_gate")
-      .map((event) => event.payload as { ok: boolean; result: { status: string; reason?: string } });
+      .map((event) => event.payload as { ok: boolean; result: { status: string; reason_codes?: string[] } });
     expect(gateResults).toHaveLength(2);
     expect(gateResults[0]?.ok).toBe(true);
     expect(gateResults[0]?.result.status).toBe("blocked");
-    expect(gateResults[0]?.result.reason).toBe("evidence_missing");
+    expect(gateResults[0]?.result.reason_codes).toEqual(["evidence_missing"]);
     expect(gateResults[1]?.result.status).toBe("pass");
 
     // block 回填：首次 gate 的 tool/result 事件在会话流内（replay 可重建该事件）

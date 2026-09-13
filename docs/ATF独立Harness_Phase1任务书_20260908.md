@@ -1,5 +1,7 @@
 # ATF 独立 Harness Phase 1 任务书——headless 冒烟最小闭环（Codex 直接执行）
 
+> 【时代说明（2026-09-13 契约 v2 修订）】本文为历史存档：文中"严格 4 工具面"的 `atf_surface_scan` 为 v1 时名，自契约 v2 起改名 `atf_fact_scan`（数组字段 `surface` → `facts`），现行登记见 `bridge.contract.yaml` v2。
+
 > **状态：CLOSED（2026-09-10）** —— Phase 1 五切片（S1–S5）全部验收闭合，milestone tag `v0.1.0`。终验数字：109 passed / 2 skipped，smoke:s1–s5 全过。后续工作转 Phase 2（待 owner 启动指令），见《ATF独立Harness_Phase1_S5执行报告暨Phase1闭合报告_20260909.md》§8。
 
 > 日期：2026-09-08 ｜ 前置：**Phase 0 已拍板 ACCEPTED**（ADR-05/06/07/08，见《ATF独立Harness_Phase0决策文档_20260907.md》）

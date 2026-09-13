@@ -28,7 +28,7 @@ describe("S1 验收用例 1——握手（spawn → 版本 response → 优雅�
     if (!spawned.ok) return;
     const connection = track(spawned.value);
 
-    expect(connection.version).toEqual({ name: "atf", version: "v0.2.0b7-mock", contract_version: 1 });
+    expect(connection.version).toEqual({ name: "atf", version: "v0.2.0b7-mock", contract_version: 2 });
 
     const closed = await connection.close();
     expect(closed.ok).toBe(true);

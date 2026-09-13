@@ -8,16 +8,20 @@
  *   --chunk=N                  每次仅异步写 N 字节，模拟输出被字节级分帧
  *   --flush-delay=MS           每个响应延迟 MS 再写，使多个响应合包到达
  *   --delay-response=MS        收到请求后延迟 MS 再响应（配合超时用例）
- *   --contract-version=N       握手返回的 contract_version（默认 1；用于版本不一致反例）
+ *   --contract-version=N       握手返回的 contract_version（默认 2 = 契约 v2；用于版本不一致反例）
  *   --emit-ready-event         首个响应前先发一条 atf.ready event 帧
  *   --crash-on-second-request  第二个 request 到达时写 stderr 并以退出码 3 崩溃（模拟意外退出）
  *   --bad-line-after-handshake 首个响应后再发一行非法文本（协议违规反例）
  *
- * S3 扩展（bridge.contract.yaml methods 工具面 + ledger 方法面的 mock 承载）：
- *   四个工具方法返回 canonical output；MockLedger（进程内账本）承载
- *   ledger_record（预录，测试 setup 基建）/ ledger_query（查询）/ ledger_consume（消费，
- *   一次性语义在对端强制：重复消费 = ok:false/already_consumed）。
- *   工具内状态：admit_data 登记事实 → surface_scan / workspace_status / gate(advance) 读取。
+ * S3 扩展（bridge.contract.yaml methods 工具面 + ledger 方法面的 mock 承载；
+ * 契约 v2 2026-09-13：MockLedger 重做为内核审批链形态——
+ *   ledger_record（预录，测试 setup 基建；params = {scope_ref, tool, params_digest}，
+ *     tool/params_digest 为审计检索辅助，不再是账本键）/ ledger_query（scope_ref(+operation_id)
+ *     查询，默认只返回可消费记录）/ ledger_consume（{approval_ref, record_id} 逐值一致消费，
+ *     一次性语义在对端强制：重复消费 = approval_already_consumed，不匹配 =
+ *     approval_record_mismatch，不存在 = not_found）。
+ *   工具内状态：admit_data 登记事实（dataset-registry / <dataset_id>@<pin>）→
+ *     fact_scan / workspace_status / gate(advance) 读取。
  *   --corrupt-output=METHOD    指定方法响应剔除一个 required 字段（canonical 校验失败反例）
  *   --reject-method=METHOD     指定方法响应 ok=false/gate_rejected（对端业务拒绝反例，结构化回填路径）
  */
@@ -38,7 +42,7 @@ const findNum = (name) => {
 const chunkBytes = findNum("chunk") ?? 0;
 const flushDelayMs = findNum("flush-delay") ?? 0;
 const delayResponseMs = findNum("delay-response") ?? 0;
-const contractVersion = findNum("contract-version") ?? 1;
+const contractVersion = findNum("contract-version") ?? 2;
 const corruptOutput = findOpt("corrupt-output") ?? "";
 const rejectMethod = findOpt("reject-method") ?? "";
 const flags = new Set(process.argv.slice(2));
@@ -55,46 +59,90 @@ const stableStringify = (value) => {
 };
 const sha256Hex = (text) => createHash("sha256").update(text, "utf8").digest("hex");
 
-// ---------------- MockLedger（进程内账本；一次性消费语义在对端强制） ----------------
-const ledger = new Map(); // record_id → { record_id, tool, params_digest, consumed }
+// ---------------- MockLedger（进程内账本；契约 v2 审批链形态，一次性消费语义在对端强制） ----------------
+// 内部记录 = { record_id, approval_id, sequence, state, scope_ref, tool, params_digest, ... }；
+// scope_ref 为查询定位键，tool/params_digest 仅为审计检索辅助（契约 v2：不再是账本键），
+// 线缆 result 只回契约登记字段（approval 链五项 + 可选明细）。
+const ledger = new Map();
 let recordSeq = 0;
 
+const isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+
+const sameScopeRef = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+const ledgerWireRecord = (record) => {
+  const wire = {
+    record_id: record.record_id,
+    approval_id: record.approval_id,
+    sequence: record.sequence,
+    state: record.state,
+  };
+  for (const key of ["command_id", "actor", "operation_id", "attempt_id", "evidence_refs"]) {
+    if (record[key] !== undefined) wire[key] = record[key];
+  }
+  return wire;
+};
+
 const ledgerRecord = (params) => {
+  if (!isPlainObject(params.scope_ref)) {
+    return { error: { code: "invalid_params", message: "ledger_record 需要 scope_ref（契约 v2 审批链定位）" } };
+  }
   recordSeq += 1;
   const record = {
     record_id: `rec-${String(recordSeq).padStart(3, "0")}`,
+    approval_id: `apr-${String(recordSeq).padStart(3, "0")}`,
+    sequence: recordSeq,
+    state: "approved",
+    scope_ref: params.scope_ref,
     tool: params.tool,
     params_digest: params.params_digest,
-    consumed: false,
   };
+  if (params.operation_id !== undefined) record.operation_id = params.operation_id;
   ledger.set(record.record_id, record);
   return { ok: true, record_id: record.record_id };
 };
 
 const ledgerQuery = (params) => {
-  const entries = [];
-  for (const record of ledger.values()) {
-    if (record.tool === params.tool && record.params_digest === params.params_digest) {
-      entries.push({ ...record });
-    }
+  if (!isPlainObject(params.scope_ref)) {
+    return { error: { code: "invalid_params", message: "ledger_query 需要 scope_ref（契约 v2 审批链定位）" } };
   }
-  return { ok: true, entries };
+  const includeConsumed = params.include_consumed === true;
+  const records = [];
+  for (const record of ledger.values()) {
+    if (!sameScopeRef(record.scope_ref, params.scope_ref)) continue;
+    if (params.operation_id !== undefined && record.operation_id !== params.operation_id) continue;
+    if (params.state !== undefined) {
+      if (record.state !== params.state) continue;
+    } else if (!includeConsumed && record.state !== "approved") {
+      // 默认只返回可消费记录（state=approved 且未 consumed）
+      continue;
+    }
+    records.push(ledgerWireRecord(record));
+  }
+  return { ok: true, records };
 };
 
 const ledgerConsume = (params) => {
   const record = ledger.get(params.record_id);
   if (record === undefined) {
-    return { error: { code: "record_not_found", message: `账本无此记录: ${params.record_id}` } };
+    return { error: { code: "not_found", message: `账本无此记录: ${params.record_id}` } };
   }
-  if (record.consumed) {
-    return { error: { code: "already_consumed", message: `记录已消费（一次性语义）: ${params.record_id}` } };
+  if (record.approval_id !== params.approval_ref) {
+    return { error: { code: "approval_record_mismatch", message: `approval_ref 与 record_id 不匹配: ${params.approval_ref} / ${params.record_id}` } };
   }
-  record.consumed = true;
-  return { ok: true, record_id: record.record_id, consumed: true };
+  if (record.state === "consumed") {
+    return { error: { code: "approval_already_consumed", message: `记录已消费（一次性语义）: ${params.record_id}` } };
+  }
+  record.state = "consumed";
+  return { ok: true, record_id: record.record_id, state: "consumed" };
 };
 
-// ---------------- 工具内状态与四个工具方法（canonical output 见契约 methods 段） ----------------
+// ---------------- 工具内状态与四个工具方法（canonical output 见契约 methods 段 v2） ----------------
+// 契约 v2（变更 #7）：admit_data 三元组 = dataset-registry / <dataset_id>@<pin> / 登记记录 digest；
+// pin 以 dataset_id 的 sha256 前 12 位确定性派生（mock 语义，真实 pin 来源由批次二任务书明确）。
 const admittedFacts = [];
+
+const MOCK_SCOPE_REF = { project_id: "mock-project", scope_type: "run", scope_id: "mock-run-1", scope_mode: "headless" };
 
 const corrupt = (method, result) => {
   if (corruptOutput !== method) return result;
@@ -104,26 +152,27 @@ const corrupt = (method, result) => {
 };
 
 const toolAdmitData = (params) => {
-  const factId = `fact-${String(params.dataset_id)}`;
-  const digest = sha256Hex(stableStringify({ dataset_id: params.dataset_id }));
-  admittedFacts.push({ journal_type: "run_journal", fact_id: factId, sha256_digest: digest });
-  return { ok: true, journal_type: "run_journal", fact_id: factId, sha256_digest: digest, dataset_id: params.dataset_id };
+  const pin = sha256Hex(String(params.dataset_id)).slice(0, 12);
+  const factId = `${String(params.dataset_id)}@${pin}`;
+  const digest = sha256Hex(stableStringify({ dataset_id: String(params.dataset_id), pin }));
+  admittedFacts.push({ journal_type: "dataset-registry", fact_id: factId, sha256_digest: digest });
+  return { ok: true, journal_type: "dataset-registry", fact_id: factId, sha256_digest: digest, dataset_id: params.dataset_id };
 };
 
 const toolGate = (params) => {
   if (params.action === "advance") {
     const hasEvidence = admittedFacts.length > 0 || (Array.isArray(params.evidence_refs) && params.evidence_refs.length > 0);
     if (!hasEvidence) {
-      return { ok: true, gate: String(params.gate), status: "blocked", reason: "evidence_missing", missing: ["admitted_fact"] };
+      return { ok: true, gate: String(params.gate), status: "blocked", reason_codes: ["evidence_missing"], missing: ["admitted_fact"] };
     }
     return { ok: true, gate: String(params.gate), status: "pass" };
   }
   return { ok: true, gate: String(params.gate), status: "pass" };
 };
 
-const toolSurfaceScan = () => ({
+const toolFactScan = () => ({
   ok: true,
-  surface: admittedFacts.map((fact) => ({ ...fact })),
+  facts: admittedFacts.map((fact) => ({ ...fact })),
   count: admittedFacts.length,
 });
 
@@ -131,6 +180,7 @@ const toolWorkspaceStatus = () => ({
   ok: true,
   run_id: "mock-run-1",
   admitted_count: admittedFacts.length,
+  scope_ref: { ...MOCK_SCOPE_REF },
 });
 
 const METHODS = {
@@ -139,7 +189,7 @@ const METHODS = {
   ledger_consume: ledgerConsume,
   atf_admit_data: toolAdmitData,
   atf_gate: toolGate,
-  atf_surface_scan: toolSurfaceScan,
+  atf_fact_scan: toolFactScan,
   atf_workspace_status: toolWorkspaceStatus,
 };
 

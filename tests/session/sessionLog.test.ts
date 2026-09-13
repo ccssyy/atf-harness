@@ -96,10 +96,10 @@ describe("S2 验收用例 1——重建（写入 20+ 事件 → replay → 与�
       },
     ];
     for (let i = 0; i < 17; i += 1) {
-      inputs.push({ type: "tool/call", payload: { tool: "atf_surface_scan", seq: i } });
+      inputs.push({ type: "tool/call", payload: { tool: "atf_fact_scan", seq: i } });
       inputs.push({
         type: "tool/result",
-        payload: { tool: "atf_surface_scan", seq: i, ok: true },
+        payload: { tool: "atf_fact_scan", seq: i, ok: true },
         domain_refs: [ref(DIGEST_A, "fact-1")],
       });
     }

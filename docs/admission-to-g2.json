@@ -1,4 +1,5 @@
 {
+  "_era_note": "时代存档（2026-09-13 契约 v2 修订）：本文件为 draft-v0 原始形态，其中工具时名 atf_surface_scan 与 arguments 字段形态仅作历史对照；自契约 v2 起该方法改名 atf_fact_scan，现行版本见 scenarios/admission-to-g2.json。",
   "scenario_id": "admission-to-g2",
   "version": "draft-v0",
   "status": "草案（供 codex 在 S5 实现时校准，字段名以实际实现为准，语义不变）",

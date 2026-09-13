@@ -5,8 +5,10 @@ import { err, ok, type Result } from "./result.js";
 
 /** 请求超时初值（任务书 S1：常量定义，harness 内部实现细节，永不进入模型可见 schema）。 */
 export const REQUEST_TIMEOUT_MS = 30_000;
-/** 期望的契约版本（与 bridge.contract.yaml contract_version 一致；不一致 = 握手失败）。 */
-export const EXPECTED_CONTRACT_VERSION = 1;
+/** 期望的契约版本（与 bridge.contract.yaml contract_version 一致；不一致 = 握手失败）。
+ *  契约 v2（2026-09-13 契约修订）：1 → 2；对端 mock 握手同步回 2，
+ *  内核侧批次二实现时按契约头部登记同步其握手 contract_version。 */
+export const EXPECTED_CONTRACT_VERSION = 2;
 
 /** 握手 atf.version 的结果 schema。 */
 export interface AtfVersionInfo {

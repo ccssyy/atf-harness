@@ -27,7 +27,7 @@
         { "type": "scratch_write", "path": "analysis_badcase_scan.md", "content": "G2 证据分析报告（T0）——数据集 ds-ten-doc-round3 badcase 扫描结论：具备准入条件。\n" },
         { "type": "tool_call", "tool": "atf_workspace_status", "params": {} },
         { "type": "tool_call", "tool": "atf_admit_data", "params": { "dataset_id": "ds-ten-doc-round3" } },
-        { "type": "tool_call", "tool": "atf_surface_scan", "params": {} },
+        { "type": "tool_call", "tool": "atf_fact_scan", "params": {} },
         { "type": "tool_call", "tool": "atf_gate", "params": { "gate": "G2", "action": "advance", "evidence_refs": ["fact-ds-ten-doc-round3"] }, "cite_admitted_fact": true },
         { "type": "promote", "source": "analysis_badcase_scan.md", "command": ["node", "-e", "process.stdout.write(\"G2 证据分析报告（T0）——数据集 ds-ten-doc-round3 badcase 扫描结论：具备准入条件。\\n\")"] },
         { "type": "final_answer", "text": "数据准入完成，G2 实验门 PASS，T0 分析产物已晋升并登记 sha。" }
@@ -56,7 +56,7 @@
       "steps": [
         { "type": "tool_call", "tool": "atf_gate", "params": { "gate": "G2", "action": "advance" } },
         { "type": "tool_call", "tool": "atf_admit_data", "params": { "dataset_id": "ds-ten-doc-round3" } },
-        { "type": "tool_call", "tool": "atf_surface_scan", "params": {} },
+        { "type": "tool_call", "tool": "atf_fact_scan", "params": {} },
         { "type": "tool_call", "tool": "atf_gate", "params": { "gate": "G2", "action": "advance" }, "cite_admitted_fact": true },
         { "type": "final_answer", "text": "首次推进因证据缺失被 block，补准入后重提 PASS。" }
       ],

@@ -2,7 +2,7 @@
 # bridge.contract.yaml — atf-harness 对 ATF 内核认知的唯一真相源
 #
 # 内容：JSONL 帧格式定义 + S1 协议常量 + atf CLI 对接面 + atf_upstream pin。
-#       S3 工具子命令签名与 canonical output schema 随 S3 slice 在此登记。
+#       S3 工具子命令签名与 canonical output schema 在 methods 段登记。
 #
 # 变更纪律（AGENTS.md §4 / 任务书 §8.2）：
 #   本文件任何变更 = 显式 PR + 双仓契约测试 + owner review；
@@ -10,7 +10,34 @@
 #   pin 只落 ATF 发版 tag，禁止自动追新。
 # =====================================================================
 
-contract_version: 1
+# ---------------------------------------------------------------------
+# 【契约 v2 修订登记 2026-09-13】《ATF-Harness_Owner指令_契约修订_v2_20260913.md》
+# （依据《ATF内核_批次二规格_定稿_20260913.md》§1 D1/D2/D3 与 S1–S3 裁决）：
+# contract_version: 1 → 2，变更清单：
+#   1. methods.atf_surface_scan 改名 atf_fact_scan；数组字段 surface → facts
+#      （三元组 journal_type/fact_id/sha256_digest 不变）；语义注记 = 枚举本 run 可被引用的事实索引；
+#   2. atf_gate.result.status 枚举 pass|blocked → pass|warn|blocked；新增
+#      reason_codes / requires_human_review / evidence；reason / missing 保留为兼容字段
+#      （建议由 reason_codes 派生）；
+#   3. atf_gate.params 增注命名分流：^G[1-4]$（大小写不敏感、内部归一化）→ 数据准入闸；
+#      其余须命中七组完整性 GateId；都不命中 → unknown_gate（fail-closed）；
+#   4. ledger_query 改用内核审批链键模型：scope_ref(+operation_id) 查询，
+#      默认只返回可消费记录（state=approved 且未 consumed）；
+#   5. ledger_consume 改 {approval_ref, record_id} 消费；错误码登记
+#      approval_already_consumed / approval_record_mismatch / not_found（连接保持）；
+#   6. {tool, params_digest, consumed} 配额式键不再是账本键；tool + params_digest 降级为
+#      审计检索辅助信息，如需保留由 harness 侧自行维护映射（不进内核账本）；
+#   7. atf_admit_data 参数 source → source_ref（可校验引用）；result 三元组来源明示：
+#      journal_type="dataset-registry"、fact_id="<dataset_id>@<pin>"、
+#      sha256_digest=数据集登记记录 canonical digest；
+#   8. atf_workspace_status.result 增补 scope_ref（供 ledger_query 定位）；
+#   9. 双侧同步 bump 要求：内核侧批次二按契约 v2 实现时，同步其握手 contract_version
+#      （session/contract.py::SESSION_CONTRACT_VERSION 单一常量承载）。
+# 对端口径：atf_upstream pin 保持 v0.2.0b7 不动（re-pin 另行指令）；会话对端仍由契约
+# 忠实 mock 承载，mock 握手 contract_version 自契约 v2 起回 2（与 bridge contract_version 一致）。
+# ---------------------------------------------------------------------
+
+contract_version: 2
 
 protocol:
   name: atf-bridge-jsonl
@@ -106,6 +133,13 @@ lifecycle:
 # 【审批键 digest 算法登记】params_digest = sha256( hex, 小写 ) over
 #   stableParamsJson = JSON.stringify( 键序递归排序后的 params )；
 #   harness 侧与对端 MockLedger 同构实现，防审批键漂移。
+#
+# 【审批账本键模型 v2（契约修订 2026-09-13，变更 #6）】
+#   {tool, params_digest, consumed} 配额式键不再是账本键——查询/消费以内核 Approval Ledger
+#   审批链为准（scope_ref 定位 + {approval_ref, record_id} 逐值一致消费）；tool + params_digest
+#   降级为审计检索辅助信息（ledger_record setup 基建仍携带以便对账），如 harness 侧仍需按工具
+#   检索，由本仓自行维护映射，不进内核账本。问答轨提案键（approval_key = params_digest）为
+#   harness 内部状态键，不属账本键，维持不变。
 methods:
   atf.version:
     direction: ts_to_kernel
@@ -119,20 +153,20 @@ methods:
   atf_admit_data:
     direction: ts_to_kernel
     requires_approval: true        # 写动作：数据准入（高危推进类，须账本预录）
-    params:
+    params:                        # 契约 v2（变更 #7）：source → source_ref（可校验引用）
       type: object
       required: [dataset_id]
       properties:
         dataset_id: { type: string }
-        source: { type: string, required: false }
-    result:                        # canonical output
+        source_ref: { type: string, required: false }
+    result:                        # canonical output（契约 v2 三元组来源明示，变更 #7）
       type: object
       required: [ok, journal_type, fact_id, sha256_digest]
       properties:
         ok: { const: true }
-        journal_type: { type: string }
-        fact_id: { type: string }
-        sha256_digest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        journal_type: { type: string, note: 固定 "dataset-registry" }
+        fact_id: { type: string, note: '"<dataset_id>@<pin>"（pin 取值来源由批次二任务书明确）' }
+        sha256_digest: { type: string, pattern: "^[0-9a-f]{64}$", note: 数据集登记记录的 canonical digest }
         dataset_id: { type: string, required: false }
 
   atf_gate:
@@ -142,31 +176,46 @@ methods:
       type: object
       required: [gate, action]
       properties:
-        gate: { type: string }
+        gate:
+          type: string
+          note: >-
+            命名分流（契约 v2 变更 #3，fail-closed 不猜测）：
+            ^G[1-4]$（大小写不敏感，内部归一化为大写）→ 数据准入闸（固定顺序 G1–G4）；
+            其余取值必须命中七组完整性 GateId；两者都不命中 → error response unknown_gate。
         action: { enum: [query, advance] }
         evidence_refs: { type: array, required: false, items: { type: string } }
-    result:                        # canonical output——blocked 是合法业务产出（非错误）
+    result:                        # canonical output——blocked/warn 是合法业务产出（非错误）
       type: object
       required: [ok, gate, status]
       properties:
         ok: { const: true }
         gate: { type: string }
-        status: { enum: [pass, blocked] }
-        reason: { type: string, required: false }
-        missing: { type: array, required: false, items: { type: string } }
+        status:
+          enum: [pass, warn, blocked]   # 契约 v2（变更 #2）：增补 warn（内核三值 pass/warn/block，blocked 保既有命名）
+        reason_codes: { type: array, required: false, items: { type: string }, note: 内核稳定原因码（blocked/warn 时给出） }
+        requires_human_review: { type: boolean, required: false }
+        evidence: { type: array, required: false, items: { type: string }, note: 证据引用（不复制内容） }
+        reason: { type: string, required: false, note: 兼容字段（v1 既有），建议由 reason_codes 派生 }
+        missing: { type: array, required: false, items: { type: string }, note: 兼容字段（v1 既有），建议由 reason_codes 派生 }
 
-  atf_surface_scan:
+  atf_fact_scan:                   # 契约 v2（变更 #1）：原 atf_surface_scan 改名 + 数组字段 surface → facts
     direction: ts_to_kernel
     requires_approval: false       # 只读扫描
     params: { type: object, required: [], properties: {} }
     result:
       type: object
-      required: [ok, surface, count]
+      required: [ok, facts, count]
       properties:
         ok: { const: true }
-        count: { type: integer }
-        surface:
+        count: { type: integer, note: 自洽校验——必须等于 facts 数组长度 }
+        facts:
           type: array
+          note: >-
+            语义（契约 v2）：枚举本 run 可被引用的事实索引；只读、只给引用不给内容副本。
+            v1 覆盖两类事实：operation-journal（run 原产地流水逐行事件，
+            fact_id="journal-event:<run_id>:<行号>"）与 dataset-registry
+            （datasets/<dataset_id>@<pin>/registration.json，fact_id="<dataset_id>@<pin>"）；
+            三元组与 domain_refs 字段名完全一致；评估/校验证据类列入后续增量。
           items:
             type: object
             required: [journal_type, fact_id, sha256_digest]
@@ -179,62 +228,98 @@ methods:
     direction: ts_to_kernel
     requires_approval: false       # 只读查询
     params: { type: object, required: [], properties: {} }
-    result:
+    result:                        # 契约 v2（变更 #8）：增补 scope_ref（供 ledger_query 定位）
       type: object
-      required: [ok, run_id, admitted_count]
+      required: [ok, run_id, admitted_count, scope_ref]
       properties:
         ok: { const: true }
         run_id: { type: string }
         admitted_count: { type: integer }
+        scope_ref:
+          type: object
+          required: [project_id, scope_type, scope_id, scope_mode]
+          properties:
+            project_id: { type: string }
+            scope_type: { type: string }
+            scope_id: { type: string }
+            scope_mode: { type: string }
 
-  # ---------------- 账本方法面（ADR-07 账本轨；本阶段 mock 承载） ----------------
-  ledger_query:
+  # ---------------- 账本方法面（ADR-07 账本轨；本阶段 mock 承载；键模型 v2 见头部登记） ----------------
+  ledger_query:                    # 契约 v2（变更 #4）：scope_ref(+operation_id) 查询，审批链形态
     direction: ts_to_kernel
     params:
       type: object
-      required: [tool, params_digest]
+      required: [scope_ref]
       properties:
-        tool: { type: string }
-        params_digest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        scope_ref:
+          type: object
+          required: [project_id, scope_type, scope_id, scope_mode]
+          properties:
+            project_id: { type: string }
+            scope_type: { type: string }
+            scope_id: { type: string }
+            scope_mode: { type: string }
+        operation_id: { type: string, required: false }
+        state: { type: string, required: false }
+        include_consumed: { type: boolean, required: false, note: 缺省 false——只返回可消费记录（state=approved 且未 consumed） }
     result:
       type: object
-      required: [ok, entries]
+      required: [ok, records]
       properties:
         ok: { const: true }
-        entries:
+        records:
           type: array
           items:
             type: object
-            required: [record_id, tool, params_digest, consumed]
+            required: [record_id, approval_id, sequence, state]
             properties:
               record_id: { type: string }
-              tool: { type: string }
-              params_digest: { type: string }
-              consumed: { type: boolean }
+              approval_id: { type: string }
+              sequence: { type: integer, note: 审批链序号 }
+              state: { type: string, note: '"approved" | "consumed"（内核审批链状态)' }
+              command_id: { type: string, required: false }
+              actor: { type: string, required: false }
+              operation_id: { type: string, required: false }
+              attempt_id: { type: string, required: false }
+              evidence_refs: { type: array, required: false, items: { type: string } }
 
-  ledger_consume:
+  ledger_consume:                  # 契约 v2（变更 #5）：{approval_ref, record_id} 逐值一致消费
     direction: ts_to_kernel
     params:
       type: object
-      required: [record_id]
+      required: [approval_ref, record_id]
       properties:
+        approval_ref: { type: string, note: 审批标识（对应记录的 approval_id） }
         record_id: { type: string }
     result:
       type: object
-      required: [ok, record_id, consumed]
+      required: [ok, record_id, state]
       properties:
         ok: { const: true }
         record_id: { type: string }
-        consumed: { const: true }
+        state: { const: consumed }
+    errors:                        # 错误语义（连接保持）：契约 v2 登记
+      - approval_already_consumed  # 重复消费
+      - approval_record_mismatch   # approval_ref 与 record_id 不匹配
+      - not_found                  # 记录不存在
 
   ledger_record:                   # mock 测试/冒烟 setup 基建，非运行时方法面
-    direction: ts_to_kernel
+    direction: ts_to_kernel        # 契约 v2：setup 形态随审批链模型同步（tool/params_digest 为审计检索辅助）
     params:
       type: object
-      required: [tool, params_digest]
+      required: [scope_ref, tool, params_digest]
       properties:
+        scope_ref:
+          type: object
+          required: [project_id, scope_type, scope_id, scope_mode]
+          properties:
+            project_id: { type: string }
+            scope_type: { type: string }
+            scope_id: { type: string }
+            scope_mode: { type: string }
         tool: { type: string }
         params_digest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        operation_id: { type: string, required: false }
     result:
       type: object
       required: [ok, record_id]
@@ -264,6 +349,9 @@ atf_cli:
 
 # ---------------------------------------------------------------------
 # 上游 pin（只落 ATF 发版 tag；re-pin 三步见 AGENTS.md §4，禁止自动追新）
+# 【契约 v2 注记 2026-09-13】pin 值未动（re-pin 另行指令）。下方 contract_version: 1 为
+# pin 时点的上游会话协议版本存证；握手期望值自契约 v2 起由本文件头部 contract_version
+# 承载（mock 已回 2），真实对端以内核批次二实现为准。
 # ---------------------------------------------------------------------
 atf_upstream:
   tag: v0.2.0b7

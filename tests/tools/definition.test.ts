@@ -17,7 +17,7 @@ describe("S3 验收（schema 用例）——模型可见白名单，内部字段
     expect(visible.map((tool) => tool.name)).toEqual([
       "atf_admit_data",
       "atf_gate",
-      "atf_surface_scan",
+      "atf_fact_scan",
       "atf_workspace_status",
     ]);
     for (const tool of visible) {
@@ -48,7 +48,7 @@ describe("S3 验收（schema 用例）——模型可见白名单，内部字段
     const byName = new Map(TOOL_DEFINITIONS.map((definition) => [definition.name, definition]));
     expect(byName.get("atf_admit_data")?.requires_approval).toBe(true);
     expect(byName.get("atf_gate")?.requires_approval).toBe(true);
-    expect(byName.get("atf_surface_scan")?.requires_approval).toBe(false);
+    expect(byName.get("atf_fact_scan")?.requires_approval).toBe(false);
     expect(byName.get("atf_workspace_status")?.requires_approval).toBe(false);
   });
 });

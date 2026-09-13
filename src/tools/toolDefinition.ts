@@ -38,7 +38,10 @@ const STRING_ARRAY: SchemaNode = { type: "array", items: { type: "string" } };
 
 const HEX64 = "^[0-9a-f]{64}$";
 
-/** 严格 4 个工具（任务书 S3-1 / owner 口径 #5），工具面收敛，禁止任何增补。 */
+/** 严格 4 个工具（任务书 S3-1 / owner 口径 #5），工具面收敛，禁止任何增补。
+ *  契约 v2（2026-09-13 契约修订）：证据面扫描工具改名 atf_fact_scan（数组 facts）、
+ *  atf_gate 增补 warn 与附加字段、atf_admit_data source → source_ref、
+ *  atf_workspace_status 增补 scope_ref。 */
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "atf_admit_data",
@@ -48,7 +51,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       required: ["dataset_id"],
       properties: {
         dataset_id: { type: "string" },
-        source: { type: "string", optional: true },
+        source_ref: { type: "string", optional: true },
       },
     },
     requires_approval: true,
@@ -66,7 +69,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   },
   {
     name: "atf_gate",
-    description: "查询或推进 G 闸门（如 G2 实验门）。blocked 为合法业务产出（含缺失证据说明）。须账本审批预录。",
+    description:
+      "查询或推进闸门：gate 取值按命名分流（G1–G4 大小写不敏感 → 数据准入闸；其余须命中七组完整性 GateId；都不命中 unknown_gate）。blocked/warn 为合法业务产出（含原因码与证据引用）。须账本审批预录。",
     parameters: {
       type: "object",
       required: ["gate", "action"],
@@ -83,24 +87,27 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       properties: {
         ok: { const: true },
         gate: { type: "string" },
-        status: { enum: ["pass", "blocked"] },
+        status: { enum: ["pass", "warn", "blocked"] },
+        reason_codes: { ...STRING_ARRAY, optional: true },
+        requires_human_review: { type: "boolean", optional: true },
+        evidence: { ...STRING_ARRAY, optional: true },
         reason: { type: "string", optional: true },
         missing: { ...STRING_ARRAY, optional: true },
       },
     },
   },
   {
-    name: "atf_surface_scan",
-    description: "证据面扫描：列出当前 run 已登记的领域事实（journal_type / fact_id / sha256_digest）。只读。",
+    name: "atf_fact_scan",
+    description: "事实索引枚举：列出本 run 可被引用的事实索引（journal_type / fact_id / sha256_digest 三元组）。只读。",
     parameters: NO_PARAMS,
     requires_approval: false,
     canonical_output: {
       type: "object",
-      required: ["ok", "surface", "count"],
+      required: ["ok", "facts", "count"],
       properties: {
         ok: { const: true },
         count: { type: "integer" },
-        surface: {
+        facts: {
           type: "array",
           items: {
             type: "object",
@@ -117,16 +124,26 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   },
   {
     name: "atf_workspace_status",
-    description: "工作区状态查询：返回当前 run 标识与已准入事实计数。只读。",
+    description: "工作区状态查询：返回当前 run 标识、已准入事实计数与作用域引用 scope_ref（供账本定位）。只读。",
     parameters: NO_PARAMS,
     requires_approval: false,
     canonical_output: {
       type: "object",
-      required: ["ok", "run_id", "admitted_count"],
+      required: ["ok", "run_id", "admitted_count", "scope_ref"],
       properties: {
         ok: { const: true },
         run_id: { type: "string" },
         admitted_count: { type: "integer" },
+        scope_ref: {
+          type: "object",
+          required: ["project_id", "scope_type", "scope_id", "scope_mode"],
+          properties: {
+            project_id: { type: "string" },
+            scope_type: { type: "string" },
+            scope_id: { type: "string" },
+            scope_mode: { type: "string" },
+          },
+        },
       },
     },
   },

@@ -299,12 +299,17 @@ describe("放行执行(经 executor 的Granted→执行链,R1「放行执行」�
     const h = await makeHarness(scriptStub([{ verdict: "granted" }]));
     const transport: BridgeTransport = {
       request: async (method, params) => {
-        if (method === "ledger_query") return ok({ ok: true, entries: [] });
-        if (method === "atf_admit_data") return ok({ ok: true, journal_type: "run_journal", fact_id: "fact-1", sha256_digest: "a".repeat(64) });
+        if (method === "ledger_query") return ok({ ok: true, records: [] });
+        if (method === "atf_admit_data") return ok({ ok: true, journal_type: "dataset-registry", fact_id: "fact-1", sha256_digest: "a".repeat(64) });
         return ok({ ok: true, result: params });
       },
     };
-    const executor = new ToolExecutor(transport, ToolRegistry.createDefault());
+    const executor = new ToolExecutor(transport, ToolRegistry.createDefault(), {
+      project_id: "proj-test",
+      scope_type: "run",
+      scope_id: "run-test",
+      scope_mode: "headless",
+    });
     const gate = { handler: (input: { tool: string; params: unknown; approval_key: string }) => h.handler({ ...input, tool_call_id: 1 }) };
     const outcome = await executor.execute("atf_admit_data", { dataset_id: "ds-1" }, gate);
     expect(outcome.kind).toBe("executed"); // granted → 放行 → 执行

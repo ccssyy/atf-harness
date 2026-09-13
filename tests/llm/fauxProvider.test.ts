@@ -13,7 +13,7 @@ const BRANCH: ScenarioBranch = {
   setup: { ledger: [] },
   steps: [
     { type: "assistant_message", text: "第一步" },
-    { type: "tool_call", tool: "atf_surface_scan", params: {} },
+    { type: "tool_call", tool: "atf_fact_scan", params: {} },
     { type: "final_answer", text: "收束" },
   ],
   expect: { outcome: "completed", exit_code: 0 },
@@ -25,7 +25,7 @@ describe("S5 FauxProvider 线性回放", () => {
     const first = await provider.decide([]);
     expect(first.ok && first.value).toEqual({ type: "assistant_message", text: "第一步" });
     const second = await provider.decide([{ id: 1, ts: "t", type: "user/message", payload: { text: "任意上下文" } }]);
-    expect(second.ok && second.value).toMatchObject({ type: "tool_call", tool: "atf_surface_scan" });
+    expect(second.ok && second.value).toMatchObject({ type: "tool_call", tool: "atf_fact_scan" });
     expect(provider.exhausted).toBe(false);
     const third = await provider.decide([]);
     expect(third.ok && third.value).toMatchObject({ type: "final_answer" });
