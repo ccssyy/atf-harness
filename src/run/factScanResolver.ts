@@ -26,10 +26,15 @@ interface FactEntry {
 }
 
 export class FactScanResolver implements DigestResolver {
-  public constructor(private readonly connection: FactScanTransport) {}
+  /** runId：编排层口径（契约 v2 方法面补登 2026-09-13）——run 开始即显式定位，
+   *  以显式 params.run_id 调用（显式 run_id 优先于会话绑定，方法无隐式依赖）。 */
+  public constructor(
+    private readonly connection: FactScanTransport,
+    private readonly runId: string,
+  ) {}
 
   public async lookupDigest(journalType: string, factId: string): Promise<Result<DigestLookup, SessionError>> {
-    const response = await this.connection.request("atf_fact_scan", {});
+    const response = await this.connection.request("atf_fact_scan", { run_id: this.runId });
     if (!response.ok) {
       return err(
         sessionError("resolver_failure", `digest 查询失败（${journalType}/${factId}）: atf_fact_scan 桥接失败（${response.error.code}）`, {

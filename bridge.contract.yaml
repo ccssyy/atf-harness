@@ -36,6 +36,28 @@
 # 对端口径：atf_upstream pin 保持 v0.2.0b7 不动（re-pin 另行指令）；会话对端仍由契约
 # 忠实 mock 承载，mock 握手 contract_version 自契约 v2 起回 2（与 bridge contract_version 一致）。
 # ---------------------------------------------------------------------
+#
+# ---------------------------------------------------------------------
+# 【方法面补登 2026-09-13】《ATF-Harness_Owner指令_推送授权与bind_run补登_20260913.md》
+# （依据《ATF内核_批次二规格_定稿_20260913.md》§2 会话上下文口径 + 《ATF内核_批次二任务书》§2/§9）。
+# 背景：契约 v2 的 atf_workspace_status / atf_fact_scan 参数为 {}（隐含"当前 run"），
+# 批次一会话无状态；内核侧批次二将实现会话级 run 绑定。为消除"内核已实现、契约无登记"
+# 的不一致窗口，补登如下四项（登记键 B1–B4）：
+#   B1. 新增会话方法 atf.bind_run（归入"会话方法"区，与 atf.version 同族，不进 4 工具面）：
+#       params {run_id} → result {ok, run_id, scope_ref}；
+#   B2. atf_workspace_status / atf_fact_scan 参数由 {} 改为可选 run_id（required: []）；
+#       语义注记：显式 run_id 优先于会话绑定；
+#   B3. 错误码登记：no_run_bound（未绑定且未显式给 run_id，fail-closed）、
+#       unknown_run（run_id 不存在/不可解析）；两者均为 error response、连接保持；
+#   B4. 绑定留痕：重复绑定允许覆盖，但内核须发 event 留痕
+#       （name = "session/run-bound"，payload 含 from/to run_id）。
+# contract_version 保持 2 不 bump——方法面补登沿用批次一先例：仅帧格式 / 握手 schema /
+# 生命周期语义变更才 bump。
+# 【编排层口径】本仓编排在 run 开始时采用显式 run_id（方法无隐式依赖，无状态优先）：
+# runner/FactScanResolver 构造即携带 run_id 并以显式 params.run_id 调用只读方法；
+# atf.bind_run 主要服务宿主/长会话场景（Phase 3 dispatch 时使用）。模型可见工具面参数
+# 保持无参（TOOL_DEFINITIONS 4 工具不变），run 绑定为编排/宿主职责，不开放给模型。
+# ---------------------------------------------------------------------
 
 contract_version: 2
 
@@ -149,6 +171,34 @@ methods:
       version: string
       contract_version: integer
 
+  # ---------------- 会话方法面（与 atf.version 同族，点号命名；非工具面） ----------------
+  atf.bind_run:                    # 契约 v2 方法面补登（B1，2026-09-13）：会话级 run 绑定——
+    direction: ts_to_kernel        #   宿主/长会话场景（Phase 3 dispatch）；编排层不依赖（见头部编排口径）
+    params:
+      type: object
+      required: [run_id]
+      properties:
+        run_id: { type: string }
+    result:
+      type: object
+      required: [ok, run_id, scope_ref]
+      properties:
+        ok: { const: true }
+        run_id: { type: string }
+        scope_ref:
+          type: object
+          required: [project_id, scope_type, scope_id, scope_mode]
+          properties:
+            project_id: { type: string }
+            scope_type: { type: string }
+            scope_id: { type: string }
+            scope_mode: { type: string }
+    errors:                        # B3：错误语义（error response，连接保持）
+      - unknown_run                # run_id 不存在/不可解析
+    note: >-
+      绑定留痕（B4）：重复绑定允许覆盖，但内核须发 event 留痕——
+      name = "session/run-bound"，payload 含 from/to run_id。
+
   # ---------------- 工具方法面（严格 4 个，owner 口径 #5；工具名即方法名） ----------------
   atf_admit_data:
     direction: ts_to_kernel
@@ -201,7 +251,14 @@ methods:
   atf_fact_scan:                   # 契约 v2（变更 #1）：原 atf_surface_scan 改名 + 数组字段 surface → facts
     direction: ts_to_kernel
     requires_approval: false       # 只读扫描
-    params: { type: object, required: [], properties: {} }
+    params:                        # 契约 v2 补登（B2，2026-09-13）：可选 run_id——显式 run_id 优先于会话绑定
+      type: object
+      required: []
+      properties:
+        run_id: { type: string, required: false }
+    errors:                        # 契约 v2 补登（B3）：错误语义（error response，连接保持）
+      - no_run_bound               # 未绑定且未显式给 run_id（fail-closed）
+      - unknown_run                # run_id 不存在/不可解析
     result:
       type: object
       required: [ok, facts, count]
@@ -227,7 +284,14 @@ methods:
   atf_workspace_status:
     direction: ts_to_kernel
     requires_approval: false       # 只读查询
-    params: { type: object, required: [], properties: {} }
+    params:                        # 契约 v2 补登（B2，2026-09-13）：可选 run_id——显式 run_id 优先于会话绑定
+      type: object
+      required: []
+      properties:
+        run_id: { type: string, required: false }
+    errors:                        # 契约 v2 补登（B3）：错误语义（error response，连接保持）
+      - no_run_bound               # 未绑定且未显式给 run_id（fail-closed）
+      - unknown_run                # run_id 不存在/不可解析
     result:                        # 契约 v2（变更 #8）：增补 scope_ref（供 ledger_query 定位）
       type: object
       required: [ok, run_id, admitted_count, scope_ref]

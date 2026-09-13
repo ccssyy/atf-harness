@@ -12,6 +12,11 @@ import { beforeAll, describe, expect, it } from "vitest";
      工具面含改名后的 atf_fact_scan；旧方法名与旧数组字段零残留；
  *   - ledger_record 为 mock setup 基建（非运行时方法面）；
  *   - atf_upstream pin 保持 v0.2.0b7 不动（re-pin 另行指令）。
+ * 契约 v2 方法面补登（2026-09-13，《ATF-Harness_Owner指令_推送授权与bind_run补登_20260913.md》）：
+ *   - 运行时方法面扩为 握手 + 会话上下文（atf.bind_run）+ 4 工具 + 2 账本；
+ *   - contract_version 仍为 2（方法面补登不 bump，沿用批次一先例）；
+ *   - 错误码 no_run_bound / unknown_run 登记（连接保持）；绑定留痕 event session/run-bound；
+ *   - atf_workspace_status / atf_fact_scan 参数为可选 run_id（显式优先于会话绑定）。
  */
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
@@ -31,23 +36,41 @@ const methodKeys = (): string[] =>
     .map((match) => match[1] as string);
 
 describe("契约文件自检（v2）", () => {
-  it("contract_version: 2（契约修订 v2）", () => {
+  it("contract_version: 2（契约修订 v2，方法面补登不 bump）", () => {
     expect(contract).toMatch(/^contract_version: 2$/m);
     expect(contract).not.toMatch(/^contract_version: 1$/m);
+    expect(contract).not.toMatch(/^contract_version: 3$/m);
   });
 
-  it("运行时方法面：握手 + 4 工具（含 atf_fact_scan）+ 2 账本；ledger_record 为 setup 基建", () => {
+  it("运行时方法面：握手 + 会话上下文（atf.bind_run）+ 4 工具（含 atf_fact_scan）+ 2 账本；ledger_record 为 setup 基建", () => {
     const methods = methodKeys();
-    // 握手 + 工具 + 账本运行时方法
-    for (const required of ["atf.version", "atf_admit_data", "atf_gate", "atf_fact_scan", "atf_workspace_status", "ledger_query", "ledger_consume"]) {
+    // 握手 + 会话上下文 + 工具 + 账本运行时方法（补登 B1）
+    for (const required of ["atf.version", "atf.bind_run", "atf_admit_data", "atf_gate", "atf_fact_scan", "atf_workspace_status", "ledger_query", "ledger_consume"]) {
       expect(methods, `契约 methods 缺少 ${required}`).toContain(required);
     }
-    // 工具面恰 4 个（严格 4 工具，owner 口径 #5）
+    // 会话方法族恰 2 个（点号命名，与 atf.version 同族；补登后不再增）
+    const sessionFamily = methods.filter((name) => name.startsWith("atf."));
+    expect(sessionFamily).toEqual(["atf.version", "atf.bind_run"]);
+    // 工具面恰 4 个（严格 4 工具，owner 口径 #5；atf.bind_run 不进工具面）
     const tools = methods.filter((name) => name.startsWith("atf_"));
     expect(tools).toHaveLength(4);
     // ledger_record 仍在契约中登记，且标注为 setup 基建（非运行时方法面）
     expect(methods).toContain("ledger_record");
     expect(contract).toMatch(/ledger_record:.*# mock 测试\/冒烟 setup 基建，非运行时方法面/);
+  });
+
+  it("补登登记：可选 run_id（显式优先于会话绑定）/ 错误码 no_run_bound+unknown_run / 留痕 event session/run-bound", () => {
+    // B2：两个只读工具参数均为可选 run_id（required: []；显式 run_id 优先于会话绑定）
+    expect(contract.match(/run_id: \{ type: string, required: false \}/g)).toHaveLength(2);
+    expect(contract).toMatch(/显式 run_id 优先于会话绑定/);
+    expect(contract).toMatch(/required: \[run_id\]/);
+    // B3：错误码登记（error response，连接保持）
+    expect(contract).toMatch(/- no_run_bound/);
+    expect(contract).toMatch(/- unknown_run/);
+    // B4：绑定留痕 event
+    expect(contract).toMatch(/session\/run-bound/);
+    // 编排层口径登记（本仓编排采用显式 run_id；bind_run 服务宿主/长会话场景）
+    expect(contract).toMatch(/编排层口径/);
   });
 
   it("改名完整性：旧方法名不作方法键/字段残留（仅存于 v2 变更登记的时代说明注释行）", () => {

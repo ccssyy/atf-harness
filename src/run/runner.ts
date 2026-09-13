@@ -274,7 +274,7 @@ export class ScenarioRunner {
         return finalize();
       }
       const ws = workspace.value;
-      const resolver = new FactScanResolver(connection);
+      const resolver = new FactScanResolver(connection, branch.run_id);
       const guarded = await GuardedSessionLog.create(ws.sessionLogPath, resolver, ws.scratchDir, { now });
       if (!guarded.ok) {
         outcome = { kind: "failed", error: runError("session_failure", "会话日志创建失败", guarded.error) };

@@ -24,6 +24,19 @@
  *     fact_scan / workspace_status / gate(advance) 读取。
  *   --corrupt-output=METHOD    指定方法响应剔除一个 required 字段（canonical 校验失败反例）
  *   --reject-method=METHOD     指定方法响应 ok=false/gate_rejected（对端业务拒绝反例，结构化回填路径）
+ *
+ * 契约 v2 方法面补登（2026-09-13，B1–B4）：会话级 run 绑定——
+ *   atf.bind_run（B1）：params {run_id} → result {ok, run_id, scope_ref}；重复绑定允许覆盖，
+ *     覆盖时先发 event session/run-bound（payload {from,to}）再回 response（B4 留痕）。
+ *   run 解析（B2）：显式 params.run_id 优先于会话绑定；未绑定且未显式 → no_run_bound
+ *     （fail-closed，连接保持）；run_id 不存在/不可解析 → unknown_run（连接保持）。
+ *   mock 口径注记（与真实内核的差异面，真实对端以内核批次二实现为准）：
+ *     - run 存在性 = auto-registry：除 --unknown-run=ID 注定的不可解析值外，显式 run_id
+ *       首个引用即登记为已知 run（mock 无内核 run 注册表，自动登记保住多场景可解析）；
+ *     - 会话绑定默认启动即绑定 mock-run-1（批次一隐含"当前 run"口径的兼容承载，
+ *       既有用例零回归）；--no-auto-bind 时严格启动（无绑定），供 no_run_bound 反例与新口径用例。
+ *   --no-auto-bind             会话启动不绑定任何 run（严格口径；默认绑定 mock-run-1）
+ *   --unknown-run=ID           指定该 run_id 为不可解析（unknown_run 反例注入）
  */
 import readline from "node:readline";
 import { createHash } from "node:crypto";
@@ -45,6 +58,7 @@ const delayResponseMs = findNum("delay-response") ?? 0;
 const contractVersion = findNum("contract-version") ?? 2;
 const corruptOutput = findOpt("corrupt-output") ?? "";
 const rejectMethod = findOpt("reject-method") ?? "";
+const unknownRunId = findOpt("unknown-run") ?? "";
 const flags = new Set(process.argv.slice(2));
 const emitReadyEvent = flags.has("--emit-ready-event");
 const crashOnSecond = flags.has("--crash-on-second-request");
@@ -142,7 +156,48 @@ const ledgerConsume = (params) => {
 // pin 以 dataset_id 的 sha256 前 12 位确定性派生（mock 语义，真实 pin 来源由批次二任务书明确）。
 const admittedFacts = [];
 
-const MOCK_SCOPE_REF = { project_id: "mock-project", scope_type: "run", scope_id: "mock-run-1", scope_mode: "headless" };
+// ---------------- 会话 run 绑定（契约 v2 方法面补登 2026-09-13，B1–B4） ----------------
+// 解析顺序：显式 params.run_id → 会话绑定 → no_run_bound（B2/B3）；留痕见 sessionBindRun（B4）。
+const scopeRefFor = (runId) => ({ project_id: "mock-project", scope_type: "run", scope_id: runId, scope_mode: "headless" });
+const noAutoBind = flags.has("--no-auto-bind");
+let boundRunId = noAutoBind ? null : "mock-run-1"; // 默认绑定 = 批次一隐含"当前 run"口径的兼容承载（见头部注记）
+const knownRuns = new Set(["mock-run-1"]);
+
+const isResolvableRun = (runId) => runId !== unknownRunId; // auto-registry：除注定不可解析值外均可登记
+
+const resolveRun = (params) => {
+  const explicit = isPlainObject(params) && typeof params.run_id === "string" && params.run_id.length > 0 ? params.run_id : undefined;
+  if (explicit !== undefined) {
+    if (!isResolvableRun(explicit)) {
+      return { error: { code: "unknown_run", message: `run_id 不存在/不可解析: ${explicit}` } };
+    }
+    knownRuns.add(explicit);
+    return { runId: explicit };
+  }
+  if (boundRunId === null) {
+    return { error: { code: "no_run_bound", message: "会话未绑定 run 且未显式给 run_id（fail-closed，契约补登 B3）" } };
+  }
+  return { runId: boundRunId };
+};
+
+const sessionBindRun = (params) => {
+  const runId = isPlainObject(params) ? params.run_id : undefined;
+  if (typeof runId !== "string" || runId.length === 0) {
+    return { error: { code: "invalid_params", message: "atf.bind_run 需要非空 run_id（契约补登 B1）" } };
+  }
+  if (!isResolvableRun(runId)) {
+    return { error: { code: "unknown_run", message: `run_id 不存在/不可解析: ${runId}` } };
+  }
+  const from = boundRunId;
+  knownRuns.add(runId);
+  boundRunId = runId;
+  if (from !== null && from !== runId) {
+    // 绑定留痕（B4）：覆盖绑定先发 event 再回 response（单向通知，不影响 id 配对）；
+    // 经 writeChain 串行写出，与 response 的先后次序有保证。
+    sendFrame({ type: "event", name: "session/run-bound", payload: { from, to: runId } });
+  }
+  return { ok: true, run_id: runId, scope_ref: scopeRefFor(runId) };
+};
 
 const corrupt = (method, result) => {
   if (corruptOutput !== method) return result;
@@ -170,23 +225,32 @@ const toolGate = (params) => {
   return { ok: true, gate: String(params.gate), status: "pass" };
 };
 
-const toolFactScan = () => ({
-  ok: true,
-  facts: admittedFacts.map((fact) => ({ ...fact })),
-  count: admittedFacts.length,
-});
+const toolFactScan = (params) => {
+  const resolved = resolveRun(params);
+  if (resolved.error !== undefined) return resolved;
+  return {
+    ok: true,
+    facts: admittedFacts.map((fact) => ({ ...fact })),
+    count: admittedFacts.length,
+  };
+};
 
-const toolWorkspaceStatus = () => ({
-  ok: true,
-  run_id: "mock-run-1",
-  admitted_count: admittedFacts.length,
-  scope_ref: { ...MOCK_SCOPE_REF },
-});
+const toolWorkspaceStatus = (params) => {
+  const resolved = resolveRun(params);
+  if (resolved.error !== undefined) return resolved;
+  return {
+    ok: true,
+    run_id: resolved.runId,
+    admitted_count: admittedFacts.length,
+    scope_ref: scopeRefFor(resolved.runId),
+  };
+};
 
 const METHODS = {
   ledger_record: ledgerRecord,
   ledger_query: ledgerQuery,
   ledger_consume: ledgerConsume,
+  "atf.bind_run": sessionBindRun,
   atf_admit_data: toolAdmitData,
   atf_gate: toolGate,
   atf_fact_scan: toolFactScan,
