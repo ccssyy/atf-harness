@@ -43,7 +43,7 @@
   （`.atf-pinned/` 加入 .gitignore，不进本仓。）
 - **re-pin 三步**（唯一合法的升级路径，禁止自动追新）：
   ① 触发：ATF 侧 `contract-breaking` 标记，或 harness 需要内核新能力；
-  ② 执行：worktree 切到目标 tag → 改 contract.yaml pin（contract_version 同步 bump）→ 跑 contract tests，红了修 harness 侧适配；
+  ② 执行：worktree 切到目标 tag → 改 contract.yaml pin（pin 的 contract_version 属会话协议版本轴，随内核 bump 同步——双轴口径见 bridge.contract.yaml「版本轴注记」2026-09-13；桥接契约版本轴不随 re-pin 变动）→ 跑 contract tests，红了修 harness 侧适配；
   ③ 收口：PR 改 pin → owner review → 合入。
 - 契约变更双向纪律：本仓改契约 = 显式 PR + 双仓测试；ATF 侧改坏契约 = contract tests 红，影响面即契约面，运行时永不静默炸。
 

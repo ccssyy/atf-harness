@@ -8,7 +8,9 @@
  *   --chunk=N                  每次仅异步写 N 字节，模拟输出被字节级分帧
  *   --flush-delay=MS           每个响应延迟 MS 再写，使多个响应合包到达
  *   --delay-response=MS        收到请求后延迟 MS 再响应（配合超时用例）
- *   --contract-version=N       握手返回的 contract_version（默认 2 = 契约 v2；用于版本不一致反例）
+ *   --contract-version=N       握手返回的 contract_version（默认 1 = 会话协议版本轴，与内核
+ *                              SESSION_CONTRACT_VERSION 同源；注入 2 等用于版本不一致反例——
+ *                              双轴口径见 bridge.contract.yaml「版本轴注记」与 connection.ts 常量注释）
  *   --emit-ready-event         首个响应前先发一条 atf.ready event 帧
  *   --crash-on-second-request  第二个 request 到达时写 stderr 并以退出码 3 崩溃（模拟意外退出）
  *   --bad-line-after-handshake 首个响应后再发一行非法文本（协议违规反例）
@@ -55,7 +57,7 @@ const findNum = (name) => {
 const chunkBytes = findNum("chunk") ?? 0;
 const flushDelayMs = findNum("flush-delay") ?? 0;
 const delayResponseMs = findNum("delay-response") ?? 0;
-const contractVersion = findNum("contract-version") ?? 2;
+const contractVersion = findNum("contract-version") ?? 1; // 会话协议版本轴（双轴修正 2026-09-13；握手默认与内核一致回 1）
 const corruptOutput = findOpt("corrupt-output") ?? "";
 const rejectMethod = findOpt("reject-method") ?? "";
 const unknownRunId = findOpt("unknown-run") ?? "";

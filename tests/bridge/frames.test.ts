@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_MAX_FRAME_BYTES, LineFrameDecoder, encodeRequestFrame } from "../../src/bridge/frames.js";
 
 const versionResponse =
-  '{"type":"response","id":1,"ok":true,"result":{"name":"atf","version":"v0.2.0b7-mock","contract_version":2}}\n';
+  '{"type":"response","id":1,"ok":true,"result":{"name":"atf","version":"v0.2.0b7-mock","contract_version":1}}\n';
 
 const framesOf = (items: ReturnType<LineFrameDecoder["push"]>) =>
   items.filter((item) => item.kind === "frame").map((item) => (item.kind === "frame" ? item.frame : null));
@@ -25,7 +25,7 @@ describe("LineFrameDecoder——严格 LF 分帧（bridge.contract.yaml framing�
     }
     expect(frames).toHaveLength(1);
     expect(frames[0]).toMatchObject({ type: "response", id: 1 });
-    expect(frames[0]).toHaveProperty("result.contract_version", 2);
+    expect(frames[0]).toHaveProperty("result.contract_version", 1);
   });
 
   it("多帧合包于单块到达（粘包拆分）", () => {

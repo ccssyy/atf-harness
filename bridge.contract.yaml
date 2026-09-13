@@ -4,10 +4,11 @@
 # 内容：JSONL 帧格式定义 + S1 协议常量 + atf CLI 对接面 + atf_upstream pin。
 #       S3 工具子命令签名与 canonical output schema 在 methods 段登记。
 #
-# 变更纪律（AGENTS.md §4 / 任务书 §8.2）：
+# 变更纪律（AGENTS.md §4 / 任务书 §8.2；版本轴口径见下方「版本轴注记」）：
 #   本文件任何变更 = 显式 PR + 双仓契约测试 + owner review；
-#   双侧 contract_version 同步 bump，禁止任何一侧悄悄改。
-#   pin 只落 ATF 发版 tag，禁止自动追新。
+#   版本轴各归其位：会话协议版本仅线缆规则变更时双侧同步 bump；
+#   桥接契约版本（本文件头部 contract_version）在方法面/字段变更时 bump（harness 独有，不进握手）；
+#   任何一侧均禁止悄悄改。pin 只落 ATF 发版 tag，禁止自动追新。
 # =====================================================================
 
 # ---------------------------------------------------------------------
@@ -33,8 +34,12 @@
 #   8. atf_workspace_status.result 增补 scope_ref（供 ledger_query 定位）；
 #   9. 双侧同步 bump 要求：内核侧批次二按契约 v2 实现时，同步其握手 contract_version
 #      （session/contract.py::SESSION_CONTRACT_VERSION 单一常量承载）。
+#      【版本轴修正 2026-09-13 精化】本项"同步其握手 contract_version"的表述作废——
+#      握手承载的是会话协议版本轴（内核保持 1 为正确），桥接契约版本升 2 不进握手；见下方「版本轴注记」。
 # 对端口径：atf_upstream pin 保持 v0.2.0b7 不动（re-pin 另行指令）；会话对端仍由契约
 # 忠实 mock 承载，mock 握手 contract_version 自契约 v2 起回 2（与 bridge contract_version 一致）。
+#   【版本轴修正 2026-09-13 精化】上行"mock 握手回 2"的表述作废：握手走会话协议版本轴
+#   （当前 1，内核 SESSION_CONTRACT_VERSION 同源），mock 默认回 1；见下方「版本轴注记」。
 # ---------------------------------------------------------------------
 #
 # ---------------------------------------------------------------------
@@ -57,6 +62,20 @@
 # runner/FactScanResolver 构造即携带 run_id 并以显式 params.run_id 调用只读方法；
 # atf.bind_run 主要服务宿主/长会话场景（Phase 3 dispatch 时使用）。模型可见工具面参数
 # 保持无参（TOOL_DEFINITIONS 4 工具不变），run 绑定为编排/宿主职责，不开放给模型。
+# ---------------------------------------------------------------------
+# 【版本轴注记（双轴明确）2026-09-13】《ATF-Harness_Owner指令_版本轴修正与推送_20260913.md》
+# （依据《ATF内核_Owner决议与指令_B2-1验收_B2-2启动_双轴裁定_20260913.md》§3）。
+# 自本注记起，contract_version 一词按两轴各归其位，禁止混用：
+#   轴一·会话协议版本：两侧共有，经握手 atf.version.result.contract_version 传递；当前 = 1；
+#     仅线缆规则（帧格式/握手 schema/生命周期语义）变更时双侧同步 bump；
+#     harness 侧校验常量 = src/bridge/connection.ts::EXPECTED_SESSION_CONTRACT_VERSION；
+#     内核侧承载 = session/contract.py::SESSION_CONTRACT_VERSION（内核保持 1 为正确）。
+#   轴二·桥接契约版本：harness 独有，即本文件头部 contract_version；当前 = 2；
+#     方法面/字段变更时 bump；仅 harness 内部（契约文件自检/文档）用，不参与握手校验；
+#     harness 侧承载 = src/bridge/connection.ts::BRIDGE_CONTRACT_VERSION。
+# 【问题存证】契约 v2 曾把握手期望值误绑到桥接契约版本（EXPECTED_CONTRACT_VERSION = 2），
+# 而 mock 握手同步回 2 掩盖了该缺陷——re-pin 后首次握手即失败，且错误文案误导为"核对 pin"。
+# 本注记即该缺陷的修正登记（六项修正详见《ATF-Harness_版本轴修正执行报告_20260913.md》）。
 # ---------------------------------------------------------------------
 
 contract_version: 2
@@ -414,8 +433,10 @@ atf_cli:
 # ---------------------------------------------------------------------
 # 上游 pin（只落 ATF 发版 tag；re-pin 三步见 AGENTS.md §4，禁止自动追新）
 # 【契约 v2 注记 2026-09-13】pin 值未动（re-pin 另行指令）。下方 contract_version: 1 为
-# pin 时点的上游会话协议版本存证；握手期望值自契约 v2 起由本文件头部 contract_version
-# 承载（mock 已回 2），真实对端以内核批次二实现为准。
+# pin 时点的上游会话协议版本存证（轴一）；握手期望值 = 会话协议版本轴
+# （EXPECTED_SESSION_CONTRACT_VERSION = 1，与本存证一致），桥接契约版本（轴二）不进握手
+# 【版本轴修正 2026-09-13 精化：原"握手期望值自契约 v2 起由本文件头部 contract_version 承载
+# （mock 已回 2）"的表述作废】，真实对端以内核批次二实现为准。
 # ---------------------------------------------------------------------
 atf_upstream:
   tag: v0.2.0b7

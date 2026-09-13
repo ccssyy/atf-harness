@@ -28,7 +28,8 @@ describe("S1 验收用例 1——握手（spawn → 版本 response → 优雅�
     if (!spawned.ok) return;
     const connection = track(spawned.value);
 
-    expect(connection.version).toEqual({ name: "atf", version: "v0.2.0b7-mock", contract_version: 2 });
+    // 握手承载会话协议版本轴（双轴修正 2026-09-13）：mock 默认回 1，与内核 SESSION_CONTRACT_VERSION 同源
+    expect(connection.version).toEqual({ name: "atf", version: "v0.2.0b7-mock", contract_version: 1 });
 
     const closed = await connection.close();
     expect(closed.ok).toBe(true);
@@ -47,15 +48,20 @@ describe("S1 验收用例 1——握手（spawn → 版本 response → 优雅�
     expect(second).toEqual(first);
   });
 
-  it("契约版本不一致 → err(handshake_failed)，子进程被回收", async () => {
-    const spawned = await spawnMock("--contract-version=99");
+  it("会话协议版本不一致（注入 2 = 桥接契约版本误用反例）→ err(handshake_failed)，文案指向会话协议版本轴", async () => {
+    const spawned = await spawnMock("--contract-version=2");
     expect(spawned.ok).toBe(false);
     if (spawned.ok) {
       await track(spawned.value).close();
       return;
     }
     expect(spawned.error.code).toBe("handshake_failed");
-    expect(spawned.error.message).toContain("契约版本不一致");
+    // 双轴修正 2026-09-13：文案指向会话协议版本（不再误导为"核对 bridge.contract.yaml/pin"）
+    expect(spawned.error.message).toContain("会话协议版本不一致");
+    expect(spawned.error.message).toContain("harness 期望 1");
+    expect(spawned.error.message).toContain("对端报告 2");
+    expect(spawned.error.message).toContain("线缆协议不兼容");
+    expect(spawned.error.message).toContain("请查契约文件版本而非本值");
   });
 });
 

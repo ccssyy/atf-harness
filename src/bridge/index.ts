@@ -27,7 +27,8 @@ export {
 } from "./frames.js";
 export {
   AtfBridgeConnection,
-  EXPECTED_CONTRACT_VERSION,
+  BRIDGE_CONTRACT_VERSION,
+  EXPECTED_SESSION_CONTRACT_VERSION,
   REQUEST_TIMEOUT_MS,
   type AtfBridgeEventData,
   type AtfVersionInfo,

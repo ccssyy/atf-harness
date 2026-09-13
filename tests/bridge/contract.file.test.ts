@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
+import { BRIDGE_CONTRACT_VERSION } from "../../src/bridge/index.js";
 
 /**
  * 契约文件自检（契约修订 v2 验收 §4.3 的自动化承载）：bridge.contract.yaml 为双侧唯一
@@ -17,6 +18,10 @@ import { beforeAll, describe, expect, it } from "vitest";
  *   - contract_version 仍为 2（方法面补登不 bump，沿用批次一先例）；
  *   - 错误码 no_run_bound / unknown_run 登记（连接保持）；绑定留痕 event session/run-bound；
  *   - atf_workspace_status / atf_fact_scan 参数为可选 run_id（显式优先于会话绑定）。
+ * 版本轴修正（2026-09-13，《ATF-Harness_Owner指令_版本轴修正与推送_20260913.md》双轴裁定）：
+ *   - 文件头部 contract_version = 桥接契约版本轴（= BRIDGE_CONTRACT_VERSION，自检断言锚定）；
+ *   - 握手校验走会话协议版本轴（EXPECTED_SESSION_CONTRACT_VERSION = 1），不归本文件头部承载；
+ *   - 契约头部须有「版本轴注记（双轴明确）」登记块。
  */
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
@@ -36,10 +41,16 @@ const methodKeys = (): string[] =>
     .map((match) => match[1] as string);
 
 describe("契约文件自检（v2）", () => {
-  it("contract_version: 2（契约修订 v2，方法面补登不 bump）", () => {
+  it("contract_version: 2（桥接契约版本轴 = BRIDGE_CONTRACT_VERSION；握手走会话协议版本轴）", () => {
     expect(contract).toMatch(/^contract_version: 2$/m);
     expect(contract).not.toMatch(/^contract_version: 1$/m);
     expect(contract).not.toMatch(/^contract_version: 3$/m);
+    // 版本轴修正（2026-09-13）双轴语义：文件头部值 = 桥接契约版本轴，与 BRIDGE_CONTRACT_VERSION
+    // 一致；握手校验值是另一轴（EXPECTED_SESSION_CONTRACT_VERSION = 1），不归本文件头部承载。
+    expect(BRIDGE_CONTRACT_VERSION).toBe(2);
+    expect(contract).toMatch(/版本轴注记（双轴明确）2026-09-13/);
+    expect(contract).toMatch(/EXPECTED_SESSION_CONTRACT_VERSION/);
+    expect(contract).toMatch(/BRIDGE_CONTRACT_VERSION/);
   });
 
   it("运行时方法面：握手 + 会话上下文（atf.bind_run）+ 4 工具（含 atf_fact_scan）+ 2 账本；ledger_record 为 setup 基建", () => {

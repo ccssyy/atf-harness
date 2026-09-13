@@ -5,10 +5,14 @@ import { err, ok, type Result } from "./result.js";
 
 /** 请求超时初值（任务书 S1：常量定义，harness 内部实现细节，永不进入模型可见 schema）。 */
 export const REQUEST_TIMEOUT_MS = 30_000;
-/** 期望的契约版本（与 bridge.contract.yaml contract_version 一致；不一致 = 握手失败）。
- *  契约 v2（2026-09-13 契约修订）：1 → 2；对端 mock 握手同步回 2，
- *  内核侧批次二实现时按契约头部登记同步其握手 contract_version。 */
-export const EXPECTED_CONTRACT_VERSION = 2;
+/** 期望的会话协议版本（双轴之一，版本轴修正 2026-09-13 owner 双轴裁定）：内核握手返回的
+ *  "会话协议/线缆规则"版本（内核侧 session/contract.py::SESSION_CONTRACT_VERSION 同源），
+ *  仅线缆规则变更时双侧同步 bump。本常量不再承载桥接契约版本——桥接契约版本（harness 独有）
+ *  见 BRIDGE_CONTRACT_VERSION，仅契约文件自检/文档用，握手不校验。两轴不得混用。 */
+export const EXPECTED_SESSION_CONTRACT_VERSION = 1;
+/** 桥接契约版本（双轴之二）：与 bridge.contract.yaml 头部 contract_version 一致（当前 2），
+ *  方法面/字段变更时 bump；仅 harness 内部（契约文件自检/文档）用，不参与握手校验。 */
+export const BRIDGE_CONTRACT_VERSION = 2;
 
 /** 握手 atf.version 的结果 schema。 */
 export interface AtfVersionInfo {
@@ -140,10 +144,10 @@ export class AtfBridgeConnection {
       version: (version as Record<string, unknown>)["version"] as string,
       contract_version: (version as Record<string, unknown>)["contract_version"] as number,
     };
-    if (versionInfo.contract_version !== EXPECTED_CONTRACT_VERSION) {
+    if (versionInfo.contract_version !== EXPECTED_SESSION_CONTRACT_VERSION) {
       const error = bridgeError({
         code: "handshake_failed",
-        message: `契约版本不一致：harness 期望 ${EXPECTED_CONTRACT_VERSION}，对端报告 ${versionInfo.contract_version}（请核对 bridge.contract.yaml 与 atf_upstream pin）`,
+        message: `会话协议版本不一致：harness 期望 ${EXPECTED_SESSION_CONTRACT_VERSION}，对端报告 ${versionInfo.contract_version}（线缆协议不兼容；若需核对方法面差异，请查契约文件版本而非本值）`,
         detail: { got: versionInfo },
       });
       connection.teardown(error);

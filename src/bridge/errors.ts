@@ -5,7 +5,7 @@
 
 export type BridgeErrorCode =
   | "spawn_failed" // 子进程无法启动（可执行路径不存在、stdio 配置异常等）
-  | "handshake_failed" // 握手未通过（早退、结果 schema 不符、contract_version 不一致）
+  | "handshake_failed" // 握手未通过（早退、结果 schema 不符、会话协议版本不一致——双轴见 connection.ts 常量注释）
   | "protocol_error" // 线缆协议违规（坏 JSON 行、未知帧型、超限帧、空行）
   | "request_rejected" // 对端返回 ok=false 的错误响应（应用层错误，如 method_not_found）
   | "timeout" // 请求超时
