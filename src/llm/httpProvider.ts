@@ -49,6 +49,19 @@ export interface HttpLlmProviderOptions {
 
 const truncate = (text: string, limit = 200): string => (text.length > limit ? `${text.slice(0, limit)}…` : text);
 
+/** 从 openai-chat 原始响应捕获 reasoning_content（thinking 回传；形状不符 = null，不猜）。 */
+const extractReasoningEcho = (body: unknown): string | null => {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return null;
+  const choices = (body as Record<string, unknown>)["choices"];
+  if (!Array.isArray(choices) || choices.length === 0) return null;
+  const choice = choices[0];
+  if (typeof choice !== "object" || choice === null || Array.isArray(choice)) return null;
+  const message = (choice as Record<string, unknown>)["message"];
+  if (typeof message !== "object" || message === null || Array.isArray(message)) return null;
+  const reasoning = (message as Record<string, unknown>)["reasoning_content"];
+  return typeof reasoning === "string" && reasoning !== "" ? reasoning : null;
+};
+
 export class HttpLlmProvider implements LlmProvider {
   /** 注册名 = provider 别名（修订 v2 两层形态的 provider_id；ADR-09 红线：不记凭据化 URL） */
   public readonly providerId: string;
@@ -61,6 +74,8 @@ export class HttpLlmProvider implements LlmProvider {
   private callsMade = 0;
   /** 当前缓冲的顺序决策（A3：一次响应 N 个决策逐个弹出） */
   private buffer: LlmDecision[] = [];
+  /** thinking 模式回传缓冲：上一响应的 reasoning_content（线缆域；不进 canonical 上下文） */
+  private reasoningEcho: string | null = null;
 
   public constructor(options: HttpLlmProviderOptions) {
     const codec = getCodec(options.config.protocol);
@@ -109,11 +124,18 @@ export class HttpLlmProvider implements LlmProvider {
       // compat.supports_reasoning_effort=false → null → 请求体整体省略该字段（修订 v2 规则 4）
       reasoningEffort: this.config.compat.supports_reasoning_effort ? this.config.reasoning_effort : null,
       developerRole: this.config.compat.supports_developer_role,
+      // thinking 全量回填（复跑适配）：模型元数据 reasoning=true 时启用；null = 历史未留存（占位）
+      thinkingEcho: this.config.reasoning ? (this.reasoningEcho ?? null) : undefined,
       maxTokens: this.config.max_tokens,
     });
+    this.reasoningEcho = null; // 一次性回传
 
     const fetched = await this.postJson(body);
     if (!fetched.ok) return fetched;
+
+    // thinking 模式回传捕获（线缆域）：对端要求上一轮 reasoning_content 随 assistant 消息回传——
+    // 原样捕获，不进 canonical ModelResponse（剥离语义不变），下次请求构造时经 reasoningEcho 回注
+    this.reasoningEcho = extractReasoningEcho(fetched.value);
 
     const parsed = this.codec.parseResponse(fetched.value);
     if (!parsed.ok) {
@@ -155,12 +177,13 @@ export class HttpLlmProvider implements LlmProvider {
     return detail;
   }
 
-  private httpFailure(message: string, extra?: { status?: number; body_excerpt?: string }): LlmError {
+  private httpFailure(message: string, extra?: { status?: number; body_excerpt?: string; request_body?: string }): LlmError {
     // detail 只记 host（ADR-09 红线：provider 记录只到别名/主机名粒度，不记完整 URL）
     return llmError(this.redact(message), this.redactDetail({
       host: this.host(),
       ...(extra?.status !== undefined ? { status: extra.status } : {}),
       ...(extra?.body_excerpt !== undefined ? { body_excerpt: truncate(extra.body_excerpt) } : {}),
+      ...(extra?.request_body !== undefined ? { request_body: extra.request_body } : {}),
       calls_made: this.callsMade,
     }));
   }
@@ -211,7 +234,13 @@ export class HttpLlmProvider implements LlmProvider {
       if (response.status < 200 || response.status >= 300) {
         // 4xx 等：非瞬时故障，不重试（fail-closed）
         const excerpt = await response.text().catch(() => "");
-        return err(this.httpFailure(`决策请求被拒绝（HTTP ${String(response.status)}，不重试）`, { status: response.status, body_excerpt: excerpt }));
+        // 诊断转储（ATF_LLM_DEBUG_DUMP=1 时启用；仅请求体，不含任何头/凭据——key 不在 body）
+        const dump = process.env["ATF_LLM_DEBUG_DUMP"] === "1" ? JSON.stringify(body) : undefined;
+        return err(this.httpFailure(`决策请求被拒绝（HTTP ${String(response.status)}，不重试）`, {
+          status: response.status,
+          body_excerpt: excerpt,
+          ...(dump !== undefined ? { request_body: truncate(dump, 6000) } : {}),
+        }));
       }
       let parsedBody: unknown;
       try {

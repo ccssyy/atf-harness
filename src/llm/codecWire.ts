@@ -60,6 +60,13 @@ export interface CodecRequestInput {
   /** openai-chat：true → 首条指令消息用 role:"developer"（新 OpenAI 约定）；
    *  false/缺省 → role:"system"（既有行为；修订 v2 规则 4 compat）；anthropic 忽略 */
   developerRole: boolean;
+  /** thinking 模式回传（L1a 真实端点复跑适配登记项；实测规则：会话内 ≥2 个 assistant 工具
+   *  调用轮时**每轮都必须携带 reasoning_content**，内容不作校验）：
+   *  - undefined = 关闭（模型元数据 reasoning=false 或未知——不注入任何思考字段，既有行为）；
+   *  - string | null = 开启：给**所有**缺 reasoning_content 的工具调用轮回填（值 = 最新捕获的
+   *    思考内容；null（如恢复场景历史未留存）回填中性占位文本）。仅线缆域，canonical/
+   *  会话流不落思考内容（规则 5 剥离语义不变）。anthropic 忽略（思考块原生往返）。 */
+  thinkingEcho?: string | null;
   /** anthropic 线缆必填；openai-chat 忽略 */
   maxTokens: number;
 }

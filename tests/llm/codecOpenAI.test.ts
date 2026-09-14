@@ -66,6 +66,60 @@ describe("openai-chat——请求构造", () => {
     expect((mk(false)["messages"] as Array<Record<string, unknown>>)[0]?.["role"]).toBe("system");
   });
 
+  it("复跑适配——相邻 assistant 合并：文本并入紧随的 tool_calls 消息（tool_calls:null 视为无）", () => {
+    const body = openaiChatCodec.encodeRequestBody({
+      model: "m",
+      system: "S",
+      messages: [
+        msg({ role: "assistant", text: "先看现场。", source_event_id: 2 }),
+        msg({ role: "assistant_tool_call", tool: "atf_fact_scan", params: {}, source_event_id: 3 }),
+        msg({ role: "tool_result", tool: "atf_fact_scan", ok: true, summary: "0 条", source_event_id: 4 }),
+      ],
+      tools: TOOLS,
+      reasoningEffort: "low",
+      developerRole: false,
+      maxTokens: 4096,
+    }) as Record<string, unknown>;
+    const messages = (body["messages"] as Array<Record<string, unknown>>).filter((m) => m["role"] !== "system");
+    expect(messages).toHaveLength(2); // assistant(合并) + tool（本用例无 user 消息）
+    const merged = messages[0] as { content: string; tool_calls: unknown };
+    expect(merged.content).toContain("先看现场。");
+    expect(merged.tool_calls).toBeDefined();
+  });
+
+  it("复跑适配——thinking 全量回填：reasoning:true 模型所有工具调用轮补齐 reasoning_content（null → 占位）", () => {
+    const mk = (thinkingEcho: string | null | undefined) =>
+      openaiChatCodec.encodeRequestBody({
+        model: "m",
+        system: "S",
+        messages: [
+          msg({ role: "assistant_tool_call", tool: "atf_fact_scan", params: {}, source_event_id: 2 }),
+          msg({ role: "tool_result", tool: "atf_fact_scan", ok: true, summary: "x", source_event_id: 3 }),
+          msg({ role: "assistant_tool_call", tool: "atf_admit_data", params: {}, source_event_id: 4 }),
+          msg({ role: "tool_result", tool: "atf_admit_data", ok: false, summary: "审批中", source_event_id: 5 }),
+        ],
+        tools: TOOLS,
+        reasoningEffort: "low",
+        developerRole: false,
+        maxTokens: 4096,
+        ...(thinkingEcho !== undefined ? { thinkingEcho } : {}),
+      }) as Record<string, unknown>;
+    const off = mk(undefined) as { messages: Array<Record<string, unknown>> };
+    for (const m of off.messages) {
+      if (m["role"] === "assistant" && m["tool_calls"] != null) expect("reasoning_content" in m).toBe(false);
+    }
+    const on = mk(null) as { messages: Array<Record<string, unknown>> };
+    const rcValues = on.messages
+      .filter((m) => m["role"] === "assistant" && m["tool_calls"] != null)
+      .map((m) => m["reasoning_content"]);
+    expect(rcValues.length).toBe(2);
+    for (const rc of rcValues) expect(String(rc).length).toBeGreaterThan(0);
+    const echoed = mk("第一轮思考") as { messages: Array<Record<string, unknown>> };
+    for (const m of echoed.messages) {
+      if (m["role"] === "assistant" && m["tool_calls"] != null) expect(m["reasoning_content"]).toBe("第一轮思考");
+    }
+  });
+
   it("认证头 = Authorization Bearer（key 唯一出现处）", () => {
     const headers = openaiChatCodec.authHeaders("fake-key-x");
     expect(headers["Authorization"]).toBe("Bearer fake-key-x");

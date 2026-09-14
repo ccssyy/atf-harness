@@ -20,7 +20,8 @@
     "smoke:p2s2": "npm run build && node dist/run/smokeP2S2.js",
     "smoke:p2s3": "npm run build && node dist/run/smokeP2S3.js",
     "smoke:r2": "npm run build && node dist/run/smokeR2.js",
-    "smoke:l1a": "npm run build && node dist/run/smokeL1a.js"
+    "smoke:l1a": "npm run build && node dist/run/smokeL1a.js",
+    "trial:l1a-real": "npm run build && node dist/run/trialL1aReal.js"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",

@@ -242,6 +242,11 @@ export interface RunBranchOptions {
   resume?: ResumeAnswer;
   /** provenance model_id（缺省 "faux"，既有行为逐位不变；L1a 传入 provider config.model） */
   modelId?: string;
+  /** 账本 scope_ref.scope_mode（缺省 "headless"——mock 轨既有行为逐位不变）。
+   *  L1a 真实端点复跑适配（复跑报告登记项）：内核 ScopeMode 枚举仅 {canonical, simulation}，
+   *  "headless" 为 harness 侧自造值，真实内核拒绝（ledger_query → invalid_params）——
+   *  对接真实内核的 run 须显式传 "canonical"。 */
+  scopeMode?: "canonical" | "simulation" | "headless";
 }
 
 export class ScenarioRunner {
@@ -302,7 +307,7 @@ export class ScenarioRunner {
         project_id: scenario.scenario_id,
         scope_type: "run",
         scope_id: branch.run_id,
-        scope_mode: "headless",
+        scope_mode: options.scopeMode ?? "headless",
       };
       for (const entry of resumeMode ? [] : branch.setup.ledger) {
         const recorded = await connection.request("ledger_record", {
