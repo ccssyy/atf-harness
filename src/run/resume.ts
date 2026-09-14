@@ -214,6 +214,8 @@ export interface ResumeCliArgs {
   scenarioId?: string;
   /** mock 对端脚本路径（缺省 = 仓内 tests/fixtures/mock_atf.mjs） */
   mockPath?: string;
+  /** 账本 scope_ref.scope_mode（缺省 "headless"；真实内核 run 传 canonical——内核 ScopeMode 枚举） */
+  scopeMode?: "canonical" | "simulation" | "headless";
 }
 
 /** 解析 CLI argv（未知旗标/缺参 → err，fail-closed）。 */
@@ -226,6 +228,7 @@ export const parseResumeArgs = (argv: readonly string[]): Result<ResumeCliArgs, 
   let runId: string | undefined;
   let scenarioId: string | undefined;
   let mockPath: string | undefined;
+  let scopeMode: NonNullable<ResumeCliArgs["scopeMode"]> | undefined;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -280,6 +283,15 @@ export const parseResumeArgs = (argv: readonly string[]): Result<ResumeCliArgs, 
         i += 1;
         break;
       }
+      case "--scope-mode": {
+        const next = argv[i + 1];
+        if (next !== "canonical" && next !== "simulation" && next !== "headless") {
+          return err(`--scope-mode 非法（允许值: canonical | simulation | headless）: ${String(next)}`);
+        }
+        scopeMode = next as NonNullable<ResumeCliArgs["scopeMode"]>;
+        i += 1;
+        break;
+      }
       case "--mock": {
         const next = argv[i + 1];
         if (next === undefined || next === "") return err("--mock 缺少值");
@@ -308,6 +320,7 @@ export const parseResumeArgs = (argv: readonly string[]): Result<ResumeCliArgs, 
     runId,
     ...(scenarioId !== undefined ? { scenarioId } : {}),
     ...(mockPath !== undefined ? { mockPath } : {}),
+    ...(scopeMode !== undefined ? { scopeMode } : {}),
   });
 };
 

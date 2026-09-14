@@ -106,6 +106,46 @@ const flushAnnotations = (state: { pending: WireToolCallRef[]; annotations: stri
   out.push({ role: "user", content: approvalAnnotationText(lines) });
 };
 
+/** 相邻 assistant 合并（thinking 回传适配的线缆形状前提）：内容型 assistant 紧随 tool_calls 型
+ *  assistant 时（同一模型轮次经 A3 展开为两条决策的线缆投影），把文本并入 tool_calls 消息的
+ *  content——OpenAI 规范形态（content+tool_calls 同体），协议等价；仅线缆投影，canonical 不变。
+ *  注意：历史重建的 assistant 消息可能带显式 tool_calls:null，按"无 tool_calls"处理。 */
+const mergeAdjacentAssistantText = (wire: Record<string, unknown>[]): void => {
+  for (let i = wire.length - 2; i >= 0; i -= 1) {
+    const current = wire[i];
+    const next = wire[i + 1];
+    if (
+      current === undefined ||
+      next === undefined ||
+      current["role"] !== "assistant" ||
+      next["role"] !== "assistant" ||
+      current["tool_calls"] != null ||
+      next["tool_calls"] == null ||
+      typeof current["content"] !== "string" ||
+      current["content"] === ""
+    ) {
+      continue;
+    }
+    const merged = next as { content?: unknown };
+    merged["content"] = typeof merged["content"] === "string" && merged["content"] !== ""
+      ? `${current["content"] as string}\n${merged["content"]}`
+      : current["content"];
+    wire.splice(i, 1);
+  }
+};
+
+/** thinking 回传占位（恢复场景历史思考未留存时的中性占位；登记于复跑报告已知边界）。 */
+export const THINKING_PLACEHOLDER = "（该历史轮次的思考内容未留存，此为满足回传校验的占位文本）";
+
+/** thinking 全量回填：≥2 个工具调用轮的会话，每轮 assistant 消息都必须携带 reasoning_content。 */
+const fillThinkingEcho = (wire: Record<string, unknown>[], echo: string | null): void => {
+  for (const message of wire) {
+    if (message["role"] !== "assistant" || message["tool_calls"] == null) continue;
+    if (typeof message["reasoning_content"] === "string" && message["reasoning_content"] !== "") continue;
+    message["reasoning_content"] = echo ?? THINKING_PLACEHOLDER;
+  }
+};
+
 export const openaiChatCodec: ProtocolCodec = {
   protocol: "openai-chat",
   requestPath: PROTOCOL_REQUEST_PATHS["openai-chat"],
@@ -126,6 +166,7 @@ export const openaiChatCodec: ProtocolCodec = {
     }
     flushDangling(state, wire);
     flushAnnotations(state, wire);
+    mergeAdjacentAssistantText(wire);
     const bodyBase: Record<string, unknown> = {
       model: input.model,
       messages: wire,
@@ -138,6 +179,7 @@ export const openaiChatCodec: ProtocolCodec = {
     // 门 2 §1.2：显式携带 reasoning 参数（配置层拒绝 "none"）；修订 v2 规则 4：
     // compat.supports_reasoning_effort=false → null → 整体省略（对端不认该参数时不发送）
     if (input.reasoningEffort !== null) bodyBase["reasoning_effort"] = input.reasoningEffort;
+    if (input.thinkingEcho !== undefined) fillThinkingEcho(wire, input.thinkingEcho);
     return bodyBase;
   },
 

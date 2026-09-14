@@ -62,6 +62,7 @@ const runAnswer = async (
   note: string | undefined,
   requestEventId: number | undefined,
   mockPath: string,
+  scopeMode: "canonical" | "simulation" | "headless" | undefined,
 ): Promise<number> => {
   const config = await loadLlmProviderConfig();
   if (!config.ok) {
@@ -96,6 +97,7 @@ const runAnswer = async (
     runsRoot,
     mockCommand: ["node", mockPath],
     modelProvider: provider,
+    ...(scopeMode !== undefined ? { scopeMode } : {}),
     resume: {
       verdict: verdict as "granted" | "advised" | "denied" | "abort",
       ...(note !== undefined ? { note } : {}),
@@ -139,5 +141,6 @@ if (!args.ok) {
     args.value.note,
     args.value.requestEventId,
     args.value.mockPath ?? defaultMockPath,
+    args.value.scopeMode,
   );
 }
