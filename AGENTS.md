@@ -34,7 +34,7 @@
 ## 4. 契约与 pin 管理
 
 - 仓内 `bridge.contract.yaml` 是 harness 对 ATF 认知的**唯一真相源**：JSONL 帧格式 + atf 子命令签名 + canonical output schema + `atf_upstream` pin（commit + contract_version）。
-- **当前 pin：tag `v0.2.0b7`（commit `a628f8b`，2026-09-08；含 --run 自动发现修复与全量基线）**。pin 只落在 ATF 发版 tag 上，不追 main 中间态。
+- **当前 pin：tag `v0.6.0b0`（commit `b6db3496b34089147044be9c6b9a0a7ceb595e3a`，2026-09-14；会话方法面 7 方法（含 `atf.bind_run`），内核批次二发版）**。pin 只落在 ATF 发版 tag 上，不追 main 中间态。
 - contract tests 运行前提：`ATF_CLI_PATH` 指向一份 **checkout 在 pin 上的 ATF 只读副本**，测试先校验其 HEAD sha 与 pin 一致，不一致直接 fail：
   ```bash
   git -C <ATF_KERNEL_DIR> worktree add <HARNESS_DIR>/.atf-pinned v0.2.0b7
