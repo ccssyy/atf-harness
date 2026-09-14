@@ -1,0 +1,198 @@
+/**
+ * B1 adapter 契约 ＋ A3 多工具展开（切片 2——《ATF独立Harness_切片2任务书_adapter与公理兑现_20260914.md》§1.1/§1.2；
+ * 依据《agent-loop 设计（已升格）》§5 B1 / §4 A3）。
+ *
+ * B1：白名单投影（LlmContextEvent[]）→ 模型消息序列——**纯函数**（同输入同输出）、
+ *     顺序稳定（事件流顺序 → 消息顺序）、**fail-closed**（未声明事件类型 / 未声明字段一律拒绝）、
+ *     **不含预算/治理内部字段**（延续切片 1 模型不可见约束）。
+ * A3：模型响应含 N 个工具调用 → 展开为 **N 个顺序 LlmDecision**——loop 语义仍为
+ *     "一次决策一个工具"；每个决策各自过守卫（切片 0）与各自过审批检查点（禁止共享授权，
+ *     ADR-07 无配额复用红线）。具体 provider 的响应解析属 L1a；本模块定义中性契约并以桩验证。
+ */
+import { err, ok, type Result } from "../bridge/index.js";
+import { type LlmDecision } from "./provider.js";
+import { type LlmContextEvent } from "../session/index.js";
+
+// ---------------------------------------------------------------------------
+// B1：投影 → 模型消息（adapter 映射）
+// ---------------------------------------------------------------------------
+
+/** 模型消息（中性词汇；具体 provider 消息格式的最终映射属 L1a adapter 实现层）。 */
+export type AdapterMessage =
+  | { role: "user"; text: string; source_event_id: number }
+  | { role: "assistant"; text: string; source_event_id: number }
+  | { role: "assistant_tool_call"; tool: string; params: Record<string, unknown>; source_event_id: number }
+  | { role: "tool_result"; tool: string; ok: boolean; summary: string; source_event_id: number }
+  | { role: "approval"; phase: "request" | "response"; summary: string; source_event_id: number };
+
+export interface AdapterError {
+  code: "adapter_schema_violation";
+  message: string;
+}
+
+export const adapterError = (message: string): { code: "adapter_schema_violation"; message: string } => ({
+  code: "adapter_schema_violation",
+  message,
+});
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** 未声明字段检查（properties 即白名单——与全仓 schema 同哲学）。 */
+const rejectUndeclared = (payload: Record<string, unknown>, declared: readonly string[], path: string): string | null => {
+  for (const key of Object.keys(payload)) {
+    if (!declared.includes(key)) return `${path} 含未声明字段 "${key}"`;
+  }
+  return null;
+};
+
+/**
+ * B1 映射表（声明式；表外事件类型一律拒绝——fail-closed）。
+ * - 映射四类语义内容：user/message、assistant/message、tool/call、tool/result；
+ * - approval/request|response 映射为审批消息（问答轨历史对模型可见）；
+ * - turn/start|end、provider/switch、session/repair、session/compaction：声明为结构/审计标记，
+ *   不产生模型消息（skip——显式声明决策，非遗漏）。
+ */
+const ADAPTER_MAPPINGS: Readonly<Record<string, "map" | "skip">> = {
+  "user/message": "map",
+  "assistant/message": "map",
+  "tool/call": "map",
+  "tool/result": "map",
+  "approval/request": "map",
+  "approval/response": "map",
+  "turn/start": "skip",
+  "turn/end": "skip",
+  "provider/switch": "skip",
+  "session/repair": "skip",
+  "session/compaction": "skip",
+};
+
+const readableSummary = (value: unknown, limit = 160): string => {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text === undefined ? "" : text.length > limit ? `${text.slice(0, limit)}…` : text;
+};
+
+const mapEvent = (event: LlmContextEvent): Result<AdapterMessage | null, AdapterError> => {
+  const mapping = ADAPTER_MAPPINGS[event.type];
+  if (mapping === undefined) {
+    return err(adapterError(`adapter 未声明的事件类型: ${event.type}（fail-closed，不猜测映射）`));
+  }
+  if (mapping === "skip") return ok(null);
+  if (!isPlainObject(event.payload)) return err(adapterError(`${event.type}.payload 不是 JSON 对象`));
+  switch (event.type) {
+    case "user/message":
+    case "assistant/message": {
+      const violation = rejectUndeclared(event.payload, ["text"], event.type);
+      if (violation !== null) return err(adapterError(violation));
+      if (typeof event.payload["text"] !== "string") return err(adapterError(`${event.type}.text 非法`));
+      return ok({
+        role: event.type === "user/message" ? "user" : "assistant",
+        text: event.payload["text"],
+        source_event_id: event.id,
+      });
+    }
+    case "tool/call": {
+      const violation = rejectUndeclared(event.payload, ["tool", "params"], event.type);
+      if (violation !== null) return err(adapterError(violation));
+      if (typeof event.payload["tool"] !== "string") return err(adapterError("tool/call.tool 非法"));
+      if (!isPlainObject(event.payload["params"])) return err(adapterError("tool/call.params 非法"));
+      return ok({
+        role: "assistant_tool_call",
+        tool: event.payload["tool"],
+        params: event.payload["params"],
+        source_event_id: event.id,
+      });
+    }
+    case "tool/result": {
+      const violation = rejectUndeclared(event.payload, ["tool", "ok", "result", "reason", "call_ref", "block", "detail"], event.type);
+      if (violation !== null) return err(adapterError(violation));
+      if (typeof event.payload["tool"] !== "string") return err(adapterError("tool/result.tool 非法"));
+      const okFlag = event.payload["ok"];
+      if (typeof okFlag !== "boolean") return err(adapterError("tool/result.ok 非法"));
+      const summary = okFlag === true ? readableSummary(event.payload["result"]) : String(event.payload["reason"] ?? "");
+      return ok({ role: "tool_result", tool: event.payload["tool"], ok: okFlag, summary, source_event_id: event.id });
+    }
+    case "approval/request":
+    case "approval/response": {
+      const violation = rejectUndeclared(event.payload, ["tool", "question", "advice_text", "verdict", "actor", "reason", "approval_session_id", "attempt"], event.type);
+      if (violation !== null) return err(adapterError(violation));
+      return ok({
+        role: "approval",
+        phase: event.type === "approval/request" ? "request" : "response",
+        summary: readableSummary(event.payload),
+        source_event_id: event.id,
+      });
+    }
+  }
+  // 防御收尾：mapping 表与 switch 分支一致性由上方 undefined 检查保证（不可达）
+  return ok(null);
+};
+
+/** B1：投影 → 模型消息序列（纯函数；顺序稳定；单条失败即整体拒绝——不产残缺上下文）。 */
+export const adaptProjectionToMessages = (
+  context: readonly LlmContextEvent[],
+): Result<AdapterMessage[], AdapterError> => {
+  const messages: AdapterMessage[] = [];
+  for (const event of context) {
+    const mapped = mapEvent(event);
+    if (!mapped.ok) return mapped;
+    if (mapped.value !== null) messages.push(mapped.value);
+  }
+  return ok(messages);
+};
+
+// ---------------------------------------------------------------------------
+// A3：模型响应 → 顺序 LlmDecision（多工具展开）
+// ---------------------------------------------------------------------------
+
+/**
+ * 模型响应（中性形态；真实 provider 响应的解析/归一属 L1a adapter 实现层）。
+ * 三类内容可组合，但有确定性展开顺序：message → tool_calls（按声明序）→ final_answer；
+ * final_answer 与 tool_calls 并存 = 契约冲突（fail-closed 拒绝——终止语义与待执行动作并存不可判定）。
+ */
+export interface ModelResponse {
+  message?: string;
+  tool_calls?: ReadonlyArray<{ tool: string; params: Record<string, unknown> }>;
+  final_answer?: string;
+}
+
+/** A3 展开：一次模型响应 → N 个顺序 LlmDecision（N ≥ 1；loop 逐个消费，一次决策一个工具）。 */
+export const expandModelResponse = (response: unknown): Result<LlmDecision[], AdapterError> => {
+  if (!isPlainObject(response)) return err(adapterError("模型响应不是 JSON 对象"));
+  const violation = rejectUndeclared(response, ["message", "tool_calls", "final_answer"], "response");
+  if (violation !== null) return err(adapterError(violation));
+  const hasMessage = response["message"] !== undefined;
+  const hasToolCalls = response["tool_calls"] !== undefined;
+  const hasFinal = response["final_answer"] !== undefined;
+  if (!hasMessage && !hasToolCalls && !hasFinal) return err(adapterError("模型响应为空（三类内容至少其一）"));
+  if (hasFinal && hasToolCalls) {
+    return err(adapterError("final_answer 与 tool_calls 并存（终止语义与待执行动作冲突，fail-closed）"));
+  }
+  const decisions: LlmDecision[] = [];
+  if (hasMessage) {
+    if (typeof response["message"] !== "string" || response["message"] === "") {
+      return err(adapterError("response.message 非法（须为非空字符串）"));
+    }
+    decisions.push({ type: "assistant_message", text: response["message"] });
+  }
+  if (hasToolCalls) {
+    const calls = response["tool_calls"];
+    if (!Array.isArray(calls) || calls.length === 0) return err(adapterError("response.tool_calls 非法（须为非空数组）"));
+    for (let i = 0; i < calls.length; i += 1) {
+      const call = calls[i];
+      if (!isPlainObject(call)) return err(adapterError(`tool_calls[${String(i)}] 不是 JSON 对象`));
+      const callViolation = rejectUndeclared(call, ["tool", "params"], `tool_calls[${String(i)}]`);
+      if (callViolation !== null) return err(adapterError(callViolation));
+      if (typeof call["tool"] !== "string" || call["tool"] === "") return err(adapterError(`tool_calls[${String(i)}].tool 非法`));
+      if (!isPlainObject(call["params"])) return err(adapterError(`tool_calls[${String(i)}].params 非法`));
+      decisions.push({ type: "tool_call", tool: call["tool"], params: call["params"] });
+    }
+  }
+  if (hasFinal) {
+    if (typeof response["final_answer"] !== "string" || response["final_answer"] === "") {
+      return err(adapterError("response.final_answer 非法（须为非空字符串）"));
+    }
+    decisions.push({ type: "final_answer", text: response["final_answer"] });
+  }
+  return ok(decisions);
+};

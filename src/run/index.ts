@@ -37,3 +37,11 @@ export {
   type ProviderSwitchPayload,
 } from "./providerSwitch.js";
 export { LOOP_STOP_REASONS, resolveExhaustionStop, type LoopStopReason } from "./stopReason.js";
+export { buildApprovalBackfill, buildDecisionBackfill, type DecisionBackfill } from "./backfill.js";
+export {
+  injectMemoryEntries,
+  type MemoryInjectionOutcome,
+  type MemoryReadEntry,
+  type MemoryReadInjector,
+} from "./memoryInjection.js";
+export { deriveLoopStateFromEvents, type LoopStateSnapshot, type LoopTurnState } from "./loopState.js";

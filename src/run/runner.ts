@@ -34,6 +34,7 @@ import { AtfBridgeConnection } from "../bridge/index.js";import {
 import type { LlmProvider } from "../llm/index.js";
 import { LOOP_MAX_STEPS_PER_TURN, LOOP_MAX_TURNS } from "../session/constants.js";
 import { resolveExhaustionStop, type LoopStopReason } from "./stopReason.js";
+import { injectMemoryEntries, type MemoryReadInjector } from "./memoryInjection.js";
 import {
   approvalParamsDigest,
   resolveHeadlessExitCode,
@@ -210,6 +211,9 @@ export interface RunBranchOptions {
    *  经运行时守卫 assertModelDecision 校验（守卫作用域 = provider 接口）。缺省 = 既有行为
    *  逐位不变（段模式缺省注册表 / 单段 FauxProvider.fromBranch，均为脚本执行器，守卫豁免）。 */
   modelProvider?: LlmProvider;
+  /** 切片 2 §1.3：TEM 读闸注入源（v1 可注入桩；缺省不注入 = 无记忆运行）。注入发生在
+   *  transformContext 之后、decide 之前（不另起通道）；注入源不可用 → 记事件 + 无记忆运行。 */
+  memoryInjector?: MemoryReadInjector;
 }
 
 export class ScenarioRunner {
@@ -484,7 +488,16 @@ export class ScenarioRunner {
           await appendTurnEnd("failed", "budget_exhausted");
           break;
         }
-        const decided = await provider.decide(transformContext(events));
+        // 切片 2 §1.3 TEM 读闸注入点：transformContext 之后、provider.decide 之前
+        // （不另起注入通道）；注入源不可用 → 记事件（assistant/attempt，不进模型历史）+ 无记忆运行。
+        const injection = await injectMemoryEntries(transformContext(events), options.memoryInjector);
+        if (injection.failure !== undefined) {
+          await appendEvent({
+            type: "assistant/attempt",
+            payload: { reason: "memory_read_failed", code: injection.failure.code, message: injection.failure.message },
+          });
+        }
+        const decided = await provider.decide(injection.context);
         if (!decided.ok) {
           // 切片 1 A2/INV-2：provider 自身故障 = error 判据——终局必须收口 turn（stop_reason=error）
           outcome = { kind: "failed", error: runError("provider_failure", `provider 决策失败: ${decided.error.message}`, decided.error) };
