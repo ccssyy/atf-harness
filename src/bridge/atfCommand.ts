@@ -7,8 +7,10 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-export const ATF_UPSTREAM_TAG = "v0.2.0b7";
-export const ATF_UPSTREAM_COMMIT_SHA = "a628f8b8e23beff104b42b5c80088416ea78b394";
+// 当前 pin（re-pin R1 2026-09-14：v0.2.0b7 → v0.6.0b0，唯一真相源 = bridge.contract.yaml atf_upstream，
+// 本处为契约测试承载镜像；re-pin 三步见 AGENTS.md §4，禁止自动追新）
+export const ATF_UPSTREAM_TAG = "v0.6.0b0";
+export const ATF_UPSTREAM_COMMIT_SHA = "b6db3496b34089147044be9c6b9a0a7ceb595e3a";
 
 export interface AtfCliInvocation {
   command: string;
@@ -25,6 +27,9 @@ export const deriveAtfCommand = (cliPath: string, args: readonly string[]): AtfC
   env: {
     PYTHONPATH: `${cliPath}/src`,
     PYTHONDONTWRITEBYTECODE: "1",
+    // re-pin R1（2026-09-14，契约 derive_command.env 同步）：内核 CLI 入口有技能自举
+    // （skills_install.ensure_skills_installed()，默认写 ~/.agents/skills），测试期必须关闭。
+    ATF_SKILLS_AUTO_INSTALL: "0",
   },
 });
 
