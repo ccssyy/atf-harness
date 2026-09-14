@@ -84,6 +84,18 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/编排层口径/);
   });
 
+  it("R2 补登（D3）：atf_admit_data 可选 pin；bump 口径固化（纯增量不 bump / 破坏性 bump）", () => {
+    // 可选 pin 参数（纯增量补登，contract_version 不 bump）
+    expect(contract).toMatch(/pin: \{ type: string, required: false/);
+    expect(contract).toMatch(/canonical_digest\(\{dataset_id, source_ref\}\)\[:12\]/);
+    // bump 口径表进版本轴注记（D3 裁决 2026-09-14）
+    expect(contract).toMatch(/bump 口径固化（D3 裁决 2026-09-14）/);
+    expect(contract).toMatch(/纯增量（新增方法、新增可选字段\/参数、错误码枚举扩面）→ 补登登记，不 bump/);
+    expect(contract).toMatch(/破坏性（改名、删字段、改既有字段语义、收窄枚举、帧\/握手\/生命周期变更）→ bump 桥接契约版本轴/);
+    // 文件头部值仍为 2（纯增量不 bump）
+    expect(contract).toMatch(/^contract_version: 2$/m);
+  });
+
   it("改名完整性：旧方法名不作方法键/字段残留（仅存于 v2 变更登记的时代说明注释行）", () => {
     // 方法键与字段键层面零残留
     expect(methodKeys()).not.toContain("atf_surface_scan");

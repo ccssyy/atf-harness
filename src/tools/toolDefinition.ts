@@ -52,6 +52,9 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       properties: {
         dataset_id: { type: "string" },
         source_ref: { type: "string", optional: true },
+        // R2 补登（D3 决议 20260914）：与契约 atf_admit_data.params 对等——
+        // 显式 pin 优先，缺省由内核按 canonical_digest({dataset_id, source_ref})[:12] 推导。
+        pin: { type: "string", optional: true },
       },
     },
     requires_approval: true,
