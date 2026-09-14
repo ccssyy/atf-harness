@@ -24,6 +24,7 @@ export {
   REPRODUCE_META_SUFFIX,
   SESSION_LOG_FILENAME,
   RunWorkspace,
+  readRunProvenance,
   safeScratchPath,
   type ProvenanceInput,
   type ReproduceMeta,

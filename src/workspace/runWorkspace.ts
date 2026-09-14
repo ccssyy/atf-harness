@@ -275,6 +275,39 @@ export class RunWorkspace {
 }
 
 /**
+ * 读取既有 provenance 四元组（L1a 门 2 resume 前置：重开语义的输入以既有文件为准，
+ * RunWorkspace.create 内做逐字段等值校验）。文件缺失/非法 → err（fail-closed）。
+ */
+export const readRunProvenance = async (rootDir: string): Promise<Result<ProvenanceInput, WorkspaceError>> => {
+  const provenancePath = join(rootDir, "scratch", PROVENANCE_FILENAME);
+  let text: string;
+  try {
+    text = await readFile(provenancePath, "utf8");
+  } catch (cause) {
+    return err(workspaceError("provenance_conflict", `provenance.json 读取失败: ${(cause as Error).message}`, { path: provenancePath }));
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return err(workspaceError("provenance_conflict", "provenance.json 非法 JSON（可能被篡改）"));
+  }
+  if (!isPlainObject(parsed)) {
+    return err(workspaceError("provenance_conflict", "provenance.json 不是 JSON 对象"));
+  }
+  for (const field of ["run_id", "trigger_instruction", "model_id"] as const) {
+    if (!isNonEmptyString(parsed[field])) {
+      return err(workspaceError("provenance_conflict", `provenance.json 字段 ${field} 非法（须为非空字符串）`));
+    }
+  }
+  return ok({
+    run_id: parsed["run_id"] as string,
+    trigger_instruction: parsed["trigger_instruction"] as string,
+    model_id: parsed["model_id"] as string,
+  });
+};
+
+/**
  * scratch 相对路径守卫：绝对路径、含 ".." 逃逸、解析后落点越出 scratch/ 的路径一律拒绝。
  * 供 scratchWrite / registerReproduce / promote 共用（fail-closed：路径形态不合法即拒绝）。
  */

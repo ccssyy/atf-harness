@@ -45,3 +45,19 @@ export {
   type MemoryReadInjector,
 } from "./memoryInjection.js";
 export { deriveLoopStateFromEvents, type LoopStateSnapshot, type LoopTurnState } from "./loopState.js";
+export {
+  buildAnswerPayload,
+  channelToApprovalVerdict,
+  CHANNEL_ACTOR,
+  CHANNEL_VERDICTS,
+  listPendingApprovals,
+  parseResumeArgs,
+  parseSessionStream,
+  readSessionStream,
+  resolveAnswerTarget,
+  sessionLogPathFor,
+  type ChannelVerdict,
+  type PendingApproval,
+  type ResumeChannelError,
+  type ResumeCliArgs,
+} from "./resume.js";

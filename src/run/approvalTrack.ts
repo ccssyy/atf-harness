@@ -87,6 +87,40 @@ interface ProposalState {
 
 export type ApprovalHandler = (input: ApprovalTrackInput) => Promise<ApprovalTrackVerdict>;
 
+/**
+ * L1a 门 2：跨进程提案状态种子（resume 后同一提案的延续语义）。
+ * P2-S2 的提案状态（attempt / denied_count / last_request_id / 同会话延续）是进程内闭包；
+ * L1a 起 run 跨进程（挂起 → CLI 应答 → resume 新进程），种子从**事件流**推导（durability
+ * 公理同范式——恢复只读本侧流）：同 approval_key 取最大 attempt、最新 request id、
+ * 累计 denied 应答数、延续最新 approval_session_id。进程内行为零改动（空流种子 = 空表）。
+ */
+const seedProposalsFromEvents = (events: readonly SessionEvent[]): Map<string, ProposalState> => {
+  const deniedByRequest = new Map<number, number>();
+  for (const event of events) {
+    if (event.type !== "approval/response") continue;
+    const ref = numField(event.payload, "request_event_ref");
+    const verdict = strField(event.payload, "verdict");
+    if (ref === null || verdict === null || verdict !== "denied") continue;
+    deniedByRequest.set(ref, (deniedByRequest.get(ref) ?? 0) + 1);
+  }
+  const map = new Map<string, ProposalState>();
+  for (const event of events) {
+    if (event.type !== "approval/request") continue;
+    const key = strField(event.payload, "approval_key");
+    const session = strField(event.payload, "approval_session_id");
+    const attempt = numField(event.payload, "attempt");
+    if (key === null || session === null || attempt === null) continue;
+    const existing = map.get(key);
+    const state: ProposalState = existing ?? { approval_session_id: session, attempt: 0, denied_count: 0 };
+    state.approval_session_id = session;
+    if (attempt > state.attempt) state.attempt = attempt;
+    state.denied_count += deniedByRequest.get(event.id) ?? 0;
+    state.last_request_id = event.id; // 事件序最大 = 最新 request（supersedes 链跨进程延续）
+    map.set(key, state);
+  }
+  return map;
+};
+
 /** 流内定位 granted 事件 id(A3 窗口区间字段);未找到返回 null。 */
 const findGrantedId = (events: readonly SessionEvent[], requestEventRef: number): number | null => {
   const granted = events.find(
@@ -100,8 +134,16 @@ const findGrantedId = (events: readonly SessionEvent[], requestEventRef: number)
 
 /** 创建问答轨编排 handler(每次 runBranch 一个实例:会话计数与提案状态为 run 内闭包)。 */
 export const createApprovalTrackHandler = (deps: ApprovalTrackDeps): ApprovalHandler => {
+  // L1a：会话计数器自流内既有 aps-N 最大值续起（防 resume 后新会话与历史撞号；全新 run = 0）
   let sessionCounter = 0;
-  const proposals = new Map<string, ProposalState>();
+  for (const event of deps.events) {
+    if (event.type !== "approval/request") continue;
+    const session = strField(event.payload, "approval_session_id");
+    const match = session === null ? null : /^aps-(\d+)$/.exec(session);
+    if (match !== null) sessionCounter = Math.max(sessionCounter, Number(match[1]));
+  }
+  // L1a：resume 跨进程延续——流内已有提案状态作种子（新 run 空流 = 空表，进程内行为零改动）
+  const proposals = seedProposalsFromEvents(deps.events);
 
   const write = async (input: SessionEventInput): Promise<SessionEvent | null> => deps.appendEvent(input);
 

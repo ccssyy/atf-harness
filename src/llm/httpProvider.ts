@@ -1,0 +1,224 @@
+/**
+ * L1a 门 2——配置式 HTTP provider（《ATF独立Harness_L1a门2任务书_20260914.md》§1.1/§1.2、
+ * 设计 §1.1/§1.2；R2a：Node 内置 fetch ＋ 自研薄适配层，不引 SDK）。
+ *
+ * 职责：decide(context) = adapter 投影（切片 2）→ codec 请求构造 → HTTP POST →
+ * codec 响应解析 → expandModelResponse（切片 2）→ 决策缓冲（A3：一次响应 N 个顺序决策，
+ * 每次调用弹出一个，逐个过守卫与审批——在 runner/codec 之外）。decide 永不抛出，失败走 Result err。
+ *
+ * 红线与护栏：
+ * - api_key 只在出站请求头出现（codec.authHeaders）；本类私有持有，严禁进事件/载荷/报告；
+ * - 脱敏漏斗：一切错误信息/detail 经 redact()——key 串出现处一律替换为 "[REDACTED]"；
+ *   detail 只记 host（别名/主机名粒度，ADR-09 红线），不记完整 URL 与请求头；
+ * - 成本护栏（D5）：单 run 调用次数上限 max_calls_per_run（默认 50，可配），每次 HTTP 尝试
+ *   （含重试）计数；命中 → err(call_budget_exhausted)（结构化可区分），调用方终局收敛；
+ * - 重试仅网络/超时/5xx 类决策请求，上限 max_retries（默认 1）；每次重试后的决策重新过
+ *   守卫与审批（决策尚未产生即重试，无授权可复用——ADR-07 语义不变）；
+ * - 零外连（门 2 / D3）：出站 URL 恒为 config.base_url + codec.requestPath；fetchImpl 可注入
+ *   （测试断言全部请求命中回环假端点；缺省 globalThis.fetch）。
+ */
+import { err, ok, type Result } from "../bridge/index.js";
+import { adaptProjectionToMessages, expandModelResponse } from "./adapter.js";
+import { getCodec } from "./codec.js";
+import { type ProtocolCodec } from "./codecWire.js";
+import { llmError, llmErrorOf, type LlmDecision, type LlmError, type LlmProvider } from "./provider.js";
+import { type ResolvedLlmProviderConfig } from "./providerConfig.js";
+import { type ModelVisibleTool } from "../tools/index.js";
+import { type LlmContextEvent } from "../session/index.js";
+
+/**
+ * 系统提示（harness 静态文本；只描述模型面约定，不含预算/治理内部字段——
+ * 模型不可见约束延续；审批语义与 approval 消息同属模型可见面）。
+ */
+export const HARNESS_SYSTEM_PROMPT = [
+  "你是 ATF 训练流水线上的运行代理，由本 harness 托管。本轮任务见首条用户消息。",
+  "可用工具以 tools 列表为准。约定：",
+  "1. 了解现场先用只读工具查询（工作区状态 / 事实索引 / 闸门查询），不要臆测；",
+  "2. 写动作（如数据准入）直接发起工具调用；是否放行由人工审批决定，审批往返以消息形式",
+  "   出现在对话中——被拒绝或收到修改意见时，依据意见调整后重试或改走其他路径；",
+  "3. 任务完成后以纯文本回复作最终答复（不再调用工具），概述做了什么、看到了什么、建议下一步。",
+].join("\n");
+
+export interface HttpLlmProviderOptions {
+  config: ResolvedLlmProviderConfig;
+  /** 模型可见工具面（白名单投影；来自 ToolRegistry.modelVisible()） */
+  tools: readonly ModelVisibleTool[];
+  /** fetch 注入面（测试/零外连断言；缺省 globalThis.fetch） */
+  fetchImpl?: typeof fetch;
+}
+
+const truncate = (text: string, limit = 200): string => (text.length > limit ? `${text.slice(0, limit)}…` : text);
+
+export class HttpLlmProvider implements LlmProvider {
+  /** 注册名 = protocol（别名/主机名粒度；ADR-09 红线：不记凭据化 URL） */
+  public readonly providerId: string;
+
+  private readonly config: ResolvedLlmProviderConfig;
+  private readonly tools: readonly ModelVisibleTool[];
+  private readonly fetchImpl: typeof fetch;
+  private readonly codec: ProtocolCodec;
+  /** 已消耗的 HTTP 调用次数（含重试尝试） */
+  private callsMade = 0;
+  /** 当前缓冲的顺序决策（A3：一次响应 N 个决策逐个弹出） */
+  private buffer: LlmDecision[] = [];
+
+  public constructor(options: HttpLlmProviderOptions) {
+    const codec = getCodec(options.config.protocol);
+    if (!codec.ok) {
+      // 构造期 fail-closed：未知 protocol 在配置层已拦；此处防御（不应可达）
+      throw new Error(`HttpLlmProvider 配置非法: ${codec.error.message}`);
+    }
+    this.config = options.config;
+    this.tools = options.tools;
+    this.fetchImpl = options.fetchImpl ?? globalThis.fetch;
+    this.codec = codec.codec;
+    this.providerId = options.config.protocol;
+  }
+
+  /** 已消耗调用次数（诊断/测试）。 */
+  public get calls(): number {
+    return this.callsMade;
+  }
+
+  public async decide(context: readonly LlmContextEvent[]): Promise<Result<LlmDecision | null, LlmError>> {
+    if (this.buffer.length > 0) {
+      const next = this.buffer[0] as LlmDecision;
+      this.buffer = this.buffer.slice(1);
+      return ok(next);
+    }
+
+    // 成本护栏（D5）：命中即结构化收敛，不静默继续
+    if (this.callsMade >= this.config.max_calls_per_run) {
+      return err(llmErrorOf("call_budget_exhausted", `单 run 调用次数上限已耗尽（max_calls_per_run=${String(this.config.max_calls_per_run)}）`, {
+        reason: "call_budget_exhausted",
+        limit: this.config.max_calls_per_run,
+        calls_made: this.callsMade,
+      }));
+    }
+
+    const messages = adaptProjectionToMessages(context);
+    if (!messages.ok) {
+      return err(llmError("模型上下文投影失败（fail-closed）", this.redactDetail(messages.error)));
+    }
+
+    const body = this.codec.encodeRequestBody({
+      model: this.config.model,
+      system: HARNESS_SYSTEM_PROMPT,
+      messages: messages.value,
+      tools: this.tools,
+      reasoningEffort: this.config.reasoning_effort,
+      maxTokens: this.config.max_tokens,
+    });
+
+    const fetched = await this.postJson(body);
+    if (!fetched.ok) return fetched;
+
+    const parsed = this.codec.parseResponse(fetched.value);
+    if (!parsed.ok) {
+      return err(llmError(`模型响应形状非法（fail-closed）: ${parsed.error.message}`, this.redactDetail({
+        protocol: this.config.protocol,
+        status: parsed.error.status,
+        body_excerpt: parsed.error.body_excerpt,
+      })));
+    }
+    const expanded = expandModelResponse(parsed.value);
+    if (!expanded.ok) {
+      return err(llmError(`模型响应展开失败（fail-closed）: ${expanded.error.message}`));
+    }
+    this.buffer = [...expanded.value];
+    const first = this.buffer[0] as LlmDecision;
+    this.buffer = this.buffer.slice(1);
+    return ok(first);
+  }
+
+  // ---------------------------------------------------------------- 内部
+
+  /** 脱敏漏斗：key 串出现处一律替换（错误信息/detail 的唯一出口）。 */
+  private redact(text: string): string {
+    if (this.config.api_key === "") return text;
+    return text.split(this.config.api_key).join("[REDACTED]");
+  }
+
+  /** detail 深度脱敏（字符串值逐个过漏斗）。 */
+  private redactDetail(detail: unknown): unknown {
+    if (typeof detail === "string") return this.redact(detail);
+    if (Array.isArray(detail)) return detail.map((item) => this.redactDetail(item));
+    if (typeof detail === "object" && detail !== null) {
+      const out: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(detail as Record<string, unknown>)) {
+        out[key] = this.redactDetail(value);
+      }
+      return out;
+    }
+    return detail;
+  }
+
+  private httpFailure(message: string, extra?: { status?: number; body_excerpt?: string }): LlmError {
+    // detail 只记 host（ADR-09 红线：provider 记录只到别名/主机名粒度，不记完整 URL）
+    return llmError(this.redact(message), this.redactDetail({
+      host: this.host(),
+      ...(extra?.status !== undefined ? { status: extra.status } : {}),
+      ...(extra?.body_excerpt !== undefined ? { body_excerpt: truncate(extra.body_excerpt) } : {}),
+      calls_made: this.callsMade,
+    }));
+  }
+
+  private host(): string {
+    try {
+      return new URL(this.config.base_url).host;
+    } catch {
+      return "<unparsed>";
+    }
+  }
+
+  /** 单次 POST（含重试循环；每次尝试计入调用预算；网络/超时/5xx 可重试，4xx 与解析错不重试）。 */
+  private async postJson(body: unknown): Promise<Result<unknown, LlmError>> {
+    const url = `${this.config.base_url}${this.codec.requestPath}`;
+    const attemptsAllowed = 1 + this.config.max_retries;
+    let lastFailure: LlmError | null = null;
+    for (let attempt = 1; attempt <= attemptsAllowed; attempt += 1) {
+      if (this.callsMade >= this.config.max_calls_per_run) {
+        return err(llmErrorOf("call_budget_exhausted", `单 run 调用次数上限已耗尽（重试计入预算）: max_calls_per_run=${String(this.config.max_calls_per_run)}`, {
+          reason: "call_budget_exhausted",
+          limit: this.config.max_calls_per_run,
+          calls_made: this.callsMade,
+        }));
+      }
+      this.callsMade += 1;
+      let response: Response;
+      try {
+        response = await this.fetchImpl(url, {
+          method: "POST",
+          headers: { "content-type": "application/json", ...this.codec.authHeaders(this.config.api_key) },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(this.config.timeout_ms),
+        });
+      } catch (cause) {
+        // 网络故障 / 超时（AbortError）——可重试类
+        lastFailure = this.httpFailure(`决策请求失败（网络/超时，第 ${String(attempt)}/${String(attemptsAllowed)} 次）: ${truncate(String((cause as Error).message))}`);
+        continue;
+      }
+      if (response.status >= 500) {
+        const excerpt = await response.text().catch(() => "");
+        lastFailure = this.httpFailure(`决策请求服务端故障（HTTP ${String(response.status)}，第 ${String(attempt)}/${String(attemptsAllowed)} 次）`, {
+          status: response.status,
+          body_excerpt: excerpt,
+        });
+        continue;
+      }
+      if (response.status < 200 || response.status >= 300) {
+        // 4xx 等：非瞬时故障，不重试（fail-closed）
+        const excerpt = await response.text().catch(() => "");
+        return err(this.httpFailure(`决策请求被拒绝（HTTP ${String(response.status)}，不重试）`, { status: response.status, body_excerpt: excerpt }));
+      }
+      let parsedBody: unknown;
+      try {
+        parsedBody = await response.json();
+      } catch (cause) {
+        return err(this.httpFailure(`响应体不是合法 JSON（fail-closed）: ${truncate(String((cause as Error).message))}`, { status: response.status }));
+      }
+      return ok(parsedBody);
+    }
+    return err(lastFailure ?? this.httpFailure("决策请求失败（原因未归类）"));
+  }
+}

@@ -77,7 +77,13 @@ export const assertModelDecision = (value: unknown): { ok: true; decision: LlmDe
   }
 };
 
-export type LlmErrorCode = "provider_failure";
+/**
+ * LlmErrorCode（L1a 门 2 扩一值）：
+ * - provider_failure：provider 自身/协议/响应形状故障（既有语义零改动）；
+ * - call_budget_exhausted：单 run 调用次数上限命中（门 2 任务书 §1.1 / D5 成本护栏——
+ *   与轮次预算是两件事；结构化可区分，调用方按故障终局收敛，不静默继续）。
+ */
+export type LlmErrorCode = "provider_failure" | "call_budget_exhausted";
 
 export interface LlmError {
   code: LlmErrorCode;
@@ -88,6 +94,13 @@ export interface LlmError {
 
 export const llmError = (message: string, detail?: unknown): LlmError => {
   const error: LlmError = { code: "provider_failure", message };
+  if (detail !== undefined) error.detail = detail;
+  return error;
+};
+
+/** 指定错误码的 LlmError 构造（L1a 门 2：call_budget_exhausted 用）。 */
+export const llmErrorOf = (code: LlmErrorCode, message: string, detail?: unknown): LlmError => {
+  const error: LlmError = { code, message };
   if (detail !== undefined) error.detail = detail;
   return error;
 };

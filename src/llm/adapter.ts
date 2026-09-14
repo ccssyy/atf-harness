@@ -114,7 +114,30 @@ const mapEvent = (event: LlmContextEvent): Result<AdapterMessage | null, Adapter
     }
     case "approval/request":
     case "approval/response": {
-      const violation = rejectUndeclared(event.payload, ["tool", "question", "advice_text", "verdict", "actor", "reason", "approval_session_id", "attempt"], event.type);
+      // L1a 门 2 修正登记：白名单对齐 approvalTrack 实际写入形态——approval/request 含
+      // tool_call_id/params/approval_key/attempt/supersedes；approval/response 含
+      // request_event_ref/verdict/actor/reason/advice_text/question/approval_session_id。
+      // 切片 2 桩测试未覆盖真实流形态（真实流投影被旧白名单拦截）；纯增量补登，
+      // 映射语义不变（payload 整体以摘要进模型上下文——问答轨历史对模型可见，B1 既定）。
+      const violation = rejectUndeclared(
+        event.payload,
+        [
+          "tool",
+          "question",
+          "advice_text",
+          "verdict",
+          "actor",
+          "reason",
+          "approval_session_id",
+          "attempt",
+          "request_event_ref",
+          "tool_call_id",
+          "params",
+          "approval_key",
+          "supersedes",
+        ],
+        event.type,
+      );
       if (violation !== null) return err(adapterError(violation));
       return ok({
         role: "approval",
