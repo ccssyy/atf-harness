@@ -54,8 +54,12 @@ export interface CodecRequestInput {
   system: string;
   messages: readonly AdapterMessage[];
   tools: readonly ModelVisibleTool[];
-  /** openai-chat 显式携带（任务书 §1.2）；anthropic 忽略 */
-  reasoningEffort: string;
+  /** openai-chat 显式携带（门 2 任务书 §1.2）；**null = compat 抑制，整体省略字段**
+   *  （修订 v2 规则 4：对端不认该参数时不发送）；anthropic 忽略 */
+  reasoningEffort: string | null;
+  /** openai-chat：true → 首条指令消息用 role:"developer"（新 OpenAI 约定）；
+   *  false/缺省 → role:"system"（既有行为；修订 v2 规则 4 compat）；anthropic 忽略 */
+  developerRole: boolean;
   /** anthropic 线缆必填；openai-chat 忽略 */
   maxTokens: number;
 }
@@ -100,8 +104,12 @@ export const approvalSummaryLine = (message: AdapterMessage & { role: "approval"
 export const approvalAnnotationText = (lines: readonly string[]): string =>
   ["[审批往返]", ...lines].join("\n");
 
-/** 悬空工具调用的合成结果内容（形状要求：每个 wire 工具调用必须有结果）。 */
+/** 悬空工具调用的合成结果内容（形状要求：每个 wire 工具调用必须有结果）。
+ *  修订 v2（验收决议 §4 登记项）：**首行显式标注未执行**——接真实模型后该文本是模型输入，
+ *  不得被读成"工具已执行"；审批摘要与"动作未发生"说明保留。 */
 export const danglingToolResultContent = (annotations: readonly string[]): string =>
-  annotations.length > 0
-    ? `${approvalAnnotationText(annotations)}（工具调用未执行：审批未在进程内完成，动作未发生）`
-    : "工具调用未执行：审批等待中，动作未发生";
+  [
+    "[未执行：等待人工审批]",
+    ...(annotations.length > 0 ? [approvalAnnotationText(annotations)] : []),
+    "工具调用未执行：审批未在进程内完成，动作未发生。",
+  ].join("\n");

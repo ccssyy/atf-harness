@@ -10,17 +10,22 @@ import type { ModelVisibleTool } from "../../src/tools/index.js";
 
 const FAKE_KEY = "fake-provider-test-key-DO-NOT-USE";
 
+/** 修订 v2 解析形态（选中 provider+model；与 loadLlmProviderConfig 产物同构）。 */
 const CONFIG = (overrides: Partial<Record<string, unknown>> = {}) =>
   ({
+    provider_id: "fake-provider",
     protocol: "openai-chat",
     base_url: "http://127.0.0.1:45321",
     api_key: FAKE_KEY,
     model: "fake-model-provider",
+    reasoning: false,
+    reasoning_effort: "low",
+    max_tokens: 4096,
+    context_window: null,
+    compat: { supports_developer_role: false, supports_reasoning_effort: true },
     timeout_ms: 5_000,
     max_retries: 1,
     max_calls_per_run: 50,
-    reasoning_effort: "low",
-    max_tokens: 4096,
     ...overrides,
   }) as never;
 
@@ -218,6 +223,33 @@ describe("HttpLlmProvider——fail-closed", () => {
     const fetchImpl: typeof fetch = async () => new Response("不是JSON", { status: 200 });
     const provider = new HttpLlmProvider({ config: CONFIG(), tools: TOOLS, fetchImpl });
     expect((await provider.decide(CTX)).ok).toBe(false);
+  });
+
+  it("VERIFY 4——compat 抑制：supports_reasoning_effort=false → 请求体不含 reasoning_effort", async () => {
+    let capturedBody: unknown;
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return jsonResponse(completion({ content: "答" }));
+    };
+    const provider = new HttpLlmProvider({
+      config: CONFIG({ compat: { supports_developer_role: false, supports_reasoning_effort: false } }) as never,
+      tools: TOOLS,
+      fetchImpl,
+    });
+    expect((await provider.decide(CTX)).ok).toBe(true);
+    expect(capturedBody as Record<string, unknown>).not.toBeNull();
+    expect((capturedBody as Record<string, unknown>)["reasoning_effort"]).toBeUndefined();
+  });
+
+  it("VERIFY 4——compat 缺省（协议标准）：请求体显式携带 reasoning_effort", async () => {
+    let capturedBody: unknown;
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return jsonResponse(completion({ content: "答" }));
+    };
+    const provider = new HttpLlmProvider({ config: CONFIG(), tools: TOOLS, fetchImpl });
+    await provider.decide(CTX);
+    expect((capturedBody as Record<string, unknown>)["reasoning_effort"]).toBe("low");
   });
 
   it("请求体携带系统提示与工具面；不出现在响应路径", async () => {
