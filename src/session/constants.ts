@@ -43,3 +43,17 @@ export const FSYNC_BATCH_MAX_EVENTS = 32;
 
 /** 批量档：自缓冲最早未刷盘事件起 T 毫秒窗口到期触发一次 write+fsync（含空转时钟不驻留进程）。 */
 export const FSYNC_BATCH_WINDOW_MS = 50;
+
+// ---------------------------------------------------------------------------
+// loop 轮次预算（切片 1，A2——《agent-loop 设计（已升格）》§4 A2 / 任务书 §1.2）
+// 真实模型驱动的 loop 没有预算会失控（无限工具调用 / 无限重试）；Faux 下脚本有限
+// 不可见此风险。预算耗尽 → failed(budget_exhausted)，复用 exit 1（不新增退出码）。
+// **模型不可见**：不得进入任何注入上下文、工具参数或决策对象（会话 schema 无此字段位，
+// runner 不向 decide context / 工具 params 注入——任务书 §1.2 硬约束）。
+// ---------------------------------------------------------------------------
+
+/** 单 turn 步数上限（一个 turn 内可执行内容步——assistant_message/tool_call/工作区动作等）。 */
+export const LOOP_MAX_STEPS_PER_TURN = 32;
+
+/** 单分支（run）turn 数上限。 */
+export const LOOP_MAX_TURNS = 8;

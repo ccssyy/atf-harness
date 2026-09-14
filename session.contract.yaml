@@ -286,3 +286,19 @@ pipeline:
   synthetic_semantics: 投影合成的压缩摘要条目携带 synthetic: true（P1-2 修复，S1a）；
                        与同 id 的白名单豁免原文区分，投影消费者按 (id, synthetic) 唯一识别；
                        原文条目不携带该键（ADR-09 §1.2 投影形态纪律）
+
+# ---------------------------------------------------------------------
+# 【切片 1 注记 2026-09-14】loop 骨架（A1/A2——《agent-loop 设计（已升格）》§4 落地）
+# 纯增量补登，contract_version / schema_version 均不 bump（不新增事件类型、不改既有取值）：
+#   1. turn/end.payload 纯增两个字段（恒填）：
+#      step_count    = 本 turn 已执行内容步数（assistant_message / tool_call / 工作区动作等；
+#                      provider_switch 请求不计——无内容执行）；
+#      decision_count = 本 turn provider 决策数（含被拒的 provider_switch 请求）；
+#   2. turn/end.payload 新增可选字段 stop_reason（仅 A2 五值判据命中时携带）：
+#      final_answer | no_more_tools | budget_exhausted | error | aborted（只扩面，既有 reason 取值零改动）；
+#   3. 轮次预算常量 LOOP_MAX_STEPS_PER_TURN=32 / LOOP_MAX_TURNS=8 收在 src/session/constants.ts，
+#      **模型不可见**——不进入注入上下文（transformContext/convertToLlm 投影）、工具参数或决策对象
+#      （本文件 llm_context_event_fields 白名单不含任何预算字段位，结构性保证）；
+#   4. 不变量（A4，实施章节见 agent-loop 设计文档）：INV-1 turn 不跨进程连续执行；
+#      INV-2 任意可写终局必须收口 turn；INV-3 provider 切换边界 = turn 边界，审批往返不构成切换窗口。
+# ---------------------------------------------------------------------
