@@ -48,10 +48,12 @@ import {
   GuardedSessionLog,
   loadCatalog,
   promoteArtifact,
+  readRunProvenance,
   RunWorkspace,
   sha256Hex,
   type CatalogEntry,
   type GuardedReplayOutcome,
+  type ProvenanceInput,
   type WorkspaceError,
 } from "../workspace/index.js";
 import {
@@ -75,6 +77,14 @@ import {
 } from "./providerSwitch.js";
 import { type ApprovalGate } from "../tools/index.js";
 import { FactScanResolver } from "./factScanResolver.js";
+import { deriveLoopStateFromEvents } from "./loopState.js";
+import {
+  buildAnswerPayload,
+  listPendingApprovals,
+  parseSessionStream,
+  resolveAnswerTarget,
+  type ChannelVerdict,
+} from "./resume.js";
 
 export type RunErrorCode =
   | "invalid_input" // 场景/分支/选项非法（分支不存在、run_id 逃逸等）
@@ -195,6 +205,17 @@ export interface BranchRunReport {
   switches?: SwitchRecord[];
 }
 
+/** L1a 门 2：resume 应答（通道四类；答复落 approval/response 后于本进程开新 turn 继续——INV-1）。 */
+export interface ResumeAnswer {
+  verdict: ChannelVerdict;
+  /** 人读备注（denied/abort → reason；advised → advice_text；granted 可选 reason） */
+  note?: string;
+  /** 目标 approval/request 事件 id；缺省 = 恰一个待办时自动指定（多待办缺省 → fail-closed） */
+  request_event_id?: number;
+  /** 应答 actor 账面标识（缺省 cli-operator） */
+  actor?: string;
+}
+
 export interface RunBranchOptions {
   /** runs 根目录（owner 口径 #1：harness 仓测试工作区，如 <repo>/tmp/runs） */
   runsRoot: string;
@@ -214,6 +235,13 @@ export interface RunBranchOptions {
   /** 切片 2 §1.3：TEM 读闸注入源（v1 可注入桩；缺省不注入 = 无记忆运行）。注入发生在
    *  transformContext 之后、decide 之前（不另起通道）；注入源不可用 → 记事件 + 无记忆运行。 */
   memoryInjector?: MemoryReadInjector;
+  /** L1a 门 2：resume 模式——在既有 run 流上应答并开新 turn 继续（任务书 §1.3）。
+   *  声明后：不清场重跑、不重做账本预录、不重发首条 user/message；事件流历史装载进本进程
+   *  （凭据判定与待办解析据此推导——durability 公理）；须同时声明 modelProvider 与
+   *  approvalSurface。fresh 选项在 resume 模式下被忽略（既有流不可清场）。 */
+  resume?: ResumeAnswer;
+  /** provenance model_id（缺省 "faux"，既有行为逐位不变；L1a 传入 provider config.model） */
+  modelId?: string;
 }
 
 export class ScenarioRunner {
@@ -231,9 +259,10 @@ export class ScenarioRunner {
       return err(runError("invalid_input", `场景 ${scenario.scenario_id} 无此分支: ${branchId}`, { available: Object.keys(scenario.branches) }));
     }
     const branch: ScenarioBranch = branchLookup;
+    const resumeMode = options.resume !== undefined;
     const now = options.now ?? ((): string => new Date().toISOString());
     const workspaceRoot = join(options.runsRoot, branch.run_id);
-    if (options.fresh !== false) {
+    if (options.fresh !== false && !resumeMode) {
       try {
         await rm(workspaceRoot, { recursive: true, force: true });
       } catch (cause) {
@@ -246,6 +275,13 @@ export class ScenarioRunner {
       return err(runError("bridge_failure", "mock 对端 spawn/握手失败", spawned.error));
     }
     const connection = spawned.value;
+
+    // L1a 门 2（任务书 §1.4 只读全链）：会话级 run 绑定（atf.bind_run，pin 已含该方法）——
+    // 失败 = 会话基线不成立，fail-closed 终局（不猜测未绑定可继续）。
+    const bound = await connection.request("atf.bind_run", { run_id: branch.run_id });
+    if (!bound.ok) {
+      return err(runError("bridge_failure", "atf.bind_run 失败（run 绑定是只读链第一步）", bound.error));
+    }
 
     let outcome: BranchOutcome = { kind: "failed", error: runError("provider_failure", "分支未执行（占位，不应外泄）") };
     const events: SessionEvent[] = [];
@@ -261,13 +297,14 @@ export class ScenarioRunner {
 
     try {
       // ---------------- setup：账本预录（经桥接，owner 口径 #3；契约 v2 审批链形态） ----------------
+      // resume 模式不重做预录（既有授权事实以事件流/内核状态为准，重复预录 = 双份授权面）。
       const scopeRef: ScopeRef = {
         project_id: scenario.scenario_id,
         scope_type: "run",
         scope_id: branch.run_id,
         scope_mode: "headless",
       };
-      for (const entry of branch.setup.ledger) {
+      for (const entry of resumeMode ? [] : branch.setup.ledger) {
         const recorded = await connection.request("ledger_record", {
           scope_ref: scopeRef,
           tool: entry.tool,
@@ -280,11 +317,22 @@ export class ScenarioRunner {
       }
 
       // ---------------- 工作区 + 会话（GuardedSessionLog 承载，owner 口径 #6） ----------------
-      const workspace = await RunWorkspace.create(
-        workspaceRoot,
-        { run_id: branch.run_id, trigger_instruction: branch.trigger_instruction, model_id: "faux" },
-        { now },
-      );
+      // L1a：model_id 可经 options.modelId 注入（缺省 "faux"，既有行为逐位不变）；
+      // resume 模式以既有 provenance 为准（等值校验在 RunWorkspace.create 内，fail-closed）。
+      let provenanceInput: ProvenanceInput = {
+        run_id: branch.run_id,
+        trigger_instruction: branch.trigger_instruction,
+        model_id: options.modelId ?? "faux",
+      };
+      if (resumeMode) {
+        const existingProvenance = await readRunProvenance(workspaceRoot);
+        if (!existingProvenance.ok) {
+          outcome = { kind: "failed", error: runError("invalid_input", "resume 读取既有 provenance 失败", existingProvenance.error) };
+          return finalize();
+        }
+        provenanceInput = existingProvenance.value;
+      }
+      const workspace = await RunWorkspace.create(workspaceRoot, provenanceInput, { now });
       if (!workspace.ok) {
         outcome = { kind: "failed", error: runError("workspace_failure", "run 工作区创建失败", workspace.error) };
         return finalize();
@@ -320,14 +368,40 @@ export class ScenarioRunner {
         };
       }
 
+      // L1a resume 前置：模型面 provider 必须注入（resume 无脚本可回放）。
+      if (resumeMode && options.modelProvider === undefined) {
+        outcome = { kind: "failed", error: runError("invalid_input", "resume 模式须注入模型面 provider（modelProvider）") };
+        return finalize();
+      }
+
       // A2:恢复水位线——打开会话后立即取值并固定(流内最大事件 id,全新 run = 0,含 session/repair
       // 审计事件);取值后不随后续 append 变化,问答轨凭据判定以此区分旧遗留与新注入。
+      // L1a resume：水位线取值先于应答落盘（CLI granted 应答 id > 水位线 → 凭据 available，
+      // ADR-09 C3 resume(answer) 路径；既有 resolveCredentialState 语义零改动）。
       const recoveryWatermark = await readStreamMaxId(async () =>
         readFile(ws.sessionLogPath, "utf8").then(
           (text) => text,
           () => "",
         ),
       );
+      // L1a resume：磁盘历史装载进本进程内存序列——凭据判定 / 待办解析 / turn 归属据此推导
+      // （durability 公理：恢复只读本侧事件流）；此后 appendEvent 顺序续接，报告 events = 全流。
+      if (resumeMode) {
+        const historyText = await readFile(ws.sessionLogPath, "utf8").then(
+          (text) => ok(text),
+          (cause: NodeJS.ErrnoException) => err({ message: `会话流读取失败: ${String(cause.message)}`, code: cause.code }),
+        );
+        if (!historyText.ok) {
+          outcome = { kind: "failed", error: runError("session_failure", "resume 装载既有会话流失败", historyText.error) };
+          return finalize();
+        }
+        const parsed = parseSessionStream(historyText.value);
+        if (!parsed.ok) {
+          outcome = { kind: "failed", error: runError("session_failure", "resume 既有会话流校验失败（fail-closed）", parsed.error) };
+          return finalize();
+        }
+        events.push(...parsed.value);
+      }
       const approvalHandler = options.approvalSurface === undefined
         ? undefined
         : createApprovalTrackHandler({
@@ -460,7 +534,7 @@ export class ScenarioRunner {
         return { kind: "switched", provider: next, eventId: appended.id };
       };
 
-      if (provider !== null) {
+      if (provider !== null && !resumeMode) {
         turnsOpened += 1; // 切片 1 A2：初始 turn 计数（max_turns 预算的第一次消耗）
         await appendEvent({ type: "turn/start", payload: { scenario_id: scenario.scenario_id, branch_id: branch.branch_id } });
         await appendEvent({ type: "user/message", payload: { text: branch.trigger_instruction } });
@@ -468,7 +542,153 @@ export class ScenarioRunner {
       }
 
       let lastAdmittedFact: DomainRef | undefined;
-      let turnOpen = provider !== null;
+      let turnOpen = provider !== null && !resumeMode;
+
+      // ---------------- L1a 门 2：resume 前置（任务书 §1.3；INV-1/INV-2 与 durability 公理） ----------------
+      // 顺序（fail-closed 逐级）：① 末 turn 须以 suspended 收口；② turn 预算；
+      // ③ 审批面须声明；④ 应答目标解析（无待办/歧义/已答拒绝）；⑤ 答复落 approval/response；
+      // ⑥ abort → 终局 79（不开新 turn——无 open turn，INV-2 不涉及）；
+      // ⑦ granted/advised/denied → 开新 turn（模型不可见预算计数续自事件流推导）；
+      // ⑧ granted → 重派原 tool/call（复用原事件 id，凭据 findExistingCredential → available
+      //    放行；一次性消费语义不变）。水位线已在应答落盘前取值（见上）。
+      if (resumeMode && provider !== null) {
+        const resumeAnswer = options.resume as ResumeAnswer;
+        const loopState = deriveLoopStateFromEvents(events);
+        const lastTurn = loopState.turns[loopState.turns.length - 1];
+        const suspendedPrecondition = lastTurn !== undefined && lastTurn.closed_reason === "suspended";
+        if (!suspendedPrecondition) {
+          outcome = {
+            kind: "failed",
+            error: runError("invalid_input", "resume 前置不满足：末 turn 未以 suspended 收口（仅挂起 run 可恢复）", {
+              turns_opened: loopState.turns_opened,
+              last_closed_reason: lastTurn?.closed_reason ?? null,
+            }),
+          };
+          provider = null;
+        } else if (loopState.turns_opened + 1 > LOOP_MAX_TURNS) {
+          outcome = {
+            kind: "failed",
+            error: runError("budget_exhausted", `turn 数预算耗尽（max_turns=${String(LOOP_MAX_TURNS)}），resume 无法开新 turn`, {
+              budget: "max_turns",
+              limit: LOOP_MAX_TURNS,
+            }),
+          };
+          provider = null;
+        } else if (approvalHandler === undefined) {
+          outcome = {
+            kind: "failed",
+            error: runError("invalid_input", "resume 模式须声明审批面（approvalSurface）——应答经问答轨凭据路径放行"),
+          };
+          provider = null;
+        }
+        // 局部捕获（TS 收窄：provider 与审批面同时非空才进入应答路径）
+        const resumeHandler = provider !== null ? approvalHandler : undefined;
+        if (resumeHandler !== undefined && provider !== null) {
+          const pending = listPendingApprovals(events);
+          const target = resolveAnswerTarget(pending, resumeAnswer.request_event_id);
+          if (!target.ok) {
+            outcome = {
+              kind: "failed",
+              error: runError("invalid_input", `resume 应答目标非法: ${target.error.message}`, {
+                pending: pending.map((item) => item.request_event_id),
+              }),
+            };
+            provider = null;
+          } else {
+            const answered = await appendEvent({
+              type: "approval/response",
+              payload: buildAnswerPayload(target.value, resumeAnswer.verdict, resumeAnswer.note, resumeAnswer.actor),
+            });
+            if (answered === null) {
+              outcome = { kind: "failed", error: runError("session_failure", "resume 应答（approval/response）落盘失败") };
+              provider = null;
+            } else if (resumeAnswer.verdict === "abort") {
+              // 人中止：run 终态 79；本进程不开新 turn（流尾无 open turn，INV-2 不涉及）
+              outcome = {
+                kind: "aborted",
+                block: {
+                  reason: "approval_aborted",
+                  message: `人经 CLI 通道中止任务: ${resumeAnswer.note ?? "(无理由)"}`,
+                  tool: target.value.tool,
+                  exit_code: 79,
+                },
+              };
+              provider = null;
+            } else {
+              // ⑦ 开新 turn（INV-1：应答后 resume 开新 turn）
+              turnsOpened += 1;
+              await appendEvent({ type: "turn/start", payload: { scenario_id: scenario.scenario_id, branch_id: branch.branch_id } });
+              openTurnRecord(provider);
+              turnOpen = true;
+              if (resumeAnswer.verdict === "granted") {
+                // ⑧ 重派原 tool/call（复用原事件 id——不新增 tool/call 事件，凭据配对链完整）
+                const originalCall = events.find(
+                  (event) => event.id === target.value.tool_call_id && event.type === "tool/call",
+                );
+                const callPayload = (originalCall?.payload ?? {}) as { tool?: unknown; params?: unknown };
+                if (originalCall === undefined || typeof callPayload.tool !== "string" || typeof callPayload.params !== "object" || callPayload.params === null) {
+                  outcome = { kind: "failed", error: runError("invalid_input", "resume 重派失败：原 tool/call 事件缺失或形状非法（凭据回溯链断裂，fail-closed）", { tool_call_id: target.value.tool_call_id }) };
+                  provider = null;
+                } else {
+                  const gate: ApprovalGate = {
+                    handler: (gateInput) => resumeHandler({ ...gateInput, tool_call_id: originalCall.id }),
+                  };
+                  const result: ToolCallOutcome = await executor.execute(callPayload.tool, callPayload.params, gate);
+                  if (result.kind === "suspended" || result.kind === "aborted") {
+                    outcome = result.kind === "suspended"
+                      ? { kind: "suspended", block: result.block }
+                      : { kind: "aborted", block: result.block };
+                    turnOpen = false;
+                    await appendTurnEnd(outcome.kind, outcome.kind === "aborted" ? "aborted" : undefined);
+                    provider = null;
+                  } else {
+                    const payload: ToolResultPayload =
+                      result.kind === "executed"
+                        ? { tool: callPayload.tool, ok: true, result: result.result, call_ref: originalCall.id }
+                        : result.kind === "rejected"
+                          ? { tool: callPayload.tool, ok: false, reason: result.reason, call_ref: originalCall.id, detail: result.detail }
+                          : result.kind === "failed"
+                            ? { tool: callPayload.tool, ok: false, reason: "failed", call_ref: originalCall.id, detail: result.error }
+                            : { tool: callPayload.tool, ok: false, reason: result.block.reason, call_ref: originalCall.id, block: result.block };
+                    const backfilled = await appendEvent({ type: "tool/result", payload });
+                    if (backfilled === null) {
+                      provider = null; // 会话写路径失败已在 appendEvent 内折算
+                    } else if (result.kind === "executed") {
+                      if (callPayload.tool === "atf_admit_data") {
+                        const fact = result.result as { journal_type: string; fact_id: string; sha256_digest: string };
+                        lastAdmittedFact = { journal_type: fact.journal_type, fact_id: fact.fact_id, sha256_digest: fact.sha256_digest };
+                      }
+                      // 执行完成 → 决策循环继续（模型看到 tool/result 后收束或继续）
+                    } else if (result.kind === "blocked" && result.block.reason === "approval_missing") {
+                      outcome = { kind: "approval_missing", block: result.block };
+                      turnOpen = false;
+                      await appendTurnEnd("approval_missing");
+                      provider = null;
+                    } else if (result.kind === "blocked" && (result.block.reason === "credential_indeterminate" || result.block.reason === "credential_persist_failed" || result.block.reason === "approval_track_failed")) {
+                      outcome = {
+                        kind: "failed",
+                        error: runError("credential_indeterminate", result.block.message, result.block.detail),
+                      };
+                      turnOpen = false;
+                      await appendTurnEnd("credential_indeterminate");
+                      provider = null;
+                    } else if (result.kind === "rejected" || result.kind === "failed") {
+                      outcome =
+                        result.kind === "rejected"
+                          ? { kind: "failed", error: runError("bridge_failure", `对端业务拒绝（重派 ${String(callPayload.tool)}）: ${result.reason}`, result.detail) }
+                          : { kind: "failed", error: runError("bridge_failure", `工具执行故障（重派 ${String(callPayload.tool)}）: ${result.error.message}`, result.error) };
+                      turnOpen = false;
+                      await appendTurnEnd("failed");
+                      provider = null;
+                    }
+                    // blocked(denied/advised/credential_consumed/credential_invalid) 非终局：循环继续（模型换路径）
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
 
       // ---------------- 决策循环（Faux 线性回放，owner 口径 #5；P2-S3 起支持多 provider 段；
       // 切片 1 起受轮次预算约束、以 stopReason 判据收敛） ----------------
@@ -834,13 +1054,16 @@ export class ScenarioRunner {
         replay_error: replayError,
         catalog,
         catalog_error: catalogError,
-        expect_violations: evaluateExpectations(branch.expect, {
-          outcome,
-          exit_code: resolveRunExitCode(outcome),
-          events,
-          replay,
-          catalog,
-        }),
+        // resume 模式：CLI 无场景期望文件，期望核验由调用方承担（violations 恒空，非豁免语义）
+        expect_violations: resumeMode
+          ? []
+          : evaluateExpectations(branch.expect, {
+              outcome,
+              exit_code: resolveRunExitCode(outcome),
+              events,
+              replay,
+              catalog,
+            }),
         ...(credentialIndeterminate !== undefined ? { credential_indeterminate: credentialIndeterminate } : {}),
         ...(segmentMode || switchRecords.length > 0
           ? { turns: [...turnRecords], switches: [...switchRecords] }
