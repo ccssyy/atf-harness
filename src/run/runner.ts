@@ -21,11 +21,15 @@ import { err, ok, type Result } from "../bridge/index.js";
 import { AtfBridgeConnection } from "../bridge/index.js";import {
   FauxProvider,
   createDefaultProviderRegistry,
+  assertModelDecision,
+  MODEL_DECISION_FORBIDDEN,
   type ProviderSegment,
   type ProviderRegistry,
   type Scenario,
   type ScenarioBranch,
   type ScenarioExpect,
+  type ScenarioStep,
+  type ScriptedStepSource,
 } from "../llm/index.js";
 import type { LlmProvider } from "../llm/index.js";
 import {
@@ -76,6 +80,7 @@ export type RunErrorCode =
   | "workspace_failure" // 工作区创建 / scratch 写入 / 晋升失败
   | "session_failure" // 会话事件写入失败 / 铁律一意外缺位
   | "provider_failure" // provider 故障 / 决策序列耗尽而未收束
+  | "model_decision_forbidden" // 切片 0：provider 返回值含模型面外步骤（运行时守卫 fail-closed，exit 1）
   | "credential_indeterminate"; // 问答轨凭据状态不确定（A3：run 终态，需人工核对，exit 1）
 
 export interface RunError {
@@ -198,6 +203,10 @@ export interface RunBranchOptions {
   /** P2-S2:问答轨审批面声明。缺省 = 账本轨-only(Phase 1 行为逐位一致,headless 等价性);
    *  声明后:账本轨优先,未命中走问答轨(桩对端应答,决议 §3.2 口径 #6/#8)。 */
   approvalSurface?: { stub: ApprovalStub };
+  /** 切片 0（任务书 §2.2 守卫可测性 seam）：注入**模型面 provider**（LlmProvider）——其返回值
+   *  经运行时守卫 assertModelDecision 校验（守卫作用域 = provider 接口）。缺省 = 既有行为
+   *  逐位不变（段模式缺省注册表 / 单段 FauxProvider.fromBranch，均为脚本执行器，守卫豁免）。 */
+  modelProvider?: LlmProvider;
 }
 
 export class ScenarioRunner {
@@ -285,12 +294,17 @@ export class ScenarioRunner {
 
       // P2-S3:多 provider 段分支(segments)= 一段一个 turn,段边界即合法切换边界;
       // 缺省 = 单 provider 分支(FauxProvider.fromBranch 既有路径逐位不变)。
+      // 切片 0:决策面双轨——LlmProvider(模型面,经运行时守卫)| ScriptedStepSource(测试脚本
+      // 执行器,非模型面,守卫豁免);options.modelProvider 为模型面注入 seam(守卫可测性)。
       const segments: readonly ProviderSegment[] = branch.segments ?? [];
       const registry: ProviderRegistry | null = segmentMode ? createDefaultProviderRegistry() : null;
       let segIdx = 0;
-      let provider: LlmProvider | null = segmentMode && registry !== null
-        ? registry.create((segments[0] as ProviderSegment).provider_id, branch.branch_id, (segments[0] as ProviderSegment).steps)
-        : FauxProvider.fromBranch(branch);
+      let provider: LlmProvider | ScriptedStepSource | null =
+        options.modelProvider !== undefined
+          ? options.modelProvider
+          : segmentMode && registry !== null
+            ? registry.create((segments[0] as ProviderSegment).provider_id, branch.branch_id, (segments[0] as ProviderSegment).steps)
+            : FauxProvider.fromBranch(branch);
       if (segmentMode && provider === null) {
         // 注册面未命中(防御路径,parseScenario 已拦一致性与非空;此处兜底 fail-closed)
         outcome = {
@@ -356,7 +370,7 @@ export class ScenarioRunner {
       let currentTurn: TurnAttribution | null = null;
       let turnDecisionCount = 0;
 
-      const openTurnRecord = (turnProvider: LlmProvider): void => {
+      const openTurnRecord = (turnProvider: LlmProvider | ScriptedStepSource): void => {
         const first = events[events.length - 1];
         currentTurn = {
           turn_index: turnRecords.length + 1,
@@ -384,9 +398,9 @@ export class ScenarioRunner {
        * 不切换;落盘后复核失败 = 流不可信 → run 终局(新 provider 不激活,无半生效)。
        */
       const performSwitch = async (
-        fromProvider: LlmProvider,
+        fromProvider: LlmProvider | ScriptedStepSource,
         segment: ProviderSegment,
-      ): Promise<{ kind: "switched"; provider: LlmProvider; eventId: number } | { kind: "rejected"; block: ProviderSwitchBlock } | { kind: "failed"; error: ReturnType<typeof runError> }> => {
+      ): Promise<{ kind: "switched"; provider: LlmProvider | ScriptedStepSource; eventId: number } | { kind: "rejected"; block: ProviderSwitchBlock } | { kind: "failed"; error: ReturnType<typeof runError> }> => {
         if (registry === null) return { kind: "failed", error: runError("invalid_input", "非段分支不得切换") };
         const next = registry.create(segment.provider_id, branch.branch_id, segment.steps);
         if (next === null) {
@@ -440,8 +454,8 @@ export class ScenarioRunner {
           outcome = { kind: "failed", error: runError("provider_failure", `provider 决策失败: ${decided.error.message}`, decided.error) };
           break;
         }
-        const step = decided.value;
-        if (step === null) {
+        const raw = decided.value;
+        if (raw === null) {
           // P2-S3:段分支脚本耗尽 = 段边界——非末段执行切换协议;末段/单 provider 分支 = 既有未收束终局
           if (segmentMode && segIdx < segments.length - 1) {
             const nextSegment = segments[segIdx + 1] as ProviderSegment;
@@ -476,6 +490,38 @@ export class ScenarioRunner {
           outcome = { kind: "failed", error: runError("provider_failure", "分支决策序列耗尽而未收束（须以 final_answer 收尾或以 block 终局）") };
           break;
         }
+        // 切片 0 运行时守卫（任务书 §2.2）：作用域 = LlmProvider 接口（模型面）返回值——
+        // 脚本执行器（decisionFace = "script"，测试路径）类型级豁免（保全路径 b）。
+        // 非模型面步骤 → fail-closed：assistant/attempt 落事件留痕（含被拒 type）+ failed 终局，
+        // 不吞错、不降级忽略。
+        if (!("decisionFace" in provider)) {
+          const guard = assertModelDecision(raw);
+          if (!guard.ok) {
+            const rejectedType =
+              typeof raw === "object" && raw !== null && "type" in raw ? String((raw as { type: unknown }).type) : typeof raw;
+            const attempted = await appendEvent({
+              type: "assistant/attempt",
+              payload: { rejected_type: rejectedType, reason: MODEL_DECISION_FORBIDDEN, message: guard.reason },
+            });
+            if (attempted === null) {
+              outcome = { kind: "failed", error: runError("session_failure", "守卫留痕事件（assistant/attempt）写入失败") };
+              turnOpen = false;
+              await appendTurnEnd("failed");
+              break;
+            }
+            outcome = {
+              kind: "failed",
+              error: runError("model_decision_forbidden", `模型决策含模型面外步骤（fail-closed）: type=${rejectedType}（${guard.reason}）`, {
+                rejected_type: rejectedType,
+                reason: guard.reason,
+              }),
+            };
+            turnOpen = false;
+            await appendTurnEnd("failed");
+            break;
+          }
+        }
+        const step: ScenarioStep = raw;
         turnDecisionCount += 1;
 
         if (step.type === "provider_switch") {
