@@ -16,6 +16,7 @@
  * 本模块只做结构与语法校验；语义（步骤顺序、账本绑定一致性）由 runner 执行期承载。
  */
 import { err, ok, type Result } from "../bridge/index.js";
+import { type LlmDecision } from "./provider.js";
 
 export const SCENARIO_VERSION = 1;
 
@@ -32,22 +33,22 @@ export const SCENARIO_STEP_TYPES = [
 
 export type ScenarioStepType = (typeof SCENARIO_STEP_TYPES)[number];
 
-/** 单个 Faux 决策步骤（判别联合）。 */
+/**
+ * 场景脚本步骤（测试基建面，切片 0 起 = LlmDecision ∪ 四类脚本专用指令）：
+ * LlmDecision（模型面：tool_call / assistant_message / final_answer）为脚本与模型面的
+ * 公共子集；scratch_write / promote / cite_t0 / provider_switch 为**脚本专用**——
+ * 不在模型面契约内（切片 0：模型经 provider 接口不可表达，运行时守卫兜底）。
+ * 结构与切片 0 之前逐位一致（纯类型组合改写，零行为变更）。
+ */
 export type ScenarioStep =
-  | { type: "assistant_message"; text: string }
-  | {
-      type: "tool_call";
-      /** 工具名（严格 4 工具面，面外由注册表拒绝） */
-      tool: string;
-      /** 与账本预录严格绑定的参数对象（审批键 = tool + stable(params) digest） */
-      params: Record<string, unknown>;
+  | (Extract<LlmDecision, { type: "tool_call" }> & {
       /** true = 把最近一次成功准入的事实三元组作为本步骤 tool/result 事件的 domain_refs（证据链闭合） */
       cite_admitted_fact?: boolean;
-    }
+    })
+  | Extract<LlmDecision, { type: "assistant_message" | "final_answer" }>
   | { type: "scratch_write"; path: string; content: string }
   | { type: "promote"; source: string; command: string[] }
   | { type: "cite_t0"; source: string; text: string }
-  | { type: "final_answer"; text: string }
   /** P2-S3：越界切换请求（turn 内出现即被拒；合法切换由 segments 段边界声明） */
   | { type: "provider_switch"; to: string; reason?: string };
 

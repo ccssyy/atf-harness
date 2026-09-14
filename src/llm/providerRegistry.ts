@@ -7,12 +7,15 @@
  * - 工厂以步骤序列为参：多 provider 段（segments）各自的决策脚本在场景分支内声明，
  *   注册表只负责「id → 实现例示」。
  */
-import { FauxProvider } from "./fauxProvider.js";
+import { FauxProvider, type ScriptedStepSource } from "./fauxProvider.js";
 import { FauxVariantProvider } from "./fauxVariantProvider.js";
-import { type LlmProvider } from "./provider.js";
 import { type ScenarioStep } from "./scenario.js";
 
-export type ProviderFactory = (branchId: string, steps: readonly ScenarioStep[]) => LlmProvider;
+/**
+ * 注册面工厂（切片 0 起产出 ScriptedStepSource——测试供应商接口，非模型面；
+ * 既有注册面两个实现均为脚本化 Faux，产出类型随保全路径 b 同步收窄）。
+ */
+export type ProviderFactory = (branchId: string, steps: readonly ScenarioStep[]) => ScriptedStepSource;
 
 export class ProviderRegistry {
   private readonly factories = new Map<string, ProviderFactory>();
@@ -31,7 +34,7 @@ export class ProviderRegistry {
   }
 
   /** 注册面未命中 = null（调用方结构化拒绝，不猜测回退）。 */
-  public create(providerId: string, branchId: string, steps: readonly ScenarioStep[]): LlmProvider | null {
+  public create(providerId: string, branchId: string, steps: readonly ScenarioStep[]): ScriptedStepSource | null {
     const factory = this.factories.get(providerId);
     if (factory === undefined) return null;
     return factory(branchId, steps);
