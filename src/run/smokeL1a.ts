@@ -28,6 +28,7 @@ import { spawn } from "node:child_process";
 import {
   FakeLlmEndpoint,
   HttpLlmProvider,
+  LLM_CONFIG_SCHEMA_VERSION,
   loadLlmProviderConfig,
   PROVIDER_ENV_VARS,
   type FakeEndpointScriptItem,
@@ -40,9 +41,12 @@ const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
 const cliPath = join(repoRoot, "dist", "cli", "resume.js");
 
-/** 显式标注 fake 的假 key（仓内零凭据纪律：仅运行期生成于 tmp/，不进仓；不可被误用）。 */
+/** 显式标注 fake 的假 key（仓内零凭据纪律：仅运行期注入环境变量，不进配置文件、不进仓）。 */
 const FAKE_API_KEY = "fake-l1a-api-key-DO-NOT-USE";
+/** 修订 v2：配置文件只留凭据引用（api_key_env 指向本环境变量名）。 */
+const FAKE_KEY_ENV = "ATF_LLM_KEY_LOCAL_FAKE";
 const FAKE_MODEL = "fake-model-l1a";
+const FAKE_PROVIDER = "local-fake";
 const SCENARIO_ID = "l1a-trial";
 const RUN_ID = "run-l1a-trial";
 
@@ -113,19 +117,27 @@ const smoke = async (): Promise<string[]> => {
     model: FAKE_MODEL,
   });
   try {
-    // ② provider 配置文件（owner 指定路径形态：环境变量指向 0600 文件；不入仓）
+    // ② provider 配置文件（修订 v2 两层清单：schema_version/默认选择/providers，凭据只留引用；
+    //    0600；不入仓；假 key 经环境变量注入，不落任何文件）
     const configPath = join(workDir, "llm-provider.config.json");
     await writeFile(
       configPath,
       `${JSON.stringify(
         {
-          protocol: "openai-chat",
-          base_url: endpoint.baseUrl,
-          api_key: FAKE_API_KEY,
-          model: FAKE_MODEL,
+          schema_version: LLM_CONFIG_SCHEMA_VERSION,
+          default_provider: FAKE_PROVIDER,
+          default_model: FAKE_MODEL,
           timeout_ms: 10_000,
           max_retries: 1,
           max_calls_per_run: 50,
+          providers: {
+            [FAKE_PROVIDER]: {
+              protocol: "openai-chat",
+              base_url: endpoint.baseUrl,
+              api_key_env: FAKE_KEY_ENV,
+              models: [{ id: FAKE_MODEL, reasoning: false, max_tokens: 4096 }],
+            },
+          },
         },
         null,
         2,
@@ -133,7 +145,11 @@ const smoke = async (): Promise<string[]> => {
       { mode: 0o600 },
     );
     await chmod(configPath, 0o600);
-    const childEnv: NodeJS.ProcessEnv = { ...process.env, [PROVIDER_ENV_VARS.configPath]: configPath };
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      [PROVIDER_ENV_VARS.configPath]: configPath,
+      [FAKE_KEY_ENV]: FAKE_API_KEY,
+    };
 
     // ③ run 1：只读链自主完成 → admit 挂起（75）
     const config = await loadLlmProviderConfig(childEnv);
@@ -204,7 +220,7 @@ const smoke = async (): Promise<string[]> => {
     if (resultLine.payload.call_ref !== callId) throw new Error("call_ref 与原 tool/call 不配对（重派语义破坏）");
     evidence.push(`落盘证据: granted 应答 + 2×turn/start（新进程新 turn）+ tool/result(ok=true, call_ref=${String(callId)}) 全在流内`);
 
-    // ⑦ 零外连 + 认证 + 脱敏断言（假端点请求台账）
+    // ⑦ 零外连 + 认证 + 脱敏断言（假端点请求台账；配置文件本身亦不含 key）
     const requests = endpoint.requests;
     if (requests.length !== providerRun1.calls + 1) {
       throw new Error(`假端点请求数不符: 台账 ${String(requests.length)} ≠ run1 ${String(providerRun1.calls)} + resume 1`);
@@ -226,6 +242,8 @@ const smoke = async (): Promise<string[]> => {
       cliStderr: listed.stderr + answered.stderr,
     });
     if (sensitiveSurface.includes(FAKE_API_KEY)) throw new Error("脱敏违例：fake key 出现在事件/报告/会话流/CLI 输出");
+    const configFileText = await readFile(configPath, "utf8");
+    if (configFileText.includes(FAKE_API_KEY)) throw new Error("脱敏违例：配置文件出现明文 key（修订 v2 规则 3：凭据只留引用）");
     evidence.push("脱敏断言: 事件/报告/会话流/CLI 输出全序列化不含 fake key");
 
     return evidence;

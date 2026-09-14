@@ -50,7 +50,7 @@ export interface HttpLlmProviderOptions {
 const truncate = (text: string, limit = 200): string => (text.length > limit ? `${text.slice(0, limit)}…` : text);
 
 export class HttpLlmProvider implements LlmProvider {
-  /** 注册名 = protocol（别名/主机名粒度；ADR-09 红线：不记凭据化 URL） */
+  /** 注册名 = provider 别名（修订 v2 两层形态的 provider_id；ADR-09 红线：不记凭据化 URL） */
   public readonly providerId: string;
 
   private readonly config: ResolvedLlmProviderConfig;
@@ -72,7 +72,7 @@ export class HttpLlmProvider implements LlmProvider {
     this.tools = options.tools;
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch;
     this.codec = codec.codec;
-    this.providerId = options.config.protocol;
+    this.providerId = options.config.provider_id;
   }
 
   /** 已消耗调用次数（诊断/测试）。 */
@@ -106,7 +106,9 @@ export class HttpLlmProvider implements LlmProvider {
       system: HARNESS_SYSTEM_PROMPT,
       messages: messages.value,
       tools: this.tools,
-      reasoningEffort: this.config.reasoning_effort,
+      // compat.supports_reasoning_effort=false → null → 请求体整体省略该字段（修订 v2 规则 4）
+      reasoningEffort: this.config.compat.supports_reasoning_effort ? this.config.reasoning_effort : null,
+      developerRole: this.config.compat.supports_developer_role,
       maxTokens: this.config.max_tokens,
     });
 

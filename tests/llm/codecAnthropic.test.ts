@@ -21,6 +21,7 @@ const encode = (messages: AdapterMessage[]) =>
     messages,
     tools: TOOLS,
     reasoningEffort: "low",
+    developerRole: false,
     maxTokens: 8192,
   }) as Record<string, unknown>;
 
@@ -104,6 +105,24 @@ describe("anthropic-messages——响应解析", () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.value).toEqual({ message: "查询中", tool_calls: [{ tool: "atf_workspace_status", params: {} }] });
+  });
+
+  it("修订 v2 规则 5——thinking/redacted_thinking 思考块剥离（不进决策解析）；其余未知类型仍 fail-closed", () => {
+    const stripped = anthropicMessagesCodec.parseResponse({
+      content: [
+        { type: "thinking", thinking: "推理过程…" },
+        { type: "text", text: "结论" },
+        { type: "redacted_thinking", data: "xxx" },
+      ],
+      stop_reason: "end_turn",
+    });
+    expect(stripped.ok).toBe(true);
+    if (stripped.ok) expect(stripped.value).toEqual({ final_answer: "结论" });
+    const unknown = anthropicMessagesCodec.parseResponse({
+      content: [{ type: "mystery_block", x: 1 }],
+      stop_reason: "end_turn",
+    });
+    expect(unknown.ok).toBe(false);
   });
 
   it('仅 text + stop_reason=end_turn → final_answer', () => {

@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   FakeLlmEndpoint,
   HttpLlmProvider,
+  LLM_CONFIG_SCHEMA_VERSION,
   loadLlmProviderConfig,
   PROVIDER_ENV_VARS,
   type FakeEndpointScriptItem,
@@ -23,7 +24,10 @@ import { ToolRegistry } from "../../src/tools/index.js";
 const repoRoot = join(import.meta.dirname, "..", "..");
 const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
 const FAKE_KEY = "fake-l1a-e2e-key-DO-NOT-USE";
+/** 修订 v2：配置文件只留凭据引用（api_key_env 指向本环境变量名）。 */
+const FAKE_KEY_ENV = "ATF_LLM_KEY_E2E_FAKE";
 const FAKE_MODEL = "fake-model-l1a-e2e";
+const FAKE_PROVIDER = "local-fake";
 
 let scenarioSeq = 0;
 const workDirs: string[] = [];
@@ -52,22 +56,32 @@ const makeRig = async (
   await mkdir(join(workDir, "runs"), { recursive: true });
   workDirs.push(workDir);
   const configPath = join(workDir, "llm.config.json");
+  const { timeout_ms, max_retries, max_calls_per_run } = overrides as Record<string, unknown>;
   await writeFile(
     configPath,
     JSON.stringify({
-      protocol,
-      base_url: endpoint.baseUrl,
-      api_key: FAKE_KEY,
-      model: FAKE_MODEL,
-      timeout_ms: 10_000,
-      max_retries: 0,
-      max_calls_per_run: 50,
-      ...overrides,
+      // 修订 v2 两层清单：凭据只留引用（api_key_env），假 key 运行期注入环境变量
+      schema_version: LLM_CONFIG_SCHEMA_VERSION,
+      default_provider: FAKE_PROVIDER,
+      ...(timeout_ms !== undefined ? { timeout_ms } : {}),
+      ...(max_retries !== undefined ? { max_retries } : {}),
+      ...(max_calls_per_run !== undefined ? { max_calls_per_run } : {}),
+      providers: {
+        [FAKE_PROVIDER]: {
+          protocol,
+          base_url: endpoint.baseUrl,
+          api_key_env: FAKE_KEY_ENV,
+          models: [{ id: FAKE_MODEL, reasoning: false, max_tokens: 4096 }],
+        },
+      },
     }),
     { mode: 0o600 },
   );
   await chmod(configPath, 0o600);
-  const loaded = await loadLlmProviderConfig({ [PROVIDER_ENV_VARS.configPath]: configPath });
+  const loaded = await loadLlmProviderConfig({
+    [PROVIDER_ENV_VARS.configPath]: configPath,
+    [FAKE_KEY_ENV]: FAKE_KEY,
+  });
   if (!loaded.ok) throw new Error(`rig 配置失败: ${loaded.error.message}`);
   return { runsRoot: join(workDir, "runs"), config: loaded.value, requestsOf: () => endpoint.requests.map((r) => r.path) };
 };

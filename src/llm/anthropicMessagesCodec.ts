@@ -186,6 +186,9 @@ export const anthropicMessagesCodec: ProtocolCodec = {
         calls.push({ tool: block["name"], params: block["input"] });
         continue;
       }
+      // 修订 v2 规则 5（剥离要求；验收决议 §3 实现要求）：reasoning 模型对端可能返回思考块——
+      // thinking / redacted_thinking 块**剥离**（不进模型上下文、不参与决策解析），其余未知类型仍 fail-closed
+      if (type === "thinking" || type === "redacted_thinking") continue;
       return err(codecError("wire_shape_invalid", `content[${String(i)}].type 不在 codec 解析面（${String(type)}，fail-closed）`));
     }
 

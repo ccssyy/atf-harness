@@ -22,6 +22,7 @@ describe("openai-chat——请求构造", () => {
       messages: [msg({ role: "user", text: "任务", source_event_id: 1 })],
       tools: TOOLS,
       reasoningEffort: "low",
+      developerRole: false,
       maxTokens: 4096,
     }) as Record<string, unknown>;
     const messages = body["messages"] as Array<Record<string, unknown>>;
@@ -35,6 +36,34 @@ describe("openai-chat——请求构造", () => {
       type: "function",
       function: { name: "atf_fact_scan", description: "事实索引枚举", parameters: { type: "object", required: [], properties: {} } },
     });
+  });
+
+  it("修订 v2 规则 4——reasoningEffort=null（compat 抑制）→ 请求体整体省略该字段", () => {
+    const body = openaiChatCodec.encodeRequestBody({
+      model: "m",
+      system: "S",
+      messages: [msg({ role: "user", text: "任务", source_event_id: 1 })],
+      tools: TOOLS,
+      reasoningEffort: null,
+      developerRole: false,
+      maxTokens: 4096,
+    }) as Record<string, unknown>;
+    expect("reasoning_effort" in body).toBe(false);
+  });
+
+  it("修订 v2 规则 4——developerRole=true → 首条指令消息 role:developer；false → system（缺省不变）", () => {
+    const mk = (developerRole: boolean) =>
+      openaiChatCodec.encodeRequestBody({
+        model: "m",
+        system: "S",
+        messages: [msg({ role: "user", text: "任务", source_event_id: 1 })],
+        tools: TOOLS,
+        reasoningEffort: "low",
+        developerRole,
+        maxTokens: 4096,
+      }) as Record<string, unknown>;
+    expect((mk(true)["messages"] as Array<Record<string, unknown>>)[0]?.["role"]).toBe("developer");
+    expect((mk(false)["messages"] as Array<Record<string, unknown>>)[0]?.["role"]).toBe("system");
   });
 
   it("认证头 = Authorization Bearer（key 唯一出现处）", () => {
@@ -53,6 +82,7 @@ describe("openai-chat——请求构造", () => {
       ],
       tools: TOOLS,
       reasoningEffort: "low",
+      developerRole: false,
       maxTokens: 4096,
     }) as Record<string, unknown>;
     const messages = body["messages"] as Array<Record<string, unknown>>;
@@ -77,6 +107,7 @@ describe("openai-chat——请求构造", () => {
       ],
       tools: TOOLS,
       reasoningEffort: "low",
+      developerRole: false,
       maxTokens: 4096,
     }) as Record<string, unknown>;
     const messages = body["messages"] as Array<Record<string, unknown>>;
@@ -101,6 +132,7 @@ describe("openai-chat——请求构造", () => {
       ],
       tools: TOOLS,
       reasoningEffort: "low",
+      developerRole: false,
       maxTokens: 4096,
     }) as Record<string, unknown>;
     const messages = body["messages"] as Array<Record<string, unknown>>;
@@ -118,6 +150,7 @@ describe("openai-chat——请求构造", () => {
       messages: [msg({ role: "tool_result", tool: "atf_fact_scan", ok: true, summary: "x", source_event_id: 3 })] as AdapterMessage[],
       tools: TOOLS,
       reasoningEffort: "low",
+      developerRole: false,
       maxTokens: 4096,
     };
     const body = openaiChatCodec.encodeRequestBody(input) as { ok: boolean; error?: { code: string } };

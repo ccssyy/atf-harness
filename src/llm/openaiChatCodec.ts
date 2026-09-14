@@ -115,7 +115,10 @@ export const openaiChatCodec: ProtocolCodec = {
   },
 
   encodeRequestBody(input) {
-    const wire: Record<string, unknown>[] = [{ role: "system", content: input.system }];
+    // compat.supports_developer_role（修订 v2 规则 4）：true → "developer"（新 OpenAI 约定）；
+    // 缺省/false → "system"（协议标准行为，与门 2 v1 逐位一致）
+    const instructionRole = input.developerRole ? "developer" : "system";
+    const wire: Record<string, unknown>[] = [{ role: instructionRole, content: input.system }];
     const state = { pending: [] as WireToolCallRef[], annotations: [] as string[] };
     for (const message of input.messages) {
       const encoded = encodeMessage(message, state, wire);
@@ -123,7 +126,7 @@ export const openaiChatCodec: ProtocolCodec = {
     }
     flushDangling(state, wire);
     flushAnnotations(state, wire);
-    return {
+    const bodyBase: Record<string, unknown> = {
       model: input.model,
       messages: wire,
       tools: input.tools.map((tool) => ({
@@ -131,9 +134,11 @@ export const openaiChatCodec: ProtocolCodec = {
         function: { name: tool.name, description: tool.description, parameters: tool.parameters },
       })),
       tool_choice: "auto",
-      // 任务书 §1.2：显式携带 reasoning 参数（配置层拒绝 "none"——见 providerConfig.ts）
-      reasoning_effort: input.reasoningEffort,
     };
+    // 门 2 §1.2：显式携带 reasoning 参数（配置层拒绝 "none"）；修订 v2 规则 4：
+    // compat.supports_reasoning_effort=false → null → 整体省略（对端不认该参数时不发送）
+    if (input.reasoningEffort !== null) bodyBase["reasoning_effort"] = input.reasoningEffort;
+    return bodyBase;
   },
 
   parseResponse(body) {
