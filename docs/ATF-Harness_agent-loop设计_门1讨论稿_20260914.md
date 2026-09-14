@@ -619,3 +619,49 @@ session.contract.yaml 已按纯增量注记（不 bump 任何版本轴）；`bri
 - **INV-3**（provider 切换边界 = turn 边界；审批往返不构成切换窗口）：断言：provider/switch 事件仅
   出现于 turn/end 与下一 turn/start 之间（既有 `checkSwitchBoundary(turnOpen, …)` 强制 + 测试断言）；
   审批 request/response 往返不产生 switch 事件（P2-S2 既有用例承载）。
+
+---
+
+## 实施章节（切片 2 落地，2026-09-14——《ATF独立Harness_切片2任务书_adapter与公理兑现_20260914.md》交付）
+
+### II.1 B1 adapter 契约（投影 ↔ 模型消息）
+
+- 模块：`src/llm/adapter.ts`；`adaptProjectionToMessages(LlmContextEvent[]) → AdapterMessage[]`；
+- **映射表声明式**（四类语义内容映射 + approval 两类映射 + turn/provider/session 四类声明为 skip——
+  显式决策非遗漏）；表外事件类型 / 未声明 payload 字段 / payload 非对象 → **整体拒绝**（fail-closed，
+  不产残缺上下文）；**纯函数**（同输入同输出，用例断言）；顺序稳定（事件流序 → 消息序，source_event_id 回填）；
+- 不含预算/治理内部字段（用例对序列化产物断言禁词：budget/max_steps/max_turns/stop_reason/approval_key/params_digest）；
+- 消息词汇为中性形态（role: user/assistant/assistant_tool_call/tool_result/approval），具体 provider
+  消息格式的最终映射属 L1a 实现层（本切片不实现真实 provider）。
+
+### II.2 A3 多工具展开 + B2 错误回填
+
+- **展开**：`expandModelResponse(ModelResponse) → LlmDecision[]`——message → tool_calls（声明序）→
+  final_answer 的确定性展开；final_answer 与 tool_calls 并存 = 契约冲突（拒绝）；展开产物为**顺序
+  LlmDecision**，loop 逐个消费（一次决策一个工具），每个各自过切片 0 守卫 + 各自过审批检查点；
+  **逐工具审批用例**（治理红线证明）：账本一条预录 + 展开两个高危决策 → 第一个消费放行、
+  第二个 `blocked(approval_missing)`——授权未被沿用（一次性语义）。
+- **回填**：`buildDecisionBackfill(ToolCallOutcome)` / `buildApprovalBackfill(verdict)` →
+  `{tool, category, reason, references, authorization: "none"}`；五键闭集（无内部字段/栈位）；
+  `authorization` 结构性恒 "none"——回填文本即便含授权字样也不构成授权（授权唯一来源 =
+  executor 账本消费路径）；审批结论映射：consumed→executed、invalid→failed、denied/advised→blocked。
+  回填的消费方 = 模型上下文（L1a 起 decide 实际消费；本切片交付纯函数与形态）。
+
+### II.3 TEM 读闸注入点（v1 桩）
+
+- 位置：runner 决策循环内，**transformContext 之后、decide 之前**（`injectMemoryEntries`，不另起通道）；
+- 条目：`{source_ref, kind: structural_preconditions | context_note, content}`——fail-closed 校验
+  （形态非法整批拒绝）；成功 → 合成上下文项追加（synthetic: true、确定性派生 id、原上下文在前）；
+  `structural_preconditions` 带 `pinned`（折叠语义不得吃掉引用链）；
+- 失败语义：注入源不可用/条目非法 → **无记忆运行**（原上下文原样）+ `assistant/attempt` 留痕
+  （reason=memory_read_failed，不进模型历史）；
+- 写闸（回灌/projection）不激活（Phase 3）；真实 TEM 调用在 TEM 提供接口后另批。
+
+### II.4 两条公理兑现（断言级）
+
+- **durability**：`deriveLoopStateFromEvents(SessionEvent[]) → LoopStateSnapshot`（turn 计数 /
+  每 turn 决策与步数 / 收口原因与 stop_reason）——签名**只有事件流参数**（结构断言：无内核连接位）；
+  断言：纯函数两次调用深等；磁盘 replay 事件流推导 = 内存序列推导（恢复只依赖事件流）；
+  无被拒切换的流与 turn/end.payload 恒填计数对账一致。范式 = `resolveCredentialState`。
+- **N1 语义边界**：闸门推进留痕载体 = 既有 `tool/result` 事件（客户端观察事实，非内核状态权威副本）；
+  事件类型集合 12 类不变、保留位仍空（用例断言）；语义边界注记落 `session.contract.yaml`（切片 2 注记）。

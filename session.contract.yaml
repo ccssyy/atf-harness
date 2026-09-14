@@ -302,3 +302,20 @@ pipeline:
 #   4. 不变量（A4，实施章节见 agent-loop 设计文档）：INV-1 turn 不跨进程连续执行；
 #      INV-2 任意可写终局必须收口 turn；INV-3 provider 切换边界 = turn 边界，审批往返不构成切换窗口。
 # ---------------------------------------------------------------------
+
+# ---------------------------------------------------------------------
+# 【切片 2 注记 2026-09-14】N1 语义边界（闸门推进留痕）＋ TEM 读闸注入点登记（纯增量，
+# contract_version / schema_version 均不 bump；事件类型集合 12 类不变、保留位仍空）：
+#   1. N1 语义边界：闸门推进（atf_gate advance）的留痕载体 = 既有 tool/result 事件——
+#      它是**客户端观察事实**（"我方调用 atf_gate 并收到响应"），**不是**内核状态的权威副本；
+#      不得以"再查内核"作为恢复依据（内核内存态重启后为空，"不存在"≠"未推进"）；
+#      若将来审计需要独立检索"守卫拒绝/闸门推进"，须评估第 13 类扩面（owner 批准）。
+#   2. TEM 读闸注入点（v1 桩，缺省无注入 = 无记忆运行）：发生在 transformContext 投影之后、
+#      provider.decide() 之前（runner 内，不另起注入通道，不落事件流）；注入条目为合成上下文项
+#      （type=user/message + synthetic:true + payload.source_ref/kind/content），
+#      structural_preconditions 类携带 pinned 标记（折叠语义不得吃掉引用链）；
+#      注入源不可用 → 记 assistant/attempt 事件（不进模型历史）+ 无记忆运行（记忆是增强非依赖）。
+#   3. durability 公理：loop 恢复所需状态（turn 计数 / step/decision 计数 / stop_reason）全部
+#      由本侧事件流推导（deriveLoopStateFromEvents 纯函数；范式 = resolveCredentialState）；
+#      turn/end.payload 恒填计数即恢复首选数据源。
+# ---------------------------------------------------------------------

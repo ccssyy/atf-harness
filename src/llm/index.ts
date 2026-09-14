@@ -1,6 +1,14 @@
 /**
  * S5 LLM 层公开出口。冒烟 runner（src/run/）只从这里 import。
  */
+export {
+  adaptProjectionToMessages,
+  adapterError,
+  expandModelResponse,
+  type AdapterError,
+  type AdapterMessage,
+  type ModelResponse,
+} from "./adapter.js";
 export { FauxProvider, type ScriptedStepSource } from "./fauxProvider.js";
 export { FauxVariantProvider } from "./fauxVariantProvider.js";
 export {
