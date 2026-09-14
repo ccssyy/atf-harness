@@ -36,3 +36,4 @@ export {
   type ProviderSwitchBlockReason,
   type ProviderSwitchPayload,
 } from "./providerSwitch.js";
+export { LOOP_STOP_REASONS, resolveExhaustionStop, type LoopStopReason } from "./stopReason.js";

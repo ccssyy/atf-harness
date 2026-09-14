@@ -576,3 +576,46 @@ R2 决议 §3.3 要求报告如实体现"内存登记不得写成已落盘"。**
 ---
 
 *本稿为讨论稿，不含任何代码改动。所有源码引用基于 `A800_5005:/data/sam/ATF-Harness` @ `0dc75b2` 实测；约束引自 `AGENTS.md` §3、ADR-05~09、《R2 门 1 评审·门 2 放行》§2.3/§3.3/§5。*
+
+---
+
+## 实施章节（切片 1 落地，2026-09-14——《ATF独立Harness_切片1任务书_loop骨架_20260914.md》交付）
+
+### I.1 终止判据表（A2 裁剪版四重判据 + 显式预算；实施形态）
+
+| 判据 | 触发（实施口径） | 结果 | stop_reason |
+|---|---|---|---|
+| `final_answer` | provider 产出 final_answer 决策（分派即收口） | `completed`（exit 0） | `final_answer` |
+| `no_more_tools` | provider 返回 `null` 且本 turn 已产出 final_answer（`resolveExhaustionStop`） | `completed`（exit 0） | `no_more_tools` |
+| `budget_exhausted` | `turn_step_count ≥ LOOP_MAX_STEPS_PER_TURN(32)`（loop 顶，不再调用 provider）；或段边界开新 turn 前 `turnsOpened + 1 > LOOP_MAX_TURNS(8)` | `failed`（exit 1，runError code = `budget_exhausted`，可区分） | `budget_exhausted` |
+| `error` | provider decide 自身故障（err） | `failed`（exit 1，code = `provider_failure` 既有取值不变） | `error` |
+| `aborted` | 应答 verdict=abort / 宿主终止（既有 P2-S2 路径零改动） | `aborted`（exit 79） | `aborted` |
+
+未收束（null 且无 final_answer 且无待处理动作）维持既有 `provider_failure` 终局——"以可执行内容为准"：
+不把 provider 的结束信号当唯一事实；完整工具请求一旦产出即执行（执行先于后续判据）。
+
+### I.2 预算（模型不可见）
+
+- `LOOP_MAX_STEPS_PER_TURN = 32` / `LOOP_MAX_TURNS = 8`（`src/session/constants.ts`，与 compaction/fsync 常量同层）；
+- 不可见性三重保证：①`llm_context_event_fields` 白名单不含预算字段位（session.contract.yaml pipeline 节）；
+  ②runner 不向 `decide(context)` / 工具 params 注入任何预算信息；③`LlmDecision` 类型面无预算字段。
+- 耗尽 → `failed(budget_exhausted)` 复用 exit 1（预算非治理事件，不占治理退出码）。
+
+### I.3 step 元数据（A1，纯增量）
+
+`turn/end.payload` = `{reason, step_count, decision_count, stop_reason?}`：
+- `step_count`：本 turn 已分派执行的内容步（provider_switch 请求不计——无内容执行）；
+- `decision_count`：本 turn provider 决策数（含被拒的 provider_switch 请求）；
+- `stop_reason`：仅五值判据命中时携带；既有 `reason` 取值零改动（INV-2 兼容）。
+session.contract.yaml 已按纯增量注记（不 bump 任何版本轴）；`bridge.contract.yaml` 零改动。
+
+### I.4 不变量（A4）与断言口径
+
+- **INV-1**（一个 turn = 一次连续同进程执行，不跨进程）：挂起（suspended）收口 turn，resume 开新 turn——
+  断言：事件流中 turn/start 与 turn/end 严格成对、不嵌套（任意前缀中 end 数 ≤ start 数）；
+- **INV-2**（任意可写终局必须收口 turn，reason = outcome 收口语义）：断言：终局报告的事件流最后一条
+  事件（除落盘通道本身失效的 session_failure 边界外）为 turn/end；切片 1 修复既有缺口——provider
+  decide err 路径此前不收口，现以 `{reason:"failed", stop_reason:"error"}` 收口；
+- **INV-3**（provider 切换边界 = turn 边界；审批往返不构成切换窗口）：断言：provider/switch 事件仅
+  出现于 turn/end 与下一 turn/start 之间（既有 `checkSwitchBoundary(turnOpen, …)` 强制 + 测试断言）；
+  审批 request/response 往返不产生 switch 事件（P2-S2 既有用例承载）。

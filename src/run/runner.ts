@@ -32,6 +32,8 @@ import { AtfBridgeConnection } from "../bridge/index.js";import {
   type ScriptedStepSource,
 } from "../llm/index.js";
 import type { LlmProvider } from "../llm/index.js";
+import { LOOP_MAX_STEPS_PER_TURN, LOOP_MAX_TURNS } from "../session/constants.js";
+import { resolveExhaustionStop, type LoopStopReason } from "./stopReason.js";
 import {
   approvalParamsDigest,
   resolveHeadlessExitCode,
@@ -81,6 +83,7 @@ export type RunErrorCode =
   | "session_failure" // 会话事件写入失败 / 铁律一意外缺位
   | "provider_failure" // provider 故障 / 决策序列耗尽而未收束
   | "model_decision_forbidden" // 切片 0：provider 返回值含模型面外步骤（运行时守卫 fail-closed，exit 1）
+  | "budget_exhausted" // 切片 1：轮次预算耗尽（max_steps_per_turn / max_turns；A2，复用 exit 1）
   | "credential_indeterminate"; // 问答轨凭据状态不确定（A3：run 终态，需人工核对，exit 1）
 
 export interface RunError {
@@ -349,8 +352,17 @@ export class ScenarioRunner {
         return appended.value.event;
       };
 
-      const appendTurnEnd = async (reason: string): Promise<void> => {
-        const appended = await session.append({ type: "turn/end", payload: { reason } });
+      const appendTurnEnd = async (reason: string, stopReason?: LoopStopReason): Promise<void> => {
+        // 切片 1 A1（纯增量）：turn/end.payload 补 step 元数据（step_count = 本 turn 已执行步；
+        // decision_count = 本 turn provider 决策数，含被拒的 provider_switch 请求）；
+        // stop_reason 仅在 A2 五值判据命中时携带（可选字段，既有 reason 取值零改动）。
+        const payload: Record<string, unknown> = {
+          reason,
+          step_count: turnStepCount,
+          decision_count: turnDecisionCount,
+        };
+        if (stopReason !== undefined) payload["stop_reason"] = stopReason;
+        const appended = await session.append({ type: "turn/end", payload });
         if (appended.ok && appended.value.status === "appended") {
           events.push(appended.value.event);
           closeTurnRecord();
@@ -369,6 +381,11 @@ export class ScenarioRunner {
       // ---------------- P2-S3:turn 归属与切换协议(多 provider 段) ----------------
       let currentTurn: TurnAttribution | null = null;
       let turnDecisionCount = 0;
+      // 切片 1 A1/A2：step 粒度计数与终局判据状态（每 turn 开启时清零）
+      let turnStepCount = 0;
+      let turnHadFinalAnswer = false;
+      // 切片 1 A2：run 级 turn 计数（max_turns 预算）
+      let turnsOpened = 0;
 
       const openTurnRecord = (turnProvider: LlmProvider | ScriptedStepSource): void => {
         const first = events[events.length - 1];
@@ -380,6 +397,8 @@ export class ScenarioRunner {
           decision_count: 0,
         };
         turnDecisionCount = 0;
+        turnStepCount = 0;
+        turnHadFinalAnswer = false;
       };
 
       const closeTurnRecord = (): void => {
@@ -438,6 +457,7 @@ export class ScenarioRunner {
       };
 
       if (provider !== null) {
+        turnsOpened += 1; // 切片 1 A2：初始 turn 计数（max_turns 预算的第一次消耗）
         await appendEvent({ type: "turn/start", payload: { scenario_id: scenario.scenario_id, branch_id: branch.branch_id } });
         await appendEvent({ type: "user/message", payload: { text: branch.trigger_instruction } });
         openTurnRecord(provider);
@@ -446,18 +466,49 @@ export class ScenarioRunner {
       let lastAdmittedFact: DomainRef | undefined;
       let turnOpen = provider !== null;
 
-      // ---------------- 决策循环（Faux 线性回放，owner 口径 #5；P2-S3 起支持多 provider 段） ----------------
+      // ---------------- 决策循环（Faux 线性回放，owner 口径 #5；P2-S3 起支持多 provider 段；
+      // 切片 1 起受轮次预算约束、以 stopReason 判据收敛） ----------------
       for (;;) {
         if (provider === null) break; // 初始注册失败已折算(防御路径,不进入决策)
+        // 切片 1 A2 轮次预算：单 turn 步数上限——达到即 failed(budget_exhausted)，不再调用
+        // provider（确定性判据：同输入同结果；不新增退出码，复用 exit 1）。
+        if (turnStepCount >= LOOP_MAX_STEPS_PER_TURN) {
+          outcome = {
+            kind: "failed",
+            error: runError("budget_exhausted", `单 turn 步数预算耗尽（max_steps_per_turn=${String(LOOP_MAX_STEPS_PER_TURN)}）`, {
+              budget: "max_steps_per_turn",
+              limit: LOOP_MAX_STEPS_PER_TURN,
+            }),
+          };
+          turnOpen = false;
+          await appendTurnEnd("failed", "budget_exhausted");
+          break;
+        }
         const decided = await provider.decide(transformContext(events));
         if (!decided.ok) {
+          // 切片 1 A2/INV-2：provider 自身故障 = error 判据——终局必须收口 turn（stop_reason=error）
           outcome = { kind: "failed", error: runError("provider_failure", `provider 决策失败: ${decided.error.message}`, decided.error) };
+          turnOpen = false;
+          await appendTurnEnd("failed", "error");
           break;
         }
         const raw = decided.value;
         if (raw === null) {
           // P2-S3:段分支脚本耗尽 = 段边界——非末段执行切换协议;末段/单 provider 分支 = 既有未收束终局
           if (segmentMode && segIdx < segments.length - 1) {
+            // 切片 1 A2：run 级 turn 预算——开新 turn 前检查（max_turns；不越限才执行切换协议）
+            if (turnsOpened + 1 > LOOP_MAX_TURNS) {
+              outcome = {
+                kind: "failed",
+                error: runError("budget_exhausted", `turn 数预算耗尽（max_turns=${String(LOOP_MAX_TURNS)}）`, {
+                  budget: "max_turns",
+                  limit: LOOP_MAX_TURNS,
+                }),
+              };
+              turnOpen = false;
+              await appendTurnEnd("failed", "budget_exhausted");
+              break;
+            }
             const nextSegment = segments[segIdx + 1] as ProviderSegment;
             await appendTurnEnd("provider_switch");
             turnOpen = false;
@@ -473,6 +524,7 @@ export class ScenarioRunner {
               });
               provider = switched.provider;
               segIdx += 1;
+              turnsOpened += 1;
               await appendEvent({ type: "turn/start", payload: { scenario_id: scenario.scenario_id, branch_id: branch.branch_id } });
               openTurnRecord(provider);
               turnOpen = true;
@@ -485,6 +537,16 @@ export class ScenarioRunner {
               break;
             }
             outcome = { kind: "failed", error: switched.error };
+            break;
+          }
+          // 切片 1 A2 终止判据：null 且本 turn 已产出 final_answer → completed(no_more_tools)；
+          // 否则维持既有未收束终局（provider_failure——"以可执行内容为准"：声称完成但无
+          // final_answer 且无待处理动作，不判成功）。
+          const exhaustion = resolveExhaustionStop(turnHadFinalAnswer);
+          if (exhaustion !== null) {
+            outcome = { kind: "completed" };
+            turnOpen = false;
+            await appendTurnEnd("completed", exhaustion.stopReason);
             break;
           }
           outcome = { kind: "failed", error: runError("provider_failure", "分支决策序列耗尽而未收束（须以 final_answer 收尾或以 block 终局）") };
@@ -526,6 +588,7 @@ export class ScenarioRunner {
 
         if (step.type === "provider_switch") {
           // 越界切换请求(turn 内,口径 #5):拒绝,不落 switch 事件,非终局——同 provider 继续
+          // （切片 1 A1：provider_switch 请求计入 decision_count，不计 step_count——无内容执行）
           const block = checkSwitchBoundary(turnOpen, { to: step.to, ...(step.reason !== undefined ? { reason: step.reason } : {}) });
           if (block !== null) {
             switchRecords.push({ status: "rejected", to: step.to, block });
@@ -536,13 +599,17 @@ export class ScenarioRunner {
           break;
         }
 
+        // 切片 1 A1：自此为本 turn 的可执行 step（step_count 口径 = 分派执行的内容步）
+        turnStepCount += 1;
+
         if (step.type === "assistant_message" || step.type === "final_answer") {
           const appended = await appendEvent({ type: "assistant/message", payload: { text: step.text } });
           if (appended === null) break;
           if (step.type === "final_answer") {
+            turnHadFinalAnswer = true; // 切片 1 A2：no_more_tools 判据状态（防御性——本路径随即收口）
             outcome = { kind: "completed" };
             turnOpen = false;
-            await appendTurnEnd("completed");
+            await appendTurnEnd("completed", "final_answer");
             break;
           }
           continue;
@@ -574,7 +641,8 @@ export class ScenarioRunner {
               ? { kind: "suspended", block: result.block }
               : { kind: "aborted", block: result.block };
             turnOpen = false;
-            await appendTurnEnd(outcome.kind);
+            // 切片 1 A2：aborted 命中五值判据（suspended 非判据值，不带 stop_reason）
+            await appendTurnEnd(outcome.kind, outcome.kind === "aborted" ? "aborted" : undefined);
             break;
           }
 
