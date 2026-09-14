@@ -76,6 +76,14 @@
 # 【问题存证】契约 v2 曾把握手期望值误绑到桥接契约版本（EXPECTED_CONTRACT_VERSION = 2），
 # 而 mock 握手同步回 2 掩盖了该缺陷——re-pin 后首次握手即失败，且错误文案误导为"核对 pin"。
 # 本注记即该缺陷的修正登记（六项修正详见《ATF-Harness_版本轴修正执行报告_20260913.md》）。
+# 【bump 口径固化（D3 裁决 2026-09-14）】《ATF-Harness_Owner决议与指令_R2门1评审_门2放行_20260914.md》§2.3：
+#   纯增量（新增方法、新增可选字段/参数、错误码枚举扩面）→ 补登登记，不 bump（沿用 atf.bind_run 先例）；
+#   破坏性（改名、删字段、改既有字段语义、收窄枚举、帧/握手/生命周期变更）→ bump 桥接契约版本轴
+#   （会话协议轴仅在线缆规则变更时单独处理）。
+# ---------------------------------------------------------------------
+# 【R2 契约补登登记 2026-09-14】《ATF-Harness_Owner决议与指令_R2门1评审_门2放行_20260914.md》D3：
+#   atf_admit_data.params 增可选 pin（内核 v0.6.0b0 实测面：显式优先，缺省
+#   canonical_digest({dataset_id, source_ref})[:12]）——纯增量补登，contract_version 不 bump。
 # ---------------------------------------------------------------------
 
 contract_version: 2
@@ -228,6 +236,7 @@ methods:
       properties:
         dataset_id: { type: string }
         source_ref: { type: string, required: false }
+        pin: { type: string, required: false, note: R2 补登（D3，2026-09-14）——显式优先；缺省 = canonical_digest({dataset_id, source_ref})[:12]（内核口径） }
     result:                        # canonical output（契约 v2 三元组来源明示，变更 #7）
       type: object
       required: [ok, journal_type, fact_id, sha256_digest]
