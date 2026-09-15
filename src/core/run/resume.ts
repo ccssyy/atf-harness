@@ -139,20 +139,31 @@ export const resolveAnswerTarget = (
 };
 
 /** 应答事件 payload（复用 approval/response 既有字段闭集；不新增 schema 形态）。 */
+/** 应答通道留痕(D4,L1 门 2 T04):宿主通道经此把 channel/host_id 带入 approval/response。 */
+export interface AnswerChannelMeta {
+  channel?: "acp";
+  host_id?: string;
+}
+
 export const buildAnswerPayload = (
   target: PendingApproval,
   verdict: ChannelVerdict,
   note?: string,
   actor: string = CHANNEL_ACTOR,
+  meta?: AnswerChannelMeta,
 ): Record<string, unknown> => {
   const trimmed = note?.trim();
   const hasNote = trimmed !== undefined && trimmed !== "";
+  const acpChannel = meta?.channel === "acp";
   return {
     approval_session_id: target.approval_session_id,
     request_event_ref: target.request_event_id,
     verdict: channelToApprovalVerdict(verdict),
     actor,
     ...(hasNote ? (verdict === "advised" ? { advice_text: trimmed } : { reason: trimmed }) : {}),
+    ...(acpChannel ? { channel: "acp" as const } : {}),
+    ...(acpChannel && meta?.host_id !== undefined ? { host_id: meta.host_id } : {}),
+    ...(acpChannel ? { requires_human_review: true } : {}),
   };
 };
 
