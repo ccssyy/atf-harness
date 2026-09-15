@@ -77,6 +77,7 @@ import {
 } from "./providerSwitch.js";
 import { type ApprovalGate } from "../tools/index.js";
 import { FactScanResolver } from "./factScanResolver.js";
+import type { RunEventSubscriber } from "../projection.js";
 import { deriveLoopStateFromEvents } from "./loopState.js";
 import {
   buildAnswerPayload,
@@ -247,6 +248,10 @@ export interface RunBranchOptions {
    *  "headless" 为 harness 侧自造值，真实内核拒绝（ledger_query → invalid_params）——
    *  对接真实内核的 run 须显式传 "canonical"。 */
   scopeMode?: "canonical" | "simulation" | "headless";
+  /** L1 门 2 T01：投影订阅（core 投影面，src/core/projection.ts）。事件真实落盘后同步
+   *  投出（origin=live；resume 装载既有流为 history）——订阅方看到的事件与 append-only
+   *  日志逐条一致（INV-A 投影侧）。缺省不订阅 = 既有行为逐位不变。 */
+  onEvent?: RunEventSubscriber;
 }
 
 export class ScenarioRunner {
@@ -406,6 +411,7 @@ export class ScenarioRunner {
           return finalize();
         }
         events.push(...parsed.value);
+        for (const historical of parsed.value) options.onEvent?.(historical, "history");
       }
       const approvalHandler = options.approvalSurface === undefined
         ? undefined
@@ -432,6 +438,7 @@ export class ScenarioRunner {
           return null;
         }
         events.push(appended.value.event);
+        options.onEvent?.(appended.value.event, "live");
         return appended.value.event;
       };
 
@@ -448,6 +455,7 @@ export class ScenarioRunner {
         const appended = await session.append({ type: "turn/end", payload });
         if (appended.ok && appended.value.status === "appended") {
           events.push(appended.value.event);
+          options.onEvent?.(appended.value.event, "live");
           closeTurnRecord();
           return;
         }
