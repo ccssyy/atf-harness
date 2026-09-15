@@ -11,7 +11,7 @@
  */
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { err, ok, type Result } from "../bridge/index.js";
+import { err, ok, type Result } from "../../bridge/index.js";
 import { CATALOG_FILENAME, loadCatalog } from "./catalog.js";
 import { workspaceError, type WorkspaceError } from "./errors.js";
 

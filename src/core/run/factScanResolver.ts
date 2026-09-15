@@ -8,7 +8,7 @@
  * lookupDigest = 扫描当前 run 可被引用的事实索引 → 命中返回其 digest，未命中 not_found，
  * 桥接/对端故障 → err（会话层语义：不落盘、不标记、不猜测）。
  */
-import { err, ok, type Result } from "../bridge/index.js";
+import { err, ok, type Result } from "../../bridge/index.js";
 import { TOOL_DEFINITIONS, validateCanonicalOutput, type SchemaNode } from "../tools/index.js";
 import { sessionError, type DigestLookup, type DigestResolver, type SessionError } from "../session/index.js";
 

@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MockDigestResolver } from "../../src/session/digestResolver.js";
-import { SessionLog } from "../../src/session/sessionLog.js";
+import { MockDigestResolver } from "../../src/core/session/digestResolver.js";
+import { SessionLog } from "../../src/core/session/sessionLog.js";
 
 /**
  * P2-S1 fsync 崩溃恢复测试（任务书 §2 设计要求 6–8 / 验收 4 / owner 口径 #4 / 决议四）。

@@ -3,10 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { err } from "../../src/bridge/index.js";
-import { sessionError } from "../../src/session/errors.js";
-import { MockDigestResolver, type DigestResolver } from "../../src/session/digestResolver.js";
-import { SessionLog } from "../../src/session/sessionLog.js";
-import type { InvalidRefEntry, SessionEvent, SessionEventInput } from "../../src/session/schema.js";
+import { sessionError } from "../../src/core/session/errors.js";
+import { MockDigestResolver, type DigestResolver } from "../../src/core/session/digestResolver.js";
+import { SessionLog } from "../../src/core/session/sessionLog.js";
+import type { InvalidRefEntry, SessionEvent, SessionEventInput } from "../../src/core/session/schema.js";
 
 /**
  * S2 会话事件流测试（Phase 1 任务书 §2 验收 1/2 + owner 启动指令口径 #1/#2）。

@@ -13,9 +13,9 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { err, ok, type Result } from "../bridge/index.js";
-import { ScenarioRunner, type ApprovalStubResponse, type BranchRunReport } from "./index.js";
+import { ScenarioRunner, type ApprovalStubResponse, type BranchRunReport } from "../core/run/index.js";
 import type { Scenario, ScenarioStep } from "../llm/index.js";
-import { sessionError, type SessionError } from "../session/index.js";
+import { sessionError, type SessionError } from "../core/session/index.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");

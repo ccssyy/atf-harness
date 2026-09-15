@@ -9,7 +9,7 @@
  * 不经模型面守卫（守卫作用域 = provider 接口返回值），既有场景零回归。
  */
 import { ok, type Result } from "../bridge/index.js";
-import { type LlmContextEvent } from "../session/index.js";
+import { type LlmContextEvent } from "../core/session/index.js";
 import { type LlmError } from "./provider.js";
 import { type ScenarioBranch, type ScenarioStep } from "./scenario.js";
 

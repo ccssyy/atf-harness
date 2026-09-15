@@ -13,14 +13,14 @@ import {
   ScenarioRunner,
   resolveExhaustionStop,
   type BranchRunReport,
-} from "../../src/run/index.js";
-import { LOOP_MAX_STEPS_PER_TURN, LOOP_MAX_TURNS } from "../../src/session/constants.js";
+} from "../../src/core/run/index.js";
+import { LOOP_MAX_STEPS_PER_TURN, LOOP_MAX_TURNS } from "../../src/core/session/constants.js";
 
 /**
  * 切片 1 验收测试（任务书 §3 VERIFY 1–6、8）：loop 骨架——终止判据、轮次预算、step 元数据、不变量。
  *
  * - 判据来源确定性：stopReason 判定为纯函数/常量驱动（同输入同结果），状态只落本侧事件流；
- * - 预算模型不可见：常量收在 src/session/constants.ts，注入上下文/工具参数/决策对象三处皆无；
+ * - 预算模型不可见：常量收在 src/core/session/constants.ts，注入上下文/工具参数/决策对象三处皆无；
  * - INV-1/2/3 断言：turn 成对不嵌套 / 可写终局收口 turn / switch 仅在 turn 边界。
  */
 

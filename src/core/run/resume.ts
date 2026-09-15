@@ -16,7 +16,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { err, ok, type Result } from "../bridge/index.js";
+import { err, ok, type Result } from "../../bridge/index.js";
 import { asSessionEvent, validateEventEnvelope, type SessionEvent } from "../session/index.js";
 import { type ApprovalVerdict } from "./approvalTrack.js";
 

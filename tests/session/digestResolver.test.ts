@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MockDigestResolver } from "../../src/session/digestResolver.js";
+import { MockDigestResolver } from "../../src/core/session/digestResolver.js";
 
 /**
  * DigestResolver 契约 mock 行为（owner 口径 #1：可配置返回指定 digest / 缺失）。

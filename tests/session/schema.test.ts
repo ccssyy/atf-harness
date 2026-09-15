@@ -2,14 +2,14 @@ import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MockDigestResolver } from "../../src/session/digestResolver.js";
+import { MockDigestResolver } from "../../src/core/session/digestResolver.js";
 import {
   SESSION_ENABLED_EVENT_TYPES,
   SESSION_EVENT_TYPES,
   SESSION_RESERVED_EVENT_TYPES,
   SESSION_SCHEMA_VERSION,
-} from "../../src/session/schema.js";
-import { SessionLog } from "../../src/session/sessionLog.js";
+} from "../../src/core/session/schema.js";
+import { SessionLog } from "../../src/core/session/sessionLog.js";
 
 /**
  * schema 常量与白名单（v0 语义 owner 口径 #3 → P2-S1 bump v1：11 类一次定死 + 保留位拒写）

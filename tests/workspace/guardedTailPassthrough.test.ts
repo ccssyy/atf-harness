@@ -2,8 +2,8 @@ import { appendFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MockDigestResolver, SessionLog } from "../../src/session/index.js";
-import { GuardedSessionLog } from "../../src/workspace/index.js";
+import { MockDigestResolver, SessionLog } from "../../src/core/session/index.js";
+import { GuardedSessionLog } from "../../src/core/workspace/index.js";
 
 /**
  * S1b L-2 测试（决议 §3 必新增测试 1）：GuardedSessionLog 透传尾部修复事实——

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { err } from "../../src/bridge/index.js";
-import { FactScanResolver, type FactScanTransport } from "../../src/run/index.js";
+import { FactScanResolver, type FactScanTransport } from "../../src/core/run/index.js";
 
 /**
  * S5 FactScanResolver 测试（owner 口径 #3：digest 查询经 mock 对端 atf_fact_scan 承载；

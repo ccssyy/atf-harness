@@ -21,8 +21,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseScenario, type Scenario } from "../llm/index.js";
-import type { SessionEvent } from "../session/index.js";
-import { ScenarioRunner, type BranchRunReport, type ProviderSwitchPayload, type SwitchRecord } from "./index.js";
+import type { SessionEvent } from "../core/session/index.js";
+import { ScenarioRunner, type BranchRunReport, type ProviderSwitchPayload, type SwitchRecord } from "../core/run/index.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const scenarioPath = join(repoRoot, "scenarios", "provider-alternation.json");

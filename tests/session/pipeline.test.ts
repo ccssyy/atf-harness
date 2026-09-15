@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { convertToLlm, transformContext, type LlmContextEvent } from "../../src/session/pipeline.js";
-import type { SessionEvent } from "../../src/session/schema.js";
+import { convertToLlm, transformContext, type LlmContextEvent } from "../../src/core/session/pipeline.js";
+import type { SessionEvent } from "../../src/core/session/schema.js";
 
 /**
  * S2 验收用例 3——白名单（含 UI-only 字段的事件在 convertToLlm 输出中不出现该字段）

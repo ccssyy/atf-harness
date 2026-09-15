@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { AtfBridgeConnection } from "../../src/bridge/connection.js";
 import { err, type Result } from "../../src/bridge/index.js";
 import type { BridgeError } from "../../src/bridge/errors.js";
-import { ToolExecutor, ToolRegistry, resolveHeadlessExitCode, type BridgeTransport } from "../../src/tools/index.js";
-import { approvalParamsDigest, type LedgerRecord, type ScopeRef } from "../../src/tools/approvalKey.js";
+import { ToolExecutor, ToolRegistry, resolveHeadlessExitCode, type BridgeTransport } from "../../src/core/tools/index.js";
+import { approvalParamsDigest, type LedgerRecord, type ScopeRef } from "../../src/core/tools/approvalKey.js";
 
 /**
  * S3 工具执行测试（Phase 1 任务书 §3 验收 + owner 启动指令口径 #1/#3/#4）。

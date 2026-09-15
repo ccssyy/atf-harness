@@ -15,7 +15,7 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { err, ok, type Result } from "../bridge/index.js";
+import { err, ok, type Result } from "../../bridge/index.js";
 import { loadCatalog, saveCatalog, type CatalogEntry } from "./catalog.js";
 import { workspaceError, type PromoteOutcome, type WorkspaceError } from "./errors.js";
 import { REPRODUCE_META_SUFFIX, RunWorkspace, safeScratchPath } from "./runWorkspace.js";

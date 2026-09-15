@@ -21,7 +21,7 @@
  */
 import { err, ok, type Result } from "../bridge/index.js";
 import { type AdapterMessage, type ModelResponse } from "../llm/adapter.js";
-import { type ModelVisibleTool } from "../tools/index.js";
+import { type ModelVisibleTool } from "../core/tools/index.js";
 import { type ProviderProtocol } from "./providerConfig.js";
 
 /** codec 级结构化错误（任务书 §3.2：非法响应 → fail-closed）。 */

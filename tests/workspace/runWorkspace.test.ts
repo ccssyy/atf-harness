@@ -3,7 +3,7 @@ import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { RunWorkspace } from "../../src/workspace/index.js";
+import { RunWorkspace } from "../../src/core/workspace/index.js";
 
 /**
  * S4 工作区结构与 provenance 测试（任务书 §4.1/4.2 + owner 口径 #1/#2/#5）。

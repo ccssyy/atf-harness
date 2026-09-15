@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { type ProviderSegment, type Scenario, type ScenarioStep } from "../../src/llm/index.js";
-import { ScenarioRunner, type ProviderSwitchPayload } from "../../src/run/index.js";
+import { ScenarioRunner, type ProviderSwitchPayload } from "../../src/core/run/index.js";
 
 /**
  * P2-S3 runner 端到端测试（启动决议验收 2：越界切换不落事件断言 / 切换原子性 /

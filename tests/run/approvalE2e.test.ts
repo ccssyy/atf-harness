@@ -8,7 +8,7 @@ import {
   resolveRunExitCode,
   type ApprovalStubResponse,
   type BranchRunReport,
-} from "../../src/run/index.js";
+} from "../../src/core/run/index.js";
 import type { ScenarioStep } from "../../src/llm/index.js";
 
 /**

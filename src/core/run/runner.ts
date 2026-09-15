@@ -17,8 +17,8 @@
  */
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { err, ok, type Result } from "../bridge/index.js";
-import { AtfBridgeConnection } from "../bridge/index.js";import {
+import { err, ok, type Result } from "../../bridge/index.js";
+import { AtfBridgeConnection } from "../../bridge/index.js";import {
   FauxProvider,
   createDefaultProviderRegistry,
   assertModelDecision,
@@ -30,8 +30,8 @@ import { AtfBridgeConnection } from "../bridge/index.js";import {
   type ScenarioExpect,
   type ScenarioStep,
   type ScriptedStepSource,
-} from "../llm/index.js";
-import type { LlmProvider } from "../llm/index.js";
+} from "../../llm/index.js";
+import type { LlmProvider } from "../../llm/index.js";
 import { LOOP_MAX_STEPS_PER_TURN, LOOP_MAX_TURNS } from "../session/constants.js";
 import { resolveExhaustionStop, type LoopStopReason } from "./stopReason.js";
 import { injectMemoryEntries, type MemoryReadInjector } from "./memoryInjection.js";

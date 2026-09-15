@@ -11,7 +11,7 @@
  */
 import { err, ok, type Result } from "../bridge/index.js";
 import { type LlmDecision } from "./provider.js";
-import { type LlmContextEvent } from "../session/index.js";
+import { type LlmContextEvent } from "../core/session/index.js";
 
 // ---------------------------------------------------------------------------
 // B1：投影 → 模型消息（adapter 映射）

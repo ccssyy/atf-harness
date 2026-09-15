@@ -1,7 +1,7 @@
 /**
  * L1a 门 2——CLI 最小应答通道前端（《ATF独立Harness_L1a门2任务书_20260914.md》§1.3）。
  *
- * 形态（v1 只做 CLI；socket / 界面不实现，接口预留——通道接口面在 src/run/resume.ts）：
+ * 形态（v1 只做 CLI；socket / 界面不实现，接口预留——通道接口面在 src/core/run/resume.ts）：
  *   node dist/cli/resume.js --list --runs-root <dir> --run-id <id>
  *   node dist/cli/resume.js --answer <granted|advised|denied|abort> [--note "…"] [--request <事件id>]
  *       --runs-root <dir> --run-id <id> --scenario-id <id> [--mock <对端脚本路径>]
@@ -19,7 +19,7 @@ import {
   HttpLlmProvider,
   type ResolvedLlmProviderConfig,
 } from "../llm/index.js";
-import { ToolRegistry } from "../tools/index.js";
+import { ToolRegistry } from "../core/tools/index.js";
 import {
   ScenarioRunner,
   parseResumeArgs,
@@ -27,7 +27,7 @@ import {
   readSessionStream,
   sessionLogPathFor,
   type BranchRunReport,
-} from "../run/index.js";
+} from "../core/run/index.js";
 import type { Scenario } from "../llm/index.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));

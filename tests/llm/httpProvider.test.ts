@@ -5,8 +5,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { HttpLlmProvider, HARNESS_SYSTEM_PROMPT } from "../../src/llm/index.js";
-import type { LlmContextEvent } from "../../src/session/index.js";
-import type { ModelVisibleTool } from "../../src/tools/index.js";
+import type { LlmContextEvent } from "../../src/core/session/index.js";
+import type { ModelVisibleTool } from "../../src/core/tools/index.js";
 
 const FAKE_KEY = "fake-provider-test-key-DO-NOT-USE";
 

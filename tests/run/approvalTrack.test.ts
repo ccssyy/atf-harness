@@ -3,14 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ok } from "../../src/bridge/index.js";
-import { MockDigestResolver, SessionLog } from "../../src/session/index.js";
+import { MockDigestResolver, SessionLog } from "../../src/core/session/index.js";
 import {
   createApprovalTrackHandler,
   readStreamMaxId,
   type ApprovalStubResponse,
-} from "../../src/run/index.js";
-import { ToolExecutor, ToolRegistry, type ApprovalTrackVerdict, type BridgeTransport } from "../../src/tools/index.js";
-import type { SessionEvent } from "../../src/session/index.js";
+} from "../../src/core/run/index.js";
+import { ToolExecutor, ToolRegistry, type ApprovalTrackVerdict, type BridgeTransport } from "../../src/core/tools/index.js";
+import type { SessionEvent } from "../../src/core/session/index.js";
 
 /**
  * P2-S2 问答轨编排器测试(handler 级,决议 §3 验收:R1 resume 可执行性 / R2 持久化前置 /

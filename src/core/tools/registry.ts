@@ -2,7 +2,7 @@
  * 工具注册表（任务书 S3-1 / owner 口径 #5）：严格 4 个内置工具，
  * 不暴露任意注册入口——工具面收敛由类型与构造共同强制，注册表外工具 = unknown_tool。
  */
-import { type Result } from "../bridge/index.js";
+import { type Result } from "../../bridge/index.js";
 import { toolError, type ToolError } from "./errors.js";
 import { TOOL_DEFINITIONS, toModelVisible, type ModelVisibleTool, type ToolDefinition } from "./toolDefinition.js";
 

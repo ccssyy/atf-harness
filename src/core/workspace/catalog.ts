@@ -8,7 +8,7 @@
  * - 与 artifacts/ 目录的一致性由晋升闸负责（本模块只管清单自身的读写与校验）。
  */
 import { readFile, rename, writeFile } from "node:fs/promises";
-import { err, ok, type Result } from "../bridge/index.js";
+import { err, ok, type Result } from "../../bridge/index.js";
 import { workspaceError, type WorkspaceError } from "./errors.js";
 
 export const CATALOG_SCHEMA_VERSION = 0;

@@ -3,17 +3,17 @@ import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { MockDigestResolver, SessionLog } from "../../src/session/index.js";
+import { MockDigestResolver, SessionLog } from "../../src/core/session/index.js";
 import {
   GuardedSessionLog,
   RunWorkspace,
   T0_REF_FORBIDDEN,
   isScratchReference,
-} from "../../src/workspace/index.js";
+} from "../../src/core/workspace/index.js";
 
 /**
  * S4 铁律一测试（任务书 §4.4 验收"引用反例" + owner 口径 #4）：
- * GuardedSessionLog 包装 S2 会话校验入口——src/session/ 零改动；
+ * GuardedSessionLog 包装 S2 会话校验入口——src/core/session/ 零改动；
  * scratch/ 引用 → 校验拒绝（t0_ref_forbidden），非 scratch 引用 → S2 既有语义原样。
  */
 

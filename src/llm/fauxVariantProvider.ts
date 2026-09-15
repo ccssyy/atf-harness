@@ -6,7 +6,7 @@
  * （模型面契约），改实现测试供应商接口 ScriptedStepSource（decisionFace = "script"，非模型面）。
  */
 import { ok, type Result } from "../bridge/index.js";
-import { type LlmContextEvent } from "../session/index.js";
+import { type LlmContextEvent } from "../core/session/index.js";
 import { type LlmError } from "./provider.js";
 import { type ScriptedStepSource } from "./fauxProvider.js";
 import { type ScenarioStep } from "./scenario.js";

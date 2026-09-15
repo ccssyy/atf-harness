@@ -15,7 +15,7 @@ import {
   transformContext,
   type SessionEvent,
   type SessionEventType,
-} from "../../src/session/index.js";
+} from "../../src/core/session/index.js";
 
 /**
  * P2-S1 compaction 测试（任务书 §2 验收 1–3 / owner 口径 #2–#3 / ADR-09 C4/C5）：

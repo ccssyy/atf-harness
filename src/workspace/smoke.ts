@@ -13,7 +13,7 @@
 import { rm, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MockDigestResolver } from "../session/index.js";
+import { MockDigestResolver } from "../core/session/index.js";
 import {
   GuardedSessionLog,
   RunWorkspace,
@@ -21,7 +21,7 @@ import {
   sha256Hex,
   T0_REF_FORBIDDEN,
   type WorkspaceStatus,
-} from "./index.js";
+} from "../core/workspace/index.js";
 
 const repoRoot = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..");
 const runDir = join(repoRoot, "tmp", "runs", "smoke-s4");

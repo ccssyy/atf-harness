@@ -1,7 +1,7 @@
 /**
  * 工具层错误与 block 模型（与桥接/会话层同一边界纪律：只作 Result err 载荷，永不抛出）。
  */
-import { type BridgeError } from "../bridge/index.js";
+import { type BridgeError } from "../../bridge/index.js";
 
 export type ToolErrorCode =
   | "schema_violation" // canonical output 校验失败（owner 口径 #4）/ 参数违反模型可见 schema

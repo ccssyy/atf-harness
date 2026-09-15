@@ -13,7 +13,7 @@
  * {approval_ref, record_id} 逐值一致消费；{tool, params_digest} 仅为审计检索辅助
  * （approval_key 沿用为问答轨提案键，harness 内部）。
  */
-import { type BridgeError } from "../bridge/index.js";
+import { type BridgeError } from "../../bridge/index.js";
 import { checkSchema, validateCanonicalOutput, type SchemaNode } from "./canonical.js";
 import { approvalKeyFor, type LedgerRecord, type ScopeRef } from "./approvalKey.js";
 import { approvalMissingBlock, approvalTrackBlock, toolError, toolErrorFromBridge, type ToolBlock, type ToolError } from "./errors.js";

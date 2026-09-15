@@ -5,7 +5,7 @@
  * 真实对端 = 内核 fact digest 查询能力（尚未落地，按 owner 决议 ②1 同口径在 ATF 仓排队，
  * 不阻塞、不插队）；S2 提供契约 mock 实现，内核落地 re-pin 后接入真实实现。
  */
-import { type Result } from "../bridge/index.js";
+import { type Result } from "../../bridge/index.js";
 import { type SessionError } from "./errors.js";
 
 /** 单次 digest 查询结果。 */

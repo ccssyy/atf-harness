@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ok } from "../../src/bridge/index.js";
 import { type LlmDecision, type LlmProvider, type Scenario } from "../../src/llm/index.js";
-import { SESSION_EVENT_TYPES, SESSION_RESERVED_EVENT_TYPES, type LlmContextEvent } from "../../src/session/index.js";
+import { SESSION_EVENT_TYPES, SESSION_RESERVED_EVENT_TYPES, type LlmContextEvent } from "../../src/core/session/index.js";
 import {
   buildApprovalBackfill,
   buildDecisionBackfill,
@@ -12,9 +12,9 @@ import {
   injectMemoryEntries,
   type DecisionBackfill,
   type MemoryReadInjector,
-} from "../../src/run/index.js";
-import { ScenarioRunner, type BranchRunReport } from "../../src/run/index.js";
-import type { ToolCallOutcome } from "../../src/tools/index.js";
+} from "../../src/core/run/index.js";
+import { ScenarioRunner, type BranchRunReport } from "../../src/core/run/index.js";
+import type { ToolCallOutcome } from "../../src/core/tools/index.js";
 
 /**
  * 切片 2 验收测试（任务书 §3 VERIFY 2/3/4/5/6/7）：
