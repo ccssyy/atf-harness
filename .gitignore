@@ -6,3 +6,4 @@ dist/
 coverage/
 *.log
 tmp/
+docs/_owner/
