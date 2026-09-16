@@ -5,7 +5,7 @@
  * 问答轨 mcp 通道留痕 D4）／账本工具直通／退出码进 tool result／审计流落盘。
  */
 import { PassThrough } from "node:stream";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,17 +20,28 @@ const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
 interface Fixture {
   client: RpcPeer;
   runsRoot: string;
+  preauthPath?: string;
   close: () => void;
 }
 
-const setupFixture = async (): Promise<Fixture> => {
+const setupFixture = async (options?: { preauthTools?: readonly string[]; preauthHost?: string; badSchemaVersion?: boolean }): Promise<Fixture> => {
   const runsRoot = await mkdtemp(join(tmpdir(), "mcp-shell-test-"));
+  let preauthPath: string | undefined;
+  if (options?.preauthTools !== undefined || options?.badSchemaVersion === true) {
+    preauthPath = join(runsRoot, "mcp-preauth.json");
+    const body = options.badSchemaVersion === true
+      ? { schema_version: "McpPreauth/v0-bad", hosts: [{ host_id: options.preauthHost ?? "workbuddy-test", tools: ["atf_admit_data"] }] }
+      : { schema_version: "McpPreauth/v1", hosts: [{ host_id: options.preauthHost ?? "workbuddy-test", tools: options.preauthTools ?? ["atf_admit_data"] }] };
+    await writeFile(preauthPath, JSON.stringify(body), { mode: 0o600 });
+    await chmod(preauthPath, 0o600);
+  }
   const clientToShell = new PassThrough();
   const shellToClient = new PassThrough();
   const shell = new McpShell({
     runsRoot,
     mockCommand: ["node", mockPath],
     hostId: "workbuddy-test",
+    ...(preauthPath !== undefined ? { preauthPath } : {}),
   });
   const shellPeer = RpcPeer.create({
     input: clientToShell,
@@ -44,6 +55,7 @@ const setupFixture = async (): Promise<Fixture> => {
   return {
     client,
     runsRoot,
+    ...(preauthPath !== undefined ? { preauthPath } : {}),
     close: () => {
       client.close();
       shellPeer.close();
@@ -158,8 +170,8 @@ describe("MCP 外壳 E2E（T05）", () => {
     }
   });
 
-  it("治理：只读免审直执行；gate(query) 与 admit 经问答轨 mcp 通道留痕放行（D4），退出码进 result", async () => {
-    const fixture = await setupFixture();
+  it("治理（白名单内）：gate(query) 免预授权；admit 经问答轨放行且留痕 pre_authorization（D4+D1=A），退出码进 result", async () => {
+    const fixture = await setupFixture({ preauthTools: ["atf_admit_data", "atf_gate"] });
     try {
       await handshake(fixture.client);
       await callTool(fixture.client, "atf_bind_run", { run_id: "mcp-run-3" });
@@ -191,10 +203,102 @@ describe("MCP 外壳 E2E（T05）", () => {
         expect(payload["requires_human_review"]).toBe(true);
         expect(payload["actor"]).toBe("mcp-host");
       }
+      // L1b B1：写类（admit）留 pre_authorization；非写类（gate query）不带该位
+      //（approval/response 不含工具名——经 request_event_ref 反查对应 approval/request 的 tool）
+      const responseTool = (response: Record<string, unknown>): string | null => {
+        const ref = (response["payload"] as { request_event_ref?: number }).request_event_ref;
+        const request = stream.find((event) => event["type"] === "approval/request" && event["id"] === ref);
+        return request === undefined ? null : ((request["payload"] as { tool?: string }).tool ?? null);
+      };
+      const admitResponse = responses.find((response) => responseTool(response) === "atf_admit_data");
+      expect(admitResponse).toBeDefined();
+      expect((admitResponse?.["payload"] as Record<string, unknown>)["pre_authorization"]).toBe(true);
+      const gateResponse = responses.find((response) => responseTool(response) === "atf_gate");
+      expect(gateResponse).toBeDefined();
+      expect((gateResponse?.["payload"] as Record<string, unknown>)["pre_authorization"]).toBeUndefined();
       // 审计流：tool/call 与 tool/result 逐对配对（call_ref）
       const calls = stream.filter((event) => event["type"] === "tool/call");
       const results = stream.filter((event) => event["type"] === "tool/result");
       expect(calls.length).toBe(results.length);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it("B1 默认拒绝（L1b-D1=A）：无白名单 admit/gate(advance) 三段式拒绝且不写 approval/request；gate(query) 不受管辖", async () => {
+    const fixture = await setupFixture(); // 无 preauthPath → fail-closed 空白名单
+    try {
+      await handshake(fixture.client);
+      await callTool(fixture.client, "atf_bind_run", { run_id: "mcp-run-b1" });
+
+      const admit = await callTool(fixture.client, "atf_admit_data", { dataset_id: "ds-b1" });
+      expect(admit.isError).toBe(true);
+      expect(admit.body["exit_code"]).toBe(1);
+      expect(admit.body["reason"]).toBe("mcp_write_not_preauthorized");
+      const detail = admit.body["detail"] as string;
+      expect(detail).toContain("①写动作被默认拒绝（未执行）");
+      expect(detail).toContain("②原因");
+      expect(detail).toContain("③修复：在");
+      expect(detail).toContain('"host_id":"workbuddy-test"');
+
+      const advance = await callTool(fixture.client, "atf_gate", { gate: "g1", action: "advance" });
+      expect(advance.isError).toBe(true);
+      expect(advance.body["reason"]).toBe("mcp_write_not_preauthorized");
+
+      // gate(query) 只读：不受白名单管辖，经问答轨照常放行
+      const query = await callTool(fixture.client, "atf_gate", { gate: "g1", action: "query" });
+      expect(query.isError).toBe(false);
+
+      const stream = await readStream(fixture.runsRoot, "mcp-run-b1");
+      // 默认拒绝路径不触发审批链（被拒调用无任何 approval/request|response）
+      for (const deniedTool of ["atf_admit_data", "atf_gate"]) {
+        const deniedRequests = stream.filter(
+          (event) => event["type"] === "approval/request" && JSON.stringify(event["payload"]).includes(`"tool":"${deniedTool}"`),
+        );
+        // gate 仅有 query 的审批（advance 被拒无审批）；admit 无审批
+        if (deniedTool === "atf_admit_data") {
+          expect(deniedRequests.length).toBe(0);
+        } else {
+          const advanceRequests = deniedRequests.filter((event) => (event["payload"] as { params?: { action?: string } }).params?.action === "advance");
+          expect(advanceRequests.length).toBe(0);
+        }
+      }
+      const refusal = stream.find((event) => event["type"] === "tool/result" && JSON.stringify(event["payload"]).includes("mcp_write_not_preauthorized"));
+      expect(refusal).toBeDefined();
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it("B1 fail-closed：配置 schema_version 非法 → 视同空白名单全拒绝", async () => {
+    const fixture = await setupFixture({ badSchemaVersion: true, preauthTools: ["atf_admit_data"] });
+    try {
+      await handshake(fixture.client);
+      await callTool(fixture.client, "atf_bind_run", { run_id: "mcp-run-b1b" });
+      const admit = await callTool(fixture.client, "atf_admit_data", { dataset_id: "ds-b1b" });
+      expect(admit.isError).toBe(true);
+      expect(admit.body["reason"]).toBe("mcp_write_not_preauthorized");
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it("B1 gate(advance) 白名单内放行（写类经预授权）", async () => {
+    const fixture = await setupFixture({ preauthTools: ["atf_admit_data", "atf_gate"] });
+    try {
+      await handshake(fixture.client);
+      await callTool(fixture.client, "atf_bind_run", { run_id: "mcp-run-b1c" });
+      const advance = await callTool(fixture.client, "atf_gate", { gate: "g1", action: "advance" });
+      // mock 对端业务面允许 advance（canonical status 或 blocked 均为业务事实；此处断言非白名单拒绝）
+      expect(advance.body["reason"]).not.toBe("mcp_write_not_preauthorized");
+      const stream = await readStream(fixture.runsRoot, "mcp-run-b1c");
+      const advanceRequest = stream.find(
+        (event) => event["type"] === "approval/request" && (event["payload"] as { tool?: string; params?: { action?: string } }).tool === "atf_gate" && (event["payload"] as { params?: { action?: string } }).params?.action === "advance",
+      );
+      expect(advanceRequest).toBeDefined();
+      const advanceResponse = stream.find((event) => event["type"] === "approval/response" && (event["payload"] as { request_event_ref?: number }).request_event_ref === advanceRequest?.["id"]);
+      expect(advanceResponse).toBeDefined();
+      expect((advanceResponse?.["payload"] as Record<string, unknown>)["pre_authorization"]).toBe(true);
     } finally {
       fixture.close();
     }

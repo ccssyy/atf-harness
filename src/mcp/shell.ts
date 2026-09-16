@@ -38,6 +38,7 @@ import {
 import type { SessionEvent, SessionEventInput } from "../core/session/index.js";
 import { AtfBridgeConnection } from "../bridge/index.js";
 import { jsonRpcError, type RpcHandlerOutcome } from "../rpc/index.js";
+import { isPreauthorized, isWriteClassTool, loadMcpPreauth } from "./preauth.js";
 import { mcpToolDescriptors } from "./tools.js";
 import {
   MCP_LATEST_VERSION,
@@ -70,6 +71,9 @@ export interface McpShellOptions {
   projectId?: string;
   /** 宿主标识（D4 留痕；缺省 mcp-client，initialize clientInfo.name 覆盖） */
   hostId?: string;
+  /** 写类工具预授权白名单路径（L1b B1，L1b-D1=A；入口经 ATF_MCP_PREAUTH/缺省路径解析；
+   *  缺省 ~ 下 mcp-preauth.json；未传＝fail-closed 空白名单）。每次 tools/call 重新读取。 */
+  preauthPath?: string;
 }
 
 /** 工具结果统一形态：canonical 结果/失败原因＋退出码编码（MCP 无退出码 → 进 tool result）。 */
@@ -94,6 +98,16 @@ const toolPayload = (args: {
 
 const errorResult = (tool: string, message: string): McpToolCallResult =>
   toolPayload({ tool, exit_code: 1, reason: message });
+
+/** 三段式拒绝文案（B2 格式：①事实 → ②原因 → ③修复；L1b-D1=A 默认拒绝）。 */
+const preauthRefusal = (tool: string, hostId: string, preauthPath: string): McpToolCallResult => {
+  const threePart = [
+    `①写动作被默认拒绝（未执行）：${tool}`,
+    `②原因：MCP 面写类工具须主机显式预授权（L1b-D1=A）；host "${hostId}" 不在预授权白名单`,
+    `③修复：在 ${preauthPath} 的 hosts 增 {"host_id":"${hostId}","tools":["${tool}"]}（文件权限须 0600）后重试`,
+  ].join("\n");
+  return toolPayload({ tool, exit_code: 1, reason: "mcp_write_not_preauthorized", detail: threePart });
+};
 
 export class McpShell {
   private session: McpSession | null = null;
@@ -246,6 +260,23 @@ export class McpShell {
     if (session === null) {
       return errorResult(name, "未绑定 run——先调用 atf_bind_run（我方会话以绑定为界）");
     }
+    // 写类工具预授权闸（L1b B1，L1b-D1=A）：白名单外默认拒绝——不进 ToolExecutor、
+    // 不写 approval/request（无任何自动应答路径）；审计流落 tool/call+tool/result 可复核。
+    const writeClass = isWriteClassTool(name, args);
+    let preauthorized = false;
+    if (writeClass) {
+      const preauthPath = this.options.preauthPath ?? "";
+      const preauth = preauthPath === "" ? { config: { hosts: [] }, path: "(未配置)", failure: "预授权路径未配置——视同空白名单" } : await loadMcpPreauth(preauthPath);
+      if (preauth.failure !== undefined) console.error(`[atf-mcp] ${preauth.failure}`);
+      preauthorized = isPreauthorized(preauth.config, this.hostId, name);
+      if (!preauthorized) {
+        const call = await this.appendEvent({ type: "tool/call", payload: { tool: name, params: args } });
+        if (call !== null) {
+          await this.appendEvent({ type: "tool/result", payload: { tool: name, ok: false, reason: "mcp_write_not_preauthorized", call_ref: call.id, detail: `host=${this.hostId} 未预授权（fail-closed 基线：配置缺失/异常视同空白名单）` } });
+        }
+        return preauthRefusal(name, this.hostId, preauth.path);
+      }
+    }
     const call = await this.appendEvent({ type: "tool/call", payload: { tool: name, params: args } });
     if (call === null) {
       return errorResult(name, "会话事件落盘失败（fail-closed，工具未执行）");
@@ -259,8 +290,15 @@ export class McpShell {
       stub: async (): Promise<ApprovalStubResponse> => {
         // MCP 无授权原语：工具调用＝客户端审批面放行后的产物（D4-C 显式预授权）。
         // 我方闸门不放宽：账本轨优先/CAS/重入/indeterminate 防线在 handler 内全部保留；
-        // 放行恒留痕 channel:"mcp"+host_id+requires_human_review:true（D4-B 审计位）。
-        return { verdict: "granted", actor: "mcp-host", channel: "mcp", host_id: this.hostId };
+        // 放行恒留痕 channel:"mcp"+host_id+requires_human_review:true（D4-B 审计位）；
+        // 写类工具经白名单放行时增 pre_authorization:true（L1b B1；预授权不绕过账本 CAS）。
+        return {
+          verdict: "granted",
+          actor: "mcp-host",
+          channel: "mcp",
+          host_id: this.hostId,
+          ...(writeClass && preauthorized ? { pre_authorization: true as const } : {}),
+        };
       },
     });
     const gate: ApprovalGate = { handler: (gateInput) => qaHandler({ ...gateInput, tool_call_id: call.id }) };

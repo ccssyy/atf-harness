@@ -98,7 +98,20 @@ L1（已交付）  │ 前端一  src/ui/（TUI，主入口，同进程直连）
 | 6 | `ledger_query` | 直通 | canonical 复用 `LEDGER_QUERY_CANONICAL` |
 | 7 | `ledger_consume` | 直通 | 对端 CAS 一次性语义强制；无记录→业务拒绝 exit 1 |
 
-**授权（无授权原语）**：MCP 无 `session/request_permission` → 工具调用＝客户端审批面放行后的产物（D4-C 显式预授权）；我方闸门**不放宽**——问答轨 stub 恒 granted 但强制留痕 `channel:"mcp"+host_id+requires_human_review:true`，账本轨优先/CAS/重入/indeterminate 防线全保留（stub 恒 granted 使 denied/timeout 分支结构性死路，收紧须新机制，归 L1b）。
+**授权（无授权原语）**：MCP 无 `session/request_permission` → 工具调用＝客户端审批面放行后的产物（D4-C 显式预授权）；我方闸门**不放宽**——问答轨 stub 恒 granted 但强制留痕 `channel:"mcp"+host_id+requires_human_review:true`，账本轨优先/CAS/重入/indeterminate 防线全保留。
+
+**写类工具预授权白名单（L1b B1，L1b-D1=A）**：
+
+- **写类集合**：`atf_admit_data` ＋ `atf_gate(action=="advance")`（闸门推进＝状态变更；query 只读不入类）。
+- **配置**：缺省 `~/.atf-harness/mcp-preauth.json`（0600，与 llm.json 同范式；`--preauth` 或环境变量 `ATF_MCP_PREAUTH` 可指路径）：
+
+  ```json
+  { "schema_version": "McpPreauth/v1", "hosts": [ { "host_id": "workbuddy", "tools": ["atf_admit_data"] } ] }
+  ```
+
+- **语义**：白名单外写动作**默认拒绝**（不进 ToolExecutor、不写 `approval/request`——无自动应答路径），tool result 返回三段式拒绝文案（①事实②原因③修复，reason=`mcp_write_not_preauthorized`，exit 1），审计流仍落 tool/call+tool/result 可复核；白名单内放行走既有问答轨，留痕在 D4 三字段外增 `pre_authorization:true`。**预授权不写账本、不绕过 CAS 一次性消费**（D4-C 延续）。
+- **fail-closed 基线**：文件缺失＝空白名单（缺省最严，非错误）；宽权限/坏 schema_version/解析失败一律视同空白名单并 stderr 留因；每次 `tools/call` 重新读取（配置热生效）。
+- **⚠ 身份 caveat**：`host_id` 取自 MCP `clientInfo.name`＝**客户端自报身份**，预授权白名单**≠强身份鉴别**——仅用于约束宿主自动化行为（本地 stdio／D3 场景边界：传输两端同机，进程身份由 OS 域隔离承载）；远程多租户场景须另行鉴别机制（归 L2）。
 
 **退出码**：MCP 无退出码 → `resolveHeadlessExitCode` 编码进 tool result 文本 JSON 的 `exit_code`（非零 `isError:true`）；`0/1/75/78/79` 仅保留 ACP 与 CLI 入口。
 

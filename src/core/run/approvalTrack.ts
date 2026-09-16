@@ -52,8 +52,11 @@ export interface ApprovalStubResponse {
   question?: string;
   /** 应答通道留痕(D4):缺省不写任何字段;"acp"=宿主(ACP 面);"mcp"=客户端审批面(MCP 面) */
   channel?: "acp" | "mcp";
-  /** 宿主标识(D4):channel="acp" 时随 payload 落盘 */
+  /** 宿主标识(D4):随 payload 落盘 */
   host_id?: string;
+  /** 主机显式预授权位(L1b B1,D1=A):仅 MCP 写类工具经预授权白名单放行时置 true;
+   *  预授权不写账本、不绕过 CAS——账本一次性消费语义不变。 */
+  pre_authorization?: boolean;
 }
 
 export type ApprovalStub = (input: {
@@ -281,6 +284,8 @@ export const createApprovalTrackHandler = (deps: ApprovalTrackDeps): ApprovalHan
           ...(channeled ? { channel: stubResponse.channel } : {}),
           ...(channeled && stubResponse.host_id !== undefined ? { host_id: stubResponse.host_id } : {}),
           ...(channeled ? { requires_human_review: true } : {}),
+          // L1b B1(D1=A):主机显式预授权位(预授权不绕过账本——D4-C 延续)
+          ...(channeled && stubResponse.pre_authorization === true ? { pre_authorization: true } : {}),
         },
       });
       if (response === null) {

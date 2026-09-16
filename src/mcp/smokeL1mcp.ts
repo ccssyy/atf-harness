@@ -12,7 +12,7 @@
  */
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -84,7 +84,8 @@ const smoke = async (): Promise<string[]> => {
   const runsRoot = join(workDir, "runs");
   await mkdir(runsRoot, { recursive: true });
 
-  const child = spawn(process.execPath, [join(repoRoot, "dist", "mcp", "main.js"), "--runs-root", runsRoot], {
+  const preauthPath = join(workDir, "mcp-preauth.json"); // B1：先不存在（阶段 A 默认拒绝），后写入（阶段 B 放行）
+  const child = spawn(process.execPath, [join(repoRoot, "dist", "mcp", "main.js"), "--runs-root", runsRoot, "--preauth", preauthPath], {
     stdio: ["pipe", "pipe", "pipe"],
   });
   let stderrText = "";
@@ -131,6 +132,22 @@ const smoke = async (): Promise<string[]> => {
     if (scan.isError) throw new Error("fact_scan 失败");
     evidence.push("只读链: workspace_status / fact_scan 免审批直执行，canonical 返回正常（exit 0）");
 
+    // ⑤-B1 阶段 A：白名单外（配置文件未建＝空白名单）→ 默认拒绝三段式，无审批链
+    const refused = await client.callTool("atf_admit_data", { dataset_id: "ds-l1mcp" });
+    if (!refused.isError || refused.body["reason"] !== "mcp_write_not_preauthorized") {
+      throw new Error(`B1 阶段 A：白名单外 admit 未被默认拒绝: ${JSON.stringify(refused.body)}`);
+    }
+    const refusalDetail = refused.body["detail"] as string;
+    if (!refusalDetail.includes("①写动作被默认拒绝（未执行）") || !refusalDetail.includes("②原因") || !refusalDetail.includes("③修复：在")) {
+      throw new Error(`B1 三段式拒绝文案不完整: ${refusalDetail}`);
+    }
+    evidence.push("B1 阶段 A: 白名单外 admit 默认拒绝（三段式文案；不进 ToolExecutor、无 approval/request）");
+
+    // ⑤-B1 阶段 B：写入预授权配置（server 每次 tools/call 重新读取，无需重启）→ 放行留痕
+    await writeFile(preauthPath, JSON.stringify({ schema_version: "McpPreauth/v1", hosts: [{ host_id: HOST_ID, tools: ["atf_admit_data", "atf_gate"] }] }), { mode: 0o600 });
+    await chmod(preauthPath, 0o600);
+    evidence.push("B1 阶段 B: 预授权配置热生效（hosts 增 workbuddy-l1mcp-smoke；0600）");
+
     // ⑤ 写治理链（VERIFY 9）：账本轨 miss → 问答轨 mcp 通道留痕放行 → 真执行
     const gate = await client.callTool("atf_gate", { gate: "g1", action: "query" });
     if (gate.isError || gate.body["exit_code"] !== 0) throw new Error(`gate(query) 失败: ${JSON.stringify(gate.body)}`);
@@ -160,12 +177,25 @@ const smoke = async (): Promise<string[]> => {
     // ⑧ 落盘审计流：D4 留痕 + tool/call↔tool/result 逐对配对
     const streamText = await readFile(join(runsRoot, RUN_ID, "session.jsonl"), "utf8");
     const lines = streamText.split("\n").filter((line) => line !== "");
-    const responses = lines.filter((line) => line.includes('"type":"approval/response"')).map((line) => JSON.parse(line) as { payload: Record<string, unknown> });
+    const responses = lines.filter((line) => line.includes('"type":"approval/response"')).map((line) => JSON.parse(line) as { id: number; payload: Record<string, unknown> });
     if (responses.length !== 2) throw new Error(`approval/response 数量不符: ${String(responses.length)} ≠ 2（gate+admit）`);
     for (const response of responses) {
       if (response.payload["channel"] !== "mcp" || response.payload["host_id"] !== HOST_ID || response.payload["requires_human_review"] !== true || response.payload["verdict"] !== "granted") {
         throw new Error(`D4 留痕不完整: ${JSON.stringify(response.payload)}`);
       }
+    }
+    // B1：写类（admit）审批应答带 pre_authorization:true；非写类（gate query）不带
+    const toolOfResponse = (response: { id: number; payload: Record<string, unknown> }): string | null => {
+      const request = lines.map((line) => JSON.parse(line) as { id: number; type: string; payload: { request_event_ref?: number; tool?: string } }).find((event) => event.type === "approval/request" && event.id === response.payload["request_event_ref"]);
+      return request?.payload.tool ?? null;
+    };
+    const admitResponse = responses.find((response) => toolOfResponse(response) === "atf_admit_data");
+    if (admitResponse === undefined || admitResponse.payload["pre_authorization"] !== true) {
+      throw new Error("B1 留痕缺失: admit 应答无 pre_authorization:true");
+    }
+    const gateResponse = responses.find((response) => toolOfResponse(response) === "atf_gate");
+    if (gateResponse === undefined || gateResponse.payload["pre_authorization"] !== undefined) {
+      throw new Error("B1 越界留痕: gate(query) 应答不应带 pre_authorization");
     }
     const calls = lines.filter((line) => line.includes('"type":"tool/call"'));
     const results = lines.filter((line) => line.includes('"type":"tool/result"'));
