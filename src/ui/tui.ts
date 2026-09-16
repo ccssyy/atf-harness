@@ -27,6 +27,7 @@ import { loadLlmProviderConfig, HttpLlmProvider, type ResolvedLlmProviderConfig 
 import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
 import { ToolRegistry } from "../core/tools/index.js";
 import { ScenarioRunner, resolveRunExitCode, sessionLogPathFor, listPendingApprovals, readSessionStream, type ApprovalStubResponse, type BranchRunReport } from "../core/run/index.js";
+import { HistoryFolder } from "./historyFold.js";
 import type { Scenario } from "../llm/index.js";
 import { DiffRenderer } from "./renderer.js";
 import { formatEventLine } from "./eventView.js";
@@ -178,6 +179,8 @@ const main = async (): Promise<void> => {
     }
 
     let instructionText = instruction;
+    // B6 D2：历史重放折叠——history 事件缓冲为一批，默认一行摘要（按 h 展开）
+    const folder = new HistoryFolder(renderer, { scenario: args.scenarioId, run: runId });
     // B4：多轮续跑循环——每个 prompt 一个 turn（审批闸逐 turn 生效）；空输入/Ctrl+C 退出
     for (;;) {
       const provider = new HttpLlmProvider({
@@ -211,7 +214,7 @@ const main = async (): Promise<void> => {
           stub: async (input) => await askApproval({ renderer, rl, input }),
         },
         onEvent: (event, origin) => {
-          renderer.appendLine(formatEventLine(event, origin));
+          folder.handle(event, origin, formatEventLine);
         },
         ...(continueMode ? { continue: { instruction: instructionText } } : {}),
         ...(args.scopeMode !== "headless" ? { scopeMode: args.scopeMode } : {}),
@@ -226,6 +229,7 @@ const main = async (): Promise<void> => {
         break;
       }
       const report: BranchRunReport = ran.value;
+      folder.flushSummary(); // runBranch 收口：历史批次未达 live 也补摘要（幂等）
       renderer.appendLine("──────── 终局 ────────");
       renderer.appendLine(`outcome=${report.outcome.kind} exit=${String(report.exit_code)} 事件数=${String(report.events.length)} 模型调用=${String(provider.calls)} 次`);
       if (report.outcome.kind === "failed") {
@@ -252,7 +256,7 @@ const main = async (): Promise<void> => {
       let nextInstruction: string | null = null;
       for (;;) {
         rl.resume();
-        const post = (await ask(rl, "新指令（直接回车=退出，r=重绘，e=展开/折叠长事件）> ")).trim();
+        const post = (await ask(rl, "新指令（直接回车=退出，r=重绘，e=展开/折叠长事件，h=展开历史）> ")).trim();
         if (post === "r" || post === "R") {
           renderer.reset();
           renderer.appendLine("（界面已重绘：过程流为 append-only 日志的纯重放，语义不变）");
@@ -263,6 +267,11 @@ const main = async (): Promise<void> => {
           renderer.setFoldExpanded(!renderer.isFoldExpanded);
           renderer.reset();
           renderer.appendLine(`（长事件已${renderer.isFoldExpanded ? "全部展开" : "重新折叠（阈值 20 物理行）"}）`);
+          continue;
+        }
+        // B6 D2：h 展开历史重放（逐条，沿用 D1 渲染规则；日志零改动）
+        if (post === "h" || post === "H") {
+          if (!folder.reveal()) renderer.appendLine("（当前无可展开的历史批次——已展开或本会话无重放）");
           continue;
         }
         if (post !== "") nextInstruction = post;
