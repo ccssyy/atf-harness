@@ -8,8 +8,8 @@ import {
   parseResumeArgs,
   parseSessionStream,
   resolveAnswerTarget,
-} from "../../src/run/index.js";
-import type { SessionEvent } from "../../src/session/index.js";
+} from "../../src/core/run/index.js";
+import type { SessionEvent } from "../../src/core/session/index.js";
 
 let seq = 0;
 const ev = (type: SessionEvent["type"], payload: unknown): SessionEvent => {

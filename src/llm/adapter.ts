@@ -11,7 +11,7 @@
  */
 import { err, ok, type Result } from "../bridge/index.js";
 import { type LlmDecision } from "./provider.js";
-import { type LlmContextEvent } from "../session/index.js";
+import { type LlmContextEvent } from "../core/session/index.js";
 
 // ---------------------------------------------------------------------------
 // B1：投影 → 模型消息（adapter 映射）
@@ -135,6 +135,10 @@ const mapEvent = (event: LlmContextEvent): Result<AdapterMessage | null, Adapter
           "params",
           "approval_key",
           "supersedes",
+          // D4 通道留痕（L1 门 2 T04/T05）：宿主/客户端通道应答三字段，白名单对齐实际写入形态
+          "channel",
+          "host_id",
+          "requires_human_review",
         ],
         event.type,
       );

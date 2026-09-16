@@ -9,7 +9,7 @@
 
 - **本仓（atf-harness）**：L2–L4 层。TypeScript，trunk-based（main + 短命分支）。
 - **内核仓（ATF）**：L1 层，位于 `<ATF_KERNEL_DIR>`。harness 通过 spawn 其 `atf` CLI 子进程驱动它，**不做任何代码级依赖**（无 submodule、无 pip/npm 依赖、不 import）。
-- **长期路线**（Phase 0–4，详见决策文档 §路线图）：0 决策 ✅ → 1 headless 冒烟 → 2 深水区 → 3 宿主嵌入（ACP server）→ 4 表面壳（条件阶段）。最终集成形态 = ACP / skills 双入口，**两仓永不合并**。
+- **长期路线**（**路线轴定义**，详见决策文档 §路线图）：0 决策 ✅ → 1 headless 冒烟 → 2 深水区 → **3+4 合并为 L1「产品本体落地」**。**本轴已按 2026-09-15 owner 裁定 D15-a 修订**：原 Phase 3（宿主嵌入 / ACP server）与原 Phase 4（表面壳，原定语"条件阶段 · 可砍"）自该裁定起**合并为一个阶段**——原因是自有 UI 已确立为**产品本体主入口**（前端一），不再是"若宿主嵌入体验够用则砍掉"的条件阶段；ACP / MCP 是两个集成面（配件）。合并后按批次推进：**L1**（`core/` 抽取 ＋ 自有 UI 最小前端 TUI ＋ ACP 外壳 ＋ MCP 外壳）→ **L1b** → **L1c**（Web UI）→ **L1d**（桌面 app）。最终集成形态 = ACP / skills 双入口，**两仓永不合并**。
 
 ## 2. 权威文档体系（docs/）
 
@@ -37,7 +37,7 @@
 - **当前 pin：tag `v0.6.0b0`（commit `b6db3496b34089147044be9c6b9a0a7ceb595e3a`，2026-09-14；会话方法面 7 方法（含 `atf.bind_run`），内核批次二发版）**。pin 只落在 ATF 发版 tag 上，不追 main 中间态。
 - contract tests 运行前提：`ATF_CLI_PATH` 指向一份 **checkout 在 pin 上的 ATF 只读副本**，测试先校验其 HEAD sha 与 pin 一致，不一致直接 fail：
   ```bash
-  git -C <ATF_KERNEL_DIR> worktree add <HARNESS_DIR>/.atf-pinned v0.2.0b7
+  git -C <ATF_KERNEL_DIR> worktree add <HARNESS_DIR>/.atf-pinned v0.6.0b0
   export ATF_CLI_PATH=<HARNESS_DIR>/.atf-pinned
   ```
   （`.atf-pinned/` 加入 .gitignore，不进本仓。）

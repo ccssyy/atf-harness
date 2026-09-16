@@ -20,7 +20,7 @@
 import { open, mkdir, readFile, type FileHandle } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname } from "node:path";
-import { err, ok, type Result } from "../bridge/index.js";
+import { err, ok, type Result } from "../../bridge/index.js";
 import {
   FSYNC_BATCH_MAX_EVENTS,
   FSYNC_BATCH_WINDOW_MS,

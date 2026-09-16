@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FauxProvider } from "../../src/llm/fauxProvider.js";
 import { FauxVariantProvider } from "../../src/llm/fauxVariantProvider.js";
 import { createDefaultProviderRegistry, ProviderRegistry } from "../../src/llm/providerRegistry.js";
-import { type LlmContextEvent } from "../../src/session/index.js";
+import { type LlmContextEvent } from "../../src/core/session/index.js";
 
 /**
  * P2-S3 provider 注册表与第二实现（任务书 §4 / 启动决议口径 #2/#3：至少注册两个

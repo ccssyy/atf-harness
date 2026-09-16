@@ -3,8 +3,8 @@ import {
   findExistingCredential,
   resolveCredentialState,
   type CredentialRef,
-} from "../../src/tools/index.js";
-import { type SessionEvent, type SessionEventType } from "../../src/session/index.js";
+} from "../../src/core/tools/index.js";
+import { type SessionEvent, type SessionEventType } from "../../src/core/session/index.js";
 
 /**
  * P2-S2 凭据判定纯函数测试(设计 v1.1 §2 / 门 2 A1–A2):

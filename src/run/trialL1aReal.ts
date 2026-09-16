@@ -42,8 +42,8 @@ import {
   loadLlmProviderConfig,
   type ResolvedLlmProviderConfig,
 } from "../llm/index.js";
-import { ToolRegistry } from "../tools/index.js";
-import { ScenarioRunner, type ApprovalStubResponse, type BranchRunReport } from "./index.js";
+import { ToolRegistry } from "../core/tools/index.js";
+import { ScenarioRunner, type ApprovalStubResponse, type BranchRunReport } from "../core/run/index.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const cliEntry = join(repoRoot, "dist", "cli", "resume.js");

@@ -11,7 +11,7 @@ import {
   type LlmProvider,
   type Scenario,
 } from "../../src/llm/index.js";
-import { ScenarioRunner, type BranchRunReport } from "../../src/run/index.js";
+import { ScenarioRunner, type BranchRunReport } from "../../src/core/run/index.js";
 
 /**
  * 切片 0 验收测试（任务书 §4 VERIFY 1/2/3/4/6）：决策类型拆分与运行时守卫。

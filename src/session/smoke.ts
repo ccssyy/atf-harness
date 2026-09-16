@@ -13,11 +13,11 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { err, ok, type Result } from "../bridge/index.js";
-import { sessionError, type SessionError } from "./errors.js";
-import { MockDigestResolver } from "./digestResolver.js";
-import { convertToLlm, transformContext } from "./pipeline.js";
-import type { SessionEventInput } from "./schema.js";
-import { SessionLog } from "./sessionLog.js";
+import { sessionError, type SessionError } from "../core/session/errors.js";
+import { MockDigestResolver } from "../core/session/digestResolver.js";
+import { convertToLlm, transformContext } from "../core/session/pipeline.js";
+import type { SessionEventInput } from "../core/session/schema.js";
+import { SessionLog } from "../core/session/sessionLog.js";
 
 const DIGEST_GOOD = "3a7f".repeat(16); // 演示用 64 位 hex
 const DIGEST_EVIL = "dead".repeat(16);

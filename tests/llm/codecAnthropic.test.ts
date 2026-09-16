@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { anthropicMessagesCodec, ANTHROPIC_VERSION } from "../../src/llm/index.js";
 import type { AdapterMessage, ModelResponse } from "../../src/llm/index.js";
-import type { ModelVisibleTool } from "../../src/tools/index.js";
+import type { ModelVisibleTool } from "../../src/core/tools/index.js";
 
 const TOOLS: ModelVisibleTool[] = [
   { name: "atf_workspace_status", description: "工作区状态", parameters: { type: "object", required: [], properties: {} } },

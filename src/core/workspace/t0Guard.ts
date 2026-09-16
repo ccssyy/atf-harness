@@ -16,7 +16,7 @@
  * 语义的扩展点（owner 口径 #4"新增规则注入或包装校验器"之包装形态）。
  */
 import { dirname, isAbsolute, relative, resolve } from "node:path";
-import { type Result } from "../bridge/index.js";
+import { type Result } from "../../bridge/index.js";
 import {
   SessionLog,
   type AppendOutcome,

@@ -17,8 +17,8 @@
  */
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { err, ok, type Result } from "../bridge/index.js";
-import { AtfBridgeConnection } from "../bridge/index.js";import {
+import { err, ok, type Result } from "../../bridge/index.js";
+import { AtfBridgeConnection } from "../../bridge/index.js";import {
   FauxProvider,
   createDefaultProviderRegistry,
   assertModelDecision,
@@ -30,8 +30,8 @@ import { AtfBridgeConnection } from "../bridge/index.js";import {
   type ScenarioExpect,
   type ScenarioStep,
   type ScriptedStepSource,
-} from "../llm/index.js";
-import type { LlmProvider } from "../llm/index.js";
+} from "../../llm/index.js";
+import type { LlmProvider } from "../../llm/index.js";
 import { LOOP_MAX_STEPS_PER_TURN, LOOP_MAX_TURNS } from "../session/constants.js";
 import { resolveExhaustionStop, type LoopStopReason } from "./stopReason.js";
 import { injectMemoryEntries, type MemoryReadInjector } from "./memoryInjection.js";
@@ -77,6 +77,7 @@ import {
 } from "./providerSwitch.js";
 import { type ApprovalGate } from "../tools/index.js";
 import { FactScanResolver } from "./factScanResolver.js";
+import type { RunEventSubscriber } from "../projection.js";
 import { deriveLoopStateFromEvents } from "./loopState.js";
 import {
   buildAnswerPayload,
@@ -214,6 +215,10 @@ export interface ResumeAnswer {
   request_event_id?: number;
   /** 应答 actor 账面标识（缺省 cli-operator） */
   actor?: string;
+  /** D4 通道留痕（L1 门 2 T04）：宿主/客户端通道 resume 应答增 channel/host_id
+   *  （approval/response 恒增 requires_human_review:true）。缺省不写任何字段——既有通道零改动。 */
+  channel?: "acp" | "mcp";
+  host_id?: string;
 }
 
 export interface RunBranchOptions {
@@ -247,6 +252,10 @@ export interface RunBranchOptions {
    *  "headless" 为 harness 侧自造值，真实内核拒绝（ledger_query → invalid_params）——
    *  对接真实内核的 run 须显式传 "canonical"。 */
   scopeMode?: "canonical" | "simulation" | "headless";
+  /** L1 门 2 T01：投影订阅（core 投影面，src/core/projection.ts）。事件真实落盘后同步
+   *  投出（origin=live；resume 装载既有流为 history）——订阅方看到的事件与 append-only
+   *  日志逐条一致（INV-A 投影侧）。缺省不订阅 = 既有行为逐位不变。 */
+  onEvent?: RunEventSubscriber;
 }
 
 export class ScenarioRunner {
@@ -406,6 +415,7 @@ export class ScenarioRunner {
           return finalize();
         }
         events.push(...parsed.value);
+        for (const historical of parsed.value) options.onEvent?.(historical, "history");
       }
       const approvalHandler = options.approvalSurface === undefined
         ? undefined
@@ -432,6 +442,7 @@ export class ScenarioRunner {
           return null;
         }
         events.push(appended.value.event);
+        options.onEvent?.(appended.value.event, "live");
         return appended.value.event;
       };
 
@@ -448,6 +459,7 @@ export class ScenarioRunner {
         const appended = await session.append({ type: "turn/end", payload });
         if (appended.ok && appended.value.status === "appended") {
           events.push(appended.value.event);
+          options.onEvent?.(appended.value.event, "live");
           closeTurnRecord();
           return;
         }
@@ -602,7 +614,7 @@ export class ScenarioRunner {
           } else {
             const answered = await appendEvent({
               type: "approval/response",
-              payload: buildAnswerPayload(target.value, resumeAnswer.verdict, resumeAnswer.note, resumeAnswer.actor),
+              payload: buildAnswerPayload(target.value, resumeAnswer.verdict, resumeAnswer.note, resumeAnswer.actor, resumeAnswer.channel !== undefined ? { channel: resumeAnswer.channel, host_id: resumeAnswer.host_id } : undefined),
             });
             if (answered === null) {
               outcome = { kind: "failed", error: runError("session_failure", "resume 应答（approval/response）落盘失败") };

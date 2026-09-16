@@ -12,8 +12,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseScenario } from "../llm/index.js";
-import { sha256Hex } from "../workspace/index.js";
-import { ScenarioRunner } from "./index.js";
+import { sha256Hex } from "../core/workspace/index.js";
+import { ScenarioRunner } from "../core/run/index.js";
 
 const repoRoot = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..");
 const scenarioPath = join(repoRoot, "scenarios", "admission-to-g2.json");

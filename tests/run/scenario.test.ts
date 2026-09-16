@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseScenario } from "../../src/llm/index.js";
-import { resolveRunExitCode, ScenarioRunner, type BranchRunReport } from "../../src/run/index.js";
-import { sha256Hex } from "../../src/workspace/index.js";
+import { resolveRunExitCode, ScenarioRunner, type BranchRunReport } from "../../src/core/run/index.js";
+import { sha256Hex } from "../../src/core/workspace/index.js";
 
 /**
  * S5 冒烟 runner 测试（任务书 §5 四分支 + owner 口径 #1–#6；mock 对端 = 契约 mock，owner 口径 #3）。

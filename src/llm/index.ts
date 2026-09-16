@@ -1,5 +1,5 @@
 /**
- * S5 LLM 层公开出口。冒烟 runner（src/run/）只从这里 import。
+ * S5 LLM 层公开出口。冒烟 runner（src/core/run/）只从这里 import。
  */
 export {
   adaptProjectionToMessages,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { adaptProjectionToMessages, expandModelResponse } from "../../src/llm/index.js";
-import { type LlmContextEvent } from "../../src/session/index.js";
+import { type LlmContextEvent } from "../../src/core/session/index.js";
 
 /**
  * 切片 2 · VERIFY 1（B1 adapter 映射）＋ A3 多工具展开（任务书 §3.1/§3.2 上半）。

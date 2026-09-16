@@ -11,7 +11,7 @@
  *
  * 红线：凭据与端点不进载荷明文（载荷只到 provider_id 粒度，ADR-09 §1.4）。
  */
-import { err, ok, type Result } from "../bridge/index.js";
+import { err, ok, type Result } from "../../bridge/index.js";
 import { type DigestResolver, type SessionEvent } from "../session/index.js";
 
 /** provider/switch 事件载荷（决议口径 #4 定死形态）。 */

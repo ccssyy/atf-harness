@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { MockDigestResolver } from "../../src/session/digestResolver.js";
-import { type SessionEvent } from "../../src/session/index.js";
+import { MockDigestResolver } from "../../src/core/session/digestResolver.js";
+import { type SessionEvent } from "../../src/core/session/index.js";
 import {
   buildSwitchPayload,
   checkSwitchBoundary,
   verifyDigestContinuity,
-} from "../../src/run/index.js";
+} from "../../src/core/run/index.js";
 
 /**
  * P2-S3 切换编排原语测试（启动决议口径 #5/#6/#4）：

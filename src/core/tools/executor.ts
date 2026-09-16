@@ -13,7 +13,7 @@
  * {approval_ref, record_id} 逐值一致消费；{tool, params_digest} 仅为审计检索辅助
  * （approval_key 沿用为问答轨提案键，harness 内部）。
  */
-import { type BridgeError } from "../bridge/index.js";
+import { type BridgeError } from "../../bridge/index.js";
 import { checkSchema, validateCanonicalOutput, type SchemaNode } from "./canonical.js";
 import { approvalKeyFor, type LedgerRecord, type ScopeRef } from "./approvalKey.js";
 import { approvalMissingBlock, approvalTrackBlock, toolError, toolErrorFromBridge, type ToolBlock, type ToolError } from "./errors.js";
@@ -216,7 +216,8 @@ export class ToolExecutor {
 type ApprovalOutcome = { ok: true } | { ok: false; outcome: ToolCallOutcome };
 
 // ledger 方法自身的 canonical output（与 bridge.contract.yaml methods 段 v2 对等）
-const LEDGER_QUERY_CANONICAL: SchemaNode = {
+/** ledger_query canonical output（MCP 外壳同用，沿用桥接契约不另造）。 */
+export const LEDGER_QUERY_CANONICAL: SchemaNode = {
   type: "object",
   required: ["ok", "records"],
   properties: {
@@ -242,7 +243,8 @@ const LEDGER_QUERY_CANONICAL: SchemaNode = {
   },
 };
 
-const LEDGER_CONSUME_CANONICAL: SchemaNode = {
+/** ledger_consume canonical output（MCP 外壳同用，沿用桥接契约不另造）。 */
+export const LEDGER_CONSUME_CANONICAL: SchemaNode = {
   type: "object",
   required: ["ok", "record_id", "state"],
   properties: {

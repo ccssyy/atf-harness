@@ -33,8 +33,8 @@ import {
   PROVIDER_ENV_VARS,
   type FakeEndpointScriptItem,
 } from "../llm/index.js";
-import { approvalParamsDigest, ToolRegistry } from "../tools/index.js";
-import { ScenarioRunner, type ApprovalStubResponse, type BranchRunReport } from "./index.js";
+import { approvalParamsDigest, ToolRegistry } from "../core/tools/index.js";
+import { ScenarioRunner, type ApprovalStubResponse, type BranchRunReport } from "../core/run/index.js";
 import type { Scenario } from "../llm/index.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));

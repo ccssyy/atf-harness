@@ -18,8 +18,8 @@ import {
   type ResolvedLlmProviderConfig,
 } from "../../src/llm/index.js";
 import type { Scenario, ScenarioStep } from "../../src/llm/index.js";
-import { ScenarioRunner, deriveLoopStateFromEvents, type ApprovalStubResponse, type BranchRunReport } from "../../src/run/index.js";
-import { ToolRegistry } from "../../src/tools/index.js";
+import { ScenarioRunner, deriveLoopStateFromEvents, type ApprovalStubResponse, type BranchRunReport } from "../../src/core/run/index.js";
+import { ToolRegistry } from "../../src/core/tools/index.js";
 
 const repoRoot = join(import.meta.dirname, "..", "..");
 const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");

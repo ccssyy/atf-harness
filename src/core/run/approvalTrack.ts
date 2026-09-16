@@ -38,13 +38,22 @@ export const DENIAL_LOOP_LIMIT = 2;
 /** 六类应答 verdict(ADR-09 C6;timeout 的 actor 恒为 "harness" 系统标记)。 */
 export type ApprovalVerdict = "granted" | "advised" | "denied" | "aborted" | "clarification" | "timeout";
 
-/** 桩对端应答(测试基建;实现由测试注入,不得成为运行时依赖路径)。 */
+/** 桩对端应答(测试基建;实现由测试注入,不得成为运行时依赖路径)。
+ *  D4(门 1 裁定,B+C 组合,L1 门 2 T04 起):宿主通道应答增 channel/host_id 留痕位——
+ *  channel 缺省时零增量(既有通道 TUI/CLI/冒烟行为逐位不变);channel="acp"|"mcp" 时
+ *  approval/response 落盘 payload 恒增 channel/host_id/requires_human_review:true
+ *  (人经宿主/客户端审批面应答,我方无法验证人性,审计位恒亮——B 的诚实口径;
+ *  账本一次性消费不受影响。mcp 通道=T05,任务书 §2.4「D4 的口径同样适用」)。 */
 export interface ApprovalStubResponse {
   verdict: ApprovalVerdict;
   actor?: string;
   reason?: string;
   advice_text?: string;
   question?: string;
+  /** 应答通道留痕(D4):缺省不写任何字段;"acp"=宿主(ACP 面);"mcp"=客户端审批面(MCP 面) */
+  channel?: "acp" | "mcp";
+  /** 宿主标识(D4):channel="acp" 时随 payload 落盘 */
+  host_id?: string;
 }
 
 export type ApprovalStub = (input: {
@@ -257,6 +266,7 @@ export const createApprovalTrackHandler = (deps: ApprovalTrackDeps): ApprovalHan
 
       const verdict = stubResponse.verdict;
       const actor = verdict === "timeout" ? "harness" : (stubResponse.actor ?? "stub-host");
+      const channeled = stubResponse.channel !== undefined;
       const response = await write({
         type: "approval/response",
         payload: {
@@ -267,6 +277,10 @@ export const createApprovalTrackHandler = (deps: ApprovalTrackDeps): ApprovalHan
           ...(stubResponse.reason !== undefined ? { reason: stubResponse.reason } : {}),
           ...(stubResponse.advice_text !== undefined ? { advice_text: stubResponse.advice_text } : {}),
           ...(stubResponse.question !== undefined ? { question: stubResponse.question } : {}),
+          // D4 B+C:宿主/客户端通道留痕(仅有 channel 时增量;requires_human_review 恒 true——不假装能验证人性)
+          ...(channeled ? { channel: stubResponse.channel } : {}),
+          ...(channeled && stubResponse.host_id !== undefined ? { host_id: stubResponse.host_id } : {}),
+          ...(channeled ? { requires_human_review: true } : {}),
         },
       });
       if (response === null) {

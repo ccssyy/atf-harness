@@ -24,6 +24,8 @@ export { TOOL_DEFINITIONS, TOOL_NAMES, toModelVisible, type ModelVisibleTool, ty
 export { ToolRegistry } from "./registry.js";
 export type { BridgeTransport } from "./executor.js";
 export {
+  LEDGER_CONSUME_CANONICAL,
+  LEDGER_QUERY_CANONICAL,
   ToolExecutor,
   resolveHeadlessExitCode,
   type ApprovalGate,

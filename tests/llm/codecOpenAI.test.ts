@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { openaiChatCodec } from "../../src/llm/index.js";
 import type { AdapterMessage, ModelResponse } from "../../src/llm/index.js";
-import type { ModelVisibleTool } from "../../src/tools/index.js";
+import type { ModelVisibleTool } from "../../src/core/tools/index.js";
 
 const TOOLS: ModelVisibleTool[] = [
   { name: "atf_fact_scan", description: "事实索引枚举", parameters: { type: "object", required: [], properties: {} } },

@@ -13,8 +13,8 @@
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AtfBridgeConnection } from "../bridge/index.js";
-import { ToolExecutor, ToolRegistry, resolveHeadlessExitCode } from "./index.js";
-import { approvalParamsDigest, type ScopeRef } from "./approvalKey.js";
+import { ToolExecutor, ToolRegistry, resolveHeadlessExitCode } from "../core/tools/index.js";
+import { approvalParamsDigest, type ScopeRef } from "../core/tools/approvalKey.js";
 
 const repoRoot = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..");
 const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");

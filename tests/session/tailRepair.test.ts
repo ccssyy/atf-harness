@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { err } from "../../src/bridge/index.js";
-import { sessionError } from "../../src/session/errors.js";
-import { MockDigestResolver } from "../../src/session/digestResolver.js";
-import { SessionLog } from "../../src/session/sessionLog.js";
-import { planCompaction, transformContext, type SessionEvent, type SessionEventType } from "../../src/session/index.js";
+import { sessionError } from "../../src/core/session/errors.js";
+import { MockDigestResolver } from "../../src/core/session/digestResolver.js";
+import { SessionLog } from "../../src/core/session/sessionLog.js";
+import { planCompaction, transformContext, type SessionEvent, type SessionEventType } from "../../src/core/session/index.js";
 
 /**
  * S1a 尾部半行策略测试（决议 §2.1 七条 / §3 新增测试 1–5）：

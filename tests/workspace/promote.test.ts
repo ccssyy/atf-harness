@@ -3,7 +3,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { RunWorkspace, promoteArtifact, sha256Hex } from "../../src/workspace/index.js";
+import { RunWorkspace, promoteArtifact, sha256Hex } from "../../src/core/workspace/index.js";
 
 /**
  * S4 晋升闸 A 测试（任务书 §4.3 验收 + owner 口径 #3/#6）。

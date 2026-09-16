@@ -23,8 +23,8 @@ import { getCodec } from "./codec.js";
 import { type ProtocolCodec } from "./codecWire.js";
 import { llmError, llmErrorOf, type LlmDecision, type LlmError, type LlmProvider } from "./provider.js";
 import { type ResolvedLlmProviderConfig } from "./providerConfig.js";
-import { type ModelVisibleTool } from "../tools/index.js";
-import { type LlmContextEvent } from "../session/index.js";
+import { type ModelVisibleTool } from "../core/tools/index.js";
+import { type LlmContextEvent } from "../core/session/index.js";
 
 /**
  * 系统提示（harness 静态文本；只描述模型面约定，不含预算/治理内部字段——

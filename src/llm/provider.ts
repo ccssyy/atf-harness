@@ -13,7 +13,7 @@
  * 接口 ScriptedStepSource，见 fauxProvider.ts；明确标注非模型面）。
  */
 import { type Result } from "../bridge/index.js";
-import { type LlmContextEvent } from "../session/index.js";
+import { type LlmContextEvent } from "../core/session/index.js";
 
 /**
  * 模型面契约（切片 0）：一次模型决策的合法形态，独立定义、不引用场景脚本类型。
