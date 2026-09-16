@@ -43,7 +43,7 @@ const dialogLines = (input: ApprovalPromptInput, hint?: string): string[] => {
     "║ 审批请求 · 账本轨未命中 → 问答轨（本弹窗仅为问答轨渲染，非新通道）",
     `║ 工具:  ${input.tool}`,
     `║ 会话:  ${input.approval_session_id}   第 ${String(input.attempt)} 次提案   key: ${input.approval_key}`,
-    `║ 参数:  ${params.length > 200 ? `${params.slice(0, 200)}…` : params}`,
+    `║ 参数:  ${params}`,
     "║ ── 选项 ──────────────────────────────────────────",
     "║ ① 放行(granted)    ② 给意见(advised)    ③ 拒绝(denied)    ④ 中止(abort)",
     "║ 应答：<编号或字母> [备注]（如：1 同意准入）",

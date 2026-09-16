@@ -252,10 +252,17 @@ const main = async (): Promise<void> => {
       let nextInstruction: string | null = null;
       for (;;) {
         rl.resume();
-        const post = (await ask(rl, "新指令（直接回车=退出，r=重绘干净界面）> ")).trim();
+        const post = (await ask(rl, "新指令（直接回车=退出，r=重绘，e=展开/折叠长事件）> ")).trim();
         if (post === "r" || post === "R") {
           renderer.reset();
           renderer.appendLine("（界面已重绘：过程流为 append-only 日志的纯重放，语义不变）");
+          continue;
+        }
+        // B6 D1：折叠展开双向切换（切换后 reset 重放；仅展示层，日志零改动）
+        if (post === "e" || post === "E") {
+          renderer.setFoldExpanded(!renderer.isFoldExpanded);
+          renderer.reset();
+          renderer.appendLine(`（长事件已${renderer.isFoldExpanded ? "全部展开" : "重新折叠（阈值 20 物理行）"}）`);
           continue;
         }
         if (post !== "") nextInstruction = post;
