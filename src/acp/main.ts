@@ -18,6 +18,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadLlmProviderConfig } from "../llm/index.js";
+import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
 import { RpcPeer } from "../rpc/index.js";
 import { AcpShell } from "./shell.js";
 
@@ -37,7 +38,7 @@ const scopeModeArg = argValue("--scope-mode");
 // provider 配置 fail-closed 前置（沿用 L1a；stdout 恒净——错误走 stderr）
 const config = await loadLlmProviderConfig(process.env);
 if (!config.ok) {
-  console.error(`[atf-acp] provider 配置加载失败（fail-closed）: ${config.error.message}`);
+  console.error(`[atf-acp] ${formatThreePartLines(providerConfigThreePart(config.error.message, "配置文件经 ATF_LLM_CONFIG 指定（两层清单，0600）"))}`);
   process.exit(1);
 }
 if (scopeModeArg !== undefined && scopeModeArg !== "headless" && scopeModeArg !== "canonical" && scopeModeArg !== "simulation") {

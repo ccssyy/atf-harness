@@ -19,6 +19,7 @@ import {
   HttpLlmProvider,
   type ResolvedLlmProviderConfig,
 } from "../llm/index.js";
+import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
 import { ToolRegistry } from "../core/tools/index.js";
 import {
   ScenarioRunner,
@@ -66,7 +67,7 @@ const runAnswer = async (
 ): Promise<number> => {
   const config = await loadLlmProviderConfig();
   if (!config.ok) {
-    console.error(`provider 配置加载失败（fail-closed）: ${config.error.message}`);
+    console.error(formatThreePartLines(providerConfigThreePart(config.error.message, "配置文件经 ATF_LLM_CONFIG 指定（两层清单，0600）")));
     return 1;
   }
   const provider = new HttpLlmProvider({
@@ -109,7 +110,11 @@ const runAnswer = async (
     approvalSurface: { stub: async () => ({ verdict: "timeout" as const }) },
   });
   if (!ran.ok) {
-    console.error(`resume 执行失败: ${ran.error.message}`);
+    console.error(formatThreePartLines({
+      fact: "resume 执行失败（会话未启动）",
+      cause: `[${ran.error.code}] ${ran.error.message}`,
+      fix: "核对 --runs-root/--run-id/--scenario-id 与会话流状态后重试；挂起续答应答先经 --list 确认待办",
+    }));
     return 1;
   }
   const report: BranchRunReport = ran.value;

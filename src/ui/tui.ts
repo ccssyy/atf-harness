@@ -24,6 +24,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as readline from "node:readline";
 import { loadLlmProviderConfig, HttpLlmProvider, type ResolvedLlmProviderConfig } from "../llm/index.js";
+import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
 import { ToolRegistry } from "../core/tools/index.js";
 import { ScenarioRunner, resolveRunExitCode, type ApprovalStubResponse, type BranchRunReport } from "../core/run/index.js";
 import type { Scenario } from "../llm/index.js";
@@ -137,7 +138,7 @@ const main = async (): Promise<void> => {
   // provider 配置 fail-closed 前置（沿用 L1a：ATF_LLM_CONFIG / ATF_LLM_*；批内不改选型）
   const configResult = await loadLlmProviderConfig(process.env);
   if (!configResult.ok) {
-    renderer.appendLine(`✗ provider 配置加载失败（fail-closed）: ${configResult.error.message}`);
+    renderer.appendLine(`✗ ${formatThreePartLines(providerConfigThreePart(configResult.error.message, "配置文件经 ATF_LLM_CONFIG 指定（两层清单，0600）"))}`);
     process.exitCode = 1;
     return;
   }
@@ -147,6 +148,13 @@ const main = async (): Promise<void> => {
   try {
     renderer.appendLine("══ ATF Harness TUI（前端一 · 同进程直连 core）══");
     renderer.appendLine(`provider=${config.provider_id} model=${config.model}（沿用 L1a 选型）· 零 npm 依赖`);
+    // 首屏四块指引（L1b B2）：绑定状态 / 可输入什么 / 常用指令示例 / 退出方式
+    renderer.appendLine("── 使用指引 ──────────────────────────────");
+    renderer.appendLine("① 当前状态：run 未绑定（下一步将提示输入 run-id 与触发指令，绑定后过程流逐条可见）");
+    renderer.appendLine("② 你可以输入：run-id（如 run-20260916-1）与触发指令（自然语言描述本次任务）");
+    renderer.appendLine("③ 常用指令示例：绑定 run → 查询工作区状态 → 事实扫描 → 闸门查询 → 数据准入 → 账本查询");
+    renderer.appendLine("④ 退出方式：Ctrl+C 退出；运行中审批弹窗应答键 g=放行 a=给意见 d=拒绝 x=中止（可跟备注）");
+    renderer.appendLine("──────────────────────────────────────────");
     const runId = args.runId ?? (await ask(rl, "run-id> "));
     const instruction = args.instruction ?? (await ask(rl, "触发指令> "));
     if (runId === "" || instruction === "") {
@@ -195,7 +203,11 @@ const main = async (): Promise<void> => {
       ...(args.scopeMode !== "headless" ? { scopeMode: args.scopeMode } : {}),
     });
     if (!ran.ok) {
-      renderer.appendLine(`✗ run 启动失败: ${ran.error.message}`);
+      renderer.appendLine(`✗ ${formatThreePartLines({
+        fact: "run 启动失败（会话未启动）",
+        cause: `[${ran.error.code}] ${ran.error.message}`,
+        fix: "核对 runs-root 与桥接脚本路径后重试；挂起 run 请先经 CLI resume 处理待办",
+      })}`);
       process.exitCode = 1;
       return;
     }
@@ -203,7 +215,11 @@ const main = async (): Promise<void> => {
     renderer.appendLine("──────── 终局 ────────");
     renderer.appendLine(`outcome=${report.outcome.kind} exit=${String(report.exit_code)} 事件数=${String(report.events.length)} 模型调用=${String(provider.calls)} 次`);
     if (report.outcome.kind === "failed") {
-      renderer.appendLine(`失败原因: [${report.outcome.error.code}] ${report.outcome.error.message}`);
+      renderer.appendLine(formatThreePartLines({
+        fact: "run 终局 failed（本 turn 未完成即收口）",
+        cause: `[${report.outcome.error.code}] ${report.outcome.error.message}`,
+        fix: "按原因修正后重新发起会话；已落盘事件可经 CLI resume/--list 追溯",
+      }));
     } else if (report.outcome.kind !== "completed") {
       const block = report.outcome.block;
       renderer.appendLine(`block: ${block.reason} —— ${block.message}`);
