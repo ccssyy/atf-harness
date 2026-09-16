@@ -19,14 +19,14 @@
  * resume 通道（登记 L1b 优化：TUI 内 resume）。
  * 退出码 = run 终局码（0/1/75/78/79，单一出口 resolveRunExitCode）。
  */
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as readline from "node:readline";
 import { loadLlmProviderConfig, HttpLlmProvider, type ResolvedLlmProviderConfig } from "../llm/index.js";
 import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
 import { ToolRegistry } from "../core/tools/index.js";
-import { ScenarioRunner, resolveRunExitCode, type ApprovalStubResponse, type BranchRunReport } from "../core/run/index.js";
+import { ScenarioRunner, resolveRunExitCode, sessionLogPathFor, listPendingApprovals, readSessionStream, type ApprovalStubResponse, type BranchRunReport } from "../core/run/index.js";
 import type { Scenario } from "../llm/index.js";
 import { DiffRenderer } from "./renderer.js";
 import { formatEventLine } from "./eventView.js";
@@ -167,79 +167,104 @@ const main = async (): Promise<void> => {
     renderer.appendLine(`run=${runId} · 工作区根=${args.runsRoot} · 桥接=${args.mockPath}`);
     renderer.appendLine("──────── 过程流（与 append-only 日志逐条对应）────────");
 
-    const provider = new HttpLlmProvider({
-      config,
-      tools: ToolRegistry.createDefault().modelVisible(),
-    });
-    // 会话脚手架形态同 CLI resume（L1a 既有模式）：TUI 不持有场景脚本，只提供会话参数。
-    const scenario: Scenario = {
-      scenario_id: args.scenarioId,
-      version: 1,
-      provider: "faux",
-      description: "L1 TUI session",
-      branches: {
-        main: {
-          branch_id: "main",
-          run_id: runId,
-          trigger_instruction: instruction,
-          purpose: "l1-tui",
-          setup: { ledger: [] },
-          steps: [],
-          expect: { outcome: "completed", exit_code: 0 },
+    // B4（L1b-D2=A）：跨进程续跑检测——既有会话流存在＝由事实日志重放重建（INV-A），
+    // 首个 prompt 走 continue 通道；挂起待办须经 CLI resume 应答（TUI 内 resume 归后续）。
+    let continueMode = existsSync(sessionLogPathFor(args.runsRoot, runId));
+    if (continueMode) {
+      const stream = await readSessionStream(sessionLogPathFor(args.runsRoot, runId));
+      const eventCount = stream.ok ? stream.value.length : 0;
+      const pending = stream.ok ? listPendingApprovals(stream.value).length : 0;
+      renderer.appendLine(`检测到既有会话（${String(eventCount)} 事件，由事实日志重放重建）${pending > 0 ? `；待办审批 ${String(pending)} 项——须经 CLI resume 应答后才能续跑` : ""}`);
+    }
+
+    let instructionText = instruction;
+    // B4：多轮续跑循环——每个 prompt 一个 turn（审批闸逐 turn 生效）；空输入/Ctrl+C 退出
+    for (;;) {
+      const provider = new HttpLlmProvider({
+        config,
+        tools: ToolRegistry.createDefault().modelVisible(),
+      });
+      // 会话脚手架形态同 CLI resume（L1a 既有模式）：TUI 不持有场景脚本，只提供会话参数。
+      const scenario: Scenario = {
+        scenario_id: args.scenarioId,
+        version: 1,
+        provider: "faux",
+        description: "L1 TUI session",
+        branches: {
+          main: {
+            branch_id: "main",
+            run_id: runId,
+            trigger_instruction: instructionText,
+            purpose: "l1-tui",
+            setup: { ledger: [] },
+            steps: [],
+            expect: { outcome: "completed", exit_code: 0 },
+          },
         },
-      },
-    };
-    const ran = await ScenarioRunner.runBranch(scenario, "main", {
-      runsRoot: args.runsRoot,
-      mockCommand: ["node", args.mockPath],
-      modelProvider: provider,
-      modelId: config.model,
-      approvalSurface: {
-        stub: async (input) => await askApproval({ renderer, rl, input }),
-      },
-      onEvent: (event, origin) => {
-        renderer.appendLine(formatEventLine(event, origin));
-      },
-      ...(args.scopeMode !== "headless" ? { scopeMode: args.scopeMode } : {}),
-    });
-    if (!ran.ok) {
-      renderer.appendLine(`✗ ${formatThreePartLines({
-        fact: "run 启动失败（会话未启动）",
-        cause: `[${ran.error.code}] ${ran.error.message}`,
-        fix: "核对 runs-root 与桥接脚本路径后重试；挂起 run 请先经 CLI resume 处理待办",
-      })}`);
-      process.exitCode = 1;
-      return;
-    }
-    const report: BranchRunReport = ran.value;
-    renderer.appendLine("──────── 终局 ────────");
-    renderer.appendLine(`outcome=${report.outcome.kind} exit=${String(report.exit_code)} 事件数=${String(report.events.length)} 模型调用=${String(provider.calls)} 次`);
-    if (report.outcome.kind === "failed") {
-      renderer.appendLine(formatThreePartLines({
-        fact: "run 终局 failed（本 turn 未完成即收口）",
-        cause: `[${report.outcome.error.code}] ${report.outcome.error.message}`,
-        fix: "按原因修正后重新发起会话；已落盘事件可经 CLI resume/--list 追溯",
-      }));
-    } else if (report.outcome.kind !== "completed") {
-      const block = report.outcome.block;
-      renderer.appendLine(`block: ${block.reason} —— ${block.message}`);
-      if (report.outcome.kind === "suspended") {
-        renderer.appendLine("挂起可续：node dist/cli/resume.js --answer <granted|advised|denied|abort> --runs-root … --run-id … --scenario-id …（L1b 起 TUI 内 resume）");
+      };
+      const ran = await ScenarioRunner.runBranch(scenario, "main", {
+        runsRoot: args.runsRoot,
+        mockCommand: ["node", args.mockPath],
+        modelProvider: provider,
+        modelId: config.model,
+        approvalSurface: {
+          stub: async (input) => await askApproval({ renderer, rl, input }),
+        },
+        onEvent: (event, origin) => {
+          renderer.appendLine(formatEventLine(event, origin));
+        },
+        ...(continueMode ? { continue: { instruction: instructionText } } : {}),
+        ...(args.scopeMode !== "headless" ? { scopeMode: args.scopeMode } : {}),
+      });
+      if (!ran.ok) {
+        renderer.appendLine(`✗ ${formatThreePartLines({
+          fact: "turn 启动失败（本 turn 未执行）",
+          cause: `[${ran.error.code}] ${ran.error.message}`,
+          fix: "核对 runs-root 与桥接脚本路径；continue 前置不满足时按提示先处理待办/改走全新会话",
+        })}`);
+        process.exitCode = 1;
+        break;
       }
-    }
-    process.exitCode = report.exit_code;
-    // B3：终局后提供 reset（重新渲染干净界面）——交互终端键入 r 重绘；非 TTY 直接退出
-    if (process.stdin.isTTY === true) {
+      const report: BranchRunReport = ran.value;
+      renderer.appendLine("──────── 终局 ────────");
+      renderer.appendLine(`outcome=${report.outcome.kind} exit=${String(report.exit_code)} 事件数=${String(report.events.length)} 模型调用=${String(provider.calls)} 次`);
+      if (report.outcome.kind === "failed") {
+        renderer.appendLine(formatThreePartLines({
+          fact: "run 终局 failed（本 turn 未完成即收口）",
+          cause: `[${report.outcome.error.code}] ${report.outcome.error.message}`,
+          fix: "按原因修正后重新发起会话；已落盘事件可经 CLI resume/--list 追溯",
+        }));
+        process.exitCode = report.exit_code;
+        break;
+      }
+      if (report.outcome.kind !== "completed") {
+        const block = report.outcome.block;
+        renderer.appendLine(`block: ${block.reason} —— ${block.message}`);
+        if (report.outcome.kind === "suspended") {
+          renderer.appendLine("挂起可续：node dist/cli/resume.js --answer <granted|advised|denied|abort> --runs-root … --run-id … --scenario-id …（应答后重进本 TUI 续跑）");
+        }
+        process.exitCode = report.exit_code;
+        break;
+      }
+      process.exitCode = report.exit_code;
+      // B3：reset 键 ＋ B4：多轮续跑入口——仅交互终端（非 TTY 冒烟单 turn 后直接退出）
+      if (process.stdin.isTTY !== true) break;
+      let nextInstruction: string | null = null;
       for (;;) {
         rl.resume();
-        const post = (await ask(rl, "回车退出，r=重绘干净界面> ")).trim();
+        const post = (await ask(rl, "新指令（直接回车=退出，r=重绘干净界面）> ")).trim();
         if (post === "r" || post === "R") {
           renderer.reset();
           renderer.appendLine("（界面已重绘：过程流为 append-only 日志的纯重放，语义不变）");
           continue;
         }
+        if (post !== "") nextInstruction = post;
         break;
       }
+      if (nextInstruction === null) break;
+      instructionText = nextInstruction;
+      continueMode = true;
+      renderer.appendLine("──────── 新 turn（同一 run 绑定下续跑；由事实日志重放重建上下文）────────");
     }
   } finally {
     rl.close();
