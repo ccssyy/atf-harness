@@ -18,7 +18,7 @@ import { SessionLog } from "../../src/core/session/sessionLog.js";
  */
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), "../../..");
-const distEntry = join(repoRoot, "dist", "session", "index.js");
+const distEntry = join(repoRoot, "dist", "core", "session", "index.js");
 const fixturePath = join(repoRoot, "tests", "fixtures", "p2s1_fsync_child.mjs");
 const srcMarker = join(repoRoot, "src", "session", "sessionLog.ts");
 
