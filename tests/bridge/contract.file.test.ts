@@ -11,7 +11,8 @@ import { BRIDGE_CONTRACT_VERSION } from "../../src/bridge/index.js";
  *   - contract_version: 2；
  *   - 运行时方法面 = 握手 atf.version + 4 工具 + 2 账本方法（ledger_query/ledger_consume）；
      工具面含改名后的 atf_fact_scan；旧方法名与旧数组字段零残留；
- *   - ledger_record 为 mock setup 基建（非运行时方法面）；
+ *   - ledger_record 原为 mock setup 基建；【K4 补登 2026-09-16】升为运行时方法面
+ *     （内核 stdio-session-contract.md §13.8 对齐：setup-only 预录，补登不 bump）；
  *   - atf_upstream pin = v0.6.0b0（re-pin R1 2026-09-14；tag/sha 自检锚定，会话协议版本轴保持 1）。
  * 契约 v2 方法面补登（2026-09-13，《ATF-Harness_Owner指令_推送授权与bind_run补登_20260913.md》）：
  *   - 运行时方法面扩为 握手 + 会话上下文（atf.bind_run）+ 4 工具 + 2 账本；
@@ -53,7 +54,7 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/BRIDGE_CONTRACT_VERSION/);
   });
 
-  it("运行时方法面：握手 + 会话上下文（atf.bind_run）+ 4 工具（含 atf_fact_scan）+ 2 账本；ledger_record 为 setup 基建", () => {
+  it("运行时方法面：握手 + 会话上下文（atf.bind_run）+ 4 工具（含 atf_fact_scan）+ 2 账本 + ledger_record（K4 运行时方法面补登）", () => {
     const methods = methodKeys();
     // 握手 + 会话上下文 + 工具 + 账本运行时方法（补登 B1）
     for (const required of ["atf.version", "atf.bind_run", "atf_admit_data", "atf_gate", "atf_fact_scan", "atf_workspace_status", "ledger_query", "ledger_consume"]) {
@@ -65,14 +66,15 @@ describe("契约文件自检（v2）", () => {
     // 工具面恰 4 个（严格 4 工具，owner 口径 #5；atf.bind_run 不进工具面）
     const tools = methods.filter((name) => name.startsWith("atf_"));
     expect(tools).toHaveLength(4);
-    // ledger_record 仍在契约中登记，且标注为 setup 基建（非运行时方法面）
+    // ledger_record 仍在契约中登记；【K4 补登 2026-09-16】为运行时方法面（内核 §13.8，补登不 bump）
     expect(methods).toContain("ledger_record");
-    expect(contract).toMatch(/ledger_record:.*# mock 测试\/冒烟 setup 基建，非运行时方法面/);
+    expect(contract).toMatch(/ledger_record:.*# 【K4 补登 2026-09-16】运行时方法面（内核 §13.8；补登不 bump）/);
   });
 
   it("补登登记：可选 run_id（显式优先于会话绑定）/ 错误码 no_run_bound+unknown_run / 留痕 event session/run-bound", () => {
-    // B2：两个只读工具参数均为可选 run_id（required: []；显式 run_id 优先于会话绑定）
-    expect(contract.match(/run_id: \{ type: string, required: false \}/g)).toHaveLength(2);
+    // B2：两个只读工具参数均为可选 run_id（required: []；显式 run_id 优先于会话绑定）；
+    //     【K4 补登 2026-09-16】ledger_record 增第三处可选 run_id（内核 §13.0 覆盖口径，写透定位用）
+    expect(contract.match(/run_id: \{ type: string, required: false \}/g)).toHaveLength(3);
     expect(contract).toMatch(/显式 run_id 优先于会话绑定/);
     expect(contract).toMatch(/required: \[run_id\]/);
     // B3：错误码登记（error response，连接保持）
