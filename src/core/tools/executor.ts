@@ -83,7 +83,18 @@ export class ToolExecutor {
     private readonly scopeRef?: ScopeRef,
   ) {}
 
-  public async execute(toolName: string, params: unknown, approval?: ApprovalGate): Promise<ToolCallOutcome> {
+  /**
+   * L1b B5（§9⑤ 立项切片）：options.operationId 可选透传——批准账本查询（approve 内
+   * ledger_query）以 operation_id 过滤（契约 v2 已登记的可选参数，补登零改动；缺省不传
+   * ＝既有行为逐位不变）。过滤语义在对端强制，harness 不做客户端二次切片（单一过滤点，
+   * 防口径漂移）。
+   */
+  public async execute(
+    toolName: string,
+    params: unknown,
+    approval?: ApprovalGate,
+    options?: { operationId?: string },
+  ): Promise<ToolCallOutcome> {
     const definition = this.registry.get(toolName);
     if (!definition.ok) return { kind: "failed", error: definition.error };
 
@@ -96,7 +107,7 @@ export class ToolExecutor {
     }
 
     if (definition.value.requires_approval) {
-      const approvalOutcome = await this.approve(definition.value, params ?? {}, approval);
+      const approvalOutcome = await this.approve(definition.value, params ?? {}, approval, options?.operationId);
       if (!approvalOutcome.ok) return approvalOutcome.outcome;
     }
 
@@ -111,7 +122,7 @@ export class ToolExecutor {
    *  无可消费记录 + 无 gate → blocked(approval_missing,Phase 1 逐位一致);
    *  未命中 + gate → 问答轨编排(handler 发起/延续审批会话,granted 附带持久化前置)。
    *  scope_ref 缺省 = harness 配置故障,无法核对授权状态 → failed(fail-closed,不猜测)。 */
-  private async approve(definition: ToolDefinition, params: unknown, approval?: ApprovalGate): Promise<ApprovalOutcome> {
+  private async approve(definition: ToolDefinition, params: unknown, approval?: ApprovalGate, operationId?: string): Promise<ApprovalOutcome> {
     if (this.scopeRef === undefined) {
       return {
         ok: false,
@@ -122,7 +133,12 @@ export class ToolExecutor {
       };
     }
     const auditKey = approvalKeyFor(definition.name, params);
-    const queried = await this.request("ledger_query", { scope_ref: this.scopeRef }, LEDGER_QUERY_CANONICAL);
+    const queried = await this.request(
+      "ledger_query",
+      // L1b B5：operation_id 可选透传（契约已登记；缺省不传＝既有行为逐位不变）
+      operationId !== undefined ? { scope_ref: this.scopeRef, operation_id: operationId } : { scope_ref: this.scopeRef },
+      LEDGER_QUERY_CANONICAL,
+    );
     if (!queried.ok) {
       // 账本面故障 = 无法确认授权状态 → fail-closed,不猜测审批通过
       return { ok: false, outcome: { kind: "failed", error: queried.error ?? toolError("bridge_failure", "账本查询失败") } };
