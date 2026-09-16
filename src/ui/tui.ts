@@ -228,6 +228,19 @@ const main = async (): Promise<void> => {
       }
     }
     process.exitCode = report.exit_code;
+    // B3：终局后提供 reset（重新渲染干净界面）——交互终端键入 r 重绘；非 TTY 直接退出
+    if (process.stdin.isTTY === true) {
+      for (;;) {
+        rl.resume();
+        const post = (await ask(rl, "回车退出，r=重绘干净界面> ")).trim();
+        if (post === "r" || post === "R") {
+          renderer.reset();
+          renderer.appendLine("（界面已重绘：过程流为 append-only 日志的纯重放，语义不变）");
+          continue;
+        }
+        break;
+      }
+    }
   } finally {
     rl.close();
   }
