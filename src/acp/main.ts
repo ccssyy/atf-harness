@@ -69,6 +69,10 @@ const peer = RpcPeer.create({
   output: process.stdout,
   onRequest: shell.handleRequest,
   onNotification: shell.handleNotification,
+  // 客户端断开（stdin end/close）：退出（ACP 会话的桥接连接随各 prompt 收口，无常驻句柄）
+  onPeerClose: () => {
+    process.exit(0);
+  },
 });
 peerRef = peer;
 peer.start();

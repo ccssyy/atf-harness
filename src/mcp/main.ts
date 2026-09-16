@@ -53,6 +53,10 @@ const peer = RpcPeer.create({
   output: process.stdout,
   onRequest: shell.handleRequest,
   onNotification: (method) => shell.handleNotification(method),
+  // 客户端断开（stdin end/close）：收口会话并退出——不留孤儿 server/桥接进程
+  onPeerClose: () => {
+    void shell.shutdown().then(() => process.exit(0));
+  },
 });
 peer.start();
 console.error(`[atf-mcp] server 就绪（MCP ${MCP_LATEST_VERSION}；runs-root=${runsRoot}）`);

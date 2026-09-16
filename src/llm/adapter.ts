@@ -135,6 +135,10 @@ const mapEvent = (event: LlmContextEvent): Result<AdapterMessage | null, Adapter
           "params",
           "approval_key",
           "supersedes",
+          // D4 通道留痕（L1 门 2 T04/T05）：宿主/客户端通道应答三字段，白名单对齐实际写入形态
+          "channel",
+          "host_id",
+          "requires_human_review",
         ],
         event.type,
       );

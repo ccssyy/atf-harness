@@ -69,6 +69,23 @@ export const mapPermissionOutcome = (outcome: AcpPermissionOutcome, hostId: stri
   }
 };
 
+/** 宿主应答归一化：ACP 规范线缆形态为嵌套 {outcome: RequestPermissionOutcome}
+ *  （acpx@0.15.1 实测，T06 探针）；兼容扁平形态（outcome 直接为结果对象，自写客户端桩）。
+ *  形状非法返回 undefined（调用方 fail-closed）。 */
+export const normalizePermissionOutcome = (result: unknown): AcpPermissionOutcome | undefined => {
+  if (result === null || typeof result !== "object" || !("outcome" in result)) return undefined;
+  const outcome = (result as { outcome: unknown }).outcome;
+  if (typeof outcome === "string") {
+    // 扁平形态：{outcome: "selected"|"cancelled", optionId?}
+    return result as AcpPermissionOutcome;
+  }
+  if (outcome !== null && typeof outcome === "object" && "outcome" in outcome) {
+    // 规范嵌套形态：{outcome: {outcome: "selected"|"cancelled", optionId?}}
+    return outcome as AcpPermissionOutcome;
+  }
+  return undefined;
+};
+
 /** 经 RpcPeer 发送 request_permission 并等待宿主应答（问答轨 stub 的 ACP 实现）。
  *  cancelledDueToSessionCancel：宿主以 session/cancel 收口本 turn 时由 shell 置位——
  *  此时折算挂起（verdict=timeout 机制位，reason 记录取消事实，非否决、可续）。 */
@@ -87,8 +104,8 @@ export const requestPermissionOverPeer = async (deps: {
     // 传输层失败：不猜测宿主意图，折算拒绝（fail-closed；ledger 未消费、动作未执行）
     return { verdict: "denied", actor: "acp-host", reason: `授权请求失败（${sent.error.message}）——fail-closed 未执行`, channel: "acp", host_id: deps.hostId };
   }
-  const outcome = sent.result as AcpPermissionOutcome | undefined;
-  if (outcome === undefined || typeof outcome !== "object" || !("outcome" in outcome)) {
+  const outcome = normalizePermissionOutcome(sent.result);
+  if (outcome === undefined) {
     return { verdict: "denied", actor: "acp-host", reason: "宿主应答形状非法（缺 outcome）——fail-closed 未执行", channel: "acp", host_id: deps.hostId };
   }
   return mapPermissionOutcome(outcome, deps.hostId).response;

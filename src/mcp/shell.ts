@@ -125,6 +125,14 @@ export class McpShell {
     if (method === MCP_METHODS.initialized) this.initialized = true;
   };
 
+  /** 客户端断开（stdin end）：关闭会话持有的内核桥接连接，供入口进程收口退出。 */
+  public async shutdown(): Promise<void> {
+    const session = this.session;
+    this.session = null;
+    this.initialized = false;
+    if (session !== null) await session.connection.close().catch(() => undefined);
+  }
+
   // -------------------------------------------------------------------------
   // initialize（MCP 协议版本轴协商；serverInfo；clientInfo.name → D4 host_id）
   // -------------------------------------------------------------------------
