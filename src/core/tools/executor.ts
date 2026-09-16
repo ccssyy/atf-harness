@@ -216,7 +216,8 @@ export class ToolExecutor {
 type ApprovalOutcome = { ok: true } | { ok: false; outcome: ToolCallOutcome };
 
 // ledger 方法自身的 canonical output（与 bridge.contract.yaml methods 段 v2 对等）
-const LEDGER_QUERY_CANONICAL: SchemaNode = {
+/** ledger_query canonical output（MCP 外壳同用，沿用桥接契约不另造）。 */
+export const LEDGER_QUERY_CANONICAL: SchemaNode = {
   type: "object",
   required: ["ok", "records"],
   properties: {
@@ -242,7 +243,8 @@ const LEDGER_QUERY_CANONICAL: SchemaNode = {
   },
 };
 
-const LEDGER_CONSUME_CANONICAL: SchemaNode = {
+/** ledger_consume canonical output（MCP 外壳同用，沿用桥接契约不另造）。 */
+export const LEDGER_CONSUME_CANONICAL: SchemaNode = {
   type: "object",
   required: ["ok", "record_id", "state"],
   properties: {

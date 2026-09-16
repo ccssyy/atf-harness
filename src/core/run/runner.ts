@@ -215,9 +215,9 @@ export interface ResumeAnswer {
   request_event_id?: number;
   /** 应答 actor 账面标识（缺省 cli-operator） */
   actor?: string;
-  /** D4 通道留痕（L1 门 2 T04）：宿主通道 resume 应答增 channel/host_id（approval/response
-   *  恒增 requires_human_review:true）。缺省不写任何字段——既有通道零改动。 */
-  channel?: "acp";
+  /** D4 通道留痕（L1 门 2 T04）：宿主/客户端通道 resume 应答增 channel/host_id
+   *  （approval/response 恒增 requires_human_review:true）。缺省不写任何字段——既有通道零改动。 */
+  channel?: "acp" | "mcp";
   host_id?: string;
 }
 
