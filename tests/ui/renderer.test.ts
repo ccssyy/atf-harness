@@ -88,3 +88,83 @@ describe("DiffRenderer（TTY：ANSI 差分）", () => {
     expect(stream.chunks[countAfterClear]).toBe("收尾行\n");
   });
 });
+
+// ---------------------------------------------------------------------------
+// B3 渲染包：长行折行 / reset 重放 / 物理行擦除计数
+// ---------------------------------------------------------------------------
+import { wrapLine } from "../../src/ui/renderer.js";
+
+describe("DiffRenderer B3：长行折行", () => {
+  it("wrapLine：宽度内不折；超宽按宽度折、续行缩进两格", () => {
+    expect(wrapLine("短行", 80)).toEqual(["短行"]);
+    // 续行总宽 = 列宽（缩进 2 + 内容 3）；首行占满列宽
+    expect(wrapLine("a".repeat(10), 5)).toEqual(["aaaaa", "  aaa", "  aa"]);
+    expect(wrapLine("a".repeat(12), 5)).toEqual(["aaaaa", "  aaa", "  aaa", "  a"]);
+  });
+
+  it("TTY 折行：过程流长行按列宽折行（事件仍为独立写单元，续行缩进）", () => {
+    const stream = fakeStream(true);
+    const renderer = new DiffRenderer({ out: stream, columns: 20 });
+    const long = `#${"0".repeat(4)} assistant/message ${"字".repeat(40)}`;
+    renderer.appendLine(long);
+    const text = joined(stream);
+    const physical = text.split("\n");
+    expect(physical.length).toBeGreaterThan(2);
+    for (const continuation of physical.slice(1, -1)) {
+      expect(continuation.startsWith("  ")).toBe(true);
+    }
+  });
+
+  it("非 TTY 未给列宽则不折行（冒烟断言面不变）", () => {
+    const stream = fakeStream(false);
+    const renderer = new DiffRenderer({ out: stream });
+    renderer.appendLine("x".repeat(100));
+    expect(joined(stream)).toBe(`${"x".repeat(100)}\n`);
+  });
+});
+
+describe("DiffRenderer B3：reset 重新渲染干净界面", () => {
+  it("TTY：清屏指令 + 保留行按当前宽度重放", () => {
+    const stream = fakeStream(true);
+    const renderer = new DiffRenderer({ out: stream, columns: 100 });
+    renderer.appendLine("历史行一");
+    renderer.appendLine("历史行二");
+    renderer.setStatus(["弹窗"]);
+    renderer.clearStatus();
+    const before = stream.chunks.length;
+    renderer.reset();
+    expect(joined(stream).slice(before)).toContain("\x1b[2J\x1b[H");
+    const replay = joined(stream).slice(before);
+    expect(replay).toContain("历史行一");
+    expect(replay).toContain("历史行二");
+  });
+
+  it("非 TTY：打印重放分隔标记；retain=false 时保留行不重放", () => {
+    const stream = fakeStream(false);
+    const renderer = new DiffRenderer({ out: stream, retain: false });
+    renderer.appendLine("仅此一行不应重放");
+    renderer.reset();
+    const output = joined(stream);
+    expect(output).toContain("reset（重新渲染干净界面）");
+    // retain=false：该行仅在 reset 前出现一次（不重放）
+    expect(output.split("仅此一行不应重放").length - 1).toBe(1);
+    const stream2 = fakeStream(false);
+    const renderer2 = new DiffRenderer({ out: stream2 });
+    renderer2.appendLine("保留行应重放");
+    renderer2.reset();
+    const output2 = joined(stream2);
+    expect(output2.indexOf("保留行应重放")).toBeLessThan(output2.indexOf("reset"));
+    expect(output2.lastIndexOf("保留行应重放")).toBeGreaterThan(output2.indexOf("reset"));
+  });
+});
+
+describe("DiffRenderer B3：状态区物理行擦除（折行弹窗不残留）", () => {
+  it("弹窗行超宽折行后，擦除指令按物理行数计", () => {
+    const stream = fakeStream(true);
+    const renderer = new DiffRenderer({ out: stream, columns: 20 });
+    renderer.setStatus([`║ ${"参数".repeat(20)}`]); // 逻辑 1 行 → 物理 3 行
+    renderer.appendLine("新过程流行");
+    // 擦除 3 物理行：\x1b[3A + 3 个擦行
+    expect(joined(stream)).toContain("\x1b[3A\x1b[2K\n\x1b[2K\n\x1b[2K\n");
+  });
+});

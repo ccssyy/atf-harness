@@ -145,8 +145,11 @@ const smoke = async (): Promise<string[]> => {
       stderrText += String(chunk);
     });
 
-    // ④ 发起会话 → 过程流可见：banner + 只读工具自主执行（无人工干预）
+    // ④ 发起会话 → 过程流可见：banner + 首屏四块指引（B2）+ 只读工具自主执行（无人工干预）
     await expectator.waitFor("TUI 启动横幅", (buffer) => buffer.includes("同进程直连 core"));
+    await expectator.waitFor("首屏四块指引（B2）", (buffer) =>
+      buffer.includes("使用指引") && buffer.includes("① 当前状态") && buffer.includes("② 你可以输入") && buffer.includes("③ 常用指令示例") && buffer.includes("④ 退出方式"));
+    evidence.push("首屏四块指引: 绑定状态/可输入什么/常用指令示例/退出方式 全部渲染（B2）");
     await expectator.waitFor("过程流可见（只读工具）", (buffer) =>
       hasLine(buffer, (line) => line.includes("tool/call") && line.includes("atf_workspace_status")));
     evidence.push("发起会话→过程流可见: banner + tool/call(atf_workspace_status) 已渲染（模型自主只读）");

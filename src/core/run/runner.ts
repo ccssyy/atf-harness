@@ -245,6 +245,11 @@ export interface RunBranchOptions {
    *  （凭据判定与待办解析据此推导——durability 公理）；须同时声明 modelProvider 与
    *  approvalSurface。fresh 选项在 resume 模式下被忽略（既有流不可清场）。 */
   resume?: ResumeAnswer;
+  /** L1b B4（L1b-D2=A）：多轮续跑——在既有 run 流上以新用户指令开新 turn（同进程
+   *  多轮与跨进程续跑同一机制：历史由事实日志重放装载）。前置（fail-closed）：
+   *  流存在且末 turn 已收口、无待办审批（有待办须经 resume 应答）、turn 预算未耗尽；
+   *  须同时声明 modelProvider 与 approvalSurface。fresh 选项被忽略（既有流不可清场）。 */
+  continue?: { instruction: string };
   /** provenance model_id（缺省 "faux"，既有行为逐位不变；L1a 传入 provider config.model） */
   modelId?: string;
   /** 账本 scope_ref.scope_mode（缺省 "headless"——mock 轨既有行为逐位不变）。
@@ -274,9 +279,13 @@ export class ScenarioRunner {
     }
     const branch: ScenarioBranch = branchLookup;
     const resumeMode = options.resume !== undefined;
+    const continueMode = options.continue !== undefined;
+    if (resumeMode && continueMode) {
+      return err(runError("invalid_input", "resume 与 continue 互斥（应答续跑与新指令续跑不可同时声明）"));
+    }
     const now = options.now ?? ((): string => new Date().toISOString());
     const workspaceRoot = join(options.runsRoot, branch.run_id);
-    if (options.fresh !== false && !resumeMode) {
+    if (options.fresh !== false && !resumeMode && !continueMode) {
       try {
         await rm(workspaceRoot, { recursive: true, force: true });
       } catch (cause) {
@@ -318,7 +327,7 @@ export class ScenarioRunner {
         scope_id: branch.run_id,
         scope_mode: options.scopeMode ?? "headless",
       };
-      for (const entry of resumeMode ? [] : branch.setup.ledger) {
+      for (const entry of resumeMode || continueMode ? [] : branch.setup.ledger) {
         const recorded = await connection.request("ledger_record", {
           scope_ref: scopeRef,
           tool: entry.tool,
@@ -338,7 +347,7 @@ export class ScenarioRunner {
         trigger_instruction: branch.trigger_instruction,
         model_id: options.modelId ?? "faux",
       };
-      if (resumeMode) {
+      if (resumeMode || continueMode) {
         const existingProvenance = await readRunProvenance(workspaceRoot);
         if (!existingProvenance.ok) {
           outcome = { kind: "failed", error: runError("invalid_input", "resume 读取既有 provenance 失败", existingProvenance.error) };
@@ -383,8 +392,8 @@ export class ScenarioRunner {
       }
 
       // L1a resume 前置：模型面 provider 必须注入（resume 无脚本可回放）。
-      if (resumeMode && options.modelProvider === undefined) {
-        outcome = { kind: "failed", error: runError("invalid_input", "resume 模式须注入模型面 provider（modelProvider）") };
+      if ((resumeMode || continueMode) && options.modelProvider === undefined) {
+        outcome = { kind: "failed", error: runError("invalid_input", "resume/continue 模式须注入模型面 provider（modelProvider）") };
         return finalize();
       }
 
@@ -400,18 +409,23 @@ export class ScenarioRunner {
       );
       // L1a resume：磁盘历史装载进本进程内存序列——凭据判定 / 待办解析 / turn 归属据此推导
       // （durability 公理：恢复只读本侧事件流）；此后 appendEvent 顺序续接，报告 events = 全流。
-      if (resumeMode) {
+      if (resumeMode || continueMode) {
+        const historyLabel = resumeMode ? "resume" : "continue";
         const historyText = await readFile(ws.sessionLogPath, "utf8").then(
           (text) => ok(text),
           (cause: NodeJS.ErrnoException) => err({ message: `会话流读取失败: ${String(cause.message)}`, code: cause.code }),
         );
         if (!historyText.ok) {
-          outcome = { kind: "failed", error: runError("session_failure", "resume 装载既有会话流失败", historyText.error) };
+          outcome = { kind: "failed", error: runError("session_failure", `${historyLabel} 装载既有会话流失败`, historyText.error) };
           return finalize();
         }
         const parsed = parseSessionStream(historyText.value);
         if (!parsed.ok) {
-          outcome = { kind: "failed", error: runError("session_failure", "resume 既有会话流校验失败（fail-closed）", parsed.error) };
+          outcome = { kind: "failed", error: runError("session_failure", `${historyLabel} 既有会话流校验失败（fail-closed）`, parsed.error) };
+          return finalize();
+        }
+        if (continueMode && parsed.value.length === 0) {
+          outcome = { kind: "failed", error: runError("invalid_input", "continue 前置不满足：会话流为空（新 run 请走全新会话，勿用 continue）") };
           return finalize();
         }
         events.push(...parsed.value);
@@ -551,7 +565,7 @@ export class ScenarioRunner {
         return { kind: "switched", provider: next, eventId: appended.id };
       };
 
-      if (provider !== null && !resumeMode) {
+      if (provider !== null && !resumeMode && !continueMode) {
         turnsOpened += 1; // 切片 1 A2：初始 turn 计数（max_turns 预算的第一次消耗）
         await appendEvent({ type: "turn/start", payload: { scenario_id: scenario.scenario_id, branch_id: branch.branch_id } });
         await appendEvent({ type: "user/message", payload: { text: branch.trigger_instruction } });
@@ -559,7 +573,7 @@ export class ScenarioRunner {
       }
 
       let lastAdmittedFact: DomainRef | undefined;
-      let turnOpen = provider !== null && !resumeMode;
+      let turnOpen = provider !== null && !resumeMode && !continueMode;
 
       // ---------------- L1a 门 2：resume 前置（任务书 §1.3；INV-1/INV-2 与 durability 公理） ----------------
       // 顺序（fail-closed 逐级）：① 末 turn 须以 suspended 收口；② turn 预算；
@@ -704,6 +718,46 @@ export class ScenarioRunner {
               }
             }
           }
+        }
+      }
+
+      // ---------------- L1b B4：continue 前置（L1b-D2=A；多轮续跑同一机制） ----------------
+      // 顺序（fail-closed 逐级）：① 流非空；② 末 turn 须已收口（open turn = 异常态拒绝）；
+      // ③ 无待办审批（有待办须经 resume 应答——continue 不得绕过问答轨）；④ turn 预算；
+      // ⑤ 新用户指令落 user/message → 开新 turn（预算计数续自事件流推导，模型不可见）。
+      // 历史已由事实日志重放装载（origin=history 投影）；措辞纪律：恢复态只写
+      // 「由事实日志重放重建」，不投影真思考（门 1 D6 边界延续）。
+      if (continueMode && provider !== null) {
+        const continueInstruction = (options.continue as { instruction: string }).instruction;
+        const loopState = deriveLoopStateFromEvents(events);
+        const lastTurn = loopState.turns[loopState.turns.length - 1];
+        if (lastTurn === undefined) {
+          outcome = { kind: "failed", error: runError("invalid_input", "continue 前置不满足：流内无 turn（新 run 请走全新会话）") };
+          provider = null;
+        } else if (lastTurn.closed_reason === undefined || lastTurn.closed_reason === null) {
+          outcome = { kind: "failed", error: runError("invalid_input", "continue 前置不满足：末 turn 未收口（异常态，fail-closed）", {
+            turns_opened: loopState.turns_opened,
+          }) };
+          provider = null;
+        } else if (listPendingApprovals(events).length > 0) {
+          outcome = { kind: "failed", error: runError("invalid_input", "continue 前置不满足：存在待办审批——挂起续跑须经 resume 应答通道（不得绕过问答轨）") };
+          provider = null;
+        } else if (loopState.turns_opened + 1 > LOOP_MAX_TURNS) {
+          outcome = {
+            kind: "failed",
+            error: runError("budget_exhausted", `turn 数预算耗尽（max_turns=${String(LOOP_MAX_TURNS)}），continue 无法开新 turn`, {
+              budget: "max_turns",
+              limit: LOOP_MAX_TURNS,
+            }),
+          };
+          provider = null;
+        } else {
+          turnsOpened = loopState.turns_opened;
+          turnsOpened += 1;
+          await appendEvent({ type: "turn/start", payload: { scenario_id: scenario.scenario_id, branch_id: branch.branch_id } });
+          await appendEvent({ type: "user/message", payload: { text: continueInstruction } });
+          openTurnRecord(provider);
+          turnOpen = true;
         }
       }
 
@@ -1072,7 +1126,7 @@ export class ScenarioRunner {
         catalog,
         catalog_error: catalogError,
         // resume 模式：CLI 无场景期望文件，期望核验由调用方承担（violations 恒空，非豁免语义）
-        expect_violations: resumeMode
+        expect_violations: resumeMode || continueMode
           ? []
           : evaluateExpectations(branch.expect, {
               outcome,

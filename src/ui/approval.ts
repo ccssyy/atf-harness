@@ -1,10 +1,14 @@
 /**
- * 前端一（自有 UI · TUI）——审批弹窗（L1 门 2 T02，VERIFY 验收项 1「人在同一界面放行」）。
+ * 前端一（自有 UI · TUI）——审批弹窗（L1 门 2 T02 ＋ L1b B3 可视化包）。
  *
  * 纪律（任务书 §2.2 / ADR-07）：本弹窗 = core 问答轨在 UI 的**渲染**，不是新通道——
  * 应答经 ScenarioRunner 的 approvalSurface stub 回调进入既有问答轨编排（approvalTrack），
  * 账本轨仍是唯一真相源；无任何自动应答路径（不提供超时自动放行/自动拒绝；SIGINT = 人
  * 主动中止，落 aborted 留痕）。actor 恒 "tui-operator"（账面标识，登记粒度同 CLI 通道）。
+ *
+ * B3 可视化：独立高亮框（边框＋标题「等待人工审批」＋**编号选项**——光标锁定语义＝
+ * 输入焦点恒在弹窗应答行）；应答后弹窗 clear，过程流落一行**审计摘要**（动作/选择/
+ * 时间戳）。有意不提供 allow_always/reject_always 类选项（CAS 一次性消费语义）。
  */
 
 import type readline from "node:readline";
@@ -23,25 +27,28 @@ export interface ApprovalPromptInput {
   round: number;
 }
 
-/** 弹窗键位：g=放行 granted / a=给意见 advised / d=拒绝 denied / x=中止 abort。
- *  有意不提供 allow_always/reject_always 类选项（无配额复用，CAS 一次性消费语义）。 */
+/** 弹窗选项（编号 + 字母双键位；无 always 类——无配额复用）。 */
 const VERDICT_KEYS: Readonly<Record<string, { verdict: "granted" | "advised" | "denied" | "aborted"; label: string }>> = {
   g: { verdict: "granted", label: "放行(granted)" },
   a: { verdict: "advised", label: "给意见(advised)" },
   d: { verdict: "denied", label: "拒绝(denied)" },
   x: { verdict: "aborted", label: "中止(abort)" },
 };
+const NUMBER_KEYS: Readonly<Record<string, string>> = { "1": "g", "2": "a", "3": "d", "4": "x" };
 
 const dialogLines = (input: ApprovalPromptInput, hint?: string): string[] => {
   const params = JSON.stringify(input.params ?? null);
   return [
-    "╔══ 审批请求 · 账本轨未命中 → 问答轨（本弹窗仅为问答轨渲染，非新通道）",
-    `║ tool:    ${input.tool}`,
-    `║ session: ${input.approval_session_id}   attempt: ${String(input.attempt)}   key: ${input.approval_key}`,
-    `║ params:  ${params.length > 200 ? `${params.slice(0, 200)}…` : params}`,
-    "║ 应答：g=放行  a=给意见  d=拒绝  x=中止（格式：<字母> [备注]，如：g 同意准入）",
+    "╔════════════════════ 等待人工审批 ════════════════════",
+    "║ 审批请求 · 账本轨未命中 → 问答轨（本弹窗仅为问答轨渲染，非新通道）",
+    `║ 工具:  ${input.tool}`,
+    `║ 会话:  ${input.approval_session_id}   第 ${String(input.attempt)} 次提案   key: ${input.approval_key}`,
+    `║ 参数:  ${params.length > 200 ? `${params.slice(0, 200)}…` : params}`,
+    "║ ── 选项 ──────────────────────────────────────────",
+    "║ ① 放行(granted)    ② 给意见(advised)    ③ 拒绝(denied)    ④ 中止(abort)",
+    "║ 应答：<编号或字母> [备注]（如：1 同意准入）",
     ...(hint !== undefined ? [`║ ↑ ${hint}`] : []),
-    "╚══ 等待人工应答…",
+    "╚══ 焦点已锁定本弹窗，等待人工应答…",
   ];
 };
 
@@ -51,8 +58,9 @@ const question = (rl: readline.Interface, prompt: string): Promise<string> =>
   });
 
 /**
- * 渲染弹窗并等待人工应答（ScenarioRunner approvalSurface stub 的 TUI 实现）。
- * 非法输入（未知字母）不落任何事件，就地重问；SIGINT = 人主动中止 → aborted 留痕。
+ * 渲染高亮弹窗并等待人工应答（ScenarioRunner approvalSurface stub 的 TUI 实现）。
+ * 非法输入（未知键位）不落任何事件，就地重问；SIGINT = 人主动中止 → aborted 留痕。
+ * 应答收敛后：弹窗 clear ＋ 过程流落审计摘要（动作/选择/时间戳）。
  */
 export const askApproval = async (deps: {
   renderer: DiffRenderer;
@@ -76,16 +84,21 @@ export const askApproval = async (deps: {
       });
       const outcome = await Promise.race([answerPromise, sigintPromise]);
       if (outcome === "sigint") {
-        return { verdict: "aborted", actor: TUI_ACTOR, reason: "SIGINT 中止（人主动）" };
+        const response: ApprovalStubResponse = { verdict: "aborted", actor: TUI_ACTOR, reason: "SIGINT 中止（人主动）" };
+        renderer.clearStatus();
+        renderer.appendLine(`> 审批留痕 ${new Date().toISOString()} 动作=${input.tool} 选择=中止(abort) 备注=SIGINT 中止（人主动）`);
+        return response;
       }
       const text = outcome.trim();
-      const mapping = VERDICT_KEYS[text.slice(0, 1).toLowerCase()];
+      const normalized = NUMBER_KEYS[text.slice(0, 1).toLowerCase()] ?? text.slice(0, 1).toLowerCase();
+      const mapping = VERDICT_KEYS[normalized];
       if (mapping === undefined) {
-        hint = `无法识别的应答「${text.slice(0, 20)}」——请输入 g / a / d / x（可跟备注）`;
+        hint = `无法识别的应答「${text.slice(0, 20)}」——请输入 ①②③④ 编号或 g / a / d / x（可跟备注）`;
         continue;
       }
       const note = text.slice(1).trim();
-      renderer.appendLine(`> 已提交应答：${mapping.label}${note !== "" ? ` 备注：${note}` : ""}`);
+      renderer.clearStatus();
+      renderer.appendLine(`> 审批留痕 ${new Date().toISOString()} 动作=${input.tool} 选择=${mapping.label}${note !== "" ? ` 备注：${note}` : ""}`);
       return mapping.verdict === "advised"
         ? { verdict: "advised", actor: TUI_ACTOR, ...(note !== "" ? { advice_text: note } : {}) }
         : { verdict: mapping.verdict, actor: TUI_ACTOR, ...(note !== "" ? { reason: note } : {}) };

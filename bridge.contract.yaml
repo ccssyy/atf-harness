@@ -164,8 +164,13 @@ lifecycle:
 # 审批账本（ADR-07 账本轨；owner 口径 #1）：
 #   ledger 查询/消费经桥接方法承载（harness 不直读文件），本阶段由契约 mock 对端
 #   承载（MockLedger：预录 ledger_record / 查询 ledger_query / 消费 ledger_consume，
-#   一次性消费语义在对端强制）；真实对端待内核能力落地 re-pin 后接入，不阻塞、不插队。
-#   ledger_record 仅为测试/冒烟 setup 基建，非运行时方法面。
+#   一次性消费语义在对端强制）。
+#   【K4 补登 2026-09-16】ledger_record 升为运行时方法面（内核已交付；口径＝内核
+#   docs/architecture/stdio-session-contract.md §13.8；补登不 bump）：setup-only 预录
+#   typed OperatorCommand 形成 approved 记录，写透 runs/<run_id>/facts/approval-ledger.jsonl
+#   （由事实日志重放重建）；同 command_id 同内容重放幂等（不追加新行）；消费仍只经内核
+#   CAS 路径与 ledger_consume。harness 侧 mock 对端暂按既有 wire 形态承载，re-pin 至含
+#   K4 的内核版本时切换（不阻塞、不插队）。
 #
 # 【exit 78 语义登记 2026-09-09】owner 口径 #3：approval_missing block 发生时，
 #   由 harness 主进程以 exit code 78 终止（headless 冒烟断言锚点，
@@ -395,11 +400,11 @@ methods:
       - approval_record_mismatch   # approval_ref 与 record_id 不匹配
       - not_found                  # 记录不存在
 
-  ledger_record:                   # mock 测试/冒烟 setup 基建，非运行时方法面
-    direction: ts_to_kernel        # 契约 v2：setup 形态随审批链模型同步（tool/params_digest 为审计检索辅助）
+  ledger_record:                   # 【K4 补登 2026-09-16】运行时方法面（内核 §13.8；补登不 bump）——setup-only 预录
+    direction: ts_to_kernel        #   同 command_id 同内容重放幂等；消费仍只经内核 CAS 与 ledger_consume
     params:
       type: object
-      required: [scope_ref, tool, params_digest]
+      required: [scope_ref, command_id, actor, operation_id, attempt_id, subject_ref, evidence_refs]
       properties:
         scope_ref:
           type: object
@@ -409,15 +414,28 @@ methods:
             scope_type: { type: string }
             scope_id: { type: string }
             scope_mode: { type: string }
-        tool: { type: string }
-        params_digest: { type: string, pattern: "^[0-9a-f]{64}$" }
-        operation_id: { type: string, required: false }
+        command_id: { type: string }
+        actor: { type: string }
+        operation_id: { type: string }
+        attempt_id: { type: string }
+        subject_ref: { type: string }
+        evidence_refs: { type: array, items: { type: string } }
+        run_id: { type: string, required: false }   # 显式覆盖会话绑定（写透定位用，内核 §13.0 覆盖口径）
     result:
       type: object
-      required: [ok, record_id]
+      required: [ok, command_id, record_id, state]
       properties:
         ok: { const: true }
-        record_id: { type: string }
+        command_id: { type: string }
+        record_id: { type: string }                  # 形态 <approval-record:<subject_ref>:<序号>>；可被 ledger_consume 一次性消费
+        state: { const: recorded }
+    errors:                        # 错误语义（连接保持）：内核 §13.8 登记
+      - approval_command_conflict  # 同 command_id 不同内容
+      - no_run_bound               # 未绑定且未显式 run_id
+      - unknown_run                # run 不存在
+      - facts_log_tail_corrupt     # 事实日志尾损坏（bind 与写透均 fail-closed）
+      - facts_log_digest_mismatch  # 事实日志摘要不符
+      - facts_log_chain_broken     # prev_digest 链断裂
 
 # ---------------------------------------------------------------------
 # atf CLI 对接面（pin v0.2.0b7 实测于 2026-09-08）

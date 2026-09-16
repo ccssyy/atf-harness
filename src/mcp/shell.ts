@@ -38,6 +38,8 @@ import {
 import type { SessionEvent, SessionEventInput } from "../core/session/index.js";
 import { AtfBridgeConnection } from "../bridge/index.js";
 import { jsonRpcError, type RpcHandlerOutcome } from "../rpc/index.js";
+import { formatThreePartInline } from "../core/index.js";
+import { isPreauthorized, isWriteClassTool, loadMcpPreauth } from "./preauth.js";
 import { mcpToolDescriptors } from "./tools.js";
 import {
   MCP_LATEST_VERSION,
@@ -70,6 +72,9 @@ export interface McpShellOptions {
   projectId?: string;
   /** 宿主标识（D4 留痕；缺省 mcp-client，initialize clientInfo.name 覆盖） */
   hostId?: string;
+  /** 写类工具预授权白名单路径（L1b B1，L1b-D1=A；入口经 ATF_MCP_PREAUTH/缺省路径解析；
+   *  缺省 ~ 下 mcp-preauth.json；未传＝fail-closed 空白名单）。每次 tools/call 重新读取。 */
+  preauthPath?: string;
 }
 
 /** 工具结果统一形态：canonical 结果/失败原因＋退出码编码（MCP 无退出码 → 进 tool result）。 */
@@ -94,6 +99,16 @@ const toolPayload = (args: {
 
 const errorResult = (tool: string, message: string): McpToolCallResult =>
   toolPayload({ tool, exit_code: 1, reason: message });
+
+/** 三段式拒绝文案（B2 格式：①事实 → ②原因 → ③修复；L1b-D1=A 默认拒绝）。 */
+const preauthRefusal = (tool: string, hostId: string, preauthPath: string): McpToolCallResult => {
+  const threePart = [
+    `①写动作被默认拒绝（未执行）：${tool}`,
+    `②原因：MCP 面写类工具须主机显式预授权（L1b-D1=A）；host "${hostId}" 不在预授权白名单`,
+    `③修复：在 ${preauthPath} 的 hosts 增 {"host_id":"${hostId}","tools":["${tool}"]}（文件权限须 0600）后重试`,
+  ].join("\n");
+  return toolPayload({ tool, exit_code: 1, reason: "mcp_write_not_preauthorized", detail: threePart });
+};
 
 export class McpShell {
   private session: McpSession | null = null;
@@ -181,11 +196,19 @@ export class McpShell {
   // -------------------------------------------------------------------------
   private async bindRun(args: Record<string, unknown>): Promise<McpToolCallResult> {
     if (this.session !== null) {
-      return errorResult("atf_bind_run", `已绑定 run ${this.session.runId}（v1 一进程一绑定；换 run 请重启 server）`);
+      return errorResult("atf_bind_run", formatThreePartInline({
+        fact: `绑定被拒绝（run 保持 ${this.session.runId}）`,
+        cause: "v1 一进程一绑定（会话以 atf_bind_run 为界，重复绑定会产生双真相源）",
+        fix: "如需换 run：结束本 server 进程后以新进程绑定目标 run",
+      }));
     }
     const runId = args["run_id"];
     if (typeof runId !== "string" || runId === "") {
-      return errorResult("atf_bind_run", "参数非法：run_id 须为非空字符串");
+      return errorResult("atf_bind_run", formatThreePartInline({
+        fact: "atf_bind_run 参数非法（未执行）",
+        cause: "run_id 缺失或不是非空字符串",
+        fix: '以 {"run_id":"<目标 run 标识>"} 为 arguments 重试',
+      }));
     }
     const scopeRef: ScopeRef = {
       project_id: this.options.projectId ?? "agentic-training-flow",
@@ -244,7 +267,28 @@ export class McpShell {
   private async governedTool(name: string, args: Record<string, unknown>): Promise<McpToolCallResult> {
     const session = this.session;
     if (session === null) {
-      return errorResult(name, "未绑定 run——先调用 atf_bind_run（我方会话以绑定为界）");
+      return errorResult(name, formatThreePartInline({
+        fact: "未绑定 run——调用未执行",
+        cause: "我方会话以 atf_bind_run 为界（v1 一进程一绑定），当前进程尚无绑定",
+        fix: "先调用 atf_bind_run 传入 run_id，再调用本工具",
+      }));
+    }
+    // 写类工具预授权闸（L1b B1，L1b-D1=A）：白名单外默认拒绝——不进 ToolExecutor、
+    // 不写 approval/request（无任何自动应答路径）；审计流落 tool/call+tool/result 可复核。
+    const writeClass = isWriteClassTool(name, args);
+    let preauthorized = false;
+    if (writeClass) {
+      const preauthPath = this.options.preauthPath ?? "";
+      const preauth = preauthPath === "" ? { config: { hosts: [] }, path: "(未配置)", failure: "预授权路径未配置——视同空白名单" } : await loadMcpPreauth(preauthPath);
+      if (preauth.failure !== undefined) console.error(`[atf-mcp] ${preauth.failure}`);
+      preauthorized = isPreauthorized(preauth.config, this.hostId, name);
+      if (!preauthorized) {
+        const call = await this.appendEvent({ type: "tool/call", payload: { tool: name, params: args } });
+        if (call !== null) {
+          await this.appendEvent({ type: "tool/result", payload: { tool: name, ok: false, reason: "mcp_write_not_preauthorized", call_ref: call.id, detail: `host=${this.hostId} 未预授权（fail-closed 基线：配置缺失/异常视同空白名单）` } });
+        }
+        return preauthRefusal(name, this.hostId, preauth.path);
+      }
     }
     const call = await this.appendEvent({ type: "tool/call", payload: { tool: name, params: args } });
     if (call === null) {
@@ -259,8 +303,15 @@ export class McpShell {
       stub: async (): Promise<ApprovalStubResponse> => {
         // MCP 无授权原语：工具调用＝客户端审批面放行后的产物（D4-C 显式预授权）。
         // 我方闸门不放宽：账本轨优先/CAS/重入/indeterminate 防线在 handler 内全部保留；
-        // 放行恒留痕 channel:"mcp"+host_id+requires_human_review:true（D4-B 审计位）。
-        return { verdict: "granted", actor: "mcp-host", channel: "mcp", host_id: this.hostId };
+        // 放行恒留痕 channel:"mcp"+host_id+requires_human_review:true（D4-B 审计位）；
+        // 写类工具经白名单放行时增 pre_authorization:true（L1b B1；预授权不绕过账本 CAS）。
+        return {
+          verdict: "granted",
+          actor: "mcp-host",
+          channel: "mcp",
+          host_id: this.hostId,
+          ...(writeClass && preauthorized ? { pre_authorization: true as const } : {}),
+        };
       },
     });
     const gate: ApprovalGate = { handler: (gateInput) => qaHandler({ ...gateInput, tool_call_id: call.id }) };
@@ -296,7 +347,11 @@ export class McpShell {
   private async ledgerTool(name: "ledger_query" | "ledger_consume", args: Record<string, unknown>): Promise<McpToolCallResult> {
     const session = this.session;
     if (session === null) {
-      return errorResult(name, "未绑定 run——先调用 atf_bind_run（我方会话以绑定为界）");
+      return errorResult(name, formatThreePartInline({
+        fact: "未绑定 run——调用未执行",
+        cause: "我方会话以 atf_bind_run 为界（v1 一进程一绑定），当前进程尚无绑定",
+        fix: "先调用 atf_bind_run 传入 run_id，再调用本工具",
+      }));
     }
     const canonical = name === "ledger_query" ? LEDGER_QUERY_CANONICAL : LEDGER_CONSUME_CANONICAL;
     const call = await this.appendEvent({ type: "tool/call", payload: { tool: name, params: args } });

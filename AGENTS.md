@@ -50,9 +50,12 @@
 ## 5. 工程约定
 
 - TypeScript strict，Node ≥ 22，测试框架 vitest；Result 类型贯穿一切可能失败的操作，禁止裸 throw 穿过桥接边界。
-- 目录：`src/bridge/`、`src/session/`、`src/tools/`、`src/workspace/`、`src/faux/`、`scenarios/`、`tests/`、`docs/`（按 phase 扩充，不提前建空壳）。
-- 会话事件 schema（8 事件类型、`domain_refs` 三元组 `{journal_type, fact_id, sha256_digest}`、compaction 白名单、`projection` 预留位）是全仓最重要的 schema，一次定死，细节以对应任务书与 ADR-06 为准。
-- 提交信息：`feat/fix/test/docs/chore(scope): 中文描述`；trunk-based，slice/PR 粒度合入 main；milestone tag 仅在 phase 验收全过后打（首个 = `v0.1.0`）。
+- 目录（L1/L1b 落地后，2026-09-16）：`src/core/`（共享中间层：会话事件/审批闸/三层工作区/工具定义与 canonical/run 引擎/投影面）、`src/rpc/`（共享 JSON-RPC 2.0/stdio 传输层，ACP/MCP 共用）、`src/bridge/`（内核 stdio JSONL 桥接）、`src/llm/`（模型面 provider 与假端点）、`src/ui/`（前端一 TUI 主入口）、`src/acp/`（前端二 ACP agent 外壳）、`src/mcp/`（前端三 MCP server 外壳）、`src/cli/`（CLI 挂起应答通道）、`src/session|tools|workspace/`（各层冒烟入口留存位）、`scenarios/`、`tests/`、`docs/`。依赖方向：三外壳 → core → {bridge, llm}（`tests/core/boundary.test.ts` 静态守卫；`dependencies` 恒空）。
+- 入口与命令（构建产物 `dist/`）：`node dist/ui/tui.js`（TUI 主入口；多轮续跑）、`node dist/cli/resume.js --list|--answer`（挂起应答通道）、`node dist/acp/main.js`（ACP agent；acpx@0.15.1 对端验收，开发期工具不入库）、`node dist/mcp/main.js`（MCP server，7 细粒度工具）。冒烟八条：`npm run smoke:p2s1|p2s2|p2s3|r2|l1a|l1ui|l1acp|l1mcp`；真端点试用 `trial:l1a-real`。
+- MCP 写类工具预授权（L1b-D1=A）：白名单配置缺省 `~/.atf-harness/mcp-preauth.json`（0600；`ATF_MCP_PREAUTH` 或 `--preauth` 指路径），白名单外写动作默认拒绝；文件缺失/解析失败/权限过宽一律视同空白名单（fail-closed）；`host_id`＝客户端自报身份（非强身份鉴别）。
+- 会话事件 schema（12 事件类型全启用、`domain_refs` 三元组 `{journal_type, fact_id, sha256_digest}`、compaction 白名单、`projection` 预留位）是全仓最重要的 schema，一次定死，细节以对应任务书与 ADR-06 为准。
+- 内核 pin 现状 `v0.6.0b0`（归属与 re-pin 三步见 §4）；re-pin 至含 K4 的内核发版（`.atf-pinned` → `v0.7.0b0`）为登记待办，届时 mock 对端 `ledger_record` wire 形态同步切换（另走变更单）。
+- 提交信息：`feat/fix/test/docs/chore(scope): 中文描述`；trunk-based，slice/PR 粒度合入 main；milestone tag 仅在 phase 验收全过后打（首个 = `v0.1.0`）；commit/merge/push/re-pin 等 repo 写操作执行主体＝zcode（协议 §3.5 铁律五）。
 
 ## 6. 沟通纪律
 

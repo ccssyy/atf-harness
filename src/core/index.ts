@@ -22,3 +22,9 @@ export {
   type ProjectionOrigin,
   type RunEventSubscriber,
 } from "./projection.js";
+export {
+  formatThreePartInline,
+  formatThreePartLines,
+  providerConfigThreePart,
+  type ThreePartError,
+} from "./threePart.js";

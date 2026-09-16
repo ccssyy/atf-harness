@@ -9,12 +9,16 @@
  *
  * 运行：
  *   node dist/mcp/main.js [--runs-root <dir>] [--mock <桥接 serve 脚本>]
- *        [--scope-mode canonical|simulation] [--project-id <id>]
+ *        [--scope-mode canonical|simulation] [--project-id <id>] [--preauth <path>]
+ *
+ * 写类工具预授权（L1b B1，D1=A）：路径解析序 --preauth > ATF_MCP_PREAUTH >
+ * ~/.atf-harness/mcp-preauth.json；文件缺失/解析/权限异常一律视同空白名单（默认拒绝）。
  *
  * 红线：stdout 是协议通道——非协议输出一律 stderr；本壳不发起任何 LLM 调用
  * （模型/额度归客户端自管），无 provider 配置依赖。
  */
 import { mkdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { RpcPeer } from "../rpc/index.js";
@@ -41,9 +45,12 @@ if (scopeModeArg !== undefined && scopeModeArg !== "canonical" && scopeModeArg !
 }
 mkdirSync(runsRoot, { recursive: true });
 
+const preauthPath = argValue("--preauth") ?? process.env["ATF_MCP_PREAUTH"] ?? join(homedir(), ".atf-harness", "mcp-preauth.json");
+
 const shell = new McpShell({
   runsRoot,
   mockCommand: ["node", mockPath],
+  preauthPath,
   ...(scopeModeArg !== undefined ? { scopeMode: scopeModeArg as "canonical" | "simulation" } : {}),
   ...(projectId !== undefined ? { projectId } : {}),
 });
