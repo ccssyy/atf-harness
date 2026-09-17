@@ -327,11 +327,20 @@ export class ScenarioRunner {
         scope_id: branch.run_id,
         scope_mode: options.scopeMode ?? "headless",
       };
+      // re-pin R2（v0.7.1b0）：setup 预录 wire 切换至 K4 §13.8 形态（typed OperatorCommand）；
+      // 场景条目仍以 {tool, params} 表达，runner 映射为 command_id/actor/operation_id/
+      // attempt_id/subject_ref/evidence_refs（tool+digest 作审计检索辅助入 evidence_refs）。
+      let setupRecordSeq = 0;
       for (const entry of resumeMode || continueMode ? [] : branch.setup.ledger) {
+        setupRecordSeq += 1;
         const recorded = await connection.request("ledger_record", {
           scope_ref: scopeRef,
-          tool: entry.tool,
-          params_digest: approvalParamsDigest(entry.params),
+          command_id: `cmd-setup-${entry.tool}-${String(setupRecordSeq)}`,
+          actor: "scenario-setup",
+          operation_id: `op-${entry.tool}`,
+          attempt_id: "1",
+          subject_ref: `${entry.tool}:${approvalParamsDigest(entry.params).slice(0, 12)}`,
+          evidence_refs: [approvalParamsDigest(entry.params)],
         });
         if (!recorded.ok) {
           outcome = { kind: "failed", error: runError("setup_failure", `账本预录失败（${entry.tool}）`, recorded.error) };

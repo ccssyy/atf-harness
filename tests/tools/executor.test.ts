@@ -41,12 +41,20 @@ afterEach(async () => {
 
 const ADMIT_PARAMS = { dataset_id: "ds-2026-001", source_ref: "smoke" };
 
-/** 经桥接在对端 MockLedger 预录一条审批链记录（测试 setup 基建方法；审计辅助键随录）。 */
+/** 经桥接在对端 MockLedger 预录一条审批链记录（测试 setup 基建；re-pin R2 后按 K4 §13.8
+ *  wire 形态：{scope_ref, command_id, actor, operation_id, attempt_id, subject_ref,
+ *  evidence_refs}；tool/params_digest 入 subject_ref/evidence_refs 作审计检索辅助）。 */
+let recordSeqForTest = 0;
 const recordApproval = async (connection: AtfBridgeConnection, tool: string, params: unknown): Promise<string> => {
+  recordSeqForTest += 1;
   const recorded = await connection.request("ledger_record", {
     scope_ref: SCOPE_REF,
-    tool,
-    params_digest: approvalParamsDigest(params),
+    command_id: `cmd-${tool}-${String(recordSeqForTest)}`,
+    actor: "test-setup",
+    operation_id: `op-${tool}`,
+    attempt_id: "1",
+    subject_ref: `${tool}:${approvalParamsDigest(params).slice(0, 12)}`,
+    evidence_refs: [approvalParamsDigest(params)],
   });
   expect(recorded.ok, recorded.ok ? "" : JSON.stringify(recorded.error)).toBe(true);
   if (!recorded.ok) throw new Error("unreachable");
@@ -58,7 +66,7 @@ describe("S3 验收（成功用例）——预录 → 执行成功 → 账本已
     const { connection, executor } = await makeExecutor();
 
     const recordId = await recordApproval(connection, "atf_admit_data", ADMIT_PARAMS);
-    expect(recordId).toMatch(/^rec-/);
+    expect(recordId).toMatch(/^approval-record:/);
 
     const first = await executor.execute("atf_admit_data", ADMIT_PARAMS);
     expect(first.kind).toBe("executed");

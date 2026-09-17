@@ -513,8 +513,8 @@ atf_cli:
 # （mock 已回 2）"的表述作废】，真实对端以内核批次二实现为准。
 # ---------------------------------------------------------------------
 atf_upstream:
-  tag: v0.6.0b0
-  commit_sha: b6db3496b34089147044be9c6b9a0a7ceb595e3a
-  pinned_at: "2026-09-14"
-  baseline: 全量基线 1235 passed / 128 skipped（合计 1363；内核批次二发版实测）
+  tag: v0.7.1b0
+  commit_sha: b8b022597a2ab1f33c865e644716bb19381959cc
+  pinned_at: "2026-09-17"
+  baseline: 全量基线 1330 passed / 128 skipped（合计 1458；内核 v0.7.1b0 发版实测）
   contract_version: 1

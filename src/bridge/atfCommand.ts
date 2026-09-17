@@ -7,10 +7,10 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin R1 2026-09-14：v0.2.0b7 → v0.6.0b0，唯一真相源 = bridge.contract.yaml atf_upstream，
+// 当前 pin（re-pin R2 2026-09-17：v0.6.0b0 → v0.7.1b0，唯一真相源 = bridge.contract.yaml atf_upstream，
 // 本处为契约测试承载镜像；re-pin 三步见 AGENTS.md §4，禁止自动追新）
-export const ATF_UPSTREAM_TAG = "v0.6.0b0";
-export const ATF_UPSTREAM_COMMIT_SHA = "b6db3496b34089147044be9c6b9a0a7ceb595e3a";
+export const ATF_UPSTREAM_TAG = "v0.7.1b0";
+export const ATF_UPSTREAM_COMMIT_SHA = "b8b022597a2ab1f33c865e644716bb19381959cc";
 
 export interface AtfCliInvocation {
   command: string;

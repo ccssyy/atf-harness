@@ -99,23 +99,47 @@ const ledgerWireRecord = (record) => {
   return wire;
 };
 
+// re-pin R2（v0.7.1b0）wire 切换：ledger_record 按 K4 §13.8 形态——
+// params {scope_ref, command_id, actor, operation_id, attempt_id, subject_ref, evidence_refs[, run_id]}；
+// 同 command_id 同内容重放幂等（不追加新行）；不同内容 = approval_command_conflict；
+// run 解析＝显式 run_id 优先于会话绑定（§13.0 覆盖口径），未绑定且未显式 = no_run_bound。
 const ledgerRecord = (params) => {
   if (!isPlainObject(params.scope_ref)) {
     return { error: { code: "invalid_params", message: "ledger_record 需要 scope_ref（契约 v2 审批链定位）" } };
   }
+  for (const key of ["command_id", "actor", "operation_id", "attempt_id", "subject_ref", "evidence_refs"]) {
+    if (params[key] === undefined) {
+      return { error: { code: "invalid_params", message: `ledger_record 缺 ${key}（§13.8 形态）` } };
+    }
+  }
+  const resolved = resolveRun(params);
+  if (resolved.error !== undefined) return { error: resolved.error };
+  const contentKey = JSON.stringify([params.actor, params.operation_id, params.attempt_id, params.subject_ref, params.evidence_refs]);
+  const existing = [...ledger.values()].find((r) => r.command_id === params.command_id);
+  if (existing !== undefined) {
+    // 幂等：同 command_id 同内容重放 → 原记录原样返回（不追加）
+    if (JSON.stringify([existing.actor, existing.operation_id, existing.attempt_id, existing.subject_ref, existing.evidence_refs]) === contentKey) {
+      return { ok: true, command_id: existing.command_id, record_id: existing.record_id, state: "recorded" };
+    }
+    return { error: { code: "approval_command_conflict", message: "同 command_id 不同内容（§13.8）" } };
+  }
   recordSeq += 1;
   const record = {
-    record_id: `rec-${String(recordSeq).padStart(3, "0")}`,
+    record_id: `approval-record:${params.subject_ref}:${String(recordSeq).padStart(3, "0")}`,
     approval_id: `apr-${String(recordSeq).padStart(3, "0")}`,
     sequence: recordSeq,
     state: "approved",
     scope_ref: params.scope_ref,
-    tool: params.tool,
-    params_digest: params.params_digest,
+    run_id: resolved.runId,
+    command_id: params.command_id,
+    actor: params.actor,
+    operation_id: params.operation_id,
+    attempt_id: params.attempt_id,
+    subject_ref: params.subject_ref,
+    evidence_refs: params.evidence_refs,
   };
-  if (params.operation_id !== undefined) record.operation_id = params.operation_id;
   ledger.set(record.record_id, record);
-  return { ok: true, record_id: record.record_id };
+  return { ok: true, command_id: params.command_id, record_id: record.record_id, state: "recorded" };
 };
 
 const ledgerQuery = (params) => {
@@ -248,6 +272,30 @@ const toolWorkspaceStatus = (params) => {
   };
 };
 
+// re-pin R2 wire 切换：atf_flow_anchor（K3 §13.9）流程位置纯读出口——三态 current/stale/missing。
+// mock 承载：锚 = 进程内 Map（bind 时写锚为 current；--stale-anchor=RUN 可注入 stale 形态）；
+// 纯读纪律（不重算、不写锚）与三态形状按契约条目；显式 run_id 优先于会话绑定。
+const anchorStore = new Map(); // runId -> { document, as_of_digest }
+const flowAnchor = (params) => {
+  const resolved = resolveRun(params);
+  if (resolved.error !== undefined) return { error: resolved.error };
+  const anchor = anchorStore.get(resolved.runId);
+  if (anchor === undefined) {
+    return { ok: true, run_id: resolved.runId, anchor_status: "missing" };
+  }
+  if (anchor.stale === true) {
+    return {
+      ok: true,
+      run_id: resolved.runId,
+      anchor_status: "stale",
+      anchor_phase: anchor.document.phase,
+      as_of_digest: anchor.recomputedDigest,
+      expected_as_of_digest: anchor.document.as_of_digest,
+    };
+  }
+  return { ok: true, run_id: resolved.runId, anchor_status: "current", anchor: anchor.document.raw };
+};
+
 const METHODS = {
   ledger_record: ledgerRecord,
   ledger_query: ledgerQuery,
@@ -257,6 +305,7 @@ const METHODS = {
   atf_gate: toolGate,
   atf_fact_scan: toolFactScan,
   atf_workspace_status: toolWorkspaceStatus,
+  atf_flow_anchor: flowAnchor,
 };
 
 // 响应写出经串行链，保证分片模式下不同响应的字节不交错（对端自身的帧完整性义务）

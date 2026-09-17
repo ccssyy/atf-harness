@@ -48,11 +48,15 @@ const smoke = async (): Promise<void> => {
       `exit=${String(noApproval.kind === "blocked" ? resolveHeadlessExitCode(noApproval) : "?")}`,
     );
 
-    console.log("[3] 账本预录（scope_ref + 审计辅助键）→ admit_data 执行成功（canonical 校验通过）");
+    console.log("[3] 账本预录（re-pin R2：§13.8 typed OperatorCommand 形态）→ admit_data 执行成功（canonical 校验通过）");
     const recorded = await connection.request("ledger_record", {
       scope_ref: SCOPE_REF,
-      tool: "atf_admit_data",
-      params_digest: approvalParamsDigest(params),
+      command_id: "cmd-smoke-admit-1",
+      actor: "smoke-s3",
+      operation_id: "op-atf_admit_data",
+      attempt_id: "1",
+      subject_ref: `atf_admit_data:${approvalParamsDigest(params).slice(0, 12)}`,
+      evidence_refs: [approvalParamsDigest(params)],
     });
     step("预录 ledger_record", recorded.ok, recorded.ok ? JSON.stringify(recorded.value) : undefined);
     const executed = await executor.execute("atf_admit_data", params);
@@ -70,8 +74,12 @@ const smoke = async (): Promise<void> => {
     const gateParams = { gate: "G2", action: "advance" };
     const gateRecorded = await connection.request("ledger_record", {
       scope_ref: SCOPE_REF,
-      tool: "atf_gate",
-      params_digest: approvalParamsDigest(gateParams),
+      command_id: "cmd-smoke-gate-1",
+      actor: "smoke-s3",
+      operation_id: "op-atf_gate",
+      attempt_id: "1",
+      subject_ref: `atf_gate:${approvalParamsDigest(gateParams).slice(0, 12)}`,
+      evidence_refs: [approvalParamsDigest(gateParams)],
     });
     step("预录 atf_gate 审批", gateRecorded.ok);
     const gate = await executor.execute("atf_gate", gateParams);

@@ -87,15 +87,20 @@ describe("B5：mock 对端 operation_id 过滤行为（对端支持实证）", (
       };
       const recorded = await connection.request("ledger_record", {
         scope_ref: scopeRef,
-        tool: "atf_admit_data",
-        params_digest: "b".repeat(64),
+        run_id: scopeRef.scope_id, // §13.0：显式 run_id 优先于会话绑定（本例 spawn --no-auto-bind）
+        command_id: "cmd-op-filter",
+        actor: "test-setup",
         operation_id: "op-target",
+        attempt_id: "1",
+        subject_ref: "atf_admit_data:setup",
+        evidence_refs: ["b".repeat(64)],
       });
-      expect(recorded.ok).toBe(true);
+      expect(recorded.ok, recorded.ok ? "" : JSON.stringify(recorded.error)).toBe(true);
 
       const hit = await connection.request("ledger_query", { scope_ref: scopeRef, operation_id: "op-target" });
       expect(hit.ok).toBe(true);
       if (!hit.ok) throw new Error("unreachable");
+      // K4 形态：record_id = approval-record:<subject_ref>:<序号>；ledger_query 缺省只回可消费（approved）
       expect((hit.value as { records: unknown[] }).records.length).toBe(1);
 
       const miss = await connection.request("ledger_query", { scope_ref: scopeRef, operation_id: "op-other" });
