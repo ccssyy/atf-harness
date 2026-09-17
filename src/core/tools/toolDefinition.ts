@@ -12,8 +12,15 @@ export interface ToolDefinition {
   description: string;
   /** 模型可见参数白名单（JSON Schema 方言，见 canonical.ts） */
   parameters: SchemaNode;
-  /** 审批轨要求：写动作/闸门推进 = true（调用前须账本预录且未消费）；只读 = false */
+  /** 审批轨要求：写动作/闸门推进 = true（调用前须账本预录且未消费）；只读 = false。
+   *  基准旗标——当 requiresApproval 谓词存在时以其为准（见下）。 */
   requires_approval: boolean;
+  /** L1b B7 N1（owner 裁定 2026-09-17）：按 params 分派的审批谓词（存在时优先于
+   *  requires_approval）。atf_gate：action=="advance"（推进）须审批；action=="query"
+   *  （只读）免审批、模型自主执行——对齐 L1 门 2 VERIFY 4「模型自主只读」与
+   *  L1b-D1=A 写类界定。定性＝实现修正到已裁口径，非放宽「逐工具审批」红线
+   *  （advance 仍走问答轨；账本轨优先/CAS/一次性消费零改动）。 */
+  requiresApproval?: (params: unknown) => boolean;
   /** canonical output schema（成功返回值逐次校验，失败 = err(schema_violation)） */
   canonical_output: SchemaNode;
 }
@@ -24,6 +31,19 @@ export interface ModelVisibleTool {
   description: string;
   parameters: SchemaNode;
 }
+
+/** 审批判定单一出口：谓词存在以其为准，否则退回基准旗标（executor 消费点唯一）。 */
+export const requiresApprovalFor = (definition: ToolDefinition, params: unknown): boolean =>
+  definition.requiresApproval !== undefined ? definition.requiresApproval(params) : definition.requires_approval;
+
+/** atf_gate 审批谓词：仅 action=="advance"（推进＝状态变更）须审批；query 只读免审批。
+ *  action 缺失/非法 → 按须审批处置（fail-closed，不猜只读）。 */
+const gateRequiresApproval = (params: unknown): boolean => {
+  const action = typeof params === "object" && params !== null && !Array.isArray(params)
+    ? (params as { action?: unknown }).action
+    : undefined;
+  return action !== "query";
+};
 
 export const toModelVisible = (definition: ToolDefinition): ModelVisibleTool => ({
   name: definition.name,
@@ -73,7 +93,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "atf_gate",
     description:
-      "查询或推进闸门：gate 取值按命名分流（G1–G4 大小写不敏感 → 数据准入闸；其余须命中七组完整性 GateId；都不命中 unknown_gate）。blocked/warn 为合法业务产出（含原因码与证据引用）。须账本审批预录。",
+      "查询或推进闸门：gate 取值按命名分流（G1–G4 大小写不敏感 → 数据准入闸；其余须命中七组完整性 GateId；都不命中 unknown_gate）。blocked/warn 为合法业务产出（含原因码与证据引用）。query 免审批自主执行；advance 须账本审批预录。",
     parameters: {
       type: "object",
       required: ["gate", "action"],
@@ -84,6 +104,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       },
     },
     requires_approval: true,
+    requiresApproval: gateRequiresApproval,
     canonical_output: {
       type: "object",
       required: ["ok", "gate", "status"],

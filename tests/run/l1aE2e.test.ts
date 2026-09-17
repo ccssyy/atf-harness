@@ -174,7 +174,7 @@ describe("VERIFY 4/5——挂起闭环 + 人放行闭环", () => {
 
   it("触发 admit → approval/request + exit 75 + turn 收口（INV-2）；CLI 面应答 → resume 开新 turn → 真正执行", async () => {
     const rig = await makeRig(SUSPEND);
-    const scenario = makeScenario({ gatePreRecord: true, runLabel: "grant" });
+    const scenario = makeScenario({ gatePreRecord: false, runLabel: "grant" });
     const report1 = await run(rig, scenario, providerOf(rig));
     // 挂起闭环
     expect(report1.outcome.kind).toBe("suspended");
@@ -209,7 +209,7 @@ describe("VERIFY 4/5——挂起闭环 + 人放行闭环", () => {
 
   it("resume 前置 fail-closed：非挂起流拒绝恢复", async () => {
     const rig = await makeRig(RO);
-    const scenario = makeScenario({ gatePreRecord: true, runLabel: "nosusp" });
+    const scenario = makeScenario({ gatePreRecord: false, runLabel: "nosusp" });
     const completed = await run(rig, scenario, providerOf(rig));
     expect(completed.outcome.kind).toBe("completed");
     const refused = await run(rig, scenario, providerOf(rig), { verdict: "granted" });
@@ -302,7 +302,7 @@ describe("VERIFY 7——成本护栏（max_calls_per_run，与轮次预算正交
   it("超上限 → 收敛且原因可区分（call_budget_exhausted）", async () => {
     const rig = await makeRig(RO, { max_calls_per_run: 2 });
     const provider = providerOf(rig);
-    const report = await run(rig, makeScenario({ gatePreRecord: true, runLabel: "budget" }), provider);
+    const report = await run(rig, makeScenario({ gatePreRecord: false, runLabel: "budget" }), provider);
     expect(report.outcome.kind).toBe("failed");
     if (report.outcome.kind !== "failed") return;
     // runner 折算 provider_failure 终局；原始错误码在 detail 内可区分（非轮次预算 32/8）
@@ -316,7 +316,7 @@ describe("anthropic-messages 协议全链（codec 互换性）", () => {
   it("同型闭环在 anthropic-messages 下成立（只读链）", async () => {
     const rig = await makeRig(RO, {}, "anthropic-messages");
     const provider = providerOf(rig);
-    const report = await run(rig, makeScenario({ gatePreRecord: true, runLabel: "anthro" }), provider);
+    const report = await run(rig, makeScenario({ gatePreRecord: false, runLabel: "anthro" }), provider);
     expect(report.outcome.kind).toBe("completed");
     expect(toolResults(report).filter((r) => r.ok)).toHaveLength(3);
     for (const path of rig.requestsOf()) expect(path).toBe("/v1/messages");
