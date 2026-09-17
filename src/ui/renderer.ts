@@ -129,6 +129,12 @@ export class DiffRenderer {
     this.setStatus([]);
   }
 
+  /** 擦除当前光标行（B7 N2）：弹窗应答提示行与人键入回显的清面——擦除后光标回到
+   *  行首（即状态块下方原位），审计行得以紧跟过程流末行、不留残行。非 TTY 空操作。 */
+  public eraseCurrentLine(): void {
+    if (this.tty) this.out.write("\r\x1b[2K");
+  }
+
   /** 重新渲染干净界面（L1b B3）：TTY 清屏＋按当前宽度重放保留行＋状态区；非 TTY 打标记。 */
   public reset(): void {
     if (this.tty) {

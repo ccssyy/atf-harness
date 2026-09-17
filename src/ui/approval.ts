@@ -83,6 +83,9 @@ export const askApproval = async (deps: {
         triggerSigint = (): void => resolve("sigint");
       });
       const outcome = await Promise.race([answerPromise, sigintPromise]);
+      // B7 N2：先擦应答提示行与人键入回显（恢复「光标在状态块下方」不变量，
+      // 物理行计数才能对齐），再做弹窗 clear/重绘与审计落行——无残行、不漂移。
+      renderer.eraseCurrentLine();
       if (outcome === "sigint") {
         const response: ApprovalStubResponse = { verdict: "aborted", actor: TUI_ACTOR, reason: "SIGINT 中止（人主动）" };
         renderer.clearStatus();
