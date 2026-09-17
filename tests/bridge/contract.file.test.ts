@@ -13,6 +13,8 @@ import { BRIDGE_CONTRACT_VERSION } from "../../src/bridge/index.js";
      工具面含改名后的 atf_fact_scan；旧方法名与旧数组字段零残留；
  *   - ledger_record 原为 mock setup 基建；【K4 补登 2026-09-16】升为运行时方法面
  *     （内核 stdio-session-contract.md §13.8 对齐：setup-only 预录，补登不 bump）；
+ *   - 【K3 补登 2026-09-17】atf_flow_anchor 升为运行时方法面（内核 §13.9 对齐：
+ *     流程位置纯读出口，三态 current/stale/missing；INV-A：stale 不得自行推断；补登不 bump）；
  *   - atf_upstream pin = v0.6.0b0（re-pin R1 2026-09-14；tag/sha 自检锚定，会话协议版本轴保持 1）。
  * 契约 v2 方法面补登（2026-09-13，《ATF-Harness_Owner指令_推送授权与bind_run补登_20260913.md》）：
  *   - 运行时方法面扩为 握手 + 会话上下文（atf.bind_run）+ 4 工具 + 2 账本；
@@ -54,27 +56,33 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/BRIDGE_CONTRACT_VERSION/);
   });
 
-  it("运行时方法面：握手 + 会话上下文（atf.bind_run）+ 4 工具（含 atf_fact_scan）+ 2 账本 + ledger_record（K4 运行时方法面补登）", () => {
+  it("运行时方法面：握手 + 会话上下文（atf.bind_run）+ 4 工具（含 atf_fact_scan）+ 2 账本 + ledger_record（K4 补登）+ atf_flow_anchor（K3 补登）", () => {
     const methods = methodKeys();
     // 握手 + 会话上下文 + 工具 + 账本运行时方法（补登 B1）
     for (const required of ["atf.version", "atf.bind_run", "atf_admit_data", "atf_gate", "atf_fact_scan", "atf_workspace_status", "ledger_query", "ledger_consume"]) {
       expect(methods, `契约 methods 缺少 ${required}`).toContain(required);
     }
-    // 会话方法族恰 2 个（点号命名，与 atf.version 同族；补登后不再增）
+    // 会话方法族恰 2 个（点号命名，与 atf.version 同族；补登后不再增；
+    // atf_flow_anchor 为下划线命名纯读出口，不属点号族）
     const sessionFamily = methods.filter((name) => name.startsWith("atf."));
     expect(sessionFamily).toEqual(["atf.version", "atf.bind_run"]);
-    // 工具面恰 4 个（严格 4 工具，owner 口径 #5；atf.bind_run 不进工具面）
-    const tools = methods.filter((name) => name.startsWith("atf_"));
+    // 工具面恰 4 个（严格 4 工具，owner 口径 #5；atf.bind_run 不进工具面）；
+    // 【K3 补登 2026-09-17】atf_flow_anchor 为流程位置纯读出口（非工具面），不计入工具面
+    const tools = methods.filter((name) => name.startsWith("atf_") && name !== "atf_flow_anchor");
     expect(tools).toHaveLength(4);
     // ledger_record 仍在契约中登记；【K4 补登 2026-09-16】为运行时方法面（内核 §13.8，补登不 bump）
     expect(methods).toContain("ledger_record");
     expect(contract).toMatch(/ledger_record:.*# 【K4 补登 2026-09-16】运行时方法面（内核 §13.8；补登不 bump）/);
+    // 【K3 补登 2026-09-17】atf_flow_anchor 为运行时方法面（内核 §13.9，补登不 bump）
+    expect(methods).toContain("atf_flow_anchor");
+    expect(contract).toMatch(/atf_flow_anchor:.*# 【K3 补登 2026-09-17】运行时方法面（内核 §13\.9；补登不 bump）/);
   });
 
   it("补登登记：可选 run_id（显式优先于会话绑定）/ 错误码 no_run_bound+unknown_run / 留痕 event session/run-bound", () => {
     // B2：两个只读工具参数均为可选 run_id（required: []；显式 run_id 优先于会话绑定）；
-    //     【K4 补登 2026-09-16】ledger_record 增第三处可选 run_id（内核 §13.0 覆盖口径，写透定位用）
-    expect(contract.match(/run_id: \{ type: string, required: false \}/g)).toHaveLength(3);
+    //     【K4 补登 2026-09-16】ledger_record 增第三处可选 run_id（内核 §13.0 覆盖口径，写透定位用）；
+    //     【K3 补登 2026-09-17】atf_flow_anchor 增第四处可选 run_id（内核 §13.9，显式优先于会话绑定）
+    expect(contract.match(/run_id: \{ type: string, required: false \}/g)).toHaveLength(4);
     expect(contract).toMatch(/显式 run_id 优先于会话绑定/);
     expect(contract).toMatch(/required: \[run_id\]/);
     // B3：错误码登记（error response，连接保持）
@@ -122,6 +130,22 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/state: \{ const: consumed \}/);
     expect(contract).toMatch(/approval_already_consumed/);
     expect(contract).toMatch(/approval_record_mismatch/);
+  });
+
+  it("K3 补登（2026-09-17）：atf_flow_anchor 三态 current/stale/missing / INV-A 消费纪律 / §13.9 错误码与措辞纪律", () => {
+    // 三态（missing＝run 尚无任何推进的合法态，非错误）
+    expect(contract).toMatch(/anchor_status: \{ enum: \[current, stale, missing\] \}/);
+    // INV-A 消费纪律：harness 收到 stale 不得自行推断最新阶段（不得重派生 phase）；
+    // 最新派生投影只能由内核 writer 在下一次推进时写锚产出
+    expect(contract).toMatch(/INV-A 消费纪律/);
+    expect(contract).toMatch(/不得自行推断最新阶段/);
+    // 锚定返回值措辞纪律＝只能写「派生投影」
+    expect(contract).toMatch(/派生投影/);
+    // 错误码（连接保持）：no_run_bound / unknown_run / anchor_document_invalid / facts_log_* 族透传
+    expect(contract).toMatch(/- anchor_document_invalid/);
+    expect(contract).toMatch(/- no_run_bound/);
+    expect(contract).toMatch(/- unknown_run/);
+    expect(contract).toMatch(/- facts_log_tail_corrupt/);
   });
 
   it("atf_upstream pin 保持 v0.6.0b0（re-pin R1 2026-09-14；禁止追 main 中间态）", () => {

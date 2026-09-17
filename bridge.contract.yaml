@@ -172,6 +172,15 @@ lifecycle:
 #   CAS 路径与 ledger_consume。harness 侧 mock 对端暂按既有 wire 形态承载，re-pin 至含
 #   K4 的内核版本时切换（不阻塞、不插队）。
 #
+#   【K3 补登 2026-09-17】atf_flow_anchor 升为运行时方法面（内核已交付；口径＝内核
+#   docs/architecture/stdio-session-contract.md §13.9；补登不 bump）：流程位置纯读出口，
+#   三态 current/stale/missing（missing＝run 尚无任何推进的合法态，非错误）。纯读＝方法体
+#   只做参数解析＋K2 read_anchor 校验＋形状映射，不重算摘要、不重派生 phase、绝不写锚
+#   （零第二真相源）。INV-A 消费纪律：harness 收到 stale 不得自行推断最新阶段（不得从
+#   stale 响应或其它来源重派生 phase），最新派生投影只能由内核 writer 在下一次推进时写锚
+#   产出；锚定返回值措辞纪律＝只能写「派生投影」。harness 侧 mock 对端暂按既有 wire 形态
+#   承载，re-pin 至含 K3 的内核版本时切换（不阻塞、不插队）。
+#
 # 【exit 78 语义登记 2026-09-09】owner 口径 #3：approval_missing block 发生时，
 #   由 harness 主进程以 exit code 78 终止（headless 冒烟断言锚点，
 #   harness 侧 resolveHeadlessExitCode 为唯一出口）；"exit 78 由 atf 侧返回"
@@ -436,6 +445,33 @@ methods:
       - facts_log_tail_corrupt     # 事实日志尾损坏（bind 与写透均 fail-closed）
       - facts_log_digest_mismatch  # 事实日志摘要不符
       - facts_log_chain_broken     # prev_digest 链断裂
+
+  # ---------------- 流程位置纯读出口（K3；下划线命名，非点号族、非工具面、不进审批面） ----------------
+  atf_flow_anchor:                 # 【K3 补登 2026-09-17】运行时方法面（内核 §13.9；补登不 bump）——流程位置纯读出口
+    direction: ts_to_kernel        #   三态 current/stale/missing；INV-A 消费纪律与措辞纪律见头部【K3 补登】注记
+    params:
+      type: object
+      required: []
+      properties:
+        run_id: { type: string, required: false }   # 显式优先于会话绑定（批次二先例）；未绑定且未显式 → no_run_bound
+    result:                        # 纯读：只做参数解析＋K2 read_anchor 校验＋形状映射；不重算摘要、
+      type: object                 #   不重派生 phase、绝不写锚（零第二真相源）；按 anchor_status 三态返回
+      required: [ok, run_id, anchor_status]
+      properties:
+        ok: { const: true }
+        run_id: { type: string }
+        anchor_status: { enum: [current, stale, missing] }
+        anchor: { type: string, required: false, note: 仅 current——TrainingFlowAnchor/v1 文档，与 runs/<run_id>/anchor.json 逐字一致（派生投影） }
+        anchor_phase: { type: string, required: false, note: 仅 stale——锚内 phase；不返回重生后的 phase、不含 blocked（内核 A④） }
+        as_of_digest: { type: string, required: false, note: 仅 stale——当前重算摘要 }
+        expected_as_of_digest: { type: string, required: false, note: 仅 stale——锚内摘要 }
+    errors:                        # 错误语义（连接保持）：内核 §13.9 登记
+      - no_run_bound               # 未绑定且未显式 run_id
+      - unknown_run                # run 不存在
+      - anchor_document_invalid    # 锚文件非法 JSON/非对象/schema_version 不符/必需顶层字段缺失或非字符串/derived_from 四键缺失（K3 新增，fail-closed 兜底）
+      - facts_log_tail_corrupt     # facts 日志损坏透传 K4 原因码（facts_log_* 族）
+      - facts_log_digest_mismatch
+      - facts_log_chain_broken
 
 # ---------------------------------------------------------------------
 # atf CLI 对接面（pin v0.2.0b7 实测于 2026-09-08）
