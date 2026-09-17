@@ -48,12 +48,20 @@ describe("formatEventLine（T02）", () => {
     expect(advised).toContain("备注=先改参数");
   });
 
-  it("长文本截断且压成单行（日志本体不受影响）", () => {
-    const long = `很长文本 ${"字".repeat(300)}\n换行也要压平`;
+  it("B6 D1：长文本不再硬截断——全量单行输出（折行/折叠交渲染层）", () => {
+    const marker = "尾部标记-不可丢";
+    const long = `很长文本 ${"字".repeat(300)} ${marker}`;
     const line = formatEventLine(ev("assistant/message", { text: long }), "live");
+    expect(line).not.toContain("…(截断)");
+    expect(line).toContain(marker); // 全量输出：尾部内容保留
     expect(line).not.toContain("\n");
-    expect(line).toContain("…(截断)");
-    expect(line.length).toBeLessThan(300);
+  });
+
+  it("B6 D1：tool/result 大 result 同样全量（machine 字段零漂移）", () => {
+    const big = { ok: true, payload: "x".repeat(500), tail: "结果尾部标记" };
+    const line = formatEventLine(ev("tool/result", { tool: "atf_fact_scan", ok: true, result: big, call_ref: 1 }), "live");
+    expect(line).toContain("结果尾部标记");
+    expect(line).toContain("atf_fact_scan");
   });
 
   it("turn/end 收口形态（reason + stop_reason）", () => {

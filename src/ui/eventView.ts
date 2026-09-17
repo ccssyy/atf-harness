@@ -1,25 +1,23 @@
 /**
- * 前端一（自有 UI · TUI）——会话事件 → 过程流行（L1 门 2 T02，VERIFY 验收项 2 的呈现侧）。
+ * 前端一（自有 UI · TUI）——会话事件 → 过程流行（L1 门 2 T02；L1b B6 D1 去硬截断）。
  *
  * 同源纪律：行内容只由 SessionEvent 本体推导（core 投影面投出的已落盘事实），不引入
  * 第二套语义——UI 每行带事件 id 前缀 `#NNNN`，与 append-only 日志逐条对应（smoke:l1ui
  * 两侧比对断言）。origin=history（resume 装载的既有流）加「历史」标记，防与本次进程
  * 新落盘事件混淆。脱敏：本模块只做展示格式化，不新增任何载荷来源。
+ *
+ * B6 D1：**不再硬截断**——长内容（tool/result 结果、assistant/message 文本、params 等）
+ * 全量输出，交给 B3 折行渲染与 D1 折叠（>20 物理行折叠为前 20 行＋按 e 展开）；
+ * reason/错误码等机器码字段零漂移（字段名与取值不改，只去长度截断）。
  */
 
 import type { SessionEvent } from "../core/session/index.js";
 import type { ProjectionOrigin } from "../core/index.js";
 import { type ToolResultPayload } from "../core/run/index.js";
 
-/** 单行截断上限（展示面；日志本体不受影响）。 */
-const DETAIL_MAX = 160;
-
 const oneLine = (text: string): string => text.replace(/\s+/g, " ").trim();
 
-const truncate = (text: string, max = DETAIL_MAX): string =>
-  text.length <= max ? text : `${text.slice(0, max)}…(截断)`;
-
-const detailOf = (value: unknown): string => truncate(oneLine(JSON.stringify(value) ?? ""));
+const detailOf = (value: unknown): string => oneLine(JSON.stringify(value) ?? "");
 
 const payloadStr = (payload: unknown, key: string): string => {
   if (typeof payload !== "object" || payload === null) return "";
@@ -40,9 +38,9 @@ export const formatEventLine = (event: SessionEvent, origin: ProjectionOrigin): 
       return `${prefix}收口 reason=${reason}${stop !== "" ? ` stop_reason=${stop}` : ""}`;
     }
     case "user/message":
-      return `${prefix}${truncate(oneLine(payloadStr(payload, "text")))}`;
+      return `${prefix}${oneLine(payloadStr(payload, "text"))}`;
     case "assistant/message":
-      return `${prefix}${truncate(oneLine(payloadStr(payload, "text")))}`;
+      return `${prefix}${oneLine(payloadStr(payload, "text"))}`;
     case "assistant/attempt":
       return `${prefix}reason=${payloadStr(payload, "reason") || payloadStr(payload, "code")} ${oneLine(JSON.stringify(payload))}`.trimEnd();
     case "tool/call":
@@ -61,7 +59,7 @@ export const formatEventLine = (event: SessionEvent, origin: ProjectionOrigin): 
       const advice = payloadStr(payload, "advice_text");
       const reason = payloadStr(payload, "reason");
       const note = advice !== "" ? advice : reason;
-      return `${prefix}verdict=${payloadStr(payload, "verdict")} actor=${payloadStr(payload, "actor")}${note !== "" ? ` 备注=${truncate(oneLine(note), 60)}` : ""}`;
+      return `${prefix}verdict=${payloadStr(payload, "verdict")} actor=${payloadStr(payload, "actor")}${note !== "" ? ` 备注=${oneLine(note)}` : ""}`;
     }
     case "provider/switch":
       return `${prefix}${payloadStr(payload, "from_provider")} → ${payloadStr(payload, "to_provider")}`;

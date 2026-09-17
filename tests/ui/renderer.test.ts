@@ -23,7 +23,7 @@ const fakeStream = (tty: boolean): FakeStream => {
   };
 };
 
-const joined = (stream: FakeStream): string => stream.chunks.join("");
+const joined = (stream: FakeStream, from = 0): string => stream.chunks.slice(from).join("");
 
 describe("DiffRenderer（非 TTY：冒烟/管道形态）", () => {
   it("过程流逐行直写；状态区仅在内容变化时打印一次（带分隔线）", () => {
@@ -166,5 +166,61 @@ describe("DiffRenderer B3：状态区物理行擦除（折行弹窗不残留）"
     renderer.appendLine("新过程流行");
     // 擦除 3 物理行：\x1b[3A + 3 个擦行
     expect(joined(stream)).toContain("\x1b[3A\x1b[2K\n\x1b[2K\n\x1b[2K\n");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B6 D1：单事件折叠（>20 物理行 → 前 20 行＋标记；e 展开双向）
+// ---------------------------------------------------------------------------
+describe("DiffRenderer B6 D1：折叠与展开", () => {
+  const longLine = (lines: number): string => Array.from({ length: lines }, (_, i) => `第${String(i)}段内容填充`).join(" ");
+
+  it("超阈值事件折叠为前 20 行＋标记行；短事件不受影响", () => {
+    const stream = fakeStream(true);
+    const renderer = new DiffRenderer({ out: stream, columns: 20 });
+    renderer.appendLine(longLine(60)); // 折行后 >20 物理行 → 折叠
+    const text = joined(stream);
+    expect(text).toContain("……（本事件共 ");
+    expect(text).toContain("已折叠；按 e 展开）");
+    const writtenLines = text.split("\n").filter((line) => line !== "");
+    expect(writtenLines.length).toBe(21); // 20 物理行 + 1 标记
+    renderer.appendLine("短行");
+    expect(joined(stream)).toContain("短行\n"); // 短事件直写
+  });
+
+  it("setFoldExpanded(true)＋reset → 全量重放（无标记）；再折叠回切亦然", () => {
+    const stream = fakeStream(true);
+    const renderer = new DiffRenderer({ out: stream, columns: 20 });
+    renderer.appendLine(longLine(60));
+    const foldedText = joined(stream);
+    expect(foldedText).toContain("已折叠；按 e 展开）");
+    renderer.setFoldExpanded(true);
+    const before = stream.chunks.length;
+    renderer.reset();
+    const replay = joined(stream).slice(joined(stream, before).length);
+    expect(replay).not.toContain("已折叠；按 e 展开）");
+    expect(replay.split("\n").filter((line) => line !== "").length).toBeGreaterThan(20);
+    // 折回
+    renderer.setFoldExpanded(false);
+    const before2 = stream.chunks.length;
+    renderer.reset();
+    const refold = joined(stream).slice(joined(stream, before2).length);
+    expect(refold).toContain("已折叠；按 e 展开）");
+  });
+
+  it("非 TTY 不折叠（全量直写，冒烟断言面不变）", () => {
+    const stream = fakeStream(false);
+    const renderer = new DiffRenderer({ out: stream });
+    renderer.appendLine(longLine(60));
+    expect(joined(stream)).not.toContain("已折叠；按 e 展开）");
+    expect(joined(stream).split("\n").filter((line) => line !== "").length).toBe(1);
+  });
+
+  it("保留行为逻辑全量行（折叠仅展示层）", () => {
+    const stream = fakeStream(true);
+    const renderer = new DiffRenderer({ out: stream, columns: 20 });
+    const line = longLine(60);
+    renderer.appendLine(line);
+    expect(renderer.retainedSnapshot).toEqual([line]);
   });
 });
