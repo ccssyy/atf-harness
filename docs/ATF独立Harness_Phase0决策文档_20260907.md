@@ -5,7 +5,7 @@
 > 决策人：owner ｜ 执行方：Codex / zcode（按 Phase 1 任务书执行，每步 review）
 > 定位：本文档自拍板起升格为四份 ADR，作为 Phase 1 任务书的直接输入。
 > 背景阅读：《Harness设计与ATF独立训练Agent教学文档_20260907.html》与 research-docs/2026-09-05-ATF独立训练Agent形态调研-Pi与DeepSeekHarness.md
-> 变更记录：2026-09-07 晚 增补决策四（灵活创作层：三层工作区 + 晋升闸）；2026-09-08 拍板 accepted，升格 ADR-05/06/07/08
+> 变更记录：2026-09-07 晚 增补决策四（灵活创作层：三层工作区 + 晋升闸）；2026-09-08 拍板 accepted，升格 ADR-05/06/07/08；**2026-09-17 ADR-05 修订登记（R2a → R2a v2 分层，owner 裁定）**——安全核心（bridge JSON-RPC/stdio、审批与授权（approval／预授权白名单）、凭据（llm.json/.env）、会话与事实日志写入）**零运行时依赖不变**；表现层允许依赖，两条进法：轻库走 vendor 审查（R2c 形态，D14 甲' Preact＋htm 先例）、重框架走白名单（声明＋lockfile＋audit＋禁 postinstall）；契约测试口径从「dependencies 恒空」修订为「**白名单断言**」（安全核心依赖仍须恒空）。依据：《ATF-Harness_Owner决议与启动指令_R2a分层_B8与冒烟批_20260917.md》§1 裁定一。原文（零依赖口径）对安全核心仍然有效，其余表述以本修订为准。
 
 ## 0.1 拍板记录
 
