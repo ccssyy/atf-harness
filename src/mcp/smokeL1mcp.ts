@@ -5,7 +5,7 @@
  * 链路：spawn dist/mcp/main.js（本进程 stdio 即 MCP 客户端；WorkBuddy 对端试验经
  * SSH stdio 桥、按 owner 授权在 A800 侧执行——本冒烟固化协议与治理语义）→
  * initialize → tools/list（恰 7 工具）→ 只读链（bind_run→workspace_status→fact_scan，
- * 零审批）→ 写治理链（gate query + admit_data：账本轨 miss → 问答轨 mcp 通道留痕放行）
+ * 零审批（B7 N1：gate query 亦免审批）→ 写治理链（admit_data：白名单＋问答轨 mcp 通道留痕放行）
  * → 账本工具直通（query 可用；consume 无记录 → 业务拒绝 exit 1）→ 未知工具 -32602。
  * 断言：D4 留痕（channel=mcp/host_id/requires_human_review）＋审计流逐对配对＋
  * 退出码进 tool result。
@@ -148,7 +148,8 @@ const smoke = async (): Promise<string[]> => {
     await chmod(preauthPath, 0o600);
     evidence.push("B1 阶段 B: 预授权配置热生效（hosts 增 workbuddy-l1mcp-smoke；0600）");
 
-    // ⑤ 写治理链（VERIFY 9）：账本轨 miss → 问答轨 mcp 通道留痕放行 → 真执行
+    // ⑤ 写治理链（VERIFY 9；B7 N1：gate query 免审批自主执行，advance 才须审批）：
+    // admit_data 白名单内 → 问答轨 mcp 通道留痕放行 → 真执行
     const gate = await client.callTool("atf_gate", { gate: "g1", action: "query" });
     if (gate.isError || gate.body["exit_code"] !== 0) throw new Error(`gate(query) 失败: ${JSON.stringify(gate.body)}`);
     const admit = await client.callTool("atf_admit_data", { dataset_id: "ds-l1mcp" });
@@ -157,7 +158,7 @@ const smoke = async (): Promise<string[]> => {
     if (admitResult["journal_type"] !== "dataset-registry" || admitResult["sha256_digest"] === undefined) {
       throw new Error("admit canonical 形态不符");
     }
-    evidence.push("写治理链: gate(query)+admit_data 经问答轨授权放行，canonical 三元组落定（exit 0 编码进 tool result）");
+    evidence.push("写治理链: gate(query) 免审批自主执行（B7 N1）；admit_data 经问答轨授权放行，canonical 三元组落定（exit 0）");
 
     // ⑥ 账本工具直通：query 可用；consume 无记录 → 业务拒绝 exit 1（一次性语义在对端强制）
     const query = await client.callTool("ledger_query", {
@@ -178,7 +179,7 @@ const smoke = async (): Promise<string[]> => {
     const streamText = await readFile(join(runsRoot, RUN_ID, "session.jsonl"), "utf8");
     const lines = streamText.split("\n").filter((line) => line !== "");
     const responses = lines.filter((line) => line.includes('"type":"approval/response"')).map((line) => JSON.parse(line) as { id: number; payload: Record<string, unknown> });
-    if (responses.length !== 2) throw new Error(`approval/response 数量不符: ${String(responses.length)} ≠ 2（gate+admit）`);
+    if (responses.length !== 1) throw new Error(`approval/response 数量不符: ${String(responses.length)} ≠ 1（B7 N1：仅 admit 走问答轨）`);
     for (const response of responses) {
       if (response.payload["channel"] !== "mcp" || response.payload["host_id"] !== HOST_ID || response.payload["requires_human_review"] !== true || response.payload["verdict"] !== "granted") {
         throw new Error(`D4 留痕不完整: ${JSON.stringify(response.payload)}`);
@@ -193,14 +194,11 @@ const smoke = async (): Promise<string[]> => {
     if (admitResponse === undefined || admitResponse.payload["pre_authorization"] !== true) {
       throw new Error("B1 留痕缺失: admit 应答无 pre_authorization:true");
     }
-    const gateResponse = responses.find((response) => toolOfResponse(response) === "atf_gate");
-    if (gateResponse === undefined || gateResponse.payload["pre_authorization"] !== undefined) {
-      throw new Error("B1 越界留痕: gate(query) 应答不应带 pre_authorization");
-    }
+    // B7 N1：gate(query) 免审批——流内无 gate 的 approval/response（越界留痕面消失）
     const calls = lines.filter((line) => line.includes('"type":"tool/call"'));
     const results = lines.filter((line) => line.includes('"type":"tool/result"'));
     if (calls.length !== results.length) throw new Error(`审计流不配对: call=${String(calls.length)} result=${String(results.length)}`);
-    evidence.push(`落盘审计: approval/response×2 全带 channel=mcp/host_id/requires_human_review；tool/call↔tool/result ${String(calls.length)} 对逐配对`);
+    evidence.push(`落盘审计: approval/response×${String(responses.length)}（仅 admit，写类）全带 channel=mcp/host_id/requires_human_review/pre_authorization；tool/call↔tool/result ${String(calls.length)} 对逐配对`);
 
     // ⑨ 脱敏冒烟自检：stderr 与流内无敏感痕迹（本壳零凭据路径）
     if ((stderrText + streamText).includes("api_key")) throw new Error("脱敏违例：输出出现凭据字样");

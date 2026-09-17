@@ -16,6 +16,7 @@
 import { type BridgeError } from "../../bridge/index.js";
 import { checkSchema, validateCanonicalOutput, type SchemaNode } from "./canonical.js";
 import { approvalKeyFor, type LedgerRecord, type ScopeRef } from "./approvalKey.js";
+import { requiresApprovalFor } from "./toolDefinition.js";
 import { approvalMissingBlock, approvalTrackBlock, toolError, toolErrorFromBridge, type ToolBlock, type ToolError } from "./errors.js";
 import { type ToolRegistry } from "./registry.js";
 import type { ToolDefinition } from "./toolDefinition.js";
@@ -106,7 +107,7 @@ export class ToolExecutor {
       };
     }
 
-    if (definition.value.requires_approval) {
+    if (requiresApprovalFor(definition.value, params ?? {})) {
       const approvalOutcome = await this.approve(definition.value, params ?? {}, approval, options?.operationId);
       if (!approvalOutcome.ok) return approvalOutcome.outcome;
     }

@@ -194,7 +194,7 @@ describe("MCP 外壳 E2E（T05）", () => {
 
       const stream = await readStream(fixture.runsRoot, "mcp-run-3");
       const responses = stream.filter((event) => event["type"] === "approval/response");
-      expect(responses.length).toBe(2); // gate + admit 各一次
+      expect(responses.length).toBe(1); // B7 N1：gate(query) 免审批，仅 admit 走问答轨
       for (const response of responses) {
         const payload = response["payload"] as Record<string, unknown>;
         expect(payload["verdict"]).toBe("granted");
@@ -214,8 +214,7 @@ describe("MCP 外壳 E2E（T05）", () => {
       expect(admitResponse).toBeDefined();
       expect((admitResponse?.["payload"] as Record<string, unknown>)["pre_authorization"]).toBe(true);
       const gateResponse = responses.find((response) => responseTool(response) === "atf_gate");
-      expect(gateResponse).toBeDefined();
-      expect((gateResponse?.["payload"] as Record<string, unknown>)["pre_authorization"]).toBeUndefined();
+      expect(gateResponse).toBeUndefined(); // B7 N1：query 免审批，无审批事件
       // 审计流：tool/call 与 tool/result 逐对配对（call_ref）
       const calls = stream.filter((event) => event["type"] === "tool/call");
       const results = stream.filter((event) => event["type"] === "tool/result");

@@ -10,8 +10,10 @@
  *
  * 执行序列（真实内核 = ATF_CLI_PATH pin 副本；会话对端经 launcher 子进程承载 cwd/env）：
  *   [preflight] 注入式 serve（恰 1 条预录授权）账本探针：scope 逐字段匹配 → query 1 条 → consume 一次
- *   [run 1]     真实模型自主只读链（bind_run 由 runner 桥接）→ gate(query) 消费预录 →
- *               atf_admit_data（无预录）→ 问答轨 approval/request → headless 等待耗尽 timeout → 挂起 75
+ *   [run 1]     真实模型自主只读链（bind_run 由 runner 桥接）→ gate(query)（L1b B7 N1：
+ *               免审批自主执行）→ atf_admit_data（无预录）→ 问答轨 approval/request →
+ *               headless 等待耗尽 timeout → 挂起 75（preflight 预录已被探针自身消费，
+ *               不残留授权）
  *   [CLI]       resume --list → 待办可见
  *   [run 2]     resume --answer granted（纯净 serve，账本为空）→ 重派原 tool/call →
  *               凭据 available 放行 → 真实写 datasets/<id>@<pin>/registration.json → 模型收束 → exit 0

@@ -249,7 +249,7 @@ describe("ACP 外壳 E2E（T04）", () => {
     }
   });
 
-  it("只读链治理：免审批只读零请求；gate query 经宿主授权（D4-C）后执行", async () => {
+  it("只读链治理（B7 N1）：ws/scan/gate query 全部免审批零请求直执行", async () => {
     const fixture = await setupFixture();
     try {
       fixture.queue.push(
@@ -261,16 +261,14 @@ describe("ACP 外壳 E2E（T04）", () => {
       const sessionId = await newSession(fixture.client);
       const prompt = await fixture.client.peer.request(ACP_METHODS.sessionPrompt, { sessionId, prompt: [{ type: "text", text: "只读巡检" }] });
       expect(stopReasonOf(prompt)).toBe("end_turn");
-      // 免审批只读工具（workspace_status/fact_scan）不经授权；gate query 须审批 →
-      // 宿主策略应答（D4-C：宿主自动允许＝人的显式预授权；留痕 channel/host_id）
-      expect(fixture.client.permissionRequests.length).toBe(1);
+      // B7 N1：gate(query) 与 ws/scan 同为免审批——只读链全程零弹窗（VERIFY 4 口径）
+      expect(fixture.client.permissionRequests.length).toBe(0);
       const stream = await readStream(fixture.runsRoot, sessionId);
       const statuses = stream
         .filter((event) => event["type"] === "tool/result" && (event["payload"] as { ok?: boolean }).ok === true)
         .map((event) => (event["payload"] as { tool: string }).tool);
       expect(statuses).toEqual(["atf_workspace_status", "atf_fact_scan", "atf_gate"]);
-      const gateResponse = stream.find((event) => event["type"] === "approval/response");
-      expect(((gateResponse?.["payload"]) as Record<string, unknown>)["requires_human_review"]).toBe(true);
+      expect(stream.some((event) => event["type"] === "approval/response")).toBe(false);
     } finally {
       await rmRoot(fixture);
     }

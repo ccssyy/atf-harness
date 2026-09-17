@@ -224,3 +224,17 @@ describe("DiffRenderer B6 D1：折叠与展开", () => {
     expect(renderer.retainedSnapshot).toEqual([line]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// B7 N2：应答行擦除（提示行＋键入回显不残留）
+// ---------------------------------------------------------------------------
+describe("DiffRenderer B7 N2：eraseCurrentLine", () => {
+  it("TTY 输出 \\r\\x1b[2K；非 TTY 空操作", () => {
+    const tty = fakeStream(true);
+    new DiffRenderer({ out: tty }).eraseCurrentLine();
+    expect(joined(tty)).toBe("\r\x1b[2K");
+    const plain = fakeStream(false);
+    new DiffRenderer({ out: plain }).eraseCurrentLine();
+    expect(joined(plain)).toBe("");
+  });
+});

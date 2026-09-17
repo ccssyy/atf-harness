@@ -76,8 +76,9 @@ const trialScenario = (): Scenario => ({
       run_id: RUN_ID,
       trigger_instruction: "读取本 run 事实索引，报告数据集登记与闸门状态，并给下一步建议；如需数据准入请发起 atf_admit_data。",
       purpose: "L1a D4 trial",
-      // 只读链的 gate(query) 走账本轨预录授权（自主完成）；atf_admit_data 无预录 → 问答轨（人工）。
-      setup: { ledger: [{ tool: "atf_gate", params: { gate: "g1", action: "query" } }] },
+      // L1b B7 N1：gate(query) 免审批自主执行——不再账本预录（陈旧预录会被首个高危动作
+      // 盗消费，T4 裁定口径）；atf_admit_data 仍走问答轨（人工）。
+      setup: { ledger: [] },
       steps: [],
       expect: { outcome: "completed", exit_code: 0 },
     },
