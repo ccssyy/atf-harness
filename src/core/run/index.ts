@@ -10,6 +10,7 @@ export {
   type BranchOutcome,
   type BranchRunReport,
   type CredentialIndeterminateReport,
+  type PeerSpawnDescriptor,
   type RunBranchOptions,
   type RunError,
   type RunErrorCode,

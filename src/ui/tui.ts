@@ -10,19 +10,26 @@
  * 运行：
  *   node dist/ui/tui.js [--runs-root <dir>] [--run-id <id>] [--instruction <text>]
  *        [--scenario-id <id>] [--scope-mode headless|canonical|simulation]
- *        [--mock <桥接 serve 脚本路径>] [--help]
- *   缺省：runs-root=<repo>/tmp/ui-runs；mock=tests/fixtures/mock_atf.mjs（真内核可传
- *   L1a launcher 脚本，形态同 trial:l1a-real）；缺 run-id/instruction 时交互补问。
+ *        [--mock <桥接 serve 脚本路径> | --peer real --ws-root <path>] [--help]
+ *   缺省：runs-root=<repo>/tmp/ui-runs；mock=tests/fixtures/mock_atf.mjs；缺 run-id/
+ *   instruction 时交互补问。
+ *   W2 --peer real（门 1 裁定 D-1～D-5，2026-09-20）：内置真内核对端——内核副本取
+ *   ATF_CLI_PATH 覆盖 > <repo>/.atf-pinned 缺省（HEAD sha 与契约 pin 校验，fail-closed）；
+ *   隔离 HOME（<tmp>/atf-tui-home-*，零仓写入，退出即清）；启动预置一次幂等 `atf init
+ *   --workspace-root <ws-root>`（失败不进会话）；scope-mode 强制 canonical；run 骨架不
+ *   自动建（bind 失败按提示走走查 prep 脚本）。首屏对端核验行 peer=real(<pin tag>)。
  *
  * 红线：provider 配置经 ATF_LLM_CONFIG（0600）/ATF_LLM_* 注入（沿用 L1a，D2）；应答
  * 只能由人在本界面给出，无任何自动应答（ADR-07）；挂起 run 的续答应答 v1 仍走 CLI
  * resume 通道（登记 L1b 优化：TUI 内 resume）。
  * 退出码 = run 终局码（0/1/75/78/79，单一出口 resolveRunExitCode）。
  */
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import * as readline from "node:readline";
+import { ATF_UPSTREAM_COMMIT_SHA, ATF_UPSTREAM_TAG, readGitHeadSha } from "../bridge/atfCommand.js";
 import { loadLlmProviderConfig, HttpLlmProvider, type ResolvedLlmProviderConfig } from "../llm/index.js";
 import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
 import { ToolRegistry } from "../core/tools/index.js";
@@ -32,93 +39,30 @@ import type { Scenario } from "../llm/index.js";
 import { DiffRenderer } from "./renderer.js";
 import { formatEventLine } from "./eventView.js";
 import { askApproval } from "./approval.js";
-
-const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
-const defaultMockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
-const defaultRunsRoot = join(repoRoot, "tmp", "ui-runs");
-
-interface TuiArgs {
-  runsRoot: string;
-  runId?: string;
-  instruction?: string;
-  scenarioId: string;
-  scopeMode: "headless" | "canonical" | "simulation";
-  mockPath: string;
-  help: boolean;
-}
-
-const usage = (): string =>
-  [
-    "ATF Harness TUI（前端一 · 主入口，同进程直连 core）",
-    "",
-    "用法: node dist/ui/tui.js [--runs-root <dir>] [--run-id <id>] [--instruction <text>]",
-    "      [--scenario-id <id>] [--scope-mode headless|canonical|simulation] [--mock <path>]",
-    "",
-    "  --runs-root      run 工作区根目录（缺省 <repo>/tmp/ui-runs）",
-    "  --run-id         run 标识（缺省交互补问）",
-    "  --instruction    触发指令（缺省交互补问）",
-    "  --scenario-id    场景账面标识（缺省 l1ui-session）",
-    "  --scope-mode     账本 scope_mode（缺省 headless；真实内核传 canonical）",
-    "  --mock           内核桥接 serve 脚本（缺省 mock 夹具；真内核传 L1a launcher）",
-    "",
-    "红线: provider 配置经 ATF_LLM_CONFIG 注入（沿用 L1a）；审批应答只能由人在本界面给出。",
-  ].join("\n");
-
-const parseArgs = (argv: readonly string[]): TuiArgs | { error: string } => {
-  const args: TuiArgs = {
-    runsRoot: defaultRunsRoot,
-    scenarioId: "l1ui-session",
-    scopeMode: "headless",
-    mockPath: defaultMockPath,
-    help: false,
-  };
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
-    const next = argv[i + 1];
-    const take = (): string => {
-      i += 1;
-      return next as string;
-    };
-    switch (arg) {
-      case "--help":
-      case "-h":
-        args.help = true;
-        break;
-      case "--runs-root":
-        args.runsRoot = take();
-        break;
-      case "--run-id":
-        args.runId = take();
-        break;
-      case "--instruction":
-        args.instruction = take();
-        break;
-      case "--scenario-id":
-        args.scenarioId = take();
-        break;
-      case "--mock":
-        args.mockPath = take();
-        break;
-      case "--scope-mode": {
-        const value = take();
-        if (value !== "headless" && value !== "canonical" && value !== "simulation") {
-          return { error: `--scope-mode 非法: ${value}（允许 headless|canonical|simulation）` };
-        }
-        args.scopeMode = value;
-        break;
-      }
-      default:
-        return { error: `未知参数: ${arg ?? "(空)"}（--help 查看用法）` };
-    }
-  }
-  return args;
-};
+import { buildInitInvocation, buildRealPeerDescriptor, effectiveScopeMode, parseArgs, repoRootDefault, resolveKernelDir, usage } from "./tuiArgs.js";
 
 const ask = (rl: readline.Interface, prompt: string, fallback?: string): Promise<string> =>
   new Promise((resolve) => {
     rl.question(prompt, (answer) => {
       const trimmed = answer.trim();
       resolve(trimmed !== "" ? trimmed : (fallback ?? ""));
+    });
+  });
+
+/** 子进程一次性调用（D-1 预置 init 用；非零退出 = 正常返回，由调用方断言）。 */
+const execFileP = (command: string, args: readonly string[], options: { cwd: string; env: NodeJS.ProcessEnv }): Promise<{ exitCode: number | null; stdout: string; stderr: string }> =>
+  new Promise((resolve, reject) => {
+    execFile(command, [...args], options, (error, stdout, stderr) => {
+      if (error === null) {
+        resolve({ exitCode: 0, stdout, stderr });
+        return;
+      }
+      const code = (error as { exitCode?: number | null }).exitCode;
+      if (typeof code === "number") {
+        resolve({ exitCode: code, stdout, stderr });
+        return;
+      }
+      reject(error);
     });
   });
 
@@ -145,10 +89,55 @@ const main = async (): Promise<void> => {
   }
   const config: ResolvedLlmProviderConfig = configResult.value;
 
+  // W2 --peer real 预置（门 1 裁定 D-1/D-2；全部 fail-closed，任一步不过即退出不进会话）。
+  // 顺序：内核目录解析（D-2）→ pin sha 校验 → ws-root 校验 → 隔离 HOME → 幂等 atf init（D-1）。
+  let peerReal: { kernelDir: string; wsRoot: string; home: string } | null = null;
+  if (args.peer === "real") {
+    const kernel = resolveKernelDir(process.env, repoRootDefault());
+    if (!kernel.ok) {
+      renderer.appendLine(`✗ ${kernel.error}`);
+      process.exitCode = 1;
+      return;
+    }
+    const sha = await readGitHeadSha(kernel.path);
+    if (!sha.ok) {
+      renderer.appendLine(`✗ 内核副本 pin 校验失败（读 HEAD 失败: ${sha.error.message}）——拒绝以非 pin 内核走查`);
+      process.exitCode = 1;
+      return;
+    }
+    if (sha.value !== ATF_UPSTREAM_COMMIT_SHA) {
+      renderer.appendLine(`✗ 内核副本 HEAD ${sha.value.slice(0, 12)}… ≠ 契约 pin ${ATF_UPSTREAM_TAG}（${ATF_UPSTREAM_COMMIT_SHA.slice(0, 12)}…）——拒绝以非 pin 内核走查`);
+      process.exitCode = 1;
+      return;
+    }
+    const wsRoot = args.wsRoot;
+    const wsStat = wsRoot === undefined ? undefined : statSync(wsRoot, { throwIfNoEntry: false });
+    if (wsRoot === undefined || wsStat === undefined || !wsStat.isDirectory()) {
+      renderer.appendLine(`✗ --ws-root 须为已存在目录: ${wsRoot ?? "(缺省)"}`);
+      process.exitCode = 1;
+      return;
+    }
+    const home = mkdtempSync(join(tmpdir(), "atf-tui-home-"));
+    const init = buildInitInvocation(kernel.path, wsRoot);
+    const initRun = await execFileP(init.command, init.args, { cwd: init.cwd, env: { ...process.env, ...init.env, HOME: home } });
+    if (initRun.exitCode !== 0) {
+      rmSync(home, { recursive: true, force: true });
+      renderer.appendLine(`✗ atf init 预置失败(exit=${String(initRun.exitCode)})——不进入会话（D-1 fail-closed）：${(initRun.stderr !== "" ? initRun.stderr : initRun.stdout).slice(0, 300)}`);
+      process.exitCode = 1;
+      return;
+    }
+    peerReal = { kernelDir: kernel.path, wsRoot, home };
+    renderer.appendLine(`真内核对端预置完成：内核=${kernel.path}（${kernel.source}，pin ${ATF_UPSTREAM_TAG}）· 隔离 HOME=${home}`);
+  }
+
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
     renderer.appendLine("══ ATF Harness TUI（前端一 · 同进程直连 core）══");
     renderer.appendLine(`provider=${config.provider_id} model=${config.model}（沿用 L1a 选型）· 零 npm 依赖`);
+    // W2 D-5：首屏对端核验行（仅 peer real；mock 模式首屏零扰动）
+    if (peerReal !== null) {
+      renderer.appendLine(`对端核验: peer=real(${ATF_UPSTREAM_TAG}) ws-root=${peerReal.wsRoot} home=${peerReal.home}`);
+    }
     // 首屏四块指引（L1b B2）：绑定状态 / 可输入什么 / 常用指令示例 / 退出方式
     renderer.appendLine("── 使用指引 ──────────────────────────────");
     renderer.appendLine("① 当前状态：run 未绑定（下一步将提示输入 run-id 与触发指令，绑定后过程流逐条可见）");
@@ -165,7 +154,7 @@ const main = async (): Promise<void> => {
     }
     rl.pause(); // 运行期收摄输入（审批弹窗内由 askApproval resume）
     mkdirSync(args.runsRoot, { recursive: true });
-    renderer.appendLine(`run=${runId} · 工作区根=${args.runsRoot} · 桥接=${args.mockPath}`);
+    renderer.appendLine(`run=${runId} · 工作区根=${args.runsRoot} · ${peerReal !== null ? `桥接=真内核 serve（内核=${peerReal.kernelDir}）` : `桥接=${args.mockPath}`}`);
     renderer.appendLine("──────── 过程流（与 append-only 日志逐条对应）────────");
 
     // B4（L1b-D2=A）：跨进程续跑检测——既有会话流存在＝由事实日志重放重建（INV-A），
@@ -207,7 +196,10 @@ const main = async (): Promise<void> => {
       };
       const ran = await ScenarioRunner.runBranch(scenario, "main", {
         runsRoot: args.runsRoot,
-        mockCommand: ["node", args.mockPath],
+        // W2 载体 B：peer real 走内置 descriptor（argv/cwd/env 直通 bridge spawn 面）
+        mockCommand: peerReal !== null
+          ? buildRealPeerDescriptor(peerReal.kernelDir, peerReal.wsRoot, peerReal.home)
+          : ["node", args.mockPath],
         modelProvider: provider,
         modelId: config.model,
         approvalSurface: {
@@ -217,13 +209,15 @@ const main = async (): Promise<void> => {
           folder.handle(event, origin, formatEventLine);
         },
         ...(continueMode ? { continue: { instruction: instructionText } } : {}),
-        ...(args.scopeMode !== "headless" ? { scopeMode: args.scopeMode } : {}),
+        ...(effectiveScopeMode(args) !== "headless" ? { scopeMode: effectiveScopeMode(args) } : {}),
       });
       if (!ran.ok) {
         renderer.appendLine(`✗ ${formatThreePartLines({
           fact: "turn 启动失败（本 turn 未执行）",
           cause: `[${ran.error.code}] ${ran.error.message}`,
-          fix: "核对 runs-root 与桥接脚本路径；continue 前置不满足时按提示先处理待办/改走全新会话",
+          fix: peerReal !== null
+            ? "peer=real：bind/run 前置失败时先用走查 prep 脚本建立 runs/<run-id> 十目录骨架再重试（骨架不自动建，D-4）；否则核对 ws-root 与内核就绪"
+            : "核对 runs-root 与桥接脚本路径；continue 前置不满足时按提示先处理待办/改走全新会话",
         })}`);
         process.exitCode = 1;
         break;
@@ -284,6 +278,8 @@ const main = async (): Promise<void> => {
     }
   } finally {
     rl.close();
+    // W2 D-1：隔离 HOME 退出即清（best-effort；kill -9 残留交 /tmp 自清理）
+    if (peerReal !== null) rmSync(peerReal.home, { recursive: true, force: true });
   }
 };
 

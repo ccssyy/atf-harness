@@ -221,11 +221,20 @@ export interface ResumeAnswer {
   host_id?: string;
 }
 
+/** 对端 spawn 描述符（W2 --peer real：真内核对端需承载 cwd/env；argv 形态的结构化放宽，
+ *  归一后直配 AtfBridgeConnection.spawn 既有 cwd/env 面）。 */
+export interface PeerSpawnDescriptor {
+  argv: readonly string[];
+  cwd?: string;
+  env?: Readonly<Record<string, string>>;
+}
+
 export interface RunBranchOptions {
   /** runs 根目录（owner 口径 #1：harness 仓测试工作区，如 <repo>/tmp/runs） */
   runsRoot: string;
-  /** mock 对端 spawn argv（如 ["node", <repo>/tests/fixtures/mock_atf.mjs]） */
-  mockCommand: readonly string[];
+  /** mock 对端 spawn：argv 数组（如 ["node", <repo>/tests/fixtures/mock_atf.mjs]）
+   *  或描述符（cwd/env 承载，W2 --peer real）。argv 为联合类型的既有形态，消费点零改动。 */
+  mockCommand: readonly string[] | PeerSpawnDescriptor;
   /** 默认 true：运行前清理同 run_id 既有工作区（验收运行语义，防既有流污染） */
   fresh?: boolean;
   /** 时间源注入（默认 UTC ISO 8601） */
@@ -293,7 +302,13 @@ export class ScenarioRunner {
       }
     }
 
-    const spawned = await AtfBridgeConnection.spawn({ command: [...options.mockCommand] });
+    // W2：对端 spawn 归一——argv 形态与描述符形态统一到 AtfBridgeConnection.spawn
+    //（bridge 原生 cwd/env 面；env 合并在 process.env 之上，语义与生成式 launcher 一致）。
+    const peer = options.mockCommand;
+    const peerSpawn = "argv" in peer
+      ? { command: [...peer.argv], cwd: peer.cwd, env: peer.env }
+      : { command: [...peer] };
+    const spawned = await AtfBridgeConnection.spawn(peerSpawn);
     if (!spawned.ok) {
       return err(runError("bridge_failure", "mock 对端 spawn/握手失败", spawned.error));
     }
