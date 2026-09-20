@@ -53,6 +53,8 @@ const question = (rl: readline.Interface, prompt: string): Promise<string> =>
  * 过程流一行式请求＋普通输入行应答（ScenarioRunner approvalSurface stub 的 TUI 实现）。
  * 非法输入（未知键位）不落任何事件，以过程流行提示后就地重问；SIGINT = 人主动中止 →
  * aborted 留痕。应答后落审计行（动作/选择/时间戳）。全程零擦除——无残留 bug 类。
+ * W1（走查前置止血批 2026-09-20）：advised 且无备注时追问一次意见内容（直接回车＝按
+ * 无意见提交，防卡死）；granted/denied/aborted 空备注维持现状；SIGINT 兜底路径不变。
  */
 export const askApproval = async (deps: {
   renderer: DiffRenderer;
@@ -86,7 +88,20 @@ export const askApproval = async (deps: {
         renderer.appendLine(`> 无法识别的应答「${text.slice(0, 20)}」——请输入 1/2/3/4 或 g/a/d/x（可跟备注）`);
         continue;
       }
-      const note = text.slice(1).trim();
+      let note = text.slice(1).trim();
+      // W1：advised＋空备注追问一次（一次性，不循环）；追问等待同样受 SIGINT 兜底——
+      // 中断即 aborted 留痕；非空文本 → advice_text 透传（现有字段，不变语义），
+      // 空（直接回车）→ 按无意见 advised 提交（防卡死）。granted/denied/aborted 不追问。
+      if (mapping.verdict === "advised" && note === "") {
+        const followUpPromise = question(rl, "请输入意见内容（直接输入文字回车提交；直接回车＝按无意见提交）> ").catch(() => "");
+        const followOutcome = await Promise.race([followUpPromise, sigintPromise]);
+        if (followOutcome === "sigint") {
+          const response: ApprovalStubResponse = { verdict: "aborted", actor: TUI_ACTOR, reason: "SIGINT 中止（人主动）" };
+          renderer.appendLine(`> 审批留痕 ${new Date().toISOString()} 动作=${input.tool} 选择=中止(abort) 备注=SIGINT 中止（人主动）`);
+          return response;
+        }
+        note = followOutcome.trim();
+      }
       renderer.appendLine(`> 审批留痕 ${new Date().toISOString()} 动作=${input.tool} 选择=${mapping.label}${note !== "" ? ` 备注：${note}` : ""}`);
       return mapping.verdict === "advised"
         ? { verdict: "advised", actor: TUI_ACTOR, ...(note !== "" ? { advice_text: note } : {}) }
