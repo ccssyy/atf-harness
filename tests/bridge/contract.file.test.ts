@@ -56,20 +56,21 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/BRIDGE_CONTRACT_VERSION/);
   });
 
-  it("运行时方法面：握手 + 会话上下文（atf.bind_run）+ 4 工具（含 atf_fact_scan）+ 2 账本 + ledger_record（K4 补登）+ atf_flow_anchor（K3 补登）", () => {
+  it("运行时方法面：握手 + 会话上下文（atf.bind_run）+ 5 工具（R1 增 atf_data_admission.request）+ 2 账本 + ledger_record（K4 补登）+ atf_flow_anchor（K3 补登）", () => {
     const methods = methodKeys();
     // 握手 + 会话上下文 + 工具 + 账本运行时方法（补登 B1）
-    for (const required of ["atf.version", "atf.bind_run", "atf_admit_data", "atf_gate", "atf_fact_scan", "atf_workspace_status", "ledger_query", "ledger_consume"]) {
+    for (const required of ["atf.version", "atf.bind_run", "atf_admit_data", "atf_gate", "atf_fact_scan", "atf_workspace_status", "atf_data_admission.request", "ledger_query", "ledger_consume"]) {
       expect(methods, `契约 methods 缺少 ${required}`).toContain(required);
     }
-    // 会话方法族恰 2 个（点号命名，与 atf.version 同族；补登后不再增；
+    // 会话方法族恰 2 个（atf. 前缀点号族；atf_data_admission.request 属工具面、以 atf_ 前缀计；
     // atf_flow_anchor 为下划线命名纯读出口，不属点号族）
     const sessionFamily = methods.filter((name) => name.startsWith("atf."));
     expect(sessionFamily).toEqual(["atf.version", "atf.bind_run"]);
-    // 工具面恰 4 个（严格 4 工具，owner 口径 #5；atf.bind_run 不进工具面）；
-    // 【K3 补登 2026-09-17】atf_flow_anchor 为流程位置纯读出口（非工具面），不计入工具面
+    // 工具面恰 5 个（R1 修订 2026-09-20：原「严格 4 工具」owner 口径 #5 经 R1 立项扩为 5，
+    // owner 决议 sha 8b5458c0…；atf.bind_run 不进工具面；atf_flow_anchor 不计入工具面）
     const tools = methods.filter((name) => name.startsWith("atf_") && name !== "atf_flow_anchor");
-    expect(tools).toHaveLength(4);
+    expect(tools).toHaveLength(5);
+    expect(tools).toContain("atf_data_admission.request");
     // ledger_record 仍在契约中登记；【K4 补登 2026-09-16】为运行时方法面（内核 §13.8，补登不 bump）
     expect(methods).toContain("ledger_record");
     expect(contract).toMatch(/ledger_record:.*# 【K4 补登 2026-09-16】运行时方法面（内核 §13.8；补登不 bump）/);

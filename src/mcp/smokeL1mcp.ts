@@ -105,14 +105,14 @@ const smoke = async (): Promise<string[]> => {
     client.notify("notifications/initialized", {});
     evidence.push("握手: initialize 版本回显 2025-03-26 + notifications/initialized（host_id=clientInfo.name）");
 
-    // ② tools/list：恰 7 细粒度工具（D11）
+    // ② tools/list：恰 8 细粒度工具（D11＋R1 接线批 2026-09-20）
     const listed = await client.request("tools/list", {});
     const tools = (listed["result"] as { tools: Array<{ name: string }> }).tools;
     const names = tools.map((tool) => tool.name);
-    if (JSON.stringify(names) !== JSON.stringify(["atf_bind_run", "atf_workspace_status", "atf_fact_scan", "atf_gate", "atf_admit_data", "ledger_query", "ledger_consume"])) {
-      throw new Error(`tools/list 非 7 工具: ${JSON.stringify(names)}`);
+    if (JSON.stringify(names) !== JSON.stringify(["atf_bind_run", "atf_workspace_status", "atf_fact_scan", "atf_gate", "atf_admit_data", "atf_data_admission_request", "ledger_query", "ledger_consume"])) {
+      throw new Error(`tools/list 非 8 工具: ${JSON.stringify(names)}`);
     }
-    evidence.push(`tools/list: 恰 7 细粒度工具（${names.join("/")}）——VERIFY 8 工具面可见`);
+    evidence.push(`tools/list: 恰 8 细粒度工具（${names.join("/")}）——VERIFY 8 工具面可见`);
 
     // ③ 绑定界：未绑定 isError（exit 1 编码）；bind 成功；重复绑定拒绝
     const early = await client.callTool("atf_workspace_status");
