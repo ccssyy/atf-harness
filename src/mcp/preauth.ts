@@ -74,11 +74,13 @@ export const loadMcpPreauth = async (path: string): Promise<McpPreauthLoad> => {
 };
 
 /**
- * 写类工具判定（L1b-D1=A 确认版）：`atf_admit_data` ＋ `atf_gate(action=="advance")`。
- * 其余工具（只读查询/账本双方法/bind）不入预授权管辖。
+ * 写类工具判定（L1b-D1=A 确认版；R1 接线批 2026-09-20 增 atf_data_admission_request）：
+ * `atf_admit_data` ＋ `atf_data_admission_request`（真实数据准入，D-3 纳入 preauth 管理缺省拒绝）
+ * ＋ `atf_gate(action=="advance")`。其余工具（只读查询/账本双方法/bind）不入预授权管辖。
  */
 export const isWriteClassTool = (tool: string, params: unknown): boolean => {
   if (tool === "atf_admit_data") return true;
+  if (tool === "atf_data_admission_request") return true; // R1（D-3）：真实数据准入＝写类，白名单缺省拒绝
   if (tool === "atf_gate") {
     const action = isPlainObject(params) ? params["action"] : undefined;
     return action === "advance";

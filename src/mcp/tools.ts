@@ -1,7 +1,7 @@
 /**
- * 前端三（MCP server 外壳）——7 细粒度工具面（L1 门 2 T05，D11）。
+ * 前端三（MCP server 外壳）——8 细粒度工具面（L1 门 2 T05，D11；R1 接线批 2026-09-20 扩为 8）。
  *
- * 工具名与 canonical output 沿用桥接契约，不另造一套：4 个模型面工具直接取
+ * 工具名与 canonical output 沿用桥接契约，不另造一套：5 个模型面工具直接取
  * ToolRegistry 的 ToolDefinition（canonical 校验在 ToolExecutor 内）；atf_bind_run 与
  * 2 个账本方法的 schema 按 bridge.contract.yaml 转写；ledger 的 canonical output 复用
  * executor 导出常量（LEDGER_*_CANONICAL）。
@@ -12,13 +12,14 @@
 import { TOOL_DEFINITIONS, type SchemaNode, type ToolDefinition } from "../core/tools/index.js";
 import { type McpToolDescriptor } from "./protocol.js";
 
-/** D11：恰 7 个细粒度工具（顺序即 tools/list 顺序；禁止增补）。 */
+/** D11＋R1：恰 8 个细粒度工具（顺序即 tools/list 顺序；R1 增补 atf_data_admission_request）。 */
 export const MCP_TOOL_NAMES = [
   "atf_bind_run",
   "atf_workspace_status",
   "atf_fact_scan",
   "atf_gate",
   "atf_admit_data",
+  "atf_data_admission_request",
   "ledger_query",
   "ledger_consume",
 ] as const;

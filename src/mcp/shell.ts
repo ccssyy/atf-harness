@@ -182,12 +182,13 @@ export class McpShell {
       case "atf_fact_scan":
       case "atf_gate":
       case "atf_admit_data":
+      case "atf_data_admission_request":
         return { ok: true, result: await this.governedTool(name, args) };
       case "ledger_query":
       case "ledger_consume":
         return { ok: true, result: await this.ledgerTool(name, args) };
       default:
-        return { ok: false, error: jsonRpcError(-32602, `未知工具: ${name}（D11 细粒度 7 工具见 src/mcp/tools.ts）`) };
+        return { ok: false, error: jsonRpcError(-32602, `未知工具: ${name}（D11＋R1 细粒度 8 工具见 src/mcp/tools.ts）`) };
     }
   }
 

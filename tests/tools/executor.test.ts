@@ -222,6 +222,7 @@ describe("S3 补充语义——canonical 反例 / 对端拒绝 / 参数白名单
 
     expect(ToolRegistry.createDefault().names()).toEqual([
       "atf_admit_data",
+      "atf_data_admission_request",
       "atf_gate",
       "atf_fact_scan",
       "atf_workspace_status",

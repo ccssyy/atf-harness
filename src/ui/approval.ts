@@ -14,6 +14,7 @@
 
 import type readline from "node:readline";
 import { type DiffRenderer } from "./renderer.js";
+import { approvalCopyFor } from "../core/tools/index.js";
 import type { ApprovalStubResponse } from "../core/run/index.js";
 
 /** TUI 应答 actor（账面标识；通道只由人触发）。 */
@@ -38,10 +39,13 @@ const VERDICT_KEYS: Readonly<Record<string, { verdict: "granted" | "advised" | "
 };
 const NUMBER_KEYS: Readonly<Record<string, string>> = { "1": "g", "2": "a", "3": "d", "4": "x" };
 
-/** 一行式审批请求行（长内容随流折行/折叠——与事件行同一渲染路径）。 */
+/** 一行式审批请求行（长内容随流折行/折叠——与事件行同一渲染路径）。
+ *  R1 D-4（2026-09-20）：登记了人读文案映射的工具以产品语言呈现（机制词不暴露）；
+ *  未登记映射的工具维持既有渲染（零行为变化）。 */
 const requestLine = (input: ApprovalPromptInput): string => {
-  const params = JSON.stringify(input.params ?? null);
-  return `⛔ 审批请求 · 问答轨（本请求仅为问答轨渲染，非新通道）：${input.tool} 参数=${params} 会话=${input.approval_session_id} 第 ${String(input.attempt)} 次提案 key=${input.approval_key}`;
+  const copy = approvalCopyFor({ tool: input.tool, params: input.params });
+  const subject = copy ?? `${input.tool} 参数=${JSON.stringify(input.params ?? null)}`;
+  return `⛔ 审批请求 · 问答轨（本请求仅为问答轨渲染，非新通道）：${subject} 会话=${input.approval_session_id} 第 ${String(input.attempt)} 次提案 key=${input.approval_key}`;
 };
 
 const question = (rl: readline.Interface, prompt: string): Promise<string> =>

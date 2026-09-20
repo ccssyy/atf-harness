@@ -1,6 +1,6 @@
 /**
  * MCP server 外壳 E2E（L1 门 2 T05）：RpcPeer 客户端桩 ↔ McpShell 双向互连（PassThrough，
- * 内核桥接 = 真实 mock 夹具子进程）。覆盖：initialize 版本轴协商／tools/list 恰 7 工具
+ * 内核桥接 = 真实 mock 夹具子进程）。覆盖：initialize 版本轴协商／tools/list 恰 8 工具
  * （D11）／绑定界（未绑定 isError、重复绑定拒绝）／只读与高危工具治理（账本轨 miss →
  * 问答轨 mcp 通道留痕 D4）／账本工具直通／退出码进 tool result／审计流落盘。
  */
@@ -123,7 +123,7 @@ describe("MCP 外壳 E2E（T05）", () => {
     }
   });
 
-  it("tools/list：恰 7 细粒度工具（D11），工具名沿用桥接契约；inputSchema 无 optional 旁标记", async () => {
+  it("tools/list：恰 8 细粒度工具（D11＋R1 接线批），工具名沿用桥接契约；inputSchema 无 optional 旁标记", async () => {
     const fixture = await setupFixture();
     try {
       await handshake(fixture.client);
@@ -134,6 +134,7 @@ describe("MCP 外壳 E2E（T05）", () => {
         "atf_fact_scan",
         "atf_gate",
         "atf_admit_data",
+        "atf_data_admission_request",
         "ledger_query",
         "ledger_consume",
       ]);
@@ -264,6 +265,23 @@ describe("MCP 外壳 E2E（T05）", () => {
       }
       const refusal = stream.find((event) => event["type"] === "tool/result" && JSON.stringify(event["payload"]).includes("mcp_write_not_preauthorized"));
       expect(refusal).toBeDefined();
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it("R1（D-3）：atf_data_admission_request 为写类——无白名单默认拒绝（缺省拒绝态）", async () => {
+    const fixture = await setupFixture(); // 无 preauthPath → fail-closed 空白名单
+    try {
+      await handshake(fixture.client);
+      await callTool(fixture.client, "atf_bind_run", { run_id: "mcp-run-r1" });
+      const denied = await callTool(fixture.client, "atf_data_admission_request", { dataset_id: "ds-r1-mcp" });
+      expect(denied.isError).toBe(true);
+      expect(denied.body["exit_code"]).toBe(1);
+      expect(denied.body["reason"]).toBe("mcp_write_not_preauthorized");
+      const detail = denied.body["detail"] as string;
+      expect(detail).toContain("①写动作被默认拒绝（未执行）");
+      expect(detail).toContain('"tools":["atf_data_admission_request"]');
     } finally {
       fixture.close();
     }

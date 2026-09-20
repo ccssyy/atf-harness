@@ -11,11 +11,12 @@ import { approvalParamsDigest, stableStringify } from "../../src/core/tools/appr
  */
 
 describe("S3 验收（schema 用例）——模型可见白名单，内部字段一律不发", () => {
-  it("4 个工具的模型可见投影仅含 { name, description, parameters }", () => {
+  it("5 个工具的模型可见投影仅含 { name, description, parameters }（R1 接线批扩为 5）", () => {
     const registry = ToolRegistry.createDefault();
     const visible = registry.modelVisible();
     expect(visible.map((tool) => tool.name)).toEqual([
       "atf_admit_data",
+      "atf_data_admission_request",
       "atf_gate",
       "atf_fact_scan",
       "atf_workspace_status",

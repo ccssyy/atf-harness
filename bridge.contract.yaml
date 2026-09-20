@@ -240,7 +240,10 @@ methods:
       绑定留痕（B4）：重复绑定允许覆盖，但内核须发 event 留痕——
       name = "session/run-bound"，payload 含 from/to run_id。
 
-  # ---------------- 工具方法面（严格 4 个，owner 口径 #5；工具名即方法名） ----------------
+  # ---------------- 工具方法面（R1 修订 2026-09-20：5 个——原「严格 4 个」owner 口径 #5 经 R1 立项
+  #    扩为 5（owner 决议《ATF项目_Owner决议_R1立项_准入收进会话_20260920.md》sha 8b5458c0…）；
+  #    工具名即方法名，唯 atf_data_admission.request 因 provider 函数名限制经 executor 显式映射
+  #    自工具名 atf_data_admission_request；补登不 bump：轴一 contract_version 仍 1、轴二仍 2） ----------------
   atf_admit_data:
     direction: ts_to_kernel
     requires_approval: true        # 写动作：数据准入（高危推进类，须账本预录）
@@ -349,6 +352,47 @@ methods:
             scope_type: { type: string }
             scope_id: { type: string }
             scope_mode: { type: string }
+
+  atf_data_admission.request:      # R1 补登（2026-09-20）：准入收进会话（K-Gap-1 方案 C 接线；
+    direction: ts_to_kernel        # 内核冻结面实测 = main 61631e6；模型面工具名 atf_data_admission_request）
+    requires_approval: true        # 写动作：真实数据准入（高危推进类；走既有 B8 问答轨/账本轨，零新审批语义）
+    params:                        # 内核冻结面最小闭集；两者均不含路径分隔符与 @，缺省未知参数不消费
+      type: object
+      required: [dataset_id]
+      properties:
+        dataset_id: { type: string, note: 取自 atf_admit_data 登记结果 fact_id（形如 <dataset_id>@<pin>）或事实索引登记事实；不接受文件路径 }
+        pin: { type: string, required: false, note: 显式 pin；多 pin 登记且未显式 → dataset_not_registered（fail-closed） }
+    errors:                        # 内核冻结面错误语义（error response，连接保持）
+      - invalid_params             # dataset_id/pin 形态非法（与登记面同口径）
+      - no_run_bound               # 会话未绑定 run
+      - unknown_run                # run 不可解析
+      - dataset_not_registered     # 未登记/多 pin 未显式/登记记录缺可解析源根（fail-closed）
+      - module_reason_passthrough  # 模块稳定原因码原样透出（如 source_workspace_overlap_forbidden）
+    result:                        # canonical output（闭集＝内核返回面逐字段）
+      type: object
+      required: [ok, run_id, dataset_id, pin, fact_id, status, summary_ref, summary_sha256, gates]
+      properties:
+        ok: { const: true }
+        run_id: { type: string }
+        dataset_id: { type: string }
+        pin: { type: string }
+        fact_id: { type: string, note: '"<dataset_id>@<pin>"' }
+        status:
+          enum: [not_required, waiting_on_human, adjudicated, temporarily_excluded]
+          note: 准入模块裁决状态；waiting_on_human＝诚实停止（恢复走既有 data.annotation.adjudicate.v1 流），不阻塞不猜测
+        summary_ref: { type: string, note: workspace 相对路径（runs/<run_id>/l1/<dataset_id>@<pin>/…） }
+        summary_sha256: { type: string, pattern: "^[0-9a-f]{64}$", note: summary 文件字节摘要，可独立复算 }
+        gates:
+          type: array
+          note: G1–G4 判定投影（×4；summary 是 G1–G4 判定唯一来源）
+          items:
+            type: object
+            required: [gate_id, verdict, reason_codes]
+            properties:
+              gate_id: { type: string }
+              verdict: { type: string }
+              reason_codes: { type: array, items: { type: string } }
+        requests: { type: array, required: false, note: 仅 waiting_on_human 携带（标注冲突裁决请求集） }
 
   # ---------------- 账本方法面（ADR-07 账本轨；本阶段 mock 承载；键模型 v2 见头部登记） ----------------
   ledger_query:                    # 契约 v2（变更 #4）：scope_ref(+operation_id) 查询，审批链形态

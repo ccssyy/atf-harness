@@ -58,8 +58,9 @@ const STRING_ARRAY: SchemaNode = { type: "array", items: { type: "string" } };
 
 const HEX64 = "^[0-9a-f]{64}$";
 
-/** 严格 4 个工具（任务书 S3-1 / owner 口径 #5），工具面收敛，禁止任何增补。
- *  契约 v2（2026-09-13 契约修订）：证据面扫描工具改名 atf_fact_scan（数组 facts）、
+/** 工具面 5 个（R1 修订 2026-09-20：原「严格 4 个」owner 口径 #5 经 R1 立项扩为 5——owner 决议
+ *  sha 8b5458c0…；新增 atf_data_admission_request 经 executor 显式映射到 atf_data_admission.request。
+ *  契约 v2（2026-09-13）：证据面扫描工具改名 atf_fact_scan（数组 facts）、
  *  atf_gate 增补 warn 与附加字段、atf_admit_data source → source_ref、
  *  atf_workspace_status 增补 scope_ref。 */
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
@@ -90,6 +91,57 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         fact_id: { type: "string" },
         sha256_digest: { type: "string", pattern: HEX64 },
         dataset_id: { type: "string", optional: true },
+      },
+    },
+  },
+  {
+    name: "atf_data_admission_request",
+    // R1 接线批（D-5，2026-09-20）：模型面工具名用下划线（provider 函数名不允许 "."），
+    // RPC 方法经 executor 显式映射到 atf_data_admission.request（内核冻结面 main 61631e6）。
+    description:
+      "数据准入申请：对已登记数据集执行真实 source-backed 数据校验并落盘判定结果（可能因标注冲突需要人工裁决；结果含 G1–G4 判定投影）。dataset_id/pin 取自 atf_admit_data 登记结果 fact_id（形如 <dataset_id>@<pin>）或事实索引中的登记事实；勿要求用户手敲；不接受文件路径。",
+    parameters: {
+      type: "object",
+      required: ["dataset_id"],
+      properties: {
+        dataset_id: {
+          type: "string",
+          description:
+            "注册标识符：取自 atf_admit_data 登记结果 fact_id（形如 <dataset_id>@<pin>）或事实索引中的登记事实；勿要求用户手敲；不接受文件路径（路径类信息不属于本参数）",
+        },
+        pin: {
+          type: "string",
+          optional: true,
+          description: "显式 pin（fact_id 的 @ 后段）；同数据集多 pin 登记时必须显式给出，缺省取唯一登记 pin",
+        },
+      },
+    },
+    requires_approval: true,
+    canonical_output: {
+      type: "object",
+      required: ["ok", "run_id", "dataset_id", "pin", "fact_id", "status", "summary_ref", "summary_sha256", "gates"],
+      properties: {
+        ok: { const: true },
+        run_id: { type: "string" },
+        dataset_id: { type: "string" },
+        pin: { type: "string" },
+        fact_id: { type: "string" },
+        status: { enum: ["not_required", "waiting_on_human", "adjudicated", "temporarily_excluded"] },
+        summary_ref: { type: "string" },
+        summary_sha256: { type: "string", pattern: HEX64 },
+        gates: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["gate_id", "verdict", "reason_codes"],
+            properties: {
+              gate_id: { type: "string" },
+              verdict: { type: "string" },
+              reason_codes: { type: "array", items: { type: "string" } },
+            },
+          },
+        },
+        requests: { type: "array", optional: true },
       },
     },
   },

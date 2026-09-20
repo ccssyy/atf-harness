@@ -264,13 +264,67 @@ const toolGate = (params) => {
   return { ok: true, gate: String(params.gate), status: "pass" };
 };
 
+// R1 接线批（D-6，2026-09-20）：atf_data_admission.request 三态仿真——
+//   adjudicated（缺省成功）／waiting_on_human（--admission-status=waiting_on_human，
+//   含 requests 载荷、诚实停止）／invalid_params（形态校验失败，供回流链复测）。
+// 仿真口径与 bridge.contract.yaml 登记段逐字段一致；dataset 未登记 → dataset_not_registered
+// （与内核 fail-closed 同口径：本仿真要求先经 atf_admit_data 登记）。
+const admissionStatus = findOpt("admission-status") ?? "adjudicated";
+const isSafeComponent = (value) => typeof value === "string" && value !== "" && !/[\\/]/.test(value) && !value.includes("@");
+const toolDataAdmissionRequest = (params) => {
+  const datasetId = params.dataset_id;
+  if (!isSafeComponent(datasetId)) {
+    return { error: { code: "invalid_params", message: "params.dataset_id 必须不含路径分隔符与 @ 的非空字符串" } };
+  }
+  if (params.pin !== undefined && !isSafeComponent(params.pin)) {
+    return { error: { code: "invalid_params", message: "params.pin 必须是不含路径分隔符与 @ 的非空字符串" } };
+  }
+  const resolved = resolveRun({});
+  if (resolved.error !== undefined) return resolved;
+  const matches = admittedFacts.filter((fact) => fact.fact_id.startsWith(`${String(datasetId)}@`));
+  if (matches.length === 0) {
+    return { error: { code: "dataset_not_registered", message: `数据集未登记（须先 atf_admit_data）: ${String(datasetId)}` } };
+  }
+  const fact = matches[0];
+  const pin = fact.fact_id.split("@")[1] ?? "";
+  const summaryRef = `runs/${resolved.runId}/l1/${fact.fact_id}/source-backed-admission-summary.json`;
+  const gates = [
+    { gate_id: "G1", verdict: admissionStatus === "adjudicated" ? "pass" : "blocked", reason_codes: admissionStatus === "adjudicated" ? [] : ["annotation_conflict_pending_human"] },
+    { gate_id: "G2", verdict: "pass", reason_codes: [] },
+    { gate_id: "G3", verdict: "pass", reason_codes: [] },
+    { gate_id: "G4", verdict: "pass", reason_codes: [] },
+  ];
+  const result = {
+    ok: true,
+    run_id: resolved.runId,
+    dataset_id: String(datasetId),
+    pin,
+    fact_id: fact.fact_id,
+    status: admissionStatus,
+    summary_ref: summaryRef,
+    summary_sha256: sha256Hex(stableStringify({ dataset_id: String(datasetId), pin, status: admissionStatus })),
+    gates,
+  };
+  if (admissionStatus === "waiting_on_human") {
+    result.requests = [
+      {
+        request_id: `lar-${String(datasetId)}-1`,
+        kind: "label_adjudication",
+        dataset_id: String(datasetId),
+        pin,
+        reason: "同像素候选标注冲突（仿真载荷）",
+      },
+    ];
+  }
+  return result;
+};
+
 const toolFactScan = (params) => {
   const resolved = resolveRun(params);
   if (resolved.error !== undefined) return resolved;
   return {
     ok: true,
-    facts: admittedFacts.map((fact) => ({ ...fact })),
-    count: admittedFacts.length,
+    facts: admittedFacts.map((fact) => ({ ...fact })),    count: admittedFacts.length,
   };
 };
 
@@ -315,6 +369,7 @@ const METHODS = {
   ledger_consume: ledgerConsume,
   "atf.bind_run": sessionBindRun,
   atf_admit_data: toolAdmitData,
+  "atf_data_admission.request": toolDataAdmissionRequest,
   atf_gate: toolGate,
   atf_fact_scan: toolFactScan,
   atf_workspace_status: toolWorkspaceStatus,

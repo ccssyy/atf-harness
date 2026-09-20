@@ -80,6 +80,14 @@ export interface BridgeTransport {
   request(method: string, params?: unknown): Promise<{ ok: true; value: unknown } | { ok: false; error: BridgeError }>;
 }
 
+/** toolName → RPC method 显式映射（R1 D-1，2026-09-20）：模型面工具名不允许 "."，
+ *  点号方法经此表映射；未注册项恒等映射（既有 4 工具零行为变化）。 */
+const TOOL_METHOD_OVERRIDES: Readonly<Record<string, string>> = {
+  atf_data_admission_request: "atf_data_admission.request",
+};
+
+const rpcMethodFor = (toolName: string): string => TOOL_METHOD_OVERRIDES[toolName] ?? toolName;
+
 export class ToolExecutor {
   public constructor(
     private readonly connection: BridgeTransport,
@@ -120,7 +128,7 @@ export class ToolExecutor {
       if (!approvalOutcome.ok) return approvalOutcome.outcome;
     }
 
-    const invoked = await this.request(toolName, params ?? {}, definition.value.canonical_output);
+    const invoked = await this.request(rpcMethodFor(toolName), toolName, params ?? {}, definition.value.canonical_output);
     if (invoked.ok) return { kind: "executed", tool: toolName, result: invoked.result };
     if (invoked.rejected !== undefined) return invoked.rejected;
     return { kind: "failed", error: invoked.error ?? toolError("bridge_failure", "工具调用失败（原因未归类）") };
@@ -143,6 +151,7 @@ export class ToolExecutor {
     }
     const auditKey = approvalKeyFor(definition.name, params);
     const queried = await this.request(
+      "ledger_query",
       "ledger_query",
       // L1b B5：operation_id 可选透传（契约已登记；缺省不传＝既有行为逐位不变）
       operationId !== undefined ? { scope_ref: this.scopeRef, operation_id: operationId } : { scope_ref: this.scopeRef },
@@ -197,6 +206,7 @@ export class ToolExecutor {
     // 消费：{approval_ref, record_id} 逐值一致校验（契约 v2；对端强制一次性语义）
     const consumed = await this.request(
       "ledger_consume",
+      "ledger_consume",
       { approval_ref: live.approval_id, record_id: live.record_id },
       LEDGER_CONSUME_CANONICAL,
     );
@@ -214,25 +224,27 @@ export class ToolExecutor {
     return { ok: false, outcome: { kind: "failed", error: consumed.error ?? toolError("bridge_failure", "审批消费失败") } };
   }
 
-  /** 桥接请求 + canonical 校验（对端 ok=false → rejected 结构化回填；其余折算 failed）。 */
+  /** 桥接请求 + canonical 校验（对端 ok=false → rejected 结构化回填；其余折算 failed）。
+   *  toolName 与 rpcMethod 分离（R1 D-1）：回填 payload 的 tool 字段恒为模型面工具名。 */
   private async request(
-    method: string,
+    rpcMethod: string,
+    toolName: string,
     params: unknown,
     canonical: SchemaNode,
   ): Promise<
     | { ok: true; result: unknown }
     | { ok: false; rejected?: { kind: "rejected"; tool: string; reason: string; detail?: unknown }; error?: ToolError }
   > {
-    const response = await this.connection.request(method, params);
+    const response = await this.connection.request(rpcMethod, params);
     if (!response.ok) {
       const { code } = (response.error.detail ?? {}) as { code?: string };
       if (response.error.code === "request_rejected") {
         // 对端业务拒绝：结构化回填（任务书 S3-4），不折算为 harness 故障
-        return { ok: false, rejected: { kind: "rejected", tool: method, reason: code ?? "rejected", detail: response.error.detail } };
+        return { ok: false, rejected: { kind: "rejected", tool: toolName, reason: code ?? "rejected", detail: response.error.detail } };
       }
       return { ok: false, error: toolErrorFromBridge(response.error) };
     }
-    const canonicalCheck = validateCanonicalOutput(method, canonical, response.value);
+    const canonicalCheck = validateCanonicalOutput(rpcMethod, canonical, response.value);
     if (!canonicalCheck.ok) return { ok: false, error: canonicalCheck.error };
     return { ok: true, result: response.value };
   }
