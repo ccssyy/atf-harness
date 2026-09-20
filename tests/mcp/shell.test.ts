@@ -270,6 +270,23 @@ describe("MCP 外壳 E2E（T05）", () => {
     }
   });
 
+  it("R1（D-3）：atf_data_admission_request 为写类——无白名单默认拒绝（缺省拒绝态）", async () => {
+    const fixture = await setupFixture(); // 无 preauthPath → fail-closed 空白名单
+    try {
+      await handshake(fixture.client);
+      await callTool(fixture.client, "atf_bind_run", { run_id: "mcp-run-r1" });
+      const denied = await callTool(fixture.client, "atf_data_admission_request", { dataset_id: "ds-r1-mcp" });
+      expect(denied.isError).toBe(true);
+      expect(denied.body["exit_code"]).toBe(1);
+      expect(denied.body["reason"]).toBe("mcp_write_not_preauthorized");
+      const detail = denied.body["detail"] as string;
+      expect(detail).toContain("①写动作被默认拒绝（未执行）");
+      expect(detail).toContain('"tools":["atf_data_admission_request"]');
+    } finally {
+      fixture.close();
+    }
+  });
+
   it("B1 fail-closed：配置 schema_version 非法 → 视同空白名单全拒绝", async () => {
     const fixture = await setupFixture({ badSchemaVersion: true, preauthTools: ["atf_admit_data"] });
     try {
