@@ -136,6 +136,38 @@ describe("B8 D1：审批交互流内化（零擦除）", () => {
   });
 });
 
+describe("R1 D-4：审批请求人读文案映射（产品语言呈现）", () => {
+  const admissionInput: ApprovalPromptInput = {
+    approval_session_id: "aps-r1",
+    tool: "atf_data_admission_request",
+    params: { dataset_id: "ds-swb-20260920" },
+    approval_key: "k".repeat(64),
+    attempt: 1,
+    round: 0,
+  };
+
+  it("映射工具：请求行呈现产品文案（含 dataset_id），不暴露原始参数 JSON", async () => {
+    const { stream, chunks } = ttyStream();
+    const renderer = new DiffRenderer({ out: stream, columns: 80 });
+    const { rl, prompts } = stubRl(["1"]);
+    const response = await askApproval({ renderer, rl, input: admissionInput });
+    expect(response.verdict).toBe("granted");
+    const text = chunks();
+    expect(text).toContain("数据准入申请：对数据集 ds-swb-20260920 执行真实数据校验并落盘判定结果");
+    expect(text).not.toContain("参数=");
+    expect(text).not.toContain("dataset_id");
+    expect(prompts.length).toBe(1);
+  });
+
+  it("未映射工具：维持既有渲染（工具名＋参数 JSON），零行为变化", async () => {
+    const { stream, chunks } = ttyStream();
+    const renderer = new DiffRenderer({ out: stream, columns: 200 });
+    const { rl } = stubRl(["1"]);
+    await askApproval({ renderer, rl, input });
+    expect(chunks()).toContain("atf_admit_data 参数=");
+  });
+});
+
 describe("W1：advised 空备注追问一次（走查前置止血批 2026-09-20）", () => {
   it("选 2 无备注 → 追问一次 → 输入文字 → advice_text 透传（留痕行含备注）", async () => {
     const { stream, chunks } = ttyStream();
