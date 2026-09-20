@@ -2,6 +2,7 @@
  * S5 run 层公开出口。冒烟命令与测试只从这里 import。
  */
 export { FactScanResolver, type FactScanTransport } from "./factScanResolver.js";
+export { REJECT_LOOP_LIMIT } from "./constants.js";
 export {
   ScenarioRunner,
   evaluateExpectations,

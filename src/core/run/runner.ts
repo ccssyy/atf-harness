@@ -34,6 +34,7 @@ import { AtfBridgeConnection } from "../../bridge/index.js";import {
 import type { LlmProvider } from "../../llm/index.js";
 import { LOOP_MAX_STEPS_PER_TURN, LOOP_MAX_TURNS } from "../session/constants.js";
 import { resolveExhaustionStop, type LoopStopReason } from "./stopReason.js";
+import { REJECT_LOOP_LIMIT } from "./constants.js";
 import { injectMemoryEntries, type MemoryReadInjector } from "./memoryInjection.js";
 import {
   approvalParamsDigest,
@@ -96,7 +97,8 @@ export type RunErrorCode =
   | "provider_failure" // provider 故障 / 决策序列耗尽而未收束
   | "model_decision_forbidden" // 切片 0：provider 返回值含模型面外步骤（运行时守卫 fail-closed，exit 1）
   | "budget_exhausted" // 切片 1：轮次预算耗尽（max_steps_per_turn / max_turns；A2，复用 exit 1）
-  | "credential_indeterminate"; // 问答轨凭据状态不确定（A3：run 终态，需人工核对，exit 1）
+  | "credential_indeterminate" // 问答轨凭据状态不确定（A3：run 终态，需人工核对，exit 1）
+  | "reject_loop_exhausted"; // 快修批 D-a R-2：单 turn 连续工具错误回流达 REJECT_LOOP_LIMIT（exit 1）
 
 export interface RunError {
   code: RunErrorCode;
@@ -517,6 +519,9 @@ export class ScenarioRunner {
       // 切片 1 A1/A2：step 粒度计数与终局判据状态（每 turn 开启时清零）
       let turnStepCount = 0;
       let turnHadFinalAnswer = false;
+      // 快修批 D-a R-2：单 turn 连续工具错误回流计数（rejected/input_violation；每 turn 清零，
+      // 任何非回流类工具结果打断连续——达 REJECT_LOOP_LIMIT → turn 终局 reject_loop_exhausted）
+      let turnRejectCount = 0;
       // 切片 1 A2：run 级 turn 计数（max_turns 预算）
       let turnsOpened = 0;
 
@@ -532,6 +537,7 @@ export class ScenarioRunner {
         turnDecisionCount = 0;
         turnStepCount = 0;
         turnHadFinalAnswer = false;
+        turnRejectCount = 0;
       };
 
       const closeTurnRecord = (): void => {
@@ -702,9 +708,11 @@ export class ScenarioRunner {
                         ? { tool: callPayload.tool, ok: true, result: result.result, call_ref: originalCall.id }
                         : result.kind === "rejected"
                           ? { tool: callPayload.tool, ok: false, reason: result.reason, call_ref: originalCall.id, detail: result.detail }
-                          : result.kind === "failed"
-                            ? { tool: callPayload.tool, ok: false, reason: "failed", call_ref: originalCall.id, detail: result.error }
-                            : { tool: callPayload.tool, ok: false, reason: result.block.reason, call_ref: originalCall.id, block: result.block };
+                          : result.kind === "input_violation"
+                            ? { tool: callPayload.tool, ok: false, reason: result.reason, call_ref: originalCall.id, detail: result.detail }
+                            : result.kind === "failed"
+                              ? { tool: callPayload.tool, ok: false, reason: "failed", call_ref: originalCall.id, detail: result.error }
+                              : { tool: callPayload.tool, ok: false, reason: result.block.reason, call_ref: originalCall.id, block: result.block };
                     const backfilled = await appendEvent({ type: "tool/result", payload });
                     if (backfilled === null) {
                       provider = null; // 会话写路径失败已在 appendEvent 内折算
@@ -727,14 +735,33 @@ export class ScenarioRunner {
                       turnOpen = false;
                       await appendTurnEnd("credential_indeterminate");
                       provider = null;
-                    } else if (result.kind === "rejected" || result.kind === "failed") {
-                      outcome =
-                        result.kind === "rejected"
-                          ? { kind: "failed", error: runError("bridge_failure", `对端业务拒绝（重派 ${String(callPayload.tool)}）: ${result.reason}`, result.detail) }
-                          : { kind: "failed", error: runError("bridge_failure", `工具执行故障（重派 ${String(callPayload.tool)}）: ${result.error.message}`, result.error) };
-                      turnOpen = false;
-                      await appendTurnEnd("failed");
-                      provider = null;
+                    } else if (result.kind === "rejected" || result.kind === "input_violation" || result.kind === "failed") {
+                      // 快修批 D-a：E1/E2（rejected/input_violation）对模型面 provider 非终局——
+                      // tool/result 已回填（零加工），不置 outcome、不收口、不终止 provider，
+                      // 落回决策循环继续（模型修参重试或转述）；连续计数达 REJECT_LOOP_LIMIT → 终局。
+                      if (result.kind !== "failed" && !("decisionFace" in provider)) {
+                        turnRejectCount += 1;
+                        if (turnRejectCount >= REJECT_LOOP_LIMIT) {
+                          outcome = {
+                            kind: "failed",
+                            error: runError("reject_loop_exhausted", `单 turn 连续工具错误回流达阈值 ${String(REJECT_LOOP_LIMIT)}（reject_loop_exhausted）：重派 ${String(callPayload.tool)} reason=${result.reason}`, result.detail),
+                          };
+                          turnOpen = false;
+                          await appendTurnEnd("failed");
+                          provider = null;
+                        }
+                      } else {
+                        // 脚本执行器（Faux 断言路径）与 E3/E4（failed）维持既有终局
+                        outcome =
+                          result.kind === "rejected"
+                            ? { kind: "failed", error: runError("bridge_failure", `对端业务拒绝（重派 ${String(callPayload.tool)}）: ${result.reason}`, result.detail) }
+                            : result.kind === "input_violation"
+                              ? { kind: "failed", error: runError("bridge_failure", `工具入参违反模型可见 schema（重派 ${String(callPayload.tool)}）: ${result.reason}`, result.detail) }
+                              : { kind: "failed", error: runError("bridge_failure", `工具执行故障（重派 ${String(callPayload.tool)}）: ${result.error.message}`, result.error) };
+                        turnOpen = false;
+                        await appendTurnEnd("failed");
+                        provider = null;
+                      }
                     }
                     // blocked(denied/advised/credential_consumed/credential_invalid) 非终局：循环继续（模型换路径）
                   }
@@ -979,13 +1006,16 @@ export class ScenarioRunner {
               ? { tool: step.tool, ok: true, result: result.result, call_ref: call.id }
               : result.kind === "rejected"
                 ? { tool: step.tool, ok: false, reason: result.reason, call_ref: call.id, detail: result.detail }
-                : result.kind === "failed"
-                  ? { tool: step.tool, ok: false, reason: "failed", call_ref: call.id, detail: result.error }
-                  : { tool: step.tool, ok: false, reason: result.block.reason, call_ref: call.id, block: result.block };
+                : result.kind === "input_violation"
+                  ? { tool: step.tool, ok: false, reason: result.reason, call_ref: call.id, detail: result.detail }
+                  : result.kind === "failed"
+                    ? { tool: step.tool, ok: false, reason: "failed", call_ref: call.id, detail: result.error }
+                    : { tool: step.tool, ok: false, reason: result.block.reason, call_ref: call.id, block: result.block };
           const appended = await appendEvent({ type: "tool/result", payload, domain_refs: refs });
           if (appended === null) break;
 
           if (result.kind === "executed") {
+            turnRejectCount = 0; // D-a R-2：非回流类结果打断连续计数
             if (step.tool === "atf_admit_data") {
               // canonical output 已保证三元组字段存在（S3 逐次校验）
               const fact = result.result as { journal_type: string; fact_id: string; sha256_digest: string };
@@ -994,6 +1024,7 @@ export class ScenarioRunner {
             continue;
           }
           if (result.kind === "blocked") {
+            turnRejectCount = 0; // D-a R-2：非回流类结果打断连续计数
             if (result.block.reason === "approval_missing") {
               // headless 账本轨终局(ADR-07):approval_missing 即终止——无自动应答、不重试(语义零改动)
               outcome = { kind: "approval_missing", block: result.block };
@@ -1040,13 +1071,39 @@ export class ScenarioRunner {
             if (outcome.kind === "failed" && outcome.error.code === "session_failure") break; // 会话写路径已真实折算失败(初始占位不算)
             continue;
           }
-          // rejected / failed：结构化回填已落盘，分支按故障终局（不猜测成功）
-          outcome =
-            result.kind === "rejected"
-              ? { kind: "failed", error: runError("bridge_failure", `对端业务拒绝（${step.tool}）: ${result.reason}`, result.detail) }
-              : { kind: "failed", error: runError("bridge_failure", `工具执行故障（${step.tool}）: ${result.error.message}`, result.error) };
+          // 快修批 D-a（门 1 裁定 R-1/R-2/R-3/R-5）：错误回流分流——
+          // E1（rejected，对端业务拒绝）与 E2（input_violation，入参校验点位产出）对模型面
+          // provider 非终局：tool/result 已回填（零加工透传），模型下一拍可见并修参重试或
+          // 如实转述；连续达 REJECT_LOOP_LIMIT → turn 终局（reject_loop_exhausted，防死循环）。
+          // 脚本执行器（"decisionFace" in provider，与 :894 运行时守卫同判别式）维持终局
+          // （Faux 断言路径 S3-4 语义零回归）；E3/E4（failed）恒终局不回流。
+          if (result.kind === "rejected" || result.kind === "input_violation") {
+            if (!("decisionFace" in provider)) {
+              turnRejectCount += 1;
+              if (turnRejectCount >= REJECT_LOOP_LIMIT) {
+                outcome = {
+                  kind: "failed",
+                  error: runError("reject_loop_exhausted", `单 turn 连续工具错误回流达阈值 ${String(REJECT_LOOP_LIMIT)}（reject_loop_exhausted）：最后错误 tool=${step.tool} reason=${result.reason}`, result.detail),
+                };
+                turnOpen = false;
+                await appendTurnEnd("failed");
+                break;
+              }
+              continue;
+            }
+            // 脚本执行器：维持既有终局（结构化回填已落盘，分支按故障终局，不猜测成功）
+            outcome =
+              result.kind === "rejected"
+                ? { kind: "failed", error: runError("bridge_failure", `对端业务拒绝（${step.tool}）: ${result.reason}`, result.detail) }
+                : { kind: "failed", error: runError("bridge_failure", `工具入参违反模型可见 schema（${step.tool}）: ${result.reason}`, result.detail) };
+            turnOpen = false;
+            await appendTurnEnd("failed");
+            break;
+          }
+          // failed（E3 canonical 输出校验失败 / E4 bridge 故障）：结构化回填已落盘，终局（不猜测成功）
+          outcome = { kind: "failed", error: runError("bridge_failure", `工具执行故障（${step.tool}）: ${result.error.message}`, result.error) };
           turnOpen = false;
-          await appendTurnEnd(outcome.kind === "failed" ? "failed" : "rejected");
+          await appendTurnEnd("failed");
           break;
         }
 

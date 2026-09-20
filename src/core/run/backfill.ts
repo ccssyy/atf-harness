@@ -45,6 +45,9 @@ export const buildDecisionBackfill = (outcome: ToolCallOutcome): DecisionBackfil
       };
     case "rejected":
       return { tool: outcome.tool, category: "rejected", reason: readable(outcome.reason), references: [`rejected:${outcome.tool}`], authorization: "none" };
+    case "input_violation":
+      // D-a E2：入参违规归 rejected 类（模型可自纠回填；R-1 点位区分不影响回填归类）
+      return { tool: outcome.tool, category: "rejected", reason: readable(outcome.detail), references: [`input_violation:${outcome.tool}`], authorization: "none" };
     case "failed":
       return { tool: outcome.error.code, category: "failed", reason: readable(outcome.error.message), references: [`error:${outcome.error.code}`], authorization: "none" };
     case "suspended":

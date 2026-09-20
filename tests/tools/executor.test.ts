@@ -187,22 +187,30 @@ describe("S3 补充语义——canonical 反例 / 对端拒绝 / 参数白名单
     expect(resolveHeadlessExitCode(outcome)).toBe(1);
   });
 
-  it("参数违反模型可见 schema（缺 required / 多余字段）→ failed(schema_violation)，不触桥接", async () => {
-    const { executor } = await makeExecutor();
+  it("参数违反模型可见 schema（缺 required / 多余字段）→ input_violation(schema_violation)，不触桥接（快修批 D-a R-1：入参点位独立类别，供 runner 回流）", async () => {
+    const requests: string[] = [];
+    const countingTransport: BridgeTransport = {
+      request: async (method: string) => {
+        requests.push(method);
+        return { ok: false, error: { code: "request_rejected", message: "不应触达（计数桩）" } as BridgeError };
+      },
+    };
+    const executor = new ToolExecutor(countingTransport, ToolRegistry.createDefault());
 
     const missing = await executor.execute("atf_admit_data", { source_ref: "no-dataset-id" });
-    expect(missing.kind).toBe("failed");
-    if (missing.kind === "failed") {
-      expect(missing.error.code).toBe("schema_violation");
-      expect(missing.error.message).toContain("dataset_id");
+    expect(missing.kind).toBe("input_violation");
+    if (missing.kind === "input_violation") {
+      expect(missing.reason).toBe("schema_violation");
+      expect(JSON.stringify(missing.detail)).toContain("dataset_id");
     }
 
     const extra = await executor.execute("atf_fact_scan", { evil_param: 1 });
-    expect(extra.kind).toBe("failed");
-    if (extra.kind === "failed") {
-      expect(extra.error.code).toBe("schema_violation");
-      expect(extra.error.message).toContain("evil_param");
+    expect(extra.kind).toBe("input_violation");
+    if (extra.kind === "input_violation") {
+      expect(extra.reason).toBe("schema_violation");
+      expect(JSON.stringify(extra.detail)).toContain("evil_param");
     }
+    expect(requests.length).toBe(0); // 未触桥接（E2 点位在桥接请求之前）
   });
 
   it("registry 外工具 → failed(unknown_tool)；注册表恰为契约 4 工具（owner 口径 #5）", async () => {
