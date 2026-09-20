@@ -18,6 +18,9 @@ export interface SchemaNode {
   pattern?: string;
   /** optional 声明仅作文档语义；校验以 properties 是否声明为准（声明即校验，未声明字段不校验） */
   optional?: boolean;
+  /** 快修批 D-b（2026-09-20）：纯文档元数据——经两 codec 原样透传给模型（提示词面），
+   *  不参与 checkSchema/validateCanonicalOutput 校验，不属于契约对等面（bridge.contract.yaml 零 diff）。 */
+  description?: string;
 }
 
 /** 供校验器抛错文案使用：把值缩略为可读摘要。 */

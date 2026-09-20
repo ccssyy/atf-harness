@@ -26,6 +26,8 @@
  *     fact_scan / workspace_status / gate(advance) 读取。
  *   --corrupt-output=METHOD    指定方法响应剔除一个 required 字段（canonical 校验失败反例）
  *   --reject-method=METHOD     指定方法响应 ok=false/gate_rejected（对端业务拒绝反例，结构化回填路径）
+ *   --invalid-params-on-path-dataset-id  atf_admit_data 的 dataset_id 含 "/" 时回
+ *                              invalid_params（快修批 D-a 2026-09-20；复刻走查 S1 实况；缺省关）
  *
  * 契约 v2 方法面补登（2026-09-13，B1–B4）：会话级 run 绑定——
  *   atf.bind_run（B1）：params {run_id} → result {ok, run_id, scope_ref}；重复绑定允许覆盖，
@@ -65,6 +67,9 @@ const flags = new Set(process.argv.slice(2));
 const emitReadyEvent = flags.has("--emit-ready-event");
 const crashOnSecond = flags.has("--crash-on-second-request");
 const badLineAfterHandshake = flags.has("--bad-line-after-handshake");
+// 快修批 D-a（2026-09-20）：opt-in 行为注入——atf_admit_data 的 dataset_id 含 "/"（路径形态）
+// 时回 invalid_params（内核同码），复刻走查 S1 实况供回流链用例/证据；缺省关 = 既有行为零变化。
+const invalidParamsOnPathDatasetId = flags.has("--invalid-params-on-path-dataset-id");
 
 // 审批键 digest：sha256(stableParamsJson)，与 harness 侧同构（契约登记，防漂移）
 const stableStringify = (value) => {
@@ -233,6 +238,14 @@ const corrupt = (method, result) => {
 };
 
 const toolAdmitData = (params) => {
+  if (invalidParamsOnPathDatasetId && String(params.dataset_id ?? "").includes("/")) {
+    return {
+      error: {
+        code: "invalid_params",
+        message: `dataset_id 须为注册标识符（形如 ds-<slug>-<date>），非文件路径: ${String(params.dataset_id)}`,
+      },
+    };
+  }
   const pin = sha256Hex(String(params.dataset_id)).slice(0, 12);
   const factId = `${String(params.dataset_id)}@${pin}`;
   const digest = sha256Hex(stableStringify({ dataset_id: String(params.dataset_id), pin }));

@@ -21,16 +21,19 @@ import { approvalMissingBlock, approvalTrackBlock, toolError, toolErrorFromBridg
 import { type ToolRegistry } from "./registry.js";
 import type { ToolDefinition } from "./toolDefinition.js";
 
-/** 单次工具执行的结果(Phase 1 四态 + P2-S2 问答轨两终态):
+/** 单次工具执行的结果(Phase 1 四态 + P2-S2 问答轨两终态 + 快修批 D-a 入参违规):
  *  - executed/blocked/rejected/failed:Phase 1 既有语义零改动;
  *  - suspended:问答轨 timeout → run 挂起(exit 75,非终态可恢复,「超时非否决」);
- *  - aborted:应答 verdict=abort 或拒绝循环升级 → run 终态(exit 79)。
+ *  - aborted:应答 verdict=abort 或拒绝循环升级 → run 终态(exit 79);
+ *  - input_violation:模型入参违反模型可见 schema(入参校验点位产出,未触桥接请求——
+ *    R-1 精度约束:E2 回流判定锚定此点位,禁止与 E3 canonical 输出校验失败按错误码混同)。
  *  blocked 的问答轨子类(denied / credential_consumed / credential_invalid)为结构化回填:
  *  模型可换路径继续,由 runner 按 block.reason 分流,不是 run 终局。 */
 export type ToolCallOutcome =
   | { kind: "executed"; tool: string; result: unknown }
   | { kind: "blocked"; block: ToolBlock }
   | { kind: "rejected"; tool: string; reason: string; detail?: unknown }
+  | { kind: "input_violation"; tool: string; reason: string; detail?: unknown }
   | { kind: "failed"; error: ToolError }
   | { kind: "suspended"; tool: string; block: ToolBlock }
   | { kind: "aborted"; tool: string; block: ToolBlock };
@@ -45,6 +48,7 @@ export const resolveHeadlessExitCode = (outcome: ToolCallOutcome): 0 | 1 | 75 | 
     case "blocked":
       return outcome.block.exit_code; // approval_missing 恒 78;问答轨按原因映射 1/75/79
     case "rejected":
+    case "input_violation":
     case "failed":
       return 1;
     case "suspended":
@@ -101,9 +105,13 @@ export class ToolExecutor {
 
     const paramCheck = checkSchema(params ?? {}, definition.value.parameters, toolName);
     if (paramCheck !== null) {
+      // D-a E2：入参违规（入参校验点位，未触桥接）——独立 outcome 类别，供 runner 回流模型
+      // （R-1：与 E3 canonical 输出校验失败的 failed/schema_violation 结构性区分，不按错误码匹配）
       return {
-        kind: "failed",
-        error: toolError("schema_violation", `工具参数违反模型可见 schema: ${paramCheck}`, { tool: toolName, params }),
+        kind: "input_violation",
+        tool: toolName,
+        reason: "schema_violation",
+        detail: { tool: toolName, params, message: paramCheck },
       };
     }
 

@@ -65,13 +65,16 @@ const HEX64 = "^[0-9a-f]{64}$";
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "atf_admit_data",
-    description: "数据准入：将指定数据集准入 ATF 训练流水（登记领域事实并产出 digest）。须账本审批预录。",
+    description:
+      "数据准入：将指定数据集准入 ATF 训练流水（登记领域事实并产出 digest）。须账本审批预录。dataset_id 为注册标识符（形如 ds-<slug>-<date>），不是文件路径；文件路径放 source_ref。",
     parameters: {
       type: "object",
       required: ["dataset_id"],
       properties: {
-        dataset_id: { type: "string" },
-        source_ref: { type: "string", optional: true },
+        // 快修批 D-b（2026-09-20）：描述层形态约束（描述即提示词面，经 codec 透传模型；
+        // 不做运行时强校验——内核侧已是 fail-closed 校验方，harness 不引入第二权威）。
+        dataset_id: { type: "string", description: "注册标识符，形如 ds-<slug>-<date>（如 ds-swb-20260920），非文件路径" },
+        source_ref: { type: "string", optional: true, description: "数据来源引用（文件路径或出处说明）；dataset_id 为标识符，路径类信息放这里" },
         // R2 补登（D3 决议 20260914）：与契约 atf_admit_data.params 对等——
         // 显式 pin 优先，缺省由内核按 canonical_digest({dataset_id, source_ref})[:12] 推导。
         pin: { type: "string", optional: true },

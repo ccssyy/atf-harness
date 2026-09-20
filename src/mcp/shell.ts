@@ -321,9 +321,11 @@ export class McpShell {
         ? { tool: name, ok: true, result: outcome.result, call_ref: call.id }
         : outcome.kind === "rejected"
           ? { tool: name, ok: false, reason: outcome.reason, call_ref: call.id, detail: outcome.detail }
-          : outcome.kind === "failed"
-            ? { tool: name, ok: false, reason: "failed", call_ref: call.id, detail: outcome.error }
-            : { tool: name, ok: false, reason: outcome.block.reason, call_ref: call.id, block: outcome.block };
+          : outcome.kind === "input_violation"
+            ? { tool: name, ok: false, reason: outcome.reason, call_ref: call.id, detail: outcome.detail }
+            : outcome.kind === "failed"
+              ? { tool: name, ok: false, reason: "failed", call_ref: call.id, detail: outcome.error }
+              : { tool: name, ok: false, reason: outcome.block.reason, call_ref: call.id, block: outcome.block };
     await this.appendEvent({ type: "tool/result", payload });
     const exitCode = resolveHeadlessExitCode(outcome);
     if (outcome.kind === "executed") {
@@ -332,7 +334,7 @@ export class McpShell {
     if (outcome.kind === "blocked") {
       return toolPayload({ tool: name, exit_code: exitCode, reason: outcome.block.message, block: outcome.block });
     }
-    if (outcome.kind === "rejected") {
+    if (outcome.kind === "rejected" || outcome.kind === "input_violation") {
       return toolPayload({ tool: name, exit_code: exitCode, reason: outcome.reason, detail: outcome.detail });
     }
     if (outcome.kind === "failed") {
