@@ -135,3 +135,74 @@ describe("B8 D1：审批交互流内化（零擦除）", () => {
     expect(text).not.toContain("\x1b[2K");
   });
 });
+
+describe("W1：advised 空备注追问一次（走查前置止血批 2026-09-20）", () => {
+  it("选 2 无备注 → 追问一次 → 输入文字 → advice_text 透传（留痕行含备注）", async () => {
+    const { stream, chunks } = ttyStream();
+    const renderer = new DiffRenderer({ out: stream, columns: 80 });
+    const { rl, prompts } = stubRl(["2", "请补充数据来源说明"]);
+    const response = await askApproval({ renderer, rl, input });
+    expect(response).toEqual({ verdict: "advised", actor: "tui-operator", advice_text: "请补充数据来源说明" });
+    const text = chunks();
+    // 追问恰好一次：两轮普通输入行，第二轮为追问 prompt
+    expect(prompts.length).toBe(2);
+    expect(prompts[0]).toContain("审批应答（1=放行 2=给意见 3=拒绝 4=中止，可跟备注）>");
+    expect(prompts[1]).toContain("请输入意见内容（直接输入文字回车提交；直接回车＝按无意见提交）>");
+    // 留痕行含备注（有则显；超 80 列折行——展平后断言，B8 同款手法）
+    const flat = text.replace(/\n {2}/g, "").replace(/\n/g, "");
+    expect(flat).toContain("选择=给意见(advised) 备注：请补充数据来源说明");
+    expect(text).not.toContain("\x1b[2K");
+    expect(text).not.toContain("\r");
+  });
+
+  it("追问后直接回车 → 按无意见 advised 提交（防卡死；无 advice_text 字段）", async () => {
+    const { stream, chunks } = ttyStream();
+    const renderer = new DiffRenderer({ out: stream, columns: 80 });
+    const { rl, prompts } = stubRl(["a", "   "]); // 键位 a 同 2；追问答纯空白＝空
+    const response = await askApproval({ renderer, rl, input });
+    expect(response).toEqual({ verdict: "advised", actor: "tui-operator" });
+    expect(Object.keys(response)).not.toContain("advice_text");
+    expect(prompts.length).toBe(2); // 追问一次后即提交，不再循环
+    expect(chunks()).toContain("选择=给意见(advised)\n");
+    expect(chunks()).not.toContain("备注：");
+  });
+
+  it("granted/denied/aborted 空备注维持现状不追问（各恰一轮输入行）", async () => {
+    for (const [answer, verdict] of [["1", "granted"], ["3", "denied"], ["x", "aborted"]] as const) {
+      const { stream } = ttyStream();
+      const renderer = new DiffRenderer({ out: stream, columns: 80 });
+      const { rl, prompts } = stubRl([answer]);
+      const response = await askApproval({ renderer, rl, input });
+      expect(response.verdict).toBe(verdict);
+      expect(prompts.length).toBe(1);
+      expect(prompts.every((p) => p.includes("审批应答（1=放行 2=给意见 3=拒绝 4=中止，可跟备注）>"))).toBe(true);
+    }
+  });
+
+  it("追问等待中 SIGINT → aborted 留痕（兜底路径行为不变）", async () => {
+    const { stream, chunks } = ttyStream();
+    const renderer = new DiffRenderer({ out: stream, columns: 80 });
+    let triggerSigint: (() => void) = () => undefined;
+    let questionCount = 0;
+    const rl = {
+      resume: (): void => undefined,
+      pause: (): void => undefined,
+      on: (name: string, cb: () => void): void => {
+        if (name === "SIGINT") triggerSigint = cb;
+      },
+      removeListener: (): void => undefined,
+      question: (_p: string, cb: (a: string) => void): void => {
+        questionCount += 1;
+        if (questionCount === 1) {
+          queueMicrotask(() => cb("2")); // 第一轮：选 2 无备注，进入追问
+        } else {
+          queueMicrotask(() => triggerSigint()); // 追问等待中 SIGINT
+        }
+      },
+    } as unknown as readline.Interface;
+    const response = await askApproval({ renderer, rl, input });
+    expect(response.verdict).toBe("aborted");
+    expect(chunks()).toContain("选择=中止(abort)");
+    expect(chunks()).not.toContain("选择=给意见(advised)");
+  });
+});
