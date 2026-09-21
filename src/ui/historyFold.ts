@@ -20,8 +20,8 @@ export interface HistoryFolderLabels {
 }
 
 export class HistoryFolder {
-  /** 当前历史批次（逻辑显示行）；null＝无未处置批次 */
-  private batch: string[] | null = null;
+  /** 当前历史批次（每事件的行组：主行＋可选人读附加行）；null＝无未处置批次 */
+  private batch: string[][] | null = null;
   /** 批次摘要行是否已写（写过后本批不再重复摘要） */
   private batchSummarized = false;
 
@@ -30,11 +30,13 @@ export class HistoryFolder {
     private readonly labels: HistoryFolderLabels,
   ) {}
 
-  /** onEvent 入口：history 缓冲不直出；live 前先落摘要行（每批恰一次）。 */
+  /** onEvent 入口：history 缓冲不直出；live 前先落摘要行（每批恰一次）。
+   *  F6（2026-09-21）：detailLines 提供事件多行附加渲染（状态面概览人读行），主行后接续输出。 */
   public handle(
     event: SessionEvent,
     origin: ProjectionOrigin,
     format: (event: SessionEvent, origin: ProjectionOrigin) => string,
+    detailLines?: (event: SessionEvent) => string[],
   ): void {
     if (origin === "history") {
       if (this.batch === null || this.batchSummarized) {
@@ -42,11 +44,12 @@ export class HistoryFolder {
         this.batch = [];
         this.batchSummarized = false;
       }
-      this.batch.push(format(event, origin));
+      this.batch.push([format(event, origin), ...(detailLines?.(event) ?? [])]);
       return;
     }
     this.flushSummary();
     this.renderer.appendLine(format(event, origin));
+    for (const line of detailLines?.(event) ?? []) this.renderer.appendLine(line);
   }
 
   /** runBranch 收口后调用：未达 live 的批次也补摘要（幂等）。 */
@@ -61,7 +64,9 @@ export class HistoryFolder {
   public reveal(): boolean {
     if (this.batch === null || this.batch.length === 0 || !this.batchSummarized) return false;
     this.renderer.appendLine(`[历史] 展开重放（由事实日志重放重建，共 ${String(this.batch.length)} 条）：`);
-    for (const line of this.batch) this.renderer.appendLine(line);
+    for (const lines of this.batch) {
+      for (const line of lines) this.renderer.appendLine(line);
+    }
     this.batch = null;
     return true;
   }

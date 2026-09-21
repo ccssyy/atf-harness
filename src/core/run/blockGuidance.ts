@@ -80,11 +80,11 @@ export const BLOCK_CODE_GUIDANCE: readonly BlockGuidanceEntry[] = [
   },
   {
     code: "invalid_params",
-    meaning: "参数形态或互斥约束不合法（如登记面双形态字段混用）",
+    meaning: "参数形态或互斥约束不合法（如登记面双形态字段混用；亦可能是路径不存在或不可达）",
     missing: "符合工具 schema 的参数（见各工具 parameters 描述）",
     producedBy: "调用方（修正参数即可，无需新材料）",
     why: "形态非法的调用被内核 fail-closed 拒绝，不会部分生效",
-    actionLine: "按 detail 中的字段说明修正参数后重试；同类修参两次仍拒则如实请示，勿继续盲试",
+    actionLine: "按 detail 中的字段说明修正参数后重试；亦可能是路径不存在或不可达——请先按工作区状态确认来源根实际形态，勿按示例路径猜测；同类修参两次仍拒则如实请示，勿继续盲试",
     isMaterialGap: false,
     options: [],
   },

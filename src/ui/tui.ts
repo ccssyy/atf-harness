@@ -37,7 +37,7 @@ import { ScenarioRunner, resolveRunExitCode, sessionLogPathFor, listPendingAppro
 import { HistoryFolder } from "./historyFold.js";
 import type { Scenario } from "../llm/index.js";
 import { DiffRenderer } from "./renderer.js";
-import { formatEventLine } from "./eventView.js";
+import { formatEventDetailLines, formatEventLine } from "./eventView.js";
 import { collapseLines } from "./collapseView.js";
 import { askApproval } from "./approval.js";
 import { buildInitInvocation, buildRealPeerDescriptor, effectiveScopeMode, parseArgs, repoRootDefault, resolveKernelDir, usage } from "./tuiArgs.js";
@@ -207,7 +207,7 @@ const main = async (): Promise<void> => {
           stub: async (input) => await askApproval({ renderer, rl, input }),
         },
         onEvent: (event, origin) => {
-          folder.handle(event, origin, formatEventLine);
+          folder.handle(event, origin, formatEventLine, formatEventDetailLines);
         },
         ...(continueMode ? { continue: { instruction: instructionText } } : {}),
         ...(effectiveScopeMode(args) !== "headless" ? { scopeMode: effectiveScopeMode(args) } : {}),
