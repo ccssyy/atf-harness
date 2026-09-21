@@ -2,8 +2,8 @@
  * F6 harness 侧小批门 2（裁定件 v2 §二；门 2 放行件 7e51dcc7…）。用例五组：
  * ① canonical 两态（mock --ws-overview 缺省关，概览透传不 fail-closed）
  * ② 状态面渲染（人读行＋禁直出工程语）
- * ③ guidance 文案修正断言（invalid_params 补"路径不存在或不可达/勿按示例路径猜测"）
- * ④ 描述层指引断言（两工具"勿按示例路径猜测"）
+ * ③ guidance 文案修正断言（invalid_params 含"路径不存在或不可达/先探测实际形态"；禁含"示例"）
+ * ④ 描述层指引断言（两工具"先探测/查看实际数据形态"；禁含具名形态示例）
  * ⑤ §三 双面覆盖：FakeLlmEndpoint＋HttpLlmProvider 走真投影路径（状态面调用 → 下一拍 decide 成功）
  */
 import { randomUUID } from "node:crypto";
@@ -166,22 +166,28 @@ describe("F6 用例 ②：状态面渲染（人读行＋禁直出工程语）", 
   });
 });
 
-describe("F6 用例 ③：guidance 文案修正断言（invalid_params）", () => {
-  it("一行文案含『路径不存在或不可达』与『勿按示例路径猜测』", () => {
+describe("F6 用例 ③：guidance 文案修正断言（invalid_params；F6-b 改向）", () => {
+  it("一行文案含『路径不存在或不可达』与『先探测实际形态，再决定来源根与整备方式』；禁含『示例』字样", () => {
     const line = guidanceLineFor("invalid_params");
     expect(line).toBeDefined();
     expect(line ?? "").toContain("路径不存在或不可达");
-    expect(line ?? "").toContain("勿按示例路径猜测");
+    expect(line ?? "").toContain("先探测实际形态，再决定来源根与整备方式");
+    expect(line ?? "").not.toContain("示例");
   });
 });
 
-describe("F6 用例 ④：描述层指引断言（两工具）", () => {
-  it("atf_admit_data／atf_data_admission_request 描述含『勿按示例路径猜测』", () => {
+describe("F6 用例 ④：描述层指引断言（两工具；F6-b 改向）", () => {
+  it("正向：两工具描述含『先探测/查看实际数据形态』；负向：不得含具名形态示例片段", () => {
     const registry = ToolRegistry.createDefault();
     for (const name of ["atf_admit_data", "atf_data_admission_request"]) {
       const definition = registry.get(name);
       expect(definition.ok).toBe(true);
-      if (definition.ok) expect(definition.value.description).toContain("勿按示例路径猜测");
+      if (!definition.ok) continue;
+      expect(definition.value.description).toContain("先探测/查看实际数据形态");
+      // F6-b 负向断言：具名形态示例已删（normalized/<类型>/groups/…、png×json）
+      for (const forbidden of ["normalized/", "groups/", "<类型>", "png×json"]) {
+        expect(definition.value.description, `${name} 描述不得含 "${forbidden}"`).not.toContain(forbidden);
+      }
     }
   });
 });
