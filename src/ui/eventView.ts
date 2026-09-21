@@ -51,6 +51,11 @@ export const formatEventLine = (event: SessionEvent, origin: ProjectionOrigin): 
       const note = (payload as { nudge?: unknown; guidance?: unknown }).nudge ?? (payload as { guidance?: unknown }).guidance;
       const noteText = typeof note === "string" ? ` 指引=${oneLine(note)}` : "";
       if (result.ok) {
+        // F6（2026-09-21）：状态面成功结果 → 机器行人读化（已登记 N 批），概览人读行走
+        // formatEventDetailLines 附加通道；禁直出工程语（digest/schema 名/snake_case 码）。
+        if (result.tool === "atf_workspace_status") {
+          return `${prefix}ok=true atf_workspace_status ${oneLine(statusHeadline(result.result))}${noteText}`;
+        }
         return `${prefix}ok=true ${result.tool} 结果=${detailOf(result.result)}${noteText}`;
       }
       const blockReason = result.block?.reason;
@@ -69,4 +74,72 @@ export const formatEventLine = (event: SessionEvent, origin: ProjectionOrigin): 
     default:
       return `${prefix}${detailOf(payload)}`;
   }
+};
+
+// ---------------------------------------------------------------------------
+// F6 harness 侧小批（2026-09-21）：状态面（atf_workspace_status）人读渲染
+// ---------------------------------------------------------------------------
+
+const PLAIN_OBJECT = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** 保守工程语泄漏检测（与接线批 engineeringLeak 同判据；接线批合入后合并为单一函数——登记合并点）：
+ *  64 位 hex digest／`X/v数字` schema 名／snake_case 工程码。 */
+const ENGINEERING_LEAK = (line: string): boolean =>
+  /\b[0-9a-f]{64}\b/.test(line) || /\b[A-Z][A-Za-z]+\/v\d+\b/.test(line) || /\b[a-z]+(?:_[a-z0-9]+)+\b/.test(line);
+
+const safeLine = (line: string): string => (ENGINEERING_LEAK(line) ? "（该行含工程信息，已收起）" : line);
+
+/** 状态面机器行标题（已登记 N 批；N 取 admitted_count，缺省不给数）。 */
+export const statusHeadline = (result: unknown): string => {
+  const count = PLAIN_OBJECT(result) && typeof result["admitted_count"] === "number" ? (result["admitted_count"] as number) : undefined;
+  return count !== undefined ? `已登记 ${String(count)} 批` : "工作区状态查询完成";
+};
+
+/** 状态面概览 → 人读行（禁直出工程语；命中即整行降级为中性提示）：
+ *  优先内核 human_summary（结论/分组/待确认，人读层直渲染）；否则按 datasets[] 逐批人读行
+ *  （登记身份＋形态摘要＋登记时间——用户所需标识与人读文本）；两者皆无 → 单行人读现状。 */
+export const statusOverviewLines = (result: unknown): string[] => {
+  if (!PLAIN_OBJECT(result)) return [];
+  const lines: string[] = [];
+  const human = result["human_summary"];
+  if (PLAIN_OBJECT(human)) {
+    if (typeof human["headline"] === "string" && human["headline"] !== "") lines.push(`结论：${human["headline"]}`);
+    for (const section of Array.isArray(human["sections"]) ? (human["sections"] as unknown[]) : []) {
+      if (!PLAIN_OBJECT(section)) continue;
+      if (typeof section["title"] === "string") lines.push(`· ${section["title"]}`);
+      for (const item of Array.isArray(section["items"]) ? (section["items"] as unknown[]) : []) {
+        if (typeof item === "string") lines.push(`    ${item}`);
+      }
+    }
+    for (const pending of Array.isArray(human["pending_confirmations"]) ? (human["pending_confirmations"] as unknown[]) : []) {
+      if (!PLAIN_OBJECT(pending)) continue;
+      if (typeof pending["title"] === "string") lines.push(`? ${pending["title"]}`);
+      if (typeof pending["detail"] === "string") lines.push(`    ${pending["detail"]}`);
+    }
+  } else if (Array.isArray(result["datasets"]) && (result["datasets"] as unknown[]).length > 0) {
+    for (const entry of result["datasets"] as unknown[]) {
+      if (!PLAIN_OBJECT(entry)) continue;
+      const id = typeof entry["fact_id"] === "string" ? (entry["fact_id"] as string) : typeof entry["dataset_id"] === "string" ? (entry["dataset_id"] as string) : "（未具名登记）";
+      const shape = typeof entry["shape_summary"] === "string" ? (entry["shape_summary"] as string) : typeof entry["summary"] === "string" ? (entry["summary"] as string) : "";
+      const at = typeof entry["registered_at"] === "string" ? `（登记于 ${entry["registered_at"] as string}）` : "";
+      lines.push(`· ${id}${shape !== "" ? `：${shape}` : ""}${at}`);
+    }
+  } else {
+    const count = typeof result["admitted_count"] === "number" ? (result["admitted_count"] as number) : 0;
+    lines.push(count > 0 ? `已登记 ${String(count)} 批（形态摘要待状态面提供）` : "工作区暂无已登记数据集");
+  }
+  return lines.map(safeLine);
+};
+
+/** F6：状态面人读行的多行附加渲染（tool/result 成功且 tool=atf_workspace_status）。
+ *  每行带同事件 id 前缀（smoke:l1ui 的 id 集合断言保持全等）。
+ *  机制说明：与接线批（fdf3555）formatEventDetailLines 同款通道，main 侧由本批引入；
+ *  接线批 rebase 时两版合并（其版含 humanSummary 六键嗅探，本版限状态面）。 */
+export const formatEventDetailLines = (event: SessionEvent): string[] => {
+  if (event.type !== "tool/result") return [];
+  const result = event.payload as ToolResultPayload;
+  if (!result.ok || result.tool !== "atf_workspace_status") return [];
+  const idPrefix = `#${String(event.id).padStart(4, "0")} `;
+  return statusOverviewLines(result.result).map((line) => `${idPrefix}${line}`);
 };

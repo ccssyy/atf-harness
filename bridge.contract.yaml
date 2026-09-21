@@ -349,6 +349,9 @@ methods:
     result:                        # 契约 v2（变更 #8）：增补 scope_ref（供 ledger_query 定位）
       type: object
       required: [ok, run_id, admitted_count, scope_ref]
+      # 【F6 补登 2026-09-21（harness 侧小批；内核 §一 合回后按真实形态逐条对齐）】状态面
+      # 数据集概览透传——root 严格模式关闭（内核多返回顶层字段不 fail-closed），深形态校验
+      # 归内核（不引入第二权威）；登记段补登不 bump（轴一仍 1／轴二仍 2）。
       properties:
         ok: { const: true }
         run_id: { type: string }
@@ -361,6 +364,8 @@ methods:
             scope_type: { type: string }
             scope_id: { type: string }
             scope_mode: { type: string }
+        datasets: { type: array, required: false, note: 数据集概览（已登记 dataset_id＋pin 可多个＋来源根相对形态摘要＋最近登记时间；不含源路径直出），items 为开放映射对象 }
+        human_summary: { type: object, required: false, note: 状态面人读双层报告（若内核给，harness 直渲染；禁直出 code/schema 名/digest）
 
   atf_data_admission.request:      # R1 补登（2026-09-20）：准入收进会话（K-Gap-1 方案 C 接线；
     direction: ts_to_kernel        # 内核冻结面实测 = main 61631e6；模型面工具名 atf_data_admission_request）

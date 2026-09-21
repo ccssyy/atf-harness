@@ -102,7 +102,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     // 返回的 dataset_id 定位执行。两形态互斥由内核 fail-closed 校验（invalid_params 回流），
     // harness schema 只做描述层指引＋字段声明（D-b 原则：不引入第二权威）。
     description:
-      "数据集登记（真实数据校验的第一步）：推荐用自动形态——不传 dataset_id，传真实 source_root（成对标注来源包根）与 split_root（split manifest 根），二者必须为已存在的目录；内核按内容寻址派生 dataset_id（ds-<digest12>）并从返回值读取。显式形态（仅登记引用、不支持真实数据校验）：传 dataset_id（注册标识符，非文件路径、无 @）与可选 source_ref（来源引用字符串，非文件路径要求）。两形态互斥。业务拒绝回流（如 *_missing／invalid_params）附有一行指引：按指引修参；缺料（*_missing 类）时勿重复探查——如实向用户说明缺什么并停止。",
+      "数据集登记（真实数据校验的第一步）：推荐用自动形态——不传 dataset_id，传真实 source_root（成对标注来源包根）与 split_root（split manifest 根），二者必须为已存在的目录；内核按内容寻址派生 dataset_id（ds-<digest12>）并从返回值读取。显式形态（仅登记引用、不支持真实数据校验）：传 dataset_id（注册标识符，非文件路径、无 @）与可选 source_ref（来源引用字符串，非文件路径要求）。两形态互斥。业务拒绝回流（如 *_missing／invalid_params）附有一行指引：按指引修参；缺料（*_missing 类）时勿重复探查——如实向用户说明缺什么并停止。先按工作区状态（atf_workspace_status）确认来源根的实际形态，再据此取 source_root／split_root；勿按示例路径猜测。",
     parameters: {
       type: "object",
       required: [],
@@ -159,7 +159,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     // R1 接线批（D-5，2026-09-20）：模型面工具名用下划线（provider 函数名不允许 "."），
     // RPC 方法经 executor 显式映射到 atf_data_admission.request（内核冻结面 main 61631e6）。
     description:
-      "数据准入申请：对已登记数据集执行真实 source-backed 数据校验并落盘判定结果（可能因标注冲突需要人工裁决；结果含 G1–G4 判定投影）。dataset_id/pin 取自 atf_admit_data 登记结果 fact_id（形如 <dataset_id>@<pin>）或事实索引中的登记事实；勿要求用户手敲；不接受文件路径。返回 *_missing 类业务拒绝（缺料）时：不要重复探查——如实向用户说明缺什么并停止（系统会呈现缺口卡）。",
+      "数据准入申请：对已登记数据集执行真实 source-backed 数据校验并落盘判定结果（可能因标注冲突需要人工裁决；结果含 G1–G4 判定投影）。dataset_id/pin 取自 atf_admit_data 登记结果 fact_id（形如 <dataset_id>@<pin>）或事实索引中的登记事实；勿要求用户手敲；不接受文件路径。返回 *_missing 类业务拒绝（缺料）时：不要重复探查——如实向用户说明缺什么并停止（系统会呈现缺口卡）。先按工作区状态（atf_workspace_status）确认来源根的实际形态，再据此取 source_root／split_root；勿按示例路径猜测。",
     parameters: {
       type: "object",
       required: ["dataset_id"],
@@ -269,7 +269,10 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     parameters: NO_PARAMS,
     requires_approval: false,
     canonical_output: {
+      // F6 harness 侧小批（2026-09-21）：状态面数据集概览透传——根 strict:false（内核多返回
+      // 顶层字段不 fail-closed），概览深形态校验归内核（不引入第二权威）；既有必填面照校。
       type: "object",
+      strict: false,
       required: ["ok", "run_id", "admitted_count", "scope_ref"],
       properties: {
         ok: { const: true },
@@ -285,6 +288,13 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
             scope_mode: { type: "string" },
           },
         },
+        datasets: {
+          type: "array",
+          optional: true,
+          items: { type: "object", strict: false },
+          description: "数据集概览（F6，形态归内核）：已登记 dataset_id＋pin（可多个）＋来源根相对形态摘要＋最近登记时间",
+        },
+        human_summary: { type: "object", optional: true, strict: false, description: "状态面人读双层报告（若内核给，harness 直渲染）" },
       },
     },
   },

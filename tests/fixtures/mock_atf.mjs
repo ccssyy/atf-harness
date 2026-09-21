@@ -412,15 +412,39 @@ const toolFactScan = (params) => {
   };
 };
 
+const wsOverview = flags.has("--ws-overview");
 const toolWorkspaceStatus = (params) => {
   const resolved = resolveRun(params);
   if (resolved.error !== undefined) return resolved;
-  return {
+  const result = {
     ok: true,
     run_id: resolved.runId,
     admitted_count: admittedFacts.length,
     scope_ref: scopeRefFor(resolved.runId),
   };
+  if (wsOverview) {
+    // F6 harness 侧小批（2026-09-21）：状态面数据集概览仿真（内核 §一 冻结前以裁定形态仿真；
+    // 旗标 --ws-overview 缺省关＝既有行为零变化）。只含登记身份/形态摘要/登记时间，不含源路径直出。
+    result.datasets = admittedFacts.map((fact, index) => ({
+      fact_id: fact.fact_id,
+      dataset_id: fact.fact_id.split("@")[0] ?? fact.fact_id,
+      pin: fact.fact_id.split("@")[1] ?? "",
+      shape_summary: `成对样本 ${String((index + 1) * 50)} 张（png×json 成对）`,
+      registered_at: "2026-09-21T12:00:00Z",
+    }));
+    result.human_summary = {
+      headline: `工作区已有 ${String(admittedFacts.length)} 批已登记数据。`,
+      sections: admittedFacts.map((fact, index) => ({
+        title: `已登记：${fact.fact_id.split("@")[0] ?? fact.fact_id}`,
+        items: [`形态摘要：成对样本 ${(index + 1) * 50} 张（png×json 成对）。`, `最近登记：2026-09-21。`],
+      })),
+      metrics: [{ label: "已登记批次", value: String(admittedFacts.length) }],
+      actions: [{ title: "下一步", detail: "按工作区现状继续准备即可；来源根形态以上述登记摘要为准。", needs_decision: false }],
+      pending_confirmations: [],
+      notes: [],
+    };
+  }
+  return result;
 };
 
 // re-pin R2 wire 切换：atf_flow_anchor（K3 §13.9）流程位置纯读出口——三态 current/stale/missing。

@@ -18,6 +18,11 @@ export interface SchemaNode {
   pattern?: string;
   /** optional 声明仅作文档语义；校验以 properties 是否声明为准（声明即校验，未声明字段不校验） */
   optional?: boolean;
+  /** 对象白名单的选择性退出（K-Gap-2 接线批与 F6 harness 侧小批同名扩展，2026-09-21）：
+   *  缺省 true（properties 即白名单，未声明键拒绝）；显式 strict:false 放开未声明键——
+   *  用于自由形态 payload 透传（split_policy 确认态／状态面数据集概览／human_summary 双层），
+   *  深形态校验归内核，harness 不做第二权威。已声明属性仍逐键校验。 */
+  strict?: boolean;
   /** 快修批 D-b（2026-09-20）：纯文档元数据——经两 codec 原样透传给模型（提示词面），
    *  不参与 checkSchema/validateCanonicalOutput 校验，不属于契约对等面（bridge.contract.yaml 零 diff）。 */
   description?: string;
@@ -62,8 +67,10 @@ export const checkSchema = (value: unknown, schema: SchemaNode, path: string): s
       if (!(key in record)) return `${path} 缺少 required 字段 "${key}"`;
     }
     const declared = schema.properties ?? {};
-    for (const key of Object.keys(record)) {
-      if (!(key in declared)) return `${path} 含未声明字段 "${key}"（properties 即白名单，额外字段拒绝）`;
+    if (schema.strict !== false) {
+      for (const key of Object.keys(record)) {
+        if (!(key in declared)) return `${path} 含未声明字段 "${key}"（properties 即白名单，额外字段拒绝）`;
+      }
     }
     for (const [key, child] of Object.entries(declared)) {
       if (!(key in record)) continue;
