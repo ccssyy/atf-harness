@@ -247,13 +247,22 @@ methods:
   atf_admit_data:
     direction: ts_to_kernel
     requires_approval: true        # 写动作：数据准入（高危推进类，须账本预录）
-    params:                        # 契约 v2（变更 #7）：source → source_ref（可校验引用）
+    # 【登记面双形态补登 2026-09-21】内核件B v0.7.2b0 实义变更（实测锚 main 61631e6；补登不 bump）：
+    #   显式形态 {dataset_id, source_ref?, pin?}＝引用式登记（refs 仅 source_ref 档案，
+    #   不被 atf_data_admission.request 定位消费——缺源根即 dataset_not_registered）；
+    #   自动形态 {source_root, split_root, pin?, label?}（无 dataset_id）＝内容寻址登记，
+    #   dataset_id 由内核按双树 digest 派生 ds-<digest12>，refs 写双源根 → 准入可定位；
+    #   两形态互斥（混用 invalid_params，双向把守）；label 仅展示字段。
+    params:
       type: object
-      required: [dataset_id]
+      required: []                 # 双形态：形态完整性由内核 fail-closed 校验（invalid_params），harness 不做第二权威
       properties:
-        dataset_id: { type: string }
-        source_ref: { type: string, required: false }
-        pin: { type: string, required: false, note: R2 补登（D3，2026-09-14）——显式优先；缺省 = canonical_digest({dataset_id, source_ref})[:12]（内核口径） }
+        dataset_id: { type: string, required: false, note: 仅显式形态；非空、不含路径分隔符与 @；自动形态勿传（内核派生 ds-<digest12>） }
+        source_ref: { type: string, required: false, note: 仅显式形态；非空字符串自由文本（refs 档案）；与自动形态字段互斥 }
+        source_root: { type: string, required: false, note: 仅自动形态；成对标注来源包根，必须为存在目录（绝对原样/相对按 workspace 根）；symlink fail-closed }
+        split_root: { type: string, required: false, note: 仅自动形态；split manifest 根，必须为存在目录 }
+        label: { type: string, required: false, note: 仅自动形态；人类可读展示名（只进 registration.json，不参与派生） }
+        pin: { type: string, required: false, note: R2 补登（D3，2026-09-14）——显式优先；缺省 = canonical_digest({dataset_id, source_ref})[:12]（显式形态口径；自动形态 source_ref 恒空串，同式推导）}
     result:                        # canonical output（契约 v2 三元组来源明示，变更 #7）
       type: object
       required: [ok, journal_type, fact_id, sha256_digest]

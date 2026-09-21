@@ -197,11 +197,12 @@ describe("S3 补充语义——canonical 反例 / 对端拒绝 / 参数白名单
     };
     const executor = new ToolExecutor(countingTransport, ToolRegistry.createDefault());
 
-    const missing = await executor.execute("atf_admit_data", { source_ref: "no-dataset-id" });
+    // 双形态补丁后 admit required=[]：入参违规改以未声明字段触发（harness schema 面）
+    const missing = await executor.execute("atf_admit_data", { dataset_id: "ds-x", evil_param: 1 });
     expect(missing.kind).toBe("input_violation");
     if (missing.kind === "input_violation") {
       expect(missing.reason).toBe("schema_violation");
-      expect(JSON.stringify(missing.detail)).toContain("dataset_id");
+      expect(JSON.stringify(missing.detail)).toContain("evil_param");
     }
 
     const extra = await executor.execute("atf_fact_scan", { evil_param: 1 });

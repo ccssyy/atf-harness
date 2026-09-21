@@ -139,7 +139,8 @@ describe("MCP 外壳 E2E（T05）", () => {
         "ledger_consume",
       ]);
       const admit = tools.find((tool) => tool.name === "atf_admit_data");
-      expect((admit?.inputSchema as { required: string[] })["required"]).toEqual(["dataset_id"]);
+      // 双形态补丁：required 改 []（形态完整性由内核 fail-closed 校验，harness 不做第二权威）
+      expect((admit?.inputSchema as { required: string[] })["required"]).toEqual([]);
       expect(JSON.stringify(admit?.inputSchema)).not.toContain('"optional"');
     } finally {
       fixture.close();

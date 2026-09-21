@@ -43,6 +43,8 @@
  *   --unknown-run=ID           指定该 run_id 为不可解析（unknown_run 反例注入）
  */
 import readline from "node:readline";
+import { readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { createHash } from "node:crypto";
 
 const findOpt = (name) => {
@@ -237,7 +239,55 @@ const corrupt = (method, result) => {
   return clone;
 };
 
+// 登记面双形态补丁（2026-09-21，对齐内核件B 实测面 main 61631e6）：
+//   显式形态 {dataset_id, source_ref?, pin?}（既有行为；refs 仅 source_ref 档案——
+//   不被 atf_data_admission.request 定位消费）；自动形态（无 dataset_id）
+//   {source_root, split_root, pin?, label?}：源根须为存在目录（同机 fs 校验，同内核口径），
+//   dataset_id＝内容寻址派生 ds-<digest12>（双树文件清单摘要，同内容幂等），refs 写双源根；
+//   两形态互斥（混用 invalid_params，双向把守，同内核）。
+const isExistingDir = (value) => {
+  try { return typeof value === "string" && value !== "" && statSync(value).isDirectory(); } catch { return false; }
+};
+const treeDigestLite = (root) => {
+  // 简化同构：文件相对路径+大小清单的稳定 sha256（同内容幂等；仿真面不复制内核 _tree_digest 全语义）
+  const files = readdirSync(root, { recursive: true })
+    .filter((rel) => statSync(join(root, rel)).isFile())
+    .sort()
+    .map((rel) => `${rel.replaceAll("\\", "/")}:${statSync(join(root, rel)).size}`);
+  return sha256Hex(stableStringify(files));
+};
+const isSafeText = (value) => typeof value === "string" && value !== "";
 const toolAdmitData = (params) => {
+  if (params.dataset_id === undefined || params.dataset_id === null) {
+    // 自动形态（件B）：{source_root, split_root, pin?, label?}——dataset_id 缺省派生
+    if (params.source_ref !== undefined) {
+      return { error: { code: "invalid_params", message: "params.source_ref 属 dataset_id 显式形态,自动形态不得混用" } };
+    }
+    for (const key of ["source_root", "split_root"]) {
+      if (!isExistingDir(params[key])) {
+        return { error: { code: "invalid_params", message: `params 源根必须是可解析为存在目录的路径:${String(params[key] ?? "")}` } };
+      }
+    }
+    if (params.label !== undefined && !isSafeText(params.label)) {
+      return { error: { code: "invalid_params", message: "params.label 必须是非空字符串" } };
+    }
+    const sourceRoot = String(params.source_root);
+    const splitRoot = String(params.split_root);
+    const derivedId = `ds-${sha256Hex(stableStringify([treeDigestLite(sourceRoot), treeDigestLite(splitRoot)])).slice(0, 12)}`;
+    const pin = isSafeText(params.pin) && isSafeComponent(params.pin) ? String(params.pin) : sha256Hex(stableStringify({ dataset_id: derivedId, source_ref: "" })).slice(0, 12);
+    const factId = `${derivedId}@${pin}`;
+    const digest = sha256Hex(stableStringify({ dataset_id: derivedId, pin }));
+    const existing = admittedFacts.find((fact) => fact.fact_id === factId);
+    const entry = { journal_type: "dataset-registry", fact_id: factId, sha256_digest: digest, refs: { source_root: sourceRoot, split_root: splitRoot }, ...(params.label !== undefined ? { label: String(params.label) } : {}) };
+    if (existing !== undefined) Object.assign(existing, entry); // 重复登记同 id@pin＝覆盖（登记面为当前态）
+    else admittedFacts.push(entry);
+    return { ok: true, journal_type: "dataset-registry", fact_id: factId, sha256_digest: digest, dataset_id: derivedId };
+  }
+  // 显式形态（既有）：{dataset_id, source_ref?, pin?}
+  if (["source_root", "split_root", "label"].some((key) => params[key] !== undefined)) {
+    const mixed = ["source_root", "split_root", "label"].filter((key) => params[key] !== undefined);
+    return { error: { code: "invalid_params", message: `params ${mixed.join(",")} 属 dataset_id 自动生成形态,显式形态不得混用` } };
+  }
   if (invalidParamsOnPathDatasetId && String(params.dataset_id ?? "").includes("/")) {
     return {
       error: {
@@ -246,10 +296,19 @@ const toolAdmitData = (params) => {
       },
     };
   }
-  const pin = sha256Hex(String(params.dataset_id)).slice(0, 12);
+  if (!isSafeComponent(params.dataset_id)) {
+    return { error: { code: "invalid_params", message: "params.dataset_id 必须不含路径分隔符与 @ 的非空字符串" } };
+  }
+  if (params.source_ref !== undefined && !isSafeText(params.source_ref)) {
+    return { error: { code: "invalid_params", message: "params.source_ref 必须是非空字符串" } };
+  }
+  const pin = isSafeText(params.pin) && isSafeComponent(params.pin) ? String(params.pin) : sha256Hex(stableStringify({ dataset_id: String(params.dataset_id), source_ref: String(params.source_ref ?? "") })).slice(0, 12);
   const factId = `${String(params.dataset_id)}@${pin}`;
   const digest = sha256Hex(stableStringify({ dataset_id: String(params.dataset_id), pin }));
-  admittedFacts.push({ journal_type: "dataset-registry", fact_id: factId, sha256_digest: digest });
+  const existing = admittedFacts.find((fact) => fact.fact_id === factId);
+  const entry = { journal_type: "dataset-registry", fact_id: factId, sha256_digest: digest, ...(params.source_ref !== undefined ? { refs: { source_ref: String(params.source_ref) } } : {}) };
+  if (existing !== undefined) Object.assign(existing, entry);
+  else admittedFacts.push(entry);
   return { ok: true, journal_type: "dataset-registry", fact_id: factId, sha256_digest: digest, dataset_id: params.dataset_id };
 };
 
@@ -286,6 +345,9 @@ const toolDataAdmissionRequest = (params) => {
     return { error: { code: "dataset_not_registered", message: `数据集未登记（须先 atf_admit_data）: ${String(datasetId)}` } };
   }
   const fact = matches[0];
+  if ((fact.refs?.source_root ?? undefined) === undefined) {
+    return { error: { code: "dataset_not_registered", message: `登记记录缺可解析源根（显式登记不支持真实数据校验，请用自动形态重新登记）: ${String(datasetId)}` } };
+  }
   const pin = fact.fact_id.split("@")[1] ?? "";
   const summaryRef = `runs/${resolved.runId}/l1/${fact.fact_id}/source-backed-admission-summary.json`;
   const gates = [

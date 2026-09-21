@@ -51,23 +51,50 @@ const forbiddenStub = async (): Promise<ApprovalStubResponse> => {
 
 const runsRootOf = (): string => join(repoRoot, "tmp", "runs", `r1-${randomUUID()}`);
 
-describe("R1 ①：账本轨预录→放行→方法执行→summary 闭集断言", () => {
-  it("admit 登记 → admission_request（账本预录消费，零问答轨）→ 全字段 canonical 结果", async () => {
+/** 双形态测试夹具：真实存在的最小双树目录（自动形态 source_root/split_root 校验用）。 */
+const makeTreePair = async (): Promise<{ sourceRoot: string; splitRoot: string }> => {
+  const { mkdtemp } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const root = await mkdtemp(join(tmpdir(), "r1-dual-"));
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  const sourceRoot = join(root, "source");
+  const splitRoot = join(root, "split");
+  await mkdir(join(sourceRoot, "normalized", "cluster_01"), { recursive: true });
+  await mkdir(splitRoot, { recursive: true });
+  await writeFile(join(sourceRoot, "normalized", "cluster_01", "sample-1.png"), "png-bytes");
+  await writeFile(join(sourceRoot, "normalized", "cluster_01", "sample-1.json"), "{}");
+  await writeFile(join(splitRoot, "global_assignment.csv"), "cluster_id,component_id,image_relpath,json_relpath,pixel_hash,raw_hash,split,unit,family_id\n");
+  await writeFile(join(splitRoot, "global_plan.json"), "{}");
+  return { sourceRoot, splitRoot };
+};
+
+describe("R1 ①：自动形态登记→准入 request→summary 闭集断言（双形态补丁后正确用法）", () => {
+  it("自动形态登记（无 dataset_id，双树目录）→ 解析派生 id → admission_request → 全字段 canonical 结果", async () => {
+    const { sourceRoot, splitRoot } = await makeTreePair();
+    const contexts: string[] = [];
+    let stage = 0;
+    const provider: LlmProvider = {
+      providerId: "r1-stub-model",
+      decide: async (context) => {
+        contexts.push(JSON.stringify(context));
+        stage += 1;
+        if (stage === 1) return ok({ type: "tool_call", tool: "atf_admit_data", params: { source_root: sourceRoot, split_root: splitRoot } });
+        if (stage === 2) {
+          const m = /"fact_id":"(ds-[0-9a-f]{12})@/.exec(contexts[contexts.length - 1] ?? "");
+          if (m === null) throw new Error("登记结果解析失败（派生 dataset_id 不在上下文）");
+          return ok({ type: "tool_call", tool: "atf_data_admission_request", params: { dataset_id: m[1] } });
+        }
+        return ok({ type: "final_answer", text: "准入申请已完成。" });
+      },
+    };
     const ran = await ScenarioRunner.runBranch(
-      scenarioOf(`r1-ledger-${randomUUID()}`, "登记并请求准入", [
-        { tool: "atf_admit_data", params: { dataset_id: "ds-r1-ledger" } },
-        { tool: "atf_data_admission_request", params: { dataset_id: "ds-r1-ledger" } },
-      ]),
+      scenarioOf(`r1-ledger-${randomUUID()}`, "登记并请求准入"),
       "main",
       {
         runsRoot: runsRootOf(),
         mockCommand: ["node", mockPath],
-        modelProvider: modelStub([
-          { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-r1-ledger" } },
-          { type: "tool_call", tool: "atf_data_admission_request", params: { dataset_id: "ds-r1-ledger" } },
-          { type: "final_answer", text: "准入申请已完成（账本轨放行）。" },
-        ]),
-        approvalSurface: { stub: forbiddenStub },
+        modelProvider: provider,
+        approvalSurface: { stub: grantedStub },
       },
     );
     expect(ran.ok, !ran.ok ? JSON.stringify(ran.error) : "").toBe(true);
@@ -86,7 +113,8 @@ describe("R1 ①：账本轨预录→放行→方法执行→summary 闭集断�
       expect(result, `缺字段 ${key}`).toHaveProperty(key);
     }
     expect(result["status"]).toBe("adjudicated");
-    expect(result["fact_id"]).toBe(`ds-r1-ledger@${String(result["pin"])}`);
+    expect(result["fact_id"]).toBe(`${String(result["dataset_id"])}@${String(result["pin"])}`);
+    expect(String(result["dataset_id"])).toMatch(/^ds-[0-9a-f]{12}$/); // 内容寻址派生（件B）
     expect(result["summary_ref"]).toContain(`runs/${String(result["run_id"])}/l1/${String(result["fact_id"])}`);
     expect(String(result["summary_sha256"])).toMatch(/^[0-9a-f]{64}$/);
     expect(Array.isArray(result["gates"])).toBe(true);
@@ -100,14 +128,30 @@ describe("R1 ①：账本轨预录→放行→方法执行→summary 闭集断�
 describe("R1 ②：waiting_on_human 非终局（诚实停止）", () => {
   it("status=waiting_on_human＋requests 载荷 → 正常回填 → 模型如实转述 → completed", async () => {
     const contexts: string[] = [];
+    const sourceTree = await makeTreePair();
     const ran = await ScenarioRunner.runBranch(scenarioOf(`r1-wait-${randomUUID()}`, "请求准入"), "main", {
       runsRoot: runsRootOf(),
       mockCommand: ["node", mockPath, "--admission-status=waiting_on_human"],
-      modelProvider: modelStub([
-        { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-r1-wait" } },
-        { type: "tool_call", tool: "atf_data_admission_request", params: { dataset_id: "ds-r1-wait" } },
-        { type: "final_answer", text: "准入申请已执行：判定为 waiting_on_human（标注冲突待人工裁决），已诚实停止，未猜测成功。" },
-      ], contexts),
+      modelProvider: (() => {
+        const tail: LlmDecision[] = [
+          { type: "final_answer", text: "准入申请已执行：判定为 waiting_on_human（标注冲突待人工裁决），已诚实停止，未猜测成功。" },
+        ];
+        let stage = 0;
+        return {
+          providerId: "r1-stub-model",
+          decide: async (context) => {
+            contexts.push(JSON.stringify(context));
+            stage += 1;
+            if (stage === 1) return ok({ type: "tool_call", tool: "atf_admit_data", params: { source_root: sourceTree.sourceRoot, split_root: sourceTree.splitRoot } });
+            if (stage === 2) {
+              const m = /"fact_id":"(ds-[0-9a-f]{12})@/.exec(contexts[contexts.length - 1] ?? "");
+              if (m === null) throw new Error("登记结果解析失败");
+              return ok({ type: "tool_call", tool: "atf_data_admission_request", params: { dataset_id: m[1] } });
+            }
+            return ok(tail.shift() ?? null);
+          },
+        } satisfies LlmProvider;
+      })(),
       approvalSurface: { stub: grantedStub },
     });
     expect(ran.ok).toBe(true);
