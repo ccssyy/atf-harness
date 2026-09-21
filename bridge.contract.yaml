@@ -242,8 +242,89 @@ methods:
 
   # ---------------- 工具方法面（R1 修订 2026-09-20：5 个——原「严格 4 个」owner 口径 #5 经 R1 立项
   #    扩为 5（owner 决议《ATF项目_Owner决议_R1立项_准入收进会话_20260920.md》sha 8b5458c0…）；
-  #    工具名即方法名，唯 atf_data_admission.request 因 provider 函数名限制经 executor 显式映射
-  #    自工具名 atf_data_admission_request；补登不 bump：轴一 contract_version 仍 1、轴二仍 2） ----------------
+  #    工具名即方法名，唯点号方法因 provider 函数名限制经 executor 显式映射自下划线工具名
+  #    （atf_data_admission_request／atf_preparation_propose／atf_style_cluster_execute）；
+  #    【K-Gap-2 接线批补登 2026-09-21】工具面 5→7：新增 atf_preparation.propose（§13.11，
+  #    纯读免审批）与 atf_style_cluster.execute（§13.12，写需审批），方法面 10→12（内核变更单
+  #    《ATF内核_变更单_K-Gap-2料门对齐批_20260921.md》；对齐基准＝内核 stdio-session-contract
+  #    §13.11/§13.12/§14）；补登不 bump：轴一 contract_version 仍 1、轴二仍 2（§14 裁定 5 同款口径） ----------------
+  atf_preparation.propose:         # K-Gap-2 补登（2026-09-21；内核冻结面实测 = kgap2 worktree a5fffae）
+    direction: ts_to_kernel
+    requires_approval: false       # 纯读：不写盘、不执行、锚不写（§13.11 纯读纪律）
+    params:
+      type: object
+      required: [dataset_id]
+      properties:
+        dataset_id: { type: string, note: 注册标识符（登记面 fact_id 的 dataset_id 段）；非空、不含路径分隔符与 @ }
+        pin: { type: string, required: false, note: 显式 pin；多 pin 未消歧 → dataset_not_registered（fail-closed） }
+    errors:                        # §13.11 错误闭集（连接保持）
+      - invalid_params             # dataset_id/pin 形态非法
+      - dataset_not_registered     # 未登记/多 pin 未消歧（纯读对未知数据集不猜测）
+    result:                        # canonical output（§13.11 返回面逐字段）
+      type: object
+      required: [ok, dataset_id, pin, fact_id, stage, cluster_material, explanation, human_summary]
+      properties:
+        ok: { const: true }
+        dataset_id: { type: string }
+        pin: { type: string }
+        fact_id: { type: string, note: '"<dataset_id>@<pin>"' }
+        stage: { enum: [cluster_confirmation, split_confirmation], note: 聚类确认/划分确认（按登记面聚类料现状判定） }
+        cluster_material: { enum: [skills_ready, absent] }
+        cluster_params_template: { type: object, required: false, note: 仅聚类阶段携带——六键能力闭集显式声明（无隐式缺省），取值以模板回显为单源 }
+        policy_template: { type: object, required: false, note: 仅划分阶段携带——DatasetSplitPolicy/v2 骨架（默认 训练:测试 = 8:2 可改；policy_id/seed 模板置 null 须显式给出） }
+        explanation: { type: object, note: 结构化事实性说明（策略语义/分层单位/比例/四维泄漏防护/聚类来源） }
+        human_summary: { type: object, note: 人读投影六字段冻结表（owner 裁定方案 A）：headline/sections/metrics/actions/pending_confirmations/notes；下一动作由 actions[] 首条 needs_decision=false 承载；禁 code/schema 名/digest/gate 名直出 }
+
+  atf_style_cluster.execute:       # K-Gap-2 补登（2026-09-21；写：确定性版式聚类＋落料＋留痕）
+    direction: ts_to_kernel
+    requires_approval: true        # 写动作：聚类产物落 registration 面＋journal 留痕（高危推进类）
+    params:
+      type: object
+      required: [dataset_id, cluster_params]
+      properties:
+        dataset_id: { type: string, note: 同 propose 口径 }
+        pin: { type: string, required: false }
+        cluster_params:
+          type: object
+          note: >-
+            聚类参数六键逐项显式声明（无隐式缺省）：algorithm_version/granularity/metric/
+            linkage/threshold/min_cluster_size；键集须与能力闭集完全一致（缺/多键皆拒），
+            值须逐字落内核闭集（bbox_layout_v1/page/cosine/average/auto_candidates/1）——
+            校验归内核（invalid_params），harness schema 只做键声明（§13.12 能力闭集）
+    errors:                        # §13.12 错误闭集（连接保持）
+      - invalid_params
+      - no_run_bound               # journal 留痕需要 run 语境（本方法不收 run_id）
+      - dataset_not_registered     # 未登记/refs 缺 source_root
+      - module_reason_passthrough  # 模块稳定原因码原样透出（source_symlink_forbidden /
+                                   # source_package_taxonomy_unexpected / data_one_sided_pair /
+                                   # style_cluster_page_limit / style_cluster_pages_required）
+    result:                        # canonical output（§13.12 返回面逐字段）
+      type: object
+      required: [ok, run_id, dataset_id, pin, fact_id, assignment_ref, cluster_digest, cluster_count, clusters, no_feature_count, page_count, source, human_summary]
+      properties:
+        ok: { const: true }
+        run_id: { type: string }
+        dataset_id: { type: string }
+        pin: { type: string }
+        fact_id: { type: string }
+        assignment_ref: { type: string, note: 登记面 style-cluster-assignment.json 引用 }
+        cluster_digest: { type: string, pattern: "^[0-9a-f]{64}$", note: 可复算（canonical_digest） }
+        cluster_count: { type: integer }
+        clusters:
+          type: array
+          note: 按簇 id 稳定序；代表样本取簇内最小 sample_id（确定性）
+          items:
+            type: object
+            required: [cluster_id, size, representative_sample_ref]
+            properties:
+              cluster_id: { type: string }
+              size: { type: integer }
+              representative_sample_ref: { type: string }
+        no_feature_count: { type: integer }
+        page_count: { type: integer }
+        source: { const: kernel, note: 产物来源恒为内核（不冒充 skills 料） }
+        human_summary: { type: object, note: 六字段冻结表（同 propose） }
+
   atf_admit_data:
     direction: ts_to_kernel
     requires_approval: true        # 写动作：数据准入（高危推进类，须账本预录）
@@ -376,11 +457,20 @@ methods:
       properties:
         dataset_id: { type: string, note: 取自 atf_admit_data 登记结果 fact_id（形如 <dataset_id>@<pin>）或事实索引登记事实；不接受文件路径 }
         pin: { type: string, required: false, note: 显式 pin；多 pin 登记且未显式 → dataset_not_registered（fail-closed） }
+        # 【K-Gap-2 扩展补登 2026-09-21（§13.10；补登不 bump）】可选确认态——经用户确认的
+        # 完整策略 payload 对象（不接受自由文本）；深度校验归内核（DatasetSplitPolicy/v1|v2、
+        # target_ratios 和为 1、style_cluster_assignment_ref 非空、可选 training_lanes 非空无
+        # 重复、unit 全覆盖），失败 → invalid_params。policy 取值优先级＝确认态 > 登记面
+        # refs.split_policy_ref（skills 建议）> 诚实拒绝（split_policy_missing）；
+        # harness 只透传，不实现优先级逻辑、禁静默补齐/静默换策略。
+        split_policy: { type: object, required: false, note: 经确认的划分策略完整 payload（骨架以 atf_preparation.propose 的 policy_template 为基准）；缺省＝按登记面 skills 建议划分，两者皆无 → split_policy_missing }
     errors:                        # 内核冻结面错误语义（error response，连接保持）
-      - invalid_params             # dataset_id/pin 形态非法（与登记面同口径）
+      - invalid_params             # dataset_id/pin 形态非法（与登记面同口径）；split_policy 校验失败同码
       - no_run_bound               # 会话未绑定 run
       - unknown_run                # run 不可解析
       - dataset_not_registered     # 未登记/多 pin 未显式/登记记录缺可解析源根（fail-closed）
+      - split_policy_missing       # 【K-Gap-2 补登】无确认态且无 skills 建议（诚实拒绝，不透传不猜）
+      - split_recompute_cluster_required  # 【K-Gap-2 补登】既无聚类料也不选免聚类策略（诚实停止）
       - module_reason_passthrough  # 模块稳定原因码原样透出（如 source_workspace_overlap_forbidden）
     result:                        # canonical output（闭集＝内核返回面逐字段）
       type: object
@@ -407,6 +497,12 @@ methods:
               verdict: { type: string }
               reason_codes: { type: array, items: { type: string } }
         requests: { type: array, required: false, note: 仅 waiting_on_human 携带（标注冲突裁决请求集） }
+        # 【K-Gap-2 返回扩展补登 2026-09-21（§13.10；补登不 bump）】
+        policy: { type: object, required: false, note: '{source: confirmed|suggested|null, digest, deviation?}——确认态相对建议的偏离 diff＋可复算 digest' }
+        style_cluster_source: { type: string, required: false, note: skills | kernel | null（聚类料来源，不冒充） }
+        allocation_unit_source: { type: string, required: false, note: provided_split_manifest | derived_from_source（单元来源显式标注） }
+        partition_counts: { type: object, required: false, note: 分区计数（泄漏审计产物投影） }
+        human_summary: { type: object, required: false, note: 六字段冻结表（§13.11 同款；说明划分方式/泄漏防护/数据来源/闸门结果；下一动作由 actions[] 首条 needs_decision=false 承载） }
 
   # ---------------- 账本方法面（ADR-07 账本轨；本阶段 mock 承载；键模型 v2 见头部登记） ----------------
   ledger_query:                    # 契约 v2（变更 #4）：scope_ref(+operation_id) 查询，审批链形态

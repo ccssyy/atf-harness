@@ -56,27 +56,33 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/BRIDGE_CONTRACT_VERSION/);
   });
 
-  it("运行时方法面：握手 + 会话上下文（atf.bind_run）+ 5 工具（R1 增 atf_data_admission.request）+ 2 账本 + ledger_record（K4 补登）+ atf_flow_anchor（K3 补登）", () => {
+  it("运行时方法面：握手 + 会话上下文（atf.bind_run）+ 7 工具（R1 增准入申请；K-Gap-2 增 propose/cluster execute）+ 2 账本 + ledger_record（K4 补登）+ atf_flow_anchor（K3 补登）", () => {
     const methods = methodKeys();
     // 握手 + 会话上下文 + 工具 + 账本运行时方法（补登 B1）
-    for (const required of ["atf.version", "atf.bind_run", "atf_admit_data", "atf_gate", "atf_fact_scan", "atf_workspace_status", "atf_data_admission.request", "ledger_query", "ledger_consume"]) {
+    for (const required of ["atf.version", "atf.bind_run", "atf_admit_data", "atf_gate", "atf_fact_scan", "atf_workspace_status", "atf_data_admission.request", "atf_preparation.propose", "atf_style_cluster.execute", "ledger_query", "ledger_consume"]) {
       expect(methods, `契约 methods 缺少 ${required}`).toContain(required);
     }
-    // 会话方法族恰 2 个（atf. 前缀点号族；atf_data_admission.request 属工具面、以 atf_ 前缀计；
-    // atf_flow_anchor 为下划线命名纯读出口，不属点号族）
+    // 会话方法族恰 2 个（atf. 前缀点号族；atf_data_admission.request / atf_preparation.propose /
+    // atf_style_cluster.execute 属工具面、以 atf_ 前缀计；atf_flow_anchor 为下划线命名纯读出口）
     const sessionFamily = methods.filter((name) => name.startsWith("atf."));
     expect(sessionFamily).toEqual(["atf.version", "atf.bind_run"]);
-    // 工具面恰 5 个（R1 修订 2026-09-20：原「严格 4 工具」owner 口径 #5 经 R1 立项扩为 5，
-    // owner 决议 sha 8b5458c0…；atf.bind_run 不进工具面；atf_flow_anchor 不计入工具面）
+    // 工具面恰 7 个（K-Gap-2 接线批 2026-09-21：方法面 10→12，内核变更单料-门对齐批；
+    // atf.bind_run 不进工具面；atf_flow_anchor 不计入工具面）
     const tools = methods.filter((name) => name.startsWith("atf_") && name !== "atf_flow_anchor");
-    expect(tools).toHaveLength(5);
+    expect(tools).toHaveLength(7);
     expect(tools).toContain("atf_data_admission.request");
+    expect(tools).toContain("atf_preparation.propose");
+    expect(tools).toContain("atf_style_cluster.execute");
     // ledger_record 仍在契约中登记；【K4 补登 2026-09-16】为运行时方法面（内核 §13.8，补登不 bump）
     expect(methods).toContain("ledger_record");
     expect(contract).toMatch(/ledger_record:.*# 【K4 补登 2026-09-16】运行时方法面（内核 §13.8；补登不 bump）/);
     // 【K3 补登 2026-09-17】atf_flow_anchor 为运行时方法面（内核 §13.9，补登不 bump）
     expect(methods).toContain("atf_flow_anchor");
     expect(contract).toMatch(/atf_flow_anchor:.*# 【K3 补登 2026-09-17】运行时方法面（内核 §13\.9；补登不 bump）/);
+    // 【K-Gap-2 补登 2026-09-21】方法面 10→12（内核 §13.11/§13.12；补登不 bump 双轴）
+    expect(contract).toMatch(/K-Gap-2 接线批补登 2026-09-21/);
+    expect(contract).toMatch(/§13\.11/);
+    expect(contract).toMatch(/§13\.12/);
   });
 
   it("补登登记：可选 run_id（显式优先于会话绑定）/ 错误码 no_run_bound+unknown_run / 留痕 event session/run-bound", () => {

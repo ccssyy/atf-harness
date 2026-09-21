@@ -31,7 +31,8 @@ export class HistoryFolder {
   ) {}
 
   /** onEvent 入口：history 缓冲不直出；live 前先落摘要行（每批恰一次）。
-   *  F6（2026-09-21）：detailLines 提供事件多行附加渲染（状态面概览人读行），主行后接续输出。 */
+   *  detailLines 提供事件多行附加渲染（F6 状态面概览行／K-Gap-2 human_summary 六段版式），
+   *  主行后接续输出（rebase 并集 2026-09-21）。 */
   public handle(
     event: SessionEvent,
     origin: ProjectionOrigin,

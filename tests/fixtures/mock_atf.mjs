@@ -342,6 +342,8 @@ const toolGate = (params) => {
 // （与内核 fail-closed 同口径：本仿真要求先经 atf_admit_data 登记）。
 const admissionStatus = findOpt("admission-status") ?? "adjudicated";
 const admissionReason = findOpt("admission-reason") ?? "";
+// K-Gap-2 接线批（2026-09-21）：split_policy 新语义旗标（缺省关——re-pin 前保既有用例零回归）
+const splitPolicyEnabled = flags.has("--kgap2-split-policy");
 const isSafeComponent = (value) => typeof value === "string" && value !== "" && !/[\\/]/.test(value) && !value.includes("@");
 const toolDataAdmissionRequest = (params) => {
   const datasetId = params.dataset_id;
@@ -367,6 +369,50 @@ const toolDataAdmissionRequest = (params) => {
       split_manifest_missing: `split_root 下缺 global_assignment.csv 或 global_plan.json（内核 _read_assignments 强制清单）: ${String(datasetId)}`,
     };
     return { error: { code: admissionReason, message: messages[admissionReason] ?? `业务阻断（仿真注入）: ${admissionReason}` } };
+  }
+  // K-Gap-2 接线批（2026-09-21）：split_policy 确认态仿真（§13.10 扩展）——旗标门控
+  // （--kgap2-split-policy）。会话侧校验/优先级/拒绝码同内核口径；深度 schema 校验归
+  // 内核（本仿真镜像其加严面）；harness 只透传，禁静默补齐/静默换策略。
+  let policySource;
+  let policyPayload;
+  if (splitPolicyEnabled) {
+  const sp = params.split_policy;
+  policyPayload = sp;
+  let effectivePolicy = null;
+  if (sp !== undefined) {
+    if (typeof sp !== "object" || sp === null || Array.isArray(sp)) {
+      return { error: { code: "invalid_params", message: "params.split_policy 必须是经确认的完整策略 payload 对象,不接受自由文本" } };
+    }
+    if (sp.style_cluster_assignment_ref !== undefined && (typeof sp.style_cluster_assignment_ref !== "string" || sp.style_cluster_assignment_ref === "")) {
+      return { error: { code: "invalid_params", message: "params.split_policy 的 style_cluster_assignment_ref 必须是非空字符串" } };
+    }
+    if (sp.training_lanes !== undefined) {
+      const lanes = sp.training_lanes;
+      if (!Array.isArray(lanes) || lanes.length === 0 || !lanes.every((l) => typeof l === "string" && l !== "") || new Set(lanes).size !== lanes.length) {
+        return { error: { code: "invalid_params", message: "params.split_policy 的 training_lanes 必须是非空、无重复的字符串数组" } };
+      }
+    }
+    if (sp.target_ratios !== undefined) {
+      const ratioValues = Object.values(sp.target_ratios);
+      if (typeof sp.target_ratios !== "object" || sp.target_ratios === null || ratioValues.length === 0 || ratioValues.some((v) => typeof v !== "number" || !(v > 0)) || Math.abs(ratioValues.reduce((a, b) => a + b, 0) - 1) > 1e-9) {
+        return { error: { code: "invalid_params", message: "params.split_policy 的 target_ratios 须为正且总和为 1" } };
+      }
+    }
+    effectivePolicy = sp;
+  } else if ((fact.refs?.split_policy_ref ?? undefined) === undefined) {
+    // 确认态与 skills 建议皆无 → 诚实拒绝（不透传、不猜、不静默补齐）
+    return { error: { code: "split_policy_missing", message: `缺经确认的划分策略（确认态与登记面 skills 建议均无）: ${String(datasetId)}` } };
+  } else {
+    effectivePolicy = { split_strategy: "cluster_content_family_seeded", auto_style_cluster: false };
+  }
+  if (
+    (fact.refs?.style_cluster_assignment_ref ?? undefined) === undefined &&
+    effectivePolicy.auto_style_cluster !== true &&
+    effectivePolicy.split_strategy === "cluster_content_family_seeded"
+  ) {
+    return { error: { code: "split_recompute_cluster_required", message: `既无版式聚类产物亦未选择免聚类策略（聚类确认点被跳过）: ${String(datasetId)}` } };
+  }
+  policySource = sp !== undefined ? "confirmed" : "suggested";
   }
   const pin = fact.fact_id.split("@")[1] ?? "";
   const summaryRef = `runs/${resolved.runId}/l1/${fact.fact_id}/source-backed-admission-summary.json`;
@@ -398,7 +444,148 @@ const toolDataAdmissionRequest = (params) => {
       },
     ];
   }
+  if (splitPolicyEnabled) {
+    // §13.10 K-Gap-2 返回扩展：双层报告（machine＋human_summary 六字段冻结表）
+    result.policy = {
+      source: policySource,
+      digest: sha256Hex(stableStringify({ dataset_id: String(datasetId), pin, policy: policyPayload ?? null })),
+    };
+    result.style_cluster_source = (fact.refs?.style_cluster_assignment_ref ?? undefined) !== undefined ? "kernel" : null;
+    result.allocation_unit_source = "provided_split_manifest";
+    result.human_summary = kgap2HumanSummary(
+      `数据集 ${String(datasetId)} 已完成划分与准入检查，四项闸门全部通过。`,
+      "调用 atf_gate 逐项推进 G1–G4 登记复核。",
+      [],
+    );
+  }
   return result;
+};
+
+// K-Gap-2 接线批（2026-09-21）：两新方法仿真（方法面 10→12；内核 §13.11/§13.12 对齐）。
+// human_summary 六字段冻结表（owner 裁定方案 A）：headline/sections/metrics/actions/
+// pending_confirmations/notes；下一动作由 actions[] 首条 needs_decision=false 承载；
+// 人读文案经闭集映射，禁 code/schema 名/digest/gate 名直出。
+const kgap2HumanSummary = (headline, nextAction, pending) => ({
+  headline,
+  sections: [],
+  metrics: [],
+  actions: [{ title: "下一动作", detail: nextAction, needs_decision: false }],
+  pending_confirmations: pending,
+  notes: [],
+});
+
+// 聚类参数能力闭集（内核 session/tools.py 逐字镜像；键集与取值双闭）
+const KGAP2_CLUSTER_PARAMS_CLOSED = {
+  algorithm_version: ["bbox_layout_v1"],
+  granularity: ["page"],
+  metric: ["cosine"],
+  linkage: ["average"],
+  threshold: ["auto_candidates"],
+  min_cluster_size: ["1"],
+};
+
+const toolPreparationPropose = (params) => {
+  const datasetId = params.dataset_id;
+  if (!isSafeComponent(datasetId)) {
+    return { error: { code: "invalid_params", message: "params.dataset_id 必须不含路径分隔符与 @ 的非空字符串" } };
+  }
+  if (params.pin !== undefined && !isSafeComponent(params.pin)) {
+    return { error: { code: "invalid_params", message: "params.pin 必须是不含路径分隔符与 @ 的非空字符串" } };
+  }
+  const matches = admittedFacts.filter((fact) => fact.fact_id.startsWith(`${String(datasetId)}@`));
+  if (matches.length === 0) {
+    return { error: { code: "dataset_not_registered", message: `数据集未登记（须先 atf_admit_data）: ${String(datasetId)}` } };
+  }
+  const fact = matches[0];
+  const clusterReady = (fact.refs?.style_cluster_assignment_ref ?? undefined) !== undefined;
+  const result = {
+    ok: true,
+    dataset_id: String(datasetId),
+    pin: fact.fact_id.split("@")[1] ?? "",
+    fact_id: fact.fact_id,
+    stage: clusterReady ? "split_confirmation" : "cluster_confirmation",
+    cluster_material: clusterReady ? "skills_ready" : "absent",
+  };
+  if (!clusterReady) {
+    result.cluster_params_template = Object.fromEntries(Object.entries(KGAP2_CLUSTER_PARAMS_CLOSED).map(([k, v]) => [k, v[0]]));
+  } else {
+    result.policy_template = {
+      schema_version: "DatasetSplitPolicy/v2",
+      policy_id: null,
+      target_ratios: { train: 0.8, test: 0.2 },
+      seed: null,
+      assignment_mode: "recompute_with_policy",
+      split_strategy: "cluster_content_family_seeded",
+      auto_style_cluster: false,
+    };
+  }
+  result.explanation = clusterReady
+    ? { strategy_semantics: "训练集/测试集按已确认策略从全体样本重新分配，以不可拆分单元为原子。", ratio: "默认建议 训练:测试 = 8:2；比例在确认点可改。" }
+    : { cluster_semantics: "版式聚类把版面相似的样本页归为一类，划分时同类样本尽量同分区；只看框几何分布，不做模型推理。" };
+  result.human_summary = clusterReady
+    ? kgap2HumanSummary(
+        `数据集 ${fact.fact_id} 的版式聚类料已就位，可以进入划分确认。`,
+        "确认划分策略后调用 atf_data_admission_request（可携带修改后的划分策略）。",
+        [{ title: "确认划分方式", detail: "直接采用默认 训练:测试 = 8:2，或给出修改后的比例", options: ["默认 8:2", "自定义比例"] }],
+      )
+    : kgap2HumanSummary(
+        `数据集 ${fact.fact_id} 尚无版式聚类料，需要先完成聚类确认。`,
+        "确认聚类参数后调用 atf_style_cluster_execute 执行聚类并落料。",
+        [{ title: "确认聚类参数", detail: "当前内核提供唯一一组确定性参数，确认后按该参数执行" }],
+    );
+  return result;
+};
+
+const toolStyleClusterExecute = (params) => {
+  const datasetId = params.dataset_id;
+  if (!isSafeComponent(datasetId)) {
+    return { error: { code: "invalid_params", message: "params.dataset_id 必须不含路径分隔符与 @ 的非空字符串" } };
+  }
+  if (params.pin !== undefined && !isSafeComponent(params.pin)) {
+    return { error: { code: "invalid_params", message: "params.pin 必须是不含路径分隔符与 @ 的非空字符串" } };
+  }
+  const cp = params.cluster_params;
+  if (typeof cp !== "object" || cp === null || Array.isArray(cp)) {
+    return { error: { code: "invalid_params", message: "params.cluster_params 必须是逐项显式声明的参数对象（无隐式缺省）" } };
+  }
+  const closedKeys = Object.keys(KGAP2_CLUSTER_PARAMS_CLOSED);
+  for (const key of closedKeys) {
+    if (typeof cp[key] !== "string" || !KGAP2_CLUSTER_PARAMS_CLOSED[key].includes(cp[key])) {
+      return { error: { code: "invalid_params", message: `params.cluster_params.${key} 越出能力闭集（取值以 propose 模板回显为准）` } };
+    }
+  }
+  if (Object.keys(cp).length !== closedKeys.length) {
+    return { error: { code: "invalid_params", message: "params.cluster_params 键集必须与能力闭集完全一致（缺字段或多字段皆拒）" } };
+  }
+  const resolved = resolveRun({});
+  if (resolved.error !== undefined) return resolved;
+  const matches = admittedFacts.filter((fact) => fact.fact_id.startsWith(`${String(datasetId)}@`));
+  if (matches.length === 0) {
+    return { error: { code: "dataset_not_registered", message: `数据集未登记（须先 atf_admit_data）: ${String(datasetId)}` } };
+  }
+  const fact = matches[0];
+  const clusterDigest = sha256Hex(stableStringify({ dataset_id: String(datasetId), params: cp }));
+  const assignmentRef = `style-cluster-assignment:${clusterDigest.slice(0, 12)}`;
+  fact.refs = { ...(fact.refs ?? {}), style_cluster_assignment_ref: assignmentRef, style_cluster_digest: clusterDigest };
+  return {
+    ok: true,
+    run_id: resolved.runId,
+    dataset_id: String(datasetId),
+    pin: fact.fact_id.split("@")[1] ?? "",
+    fact_id: fact.fact_id,
+    assignment_ref: assignmentRef,
+    cluster_digest: clusterDigest,
+    cluster_count: 1,
+    clusters: [{ cluster_id: "cluster-001", size: 1, representative_sample_ref: "pair-1" }],
+    no_feature_count: 0,
+    page_count: 1,
+    source: "kernel",
+    human_summary: kgap2HumanSummary(
+      `数据集 ${String(datasetId)} 版式聚类完成：共聚出 1 类版式，覆盖 1 张样本页。`,
+      "复查 atf_preparation_propose 进入划分确认阶段。",
+      [],
+    ),
+  };
 };
 
 const toolFactScan = (params) => {
@@ -481,6 +668,8 @@ const METHODS = {
   atf_gate: toolGate,
   atf_fact_scan: toolFactScan,
   atf_workspace_status: toolWorkspaceStatus,
+  "atf_preparation.propose": toolPreparationPropose,
+  "atf_style_cluster.execute": toolStyleClusterExecute,
   atf_flow_anchor: flowAnchor,
 };
 

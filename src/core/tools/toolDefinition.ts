@@ -87,8 +87,8 @@ export const INTEGRITY_GATE_IDS: readonly string[] = [
   "evaluation-evidence-valid",
 ];
 
-/** 工具面 5 个（R1 修订 2026-09-20：原「严格 4 个」owner 口径 #5 经 R1 立项扩为 5——owner 决议
- *  sha 8b5458c0…；新增 atf_data_admission_request 经 executor 显式映射到 atf_data_admission.request。
+/** 工具面 7 个（K-Gap-2 接线批 2026-09-21：方法面 10→12——新增 atf_preparation_propose
+ *  （纯读免审批）与 atf_style_cluster_execute（写需审批）；契约登记段同步补登不 bump）。
  *  契约 v2（2026-09-13）：证据面扫描工具改名 atf_fact_scan（数组 facts）、
  *  atf_gate 增补 warn 与附加字段、atf_admit_data source → source_ref、
  *  atf_workspace_status 增补 scope_ref。 */
@@ -174,6 +174,17 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
           optional: true,
           description: "显式 pin（fact_id 的 @ 后段）；同数据集多 pin 登记时必须显式给出，缺省取唯一登记 pin",
         },
+        // K-Gap-2 接线批（2026-09-21）：可选 split_policy 确认态——完整 payload 透传，
+        // 深度校验归内核（DatasetSplitPolicy/v1|v2、target_ratios 和为 1、
+        // style_cluster_assignment_ref 非空、unit 全覆盖）。policy 取值优先级＝确认态 >
+        // 登记面 skills 建议 > 诚实拒绝（split_policy_missing），harness 不实现优先级逻辑。
+        split_policy: {
+          type: "object",
+          optional: true,
+          strict: false,
+          description:
+            "经用户确认的完整划分策略 payload 对象（骨架以 atf_preparation_propose 返回的 policy_template 为基准，默认 训练:测试 = 8:2 可改；不接受自由文本）。缺省＝按登记面 skills 建议划分；两者皆无时内核拒绝（split_policy_missing）。用户对划分方式的要求必须落为本字段（Agent 译 payload），勿省略用户已确认的修改",
+        },
       },
     },
     requires_approval: true,
@@ -202,6 +213,117 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
           },
         },
         requests: { type: "array", optional: true },
+        // K-Gap-2 补登：返回体双层（machine＋human_summary 六键闭集，见 humanSummary 模块）
+        human_summary: { type: "object", optional: true, strict: false },
+        policy: { type: "object", optional: true, strict: false },
+        style_cluster_source: { enum: ["skills", "kernel", null], optional: true },
+        allocation_unit_source: { type: "string", optional: true },
+        partition_counts: { type: "object", optional: true, strict: false },
+      },
+    },
+  },
+  {
+    name: "atf_preparation_propose",
+    // K-Gap-2 接线批（2026-09-21）：方法面 10→12 之 S1。模型面工具名下划线（R1 D-1 同例），
+    // RPC 经 executor 显式映射到 atf_preparation.propose。纯读：不写盘、不执行、锚不写。
+    description:
+      "数据准备阶段判定（纯读，免审批）：返回当前阶段（聚类确认/划分确认）、阶段模板（聚类参数模板或划分策略模板，默认 训练:测试 = 8:2）、事实性说明与人读报告。聚类阶段缺料时→确认参数后调用 atf_style_cluster_execute 落料；划分阶段→向用户确认划分方式（用户要求译为 split_policy payload 交 atf_data_admission_request）。不写盘、不执行任何动作。",
+    parameters: {
+      type: "object",
+      required: ["dataset_id"],
+      properties: {
+        dataset_id: {
+          type: "string",
+          description: "注册标识符：取自 atf_admit_data 登记结果 fact_id 的 dataset_id 段；非文件路径、不含 @",
+        },
+        pin: {
+          type: "string",
+          optional: true,
+          description: "显式 pin；同数据集多 pin 登记时必须显式给出",
+        },
+      },
+    },
+    requires_approval: false,
+    canonical_output: {
+      type: "object",
+      required: ["ok", "dataset_id", "pin", "fact_id", "stage", "cluster_material", "explanation", "human_summary"],
+      properties: {
+        ok: { const: true },
+        dataset_id: { type: "string" },
+        pin: { type: "string" },
+        fact_id: { type: "string" },
+        stage: { enum: ["cluster_confirmation", "split_confirmation"] },
+        cluster_material: { enum: ["skills_ready", "absent"] },
+        cluster_params_template: { type: "object", optional: true, strict: false },
+        policy_template: { type: "object", optional: true, strict: false },
+        explanation: { type: "object", strict: false, },
+        human_summary: { type: "object", strict: false, },
+      },
+    },
+  },
+  {
+    name: "atf_style_cluster_execute",
+    // K-Gap-2 接线批（2026-09-21）：方法面 10→12 之 S2。写动作：确定性版式聚类→落料→汇报＋留痕。
+    description:
+      "执行版式聚类（写动作，须审批）：按逐项显式声明的聚类参数执行确定性聚类并把产物落登记面（style-cluster-assignment.json），返回簇清单、聚类摘要与人读报告。cluster_params 六项逐项显式声明（无隐式缺省），合法取值以 atf_preparation_propose 返回的 cluster_params_template 为准；执行后可复查 propose 进入划分确认阶段。内核只做确定性版式聚类，不读图片内容、不做模型推理。",
+    parameters: {
+      type: "object",
+      required: ["dataset_id", "cluster_params"],
+      properties: {
+        dataset_id: {
+          type: "string",
+          description: "注册标识符：取自 atf_admit_data 登记结果 fact_id 的 dataset_id 段；非文件路径、不含 @",
+        },
+        pin: {
+          type: "string",
+          optional: true,
+          description: "显式 pin；同数据集多 pin 登记时必须显式给出",
+        },
+        cluster_params: {
+          type: "object",
+          required: ["algorithm_version", "granularity", "metric", "linkage", "threshold", "min_cluster_size"],
+          properties: {
+            algorithm_version: { type: "string", description: "算法版本（取值以 propose 模板回显为准，勿自造）" },
+            granularity: { type: "string", description: "粒度（取值以 propose 模板回显为准）" },
+            metric: { type: "string", description: "度量（取值以 propose 模板回显为准）" },
+            linkage: { type: "string", description: "合并方式（取值以 propose 模板回显为准）" },
+            threshold: { type: "string", description: "阈值（取值以 propose 模板回显为准）" },
+            min_cluster_size: { type: "string", description: "最小簇（取值以 propose 模板回显为准）" },
+          },
+          description:
+            "聚类参数声明（六键逐项显式，无隐式缺省；键集须完全一致，多键少键皆拒）。各键合法取值以 atf_preparation_propose 回显的 cluster_params_template 为准（单源），由内核闭集校验（越出闭集 → invalid_params）",
+        },
+      },
+    },
+    requires_approval: true,
+    canonical_output: {
+      type: "object",
+      required: ["ok", "run_id", "dataset_id", "pin", "fact_id", "assignment_ref", "cluster_digest", "cluster_count", "clusters", "no_feature_count", "page_count", "source", "human_summary"],
+      properties: {
+        ok: { const: true },
+        run_id: { type: "string" },
+        dataset_id: { type: "string" },
+        pin: { type: "string" },
+        fact_id: { type: "string" },
+        assignment_ref: { type: "string" },
+        cluster_digest: { type: "string", pattern: HEX64 },
+        cluster_count: { type: "integer" },
+        clusters: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["cluster_id", "size", "representative_sample_ref"],
+            properties: {
+              cluster_id: { type: "string" },
+              size: { type: "integer" },
+              representative_sample_ref: { type: "string" },
+            },
+          },
+        },
+        no_feature_count: { type: "integer" },
+        page_count: { type: "integer" },
+        source: { const: "kernel" },
+        human_summary: { type: "object", strict: false },
       },
     },
   },

@@ -16,10 +16,17 @@ const paramString = (params: unknown, key: string): string => {
   return "（未提供）";
 };
 
-/** D-4 文案映射（现仅 R1 新工具；存量 4 工具的产品语言改造归 L1c/R3，不在本批）。 */
+/** D-4 文案映射（现仅 R1/K-Gap-2 新工具；存量工具的产品语言改造归 L1c/R3，不在本批）。
+ *  K-Gap-2（2026-09-21）：准入申请文案在携带确认态 split_policy 时显式标注（放行已定
+ *  动作——弹窗呈现的即用户已确认的策略，含修改）；聚类执行新增人读文案。 */
 const APPROVAL_COPY: Readonly<Record<string, ApprovalCopyBuilder>> = {
-  atf_data_admission_request: (params) =>
-    `数据准入申请：对数据集 ${paramString(params, "dataset_id")} 执行真实数据校验并落盘判定结果（可能因标注冲突需要人工裁决）`,
+  atf_data_admission_request: (params) => {
+    const base = `数据准入申请：对数据集 ${paramString(params, "dataset_id")} 执行真实数据校验并落盘判定结果（可能因标注冲突需要人工裁决）`;
+    const policy = (params as { split_policy?: unknown } | null)?.split_policy;
+    return typeof policy === "object" && policy !== null ? `${base}；划分方式按你已确认的策略执行（可在放行前继续修改）` : base;
+  },
+  atf_style_cluster_execute: (params) =>
+    `版式聚类执行：对数据集 ${paramString(params, "dataset_id")} 按你确认的聚类参数执行确定性聚类并落盘产物（结果将用于后续数据划分的版式分层）`,
 };
 
 export const approvalCopyFor = (input: { tool: string; params: unknown }): string | null => {

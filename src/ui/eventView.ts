@@ -14,6 +14,7 @@
 import type { SessionEvent } from "../core/session/index.js";
 import type { ProjectionOrigin } from "../core/index.js";
 import { type ToolResultPayload } from "../core/run/index.js";
+import { engineeringLeak, humanSummaryLines, isHumanSummaryShape } from "./humanSummary.js";
 
 const oneLine = (text: string): string => text.replace(/\s+/g, " ").trim();
 
@@ -56,6 +57,12 @@ export const formatEventLine = (event: SessionEvent, origin: ProjectionOrigin): 
         if (result.tool === "atf_workspace_status") {
           return `${prefix}ok=true atf_workspace_status ${oneLine(statusHeadline(result.result))}${noteText}`;
         }
+        // K-Gap-2（2026-09-21）：携带六键 human_summary 的成功结果——机器行只留 headline 摘要，
+        // 六段人读版式走 formatEventDetailLines 附加行（直渲染内核人读层，不拼工程语言）。
+        const human = (result.result as { human_summary?: unknown } | null | undefined)?.human_summary;
+        if (isHumanSummaryShape(human)) {
+          return `${prefix}ok=true ${result.tool} ${oneLine(human.headline)}${noteText}`;
+        }
         return `${prefix}ok=true ${result.tool} 结果=${detailOf(result.result)}${noteText}`;
       }
       const blockReason = result.block?.reason;
@@ -83,12 +90,9 @@ export const formatEventLine = (event: SessionEvent, origin: ProjectionOrigin): 
 const PLAIN_OBJECT = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** 保守工程语泄漏检测（与接线批 engineeringLeak 同判据；接线批合入后合并为单一函数——登记合并点）：
- *  64 位 hex digest／`X/v数字` schema 名／snake_case 工程码。 */
-const ENGINEERING_LEAK = (line: string): boolean =>
-  /\b[0-9a-f]{64}\b/.test(line) || /\b[A-Z][A-Za-z]+\/v\d+\b/.test(line) || /\b[a-z]+(?:_[a-z0-9]+)+\b/.test(line);
 
-const safeLine = (line: string): string => (ENGINEERING_LEAK(line) ? "（该行含工程信息，已收起）" : line);
+/** 保守工程语泄漏过滤——判据即 humanSummary.engineeringLeak（本合并落地单一函数，消除双实现）。 */
+const safeLine = (line: string): string => (engineeringLeak(line) ? "（该行含工程信息，已收起）" : line);
 
 /** 状态面机器行标题（已登记 N 批；N 取 admitted_count，缺省不给数）。 */
 export const statusHeadline = (result: unknown): string => {
@@ -136,10 +140,19 @@ export const statusOverviewLines = (result: unknown): string[] => {
  *  每行带同事件 id 前缀（smoke:l1ui 的 id 集合断言保持全等）。
  *  机制说明：与接线批（fdf3555）formatEventDetailLines 同款通道，main 侧由本批引入；
  *  接线批 rebase 时两版合并（其版含 humanSummary 六键嗅探，本版限状态面）。 */
+/** 人读投影多行附加渲染（并集版，K-Gap-2 接线批 rebase 合并 2026-09-21）：
+ *  - atf_workspace_status → 状态面概览人读行（statusOverviewLines，禁直出工程语）；
+ *  - 其余工具 ok 且携带六键 human_summary → 六段人读版式（humanSummaryLines，主叙述过负向校验）。
+ *  每行带同事件 id 前缀（smoke:l1ui 的 id 集合断言保持全等）。 */
 export const formatEventDetailLines = (event: SessionEvent): string[] => {
   if (event.type !== "tool/result") return [];
   const result = event.payload as ToolResultPayload;
-  if (!result.ok || result.tool !== "atf_workspace_status") return [];
+  if (!result.ok) return [];
   const idPrefix = `#${String(event.id).padStart(4, "0")} `;
-  return statusOverviewLines(result.result).map((line) => `${idPrefix}${line}`);
+  if (result.tool === "atf_workspace_status") {
+    return statusOverviewLines(result.result).map((line) => `${idPrefix}${line}`);
+  }
+  const human = (result.result as { human_summary?: unknown } | null | undefined)?.human_summary;
+  if (!isHumanSummaryShape(human)) return [];
+  return humanSummaryLines(human).map((line) => `${idPrefix}${line}`);
 };
