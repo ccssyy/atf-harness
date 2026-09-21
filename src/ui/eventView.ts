@@ -47,11 +47,14 @@ export const formatEventLine = (event: SessionEvent, origin: ProjectionOrigin): 
       return `${prefix}${payloadStr(payload, "tool")} 参数=${detailOf((payload as { params?: unknown } | undefined)?.params)}`;
     case "tool/result": {
       const result = payload as ToolResultPayload;
+      // D-f：回填附注（nudge 无进展指引／guidance 阻断码文案）随行展示——展示层零新增来源
+      const note = (payload as { nudge?: unknown; guidance?: unknown }).nudge ?? (payload as { guidance?: unknown }).guidance;
+      const noteText = typeof note === "string" ? ` 指引=${oneLine(note)}` : "";
       if (result.ok) {
-        return `${prefix}ok=true ${result.tool} 结果=${detailOf(result.result)}`;
+        return `${prefix}ok=true ${result.tool} 结果=${detailOf(result.result)}${noteText}`;
       }
       const blockReason = result.block?.reason;
-      return `${prefix}ok=false ${result.tool} 原因=${result.reason}${blockReason !== undefined ? `(${blockReason})` : ""}${result.reason === "failed" && result.detail !== undefined ? ` 明细=${detailOf(result.detail)}` : ""}`;
+      return `${prefix}ok=false ${result.tool} 原因=${result.reason}${blockReason !== undefined ? `(${blockReason})` : ""}${result.reason === "failed" && result.detail !== undefined ? ` 明细=${detailOf(result.detail)}` : ""}${noteText}`;
     }
     case "approval/request":
       return `${prefix}session=${payloadStr(payload, "approval_session_id")} attempt=${payloadStr(payload, "attempt")} tool=${payloadStr(payload, "tool")}${payloadStr(payload, "supersedes") !== "" ? " supersedes" : ""}`;

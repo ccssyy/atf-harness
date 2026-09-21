@@ -112,8 +112,8 @@ describe("D-a E1：对端业务拒绝回流（模型面非终局）", () => {
     const summary = report.outcome.summary;
     expect(summary.reason).toBe("reject_loop_exhausted");
     expect(summary.limit).toBe(3);
-    expect(summary.rejected.length).toBe(3);
-    for (const call of summary.rejected) {
+    expect(summary.rejected?.length ?? 0).toBe(3);
+    for (const call of summary.rejected ?? []) {
       expect(call.tool).toBe("atf_admit_data");
       expect(call.reason).toBe("invalid_params");
       expect(call.params_digest).toMatch(/^[0-9a-f]{64}$/);
@@ -186,7 +186,7 @@ describe("D-a E1：对端业务拒绝回流（模型面非终局）", () => {
     expect(report.outcome.summary.hint.gate_ids).toBeDefined();
     expect(report.outcome.summary.hint.gate_ids?.some((id) => id.startsWith("G1"))).toBe(true);
     expect(report.outcome.summary.hint.gate_ids?.filter((id) => id.includes("valid")).length).toBe(7);
-    for (const call of report.outcome.summary.rejected) {
+    for (const call of report.outcome.summary.rejected ?? []) {
       expect(call.reason).toBe("unknown_gate");
     }
   });
