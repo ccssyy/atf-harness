@@ -146,7 +146,7 @@ describe("D-a E2：入参违规回流（R-1 锚定入参点位）", () => {
       runsRoot: runsRootOf(),
       mockCommand: ["node", mockPath],
       modelProvider: modelStub([
-        { type: "tool_call", tool: "atf_admit_data", params: { source_ref: "somewhere" } },
+        { type: "tool_call", tool: "atf_admit_data", params: { evil_param: "somewhere" } },
         { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-da-e2" } },
         { type: "final_answer", text: "done" },
       ], contexts),
@@ -226,8 +226,10 @@ describe("D-b：dataset_id 描述层约束存在性", () => {
     const visible = ToolRegistry.createDefault().modelVisible();
     const admit = visible.find((tool) => tool.name === "atf_admit_data");
     expect(admit).toBeDefined();
+    // 双形态补丁后：description 为双形态口径（自动形态推荐＋显式形态口径并存）
     expect(admit?.description).toContain("注册标识符");
-    expect(admit?.description).toContain("不是文件路径");
+    expect(admit?.description).toContain("非文件路径");
+    expect(admit?.description).toContain("自动形态");
     const datasetId = admit?.parameters.properties?.dataset_id;
     expect(datasetId?.description).toContain("非文件路径");
     expect(datasetId?.type).toBe("string");

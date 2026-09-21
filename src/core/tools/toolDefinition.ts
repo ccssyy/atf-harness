@@ -66,18 +66,49 @@ const HEX64 = "^[0-9a-f]{64}$";
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "atf_admit_data",
+    // 登记面双形态补丁（2026-09-21，对齐内核件B v0.7.2b0 实测面 main 61631e6；门 1 全案放行）：
+    // 显式 {dataset_id, source_ref?, pin?}＝引用式登记（不可供准入定位）；
+    // 自动（推荐，真实数据校验前）＝不传 dataset_id，传真实 source_root/split_root——
+    // 内核按双树内容寻址派生 ds-<digest12>，refs 写双源根，atf_data_admission_request 凭
+    // 返回的 dataset_id 定位执行。两形态互斥由内核 fail-closed 校验（invalid_params 回流），
+    // harness schema 只做描述层指引＋字段声明（D-b 原则：不引入第二权威）。
     description:
-      "数据准入：将指定数据集准入 ATF 训练流水（登记领域事实并产出 digest）。须账本审批预录。dataset_id 为注册标识符（形如 ds-<slug>-<date>），不是文件路径；文件路径放 source_ref。",
+      "数据集登记（真实数据校验的第一步）：推荐用自动形态——不传 dataset_id，传真实 source_root（成对标注来源包根）与 split_root（split manifest 根），二者必须为已存在的目录；内核按内容寻址派生 dataset_id（ds-<digest12>）并从返回值读取。显式形态（仅登记引用、不支持真实数据校验）：传 dataset_id（注册标识符，非文件路径、无 @）与可选 source_ref（来源引用字符串，非文件路径要求）。两形态互斥。",
     parameters: {
       type: "object",
-      required: ["dataset_id"],
+      required: [],
       properties: {
-        // 快修批 D-b（2026-09-20）：描述层形态约束（描述即提示词面，经 codec 透传模型；
-        // 不做运行时强校验——内核侧已是 fail-closed 校验方，harness 不引入第二权威）。
-        dataset_id: { type: "string", description: "注册标识符，形如 ds-<slug>-<date>（如 ds-swb-20260920），非文件路径" },
-        source_ref: { type: "string", optional: true, description: "数据来源引用（文件路径或出处说明）；dataset_id 为标识符，路径类信息放这里" },
+        dataset_id: {
+          type: "string",
+          optional: true,
+          description:
+            "仅显式形态：注册标识符（如 ds-swb-20260920），非文件路径、不含 @。自动形态（推荐，真实数据校验前）勿传——由内核按双树内容寻址派生，从返回值 dataset_id 读取",
+        },
+        source_ref: {
+          type: "string",
+          optional: true,
+          description:
+            "仅显式形态：来源引用字符串（存入登记记录 refs 作档案；不被真实数据校验消费）。与自动形态字段互斥；需要真实数据校验请改用自动形态",
+        },
+        source_root: {
+          type: "string",
+          optional: true,
+          description:
+            "仅自动形态（推荐）：成对标注来源包根（normalized/<类型>/groups/… 形态，含 png×json 成对样本），必须为已存在的目录；与 dataset_id/source_ref 互斥",
+        },
+        split_root: {
+          type: "string",
+          optional: true,
+          description:
+            "仅自动形态（推荐）：split manifest 根（含 global_assignment.csv 与 global_plan.json），必须为已存在的目录",
+        },
+        label: {
+          type: "string",
+          optional: true,
+          description: "仅自动形态：人类可读展示名（只进登记记录，不参与 dataset_id 派生）",
+        },
         // R2 补登（D3 决议 20260914）：与契约 atf_admit_data.params 对等——
-        // 显式 pin 优先，缺省由内核按 canonical_digest({dataset_id, source_ref})[:12] 推导。
+        // 显式 pin 优先，缺省由内核按 canonical_digest 推导（两形态通用）。
         pin: { type: "string", optional: true },
       },
     },
