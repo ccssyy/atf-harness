@@ -104,12 +104,24 @@ const mapEvent = (event: LlmContextEvent): Result<AdapterMessage | null, Adapter
       });
     }
     case "tool/result": {
-      const violation = rejectUndeclared(event.payload, ["tool", "ok", "result", "reason", "call_ref", "block", "detail"], event.type);
+      // D-f 补正批登记（2026-09-21）：tool/result 增可选附注 nudge（无进展指引，runner.ts
+      // ok:true/ok:false 两注入点）／guidance（业务阻断码一行文案，ok:false 注入点）。
+      // 切片 2 白名单未含 → 真实流投影被拦（provider_failure；第二次同类事故，测试盲区＝
+      // 脚本面 provider 不经本投影）。纯增量补登；摘要化语义见下（B4·裁定甲）。
+      const violation = rejectUndeclared(event.payload, ["tool", "ok", "result", "reason", "call_ref", "block", "detail", "nudge", "guidance"], event.type);
       if (violation !== null) return err(adapterError(violation));
       if (typeof event.payload["tool"] !== "string") return err(adapterError("tool/result.tool 非法"));
       const okFlag = event.payload["ok"];
       if (typeof okFlag !== "boolean") return err(adapterError("tool/result.ok 非法"));
-      const summary = okFlag === true ? readableSummary(event.payload["result"]) : String(event.payload["reason"] ?? "");
+      // B4·摘要化定向扩展（D-f 补正批，owner 裁定甲 2026-09-21）：nudge/guidance 追加进
+      // 模型可见摘要尾部——ok:false = [reason, guidance, nudge]，ok:true = [readableSummary,
+      // nudge]，空段滤除后以"｜"连接。两字段缺省时与旧规则逐字节一致（零回归硬要求）；
+      // 主体语义（reason／readableSummary(result)）不变，模型看到的是旧信息的超集。
+      const parts: (string | undefined)[] =
+        okFlag === true
+          ? [readableSummary(event.payload["result"]), event.payload["nudge"] as string | undefined]
+          : [String(event.payload["reason"] ?? ""), event.payload["guidance"] as string | undefined, event.payload["nudge"] as string | undefined];
+      const summary = parts.filter((part): part is string => typeof part === "string" && part !== "").join("｜");
       return ok({ role: "tool_result", tool: event.payload["tool"], ok: okFlag, summary, source_event_id: event.id });
     }
     case "approval/request":
