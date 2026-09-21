@@ -47,9 +47,38 @@ export interface BlockGuidanceEntry {
 
 const STOP_OPTION: GapCardOption = { text: "如实停止并等待用户指示" };
 
-/** 首批登记（v4 定稿 §三 D-f-3）；K-Gap-2 接线批将增 split_policy_missing／
- *  split_recompute_cluster_required 两键（增键不新造机制）。 */
+/** 首批登记（v4 定稿 §三 D-f-3）；K-Gap-2 接线批（2026-09-21）增 split_policy_missing／
+ *  split_recompute_cluster_required 两键（增键不新造机制；policy 取值优先级＝确认态 >
+ *  登记面 skills 建议 > 拒绝执行，裁决权在内核，harness 只透传与呈现，禁静默补齐/换策略）。 */
 export const BLOCK_CODE_GUIDANCE: readonly BlockGuidanceEntry[] = [
+  {
+    code: "split_policy_missing",
+    meaning: "缺「经确认的划分策略」：既无确认态 split_policy 也无登记面 skills 建议（内核不透传不猜）",
+    missing: "经用户确认的划分策略 payload（默认建议 训练:测试 = 8:2，可改），或 skills 侧 split-policy.json 建议料",
+    producedBy: "用户确认（Agent 译为 schema 化 payload）或 skills 侧产料",
+    why: "无策略则划分无依据，准入按 fail-closed 诚实拒绝，不会自作主张",
+    actionLine: "向用户呈现划分模板并请示（说明策略语义与默认比例），勿重复探查、勿代用户默认拿主意",
+    isMaterialGap: true,
+    options: [
+      { text: "确认划分策略（采用默认 训练:测试 = 8:2 或给出修改比例）后重新执行准入", recommended: true },
+      { text: "先落 skills 建议策略料（split-policy.json 进登记面）再重试" },
+      STOP_OPTION,
+    ],
+  },
+  {
+    code: "split_recompute_cluster_required",
+    meaning: "用户既不提供聚类料也不选免聚类策略——聚类确认点被跳过（内核诚实停止）",
+    missing: "版式聚类产物（atf_style_cluster.execute 落料）或免聚类策略声明（auto_style_cluster 语义）",
+    producedBy: "内核确定性聚类（经用户确认参数后执行）或 skills 侧语义聚类",
+    why: "无聚类归属时按策略重分会破坏版式分层防护，内核拒绝静默放行",
+    actionLine: "向用户确认聚类参数（propose 模板回显）后执行聚类落料，或改选免聚类策略；勿静默补齐",
+    isMaterialGap: true,
+    options: [
+      { text: "确认聚类参数后调用 atf_style_cluster_execute 落料，再重新执行准入", recommended: true },
+      { text: "改用免聚类的划分策略 payload 后重试" },
+      STOP_OPTION,
+    ],
+  },
   {
     code: "split_manifest_missing",
     meaning: "split_root 下缺 global_assignment.csv（9 列）或 global_plan.json（内核准入强制清单）",

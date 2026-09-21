@@ -11,12 +11,14 @@ import { approvalParamsDigest, stableStringify } from "../../src/core/tools/appr
  */
 
 describe("S3 验收（schema 用例）——模型可见白名单，内部字段一律不发", () => {
-  it("5 个工具的模型可见投影仅含 { name, description, parameters }（R1 接线批扩为 5）", () => {
+  it("7 个工具的模型可见投影仅含 { name, description, parameters }（R1 扩 5；K-Gap-2 接线批扩 7）", () => {
     const registry = ToolRegistry.createDefault();
     const visible = registry.modelVisible();
     expect(visible.map((tool) => tool.name)).toEqual([
       "atf_admit_data",
       "atf_data_admission_request",
+      "atf_preparation_propose",
+      "atf_style_cluster_execute",
       "atf_gate",
       "atf_fact_scan",
       "atf_workspace_status",
@@ -26,10 +28,12 @@ describe("S3 验收（schema 用例）——模型可见白名单，内部字段
     }
   });
 
-  it("序列化产物不含内部字段（timeout / canonical_output / requires_approval / method 等）", () => {
+  it("序列化产物不含内部字段键（timeout / canonical_output / requires_approval / method 等）", () => {
     const serialized = JSON.stringify(ToolRegistry.createDefault().modelVisible());
-    for (const forbidden of ["timeout", "canonical_output", "requires_approval", "method", "connection", "execute", "ledger"]) {
-      expect(serialized, `模型可见形态不得包含 "${forbidden}"`).not.toContain(forbidden);
+    // 以 JSON 键形态断言（"execute" 现为冻结工具名 atf_style_cluster_execute 的组成部分，
+    // 子串断言不再适用；内部字段若泄漏必以键形态出现）
+    for (const forbidden of ['"timeout":', '"canonical_output":', '"requires_approval":', '"method":', '"connection":', '"execute":', '"ledger":']) {
+      expect(serialized, `模型可见形态不得包含内部字段键 "${forbidden}"`).not.toContain(forbidden);
     }
   });
 

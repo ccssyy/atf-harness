@@ -126,7 +126,9 @@ export const createRealPeerFixture = async (runId = `r2-fixture-run-1`): Promise
     pinPath,
     serveSpawn: () => {
       const invocation = deriveAtfCommand(pinPath, ["serve"]);
-      return { argv: [invocation.command, ...invocation.args], cwd: invocation.cwd, env: baseEnv() };
+      // K-Gap-2 接线批（2026-09-21）：serve 需知工作区根（TUI descriptor 同款）——
+      // 相对形态的 source_root/split_root 依此解析；缺失时登记面相对路径不可解析。
+      return { argv: [invocation.command, ...invocation.args], cwd: invocation.cwd, env: { ...baseEnv(), ATF_WORKSPACE_ROOT: wsRoot } };
     },
     injectedServeSpawn: () => {
       const invocation = deriveAtfCommand(pinPath, []);
