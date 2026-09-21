@@ -190,6 +190,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     requires_approval: true,
     canonical_output: {
       type: "object",
+      strict: false, // K-Gap-2 返回扩展字段（policy/human_summary/partition_counts 等）与内核可空语义透传——深形态归内核
       required: ["ok", "run_id", "dataset_id", "pin", "fact_id", "status", "summary_ref", "summary_sha256", "gates"],
       properties: {
         ok: { const: true },
@@ -218,7 +219,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         policy: { type: "object", optional: true, strict: false },
         style_cluster_source: { enum: ["skills", "kernel", null], optional: true },
         allocation_unit_source: { type: "string", optional: true },
-        partition_counts: { type: "object", optional: true, strict: false },
+        // partition_counts：内核实测可为 null（分区未产出时不编造）——不入 properties，由根 strict:false 透传
       },
     },
   },
@@ -306,7 +307,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         pin: { type: "string" },
         fact_id: { type: "string" },
         assignment_ref: { type: "string" },
-        cluster_digest: { type: "string", pattern: HEX64 },
+        cluster_digest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$", description: "内核实义含 sha256: 前缀（integrity_digest 可复算形态）" },
         cluster_count: { type: "integer" },
         clusters: {
           type: "array",

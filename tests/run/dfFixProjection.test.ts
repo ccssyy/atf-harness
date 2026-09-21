@@ -19,9 +19,14 @@ import { parseSessionStream, ScenarioRunner, type BranchRunReport } from "../../
 import { transformContext } from "../../src/core/session/index.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
-const RUNS_ROOT = join(repoRoot, "tmp", "ui-runs");
 const RUN_ID = "run-smoke2-ebbc3a57";
-const FACTS = join(RUNS_ROOT, RUN_ID, "session.jsonl");
+// 四跑 facts 落在主仓 checkout 的 tmp/ui-runs（worktree 各有独立 tmp）——依次探测
+const FACTS_CANDIDATES = [
+  join(repoRoot, "tmp", "ui-runs", RUN_ID, "session.jsonl"),
+  join(repoRoot, "..", "ATF-Harness", "tmp", "ui-runs", RUN_ID, "session.jsonl"),
+];
+const FACTS = FACTS_CANDIDATES.find((candidate) => existsSync(candidate)) ?? FACTS_CANDIDATES[0] as string;
+const RUNS_ROOT = FACTS_CANDIDATES.indexOf(FACTS) === 1 ? join(repoRoot, "..", "ATF-Harness", "tmp", "ui-runs") : join(repoRoot, "tmp", "ui-runs");
 const FACTS_EXIST = existsSync(FACTS);
 
 const grantedStub = async (): Promise<{ verdict: "granted"; actor: string }> => ({ verdict: "granted", actor: "df-fix-host" });

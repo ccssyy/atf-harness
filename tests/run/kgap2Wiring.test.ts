@@ -160,6 +160,7 @@ describe("K-Gap-2 用例 2：execute 写（需审批——审批链在场）", (
     expect(ran.ok).toBe(true);
     if (!ran.ok) throw new Error("unreachable");
     const report = ran.value;
+    if (report.outcome.kind !== "completed") console.log("DBG-EXEC", JSON.stringify(report.outcome));
     expect(report.outcome.kind).toBe("completed");
     // 需审批：admit 与 execute 各触发一次问答轨审批（approval/request 在场）
     const approvals = report.events.filter((event) => event.type === "approval/request");

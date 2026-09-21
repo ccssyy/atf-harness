@@ -564,7 +564,7 @@ const toolStyleClusterExecute = (params) => {
     return { error: { code: "dataset_not_registered", message: `数据集未登记（须先 atf_admit_data）: ${String(datasetId)}` } };
   }
   const fact = matches[0];
-  const clusterDigest = sha256Hex(stableStringify({ dataset_id: String(datasetId), params: cp }));
+  const clusterDigest = `sha256:${sha256Hex(stableStringify({ dataset_id: String(datasetId), params: cp }))}`; // 内核实义含 sha256: 前缀
   const assignmentRef = `style-cluster-assignment:${clusterDigest.slice(0, 12)}`;
   fact.refs = { ...(fact.refs ?? {}), style_cluster_assignment_ref: assignmentRef, style_cluster_digest: clusterDigest };
   return {

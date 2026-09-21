@@ -155,9 +155,9 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/- facts_log_tail_corrupt/);
   });
 
-  it("atf_upstream pin 保持 v0.7.2b0（re-pin R3 2026-09-20；pin＝main HEAD 61631e6，不追后续中间态）", () => {
-    expect(contract).toMatch(/  tag: v0\.7\.2b0/);
-    expect(contract).toMatch(/  commit_sha: 61631e6ae4543f35e79751f5bf4d9d5bfa2abdc5/);
+  it("atf_upstream pin 升至 v0.7.3b0（re-pin 2026-09-21；pin＝tag commit 1c36fb3，K-Gap-2 方法面 12）", () => {
+    expect(contract).toMatch(/  tag: v0\.7\.3b0/);
+    expect(contract).toMatch(/  commit_sha: 1c36fb37f7abc8dc5b0be763a9580279260d56c5/);
     // 会话协议版本轴不随 re-pin 变动（内核方法面补登不 bump）；桥接契约版本轴恒 2（另轴）
     expect(contract).toMatch(/  contract_version: 1/);
   });

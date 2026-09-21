@@ -143,50 +143,58 @@ describeIfPinned("D-f 真内核 e2e——三情形收口（当前 pin）", () =>
   );
 
   it(
-    "(c) 缺关键输入：合成对登记后准入缺 split 清单 → split_manifest_missing×3 → 缺口卡收口＋会话可续",
+    "(c) v0.7.3b0 新语义：无确认态且无合同料 → 准入按推导单元诚实执行（not_required，不再探索烧尽）→ completed＋会话可续（split_policy_missing 缺口卡语义由 mock 组⑤承载）",
     { timeout: 240_000 },
     async () => {
       const fixture = await createRealPeerFixture(`df-e2e-gap-${randomUUID().slice(0, 8)}`);
       openFixtures.push(fixture);
-      // 合成最小成对样本（1×1 PNG 字节＋同名 json；零真实业务内容）——split_root 无
-      // global_assignment.csv/global_plan.json ⇒ 准入按内核 fail-closed 语义诚实拒绝。
-      const sourceRoot = await mkdtemp(join(tmpdir(), "df-e2e-src-"));
-      const splitRoot = await mkdtemp(join(tmpdir(), "df-e2e-split-"));
-      const png = Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-        "base64",
-      );
-      await mkdir(sourceRoot, { recursive: true });
-      await mkdir(splitRoot, { recursive: true });
-      await writeFile(join(sourceRoot, "df-e2e-pair-1.png"), png);
-      await writeFile(join(sourceRoot, "df-e2e-pair-1.json"), `${JSON.stringify({ pairs: [{ image: "df-e2e-pair-1.png", label: "df-e2e-pair-1.json" }] })}\n`);
-      let calls = 0;
+      // 料源＝四跑同源口径：走查批拷入 ws datasets/external/swb（源零写入），登记用相对
+      // 路径（v0.7.3b0 实测：外部绝对路径登记 → invalid_params）。无确认态且无 skills 建议
+      // → 内核以 split_policy_missing 诚实拒绝（K-Gap-2 口径）；缺口卡由 D-f-6 注册表出卡。
+      const sourceRootAbs = join(fixture.wsRoot, "datasets", "external", "swb"); // 拷入夹具 ws（内核按 ws 根解析相对路径）
+      const splitRootAbs = sourceRootAbs; // 四跑同根口径（v3b 实况）
+      await mkdir(sourceRootAbs, { recursive: true });
+      const { cp } = await import("node:fs/promises");
+      await cp("/data/sam/atf-walkthrough/ds-multi-doc-20260920/swb", sourceRootAbs, { recursive: true });
+      const queue: Array<{ type: "tool_call"; tool: string; params: Record<string, unknown> } | { type: "final_answer"; text: string }> = [
+        { type: "tool_call", tool: "atf_admit_data", params: { source_root: "datasets/external/swb", split_root: "datasets/external/swb" } },
+        { type: "tool_call", tool: "atf_data_admission_request", params: { dataset_id: "ds-x" } },
+        { type: "final_answer", text: "工作区已按推导单元完成准入检查，结果已汇报。" },
+      ];
       const provider: LlmProvider = {
         providerId: "df-e2e-model",
         decide: async (context) => {
-          calls += 1;
-          if (calls === 1) return ok({ type: "tool_call", tool: "atf_admit_data", params: { source_root: sourceRoot, split_root: splitRoot } });
-          const derived = /ds-[0-9a-f]{12}/.exec(JSON.stringify(context))?.[0] ?? "ds-unresolved";
-          return ok({ type: "tool_call", tool: "atf_data_admission_request", params: { dataset_id: derived } });
+          const next = queue.shift();
+          if (next === undefined) return ok({ type: "final_answer", text: "已停止。" });
+          if (next.type === "tool_call") {
+            const params = { ...next.params } as Record<string, unknown>;
+            // 仅准入申请做派生 id 替换（登记为自动形态，不得携带 dataset_id——双形态互斥）
+            if (next.tool === "atf_data_admission_request") {
+              params["dataset_id"] = /ds-[0-9a-f]{12}/.exec(JSON.stringify(context))?.[0] ?? "ds-unresolved";
+            }
+            return ok({ type: "tool_call", tool: next.tool, params });
+          }
+          return ok(next);
         },
       };
       const runsRoot = await mkdtemp(join(tmpdir(), "df-e2e-runs-"));
-      tempRoots.push(runsRoot);
+      tempRoots.push(runsRoot, splitRootAbs);
       const report = await runAgainstRealPeer(fixture, provider, "对合成对数据执行真实数据校验", { runsRoot });
-      expect(report.outcome.kind).toBe("turn_failed");
-      if (report.outcome.kind !== "turn_failed") throw new Error("unreachable");
-      const summary = report.outcome.summary;
-      expect(summary.reason).toBe("reject_loop_exhausted");
-      const rejects = report.events.filter(
-        (event) => event.type === "tool/result" && (event.payload as { reason?: string }).reason === "split_manifest_missing",
-      );
-      expect(rejects.length).toBe(3);
-      for (const reject of rejects) {
-        expect((reject.payload as { guidance?: string }).guidance ?? "").toContain("global_assignment.csv");
+      for (const event of report.events) {
+        const p = event.payload as { tool?: string; ok?: boolean; reason?: string; result?: unknown; detail?: unknown };
+        if (event.type === "tool/result" && p.ok === false) console.log("RC2", JSON.stringify({ tool: p.tool, reason: p.reason, detail: p.detail }));
       }
-      expect(summary.gap_card?.stuck).toContain("atf_data_admission_request");
-      expect(summary.gap_card?.missing).toContain("global_plan.json");
-      expect(summary.gap_card?.options[0]?.recommended).toBe(true);
+      for (const event of report.events) {
+        if (event.type === "tool/call") console.log("DBG-CALL", JSON.stringify(event.payload));
+      }
+      expect(report.outcome.kind).toBe("completed");
+      expect(report.exit_code).toBe(0);
+      const request = report.events
+        .filter((event) => event.type === "tool/result")
+        .map((event) => event.payload as { tool?: string; ok?: boolean; reason?: string; result?: unknown })
+        .find((entry) => entry.tool === "atf_data_admission_request");
+      console.log("DBG-R", JSON.stringify({ ok: request?.ok, reason: request?.reason }));
+      expect(request?.ok).toBe(true);
       // 会话可续（同 run 流上新 turn 收尾成功）
       const follow = await runAgainstRealPeer(
         fixture,
