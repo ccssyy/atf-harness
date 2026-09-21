@@ -126,3 +126,14 @@ describe("审批键 digest——harness 侧算法与契约登记同构（stable 
     expect(approvalParamsDigest({ x: [2, 1] })).not.toBe(approvalParamsDigest({ x: [1, 2] }));
   });
 });
+
+describe("三件小批 D-2：atf_gate 描述轻补（合法清单展开）", () => {
+  it("atf_gate description 含勿猜测句与合法 GateId 清单（GATE_LEGAL_IDS 单源）", () => {
+    const visible = ToolRegistry.createDefault().modelVisible();
+    const gate = visible.find((tool) => tool.name === "atf_gate");
+    expect(gate?.description).toContain("完整性 GateId 非序号顺延，勿猜测");
+    expect(gate?.description).toContain("extraction-contract-valid");
+    expect(gate?.description).toContain("evaluation-evidence-valid");
+    expect(gate?.description).toContain("G1–G4");
+  });
+});

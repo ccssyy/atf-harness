@@ -76,7 +76,7 @@ import {
   verifyDigestContinuity,
   type ProviderSwitchBlock,
 } from "./providerSwitch.js";
-import { type ApprovalGate } from "../tools/index.js";
+import { GATE_LEGAL_IDS, type ApprovalGate } from "../tools/index.js";
 import { FactScanResolver } from "./factScanResolver.js";
 import type { RunEventSubscriber } from "../projection.js";
 import { deriveLoopStateFromEvents } from "./loopState.js";
@@ -112,14 +112,32 @@ export const runError = (code: RunErrorCode, message: string, detail?: unknown):
   return error;
 };
 
-/** 分支终局(六态穷尽互斥;业务级 gate blocked 是合法 canonical 产出,不是终局——B2 语义):
- *  Phase 1 四态 + P2-S2 问答轨两终态 suspended(75,非终态可恢复)/ aborted(79)。 */
+/** 三件小批 D-1（2026-09-21）：turn 级失败收口摘要——阈值触发（reject_loop_exhausted）时
+ *  随 turn/end payload（failure_summary，可选字段）与 BranchOutcome.turn_failed 携带；
+ *  受众＝用户（TUI 呈现）与审计（模型上下文投影 turn/end 为 skip，模型侧纠错依据＝
+ *  已回流的 rejected tool/result ＋ atf_gate 描述常驻合法清单）。 */
+export interface TurnFailureSummary {
+  reason: "reject_loop_exhausted";
+  limit: number;
+  rejected: Array<{ tool: string; reason: string; params_digest: string }>;
+  hint: {
+    /** 仅本 turn 被拒工具含 atf_gate 时携带：合法 GateId 清单（GATE_LEGAL_IDS 单源） */
+    gate_ids?: string[];
+    note: string;
+  };
+}
+
+/** 分支终局(七态穷尽互斥;业务级 gate blocked 是合法 canonical 产出,不是终局——B2 语义):
+ *  Phase 1 四态 + P2-S2 问答轨两终态 suspended(75,非终态可恢复)/ aborted(79)
+ *  + 三件小批 D-1 turn_failed(turn 级失败收口——本 turn 已收口、run 未终局，
+ *  控制权交还调用方：TUI 保持存活可继续输入；headless 以 1 如实退出)。 */
 export type BranchOutcome =
   | { kind: "completed" }
   | { kind: "approval_missing"; block: ToolBlock }
   | { kind: "session_rejected"; block: T0RefBlockShape }
   | { kind: "suspended"; block: ToolBlock }
   | { kind: "aborted"; block: ToolBlock }
+  | { kind: "turn_failed"; summary: TurnFailureSummary }
   | { kind: "failed"; error: RunError };
 
 // 避免与 workspace 层类型产生导入环的轻量别名（结构同构于 T0RefBlock）
@@ -132,6 +150,7 @@ interface T0RefBlockShape {
 /**
  * runner 统一出口(owner 口径 #4 + 决议 §3.2 口径 #9,单一出口):0 = completed;
  * 78 = approval_missing(S3 锚点,不挪用);75 = suspended;79 = aborted;
+ * turn_failed = 1（D-1：headless 单 turn 如实退出；交互面由 TUI 保持存活）;
  * 会话层拒绝 / credential_indeterminate / 各类故障 = 1。
  */
 export const resolveRunExitCode = (outcome: BranchOutcome): 0 | 1 | 75 | 78 | 79 => {
@@ -141,6 +160,7 @@ export const resolveRunExitCode = (outcome: BranchOutcome): 0 | 1 | 75 | 78 | 79
     case "approval_missing":
       return resolveHeadlessExitCode({ kind: "blocked", block: outcome.block });
     case "session_rejected":
+    case "turn_failed":
     case "failed":
       return 1;
     case "suspended":
@@ -486,16 +506,18 @@ export class ScenarioRunner {
         return appended.value.event;
       };
 
-      const appendTurnEnd = async (reason: string, stopReason?: LoopStopReason): Promise<void> => {
+      const appendTurnEnd = async (reason: string, stopReason?: LoopStopReason, failureSummary?: TurnFailureSummary): Promise<void> => {
         // 切片 1 A1（纯增量）：turn/end.payload 补 step 元数据（step_count = 本 turn 已执行步；
         // decision_count = 本 turn provider 决策数，含被拒的 provider_switch 请求）；
-        // stop_reason 仅在 A2 五值判据命中时携带（可选字段，既有 reason 取值零改动）。
+        // stop_reason 仅在 A2 五值判据命中时携带（可选字段，既有 reason 取值零改动）；
+        // failure_summary 仅 D-1 阈值收口时携带（可选字段；payload 自由 JSON，类型白名单/schema_version 不动）。
         const payload: Record<string, unknown> = {
           reason,
           step_count: turnStepCount,
           decision_count: turnDecisionCount,
         };
         if (stopReason !== undefined) payload["stop_reason"] = stopReason;
+        if (failureSummary !== undefined) payload["failure_summary"] = failureSummary;
         const appended = await session.append({ type: "turn/end", payload });
         if (appended.ok && appended.value.status === "appended") {
           events.push(appended.value.event);
@@ -520,8 +542,10 @@ export class ScenarioRunner {
       let turnStepCount = 0;
       let turnHadFinalAnswer = false;
       // 快修批 D-a R-2：单 turn 连续工具错误回流计数（rejected/input_violation；每 turn 清零，
-      // 任何非回流类工具结果打断连续——达 REJECT_LOOP_LIMIT → turn 终局 reject_loop_exhausted）
+      // 任何非回流类工具结果打断连续——达 REJECT_LOOP_LIMIT → turn 级失败收口）。
+      // 三件小批 D-1：连续被拒调用留痕（供 turn_failed.summary.rejected；≤LIMIT 条）。
       let turnRejectCount = 0;
+      let turnRejectCalls: Array<{ tool: string; reason: string; params_digest: string }> = [];
       // 切片 1 A2：run 级 turn 计数（max_turns 预算）
       let turnsOpened = 0;
 
@@ -538,6 +562,7 @@ export class ScenarioRunner {
         turnStepCount = 0;
         turnHadFinalAnswer = false;
         turnRejectCount = 0;
+        turnRejectCalls = [];
       };
 
       const closeTurnRecord = (): void => {
@@ -741,14 +766,25 @@ export class ScenarioRunner {
                       // 落回决策循环继续（模型修参重试或转述）；连续计数达 REJECT_LOOP_LIMIT → 终局。
                       if (result.kind !== "failed" && !("decisionFace" in provider)) {
                         turnRejectCount += 1;
+                        turnRejectCalls.push({ tool: String(callPayload.tool), reason: result.reason, params_digest: approvalParamsDigest(callPayload.params) });
                         if (turnRejectCount >= REJECT_LOOP_LIMIT) {
-                          outcome = {
-                            kind: "failed",
-                            error: runError("reject_loop_exhausted", `单 turn 连续工具错误回流达阈值 ${String(REJECT_LOOP_LIMIT)}（reject_loop_exhausted）：重派 ${String(callPayload.tool)} reason=${result.reason}`, result.detail),
-                          };
-                          turnOpen = false;
-                          await appendTurnEnd("failed");
+                          // 三件小批 D-1：阈值触发改 turn 级失败收口（run 未终局，控制权交还调用方）。
+                          // provider 生命周期确认点（门 1 放行指令）：此处保留既有 provider = null——
+                          // 本 turn 已收口，置空使决策循环首行守卫（provider === null → break）即出，
+                          // runBranch 返回 turn_failed；connection 由 finally 统一关闭，无悬空实例。
                           provider = null;
+                          const summary: TurnFailureSummary = {
+                            reason: "reject_loop_exhausted",
+                            limit: REJECT_LOOP_LIMIT,
+                            rejected: [...turnRejectCalls].slice(-REJECT_LOOP_LIMIT),
+                            hint: {
+                              ...(turnRejectCalls.some((call) => call.tool === "atf_gate") ? { gate_ids: [...GATE_LEGAL_IDS] } : {}),
+                              note: "修正参数后输入新指令即可继续本会话；被拒调用与错误码见上（模型下一 turn 同样可见）",
+                            },
+                          };
+                          outcome = { kind: "turn_failed", summary };
+                          turnOpen = false;
+                          await appendTurnEnd("failed", undefined, summary);
                         }
                       } else {
                         // 脚本执行器（Faux 断言路径）与 E3/E4（failed）维持既有终局
@@ -1016,6 +1052,7 @@ export class ScenarioRunner {
 
           if (result.kind === "executed") {
             turnRejectCount = 0; // D-a R-2：非回流类结果打断连续计数
+            turnRejectCalls = [];
             if (step.tool === "atf_admit_data") {
               // canonical output 已保证三元组字段存在（S3 逐次校验）
               const fact = result.result as { journal_type: string; fact_id: string; sha256_digest: string };
@@ -1025,6 +1062,7 @@ export class ScenarioRunner {
           }
           if (result.kind === "blocked") {
             turnRejectCount = 0; // D-a R-2：非回流类结果打断连续计数
+            turnRejectCalls = [];
             if (result.block.reason === "approval_missing") {
               // headless 账本轨终局(ADR-07):approval_missing 即终止——无自动应答、不重试(语义零改动)
               outcome = { kind: "approval_missing", block: result.block };
@@ -1080,13 +1118,23 @@ export class ScenarioRunner {
           if (result.kind === "rejected" || result.kind === "input_violation") {
             if (!("decisionFace" in provider)) {
               turnRejectCount += 1;
+              turnRejectCalls.push({ tool: step.tool, reason: result.reason, params_digest: approvalParamsDigest(step.params) });
               if (turnRejectCount >= REJECT_LOOP_LIMIT) {
-                outcome = {
-                  kind: "failed",
-                  error: runError("reject_loop_exhausted", `单 turn 连续工具错误回流达阈值 ${String(REJECT_LOOP_LIMIT)}（reject_loop_exhausted）：最后错误 tool=${step.tool} reason=${result.reason}`, result.detail),
+                // 三件小批 D-1：阈值触发改 turn 级失败收口——本 turn 收口（turn/end failed 含
+                // failure_summary），run 未终局；控制权交还调用方（TUI 保持存活可继续输入，
+                // headless 以 exit 1 如实退出）。E1/E2 回流与脚本径豁免语义不变。
+                const summary: TurnFailureSummary = {
+                  reason: "reject_loop_exhausted",
+                  limit: REJECT_LOOP_LIMIT,
+                  rejected: [...turnRejectCalls].slice(-REJECT_LOOP_LIMIT),
+                  hint: {
+                    ...(turnRejectCalls.some((call) => call.tool === "atf_gate") ? { gate_ids: [...GATE_LEGAL_IDS] } : {}),
+                    note: "修正参数后输入新指令即可继续本会话；被拒调用与错误码见上（模型下一 turn 同样可见）",
+                  },
                 };
+                outcome = { kind: "turn_failed", summary };
                 turnOpen = false;
-                await appendTurnEnd("failed");
+                await appendTurnEnd("failed", undefined, summary);
                 break;
               }
               continue;

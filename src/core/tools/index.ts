@@ -21,7 +21,7 @@ export {
   type LedgerRecord,
   type ScopeRef,
 } from "./approvalKey.js";
-export { requiresApprovalFor, TOOL_DEFINITIONS, TOOL_NAMES, toModelVisible, type ModelVisibleTool, type ToolDefinition } from "./toolDefinition.js";
+export { GATE_LEGAL_IDS, INTEGRITY_GATE_IDS, requiresApprovalFor, TOOL_DEFINITIONS, TOOL_NAMES, toModelVisible, type ModelVisibleTool, type ToolDefinition } from "./toolDefinition.js";
 export { ToolRegistry } from "./registry.js";
 export type { BridgeTransport } from "./executor.js";
 export {

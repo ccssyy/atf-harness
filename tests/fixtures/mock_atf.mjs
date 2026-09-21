@@ -312,7 +312,17 @@ const toolAdmitData = (params) => {
   return { ok: true, journal_type: "dataset-registry", fact_id: factId, sha256_digest: digest, dataset_id: params.dataset_id };
 };
 
+// 三件小批 D-1/D-2（2026-09-21）：gate 命名校验对齐内核（G1–G4 大小写不敏感 → 数据准入闸；
+// 其余须命中七组完整性 GateId；都不命中 → unknown_gate）——供阈值收口链用例仿真。
+const INTEGRITY_GATE_IDS = [
+  "extraction-contract-valid", "source-identity-valid", "split-integrity-valid", "training-data-valid",
+  "training-preflight-valid", "evaluation-preflight-valid", "evaluation-evidence-valid",
+];
 const toolGate = (params) => {
+  const gateName = String(params.gate ?? "");
+  if (!/^g[1-4]$/i.test(gateName) && !INTEGRITY_GATE_IDS.includes(gateName)) {
+    return { error: { code: "unknown_gate", message: `未收录 GateId: ${gateName}（合法清单见工具描述：G1–G4 命名分流＋七组完整性 GateId）` } };
+  }
   if (params.action === "advance") {
     const hasEvidence = admittedFacts.length > 0 || (Array.isArray(params.evidence_refs) && params.evidence_refs.length > 0);
     if (!hasEvidence) {

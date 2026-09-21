@@ -58,6 +58,35 @@ const STRING_ARRAY: SchemaNode = { type: "array", items: { type: "string" } };
 
 const HEX64 = "^[0-9a-f]{64}$";
 
+/** 合法 GateId 清单（三件小批 D-2/D-1 单源常量，2026-09-21）：
+ *  权威来源＝内核 GateId 枚举（contracts/models.py，v0.1.0 固定七组实验完整性 Gate，冻结面）
+ *  ＋G1–G4 命名分流（数据准入闸，大小写不敏感）。atf_gate 描述文本与 turn 失败摘要 hint
+ *  两处消费本常量（一处定义，防漂移）；内核增删 GateId 属破坏性变更，经 re-pin/契约审同步。 */
+export const GATE_LEGAL_IDS: readonly string[] = [
+  "G1（数据准入闸，命名分流）",
+  "G2（数据准入闸，命名分流）",
+  "G3（数据准入闸，命名分流）",
+  "G4（数据准入闸，命名分流）",
+  "extraction-contract-valid",
+  "source-identity-valid",
+  "split-integrity-valid",
+  "training-data-valid",
+  "training-preflight-valid",
+  "evaluation-preflight-valid",
+  "evaluation-evidence-valid",
+];
+
+/** 七组完整性 GateId（严格匹配面；G1–G4 为命名分流路由，大小写不敏感）。 */
+export const INTEGRITY_GATE_IDS: readonly string[] = [
+  "extraction-contract-valid",
+  "source-identity-valid",
+  "split-integrity-valid",
+  "training-data-valid",
+  "training-preflight-valid",
+  "evaluation-preflight-valid",
+  "evaluation-evidence-valid",
+];
+
 /** 工具面 5 个（R1 修订 2026-09-20：原「严格 4 个」owner 口径 #5 经 R1 立项扩为 5——owner 决议
  *  sha 8b5458c0…；新增 atf_data_admission_request 经 executor 显式映射到 atf_data_admission.request。
  *  契约 v2（2026-09-13）：证据面扫描工具改名 atf_fact_scan（数组 facts）、
@@ -179,7 +208,9 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "atf_gate",
     description:
-      "查询或推进闸门：gate 取值按命名分流（G1–G4 大小写不敏感 → 数据准入闸；其余须命中七组完整性 GateId；都不命中 unknown_gate）。blocked/warn 为合法业务产出（含原因码与证据引用）。query 免审批自主执行；advance 须账本审批预录。",
+      "查询或推进闸门：gate 取值按命名分流（G1–G4 大小写不敏感 → 数据准入闸；其余须命中七组完整性 GateId；都不命中 unknown_gate）。blocked/warn 为合法业务产出（含原因码与证据引用）。query 免审批自主执行；advance 须账本审批预录。完整性 GateId 非序号顺延，勿猜测；未收录 id 返回 unknown_gate，先 query 合法清单。合法 GateId 清单：" +
+      GATE_LEGAL_IDS.join("／") +
+      "。",
     parameters: {
       type: "object",
       required: ["gate", "action"],

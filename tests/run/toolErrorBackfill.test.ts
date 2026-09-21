@@ -88,7 +88,7 @@ describe("D-a E1：对端业务拒绝回流（模型面非终局）", () => {
     expect(contexts[1]).toContain("invalid_params");
   });
 
-  it("连续 rejected 达 REJECT_LOOP_LIMIT=3 → 终局 failed（reject_loop_exhausted，防死循环）", async () => {
+  it("连续 rejected 达 REJECT_LOOP_LIMIT=3 → turn 级失败收口（turn_failed，run 未终局；D-1）", async () => {
     let asked = 0;
     const provider: LlmProvider = {
       providerId: "da-stub-model",
@@ -106,13 +106,89 @@ describe("D-a E1：对端业务拒绝回流（模型面非终局）", () => {
     expect(ran.ok).toBe(true);
     if (!ran.ok) throw new Error("unreachable");
     const report: BranchRunReport = ran.value;
-    expect(report.outcome.kind).toBe("failed");
+    expect(report.outcome.kind).toBe("turn_failed");
     expect(report.exit_code).toBe(1);
-    if (report.outcome.kind !== "failed") throw new Error("unreachable");
-    expect(report.outcome.error.code).toBe("reject_loop_exhausted");
+    if (report.outcome.kind !== "turn_failed") throw new Error("unreachable");
+    const summary = report.outcome.summary;
+    expect(summary.reason).toBe("reject_loop_exhausted");
+    expect(summary.limit).toBe(3);
+    expect(summary.rejected.length).toBe(3);
+    for (const call of summary.rejected) {
+      expect(call.tool).toBe("atf_admit_data");
+      expect(call.reason).toBe("invalid_params");
+      expect(call.params_digest).toMatch(/^[0-9a-f]{64}$/);
+    }
+    expect(summary.hint.gate_ids).toBeUndefined(); // 非 gate 场景不带清单
+    expect(summary.hint.note).toContain("继续本会话");
     const rejects = report.events.filter((event) => event.type === "tool/result" && (event.payload as { ok?: boolean }).ok === false);
     expect(rejects.length).toBe(3);
-    expect(asked).toBe(3); // 第 3 次拒绝即终局，模型不再被询问
+    expect(asked).toBe(3); // 第 3 次拒绝即收口，模型不再被询问
+    // turn/end 落盘 failure_summary（审计面）
+    const turnEnd = report.events.find((event) => event.type === "turn/end");
+    const endPayload = (turnEnd?.payload ?? {}) as { reason?: string; failure_summary?: { reason?: string } };
+    expect(endPayload.reason).toBe("failed");
+    expect(endPayload.failure_summary?.reason).toBe("reject_loop_exhausted");
+  });
+
+  it("D-1：阈值收口后同 run-id continue 续跑成功（同会话可继续；禁止 turn failed→退出路径）", async () => {
+    const runsRoot = runsRootOf();
+    const runId = `da-continue-${randomUUID()}`;
+    const loopProvider: LlmProvider = {
+      providerId: "da-stub-model",
+      decide: async () => ok({ type: "tool_call", tool: "atf_admit_data", params: { dataset_id: PATH_ID } }),
+    };
+    const first = await ScenarioRunner.runBranch(scenarioOf(runId, "准入"), "main", {
+      runsRoot,
+      mockCommand: ["node", mockPath, "--invalid-params-on-path-dataset-id"],
+      modelProvider: loopProvider,
+      approvalSurface: { stub: grantedStub },
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error("unreachable");
+    expect(first.value.outcome.kind).toBe("turn_failed");
+    // 同会话续跑：正确参数（显式登记即可成功登记；B4 continue 前置＝末 turn 已收口）
+    const second = await ScenarioRunner.runBranch(scenarioOf(runId, "修正后重试"), "main", {
+      runsRoot,
+      mockCommand: ["node", mockPath, "--invalid-params-on-path-dataset-id"],
+      modelProvider: modelStub([
+        { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: GOOD_ID } },
+        { type: "final_answer", text: "修正后登记成功。" },
+      ]),
+      approvalSurface: { stub: grantedStub },
+      continue: { instruction: "修正后重试" },
+    });
+    expect(second.ok).toBe(true);
+    if (!second.ok) throw new Error("unreachable");
+    expect(second.value.outcome.kind).toBe("completed");
+    expect(second.value.exit_code).toBe(0);
+  });
+
+  it("D-1：atf_gate 场景阈值收口 → hint.gate_ids 携带合法清单（unknown_gate×3）", async () => {
+    let asked = 0;
+    const provider: LlmProvider = {
+      providerId: "da-stub-model",
+      decide: async () => {
+        asked += 1;
+        return ok({ type: "tool_call", tool: "atf_gate", params: { gate: `G${asked + 4}`, action: "query" } });
+      },
+    };
+    const ran = await ScenarioRunner.runBranch(scenarioOf(`da-gate-${randomUUID()}`, "查询闸门"), "main", {
+      runsRoot: runsRootOf(),
+      mockCommand: ["node", mockPath],
+      modelProvider: provider,
+      approvalSurface: { stub: grantedStub },
+    });
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) throw new Error("unreachable");
+    const report: BranchRunReport = ran.value;
+    expect(report.outcome.kind).toBe("turn_failed");
+    if (report.outcome.kind !== "turn_failed") throw new Error("unreachable");
+    expect(report.outcome.summary.hint.gate_ids).toBeDefined();
+    expect(report.outcome.summary.hint.gate_ids?.some((id) => id.startsWith("G1"))).toBe(true);
+    expect(report.outcome.summary.hint.gate_ids?.filter((id) => id.includes("valid")).length).toBe(7);
+    for (const call of report.outcome.summary.rejected) {
+      expect(call.reason).toBe("unknown_gate");
+    }
   });
 
   it("R-5 哨兵：脚本执行器 rejected 维持终局（Faux 断言路径零回归）", async () => {

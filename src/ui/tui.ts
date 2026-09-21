@@ -226,6 +226,20 @@ const main = async (): Promise<void> => {
       folder.flushSummary(); // runBranch 收口：历史批次未达 live 也补摘要（幂等）
       renderer.appendLine("──────── 终局 ────────");
       renderer.appendLine(`outcome=${report.outcome.kind} exit=${String(report.exit_code)} 事件数=${String(report.events.length)} 模型调用=${String(provider.calls)} 次`);
+      if (report.outcome.kind === "turn_failed") {
+        // 三件小批 D-1：阈值触发＝turn 级失败收口——会话保持存活，控制权交还用户
+        // （TTY 与 completed 同路径进新指令循环；headless 非 TTY 照旧退出，exit 1）。
+        const summary = report.outcome.summary;
+        renderer.appendLine("──── turn 收口（会话保持存活）────");
+        renderer.appendLine(`本 turn 连续 ${String(summary.limit)} 次工具调用被拒（${summary.reason}），turn 已收口、run 未终止：`);
+        for (const call of summary.rejected) {
+          renderer.appendLine(`  - ${call.tool} reason=${call.reason} params_digest=${call.params_digest.slice(0, 16)}…`);
+        }
+        if (summary.hint.gate_ids !== undefined) {
+          renderer.appendLine(`合法 GateId 清单：${summary.hint.gate_ids.join(" / ")}`);
+        }
+        renderer.appendLine(summary.hint.note);
+      }
       if (report.outcome.kind === "failed") {
         renderer.appendLine(formatThreePartLines({
           fact: "run 终局 failed（本 turn 未完成即收口）",
@@ -235,7 +249,7 @@ const main = async (): Promise<void> => {
         process.exitCode = report.exit_code;
         break;
       }
-      if (report.outcome.kind !== "completed") {
+      if (report.outcome.kind !== "completed" && report.outcome.kind !== "turn_failed") {
         const block = report.outcome.block;
         renderer.appendLine(`block: ${block.reason} —— ${block.message}`);
         if (report.outcome.kind === "suspended") {
