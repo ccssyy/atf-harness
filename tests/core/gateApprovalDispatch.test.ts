@@ -116,8 +116,9 @@ describe("B7 N1：MCP 面同语义（真实 mock 对端，同一 executor）", (
       expect(qaCalls).toBe(0); // 免审批
 
       const unknown = await executor.execute("atf_gate", { gate: "zzz-not-a-gate", action: "query" }, gate);
-      // mock 简化面：任意 gate 名回 ok（unknown_gate 由真内核产出，SpyTransport 单测已覆盖）
-      expect(unknown.kind).toBe("executed");
+      // mock 契约忠实化（三件小批 D-1/D-2）：未收录 gate 名 → unknown_gate 结构化回填（rejected）
+      expect(unknown.kind).toBe("rejected");
+      if (unknown.kind === "rejected") expect(unknown.reason).toBe("unknown_gate");
       expect(qaCalls).toBe(0); // 零弹窗（本断言为本例要点）
 
       const advance = await executor.execute("atf_gate", { gate: "g1", action: "advance" }, gate);
