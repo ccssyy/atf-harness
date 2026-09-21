@@ -18,6 +18,11 @@ export {
   type SwitchRecord,
   type ToolResultPayload,
   type TurnAttribution,
+  type TurnBlockingDescription,
+  type TurnFailureReason,
+  type TurnFailureSummary,
+  type TurnGapCard,
+  type TurnGapCardOption,
 } from "./runner.js";
 export {
   createApprovalTrackHandler,
@@ -47,6 +52,33 @@ export {
   type MemoryReadInjector,
 } from "./memoryInjection.js";
 export { deriveLoopStateFromEvents, type LoopStateSnapshot, type LoopTurnState } from "./loopState.js";
+export {
+  NoProgressDetector,
+  NO_PROGRESS_COLLAPSE_CUT_TOOLS,
+  NO_PROGRESS_CUT_THRESHOLD,
+  NO_PROGRESS_EXEMPT_TOOLS,
+  NO_PROGRESS_NUDGE_NOTE,
+  NO_PROGRESS_NUDGE_THRESHOLD,
+  POLLING_STATE_CHANGERS,
+  TOOL_CUT_NOTE,
+  TOOL_CUT_REASON,
+  actionFingerprint,
+  resultFingerprint,
+  type NoProgressForm,
+  type NoProgressObservation,
+  type NoProgressTier,
+  type NoProgressVerdict,
+} from "./noProgress.js";
+export {
+  BLOCK_CODE_GUIDANCE,
+  gapCardFor,
+  guidanceFor,
+  guidanceLineFor,
+  isMaterialGapCode,
+  type BlockGuidanceEntry,
+  type GapCard,
+  type GapCardOption,
+} from "./blockGuidance.js";
 export {
   buildAnswerPayload,
   channelToApprovalVerdict,

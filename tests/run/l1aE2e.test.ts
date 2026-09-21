@@ -299,16 +299,16 @@ describe("VERIFY 6——拒绝/建议/中止分支", () => {
 });
 
 describe("VERIFY 7——成本护栏（max_calls_per_run，与轮次预算正交）", () => {
-  it("超上限 → 收敛且原因可区分（call_budget_exhausted）", async () => {
+  it("超上限 → turn 级收口且原因可区分（call_budget_exhausted；D-f-1 改 turn_failed）", async () => {
     const rig = await makeRig(RO, { max_calls_per_run: 2 });
     const provider = providerOf(rig);
     const report = await run(rig, makeScenario({ gatePreRecord: false, runLabel: "budget" }), provider);
-    expect(report.outcome.kind).toBe("failed");
-    if (report.outcome.kind !== "failed") return;
-    // runner 折算 provider_failure 终局；原始错误码在 detail 内可区分（非轮次预算 32/8）
-    expect(report.outcome.error.code).toBe("provider_failure");
-    expect((report.outcome.error.detail as { code?: string }).code).toBe("call_budget_exhausted");
-    expect((report.outcome.error.detail as { detail?: { limit?: number } }).detail?.limit).toBe(2);
+    expect(report.outcome.kind).toBe("turn_failed");
+    if (report.outcome.kind !== "turn_failed") return;
+    // runner 折算 provider_failure turn 级收口；原始错误码在阻塞说明 stuck_at 可区分（非轮次预算 32/8）
+    expect(report.outcome.summary.reason).toBe("provider_failure");
+    expect(report.outcome.summary.blocked_description?.stuck_at).toContain("call_budget_exhausted");
+    expect(report.outcome.summary.blocked_description?.stuck_at).toContain("max_calls_per_run=2");
   });
 });
 

@@ -102,7 +102,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     // 返回的 dataset_id 定位执行。两形态互斥由内核 fail-closed 校验（invalid_params 回流），
     // harness schema 只做描述层指引＋字段声明（D-b 原则：不引入第二权威）。
     description:
-      "数据集登记（真实数据校验的第一步）：推荐用自动形态——不传 dataset_id，传真实 source_root（成对标注来源包根）与 split_root（split manifest 根），二者必须为已存在的目录；内核按内容寻址派生 dataset_id（ds-<digest12>）并从返回值读取。显式形态（仅登记引用、不支持真实数据校验）：传 dataset_id（注册标识符，非文件路径、无 @）与可选 source_ref（来源引用字符串，非文件路径要求）。两形态互斥。",
+      "数据集登记（真实数据校验的第一步）：推荐用自动形态——不传 dataset_id，传真实 source_root（成对标注来源包根）与 split_root（split manifest 根），二者必须为已存在的目录；内核按内容寻址派生 dataset_id（ds-<digest12>）并从返回值读取。显式形态（仅登记引用、不支持真实数据校验）：传 dataset_id（注册标识符，非文件路径、无 @）与可选 source_ref（来源引用字符串，非文件路径要求）。两形态互斥。业务拒绝回流（如 *_missing／invalid_params）附有一行指引：按指引修参；缺料（*_missing 类）时勿重复探查——如实向用户说明缺什么并停止。",
     parameters: {
       type: "object",
       required: [],
@@ -159,7 +159,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     // R1 接线批（D-5，2026-09-20）：模型面工具名用下划线（provider 函数名不允许 "."），
     // RPC 方法经 executor 显式映射到 atf_data_admission.request（内核冻结面 main 61631e6）。
     description:
-      "数据准入申请：对已登记数据集执行真实 source-backed 数据校验并落盘判定结果（可能因标注冲突需要人工裁决；结果含 G1–G4 判定投影）。dataset_id/pin 取自 atf_admit_data 登记结果 fact_id（形如 <dataset_id>@<pin>）或事实索引中的登记事实；勿要求用户手敲；不接受文件路径。",
+      "数据准入申请：对已登记数据集执行真实 source-backed 数据校验并落盘判定结果（可能因标注冲突需要人工裁决；结果含 G1–G4 判定投影）。dataset_id/pin 取自 atf_admit_data 登记结果 fact_id（形如 <dataset_id>@<pin>）或事实索引中的登记事实；勿要求用户手敲；不接受文件路径。返回 *_missing 类业务拒绝（缺料）时：不要重复探查——如实向用户说明缺什么并停止（系统会呈现缺口卡）。",
     parameters: {
       type: "object",
       required: ["dataset_id"],

@@ -105,13 +105,13 @@ describe("切片 1 · VERIFY 1 终止判据各自收敛", () => {
     // null 分支的防御形态——由 resolveExhaustionStop 纯函数承载并在此直测。
   });
 
-  it("error → failed(1)，provider 故障路径收口 turn（INV-2 修复：stop_reason=error）", { timeout: 60_000 }, async () => {
+  it("error → turn 级收口(1)：stop_reason=error 保留＋failure_summary（D-f-1 改 turn_failed；脚本径仍终局）", { timeout: 60_000 }, async () => {
     const r = await runWith(contextCapturingProvider([], 0), [{ type: "final_answer", text: "irrelevant" }]);
-    expect(r.outcome.kind).toBe("failed");
+    expect(r.outcome.kind).toBe("turn_failed");
     expect(r.exit_code).toBe(1);
     const turnEnd = r.events[r.events.length - 1];
     expect(turnEnd?.type).toBe("turn/end");
-    expect(turnEnd?.payload).toMatchObject({ reason: "failed", stop_reason: "error" });
+    expect(turnEnd?.payload).toMatchObject({ reason: "failed", stop_reason: "error", failure_summary: { reason: "provider_failure" } });
     assertTurnPairing(r.events.map((event) => event.type));
   });
 
@@ -141,17 +141,21 @@ describe("切片 1 · VERIFY 1 终止判据各自收敛", () => {
 });
 
 describe("切片 1 · VERIFY 2 预算耗尽（确定性，复用 exit 1）", () => {
-  it(`超 max_steps_per_turn(${String(LOOP_MAX_STEPS_PER_TURN)}) → failed(budget_exhausted)，exit 1`, { timeout: 120_000 }, async () => {
+  it(`超 max_steps_per_turn(${String(LOOP_MAX_STEPS_PER_TURN)}) → turn 级收口(1)：stop_reason 保留＋summary（D-f-1/D-f-2）`, { timeout: 120_000 }, async () => {
     const endless: LlmDecision[] = Array.from({ length: LOOP_MAX_STEPS_PER_TURN + 5 }, (_, index) => ({
       type: "assistant_message",
       text: `步骤 ${String(index)}`,
     }));
     const r = await runWith(contextCapturingProvider(endless), [{ type: "final_answer", text: "irrelevant" }]);
-    expect(r.outcome.kind).toBe("failed");
-    if (r.outcome.kind === "failed") expect(r.outcome.error.code).toBe("budget_exhausted");
+    expect(r.outcome.kind).toBe("turn_failed");
+    if (r.outcome.kind === "turn_failed") {
+      expect(r.outcome.summary.reason).toBe("budget_exhausted");
+      expect(r.outcome.summary.limit).toBe(LOOP_MAX_STEPS_PER_TURN);
+      expect(r.outcome.summary.blocked_description?.turns_used).toBe(1);
+    }
     expect(r.exit_code).toBe(1);
     const turnEnd = r.events[r.events.length - 1];
-    expect(turnEnd?.payload).toMatchObject({ reason: "failed", stop_reason: "budget_exhausted" });
+    expect(turnEnd?.payload).toMatchObject({ reason: "failed", stop_reason: "budget_exhausted", failure_summary: { reason: "budget_exhausted" } });
   });
 
   it(`超 max_turns(${String(LOOP_MAX_TURNS)})：9 段分支在第 9 个 turn 前被拒 → failed(budget_exhausted)`, { timeout: 120_000 }, async () => {
@@ -212,7 +216,7 @@ describe("切片 1 · VERIFY 4 step 元数据（与事件流实际计数一致�
 });
 
 describe("切片 1 · VERIFY 5 以可执行内容为准", () => {
-  it("完整工具请求已产出后 provider 截断故障 → 该请求仍执行（tool/result 在场），随后 failed(error)", { timeout: 60_000 }, async () => {
+  it("完整工具请求已产出后 provider 截断故障 → 该请求仍执行（tool/result 在场），随后 turn 级收口（stop_reason=error；D-f-1）", { timeout: 60_000 }, async () => {
     const queue: (LlmDecision | null)[] = [
       { type: "tool_call", tool: "atf_workspace_status", params: {} },
     ];
@@ -226,19 +230,19 @@ describe("切片 1 · VERIFY 5 以可执行内容为准", () => {
     };
     const r = await runWith(provider, [{ type: "final_answer", text: "irrelevant" }]);
     expect(r.events.map((event) => event.type)).toContain("tool/result");
-    expect(r.outcome.kind).toBe("failed");
+    expect(r.outcome.kind).toBe("turn_failed");
     const turnEnd = r.events[r.events.length - 1];
-    expect(turnEnd?.payload).toMatchObject({ stop_reason: "error" });
+    expect(turnEnd?.payload).toMatchObject({ stop_reason: "error", failure_summary: { reason: "provider_failure" } });
   });
 
-  it("声称完成但无 final_answer 且无待处理动作 → 判未收束（provider_failure，不猜测成功）", { timeout: 60_000 }, async () => {
+  it("声称完成但无 final_answer 且无待处理动作 → turn 级收口（provider_failure，不猜测成功；D-f-1）", { timeout: 60_000 }, async () => {
     const r = await runWith(contextCapturingProvider([{ type: "assistant_message", text: "我做完了" }]), [
       { type: "final_answer", text: "irrelevant" },
     ]);
-    expect(r.outcome.kind).toBe("failed");
-    if (r.outcome.kind === "failed") expect(r.outcome.error.code).toBe("provider_failure");
+    expect(r.outcome.kind).toBe("turn_failed");
+    if (r.outcome.kind === "turn_failed") expect(r.outcome.summary.reason).toBe("provider_failure");
     const turnEnd = r.events[r.events.length - 1];
-    expect(turnEnd?.payload).toMatchObject({ reason: "failed" });
+    expect(turnEnd?.payload).toMatchObject({ reason: "failed", failure_summary: { reason: "provider_failure" } });
     expect((turnEnd?.payload as { stop_reason?: string }).stop_reason).toBeUndefined();
   });
 });

@@ -336,9 +336,12 @@ const toolGate = (params) => {
 // R1 接线批（D-6，2026-09-20）：atf_data_admission.request 三态仿真——
 //   adjudicated（缺省成功）／waiting_on_human（--admission-status=waiting_on_human，
 //   含 requests 载荷、诚实停止）／invalid_params（形态校验失败，供回流链复测）。
+// D-f 批（2026-09-21）增 --admission-reason=<码>：登记通过后准入执行阶段业务阻断
+//   （内核同名稳定码直出；供 guidance 回填／缺口卡收口链用例，如 split_manifest_missing）。
 // 仿真口径与 bridge.contract.yaml 登记段逐字段一致；dataset 未登记 → dataset_not_registered
 // （与内核 fail-closed 同口径：本仿真要求先经 atf_admit_data 登记）。
 const admissionStatus = findOpt("admission-status") ?? "adjudicated";
+const admissionReason = findOpt("admission-reason") ?? "";
 const isSafeComponent = (value) => typeof value === "string" && value !== "" && !/[\\/]/.test(value) && !value.includes("@");
 const toolDataAdmissionRequest = (params) => {
   const datasetId = params.dataset_id;
@@ -357,6 +360,13 @@ const toolDataAdmissionRequest = (params) => {
   const fact = matches[0];
   if ((fact.refs?.source_root ?? undefined) === undefined) {
     return { error: { code: "dataset_not_registered", message: `登记记录缺可解析源根（显式登记不支持真实数据校验，请用自动形态重新登记）: ${String(datasetId)}` } };
+  }
+  if (admissionReason !== "") {
+    // 业务阻断仿真（内核 ValueError→MethodError 同码直出形态）：诚实拒绝，不静默补齐
+    const messages = {
+      split_manifest_missing: `split_root 下缺 global_assignment.csv 或 global_plan.json（内核 _read_assignments 强制清单）: ${String(datasetId)}`,
+    };
+    return { error: { code: admissionReason, message: messages[admissionReason] ?? `业务阻断（仿真注入）: ${admissionReason}` } };
   }
   const pin = fact.fact_id.split("@")[1] ?? "";
   const summaryRef = `runs/${resolved.runId}/l1/${fact.fact_id}/source-backed-admission-summary.json`;
@@ -394,9 +404,11 @@ const toolDataAdmissionRequest = (params) => {
 const toolFactScan = (params) => {
   const resolved = resolveRun(params);
   if (resolved.error !== undefined) return resolved;
+  // 契约 canonical 白名单：仅三元组（登记条目的内部 refs 不出事实面——D-f 批修复）
   return {
     ok: true,
-    facts: admittedFacts.map((fact) => ({ ...fact })),    count: admittedFacts.length,
+    facts: admittedFacts.map((fact) => ({ journal_type: fact.journal_type, fact_id: fact.fact_id, sha256_digest: fact.sha256_digest })),
+    count: admittedFacts.length,
   };
 };
 
