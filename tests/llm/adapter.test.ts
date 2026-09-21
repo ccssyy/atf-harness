@@ -74,6 +74,84 @@ describe("切片 2 · VERIFY 1 B1 adapter 映射", () => {
   });
 });
 
+describe("D-f 补正批（B2/B4）：tool/result 附注白名单＋摘要化定向扩展", () => {
+  const GUIDANCE = "【invalid_params】参数形态或互斥约束不合法。缺：符合工具 schema 的参数。按 detail 修正后重试";
+  const NUDGE = "控制面提示：该调用与此前调用重复且无新信息。";
+
+  it("用例 1：ok:false ＋ guidance → summary 含 reason 且含 guidance 文案（内容断言）", () => {
+    const mapped = adaptProjectionToMessages([
+      event(1, "tool/result", {
+        tool: "atf_admit_data", ok: false, reason: "invalid_params", call_ref: 1,
+        block: { reason: "invalid_params", message: "x", tool: "atf_admit_data", exit_code: 1 },
+        detail: { code: "invalid_params" }, guidance: GUIDANCE,
+      }),
+    ]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value.find((message) => message.role === "tool_result");
+    expect(toolResult).toBeDefined();
+    if (toolResult?.role !== "tool_result") return;
+    expect(toolResult.summary).toContain("invalid_params");
+    expect(toolResult.summary).toContain(GUIDANCE);
+    // 顺序：reason 主体在前、附注在后（旧信息超集语义）
+    expect(toolResult.summary.indexOf("invalid_params")).toBeLessThan(toolResult.summary.indexOf(GUIDANCE));
+  });
+
+  it("用例 2（零回归硬要求）：两字段缺省时 ok:false summary 与现状逐字节一致", () => {
+    const payload = { tool: "atf_gate", ok: false, reason: "unknown_gate", call_ref: 1, detail: { code: "unknown_gate" } };
+    const mapped = adaptProjectionToMessages([event(1, "tool/result", payload)]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value[0];
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    expect(toolResult.summary).toBe("unknown_gate"); // 逐字节一致（非 contains）
+  });
+
+  it("用例 3：ok:true ＋ nudge → summary 含 readableSummary(result) 且含 nudge（runner.ts:1224 注入点）", () => {
+    const result = { ok: true, count: 0, facts: [] };
+    const mapped = adaptProjectionToMessages([
+      event(1, "tool/result", { tool: "atf_fact_scan", ok: true, result, call_ref: 1, nudge: NUDGE }),
+    ]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value[0];
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    expect(toolResult.summary).toContain(JSON.stringify(result));
+    expect(toolResult.summary).toContain(NUDGE);
+  });
+
+  it("用例 4（零回归硬要求）：ok:true 无 nudge → summary 与现状逐字节一致", () => {
+    const result = { ok: true, count: 0, facts: [] }; // 短载荷（readableSummary 160 截断内）
+    const mapped = adaptProjectionToMessages([event(1, "tool/result", { tool: "atf_fact_scan", ok: true, result, call_ref: 1 })]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value[0];
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    expect(toolResult.summary).toBe(JSON.stringify(result)); // 逐字节一致
+  });
+
+  it("用例 5（反向）：未声明字段仍被拦（白名单未被放宽）", () => {
+    const mapped = adaptProjectionToMessages([
+      event(1, "tool/result", { tool: "atf_gate", ok: false, reason: "blocked", call_ref: 1, budget: 32 }),
+    ]);
+    expect(mapped.ok).toBe(false);
+    if (!mapped.ok) expect(mapped.error.message).toContain("未声明字段");
+    if (mapped.ok) throw new Error("unreachable");
+    expect(mapped.error.message).toContain("budget");
+  });
+
+  it("ok:false 双附注顺序 = [reason, guidance, nudge]；缺省段滤除", () => {
+    const mapped = adaptProjectionToMessages([
+      event(1, "tool/result", { tool: "atf_fact_scan", ok: false, reason: "blocked", call_ref: 1, nudge: NUDGE }),
+    ]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value[0];
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    expect(toolResult.summary).toBe(`blocked｜${NUDGE}`); // guidance 缺省 → 段滤除，不产生空段
+  });
+});
+
 describe("切片 2 · A3 多工具展开（一次响应 → N 个顺序决策）", () => {
   it("message + N 工具 → N+1 个顺序决策（message 先行、工具按声明序）", () => {
     const expanded = expandModelResponse({
