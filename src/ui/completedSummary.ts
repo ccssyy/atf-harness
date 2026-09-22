@@ -29,6 +29,31 @@ export const TOOL_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   atf_preparation_propose: "查询准备阶段（模板/待确认项）",
   atf_style_cluster_execute: "执行版式聚类",
   atf_data_admission_request: "发起数据准入申请",
+  // 批 3「创作执行面」（2026-09-22）：工作区工具产品名与交接指引（§四）。
+  atf_scratch_write: "写入工作区文件",
+  atf_scratch_exec: "受控执行脚本",
+  atf_skill_read: "读取技能操作定义",
+  atf_launch_execute: "放行并启动训练",
+};
+
+/** 批 3 §四：工作区工具结果 → 产物行（launch/评估/badcase 交接事实，与内核 human 层并列表述）。 */
+const workspaceProductLines = (tool: string, result: Record<string, unknown>): string[] => {
+  if (tool === "atf_launch_execute") {
+    const state = typeof result["state"] === "string" ? (result["state"] as string) : "unknown";
+    const logPath = typeof result["log_path"] === "string" ? (result["log_path"] as string) : "";
+    const stateText = state === "started" ? "已启动" : state === "waiting_for_start" ? "等待放行（账本无本配置的放行记录）" : `状态 ${state}`;
+    return [`训练启动：${stateText}${logPath !== "" ? `（日志 ${logPath}）` : ""}`];
+  }
+  if (tool === "atf_scratch_exec" && result["launch_ready"] !== undefined) {
+    return ["训练计划就绪（launch.sh 已生成，待放行确认）"];
+  }
+  if (tool === "atf_skill_read" && typeof result["skill"] === "string") {
+    return [`技能定义：${result["skill"] as string}（全文已读）`];
+  }
+  if (tool === "atf_scratch_write" && typeof result["path"] === "string") {
+    return [`工作区文件：${result["path"] as string}`];
+  }
+  return [];
 };
 
 const PLAIN_OBJECT = (value: unknown): value is Record<string, unknown> =>
@@ -96,6 +121,7 @@ export const completedSummaryLines = (events: readonly SessionEvent[]): string[]
     if (payload.tool === "atf_data_admission_request" && typeof result["status"] === "string") {
       products.push(`准入判定：${result["status"] as string}`);
     }
+    products.push(...workspaceProductLines(payload.tool, result));
   }
 
   // ── 下一步建议：末次内核 human_summary 的「唯一下一动作」；无则该段不出现 ──
@@ -106,6 +132,13 @@ export const completedSummaryLines = (events: readonly SessionEvent[]): string[]
       nextStep = nextActionOf(human) ?? null;
       if (nextStep !== null) break;
     }
+  }
+  // 批 3 §四：训练已启动 → 交接指引（评估→badcase 链；内核 human 层缺位时的兜底一行）。
+  const launched = results.some((payload) =>
+    payload.tool === "atf_launch_execute" && PLAIN_OBJECT(payload.result) &&
+    (payload.result as Record<string, unknown>)["state"] === "started");
+  if (launched && nextStep === null) {
+    nextStep = "训练已启动（长任务）：训练完成后读 atf-evaluate-checkpoints 技能做评估，再读 atf-analyze-badcases 做 badcase 归因（均用 atf_scratch_exec 执行其 scripts）";
   }
 
   const lines: string[] = [];

@@ -46,3 +46,32 @@ export {
   type GuardedReplayOutcome,
   type T0RefBlock,
 } from "./t0Guard.js";
+export {
+  buildScratchExecEnv,
+  ensureExecDirs,
+  findBash,
+  findPython3,
+  guardScratchArgv,
+  guardedScratchWrite,
+  LAUNCH_WAIT_MS_DEFAULT,
+  readLaunchState,
+  runLaunchScript,
+  runScratchCommand,
+  scanLaunchReady,
+  SCRATCH_EXEC_STDERR_TAIL_BYTES,
+  SCRATCH_EXEC_STDOUT_CAP_BYTES,
+  SCRATCH_EXEC_TIMEOUT_MS_DEFAULT,
+  SCRATCH_WRITE_MAX_BYTES,
+  type ArgvGuardVerdict,
+  type LaunchReady,
+  type ScratchRunOutcome,
+} from "./scratchExec.js";
+export {
+  listSkills,
+  parseSkillFrontmatter,
+  readSkillBody,
+  readSkillFile,
+  skillsSuffixText,
+  SKILL_FILE_MAX_BYTES,
+  type SkillSummary,
+} from "./skillCatalog.js";

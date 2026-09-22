@@ -20,7 +20,8 @@ import {
   type ResolvedLlmProviderConfig,
 } from "../llm/index.js";
 import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
-import { ToolRegistry } from "../core/tools/index.js";
+import { ToolRegistry, WORKSPACE_TOOL_HANDLERS, buildSkillsSystemSuffix, type LocalToolHost } from "../core/tools/index.js";
+import { resolveKernelDir } from "../ui/tuiArgs.js";
 import {
   ScenarioRunner,
   parseResumeArgs,
@@ -28,6 +29,7 @@ import {
   readSessionStream,
   sessionLogPathFor,
   type BranchRunReport,
+  type RunBranchOptions,
 } from "../core/run/index.js";
 import type { Scenario } from "../llm/index.js";
 
@@ -70,9 +72,29 @@ const runAnswer = async (
     console.error(formatThreePartLines(providerConfigThreePart(config.error.message, "配置文件经 ATF_LLM_CONFIG 指定（两层清单，0600）")));
     return 1;
   }
+  // 批 3：工作区工具面装配（与 TUI 同构；内核目录可解析才启用，缺省 7 工具行为不变）。
+  // 注意：resume 的执行 HOME 用进程 HOME（CLI 通道无对端隔离 home；内核配置根以本机为准）。
+  let toolFace: RunBranchOptions["toolFace"] = undefined;
+  let skillsSuffix: string | undefined;
+  const kernelDirResolved = resolveKernelDir(process.env, repoRoot);
+  if (kernelDirResolved.ok) {
+    const home = process.env["HOME"] ?? "";
+    const localHost: LocalToolHost = {
+      scratchDir: join(runsRoot, runId, "scratch"),
+      kernelDir: kernelDirResolved.path,
+      home,
+      baseEnv: { ...(process.env["ATF_WORKSPACE_ROOT"] !== undefined ? { ATF_WORKSPACE_ROOT: process.env["ATF_WORKSPACE_ROOT"] as string } : {}) },
+    };
+    skillsSuffix = await buildSkillsSystemSuffix(kernelDirResolved.path);
+    toolFace = {
+      registry: ToolRegistry.createWithWorkspaceTools(),
+      local: { handlers: WORKSPACE_TOOL_HANDLERS, host: localHost },
+    };
+  }
   const provider = new HttpLlmProvider({
     config: config.value as ResolvedLlmProviderConfig,
-    tools: ToolRegistry.createDefault().modelVisible(),
+    tools: toolFace !== undefined ? toolFace.registry.modelVisible() : ToolRegistry.createDefault().modelVisible(),
+    ...(skillsSuffix !== undefined ? { systemSuffix: skillsSuffix } : {}),
   });
   // provenance 三元组以既有 run 为准（RunWorkspace.create 内等值校验）；此处仅提供占位形态。
   // provider 字段类型面为 "faux"（场景脚本词汇）；resume 路径不消费该字段（无 segments），
@@ -99,6 +121,8 @@ const runAnswer = async (
     mockCommand: ["node", mockPath],
     modelProvider: provider,
     ...(scopeMode !== undefined ? { scopeMode } : {}),
+    // 批 3：工作区工具面注入（内核目录可解析时；缺省＝既有行为）
+    ...(toolFace !== undefined ? { toolFace } : {}),
     resume: {
       verdict: verdict as "granted" | "advised" | "denied" | "abort",
       ...(note !== undefined ? { note } : {}),
