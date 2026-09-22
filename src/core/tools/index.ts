@@ -2,7 +2,7 @@
  * S3 工具层公开出口。后续 slice（S4 工作区 / S5 冒烟 / P2-S2 问答轨）只从这里 import。
  */
 export { checkSchema, validateCanonicalOutput, type SchemaNode } from "./canonical.js";
-export { approvalCopyFor } from "./approvalCopy.js";
+export { approvalCopyFor, CLUSTER_PARAM_LABELS } from "./approvalCopy.js";
 export {
   approvalMissingBlock,
   approvalTrackBlock,

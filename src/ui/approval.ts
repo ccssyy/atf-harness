@@ -59,15 +59,19 @@ const question = (rl: readline.Interface, prompt: string): Promise<string> =>
  * aborted 留痕。应答后落审计行（动作/选择/时间戳）。全程零擦除——无残留 bug 类。
  * W1（走查前置止血批 2026-09-20）：advised 且无备注时追问一次意见内容（直接回车＝按
  * 无意见提交，防卡死）；granted/denied/aborted 空备注维持现状；SIGINT 兜底路径不变。
+ * A2（L1c 提前批 2026-09-22）：可选 confirmationEcho——写调用与来源确认卡的只读一致性
+ * 回显（一致/不一致差异；只提示、不拦截、不改写——拦截归内核闭集校验）。
  */
 export const askApproval = async (deps: {
   renderer: DiffRenderer;
   rl: readline.Interface;
   input: ApprovalPromptInput;
+  confirmationEcho?: (tool: string, params: unknown) => string | null;
 }): Promise<ApprovalStubResponse> => {
   const { renderer, rl, input } = deps;
   rl.resume();
-  renderer.appendLine(requestLine(input));
+  const echo = deps.confirmationEcho?.(input.tool, input.params) ?? null;
+  renderer.appendLine(echo !== null ? `${requestLine(input)} ${echo}` : requestLine(input));
   let triggerSigint: (() => void) = () => undefined;
   const sigintHandler = (): void => triggerSigint();
   rl.on("SIGINT", sigintHandler);

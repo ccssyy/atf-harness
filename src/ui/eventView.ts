@@ -59,9 +59,12 @@ export const formatEventLine = (event: SessionEvent, origin: ProjectionOrigin): 
         }
         // K-Gap-2（2026-09-21）：携带六键 human_summary 的成功结果——机器行只留 headline 摘要，
         // 六段人读版式走 formatEventDetailLines 附加行（直渲染内核人读层，不拼工程语言）。
+        // B 静默（L1c 提前批 2026-09-22）：headline 命中工程语 → 摘要段整体不出现
+        // （机器行只留 ok=true <tool>，不配中性填充语——headline 未过校验的漏洞一并闭合）。
         const human = (result.result as { human_summary?: unknown } | null | undefined)?.human_summary;
         if (isHumanSummaryShape(human)) {
-          return `${prefix}ok=true ${result.tool} ${oneLine(human.headline)}${noteText}`;
+          const headline = engineeringLeak(oneLine(human.headline)) ? "" : ` ${oneLine(human.headline)}`;
+          return `${prefix}ok=true ${result.tool}${headline}${noteText}`;
         }
         return `${prefix}ok=true ${result.tool} 结果=${detailOf(result.result)}${noteText}`;
       }
@@ -91,8 +94,10 @@ const PLAIN_OBJECT = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 
-/** 保守工程语泄漏过滤——判据即 humanSummary.engineeringLeak（本合并落地单一函数，消除双实现）。 */
-const safeLine = (line: string): string => (engineeringLeak(line) ? "（该行含工程信息，已收起）" : line);
+/** 保守工程语泄漏静默滤除（B 口径，L1c 提前批 2026-09-22）——判据即 humanSummary.engineeringLeak
+ *  （单一函数）；命中行对用户整体静默（不显示、不解释、不指路；原"已收起"降级文案删除；
+ *  事实日志审计不受影响）。 */
+const safeLine = (line: string): string | null => (engineeringLeak(line) ? null : line);
 
 /** 状态面机器行标题（已登记 N 批；N 取 admitted_count，缺省不给数）。 */
 export const statusHeadline = (result: unknown): string => {
@@ -106,20 +111,23 @@ export const statusHeadline = (result: unknown): string => {
 export const statusOverviewLines = (result: unknown): string[] => {
   if (!PLAIN_OBJECT(result)) return [];
   const lines: string[] = [];
+  const push = (line: string | null): void => {
+    if (line !== null) lines.push(line);
+  };
   const human = result["human_summary"];
   if (PLAIN_OBJECT(human)) {
-    if (typeof human["headline"] === "string" && human["headline"] !== "") lines.push(`结论：${human["headline"]}`);
+    push(typeof human["headline"] === "string" && human["headline"] !== "" ? `结论：${human["headline"]}` : null);
     for (const section of Array.isArray(human["sections"]) ? (human["sections"] as unknown[]) : []) {
       if (!PLAIN_OBJECT(section)) continue;
-      if (typeof section["title"] === "string") lines.push(`· ${section["title"]}`);
+      if (typeof section["title"] === "string") push(`· ${section["title"]}`);
       for (const item of Array.isArray(section["items"]) ? (section["items"] as unknown[]) : []) {
-        if (typeof item === "string") lines.push(`    ${item}`);
+        if (typeof item === "string") push(`    ${item}`);
       }
     }
     for (const pending of Array.isArray(human["pending_confirmations"]) ? (human["pending_confirmations"] as unknown[]) : []) {
       if (!PLAIN_OBJECT(pending)) continue;
-      if (typeof pending["title"] === "string") lines.push(`? ${pending["title"]}`);
-      if (typeof pending["detail"] === "string") lines.push(`    ${pending["detail"]}`);
+      if (typeof pending["title"] === "string") push(`? ${pending["title"]}`);
+      if (typeof pending["detail"] === "string") push(`    ${pending["detail"]}`);
     }
   } else if (Array.isArray(result["datasets"]) && (result["datasets"] as unknown[]).length > 0) {
     for (const entry of result["datasets"] as unknown[]) {
@@ -127,13 +135,13 @@ export const statusOverviewLines = (result: unknown): string[] => {
       const id = typeof entry["fact_id"] === "string" ? (entry["fact_id"] as string) : typeof entry["dataset_id"] === "string" ? (entry["dataset_id"] as string) : "（未具名登记）";
       const shape = typeof entry["shape_summary"] === "string" ? (entry["shape_summary"] as string) : typeof entry["summary"] === "string" ? (entry["summary"] as string) : "";
       const at = typeof entry["registered_at"] === "string" ? `（登记于 ${entry["registered_at"] as string}）` : "";
-      lines.push(`· ${id}${shape !== "" ? `：${shape}` : ""}${at}`);
+      push(`· ${id}${shape !== "" ? `：${shape}` : ""}${at}`);
     }
   } else {
     const count = typeof result["admitted_count"] === "number" ? (result["admitted_count"] as number) : 0;
-    lines.push(count > 0 ? `已登记 ${String(count)} 批（形态摘要待状态面提供）` : "工作区暂无已登记数据集");
+    push(count > 0 ? `已登记 ${String(count)} 批（形态摘要待状态面提供）` : "工作区暂无已登记数据集");
   }
-  return lines.map(safeLine);
+  return lines.map(safeLine).filter((line): line is string => line !== null);
 };
 
 /** F6：状态面人读行的多行附加渲染（tool/result 成功且 tool=atf_workspace_status）。

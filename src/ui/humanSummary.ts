@@ -14,7 +14,10 @@
  *
  * 负向校验（门 1 放行件 §一.6）：面向用户的主叙述行禁直出 reason_code／schema 名／
  * digest／gate 名——确定性检测（64 位 hex、`<Schema>/v数字`、GateId 闭集、snake_case
- * 工程码）；命中即整行降级为中性提示（呈现层 fail-closed，不向用户放大内核漏映射）。
+ * 工程码）；**B 静默口径（L1c 提前批 2026-09-22，owner 11:0x 二次更正）**：命中行对用户
+ * **整体静默**——不显示、不解释、不指路（原"已收起；详情见事实日志"降级文案删除；
+ * 事实日志审计不受影响，滤除仅呈现层）。产品化判据：回答不了"用户现在需要知道什么/
+ * 做什么"的行就不出现。
  * notes[] 属工程细节降级区，按 §2.4 第 5 条容忍技术定位、不作检测对象。
  */
 import { GATE_LEGAL_IDS } from "../core/tools/index.js";
@@ -52,8 +55,12 @@ const GATE_NAME = ((): RegExp => {
  *  应为中文/自然语；Latin 蛇形 token 即工程码泄漏候选。 */
 const SNAKE_CODE = /\b[a-z]+(?:_[a-z0-9]+)+\b/;
 
-/** 主叙述行负向校验：命中任一工程形态即视为泄漏。 */
+/** 主叙述行负向校验：命中任一工程形态即视为泄漏（检测器；单源，eventView/确认卡比对共用）。 */
 export const engineeringLeak = (line: string): boolean => HEX64.test(line) || SCHEMA_NAME.test(line) || GATE_NAME.test(line) || SNAKE_CODE.test(line);
+
+/** 主叙述行静默滤除（B 口径）：命中 → null（该行整体不出现——不显示、不解释、不指路；
+ *  原"已收起/详情见事实日志"降级文案删除；事实日志审计不受影响，滤除仅呈现层）。 */
+export const safeHumanLine = (line: string): string | null => (engineeringLeak(line) ? null : line);
 
 /** 结构嗅探（六键闭集；形态不符回落既有渲染——零回归）。 */
 export const isHumanSummaryShape = (value: unknown): value is HumanSummary => {
@@ -69,30 +76,49 @@ export const isHumanSummaryShape = (value: unknown): value is HumanSummary => {
   );
 };
 
-const safe = (line: string): string => (engineeringLeak(line) ? "（该行含未映射的工程信息，已收起；详情见事实日志）" : line);
+const safe = (line: string): string | null => safeHumanLine(line);
 
 /** human_summary → 过程流行（六段版式：结论先行→分组→量化→动作→待确认→补充）。
- *  主叙述行过负向校验；notes[] 为工程细节降级区原样呈现。 */
+ *  主叙述行过负向校验，命中行/命中段静默滤除（B 口径：不显示不解释不指路）；
+ *  notes[] 为工程细节降级区原样呈现。 */
 export const humanSummaryLines = (summary: HumanSummary): string[] => {
   const lines: string[] = [];
-  lines.push(`结论：${safe(summary.headline)}`);
+  const headline = safe(summary.headline);
+  if (headline !== null) lines.push(`结论：${headline}`);
   for (const section of summary.sections) {
-    lines.push(`· ${safe(section.title)}`);
-    for (const item of section.items) lines.push(`    ${safe(item)}`);
+    const title = safe(section.title);
+    if (title !== null) lines.push(`· ${title}`);
+    for (const item of section.items) {
+      const safeItem = safe(item);
+      if (safeItem !== null) lines.push(`    ${safeItem}`);
+    }
   }
   for (const metric of summary.metrics) {
-    lines.push(`· ${safe(metric.label)}：${safe(metric.value)}`);
+    const label = safe(metric.label);
+    const value = safe(metric.value);
+    if (label !== null && value !== null) lines.push(`· ${label}：${value}`);
   }
   for (const action of summary.actions) {
+    const title = safe(action.title);
+    if (title === null) continue;
     const suffix = action.needs_decision ? "（需要你决定）" : "";
-    lines.push(`→ ${safe(action.title)}${suffix}`);
-    if (action.detail !== "") lines.push(`    ${safe(action.detail)}`);
+    lines.push(`→ ${title}${suffix}`);
+    if (action.detail !== "") {
+      const detail = safe(action.detail);
+      if (detail !== null) lines.push(`    ${detail}`);
+    }
   }
   for (const pending of summary.pending_confirmations) {
-    lines.push(`? ${safe(pending.title)}`);
-    if (pending.detail !== "") lines.push(`    ${safe(pending.detail)}`);
+    const title = safe(pending.title);
+    if (title === null) continue;
+    lines.push(`? ${title}`);
+    if (pending.detail !== "") {
+      const detail = safe(pending.detail);
+      if (detail !== null) lines.push(`    ${detail}`);
+    }
     if (pending.options !== undefined && pending.options.length > 0) {
-      lines.push(`    可选：${pending.options.map((option) => safe(option)).join("／")}`);
+      const safeOptions = pending.options.map((option) => safe(option)).filter((option): option is string => option !== null);
+      if (safeOptions.length > 0) lines.push(`    可选：${safeOptions.join("／")}`);
     }
   }
   for (const note of summary.notes) lines.push(`    注：${note}`);
