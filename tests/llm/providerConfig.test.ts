@@ -307,3 +307,43 @@ describe("VERIFY 7——env 覆盖（规则 7，作用于选中 provider/model�
     expect(loaded.ok).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 批 2.5 §二（2026-09-22）：turn_token_budget 旋钮（est tokens；env > 文件顶层 > 数据驱动缺省）
+// ---------------------------------------------------------------------------
+describe("批 2.5：turn_token_budget 旋钮", () => {
+  it("文件顶层配置 → resolved.turn_token_budget 生效", async () => {
+    const body = clone();
+    body["turn_token_budget"] = 9_000;
+    const loaded = await loadLlmProviderConfig(ENV(await writeConfig(body)));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error("unreachable");
+    expect(loaded.value.turn_token_budget).toBe(9_000);
+  });
+
+  it("env 覆盖文件顶层", async () => {
+    const body = clone();
+    body["turn_token_budget"] = 9_000;
+    const loaded = await loadLlmProviderConfig(ENV(await writeConfig(body), { [PROVIDER_ENV_VARS.turnTokenBudget]: "12_345".replace("_", "") }));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error("unreachable");
+    expect(loaded.value.turn_token_budget).toBe(12345);
+  });
+
+  it("未配置 → null（runner 侧数据驱动缺省 floor(水位/4)）", async () => {
+    const loaded = await loadLlmProviderConfig(ENV(await writeConfig(CATALOG)));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error("unreachable");
+    expect(loaded.value.turn_token_budget).toBeNull();
+  });
+
+  it("非法（0/负数/非整数）→ config_invalid fail-closed", async () => {
+    for (const bad of [0, -1, 1.5]) {
+      const body = clone();
+      body["turn_token_budget"] = bad;
+      const loaded = await loadLlmProviderConfig(ENV(await writeConfig(body)));
+      expect(loaded.ok).toBe(false);
+      if (!loaded.ok) expect(loaded.error.code).toBe("config_invalid");
+    }
+  });
+});
