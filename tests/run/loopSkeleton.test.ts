@@ -50,11 +50,13 @@ const runWith = async (
   provider: LlmProvider | undefined,
   steps: Scenario["branches"][string]["steps"],
   segments?: Scenario["branches"][string]["segments"],
+  budgets?: { turnTokenBudget?: number; hardStepFuse?: number },
 ): Promise<BranchRunReport> => {
   const ran = await ScenarioRunner.runBranch(branchOf(steps, { segments }), "guard", {
     runsRoot: join(repoRoot, "tmp", "runs", `test-${randomUUID()}`),
     mockCommand: ["node", mockPath],
     ...(provider !== undefined ? { modelProvider: provider } : {}),
+    ...(budgets !== undefined ? { budgets } : {}),
   });
   expect(ran.ok, !ran.ok ? JSON.stringify(ran.error) : "").toBe(true);
   if (!ran.ok) throw new Error("unreachable");
@@ -141,12 +143,12 @@ describe("切片 1 · VERIFY 1 终止判据各自收敛", () => {
 });
 
 describe("切片 1 · VERIFY 2 预算耗尽（确定性，复用 exit 1）", () => {
-  it(`超 max_steps_per_turn(${String(LOOP_MAX_STEPS_PER_TURN)}) → turn 级收口(1)：stop_reason 保留＋summary（D-f-1/D-f-2）`, { timeout: 120_000 }, async () => {
+  it(`兜底保险丝（批 2.5 §二 层四）：模型面步数触达 hardStepFuse → turn 级收口(1)：stop_reason 保留＋summary（原 32 步硬切断迁移；注入 fuse=${String(LOOP_MAX_STEPS_PER_TURN)} 保持触发点）`, { timeout: 120_000 }, async () => {
     const endless: LlmDecision[] = Array.from({ length: LOOP_MAX_STEPS_PER_TURN + 5 }, (_, index) => ({
       type: "assistant_message",
       text: `步骤 ${String(index)}`,
     }));
-    const r = await runWith(contextCapturingProvider(endless), [{ type: "final_answer", text: "irrelevant" }]);
+    const r = await runWith(contextCapturingProvider(endless), [{ type: "final_answer", text: "irrelevant" }], undefined, { hardStepFuse: LOOP_MAX_STEPS_PER_TURN });
     expect(r.outcome.kind).toBe("turn_failed");
     if (r.outcome.kind === "turn_failed") {
       expect(r.outcome.summary.reason).toBe("budget_exhausted");

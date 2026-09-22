@@ -62,7 +62,7 @@ const turnEndPayload = (report: BranchRunReport): Record<string, unknown> => {
 };
 
 describe("D-f-1/D-f-2：budget_exhausted → turn 级收口 → 存活 → 同会话续跑", () => {
-  it("32 个互异只读调用耗尽预算 → turn_failed(reason=budget_exhausted)＋stop_reason 保留", async () => {
+  it("token 预算耗尽（批 2.5 层一，注入小预算）→ turn_failed(reason=budget_exhausted)＋stop_reason 保留（原 32 步径迁移）", async () => {
     let asked = 0;
     const provider: LlmProvider = {
       providerId: "df-stub-model",
@@ -77,6 +77,7 @@ describe("D-f-1/D-f-2：budget_exhausted → turn 级收口 → 存活 → 同�
       mockCommand: ["node", mockPath],
       modelProvider: provider,
       approvalSurface: { stub: grantedStub },
+      budgets: { turnTokenBudget: 500 }, // 注入小预算（est tokens）——token 径触达，先于 fuse
     });
     expect(ran.ok).toBe(true);
     if (!ran.ok) throw new Error("unreachable");
@@ -86,14 +87,15 @@ describe("D-f-1/D-f-2：budget_exhausted → turn 级收口 → 存活 → 同�
     if (report.outcome.kind !== "turn_failed") throw new Error("unreachable");
     const summary = report.outcome.summary;
     expect(summary.reason).toBe("budget_exhausted");
-    expect(summary.limit).toBe(32);
+    expect(summary.limit).toBe(500);
     expect(summary.blocked_description?.turns_used).toBe(1);
+    expect(summary.blocked_description?.stuck_at).toContain("token 预算");
     expect(summary.blocked_description?.stuck_at).toContain("atf_gate");
     // 补正#2 同口径：收口显式落 turn/end（stop_reason 保留＋failure_summary 在场）
     expect(turnEndPayload(report)).toMatchObject({
       reason: "failed",
       stop_reason: "budget_exhausted",
-      failure_summary: { reason: "budget_exhausted", limit: 32 },
+      failure_summary: { reason: "budget_exhausted", limit: 500 },
     });
   });
 
@@ -113,6 +115,7 @@ describe("D-f-1/D-f-2：budget_exhausted → turn 级收口 → 存活 → 同�
       mockCommand: ["node", mockPath],
       modelProvider: endless,
       approvalSurface: { stub: grantedStub },
+      budgets: { turnTokenBudget: 500 },
     });
     expect(first.ok).toBe(true);
     if (!first.ok) throw new Error("unreachable");

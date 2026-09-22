@@ -1,5 +1,7 @@
 # ATF-Harness 走查单：L1c 提前批 pty 真实模型最小链（批前走查）— 2026-09-22
 
+> **批 2.5 更新（2026-09-22 门 2 放行件 §四）**：走查判定扩展＋env 变更——**`ATF_LLM_MAX_TOKENS` 不设，模型级生效**（llm.json 已按官方上限落值：DeepSeek 393216／GLM 131072）；新增判定 **⑤ 确认直填后 execute/request 落盘 params 与确认值逐字节一致**、**⑥ 全程无 budget_exhausted 循环**、**⑦ 渐进警告出现（长 turn 时）**。
+
 - **用途**：门 2 复核之批前走查（合并版指令 §三；走查属复核证据，**不宣称六跑通过**——六跑仍按执行单 owner 现场）。
 - **形态**：pty 驱动、真实模型、**约 5 分钟**；执行人＝复核方（owner 批内授权已备，措辞 `1772676b…` §三-1）。
 - **证据**：全程 `.typescript.txt` ＋ 落盘 `session.jsonl`（runs-root 下 run 目录）。
@@ -20,14 +22,15 @@
 
 - **建议值口径**：统一 131072（≤ 全部登记模型官方上限；为旧值 4096 的 32 倍；DeepSeek 上限 393216 内、GLM 恰等于上限）。DeepSeek 如需顶格可用 393216（仍合法）。
 - **未核实值一律标 `[待核实: 官方文档]`**：上表四模型均已官方页实核，**无待核实项**。
-- **输入侧对齐（合并版 §三 连带）**：`context_window=1000000` 已补入 `~/.atf-harness/llm.json` 全部 5 个模型条目（含 deepseek-anthropic 协议别名，备份 `llm.json.bak-20260922`）→ compaction 触发水位生效值＝1M−25K=**975,000 tokens**，单条摘要上限＝min(125K,25K)×2=**50,000 字符**（旧回退值 24K/6_000 仅在未配置时使用）。
+- **批 2.5 落值（owner 19:4x 指示：env 不设、模型级生效）**：llm.json 模型级 `max_tokens` 已按官方上限落值——DeepSeek 系 **393216**（上限 384K）、GLM 系 **131072**（=上限 128K）；`context_window=1000000` 同前（备份 `llm.json.bak-20260922-2`）。
+- **输入侧对齐（合并版 §三 连带）**：`context_window=1000000` 已补入 `~/.atf-harness/llm.json` 全部 5 个模型条目（含 deepseek-anthropic 协议别名，备份 `llm.json.bak-20260922`）→ compaction 触发水位生效值＝1M−25K=**975,000 tokens**，turn 级 token 预算（批 2.5）＝水位/4=**243,750 est tokens/turn**，单条摘要上限＝min(125K,25K)×2=**50,000 字符**（旧回退值 24K/6_000 仅在未配置时使用）。
 
 ## 二、启动
 
 ```bash
 cd /data/sam/ATF-Harness && npm run build
 export ATF_LLM_CONFIG=/root/.atf-harness/llm.json
-export ATF_LLM_MAX_TOKENS=131072          # 按上表；走查所选模型 ≤ 官方上限即可
+# 批 2.5 起：ATF_LLM_MAX_TOKENS 不设——模型级生效（llm.json 已落官方上限值 393216/131072）
 # 真内核对端（--peer real）：ws-root 用既有时序夹具；内核取 ATF_CLI_PATH 覆盖 > .atf-pinned 缺省
 node dist/ui/tui.js --peer real --ws-root <已就绪的 ws-root> --runs-root tmp/ui-runs
 ```
@@ -41,11 +44,10 @@ run-id 建议 `run-walk6-<short>`（走查目录隔离）。
 | 1 | 按 prompt 输入 run-id 与触发指令（"登记 datasets/external/swb 并准备准入"） | 首屏过程流逐条可见；无系统视角行 |
 | 2 | 等模型查询状态 | **概览人读行**出现（"已登记 N 批…"或 human_summary 结论行）；模型**不向用户复述枚举**（判定④辅助） |
 | 3 | 等模型调 `atf_preparation_propose` | **① 聚类卡以人读中文＋推荐值出现**：`┌─ 确认卡 · 版式聚类参数（数据集 ds-…@…）`，含"分组粒度：\"page\""等六行推荐参数与"推荐参数（内核模板，可直接采用）" |
-| 4 | 输入 `1`（按推荐确认） | `> 确认留痕`行；下一 turn 由确认卡规范化文本驱动；**② execute payload 与确认值逐字一致**（session.jsonl 里 `atf_style_cluster_execute` 的 `cluster_params` 六键与模板逐字比对） |
-| 5 | 审批弹窗出现时核对回显后放行（`1`/`g`） | 弹窗文案含**逐参数中文回显**＋`（与确认卡一致）`；放行走既有 CAS 审批链 |
-| 6 | 等模型复查 propose → 划分卡 | **划分卡**出现（划分比例 8:2 推荐）；输入 `1` 确认（或 `2` 后改"7:3"再回车验证逐项修改） |
-| 7 | 等模型携 `split_policy` 发起 `atf_data_admission_request` → 审批放行 | 弹窗含划分比例回显；执行成功 |
-| 8 | turn 收口 | **③ completed 出现三段摘要**："──── 本轮小结 ────／做了什么／产生了什么／下一步建议"；**④ 全程无降级提示行（"已收起"字样零出现）／无系统视角表述** |
+| 4 | 输入 `1`（按推荐确认） | `> 确认留痕`行；下一 turn **⑤ harness 确定性合成直接派发 execute（不经模型转写）**：session.jsonl 里 `atf_style_cluster_execute` 的 `cluster_params` 六键与确认值**逐字节一致**（确认直填——走查判定②的根治验收）；审批弹窗出现时核对逐参数回显后放行（`1`/`g`） |
+| 5 | 等模型复查 propose → 划分卡 | **划分卡**出现（划分比例 8:2 推荐）；输入 `1` 确认（或 `2` 后改"7:3"再回车验证逐项修改）；确认后同 ⑤ 口径核 `atf_data_admission_request` 的 `split_policy`（含系统补全的 policy_id/seed/integrity_digest——实际值在审批弹窗回显）→ 审批放行 |
+| 6 | 等模型收口 | **③ completed 出现三段摘要**："──── 本轮小结 ────／做了什么／产生了什么／下一步建议"；**④ 全程无降级提示行（"已收起"字样零出现）／无系统视角表述** |
+| 7 | 长任务观察（可选） | **⑦ 渐进警告出现**：turn 估算过 80% 预算时模型收到"预算提示：…请尽快收口"（用户侧表现为模型及时收口，不出现 32 步硬切断）——**⑥ 全程无 budget_exhausted 循环** |
 
 异常分支（如触发即顺带核判定⑤）：provider 返回 429/配额错误 → 收口"卡在哪"行应显示**"模型服务用量已达上限（provider 侧配额/限流）：请核对账户额度或稍后重试；输入新指令即可继续本会话"**（人读提示，非"HTTP 429"裸码）。
 

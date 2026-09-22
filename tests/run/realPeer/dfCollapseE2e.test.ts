@@ -57,7 +57,7 @@ const runAgainstRealPeer = async (
   fixture: RealPeerFixture,
   provider: LlmProvider,
   instruction: string,
-  options?: { continue?: boolean; runsRoot?: string },
+  options?: { continue?: boolean; runsRoot?: string; budgets?: { turnTokenBudget?: number; hardStepFuse?: number } },
 ): Promise<BranchRunReport> => {
   const runsRoot = options?.runsRoot ?? (await mkdtemp(join(tmpdir(), "df-e2e-runs-")));
   try {
@@ -71,6 +71,7 @@ const runAgainstRealPeer = async (
       scopeMode: "canonical",
       modelProvider: provider,
       approvalSurface: { stub: grantedStub },
+      ...(options?.budgets !== undefined ? { budgets: options.budgets } : {}),
       ...(options?.continue === true ? { continue: { instruction } } : {}),
     });
     expect(ran.ok, !ran.ok ? JSON.stringify(ran.error) : "").toBe(true);
@@ -88,7 +89,7 @@ const turnEndPayload = (report: BranchRunReport): Record<string, unknown> => {
 
 describeIfPinned("D-f 真内核 e2e——三情形收口（当前 pin）", () => {
   it(
-    "(a) 步数耗尽：32 个互异 gate query → budget_exhausted turn 级收口＋stop_reason 保留",
+    "(a) token 预算耗尽（批 2.5 层一，注入小预算）→ budget_exhausted turn 级收口＋stop_reason 保留（原 32 步径迁移）",
     { timeout: 180_000 },
     async () => {
       const fixture = await createRealPeerFixture(`df-e2e-budget-${randomUUID().slice(0, 8)}`);
@@ -101,12 +102,12 @@ describeIfPinned("D-f 真内核 e2e——三情形收口（当前 pin）", () =>
           return ok({ type: "tool_call", tool: "atf_gate", params: { gate: "G1", action: "query", evidence_refs: [`df-e2e-${String(asked)}`] } });
         },
       };
-      const report = await runAgainstRealPeer(fixture, provider, "逐项核对闸门");
+      const report = await runAgainstRealPeer(fixture, provider, "逐项核对闸门", { budgets: { turnTokenBudget: 500 } });
       expect(report.outcome.kind).toBe("turn_failed");
       expect(report.exit_code).toBe(1);
       if (report.outcome.kind !== "turn_failed") throw new Error("unreachable");
       expect(report.outcome.summary.reason).toBe("budget_exhausted");
-      expect(report.outcome.summary.limit).toBe(32);
+      expect(report.outcome.summary.limit).toBe(500);
       expect(turnEndPayload(report)).toMatchObject({
         reason: "failed",
         stop_reason: "budget_exhausted",

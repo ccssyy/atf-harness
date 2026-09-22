@@ -37,11 +37,12 @@ import { ScenarioRunner, resolveRunExitCode, sessionLogPathFor, listPendingAppro
 import { HistoryFolder } from "./historyFold.js";
 import type { Scenario } from "../llm/index.js";
 import { DiffRenderer } from "./renderer.js";
-import { formatEventDetailLines, formatEventLine } from "./eventView.js";
+import { formatEventDetailLines, formatEventLine, statusLineFor } from "./eventView.js";
 import { collapseLines } from "./collapseView.js";
 import { askApproval } from "./approval.js";
 import { buildInitInvocation, buildRealPeerDescriptor, effectiveScopeMode, parseArgs, repoRootDefault, resolveKernelDir, usage } from "./tuiArgs.js";
-import { setCompactionContextWindow } from "../core/session/constantsBudget.js";
+import { setCompactionContextWindow, setTurnTokenBudget } from "../core/session/constantsBudget.js";
+import type { PendingConfirmAction } from "../core/run/runner.js";
 import {
   applyFieldInput,
   canonicalConfirmationText,
@@ -49,7 +50,9 @@ import {
   confirmCardFromResult,
   confirmCardLines,
   confirmationEchoLine,
+  synthesizeAction,
   type ConfirmCard,
+  type SynthesizedAction,
 } from "./confirmCard.js";
 import { completedSummaryLines } from "./completedSummary.js";
 
@@ -103,6 +106,8 @@ const main = async (): Promise<void> => {
   // A1.5.2（L1c 提前批）：进程级 compaction 触发水位注入——context_window − reserve，
   // 未配置 null → 回退既有 24K（行为中立）；与 sessionLog 审计径同源（constantsBudget）。
   setCompactionContextWindow(config.context_window);
+  // 批 2.5 §二：turn 级 token 预算注入（llm.json turn_token_budget 旋钮；null＝数据驱动 floor(水位/4)）。
+  setTurnTokenBudget(config.turn_token_budget ?? null);
 
   // W2 --peer real 预置（门 1 裁定 D-1/D-2；全部 fail-closed，任一步不过即退出不进会话）。
   // 顺序：内核目录解析（D-2）→ pin sha 校验 → ws-root 校验 → 隔离 HOME → 幂等 atf init（D-1）。
@@ -192,6 +197,24 @@ const main = async (): Promise<void> => {
       pending: ConfirmCard | null;
       confirmed: { card: ConfirmCard; confirmed: Record<string, unknown> } | null;
     } = { pending: null, confirmed: null };
+    // 批 2.5 A2.5：确认直填——最近一次合成的待派发动作（仅消费一次：传入下一 turn 的
+    // continue.pendingAction 后即清空）。
+    let pendingSynthesized: PendingConfirmAction | null = null;
+    // 批 2.5 §三.4：静默状态行——live 事件后 2.5s 无新事件 → 追加一行状态（零擦除保持；
+    // 下一事件到达即取消计时）。provider 流式＝中期架构项，登记不实施。
+    let statusTimer: NodeJS.Timeout | null = null;
+    let statusLabel = statusLineFor({ id: 0, ts: "", type: "turn/start", payload: {}, projection: { evidence_event: null } });
+    const armStatus = (): void => {
+      if (statusTimer !== null) clearTimeout(statusTimer);
+      statusTimer = setTimeout(() => {
+        renderer.appendLine(statusLabel);
+      }, 2_500);
+      statusTimer.unref?.();
+    };
+    const cancelStatus = (): void => {
+      if (statusTimer !== null) clearTimeout(statusTimer);
+      statusTimer = null;
+    };
     // B4：多轮续跑循环——每个 prompt 一个 turn（审批闸逐 turn 生效）；空输入/Ctrl+C 退出
     for (;;) {
       const provider = new HttpLlmProvider({
@@ -217,6 +240,8 @@ const main = async (): Promise<void> => {
         },
       };
       cardRef.pending = null; // 每 turn 重置：卡只认本 turn 末次 propose（跨 turn 陈卡不弹）
+      const continuePendingAction = pendingSynthesized; // A2.5：本 turn 消费一次（确认直填派发）
+      pendingSynthesized = null;
       const ran = await ScenarioRunner.runBranch(scenario, "main", {
         runsRoot: args.runsRoot,
         // W2 载体 B：peer real 走内置 descriptor（argv/cwd/env 直通 bridge spawn 面）
@@ -236,16 +261,27 @@ const main = async (): Promise<void> => {
         },
         onEvent: (event, origin) => {
           folder.handle(event, origin, formatEventLine, formatEventDetailLines);
+          if (origin !== "live") return;
           // A2：live propose 成功结果 → 确认卡候选（携带 cluster_params_template/policy_template 才成卡）
-          if (origin === "live" && event.type === "tool/result") {
+          if (event.type === "tool/result") {
             const payload = event.payload as { ok?: unknown; result?: unknown } | null;
             if (payload?.ok === true) {
               const card = confirmCardFromResult(payload.result);
               if (card !== null) cardRef.pending = card;
             }
           }
+          // 批 2.5 §三.4：静默状态行（调用中/思考中——事件驱动重挂 2.5s 单发定时器）
+          statusLabel = statusLineFor(event);
+          armStatus();
         },
-        ...(continueMode ? { continue: { instruction: instructionText } } : {}),
+        ...(continueMode
+          ? {
+              continue: {
+                instruction: instructionText,
+                ...(continuePendingAction !== null ? { pendingAction: continuePendingAction } : {}),
+              },
+            }
+          : {}),
         ...(effectiveScopeMode(args) !== "headless" ? { scopeMode: effectiveScopeMode(args) } : {}),
       });
       if (!ran.ok) {
@@ -322,7 +358,7 @@ const main = async (): Promise<void> => {
           cardOutcome = "confirmed";
         } else if (first === "2") {
           for (const field of cardFields(card)) {
-            if (!field.editable) continue; // null 待定字段不向用户要值（owner 21:38 原则）
+            if (field.hidden || !field.editable) continue; // 内置项/待定项卡面折叠不暴露（批 2.5 §三.2）
             const value = await ask(rl, `${field.label}（当前 ${field.valueText}，回车保留）> `);
             applyFieldInput(card, field.key, value, confirmed);
           }
@@ -334,6 +370,7 @@ const main = async (): Promise<void> => {
         if (cardOutcome === "confirmed") {
           cardRef.confirmed = { card, confirmed };
           instructionText = canonicalConfirmationText(card, confirmed);
+          pendingSynthesized = synthesizeAction(card, confirmed); // A2.5：确定性合成（无 LLM 参与）
           continueMode = true;
           cardRef.pending = null;
           renderer.appendLine(`> 确认留痕 ${new Date().toISOString()} 动作=确认卡·${cardKindLabel} 选择=按卡确认（参数以确认文本为准）`);

@@ -4,7 +4,7 @@
  * 长文本截断。脱敏：仅格式化既有 payload，不新增来源。
  */
 import { describe, expect, it } from "vitest";
-import { formatEventLine } from "../../src/ui/eventView.js";
+import { formatEventLine, statusLineFor } from "../../src/ui/eventView.js";
 import type { SessionEvent } from "../../src/core/session/index.js";
 
 let nextId = 1;
@@ -67,5 +67,25 @@ describe("formatEventLine（T02）", () => {
   it("turn/end 收口形态（reason + stop_reason）", () => {
     const line = formatEventLine(ev("turn/end", { reason: "completed", stop_reason: "final_answer", step_count: 2, decision_count: 2 }), "live");
     expect(line).toContain("reason=completed stop_reason=final_answer");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 批 2.5 §三（2026-09-22）：call/result 合并渲染（短行）＋静默状态行标签
+// ---------------------------------------------------------------------------
+describe("批 2.5 UX：call 短行＋statusLineFor", () => {
+  it("tool/call 大参数 → 首 160 字符＋…（不再全文直出；小参数保持全量）", () => {
+    const big = formatEventLine(ev("tool/call", { tool: "atf_fact_scan", params: { filler: "x".repeat(800) } }), "live");
+    expect(big).toContain("atf_fact_scan");
+    expect(big).toContain("…");
+    expect(big.length).toBeLessThan(400);
+    const small = formatEventLine(ev("tool/call", { tool: "atf_admit_data", params: { dataset_id: "ds-x" } }), "live");
+    expect(small).toContain('"dataset_id":"ds-x"');
+  });
+
+  it("statusLineFor：tool/call → 调用中（产品名）；其余 → 思考中", () => {
+    expect(statusLineFor(ev("tool/call", { tool: "atf_gate", params: {} }))).toBe("⋯ 调用中：查询闸门状态…");
+    expect(statusLineFor(ev("tool/result", { tool: "atf_gate", ok: true, result: {}, call_ref: 1 }))).toBe("⋯ 思考中（模型决策中）…");
+    expect(statusLineFor(ev("turn/start", {}))).toBe("⋯ 思考中（模型决策中）…");
   });
 });
