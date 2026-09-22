@@ -15,6 +15,7 @@ import type { SessionEvent } from "../core/session/index.js";
 import type { ProjectionOrigin } from "../core/index.js";
 import { type ToolResultPayload } from "../core/run/index.js";
 import { engineeringLeak, humanSummaryLines, isHumanSummaryShape } from "./humanSummary.js";
+import { TOOL_PRODUCT_NAMES } from "./completedSummary.js";
 
 const oneLine = (text: string): string => text.replace(/\s+/g, " ").trim();
 
@@ -44,8 +45,13 @@ export const formatEventLine = (event: SessionEvent, origin: ProjectionOrigin): 
       return `${prefix}${oneLine(payloadStr(payload, "text"))}`;
     case "assistant/attempt":
       return `${prefix}reason=${payloadStr(payload, "reason") || payloadStr(payload, "code")} ${oneLine(JSON.stringify(payload))}`.trimEnd();
-    case "tool/call":
-      return `${prefix}${payloadStr(payload, "tool")} 参数=${detailOf((payload as { params?: unknown } | undefined)?.params)}`;
+    case "tool/call": {
+      // 批 2.5 §三.1：call 行改动作短行——参数首 160 字符＋…（大参数不再重复直出；
+      // 结果行走 result 行）。零擦除保持：改初始渲染内容，非擦除重绘。
+      const paramsText = detailOf((payload as { params?: unknown } | undefined)?.params);
+      const shortParams = paramsText.length > 160 ? `${paramsText.slice(0, 160)}…` : paramsText;
+      return `${prefix}${payloadStr(payload, "tool")} 参数=${shortParams}`;
+    }
     case "tool/result": {
       const result = payload as ToolResultPayload;
       // D-f：回填附注（nudge 无进展指引／guidance 阻断码文案）随行展示——展示层零新增来源
@@ -84,6 +90,16 @@ export const formatEventLine = (event: SessionEvent, origin: ProjectionOrigin): 
     default:
       return `${prefix}${detailOf(payload)}`;
   }
+};
+
+/** 批 2.5 §三.4：静默状态行标签（纯函数；定时器胶水在 tui.ts——live 事件后 2.5s 无新事件
+ *  即 appendLine(本标签)，零擦除保持：追加行非重写行）。 */
+export const statusLineFor = (event: SessionEvent): string => {
+  if (event.type === "tool/call") {
+    const tool = (event.payload as { tool?: unknown } | null | undefined)?.tool;
+    return `⋯ 调用中：${typeof tool === "string" ? TOOL_PRODUCT_NAMES[tool] ?? tool : "工具"}…`;
+  }
+  return "⋯ 思考中（模型决策中）…";
 };
 
 // ---------------------------------------------------------------------------

@@ -19,8 +19,9 @@ import { type SessionEvent } from "../core/session/index.js";
 import { type ToolResultPayload } from "../core/run/index.js";
 import { isHumanSummaryShape, nextActionOf } from "./humanSummary.js";
 
-/** 工具动作产品名（呈现层 copy 表；带内核 human_summary.headline 的结果以 headline 代机名）。 */
-const TOOL_PRODUCT_NAMES: Readonly<Record<string, string>> = {
+/** 工具动作产品名（呈现层 copy 表；带内核 human_summary.headline 的结果以 headline 代机名）。
+ *  批 2.5：导出供 StatusTicker（调用中状态行）复用——单源防双表。 */
+export const TOOL_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   atf_workspace_status: "查询工作区状态",
   atf_fact_scan: "事实扫描",
   atf_gate: "查询闸门状态",

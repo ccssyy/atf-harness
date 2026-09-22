@@ -78,3 +78,36 @@ export const resolveSummaryResultCapChars = (contextWindowTokens: number | null)
   const capTokens = Math.min(ratioCapTokens, SUMMARY_RESULT_CAP_TOKENS);
   return Math.max(capTokens * TOKENS_TO_CHARS, SUMMARY_RESULT_FALLBACK_CHARS);
 };
+
+// ---------------------------------------------------------------------------
+// 批 2.5 §二：turn 级 token 预算（去"32 步"形态的四层之一；放行件 `9a5df272…` §一 区 5）
+// **单位标注（门 2 处置②）**：本层与 fuse 的单位＝**est tokens**（payload chars/2，与
+// compaction 估算同源同除数）；A1 单条摘要上限（resolveSummaryResultCapChars）的单位＝
+// **chars**。两者数值可能同为 6000，但单位与作用域不同——turn **增量**预算（本 turn 可
+// 烧多少）vs 单条**消息**上限（一条回流最长多少）。文档与报告一律带单位表述。
+// ---------------------------------------------------------------------------
+
+/** 渐进警告水位：turn 预算的 80% 触达即向模型注入收敛提示（经 tool/result nudge 既有通道）。 */
+export const TURN_BUDGET_WARN_RATIO = 0.8;
+
+/** turn 预算默认推导分母：数据驱动缺省＝compaction 触发水位的 1/4。 */
+export const TURN_BUDGET_WATERMARK_DIVISOR = 4;
+
+/** 兜底保险丝缺省（**步**数单位——防 bug 死循环的最后防线，正常不触达；run options 可配）。 */
+export const TURN_HARD_STEP_FUSE_DEFAULT = 200;
+
+let explicitTurnTokenBudget: number | null = null;
+
+/** 外壳注入 llm.json 旋钮（turn_token_budget，est tokens；null＝未配置走数据驱动缺省）。 */
+export const setTurnTokenBudget = (tokens: number | null): void => {
+  explicitTurnTokenBudget = tokens;
+};
+
+/** turn 预算解析（纯函数）：显式配置 > 数据驱动 floor(触发水位/4)；未配置窗口 → 6_000 est tokens。 */
+export const resolveTurnTokenBudget = (contextWindowTokens: number | null, explicit?: number | null): number => {
+  if (explicit !== undefined && explicit !== null) return explicit;
+  return Math.floor(resolveCompactionTriggerTokens(contextWindowTokens) / TURN_BUDGET_WATERMARK_DIVISOR);
+};
+
+/** 进程级生效 turn 预算（est tokens；runner 判定与外壳注入同源——A1.5.2 holder 同款模式）。 */
+export const turnTokenBudget = (): number => resolveTurnTokenBudget(activeContextWindowTokens, explicitTurnTokenBudget);

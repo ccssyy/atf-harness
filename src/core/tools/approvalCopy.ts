@@ -16,16 +16,17 @@ const paramString = (params: unknown, key: string): string => {
   return "（未提供）";
 };
 
-/** 聚类参数呈现层标签表（L1c 提前批 A2，2026-09-22）——**单源落此**：ui/confirmCard 从本表
- *  导入（core 不 import 外壳，边界守卫方向下唯一合法落位）；文案不是第二权威，值闭集零复制，
+/** 聚类参数呈现层标签表（L1c 提前批 A2，2026-09-22；批 2.5 §三.2 增 values 闭集值域）——
+ *  **单源落此**：ui/confirmCard 从本表导入（core 不 import 外壳，边界守卫方向下唯一合法落位）；
+ *  文案不是第二权威，值闭集零复制——values 为 bridge.contract.yaml 已登记闭集的呈现层引用，
  *  漂移由内核 invalid_params fail-closed 拦截如实暴露。 */
-export const CLUSTER_PARAM_LABELS: Readonly<Record<string, { label: string; meaning: string }>> = {
-  algorithm_version: { label: "算法版本", meaning: "聚类算法的确定版本" },
-  granularity: { label: "分组粒度", meaning: "以什么为单位聚类（如按页）" },
-  metric: { label: "相似度量", meaning: "判断两页版式是否相似所用的度量" },
-  linkage: { label: "合并方式", meaning: "相似页归并成组的方式" },
-  threshold: { label: "相似阈值", meaning: "多相似才算同类" },
-  min_cluster_size: { label: "最小组容量", meaning: "一组至少含多少样本" },
+export const CLUSTER_PARAM_LABELS: Readonly<Record<string, { label: string; meaning: string; values?: readonly string[] }>> = {
+  algorithm_version: { label: "算法版本", meaning: "聚类算法的确定版本", values: ["bbox_layout_v1"] },
+  granularity: { label: "分组粒度", meaning: "以什么为单位聚类（如按页）", values: ["page"] },
+  metric: { label: "相似度量", meaning: "判断两页版式是否相似所用的度量", values: ["cosine"] },
+  linkage: { label: "合并方式", meaning: "相似页归并成组的方式", values: ["average"] },
+  threshold: { label: "相似阈值", meaning: "多相似才算同类", values: ["auto_candidates"] },
+  min_cluster_size: { label: "最小组容量", meaning: "一组至少含多少样本", values: ["1"] },
 };
 
 /** 逐参数中文回显实际提交值（确认保真三道防线之三的呈现半边——漂移在审批弹窗被看见；

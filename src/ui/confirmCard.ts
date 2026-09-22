@@ -21,6 +21,7 @@
  * A1 后模板全量可见；③ 内核闭集校验＋审批弹窗逐参数中文回显（approvalCopy）＋与确认卡
  * 只读一致性比对（confirmationEchoLine——只提示、不拦截、不改写）。
  */
+import { createHash } from "node:crypto";
 import { CLUSTER_PARAM_LABELS } from "../core/tools/index.js";
 
 export type ConfirmCardKind = "cluster" | "split";
@@ -36,18 +37,28 @@ export interface ConfirmCard {
 interface FieldLabel {
   label: string;
   meaning: string;
+  /** 闭集值域（呈现层引用；bridge.contract.yaml 已登记闭集/模板回显——漂移内核校验兜底） */
+  values?: readonly string[];
+  /** 内置键：模板定值/系统补全——卡面折叠不暴露（批 2.5 §三.2） */
+  builtIn?: boolean;
 }
 
 /** 聚类六键呈现层标签表＝core/tools 单源（CLUSTER_PARAM_LABELS，approvalCopy 逐参数回显
  *  与本卡共用——防双表漂移）。 */
 export const CLUSTER_FIELD_LABELS: Readonly<Record<string, FieldLabel>> = CLUSTER_PARAM_LABELS;
 
-/** 划分模板已知键标签表；未知键回落键名原文（模板单源，不猜语义）。 */
+/** 划分模板已知键标签表；未知键回落键名原文（模板单源，不猜语义）。
+ *  builtIn 四键＝模板定值（走查 run-walk6-ee9a35 实测形态）；policy_id/seed＝待定项
+ *  （null——synthesiseAction 补全，审批弹窗回显），均不在卡面暴露（批 2.5 §三.2/§三.3）。 */
 export const SPLIT_FIELD_LABELS: Readonly<Record<string, FieldLabel>> = {
   target_ratios: { label: "划分比例", meaning: "各分区样本比例（默认 训练:测试 = 8:2，可改）" },
-  style_cluster_assignment_ref: { label: "分层依据", meaning: "按已落料的版式聚类产物分层" },
-  policy_id: { label: "策略标识", meaning: "待定——由 Agent 按模板规则补全，审批弹窗回显" },
-  seed: { label: "随机种子", meaning: "待定——由 Agent 按模板规则补全，审批弹窗回显" },
+  split_strategy: { label: "划分策略", meaning: "按内容族聚类分层（内核定值）", builtIn: true },
+  assignment_mode: { label: "分配模式", meaning: "按确认策略重算划分（内核定值）", builtIn: true },
+  auto_style_cluster: { label: "免聚类开关", meaning: "关闭＝必须使用聚类料分层（内核定值）", builtIn: true },
+  schema_version: { label: "策略格式版本", meaning: "DatasetSplitPolicy/v2（内核定值）", builtIn: true },
+  style_cluster_assignment_ref: { label: "分层依据", meaning: "按已落料的版式聚类产物分层", builtIn: true },
+  policy_id: { label: "策略标识", meaning: "待定项——系统按推荐规则自动补全，实际值在执行前回显" },
+  seed: { label: "随机种子", meaning: "待定项——系统按推荐规则自动补全，实际值在执行前回显" },
 };
 
 const PLAIN_OBJECT = (value: unknown): value is Record<string, unknown> =>
@@ -74,20 +85,23 @@ const labelOf = (card: ConfirmCard, key: string): FieldLabel => {
 
 const formatValue = (value: unknown): string => JSON.stringify(value) ?? "";
 
-/** 卡片可编辑字段（null 待定字段不可编辑——不向用户要值）。 */
-export const cardFields = (card: ConfirmCard): Array<{ key: string; label: string; meaning: string; valueText: string; editable: boolean }> =>
+/** 卡片字段视图（hidden＝内置项/待定项——卡面折叠不暴露，批 2.5 §三.2；editable＝用户可决）。 */
+export const cardFields = (card: ConfirmCard): Array<{ key: string; label: string; meaning: string; values?: readonly string[]; valueText: string; editable: boolean; hidden: boolean }> =>
   Object.entries(card.template).map(([key, value]) => {
-    const { label, meaning } = labelOf(card, key);
+    const { label, meaning, values, builtIn } = labelOf(card, key);
     return {
       key,
       label,
       meaning,
+      values,
       valueText: formatValue(value),
-      editable: value !== null,
+      editable: value !== null && builtIn !== true,
+      hidden: builtIn === true || value === null,
     };
   });
 
-/** 确认卡 → 过程流多行（人读中文＋推荐值；值单源＝模板回显）。
+/** 确认卡 → 过程流多行（人读中文＋推荐值＋闭集值域；值单源＝模板回显）。
+ *  卡面只列**用户可决键**；内置项/待定项折叠为一行说明（批 2.5 §三.2/§三.3）。
  *  参数值行**不适用工程语静默滤除**：模板回显值＝用户确认的对象本身（bbox_layout_v1/
  *  auto_candidates 类取值正是将提交内核的闭集值），滤除即无法确认——同 notes[]/内核
  *  human 层容忍口径；卡头/说明行为 harness 文案，构造即人读。 */
@@ -100,11 +114,13 @@ export const confirmCardLines = (card: ConfirmCard): string[] => {
   } else {
     lines.push("│ 划分把已登记样本分入训练/测试分区；有聚类料时按版式分层，训练与测试都覆盖各类版式。");
   }
-  lines.push("│ 推荐参数（内核模板，可直接采用）：");
+  lines.push("│ 内置推荐参数（可直接采用）：");
   for (const field of cardFields(card)) {
-    const valueText = field.editable ? field.valueText : "（由 Agent 按模板规则补全）";
-    lines.push(`│   · ${field.label}：${valueText}`);
+    if (field.hidden) continue;
+    const valuesNote = field.values !== undefined && field.values.length > 0 ? `（取值：${field.values.join("／")}）` : "";
+    lines.push(`│   · ${field.label}：${field.valueText}${valuesNote}`);
   }
+  lines.push("│ 其余参数（内置项与待定项）由系统按推荐规则自动补全，实际值在执行前回显。");
   lines.push("└─ 应答（1=按推荐确认 2=逐项修改；直接输入其他指令＝跳过）");
   return lines;
 };
@@ -127,7 +143,7 @@ export const applyFieldInput = (card: ConfirmCard, key: string, input: string, c
     if (sum > 0 && parts.length === Object.keys(templateValue).length) {
       const ratios: Record<string, number> = {};
       Object.keys(templateValue).forEach((ratioKey, index) => {
-        ratios[ratioKey] = Number(((parts[index] as number) / sum).toFixed(6));
+        ratios[ratioKey] = (parts[index] as number) / sum;
       });
       next[key] = ratios;
       return next;
@@ -146,6 +162,85 @@ const formatFieldValueList = (card: ConfirmCard, confirmed: Record<string, unkno
     .map((key) => `${key}=${formatValue(confirmed[key] ?? card.template[key])}`)
     .join("、");
 
+// ---------------------------------------------------------------------------
+// A2.5 确认直填（批 2.5 §一）：确定性合成——tool/call 参数＝f(内核模板, 确认值)，全程无 LLM
+// ---------------------------------------------------------------------------
+
+/** 内核 canonical_digest 忠实移植（处置① 对码：contracts/models.py canonical_json＝
+ *  json.dumps(sort_keys=True, separators=(",",":"), ensure_ascii=True) 的 SHA-256；
+ *  本合成只产 JSON 基础类型（str/int/float/bool/null/list/dict），datetime/Enum/dataclass/
+ *  set 分支不触。integrity_digest＝"sha256:"+digest(body)——内核 _split_policy 硬校验，
+ *  提交方必须自带（走查 run-walk6 四拒的结构性根因：模型无法计算该摘要）。 */
+const CANONICAL_DIGEST_PREFIX = "sha256:";
+
+const ensureAscii = (text: string): string => {
+  let out = "";
+  for (const ch of text) {
+    const code = ch.codePointAt(0) as number;
+    if (code < 0x80) {
+      out += ch;
+    } else if (code <= 0xffff) {
+      out += `\\u${code.toString(16).padStart(4, "0")}`;
+    } else {
+      const high = Math.floor((code - 0x10000) / 0x400) + 0xd800;
+      const low = ((code - 0x10000) % 0x400) + 0xdc00;
+      out += `\\u${high.toString(16).padStart(4, "0")}\\u${low.toString(16).padStart(4, "0")}`;
+    }
+  }
+  return out;
+};
+
+const canonicalJson = (value: unknown): string => {
+  if (value === null || typeof value === "boolean" || typeof value === "number") {
+    if (typeof value === "number" && !Number.isFinite(value)) throw new Error("canonical_float_not_finite");
+    return JSON.stringify(value);
+  }
+  if (typeof value === "string") return ensureAscii(JSON.stringify(value));
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value === "object") {
+    const keys = Object.keys(value as Record<string, unknown>).sort();
+    return `{${keys.map((key) => `${ensureAscii(JSON.stringify(key))}:${canonicalJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
+  }
+  throw new Error("canonical_value_unsupported");
+};
+
+const canonicalDigestHex = (value: unknown): string => createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
+
+export interface SynthesizedAction {
+  tool: string;
+  params: Record<string, unknown>;
+  origin: "confirm_card";
+}
+
+/** 确定性合成（三道防线升级为单一防线）：确认值 → 完整可执行 payload。
+ *  null 待定键补全规则（处置① 对码结果：内核 `_split_policy` 只要求 policy_id 非空字符串、
+ *  seed 为 int——两规则值均在接受面内；确定性、无数据语义）：
+ *  - policy_id = "policy-<dataset_id>-<yyyymmdd>"（UTC）
+ *  - seed = 0
+ *  划分 payload 追加 integrity_digest（内核硬校验，见上）。逐字节确定性：同 (card, confirmed,
+ *  now) 同输出；now 仅进入 policy_id 标识串。 */
+export const synthesizeAction = (card: ConfirmCard, confirmed: Record<string, unknown>, now: Date = new Date()): SynthesizedAction => {
+  const at = card.factId.indexOf("@");
+  const datasetId = at > 0 ? card.factId.slice(0, at) : card.factId;
+  const pin = at > 0 ? card.factId.slice(at + 1) : undefined;
+  const base = { dataset_id: datasetId, ...(pin !== undefined && pin !== "" ? { pin } : {}) };
+  if (card.kind === "cluster") {
+    const clusterParams: Record<string, unknown> = {};
+    for (const key of Object.keys(card.template)) clusterParams[key] = confirmed[key] ?? card.template[key];
+    return { tool: "atf_style_cluster_execute", params: { ...base, cluster_params: clusterParams }, origin: "confirm_card" };
+  }
+  const yyyymmdd = `${String(now.getUTCFullYear())}${String(now.getUTCMonth() + 1).padStart(2, "0")}${String(now.getUTCDate()).padStart(2, "0")}`;
+  const policy: Record<string, unknown> = {};
+  for (const key of Object.keys(card.template)) {
+    const value = confirmed[key] ?? card.template[key];
+    if (key === "policy_id" && value === null) policy[key] = `policy-${datasetId}-${yyyymmdd}`;
+    else if (key === "seed" && value === null) policy[key] = 0;
+    else policy[key] = value;
+  }
+  policy["integrity_digest"] = `${CANONICAL_DIGEST_PREFIX}${canonicalDigestHex(policy)}`;
+  return { tool: "atf_data_admission_request", params: { ...base, split_policy: policy }, origin: "confirm_card" };
+};
+
 /** 比例的人读比式（7:3 形态；非数值键值时回落 JSON 形态）。 */
 const ratiosText = (value: unknown): string => {
   if (!PLAIN_OBJECT(value)) return formatValue(value);
@@ -163,15 +258,11 @@ const ratiosText = (value: unknown): string => {
 export const canonicalConfirmationText = (card: ConfirmCard, confirmed: Record<string, unknown>): string => {
   if (card.kind === "cluster") {
     return `【确认卡·聚类参数】数据集 ${card.factId} 聚类参数已逐项确认：${formatFieldValueList(card, confirmed)}。` +
-      "请以上述值逐字作为 cluster_params 六键发起 atf_style_cluster_execute（勿改动、勿增删键）。";
+      "系统将按上述确认值直接执行 atf_style_cluster_execute（确定性合成，不经模型改写）；请读执行结果并继续。";
   }
-  const pendingKeys = Object.keys(card.template).filter((key) => card.template[key] === null);
-  const pendingNote = pendingKeys.length > 0
-    ? `模板中置 null 的待定字段（${pendingKeys.join("、")}）由你按模板规则补全，实际值将在审批弹窗逐项回显。`
-    : "";
   const ratios = confirmed["target_ratios"] ?? card.template["target_ratios"];
   return `【确认卡·划分策略】数据集 ${card.factId} 划分策略已确认：划分比例 ${ratiosText(ratios)}。` +
-    `请以上述确认值构造 split_policy 完整 payload（骨架以 atf_preparation_propose 回显的 policy_template 为基准，含 ${formatFieldValueList(card, confirmed)}）发起 atf_data_admission_request。${pendingNote}`;
+    "系统将按确认值合成完整 split_policy（待定项由系统按推荐规则自动补全）直接发起 atf_data_admission_request（确定性合成，不经模型改写），实际值在执行前（审批弹窗）回显；请读执行结果并继续。";
 };
 
 /**

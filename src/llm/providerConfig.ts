@@ -47,6 +47,7 @@ export const LLM_CONFIG_TOP_KEYS: readonly string[] = [
   "timeout_ms",
   "max_retries",
   "max_calls_per_run",
+  "turn_token_budget",
   "providers",
 ];
 
@@ -69,6 +70,7 @@ export const PROVIDER_ENV_VARS = {
   maxCallsPerRun: "ATF_LLM_MAX_CALLS_PER_RUN",
   reasoningEffort: "ATF_LLM_REASONING_EFFORT",
   maxTokens: "ATF_LLM_MAX_TOKENS",
+  turnTokenBudget: "ATF_LLM_TURN_TOKEN_BUDGET",
 } as const;
 
 /** 默认值（收在常量层，模型不可见）。 */
@@ -136,6 +138,8 @@ export interface ResolvedLlmProviderConfig {
   timeout_ms: number;
   max_retries: number;
   max_calls_per_run: number;
+  /** 批 2.5：turn 级 token 预算（est tokens；null＝未配置——runner 侧数据驱动缺省 floor(水位/4)）。 */
+  turn_token_budget: number | null;
 }
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
@@ -191,6 +195,8 @@ interface ParsedCatalog {
   timeout_ms: number | null;
   max_retries: number | null;
   max_calls_per_run: number | null;
+  /** 批 2.5：turn 级 token 预算（est tokens；null＝未配置走数据驱动缺省 floor(水位/4)）。 */
+  turn_token_budget: number | null;
   providers: Map<string, { protocol: ProviderProtocol; base_url: string; api_key_env: string | null; api_key: string | null; compat: ProviderCompat; models: ModelEntry[] }>;
 }
 
@@ -207,7 +213,7 @@ const parseCatalog = (file: Record<string, unknown>): Result<ParsedCatalog, Prov
   if (file["default_model"] !== undefined && !nonEmptyString(file["default_model"])) {
     return err(configError("config_invalid", "default_model 非法（须为非空字符串）"));
   }
-  for (const key of ["timeout_ms", "max_calls_per_run"] as const) {
+  for (const key of ["timeout_ms", "max_calls_per_run", "turn_token_budget"] as const) {
     if (file[key] !== undefined && !positiveInt(file[key])) {
       return err(configError("config_invalid", `${key} 非法（须为正整数）`));
     }
@@ -324,6 +330,7 @@ const parseCatalog = (file: Record<string, unknown>): Result<ParsedCatalog, Prov
     timeout_ms: file["timeout_ms"] !== undefined ? (file["timeout_ms"] as number) : null,
     max_retries: file["max_retries"] !== undefined ? (file["max_retries"] as number) : null,
     max_calls_per_run: file["max_calls_per_run"] !== undefined ? (file["max_calls_per_run"] as number) : null,
+    turn_token_budget: file["turn_token_budget"] !== undefined ? (file["turn_token_budget"] as number) : null,
     providers,
   });
 };
@@ -406,6 +413,8 @@ export const loadLlmProviderConfig = async (env: NodeJS.ProcessEnv = process.env
   const effortViolation = checkReasoningEffort(effortSource, PROVIDER_ENV_VARS.reasoningEffort);
   if (effortViolation !== null) return err(effortViolation);
   const maxTokens = await envPositiveInt(env[PROVIDER_ENV_VARS.maxTokens], PROVIDER_ENV_VARS.maxTokens);
+  const turnBudget = await envPositiveInt(env[PROVIDER_ENV_VARS.turnTokenBudget], PROVIDER_ENV_VARS.turnTokenBudget);
+  if (!turnBudget.ok) return turnBudget;
 
   // ── 凭据解析（规则 3）：引用 env 缺失/为空 → fail-closed ──
   let apiKey: string;
@@ -436,5 +445,6 @@ export const loadLlmProviderConfig = async (env: NodeJS.ProcessEnv = process.env
     timeout_ms: timeout.value ?? catalog.value.timeout_ms ?? PROVIDER_CONFIG_DEFAULTS.timeoutMs,
     max_retries: retries.value ?? catalog.value.max_retries ?? PROVIDER_CONFIG_DEFAULTS.maxRetries,
     max_calls_per_run: calls.value ?? catalog.value.max_calls_per_run ?? PROVIDER_CONFIG_DEFAULTS.maxCallsPerRun,
+    turn_token_budget: turnBudget.value ?? catalog.value.turn_token_budget ?? null,
   });
 };

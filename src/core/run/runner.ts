@@ -73,7 +73,7 @@ import {
   type SessionEvent,
   type SessionEventInput,
 } from "../session/index.js";
-import { compactionTriggerTokens } from "../session/constantsBudget.js";
+import { compactionTriggerTokens, turnTokenBudget, TURN_BUDGET_WARN_RATIO, TURN_HARD_STEP_FUSE_DEFAULT } from "../session/constantsBudget.js";
 import {
   createApprovalTrackHandler,
   readStreamMaxId,
@@ -182,7 +182,7 @@ const COLLAPSE_NOTES: Record<TurnFailureReason, string> = {
   reject_loop_exhausted: "修正参数后输入新指令即可继续本会话；被拒调用与错误码见上（模型下一 turn 同样可见）",
   same_call_repeat: "检测到同参数重复调用无进展（控制面护栏）：请换用其他工具/路径，或如实向用户说明情况；输入新指令即可继续本会话",
   no_progress: "检测到重复动作无新进展（控制面护栏）：请换用其他工具/路径，或如实向用户说明情况；输入新指令即可继续本会话",
-  budget_exhausted: "本 turn 预算护栏已命中（运行时护栏，非进度指标）：请说明卡点与所需输入、或收窄请求；输入新指令即可继续本会话",
+  budget_exhausted: "本轮预算已用完（运行护栏，非进度指标）：控制权已交还——可直接输入新指令继续，或先收窄任务；输入新指令即可继续本会话",
   provider_failure: "provider 决策失败已按 turn 收口：核对 provider 配置/网络后输入新指令即可继续本会话",
 };
 
@@ -312,6 +312,14 @@ export interface PeerSpawnDescriptor {
   env?: Readonly<Record<string, string>>;
 }
 
+/** 批 2.5 §一 A2.5：确认直填——harness 确定性合成的待派发动作（确认值已定，模型不重生成参数；
+ *  派发经既有审批 gate——第二道人审不变；ui 留痕 origin 恒 "confirm_card"）。 */
+export interface PendingConfirmAction {
+  tool: string;
+  params: Record<string, unknown>;
+  origin: "confirm_card";
+}
+
 export interface RunBranchOptions {
   /** runs 根目录（owner 口径 #1：harness 仓测试工作区，如 <repo>/tmp/runs） */
   runsRoot: string;
@@ -341,7 +349,10 @@ export interface RunBranchOptions {
    *  多轮与跨进程续跑同一机制：历史由事实日志重放装载）。前置（fail-closed）：
    *  流存在且末 turn 已收口、无待办审批（有待办须经 resume 应答）、turn 预算未耗尽；
    *  须同时声明 modelProvider 与 approvalSurface。fresh 选项被忽略（既有流不可清场）。 */
-  continue?: { instruction: string };
+  continue?: { instruction: string; pendingAction?: PendingConfirmAction };
+  /** 批 2.5 §二：run 级预算注入（测试/宿主 seam；缺省走 constantsBudget holder——llm.json 旋钮/env）。
+   *  turnTokenBudget 单位＝est tokens（payload chars/2）；hardStepFuse 单位＝步（兜底保险丝）。 */
+  budgets?: { turnTokenBudget?: number; hardStepFuse?: number };
   /** provenance model_id（缺省 "faux"，既有行为逐位不变；L1a 传入 provider config.model） */
   modelId?: string;
   /** 账本 scope_ref.scope_mode（缺省 "headless"——mock 轨既有行为逐位不变）。
@@ -551,12 +562,63 @@ export class ScenarioRunner {
             stub: options.approvalSurface.stub,
           });
 
+      // ---------------- 批 2.5 §二：turn 级 token 预算（层一/层二） ----------------
+      // 估算同源：payload chars/2（与 compaction 同一除数）；自末次 turn/start 起的实质事件
+      // 增量（durability 公理——从事件流确定性推导，无跨 turn 可变状态）。单位＝est tokens。
+      const BUDGET_WARN_MARKER = "预算提示";
+      const turnEstimateTokens = (): number => {
+        let start = 0;
+        for (let i = events.length - 1; i >= 0; i -= 1) {
+          if ((events[i] as SessionEvent).type === "turn/start") {
+            start = i;
+            break;
+          }
+        }
+        let total = 0;
+        for (let i = start; i < events.length; i += 1) {
+          const event = events[i] as SessionEvent;
+          if (event.type === "session/compaction" || event.type === "session/repair" || event.type === "assistant/attempt") continue;
+          total += Math.ceil(JSON.stringify(event.payload).length / 2);
+        }
+        return total;
+      };
+      const effectiveTurnTokenBudget = (): number => options.budgets?.turnTokenBudget ?? turnTokenBudget();
+      const budgetWarnedThisTurn = (): boolean => {
+        let start = 0;
+        for (let i = events.length - 1; i >= 0; i -= 1) {
+          if ((events[i] as SessionEvent).type === "turn/start") {
+            start = i;
+            break;
+          }
+        }
+        for (let i = start; i < events.length; i += 1) {
+          const event = events[i] as SessionEvent;
+          if (event.type !== "tool/result") continue;
+          const nudge = (event.payload as { nudge?: unknown } | null | undefined)?.nudge;
+          if (typeof nudge === "string" && nudge.includes(BUDGET_WARN_MARKER)) return true;
+        }
+        return false;
+      };
+
       /** 追加事件（无引用步骤不应触发铁律一——命中即 harness 故障）。 */
       const appendEvent = async (input: SessionEventInput): Promise<SessionEvent | null> => {
         // D-f-4 轮询豁免的状态变化事实源之一：审批 granted 落盘（可能翻转被询状态）。
         // 引用 let 变量在声明前——运行时调用序恒晚于声明（TDZ 不触）。
         if (input.type === "approval/response" && (input.payload as { verdict?: unknown } | null)?.verdict === "granted") {
           turnNoProgress.noteStateChange();
+        }
+        // 批 2.5 层二：渐进警告——本拍 tool/result 落盘前，若含本拍增量已达预算 80% 且本 turn
+        // 未警告过 → nudge 注入收敛提示（复用 D-f 既有 nudge 字段，零新增 payload 字段——
+        // 两跳核最强形式：跳 1 schema 零改、跳 2 白名单零扩）。
+        if (input.type === "tool/result" && !budgetWarnedThisTurn()) {
+          const candidateEstimate = turnEstimateTokens() + Math.ceil(JSON.stringify(input.payload).length / 2);
+          const budget = effectiveTurnTokenBudget();
+          if (candidateEstimate >= budget * TURN_BUDGET_WARN_RATIO) {
+            const payload = input.payload as { nudge?: unknown };
+            const existing = typeof payload["nudge"] === "string" ? (payload["nudge"] as string) : undefined;
+            const warning = `${BUDGET_WARN_MARKER}：本 turn 估算用量已达 ${Math.min(100, Math.floor((candidateEstimate / budget) * 100))}%（预算 ${String(budget)} est tokens），请尽快收口（给出最终答复或向用户汇报）。`;
+            payload["nudge"] = existing !== undefined ? `${warning}；${existing}` : warning;
+          }
         }
         const appended = await session.append(input);
         if (!appended.ok) {
@@ -922,8 +984,89 @@ export class ScenarioRunner {
       // ⑤ 新用户指令落 user/message → 开新 turn（预算计数续自事件流推导，模型不可见）。
       // 历史已由事实日志重放装载（origin=history 投影）；措辞纪律：恢复态只写
       // 「由事实日志重放重建」，不投影真思考（门 1 D6 边界延续）。
+      // ---------------- 批 2.5 §一 A2.5：确认直填派发 helper（resume 重派同构区） ----------------
+      // harness 确定性合成动作直接派发（模型不重生成参数——执行的就是批准的动作本身）：
+      // tool/call（ui 留痕）→ 既有 approvalHandler gate（第二道人审不变）→ 结果回填 →
+      // 决策循环继续（模型第一拍读到"已按确认参数执行"的事实）。终局语义与 resume 重派同款。
+      const dispatchConfirmAction = async (action: PendingConfirmAction): Promise<void> => {
+        const call = await appendEvent({
+          type: "tool/call",
+          payload: { tool: action.tool, params: action.params },
+          ui: { confirm_card: { origin: action.origin, synthesized: true } },
+        });
+        if (call === null) return; // 会话写路径失败已在 appendEvent 内折算
+        turnLastTool = action.tool;
+        const gate: ApprovalGate | undefined = approvalHandler === undefined
+          ? undefined
+          : { handler: (gateInput) => approvalHandler({ ...gateInput, tool_call_id: call.id }) };
+        const result: ToolCallOutcome = await executor.execute(action.tool, action.params, gate);
+        if (result.kind === "suspended" || result.kind === "aborted") {
+          outcome = result.kind === "suspended"
+            ? { kind: "suspended", block: result.block }
+            : { kind: "aborted", block: result.block };
+          turnOpen = false;
+          await appendTurnEnd(outcome.kind, outcome.kind === "aborted" ? "aborted" : undefined);
+          provider = null;
+          return;
+        }
+        const backfillGuidance = result.kind === "rejected" || result.kind === "input_violation" ? guidanceLineFor(result.reason) : undefined;
+        if ((result.kind === "rejected" || result.kind === "input_violation") && isMaterialGapCode(result.reason)) {
+          turnLastMaterialGap = { tool: action.tool, reason: result.reason };
+        }
+        const payload: ToolResultPayload =
+          result.kind === "executed"
+            ? { tool: action.tool, ok: true, result: result.result, call_ref: call.id }
+            : result.kind === "rejected"
+              ? { tool: action.tool, ok: false, reason: result.reason, call_ref: call.id, detail: result.detail, ...(backfillGuidance !== undefined ? { guidance: backfillGuidance } : {}) }
+              : result.kind === "input_violation"
+                ? { tool: action.tool, ok: false, reason: result.reason, call_ref: call.id, detail: result.detail, ...(backfillGuidance !== undefined ? { guidance: backfillGuidance } : {}) }
+                : result.kind === "failed"
+                  ? { tool: action.tool, ok: false, reason: "failed", call_ref: call.id, detail: result.error }
+                  : { tool: action.tool, ok: false, reason: result.block.reason, call_ref: call.id, block: result.block };
+        const backfilled = await appendEvent({ type: "tool/result", payload });
+        if (backfilled === null) return;
+        if (result.kind === "executed") return; // 决策循环继续：模型下一拍读到结果
+        if (result.kind === "blocked") {
+          if (result.block.reason === "approval_missing") {
+            outcome = { kind: "approval_missing", block: result.block };
+            turnOpen = false;
+            await appendTurnEnd("approval_missing");
+            provider = null;
+            return;
+          }
+          if (result.block.reason === "credential_indeterminate" || result.block.reason === "credential_persist_failed" || result.block.reason === "approval_track_failed") {
+            outcome = { kind: "failed", error: runError("credential_indeterminate", result.block.message, result.block.detail) };
+            turnOpen = false;
+            await appendTurnEnd("credential_indeterminate");
+            provider = null;
+            return;
+          }
+          return; // denied/credential_consumed/credential_invalid 非终局：模型换路径
+        }
+        if (result.kind === "rejected" || result.kind === "input_violation") {
+          turnRejectCount += 1;
+          turnRejectCalls.push({ tool: action.tool, reason: result.reason, params_digest: approvalParamsDigest(action.params) });
+          if (turnRejectCount >= REJECT_LOOP_LIMIT) {
+            provider = null;
+            await collapseTurn(buildCollapseSummary({
+              reason: "reject_loop_exhausted",
+              limit: REJECT_LOOP_LIMIT,
+              rejected: [...turnRejectCalls].slice(-REJECT_LOOP_LIMIT),
+              stuckAt: `确认直填动作连续 ${String(REJECT_LOOP_LIMIT)} 次被拒（最近：${action.tool}）——合成值与内核校验面漂移，属 harness 缺陷须修复`,
+            }));
+          }
+          return;
+        }
+        // failed（E3/E4）：终局（不猜测成功）
+        outcome = { kind: "failed", error: runError("bridge_failure", `确认直填动作执行故障（${action.tool}）: ${result.error.message}`, result.error) };
+        turnOpen = false;
+        await appendTurnEnd("failed");
+        provider = null;
+      };
+
       if (continueMode && provider !== null) {
         const continueInstruction = (options.continue as { instruction: string }).instruction;
+        const pendingAction = (options.continue as { pendingAction?: PendingConfirmAction }).pendingAction;
         const loopState = deriveLoopStateFromEvents(events);
         const lastTurn = loopState.turns[loopState.turns.length - 1];
         if (lastTurn === undefined) {
@@ -950,9 +1093,18 @@ export class ScenarioRunner {
           turnsOpened = loopState.turns_opened;
           turnsOpened += 1;
           await appendEvent({ type: "turn/start", payload: { scenario_id: scenario.scenario_id, branch_id: branch.branch_id } });
-          await appendEvent({ type: "user/message", payload: { text: continueInstruction } });
+          // 批 2.5 A2.5：确认直填轮——确认文本 user/message 附 ui 审计位（L1c 登记缺口随本批闭环；
+          // convertToLlm 恒剥离 ui，模型不可见）。
+          await appendEvent({
+            type: "user/message",
+            payload: { text: continueInstruction },
+            ui: pendingAction !== undefined ? { confirm_card: { origin: pendingAction.origin, synthesized: true } } : undefined,
+          });
           openTurnRecord(provider);
           turnOpen = true;
+          if (pendingAction !== undefined) {
+            await dispatchConfirmAction(pendingAction);
+          }
         }
       }
 
@@ -976,18 +1128,39 @@ export class ScenarioRunner {
             await appendTurnEnd("failed", "budget_exhausted");
             break;
           }
-          // D-f-1/D-f-2：模型面预算命中 = 受控收口（护栏非进度指标）——本 turn 收口、run 非终局、
-          // 控制权交还用户；stop_reason 五值枚举保留（机查）。阈值 LOOP_MAX_STEPS_PER_TURN 不调参。
+          // 批 2.5 §二 层四：兜底保险丝（原"模型面 32 步硬切断"去步数化——大硬限仅防 bug
+          // 死循环的最后防线，正常不触达；触达即收口＋人读"疑似异常循环"）。stop_reason
+          // 五值枚举保留（session.contract.yaml:298 零 diff）；脚本径 32 步语义逐位不变（上方）。
           // provider 生命周期同 D-1 确认点：置空使循环首行守卫即出，connection 由 finally 关闭。
+          const hardFuse = options.budgets?.hardStepFuse ?? TURN_HARD_STEP_FUSE_DEFAULT;
           provider = null;
           await collapseTurn(buildCollapseSummary({
             reason: "budget_exhausted",
-            limit: LOOP_MAX_STEPS_PER_TURN,
+            limit: hardFuse,
             stuckAt: turnLastTool !== undefined
-              ? `单 turn 预算（${String(LOOP_MAX_STEPS_PER_TURN)}）在本 turn 耗尽，最近工具动作：${turnLastTool}`
-              : "单 turn 预算在本 turn 耗尽（本 turn 无工具动作）",
+              ? `安全熔断线（${String(hardFuse)} 步）触达——疑似异常循环，请核查；最近工具动作：${turnLastTool}`
+              : `安全熔断线（${String(hardFuse)} 步）触达——疑似异常循环，请核查`,
           }), "budget_exhausted");
           break;
+        }
+        // 批 2.5 §二 层一：turn 级 token 预算（est tokens 增量，估算与 compaction 同源 chars/2）——
+        // "步数"形态的替代预算：真实资源水位＋下方 80% 渐进警告（appendEvent 注入）＋三档熔断
+        // （D-f 既有）＋fuse（上方）。默认＝floor(触发水位/4)（constantsBudget holder，
+        // run options budgets.turnTokenBudget 可覆盖）。与 compaction 存量水位两层分明：
+        // 本层度量本 turn 增量，compaction 度量会话存量。
+        if (!("decisionFace" in provider)) {
+          const budget = effectiveTurnTokenBudget();
+          if (turnEstimateTokens() >= budget) {
+            provider = null;
+            await collapseTurn(buildCollapseSummary({
+              reason: "budget_exhausted",
+              limit: budget,
+              stuckAt: turnLastTool !== undefined
+                ? `本轮 token 预算（${String(budget)} est tokens）已用完，最近工具动作：${turnLastTool}`
+                : `本轮 token 预算（${String(budget)} est tokens）已用完`,
+            }), "budget_exhausted");
+            break;
+          }
         }
         // 切片 2 §1.3 TEM 读闸注入点：transformContext 之后、provider.decide 之前
         // （不另起注入通道）；注入源不可用 → 记事件（assistant/attempt，不进模型历史）+ 无记忆运行。
@@ -1013,10 +1186,22 @@ export class ScenarioRunner {
           // D-f-1：模型面 provider 故障（网络/超时/形状非法/call_budget 等）= turn 级受控收口
           // （run 非终局；用户核对配置后输入新指令即重试——TUI 每 prompt 重建 provider 实例）。
           // stop_reason="error" 五值枚举保留（机查）；阻塞说明携带原始错误码（原因可区分）。
+          // 批 2.5 §二 层三：连续 provider 失败熔断升级——流尾连续 provider_failure 轮数
+          // （含本拍）≥3 → 卡在哪行升级为核对配额/网络的人读强提示（任何非该类收口复位——
+          // 由"流尾连续"推导天然实现，无跨 turn 可变状态）。
+          let consecutiveFailures = 1;
+          for (let i = events.length - 1; i >= 0; i -= 1) {
+            const event = events[i] as SessionEvent;
+            if (event.type !== "turn/end") continue;
+            const reason = (event.payload as { failure_summary?: { reason?: unknown } } | null | undefined)?.failure_summary?.reason;
+            if (reason === "provider_failure") consecutiveFailures += 1;
+            else break;
+          }
           provider = null;
           await collapseTurn(buildCollapseSummary({
             reason: "provider_failure",
-            stuckAt: `provider 决策失败（${decided.error.code}）: ${decided.error.message}`,
+            stuckAt: `provider 决策失败（${decided.error.code}）: ${decided.error.message}` +
+              (consecutiveFailures >= 3 ? `——provider 已连续 ${String(consecutiveFailures)} 轮失败，请核对 provider 配置/额度/网络后重试` : ""),
           }), "error");
           break;
         }
