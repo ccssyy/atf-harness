@@ -78,11 +78,21 @@
 
 既有（SIGINT 中止／新指令续跑／CLI resume）不动；`budget_exhausted` 人读产品化：`COLLAPSE_NOTES` 该键改"**本轮预算已用完**（运行护栏，非进度指标）：控制权已交还——可直接输入新指令继续，或先收窄任务；输入新指令即可继续本会话"；fuse 触达另有"疑似异常循环"警示行（人读非裸码）。
 
+### 脚本径 32 步口径（裁定① 增补，2026-09-22）
+
+**"脚本径"＝决策来自脚本、不经过模型的确定性执行径**（`scenario.ts` 的脚本专用指令 `scratch_write`／`promote`／`cite_t0`／`provider_switch` ＋ Faux provider／测试夹具驱动；`runner.ts:1117-1130` 按 `decisionFace` 分流）。**保留三条理由**：
+
+1. **语义不同源**：模型面的"32 步"是**预算**（对 LLM 生成的资源代理——本批删除）；脚本径的"32 步"是**脚本执行器上限**（确定性护栏——防脚本自身写成死循环），与 token 预算无对应关系（脚本不烧 token）；
+2. **测试稳定性**：既有用例以 32 为断言基准；同批移除会牵动一批测试重写，DDL 内不值得（且无产品收益）；
+3. **L1c 时代"脚本径豁免"纪律**：Faux 断言路径语义逐位不变。
+
+**明确边界**：**脚本径 32 步不是产品行为**——只在测试/夹具径生效；`core/session/constants.ts:56` 原值保留、`session.contract.yaml` 零改动（stop_reason 五枚举不动）。
+
 ### 旧语义迁移表（§二.6）
 
 | 既有依赖 | 迁移 |
 |---|---|
-| `loopSkeleton.test.ts` 32 步用例（脚本径） | **零迁移**——脚本径保留 32 步语义，原样通过 |
+| `loopSkeleton.test.ts`「超 max_steps_per_turn(32)」（**模型面径**——裁定① 订正：provider 为普通 `LlmProvider`，无 `decisionFace` 字段，与下行走查判据同构） | **迁移**为注入 `budgets.hardStepFuse=32`（触发点与断言形态不变：turn_failed／reason=budget_exhausted／stop_reason 保留）——已随批实施 |
 | `realPeer/dfCollapseE2e.test.ts` "(a) 32 个互异 gate query → budget_exhausted"（模型面） | 迁移为 **token 预算径**：注入小 `budgets.turnTokenBudget` 触达收口（断言 reason/stop_reason/limit 形态不变、值变预算值）；另加 fuse 径用例（注入 hardStepFuse=小值） |
 | `dfCollapse.test.ts`／`l1aE2e.test.ts` budget 断言 | 逐一核对：脚本径断言不动；模型面径改注入预算触发（同上形态） |
 | `failure_summary.limit` 注释语义（"budget_exhausted：LOOP_MAX_STEPS_PER_TURN"） | 代码注释更新（token 预算值／fuse 步数两义并存，按径标注）——**未登记契约，零 diff** |
@@ -172,3 +182,9 @@ gate 穷举指引（状态面"当前可做动作"）／聚类结果人读丰富�
 ---
 
 **停等**：本《设计要点》报补核 → owner 放行门 2（含 (五) 解冻申请裁定）→ 实施 → 单批 `--no-ff` 合入 → 复核（两口径＋批前走查）。
+
+---
+
+## 登记录（裁定① §三，2026-09-22 增补——DDL 后改进项，不在本批）
+
+**命名/语义分离**：现"模型面 token 预算"（`constantsBudget.ts` 新值）与"脚本径步数上限"（`constants.ts:56` 旧常量 `LOOP_MAX_STEPS_PER_TURN`）**同名不同义**——§二迁移表的分类矛盾正源于此。DDL 后改进：脚本径常量独立命名（如 `SCRIPT_MAX_STEPS_PER_TURN`）＋注释标明"脚本执行器上限，非产品预算"，消除同一数字引发两类语义的混淆。
