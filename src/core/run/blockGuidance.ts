@@ -127,6 +127,58 @@ export const BLOCK_CODE_GUIDANCE: readonly BlockGuidanceEntry[] = [
     isMaterialGap: false,
     options: [],
   },
+  // 批 3「创作执行面」（2026-09-22）：工作区工具本地拒绝码 guidance——可行动一行回填，
+  // 模型可自纠换路径（非 material gap：均系参数/用法问题，无需请示用户产料）。
+  {
+    code: "argv0_not_allowed",
+    meaning: "scratch 执行的 argv[0] 不在白名单（只允许 python3 或 .py 脚本：pin 内 skills scripts 或 scratch 内脚本）",
+    missing: "以 python3 开头的 argv，或指向内核 skills scripts／scratch 内 .py 的脚本路径",
+    producedBy: "调用方（改写 argv 即可）",
+    why: "白名单外二进制（含 shell）一律拒绝——受控执行面无 shell 入口",
+    actionLine: "把命令改写为 python3 执行 .py 脚本的形式（内核 skills scripts 直接给绝对路径）；launch.sh/train.sh 不可经本工具执行（由 harness 在用户确认后执行）",
+    isMaterialGap: false,
+    options: [],
+  },
+  {
+    code: "path_escape",
+    meaning: "路径越界（拒绝绝对路径、.. 逃逸与 scratch 外落点）",
+    missing: "scratch 内相对路径",
+    producedBy: "调用方（改写 path 即可）",
+    why: "T0 写入与执行落点恒在 scratch 内（沙箱最小权限）",
+    actionLine: "改用 scratch 内相对路径（如 prep/iteration-config.json）；需要绝对路径输入时先确认 pin/内核目录形态",
+    isMaterialGap: false,
+    options: [],
+  },
+  {
+    code: "content_too_large",
+    meaning: "写入内容超过体量上限（1 MiB）",
+    missing: "更小的内容（拆分文件或精简）",
+    producedBy: "调用方",
+    why: "T0 写入体量守卫；超大内容应拆分或改由脚本生成",
+    actionLine: "拆分为多个文件或精简内容后重试；大文件建议由脚本在 scratch 内生成",
+    isMaterialGap: false,
+    options: [],
+  },
+  {
+    code: "skills_root_missing",
+    meaning: "技能根不可用（本环境未找到内核 skills 目录）",
+    missing: "pin 内核 checkout（<内核>/skills）",
+    producedBy: "环境（ATF_CLI_PATH 或 .atf-pinned）",
+    why: "技能唯一事实源＝pin 内核；缺失时装载降级、读全文不可用",
+    actionLine: "如实向用户说明本环境无技能目录，按用户指示改走显式命令路径",
+    isMaterialGap: false,
+    options: [],
+  },
+  {
+    code: "launch_config_mismatch",
+    meaning: "IterationConfig 与 launch_manifest 的 iteration_config_sha256 不一致（放行对拍 fail-closed）",
+    missing: "与 launch_manifest 同源的 IterationConfig 文件",
+    producedBy: "环节① generate_train_launch.py 消费的同一份配置",
+    why: "放行记录按配置 sha256 入账；对不上即放行了另一份计划",
+    actionLine: "核对配置文件是否为生成 train.sh 的同一份（可重新生成后重试）；勿强行放行不一致的计划",
+    isMaterialGap: false,
+    options: [],
+  },
 ];
 
 export const guidanceFor = (code: string): BlockGuidanceEntry | undefined =>

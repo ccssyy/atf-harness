@@ -40,3 +40,11 @@ export {
   type CredentialRef,
   type CredentialState,
 } from "./credentialState.js";
+export {
+  WORKSPACE_TOOL_DEFINITIONS,
+  WORKSPACE_TOOL_HANDLERS,
+  buildSkillsSystemSuffix,
+  type LocalToolHandler,
+  type LocalToolHost,
+  type LocalToolResult,
+} from "./workspaceTools.js";

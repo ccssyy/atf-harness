@@ -67,6 +67,20 @@ const APPROVAL_COPY: Readonly<Record<string, ApprovalCopyBuilder>> = {
     const echo = clusterParamsEcho(params);
     return echo !== "" ? `${base}。${echo}` : base;
   },
+  // 批 3「创作执行面」（2026-09-22）：工作区工具审批人读文案。
+  atf_scratch_exec: (params) => {
+    const argv = (params as { argv?: unknown } | null)?.argv;
+    const commandText = Array.isArray(argv) && argv.every((part) => typeof part === "string")
+      ? (argv as string[]).join(" ")
+      : "（argv 非法）";
+    return `受控执行：在本次运行的工作区 scratch 内执行命令「${commandText}」（工作目录限 scratch、环境白名单、输出上限与超时保护；产物只落 scratch）`;
+  },
+  atf_launch_execute: (params) => {
+    const launchSh = paramString(params, "launch_sh");
+    const config = paramString(params, "config");
+    const configNote = config !== "（未提供）" ? `；按配置 ${config} 登记放行记录` : "；未附配置（不登记放行记录，按账本现状执行）";
+    return `训练启动放行：执行 ${launchSh}${configNote}——确认后训练进程即被启动（此为真实执行点）`;
+  },
 };
 
 export const approvalCopyFor = (input: { tool: string; params: unknown }): string | null => {

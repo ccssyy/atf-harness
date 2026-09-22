@@ -32,8 +32,9 @@ import * as readline from "node:readline";
 import { ATF_UPSTREAM_COMMIT_SHA, ATF_UPSTREAM_TAG, readGitHeadSha } from "../bridge/atfCommand.js";
 import { loadLlmProviderConfig, HttpLlmProvider, type ResolvedLlmProviderConfig } from "../llm/index.js";
 import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
-import { ToolRegistry } from "../core/tools/index.js";
-import { ScenarioRunner, resolveRunExitCode, sessionLogPathFor, listPendingApprovals, readSessionStream, type ApprovalStubResponse, type BranchRunReport } from "../core/run/index.js";
+import { ToolRegistry, WORKSPACE_TOOL_HANDLERS, buildSkillsSystemSuffix, type LocalToolHost } from "../core/tools/index.js";
+import type { LaunchReady } from "../core/workspace/index.js";
+import { ScenarioRunner, resolveRunExitCode, sessionLogPathFor, listPendingApprovals, readSessionStream, type ApprovalStubResponse, type BranchRunReport, type RunBranchOptions } from "../core/run/index.js";
 import { HistoryFolder } from "./historyFold.js";
 import type { Scenario } from "../llm/index.js";
 import { DiffRenderer } from "./renderer.js";
@@ -41,6 +42,7 @@ import { formatEventDetailLines, formatEventLine, statusLineFor } from "./eventV
 import { collapseLines } from "./collapseView.js";
 import { askApproval } from "./approval.js";
 import { buildInitInvocation, buildRealPeerDescriptor, effectiveScopeMode, parseArgs, repoRootDefault, resolveKernelDir, usage } from "./tuiArgs.js";
+import { launchCardKey, launchCardLines, launchConfirmationText, synthesizeLaunchAction } from "./launchCard.js";
 import { setCompactionContextWindow, setTurnTokenBudget } from "../core/session/constantsBudget.js";
 import type { PendingConfirmAction } from "../core/run/runner.js";
 import {
@@ -63,6 +65,9 @@ const ask = (rl: readline.Interface, prompt: string, fallback?: string): Promise
       resolve(trimmed !== "" ? trimmed : (fallback ?? ""));
     });
   });
+
+const PLAIN_RESULT = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** 子进程一次性调用（D-1 预置 init 用；非零退出 = 正常返回，由调用方断言）。 */
 const execFileP = (command: string, args: readonly string[], options: { cwd: string; env: NodeJS.ProcessEnv }): Promise<{ exitCode: number | null; stdout: string; stderr: string }> =>
@@ -150,6 +155,40 @@ const main = async (): Promise<void> => {
     renderer.appendLine(`真内核对端预置完成：内核=${kernel.path}（${kernel.source}，pin ${ATF_UPSTREAM_TAG}）· 隔离 HOME=${home}`);
   }
 
+  // 批 3「创作执行面」：工作区工具面装配（§一/§二/§三）。内核目录可解析即启用——
+  // 注册表扩至 11 工具（TUI/resume 专属；MCP/ACP 不变）＋技能清单常驻 systemSuffix＋
+  // 本地工具宿主（scratch 内受控执行；HOME 与对端隔离 home 同源，内核配置根/放行账本一致）。
+  // 内核目录不可解析＝不启用（7 工具既有行为；skills 装载降级——增强而非依赖）。
+  const kernelDirResolved = peerReal !== null
+    ? { ok: true as const, path: peerReal.kernelDir }
+    : resolveKernelDir(process.env, repoRootDefault());
+  let toolFace: RunBranchOptions["toolFace"] = undefined;
+  let skillsSuffix: string | undefined;
+  let execHome: string | null = null;
+  const localHost: LocalToolHost | null = kernelDirResolved.ok
+    ? (() => {
+        execHome = peerReal !== null ? peerReal.home : mkdtempSync(join(tmpdir(), "atf-exec-home-"));
+        const baseEnv: Record<string, string> = { ATF_SKILLS_AUTO_INSTALL: "0" };
+        if (peerReal !== null) {
+          baseEnv["HOME"] = peerReal.home;
+          baseEnv["ATF_WORKSPACE_ROOT"] = peerReal.wsRoot;
+        }
+        return {
+          scratchDir: "", // runId 就绪后回填（runs-root/run-id/scratch）
+          kernelDir: kernelDirResolved.path,
+          home: execHome,
+          baseEnv,
+        };
+      })()
+    : null;
+  if (kernelDirResolved.ok) {
+    skillsSuffix = await buildSkillsSystemSuffix(kernelDirResolved.path);
+    toolFace = {
+      registry: ToolRegistry.createWithWorkspaceTools(),
+      local: { handlers: WORKSPACE_TOOL_HANDLERS, host: localHost as LocalToolHost },
+    };
+  }
+
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
     renderer.appendLine("══ ATF Harness TUI（前端一 · 同进程直连 core）══");
@@ -174,6 +213,7 @@ const main = async (): Promise<void> => {
     }
     rl.pause(); // 运行期收摄输入（审批弹窗内由 askApproval resume）
     mkdirSync(args.runsRoot, { recursive: true });
+    if (localHost !== null) localHost.scratchDir = join(args.runsRoot, runId, "scratch"); // 批 3：本地工具宿主落点
     renderer.appendLine(`run=${runId} · 工作区根=${args.runsRoot} · ${peerReal !== null ? `桥接=真内核 serve（内核=${peerReal.kernelDir}）` : `桥接=${args.mockPath}`}`);
     renderer.appendLine("──────── 过程流（与 append-only 日志逐条对应）────────");
 
@@ -200,6 +240,10 @@ const main = async (): Promise<void> => {
     // 批 2.5 A2.5：确认直填——最近一次合成的待派发动作（仅消费一次：传入下一 turn 的
     // continue.pendingAction 后即清空）。
     let pendingSynthesized: PendingConfirmAction | null = null;
+    // 批 3 §三：G5 就绪检测（harness 侧确定性——scratch_exec 成功后扫 scratch 找 launch.sh）。
+    // pending = 最近一次检测命中；shownKey = 已出过卡（含跳过）的目标键——同一启动目标只出一次。
+    let launchReadyPending: LaunchReady | null = null;
+    let launchCardShownKey: string | null = null;
     // 批 2.5 §三.4：静默状态行——live 事件后 2.5s 无新事件 → 追加一行状态（零擦除保持；
     // 下一事件到达即取消计时）。provider 流式＝中期架构项，登记不实施。
     let statusTimer: NodeJS.Timeout | null = null;
@@ -219,7 +263,12 @@ const main = async (): Promise<void> => {
     for (;;) {
       const provider = new HttpLlmProvider({
         config,
-        tools: ToolRegistry.createDefault().modelVisible(),
+        // 批 3：TUI 装配工作区扩面工具注册表（11 工具）；内核目录不可解析＝既有 7 工具
+        tools: toolFace !== undefined && toolFace !== null
+          ? toolFace.registry.modelVisible()
+          : ToolRegistry.createDefault().modelVisible(),
+        // 批 3 §二：技能清单常驻（Pi lazy skills；每技能一行）——skills 装载降级时缺省
+        ...(skillsSuffix !== undefined ? { systemSuffix: skillsSuffix } : {}),
       });
       // 会话脚手架形态同 CLI resume（L1a 既有模式）：TUI 不持有场景脚本，只提供会话参数。
       const scenario: Scenario = {
@@ -268,6 +317,10 @@ const main = async (): Promise<void> => {
             if (payload?.ok === true) {
               const card = confirmCardFromResult(payload.result);
               if (card !== null) cardRef.pending = card;
+              // 批 3 §三：scratch_exec 成功结果 → G5 就绪检测命中（harness 确定性产出）
+              if (PLAIN_RESULT(payload.result) && typeof (payload.result as Record<string, unknown>)["launch_ready"] === "object") {
+                launchReadyPending = (payload.result as Record<string, unknown>)["launch_ready"] as LaunchReady;
+              }
             }
           }
           // 批 2.5 §三.4：静默状态行（调用中/思考中——事件驱动重挂 2.5s 单发定时器）
@@ -283,6 +336,8 @@ const main = async (): Promise<void> => {
             }
           : {}),
         ...(effectiveScopeMode(args) !== "headless" ? { scopeMode: effectiveScopeMode(args) } : {}),
+        // 批 3：工作区工具面注入（注册表扩面＋本地分派宿主；缺省不注入＝既有行为）
+        ...(toolFace !== undefined ? { toolFace } : {}),
       });
       if (!ran.ok) {
         renderer.appendLine(`✗ ${formatThreePartLines({
@@ -384,6 +439,34 @@ const main = async (): Promise<void> => {
           break; // 直接回车＝退出（与主循环语义一致）
         }
       }
+      // 批 3 §三：训练启动确认卡（G5 就绪：launch_ready_but_not_executed）——确认后经 A2.5
+      // 既有 pendingAction 机制派发 atf_launch_execute（审批弹窗第二道人审不变）；同一启动
+      // 目标（launch.sh+配置指纹）只出一次卡（跳过/输入新指令后不再重弹）。
+      if (nextInstruction === null && launchReadyPending !== null) {
+        const ready: LaunchReady = launchReadyPending;
+        const readyKey = launchCardKey(ready);
+        if (readyKey !== launchCardShownKey) {
+          rl.resume();
+          for (const line of launchCardLines(ready)) {
+            renderer.appendLine(line);
+          }
+          const launchAnswer = (await ask(rl, "训练启动确认应答（1=确认放行并启动；直接输入其他指令＝暂不启动）> ")).trim();
+          launchCardShownKey = readyKey;
+          if (launchAnswer === "1") {
+            launchReadyPending = null;
+            instructionText = launchConfirmationText(ready);
+            pendingSynthesized = synthesizeLaunchAction(ready);
+            continueMode = true;
+            renderer.appendLine(`> 确认留痕 ${new Date().toISOString()} 动作=确认卡·训练启动 选择=放行并启动`);
+            renderer.appendLine("──────── 新 turn（同一 run 绑定下续跑；由事实日志重放重建上下文）────────");
+            continue;
+          }
+          if (launchAnswer !== "") {
+            nextInstruction = launchAnswer; // 暂不启动＝该输入即新指令
+            renderer.appendLine(`> 确认留痕 ${new Date().toISOString()} 动作=确认卡·训练启动 选择=暂不启动`);
+          }
+        }
+      }
       if (nextInstruction === null) {
         for (;;) {
           rl.resume();
@@ -418,6 +501,8 @@ const main = async (): Promise<void> => {
     rl.close();
     // W2 D-1：隔离 HOME 退出即清（best-effort；kill -9 残留交 /tmp 自清理）
     if (peerReal !== null) rmSync(peerReal.home, { recursive: true, force: true });
+    // 批 3：mock 模式下工作区工具宿主 HOME 退出即清（peer real 模式与对端隔离 HOME 同源，上面已清）
+    if (peerReal === null && execHome !== null) rmSync(execHome, { recursive: true, force: true });
   }
 };
 

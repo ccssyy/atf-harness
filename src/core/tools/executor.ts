@@ -19,6 +19,7 @@ import { approvalKeyFor, type LedgerRecord, type ScopeRef } from "./approvalKey.
 import { requiresApprovalFor } from "./toolDefinition.js";
 import { approvalMissingBlock, approvalTrackBlock, toolError, toolErrorFromBridge, type ToolBlock, type ToolError } from "./errors.js";
 import { type ToolRegistry } from "./registry.js";
+import { type LocalToolHandler, type LocalToolHost } from "./workspaceTools.js";
 import type { ToolDefinition } from "./toolDefinition.js";
 
 /** 单次工具执行的结果(Phase 1 四态 + P2-S2 问答轨两终态 + 快修批 D-a 入参违规):
@@ -97,6 +98,9 @@ export class ToolExecutor {
     private readonly registry: ToolRegistry,
     /** 作用域引用（契约 v2）：须审批工具的账本查询定位键；缺省时须审批调用 fail-closed。 */
     private readonly scopeRef?: ScopeRef,
+    /** 批 3：本地工具面（工作区工具）——命中分派表则在审批闸后本地执行、不经桥接。
+     *  缺省不注入＝既有桥接行为逐位不变（MCP/ACP 零改动）。 */
+    private readonly local?: { handlers: Readonly<Record<string, LocalToolHandler>>; host: LocalToolHost },
   ) {}
 
   /**
@@ -129,6 +133,19 @@ export class ToolExecutor {
     if (requiresApprovalFor(definition.value, params ?? {})) {
       const approvalOutcome = await this.approve(definition.value, params ?? {}, approval, options?.operationId);
       if (!approvalOutcome.ok) return approvalOutcome.outcome;
+    }
+
+    // 批 3：本地工具分派（工作区工具面）——审批闸之后、桥接之前；canonical 校验同桥接径。
+    // 本地 handler 只产 executed/rejected（环境缺口结构化回填，模型可转述；见 workspaceTools 头注）。
+    const localHandler = this.local?.handlers[toolName];
+    if (localHandler !== undefined && this.local !== undefined) {
+      const outcome = await localHandler(params ?? {}, this.local.host);
+      if (outcome.kind === "executed") {
+        const canonicalCheck = validateCanonicalOutput(toolName, definition.value.canonical_output, outcome.result);
+        if (!canonicalCheck.ok) return { kind: "failed", error: canonicalCheck.error };
+        return { kind: "executed", tool: toolName, result: outcome.result };
+      }
+      return { kind: "rejected", tool: toolName, reason: outcome.reason, detail: outcome.detail };
     }
 
     const invoked = await this.request(rpcMethodFor(toolName), toolName, params ?? {}, definition.value.canonical_output);

@@ -49,6 +49,8 @@ import {
   resolveHeadlessExitCode,
   ToolExecutor,
   ToolRegistry,
+  type LocalToolHandler,
+  type LocalToolHost,
   type ScopeRef,
   type ToolBlock,
   type ToolCallOutcome,
@@ -353,6 +355,14 @@ export interface RunBranchOptions {
   /** 批 2.5 §二：run 级预算注入（测试/宿主 seam；缺省走 constantsBudget holder——llm.json 旋钮/env）。
    *  turnTokenBudget 单位＝est tokens（payload chars/2）；hardStepFuse 单位＝步（兜底保险丝）。 */
   budgets?: { turnTokenBudget?: number; hardStepFuse?: number };
+  /** 批 3「创作执行面」工具面注入 seam（runner 解冻裁定：本批唯一 runner 改动点——
+   *  ① 本 option 字段；② executor 构造一行。缺省不注入＝ToolRegistry.createDefault()＋
+   *  无本地分派，既有行为逐位不变）。TUI/resume 注入工作区扩面注册表＋本地工具宿主
+   *  （4 个工作区工具：scratch_write/scratch_exec/skill_read/launch_execute）。 */
+  toolFace?: {
+    registry: ToolRegistry;
+    local?: { handlers: Readonly<Record<string, LocalToolHandler>>; host: LocalToolHost };
+  };
   /** provenance model_id（缺省 "faux"，既有行为逐位不变；L1a 传入 provider config.model） */
   modelId?: string;
   /** 账本 scope_ref.scope_mode（缺省 "headless"——mock 轨既有行为逐位不变）。
@@ -486,7 +496,13 @@ export class ScenarioRunner {
         return finalize();
       }
       const session = guarded.value;
-      const executor = new ToolExecutor(connection, ToolRegistry.createDefault(), scopeRef);
+      // 批 3：工具面注入 seam（缺省 = createDefault() 无本地分派，既有行为逐位不变）
+      const executor = new ToolExecutor(
+        connection,
+        options.toolFace?.registry ?? ToolRegistry.createDefault(),
+        scopeRef,
+        options.toolFace?.local,
+      );
 
       // P2-S3:多 provider 段分支(segments)= 一段一个 turn,段边界即合法切换边界;
       // 缺省 = 单 provider 分支(FauxProvider.fromBranch 既有路径逐位不变)。

@@ -59,6 +59,9 @@ export interface HttpLlmProviderOptions {
   tools: readonly ModelVisibleTool[];
   /** fetch 注入面（测试/零外连断言；缺省 globalThis.fetch） */
   fetchImpl?: typeof fetch;
+  /** 批 3 §二：技能清单常驻后缀（Pi lazy skills——每技能一行）追加在系统提示之后；
+   *  缺省不追加＝既有行为逐位不变。清单源＝pin skills（SkillCatalog），harness 不复制。 */
+  systemSuffix?: string;
 }
 
 const truncate = (text: string, limit = 200): string => (text.length > limit ? `${text.slice(0, limit)}…` : text);
@@ -84,6 +87,7 @@ export class HttpLlmProvider implements LlmProvider {
   private readonly tools: readonly ModelVisibleTool[];
   private readonly fetchImpl: typeof fetch;
   private readonly codec: ProtocolCodec;
+  private readonly systemText: string;
   /** 已消耗的 HTTP 调用次数（含重试尝试） */
   private callsMade = 0;
   /** 当前缓冲的顺序决策（A3：一次响应 N 个决策逐个弹出） */
@@ -102,6 +106,9 @@ export class HttpLlmProvider implements LlmProvider {
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch;
     this.codec = codec.codec;
     this.providerId = options.config.provider_id;
+    this.systemText = options.systemSuffix !== undefined && options.systemSuffix !== ""
+      ? `${HARNESS_SYSTEM_PROMPT}\n${options.systemSuffix}`
+      : HARNESS_SYSTEM_PROMPT;
   }
 
   /** 已消耗调用次数（诊断/测试）。 */
@@ -136,7 +143,7 @@ export class HttpLlmProvider implements LlmProvider {
 
     const body = this.codec.encodeRequestBody({
       model: this.config.model,
-      system: HARNESS_SYSTEM_PROMPT,
+      system: this.systemText,
       messages: messages.value,
       tools: this.tools,
       // compat.supports_reasoning_effort=false → null → 请求体整体省略该字段（修订 v2 规则 4）
