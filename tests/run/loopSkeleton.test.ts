@@ -175,6 +175,24 @@ describe("切片 1 · VERIFY 2 预算耗尽（确定性，复用 exit 1）", () 
   });
 });
 
+describe("走查修复小批 §三.1：模型面去 32 步拦（A1/A2 根因修复回归）", () => {
+  it("模型面 60 步不触发收口（旧 32 步前置判定已除名；fuse 缺省 200 不触达）→ completed", { timeout: 180_000 }, async () => {
+    const steps: LlmDecision[] = [
+      ...Array.from({ length: 59 }, (_, index): LlmDecision => ({ type: "assistant_message", text: `推进 ${String(index + 1)}` })),
+      { type: "final_answer", text: "60 步内自然收口" },
+    ];
+    // 不注入任何预算：fuse 缺省 200、token 预算缺省（数据驱动）均不触达
+    const r = await runWith(contextCapturingProvider(steps), [{ type: "final_answer", text: "irrelevant" }]);
+    expect(r.outcome.kind).toBe("completed");
+    expect(r.exit_code).toBe(0);
+    const turnEnd = r.events[r.events.length - 1];
+    expect(turnEnd?.payload).toMatchObject({ reason: "completed", stop_reason: "final_answer", step_count: 60 });
+    // 全流无 budget_exhausted（旧行为在第 33 步前即拦——本用例即「不再 32 步收口」回归）
+    expect(r.events.some((event) => JSON.stringify(event).includes("budget_exhausted"))).toBe(false);
+    assertTurnPairing(r.events.map((event) => event.type));
+  });
+});
+
 describe("切片 1 · VERIFY 3 预算不可见（模型面无法感知）", () => {
   it("注入上下文中不出现预算常量名或值；决策对象类型面无预算字段", { timeout: 60_000 }, async () => {
     seenContexts.length = 0;

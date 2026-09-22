@@ -1128,36 +1128,42 @@ export class ScenarioRunner {
       // 切片 1 起受轮次预算约束、以 stopReason 判据收敛） ----------------
       for (;;) {
         if (provider === null) break; // 初始注册失败已折算(防御路径,不进入决策)
-        // 切片 1 A2 轮次预算：单 turn 步数上限——达到即 failed(budget_exhausted)，不再调用
-        // provider（确定性判据：同输入同结果；不新增退出码，复用 exit 1）。
-        if (turnStepCount >= LOOP_MAX_STEPS_PER_TURN) {
-          if ("decisionFace" in provider) {
-            // 脚本执行径豁免（Faux 断言路径语义逐位不变）：维持既有终局 failed(budget_exhausted)
-            outcome = {
-              kind: "failed",
-              error: runError("budget_exhausted", `单 turn 步数预算耗尽（max_steps_per_turn=${String(LOOP_MAX_STEPS_PER_TURN)}）`, {
-                budget: "max_steps_per_turn",
-                limit: LOOP_MAX_STEPS_PER_TURN,
-              }),
-            };
-            turnOpen = false;
-            await appendTurnEnd("failed", "budget_exhausted");
+        // 切片 1 A2 轮次预算＋走查修复小批 §二.1（A1/A2 根因）：单 turn 步数上限**仅脚本执行径**
+        // ——达到即 failed(budget_exhausted)，不再调用 provider（确定性判据；不新增退出码，复用
+        // exit 1）。批 2.5「模型面去步数化」曾因本前置判定对模型面同样生效而未实际生效（模型面
+        // 32 步即落 fuse 径，报 200 文案——步数/缘由/文案三处错）；现模型面不受 32 步拦，仅受
+        // 下方 hardFuse 兜底与 token 预算径约束。
+        if ("decisionFace" in provider && turnStepCount >= LOOP_MAX_STEPS_PER_TURN) {
+          // 脚本执行径（Faux 断言路径语义逐位不变）：维持既有终局 failed(budget_exhausted)
+          outcome = {
+            kind: "failed",
+            error: runError("budget_exhausted", `单 turn 步数预算耗尽（max_steps_per_turn=${String(LOOP_MAX_STEPS_PER_TURN)}）`, {
+              budget: "max_steps_per_turn",
+              limit: LOOP_MAX_STEPS_PER_TURN,
+            }),
+          };
+          turnOpen = false;
+          await appendTurnEnd("failed", "budget_exhausted");
+          break;
+        }
+        // 批 2.5 §二 层四＋走查修复小批 §二.1：兜底保险丝——**仅模型面**（无 decisionFace），
+        // 缺省 200 步（run options hardStepFuse 可配）：防 bug 死循环的最后防线，正常不触达；
+        // 触达即 turn 级收口＋人读"疑似异常循环"（该文案仅限 fuse 径；模型面常规收口＝下方
+        // token 预算径）。stop_reason 五值枚举保留（session.contract.yaml:298 零 diff）。
+        // provider 生命周期同 D-1 确认点：置空使循环首行守卫即出，connection 由 finally 关闭。
+        if (!("decisionFace" in provider)) {
+          const hardFuse = options.budgets?.hardStepFuse ?? TURN_HARD_STEP_FUSE_DEFAULT;
+          if (turnStepCount >= hardFuse) {
+            provider = null;
+            await collapseTurn(buildCollapseSummary({
+              reason: "budget_exhausted",
+              limit: hardFuse,
+              stuckAt: turnLastTool !== undefined
+                ? `安全熔断线（${String(hardFuse)} 步）触达——疑似异常循环，请核查；最近工具动作：${turnLastTool}`
+                : `安全熔断线（${String(hardFuse)} 步）触达——疑似异常循环，请核查`,
+            }), "budget_exhausted");
             break;
           }
-          // 批 2.5 §二 层四：兜底保险丝（原"模型面 32 步硬切断"去步数化——大硬限仅防 bug
-          // 死循环的最后防线，正常不触达；触达即收口＋人读"疑似异常循环"）。stop_reason
-          // 五值枚举保留（session.contract.yaml:298 零 diff）；脚本径 32 步语义逐位不变（上方）。
-          // provider 生命周期同 D-1 确认点：置空使循环首行守卫即出，connection 由 finally 关闭。
-          const hardFuse = options.budgets?.hardStepFuse ?? TURN_HARD_STEP_FUSE_DEFAULT;
-          provider = null;
-          await collapseTurn(buildCollapseSummary({
-            reason: "budget_exhausted",
-            limit: hardFuse,
-            stuckAt: turnLastTool !== undefined
-              ? `安全熔断线（${String(hardFuse)} 步）触达——疑似异常循环，请核查；最近工具动作：${turnLastTool}`
-              : `安全熔断线（${String(hardFuse)} 步）触达——疑似异常循环，请核查`,
-          }), "budget_exhausted");
-          break;
         }
         // 批 2.5 §二 层一：turn 级 token 预算（est tokens 增量，估算与 compaction 同源 chars/2）——
         // "步数"形态的替代预算：真实资源水位＋下方 80% 渐进警告（appendEvent 注入）＋三档熔断

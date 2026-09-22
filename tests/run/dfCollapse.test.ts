@@ -91,6 +91,9 @@ describe("D-f-1/D-f-2：budget_exhausted → turn 级收口 → 存活 → 同�
     expect(summary.blocked_description?.turns_used).toBe(1);
     expect(summary.blocked_description?.stuck_at).toContain("token 预算");
     expect(summary.blocked_description?.stuck_at).toContain("atf_gate");
+    // 走查修复小批 §三.1：「疑似异常循环／安全熔断线」文案仅限 fuse 径——token 预算径不得携带
+    expect(summary.blocked_description?.stuck_at).not.toContain("疑似异常循环");
+    expect(summary.blocked_description?.stuck_at).not.toContain("安全熔断线");
     // 补正#2 同口径：收口显式落 turn/end（stop_reason 保留＋failure_summary 在场）
     expect(turnEndPayload(report)).toMatchObject({
       reason: "failed",
