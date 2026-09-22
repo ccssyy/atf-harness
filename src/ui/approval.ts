@@ -45,7 +45,7 @@ const NUMBER_KEYS: Readonly<Record<string, string>> = { "1": "g", "2": "a", "3":
 const requestLine = (input: ApprovalPromptInput): string => {
   const copy = approvalCopyFor({ tool: input.tool, params: input.params });
   const subject = copy ?? `${input.tool} 参数=${JSON.stringify(input.params ?? null)}`;
-  return `⛔ 审批请求 · 问答轨（本请求仅为问答轨渲染，非新通道）：${subject} 会话=${input.approval_session_id} 第 ${String(input.attempt)} 次提案 key=${input.approval_key}`;
+  return `⛔ 审批请求：${subject} 会话=${input.approval_session_id} 第 ${String(input.attempt)} 次提案 key=${input.approval_key}`;
 };
 
 const question = (rl: readline.Interface, prompt: string): Promise<string> =>

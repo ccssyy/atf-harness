@@ -65,7 +65,7 @@ describe("B8 D1：审批交互流内化（零擦除）", () => {
     expect(text).not.toContain("\x1b[A");
     expect(text).not.toContain("\r");
     // 一行式请求行（长 key/长参数全量，随流折行——折行不敏感断言）
-    expect(text).toContain("⛔ 审批请求 · 问答轨");
+    expect(text).toContain("⛔ 审批请求：");
     expect(text).toContain("atf_admit_data");
     const flat = text.replace(/\n {2}/g, "").replace(/\n/g, "");
     expect(flat).toContain(longKey);
@@ -91,7 +91,7 @@ describe("B8 D1：审批交互流内化（零擦除）", () => {
     }
     expect(verdicts).toEqual(["granted", "denied", "advised"]);
     const text = chunks();
-    expect(text.split("⛔ 审批请求 · 问答轨").length - 1).toBe(3); // 请求行 ×3
+    expect(text.split("⛔ 审批请求：").length - 1).toBe(3); // 请求行 ×3
     expect(text.split("审批留痕").length - 1).toBe(3); // 审计行 ×3
     expect(promptCount).toBe(3); // 普通输入行 ×3（readline 面）
     expect(text).not.toContain("\x1b[2K");

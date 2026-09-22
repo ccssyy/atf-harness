@@ -390,7 +390,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     name: "atf_workspace_status",
     description:
       "工作区状态查询：返回当前 run 标识、已准入事实计数与作用域引用 scope_ref（供账本定位）。只读。" +
-      "状态面返回的信息供你直接使用与决策——向用户报告时只讲结论与下一步，无需向用户复述其枚举内容。",
+      "状态面返回的信息供你直接使用与决策——向用户报告时只讲结论与下一步，无需向用户复述其枚举内容。" +
+      "工作区结构与数据形态优先由状态面获取；不要遍历文件系统。",
     parameters: NO_PARAMS,
     requires_approval: false,
     canonical_output: {

@@ -79,6 +79,22 @@ export const BLOCK_CODE_GUIDANCE: readonly BlockGuidanceEntry[] = [
       STOP_OPTION,
     ],
   },
+  // 走查修复小批 §二.3（2026-09-23）：补 G1 缺抽取契约包条目——直接治走查 A4（缺料后
+  // 全盘扫描）；与 split_policy_missing 同构（material gap：请示式收口＋缺口卡）。
+  {
+    code: "extraction_contract_bundle_missing",
+    meaning: "准入上下文缺已发布的抽取契约包（ExtractionContractBundle/v1）——G1 抽取契约闸无证据可验",
+    missing: "已发布的抽取契约包（ExtractionContractBundle/v1，冻结双 Prompt/Parser/Metric 组件引用；发布经用户强制确认）",
+    producedBy: "atf-validate-extraction-contract 技能的 publish 路径（仅 G1 判 pass 时发布）",
+    why: "无契约包则字段抽取无冻结依据，G1 按 fail-closed 阻断；目录存在、历史训练成功或「最新配置」都不算已发布合同",
+    actionLine: "如实说明缺什么并给出补齐路径（走 atf-validate-extraction-contract 技能发布后重试准入），勿遍历文件系统找料",
+    isMaterialGap: true,
+    options: [
+      { text: "走 atf-validate-extraction-contract 技能生成候选并发布契约包（发布经用户强制确认）后重试准入", recommended: true },
+      { text: "请用户指认既有已发布契约包（bundle_ref）后重试" },
+      STOP_OPTION,
+    ],
+  },
   {
     code: "split_manifest_missing",
     meaning: "split_root 下缺 global_assignment.csv（9 列）或 global_plan.json（内核准入强制清单）",

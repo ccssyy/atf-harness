@@ -38,11 +38,11 @@ const grantedStub = async (): Promise<{ verdict: "granted"; actor: string }> => 
 const runsRootOf = (): string => join(repoRoot, "tmp", "runs", `bl-${randomUUID()}`);
 
 describe("层一默认两态（数据驱动；单位＝est tokens——处置② 单位标注）", () => {
-  it("未配置 context_window → 6_000 est tokens/turn（＝24K 触发门 /4）", () => {
-    expect(resolveTurnTokenBudget(null)).toBe(6_000);
+  it("未配置 context_window → 12_000 est tokens/turn（＝24K 触发门 /2；走查修复小批 §二.1 放宽）", () => {
+    expect(resolveTurnTokenBudget(null)).toBe(12_000);
   });
-  it("配置 1M → 243_750 est tokens/turn（＝975K 水位 /4）", () => {
-    expect(resolveTurnTokenBudget(1_000_000)).toBe(243_750);
+  it("配置 1M → 487_500 est tokens/turn（＝975K 水位 /2；走查修复小批 §二.1 放宽）", () => {
+    expect(resolveTurnTokenBudget(1_000_000)).toBe(487_500);
   });
   it("显式配置优先；fuse 缺省 200 步（可配）；警告水位 0.8", () => {
     expect(resolveTurnTokenBudget(null, 1234)).toBe(1234);
@@ -123,6 +123,32 @@ describe("层四：兜底保险丝（fuse 可配；人读『疑似异常循环�
     expect(ran.value.outcome.summary.reason).toBe("budget_exhausted");
     expect(ran.value.outcome.summary.limit).toBe(3);
     expect(ran.value.outcome.summary.blocked_description?.stuck_at).toContain("安全熔断线（3 步）触达");
+    expect(ran.value.outcome.summary.blocked_description?.stuck_at).toContain("疑似异常循环");
+  });
+
+  it("走查修复小批 §三.1：缺省 fuse（200 步，不注入）触达收口——模型面 32 步前置判定已除名，文案含 200", { timeout: 240_000 }, async () => {
+    let step = 0;
+    const provider: LlmProvider = {
+      providerId: "bl-fuse-default-model",
+      decide: async () => {
+        step += 1;
+        return ok({ type: "assistant_message", text: `步骤 ${String(step)}` });
+      },
+    };
+    const ran = await ScenarioRunner.runBranch(scenarioOf(`bl-fuse-def-${randomUUID()}`, "跑"), "main", {
+      runsRoot: runsRootOf(),
+      mockCommand: ["node", mockPath],
+      modelProvider: provider,
+      approvalSurface: { stub: grantedStub },
+      // 不注入 hardStepFuse——走缺省 TURN_HARD_STEP_FUSE_DEFAULT=200
+    });
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) throw new Error("unreachable");
+    expect(ran.value.outcome.kind).toBe("turn_failed");
+    if (ran.value.outcome.kind !== "turn_failed") throw new Error("unreachable");
+    expect(ran.value.outcome.summary.reason).toBe("budget_exhausted");
+    expect(ran.value.outcome.summary.limit).toBe(TURN_HARD_STEP_FUSE_DEFAULT);
+    expect(ran.value.outcome.summary.blocked_description?.stuck_at).toContain(`安全熔断线（${String(TURN_HARD_STEP_FUSE_DEFAULT)} 步）触达`);
     expect(ran.value.outcome.summary.blocked_description?.stuck_at).toContain("疑似异常循环");
   });
 });

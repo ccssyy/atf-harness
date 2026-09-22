@@ -90,8 +90,9 @@ export const resolveSummaryResultCapChars = (contextWindowTokens: number | null)
 /** 渐进警告水位：turn 预算的 80% 触达即向模型注入收敛提示（经 tool/result nudge 既有通道）。 */
 export const TURN_BUDGET_WARN_RATIO = 0.8;
 
-/** turn 预算默认推导分母：数据驱动缺省＝compaction 触发水位的 1/4。 */
-export const TURN_BUDGET_WATERMARK_DIVISOR = 4;
+/** turn 预算默认推导分母：数据驱动缺省＝compaction 触发水位的 1/2（走查修复小批 §二.1
+ *  放宽：原 1/4 过紧——模型面常规收口即本径，1M 窗应有 500k est tokens/turn 量级）。 */
+export const TURN_BUDGET_WATERMARK_DIVISOR = 2;
 
 /** 兜底保险丝缺省（**步**数单位——防 bug 死循环的最后防线，正常不触达；run options 可配）。 */
 export const TURN_HARD_STEP_FUSE_DEFAULT = 200;
@@ -103,7 +104,7 @@ export const setTurnTokenBudget = (tokens: number | null): void => {
   explicitTurnTokenBudget = tokens;
 };
 
-/** turn 预算解析（纯函数）：显式配置 > 数据驱动 floor(触发水位/4)；未配置窗口 → 6_000 est tokens。 */
+/** turn 预算解析（纯函数）：显式配置 > 数据驱动 floor(触发水位/2)；未配置窗口 → 12_000 est tokens。 */
 export const resolveTurnTokenBudget = (contextWindowTokens: number | null, explicit?: number | null): number => {
   if (explicit !== undefined && explicit !== null) return explicit;
   return Math.floor(resolveCompactionTriggerTokens(contextWindowTokens) / TURN_BUDGET_WATERMARK_DIVISOR);
