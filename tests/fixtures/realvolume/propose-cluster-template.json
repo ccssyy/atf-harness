@@ -1,0 +1,56 @@
+{
+  "cluster_material": "absent",
+  "cluster_params_template": {
+    "algorithm_version": "bbox_layout_v1",
+    "granularity": "page",
+    "linkage": "average",
+    "metric": "cosine",
+    "min_cluster_size": "1",
+    "threshold": "auto_candidates"
+  },
+  "dataset_id": "ds-3b7551bca6ec",
+  "explanation": {
+    "cluster_params": "聚类参数需逐项显式确认(算法版本/粒度/度量/合并方式/阈值/最小簇);当前内核提供唯一一组确定性参数,确认后按该参数执行并可复算。",
+    "cluster_semantics": "版式聚类把版面相似的样本页归为一类,后续划分时同类样本尽量保持在同一分区,使训练与测试都覆盖各类版式;聚类只看框几何分布,不读图片内容、不做任何模型推理。",
+    "kernel_cluster_boundary": "内核只执行确定性版式聚类;语义/视觉层面的聚类由技能侧完成,两类来源在产物中以来源标记区分,不互相冒充。"
+  },
+  "fact_id": "ds-3b7551bca6ec@5fe2a8c9a98b",
+  "human_summary": {
+    "actions": [
+      {
+        "detail": "确认聚类参数后调用 atf_style_cluster.execute。",
+        "needs_decision": false,
+        "title": "确认聚类参数"
+      }
+    ],
+    "headline": "数据集 ds-3b7551bca6ec@5fe2a8c9a98b 尚无版式聚类料,需要先确认聚类参数并执行聚类(或由技能侧补料),之后才能进入划分确认。",
+    "metrics": [
+      {
+        "label": "登记身份",
+        "value": "ds-3b7551bca6ec@5fe2a8c9a98b"
+      },
+      {
+        "label": "聚类料",
+        "value": "缺失"
+      }
+    ],
+    "notes": [],
+    "pending_confirmations": [
+      {
+        "detail": "请确认聚类参数;确认后由内核执行确定性聚类并落料,也可由技能侧先行产出聚类料后重新发起查询。",
+        "title": "确认版式聚类参数"
+      }
+    ],
+    "sections": [
+      {
+        "items": [
+          "版式聚类把版面相似的样本页归为一类,后续划分时同类样本尽量保持在同一分区,使训练与测试都覆盖各类版式;聚类只看框几何分布,不读图片内容、不做任何模型推理。"
+        ],
+        "title": "第一步:确认版式聚类"
+      }
+    ]
+  },
+  "ok": true,
+  "pin": "5fe2a8c9a98b",
+  "stage": "cluster_confirmation"
+}

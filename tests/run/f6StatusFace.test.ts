@@ -145,7 +145,7 @@ describe("F6 用例 ②：状态面渲染（人读行＋禁直出工程语）", 
     expect(text).toContain("· 已登记：ds-abc123def456");
   });
 
-  it("禁直出工程语：digest／schema 名／snake_case 行降级为中性提示", () => {
+  it("禁直出工程语：digest／schema 名／snake_case 行整体静默（B 口径：不显示不解释不指路）", () => {
     const leaked = {
       ok: true,
       run_id: "r1",
@@ -157,7 +157,9 @@ describe("F6 用例 ②：状态面渲染（人读行＋禁直出工程语）", 
     expect(lines.join("\n")).not.toContain("split_integrity_unavailable");
     expect(lines.join("\n")).not.toContain("a".repeat(64));
     expect(lines.join("\n")).not.toContain("DatasetSplitPolicy/v2");
-    expect(lines.join("\n")).toContain("已收起");
+    // 降级文案已删除：命中行对用户不存在，不解释、不指路（L1c 提前批 B，2026-09-22）
+    expect(lines.join("\n")).not.toContain("已收起");
+    expect(lines.join("\n")).not.toContain("事实日志");
   });
 
   it("两字段皆无 → 单行人读现状（兜底）", () => {

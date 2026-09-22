@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { adaptProjectionToMessages, expandModelResponse } from "../../src/llm/index.js";
 import { type LlmContextEvent } from "../../src/core/session/index.js";
@@ -120,7 +121,7 @@ describe("D-f 补正批（B2/B4）：tool/result 附注白名单＋摘要化定�
     expect(toolResult.summary).toContain(NUDGE);
   });
 
-  it("用例 4（零回归硬要求）：ok:true 无 nudge → summary 与现状逐字节一致", () => {
+  it("用例 4（语义升级·A1）：ok:true 无 nudge → 小体量全量透传（≤160 旧体内与现状逐字节一致；>160 体不再截断——见下方 A1 describe）", () => {
     const result = { ok: true, count: 0, facts: [] }; // 短载荷（readableSummary 160 截断内）
     const mapped = adaptProjectionToMessages([event(1, "tool/result", { tool: "atf_fact_scan", ok: true, result, call_ref: 1 })]);
     expect(mapped.ok).toBe(true);
@@ -185,5 +186,114 @@ describe("切片 2 · A3 多工具展开（一次响应 → N 个顺序决策）
     expect(expandModelResponse({ message: "x", budget: 32 }).ok).toBe(false);
     expect(expandModelResponse({ tool_calls: [{ tool: "atf_gate" }] }).ok).toBe(false);
     expect(expandModelResponse("not-an-object").ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L1c 提前批 A1（2026-09-22）：成功结构化体取消 160 截断——丙·体量纪律三档
+// （全量透传 ≤ cap ／ 保键降级 ／ 病态体硬切知情尾标；失败径与 approval 轨零改）。
+// 测试纪律①②：真实体量 fixture＝五跑 #18 逐字拷贝（1172 字符）＋真实体量断言
+// （模板完整性逐字段：键名＋取值；截断/溢出/完整性三态全覆盖）。
+// ---------------------------------------------------------------------------
+describe("L1c 提前批 A1：成功体取消 160 截断（体量纪律）", () => {
+  const loadFixture = (name: string): unknown =>
+    JSON.parse(readFileSync(new URL(`../fixtures/realvolume/${name}`, import.meta.url), "utf8"));
+
+  const toolSummary = (payload: unknown, options?: Parameters<typeof adaptProjectionToMessages>[1]): string => {
+    const mapped = adaptProjectionToMessages([event(18, "tool/result", payload)], options);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) throw new Error("unreachable");
+    const toolResult = mapped.value.find((message) => message.role === "tool_result");
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    return toolResult.summary;
+  };
+
+  const TEMPLATE_KEYS: ReadonlyArray<readonly [string, string]> = [
+    ["algorithm_version", "bbox_layout_v1"],
+    ["granularity", "page"],
+    ["metric", "cosine"],
+    ["linkage", "average"],
+    ["threshold", "auto_candidates"],
+    ["min_cluster_size", "1"],
+  ];
+
+  it("真实体量 fixture（五跑 #18，1172 字符）——模板完整性逐字段：六键键名＋取值模型全可见", () => {
+    const result = loadFixture("propose-cluster-template.json");
+    const summary = toolSummary({ tool: "atf_preparation_propose", ok: true, result, call_ref: 18 });
+    for (const [key, value] of TEMPLATE_KEYS) {
+      expect(summary).toContain(`"${key}"`);
+      expect(summary).toContain(`"${value}"`);
+    }
+    // 五跑缺陷铁证不可再现：旧 160 截断恰切在 "min_clu
+    expect(summary).toContain('"min_cluster_size":"1"');
+    expect(summary).toContain('"threshold":"auto_candidates"');
+  });
+
+  it("全量透传长度断言：summary = JSON 全文（1172 ≤ 6_000 回退上限）——五跑截断形态不可再现", () => {
+    const result = loadFixture("propose-cluster-template.json");
+    const summary = toolSummary({ tool: "atf_preparation_propose", ok: true, result, call_ref: 18 });
+    expect(summary).toBe(JSON.stringify(result)); // 全文逐字节（旧行为：前 160 字符＋…）
+    expect(summary.length).toBe(1172);
+  });
+
+  it("状态面真实体（2_052 字符）同样全量透传", () => {
+    const result = loadFixture("workspace-status-overview.json");
+    const summary = toolSummary({ tool: "atf_workspace_status", ok: true, result, call_ref: 20 });
+    expect(summary).toBe(JSON.stringify(result));
+    expect(summary.length).toBe(2052);
+  });
+
+  it("超限降级（保键）：长字符串值截 512＋余量标记、长数组留前 50＋计数标记；模板键集保全", () => {
+    const result = {
+      dataset_id: "ds-x",
+      cluster_params_template: {
+        algorithm_version: "bbox_layout_v1",
+        granularity: "page",
+        metric: "cosine",
+        linkage: "average",
+        threshold: "auto_candidates",
+        min_cluster_size: "1",
+      },
+      big_text: "x".repeat(9000),
+      big_array: Array.from({ length: 120 }, (_, i) => `item-${String(i)}`),
+    };
+    const summary = toolSummary({ tool: "atf_preparation_propose", ok: true, result, call_ref: 1 });
+    // 键集保全：六键键名＋取值全在（「关键字段全量」由结构保证）
+    for (const [key, value] of TEMPLATE_KEYS) {
+      expect(summary).toContain(`"${key}"`);
+      expect(summary).toContain(`"${value}"`);
+    }
+    // 降级标记：长串截 512（余量 8488 字符）、数组留 50 项（余 70 项）
+    expect(summary).toContain("…[截断8488字符]");
+    expect(summary).toContain("…[共120项已折叠]");
+    expect(summary.length).toBeLessThanOrEqual(6000);
+  });
+
+  it("病态体硬切：知情尾标——模型始终知情拿到残缺体（原文 N 字符）", () => {
+    const result: Record<string, string> = {};
+    for (let i = 0; i < 2000; i += 1) result[`k${String(i)}`] = `v-${String(i)}`; // 短键短值，保键降级无效
+    const summary = toolSummary({ tool: "atf_fact_scan", ok: true, result, call_ref: 1 });
+    expect(summary).toContain("…[已截断，原文");
+    expect(summary.endsWith("字符]")).toBe(true);
+    expect(summary.length).toBeLessThanOrEqual(6000 + 64);
+  });
+
+  it("上限可注入（数据驱动）：capChars=100 → 真实体也降级并带知情尾标", () => {
+    const result = loadFixture("propose-cluster-template.json");
+    const summary = toolSummary(
+      { tool: "atf_preparation_propose", ok: true, result, call_ref: 18 },
+      { toolResultSummaryCapChars: 100 },
+    );
+    expect(summary).toContain("…[已截断，原文1172字符]");
+    expect(summary.length).toBeLessThanOrEqual(100 + 64);
+  });
+
+  it("失败径逐字节回归：ok:false = [reason, guidance, nudge]（A1 只动成功径）", () => {
+    const guidance = "【invalid_params】参数形态不合法。";
+    const nudge = "控制面提示：请修正参数。";
+    const summary = toolSummary({
+      tool: "atf_style_cluster_execute", ok: false, reason: "invalid_params", call_ref: 2, guidance, nudge,
+    });
+    expect(summary).toBe(`invalid_params｜${guidance}｜${nudge}`);
   });
 });

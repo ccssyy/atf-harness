@@ -63,14 +63,17 @@ describe("engineeringLeak（负向校验：禁 code／schema 名／digest／gate
     expect(engineeringLeak("版式聚类完成：共聚出 3 类版式。")).toBe(false);
   });
 
-  it("主叙述行泄漏 → 渲染降级为中性提示（fail-closed，不放大内核漏映射）", () => {
+  it("主叙述行泄漏 → 整行静默滤除（B 口径：不显示、不解释、不指路；L1c 提前批 2026-09-22）", () => {
     const leaked: HumanSummary = {
       ...cleanSummary,
       headline: "准入完成（split_policy_missing 已解除）",
     };
     const lines = humanSummaryLines(leaked);
-    expect(lines[0]).toContain("已收起");
-    expect(lines[0]).not.toContain("split_policy_missing");
+    // 降级文案已删除：任何行都不得出现"已收起/事实日志"类提示——命中行对用户不存在
+    expect(lines.join("\n")).not.toContain("已收起");
+    expect(lines.join("\n")).not.toContain("事实日志");
+    // 泄漏内容本身也不上屏（headline 命中 → 结论行整体静默）
+    expect(lines.join("\n")).not.toContain("split_policy_missing");
     // notes[] 为工程细节降级区：技术定位原样呈现，不作检测对象
     const withNote = humanSummaryLines({ ...cleanSummary, notes: ["digest=0000000000000000000000000000000000000000000000000000000000000000"] });
     expect(withNote.some((line) => line.includes("digest="))).toBe(true);
