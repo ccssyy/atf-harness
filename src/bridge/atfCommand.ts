@@ -7,12 +7,12 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 2026-09-21：v0.7.2b0 → v0.7.3b0，唯一真相源 = bridge.contract.yaml atf_upstream，
+// 当前 pin（re-pin 2026-09-22：v0.7.3b0 → v0.7.3b1，唯一真相源 = bridge.contract.yaml atf_upstream，
 // 本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.3b0（K-Gap-2 料门对齐批：方法面 10→12＋human_summary 六字段；
-// 含补正 0eeb016）——HEAD==tag commit 1c36fb3，无 sha 备注。
-export const ATF_UPSTREAM_TAG = "v0.7.3b0";
-export const ATF_UPSTREAM_COMMIT_SHA = "1c36fb37f7abc8dc5b0be763a9580279260d56c5";
+// 本轮 pin 取值＝tag v0.7.3b1（F6 状态面数据集概览：workspace_status 纯增
+// datasets/material_roots/human_summary；方法面仍 12）——HEAD==tag commit 2f9a052，无 sha 备注。
+export const ATF_UPSTREAM_TAG = "v0.7.3b1";
+export const ATF_UPSTREAM_COMMIT_SHA = "2f9a052eb3468257e18061296bb46be825c5d822";
 
 export interface AtfCliInvocation {
   command: string;

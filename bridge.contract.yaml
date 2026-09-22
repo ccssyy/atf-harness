@@ -667,8 +667,8 @@ atf_cli:
 # （mock 已回 2）"的表述作废】，真实对端以内核批次二实现为准。
 # ---------------------------------------------------------------------
 atf_upstream:
-  tag: v0.7.3b0
-  commit_sha: 1c36fb37f7abc8dc5b0be763a9580279260d56c5
-  pinned_at: "2026-09-21"
-  baseline: 全量基线 1366 passed / 128 skipped（内核 K-Gap-2 worktree S1–S4 实测，6c0b7a0）；pin＝tag v0.7.3b0 commit 1c36fb3（本次 HEAD==tag，无 sha 备注）
+  tag: v0.7.3b1
+  commit_sha: 2f9a052eb3468257e18061296bb46be825c5d822
+  pinned_at: "2026-09-22"
+  baseline: 全量基线 1366+11 passed（内核 F6 门 2 ＋11 对账，main 2f9a052 实测）；pin＝tag v0.7.3b1 commit 2f9a052（HEAD==tag，无 sha 备注）
   contract_version: 1

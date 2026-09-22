@@ -112,7 +112,7 @@ describeIfPinned("K-Gap-2 接线批真内核 e2e——propose→（缺料时）e
           error === null ? resolve(stdout.trim()) : reject(error),
         );
       });
-      expect(headSha).toBe("1c36fb37f7abc8dc5b0be763a9580279260d56c5");
+      expect(headSha).toBe("2f9a052eb3468257e18061296bb46be825c5d822");
 
       const fixture = await createRealPeerFixture(`k2-e2e-${randomUUID().slice(0, 8)}`);
       openFixtures.push(fixture);
