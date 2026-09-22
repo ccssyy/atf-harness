@@ -144,12 +144,16 @@ export const computeCompactionWhitelist = (events: readonly SessionEvent[]): Set
  * 压缩计划（纯函数）：双指标触发（事件数 || 估算 token，先到者生效）；
  * 折叠边界按 CHUNK 粒度整数倍推进（滞后防逐条重折叠），保留窗内（最近 KEEP_RECENT 条）
  * 一律不动。未触发时 boundary 恒为 0（投影 = v0 语义原样）。
+ * L1c 提前批 A1.5.2（放行件 v7 ★段解冻：预算参数化）：triggerTokens 由调用方注入——
+ * 缺省 = 既有常量 COMPACTION_TRIGGER_TOKENS（未配置 context_window 时逐字节回退）；
+ * 数据驱动值经 constantsBudget.compactionTriggerTokens() 解析，投影径与审计径
+ * （sessionLog.ts:463）必须同源传值（同源铁律，禁只改一处）。
  */
-export const planCompaction = (events: readonly SessionEvent[]): CompactionPlan => {
+export const planCompaction = (events: readonly SessionEvent[], triggerTokens: number = COMPACTION_TRIGGER_TOKENS): CompactionPlan => {
   const material = materialOf(events);
   const tokens = estimateTokens(material);
   const byCount = material.length >= COMPACTION_TRIGGER_EVENTS;
-  const byTokens = tokens >= COMPACTION_TRIGGER_TOKENS;
+  const byTokens = tokens >= triggerTokens;
   const triggered = byCount || byTokens;
   const reason: CompactionTriggerReason = byCount ? "event_count" : byTokens ? "token_budget" : "none";
 
@@ -209,9 +213,10 @@ export const buildCompactionRecord = (
  * 模型上下文投影（transformContext 的实现）：未触发 = v0 语义原样（过滤 assistant/attempt）；
  * 触发 = [压缩摘要] + [折叠区间内白名单豁免原文] + [保留窗原文]，审计事件不进入投影。
  * 对同一输入逐条确定、可幂等重放（replay 重建一致性的根据）。
+ * A1.5.2：triggerTokens 透传 planCompaction（缺省回退既有常量——行为中立）。
  */
-export const projectContext = (events: readonly SessionEvent[]): LlmContextEvent[] => {
-  const plan = planCompaction(events);
+export const projectContext = (events: readonly SessionEvent[], triggerTokens?: number): LlmContextEvent[] => {
+  const plan = planCompaction(events, triggerTokens);
   const material = materialOf(events);
   if (plan.boundary === 0) {
     return material.filter((event) => event.type !== "assistant/attempt").map(convertToLlm);

@@ -27,6 +27,7 @@ import {
   FSYNC_DEFAULT_MODE,
 } from "./constants.js";
 import { buildCompactionRecord, materialOf, planCompaction } from "./compaction.js";
+import { compactionTriggerTokens } from "./constantsBudget.js";
 import { type InvalidRef, sessionError, type SessionBlock, type SessionError } from "./errors.js";
 import {
   asSessionEvent,
@@ -458,9 +459,11 @@ export class SessionLog {
    * 压缩审计（按需）：实质事件序列达到折叠边界且该边界尚未记录时，落盘一条
    * session/compaction 审计事件（payload = 确定性压缩记录，covers.to_id 判重）。
    * 审计事件对计划透明（materialOf），不会引发递归审计。
+   * L1c 提前批 A1.5.2（放行件 v7 ★段解冻消费点：审计语义零改，仅触发水位与投影径
+   * 同源——compactionTriggerTokens() 与 runner seam 读同一进程级注入值，同源铁律）。
    */
   private async recordCompactionAuditIfNeeded(): Promise<Result<void, SessionError>> {
-    const plan = planCompaction(this.history);
+    const plan = planCompaction(this.history, compactionTriggerTokens());
     if (plan.boundary === 0) return ok(undefined);
     const material = materialOf(this.history);
     const anchor = material[plan.boundary - 1];

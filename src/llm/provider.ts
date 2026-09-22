@@ -78,12 +78,15 @@ export const assertModelDecision = (value: unknown): { ok: true; decision: LlmDe
 };
 
 /**
- * LlmErrorCode（L1a 门 2 扩一值）：
+ * LlmErrorCode（L1a 门 2 扩一值；L1c 提前批 C 项再扩一值）：
  * - provider_failure：provider 自身/协议/响应形状故障（既有语义零改动）；
  * - call_budget_exhausted：单 run 调用次数上限命中（门 2 任务书 §1.1 / D5 成本护栏——
- *   与轮次预算是两件事；结构化可区分，调用方按故障终局收敛，不静默继续）。
+ *   与轮次预算是两件事；结构化可区分，调用方按故障终局收敛，不静默继续）；
+ * - provider_quota_or_rate_limited：provider 侧配额/限流/欠费（HTTP 429 或 body 配额类
+ *   标记）——映射人读提示「用量已达上限」，不重试（L1c 提前批 C 项查证补映射，2026-09-22；
+ *   复核点①核验行：本闭集未登记于 bridge/session/workspace 三契约件，扩值零契约 diff）。
  */
-export type LlmErrorCode = "provider_failure" | "call_budget_exhausted";
+export type LlmErrorCode = "provider_failure" | "call_budget_exhausted" | "provider_quota_or_rate_limited";
 
 export interface LlmError {
   code: LlmErrorCode;

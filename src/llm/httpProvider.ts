@@ -21,14 +21,17 @@ import { err, ok, type Result } from "../bridge/index.js";
 import { adaptProjectionToMessages, expandModelResponse } from "./adapter.js";
 import { getCodec } from "./codec.js";
 import { type ProtocolCodec } from "./codecWire.js";
-import { llmError, llmErrorOf, type LlmDecision, type LlmError, type LlmProvider } from "./provider.js";
+import { llmError, llmErrorOf, type LlmDecision, type LlmError, type LlmErrorCode, type LlmProvider } from "./provider.js";
 import { type ResolvedLlmProviderConfig } from "./providerConfig.js";
+import { resolveSummaryResultCapChars } from "../core/session/constantsBudget.js";
 import { type ModelVisibleTool } from "../core/tools/index.js";
 import { type LlmContextEvent } from "../core/session/index.js";
 
 /**
  * 系统提示（harness 静态文本；只描述模型面约定，不含预算/治理内部字段——
  * 模型不可见约束延续；审批语义与 approval 消息同属模型可见面）。
+ * 第 4 条（L1c 提前批 B 描述层，2026-09-22）：状态面信息直接使用、无需向用户复述、
+ * 勿误称"工具"——五跑模型把 material_roots 枚举向用户复述并误称"列举工具"。
  */
 export const HARNESS_SYSTEM_PROMPT = [
   "你是 ATF 训练流水线上的运行代理，由本 harness 托管。本轮任务见首条用户消息。",
@@ -37,7 +40,18 @@ export const HARNESS_SYSTEM_PROMPT = [
   "2. 写动作（如数据准入）直接发起工具调用；是否放行由人工审批决定，审批往返以消息形式",
   "   出现在对话中——被拒绝或收到修改意见时，依据意见调整后重试或改走其他路径；",
   "3. 任务完成后以纯文本回复作最终答复（不再调用工具），概述做了什么、看到了什么、建议下一步。",
+  "4. 查询类工具返回的状态信息（已登记数据、素材目录等）供你直接使用与决策——无需向用户",
+  "   复述其枚举内容，也不要把状态面说成\"工具\"；向用户报告时只讲结论与下一步。",
 ].join("\n");
+
+/** C 项（L1c 提前批）：provider 侧配额/限流/欠费归类标记——status 429 命中，body 标记兜底。 */
+const QUOTA_BODY_MARKERS: readonly string[] = ["insufficient_quota", "quota", "rate limit", "usage limit", "arrearage"];
+
+const isQuotaFailure = (status: number, bodyExcerpt: string): boolean => {
+  if (status === 429) return true;
+  const head = bodyExcerpt.slice(0, 2000).toLowerCase();
+  return QUOTA_BODY_MARKERS.some((marker) => head.includes(marker));
+};
 
 export interface HttpLlmProviderOptions {
   config: ResolvedLlmProviderConfig;
@@ -111,7 +125,11 @@ export class HttpLlmProvider implements LlmProvider {
       }));
     }
 
-    const messages = adaptProjectionToMessages(context);
+    // A1（L1c 提前批）：成功体摘要上限数据驱动——min(窗口×12.5%, 25K tokens)×2 字符，
+    // 未配置回退 6_000 字符（constantsBudget 解析；口径换算注明处）。
+    const messages = adaptProjectionToMessages(context, {
+      toolResultSummaryCapChars: resolveSummaryResultCapChars(this.config.context_window),
+    });
     if (!messages.ok) {
       return err(llmError("模型上下文投影失败（fail-closed）", this.redactDetail(messages.error)));
     }
@@ -177,9 +195,9 @@ export class HttpLlmProvider implements LlmProvider {
     return detail;
   }
 
-  private httpFailure(message: string, extra?: { status?: number; body_excerpt?: string; request_body?: string }): LlmError {
+  private httpFailure(message: string, extra?: { status?: number; body_excerpt?: string; request_body?: string }, code: LlmErrorCode = "provider_failure"): LlmError {
     // detail 只记 host（ADR-09 红线：provider 记录只到别名/主机名粒度，不记完整 URL）
-    return llmError(this.redact(message), this.redactDetail({
+    return llmErrorOf(code, this.redact(message), this.redactDetail({
       host: this.host(),
       ...(extra?.status !== undefined ? { status: extra.status } : {}),
       ...(extra?.body_excerpt !== undefined ? { body_excerpt: truncate(extra.body_excerpt) } : {}),
@@ -234,6 +252,15 @@ export class HttpLlmProvider implements LlmProvider {
       if (response.status < 200 || response.status >= 300) {
         // 4xx 等：非瞬时故障，不重试（fail-closed）
         const excerpt = await response.text().catch(() => "");
+        // C 项（L1c 提前批）：provider 配额/限流/欠费归类——人读提示＋结构化码，不重试
+        // （无退避机制，重试计入预算只白烧；runner provider_failure 收口径自然携带人读行）。
+        if (isQuotaFailure(response.status, excerpt)) {
+          return err(this.httpFailure(
+            "模型服务用量已达上限（provider 侧配额/限流）：请核对账户额度或稍后重试；输入新指令即可继续本会话",
+            { status: response.status, body_excerpt: excerpt },
+            "provider_quota_or_rate_limited",
+          ));
+        }
         // 诊断转储（ATF_LLM_DEBUG_DUMP=1 时启用；仅请求体，不含任何头/凭据——key 不在 body）
         const dump = process.env["ATF_LLM_DEBUG_DUMP"] === "1" ? JSON.stringify(body) : undefined;
         return err(this.httpFailure(`决策请求被拒绝（HTTP ${String(response.status)}，不重试）`, {

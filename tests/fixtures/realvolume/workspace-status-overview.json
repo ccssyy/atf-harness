@@ -1,0 +1,129 @@
+{
+  "admitted_count": 1,
+  "datasets": [
+    {
+      "dataset_id": "ds-3b7551bca6ec",
+      "label": null,
+      "pin": "5fe2a8c9a98b",
+      "registered_at": "2026-09-22T01:50:51Z",
+      "shape": {
+        "paired_samples": 50,
+        "split_evidence": "absent",
+        "subdir_count": 0,
+        "subdirs": [],
+        "suffix_histogram": {
+          ".json": 50,
+          ".png": 50
+        },
+        "symlink_present": false,
+        "truncated": false
+      },
+      "shape_reason": null,
+      "source_form": "workspace_relative",
+      "source_relative": "datasets/external/swb"
+    }
+  ],
+  "human_summary": {
+    "actions": [
+      {
+        "detail": "先确认来源根的实际形态，再据此执行登记（atf_admit_data）或请求准入（atf_data_admission.request）。",
+        "needs_decision": false,
+        "title": "确认来源形态"
+      }
+    ],
+    "headline": "工作区已登记 1 批数据集；另发现 3 个素材目录尚未登记。",
+    "metrics": [
+      {
+        "label": "已登记批数",
+        "value": "1"
+      },
+      {
+        "label": "样本对总数",
+        "value": "50"
+      },
+      {
+        "label": "素材顶层分组数",
+        "value": "1"
+      }
+    ],
+    "notes": [],
+    "pending_confirmations": [
+      {
+        "detail": "若数据实际存放在工作区外，请给出根位置，以便登记与准入执行。",
+        "title": "提供工作区外来源根位置"
+      }
+    ],
+    "sections": [
+      {
+        "items": [
+          "已登记数据集「第 1 批」:来源位于工作区内，位于 datasets/external/swb，样本 50 对，无划分清单。"
+        ],
+        "title": "已登记"
+      },
+      {
+        "items": [
+          "datasets/external(样本 150 对,无划分清单)——未登记素材目录(仅事实枚举,未判定为数据集)。",
+          "datasets/external/aco(样本 50 对,无划分清单)——未登记素材目录(仅事实枚举,未判定为数据集)。",
+          "datasets/external/do(样本 50 对,无划分清单)——未登记素材目录(仅事实枚举,未判定为数据集)。"
+        ],
+        "title": "未登记素材"
+      }
+    ]
+  },
+  "material_roots": [
+    {
+      "paired_samples": 150,
+      "relative": "datasets/external",
+      "split_evidence": "absent",
+      "status_label": "unregistered_material_root",
+      "subdir_count": 3,
+      "subdirs": [
+        "aco",
+        "do",
+        "swb"
+      ],
+      "suffix_histogram": {
+        ".json": 150,
+        ".png": 150
+      },
+      "symlink_present": false,
+      "truncated": false
+    },
+    {
+      "paired_samples": 50,
+      "relative": "datasets/external/aco",
+      "split_evidence": "absent",
+      "status_label": "unregistered_material_root",
+      "subdir_count": 0,
+      "subdirs": [],
+      "suffix_histogram": {
+        ".json": 50,
+        ".png": 50
+      },
+      "symlink_present": false,
+      "truncated": false
+    },
+    {
+      "paired_samples": 50,
+      "relative": "datasets/external/do",
+      "split_evidence": "absent",
+      "status_label": "unregistered_material_root",
+      "subdir_count": 0,
+      "subdirs": [],
+      "suffix_histogram": {
+        ".json": 50,
+        ".png": 50
+      },
+      "symlink_present": false,
+      "truncated": false
+    }
+  ],
+  "ok": true,
+  "run_id": "run-smoke2-8e0d14",
+  "scope_ref": {
+    "project_id": "agentic-training-flow",
+    "scope_id": "run-smoke2-8e0d14",
+    "scope_mode": "canonical",
+    "scope_type": "run"
+  }
+}

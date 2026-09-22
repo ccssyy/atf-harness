@@ -267,3 +267,53 @@ describe("HttpLlmProvider——fail-closed", () => {
     expect(HARNESS_SYSTEM_PROMPT.length).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// L1c 提前批 C（2026-09-22）：provider quota/用量上限错误映射
+// （429 ／ body 配额类标记 → provider_quota_or_rate_limited＋人读一行；不重试——
+//   无退避机制，重试计入预算只白烧；runner provider_failure 收口径自然携带人读行。）
+// ---------------------------------------------------------------------------
+describe("L1c 提前批 C：provider quota/用量上限错误映射", () => {
+  it("HTTP 429 → provider_quota_or_rate_limited＋人读提示；不重试（调用计数=1）", async () => {
+    let attempts = 0;
+    const fetchImpl: typeof fetch = async () => {
+      attempts += 1;
+      return jsonResponse({ error: { code: "rate_limit", message: "rate limit reached" } }, 429);
+    };
+    const provider = new HttpLlmProvider({ config: CONFIG({ max_retries: 3 }), tools: TOOLS, fetchImpl });
+    const result = await provider.decide(CTX);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("unreachable");
+    expect(result.error.code).toBe("provider_quota_or_rate_limited");
+    expect(result.error.message).toContain("用量已达上限");
+    expect(result.error.message).toContain("输入新指令即可继续");
+    expect(attempts).toBe(1);
+    expect(provider.calls).toBe(1);
+  });
+
+  it("403＋body insufficient_quota（配额/欠费类）→ 同码同提示；非 429 也命中 body 标记", async () => {
+    let attempts = 0;
+    const fetchImpl: typeof fetch = async () => {
+      attempts += 1;
+      return jsonResponse({ error: { code: "insufficient_quota", message: "You exceeded your current quota" } }, 403);
+    };
+    const provider = new HttpLlmProvider({ config: CONFIG({ max_retries: 3 }), tools: TOOLS, fetchImpl });
+    const result = await provider.decide(CTX);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("unreachable");
+    expect(result.error.code).toBe("provider_quota_or_rate_limited");
+    expect(result.error.message).toContain("用量已达上限");
+    expect(attempts).toBe(1);
+  });
+
+  it("对照：非配额 4xx（401）维持既有通用文案与 provider_failure 码（零行为漂移）", async () => {
+    const fetchImpl: typeof fetch = async () => jsonResponse({ error: { message: "bad key" } }, 401);
+    const provider = new HttpLlmProvider({ config: CONFIG(), tools: TOOLS, fetchImpl });
+    const result = await provider.decide(CTX);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("unreachable");
+    expect(result.error.code).toBe("provider_failure");
+    expect(result.error.message).toContain("不重试");
+    expect(result.error.message).not.toContain("用量已达上限");
+  });
+});

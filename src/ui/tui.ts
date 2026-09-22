@@ -41,6 +41,17 @@ import { formatEventDetailLines, formatEventLine } from "./eventView.js";
 import { collapseLines } from "./collapseView.js";
 import { askApproval } from "./approval.js";
 import { buildInitInvocation, buildRealPeerDescriptor, effectiveScopeMode, parseArgs, repoRootDefault, resolveKernelDir, usage } from "./tuiArgs.js";
+import { setCompactionContextWindow } from "../core/session/constantsBudget.js";
+import {
+  applyFieldInput,
+  canonicalConfirmationText,
+  cardFields,
+  confirmCardFromResult,
+  confirmCardLines,
+  confirmationEchoLine,
+  type ConfirmCard,
+} from "./confirmCard.js";
+import { completedSummaryLines } from "./completedSummary.js";
 
 const ask = (rl: readline.Interface, prompt: string, fallback?: string): Promise<string> =>
   new Promise((resolve) => {
@@ -89,6 +100,9 @@ const main = async (): Promise<void> => {
     return;
   }
   const config: ResolvedLlmProviderConfig = configResult.value;
+  // A1.5.2（L1c 提前批）：进程级 compaction 触发水位注入——context_window − reserve，
+  // 未配置 null → 回退既有 24K（行为中立）；与 sessionLog 审计径同源（constantsBudget）。
+  setCompactionContextWindow(config.context_window);
 
   // W2 --peer real 预置（门 1 裁定 D-1/D-2；全部 fail-closed，任一步不过即退出不进会话）。
   // 顺序：内核目录解析（D-2）→ pin sha 校验 → ws-root 校验 → 隔离 HOME → 幂等 atf init（D-1）。
@@ -171,6 +185,13 @@ const main = async (): Promise<void> => {
     let instructionText = instruction;
     // B6 D2：历史重放折叠——history 事件缓冲为一批，默认一行摘要（按 h 展开）
     const folder = new HistoryFolder(renderer, { scenario: args.scenarioId, run: runId });
+    // A2 确认卡状态（holder 对象承载——onEvent 闭包写、主循环读；跨闭包 let 会被 TS 流
+    // 分析误收窄为 never）：pending = 本 turn 末次 propose 携模板的候选（runBranch 前重置、
+    // live 事件流更新）；confirmed = 最近一次经卡确认的 {卡, 确认值}（审批弹窗一致性回显源）。
+    const cardRef: {
+      pending: ConfirmCard | null;
+      confirmed: { card: ConfirmCard; confirmed: Record<string, unknown> } | null;
+    } = { pending: null, confirmed: null };
     // B4：多轮续跑循环——每个 prompt 一个 turn（审批闸逐 turn 生效）；空输入/Ctrl+C 退出
     for (;;) {
       const provider = new HttpLlmProvider({
@@ -195,6 +216,7 @@ const main = async (): Promise<void> => {
           },
         },
       };
+      cardRef.pending = null; // 每 turn 重置：卡只认本 turn 末次 propose（跨 turn 陈卡不弹）
       const ran = await ScenarioRunner.runBranch(scenario, "main", {
         runsRoot: args.runsRoot,
         // W2 载体 B：peer real 走内置 descriptor（argv/cwd/env 直通 bridge spawn 面）
@@ -204,10 +226,24 @@ const main = async (): Promise<void> => {
         modelProvider: provider,
         modelId: config.model,
         approvalSurface: {
-          stub: async (input) => await askApproval({ renderer, rl, input }),
+          stub: async (input) => await askApproval({
+            renderer,
+            rl,
+            input,
+            // A2 三道防线之三：与最近确认卡的只读一致性回显（只提示、不拦截、不改写）
+            confirmationEcho: (tool, params) => confirmationEchoLine(tool, params, cardRef.confirmed?.card ?? null, cardRef.confirmed?.confirmed ?? null),
+          }),
         },
         onEvent: (event, origin) => {
           folder.handle(event, origin, formatEventLine, formatEventDetailLines);
+          // A2：live propose 成功结果 → 确认卡候选（携带 cluster_params_template/policy_template 才成卡）
+          if (origin === "live" && event.type === "tool/result") {
+            const payload = event.payload as { ok?: unknown; result?: unknown } | null;
+            if (payload?.ok === true) {
+              const card = confirmCardFromResult(payload.result);
+              if (card !== null) cardRef.pending = card;
+            }
+          }
         },
         ...(continueMode ? { continue: { instruction: instructionText } } : {}),
         ...(effectiveScopeMode(args) !== "headless" ? { scopeMode: effectiveScopeMode(args) } : {}),
@@ -229,6 +265,13 @@ const main = async (): Promise<void> => {
       // D-f-2：不显示步数——原「模型调用=N 次」代理步数计删除；事件数保留（append-only
       // 日志对账口径，非进度指标）。
       renderer.appendLine(`outcome=${report.outcome.kind} exit=${String(report.exit_code)} 事件数=${String(report.events.length)}`);
+      // A3（L1c 提前批）：completed turn 产品化摘要——做了什么／产生了什么／下一步建议
+      // （TUI 侧确定性推导，账本轨零新增；failure 径对称物＝下方 collapseLines）。
+      if (report.outcome.kind === "completed") {
+        for (const line of completedSummaryLines(report.events)) {
+          renderer.appendLine(line);
+        }
+      }
       if (report.outcome.kind === "turn_failed") {
         // D-1/D-f：turn 级失败收口＝会话保持存活，控制权交还用户——D-1 阈值径与 D-f 四径
         // （budget_exhausted／provider_failure／same_call_repeat／no_progress）同版式渲染；
@@ -260,28 +303,74 @@ const main = async (): Promise<void> => {
       // B3：reset 键 ＋ B4：多轮续跑入口——仅交互终端（非 TTY 冒烟单 turn 后直接退出）
       if (process.stdin.isTTY !== true) break;
       let nextInstruction: string | null = null;
-      for (;;) {
+      // A2 确认卡挂点（触发＝turn 收口后且本 turn 末次 propose 成功携带模板；载体＝B8 流内
+      // 多行＋输入行应答；不劫持输入——跳过卡＝直接输入其他指令，直接回车＝退出）。确认后
+      // harness 译码（canonicalConfirmationText）作为下一 turn 用户指令落 user/message。
+      if (cardRef.pending !== null) {
+        // 显式宽化读取：上文 `cardRef.pending = null`（每 turn 重置）会把属性收窄成 never，
+        // 而 onEvent 闭包的真实写入 TS 流分析不可见——此处强制回到声明联合类型。
+        const card: ConfirmCard = cardRef.pending as ConfirmCard;
         rl.resume();
-        const post = (await ask(rl, "新指令（直接回车=退出，r=重绘，e=展开/折叠长事件，h=展开历史）> ")).trim();
-        if (post === "r" || post === "R") {
-          renderer.reset();
-          renderer.appendLine("（界面已重绘：过程流为 append-only 日志的纯重放，语义不变）");
+        for (const line of confirmCardLines(card)) {
+          renderer.appendLine(line);
+        }
+        const cardKindLabel = card.kind === "cluster" ? "聚类参数" : "划分策略";
+        const confirmed: Record<string, unknown> = { ...card.template };
+        let cardOutcome: "confirmed" | "skip" | "exit" = "exit";
+        const first = (await ask(rl, "确认卡应答（1=按推荐确认 2=逐项修改；直接输入其他指令＝跳过）> ")).trim();
+        if (first === "1") {
+          cardOutcome = "confirmed";
+        } else if (first === "2") {
+          for (const field of cardFields(card)) {
+            if (!field.editable) continue; // null 待定字段不向用户要值（owner 21:38 原则）
+            const value = await ask(rl, `${field.label}（当前 ${field.valueText}，回车保留）> `);
+            applyFieldInput(card, field.key, value, confirmed);
+          }
+          cardOutcome = "confirmed";
+        } else if (first !== "") {
+          nextInstruction = first; // 跳过卡＝该输入即新指令
+          cardOutcome = "skip";
+        }
+        if (cardOutcome === "confirmed") {
+          cardRef.confirmed = { card, confirmed };
+          instructionText = canonicalConfirmationText(card, confirmed);
+          continueMode = true;
+          cardRef.pending = null;
+          renderer.appendLine(`> 确认留痕 ${new Date().toISOString()} 动作=确认卡·${cardKindLabel} 选择=按卡确认（参数以确认文本为准）`);
+          renderer.appendLine("──────── 新 turn（同一 run 绑定下续跑；由事实日志重放重建上下文）────────");
           continue;
         }
-        // B6 D1：折叠展开双向切换（切换后 reset 重放；仅展示层，日志零改动）
-        if (post === "e" || post === "E") {
-          renderer.setFoldExpanded(!renderer.isFoldExpanded);
-          renderer.reset();
-          renderer.appendLine(`（长事件已${renderer.isFoldExpanded ? "全部展开" : "重新折叠（阈值 20 物理行）"}）`);
-          continue;
+        if (cardOutcome === "skip") {
+          cardRef.pending = null;
+          renderer.appendLine(`> 确认留痕 ${new Date().toISOString()} 动作=确认卡·${cardKindLabel} 选择=跳过（直接按输入指令续跑）`);
+        } else {
+          break; // 直接回车＝退出（与主循环语义一致）
         }
-        // B6 D2：h 展开历史重放（逐条，沿用 D1 渲染规则；日志零改动）
-        if (post === "h" || post === "H") {
-          if (!folder.reveal()) renderer.appendLine("（当前无可展开的历史批次——已展开或本会话无重放）");
-          continue;
+      }
+      if (nextInstruction === null) {
+        for (;;) {
+          rl.resume();
+          const post = (await ask(rl, "新指令（直接回车=退出，r=重绘，e=展开/折叠长事件，h=展开历史）> ")).trim();
+          if (post === "r" || post === "R") {
+            renderer.reset();
+            renderer.appendLine("（界面已重绘：过程流为 append-only 日志的纯重放，语义不变）");
+            continue;
+          }
+          // B6 D1：折叠展开双向切换（切换后 reset 重放；仅展示层，日志零改动）
+          if (post === "e" || post === "E") {
+            renderer.setFoldExpanded(!renderer.isFoldExpanded);
+            renderer.reset();
+            renderer.appendLine(`（长事件已${renderer.isFoldExpanded ? "全部展开" : "重新折叠（阈值 20 物理行）"}）`);
+            continue;
+          }
+          // B6 D2：h 展开历史重放（逐条，沿用 D1 渲染规则；日志零改动）
+          if (post === "h" || post === "H") {
+            if (!folder.reveal()) renderer.appendLine("（当前无可展开的历史批次——已展开或本会话无重放）");
+            continue;
+          }
+          if (post !== "") nextInstruction = post;
+          break;
         }
-        if (post !== "") nextInstruction = post;
-        break;
       }
       if (nextInstruction === null) break;
       instructionText = nextInstruction;

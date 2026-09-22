@@ -238,3 +238,38 @@ describe("W1：advised 空备注追问一次（走查前置止血批 2026-09-20�
     expect(chunks()).not.toContain("选择=给意见(advised)");
   });
 });
+
+// ---------------------------------------------------------------------------
+// L1c 提前批 A2（2026-09-22）：确认保真三道防线之三——审批弹窗只读一致性回显
+// （一致/不一致差异拼在请求行尾；只提示、不拦截、不改写——拦截归内核闭集校验。）
+// ---------------------------------------------------------------------------
+describe("A2 审批一致性回显（confirmationEcho 注入面）", () => {
+  it("echo 提供时拼在请求行尾；null 时请求行维持既有形态（零行为变化）", async () => {
+    const { stream, chunks } = ttyStream();
+    const renderer = new DiffRenderer({ out: stream, columns: 80 });
+    const { rl } = stubRl(["1 同意"]);
+    await askApproval({ renderer, rl, input, confirmationEcho: (tool) => (tool === "atf_admit_data" ? "（与确认卡一致）" : null) });
+    expect(chunks()).toContain("（与确认卡一致）");
+
+    const { stream: stream2, chunks: chunks2 } = ttyStream();
+    const renderer2 = new DiffRenderer({ out: stream2, columns: 80 });
+    const { rl: rl2 } = stubRl(["1 同意"]);
+    await askApproval({ renderer: renderer2, rl: rl2, input });
+    expect(chunks2()).not.toContain("与确认卡一致");
+    expect(chunks2()).toContain("⛔ 审批请求");
+  });
+
+  it("echo 标注不一致时请求行携带差异提示（呈现面）", async () => {
+    const { stream, chunks } = ttyStream();
+    const renderer = new DiffRenderer({ out: stream, columns: 200 });
+    const { rl } = stubRl(["3 参数有误"]);
+    await askApproval({
+      renderer,
+      rl,
+      input,
+      confirmationEcho: () => "（注意：与确认卡不一致——相似阈值：确认 \"auto_candidates\" → 实际 \"0.30\"）",
+    });
+    expect(chunks()).toContain("与确认卡不一致");
+    expect(chunks()).toContain("相似阈值");
+  });
+});
