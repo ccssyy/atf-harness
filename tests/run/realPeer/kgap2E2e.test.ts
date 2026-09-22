@@ -106,13 +106,13 @@ describeIfPinned("K-Gap-2 接线批真内核 e2e——propose→（缺料时）e
     "全链：登记→propose(聚类确认)→execute 落料→propose(划分确认)→request 携确认态→completed；env 含 ATF_SKILLS_AUTO_INSTALL=0",
     { timeout: 240_000 },
     async () => {
-      // pin 实测锚：当前 checkout HEAD == v0.7.3b0（1c36fb3）
+      // pin 实测锚：当前 checkout HEAD == v0.7.4b0（0cb8e1e）
       const headSha = await new Promise<string>((resolve, reject) => {
         execFile("git", ["-C", cli.ok ? (cli as { ok: true; path: string }).path : "", "rev-parse", "HEAD"], (error, stdout) =>
           error === null ? resolve(stdout.trim()) : reject(error),
         );
       });
-      expect(headSha).toBe("2f9a052eb3468257e18061296bb46be825c5d822");
+      expect(headSha).toBe("0cb8e1e41bfa6f0ef133b4d7cf6b336bfcbde30f");
 
       const fixture = await createRealPeerFixture(`k2-e2e-${randomUUID().slice(0, 8)}`);
       openFixtures.push(fixture);
