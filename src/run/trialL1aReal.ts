@@ -46,6 +46,7 @@ import {
 } from "../llm/index.js";
 import { ToolRegistry } from "../core/tools/index.js";
 import { ScenarioRunner, type ApprovalStubResponse, type BranchRunReport } from "../core/run/index.js";
+import { setCompactionContextWindow } from "../core/session/constantsBudget.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const cliEntry = join(repoRoot, "dist", "cli", "resume.js");
@@ -242,6 +243,8 @@ const smoke = async (): Promise<string[]> => {
   const config = await loadLlmProviderConfig(env);
   if (!config.ok) fail(`配置加载失败: ${config.error.message}`);
   const cfg: ResolvedLlmProviderConfig = config.value;
+  // A1.5.2（L1c 提前批）：进程级 compaction 触发水位注入（与 TUI 同源；未配置回退 24K）。
+  setCompactionContextWindow(cfg.context_window);
   evidence.push(`配置选中 provider=${cfg.provider_id} model=${cfg.model} protocol=${cfg.protocol} host=${new URL(cfg.base_url).host} api_key_len=${String(cfg.api_key.length)} reasoning_effort=${cfg.reasoning_effort} max_tokens=${String(cfg.max_tokens)}（凭据值不落任何输出）`);
 
   // ── 硬前提 ②：新 snapshot/binding —— 真实内核 mkdtemp 夹具 + run 骨架/journal/准入 summary + bind_run ──

@@ -67,12 +67,13 @@ import {
 } from "../workspace/index.js";
 import {
   hasDomainRefs,
-  transformContext,
+  projectContext,
   type DomainRef,
   type SessionError,
   type SessionEvent,
   type SessionEventInput,
 } from "../session/index.js";
+import { compactionTriggerTokens } from "../session/constantsBudget.js";
 import {
   createApprovalTrackHandler,
   readStreamMaxId,
@@ -990,7 +991,10 @@ export class ScenarioRunner {
         }
         // 切片 2 §1.3 TEM 读闸注入点：transformContext 之后、provider.decide 之前
         // （不另起注入通道）；注入源不可用 → 记事件（assistant/attempt，不进模型历史）+ 无记忆运行。
-        const injection = await injectMemoryEntries(transformContext(events), options.memoryInjector);
+        // L1c 提前批 A1.5.2（放行件 v7 ★段解冻 seam 991-993 透传）：projectContext 与
+        // pipeline.transformContext 为同一实现（纯委托），此处显式注入进程级触发水位
+        // （constantsBudget，未配置回退 24K 逐字节中立）；与 sessionLog 审计径同源（同源铁律）。
+        const injection = await injectMemoryEntries(projectContext(events, compactionTriggerTokens()), options.memoryInjector);
         if (injection.failure !== undefined) {
           await appendEvent({
             type: "assistant/attempt",

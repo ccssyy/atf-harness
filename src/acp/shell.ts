@@ -23,6 +23,7 @@ import type { SessionEvent } from "../core/session/index.js";
 import type { ResumeAnswer } from "../core/run/runner.js";
 import { ToolRegistry } from "../core/tools/index.js";
 import { HttpLlmProvider, type LlmProvider, type ResolvedLlmProviderConfig, type Scenario } from "../llm/index.js";
+import { setCompactionContextWindow } from "../core/session/constantsBudget.js";
 import { jsonRpcError, type RpcHandlerOutcome } from "../rpc/index.js";
 import { buildPermissionRequest, requestPermissionOverPeer } from "./permission.js";
 import { projectSessionEvent } from "./projection.js";
@@ -246,6 +247,8 @@ export class AcpShell {
       },
     };
     session.toolCallIdByRequest = new Map();
+    // A1.5.2（L1c 提前批）：compaction 触发水位同源注入（与 TUI/trial 一致；未配置回退 24K）。
+    setCompactionContextWindow(this.options.providerConfig.context_window);
     const ran = await ScenarioRunner.runBranch(scenario, "main", {
       runsRoot: this.options.runsRoot,
       mockCommand: [...this.options.mockCommand],
