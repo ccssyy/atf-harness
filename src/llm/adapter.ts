@@ -12,6 +12,11 @@
 import { err, ok, type Result } from "../bridge/index.js";
 import { type LlmDecision } from "./provider.js";
 import { type LlmContextEvent } from "../core/session/index.js";
+import {
+  SUMMARY_ARRAY_MAX_ITEMS,
+  SUMMARY_RESULT_FALLBACK_CHARS,
+  SUMMARY_STRING_VALUE_MAX_CHARS,
+} from "../core/session/constantsBudget.js";
 
 // ---------------------------------------------------------------------------
 // B1：投影 → 模型消息（adapter 映射）
@@ -72,7 +77,49 @@ const readableSummary = (value: unknown, limit = 160): string => {
   return text === undefined ? "" : text.length > limit ? `${text.slice(0, limit)}…` : text;
 };
 
-const mapEvent = (event: LlmContextEvent): Result<AdapterMessage | null, AdapterError> => {
+/**
+ * A1 投影摘要改造（L1c 提前批，设计要点 §(一).2 丙·体量纪律）：成功 tool/result 的结构化
+ * JSON 不再 160 截断——三档确定性降级（工具无关，不认字段名）：
+ *  ① 全文 ≤ capChars → 全量透传（内核模板类返回体整条可读——五跑 #18 缺陷即截在关键字段半截）；
+ *  ② 超限 → 保键降级后重试：逐顶层键遍历，长字符串值截至 512＋余量标记、长数组保留前 50 项
+ *     ＋计数标记（键集与结构恒保全——「关键字段全量」由结构保证而非清单保证）；
+ *  ③ 仍超限（病态体）→ 硬切至 capChars＋知情尾标——模型始终知情拿到的是残缺体。
+ * capChars 由调用方注入（resolveSummaryResultCapChars(config.context_window)，未配置回退
+ * 6_000；tokens→chars ×2 口径见 constantsBudget）；失败回流 reason 串与 approval 轨的
+ * readableSummary(160) 紧凑语义零改。
+ */
+const truncateStringValue = (value: string): string =>
+  value.length > SUMMARY_STRING_VALUE_MAX_CHARS
+    ? `${value.slice(0, SUMMARY_STRING_VALUE_MAX_CHARS)}…[截断${String(value.length - SUMMARY_STRING_VALUE_MAX_CHARS)}字符]`
+    : value;
+
+const degradeTopLevel = (value: Record<string, unknown>): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === "string") {
+      out[key] = truncateStringValue(item);
+    } else if (Array.isArray(item) && item.length > SUMMARY_ARRAY_MAX_ITEMS) {
+      out[key] = [...item.slice(0, SUMMARY_ARRAY_MAX_ITEMS), `…[共${String(item.length)}项已折叠]`];
+    } else {
+      out[key] = item;
+    }
+  }
+  return out;
+};
+
+export const structuredResultSummary = (result: unknown, capChars: number = SUMMARY_RESULT_FALLBACK_CHARS): string => {
+  const text = JSON.stringify(result);
+  if (text === undefined) return "";
+  if (text.length <= capChars) return text;
+  if (!isPlainObject(result)) {
+    return `${text.slice(0, capChars)}…[已截断，原文${String(text.length)}字符]`;
+  }
+  const degraded = JSON.stringify(degradeTopLevel(result));
+  if (degraded.length <= capChars) return degraded;
+  return `${degraded.slice(0, capChars)}…[已截断，原文${String(text.length)}字符]`;
+};
+
+const mapEvent = (event: LlmContextEvent, toolResultSummaryCapChars: number): Result<AdapterMessage | null, AdapterError> => {
   const mapping = ADAPTER_MAPPINGS[event.type];
   if (mapping === undefined) {
     return err(adapterError(`adapter 未声明的事件类型: ${event.type}（fail-closed，不猜测映射）`));
@@ -117,9 +164,11 @@ const mapEvent = (event: LlmContextEvent): Result<AdapterMessage | null, Adapter
       // 模型可见摘要尾部——ok:false = [reason, guidance, nudge]，ok:true = [readableSummary,
       // nudge]，空段滤除后以"｜"连接。两字段缺省时与旧规则逐字节一致（零回归硬要求）；
       // 主体语义（reason／readableSummary(result)）不变，模型看到的是旧信息的超集。
+      // A1（L1c 提前批 2026-09-22）：ok:true 第一段升级为 structuredResultSummary（成功
+      // 结构化体取消 160 截断，capChars 数据驱动）——失败径 [reason, guidance, nudge] 逐字节零改。
       const parts: (string | undefined)[] =
         okFlag === true
-          ? [readableSummary(event.payload["result"]), event.payload["nudge"] as string | undefined]
+          ? [structuredResultSummary(event.payload["result"], toolResultSummaryCapChars), event.payload["nudge"] as string | undefined]
           : [String(event.payload["reason"] ?? ""), event.payload["guidance"] as string | undefined, event.payload["nudge"] as string | undefined];
       const summary = parts.filter((part): part is string => typeof part === "string" && part !== "").join("｜");
       return ok({ role: "tool_result", tool: event.payload["tool"], ok: okFlag, summary, source_event_id: event.id });
@@ -167,13 +216,21 @@ const mapEvent = (event: LlmContextEvent): Result<AdapterMessage | null, Adapter
   return ok(null);
 };
 
+/** adaptProjectionToMessages 的可选注入（A1：成功体摘要上限数据驱动；缺省回退 6_000 字符）。 */
+export interface AdaptProjectionOptions {
+  /** 成功 tool/result 结构化体摘要的字符上限（provider 按 resolveSummaryResultCapChars(context_window) 注入）。 */
+  toolResultSummaryCapChars?: number;
+}
+
 /** B1：投影 → 模型消息序列（纯函数；顺序稳定；单条失败即整体拒绝——不产残缺上下文）。 */
 export const adaptProjectionToMessages = (
   context: readonly LlmContextEvent[],
+  options?: AdaptProjectionOptions,
 ): Result<AdapterMessage[], AdapterError> => {
+  const capChars = options?.toolResultSummaryCapChars ?? SUMMARY_RESULT_FALLBACK_CHARS;
   const messages: AdapterMessage[] = [];
   for (const event of context) {
-    const mapped = mapEvent(event);
+    const mapped = mapEvent(event, capChars);
     if (!mapped.ok) return mapped;
     if (mapped.value !== null) messages.push(mapped.value);
   }
