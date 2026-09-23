@@ -20,7 +20,7 @@
  * 外壳（TUI / trial）在 runBranch 前注入一次（providerConfig 解析出的 context_window），
  * 运行期只读——同一进程内 live 与 replay 折算一致。
  */
-import { COMPACTION_TRIGGER_TOKENS } from "./constants.js";
+import { COMPACTION_TRIGGER_EVENTS, COMPACTION_TRIGGER_TOKENS } from "./constants.js";
 
 /** 压缩摘要输出预算（tokens；参照 Claude Code compact 摘要预算 20K 口径，owner 指引）。 */
 export const SUMMARY_COMPACT_BUDGET_TOKENS = 20_000;
@@ -67,6 +67,20 @@ export const resolveCompactionTriggerTokens = (contextWindowTokens: number | nul
 
 /** 进程级生效触发水位（两径同源读这个：runner seam 与 sessionLog 审计径禁各算各的）。 */
 export const compactionTriggerTokens = (): number => resolveCompactionTriggerTokens(activeContextWindowTokens);
+
+// ---------------------------------------------------------------------------
+// 修复批 3（2026-09-23）：事件数触发门进程级可配（测试/宿主 seam——A1.5.2 holder 同款模式；
+// 缺省回退常量 COMPACTION_TRIGGER_EVENTS=512）。投影径与审计径同源读此（禁各算各的）。
+// ---------------------------------------------------------------------------
+let explicitCompactionTriggerEvents: number | null = null;
+
+/** 宿主/测试注入事件数触发门（实质事件数；null = 回退常量缺省）。 */
+export const setCompactionTriggerEvents = (events: number | null): void => {
+  explicitCompactionTriggerEvents = events;
+};
+
+/** 当前生效事件数触发门（planCompaction 消费；与审计径同源）。 */
+export const compactionTriggerEvents = (): number => explicitCompactionTriggerEvents ?? COMPACTION_TRIGGER_EVENTS;
 
 /**
  * 单条工具结果摘要字符上限（纯函数）：min(窗口×12.5%, 25K tokens) × 2 换算字符；

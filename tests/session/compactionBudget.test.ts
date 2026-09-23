@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { planCompaction, projectContext } from "../../src/core/session/compaction.js";
-import { COMPACTION_TRIGGER_TOKENS } from "../../src/core/session/constants.js";
+import { COMPACTION_TRIGGER_EVENTS, COMPACTION_TRIGGER_TOKENS } from "../../src/core/session/constants.js";
 import {
   COMPACTION_RESERVE_TOKENS,
   compactionTriggerTokens,
@@ -78,11 +78,14 @@ describe("A1.5.4 数据驱动触发：配置 1M 生效／未配置回退／事�
     expect(JSON.stringify(projectContext(events))).toBe(JSON.stringify(projectContext(events, COMPACTION_TRIGGER_TOKENS)));
   });
 
-  it("事件数双门保留（≥128）：大水位下事件计数仍触发", () => {
-    const events = Array.from({ length: 128 }, (_, i) => materialEvent(i + 1, `事件${String(i)}`));
+  it("事件数双门保留：大水位下事件计数仍触发（修复批 3 后缺省门＝512；128 不再过早触发）", () => {
+    const events = Array.from({ length: COMPACTION_TRIGGER_EVENTS }, (_, i) => materialEvent(i + 1, `事件${String(i)}`));
     const plan = planCompaction(events, resolveCompactionTriggerTokens(1_000_000));
     expect(plan.triggered).toBe(true);
     expect(plan.trigger.reason).toBe("event_count");
+    // 128 事件在新缺省门下不触发（512 前移修复：128 过早折叠——重跑① 实证）
+    const small = Array.from({ length: 128 }, (_, i) => materialEvent(i + 1, `事件${String(i)}`));
+    expect(planCompaction(small, resolveCompactionTriggerTokens(1_000_000)).triggered).toBe(false);
   });
 
   it("projectContext 透传：小预算（100）触发 → 投影头部为合成压缩摘要", () => {

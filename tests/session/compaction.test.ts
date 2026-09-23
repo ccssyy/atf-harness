@@ -5,13 +5,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   COMPACTION_CHUNK,
   COMPACTION_KEEP_RECENT,
-  COMPACTION_TRIGGER_EVENTS,
   MockDigestResolver,
   SessionLog,
   computeCompactionWhitelist,
   estimateTokens,
   materialOf,
   planCompaction,
+  setCompactionTriggerEvents,
   transformContext,
   type SessionEvent,
   type SessionEventType,
@@ -24,6 +24,10 @@ import {
  */
 
 const DIGEST_A = "a".repeat(64);
+
+/** 遗留数值语义锚（修复批 3 后缺省常量升 512；本文件用例经 setCompactionTriggerEvents(128)
+ *  注入并按 128 构造事件——机制断言与批 3 前逐值一致）。 */
+const LEGACY_TRIGGER_EVENTS = 128;
 
 let seq = 0;
 const ev = (
@@ -41,11 +45,17 @@ const ev = (
 
 beforeEach(() => {
   seq = 0;
+  // 修复批 3 前数值语义保持：事件数门注入 128（缺省常量已升 512——512 过早折叠修复见指令 §二.2）
+  setCompactionTriggerEvents(128);
+});
+
+afterEach(() => {
+  setCompactionTriggerEvents(null);
 });
 
 describe("压缩触发（双指标，先到者生效）", () => {
   it("正例：实质事件数达 128 → 触发，折叠前 96 条（保留窗 32，粒度 32）", () => {
-    const events = Array.from({ length: COMPACTION_TRIGGER_EVENTS }, (_, i) => ev("user/message", { seq: i }));
+    const events = Array.from({ length: LEGACY_TRIGGER_EVENTS }, (_, i) => ev("user/message", { seq: i }));
     const plan = planCompaction(events);
     expect(plan.triggered).toBe(true);
     expect(plan.trigger.reason).toBe("event_count");
@@ -53,7 +63,7 @@ describe("压缩触发（双指标，先到者生效）", () => {
 
     const view = transformContext(events);
     expect(view[0]?.type).toBe("session/compaction");
-    expect(view).toHaveLength(1 + (COMPACTION_TRIGGER_EVENTS - 96)); // 摘要 + 保留窗
+    expect(view).toHaveLength(1 + (LEGACY_TRIGGER_EVENTS - 96)); // 摘要 + 保留窗
     const summary = view[0]?.payload as { folded_count: number; covers: { from_id: number; to_id: number }; text: string };
     expect(summary.folded_count).toBe(96);
     expect(summary.covers).toEqual({ from_id: 1, to_id: 96 });
@@ -61,13 +71,13 @@ describe("压缩触发（双指标，先到者生效）", () => {
   });
 
   it("反例：未达阈值（127 条）→ 不触发，投影 = v0 语义原样（无摘要）", () => {
-    const events = Array.from({ length: COMPACTION_TRIGGER_EVENTS - 1 }, (_, i) => ev("user/message", { seq: i }));
+    const events = Array.from({ length: LEGACY_TRIGGER_EVENTS - 1 }, (_, i) => ev("user/message", { seq: i }));
     const plan = planCompaction(events);
     expect(plan.triggered).toBe(false);
     expect(plan.boundary).toBe(0);
 
     const view = transformContext(events);
-    expect(view).toHaveLength(COMPACTION_TRIGGER_EVENTS - 1);
+    expect(view).toHaveLength(LEGACY_TRIGGER_EVENTS - 1);
     expect(view.every((item) => item.type !== "session/compaction")).toBe(true);
   });
 
@@ -83,8 +93,8 @@ describe("压缩触发（双指标，先到者生效）", () => {
 
   it("滞后推进：边界按 chunk 粒度跳跃（128→96，129→96，160→128），保留窗永不折叠", () => {
     const mk = (n: number): SessionEvent[] => Array.from({ length: n }, (_, i) => ev("user/message", { seq: i }));
-    expect(planCompaction(mk(COMPACTION_TRIGGER_EVENTS)).boundary).toBe(96);
-    expect(planCompaction(mk(COMPACTION_TRIGGER_EVENTS + 1)).boundary).toBe(96);
+    expect(planCompaction(mk(LEGACY_TRIGGER_EVENTS)).boundary).toBe(96);
+    expect(planCompaction(mk(LEGACY_TRIGGER_EVENTS + 1)).boundary).toBe(96);
     expect(planCompaction(mk(160)).boundary).toBe(128);
     // 保留窗：任何事件都至少在最近 KEEP_RECENT 条之外才可能被折叠
     expect(planCompaction(mk(COMPACTION_KEEP_RECENT)).boundary).toBe(0);

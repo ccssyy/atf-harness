@@ -123,8 +123,10 @@ compaction:
     - 计划为纯函数：live 与 replay 对同一事件序列计算结果逐条一致（重建一致、幂等重放）
     - 承证白名单：携带 domain_refs 的事件及其相邻因果链永不折叠，引用链留在模型上下文
   trigger:                    # 双指标，先到者生效（owner 口径 #2；初值选取理由如下）
-    event_count: 128          # 实质事件数门：Phase 1 冒烟单分支 ≤ 50 事件，128 留 2 倍以上
-                              # 余量——小会话零压缩开销，长会话在可控粒度折叠
+    event_count: 512          # 实质事件数门【修复批 3 2026-09-23：128 → 512——重跑① 实证
+                              # 128 过早折叠（约 2 turn 即触发，配对切断风险随折叠次数累积）】；
+                              # 进程级可配（constantsBudget.setCompactionTriggerEvents，
+                              # 测试/宿主 seam，缺省回退本值）；按 token 语义重估留 backlog
     token_budget: 24000       # 估算 token 门（兜底「事件少但单条超长」形态）；
                               # 估算 = ceil(payload JSON 字符串长度 / 2) 求和——中文约 0.6–1
                               # token/字符，取 1/2 为偏保守估计（宁可早压，不冒溢出险）
@@ -134,12 +136,19 @@ compaction:
     chunk: 32                 # 折叠边界按 32 的整数倍推进（滞后防逐条重折叠）
     whitelist: domain_refs 命中事件 + 其配对事件（tool/result ↔ 往前最近同名工具 tool/call，
                 tool/call ↔ 往后最近同名工具 tool/result）永不折叠，原文保留于投影
+    boundary_alignment:       # 【修复批 3 2026-09-23】切点对齐：折叠边界永不切断配对
+      invariant: 投影消息序中 tool/call 先于其配对 tool/result、approval/request 先于其
+                 approval/response（无孤儿闭合半边）——违反即 provider 4xx（重跑① 实证）
+      rule: CHUNK 边界落在配对中间 → boundary 前移到配对起点（宁可少折叠，不可切配对）
+      audit: 折叠审计 payload 携带 boundary_before/boundary_after/reason_aligned
     projection_form: [压缩摘要(session/compaction), 折叠区间白名单豁免原文…, 保留窗原文…]
   audit_event:
     type: session/compaction
     written_by: SessionLog.append 自动落盘（同一折叠边界按 covers.to_id 判重只记一次）
     payload_fields: [kind, covers{from_id,to_id}, folded_count, kept_ids, type_counts,
-                     trigger{events,estimated_tokens,reason}, text]
+                     trigger{events,estimated_tokens,reason}, text,
+                     boundary_before, boundary_after, reason_aligned(none|pair_alignment)]
+                     # 后三项【修复批 3 2026-09-23 补登】：切点对齐审计结果
     purpose: 可审计（哪次压缩吃掉了哪些事件）+ 计划重建锚；审计事件不进入模型投影
     note: 审计事件（含 session/repair）对压缩算法透明；批量档下审计事件仅到 write 级，
           摘要可由算法确定性重建（见 durability.audit_note）

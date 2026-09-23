@@ -62,3 +62,7 @@ export {
   type TruncatedTail,
 } from "./sessionLog.js";
 export { transformContext } from "./pipeline.js";
+export {
+  compactionTriggerEvents,
+  setCompactionTriggerEvents,
+} from "./constantsBudget.js";
