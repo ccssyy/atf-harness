@@ -22,7 +22,7 @@ import {
 import type { SessionEvent } from "../core/session/index.js";
 import type { ResumeAnswer } from "../core/run/runner.js";
 import { ToolRegistry } from "../core/tools/index.js";
-import { HttpLlmProvider, type LlmProvider, type ResolvedLlmProviderConfig, type Scenario } from "../llm/index.js";
+import { createLlmProviderFromConfig, type LlmProvider, type ResolvedLlmProviderConfig, type Scenario } from "../llm/index.js";
 import { setCompactionContextWindow } from "../core/session/constantsBudget.js";
 import { jsonRpcError, type RpcHandlerOutcome } from "../rpc/index.js";
 import { buildPermissionRequest, requestPermissionOverPeer } from "./permission.js";
@@ -55,7 +55,7 @@ export interface AcpShellOptions {
   /** 内核桥接 spawn argv（mock 夹具或 L1a launcher） */
   mockCommand: readonly string[];
   providerConfig: ResolvedLlmProviderConfig;
-  /** provider 工厂（测试 seam；缺省 HttpLlmProvider，沿用 L1a 选型） */
+  /** provider 工厂（测试 seam；缺省＝createLlmProviderFromConfig 装配单点，按 config.protocol 分发） */
   providerFactory?: (config: ResolvedLlmProviderConfig) => LlmProvider;
   scopeMode?: "canonical" | "simulation" | "headless";
   /** 宿主标识（D4 留痕；缺省 acp-client，initialize 可带 clientInfo.name 覆盖） */
@@ -76,7 +76,8 @@ export class AcpShell {
   private hostId: string;
 
   public constructor(private readonly options: AcpShellOptions) {
-    this.providerFactory = options.providerFactory ?? ((config) => new HttpLlmProvider({ config, tools: ToolRegistry.createDefault().modelVisible() }));
+    // 微补丁（2026-09-23，走查 run-full-v0762 首启发现）：缺省工厂切装配单点（pi-ai 面可用；测试注入 providerFactory 面零改动）
+    this.providerFactory = options.providerFactory ?? ((config) => createLlmProviderFromConfig({ config, tools: ToolRegistry.createDefault().modelVisible() }));
     this.scopeMode = options.scopeMode ?? "headless";
     this.hostId = options.hostId ?? "acp-client";
   }

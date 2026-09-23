@@ -30,7 +30,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as readline from "node:readline";
 import { ATF_UPSTREAM_COMMIT_SHA, ATF_UPSTREAM_TAG, readGitHeadSha } from "../bridge/atfCommand.js";
-import { loadLlmProviderConfig, HttpLlmProvider, type ResolvedLlmProviderConfig } from "../llm/index.js";
+import { loadLlmProviderConfig, createLlmProviderFromConfig, type ResolvedLlmProviderConfig } from "../llm/index.js";
 import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
 import { ToolRegistry, WORKSPACE_TOOL_HANDLERS, buildSkillsSystemSuffix, type LocalToolHost } from "../core/tools/index.js";
 import {
@@ -286,7 +286,9 @@ const main = async (): Promise<void> => {
     };
     // B4：多轮续跑循环——每个 prompt 一个 turn（审批闸逐 turn 生效）；空输入/Ctrl+C 退出
     for (;;) {
-      const provider = new HttpLlmProvider({
+      // 微补丁（2026-09-23，走查 run-full-v0762 首启发现）：装配走工厂单点——pi-ai 配置在此
+      // 前被 HttpLlmProvider 直new 拒收（protocol="pi-ai" 不经 codec 注册面），TUI 面 pi-ai 不可用
+      const provider = createLlmProviderFromConfig({
         config,
         // 批 3：TUI 装配工作区扩面工具注册表（R-3 接线批后 13 工具）；内核目录不可解析＝既有 9 工具
         tools: toolFace !== undefined && toolFace !== null
