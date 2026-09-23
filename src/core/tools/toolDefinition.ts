@@ -491,6 +491,9 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         gate: { type: "string" },
         status: { enum: ["pass", "warn", "blocked"] },
         reason_codes: { ...STRING_ARRAY, optional: true },
+        // re-pin v0.7.5b0 补登（K1 闸门指引，2026-09-23）：内核被拦时新增一行可行动文案
+        // （补齐路径＋「G1–G4 同源勿逐个穷举」）——可选字段，缺省形态零回归。
+        guidance: { type: "string", optional: true },
         requires_human_review: { type: "boolean", optional: true },
         evidence: { ...STRING_ARRAY, optional: true },
         reason: { type: "string", optional: true },
