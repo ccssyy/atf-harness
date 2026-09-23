@@ -33,16 +33,37 @@ import { ATF_UPSTREAM_COMMIT_SHA, ATF_UPSTREAM_TAG, readGitHeadSha } from "../br
 import { loadLlmProviderConfig, HttpLlmProvider, type ResolvedLlmProviderConfig } from "../llm/index.js";
 import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
 import { ToolRegistry, WORKSPACE_TOOL_HANDLERS, buildSkillsSystemSuffix, type LocalToolHost } from "../core/tools/index.js";
-import type { LaunchReady } from "../core/workspace/index.js";
+import {
+  buildLabelQcResolveParams,
+  labelQcCardKey,
+  pendingItemsOf,
+  readLabelQcReport,
+  readResolvedItemIds,
+  readSliceImageRef,
+  type LabelQcDecisionDraft,
+  type LabelQcItem,
+  type LaunchReady,
+} from "../core/workspace/index.js";
 import { ScenarioRunner, resolveRunExitCode, sessionLogPathFor, listPendingApprovals, readSessionStream, type ApprovalStubResponse, type BranchRunReport, type RunBranchOptions } from "../core/run/index.js";
 import { HistoryFolder } from "./historyFold.js";
 import type { Scenario } from "../llm/index.js";
 import { DiffRenderer } from "./renderer.js";
 import { formatEventDetailLines, formatEventLine, statusLineFor } from "./eventView.js";
 import { collapseLines } from "./collapseView.js";
-import { askApproval } from "./approval.js";
+import { askApproval, TUI_ACTOR } from "./approval.js";
 import { buildInitInvocation, buildRealPeerDescriptor, effectiveScopeMode, parseArgs, repoRootDefault, resolveKernelDir, usage } from "./tuiArgs.js";
 import { launchCardKey, launchCardLines, launchConfirmationText, synthesizeLaunchAction } from "./launchCard.js";
+import {
+  applyLabelQcField,
+  labelQcCardLines,
+  labelQcConfirmationText,
+  labelQcFieldPrompt,
+  labelQcItemLines,
+  labelQcItemPrompt,
+  parseLabelQcAnswer,
+  requiredFieldsOf,
+  synthesizeLabelQcResolveAction,
+} from "./labelQcCard.js";
 import { setCompactionContextWindow, setTurnTokenBudget } from "../core/session/constantsBudget.js";
 import type { PendingConfirmAction } from "../core/run/runner.js";
 import {
@@ -244,6 +265,10 @@ const main = async (): Promise<void> => {
     // pending = 最近一次检测命中；shownKey = 已出过卡（含跳过）的目标键——同一启动目标只出一次。
     let launchReadyPending: LaunchReady | null = null;
     let launchCardShownKey: string | null = null;
+    // R-3 接线批：标签体检确认卡（inspect 成功且 pending>0 → 卡数据待建；同（dataset@pin,
+    // 报告, 已裁决进度）只出一次卡）。卡数据＝登记面报告只读（peer real 模式可达时）。
+    let labelQcPending: { datasetId: string; pin: string; reportDigest: string; reportRef: string } | null = null;
+    let labelQcShownKey: string | null = null;
     // 批 2.5 §三.4：静默状态行——live 事件后 2.5s 无新事件 → 追加一行状态（零擦除保持；
     // 下一事件到达即取消计时）。provider 流式＝中期架构项，登记不实施。
     let statusTimer: NodeJS.Timeout | null = null;
@@ -263,7 +288,7 @@ const main = async (): Promise<void> => {
     for (;;) {
       const provider = new HttpLlmProvider({
         config,
-        // 批 3：TUI 装配工作区扩面工具注册表（11 工具）；内核目录不可解析＝既有 7 工具
+        // 批 3：TUI 装配工作区扩面工具注册表（R-3 接线批后 13 工具）；内核目录不可解析＝既有 9 工具
         tools: toolFace !== undefined && toolFace !== null
           ? toolFace.registry.modelVisible()
           : ToolRegistry.createDefault().modelVisible(),
@@ -320,6 +345,25 @@ const main = async (): Promise<void> => {
               // 批 3 §三：scratch_exec 成功结果 → G5 就绪检测命中（harness 确定性产出）
               if (PLAIN_RESULT(payload.result) && typeof (payload.result as Record<string, unknown>)["launch_ready"] === "object") {
                 launchReadyPending = (payload.result as Record<string, unknown>)["launch_ready"] as LaunchReady;
+              }
+              // R-3 接线批：inspect 成功且检出待确认项 → 体检确认卡候选（post-turn 出卡）
+              if (PLAIN_RESULT(payload.result)) {
+                const inspect = payload.result as Record<string, unknown>;
+                const counts = inspect["counts"];
+                if (
+                  typeof inspect["report_digest"] === "string" &&
+                  typeof inspect["report_ref"] === "string" &&
+                  PLAIN_RESULT(counts) &&
+                  typeof (counts as Record<string, unknown>)["pending"] === "number" &&
+                  ((counts as Record<string, unknown>)["pending"] as number) > 0
+                ) {
+                  labelQcPending = {
+                    datasetId: typeof inspect["dataset_id"] === "string" ? inspect["dataset_id"] : "",
+                    pin: typeof inspect["pin"] === "string" ? inspect["pin"] : "",
+                    reportDigest: inspect["report_digest"] as string,
+                    reportRef: inspect["report_ref"] as string,
+                  };
+                }
               }
             }
           }
@@ -464,6 +508,104 @@ const main = async (): Promise<void> => {
           if (launchAnswer !== "") {
             nextInstruction = launchAnswer; // 暂不启动＝该输入即新指令
             renderer.appendLine(`> 确认留痕 ${new Date().toISOString()} 动作=确认卡·训练启动 选择=暂不启动`);
+          }
+        }
+      }
+      // R-3 接线批：标签体检确认卡（inspect 成功且待确认>0）——待确认项列表＋依据/条款/出处
+      // 展示＋逐项处置（九项闭集×检查类约束）＋未决不默认处置；确认后 A2.5 确定性合成
+      // atf_label_qc_resolve（模型不转写用户裁决），审批弹窗第二道人审不变。卡数据＝登记面
+      // 报告只读（peer real 模式且 wsRoot 可达；否则降级一行提示，不造数）。
+      // 显式宽化读取（同 cardRef 口径）：onEvent 闭包的真实写入 TS 流分析不可见， Alias 判空。
+      const pendingQc = labelQcPending as { datasetId: string; pin: string; reportDigest: string; reportRef: string } | null;
+      if (nextInstruction === null && pendingQc !== null) {
+        if (peerReal === null) {
+          renderer.appendLine("· 体检出待确认项——确认卡需 --peer real（读取登记面体检报告）；当前对端无工作区，请按报告待确认清单人工裁决");
+          labelQcPending = null;
+        } else {
+          const qcReport = await readLabelQcReport(peerReal.wsRoot, pendingQc.reportRef, pendingQc.reportDigest);
+          if (!qcReport.ok) {
+            renderer.appendLine(`✗ 体检确认卡未出：${qcReport.error.message}`);
+            labelQcPending = null;
+          } else {
+            const resolvedIds = await readResolvedItemIds(peerReal.wsRoot, pendingQc.reportRef, pendingQc.reportDigest);
+            const qcItems = pendingItemsOf(qcReport.value, resolvedIds);
+            const qcKey = labelQcCardKey(pendingQc.datasetId, pendingQc.pin, pendingQc.reportDigest, resolvedIds.size);
+            if (qcItems.length === 0) {
+              renderer.appendLine("· 体检待确认项已全部确认——可直接重新请求数据准入");
+              labelQcPending = null;
+            } else if (qcKey === labelQcShownKey) {
+              // 同一（dataset@pin, 报告, 已裁决进度）只出一次卡——跳过
+            } else {
+              rl.resume();
+              for (const line of labelQcCardLines(qcReport.value, qcItems, resolvedIds.size)) renderer.appendLine(line);
+              const gateAnswer = (await ask(rl, "处置应答（1=开始逐项处置；直接输入其他指令＝暂不处置）> ")).trim();
+              labelQcShownKey = qcKey;
+              if (gateAnswer === "1") {
+                const drafts: LabelQcDecisionDraft[] = [];
+                const imageRefs: (string | null)[] = [];
+                for (const item of qcItems) {
+                  const sliceRef = item.evidence[0]?.ref;
+                  imageRefs.push(sliceRef !== undefined ? await readSliceImageRef(peerReal.wsRoot, sliceRef) : null);
+                }
+                for (let index = 0; index < qcItems.length; index += 1) {
+                  const item = qcItems[index] as LabelQcItem;
+                  for (const line of labelQcItemLines(item, index + 1, qcItems.length, imageRefs[index] ?? null)) renderer.appendLine(line);
+                  for (const line of labelQcItemLines(item, index + 1, qcItems.length, imageRefs[index] ?? null)) renderer.appendLine(line);
+                  // 应答解析：非法就地重问；空输入＝s（暂不处置，未决不默认）
+                  let answer = parseLabelQcAnswer(item, await ask(rl, labelQcItemPrompt(item)));
+                  while (answer.kind === "invalid") {
+                    renderer.appendLine(`> ${answer.message}`);
+                    answer = parseLabelQcAnswer(item, await ask(rl, labelQcItemPrompt(item)));
+                  }
+                  if (answer.kind === "skip") continue;
+                  let draft: LabelQcDecisionDraft;
+                  if (answer.kind === "reject") {
+                    draft = { item_id: item.item_id, action: "reject" };
+                  } else if (answer.kind === "suggest") {
+                    const hint = (item.suggested_action?.disposition_hint ?? "") as LabelQcDecisionDraft["disposition"];
+                    draft = {
+                      item_id: item.item_id,
+                      action: "accept",
+                      disposition: hint,
+                      ...(item.suggested_action?.target_candidate_id !== undefined ? { target_candidate_id: item.suggested_action.target_candidate_id } : {}),
+                    };
+                  } else {
+                    draft = { item_id: item.item_id, action: "modify", disposition: answer.disposition };
+                  }
+                  // 处置必填附加字段逐项追问（建议已携带的字段不重复问）
+                  for (const field of requiredFieldsOf(draft.disposition ?? "")) {
+                    const filled = (draft as unknown as Record<string, unknown>)[field];
+                    if (typeof filled === "string" && filled !== "") continue;
+                    draft = applyLabelQcField(draft, field, await ask(rl, labelQcFieldPrompt(draft.disposition ?? "", field, item)), item);
+                  }
+                  // Q2 项：判断备注（对照整图的依据，可空——judgement basis=user 恒附）
+                  if (item.check_class === "q2_same_box_same_value_diff_field") {
+                    const note = await ask(rl, "│   判断备注（对照整图的依据，可空直接回车）> ");
+                    if (note !== "") draft.judgement_note = note;
+                  }
+                  drafts.push(draft);
+                }
+                if (drafts.length === 0) {
+                  renderer.appendLine(`> 确认留痕 ${new Date().toISOString()} 动作=确认卡·标签体检 选择=全部暂不处置（未决项不默认处置）`);
+                } else {
+                  const params = buildLabelQcResolveParams({ report: qcReport.value, actor: TUI_ACTOR, decidedAt: new Date().toISOString(), drafts });
+                  if (!params.ok) {
+                    renderer.appendLine(`✗ 裁决合成失败（未提交任何项）：${params.error.message}`);
+                  } else {
+                    const submitted = Array.isArray(params.value["decisions"]) ? (params.value["decisions"] as unknown[]).length : 0;
+                    pendingSynthesized = synthesizeLabelQcResolveAction(params.value);
+                    instructionText = labelQcConfirmationText(qcReport.value, submitted, qcItems.length - submitted);
+                    continueMode = true;
+                    renderer.appendLine(`> 确认留痕 ${new Date().toISOString()} 动作=确认卡·标签体检 选择=提交 ${String(submitted)} 项（未决 ${String(qcItems.length - submitted)} 项保持待确认）`);
+                    renderer.appendLine("──────── 新 turn（同一 run 绑定下续跑；由事实日志重放重建上下文）────────");
+                    continue;
+                  }
+                }
+              } else if (gateAnswer !== "") {
+                nextInstruction = gateAnswer; // 暂不处置＝该输入即新指令
+                renderer.appendLine(`> 确认留痕 ${new Date().toISOString()} 动作=确认卡·标签体检 选择=暂不处置`);
+              }
+            }
           }
         }
       }

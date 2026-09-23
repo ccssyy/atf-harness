@@ -95,6 +95,33 @@ export const BLOCK_CODE_GUIDANCE: readonly BlockGuidanceEntry[] = [
       STOP_OPTION,
     ],
   },
+  // R-3 接线批（2026-09-23）：标签体检引导两条——label_qc_pending 为 pin 现语义（报告存在
+  // 且 pending>0 整体阻断）；label_qc_required 为 K2「体检必经」前瞻登记（内核启用后命中，
+  // 现 pin 不触发零行为影响）。均治走查 A4 类全盘扫描：指路一键体检入口，勿遍历文件系统。
+  {
+    code: "label_qc_required",
+    meaning: "该数据集尚未做标签体检（无体检报告）——数据准入按「体检必经」前置阻断",
+    missing: "该 dataset@pin 的标签体检报告（经 atf_label_qc.inspect 生成，报告落登记面）",
+    producedBy: "atf_label_qc.inspect（或 atf-inspect-annotations 技能流程）一次性生成",
+    why: "标签质量是训练数据的前提——未体检的标注不得流入训练（owner 裁定：体检是流程必经步）",
+    actionLine: "直接调用 atf_label_qc.inspect 执行体检（一键入口，幂等可重跑）；出待确认项后经体检确认卡或 atf_label_qc.resolve 逐项裁决；勿遍历文件系统找报告、勿重复探查",
+    isMaterialGap: false,
+    options: [],
+  },
+  {
+    code: "label_qc_pending",
+    meaning: "体检报告存在且有未决待确认项——该 dataset@pin 的数据准入整体阻断（不逐类解锁）",
+    missing: "全部待确认项的逐项裁决（经确认卡或 atf_label_qc.resolve 提交，直至 pending=0）",
+    producedBy: "用户逐项确认（harness 体检确认卡裁决，或经 atf_label_qc.resolve 分批提交）",
+    why: "未决项绝不默认处置——裁决齐全前准入保持阻断（坏标注不得流入训练）",
+    actionLine: "向用户呈现待确认清单逐项请示（报告项含 human_label／出处／证据引用；Q2 项按整图理解展示 image_workspace_ref），经确认卡或 atf_label_qc.resolve 分批提交已确认项；未决项勿默认处置、勿重复探查、勿遍历文件系统",
+    isMaterialGap: true,
+    options: [
+      { text: "经体检确认卡逐项裁决全部待确认项后重新请求准入", recommended: true },
+      { text: "先提交已确认项（atf_label_qc.resolve 分批 partial），剩余项继续请示" },
+      STOP_OPTION,
+    ],
+  },
   {
     code: "split_manifest_missing",
     meaning: "split_root 下缺 global_assignment.csv（9 列）或 global_plan.json（内核准入强制清单）",

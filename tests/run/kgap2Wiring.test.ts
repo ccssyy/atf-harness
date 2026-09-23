@@ -98,7 +98,7 @@ describe("K-Gap-2 接线：工具面 5→7（模型可见面与审批矩阵）",
     const names = visible.map((tool) => tool.name);
     expect(names).toContain("atf_preparation_propose");
     expect(names).toContain("atf_style_cluster_execute");
-    expect(names).toHaveLength(7);
+    expect(names).toHaveLength(9); // R-3 接线批（2026-09-23）：工具面 7→9（label_qc 两工具）
     const registry = ToolRegistry.createDefault();
     const propose = registry.get("atf_preparation_propose");
     const execute = registry.get("atf_style_cluster_execute");

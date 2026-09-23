@@ -214,7 +214,7 @@ describe("S3 补充语义——canonical 反例 / 对端拒绝 / 参数白名单
     expect(requests.length).toBe(0); // 未触桥接（E2 点位在桥接请求之前）
   });
 
-  it("registry 外工具 → failed(unknown_tool)；注册表恰为契约 7 工具（R1 扩 5；K-Gap-2 接线批扩 7）", async () => {
+  it("registry 外工具 → failed(unknown_tool)；注册表恰为契约 9 工具（R1 扩 5；K-Gap-2 扩 7；R-3 接线批扩 9）", async () => {
     const { executor } = await makeExecutor();
 
     const ghost = await executor.execute("atf_deploy_to_production", {});
@@ -226,6 +226,8 @@ describe("S3 补充语义——canonical 反例 / 对端拒绝 / 参数白名单
       "atf_data_admission_request",
       "atf_preparation_propose",
       "atf_style_cluster_execute",
+      "atf_label_qc_inspect",
+      "atf_label_qc_resolve",
       "atf_gate",
       "atf_fact_scan",
       "atf_workspace_status",

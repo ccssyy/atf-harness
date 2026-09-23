@@ -67,6 +67,27 @@ export {
   type ScratchRunOutcome,
 } from "./scratchExec.js";
 export {
+  buildLabelQcResolveParams,
+  checkClassShort,
+  DISPOSITIONS_BY_CHECK_CLASS,
+  labelQcCardKey,
+  LABEL_QC_CHECK_CLASSES,
+  LABEL_QC_DISPOSITIONS,
+  pendingItemsOf,
+  readLabelQcReport,
+  readResolvedItemIds,
+  readSliceImageRef,
+  REQUIRED_DECISION_FIELDS,
+  resolveWorkspaceRef,
+  type LabelQcCandidate,
+  type LabelQcCheckClass,
+  type LabelQcDecisionDraft,
+  type LabelQcDisposition,
+  type LabelQcEvidence,
+  type LabelQcItem,
+  type LabelQcReportFile,
+} from "./labelQc.js";
+export {
   listSkills,
   parseSkillFrontmatter,
   readSkillBody,
