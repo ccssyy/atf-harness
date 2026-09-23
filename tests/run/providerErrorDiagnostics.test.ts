@@ -226,6 +226,29 @@ describe("runner provider_failure 收口：provider_error 落失败摘要＋审�
   });
 });
 
+describe("微补丁加修：请求体编码失败本地 fail-closed（不再把 err 对象 POST 给对端）", () => {
+  it("重放历史含孤儿 tool_result（重跑① 现场，event 164 同型）→ 编码失败收口，fetchImpl 零调用", async () => {
+    const orphanCtx: readonly LlmContextEvent[] = [
+      { id: 163, ts: "2026-09-22T16:00:00Z", type: "user/message", payload: { text: "任务" } },
+      // compaction 切点产物：tool_result 在场而 assistant_tool_call 被切掉（批 3 修复对象）
+      { id: 164, ts: "2026-09-22T16:00:01Z", type: "tool/result", payload: { tool: "atf_scratch_exec", ok: true, result: { exit_code: 0 } } },
+    ] as never;
+    let httpCalls = 0;
+    const fetchImpl: typeof fetch = (async () => {
+      httpCalls += 1;
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+    const provider = new HttpLlmProvider({ config: CONFIG(), tools: TOOLS, fetchImpl });
+    const decided = await provider.decide(orphanCtx);
+    expect(decided.ok).toBe(false);
+    if (decided.ok) throw new Error("unreachable");
+    expect(decided.error.message).toContain("模型请求体编码失败");
+    expect(decided.error.message).toContain("tool_result 无配对的 assistant_tool_call");
+    expect(decided.error.message).toContain("source_event_id=164");
+    expect(httpCalls).toBe(0); // 本地收口：错误对象绝不上线缆
+  });
+});
+
 describe("collapseView：收口行带 body_excerpt 首行（≤120）", () => {
   const baseSummary = (providerError?: NonNullable<TurnFailureSummary["blocked_description"]>["provider_error"]): TurnFailureSummary => ({
     reason: "provider_failure",

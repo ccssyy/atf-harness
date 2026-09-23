@@ -180,7 +180,7 @@ export const openaiChatCodec: ProtocolCodec = {
     // compat.supports_reasoning_effort=false → null → 整体省略（对端不认该参数时不发送）
     if (input.reasoningEffort !== null) bodyBase["reasoning_effort"] = input.reasoningEffort;
     if (input.thinkingEcho !== undefined) fillThinkingEcho(wire, input.thinkingEcho);
-    return bodyBase;
+    return ok(bodyBase);
   },
 
   parseResponse(body) {

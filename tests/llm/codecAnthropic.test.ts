@@ -14,8 +14,8 @@ const TOOLS: ModelVisibleTool[] = [
 
 const msg = (partial: AdapterMessage): AdapterMessage => partial;
 
-const encode = (messages: AdapterMessage[]) =>
-  anthropicMessagesCodec.encodeRequestBody({
+const encode = (messages: AdapterMessage[]) => {
+  const encoded = anthropicMessagesCodec.encodeRequestBody({
     model: "fake-model",
     system: "SYS",
     messages,
@@ -23,7 +23,11 @@ const encode = (messages: AdapterMessage[]) =>
     reasoningEffort: "low",
     developerRole: false,
     maxTokens: 8192,
-  }) as Record<string, unknown>;
+  });
+  expect(encoded.ok, encoded.ok ? "" : encoded.error.message).toBe(true);
+  if (!encoded.ok) throw new Error("unreachable");
+  return encoded.value as Record<string, unknown>;
+}
 
 describe("anthropic-messages——请求构造", () => {
   it("顶层 system + max_tokens（线缆必填）+ tools input_schema 形态", () => {
