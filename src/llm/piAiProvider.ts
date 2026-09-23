@@ -64,7 +64,7 @@ import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
 import { err, ok, type Result } from "../bridge/index.js";
 import { adaptProjectionToMessages, expandModelResponse, type AdapterMessage, type ModelResponse } from "./adapter.js";
 import { approvalAnnotationText, approvalSummaryLine, danglingToolResultContent, wireToolCallId } from "./codecWire.js";
-import { HARNESS_SYSTEM_PROMPT } from "./httpProvider.js";
+import { HARNESS_SYSTEM_PROMPT } from "./systemPrompt.js";
 import { PIAI_REASONING_EFFORTS, type ResolvedLlmProviderConfig } from "./providerConfig.js";
 import { llmError, llmErrorOf, type LlmDecision, type LlmError, type LlmProvider } from "./provider.js";
 import { resolveSummaryResultCapChars } from "../core/session/constantsBudget.js";

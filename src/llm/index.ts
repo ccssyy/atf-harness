@@ -51,7 +51,8 @@ export {
 export { getCodec } from "./codec.js";
 export { anthropicMessagesCodec, ANTHROPIC_VERSION } from "./anthropicMessagesCodec.js";
 export { openaiChatCodec } from "./openaiChatCodec.js";
-export { HARNESS_SYSTEM_PROMPT, HttpLlmProvider, type HttpLlmProviderOptions } from "./httpProvider.js";
+export { HttpLlmProvider, type HttpLlmProviderOptions } from "./httpProvider.js";
+export { HARNESS_SYSTEM_PROMPT } from "./systemPrompt.js";
 export {
   PiAiLlmProvider,
   isLengthAwareLlmProvider,
