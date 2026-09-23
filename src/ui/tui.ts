@@ -44,7 +44,7 @@ import {
   type LabelQcItem,
   type LaunchReady,
 } from "../core/workspace/index.js";
-import { ScenarioRunner, resolveRunExitCode, sessionLogPathFor, listPendingApprovals, readSessionStream, type ApprovalStubResponse, type BranchRunReport, type RunBranchOptions } from "../core/run/index.js";
+import { ScenarioRunner, resolveRunExitCode, sessionLogPathFor, listPendingApprovals, readSessionStream, diagnoseOrphanTurn, type ApprovalStubResponse, type BranchRunReport, type RunBranchOptions } from "../core/run/index.js";
 import { HistoryFolder } from "./historyFold.js";
 import type { Scenario } from "../llm/index.js";
 import { DiffRenderer } from "./renderer.js";
@@ -246,6 +246,14 @@ const main = async (): Promise<void> => {
       const eventCount = stream.ok ? stream.value.length : 0;
       const pending = stream.ok ? listPendingApprovals(stream.value).length : 0;
       renderer.appendLine(`检测到既有会话（${String(eventCount)} 事件，由事实日志重放重建）${pending > 0 ? `；待办审批 ${String(pending)} 项——须经 CLI resume 应答后才能续跑` : ""}`);
+      // B2（走查修复批 2026-09-23）：孤儿 turn 检测——只提示一条修复命令，不自动修
+      //（落盘流非显式旗标不得改动；runner continue 前置对孤儿流仍 fail-closed 拒收）。
+      if (stream.ok && diagnoseOrphanTurn(stream.value) !== null) {
+        renderer.appendLine(
+          `⚠ 检测到孤儿 turn（末 turn 未收口——进程异常退出残留）：续跑将被拒收。修复命令：` +
+          `node dist/cli/resume.js --recover-orphan-turn --runs-root ${args.runsRoot} --run-id ${runId}（修复后重进本界面输入新指令续跑）`,
+        );
+      }
     }
 
     let instructionText = instruction;

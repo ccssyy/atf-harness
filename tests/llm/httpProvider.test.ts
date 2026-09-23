@@ -266,6 +266,37 @@ describe("HttpLlmProvider——fail-closed", () => {
     expect((messages[0]?.["content"] as string).length).toBeGreaterThan(0);
     expect(HARNESS_SYSTEM_PROMPT.length).toBeGreaterThan(0);
   });
+
+  // 走查修复批 B5（2026-09-23，指令 7158bf43）投影三同步之三：http 投影用例——
+  // advised 意见正文经真实 provider 出站路径可见（wire 层 tool 消息 content 含意见全文）。
+  it("advised 回流出站投影：wire 层 tool 消息 content 含意见正文（B5 修复可见性断言）", async () => {
+    const ADVICE = "operator 意见：改走技能面 publish 链，产出契约包后再 advance 闸门。";
+    const advisedCtx = [
+      ...CTX,
+      { id: 2, ts: "t", type: "tool/call", payload: { tool: "atf_scratch_exec", params: { argv: ["python3", "p.py"] } } },
+      {
+        id: 3, ts: "t", type: "tool/result",
+        payload: {
+          tool: "atf_scratch_exec", ok: false, reason: "approval_advised", call_ref: 2,
+          block: {
+            reason: "approval_advised", message: `问答轨修改意见(重新提案):${ADVICE}`, tool: "atf_scratch_exec", exit_code: 1,
+            detail: { approval_session_id: "aps-1", request_event_ref: 2, advice_text: ADVICE },
+          },
+        },
+      },
+    ] as never;
+    let capturedBody: unknown;
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return jsonResponse(completion({ content: "收到意见" }));
+    };
+    const provider = new HttpLlmProvider({ config: CONFIG(), tools: TOOLS, fetchImpl });
+    const decided = await provider.decide(advisedCtx);
+    expect(decided.ok).toBe(true);
+    const serialized = JSON.stringify(capturedBody);
+    expect(serialized).toContain("approval_advised");
+    expect(serialized).toContain(ADVICE); // 意见正文全文出站（非截断残段）
+  });
 });
 
 // ---------------------------------------------------------------------------

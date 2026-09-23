@@ -317,3 +317,69 @@ describe("D-b：dataset_id 描述层约束存在性", () => {
     expect(checkSchema({ dataset_id: PATH_ID }, admit?.parameters ?? {}, "admit")).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 走查修复批 B3（2026-09-23，指令 7158bf43）：完整性闸门 blocked 回流三段式指引——
+// 走查 #2254 实测形态：atf_gate advance 对完整性闸门返回 executed(ok=true) +
+// status=blocked（非 rejected，D-f-3 点位不覆盖）。harness 措辞层在 tool/result 载荷
+// 回填「缺什么／产出路径／登记动作」，内核原始 guidance 保留拼接。
+// ---------------------------------------------------------------------------
+describe("走查修复批 B3：完整性闸门 blocked 回流三段式指引（executed 径）", () => {
+  it("atf_gate advance blocked → tool/result.payload.guidance 三段齐备；缺什么透传 mock missing", async () => {
+    const ran = await ScenarioRunner.runBranch(scenarioOf(`b3-gate-${randomUUID()}`, "推进抽取契约闸门"), "main", {
+      runsRoot: runsRootOf(),
+      mockCommand: ["node", mockPath],
+      modelProvider: modelStub([
+        { type: "tool_call", tool: "atf_gate", params: { gate: "extraction-contract-valid", action: "advance" } },
+        { type: "final_answer", text: "已按指引向用户汇报补齐路径。" },
+      ]),
+      approvalSurface: { stub: grantedStub },
+    });
+    expect(ran.ok, !ran.ok ? JSON.stringify(ran.error) : "").toBe(true);
+    if (!ran.ok) throw new Error("unreachable");
+    const report: BranchRunReport = ran.value;
+    expect(report.outcome.kind).toBe("completed");
+    const gateResult = report.events.find(
+      (event) => event.type === "tool/result" && (event.payload as { tool?: string }).tool === "atf_gate",
+    );
+    expect(gateResult).toBeDefined();
+    const payload = (gateResult?.payload ?? {}) as { ok?: boolean; result?: { status?: string; reason_codes?: string[]; missing?: string[] }; guidance?: string };
+    expect(payload.ok).toBe(true); // executed 径（合法业务产出，非 rejected）
+    expect(payload.result?.status).toBe("blocked");
+    expect(payload.guidance).toBeDefined();
+    const guidance = payload.guidance ?? "";
+    // 三段齐备（fixture 断言）
+    expect(guidance).toContain("缺什么：");
+    expect(guidance).toContain("产出路径：");
+    expect(guidance).toContain("登记动作：");
+    // 缺什么从闸门结果 missing 透传（mock 对端 missing=["admitted_fact"]）
+    expect(guidance).toContain("admitted_fact");
+    // 产出路径与登记动作示例
+    expect(guidance).toContain("atf-validate-extraction-contract");
+    expect(guidance).toContain('action="advance"');
+    // 不覆盖内核结果：result 原样保留（零加工透传），指引在 payload.guidance 侧
+    expect(payload.result?.reason_codes).toEqual(["evidence_missing"]);
+  });
+
+  it("非完整性闸门（G1 advance blocked）→ 载荷无 guidance（零加工透传既有行为）", async () => {
+    const ran = await ScenarioRunner.runBranch(scenarioOf(`b3-g1-${randomUUID()}`, "推进数据准入闸"), "main", {
+      runsRoot: runsRootOf(),
+      mockCommand: ["node", mockPath],
+      modelProvider: modelStub([
+        { type: "tool_call", tool: "atf_gate", params: { gate: "G1", action: "advance" } },
+        { type: "final_answer", text: "done" },
+      ]),
+      approvalSurface: { stub: grantedStub },
+    });
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) throw new Error("unreachable");
+    const report: BranchRunReport = ran.value;
+    expect(report.outcome.kind).toBe("completed");
+    const gateResult = report.events.find(
+      (event) => event.type === "tool/result" && (event.payload as { tool?: string }).tool === "atf_gate",
+    );
+    const payload = (gateResult?.payload ?? {}) as { ok?: boolean; guidance?: string };
+    expect(payload.ok).toBe(true);
+    expect(payload.guidance).toBeUndefined(); // G1 不命中三段式（既有行为逐位不变）
+  });
+});

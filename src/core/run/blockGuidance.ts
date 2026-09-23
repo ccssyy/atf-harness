@@ -8,6 +8,7 @@
  * 内核事实依据：《ATF-Harness_冒烟2三跑核验记录_20260921.md》§四（data_admission.py
  * _read_assignments 的强制清单形态）。
  */
+import { INTEGRITY_GATE_IDS } from "../tools/index.js";
 
 export interface GapCardOption {
   text: string;
@@ -273,4 +274,64 @@ export const lengthTruncatedGapCard = (contentEmpty: boolean, retriesUsed: numbe
           { text: "降低思考等级后重试（reasoning_effort 调低）" },
         ],
   };
+};
+
+// ---------------------------------------------------------------------------
+// B3：完整性闸门 blocked 三段式指引（走查修复批 2026-09-23，指令 7158bf43；仅 harness
+// 措辞层，不改内核闸门语义）。走查 run-full-v0762 实录（#2254）：atf_gate advance 对完整
+// 性闸门返回 executed(ok=true)+status=blocked，内核 guidance 只有一句泛化文案——模型缺
+// 「产出路径」与「登记动作示例」，被迫考古（走查报告 8628d036 §三 B3 ①②）。
+// 回流固定三段：缺什么（缺失证据清单，从闸门结果 missing 透传，不新增猜测）＋产出路径
+// （对应技能链名）＋登记动作（atf_gate action=advance 携证据引用示例）；内核原始 guidance
+// 若已有内容保留拼接于段后、不覆盖。
+// ---------------------------------------------------------------------------
+
+/** 闸门 → 技能链产出路径映射。依据＝pin 内核 skills/ 清单（v0.6.0b0）各技能 description 的
+ *  领域锚定；extraction-contract-valid 一行为指令 7158bf43 原文锚定。B4（技能互引）归内核侧
+ *  批次执行，经 re-pin 生效后本表无需变更——本表只指路技能面，不承载技能内容（禁造第二权威）。 */
+const INTEGRITY_GATE_OUTPUT_PATHS: Readonly<Record<string, string>> = {
+  "extraction-contract-valid": "atf-validate-extraction-contract 技能（候选生成与校验；契约包发布见 atf-build-family-split 技能 publish 节）",
+  "source-identity-valid": "atf-admit-training-data 技能（数据准入与来源证据闭合链）",
+  "split-integrity-valid": "atf-build-family-split 技能（切分产物链）",
+  "training-data-valid": "atf-admit-training-data 技能（TrainingDataArtifact/v1 编译与 G4 闭合）",
+  "training-preflight-valid": "atf-prepare-training 技能（训练计划与前置证据）",
+  "evaluation-preflight-valid": "atf-evaluate-checkpoints 技能（评估服务编排与前置证据）",
+  "evaluation-evidence-valid": "atf-evaluate-checkpoints 技能（评估指标与 badcase 证据报告）",
+};
+
+const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * 完整性闸门 blocked 结果的三段式回流文案（executed 径专用——闸门 blocked 是合法业务产出
+ * 而非 rejected，既有 guidanceLineFor 回填点不覆盖；runner 在 tool/result 落盘处调用）。
+ * gate 接受 unknown（从 executed result 的 gate 回显字段透传，helper 内收窄——调用面零假设）。
+ * 非完整性闸门（G1–G4 命名分流等）/ 非 blocked 状态 → undefined（零加工透传既有行为）。
+ */
+export const integrityGateBlockedGuidance = (gate: unknown, result: unknown): string | undefined => {
+  if (typeof gate !== "string" || !INTEGRITY_GATE_IDS.includes(gate)) return undefined;
+  if (!isPlainRecord(result) || result["status"] !== "blocked") return undefined;
+  const reason =
+    typeof result["reason"] === "string" && result["reason"] !== ""
+      ? result["reason"]
+      : Array.isArray(result["reason_codes"]) && typeof result["reason_codes"][0] === "string"
+        ? (result["reason_codes"][0] as string)
+        : "blocked";
+  // 第一段［缺什么］：缺失证据清单从闸门结果 missing 透传；结果未列明则指向 query 回显
+  //（不新增猜测——走查 B3 ③「不列缺哪些证据」的 harness 侧兜底）
+  const missingList = Array.isArray(result["missing"])
+    ? (result["missing"].filter((item): item is string => typeof item === "string" && item !== ""))
+    : [];
+  const missingPart =
+    missingList.length > 0
+      ? `缺什么：${missingList.join("、")}`
+      : `缺什么：闸门结果未列明缺失清单——先以 atf_gate(gate="${gate}", action="query") 回显核对`;
+  // 第二段［产出路径］：技能链名（映射表锚定；未收录映射的新 GateId 走通用指路）
+  const outputPath = INTEGRITY_GATE_OUTPUT_PATHS[gate] ?? "技能面对应技能链（按闸门名检索常驻技能清单）";
+  // 第三段［登记动作］：advance 携证据引用示例
+  const advanceExample = `登记动作：按产出路径补齐证据产物后，以 atf_gate(gate="${gate}", action="advance", evidence_refs=[…证据引用…]) 重新推进`;
+  const threeParts = `【完整性闸门 ${gate} 推进被拦（${reason}）】${missingPart}；产出路径：${outputPath}；${advanceExample}`;
+  // 内核原始 guidance 保留拼接、不覆盖（走查 B3 修法第 3 条）
+  const kernelGuidance = typeof result["guidance"] === "string" && result["guidance"] !== "" ? result["guidance"] : undefined;
+  return kernelGuidance !== undefined ? `${threeParts}｜内核指引：${kernelGuidance}` : threeParts;
 };

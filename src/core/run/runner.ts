@@ -43,7 +43,7 @@ import {
   TOOL_CUT_REASON,
   type NoProgressObservation,
 } from "./noProgress.js";
-import { gapCardFor, guidanceLineFor, isMaterialGapCode, lengthTruncatedGapCard } from "./blockGuidance.js";
+import { gapCardFor, guidanceLineFor, integrityGateBlockedGuidance, isMaterialGapCode, lengthTruncatedGapCard } from "./blockGuidance.js";
 import { injectMemoryEntries, type MemoryReadInjector } from "./memoryInjection.js";
 import {
   approvalParamsDigest,
@@ -962,9 +962,15 @@ export class ScenarioRunner {
                     await appendTurnEnd(outcome.kind, outcome.kind === "aborted" ? "aborted" : undefined);
                     provider = null;
                   } else {
+                    // B3（走查修复批 2026-09-23）：resume 重派径同口径——重派目标可能恰为
+                    // atf_gate advance（挂起的推进审批），blocked 回流同样补三段式指引。
+                    const gateBlockedGuidance =
+                      result.kind === "executed" && callPayload.tool === "atf_gate"
+                        ? integrityGateBlockedGuidance((result.result as { gate?: unknown } | null | undefined)?.gate, result.result)
+                        : undefined;
                     const payload: ToolResultPayload =
                       result.kind === "executed"
-                        ? { tool: callPayload.tool, ok: true, result: result.result, call_ref: originalCall.id }
+                        ? { tool: callPayload.tool, ok: true, result: result.result, call_ref: originalCall.id, ...(gateBlockedGuidance !== undefined ? { guidance: gateBlockedGuidance } : {}) }
                         : result.kind === "rejected"
                           ? { tool: callPayload.tool, ok: false, reason: result.reason, call_ref: originalCall.id, detail: result.detail }
                           : result.kind === "input_violation"
@@ -1528,10 +1534,18 @@ export class ScenarioRunner {
           if ((result.kind === "rejected" || result.kind === "input_violation") && isMaterialGapCode(result.reason)) {
             turnLastMaterialGap = { tool: step.tool, reason: result.reason };
           }
+          // B3（走查修复批 2026-09-23，指令 7158bf43）：完整性闸门 blocked 结果的三段式指引
+          // 回填——闸门 blocked 是 executed(ok=true) 合法业务产出（非 rejected，D-f-3 点位不
+          // 覆盖），harness 措辞层补「缺什么／产出路径／登记动作」；非完整性闸门/非 blocked
+          // 恒 undefined（既有载荷逐字段不变）。
+          const gateBlockedGuidance =
+            result.kind === "executed" && step.tool === "atf_gate"
+              ? integrityGateBlockedGuidance((result.result as { gate?: unknown } | null | undefined)?.gate, result.result)
+              : undefined;
 
           const payload: ToolResultPayload =
             result.kind === "executed"
-              ? { tool: step.tool, ok: true, result: result.result, call_ref: call.id, ...(nudgeNote !== undefined ? { nudge: nudgeNote } : {}) }
+              ? { tool: step.tool, ok: true, result: result.result, call_ref: call.id, ...(nudgeNote !== undefined ? { nudge: nudgeNote } : {}), ...(gateBlockedGuidance !== undefined ? { guidance: gateBlockedGuidance } : {}) }
               : result.kind === "rejected"
                 ? { tool: step.tool, ok: false, reason: result.reason, call_ref: call.id, detail: result.detail, ...(nudgeNote !== undefined ? { nudge: nudgeNote } : {}), ...(backfillGuidance !== undefined ? { guidance: backfillGuidance } : {}) }
                 : result.kind === "input_violation"
