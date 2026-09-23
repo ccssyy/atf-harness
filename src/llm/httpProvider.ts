@@ -23,26 +23,10 @@ import { getCodec } from "./codec.js";
 import { type ProtocolCodec } from "./codecWire.js";
 import { llmError, llmErrorOf, type LlmDecision, type LlmError, type LlmErrorCode, type LlmProvider } from "./provider.js";
 import { type ResolvedLlmProviderConfig } from "./providerConfig.js";
+import { HARNESS_SYSTEM_PROMPT } from "./systemPrompt.js";
 import { resolveSummaryResultCapChars } from "../core/session/constantsBudget.js";
 import { type ModelVisibleTool } from "../core/tools/index.js";
 import { type LlmContextEvent } from "../core/session/index.js";
-
-/**
- * 系统提示（harness 静态文本；只描述模型面约定，不含预算/治理内部字段——
- * 模型不可见约束延续；审批语义与 approval 消息同属模型可见面）。
- * 第 4 条（L1c 提前批 B 描述层，2026-09-22）：状态面信息直接使用、无需向用户复述、
- * 勿误称"工具"——五跑模型把 material_roots 枚举向用户复述并误称"列举工具"。
- */
-export const HARNESS_SYSTEM_PROMPT = [
-  "你是 ATF 训练流水线上的运行代理，由本 harness 托管。本轮任务见首条用户消息。",
-  "可用工具以 tools 列表为准。约定：",
-  "1. 了解现场先用只读工具查询（工作区状态 / 事实索引 / 闸门查询），不要臆测；",
-  "2. 写动作（如数据准入）直接发起工具调用；是否放行由人工审批决定，审批往返以消息形式",
-  "   出现在对话中——被拒绝或收到修改意见时，依据意见调整后重试或改走其他路径；",
-  "3. 任务完成后以纯文本回复作最终答复（不再调用工具），概述做了什么、看到了什么、建议下一步。",
-  "4. 查询类工具返回的状态信息（已登记数据、素材目录等）供你直接使用与决策——无需向用户",
-  "   复述其枚举内容，也不要把状态面说成\"工具\"；向用户报告时只讲结论与下一步。",
-].join("\n");
 
 /** C 项（L1c 提前批）：provider 侧配额/限流/欠费归类标记——status 429 命中，body 标记兜底。 */
 const QUOTA_BODY_MARKERS: readonly string[] = ["insufficient_quota", "quota", "rate limit", "usage limit", "arrearage"];
