@@ -32,7 +32,7 @@ import { AtfBridgeConnection } from "../../bridge/index.js";import {
   type ScriptedStepSource,
 } from "../../llm/index.js";
 import type { LlmProvider } from "../../llm/index.js";
-import { LOOP_MAX_STEPS_PER_TURN, LOOP_MAX_TURNS } from "../session/constants.js";
+import { loopMaxStepsPerTurn, loopMaxTurns } from "../session/constants.js";
 import { resolveExhaustionStop, type LoopStopReason } from "./stopReason.js";
 import { REJECT_LOOP_LIMIT } from "./constants.js";
 import {
@@ -873,12 +873,13 @@ export class ScenarioRunner {
             }),
           };
           provider = null;
-        } else if (loopState.turns_opened + 1 > LOOP_MAX_TURNS) {
+        } else if (loopState.turns_opened + 1 > loopMaxTurns()) {
+          const maxTurns = loopMaxTurns();
           outcome = {
             kind: "failed",
-            error: runError("budget_exhausted", `turn 数预算耗尽（max_turns=${String(LOOP_MAX_TURNS)}），resume 无法开新 turn`, {
+            error: runError("budget_exhausted", `turn 数预算耗尽（max_turns=${String(maxTurns)}），resume 无法开新 turn`, {
               budget: "max_turns",
-              limit: LOOP_MAX_TURNS,
+              limit: maxTurns,
             }),
           };
           provider = null;
@@ -1128,12 +1129,13 @@ export class ScenarioRunner {
         } else if (listPendingApprovals(events).length > 0) {
           outcome = { kind: "failed", error: runError("invalid_input", "continue 前置不满足：存在待办审批——挂起续跑须经 resume 应答通道（不得绕过问答轨）") };
           provider = null;
-        } else if (loopState.turns_opened + 1 > LOOP_MAX_TURNS) {
+        } else if (loopState.turns_opened + 1 > loopMaxTurns()) {
+          const maxTurns = loopMaxTurns();
           outcome = {
             kind: "failed",
-            error: runError("budget_exhausted", `turn 数预算耗尽（max_turns=${String(LOOP_MAX_TURNS)}），continue 无法开新 turn`, {
+            error: runError("budget_exhausted", `turn 数预算耗尽（max_turns=${String(maxTurns)}），continue 无法开新 turn`, {
               budget: "max_turns",
-              limit: LOOP_MAX_TURNS,
+              limit: maxTurns,
             }),
           };
           provider = null;
@@ -1165,13 +1167,14 @@ export class ScenarioRunner {
         // exit 1）。批 2.5「模型面去步数化」曾因本前置判定对模型面同样生效而未实际生效（模型面
         // 32 步即落 fuse 径，报 200 文案——步数/缘由/文案三处错）；现模型面不受 32 步拦，仅受
         // 下方 hardFuse 兜底与 token 预算径约束。
-        if ("decisionFace" in provider && turnStepCount >= LOOP_MAX_STEPS_PER_TURN) {
+        if ("decisionFace" in provider && turnStepCount >= loopMaxStepsPerTurn()) {
           // 脚本执行径（Faux 断言路径语义逐位不变）：维持既有终局 failed(budget_exhausted)
+          const maxSteps = loopMaxStepsPerTurn();
           outcome = {
             kind: "failed",
-            error: runError("budget_exhausted", `单 turn 步数预算耗尽（max_steps_per_turn=${String(LOOP_MAX_STEPS_PER_TURN)}）`, {
+            error: runError("budget_exhausted", `单 turn 步数预算耗尽（max_steps_per_turn=${String(maxSteps)}）`, {
               budget: "max_steps_per_turn",
-              limit: LOOP_MAX_STEPS_PER_TURN,
+              limit: maxSteps,
             }),
           };
           turnOpen = false;
@@ -1281,12 +1284,13 @@ export class ScenarioRunner {
           // P2-S3:段分支脚本耗尽 = 段边界——非末段执行切换协议;末段/单 provider 分支 = 既有未收束终局
           if (segmentMode && segIdx < segments.length - 1) {
             // 切片 1 A2：run 级 turn 预算——开新 turn 前检查（max_turns；不越限才执行切换协议）
-            if (turnsOpened + 1 > LOOP_MAX_TURNS) {
+            if (turnsOpened + 1 > loopMaxTurns()) {
+              const maxTurns = loopMaxTurns();
               outcome = {
                 kind: "failed",
-                error: runError("budget_exhausted", `turn 数预算耗尽（max_turns=${String(LOOP_MAX_TURNS)}）`, {
+                error: runError("budget_exhausted", `turn 数预算耗尽（max_turns=${String(maxTurns)}）`, {
                   budget: "max_turns",
-                  limit: LOOP_MAX_TURNS,
+                  limit: maxTurns,
                 }),
               };
               turnOpen = false;

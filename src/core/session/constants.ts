@@ -60,3 +60,35 @@ export const LOOP_MAX_STEPS_PER_TURN = 32;
 
 /** 单分支（run）turn 数上限。 */
 export const LOOP_MAX_TURNS = 8;
+
+// ---------------------------------------------------------------------------
+// env 覆盖（FIXVERIFY 小批 2026-09-23：复跑① 实证全流程走查必超 max_turns=8）——
+// ATF_LOOP_MAX_TURNS / ATF_LOOP_MAX_STEPS_PER_TURN：正整数合法即覆盖；未设/空/解析失败
+// 一律 fail-closed 回退默认值（默认行为零变化）。覆盖/非法各记一行 stderr（每进程每值
+// 恰一次，防逐拍刷屏；不进会话事件流——预算模型不可见约束不变）。
+// ---------------------------------------------------------------------------
+
+const loggedEnvOverrides = new Set<string>();
+
+const envPositiveInt = (raw: string | undefined, fallback: number, label: string): number => {
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const parsed = Number(raw);
+  const valid = Number.isInteger(parsed) && parsed > 0;
+  const key = `${label}=${raw}`;
+  if (!loggedEnvOverrides.has(key)) {
+    loggedEnvOverrides.add(key);
+    if (valid) {
+      if (parsed !== fallback) console.error(`[atf-harness] ${label}=${String(parsed)}（env 覆盖，缺省 ${String(fallback)}）`);
+    } else {
+      console.error(`[atf-harness] ${label}=${JSON.stringify(raw)} 非法（须正整数）——fail-closed 回退缺省 ${String(fallback)}`);
+    }
+  }
+  return valid ? parsed : fallback;
+};
+
+/** 生效的单分支 turn 数上限（env ATF_LOOP_MAX_TURNS 可覆盖；缺省 LOOP_MAX_TURNS=8）。 */
+export const loopMaxTurns = (): number => envPositiveInt(process.env["ATF_LOOP_MAX_TURNS"], LOOP_MAX_TURNS, "ATF_LOOP_MAX_TURNS");
+
+/** 生效的单 turn 步数上限（env ATF_LOOP_MAX_STEPS_PER_TURN 可覆盖；缺省 32）。 */
+export const loopMaxStepsPerTurn = (): number =>
+  envPositiveInt(process.env["ATF_LOOP_MAX_STEPS_PER_TURN"], LOOP_MAX_STEPS_PER_TURN, "ATF_LOOP_MAX_STEPS_PER_TURN");
