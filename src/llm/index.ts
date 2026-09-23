@@ -28,6 +28,7 @@ export {
   LLM_CONFIG_TOP_KEYS,
   LLM_MODEL_KEYS,
   LLM_PROVIDER_KEYS,
+  PIAI_REASONING_EFFORTS,
   PROVIDER_CONFIG_DEFAULTS,
   PROVIDER_ENV_VARS,
   PROVIDER_PROTOCOLS,
@@ -51,6 +52,16 @@ export { getCodec } from "./codec.js";
 export { anthropicMessagesCodec, ANTHROPIC_VERSION } from "./anthropicMessagesCodec.js";
 export { openaiChatCodec } from "./openaiChatCodec.js";
 export { HARNESS_SYSTEM_PROMPT, HttpLlmProvider, type HttpLlmProviderOptions } from "./httpProvider.js";
+export {
+  PiAiLlmProvider,
+  isLengthAwareLlmProvider,
+  walkAdapterMessagesToPi,
+  type EffortSwitchError,
+  type LengthAwareLlmProvider,
+  type LengthTruncationSignal,
+  type PiAiLlmProviderOptions,
+} from "./piAiProvider.js";
+export { createLlmProviderFromConfig, type CreateLlmProviderOptions } from "./providerFactory.js";
 export {
   FakeLlmEndpoint,
   type FakeEndpointRequestRecord,

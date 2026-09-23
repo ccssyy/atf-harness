@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   loadLlmProviderConfig,
-  HttpLlmProvider,
+  createLlmProviderFromConfig,
   type ResolvedLlmProviderConfig,
 } from "../llm/index.js";
 import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
@@ -91,14 +91,16 @@ const runAnswer = async (
       local: { handlers: WORKSPACE_TOOL_HANDLERS, host: localHost },
     };
   }
-  const provider = new HttpLlmProvider({
+  // pi-ai 换库批：protocol="pi-ai" → PiAiLlmProvider（库底座）；其余协议 → HttpLlmProvider
+  //（既有行为逐位不变）。分发单点 = createLlmProviderFromConfig。
+  const provider = createLlmProviderFromConfig({
     config: config.value as ResolvedLlmProviderConfig,
     tools: toolFace !== undefined ? toolFace.registry.modelVisible() : ToolRegistry.createDefault().modelVisible(),
     ...(skillsSuffix !== undefined ? { systemSuffix: skillsSuffix } : {}),
   });
   // provenance 三元组以既有 run 为准（RunWorkspace.create 内等值校验）；此处仅提供占位形态。
   // provider 字段类型面为 "faux"（场景脚本词汇）；resume 路径不消费该字段（无 segments），
-  // 实际 provider = modelProvider 注入的 HttpLlmProvider。
+  // 实际 provider = modelProvider 注入的装配产物（createLlmProviderFromConfig 按 protocol 分发）。
   const scenario: Scenario = {
     scenario_id: scenarioId,
     version: 1,

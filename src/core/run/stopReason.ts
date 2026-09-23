@@ -29,3 +29,31 @@ export const resolveExhaustionStop = (
   finalAnswerProduced: boolean,
 ): { ok: true; stopReason: Extract<LoopStopReason, "no_more_tools"> } | null =>
   finalAnswerProduced ? { ok: true, stopReason: "no_more_tools" } : null;
+
+// ---------------------------------------------------------------------------
+// R1：length 截断恢复判据（pi-ai 换库批 2026-09-23，指令 §3.3；纯函数，与 A2 同源纪律）
+// ---------------------------------------------------------------------------
+
+/** length 有界自动重试上限（恰 1 次；计入 max_calls_per_run——预算护栏语义不变）。 */
+export const LENGTH_RETRY_LIMIT = 1;
+
+export type LengthRecoveryAction =
+  | { action: "retry" }
+  | { action: "collapse"; cause: "partial_content" | "retry_exhausted" };
+
+/**
+ * length 分型恢复决策（R1/R2）：
+ * - contentEmpty（仅思考块吞预算）且重试未达上限 → 恰 1 次自动重试（R2 单独计数＋过程流留痕）；
+ * - contentEmpty 但重试已耗 → 收口（retry_exhausted），gap_card 引导「降低思考等级／输入新指令」；
+ * - content 非空截断 → 不自动重试（已有部分产出，重试性价比低）→ 收口（partial_content），
+ *   gap_card 续跑引导（续跑以既有历史重建）。
+ * 判据纯函数：同输入同结果；重试计数由 runner 每 turn 重建（durability 公理同源）。
+ */
+export const resolveLengthRecovery = (
+  contentEmpty: boolean,
+  retriesUsed: number,
+  limit: number = LENGTH_RETRY_LIMIT,
+): LengthRecoveryAction => {
+  if (!contentEmpty) return { action: "collapse", cause: "partial_content" };
+  return retriesUsed < limit ? { action: "retry" } : { action: "collapse", cause: "retry_exhausted" };
+};

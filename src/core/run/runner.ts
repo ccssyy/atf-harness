@@ -32,8 +32,9 @@ import { AtfBridgeConnection } from "../../bridge/index.js";import {
   type ScriptedStepSource,
 } from "../../llm/index.js";
 import type { LlmProvider } from "../../llm/index.js";
+import { isLengthAwareLlmProvider } from "../../llm/index.js";
 import { loopMaxStepsPerTurn, loopMaxTurns } from "../session/constants.js";
-import { resolveExhaustionStop, type LoopStopReason } from "./stopReason.js";
+import { resolveExhaustionStop, resolveLengthRecovery, type LoopStopReason } from "./stopReason.js";
 import { REJECT_LOOP_LIMIT } from "./constants.js";
 import {
   NoProgressDetector,
@@ -42,7 +43,7 @@ import {
   TOOL_CUT_REASON,
   type NoProgressObservation,
 } from "./noProgress.js";
-import { gapCardFor, guidanceLineFor, isMaterialGapCode } from "./blockGuidance.js";
+import { gapCardFor, guidanceLineFor, isMaterialGapCode, lengthTruncatedGapCard } from "./blockGuidance.js";
 import { injectMemoryEntries, type MemoryReadInjector } from "./memoryInjection.js";
 import {
   approvalParamsDigest,
@@ -130,13 +131,16 @@ export const runError = (code: RunErrorCode, message: string, detail?: unknown):
  *  D-f 批（2026-09-21）扩展：reason 扩为五值并集（reject_loop_exhausted 保首，新增
  *  same_call_repeat／no_progress／budget_exhausted／provider_failure）；rejected/limit 改可选
  *  （reject 径恒填满，其余径按需）；新增阻塞说明（卡在哪/已用轮次——TUI 不显示步数，
- *  steps_used 仅 payload 机查）、缺口卡四段（D-f-6 请示式收口）、切断工具清单。 */
+ *  steps_used 仅 payload 机查）、缺口卡四段（D-f-6 请示式收口）、切断工具清单。
+ *  pi-ai 换库批（2026-09-23）再扩一值：length_truncated（R1/R2——finish_reason=length 的
+ *  结构化分型收口；turn/end payload 自由 JSON，五值 stop_reason 枚举零改）。 */
 export type TurnFailureReason =
   | "reject_loop_exhausted"
   | "same_call_repeat"
   | "no_progress"
   | "budget_exhausted"
-  | "provider_failure";
+  | "provider_failure"
+  | "length_truncated";
 
 export interface TurnBlockingDescription {
   /** 卡在哪（一句话，具体到环节/对象） */
@@ -216,6 +220,8 @@ const COLLAPSE_NOTES: Record<TurnFailureReason, string> = {
   no_progress: "检测到重复动作无新进展（控制面护栏）：请换用其他工具/路径，或如实向用户说明情况；输入新指令即可继续本会话",
   budget_exhausted: "本轮预算已用完（运行护栏，非进度指标）：控制权已交还——可直接输入新指令继续，或先收窄任务；输入新指令即可继续本会话",
   provider_failure: "provider 决策失败已按 turn 收口：核对 provider 配置/网络后输入新指令即可继续本会话",
+  // pi-ai 换库批 R1：length 分型收口——截断响应不作完整决策执行；降档或续跑（缺口卡同源）
+  length_truncated: "模型响应被输出上限截断（finish_reason=length）：截断响应未执行、未入历史；可降低思考等级后重试，或输入新指令以既有历史继续本会话",
 };
 
 /** 分支终局(七态穷尽互斥;业务级 gate blocked 是合法 canonical 产出,不是终局——B2 语义):
@@ -726,6 +732,8 @@ export class ScenarioRunner {
       let turnLastMaterialGap: { tool: string; reason: string } | undefined;
       // D-f-2：本 turn 最近工具动作（阻塞说明 stuck_at 素材；不上屏步数）
       let turnLastTool: string | undefined;
+      // pi-ai 换库批 R2：本 turn length 有界重试计数（恰 1 次上限；每 turn 重建＝恢复语义同源）
+      let turnLengthRetries = 0;
       // 切片 1 A2：run 级 turn 计数（max_turns 预算）
       let turnsOpened = 0;
 
@@ -746,6 +754,7 @@ export class ScenarioRunner {
         turnNoProgress = new NoProgressDetector();
         turnLastMaterialGap = undefined;
         turnLastTool = undefined;
+        turnLengthRetries = 0;
       };
 
       const closeTurnRecord = (): void => {
@@ -759,7 +768,8 @@ export class ScenarioRunner {
       };
 
       /** D-f：turn 级收口摘要共享构造器（四类触发同源产出，防 D-1 双份字面量漂移）。
-       *  reject 径输出与 D-1 逐字兼容（note 文案不变、gate_ids 逻辑不变、rejected/limit 恒填）。 */
+       *  reject 径输出与 D-1 逐字兼容（note 文案不变、gate_ids 逻辑不变、rejected/limit 恒填）。
+       *  pi-ai 换库批：gapCardOverride 供 length 分型收口显式出卡（不经 material-gap 推导）。 */
       const buildCollapseSummary = (input: {
         reason: TurnFailureReason;
         limit?: number;
@@ -767,9 +777,10 @@ export class ScenarioRunner {
         cutTools?: readonly string[];
         stuckAt: string;
         providerError?: TurnBlockingDescription["provider_error"];
+        gapCardOverride?: TurnFailureSummary["gap_card"];
       }): TurnFailureSummary => {
         const gap = turnLastMaterialGap;
-        const gapCard = gap !== undefined ? gapCardFor(gap.tool, gap.reason) : undefined;
+        const gapCard = input.gapCardOverride ?? (gap !== undefined ? gapCardFor(gap.tool, gap.reason) : undefined);
         return {
           reason: input.reason,
           ...(input.limit !== undefined ? { limit: input.limit } : {}),
@@ -1281,6 +1292,41 @@ export class ScenarioRunner {
         }
         const raw = decided.value;
         if (raw === null) {
+          // pi-ai 换库批 R1/R2（2026-09-23）：length 结构化分型恢复——优先于耗尽判读。
+          // finish_reason=length 经 LengthAwareLlmProvider 信号上抛（不入 provider_failure）：
+          // contentEmpty（思考吞预算）→ 有界自动重试恰 1 次（计入 call 预算，R2 单独计数＋
+          // assistant/attempt 过程流留痕）；仍截断/非空截断 → turn 级收口＋缺口卡引导
+          // （降思考等级／以既有历史续跑），不硬阻断 run。run 状态机零改：仅新增
+          // "length→retry(≤1)→收口" 支线。
+          if (!segmentMode && !("decisionFace" in provider) && isLengthAwareLlmProvider(provider)) {
+            const signal = provider.consumeLengthSignal();
+            if (signal !== null) {
+              const verdict = resolveLengthRecovery(signal.contentEmpty, turnLengthRetries);
+              if (verdict.action === "retry") {
+                turnLengthRetries += 1;
+                const noted = await appendEvent({
+                  type: "assistant/attempt",
+                  payload: {
+                    reason: "length_retry",
+                    attempt: turnLengthRetries,
+                    content_empty: signal.contentEmpty,
+                    provider_thinking_level: signal.providerThinkingLevel,
+                  },
+                });
+                if (noted === null) break; // 会话写路径失败已在 appendEvent 内折算
+                continue; // 再次 decide＝新一次 provider 调用（预算护栏语义不变）
+              }
+              provider = null;
+              await collapseTurn(buildCollapseSummary({
+                reason: "length_truncated",
+                stuckAt: signal.contentEmpty
+                  ? `模型响应被输出上限截断且无可见内容（思考耗尽预算，重试 ${String(turnLengthRetries)} 次仍截断）`
+                  : "模型响应被输出上限截断，部分产出未执行",
+                gapCardOverride: lengthTruncatedGapCard(signal.contentEmpty, turnLengthRetries),
+              }), "error"); // 五值 stop_reason 枚举零改：机查粗分型取 error，精确分型在 failure_summary.reason
+              break;
+            }
+          }
           // P2-S3:段分支脚本耗尽 = 段边界——非末段执行切换协议;末段/单 provider 分支 = 既有未收束终局
           if (segmentMode && segIdx < segments.length - 1) {
             // 切片 1 A2：run 级 turn 预算——开新 turn 前检查（max_turns；不越限才执行切换协议）

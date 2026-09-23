@@ -5,7 +5,7 @@
   "type": "module",
   "description": "ATF 独立训练 Harness（R2a：TS L2-L4 + Python 内核经 stdio JSONL 桥接，零 npm 运行时依赖）",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -24,11 +24,16 @@
     "trial:l1a-real": "npm run build && node dist/run/trialL1aReal.js",
     "smoke:l1ui": "npm run build && node dist/ui/smokeL1ui.js",
     "smoke:l1acp": "npm run build && node dist/acp/smokeL1acp.js",
-    "smoke:l1mcp": "npm run build && node dist/mcp/smokeL1mcp.js"
+    "smoke:l1mcp": "npm run build && node dist/mcp/smokeL1mcp.js",
+    "smoke:piai": "npm run build && node dist/run/smokePiAi.js",
+    "trial:piai-real": "npm run build && node dist/run/trialPiAiReal.js"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "0.87.1"
   }
 }

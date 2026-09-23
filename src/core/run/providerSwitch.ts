@@ -99,3 +99,82 @@ export const buildSwitchPayload = (
   boundary: { turn_index: turnIndex, after_event_id: afterEventId },
   ...(reason !== undefined ? { reason } : {}),
 });
+
+// ---------------------------------------------------------------------------
+// R3：effort 档位运行时切换（pi-ai 换库批 2026-09-23，指令 §3.4）
+// ---------------------------------------------------------------------------
+
+/**
+ * effort 切换载荷——沿 provider/switch 事件词汇，**零 schema 变更**（投影面纪律零触发）：
+ * - from/to 为同一 provider_id（档位切换不改会话 provider 归属，turn 归属不变）；
+ * - 档位变化记入 reason 自由文本（payload 键闭集不变；adapter 对 provider/switch 映射为
+ *   skip，模型不可见——B1 白名单零扩）。
+ * 边界判据与 provider 切换同源（checkSwitchBoundary：仅 turn 边界合法）。
+ */
+export const buildEffortSwitchPayload = (
+  providerId: string,
+  fromEffort: string,
+  toEffort: string,
+  turnIndex: number,
+  afterEventId: number,
+): ProviderSwitchPayload => ({
+  from: { provider_id: providerId },
+  to: { provider_id: providerId },
+  boundary: { turn_index: turnIndex, after_event_id: afterEventId },
+  reason: `reasoning_effort: ${fromEffort} → ${toEffort}`,
+});
+
+/**
+ * R3 切换原子序（口径 #7 同源：要么落盘且生效，要么完全不切）：
+ * ① 闭集校验（validateEffort 注入——llm 层单点，未知值 fail-closed）；
+ * ② 边界复核（仅 turn 边界）；
+ * ③ 落盘 switch 事件（appendSwitchEvent 返回 null = 落盘失败 → 不生效）；
+ * ④ 生效注入（apply 调 provider.setReasoningEffort——已过①，运行时拒绝仅剩防御径）。
+ * 生效验证：后续请求以 pi-ai AssistantMessage.providerThinkingLevel 回显断言（trial 场景 3）。
+ */
+export const performEffortSwitch = async (input: {
+  providerId: string;
+  toEffort: string;
+  currentEffort: () => string;
+  validateEffort: (effort: string) => { ok: true } | { ok: false; message: string };
+  turnOpen: boolean;
+  turnIndex: number;
+  afterEventId: number;
+  appendSwitchEvent: (payload: ProviderSwitchPayload) => Promise<{ id: number } | null>;
+  apply: (effort: string) => { ok: true } | { ok: false; message: string };
+}): Promise<Result<{ event_id: number; from_effort: string; to_effort: string }, ProviderSwitchBlock>> => {
+  const validated = input.validateEffort(input.toEffort);
+  if (!validated.ok) {
+    return err({
+      reason: "provider_switch_unknown_provider",
+      message: `effort 切换拒绝：${validated.message}（不落 switch 事件、不生效）`,
+      detail: { to_effort: input.toEffort },
+    });
+  }
+  const boundaryBlock = checkSwitchBoundary(input.turnOpen, { to: input.providerId, effort: input.toEffort });
+  if (boundaryBlock !== null) return err(boundaryBlock);
+  const fromEffort = input.currentEffort();
+  if (fromEffort === input.toEffort) {
+    // 幂等切换：同值不落事件、不重复生效（无状态变更即无事实可记）
+    return ok({ event_id: -1, from_effort: fromEffort, to_effort: input.toEffort });
+  }
+  const payload = buildEffortSwitchPayload(input.providerId, fromEffort, input.toEffort, input.turnIndex, input.afterEventId);
+  const appended = await input.appendSwitchEvent(payload);
+  if (appended === null) {
+    return err({
+      reason: "provider_switch_digest_broken",
+      message: "effort 切换的 provider/switch 事件落盘失败（fail-closed，不生效）",
+      detail: { to_effort: input.toEffort },
+    });
+  }
+  const applied = input.apply(input.toEffort);
+  if (!applied.ok) {
+    // 防御径（①已保证闭集；此分支 = provider 实现漂移）：如实上报，不谎报生效
+    return err({
+      reason: "provider_switch_digest_broken",
+      message: `effort 切换生效注入失败（事件已落盘，provider 未切换——须人工核查）: ${applied.message}`,
+      detail: { event_id: appended.id, to_effort: input.toEffort },
+    });
+  }
+  return ok({ event_id: appended.id, from_effort: fromEffort, to_effort: input.toEffort });
+};
