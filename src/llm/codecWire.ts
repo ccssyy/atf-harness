@@ -76,8 +76,12 @@ export interface ProtocolCodec {
   readonly requestPath: string;
   /** 出站认证头（api_key 唯一出现处；ADR-09 红线）。 */
   authHeaders(apiKey: string): Record<string, string>;
-  /** canonical 消息 + 工具面 → wire 请求体（纯函数）。 */
-  encodeRequestBody(input: CodecRequestInput): unknown;
+  /** canonical 消息 + 工具面 → wire 请求体（纯函数；形状非法 → err fail-closed——调用方
+   *  必须本地收口，绝不把 err 对象当请求体发出）。微补丁加修 2026-09-23：返回类型从
+   *  unknown 升格为 Result——此前 openaiChatCodec 形状非法时 return encoded（Result 形状）
+   *  而声明是 unknown，httpProvider 把 {ok:false,error} 原样 POST（对端 422「missing field
+   *  messages」，重跑① 死循环的直接推手之一）。 */
+  encodeRequestBody(input: CodecRequestInput): Result<unknown, CodecError>;
   /** 2xx wire 响应 → canonical ModelResponse（纯函数；形状非法 → err fail-closed）。 */
   parseResponse(body: unknown): Result<ModelResponse, CodecError>;
   /** canonical ModelResponse → wire 响应体（假端点回放与 fixture 专用）。 */

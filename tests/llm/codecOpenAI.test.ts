@@ -14,9 +14,16 @@ const TOOLS: ModelVisibleTool[] = [
 
 const msg = (partial: AdapterMessage): AdapterMessage => partial;
 
+/** 微补丁加修（2026-09-23）：encodeRequestBody 契约升格为 Result——成功路径经此解包（断言 ok）。 */
+const encodeOk = (result: { ok: boolean; value?: unknown; error?: { code: string; message: string } }): Record<string, unknown> => {
+  expect(result.ok, result.error?.message ?? "").toBe(true);
+  if (!result.ok) throw new Error("unreachable");
+  return result.value as Record<string, unknown>;
+};
+
 describe("openai-chat——请求构造", () => {
   it("system 首条 + tools function 形态 + reasoning_effort 显式携带（任务书 §1.2）", () => {
-    const body = openaiChatCodec.encodeRequestBody({
+    const body = encodeOk(openaiChatCodec.encodeRequestBody({
       model: "fake-model",
       system: "SYS",
       messages: [msg({ role: "user", text: "任务", source_event_id: 1 })],
@@ -24,7 +31,8 @@ describe("openai-chat——请求构造", () => {
       reasoningEffort: "low",
       developerRole: false,
       maxTokens: 4096,
-    }) as Record<string, unknown>;
+    }));
+
     const messages = body["messages"] as Array<Record<string, unknown>>;
     expect(messages[0]).toEqual({ role: "system", content: "SYS" });
     expect(messages[1]).toEqual({ role: "user", content: "任务" });
@@ -39,7 +47,7 @@ describe("openai-chat——请求构造", () => {
   });
 
   it("修订 v2 规则 4——reasoningEffort=null（compat 抑制）→ 请求体整体省略该字段", () => {
-    const body = openaiChatCodec.encodeRequestBody({
+    const body = encodeOk(openaiChatCodec.encodeRequestBody({
       model: "m",
       system: "S",
       messages: [msg({ role: "user", text: "任务", source_event_id: 1 })],
@@ -47,13 +55,14 @@ describe("openai-chat——请求构造", () => {
       reasoningEffort: null,
       developerRole: false,
       maxTokens: 4096,
-    }) as Record<string, unknown>;
+    }));
+
     expect("reasoning_effort" in body).toBe(false);
   });
 
   it("修订 v2 规则 4——developerRole=true → 首条指令消息 role:developer；false → system（缺省不变）", () => {
     const mk = (developerRole: boolean) =>
-      openaiChatCodec.encodeRequestBody({
+      encodeOk(openaiChatCodec.encodeRequestBody({
         model: "m",
         system: "S",
         messages: [msg({ role: "user", text: "任务", source_event_id: 1 })],
@@ -61,13 +70,14 @@ describe("openai-chat——请求构造", () => {
         reasoningEffort: "low",
         developerRole,
         maxTokens: 4096,
-      }) as Record<string, unknown>;
+      }));
+
     expect((mk(true)["messages"] as Array<Record<string, unknown>>)[0]?.["role"]).toBe("developer");
     expect((mk(false)["messages"] as Array<Record<string, unknown>>)[0]?.["role"]).toBe("system");
   });
 
   it("复跑适配——相邻 assistant 合并：文本并入紧随的 tool_calls 消息（tool_calls:null 视为无）", () => {
-    const body = openaiChatCodec.encodeRequestBody({
+    const body = encodeOk(openaiChatCodec.encodeRequestBody({
       model: "m",
       system: "S",
       messages: [
@@ -79,7 +89,8 @@ describe("openai-chat——请求构造", () => {
       reasoningEffort: "low",
       developerRole: false,
       maxTokens: 4096,
-    }) as Record<string, unknown>;
+    }));
+
     const messages = (body["messages"] as Array<Record<string, unknown>>).filter((m) => m["role"] !== "system");
     expect(messages).toHaveLength(2); // assistant(合并) + tool（本用例无 user 消息）
     const merged = messages[0] as { content: string; tool_calls: unknown };
@@ -89,7 +100,7 @@ describe("openai-chat——请求构造", () => {
 
   it("复跑适配——thinking 全量回填：reasoning:true 模型所有工具调用轮补齐 reasoning_content（null → 占位）", () => {
     const mk = (thinkingEcho: string | null | undefined) =>
-      openaiChatCodec.encodeRequestBody({
+      encodeOk(openaiChatCodec.encodeRequestBody({
         model: "m",
         system: "S",
         messages: [
@@ -103,7 +114,8 @@ describe("openai-chat——请求构造", () => {
         developerRole: false,
         maxTokens: 4096,
         ...(thinkingEcho !== undefined ? { thinkingEcho } : {}),
-      }) as Record<string, unknown>;
+      }));
+
     const off = mk(undefined) as { messages: Array<Record<string, unknown>> };
     for (const m of off.messages) {
       if (m["role"] === "assistant" && m["tool_calls"] != null) expect("reasoning_content" in m).toBe(false);
@@ -126,7 +138,7 @@ describe("openai-chat——请求构造", () => {
   });
 
   it("assistant_tool_call → tool_calls（arguments 为 JSON 字符串）；tool_result → role:tool 配对", () => {
-    const body = openaiChatCodec.encodeRequestBody({
+    const body = encodeOk(openaiChatCodec.encodeRequestBody({
       model: "m",
       system: "S",
       messages: [
@@ -138,7 +150,8 @@ describe("openai-chat——请求构造", () => {
       reasoningEffort: "low",
       developerRole: false,
       maxTokens: 4096,
-    }) as Record<string, unknown>;
+    }));
+
     const messages = body["messages"] as Array<Record<string, unknown>>;
     const assistant = messages[2] as { role: string; tool_calls: Array<{ id: string; function: { name: string; arguments: string } }> };
     expect(assistant.role).toBe("assistant");
@@ -149,7 +162,7 @@ describe("openai-chat——请求构造", () => {
   });
 
   it("approval 往返缓冲：随配对 tool_result 之后以 user 附言回填（线缆次序）", () => {
-    const body = openaiChatCodec.encodeRequestBody({
+    const body = encodeOk(openaiChatCodec.encodeRequestBody({
       model: "m",
       system: "S",
       messages: [
@@ -163,7 +176,8 @@ describe("openai-chat——请求构造", () => {
       reasoningEffort: "low",
       developerRole: false,
       maxTokens: 4096,
-    }) as Record<string, unknown>;
+    }));
+
     const messages = body["messages"] as Array<Record<string, unknown>>;
     // 次序：assistant(tool_calls) → tool(结果) → user(审批附言)
     expect((messages[2] as { role: string }).role).toBe("assistant");
@@ -176,7 +190,7 @@ describe("openai-chat——请求构造", () => {
   });
 
   it("挂起尾悬空工具调用：以审批摘要合成 role:tool 结果（线缆形状要求）", () => {
-    const body = openaiChatCodec.encodeRequestBody({
+    const body = encodeOk(openaiChatCodec.encodeRequestBody({
       model: "m",
       system: "S",
       messages: [
@@ -188,7 +202,8 @@ describe("openai-chat——请求构造", () => {
       reasoningEffort: "low",
       developerRole: false,
       maxTokens: 4096,
-    }) as Record<string, unknown>;
+    }));
+
     const messages = body["messages"] as Array<Record<string, unknown>>;
     const synth = messages[3] as { role: string; tool_call_id: string; content: string };
     expect(synth.role).toBe("tool");

@@ -141,7 +141,7 @@ export class HttpLlmProvider implements LlmProvider {
       return err(llmError("模型上下文投影失败（fail-closed）", this.redactDetail(messages.error)));
     }
 
-    const body = this.codec.encodeRequestBody({
+    const encodedBody = this.codec.encodeRequestBody({
       model: this.config.model,
       system: this.systemText,
       messages: messages.value,
@@ -153,6 +153,15 @@ export class HttpLlmProvider implements LlmProvider {
       thinkingEcho: this.config.reasoning ? (this.reasoningEcho ?? null) : undefined,
       maxTokens: this.config.max_tokens,
     });
+    // 微补丁加修（2026-09-23）：形状非法 → 本地 fail-closed 收口（此前把 err 对象当请求体
+    // POST——对端 422「missing field messages」，重放历史含孤儿 tool_result 时永久死循环）。
+    if (!encodedBody.ok) {
+      return err(llmError(
+        `模型请求体编码失败（fail-closed，未发起网络请求）: ${encodedBody.error.message}`,
+        this.redactDetail({ codec_code: encodedBody.error.code }),
+      ));
+    }
+    const body = encodedBody.value;
     this.reasoningEcho = null; // 一次性回传
 
     const fetched = await this.postJson(body);

@@ -146,7 +146,7 @@ export const anthropicMessagesCodec: ProtocolCodec = {
     if (dangling.length > 0) pushUserSide(wire, dangling);
     const annotations = annotationTextBlocks(state);
     if (annotations.length > 0) pushUserSide(wire, annotations);
-    return {
+    return ok({
       model: input.model,
       max_tokens: input.maxTokens, // 线缆必填（协议要求）
       system: input.system,
@@ -156,7 +156,7 @@ export const anthropicMessagesCodec: ProtocolCodec = {
         description: tool.description,
         input_schema: tool.parameters,
       })),
-    };
+    });
   },
 
   parseResponse(body) {
