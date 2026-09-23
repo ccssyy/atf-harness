@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { ok } from "../../../src/bridge/index.js";
 import { type LlmDecision, type LlmProvider, type Scenario } from "../../../src/llm/index.js";
 import { ScenarioRunner, type BranchRunReport } from "../../../src/core/run/index.js";
@@ -88,6 +88,18 @@ const turnEndPayload = (report: BranchRunReport): Record<string, unknown> => {
 };
 
 describeIfPinned("D-f 真内核 e2e——三情形收口（当前 pin）", () => {
+  // K2 体检必经回滚门（re-pin 2026-09-23）：本组定位 D-f 收口语义（预算/重复/缺口），
+  // 用例依赖无体检报告的准入链——显式回滚旧语义（label_qc_required 链归重跑②专验）。
+  let qcRequiredSaved: string | undefined;
+  beforeAll(() => {
+    qcRequiredSaved = process.env["ATF_LABEL_QC_REQUIRED"];
+    process.env["ATF_LABEL_QC_REQUIRED"] = "0";
+  });
+  afterAll(() => {
+    if (qcRequiredSaved === undefined) delete process.env["ATF_LABEL_QC_REQUIRED"];
+    else process.env["ATF_LABEL_QC_REQUIRED"] = qcRequiredSaved;
+  });
+
   it(
     "(a) token 预算耗尽（批 2.5 层一，注入小预算）→ budget_exhausted turn 级收口＋stop_reason 保留（原 32 步径迁移）",
     { timeout: 180_000 },
