@@ -9,9 +9,12 @@
 // ---------------------------------------------------------------------------
 
 /** 事件数触发门：会话实质事件数（不含 session/compaction 审计事件）达到即触发压缩。
- *  初值理由：Phase 1 冒烟单分支事件量 ≤ 50，128 留出 2 倍以上余量——小会话零压缩开销，
- *  长会话在可控粒度折叠；常量层可随真实负载演化，本 slice 不引入配置面。 */
-export const COMPACTION_TRIGGER_EVENTS = 128;
+ *  修复批 3（2026-09-23）：128 → 512——重跑① 实证 128 过早折叠（约 2 个 turn 即触发，
+ *  且折叠边界的配对切断风险随折叠次数线性累积）；512 把折叠推迟到长会话深部，配合
+ *  切点对齐（compaction.alignBoundaryToPairs）双保险。进程级可配（constantsBudget
+ *  setCompactionTriggerEvents——测试/宿主 seam，缺省回退本常量）；按 token 语义重估
+ *  （事件数门与 token 门的关系归一）留 backlog。 */
+export const COMPACTION_TRIGGER_EVENTS = 512;
 
 /** 估算 token 触发门：未折叠事件的 payload 估算 token 总量达到即触发。
  *  初值理由：约 24k token 的上下文占用护栏，远小于任何在用模型窗口，

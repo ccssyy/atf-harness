@@ -14,10 +14,10 @@
 import {
   COMPACTION_CHUNK,
   COMPACTION_KEEP_RECENT,
-  COMPACTION_TRIGGER_EVENTS,
   COMPACTION_TRIGGER_TOKENS,
   TOKEN_ESTIMATE_DIVISOR,
 } from "./constants.js";
+import { compactionTriggerEvents } from "./constantsBudget.js";
 import { hasDomainRefs, type SessionEvent } from "./schema.js";
 
 /**
@@ -65,8 +65,12 @@ export interface CompactionTriggerMetrics {
  */
 export interface CompactionPlan {
   triggered: boolean;
-  /** 折叠边界（实质事件序列的位置数；0 = 未折叠任何前缀）。 */
+  /** 折叠边界（实质事件序列的位置数；0 = 未折叠任何前缀）。切点对齐后值。 */
   boundary: number;
+  /** 修复批 3：切点对齐前的 CHUNK 粒度原始边界（≥ boundary；未触发 = 0）。 */
+  boundary_before: number;
+  /** 修复批 3：切点对齐是否实际前移了边界（配对切断 → 宁可少折叠）。 */
+  aligned: boolean;
   /** 折叠区间内保留原文的白名单事件位置集合。 */
   keptPositions: Set<number>;
   /** 实际折叠的事件数（boundary - 区间内白名单命中数）。 */
@@ -84,6 +88,11 @@ export interface CompactionRecordPayload {
   kept_ids: number[];
   type_counts: Record<string, number>;
   trigger: CompactionTriggerMetrics;
+  /** 修复批 3：切点对齐审计——CHUNK 粒度原始边界与对齐后边界（前者 ≥ 后者）。 */
+  boundary_before: number;
+  boundary_after: number;
+  /** 对齐原因：none = 未前移；pair_alignment = 配对切断前移（宁可少折叠，不可切配对）。 */
+  reason_aligned: "none" | "pair_alignment";
   /** 人读摘要文本（确定性生成，投给模型） */
   text: string;
 }
@@ -141,6 +150,73 @@ export const computeCompactionWhitelist = (events: readonly SessionEvent[]): Set
 };
 
 /**
+ * 切点对齐（修复批 3，2026-09-23；重跑① A 类缺陷根因修复）。
+ *
+ * 不变量（写入测试）：投影消息序中 tool/call 必先于其配对 tool/result、approval/request
+ * 必先于其 approval/response——孤儿闭合半边使消息序非法，provider 两协议同拒（重跑①
+ * 持续 422 实证）。CHUNK 粒度边界只看数量不看配对，边界落在配对中间时前半边被折叠、
+ * 后半边留在投影 → 孤儿。
+ *
+ * 对齐算法：FIFO 模拟线缆配对（与 codecWire 同序——call/request 入队、result/response
+ * 出队），在「投影序」（折叠区间内白名单原文 + 保留侧原文）上找孤儿闭合半边；命中则把
+ * boundary 前移到其开启半边（折叠区内最近同族同工具者）的位置——该半边改归保留侧
+ * （宁可少折叠，不可切配对），迭代至无孤儿。防御：找不到开启半边 → boundary=0（不折叠，
+ * v0 语义保证合法）。纯函数：live 与 replay 逐条一致。
+ */
+const alignBoundaryToPairs = (
+  material: readonly SessionEvent[],
+  rawBoundary: number,
+  keptPositions: Set<number>,
+): { boundary: number; aligned: boolean } => {
+  let boundary = rawBoundary;
+  let aligned = false;
+  for (;;) {
+    if (boundary <= 0) return { boundary: 0, aligned };
+    const callQueue: number[] = [];
+    const approvalQueue: number[] = [];
+    let orphanAt = -1;
+    for (let pos = 0; pos < material.length; pos += 1) {
+      if (pos < boundary && !keptPositions.has(pos)) continue; // 折叠区非白名单 = 不投影
+      const type = (material[pos] as SessionEvent).type;
+      if (type === "tool/call") callQueue.push(pos);
+      else if (type === "tool/result") {
+        if (callQueue.length === 0) {
+          orphanAt = pos;
+          break;
+        }
+        callQueue.shift();
+      } else if (type === "approval/request") approvalQueue.push(pos);
+      else if (type === "approval/response") {
+        if (approvalQueue.length === 0) {
+          orphanAt = pos;
+          break;
+        }
+        approvalQueue.shift();
+      }
+    }
+    if (orphanAt < 0) return { boundary, aligned };
+    const closer = material[orphanAt] as SessionEvent;
+    const openerType = closer.type === "tool/result" ? "tool/call" : "approval/request";
+    const closerTool = (closer.payload as { tool?: unknown } | null | undefined)?.tool;
+    let target = -1;
+    for (let pos = Math.min(orphanAt, boundary) - 1; pos >= 0; pos -= 1) {
+      if (keptPositions.has(pos)) continue; // 只找被折叠的开启半边（白名单原文本就投影）
+      const event = material[pos] as SessionEvent;
+      if (event.type !== openerType) continue;
+      if (openerType === "tool/call") {
+        const tool = (event.payload as { tool?: unknown } | null | undefined)?.tool;
+        if (tool !== closerTool) continue;
+      }
+      target = pos;
+      break;
+    }
+    if (target < 0) return { boundary: 0, aligned: true };
+    boundary = target;
+    aligned = true;
+  }
+};
+
+/**
  * 压缩计划（纯函数）：双指标触发（事件数 || 估算 token，先到者生效）；
  * 折叠边界按 CHUNK 粒度整数倍推进（滞后防逐条重折叠），保留窗内（最近 KEEP_RECENT 条）
  * 一律不动。未触发时 boundary 恒为 0（投影 = v0 语义原样）。
@@ -148,20 +224,23 @@ export const computeCompactionWhitelist = (events: readonly SessionEvent[]): Set
  * 缺省 = 既有常量 COMPACTION_TRIGGER_TOKENS（未配置 context_window 时逐字节回退）；
  * 数据驱动值经 constantsBudget.compactionTriggerTokens() 解析，投影径与审计径
  * （sessionLog.ts:463）必须同源传值（同源铁律，禁只改一处）。
+ * 修复批 3（2026-09-23）：① 事件数门经 constantsBudget.compactionTriggerEvents() 同源可配
+ * （缺省回退常量 512——128 过早折叠）；② 切点对齐（alignBoundaryToPairs）——折叠边界
+ * 永不切断配对，审计 payload 携带 boundary_before/after 与 reason_aligned。
  */
 export const planCompaction = (events: readonly SessionEvent[], triggerTokens: number = COMPACTION_TRIGGER_TOKENS): CompactionPlan => {
   const material = materialOf(events);
   const tokens = estimateTokens(material);
-  const byCount = material.length >= COMPACTION_TRIGGER_EVENTS;
+  const byCount = material.length >= compactionTriggerEvents();
   const byTokens = tokens >= triggerTokens;
   const triggered = byCount || byTokens;
   const reason: CompactionTriggerReason = byCount ? "event_count" : byTokens ? "token_budget" : "none";
 
   const usable = material.length - COMPACTION_KEEP_RECENT;
-  const boundary =
+  const boundary_before =
     triggered && usable >= COMPACTION_CHUNK ? Math.floor(usable / COMPACTION_CHUNK) * COMPACTION_CHUNK : 0;
-
-  const keptPositions = boundary > 0 ? computeCompactionWhitelist(events) : new Set<number>();
+  const keptPositions = boundary_before > 0 ? computeCompactionWhitelist(events) : new Set<number>();
+  const { boundary, aligned } = alignBoundaryToPairs(material, boundary_before, keptPositions);
   let foldedCount = 0;
   for (let pos = 0; pos < boundary; pos += 1) {
     if (!keptPositions.has(pos)) foldedCount += 1;
@@ -169,6 +248,8 @@ export const planCompaction = (events: readonly SessionEvent[], triggerTokens: n
   return {
     triggered,
     boundary,
+    boundary_before,
+    aligned,
     keptPositions,
     foldedCount,
     trigger: { events: material.length, estimated_tokens: tokens, reason },
@@ -204,6 +285,9 @@ export const buildCompactionRecord = (
     kept_ids: keptIds,
     type_counts: typeCounts,
     trigger: plan.trigger,
+    boundary_before: plan.boundary_before,
+    boundary_after: plan.boundary,
+    reason_aligned: plan.aligned ? "pair_alignment" : "none",
     text: `「上下文压缩摘要」此前 ${String(folded.length)} 条事件已折叠为摘要（${distribution || "无"}）；` +
       `${String(keptIds.length)} 条承证事件保留原文，领域事实引用链未压缩。`,
   };
