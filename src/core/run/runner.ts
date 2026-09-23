@@ -145,6 +145,14 @@ export interface TurnBlockingDescription {
   turns_used: number;
   /** 本 turn 已用步数（仅 payload 机查，不上屏） */
   steps_used: number;
+  /** 微补丁（2026-09-23）：provider HTTP 错误可诊断性——status＋body_excerpt（≤500；错误体
+   *  经 httpProvider redact 漏斗前置脱敏，通常不含凭据）＋dump 模式结构性 request_summary
+   *  （仅 max_tokens/消息条数/总字符数/工具数，禁全量 body）。完整体不落盘。 */
+  provider_error?: {
+    status?: number;
+    body_excerpt?: string;
+    request_summary?: Record<string, unknown>;
+  };
 }
 
 export interface TurnGapCardOption {
@@ -178,6 +186,28 @@ export interface TurnFailureSummary {
     note: string;
   };
 }
+
+/** 微补丁（2026-09-23）：provider 错误 detail 白名单提取——只取 status/body_excerpt（≤500
+ *  再截断）/request_summary；request_body 永不进摘要/审计（大对象不落盘）。 */
+const providerErrorDetailOf = (error: { detail?: unknown }): NonNullable<TurnBlockingDescription["provider_error"]> => {
+  if (typeof error.detail !== "object" || error.detail === null) return {};
+  const detail = error.detail as Record<string, unknown>;
+  const out: NonNullable<TurnBlockingDescription["provider_error"]> = {};
+  if (typeof detail["status"] === "number") out["status"] = detail["status"];
+  if (typeof detail["body_excerpt"] === "string" && detail["body_excerpt"] !== "") {
+    out["body_excerpt"] = detail["body_excerpt"].length > 500 ? `${detail["body_excerpt"].slice(0, 500)}…` : detail["body_excerpt"];
+  }
+  if (typeof detail["request_summary"] === "object" && detail["request_summary"] !== null && !Array.isArray(detail["request_summary"])) {
+    out["request_summary"] = detail["request_summary"] as Record<string, unknown>;
+  }
+  return out;
+};
+
+/** body_excerpt 首行（人读，≤limit；供收口行一眼判断）。 */
+const firstLineOf = (text: string, limit: number): string => {
+  const line = (text.split(/\r?\n/).find((entry) => entry.trim() !== "") ?? "").trim();
+  return line.length > limit ? `${line.slice(0, limit)}…` : line;
+};
 
 /** D-f 收口一句话提示（按 reason 取值；reject 径文案与 D-1 逐字一致，零回归）。 */
 const COLLAPSE_NOTES: Record<TurnFailureReason, string> = {
@@ -736,6 +766,7 @@ export class ScenarioRunner {
         rejected?: TurnFailureSummary["rejected"];
         cutTools?: readonly string[];
         stuckAt: string;
+        providerError?: TurnBlockingDescription["provider_error"];
       }): TurnFailureSummary => {
         const gap = turnLastMaterialGap;
         const gapCard = gap !== undefined ? gapCardFor(gap.tool, gap.reason) : undefined;
@@ -747,6 +778,7 @@ export class ScenarioRunner {
             stuck_at: input.stuckAt,
             turns_used: turnsOpened,
             steps_used: turnStepCount,
+            ...(input.providerError !== undefined && Object.keys(input.providerError).length > 0 ? { provider_error: input.providerError } : {}),
           },
           ...(gapCard !== undefined ? { gap_card: gapCard } : {}),
           ...(input.cutTools !== undefined && input.cutTools.length > 0 ? { cut_tools: [...input.cutTools] } : {}),
@@ -1219,11 +1251,28 @@ export class ScenarioRunner {
             if (reason === "provider_failure") consecutiveFailures += 1;
             else break;
           }
+          // 微补丁（2026-09-23）：provider 错误可诊断性——status/body_excerpt（≤500）与 dump
+          // 模式结构性 request_summary 落审计事件（assistant/attempt——落盘不进模型历史，
+          // schema 零改）＋失败摘要 provider_error；卡在哪行带 body_excerpt 首行（≤120）。
+          const providerError = providerErrorDetailOf(decided.error);
+          await appendEvent({
+            type: "assistant/attempt",
+            payload: {
+              reason: "provider_error",
+              code: decided.error.code,
+              ...(providerError.status !== undefined ? { status: providerError.status } : {}),
+              ...(providerError.body_excerpt !== undefined ? { body_excerpt: providerError.body_excerpt } : {}),
+              ...(providerError.request_summary !== undefined ? { request_summary: providerError.request_summary } : {}),
+            },
+          });
+          const excerptFirstLine = firstLineOf(providerError.body_excerpt ?? "", 120);
           provider = null;
           await collapseTurn(buildCollapseSummary({
             reason: "provider_failure",
             stuckAt: `provider 决策失败（${decided.error.code}）: ${decided.error.message}` +
+              (excerptFirstLine !== "" ? `｜响应首行：${excerptFirstLine}` : "") +
               (consecutiveFailures >= 3 ? `——provider 已连续 ${String(consecutiveFailures)} 轮失败，请核对 provider 配置/额度/网络后重试` : ""),
+            ...(Object.keys(providerError).length > 0 ? { providerError } : {}),
           }), "error");
           break;
         }

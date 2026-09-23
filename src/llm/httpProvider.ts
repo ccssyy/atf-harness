@@ -202,15 +202,32 @@ export class HttpLlmProvider implements LlmProvider {
     return detail;
   }
 
-  private httpFailure(message: string, extra?: { status?: number; body_excerpt?: string; request_body?: string }, code: LlmErrorCode = "provider_failure"): LlmError {
+  private httpFailure(message: string, extra?: { status?: number; body_excerpt?: string; request_summary?: Record<string, unknown>; request_body?: string }, code: LlmErrorCode = "provider_failure"): LlmError {
     // detail 只记 host（ADR-09 红线：provider 记录只到别名/主机名粒度，不记完整 URL）
     return llmErrorOf(code, this.redact(message), this.redactDetail({
       host: this.host(),
       ...(extra?.status !== undefined ? { status: extra.status } : {}),
-      ...(extra?.body_excerpt !== undefined ? { body_excerpt: truncate(extra.body_excerpt) } : {}),
+      ...(extra?.body_excerpt !== undefined ? { body_excerpt: truncate(extra.body_excerpt, 500) } : {}),
+      ...(extra?.request_summary !== undefined ? { request_summary: extra.request_summary } : {}),
       ...(extra?.request_body !== undefined ? { request_body: extra.request_body } : {}),
       calls_made: this.callsMade,
     }));
+  }
+
+  /** 微补丁（2026-09-23）：结构性请求摘要（ATF_LLM_DEBUG_DUMP=1 时随错误 detail 携带）——
+   *  只有 max_tokens／消息条数／总字符数／工具数，禁全量 body（防日志膨胀与大对象落盘）。 */
+  private requestSummaryOf(body: unknown): Record<string, unknown> {
+    const summary: Record<string, unknown> = {};
+    if (typeof body === "object" && body !== null) {
+      const request = body as Record<string, unknown>;
+      if (typeof request["max_tokens"] === "number") summary["max_tokens"] = request["max_tokens"];
+      if (Array.isArray(request["messages"])) {
+        summary["messages"] = request["messages"].length;
+        summary["chars"] = request["messages"].reduce((total: number, message) => total + JSON.stringify(message).length, 0);
+      }
+      if (Array.isArray(request["tools"])) summary["tools"] = request["tools"].length;
+    }
+    return summary;
   }
 
   private host(): string {
@@ -268,11 +285,14 @@ export class HttpLlmProvider implements LlmProvider {
             "provider_quota_or_rate_limited",
           ));
         }
-        // 诊断转储（ATF_LLM_DEBUG_DUMP=1 时启用；仅请求体，不含任何头/凭据——key 不在 body）
-        const dump = process.env["ATF_LLM_DEBUG_DUMP"] === "1" ? JSON.stringify(body) : undefined;
+        // 诊断转储（ATF_LLM_DEBUG_DUMP=1 时启用；仅请求体，不含任何头/凭据——key 不在 body）；
+        // 微补丁（2026-09-23）：另增结构性 request_summary（禁全量 body，供失败摘要/审计事件）。
+        const dumpEnabled = process.env["ATF_LLM_DEBUG_DUMP"] === "1";
+        const dump = dumpEnabled ? JSON.stringify(body) : undefined;
         return err(this.httpFailure(`决策请求被拒绝（HTTP ${String(response.status)}，不重试）`, {
           status: response.status,
           body_excerpt: excerpt,
+          ...(dumpEnabled ? { request_summary: this.requestSummaryOf(body) } : {}),
           ...(dump !== undefined ? { request_body: truncate(dump, 6000) } : {}),
         }));
       }

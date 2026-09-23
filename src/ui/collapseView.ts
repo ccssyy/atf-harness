@@ -11,6 +11,12 @@
  */
 import { type TurnFailureSummary } from "../core/run/index.js";
 
+/** body_excerpt 首行（人读，≤limit；与 runner 收口径同一展示形态）。 */
+const firstLineOf = (text: string, limit: number): string => {
+  const line = (text.split(/\r?\n/).find((entry) => entry.trim() !== "") ?? "").trim();
+  return line.length > limit ? `${line.slice(0, limit)}…` : line;
+};
+
 /** turn 收口 → 过程流行（不含「────」分隔头——由调用方按序插入）。 */
 export const collapseLines = (summary: TurnFailureSummary): string[] => {
   const lines: string[] = [];
@@ -18,6 +24,13 @@ export const collapseLines = (summary: TurnFailureSummary): string[] => {
   const blocked = summary.blocked_description;
   if (blocked !== undefined) {
     lines.push(`卡在哪：${blocked.stuck_at}（本 run 已用 ${String(blocked.turns_used)} 轮）`);
+    // 微补丁（2026-09-23）：provider 错误可诊断性——收口行带 body_excerpt 首行（≤120 人读，
+    // 供现场一眼判断）；完整体只在审计轨（assistant/attempt）与失败摘要 payload。
+    const providerError = blocked.provider_error;
+    if (providerError !== undefined) {
+      const first = firstLineOf(providerError.body_excerpt ?? "", 120);
+      lines.push(`provider 错误：HTTP ${providerError.status !== undefined ? String(providerError.status) : "（无状态码）"}${first !== "" ? `｜响应首行：${first}` : ""}`);
+    }
   }
   for (const call of summary.rejected ?? []) {
     lines.push(`  - ${call.tool} reason=${call.reason} params_digest=${call.params_digest.slice(0, 16)}…`);
