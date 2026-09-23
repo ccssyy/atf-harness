@@ -87,8 +87,9 @@ export const INTEGRITY_GATE_IDS: readonly string[] = [
   "evaluation-evidence-valid",
 ];
 
-/** 工具面 7 个（K-Gap-2 接线批 2026-09-21：方法面 10→12——新增 atf_preparation_propose
- *  （纯读免审批）与 atf_style_cluster_execute（写需审批）；契约登记段同步补登不 bump）。
+/** 工具面 9 个（R-3 接线批 2026-09-23：方法面 12→14——新增 atf_label_qc_inspect（写需审批）
+ *  与 atf_label_qc_resolve（写需审批）；契约登记段同步补登不 bump，对齐内核 stdio-session-contract
+ *  §13.13/§13.14。前序：K-Gap-2 接线批 2026-09-21 方法面 10→12。
  *  契约 v2（2026-09-13）：证据面扫描工具改名 atf_fact_scan（数组 facts）、
  *  atf_gate 增补 warn 与附加字段、atf_admit_data source → source_ref、
  *  atf_workspace_status 增补 scope_ref。 */
@@ -324,6 +325,143 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         no_feature_count: { type: "integer" },
         page_count: { type: "integer" },
         source: { const: "kernel" },
+        human_summary: { type: "object", strict: false },
+      },
+    },
+  },
+  {
+    name: "atf_label_qc_inspect",
+    // R-3 接线批（2026-09-23）：方法面 12→14 之 S1。写动作须审批：不可变体检报告＋逐项证据
+    // 切片落登记面，直接改变准入前置状态（pending>0 即整体阻断；K2 启用后无报告亦阻断）。
+    // RPC 经 executor 显式映射到 atf_label_qc.inspect（内核 §13.13）。
+    description:
+      "标签体检（写动作，须审批）：对已登记数据集的成对 png/json 标注执行 Q1–Q4 确定性检测（同框同值同字段疑似重复／同框同值异字段需确认归属／值与框形态不匹配／框越界），写不可变体检报告与逐项证据切片到登记面。纯检测不改原始标注、幂等可重跑。qc_params 可省（缺省 iou_threshold=0.9、bounds_tolerance=0；自定义取值以本描述为准，无坐标制参数）。检出不待确认问题可直接请求数据准入；检出待确认项（counts.pending>0）→ 向用户呈现待确认清单逐项裁决（经确认卡或按报告项组装 atf_label_qc_resolve），全部确认前该数据集准入保持阻断。Q2 归属判断＝整图理解：内核永不下发 crop，证据切片以 image_workspace_ref 指向整图（仅来源在工作区内时给值，外部来源如实置空）。",
+    parameters: {
+      type: "object",
+      required: ["dataset_id"],
+      properties: {
+        dataset_id: {
+          type: "string",
+          description: "注册标识符：取自 atf_admit_data 登记结果 fact_id 的 dataset_id 段；非文件路径、不含 @",
+        },
+        pin: {
+          type: "string",
+          optional: true,
+          description: "显式 pin；同数据集多 pin 登记时必须显式给出",
+        },
+        qc_params: {
+          type: "object",
+          optional: true,
+          required: [],
+          properties: {
+            iou_threshold: { type: "number", optional: true, description: "Q1/Q2 重叠判定阈值（0<θ≤1；缺省 0.9；显式给值即记录 overridden）" },
+            bounds_tolerance: { type: "number", optional: true, description: "Q4 越界判定容差（≥0 像素；缺省 0）" },
+          },
+          description: "检测参数（键闭集 {iou_threshold, bounds_tolerance}，未知键拒绝；无坐标制参数——检测恒在原像素坐标下进行）",
+        },
+      },
+    },
+    requires_approval: true,
+    canonical_output: {
+      type: "object",
+      required: ["ok", "dataset_id", "pin", "report_ref", "report_file_sha256", "report_digest", "counts", "human_summary"],
+      properties: {
+        ok: { const: true },
+        dataset_id: { type: "string" },
+        pin: { type: "string" },
+        report_ref: { type: "string", description: "workspace 相对路径（datasets/<dataset_id>@<pin>/label-qc-report.json）" },
+        report_file_sha256: { type: "string", pattern: HEX64 },
+        report_digest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+        counts: { type: "object", strict: false, required: ["total_items", "pending", "resolved", "by_check_class"] },
+        human_summary: { type: "object", strict: false },
+      },
+    },
+  },
+  {
+    name: "atf_label_qc_resolve",
+    // R-3 接线批（2026-09-23）：方法面 12→14 之 S2。裁决落不可变累积产物＋journal 留痕＋
+    // 锚挂点——写动作须审批（第二道人审）；item_id 只能来自体检报告（TUI 经确认卡确定性
+    // 合成本调用，模型不转写用户裁决）。RPC 显式映射到 atf_label_qc.resolve（内核 §13.14）。
+    description:
+      "提交标签体检裁决（写动作，须审批）：把逐项确认的处置批次写入累积裁决产物并留痕；全部待确认项确认完毕前该数据集准入保持阻断。decisions 逐项给出：item_id（只能取自体检报告待确认清单，勿自造）、action（accept=按建议处置／modify=自定处置／reject=维持原状不处置——reject≠剔除）、disposition 九项闭集（keep_first/keep_second/keep_both/drop_both/set_value/dedupe/fix_field/clip_to_bounds/no_action；须落该检查类允许组合：Q1 dedupe；Q2 keep_first/keep_second/keep_both/drop_both/set_value；Q3 set_value/fix_field/drop_both；Q4 clip_to_bounds），并按处置齐备必填附加字段（dedupe→keep_ref；keep_first/keep_second→target_candidate_id；keep_both/drop_both→reason_text；set_value→modified_value；fix_field→target_field）。Q2 项须附判断依据（judgements:[{item_id, basis:user|multimodal, reason_text?}]）。未决项绝不默认处置——只提交用户逐项确认过的项（可分批增量提交，同一 report_digest）。幂等：同项同值重放成功、同项异值冲突（label_qc_decision_conflict，转请示勿重试覆盖）。TUI 下推荐走体检确认卡（harness 确定性合成参数，免转写）。",
+    parameters: {
+      type: "object",
+      required: ["dataset_id", "actor", "report_digest", "decisions"],
+      properties: {
+        dataset_id: {
+          type: "string",
+          description: "注册标识符：取自登记结果或体检报告；非文件路径、不含 @",
+        },
+        pin: {
+          type: "string",
+          optional: true,
+          description: "显式 pin；同数据集多 pin 登记时必须显式给出",
+        },
+        actor: {
+          type: "string",
+          description: "裁决人标签（审批人，仅审计留痕；TUI 确认卡合成时由 harness 填 tui-operator）",
+        },
+        decided_at: {
+          type: "string",
+          optional: true,
+          description: "裁决时刻（携带时区的 ISO8601；缺省由内核记录接收时间）",
+        },
+        report_digest: {
+          type: "string",
+          description: "体检报告身份（取自 atf_label_qc_inspect 返回的 report_digest，sha256: 前缀形态；勿自造）",
+        },
+        decisions: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["item_id", "action"],
+            properties: {
+              item_id: { type: "string", description: "待确认项稳定幂等键（形态 qc-<q1..q4>-<digest12>；取自体检报告）" },
+              action: { enum: ["accept", "reject", "modify"], description: "accept=按建议处置；modify=自定处置；reject=维持原状（不处置，≠剔除）" },
+              disposition: {
+                enum: ["keep_first", "keep_second", "keep_both", "drop_both", "set_value", "dedupe", "fix_field", "clip_to_bounds", "no_action"],
+                optional: true,
+                description: "处置（九项闭集；accept/modify 须落该检查类允许组合且≠no_action；reject 只可省略或 no_action）",
+              },
+              modified_value: { type: "string", optional: true, description: "set_value 必填：归一后的新值" },
+              target_field: { type: "string", optional: true, description: "fix_field 必填：修正后的字段归属" },
+              target_candidate_id: { type: "string", optional: true, description: "keep_first/keep_second 必填：保留候选（须引用该项 candidates）" },
+              keep_ref: { type: "string", optional: true, description: "dedupe 必填：保留项（形态 marks[<下标>]）" },
+              reason_text: { type: "string", optional: true, description: "keep_both/drop_both 必填：处置理由" },
+              evidence_ref: { type: "string", optional: true, description: "判断依据证据引用（workspace 相对路径；与 judgements 至少其一，Q2 项必需）" },
+              judgements: {
+                type: "array",
+                optional: true,
+                items: {
+                  type: "object",
+                  required: ["item_id", "basis"],
+                  properties: {
+                    item_id: { type: "string" },
+                    basis: { enum: ["multimodal", "user"], description: "判断主体：user=用户裁决；multimodal=多模态查看" },
+                    evidence_ref: { type: "string", optional: true },
+                    reason_text: { type: "string", optional: true },
+                  },
+                },
+                description: "内联判断依据（与 evidence_ref 至少其一；Q2 项必需）",
+              },
+            },
+          },
+          description: "裁决批次（非空数组；只含用户逐项确认过的项——未决项绝不默认处置；可分批增量提交）",
+        },
+      },
+    },
+    requires_approval: true,
+    canonical_output: {
+      type: "object",
+      required: ["ok", "dataset_id", "pin", "resolved_count", "pending_count", "decisions_ref", "decisions_sha256", "human_summary"],
+      properties: {
+        ok: { const: true },
+        dataset_id: { type: "string" },
+        pin: { type: "string" },
+        resolved_count: { type: "integer" },
+        pending_count: { type: "integer" },
+        decisions_ref: { type: "string" },
+        decisions_sha256: { type: "string", pattern: HEX64 },
         human_summary: { type: "object", strict: false },
       },
     },

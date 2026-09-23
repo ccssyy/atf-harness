@@ -83,11 +83,14 @@ export interface BridgeTransport {
 
 /** toolName → RPC method 显式映射（R1 D-1，2026-09-20）：模型面工具名不允许 "."，
  *  点号方法经此表映射；未注册项恒等映射（既有工具零行为变化）。
- *  K-Gap-2 接线批（2026-09-21）增两项（方法面 10→12）。 */
+ *  K-Gap-2 接线批（2026-09-21）增两项（方法面 10→12）。
+ *  R-3 接线批（2026-09-23）增两项（方法面 12→14，内核 §13.13/§13.14）。 */
 const TOOL_METHOD_OVERRIDES: Readonly<Record<string, string>> = {
   atf_data_admission_request: "atf_data_admission.request",
   atf_preparation_propose: "atf_preparation.propose",
   atf_style_cluster_execute: "atf_style_cluster.execute",
+  atf_label_qc_inspect: "atf_label_qc.inspect",
+  atf_label_qc_resolve: "atf_label_qc.resolve",
 };
 
 const rpcMethodFor = (toolName: string): string => TOOL_METHOD_OVERRIDES[toolName] ?? toolName;

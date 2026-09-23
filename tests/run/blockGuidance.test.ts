@@ -40,4 +40,23 @@ describe("走查修复小批：extraction_contract_bundle_missing 缺料指引",
   it("登记面既有条目零扰动（split_policy_missing 仍命中既有文案）", () => {
     expect(guidanceLineFor("split_policy_missing")).toContain("划分");
   });
+
+  it("R-3 接线批：label_qc_required 前瞻登记——指路一键体检入口，勿遍历文件系统（现 pin 不触发）", () => {
+    const line = guidanceLineFor("label_qc_required");
+    expect(line).toContain("label_qc_required");
+    expect(line).toContain("atf_label_qc.inspect");
+    expect(line).toContain("勿遍历文件系统");
+    expect(isMaterialGapCode("label_qc_required")).toBe(false); // 模型可自 remediate：调工具
+  });
+
+  it("R-3 接线批：label_qc_pending——material gap 请示式；未决不默认＋勿重复探查", () => {
+    const line = guidanceLineFor("label_qc_pending");
+    expect(line).toContain("整体阻断");
+    expect(line).toContain("勿默认处置");
+    expect(line).toContain("勿重复探查");
+    expect(isMaterialGapCode("label_qc_pending")).toBe(true);
+    const card = gapCardFor("atf_data_admission_request", "label_qc_pending");
+    expect(card.options[0]?.recommended).toBe(true);
+    expect(card.options[card.options.length - 1]?.text).toContain("停止");
+  });
 });

@@ -247,7 +247,11 @@ methods:
   #    【K-Gap-2 接线批补登 2026-09-21】工具面 5→7：新增 atf_preparation.propose（§13.11，
   #    纯读免审批）与 atf_style_cluster.execute（§13.12，写需审批），方法面 10→12（内核变更单
   #    《ATF内核_变更单_K-Gap-2料门对齐批_20260921.md》；对齐基准＝内核 stdio-session-contract
-  #    §13.11/§13.12/§14）；补登不 bump：轴一 contract_version 仍 1、轴二仍 2（§14 裁定 5 同款口径） ----------------
+  #    §13.11/§13.12/§14）；【R-3 接线批补登 2026-09-23】工具面 7→9：新增 atf_label_qc.inspect
+  #    （§13.13，写需审批）与 atf_label_qc.resolve（§13.14，写需审批），方法面 12→14（对齐基准＝
+  #    内核 stdio-session-contract §13.13/§13.14/§14，owner 裁定《ATF_裁定_K2体检必经步化与
+  #    K1闸门指引_20260923》§一.2）；两批补登均不 bump：轴一 contract_version 仍 1、轴二仍 2
+  #    （§14 裁定 5 同款口径） ----------------
   atf_preparation.propose:         # K-Gap-2 补登（2026-09-21；内核冻结面实测 = kgap2 worktree a5fffae）
     direction: ts_to_kernel
     requires_approval: false       # 纯读：不写盘、不执行、锚不写（§13.11 纯读纪律）
@@ -324,6 +328,98 @@ methods:
         page_count: { type: integer }
         source: { const: kernel, note: 产物来源恒为内核（不冒充 skills 料） }
         human_summary: { type: object, note: 六字段冻结表（同 propose） }
+
+  atf_label_qc.inspect:            # 【R-3 接线批补登 2026-09-23】工具面 7→9（方法面 12→14；
+                                   # 内核 stdio-session-contract §13.13 实测 pin v0.7.4b0；
+                                   # 补登不 bump：轴一 contract_version 仍 1、轴二仍 2——
+                                   # K-Gap-2 同款口径）。写动作：不可变报告＋证据切片落登记面。
+    direction: ts_to_kernel
+    requires_approval: true        # 写动作：体检报告直接改变准入前置状态（pending>0 整体阻断）
+    params:
+      type: object
+      required: [dataset_id]
+      properties:
+        dataset_id: { type: string, note: 注册标识符；非空、不含路径分隔符与 @ }
+        pin: { type: string, required: false, note: 显式 pin；多 pin 未消歧 → dataset_not_registered（fail-closed） }
+        qc_params:
+          type: object
+          required: false
+          note: >-
+            检测参数键闭集 {iou_threshold(0<θ≤1, 缺省 0.9), bounds_tolerance(≥0 像素, 缺省 0)}，
+            未知键拒绝；无坐标制参数（检测恒在原像素坐标）；每个生效参数以 {value, overridden}
+            记入报告（可缺省但无隐式不记录缺省）
+    errors:                        # §13.13 错误闭集（连接保持）
+      - invalid_params             # dataset_id/pin/qc_params 形态或键闭集越界
+      - dataset_not_registered     # 未登记/refs 缺 source_root/多 pin 未消歧
+      - label_qc_report_immutable_conflict  # 同 dataset@pin 异内容重写（fail-closed，切片亦不落盘）
+      - internal_error             # 写盘失败
+    result:                        # canonical output（§13.13 返回面逐字段）
+      type: object
+      required: [ok, dataset_id, pin, report_ref, report_file_sha256, report_digest, counts, human_summary]
+      properties:
+        ok: { const: true }
+        dataset_id: { type: string }
+        pin: { type: string }
+        report_ref: { type: string, note: workspace 相对路径 datasets/<dataset_id>@<pin>/label-qc-report.json }
+        report_file_sha256: { type: string, pattern: "^[0-9a-f]{64}$", note: 报告文件字节 SHA-256（落盘校验） }
+        report_digest: { type: string, pattern: "^sha256:[0-9a-f]{64}$", note: 规范域 digest（去除 report_digest/human_summary 两键；可复算） }
+        counts:
+          type: object
+          note: 冻结四键 total_items/pending/resolved/by_check_class ＋ 容错显式计数（samples_scanned/skipped_samples/image_size_conflict_samples/image_decode_unavailable_samples/other_files/unpaired_files/symlink_entries/truncated_pair_comparisons/truncated_items）
+        human_summary: { type: object, note: 六字段冻结表（复用 _human_summary 渲染器；check_class 人读标签照冻结件 §1.5） }
+
+  atf_label_qc.resolve:            # 【R-3 接线批补登 2026-09-23】工具面 7→9（方法面 12→14；
+                                   # 内核 stdio-session-contract §13.14 实测 pin v0.7.4b0；
+                                   # 补登不 bump）。写动作：裁决累积产物＋journal 留痕＋锚挂点。
+    direction: ts_to_kernel
+    requires_approval: true        # 写动作＋第二道人审（逐项裁决属用户确认面）
+    params:
+      type: object
+      required: [dataset_id, actor, report_digest, decisions]
+      properties:
+        dataset_id: { type: string, note: 同 inspect 口径 }
+        pin: { type: string, required: false }
+        actor: { type: string, note: 裁决人标签（必填，仅审计留痕） }
+        decided_at: { type: string, required: false, note: 携带时区的 ISO8601；naive 拒绝；缺省由内核记录接收时间 }
+        report_digest: { type: string, note: 体检报告身份（inspect 返回值；幂等键 = item_id + report_digest） }
+        decisions:
+          type: array
+          note: >-
+            裁决批次（非空；分批 partial 可按项增量提交，同一 report_digest）。逐项：
+            {item_id, action: accept|reject|modify, disposition?, modified_value?,
+            target_field?, target_candidate_id?, keep_ref?, reason_text?, evidence_ref?, judgements?}。
+            reject＝不处置/维持原状≠剔除（disposition 省略或 no_action）；accept/modify ⇒
+            disposition 落检查类允许组合闭集且≠no_action（q1→{dedupe}／q2→{keep_first,
+            keep_second, keep_both, drop_both, set_value}／q3→{set_value, fix_field, drop_both}／
+            q4→{clip_to_bounds}；九项闭集 keep_first/keep_second/keep_both/drop_both/set_value/
+            dedupe/fix_field/clip_to_bounds/no_action），并齐备必填附加字段（dedupe→keep_ref
+            (marks[<下标>])、keep_first/keep_second→target_candidate_id、keep_both/drop_both→
+            reason_text、set_value→modified_value、fix_field→target_field）；Q2 项须附判断依据
+            （evidence_ref 或非空 judgements:[{item_id, basis: multimodal|user, ...}] 至少其一）。
+            校验归内核（invalid_params 结构化 detail）；未决项绝不默认处置
+    errors:                        # §13.14 错误闭集（连接保持）
+      - invalid_params
+      - no_run_bound               # journal 留痕需要 run 语境（本方法不收 run_id）
+      - dataset_not_registered
+      - label_qc_report_missing    # 报告不存在
+      - label_qc_report_digest_mismatch  # 磁盘报告与其 digest 不符/裁决批引用身份不一致/既有裁决产物绑定漂移
+      - label_qc_decision_conflict # 同幂等键异值（结构化双 digest；harness 转请示勿重试覆盖）
+      - judgement_evidence_conflict
+      - evidence_ref_outside_workspace
+      - evidence_digest_mismatch
+      - internal_error
+    result:                        # canonical output（§13.14 返回面逐字段）
+      type: object
+      required: [ok, dataset_id, pin, resolved_count, pending_count, decisions_ref, decisions_sha256, human_summary]
+      properties:
+        ok: { const: true }
+        dataset_id: { type: string }
+        pin: { type: string }
+        resolved_count: { type: integer }
+        pending_count: { type: integer, note: 有效 pending＝报告项集合 − 已裁决项集合（裁决产物累积推导） }
+        decisions_ref: { type: string, note: 登记面 label-qc-decisions.json 引用 }
+        decisions_sha256: { type: string, pattern: "^[0-9a-f]{64}$", note: 产物文件字节 SHA-256 }
+        human_summary: { type: object, note: 六字段冻结表（裁决进度投影） }
 
   atf_admit_data:
     direction: ts_to_kernel

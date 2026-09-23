@@ -81,6 +81,19 @@ const APPROVAL_COPY: Readonly<Record<string, ApprovalCopyBuilder>> = {
     const configNote = config !== "（未提供）" ? `；按配置 ${config} 登记放行记录` : "；未附配置（不登记放行记录，按账本现状执行）";
     return `训练启动放行：执行 ${launchSh}${configNote}——确认后训练进程即被启动（此为真实执行点）`;
   },
+  // R-3 接线批（2026-09-23）：标签体检两工具审批人读文案（工具面 7→9）。
+  atf_label_qc_inspect: (params) => {
+    const dataset = paramString(params, "dataset_id");
+    const pin = paramString(params, "pin");
+    const pinNote = pin !== "（未提供）" ? `@${pin}` : "";
+    return `标签体检：对数据集 ${dataset}${pinNote} 的成对标注执行确定性检测并把体检报告落登记面（只检不改，原始标注不动；检出待确认项时该数据集准入保持阻断直至逐项确认完毕）`;
+  },
+  atf_label_qc_resolve: (params) => {
+    const dataset = paramString(params, "dataset_id");
+    const decisions = (params as { decisions?: unknown } | null)?.decisions;
+    const count = Array.isArray(decisions) ? decisions.length : 0;
+    return `标签体检裁决提交：对数据集 ${dataset} 的 ${String(count)} 项待确认项提交你逐项确认的处置（逐项留痕、原始标注不改写；未决项保持待确认，全部确认前准入仍阻断）`;
+  },
 };
 
 export const approvalCopyFor = (input: { tool: string; params: unknown }): string | null => {
