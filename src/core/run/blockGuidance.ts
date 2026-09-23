@@ -249,3 +249,28 @@ export const gapCardFor = (tool: string, code: string): GapCard => {
     options: entry.options.length > 0 ? entry.options : [STOP_OPTION],
   };
 };
+
+/**
+ * length 截断收口缺口卡（pi-ai 换库批 R1，2026-09-23）：finish_reason=length 的 turn 收口
+ * 引导——截断响应不作完整决策执行（fail-closed），出口＝降思考等级重试或以既有历史续跑。
+ * contentEmpty=true（思考吞预算且重试已耗）时首选项为降档；非空截断时首选项为续跑。
+ */
+export const lengthTruncatedGapCard = (contentEmpty: boolean, retriesUsed: number): GapCard => {
+  const retryNote = retriesUsed > 0 ? `（已自动重试 ${String(retriesUsed)} 次仍截断）` : "";
+  return {
+    stuck: contentEmpty
+      ? `模型响应被 max_tokens 截断且无可见内容——思考耗尽输出预算${retryNote}`
+      : `模型响应被 max_tokens 截断，携带的部分产出未执行${retryNote}`,
+    missing: "本 turn 未收束的完整决策（截断响应不作为完整决策执行）",
+    why: "以既有历史续跑不会丢失已确认的事实与结果；截断尾巴丢弃可避免执行不完整动作",
+    options: contentEmpty
+      ? [
+          { text: "降低思考等级后重试（reasoning_effort 调低，如 max→low）", recommended: true },
+          { text: "输入新指令继续本会话（历史保留）" },
+        ]
+      : [
+          { text: "输入新指令继续本会话（历史保留，续跑即重建）", recommended: true },
+          { text: "降低思考等级后重试（reasoning_effort 调低）" },
+        ],
+  };
+};

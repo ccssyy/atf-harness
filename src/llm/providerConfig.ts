@@ -10,7 +10,7 @@
  *   "timeout_ms" / "max_retries" / "max_calls_per_run",  // 可选顶层旋钮（env 可覆盖，规则 7）
  *   "providers": {
  *     "<provider 别名>": {
- *       "protocol": "openai-chat" | "anthropic-messages",
+ *       "protocol": "openai-chat" | "anthropic-messages" | "pi-ai",   // pi-ai = 库底座（换库批 2026-09-23）
  *       "base_url": "https://…",
  *       "api_key_env": "ENV_VAR_NAME",          // 首选（规则 3）；与 api_key 并存 → 拒绝
  *       "api_key": "<字面值>",                  // 仅过渡用（不推荐，文档标注）
@@ -25,16 +25,32 @@
  * ATF_LLM_MAX_CALLS_PER_RUN / ATF_LLM_REASONING_EFFORT / ATF_LLM_MAX_TOKENS。
  *
  * fail-closed 纪律：未知顶层/provider/模型键、缺 protocol/base_url/models、空 models、
- * 重复 id、base_url 内嵌 userinfo、reasoning_effort="none"（GPT-5.4 chat 面限制）→ 结构化拒绝。
- * 产物含解析后的 api_key 值——只能交给 HttpLlmProvider 私有持有，严禁序列化进事件/载荷/报告。
+ * 重复 id、base_url 内嵌 userinfo → 结构化拒绝；reasoning_effort 按协议取值域校验
+ * （pi-ai：闭集 none/low/high/max；旧路径："none" 拒绝——GPT-5.4 chat 面限制）。
+ * 产物含解析后的 api_key 值——只能交给 HttpLlmProvider / PiAiLlmProvider 私有持有，
+ * 严禁序列化进事件/载荷/报告。
  */
 import { readFile, stat } from "node:fs/promises";
 import { err, ok, type Result } from "../bridge/index.js";
 
-/** 协议面 v1（门 2 D6 不变）：两个 codec；openai-responses 只预留位。 */
-export type ProviderProtocol = "openai-chat" | "anthropic-messages";
+/**
+ * 协议面（pi-ai 换库批 2026-09-23 扩一值）：openai-chat / anthropic-messages = 自研 codec
+ * 直连（HttpLlmProvider）；"pi-ai" = `@earendil-works/pi-ai` 底座（PiAiLlmProvider，不经本仓
+ * codec/HTTP 层——feature flag 语义只影响 LLM 接入段，模型面契约零改）。
+ * openai-responses 仍只预留位不实现。
+ */
+export type ProviderProtocol = "openai-chat" | "anthropic-messages" | "pi-ai";
 
-export const PROVIDER_PROTOCOLS: readonly ProviderProtocol[] = ["openai-chat", "anthropic-messages"];
+export const PROVIDER_PROTOCOLS: readonly ProviderProtocol[] = ["openai-chat", "anthropic-messages", "pi-ai"];
+
+/**
+ * pi-ai 路径 reasoning_effort 值域闭集（D-LLM-1 口径 none/low/high/max；门 1 设计稿 §二.项 1）：
+ * - none → 不传 pi-ai reasoning（库内 deepseek 分支自动 thinking:disabled）；
+ * - low/high/max → 直传（目录 thinkingLevelMap 命中）；
+ * - 未知值 → 配置入口 fail-closed 拒绝（不猜）。
+ * 旧路径（openai-chat/anthropic-messages）不受此闭集约束——既有语义零改（none 仍拒绝）。
+ */
+export const PIAI_REASONING_EFFORTS: readonly string[] = ["none", "low", "high", "max"];
 
 /** 配置 schema 版本（唯一规范形态；其他值一律拒绝）。 */
 export const LLM_CONFIG_SCHEMA_VERSION = "HarnessLlmConfig/v3";
@@ -182,11 +198,25 @@ const rejectUnknownKeys = (payload: Record<string, unknown>, declared: readonly 
   return null;
 };
 
-/** reasoning_effort 值校验（来源无关：默认/模型级/env）。 */
+/** reasoning_effort 值校验（来源无关：默认/模型级/env；旧路径语义零改）。 */
 const checkReasoningEffort = (value: string, source: string): ProviderConfigError | null =>
   value === "none"
     ? configError("config_invalid", `${source} reasoning_effort="none" 拒绝：GPT-5.4 起 chat 面 reasoning:none 下工具调用不受支持，本 loop 依赖工具调用`)
     : null;
+
+/**
+ * 协议感知的 reasoning_effort 校验（pi-ai 换库批）：
+ * - protocol="pi-ai" → 闭集 none/low/high/max（none 合法＝关思考；未知值 fail-closed）；
+ * - 其余协议 → 既有 checkReasoningEffort（逐字节零改）。
+ */
+const checkReasoningEffortForProtocol = (protocol: ProviderProtocol, value: string, source: string): ProviderConfigError | null => {
+  if (protocol === "pi-ai") {
+    return (PIAI_REASONING_EFFORTS as readonly string[]).includes(value)
+      ? null
+      : configError("config_invalid", `${source} reasoning_effort=${JSON.stringify(value)} 拒绝：pi-ai 路径档位闭集为 ${PIAI_REASONING_EFFORTS.join("/")}（fail-closed，不猜）`);
+  }
+  return checkReasoningEffort(value, source);
+};
 
 /** 文件 → 结构化清单（两层校验，规则 1/6；不含选择与凭据解析）。 */
 interface ParsedCatalog {
@@ -298,7 +328,8 @@ const parseCatalog = (file: Record<string, unknown>): Result<ParsedCatalog, Prov
       }
       if (modelRaw["reasoning_effort"] !== undefined) {
         if (!nonEmptyString(modelRaw["reasoning_effort"])) return err(configError("config_invalid", `providers.${providerId}.models[${id}].reasoning_effort 非法`));
-        const violation = checkReasoningEffort(modelRaw["reasoning_effort"], `providers.${providerId}.models[${id}]`);
+        // pi-ai 换库批：按所属 provider 的 protocol 取值域（pi-ai 闭集含 none；旧路径语义零改）
+        const violation = checkReasoningEffortForProtocol(protocolRaw as ProviderProtocol, modelRaw["reasoning_effort"], `providers.${providerId}.models[${id}]`);
         if (violation !== null) return err(violation);
       }
       for (const key of ["max_tokens", "context_window"] as const) {
@@ -410,7 +441,8 @@ export const loadLlmProviderConfig = async (env: NodeJS.ProcessEnv = process.env
   const effortSource = env[PROVIDER_ENV_VARS.reasoningEffort] !== undefined && env[PROVIDER_ENV_VARS.reasoningEffort] !== ""
     ? (env[PROVIDER_ENV_VARS.reasoningEffort] as string)
     : (model.reasoning_effort ?? PROVIDER_CONFIG_DEFAULTS.reasoningEffort);
-  const effortViolation = checkReasoningEffort(effortSource, PROVIDER_ENV_VARS.reasoningEffort);
+  // pi-ai 换库批：校验按选中 provider 的协议取值域（pi-ai 闭集 none/low/high/max）
+  const effortViolation = checkReasoningEffortForProtocol(provider.protocol, effortSource, PROVIDER_ENV_VARS.reasoningEffort);
   if (effortViolation !== null) return err(effortViolation);
   const maxTokens = await envPositiveInt(env[PROVIDER_ENV_VARS.maxTokens], PROVIDER_ENV_VARS.maxTokens);
   const turnBudget = await envPositiveInt(env[PROVIDER_ENV_VARS.turnTokenBudget], PROVIDER_ENV_VARS.turnTokenBudget);

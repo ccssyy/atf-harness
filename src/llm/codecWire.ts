@@ -41,8 +41,9 @@ export const codecError = (code: CodecError["code"], message: string, extra?: { 
   return error;
 };
 
-/** 协议端点路径（设计 §1.1 协议面表格）。 */
-export const PROTOCOL_REQUEST_PATHS: Readonly<Record<ProviderProtocol, string>> = {
+/** 协议端点路径（设计 §1.1 协议面表格）。
+ *  pi-ai 换库批：pi-ai 不经本仓 codec（无本仓端点路径语义），从路径表类型面排除——运行时零改。 */
+export const PROTOCOL_REQUEST_PATHS: Readonly<Record<Exclude<ProviderProtocol, "pi-ai">, string>> = {
   "openai-chat": "/v1/chat/completions",
   "anthropic-messages": "/v1/messages",
 };

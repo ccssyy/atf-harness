@@ -11,8 +11,19 @@ export type CodecLookup =
   | { ok: true; codec: ProtocolCodec }
   | { ok: false; error: ProviderConfigError };
 
-/** protocol → codec（注册面闭集 = D6 两实现；openai-responses 不在面内——预留位语义）。 */
+/** protocol → codec（注册面闭集 = D6 两实现；openai-responses 不在面内——预留位语义）。
+ *  pi-ai 换库批：protocol="pi-ai" 走 PiAiLlmProvider（库内建 HTTP/编解码），**不经本注册面**——
+ *  显式拒绝，防落进既有 openai/anthropic 二分兜底（误路由即发错协议端点）。 */
 export const getCodec = (protocol: string): CodecLookup => {
+  if (protocol === "pi-ai") {
+    return {
+      ok: false,
+      error: {
+        code: "protocol_unknown",
+        message: 'protocol="pi-ai" 不经 codec 注册面（pi-ai 底座自带 HTTP/编解码；装配须走 createLlmProviderFromConfig → PiAiLlmProvider）',
+      },
+    };
+  }
   if (!(PROVIDER_PROTOCOLS as readonly string[]).includes(protocol)) {
     const hint = protocol === "openai-responses"
       ? "openai-responses 只预留 codec 位不实现（硬前提：store:false ＋ 禁用对端服务端工具执行，另批评估）"
