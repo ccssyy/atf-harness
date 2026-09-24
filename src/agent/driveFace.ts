@@ -17,11 +17,13 @@ import type { V1RunOutcome } from "./budget.js";
 
 // ---------------------------------------------------------------- B9 boundary
 
-/** 收口边界规划（库 BoundaryPlacement/finishRunBoundary 语义的丙线投影）。 */
+/** 收口边界规划（库 BoundaryPlacement/finishRunBoundary 语义的丙线投影）。
+ *  v2 增 deferred 触发径（指令 6227dbfc §四.3）：伴生子任务（ckpt 抽查）未收口时续跑
+ *  轮询——优先级在 steering 之后、followUp 与收束终局之前（伴生未收口不终局 run）。 */
 export interface BoundaryPlan {
   kind: "continue_run" | "finish_run";
-  /** 续跑触发源（steering 配套：trigger=steering 队列；无 trigger 时 followUp 决定）。 */
-  trigger: "steering" | "follow_up" | null;
+  /** 续跑触发源（steering 配套：trigger=steering 队列；v2 增 deferred=伴生子任务待轮询）。 */
+  trigger: "steering" | "follow_up" | "deferred" | null;
   queued: { steering: number; followUp: number };
   /** 终局结果（kind=finish_run 时携带；continue_run 为 undefined）。 */
   outcome?: V1RunOutcome;
@@ -34,6 +36,8 @@ export interface PlanBoundaryInput {
   pendingOutcome: V1RunOutcome | undefined;
   /** 模型已给出 final_answer（正常收束）。 */
   hasFinalAnswer: boolean;
+  /** 伴生子任务（deferred registry）运行中数量（v2；缺省 0＝v1.1 行为零回归）。 */
+  deferredPollPending?: number;
 }
 
 /** 收口边界规划（纯函数；finishTurn/before_run_end 装配面消费）。 */
@@ -43,6 +47,9 @@ export const planRunBoundary = (input: PlanBoundaryInput): BoundaryPlan => {
   }
   if (input.steeringQueued > 0) {
     return { kind: "continue_run", trigger: "steering", queued: { steering: input.steeringQueued, followUp: input.followUpQueued } };
+  }
+  if ((input.deferredPollPending ?? 0) > 0) {
+    return { kind: "continue_run", trigger: "deferred", queued: { steering: 0, followUp: input.followUpQueued } };
   }
   if (input.followUpQueued > 0 && !input.hasFinalAnswer) {
     return { kind: "continue_run", trigger: "follow_up", queued: { steering: 0, followUp: input.followUpQueued } };

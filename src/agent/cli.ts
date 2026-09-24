@@ -43,7 +43,12 @@ import { createTemAfterToolMirror, createTemTransformContext } from "./tem/retri
 import { envFingerprint, scanEvidenceEvents } from "./tem/evidence.js";
 import { ensureTemBranch, writeExperienceCase } from "./tem/store.js";
 import { buildSkillsSystemSuffix, createCompactionTransform } from "./agentCapabilities.js";
-import { createDispatchTrainingSubtaskTool, type SubagentDeps } from "./subagent.js";
+import { createDispatchParallelTrainingSubtaskTool, createDispatchTrainingSubtaskTool, createChildInstructionRunner, type SubagentDeps } from "./subagent.js";
+import { buildFileAgentTools } from "./fileTools.js";
+import { createGateLock } from "./approvalHook.js";
+import { planRunBoundary } from "./driveFace.js";
+import type { DeferredSubtaskRegistry } from "./deferredFace.js";
+import { createDeferredToolSet } from "./deferredTools.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -64,6 +69,8 @@ export interface CliArgs {
   contextTokens: number;
   keepRecentTokens: number;
   subagent: boolean;
+  /** v2 A7：白名单追加根（--fs-root 可重复；缺省白名单＝scratch 主根＋[real 对端] runs 根）。 */
+  fsRoots: string[];
 }
 
 export const parseCliArgs = (argv: readonly string[]): CliArgs | { error: string } => {
@@ -81,6 +88,7 @@ export const parseCliArgs = (argv: readonly string[]): CliArgs | { error: string
   let contextTokens = 24_000;
   let keepRecentTokens = 8_000;
   let subagent = false;
+  const fsRoots: string[] = [];
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const take = (): string => {
@@ -160,13 +168,16 @@ export const parseCliArgs = (argv: readonly string[]): CliArgs | { error: string
       case "--subagent":
         subagent = true;
         break;
+      case "--fs-root":
+        fsRoots.push(take());
+        break;
       default:
         return { error: `未知参数: ${arg ?? "(空)"}` };
     }
   }
   if (instruction === undefined || instruction.trim() === "") return { error: "--instruction 必填（非空）" };
   if (llm === undefined) return { error: "--llm 必填（faux:<script.json> | deepseek | config；真实调用须 owner 另批授权——env ATF_V1_REAL_LLM_AUTHORIZED=1）" };
-  return { instruction, peer, wsRoot, sessionsRoot, llm, maxTurns, approval, approvalTimeoutMs, steeringMode, followUpMode, skillsDir, contextTokens, keepRecentTokens, subagent };
+  return { instruction, peer, wsRoot, sessionsRoot, llm, maxTurns, approval, approvalTimeoutMs, steeringMode, followUpMode, skillsDir, contextTokens, keepRecentTokens, subagent, fsRoots };
 };
 
 export interface CliDeps {
@@ -224,11 +235,14 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
   let spawnDescriptor: { argv: string[]; cwd: string; env: Record<string, string> };
   let bindRunId: string | undefined;
   const sessionsRoot = args.sessionsRoot ?? (await mkdtemp(join(tmpdir(), "atf-v1-sessions-")));
+  // v2 A7 白名单：--fs-root 追加根（real 对端再追加 workspace runs 根；scratch 主根在 runV1Headless 补）
+  const fsRootsExtra: string[] = [...args.fsRoots];
   if (args.peer === "real") {
     const envKernel = env["ATF_CLI_PATH"]?.trim();
     const kernelDir = envKernel !== undefined && envKernel !== "" ? envKernel : join(repoRoot, ".atf-pinned");
     const home = await mkdtemp(join(tmpdir(), "atf-v1-home-"));
     const wsRootResolved = args.wsRoot ?? (await mkdtemp(join(tmpdir(), "atf-v1-ws-")));
+    fsRootsExtra.push(join(wsRootResolved, "runs"));
     const initInvocation = deriveAtfCommand(kernelDir, ["init", "--workspace-root", wsRootResolved]);
     await execFileAsync(initInvocation.command, initInvocation.args, {
       cwd: initInvocation.cwd,
@@ -295,6 +309,7 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
       contextTokens: args.contextTokens,
       keepRecentTokens: args.keepRecentTokens,
       subagent: args.subagent,
+      fileToolRoots: fsRootsExtra,
       out,
       err,
     });
@@ -309,8 +324,14 @@ export interface AssembleV1Deps {
   bridge: SpikeBridgeTransport;
   session: SessionLike;
   maxTurns: number;
-  /** v1.1 subagent-as-tool（dispatch_training_subtask；缺省不挂接——零桥接契约 diff）。 */
+  /** v1.1 subagent-as-tool（dispatch_training_subtask＋v2 并行 fan-out＋deferred 伴生面；
+   *  缺省不挂接——零桥接契约 diff）。 */
   subagent?: Omit<SubagentDeps, "scopeRefBox">;
+  /** v2 A7 四工具治理面（atf_read/edit/write/bash；缺省不挂接）。roots[0]＝主根
+   *  （相对路径落点，scratch 优先），runs 根随装配追加；env 追加面见 fileTools。 */
+  fileTools?: { roots: readonly string[] };
+  /** 外部共享账本闸锁（runChildSubtask 子装配透传同一把；缺省＝subagent 挂接时自建）。 */
+  gateLock?: import("./approvalHook.js").GateLock;
   streamFn: (model: never, context: TranscriptContext, options?: SimpleStreamOptions) => unknown;
   modelTag: string;
   approval: { kind: "headless" } | { kind: "interactive"; timeoutMs: number } | { kind: "surface"; surface: ApprovalSurface };
@@ -329,7 +350,12 @@ export interface AssembledV1Agent {
   registry: V1HookRegistry;
   events: AgentEvent[];
   runId: () => string | null;
+  /** v2 deferred 伴生 registry（subagent 挂接时在位——run 收口边界轮询规划消费）。 */
+  deferredRegistry: DeferredSubtaskRegistry | undefined;
 }
+
+/** 收口边界伴生轮询续跑上限（有界——禁 while True；每轮内模型侧 poll 亦有界）。 */
+export const MAX_BOUNDARY_POLL_ROUNDS = 8;
 
 /** v1 Agent 装配单点（批 P 增补 A/B 清单全部接线；B2 生命周期＝句柄上的 Agent 内建方法）。 */
 export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
@@ -338,8 +364,20 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
   const outcomeBox: { current: V1RunOutcome | undefined } = { current: undefined };
   const events: AgentEvent[] = [];
   const tools = buildAtfAgentTools({ bridge: deps.bridge, scopeRefBox });
-  if (deps.subagent !== undefined) {
-    tools.push(createDispatchTrainingSubtaskTool({ ...deps.subagent, scopeRefBox }));
+  if (deps.fileTools !== undefined) {
+    tools.push(...buildFileAgentTools({ roots: deps.fileTools.roots }));
+  }
+  // v2：并发执行体（主链＋并行 fan-out/deferred 子任务）共享同一把账本闸锁——
+  // 闸段（query→预录→consume）串行化，watermark 语义不被并发破坏（subagent 缺省不挂接＝无锁，语义零变化）。
+  const gateLock = deps.gateLock ?? (deps.subagent !== undefined ? createGateLock() : undefined);
+  const subagentDeps: SubagentDeps | undefined = deps.subagent !== undefined ? { ...deps.subagent, scopeRefBox, ...(gateLock !== undefined ? { gateLock } : {}) } : undefined;
+  let deferredRegistry: DeferredSubtaskRegistry | undefined;
+  if (subagentDeps !== undefined) {
+    tools.push(createDispatchTrainingSubtaskTool(subagentDeps));
+    tools.push(createDispatchParallelTrainingSubtaskTool(subagentDeps));
+    const deferredSet = createDeferredToolSet(createChildInstructionRunner(subagentDeps));
+    deferredRegistry = deferredSet.registry;
+    tools.push(...deferredSet.tools);
   }
   const registry = createHookRegistry();
 
@@ -382,7 +420,18 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
       scopeRefBox,
       audit,
       ...(surface !== undefined ? { surface } : {}),
-      ...(deps.subagent !== undefined ? { exemptTools: ["dispatch_training_subtask"] } : {}),
+      ...(deps.subagent !== undefined
+        ? {
+            exemptTools: [
+              "dispatch_training_subtask",
+              "dispatch_parallel_training_subtask",
+              "atf_deferred_spawn",
+              "atf_deferred_poll",
+              "atf_deferred_cancel",
+            ],
+          }
+        : {}),
+      ...(gateLock !== undefined ? { gateLock } : {}),
     }),
     afterToolCall: createTemAfterToolMirror({ session: deps.session, runId, model: envFingerprint(deps.modelTag).model }),
     transformContext,
@@ -404,7 +453,7 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
   });
   wireEventHooks((listener) => agent.subscribe(listener), registry);
 
-  return { agent, audit, outcomeBox, scopeRefBox, registry, events, runId };
+  return { agent, audit, outcomeBox, scopeRefBox, registry, events, runId, deferredRegistry };
 };
 
 export interface V1HeadlessDeps {
@@ -414,6 +463,8 @@ export interface V1HeadlessDeps {
   maxTurns: number;
   /** faux 脚本（与真实 provider 二选一；调用方已做红线门控）。 */
   scripted?: AssistantMessage[];
+  /** 模型面覆盖（测试/演示注入自定义 streamFn——如边界续跑动态脚本；优先于 scripted）。 */
+  streamFn?: (model: never, context: TranscriptContext, options?: SimpleStreamOptions) => unknown;
   providerConfig?: { provider_id: string; model: string; base_url: string; api_key: string };
   bindRunId?: string;
   approval: { kind: "headless" } | { kind: "interactive"; timeoutMs: number } | { kind: "surface"; surface: ApprovalSurface };
@@ -424,6 +475,10 @@ export interface V1HeadlessDeps {
   keepRecentTokens: number;
   /** v1.1 subagent 挂接（--subagent；子模型面＝与主链同 streamFn 工厂）。 */
   subagent?: boolean;
+  /** 子模型面覆盖（测试注入；缺省与主链同 streamFn 工厂）。 */
+  childStreamFn?: () => (model: never, context: TranscriptContext, options?: SimpleStreamOptions) => unknown;
+  /** v2 A7 白名单追加根（scratch 主根缺省自动在位＝<sessionsRoot>/scratch；此列表追加）。 */
+  fileToolRoots?: readonly string[];
   /** 装配后、prompt 前的注册缝（测试/扩展注册 hook；B4 面）。 */
   registerHooks?: (registry: V1HookRegistry) => void;
   out: (line: string) => void;
@@ -438,9 +493,11 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
   const modelTag = deps.providerConfig?.model ?? "faux-script";
 
   const streamFn =
-    deps.scripted !== undefined
-      ? createScriptedStreamFn(deps.scripted)
-      : createProviderStreamFn(deps.providerConfig as { provider_id: string; model: string; base_url: string; api_key: string }).streamFn;
+    deps.streamFn !== undefined
+      ? deps.streamFn
+      : deps.scripted !== undefined
+        ? createScriptedStreamFn(deps.scripted)
+        : createProviderStreamFn(deps.providerConfig as { provider_id: string; model: string; base_url: string; api_key: string }).streamFn;
 
   const systemSuffix = deps.skillsDir !== undefined ? await buildSkillsSystemSuffix(deps.skillsDir) : undefined;
   const assembled = assembleV1Agent({
@@ -450,13 +507,15 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
             bridge: deps.bridge,
             sessionsRoot: deps.sessionsRoot,
             surface: deps.approval.kind === "surface" ? deps.approval.surface : deps.approval.kind === "interactive" ? createInteractiveApprovalSurface({ timeoutMs: deps.approval.timeoutMs }) : undefined,
-            childStreamFn: () => streamFn as never,
+            childStreamFn: deps.childStreamFn !== undefined ? deps.childStreamFn : () => streamFn as never,
             modelTag,
             contextTokens: deps.contextTokens,
             keepRecentTokens: deps.keepRecentTokens,
           },
         }
       : {}),
+    // v2 A7：四工具治理面（CLI 产品面缺省在位——scratch 主根＋追加根；白名单纪律见 fileTools）
+    fileTools: { roots: [join(deps.sessionsRoot, "scratch"), ...(deps.fileToolRoots ?? [])] },
     bridge: deps.bridge,
     session,
     maxTurns: deps.maxTurns,
@@ -478,6 +537,38 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
     await agent.prompt(deps.instruction);
   } catch (cause) {
     failure = cause instanceof Error ? cause.message : String(cause);
+  }
+
+  // ---- v2 收口边界（B9 planRunBoundary 对接）：伴生子任务未收口 → 有界轮询续跑轮次 ----
+  // 规划消费：deferred trigger ⇒ 注入轮询续跑（idle 续跑以 prompt 承载——库 followUp 队列
+  // 面向活跃 loop 的停驻点注入，run 级边界续跑以新 prompt 轮承载，语义等同
+  // followUpWhenNoTrigger）。轮次有界（MAX_BOUNDARY_POLL_ROUNDS；模型侧 poll 亦有界），
+  // 禁 while True。预算终局（outcomeBox）优先——续跑轮不越过预算/审批终局。
+  const deferredRegistry = assembled.deferredRegistry;
+  for (let boundaryRound = 1; deferredRegistry !== undefined && boundaryRound <= MAX_BOUNDARY_POLL_ROUNDS + 1; boundaryRound += 1) {
+    const runningDeferred = deferredRegistry.list().filter((entry) => entry.status.state === "running");
+    const interimLast = lastAssistantMessage(agent.state.messages);
+    const interimHasFinal = interimLast !== undefined && !interimLast.content.some((block) => block.type === "toolCall");
+    const plan = planRunBoundary({
+      steeringQueued: 0,
+      followUpQueued: agent.hasQueuedMessages() ? agent.peekQueuedMessages().length : 0,
+      pendingOutcome: outcomeBox.current,
+      hasFinalAnswer: interimHasFinal,
+      deferredPollPending: runningDeferred.length,
+    });
+    if (!(plan.kind === "continue_run" && plan.trigger === "deferred")) break;
+    if (boundaryRound > MAX_BOUNDARY_POLL_ROUNDS) {
+      deps.err(`[v1] 收口边界：伴生轮询续跑轮次耗尽（有界 ${String(MAX_BOUNDARY_POLL_ROUNDS)} 轮）——${String(runningDeferred.length)} 个伴生子任务仍在册，如实登记后按现状收口`);
+      break;
+    }
+    const labels = runningDeferred.map((entry) => entry.handle.label).join("、");
+    deps.out(`[v1] 收口边界（B9）：续跑轮 ${String(boundaryRound)}/${String(MAX_BOUNDARY_POLL_ROUNDS)}——伴生未收口：${labels}`);
+    try {
+      await agent.prompt(`[boundary] 伴生子任务未收口（${String(runningDeferred.length)} 个运行中：${labels}）——以 atf_deferred_poll 有界轮询收口（或 atf_deferred_cancel），随后给出最终答复`);
+    } catch (cause) {
+      deps.err(`[v1] 收口边界续跑失败（如实登记，不重试）: ${cause instanceof Error ? cause.message : String(cause)}`);
+      break;
+    }
   }
 
   // ---- 终局判定（闭集；次序＝人中止/挂起/审批缺失 优先于 预算/故障——ADR-07 锚语义）----

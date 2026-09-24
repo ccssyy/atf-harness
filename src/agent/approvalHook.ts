@@ -20,8 +20,9 @@
 import type { BeforeToolCallContext, BeforeToolCallResult } from "@earendil-works/pi-agent-core";
 import { type ScopeRef, approvalKeyFor, type LedgerRecord } from "../core/tools/approvalKey.js";
 import { LEDGER_CONSUME_CANONICAL, LEDGER_QUERY_CANONICAL } from "../core/tools/executor.js";
-import { requiresApprovalFor, TOOL_DEFINITIONS, validateCanonicalOutput, type ToolDefinition } from "../core/tools/index.js";
+import { requiresApprovalFor, validateCanonicalOutput } from "../core/tools/index.js";
 import type { AtfAgentToolDeps, SpikeBridgeTransport } from "./atfAgentTools.js";
+import { toolDefinitionFor } from "./atfAgentTools.js";
 import { surfaceVerdictToAudit, type ApprovalSurface } from "./approvalSurface.js";
 
 /** 审批闸审计留痕（spike 演示/测试断言面；门 2 起入会话事件流）。 */
@@ -53,11 +54,28 @@ export interface ApprovalHookDeps extends AtfAgentToolDeps {
   /** 豁免面（装配期本地工具——如 dispatch_training_subtask：派发动作本身免审批，
    *  治理点在子任务内写动作过同一账本闸；不在 TOOL_DEFINITIONS 的本地工具须显式登记）。 */
   exemptTools?: readonly string[];
+  /** 账本闸临界区锁（v2 并行 fan-out 前提）：共享同一 bridge/scope_ref 的并发执行体
+   *  （主链＋并行子任务）经同一 lock 串行化「query→(问答轨预录)→consume」临界段——
+   *  并发不破坏账本 watermark 语义（逐条确认卡、逐条消费、授权对象不错位）。
+   *  缺省无锁＝单执行体顺序执行（既有语义零变化）。锁不放行任何动作——只串行化闸段。 */
+  gateLock?: GateLock;
 }
 
-/** 全 face 查找（丙 v1 九工具；未知工具由调用点 fail-closed 拦截）。 */
-const toolDefinitionOf = (toolName: string): ToolDefinition | undefined =>
-  TOOL_DEFINITIONS.find((definition) => definition.name === toolName);
+/** 账本闸临界区锁（task-of-once 互斥；错误不滞留锁队列）。 */
+export interface GateLock {
+  readonly run: <T>(fn: () => Promise<T>) => Promise<T>;
+}
+
+export const createGateLock = (): GateLock => {
+  let tail: Promise<unknown> = Promise.resolve();
+  return {
+    run: <T>(fn: () => Promise<T>): Promise<T> => {
+      const next = tail.then(fn, fn);
+      tail = next.catch(() => undefined);
+      return next;
+    },
+  };
+};
 
 /** 拦截结果（terminate = run 级终止意图：headless 78 锚语义的库内映射——单调用批次下
  *  terminate 即整批终局。门 2 引入问答轨后 suspended/denied 类不再 terminate）。 */
@@ -73,7 +91,8 @@ export const createApprovalBeforeToolCall =
       deps.audit.push({ tool: toolName, verdict: "allow_readonly", requiresApproval: false, detail: { why: "装配期本地工具（豁免面）" } });
       return undefined;
     }
-    const definition = toolDefinitionOf(toolName);
+    // 全 face 查找单点（丙 v2 A7 起：桥接面＋本地治理面——本地工具同样入闸，不脱治理）
+    const definition = toolDefinitionFor(toolName);
     if (definition === undefined) {
       deps.audit.push({ tool: toolName, verdict: "blocked_unknown_tool", requiresApproval: true, detail: { why: "工具面收敛（fail-closed）" } });
       return block(`未注册工具（工具面收敛，fail-closed）: ${toolName}`);
@@ -84,7 +103,11 @@ export const createApprovalBeforeToolCall =
       return undefined; // 只读直通（与 executor：requiresApprovalFor=false 时跳过审批一致）
     }
 
-    // ---- 以下为高危动作审批闸（主线 approve() 的 hook 形态）----
+    // ---- 高危动作审批闸（主线 approve() 的 hook 形态；v2 起闸段封装为临界段）----
+    // 并发执行体（主链＋并行 fan-out 子任务）共享闸锁时串行化「query→(问答轨预录)→
+    // consume」——锁不放行任何动作，只防并发交叉消费破坏账本 watermark 语义（逐条
+    // 确认卡、授权对象不错位）。缺省无锁＝单执行体顺序执行，语义零变化。
+    const runGate = async (): Promise<BeforeToolCallResult | undefined> => {
     const auditKey = approvalKeyFor(toolName, params);
     if (deps.scopeRefBox.current === undefined) {
       deps.audit.push({ tool: toolName, verdict: "blocked_scope_ref_missing", requiresApproval: true, detail: { audit_key: auditKey.params_digest } });
@@ -171,6 +194,8 @@ export const createApprovalBeforeToolCall =
     }
     deps.audit.push({ tool: toolName, verdict: "allow_ledger", requiresApproval: true, detail: { record_id: live.record_id } });
     return undefined; // 账本放行 → 工具执行
+    };
+    return deps.gateLock !== undefined ? deps.gateLock.run(runGate) : runGate();
   };
 
 /** ledger_record canonical（契约 v2 审批链 §13.8 形态；问答轨 granted 持久化前置消费）。 */

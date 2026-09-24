@@ -9,8 +9,47 @@
  */
 export { createFauxStreamFn, fauxAssistantMessage, fauxFinalAnswer, fauxMessageWithToolCalls, type FauxStreamFn } from "./fauxStream.js";
 export { assembleProviderModel, createProviderStreamFn, createDeepSeekStreamFn, type ProviderStreamFnConfig } from "./providerStreamFn.js";
-export { buildSpikeAgentTools, spikeToolDefinitions, SPIKE_TOOL_NAMES, toAtfAgentTool, spikeRequiresApproval, type AtfAgentToolDeps, type SpikeBridgeTransport } from "./atfAgentTools.js";
-export { createApprovalBeforeToolCall, type ApprovalAuditEntry, type ApprovalHookDeps } from "./approvalHook.js";
+export { buildSpikeAgentTools, spikeToolDefinitions, SPIKE_TOOL_NAMES, toAtfAgentTool, spikeRequiresApproval, toolDefinitionFor, type AtfAgentToolDeps, type SpikeBridgeTransport } from "./atfAgentTools.js";
+export { createApprovalBeforeToolCall, createGateLock, type ApprovalAuditEntry, type ApprovalHookDeps, type GateLock } from "./approvalHook.js";
+export {
+  FILE_TOOL_DEFINITIONS,
+  FILE_TOOL_NAMES,
+  FILE_TOOL_MAX_BYTES,
+  BASH_READONLY_COMMANDS,
+  bashCommandRequiresApproval,
+  buildFileAgentTools,
+  resolveFileToolRoots,
+  resolveWhitelistedPath,
+  toFileAgentTool,
+  type FileToolHost,
+} from "./fileTools.js";
+export {
+  createDeferredSubtaskRegistry,
+  DEFERRED_POLL_INTERVAL_MS_DEFAULT,
+  DEFERRED_POLL_MAX_POLLS_CEILING,
+  DEFERRED_POLL_MAX_POLLS_DEFAULT,
+  type DeferredPollOutcome,
+  type DeferredSubtaskHandle,
+  type DeferredSubtaskRegistry,
+  type DeferredSubtaskStatus,
+} from "./deferredFace.js";
+export {
+  buildDeferredAgentTools,
+  createDeferredToolSet,
+  DEFERRED_TOOL_NAMES,
+  type DeferredToolDeps,
+} from "./deferredTools.js";
+export {
+  createChildInstructionRunner,
+  createDispatchParallelTrainingSubtaskTool,
+  createDispatchTrainingSubtaskTool,
+  runChildSubtask,
+  DISPATCH_PARALLEL_DEFAULT_CONCURRENCY,
+  DISPATCH_PARALLEL_MAX_SUBTASKS,
+  type SubagentDeps,
+  type SubtaskResult,
+} from "./subagent.js";
+export { planRunBoundary, planReconcile, type BoundaryPlan, type PlanBoundaryInput, type ReconcilePlan } from "./driveFace.js";
 export {
   NodeFsAdapter,
   createJsonlSessionRepo,
