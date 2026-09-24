@@ -23,6 +23,9 @@ export {
   type SessionLike,
 } from "./sessionMirror.js";
 export { runGate1aSpike, type SpikeDeps, type SpikeResult } from "./spike.js";
+export { maxTurnsFromEnv, resolveV1ExitCode, createBudgetFinishTurn, type V1RunOutcome } from "./budget.js";
+export { parseCliArgs, runCli, runV1Headless, type CliArgs, type V1HeadlessDeps } from "./cli.js";
+export { loadFauxScript, parseFauxScript, createScriptedStreamFn, type FauxScriptStep } from "./fauxScript.js";
 export {
   buildEvidenceEvent,
   captureFactRef,
