@@ -469,7 +469,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "atf_gate",
     description:
-      "查询或推进闸门：gate 取值按命名分流（G1–G4 大小写不敏感 → 数据准入闸；其余须命中七组完整性 GateId；都不命中 unknown_gate）。blocked/warn 为合法业务产出（含原因码与证据引用）。query 免审批自主执行；advance 须账本审批预录。完整性 GateId 非序号顺延，勿猜测；未收录 id 返回 unknown_gate，先 query 合法清单。合法 GateId 清单：" +
+      "查询或推进闸门：gate 取值按命名分流（G1–G4 大小写不敏感 → 数据准入闸；其余须命中七组完整性 GateId；都不命中 unknown_gate）。blocked/warn 为合法业务产出（含原因码与证据引用）。query 免审批自主执行；advance 须账本审批预录。完整性 GateId 非序号顺延，勿猜测；未收录 id 返回 unknown_gate，先 query 合法清单。完整性闸门 advance 被拦（status=blocked，如 required_evidence_missing）时回流附注为固定三段：缺什么（缺失证据清单，从闸门结果透传）＋产出路径（对应技能链名，按指路产出证据产物）＋登记动作（补齐后以 atf_gate(action=\"advance\") 携证据引用重新推进）；内核原始 guidance 保留拼接其后。合法 GateId 清单：" +
       GATE_LEGAL_IDS.join("／") +
       "。",
     parameters: {

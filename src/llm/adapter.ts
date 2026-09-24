@@ -93,6 +93,23 @@ const truncateStringValue = (value: string): string =>
     ? `${value.slice(0, SUMMARY_STRING_VALUE_MAX_CHARS)}…[截断${String(value.length - SUMMARY_STRING_VALUE_MAX_CHARS)}字符]`
     : value;
 
+/**
+ * B5 修复（走查修复批 2026-09-23，指令 7158bf43）：审批 advised 意见正文提取。
+ * 走查 run-full-v0762 实录核验（#2274/#2275）：operator 意见（advice_text）在 approval/response
+ * 消息摘要中被 readableSummary(160) 截断、在 tool_result(ok=false) 摘要中完全缺席（block 字段
+ * 在白名单但不参与摘要拼接）——模型只看到 reason=approval_advised 通用码，意见正文未透传。
+ * 修复：ok:false 摘要增加意见段（block.detail.advice_text，approvalTrack 建议回填的权威落点），
+ * 无该字段时与旧规则逐字节一致（零回归）。对应测试：adapter.test.ts 走查修复批 B5 describe。
+ */
+const adviceTextOf = (payload: Record<string, unknown>): string | undefined => {
+  const block = payload["block"];
+  if (!isPlainObject(block)) return undefined;
+  const detail = block["detail"];
+  if (!isPlainObject(detail)) return undefined;
+  const advice = detail["advice_text"];
+  return typeof advice === "string" && advice !== "" ? advice : undefined;
+};
+
 const degradeTopLevel = (value: Record<string, unknown>): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
@@ -161,15 +178,20 @@ const mapEvent = (event: LlmContextEvent, toolResultSummaryCapChars: number): Re
       const okFlag = event.payload["ok"];
       if (typeof okFlag !== "boolean") return err(adapterError("tool/result.ok 非法"));
       // B4·摘要化定向扩展（D-f 补正批，owner 裁定甲 2026-09-21）：nudge/guidance 追加进
-      // 模型可见摘要尾部——ok:false = [reason, guidance, nudge]，ok:true = [readableSummary,
-      // nudge]，空段滤除后以"｜"连接。两字段缺省时与旧规则逐字节一致（零回归硬要求）；
-      // 主体语义（reason／readableSummary(result)）不变，模型看到的是旧信息的超集。
+      // 模型可见摘要尾部——空段滤除后以"｜"连接。附注字段缺省时与旧规则逐字节一致
+      // （零回归硬要求）；主体语义（reason／readableSummary(result)）不变，模型看到的
+      // 是旧信息的超集。
       // A1（L1c 提前批 2026-09-22）：ok:true 第一段升级为 structuredResultSummary（成功
-      // 结构化体取消 160 截断，capChars 数据驱动）——失败径 [reason, guidance, nudge] 逐字节零改。
+      // 结构化体取消 160 截断，capChars 数据驱动）。
+      // B5（走查修复批 2026-09-23）：ok:false = [reason, advice, guidance, nudge]——新增
+      // advice 段（block.detail.advice_text，仅 advised 回流携带，缺省时逐字节不变）。
+      // B3（走查修复批 2026-09-23）：ok:true 增 guidance 段——runner 对完整性闸门 blocked
+      // 结果（executed 径）回填的三段式指引（ok:true 此前恒无 payload.guidance，缺省时
+      // 逐字节不变）。
       const parts: (string | undefined)[] =
         okFlag === true
-          ? [structuredResultSummary(event.payload["result"], toolResultSummaryCapChars), event.payload["nudge"] as string | undefined]
-          : [String(event.payload["reason"] ?? ""), event.payload["guidance"] as string | undefined, event.payload["nudge"] as string | undefined];
+          ? [structuredResultSummary(event.payload["result"], toolResultSummaryCapChars), event.payload["guidance"] as string | undefined, event.payload["nudge"] as string | undefined]
+          : [String(event.payload["reason"] ?? ""), adviceTextOf(event.payload), event.payload["guidance"] as string | undefined, event.payload["nudge"] as string | undefined];
       const summary = parts.filter((part): part is string => typeof part === "string" && part !== "").join("｜");
       return ok({ role: "tool_result", tool: event.payload["tool"], ok: okFlag, summary, source_event_id: event.id });
     }

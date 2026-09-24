@@ -83,6 +83,16 @@ describe("系统提示内容要求（指令 §2.1 六条抽检＋§2.2 负面断
     }
   });
 
+  it("产品用户视角约定在位（走查修复批 D1，指令 7158bf43 原文措辞）——黑盒纪律防源码考古回归", () => {
+    for (const keyword of ["产品用户", "工具面与技能面文档", "黑盒", "禁止阅读或推断其内部实现"]) {
+      expect(HARNESS_SYSTEM_PROMPT.includes(keyword), `缺 D1 关键词: ${keyword}`).toBe(true);
+    }
+    // 措辞照指令原文（逐句整段在位，防改写漂移）
+    expect(HARNESS_SYSTEM_PROMPT).toContain(
+      "你以产品用户身份使用本系统：一切操作走工具面与技能面文档；内核与框架的源码实现对你是黑盒，禁止阅读或推断其内部实现。",
+    );
+  });
+
   it("长度纪律：≤1200 字（原提示 ≈400 的 3 倍上限）", () => {
     expect(HARNESS_SYSTEM_PROMPT.length).toBeLessThanOrEqual(1200);
     expect(HARNESS_SYSTEM_PROMPT.length).toBeGreaterThan(0);

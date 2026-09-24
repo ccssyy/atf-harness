@@ -153,6 +153,98 @@ describe("D-f 补正批（B2/B4）：tool/result 附注白名单＋摘要化定�
   });
 });
 
+// ---------------------------------------------------------------------------
+// 走查修复批 B5（2026-09-23，指令 7158bf43）：审批 advised 意见正文进 tool_result 摘要。
+// 核验结论（二态之一：未透传 → 修复）：走查 run-full-v0762 实录 #2274/#2275——
+// 意见正文在 approval/response 消息摘要被 160 截断、tool_result 摘要只有 reason 通用码。
+// fixture 以 #2275 真实 payload 形态（block.detail.advice_text）为基准。
+// ---------------------------------------------------------------------------
+describe("走查修复批 B5：advised 意见正文进摘要（投影三同步·摘要化）", () => {
+  // 走查 #2275 实录意见原文（操作员备注）
+  const ADVICE = "owner 指正：走查视角＝产品用户，不是内核开发者。禁止读内核源码与发布脚本内部实现。正确路径＝技能面：atf-build-family-split 技能已写明 publish_contract.py 的调用方式。";
+
+  it("advised 回流（#2275 真实形态）：summary 含意见正文全文——模型可见性由缺席转为透传", () => {
+    const mapped = adaptProjectionToMessages([
+      event(2275, "tool/result", {
+        tool: "atf_scratch_exec", ok: false, reason: "approval_advised", call_ref: 2272,
+        block: {
+          reason: "approval_advised",
+          message: `问答轨修改意见(重新提案):${ADVICE}`,
+          tool: "atf_scratch_exec",
+          exit_code: 1,
+          detail: { approval_session_id: "aps-273", request_event_ref: 2273, advice_text: ADVICE },
+        },
+      }),
+    ]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value[0];
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    expect(toolResult.summary).toContain("approval_advised");
+    expect(toolResult.summary).toContain(ADVICE); // 意见正文全量（非 160 截断残段）
+    // 顺序：reason 主体在前、意见段随后
+    expect(toolResult.summary.indexOf("approval_advised")).toBeLessThan(toolResult.summary.indexOf(ADVICE));
+    // 旧规则字节前缀保持：reason 段仍在首位（旧信息超集语义）
+    expect(toolResult.summary.startsWith("approval_advised｜")).toBe(true);
+  });
+
+  it("零回归：block 存在但无 advice_text（denied 等回流）→ 摘要与旧规则逐字节一致", () => {
+    const mapped = adaptProjectionToMessages([
+      event(1, "tool/result", {
+        tool: "atf_scratch_exec", ok: false, reason: "approval_denied", call_ref: 1,
+        block: { reason: "approval_denied", message: "问答轨拒绝:未备案", tool: "atf_scratch_exec", exit_code: 1, detail: { approval_session_id: "aps-1", request_event_ref: 1, denied_count: 1 } },
+      }),
+    ]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value[0];
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    expect(toolResult.summary).toBe("approval_denied"); // 逐字节（非 contains）
+  });
+
+  it("零回归：advice_text 空串视为缺席（段滤除，不产生空段）", () => {
+    const mapped = adaptProjectionToMessages([
+      event(1, "tool/result", {
+        tool: "t", ok: false, reason: "approval_advised", call_ref: 1,
+        block: { reason: "approval_advised", message: "问答轨修改意见(重新提案):", tool: "t", exit_code: 1, detail: { advice_text: "" } },
+      }),
+    ]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value[0];
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    expect(toolResult.summary).toBe("approval_advised");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 走查修复批 B3（2026-09-23）：ok:true 摘要增 guidance 段——runner 对完整性闸门 blocked
+// 结果（executed 径）回填三段式指引，经本段进入模型可见摘要。此前 ok:true 恒无
+// payload.guidance（既有载荷零回归由上方逐字节用例承载）。
+// ---------------------------------------------------------------------------
+describe("走查修复批 B3：ok:true 摘要含 guidance 段（完整性闸门三段式回流）", () => {
+  const GUIDANCE = '【完整性闸门 extraction-contract-valid 推进被拦（required_evidence_missing）】缺什么：artifact:contract-bundle:abc123；产出路径：atf-validate-extraction-contract 技能；登记动作：补齐后以 atf_gate(gate="extraction-contract-valid", action="advance", evidence_refs=[…]) 重新推进';
+
+  it("ok:true + guidance → summary = [structuredResultSummary, guidance]（result 摘要在前、指引随后）", () => {
+    const result = { ok: true, gate: "extraction-contract-valid", status: "blocked", reason: "required_evidence_missing" };
+    const mapped = adaptProjectionToMessages([
+      event(2254, "tool/result", { tool: "atf_gate", ok: true, result, call_ref: 2251, guidance: GUIDANCE }),
+    ]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value[0];
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    expect(toolResult.ok).toBe(true);
+    expect(toolResult.summary).toContain(JSON.stringify(result));
+    expect(toolResult.summary).toContain(GUIDANCE);
+    expect(toolResult.summary.indexOf(JSON.stringify(result))).toBeLessThan(toolResult.summary.indexOf(GUIDANCE));
+    // 三段齐备（摘要可见性断言）
+    expect(toolResult.summary).toContain("缺什么：");
+    expect(toolResult.summary).toContain("产出路径：");
+    expect(toolResult.summary).toContain("登记动作：");
+  });
+});
+
 describe("切片 2 · A3 多工具展开（一次响应 → N 个顺序决策）", () => {
   it("message + N 工具 → N+1 个顺序决策（message 先行、工具按声明序）", () => {
     const expanded = expandModelResponse({
