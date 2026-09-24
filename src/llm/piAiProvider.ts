@@ -60,7 +60,7 @@ import {
   type Usage as PiUsage,
   type UserMessage as PiUserMessage,
 } from "@earendil-works/pi-ai";
-import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
+import { applyPiaiCompatFloor, piaiProviderFactory } from "./piaiProviders.js";
 import { err, ok, type Result } from "../bridge/index.js";
 import { adaptProjectionToMessages, expandModelResponse, type AdapterMessage, type ModelResponse } from "./adapter.js";
 import { approvalAnnotationText, approvalSummaryLine, danglingToolResultContent, wireToolCallId } from "./codecWire.js";
@@ -320,10 +320,12 @@ export class PiAiLlmProvider implements LengthAwareLlmProvider {
       ? `${HARNESS_SYSTEM_PROMPT}\n${options.systemSuffix}`
       : HARNESS_SYSTEM_PROMPT;
     this.models = createModels();
-    this.models.setProvider(deepseekProvider());
-    const catalogModel = this.models.getModel("deepseek", this.config.model);
+    // 批 P 增补 §一（指令 56170242）：目录按 config.provider_id 参数化（deepseek/zai-coding-cn
+    // 同一路径；未知 id 工厂内 fail-closed throw——不再硬编码 deepseekProvider）。
+    this.models.setProvider(piaiProviderFactory(this.config.provider_id));
+    const catalogModel = this.models.getModel(this.config.provider_id, this.config.model);
     if (catalogModel === undefined || !hasApi(catalogModel, "openai-completions")) {
-      throw new Error(`PiAiLlmProvider 配置非法: pi-ai 目录无 openai-completions 模型 ${JSON.stringify(this.config.model)}（provider=deepseek；fail-closed）`);
+      throw new Error(`PiAiLlmProvider 配置非法: pi-ai 目录无 openai-completions 模型 ${JSON.stringify(this.config.model)}（provider=${JSON.stringify(this.config.provider_id)}；fail-closed）`);
     }
     // R4 配置保真：base_url/model 以用户配置为准（目录 baseUrl 被覆盖；compat 因 provider="deepseek"
     // 仍走 deepseek 规则——detectCompat 以 provider id 优先判定，不依赖 URL 嗅探）。
@@ -484,9 +486,12 @@ export class PiAiLlmProvider implements LengthAwareLlmProvider {
 
   // ---------------------------------------------------------------- 内部
 
-  /** effort → pi-ai reasoning 参数（compat 抑制或 none → undefined=不传；闭集值直传）。 */
+  /** effort → pi-ai reasoning 参数（compat 抑制或 none → undefined=不传；闭集值直传）。
+   *  批 P 增补 §一：compat 先过 provider 地板（zai-coding-cn thinkingFormat=zai——
+   *  supports_reasoning_effort 地板 false 不可开启，GLM 非推理路径零 effort 下发）。 */
   private resolveReasoningArg(): ThinkingLevel | undefined {
-    if (!this.config.compat.supports_reasoning_effort) return undefined;
+    const compat = applyPiaiCompatFloor(this.config.provider_id, this.config.compat);
+    if (!compat.supports_reasoning_effort) return undefined;
     if (this.currentEffortValue === "none") return undefined;
     return this.currentEffortValue as ThinkingLevel;
   }

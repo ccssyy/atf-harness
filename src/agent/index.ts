@@ -8,7 +8,7 @@
  * 依赖方向：agent → {core/tools, bridge, llm}（与三外壳同级——core 的消费者，core 不反依）。
  */
 export { createFauxStreamFn, fauxAssistantMessage, fauxFinalAnswer, fauxMessageWithToolCalls, type FauxStreamFn } from "./fauxStream.js";
-export { assembleDeepSeekModel, createDeepSeekStreamFn, type DeepSeekStreamFnConfig } from "./deepseekStreamFn.js";
+export { assembleProviderModel, createProviderStreamFn, createDeepSeekStreamFn, type ProviderStreamFnConfig } from "./providerStreamFn.js";
 export { buildSpikeAgentTools, spikeToolDefinitions, SPIKE_TOOL_NAMES, toAtfAgentTool, spikeRequiresApproval, type AtfAgentToolDeps, type SpikeBridgeTransport } from "./atfAgentTools.js";
 export { createApprovalBeforeToolCall, type ApprovalAuditEntry, type ApprovalHookDeps } from "./approvalHook.js";
 export {

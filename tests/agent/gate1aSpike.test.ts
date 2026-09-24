@@ -20,13 +20,13 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { AtfBridgeConnection } from "../../src/bridge/connection.js";
 import {
-  createDeepSeekStreamFn,
+  createProviderStreamFn,
   createFauxStreamFn,
   fauxFinalAnswer,
   fauxMessageWithToolCalls,
   runGate1aSpike,
 } from "../../src/agent/index.js";
-import { assembleDeepSeekModel } from "../../src/agent/deepseekStreamFn.js";
+import { assembleProviderModel } from "../../src/agent/providerStreamFn.js";
 
 const mockAtf = fileURLToPath(new URL("../fixtures/mock_atf.mjs", import.meta.url));
 
@@ -111,13 +111,18 @@ describe("门 1a spike（批 P：pi-agent-core Agent＋桥接单工具＋审批 
 });
 
 describe("DeepSeek streamFn 装配（一期 wire 经验载体；零网络）", () => {
-  it("⑥ 目录命中＋baseUrl 覆盖（R4 配置保真）；目录未命中 fail-closed", () => {
-    const { model } = createDeepSeekStreamFn({ model: "deepseek-flash", base_url: "https://api.deepseek.com", api_key: "" });
+  it("⑥ 目录命中＋baseUrl 覆盖（R4 配置保真）；目录未命中 fail-closed（provider 参数化——批 P 增补 §一）", () => {
+    const { model } = createProviderStreamFn({ provider_id: "deepseek", model: "deepseek-flash", base_url: "https://api.deepseek.com", api_key: "" });
     expect(model.provider).toBe("deepseek");
     expect(model.id).toBe("deepseek-flash");
     expect(model.api).toBe("openai-completions");
     expect(model.baseUrl).toBe("https://api.deepseek.com");
-    expect(() => assembleDeepSeekModel({ model: "no-such-model", base_url: "https://x", api_key: "" })).toThrow(/fail-closed/);
+    // GLM 同路径：zai-coding-cn 目录命中（批 P 增补 §一）
+    const glm = createProviderStreamFn({ provider_id: "zai-coding-cn", model: "glm-5.3-flash", base_url: "https://open.bigmodel.cn/api/coding/paas/v4", api_key: "" });
+    expect(glm.model.provider).toBe("zai-coding-cn");
+    expect(glm.model.id).toBe("glm-5.3-flash");
+    expect(() => assembleProviderModel({ provider_id: "no-such-provider", model: "m", base_url: "https://x", api_key: "" })).toThrow(/fail-closed/);
+    expect(() => assembleProviderModel({ provider_id: "deepseek", model: "no-such-model", base_url: "https://x", api_key: "" })).toThrow(/fail-closed/);
   });
 
   it("faux streamFn：脚本按序弹出；耗尽 = error 停止原因（fail-closed 不编造）", async () => {
