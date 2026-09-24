@@ -43,6 +43,7 @@ import { createTemAfterToolMirror, createTemTransformContext } from "./tem/retri
 import { envFingerprint, scanEvidenceEvents } from "./tem/evidence.js";
 import { ensureTemBranch, writeExperienceCase } from "./tem/store.js";
 import { buildSkillsSystemSuffix, createCompactionTransform } from "./agentCapabilities.js";
+import { createDispatchTrainingSubtaskTool, type SubagentDeps } from "./subagent.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -62,6 +63,7 @@ export interface CliArgs {
   skillsDir?: string;
   contextTokens: number;
   keepRecentTokens: number;
+  subagent: boolean;
 }
 
 export const parseCliArgs = (argv: readonly string[]): CliArgs | { error: string } => {
@@ -78,6 +80,7 @@ export const parseCliArgs = (argv: readonly string[]): CliArgs | { error: string
   let skillsDir: string | undefined;
   let contextTokens = 24_000;
   let keepRecentTokens = 8_000;
+  let subagent = false;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const take = (): string => {
@@ -154,13 +157,16 @@ export const parseCliArgs = (argv: readonly string[]): CliArgs | { error: string
         keepRecentTokens = value;
         break;
       }
+      case "--subagent":
+        subagent = true;
+        break;
       default:
         return { error: `未知参数: ${arg ?? "(空)"}` };
     }
   }
   if (instruction === undefined || instruction.trim() === "") return { error: "--instruction 必填（非空）" };
   if (llm === undefined) return { error: "--llm 必填（faux:<script.json> | deepseek | config；真实调用须 owner 另批授权——env ATF_V1_REAL_LLM_AUTHORIZED=1）" };
-  return { instruction, peer, wsRoot, sessionsRoot, llm, maxTurns, approval, approvalTimeoutMs, steeringMode, followUpMode, skillsDir, contextTokens, keepRecentTokens };
+  return { instruction, peer, wsRoot, sessionsRoot, llm, maxTurns, approval, approvalTimeoutMs, steeringMode, followUpMode, skillsDir, contextTokens, keepRecentTokens, subagent };
 };
 
 export interface CliDeps {
@@ -288,6 +294,7 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
       skillsDir: args.skillsDir,
       contextTokens: args.contextTokens,
       keepRecentTokens: args.keepRecentTokens,
+      subagent: args.subagent,
       out,
       err,
     });
@@ -302,6 +309,8 @@ export interface AssembleV1Deps {
   bridge: SpikeBridgeTransport;
   session: SessionLike;
   maxTurns: number;
+  /** v1.1 subagent-as-tool（dispatch_training_subtask；缺省不挂接——零桥接契约 diff）。 */
+  subagent?: Omit<SubagentDeps, "scopeRefBox">;
   streamFn: (model: never, context: TranscriptContext, options?: SimpleStreamOptions) => unknown;
   modelTag: string;
   approval: { kind: "headless" } | { kind: "interactive"; timeoutMs: number } | { kind: "surface"; surface: ApprovalSurface };
@@ -329,6 +338,9 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
   const outcomeBox: { current: V1RunOutcome | undefined } = { current: undefined };
   const events: AgentEvent[] = [];
   const tools = buildAtfAgentTools({ bridge: deps.bridge, scopeRefBox });
+  if (deps.subagent !== undefined) {
+    tools.push(createDispatchTrainingSubtaskTool({ ...deps.subagent, scopeRefBox }));
+  }
   const registry = createHookRegistry();
 
   const runId = (): string | null => scopeRefBox.current?.scope_id ?? null;
@@ -365,7 +377,13 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
       tools,
     },
     streamFn: deps.streamFn as never,
-    beforeToolCall: createApprovalBeforeToolCall({ bridge: deps.bridge, scopeRefBox, audit, ...(surface !== undefined ? { surface } : {}) }),
+    beforeToolCall: createApprovalBeforeToolCall({
+      bridge: deps.bridge,
+      scopeRefBox,
+      audit,
+      ...(surface !== undefined ? { surface } : {}),
+      ...(deps.subagent !== undefined ? { exemptTools: ["dispatch_training_subtask"] } : {}),
+    }),
     afterToolCall: createTemAfterToolMirror({ session: deps.session, runId, model: envFingerprint(deps.modelTag).model }),
     transformContext,
     prepareRequest: prepareRequestViaHook(registry),
@@ -404,6 +422,8 @@ export interface V1HeadlessDeps {
   skillsDir?: string;
   contextTokens: number;
   keepRecentTokens: number;
+  /** v1.1 subagent 挂接（--subagent；子模型面＝与主链同 streamFn 工厂）。 */
+  subagent?: boolean;
   /** 装配后、prompt 前的注册缝（测试/扩展注册 hook；B4 面）。 */
   registerHooks?: (registry: V1HookRegistry) => void;
   out: (line: string) => void;
@@ -424,6 +444,19 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
 
   const systemSuffix = deps.skillsDir !== undefined ? await buildSkillsSystemSuffix(deps.skillsDir) : undefined;
   const assembled = assembleV1Agent({
+    ...(deps.subagent === true
+      ? {
+          subagent: {
+            bridge: deps.bridge,
+            sessionsRoot: deps.sessionsRoot,
+            surface: deps.approval.kind === "surface" ? deps.approval.surface : deps.approval.kind === "interactive" ? createInteractiveApprovalSurface({ timeoutMs: deps.approval.timeoutMs }) : undefined,
+            childStreamFn: () => streamFn as never,
+            modelTag,
+            contextTokens: deps.contextTokens,
+            keepRecentTokens: deps.keepRecentTokens,
+          },
+        }
+      : {}),
     bridge: deps.bridge,
     session,
     maxTurns: deps.maxTurns,

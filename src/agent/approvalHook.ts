@@ -50,6 +50,9 @@ export interface ApprovalHookDeps extends AtfAgentToolDeps {
   audit: ApprovalAuditEntry[];
   /** 问答轨确认卡 surface（批 P 增补 A2）——缺省无＝headless approval_missing（78）。 */
   surface?: ApprovalSurface;
+  /** 豁免面（装配期本地工具——如 dispatch_training_subtask：派发动作本身免审批，
+   *  治理点在子任务内写动作过同一账本闸；不在 TOOL_DEFINITIONS 的本地工具须显式登记）。 */
+  exemptTools?: readonly string[];
 }
 
 /** 全 face 查找（丙 v1 九工具；未知工具由调用点 fail-closed 拦截）。 */
@@ -66,6 +69,10 @@ export const createApprovalBeforeToolCall =
   async (context: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> => {
     const toolName = context.toolCall.name;
     const params = context.args;
+    if ((deps.exemptTools ?? []).includes(toolName)) {
+      deps.audit.push({ tool: toolName, verdict: "allow_readonly", requiresApproval: false, detail: { why: "装配期本地工具（豁免面）" } });
+      return undefined;
+    }
     const definition = toolDefinitionOf(toolName);
     if (definition === undefined) {
       deps.audit.push({ tool: toolName, verdict: "blocked_unknown_tool", requiresApproval: true, detail: { why: "工具面收敛（fail-closed）" } });
