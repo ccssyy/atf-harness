@@ -279,25 +279,13 @@ const ensureMainBranch = async (session: Session): Promise<Branch> => {
   return branch;
 };
 
+export { ensureMainBranch };
+export const MAIN_BRANCH = BRANCH;
+
 /** 镜像：把一条消息 append 进分支（循环事件驱动，逐拍落盘）。返回 entry id。 */
 export const mirrorMessage = async (session: Session, message: AgentMessage): Promise<string> => {
   const branch = await ensureMainBranch(session);
   return branch.appendMessage(message, context);
-};
-
-/** TEM EvidenceEvent 镜像点演示（afterToolCall → custom entry；门 1b 正式设计前置占位）。 */
-export interface EvidenceEventStub {
-  kind: "evidence_event";
-  tool: string;
-  ok: boolean;
-  mirrored_at: string;
-}
-
-/** 镜像失败不反压主链（spike 占位口径；门 1b 定升级/降级语义）。 */
-export const mirrorEvidenceEvent = async (session: Session, event: EvidenceEventStub): Promise<void> => {
-  const branch = await session.branch(BRANCH, context);
-  if (branch === undefined) return;
-  await branch.appendCustomEntry("tem/evidence_event", event as never, context);
 };
 
 /** 读取分支全量 entries（时间升序——显式指定，缺省序不依赖）。 */

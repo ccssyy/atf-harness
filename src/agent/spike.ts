@@ -30,13 +30,14 @@ import { createFauxStreamFn, fauxFinalAnswer, fauxMessageWithToolCalls } from ".
 import {
   createJsonlSessionRepo,
   detectOrphanTip,
-  mirrorEvidenceEvent,
   mirrorMessage,
   readBranchEntries,
   recoverFromOrphan,
   transcriptFromEntries,
   type SessionLike,
 } from "./sessionMirror.js";
+import { createTemAfterToolMirror } from "./tem/retrieval.js";
+import { envFingerprint } from "./tem/evidence.js";
 
 export interface SpikeResult {
   /** 全部 Agent 事件（订阅序，A–E 各段累计）。 */
@@ -65,6 +66,14 @@ export const runGate1aSpike = async (deps: SpikeDeps): Promise<SpikeResult> => {
 
   const toolDeps: AtfAgentToolDeps = { bridge: deps.bridge, scopeRefBox };
   const tools: AgentTool[] = buildSpikeAgentTools(toolDeps);
+  const temMirror =
+    deps.temMirror === false
+      ? undefined
+      : createTemAfterToolMirror({
+          session,
+          runId: () => scopeRefBox.current?.scope_id ?? null,
+          model: envFingerprint("faux-spike").model,
+        });
 
   const agent = new Agent({
     initialState: { systemPrompt: HARNESS_SYSTEM_PROMPT, tools },
@@ -79,18 +88,7 @@ export const runGate1aSpike = async (deps: SpikeDeps): Promise<SpikeResult> => {
       fauxFinalAnswer("闸门查询已执行完毕（经账本授权放行，记录一次性消费）。"),
     ]),
     beforeToolCall: createApprovalBeforeToolCall({ bridge: deps.bridge, scopeRefBox, audit: approvalAudit }),
-    afterToolCall:
-      deps.temMirror === false
-        ? undefined
-        : async (toolContext) => {
-            await mirrorEvidenceEvent(session, {
-              kind: "evidence_event",
-              tool: toolContext.toolCall.name,
-              ok: !toolContext.isError,
-              mirrored_at: new Date().toISOString(),
-            });
-            return undefined; // 不改写工具结果（镜像只读旁路）
-          },
+    afterToolCall: temMirror,
     toolExecution: "sequential",
   });
 
