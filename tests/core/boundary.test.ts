@@ -55,17 +55,23 @@ describe("core 边界守卫（T01）", () => {
     expect(violations).toEqual([]);
   });
 
-  it("package.json：dependencies 恰为 pi-ai 锁 exact（R2a 修订），devDependencies 仅构建测试工具；shrinkwrap 在位", () => {
+  it("package.json：dependencies 恰为 pi 系双包锁 exact（R2a 修订态＋方案丙批 P），devDependencies 仅构建测试工具；shrinkwrap 在位", () => {
     // R2a 修订（owner 决议 2026-09-23，方案乙：零 npm 运行时依赖 → 低依赖＋锁版本＋审计；
     // 授权链：《决议_框架化方向方案乙》26055c6b ＋《指令_门2启动_pi-ai换库批》6aa4303a）：
-    // 运行时依赖面 = 恰 @earendil-works/pi-ai 一个、save-exact（禁止 ^/~ 漂移）；
-    // npm-shrinkwrap.json 必须在位（传递闭包锁面 ＋ audit 纪律的静态前提）。
+    // 运行时依赖面 = @earendil-works/pi-ai 一个、save-exact（禁止 ^/~ 漂移）。
+    // 批 P 增补（owner 裁定 2026-09-24，方案丙立项＋批 P 授权；裁定件 docs/_owner/
+    // ATF-Harness_裁定_方案丙立项与批P授权_20260924.md）：新进程骨架以 pi 系全栈为底座，
+    // @earendil-works/pi-agent-core 入 dependencies、save-exact（门 1a spike 随批入列；
+    // 风险表 #5 缓解＝save-exact＋shrinkwrap 锁面，升级走门）。
     const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
       engines?: { node?: string };
     };
-    expect(pkg.dependencies ?? {}).toEqual({ "@earendil-works/pi-ai": "0.87.1" });
+    expect(pkg.dependencies ?? {}).toEqual({
+      "@earendil-works/pi-agent-core": "0.87.1",
+      "@earendil-works/pi-ai": "0.87.1",
+    });
     for (const range of Object.values(pkg.dependencies ?? {})) {
       expect(/^[0-9]/.test(range), `运行时依赖须锁 exact（禁 ^/~ 漂移）: ${range}`).toBe(true);
     }
