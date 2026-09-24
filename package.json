@@ -26,7 +26,9 @@
     "smoke:l1acp": "npm run build && node dist/acp/smokeL1acp.js",
     "smoke:l1mcp": "npm run build && node dist/mcp/smokeL1mcp.js",
     "smoke:piai": "npm run build && node dist/run/smokePiAi.js",
-    "trial:piai-real": "npm run build && node dist/run/trialPiAiReal.js"
+    "trial:piai-real": "npm run build && node dist/run/trialPiAiReal.js",
+    "smoke:gate1a": "npm run build && node dist/agent/main.js",
+    "trial:gate1a-real": "npm run build && node dist/agent/main.js --peer real"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",
@@ -34,6 +36,7 @@
     "vitest": "^5.0.0"
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "0.87.1",
     "@earendil-works/pi-ai": "0.87.1"
   }
 }
