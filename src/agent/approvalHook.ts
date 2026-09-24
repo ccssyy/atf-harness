@@ -20,8 +20,8 @@
 import type { BeforeToolCallContext, BeforeToolCallResult } from "@earendil-works/pi-agent-core";
 import { type ScopeRef, approvalKeyFor, type LedgerRecord } from "../core/tools/approvalKey.js";
 import { LEDGER_CONSUME_CANONICAL, LEDGER_QUERY_CANONICAL } from "../core/tools/executor.js";
-import { validateCanonicalOutput, type ToolDefinition } from "../core/tools/index.js";
-import { spikeRequiresApproval, spikeToolDefinitions, type AtfAgentToolDeps, type SpikeBridgeTransport } from "./atfAgentTools.js";
+import { requiresApprovalFor, TOOL_DEFINITIONS, validateCanonicalOutput, type ToolDefinition } from "../core/tools/index.js";
+import type { AtfAgentToolDeps, SpikeBridgeTransport } from "./atfAgentTools.js";
 
 /** 审批闸审计留痕（spike 演示/测试断言面；门 2 起入会话事件流）。 */
 export interface ApprovalAuditEntry {
@@ -44,8 +44,9 @@ export interface ApprovalHookDeps extends AtfAgentToolDeps {
   audit: ApprovalAuditEntry[];
 }
 
-const spikeToolDefinitionOf = (toolName: string): ToolDefinition | undefined =>
-  spikeToolDefinitions().find((definition) => definition.name === toolName);
+/** 全 face 查找（丙 v1 九工具；未知工具由调用点 fail-closed 拦截）。 */
+const toolDefinitionOf = (toolName: string): ToolDefinition | undefined =>
+  TOOL_DEFINITIONS.find((definition) => definition.name === toolName);
 
 /** 拦截结果（terminate = run 级终止意图：headless 78 锚语义的库内映射——单调用批次下
  *  terminate 即整批终局。门 2 引入问答轨后 suspended/denied 类不再 terminate）。 */
@@ -57,12 +58,12 @@ export const createApprovalBeforeToolCall =
   async (context: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> => {
     const toolName = context.toolCall.name;
     const params = context.args;
-    const definition = spikeToolDefinitionOf(toolName);
+    const definition = toolDefinitionOf(toolName);
     if (definition === undefined) {
       deps.audit.push({ tool: toolName, verdict: "blocked_unknown_tool", requiresApproval: true, detail: { why: "工具面收敛（fail-closed）" } });
       return block(`未注册工具（工具面收敛，fail-closed）: ${toolName}`);
     }
-    const requiresApproval = spikeRequiresApproval(definition, params);
+    const requiresApproval = requiresApprovalFor(definition, params);
     if (!requiresApproval) {
       deps.audit.push({ tool: toolName, verdict: "allow_readonly", requiresApproval: false });
       return undefined; // 只读直通（与 executor：requiresApprovalFor=false 时跳过审批一致）
