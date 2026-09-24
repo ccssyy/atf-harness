@@ -22,6 +22,7 @@ import { promisify } from "node:util";
 import { AtfBridgeConnection } from "../bridge/connection.js";
 import { deriveAtfCommand } from "../bridge/atfCommand.js";
 import { runGate1aSpike } from "./spike.js";
+import { runGate1bPoc } from "./tem/poc.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -29,6 +30,7 @@ const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 
 const main = async (): Promise<number> => {
   const args = process.argv.slice(2);
+  const temPoc = args.includes("--tem-poc");
   const peerReal = args.includes("--peer") && args[args.indexOf("--peer") + 1] === "real";
   const wsRootIndex = args.indexOf("--ws-root");
   const wsRoot = wsRootIndex >= 0 ? args[wsRootIndex + 1] : undefined;
@@ -88,6 +90,18 @@ const main = async (): Promise<number> => {
   }
 
   try {
+    if (temPoc) {
+      const poc = await runGate1bPoc({ bridge, sessionsRoot });
+      console.log("\n[tem-poc] 门 1b 检索注入 PoC：");
+      console.log(`  run A EvidenceEvent 镜像数 = ${String(poc.run_a_evidence_count)}`);
+      console.log(`  run A ExperienceCase 落库 = ${poc.run_a_case !== undefined ? `✅（${poc.run_a_case.case_id}，证据 ${String(poc.run_a_case.evidence_event_ids.length)} 条）` : "❌"}`);
+      console.log(`  PatternClaim 写入 = ${poc.claim_written ? "✅" : "❌"}`);
+      console.log(`  run B 注入 section 到达 provider 请求面 = ${poc.run_b_injected_section !== null ? "✅" : "❌"}`);
+      if (poc.run_b_injected_section !== null) console.log(`\n  ---- 注入内容 ----\n${poc.run_b_injected_section}\n  ----`);
+      console.log(`  run B 事件数 = ${String(poc.run_b_events)}`);
+      console.log(`\n[tem-poc] ${poc.all_passed ? "门 1b PoC 全部走通" : "存在未过检查（见上）"}`);
+      return poc.all_passed ? 0 : 1;
+    }
     const result = await runGate1aSpike({ bridge, sessionsRoot });
     console.log("\n[spike] 场景检查：");
     let allPassed = true;
