@@ -58,7 +58,7 @@ describe("丙 v1.1 · B7 telemetry（pi span 层级→事实轨）", () => {
     for (const fact of sink.facts) {
       expect(fact.kind).toBe("telemetry_span");
       expect(fact.run_id).toBe("run-v11");
-      expect(fact.env_fingerprint.kernel_pin).toBe("v0.7.6b0");
+      expect(fact.env_fingerprint.kernel_pin).toBe("v0.7.7b0");
       expect(Number.isNaN(Date.parse(fact.ts))).toBe(false);
     }
     expect((sink.facts[1] as unknown as { attributes: { tool: string } }).attributes.tool).toBe("atf_fact_scan");

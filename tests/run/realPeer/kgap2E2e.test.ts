@@ -106,13 +106,13 @@ describeIfPinned("K-Gap-2 接线批真内核 e2e——propose→（缺料时）e
     "全链：登记→propose(聚类确认)→execute 落料→propose(划分确认)→request 携确认态→completed；env 含 ATF_SKILLS_AUTO_INSTALL=0（K2 回滚门 ATF_LABEL_QC_REQUIRED=0——本链定位 K-Gap-2，体检必经归重跑②专验）",
     { timeout: 240_000 },
     async () => {
-      // pin 实测锚：当前 checkout HEAD == v0.7.6b0（9d5ce4a）
+      // pin 实测锚：当前 checkout HEAD == v0.7.7b0（45c0533）
       const headSha = await new Promise<string>((resolve, reject) => {
         execFile("git", ["-C", cli.ok ? (cli as { ok: true; path: string }).path : "", "rev-parse", "HEAD"], (error, stdout) =>
           error === null ? resolve(stdout.trim()) : reject(error),
         );
       });
-      expect(headSha).toBe("9d5ce4a663d2f4454b25c0c3bf2e9a08ad156d1f");
+      expect(headSha).toBe("45c05339078575534653d1ca3b0dc1cc91fa50f4");
 
       // K2 体检必经回滚门（re-pin 2026-09-23）：本用例定位 K-Gap-2 料门链路；
       // 体检必经链路归重跑②专验——此处显式回滚旧语义，进程 env 经 fixture baseEnv 透传。
@@ -231,12 +231,24 @@ describeIfPinned("K-Gap-2 接线批真内核 e2e——propose→（缺料时）e
       expect(echo["split_strategy"]).toBe("cluster_content_family_seeded");
       expect(echo["auto_style_cluster"]).toBe(false);
 
-      // ④ request 携确认态：执行成功，policy.source=confirmed，human_summary 六字段
+      // ④ request 携确认态：K3 顺序性短路（re-pin v0.7.7b0）——本 fixture 为合成对数据、
+      // 无提取契约（合同）包，准入在 G1 入口短路（零读数零落盘，fail-closed）：status=blocked、
+      // g1_short_circuit=true、gates 变长仅 G1（evaluated:true）、执行面字段 null、
+      // human_summary 六字段仍齐（同源六键）。policy.source=confirmed 全链断言候
+      // 合同包 fixture 备料后恢复（登记待办，归 re-pin 批报告）。
       const request = results.find((entry) => entry.tool === "atf_data_admission_request" && entry.ok === true);
       expect(request).toBeDefined();
       value = (request?.result ?? {}) as Record<string, unknown>;
-      expect((value["policy"] as Record<string, unknown>)["source"]).toBe("confirmed");
-      expect(["skills", "kernel"]).toContain(value["style_cluster_source"]);
+      expect(value["status"]).toBe("blocked");
+      expect(value["g1_short_circuit"]).toBe(true);
+      const gates = value["gates"] as Array<Record<string, unknown>>;
+      const g1 = gates[0] as Record<string, unknown>;
+      expect(gates).toHaveLength(1);
+      expect(g1).toMatchObject({ gate_id: "extraction-contract-valid", verdict: "block", evaluated: true });
+      expect(g1["reason_codes"]).toContain("extraction_contract_bundle_missing");
+      expect(value["summary_ref"]).toBeNull();
+      expect(value["summary_sha256"]).toBeNull();
+      expect((value["policy"] as Record<string, unknown>)["source"]).toBeNull();
       expect(Object.keys(value["human_summary"] as Record<string, unknown>).sort()).toEqual([
         "actions", "headline", "metrics", "notes", "pending_confirmations", "sections",
       ]);

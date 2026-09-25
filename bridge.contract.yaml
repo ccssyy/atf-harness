@@ -763,8 +763,8 @@ atf_cli:
 # （mock 已回 2）"的表述作废】，真实对端以内核批次二实现为准。
 # ---------------------------------------------------------------------
 atf_upstream:
-  tag: v0.7.6b0
-  commit_sha: 9d5ce4a663d2f4454b25c0c3bf2e9a08ad156d1f
-  pinned_at: "2026-09-24"
-  baseline: 内核方法面 14／harness 工具面 9（含 label_qc 两工具，R-3 接线已合入）；K2 体检必经已启用（缺省必经，回滚门 ATF_LABEL_QC_REQUIRED="0" 供受控例外）；K1 闸门指引＋K3 ref 根约定＋K4 清理随批；B4 技能互引闭环（SKILL v1.5 双向跳转——validate↔build-family-split，纯文档无行为语义变更）随 v0.7.6b0 首次入 pin；pin＝tag v0.7.6b0 commit 9d5ce4a（HEAD==tag，无 sha 备注；re-pin 2026-09-24，内核发版指令件《ATF内核_指令_B4发版v076b0与re-pin_20260924》）
+  tag: v0.7.7b0
+  commit_sha: 45c05339078575534653d1ca3b0dc1cc91fa50f4
+  pinned_at: "2026-09-25"
+  baseline: 内核方法面 14／harness 工具面 9（含 label_qc 两工具，R-3 接线已合入）＋丙线本地治理面 4（A7 atf_read/edit/write/bash，批 P 续作 v2 已合入）；K1-K3 走查实锤缺陷修复批随 v0.7.7b0 首次入 pin（K3 顺序性短路：G1 证据缺失入口短路零读数零落盘、gates 变长依存链序列废除占位 block、逐闸 evaluated:true 来源标记＋atf_gate query 面 legacy 兼容标记 summary_format；K1 policy_template 可直提完整形态＋invalid_params 三段式回流；K2 双 Prompt 对齐）——module-contracts.md §13.10 补登为**零契约面变更**（无新 Gate/reason code/Schema 版本，纯行为加固）；harness 伴随件消费随批：canonical 白名单补登（atf_data_admission_request status+=blocked／summary_ref·summary_sha256 null 容忍／gates[].evaluated／g1_short_circuit；atf_gate summary_format）＋摘要化路径升 modern 形态（smokeR2/trialL1aReal 逐闸 evaluated:true）＋mock 投影用例；pin＝tag v0.7.7b0 commit 45c0533（HEAD==tag，无 sha 备注；re-pin 2026-09-25，内核 K1-K3 发版随裁定《ATF_裁定_批Pv2合并与K1K3发版与回归走查_20260925》）
   contract_version: 1

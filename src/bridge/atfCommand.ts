@@ -7,12 +7,13 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 2026-09-24：v0.7.5b0 → v0.7.6b0，唯一真相源 = bridge.contract.yaml atf_upstream，
+// 当前 pin（re-pin 2026-09-25：v0.7.6b0 → v0.7.7b0，唯一真相源 = bridge.contract.yaml atf_upstream，
 // 本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.6b0（B4 技能互引闭环发版：SKILL v1.5 双向跳转——validate↔build-family-split，
-// 纯文档无行为语义变更；内核闸门/桥接契约轴一轴二零 diff，不触发强制升级）——HEAD==tag commit 9d5ce4a，无 sha 备注。
-export const ATF_UPSTREAM_TAG = "v0.7.6b0";
-export const ATF_UPSTREAM_COMMIT_SHA = "9d5ce4a663d2f4454b25c0c3bf2e9a08ad156d1f";
+// 本轮 pin 取值＝tag v0.7.7b0（K1-K3 走查实锤缺陷修复批发版：K3 顺序性短路＋K1 可发现性＋
+// K2 双 Prompt 对齐，行为加固批含 module-contracts.md §13.10 补登；零契约面变更——
+// 无新 Gate/reason code/Schema 版本，会话协议轴 1／桥接契约轴 2 零 diff）——HEAD==tag commit 45c0533，无 sha 备注。
+export const ATF_UPSTREAM_TAG = "v0.7.7b0";
+export const ATF_UPSTREAM_COMMIT_SHA = "45c05339078575534653d1ca3b0dc1cc91fa50f4";
 
 export interface AtfCliInvocation {
   command: string;

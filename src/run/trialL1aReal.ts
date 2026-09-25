@@ -202,7 +202,8 @@ const createTrialFixture = async (): Promise<TrialFixture> => {
       { ts: "2026-09-14T00:00:02Z", action: "train_launch_generated", out: "launch", refs: {} },
     ];
     await writeFile(join(journalDir, "journal.jsonl"), events.map(journalLine).join(""), "utf8");
-    const gates = ADMISSION_GATE_IDS.map((gate_id) => ({ gate_id, verdict: "pass" }));
+    // re-pin v0.7.7b0 摘要化路径同步（K3 伴随件）：逐闸 evaluated:true 来源标记（modern 形态）。
+    const gates = ADMISSION_GATE_IDS.map((gate_id) => ({ gate_id, verdict: "pass", evaluated: true }));
     const laneDir = join(wsRoot, "runs", RUN_ID, "l1", "lane-a");
     await mkdir(laneDir, { recursive: true });
     await writeFile(join(laneDir, "lane-a-source-backed-admission-summary.json"), `${JSON.stringify({ gates }, null, 1)}\n`, "utf8");

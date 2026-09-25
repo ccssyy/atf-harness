@@ -68,7 +68,7 @@ describe("门 1b TEM 镜像（EvidenceEvent）", () => {
     expect(event.result_summary).toContain('"status":"blocked"');
     expect(event.gate).toBe("G1");
     expect(event.ts).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(event.env_fingerprint).toEqual({ model: "faux-spike", kernel_pin: "v0.7.6b0" });
+    expect(event.env_fingerprint).toEqual({ model: "faux-spike", kernel_pin: "v0.7.7b0" });
     expect(Number.isNaN(Date.parse(event.ts))).toBe(false);
   });
 
@@ -130,7 +130,7 @@ describe("门 1b TEM 镜像（EvidenceEvent）", () => {
       outcome: "pending",
       evidence_event_ids: ["e1"],
       cost: { model_calls: 1 },
-      env_fingerprint: { model: "m", kernel_pin: "v0.7.6b0" },
+      env_fingerprint: { model: "m", kernel_pin: "v0.7.7b0" },
     };
     await writeExperienceCase(session, base);
     await writeExperienceCase(session, { ...base, case_id: "case-2", evidence_event_ids: ["e1", "e2"] });

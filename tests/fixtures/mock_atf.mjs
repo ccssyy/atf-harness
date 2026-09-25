@@ -416,11 +416,13 @@ const toolDataAdmissionRequest = (params) => {
   }
   const pin = fact.fact_id.split("@")[1] ?? "";
   const summaryRef = `runs/${resolved.runId}/l1/${fact.fact_id}/source-backed-admission-summary.json`;
+  // re-pin v0.7.7b0 投影同步（K3 伴随件）：gates 逐闸 evaluated:true（§13.10 modern 形态；
+  // 变长序列语义在 mock 简化为全闸在场，短路/缺闸形态归真内核契约口径专验）。
   const gates = [
-    { gate_id: "G1", verdict: admissionStatus === "adjudicated" ? "pass" : "blocked", reason_codes: admissionStatus === "adjudicated" ? [] : ["annotation_conflict_pending_human"] },
-    { gate_id: "G2", verdict: "pass", reason_codes: [] },
-    { gate_id: "G3", verdict: "pass", reason_codes: [] },
-    { gate_id: "G4", verdict: "pass", reason_codes: [] },
+    { gate_id: "G1", verdict: admissionStatus === "adjudicated" ? "pass" : "blocked", reason_codes: admissionStatus === "adjudicated" ? [] : ["annotation_conflict_pending_human"], evaluated: true },
+    { gate_id: "G2", verdict: "pass", reason_codes: [], evaluated: true },
+    { gate_id: "G3", verdict: "pass", reason_codes: [], evaluated: true },
+    { gate_id: "G4", verdict: "pass", reason_codes: [], evaluated: true },
   ];
   const result = {
     ok: true,

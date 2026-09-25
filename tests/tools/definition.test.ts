@@ -143,3 +143,72 @@ describe("三件小批 D-2：atf_gate 描述轻补（合法清单展开）", () 
     expect(gate?.description).toContain("G1–G4");
   });
 });
+
+describe("re-pin v0.7.7b0 投影用例——K1-K3 伴随件三字段 wire 形态（§13.10，零契约面变更）", () => {
+  const admissionDefinition = TOOL_DEFINITIONS.find((definition) => definition.name === "atf_data_admission_request");
+  const gateDefinition = TOOL_DEFINITIONS.find((definition) => definition.name === "atf_gate");
+  const validate = (name: string, value: unknown) => {
+    const definition = TOOL_DEFINITIONS.find((entry) => entry.name === name) as NonNullable<ReturnType<typeof TOOL_DEFINITIONS.find>>;
+    return validateCanonicalOutput(name, definition.canonical_output, value);
+  };
+
+  it("admission 现代形态：gates 变长（缺闸省略）逐闸 evaluated:true 通过", () => {
+    expect(admissionDefinition).toBeDefined();
+    const outcome = validate("atf_data_admission_request", {
+      ok: true,
+      run_id: "run-1",
+      dataset_id: "ds-x@p1",
+      pin: "p1",
+      fact_id: "ds-x@p1",
+      status: "adjudicated",
+      summary_ref: "runs/run-1/l1/ds-x@p1/source-backed-admission-summary.json",
+      summary_sha256: "a".repeat(64),
+      gates: [
+        { gate_id: "extraction-contract-valid", verdict: "pass", reason_codes: [], evaluated: true },
+        { gate_id: "split-integrity-valid", verdict: "warn", reason_codes: ["minor"], evaluated: true },
+      ],
+    });
+    expect(outcome.ok).toBe(true);
+  });
+
+  it("admission K3 短路形态：status=blocked＋summary_ref/sha256=null＋单闸 evaluated＋g1_short_circuit=true 通过", () => {
+    const outcome = validate("atf_data_admission_request", {
+      ok: true,
+      run_id: "run-1",
+      dataset_id: "ds-x@p1",
+      pin: "p1",
+      fact_id: "ds-x@p1",
+      status: "blocked",
+      g1_short_circuit: true,
+      summary_ref: null,
+      summary_sha256: null,
+      gates: [{ gate_id: "extraction-contract-valid", verdict: "block", reason_codes: ["extraction_contract_bundle_missing"], evaluated: true }],
+      policy: { source: null, digest: null, deviation: null },
+      style_cluster_source: null,
+      allocation_unit_source: null,
+      partition_counts: null,
+    });
+    expect(outcome.ok).toBe(true);
+  });
+
+  it("admission 旧形态守卫：gates 无 evaluated 标记拒绝（新面标记存在必须 true——fail-closed 对齐）", () => {
+    const outcome = validate("atf_data_admission_request", {
+      ok: true,
+      run_id: "run-1",
+      dataset_id: "ds-x@p1",
+      pin: "p1",
+      fact_id: "ds-x@p1",
+      status: "adjudicated",
+      summary_ref: "runs/run-1/l1/x.json",
+      summary_sha256: "a".repeat(64),
+      gates: [{ gate_id: "G1", verdict: "pass", reason_codes: [] }],
+    });
+    expect(outcome.ok).toBe(false); // required evaluated 缺失 → schema_violation
+  });
+
+  it("atf_gate summary_format=legacy（K3 历史兼容标记）通过；缺省形态零回归", () => {
+    expect(gateDefinition).toBeDefined();
+    expect(validate("atf_gate", { ok: true, gate: "G1", status: "pass", summary_format: "legacy" }).ok).toBe(true);
+    expect(validate("atf_gate", { ok: true, gate: "G1", status: "blocked", reason_codes: ["x"], reason: "x" }).ok).toBe(true);
+  });
+});

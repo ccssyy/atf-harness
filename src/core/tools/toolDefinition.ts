@@ -199,18 +199,27 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         dataset_id: { type: "string" },
         pin: { type: "string" },
         fact_id: { type: "string" },
-        status: { enum: ["not_required", "waiting_on_human", "adjudicated", "temporarily_excluded"] },
-        summary_ref: { type: "string" },
-        summary_sha256: { type: "string", pattern: HEX64 },
+        // K3 顺序性短路（re-pin v0.7.7b0 伴随件，2026-09-25）：G1 证据缺失入口短路返回
+        // status="blocked"（执行面字段为 null、顶层 g1_short_circuit=true）——blocked 为
+        // 合法业务产出（fail-closed 语义，模型可如实转述换路径）。
+        status: { enum: ["not_required", "waiting_on_human", "adjudicated", "temporarily_excluded", "blocked"] },
+        // summary_ref/summary_sha256：键留 required（内核恒发，短路形态为 null）——
+        // 类型校验让渡内核（投影面纪律：深形态归内核，harness 不做第二权威）。
+        summary_ref: { description: "workspace 相对路径（正常形态）；G1 短路形态为 null" },
+        summary_sha256: { description: "summary 文件 sha256（正常形态，HEX64）；G1 短路形态为 null" },
+        // K3 伴随件：gates 变长依存链序列（缺闸整条省略，不再占位 block），逐闸
+        // evaluated:true 来源标记（无标记的历史 summary 按 legacy 口径兼容聚合）。
+        g1_short_circuit: { type: "boolean", optional: true, description: "K3：G1 证据缺失入口短路标记（短路返回体为 true；正常形态缺省）" },
         gates: {
           type: "array",
           items: {
             type: "object",
-            required: ["gate_id", "verdict", "reason_codes"],
+            required: ["gate_id", "verdict", "reason_codes", "evaluated"],
             properties: {
               gate_id: { type: "string" },
               verdict: { type: "string" },
               reason_codes: { type: "array", items: { type: "string" } },
+              evaluated: { type: "boolean", description: "K3 来源标记：真实评估 true；无标记历史 summary 按 legacy 兼容（内核读取侧承载）" },
             },
           },
         },
@@ -219,7 +228,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         human_summary: { type: "object", optional: true, strict: false },
         policy: { type: "object", optional: true, strict: false },
         style_cluster_source: { enum: ["skills", "kernel", null], optional: true },
-        allocation_unit_source: { type: "string", optional: true },
+        // K3 短路形态为 null（执行面字段全 null）——类型让渡内核（投影面纪律同 summary_ref）。
+        allocation_unit_source: { optional: true, description: "分配单位来源（正常形态字符串）；G1 短路形态为 null" },
         // partition_counts：内核实测可为 null（分区未产出时不编造）——不入 properties，由根 strict:false 透传
       },
     },
@@ -494,6 +504,9 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         // re-pin v0.7.5b0 补登（K1 闸门指引，2026-09-23）：内核被拦时新增一行可行动文案
         // （补齐路径＋「G1–G4 同源勿逐个穷举」）——可选字段，缺省形态零回归。
         guidance: { type: "string", optional: true },
+        // re-pin v0.7.7b0 补登（K3 伴随件 summary_format，2026-09-25）：读取侧聚合来自
+        // 无 evaluated 标记的历史 summary 时标记 legacy（K3 历史兼容；现代 summary 不发本键）。
+        summary_format: { type: "string", optional: true },
         requires_human_review: { type: "boolean", optional: true },
         evidence: { ...STRING_ARRAY, optional: true },
         reason: { type: "string", optional: true },

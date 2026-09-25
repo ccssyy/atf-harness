@@ -114,8 +114,14 @@ const call = async (connection: AtfBridgeConnection, method: string, params?: un
 };
 
 const summaryPath = async (lane: string, verdicts: ("pass" | "warn" | "block")[], codes: string[][]): Promise<void> => {
+  // re-pin v0.7.7b0 摘要化路径同步（K3 伴随件）：harness 写面升 modern 形态——逐闸
+  // evaluated:true 来源标记（缺闸整条省略语义由 verdicts 实参承载，不在场即不写）。
   const gates = GATE_IDS.map((gate_id, index) => {
-    const entry: { gate_id: string; verdict: string; reason_codes?: string[] } = { gate_id, verdict: verdicts[index] ?? "pass" };
+    const entry: { gate_id: string; verdict: string; reason_codes?: string[]; evaluated: boolean } = {
+      gate_id,
+      verdict: verdicts[index] ?? "pass",
+      evaluated: true,
+    };
     if ((codes[index]?.length ?? 0) > 0) entry.reason_codes = codes[index] ?? [];
     return entry;
   });
