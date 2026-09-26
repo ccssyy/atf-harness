@@ -28,13 +28,13 @@
 3. **T0 不可引用为证据（ADR-08）**：自由创作区产物可读，但事实链只指向晋升后的 T1+ Artifact。
 4. **无 GPU、无真实 LLM Provider**：开发与测试全程走 Faux / 假实现；真实训练调用必须 owner 显式授权且独立审批。
 5. **内核仓引用纪律**：对 ATF 主仓工作区只读；需要 pin 版本副本用 `git worktree add`（见 §4）；本仓产生的一切改动不回写内核仓。若确需内核新能力，登记待办交 owner 走 ATF 仓自己的流程排队，**本仓不阻塞等待、不插队**。
-6. **零 npm 运行时依赖（R2a）**：`dependencies` 必须为空；devDependencies 仅允许构建测试工具（typescript / vitest 类）。借鉴 Pi 的设计（分层纪律、Result 类型、双上下文管道），不引入 pi-ai 代码。
+6. **低依赖＋锁版本＋审计（R2a，2026-09-23 修订态）**：`dependencies` 保持低依赖且一律锁版本（当前＝pi-ai 底座 `@earendil-works/pi-ai`／`@earendil-works/pi-agent-core` 双包锁 0.87.1）；devDependencies 仅允许构建测试工具（typescript / vitest 类）。借鉴 Pi 的设计（分层纪律、Result 类型、双上下文管道）。
 7. **脱敏**：本仓任何文件不得出现 A800 地址端口、业务单据内容、内部同事信息；ATF 路径一律经环境变量（`ATF_CLI_PATH`）注入。
 
 ## 4. 契约与 pin 管理
 
 - 仓内 `bridge.contract.yaml` 是 harness 对 ATF 认知的**唯一真相源**：JSONL 帧格式 + atf 子命令签名 + canonical output schema + `atf_upstream` pin（commit + contract_version）。
-- **当前 pin：tag `v0.6.0b0`（commit `b6db3496b34089147044be9c6b9a0a7ceb595e3a`，2026-09-14；会话方法面 7 方法（含 `atf.bind_run`），内核批次二发版）**。pin 只落在 ATF 发版 tag 上，不追 main 中间态。
+- **当前 pin：tag `v0.7.8b0`（commit `d291270cb6af6ada4227c832ac00a2eeea0276af`，2026-09-26；F5 确认凭据与流程顺序强制批＋F1 行动指令段补丁发版，re-pin 2026-09-26）**。pin 只落在 ATF 发版 tag 上，不追 main 中间态。
 - contract tests 运行前提：`ATF_CLI_PATH` 指向一份 **checkout 在 pin 上的 ATF 只读副本**，测试先校验其 HEAD sha 与 pin 一致，不一致直接 fail：
   ```bash
   git -C <ATF_KERNEL_DIR> worktree add <HARNESS_DIR>/.atf-pinned v0.6.0b0

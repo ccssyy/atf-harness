@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { resolve } from "node:path";
 import { bridgeError, stringifyCause, type BridgeError } from "./errors.js";
 import { err, ok, type Result } from "./result.js";
 
@@ -36,7 +37,10 @@ export const deriveAtfCommand = (cliPath: string, args: readonly string[]): AtfC
   },
 });
 
-/** 读取 ATF_CLI_PATH；未设置 = err(config_error)（契约测试据此跳过并给出提示）。 */
+/** 读取 ATF_CLI_PATH；未设置 = err(config_error)（契约测试据此跳过并给出提示）。
+ *  批⑤规范化（2026-09-27，指令 de34f3a8）：读入值经 path.resolve() 升绝对路径——相对注入
+ *  一律解析为绝对（cwd=cliPath 语义下杜绝 git -C 等子进程按各自 cwd 二次解析失败类问题）；
+ *  错误分支（未设置/空串）行为不变。 */
 export const atfCliPathFromEnv = (): Result<string, BridgeError> => {
   const value = process.env["ATF_CLI_PATH"];
   if (value === undefined || value.trim() === "") {
@@ -48,7 +52,7 @@ export const atfCliPathFromEnv = (): Result<string, BridgeError> => {
       }),
     );
   }
-  return ok(value);
+  return ok(resolve(value));
 };
 
 const execFileAsResult = (

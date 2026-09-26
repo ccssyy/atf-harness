@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   ATF_UPSTREAM_COMMIT_SHA,
@@ -198,6 +198,23 @@ describeIfPinned("契约测试（真实 atf CLI @ pin）", () => {
 
 describe("契约环境自检", () => {
   it.skip("（占位）未设置 ATF_CLI_PATH 时本文件仅本组跳过并输出提示", () => {});
+
+  it("批⑤规范化：ATF_CLI_PATH 相对路径注入 → 读取值与 deriveAtfCommand().cwd 均升绝对路径", () => {
+    const saved = process.env["ATF_CLI_PATH"];
+    try {
+      process.env["ATF_CLI_PATH"] = join("relative", "pinned-checkout");
+      const read = atfCliPathFromEnv();
+      expect(read.ok).toBe(true);
+      if (!read.ok) return;
+      expect(isAbsolute(read.value)).toBe(true);
+      // cwd=cliPath 语义：注入即 cwd——相对注入必须已在读取口升绝对（git -C 等子进程不再二次解析）
+      const invocation = deriveAtfCommand(read.value, ["--help"]);
+      expect(isAbsolute(invocation.cwd)).toBe(true);
+    } finally {
+      if (saved === undefined) delete process.env["ATF_CLI_PATH"];
+      else process.env["ATF_CLI_PATH"] = saved;
+    }
+  });
 });
 
 if (!cliPath.ok) {
