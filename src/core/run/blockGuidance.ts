@@ -303,6 +303,46 @@ const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
+ * F5 改动二 guidance 段投影（2026-09-26）：内核发布面 block 回流新增结构化 guidance 段
+ * （三段式：当前流程节点／前序缺失／合法取得路径）。harness 侧渲染单源（adapter 摘要化
+ * 路径与闸门回流拼接共用本函数——禁第二实现漂移）：
+ *   字符串 → 原样（v0.7.5b0 K1 一行文案既有形态，零回归）；
+ *   对象   → 按已知键别名（current_node/missing/legal_path 等）人读渲染，未知键回落键名；
+ *   其他   → undefined（缺省零增量）。
+ * 可见性纪律（同族事故三「摘要截断」反面）：结构化段宁可人读渲染或 JSON 串出现，绝不静默丢段。
+ */
+const GUIDANCE_KEY_LABELS: Readonly<Record<string, string>> = {
+  current_node: "当前流程节点",
+  node: "当前流程节点",
+  missing: "前序缺失",
+  missing_reasons: "前序缺失",
+  legal_path: "合法取得路径",
+  next_action_path: "合法取得路径",
+};
+
+const isPlainGuidanceObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+export const renderGuidanceText = (value: unknown): string | undefined => {
+  if (typeof value === "string") return value === "" ? undefined : value;
+  if (Array.isArray(value)) {
+    const items = value.filter((item): item is string => typeof item === "string" && item !== "");
+    return items.length > 0 ? items.join("；") : undefined;
+  }
+  if (isPlainGuidanceObject(value)) {
+    const segments: string[] = [];
+    for (const [key, item] of Object.entries(value)) {
+      const label = GUIDANCE_KEY_LABELS[key] ?? key;
+      const text = typeof item === "string" ? item : (JSON.stringify(item) ?? "");
+      if (text !== "") segments.push(`${label}：${text}`);
+    }
+    if (segments.length > 0) return segments.join("；");
+    return JSON.stringify(value); // 病态空对象也保可见（不静默丢段）
+  }
+  return undefined;
+};
+
+/**
  * 完整性闸门 blocked 结果的三段式回流文案（executed 径专用——闸门 blocked 是合法业务产出
  * 而非 rejected，既有 guidanceLineFor 回填点不覆盖；runner 在 tool/result 落盘处调用）。
  * gate 接受 unknown（从 executed result 的 gate 回显字段透传，helper 内收窄——调用面零假设）。
@@ -331,7 +371,8 @@ export const integrityGateBlockedGuidance = (gate: unknown, result: unknown): st
   // 第三段［登记动作］：advance 携证据引用示例
   const advanceExample = `登记动作：按产出路径补齐证据产物后，以 atf_gate(gate="${gate}", action="advance", evidence_refs=[…证据引用…]) 重新推进`;
   const threeParts = `【完整性闸门 ${gate} 推进被拦（${reason}）】${missingPart}；产出路径：${outputPath}；${advanceExample}`;
-  // 内核原始 guidance 保留拼接、不覆盖（走查 B3 修法第 3 条）
-  const kernelGuidance = typeof result["guidance"] === "string" && result["guidance"] !== "" ? result["guidance"] : undefined;
+  // 内核原始 guidance 保留拼接、不覆盖（走查 B3 修法第 3 条）；F5 改动二起容结构化形态
+  //（renderGuidanceText 单源渲染——字符串零回归，对象人读展开）
+  const kernelGuidance = renderGuidanceText(result["guidance"]);
   return kernelGuidance !== undefined ? `${threeParts}｜内核指引：${kernelGuidance}` : threeParts;
 };

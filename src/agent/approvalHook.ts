@@ -18,7 +18,7 @@
  * ToolExecutor.approve 的合并收口归门 2（不反向改 runner 线文件）。
  */
 import type { BeforeToolCallContext, BeforeToolCallResult } from "@earendil-works/pi-agent-core";
-import { type ScopeRef, approvalKeyFor, type LedgerRecord } from "../core/tools/approvalKey.js";
+import { type ScopeRef, proposalApprovalKey, type LedgerRecord } from "../core/tools/approvalKey.js";
 import { LEDGER_CONSUME_CANONICAL, LEDGER_QUERY_CANONICAL } from "../core/tools/executor.js";
 import { requiresApprovalFor, validateCanonicalOutput } from "../core/tools/index.js";
 import type { AtfAgentToolDeps, SpikeBridgeTransport } from "./atfAgentTools.js";
@@ -59,6 +59,10 @@ export interface ApprovalHookDeps extends AtfAgentToolDeps {
    *  并发不破坏账本 watermark 语义（逐条确认卡、逐条消费、授权对象不错位）。
    *  缺省无锁＝单执行体顺序执行（既有语义零变化）。锁不放行任何动作——只串行化闸段。 */
   gateLock?: GateLock;
+  /** F5 4.2（2026-09-26）：脚本类提案问答轨 key 的内容摘要解析器（fs 半边由装配线按
+   *  FileToolHost roots 注入，proposalContent.createProposalContentDigestFor）。缺省不
+   *  注入＝key 派生与既有逐位一致（零回归）。只改提案 key，不改任何放行判定。 */
+  contentDigestFor?: (tool: string, params: unknown) => Promise<string | undefined>;
 }
 
 /** 账本闸临界区锁（task-of-once 互斥；错误不滞留锁队列）。 */
@@ -108,7 +112,14 @@ export const createApprovalBeforeToolCall =
     // consume」——锁不放行任何动作，只防并发交叉消费破坏账本 watermark 语义（逐条
     // 确认卡、授权对象不错位）。缺省无锁＝单执行体顺序执行，语义零变化。
     const runGate = async (): Promise<BeforeToolCallResult | undefined> => {
-    const auditKey = approvalKeyFor(toolName, params);
+    // F5 4.2：问答轨提案 key 派生纳入脚本内容摘要（同路径重写 → key 必变）；缺省/非脚本类
+    // 与既有 approvalKeyFor 逐位一致。params_digest（审计/账本 evidence_refs 消费面）不变。
+    const proposalKey = proposalApprovalKey(
+      toolName,
+      params,
+      deps.contentDigestFor !== undefined ? await deps.contentDigestFor(toolName, params) : undefined,
+    );
+    const auditKey = { tool: toolName, params_digest: proposalKey.params_digest };
     if (deps.scopeRefBox.current === undefined) {
       deps.audit.push({ tool: toolName, verdict: "blocked_scope_ref_missing", requiresApproval: true, detail: { audit_key: auditKey.params_digest } });
       return block(`审批账本查询缺少 scope_ref（契约 v2 定位键）——先经 atf_workspace_status 获取；fail-closed 不猜测: ${toolName}`);
@@ -125,7 +136,12 @@ export const createApprovalBeforeToolCall =
       // ---- 问答轨（批 P 增补 A2）：确认卡四 verdict；granted 经账本预录→消费统一径 ----
       let verdict: Awaited<ReturnType<ApprovalSurface["ask"]>>;
       try {
-        verdict = await deps.surface.ask({ tool: toolName, params_digest: auditKey.params_digest, audit_key: auditKey.params_digest });
+        verdict = await deps.surface.ask({
+          tool: toolName,
+          params_digest: auditKey.params_digest,
+          audit_key: proposalKey.approval_key,
+          ...(proposalKey.content_digest !== undefined ? { content_digest: proposalKey.content_digest } : {}),
+        });
       } catch {
         deps.audit.push({ tool: toolName, verdict: "blocked_track_failed", requiresApproval: true, detail: { why: "surface 故障" } });
         return { block: true, reason: `问答轨 surface 故障——fail-closed 不放行: ${toolName}` };

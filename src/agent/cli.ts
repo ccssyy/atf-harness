@@ -39,6 +39,7 @@ import { createProviderStreamFn } from "./providerStreamFn.js";
 import { createScriptedStreamFn, loadFauxScript } from "./fauxScript.js";
 import { createHookRegistry, prepareRequestViaHook, wireEventHooks, V1_HOOK_NAMES, type V1HookRegistry } from "./hooks.js";
 import { createJsonlSessionRepo, type SessionLike } from "./sessionMirror.js";
+import { createProposalContentDigestFor } from "../core/tools/proposalContent.js";
 import { createTemAfterToolMirror, createTemTransformContext } from "./tem/retrieval.js";
 import { envFingerprint, scanEvidenceEvents } from "./tem/evidence.js";
 import { ensureTemBranch, writeExperienceCase } from "./tem/store.js";
@@ -419,6 +420,9 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
       bridge: deps.bridge,
       scopeRefBox,
       audit,
+      ...(deps.fileTools !== undefined
+        ? { contentDigestFor: createProposalContentDigestFor({ roots: () => deps.fileTools!.roots }) }
+        : {}),
       ...(surface !== undefined ? { surface } : {}),
       ...(deps.subagent !== undefined
         ? {

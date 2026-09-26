@@ -503,7 +503,10 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         reason_codes: { ...STRING_ARRAY, optional: true },
         // re-pin v0.7.5b0 补登（K1 闸门指引，2026-09-23）：内核被拦时新增一行可行动文案
         // （补齐路径＋「G1–G4 同源勿逐个穷举」）——可选字段，缺省形态零回归。
-        guidance: { type: "string", optional: true },
+        // F5 改动二同步（2026-09-26，投影三同步之一·白名单）：guidance 容结构化三段式对象
+        // （当前流程节点／前序缺失／合法取得路径）——类型让渡内核（投影面纪律同
+        // summary_ref 先例，harness 不做第二权威）；内核键面定形后随 re-pin 伴随件批精化。
+        guidance: { optional: true, strict: false, description: "内核指引：一行可行动文案（v0.7.5b0 K1 形态）或结构化三段式对象（F5 改动二：当前流程节点/前序缺失/合法取得路径；深形态归内核，harness 透传渲染）" },
         // re-pin v0.7.7b0 补登（K3 伴随件 summary_format，2026-09-25）：读取侧聚合来自
         // 无 evaluated 标记的历史 summary 时标记 legacy（K3 历史兼容；现代 summary 不发本键）。
         summary_format: { type: "string", optional: true },

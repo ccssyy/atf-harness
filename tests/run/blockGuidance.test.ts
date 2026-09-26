@@ -137,4 +137,24 @@ describe("走查修复批 B3：完整性闸门 blocked 三段式指引", () => {
     expect(integrityGateBlockedGuidance("extraction-contract-valid", "not-an-object")).toBeUndefined();
     expect(integrityGateBlockedGuidance(undefined, { status: "blocked" })).toBeUndefined();
   });
+
+  // F5 改动二同步（2026-09-26）：内核 guidance 结构化三段式对象 → renderGuidanceText
+  // 人读展开后保留拼接段（不静默丢段）；字符串形态零回归由上方既有用例承载。
+  it("F5：内核 guidance 结构化对象 → 「内核指引」拼接三段渲染文本", () => {
+    const line = integrityGateBlockedGuidance("extraction-contract-valid", {
+      gate: "extraction-contract-valid",
+      status: "blocked",
+      reason_codes: ["contract_experiment_gate_required"],
+      guidance: {
+        current_node: "发布受理（publish_contract）",
+        missing: ["实验门产物标记"],
+        legal_path: "先跑 build_experiment_setup.py",
+      },
+    });
+    expect(line).toBeDefined();
+    if (line === undefined) throw new Error("unreachable");
+    expect(line).toContain("内核指引：当前流程节点：发布受理（publish_contract）");
+    expect(line).toContain('前序缺失：["实验门产物标记"]');
+    expect(line).toContain("合法取得路径：先跑 build_experiment_setup.py");
+  });
 });

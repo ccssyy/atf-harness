@@ -212,3 +212,37 @@ describe("re-pin v0.7.7b0 投影用例——K1-K3 伴随件三字段 wire 形态
     expect(validate("atf_gate", { ok: true, gate: "G1", status: "blocked", reason_codes: ["x"], reason: "x" }).ok).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// F5 改动二同步（2026-09-26，投影三同步之一·canonical 白名单）：atf_gate guidance 容
+// 结构化三段式对象（类型让渡内核，同 summary_ref 先例）——字符串既有形态零回归。
+// ---------------------------------------------------------------------------
+describe("F5 白名单同步：atf_gate guidance 容结构化三段式对象", () => {
+  const validate = (name: string, value: unknown) => {
+    const definition = TOOL_DEFINITIONS.find((entry) => entry.name === name) as NonNullable<ReturnType<typeof TOOL_DEFINITIONS.find>>;
+    return validateCanonicalOutput(name, definition.canonical_output, value);
+  };
+
+  it("guidance=字符串（v0.7.5b0 K1 形态）通过——零回归", () => {
+    expect(validate("atf_gate", { ok: true, gate: "G1", status: "blocked", guidance: "按指引补齐后重试" }).ok).toBe(true);
+  });
+
+  it("guidance=结构化对象（F5 改动二：当前流程节点/前序缺失/合法取得路径）通过", () => {
+    const outcome = validate("atf_gate", {
+      ok: true,
+      gate: "extraction-contract-valid",
+      status: "blocked",
+      reason_codes: ["contract_experiment_gate_required"],
+      guidance: {
+        current_node: "发布受理（publish_contract）",
+        missing: ["实验门产物标记（gate_produced/field_config_sha/setup 报告 ref）"],
+        legal_path: "先跑 build_experiment_setup.py 经用户确认，再重试发布",
+      },
+    });
+    expect(outcome.ok).toBe(true);
+  });
+
+  it("guidance 缺省形态零回归", () => {
+    expect(validate("atf_gate", { ok: true, gate: "G1", status: "pass" }).ok).toBe(true);
+  });
+});

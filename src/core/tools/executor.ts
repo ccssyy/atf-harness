@@ -15,7 +15,7 @@
  */
 import { type BridgeError } from "../../bridge/index.js";
 import { checkSchema, validateCanonicalOutput, type SchemaNode } from "./canonical.js";
-import { approvalKeyFor, type LedgerRecord, type ScopeRef } from "./approvalKey.js";
+import { type LedgerRecord, type ScopeRef, proposalApprovalKey } from "./approvalKey.js";
 import { requiresApprovalFor } from "./toolDefinition.js";
 import { approvalMissingBlock, approvalTrackBlock, toolError, toolErrorFromBridge, type ToolBlock, type ToolError } from "./errors.js";
 import { type ToolRegistry } from "./registry.js";
@@ -73,7 +73,7 @@ export type ApprovalTrackVerdict =
   | { kind: "aborted"; block: ToolBlock };
 
 export interface ApprovalGate {
-  handler: (input: { tool: string; params: unknown; approval_key: string }) => Promise<ApprovalTrackVerdict>;
+  handler: (input: { tool: string; params: unknown; approval_key: string; content_digest?: string }) => Promise<ApprovalTrackVerdict>;
 }
 
 /** 工具执行所需的桥接最小面（AtfBridgeConnection 结构满足；测试可用桩注入）。 */
@@ -102,8 +102,14 @@ export class ToolExecutor {
     /** 作用域引用（契约 v2）：须审批工具的账本查询定位键；缺省时须审批调用 fail-closed。 */
     private readonly scopeRef?: ScopeRef,
     /** 批 3：本地工具面（工作区工具）——命中分派表则在审批闸后本地执行、不经桥接。
-     *  缺省不注入＝既有桥接行为逐位不变（MCP/ACP 零改动）。 */
-    private readonly local?: { handlers: Readonly<Record<string, LocalToolHandler>>; host: LocalToolHost },
+     *  缺省不注入＝既有桥接行为逐位不变（MCP/ACP 零改动）。
+     *  F5 4.2：contentDigestFor 可选注入——脚本类提案问答轨 key 的内容摘要解析器
+     *  （fs 半边见 proposalContent.ts）；缺省不注入＝key 派生与既有逐位一致。 */
+    private readonly local?: {
+      handlers: Readonly<Record<string, LocalToolHandler>>;
+      host: LocalToolHost;
+      contentDigestFor?: (tool: string, params: unknown) => Promise<string | undefined>;
+    },
   ) {}
 
   /**
@@ -172,7 +178,13 @@ export class ToolExecutor {
         },
       };
     }
-    const auditKey = approvalKeyFor(definition.name, params);
+    // F5 4.2（2026-09-26）：脚本类提案的问答轨 key 派生纳入引用脚本内容摘要（同路径重写
+    // → key 必变，修 peek.py 30 次同 key 盲区）。contentDigestFor 由 runner/装配线注入
+    // （fs 半边见 proposalContent.ts）；缺省/非脚本类 → 既有 key 逐位一致（零回归）。
+    // 账本轨键面（ledger_query/evidence_refs）不随本批变化——approval_key 是 harness
+    // 内部状态键，非账本键（approvalKey.ts 头注）。
+    const proposalKey = proposalApprovalKey(definition.name, params, this.local?.contentDigestFor !== undefined ? await this.local.contentDigestFor(definition.name, params) : undefined);
+    const auditKey = { tool: definition.name, params_digest: proposalKey.params_digest };
     const queried = await this.request(
       "ledger_query",
       "ledger_query",
@@ -203,7 +215,12 @@ export class ToolExecutor {
       // 问答轨(账本未命中且已声明审批面):编排 handler 发起 request → 等待应答 → 分支处置
       let verdict: ApprovalTrackVerdict;
       try {
-        verdict = await approval.handler({ tool: definition.name, params, approval_key: auditKey.params_digest });
+        verdict = await approval.handler({
+          tool: definition.name,
+          params,
+          approval_key: proposalKey.approval_key,
+          ...(proposalKey.content_digest !== undefined ? { content_digest: proposalKey.content_digest } : {}),
+        });
       } catch (cause) {
         // 禁止异常穿越边界:编排层故障折算结构化 block(fail-closed,不放行)
         return {

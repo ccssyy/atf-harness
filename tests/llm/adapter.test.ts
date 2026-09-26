@@ -222,6 +222,81 @@ describe("走查修复批 B5：advised 意见正文进摘要（投影三同步·
 // 结果（executed 径）回填三段式指引，经本段进入模型可见摘要。此前 ok:true 恒无
 // payload.guidance（既有载荷零回归由上方逐字节用例承载）。
 // ---------------------------------------------------------------------------
+// F5 改动二/四同步（2026-09-26，投影三同步之一·二）：①guidance 容结构化形态（内核
+// 三段式 guidance 段——对象人读渲染，字符串零回归，未知形态不静默丢段）；
+// ②approval/request 白名单补 content_digest（4.2 内容摘要随 request 落账 → 模型可见）。
+// ---------------------------------------------------------------------------
+describe("F5 投影同步：结构化 guidance 摘要化＋approval/request content_digest 白名单", () => {
+  const STRUCTURED = {
+    current_node: "发布受理（publish_contract）",
+    missing: ["contract_experiment_gate_required：实验门产物标记缺失"],
+    legal_path: "先跑 build_experiment_setup.py 经用户确认，再重试发布",
+  };
+
+  it("ok:false + 结构化 guidance 对象 → 摘要按三段别名渲染（不静默丢段）", () => {
+    const mapped = adaptProjectionToMessages([
+      event(3001, "tool/result", { tool: "atf_bash", ok: false, reason: "executed_exit_2", call_ref: 3000, guidance: STRUCTURED }),
+    ]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value[0];
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    expect(toolResult.summary).toContain("当前流程节点：发布受理（publish_contract）");
+    expect(toolResult.summary).toContain("前序缺失：");
+    expect(toolResult.summary).toContain("合法取得路径：先跑 build_experiment_setup.py");
+  });
+
+  it("ok:true + 结构化 guidance 对象 → 成功径同款渲染（字符串既有形态零回归另测）", () => {
+    const mapped = adaptProjectionToMessages([
+      event(3002, "tool/result", { tool: "atf_bash", ok: true, result: { done: true }, call_ref: 3000, guidance: STRUCTURED }),
+    ]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value[0];
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    expect(toolResult.summary).toContain("当前流程节点：");
+  });
+
+  it("字符串 guidance → 与既有形态逐字节一致（F5 改动零回归锚）", () => {
+    const mapped = adaptProjectionToMessages([
+      event(3003, "tool/result", { tool: "atf_bash", ok: false, reason: "blocked", call_ref: 3000, guidance: "按指引补齐后重试" }),
+    ]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value[0];
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    expect(toolResult.summary).toBe("blocked｜按指引补齐后重试");
+  });
+
+  it("未知形态 guidance（数值）→ 摘要缺省段滤除（不产生 [object Object]，不炸投影）", () => {
+    const mapped = adaptProjectionToMessages([
+      event(3004, "tool/result", { tool: "atf_bash", ok: false, reason: "blocked", call_ref: 3000, guidance: 42 }),
+    ]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const toolResult = mapped.value[0];
+    if (toolResult?.role !== "tool_result") throw new Error("unreachable");
+    expect(toolResult.summary).toBe("blocked");
+  });
+
+  it("approval/request 携 content_digest → 投影通过白名单且摘要可见（4.2 落账面）", () => {
+    const mapped = adaptProjectionToMessages([
+      event(3005, "approval/request", {
+        approval_session_id: "aps-1", tool_call_id: 9, tool: "atf_bash",
+        params: { command: "python peek.py" }, approval_key: "abc:def", content_digest: "cafe12", attempt: 1,
+      }),
+    ]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const approval = mapped.value[0];
+    if (approval?.role !== "approval") throw new Error("unreachable");
+    expect(approval.phase).toBe("request");
+    expect(approval.summary).toContain("content_digest");
+    expect(approval.summary).toContain("cafe12");
+  });
+});
+
+// ---------------------------------------------------------------------------
 describe("走查修复批 B3：ok:true 摘要含 guidance 段（完整性闸门三段式回流）", () => {
   const GUIDANCE = '【完整性闸门 extraction-contract-valid 推进被拦（required_evidence_missing）】缺什么：artifact:contract-bundle:abc123；产出路径：atf-validate-extraction-contract 技能；登记动作：补齐后以 atf_gate(gate="extraction-contract-valid", action="advance", evidence_refs=[…]) 重新推进';
 

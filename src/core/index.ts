@@ -28,3 +28,13 @@ export {
   providerConfigThreePart,
   type ThreePartError,
 } from "./threePart.js";
+export {
+  candidateDigestFromText,
+  collectConfirmReport,
+  renderConfirmRequestLines,
+  synthesizeUserConfirmation,
+  CONFIRM_CARD_PROMPT_CAP_CHARS,
+  type ConfirmRequestBody,
+  type ContractConfirmationReport,
+  type UserConfirmation,
+} from "./confirmRequest.js";

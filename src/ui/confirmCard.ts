@@ -21,8 +21,8 @@
  * A1 后模板全量可见；③ 内核闭集校验＋审批弹窗逐参数中文回显（approvalCopy）＋与确认卡
  * 只读一致性比对（confirmationEchoLine——只提示、不拦截、不改写）。
  */
-import { createHash } from "node:crypto";
 import { CLUSTER_PARAM_LABELS } from "../core/tools/index.js";
+import { CANONICAL_DIGEST_PREFIX, canonicalDigestHex } from "../core/canonicalDigest.js";
 
 export type ConfirmCardKind = "cluster" | "split";
 
@@ -166,45 +166,8 @@ const formatFieldValueList = (card: ConfirmCard, confirmed: Record<string, unkno
 // A2.5 确认直填（批 2.5 §一）：确定性合成——tool/call 参数＝f(内核模板, 确认值)，全程无 LLM
 // ---------------------------------------------------------------------------
 
-/** 内核 canonical_digest 忠实移植（处置① 对码：contracts/models.py canonical_json＝
- *  json.dumps(sort_keys=True, separators=(",",":"), ensure_ascii=True) 的 SHA-256；
- *  本合成只产 JSON 基础类型（str/int/float/bool/null/list/dict），datetime/Enum/dataclass/
- *  set 分支不触。integrity_digest＝"sha256:"+digest(body)——内核 _split_policy 硬校验，
- *  提交方必须自带（走查 run-walk6 四拒的结构性根因：模型无法计算该摘要）。 */
-const CANONICAL_DIGEST_PREFIX = "sha256:";
-
-const ensureAscii = (text: string): string => {
-  let out = "";
-  for (const ch of text) {
-    const code = ch.codePointAt(0) as number;
-    if (code < 0x80) {
-      out += ch;
-    } else if (code <= 0xffff) {
-      out += `\\u${code.toString(16).padStart(4, "0")}`;
-    } else {
-      const high = Math.floor((code - 0x10000) / 0x400) + 0xd800;
-      const low = ((code - 0x10000) % 0x400) + 0xdc00;
-      out += `\\u${high.toString(16).padStart(4, "0")}\\u${low.toString(16).padStart(4, "0")}`;
-    }
-  }
-  return out;
-};
-
-const canonicalJson = (value: unknown): string => {
-  if (value === null || typeof value === "boolean" || typeof value === "number") {
-    if (typeof value === "number" && !Number.isFinite(value)) throw new Error("canonical_float_not_finite");
-    return JSON.stringify(value);
-  }
-  if (typeof value === "string") return ensureAscii(JSON.stringify(value));
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (typeof value === "object") {
-    const keys = Object.keys(value as Record<string, unknown>).sort();
-    return `{${keys.map((key) => `${ensureAscii(JSON.stringify(key))}:${canonicalJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
-  }
-  throw new Error("canonical_value_unsupported");
-};
-
-const canonicalDigestHex = (value: unknown): string => createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
+// 内核 canonical_digest 忠实移植已升 core 单源（F5 4.1 批，2026-09-26：core/canonicalDigest.ts
+// ——与确认凭据 candidate_digest 复算共用；CANONICAL_DIGEST_PREFIX/canonicalDigestHex 直接导入）。
 
 export interface SynthesizedAction {
   tool: string;

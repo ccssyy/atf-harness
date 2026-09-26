@@ -44,9 +44,12 @@ import {
   type NoProgressObservation,
 } from "./noProgress.js";
 import { gapCardFor, guidanceLineFor, integrityGateBlockedGuidance, isMaterialGapCode, lengthTruncatedGapCard } from "./blockGuidance.js";
+import { findExistingCredential } from "../tools/credentialState.js";
+import { synthesizeUserConfirmation } from "../confirmRequest.js";
 import { injectMemoryEntries, type MemoryReadInjector } from "./memoryInjection.js";
 import {
   approvalParamsDigest,
+  createProposalContentDigestFor,
   resolveHeadlessExitCode,
   ToolExecutor,
   ToolRegistry,
@@ -275,6 +278,46 @@ export type ToolResultPayload =
   | { tool: string; ok: true; result: unknown; call_ref: number; nudge?: string }
   | { tool: string; ok: false; reason: string; call_ref: number; block?: ToolBlock; detail?: unknown; nudge?: string; guidance?: string };
 
+/**
+ * F5 改动四 4.1（2026-09-26）：confirm 型请示的确认凭据并入。
+ *
+ * ask_user_for_input 的本地 handler 只产卡面材料（无账面访问权）；问答轨 granted 落账后，
+ * runner 在 tool/result 落盘前按应答事件合成 user_confirmation 并入结果——随凭据下发：
+ *   by/at   ＝ granted 应答事件的 actor/ts（账面事实，非本进程时钟编造）；
+ *   candidate_digest ＝ handler 对候选文件的复算值（结果体透传）；
+ *   approval_ref ＝ approval_session_id（内核仅透传落账与格式校验，改动一 1.3）。
+ * 凭据链缺失（无 request/granted——理论上 gate 已拦，防御径）→ 原结果返回（并入跳过，
+ *  不伪造凭据——fail-closed）。
+ */
+const mergeConfirmationCredential = (
+  events: readonly SessionEvent[],
+  toolCallId: number,
+  tool: string,
+  result: unknown,
+): unknown => {
+  if (tool !== "ask_user_for_input" || !isPlainRecordValue(result) || result["ok"] !== true) return result;
+  const credential = findExistingCredential(events, toolCallId);
+  if (credential === null) return result;
+  const granted = events.find(
+    (event) =>
+      event.type === "approval/response" &&
+      (event.payload as Record<string, unknown>)["request_event_ref"] === credential.request_event_ref &&
+      (event.payload as Record<string, unknown>)["verdict"] === "granted",
+  );
+  if (granted === undefined) return result;
+  const actor = (granted.payload as Record<string, unknown>)["actor"];
+  const userConfirmation = synthesizeUserConfirmation({
+    actor: typeof actor === "string" && actor !== "" ? actor : "unknown-operator",
+    answeredAt: granted.ts,
+    candidateDigest: typeof result["candidate_digest"] === "string" ? result["candidate_digest"] : "",
+    approvalSessionId: credential.approval_session_id,
+  });
+  return { ...result, user_confirmation: userConfirmation, approval_session_id: credential.approval_session_id };
+};
+
+const isPlainRecordValue = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 /** A3:credential_indeterminate 终态的人工核对上报材料(固定五项)。 */
 export interface CredentialIndeterminateReport {
   approval_session_id: string;
@@ -397,7 +440,13 @@ export interface RunBranchOptions {
    *  （4 个工作区工具：scratch_write/scratch_exec/skill_read/launch_execute）。 */
   toolFace?: {
     registry: ToolRegistry;
-    local?: { handlers: Readonly<Record<string, LocalToolHandler>>; host: LocalToolHost };
+    /** F5 4.2：contentDigestFor 可选注入（脚本类提案问答轨 key 的内容摘要解析器）；
+     *  缺省由 runner 以 ws.scratchDir 为单根补装缺省实现（proposalContent.ts）。 */
+    local?: {
+      handlers: Readonly<Record<string, LocalToolHandler>>;
+      host: LocalToolHost;
+      contentDigestFor?: (tool: string, params: unknown) => Promise<string | undefined>;
+    };
   };
   /** provenance model_id（缺省 "faux"，既有行为逐位不变；L1a 传入 provider config.model） */
   modelId?: string;
@@ -533,11 +582,22 @@ export class ScenarioRunner {
       }
       const session = guarded.value;
       // 批 3：工具面注入 seam（缺省 = createDefault() 无本地分派，既有行为逐位不变）
+      // F5 4.2（2026-09-26）：本地面在位时补装缺省内容摘要解析器（脚本类提案问答轨 key
+      // 派生纳入引用脚本内容 sha256；root 恒 scratch——相对脚本路径的落点）。调用方注入的
+      // contentDigestFor 优先（覆盖面留测试/特殊装配）；不改变任何放行判定——只改提案 key。
+      const localFace = options.toolFace?.local;
       const executor = new ToolExecutor(
         connection,
         options.toolFace?.registry ?? ToolRegistry.createDefault(),
         scopeRef,
-        options.toolFace?.local,
+        localFace !== undefined
+          ? {
+              ...localFace,
+              contentDigestFor:
+                localFace.contentDigestFor ??
+                createProposalContentDigestFor({ roots: () => [ws.scratchDir] }),
+            }
+          : undefined,
       );
 
       // P2-S3:多 provider 段分支(segments)= 一段一个 turn,段边界即合法切换边界;
@@ -970,7 +1030,7 @@ export class ScenarioRunner {
                         : undefined;
                     const payload: ToolResultPayload =
                       result.kind === "executed"
-                        ? { tool: callPayload.tool, ok: true, result: result.result, call_ref: originalCall.id, ...(gateBlockedGuidance !== undefined ? { guidance: gateBlockedGuidance } : {}) }
+                        ? { tool: callPayload.tool, ok: true, result: mergeConfirmationCredential(events, originalCall.id, callPayload.tool, result.result), call_ref: originalCall.id, ...(gateBlockedGuidance !== undefined ? { guidance: gateBlockedGuidance } : {}) }
                         : result.kind === "rejected"
                           ? { tool: callPayload.tool, ok: false, reason: result.reason, call_ref: originalCall.id, detail: result.detail }
                           : result.kind === "input_violation"
@@ -1081,7 +1141,7 @@ export class ScenarioRunner {
         }
         const payload: ToolResultPayload =
           result.kind === "executed"
-            ? { tool: action.tool, ok: true, result: result.result, call_ref: call.id }
+            ? { tool: action.tool, ok: true, result: mergeConfirmationCredential(events, call.id, action.tool, result.result), call_ref: call.id }
             : result.kind === "rejected"
               ? { tool: action.tool, ok: false, reason: result.reason, call_ref: call.id, detail: result.detail, ...(backfillGuidance !== undefined ? { guidance: backfillGuidance } : {}) }
               : result.kind === "input_violation"
@@ -1545,7 +1605,7 @@ export class ScenarioRunner {
 
           const payload: ToolResultPayload =
             result.kind === "executed"
-              ? { tool: step.tool, ok: true, result: result.result, call_ref: call.id, ...(nudgeNote !== undefined ? { nudge: nudgeNote } : {}), ...(gateBlockedGuidance !== undefined ? { guidance: gateBlockedGuidance } : {}) }
+              ? { tool: step.tool, ok: true, result: mergeConfirmationCredential(events, call.id, step.tool, result.result), call_ref: call.id, ...(nudgeNote !== undefined ? { nudge: nudgeNote } : {}), ...(gateBlockedGuidance !== undefined ? { guidance: gateBlockedGuidance } : {}) }
               : result.kind === "rejected"
                 ? { tool: step.tool, ok: false, reason: result.reason, call_ref: call.id, detail: result.detail, ...(nudgeNote !== undefined ? { nudge: nudgeNote } : {}), ...(backfillGuidance !== undefined ? { guidance: backfillGuidance } : {}) }
                 : result.kind === "input_violation"

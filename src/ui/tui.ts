@@ -25,6 +25,7 @@
  * 退出码 = run 终局码（0/1/75/78/79，单一出口 resolveRunExitCode）。
  */
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { readFile as readFileAsync } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,6 +34,8 @@ import { ATF_UPSTREAM_COMMIT_SHA, ATF_UPSTREAM_TAG, readGitHeadSha } from "../br
 import { loadLlmProviderConfig, createLlmProviderFromConfig, type ResolvedLlmProviderConfig } from "../llm/index.js";
 import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
 import { ToolRegistry, WORKSPACE_TOOL_HANDLERS, buildSkillsSystemSuffix, type LocalToolHost } from "../core/tools/index.js";
+import { safeScratchPath } from "../core/workspace/index.js";
+import { candidateDigestFromText, collectConfirmReport, renderConfirmRequestLines } from "../core/confirmRequest.js";
 import {
   buildLabelQcResolveParams,
   labelQcCardKey,
@@ -335,13 +338,39 @@ const main = async (): Promise<void> => {
         modelProvider: provider,
         modelId: config.model,
         approvalSurface: {
-          stub: async (input) => await askApproval({
-            renderer,
-            rl,
-            input,
-            // A2 三道防线之三：与最近确认卡的只读一致性回显（只提示、不拦截、不改写）
-            confirmationEcho: (tool, params) => confirmationEchoLine(tool, params, cardRef.confirmed?.card ?? null, cardRef.confirmed?.confirmed ?? null),
-          }),
+          stub: async (input) => {
+            // F5 4.1（2026-09-26）：confirm 型请示——审批请求行前渲染确认卡全文（用户可读，
+            // 过程流同路径逐行打印）。candidate_digest 在卡面时点由本层对候选文件复算
+            // （与 handler 同一 core 单源：safeScratchPath＋candidateDigestFromText）——
+            // 用户确认的对象＝摘要绑定的实际文件；文件不可读时卡面缺摘要行（handler 侧
+            // 仍会 fail-closed 拒绝）。
+            const params = input.params as Record<string, unknown> | null;
+            if (input.tool === "ask_user_for_input" && params !== null && typeof params === "object" && params["kind"] === "confirm") {
+              const report = collectConfirmReport(params as never, undefined);
+              let digest: string | null = null;
+              const candidateRef = params["candidate_ref"];
+              if (typeof candidateRef === "string" && localHost !== null && localHost.scratchDir !== "") {
+                const guard = safeScratchPath(localHost.scratchDir, candidateRef);
+                if (guard.ok) {
+                  try {
+                    digest = candidateDigestFromText(await readFileAsync(guard.value.resolved, "utf8"));
+                  } catch {
+                    digest = null;
+                  }
+                }
+              }
+              if (report !== null) {
+                for (const line of renderConfirmRequestLines(report, digest ?? "(摘要待复算)")) renderer.appendLine(line);
+              }
+            }
+            return await askApproval({
+              renderer,
+              rl,
+              input,
+              // A2 三道防线之三：与最近确认卡的只读一致性回显（只提示、不拦截、不改写）
+              confirmationEcho: (tool, params) => confirmationEchoLine(tool, params, cardRef.confirmed?.card ?? null, cardRef.confirmed?.confirmed ?? null),
+            });
+          },
         },
         onEvent: (event, origin) => {
           folder.handle(event, origin, formatEventLine, formatEventDetailLines);

@@ -43,6 +43,7 @@ import {
   type SkillSummary,
 } from "../workspace/skillCatalog.js";
 import { safeScratchPath } from "../workspace/runWorkspace.js";
+import { candidateDigestFromText, collectConfirmReport, type ConfirmRequestBody } from "../confirmRequest.js";
 import { type SchemaNode } from "./canonical.js";
 import { type ToolDefinition } from "./toolDefinition.js";
 
@@ -213,7 +214,100 @@ const LAUNCH_EXECUTE_CANONICAL: SchemaNode = {
   },
 };
 
-/** 工作区工具面（4 个；与 TOOL_DEFINITIONS 分册——不进桥接方法面，注册走 createWithWorkspaceTools）。 */
+/** ask_user_for_input 参数（F5 4.1 confirm 型；本批唯一 kind=confirm，其余 fail-closed）。 */
+const ASK_USER_PARAMS: SchemaNode = {
+  type: "object",
+  required: ["kind", "candidate_ref"],
+  properties: {
+    kind: { enum: ["confirm"], description: "请示类型：confirm＝抽取契约发布确认（渲染确认报告卡面，经问答轨落账后发确认凭据）" },
+    title: { type: "string", optional: true, description: "卡面标题（缺省「抽取契约发布确认」）" },
+    candidate_ref: {
+      type: "string",
+      description: "候选契约 JSON 文件（scratch 内相对路径；candidate_digest 由 harness 对该文件复算——模型自报摘要不采信，内核侧亦会复算 fail-closed）",
+    },
+    report_ref: { type: "string", optional: true, description: "确认报告文件（scratch 内相对路径；build_contract_confirmation_report.py 产物——inline 字段缺项时由此补齐）" },
+    prompt_texts: { type: "array", optional: true, items: { type: "string" }, description: "inline 形态：Prompt 实文（与报告文件二选一并集；inline 优先）" },
+    field_ids: { type: "array", optional: true, items: { type: "string" }, description: "inline 形态：字段序（顺序敏感；空心卡面拒绝渲染）" },
+    field_groups: { type: "array", optional: true, items: { type: "string" }, description: "inline 形态：字段分组（可选）" },
+    coordinate_policy: { type: "string", optional: true, description: "inline 形态：坐标策略声明（如 pixel）" },
+  },
+};
+
+const ASK_USER_CANONICAL: SchemaNode = {
+  type: "object",
+  required: ["ok", "kind", "candidate_ref", "candidate_digest", "report"],
+  properties: {
+    ok: { const: true },
+    kind: { const: "confirm" },
+    candidate_ref: { type: "string" },
+    candidate_digest: { type: "string", pattern: HEX64, description: "harness 对候选文件复算的规范化 sha256（确认对象绑定）" },
+    report: { type: "object", strict: false, description: "确认报告投影（prompt_texts/field_ids/field_groups/coordinate_policy）" },
+    // user_confirmation 由 runner 在问答轨 granted 后合成并入（by/at 取自应答事件、
+    // approval_ref=approval_session_id）——handler 层不产凭据（无账面访问权）。
+    user_confirmation: { type: "object", optional: true, strict: false },
+    approval_session_id: { type: "string", optional: true },
+  },
+};
+
+// ---------------------------------------------------------------------------
+// F5 改动四 4.1（2026-09-26）：confirm 型请示 handler——卡面材料收集（候选摘要复算＋
+// 确认报告收集）。凭据（user_confirmation）不在此层：handler 无账面访问权，runner 在
+// 问答轨 granted 后按应答事件合成并入结果（见 runner.ts attachConfirmationCredential）。
+// ---------------------------------------------------------------------------
+
+const askUserHandler: LocalToolHandler = async (rawParams, host) => {
+  if (!isPlainObject(rawParams)) return rejected("invalid_input", { message: "参数须为 JSON 对象" });
+  const kind = stringParam(rawParams, "kind");
+  if (kind !== "confirm") {
+    return rejected("invalid_input", { message: `kind 仅支持 confirm（得 ${kind ?? "（缺失）"}）——其他请示类型未开通` });
+  }
+  const candidateRef = stringParam(rawParams, "candidate_ref");
+  if (candidateRef === undefined) {
+    return rejected("invalid_input", { message: "candidate_ref 必填（候选契约 JSON 文件，scratch 相对路径）——确认对象必须绑定实际文件，不收模型自报摘要" });
+  }
+  const guardCandidate = safeScratchPath(host.scratchDir, candidateRef);
+  if (!guardCandidate.ok) return rejected(guardCandidate.error.code, { message: guardCandidate.error.message });
+  let candidateText: string;
+  try {
+    candidateText = await readFile(guardCandidate.value.resolved, "utf8");
+  } catch {
+    return rejected("invalid_input", { message: `候选文件不可读: ${candidateRef}` });
+  }
+  const candidateDigest = candidateDigestFromText(candidateText);
+  if (candidateDigest === null) {
+    return rejected("invalid_input", { message: `候选文件不是合法 JSON（摘要复算失败）: ${candidateRef}` });
+  }
+  const reportRef = stringParam(rawParams, "report_ref");
+  let reportFile: unknown = undefined;
+  if (reportRef !== undefined) {
+    const guardReport = safeScratchPath(host.scratchDir, reportRef);
+    if (!guardReport.ok) return rejected(guardReport.error.code, { message: guardReport.error.message });
+    try {
+      reportFile = JSON.parse(await readFile(guardReport.value.resolved, "utf8"));
+    } catch {
+      return rejected("invalid_input", { message: `确认报告文件不可读或非 JSON: ${reportRef}` });
+    }
+  }
+  const report = collectConfirmReport(rawParams as unknown as ConfirmRequestBody, reportFile);
+  if (report === null) {
+    return rejected("invalid_input", {
+      message:
+        "确认报告三要素缺失（Prompt 实文／字段序／坐标策略）——以 inline 字段或 report_ref（build_contract_confirmation_report.py 产物）补齐后再请示；不渲染空心卡面",
+    });
+  }
+  return {
+    kind: "executed",
+    result: {
+      ok: true,
+      kind: "confirm",
+      candidate_ref: candidateRef,
+      candidate_digest: candidateDigest,
+      report: report as unknown as Record<string, unknown>,
+    },
+  };
+};
+
+/** 工作区工具面（5 个；与 TOOL_DEFINITIONS 分册——不进桥接方法面，注册走 createWithWorkspaceTools）。ask_user_for_input 为 F5 改动四 4.1 增补（2026-09-26，工具面 4→5——TUI/resume 装配面；MCP/ACP 不装配零风险）。 */
 export const WORKSPACE_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "atf_scratch_write",
@@ -246,6 +340,16 @@ export const WORKSPACE_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     parameters: LAUNCH_EXECUTE_PARAMS,
     requires_approval: true,
     canonical_output: LAUNCH_EXECUTE_CANONICAL,
+  },
+  {
+    // F5 改动四 4.1（2026-09-26）：confirm 型请示——抽取契约发布确认走真人卡面落账，
+    // 确认凭据（user_confirmation＋approval_ref）由 harness 合成随工具结果下发。
+    name: "ask_user_for_input",
+    description:
+      "向用户发起确认型请示（须审批——本工具的「审批」即把请示落账并等真人应答）：kind=confirm 用于抽取契约发布前的人工确认。必须给出 candidate_ref（候选契约文件，harness 复算 candidate_digest）；确认报告三要素（Prompt 实文/字段序/坐标策略）以 inline 字段或 report_ref（build_contract_confirmation_report.py 产物）提供，缺任一即拒绝（不渲染空心卡）。用户确认后工具结果携带 user_confirmation（by/at/approval_ref），把它原样写入发布件的用户确认记录（勿改写、勿代签）；用户拒绝则如实停止，勿绕道伪造确认件——内核会复算摘要并 fail-closed。",
+    parameters: ASK_USER_PARAMS,
+    requires_approval: true,
+    canonical_output: ASK_USER_CANONICAL,
   },
 ];
 
@@ -468,6 +572,7 @@ export const WORKSPACE_TOOL_HANDLERS: Readonly<Record<string, LocalToolHandler>>
   atf_scratch_exec: scratchExecHandler,
   atf_skill_read: skillReadHandler,
   atf_launch_execute: launchExecuteHandler,
+  ask_user_for_input: askUserHandler,
 };
 
 /** 装配 helper（TUI/resume 消费）：技能常驻清单 systemSuffix（skillsRoot 缺失 = undefined，装载降级）。 */

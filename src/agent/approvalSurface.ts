@@ -8,6 +8,7 @@
  * headless 缺省无 surface＝approval_missing fail-closed（78），ADR-07 不挪用。
  */
 import { EventEmitter } from "node:events";
+import { contentDigestPrefix } from "../core/tools/index.js";
 import { type ApprovalAuditEntry } from "./approvalHook.js";
 
 export type ApprovalSurfaceVerdict =
@@ -20,6 +21,8 @@ export interface ApprovalRequestInfo {
   tool: string;
   params_digest: string;
   audit_key: string;
+  /** F5 4.2：内容摘要（脚本类提案；同路径重写 → key 变化，卡面附前缀可辨） */
+  content_digest?: string;
 }
 
 export interface ApprovalSurface {
@@ -69,6 +72,7 @@ export const createInteractiveApprovalSurface = (opts?: {
           "┌── 审批确认卡（写动作需人工裁定）──────────────",
           `│ 工具: ${info.tool}`,
           `│ 参数摘要: ${info.params_digest}`,
+          ...(info.content_digest !== undefined ? [`│ 内容摘要: ${contentDigestPrefix(info.content_digest) ?? info.content_digest}（提案引用脚本内容 sha256 前缀——同路径重写后本卡可辨）`] : []),
           `│ 审批键: ${info.audit_key}`,
           "│ 裁定: allow(放行) / deny(否决) / suspend(挂起) / abort(中止)",
           "└──────────────────────────────────────",

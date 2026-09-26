@@ -297,6 +297,38 @@ describe("HttpLlmProvider——fail-closed", () => {
     expect(serialized).toContain("approval_advised");
     expect(serialized).toContain(ADVICE); // 意见正文全文出站（非截断残段）
   });
+
+  // F5 改动二同步（2026-09-26）投影三同步之三：http 投影用例——结构化 guidance 段
+  // （内核三段式：当前流程节点/前序缺失/合法取得路径）经真实 provider 出站路径可见。
+  it("结构化 guidance 段出站投影：wire 层 tool 消息 content 含三段渲染文本（F5 可见性断言）", async () => {
+    const guidanceCtx = [
+      ...CTX,
+      { id: 2, ts: "t", type: "tool/call", payload: { tool: "atf_bash", params: { command: "python publish_contract.py" } } },
+      {
+        id: 3, ts: "t", type: "tool/result",
+        payload: {
+          tool: "atf_bash", ok: false, reason: "blocked", call_ref: 2,
+          guidance: {
+            current_node: "发布受理（publish_contract）",
+            missing: ["contract_experiment_gate_required：实验门产物标记缺失"],
+            legal_path: "先跑 build_experiment_setup.py 经用户确认，再重试发布",
+          },
+        },
+      },
+    ] as never;
+    let capturedBody: unknown;
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return jsonResponse(completion({ content: "按指引补齐" }));
+    };
+    const provider = new HttpLlmProvider({ config: CONFIG(), tools: TOOLS, fetchImpl });
+    const decided = await provider.decide(guidanceCtx);
+    expect(decided.ok).toBe(true);
+    const serialized = JSON.stringify(capturedBody);
+    expect(serialized).toContain("当前流程节点：发布受理（publish_contract）");
+    expect(serialized).toContain("前序缺失：");
+    expect(serialized).toContain("合法取得路径：先跑 build_experiment_setup.py");
+  });
 });
 
 // ---------------------------------------------------------------------------

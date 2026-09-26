@@ -14,7 +14,7 @@
 
 import type readline from "node:readline";
 import { type DiffRenderer } from "./renderer.js";
-import { approvalCopyFor } from "../core/tools/index.js";
+import { approvalCopyFor, contentDigestPrefix } from "../core/tools/index.js";
 import type { ApprovalStubResponse } from "../core/run/index.js";
 
 /** TUI 应答 actor（账面标识；通道只由人触发）。 */
@@ -25,6 +25,8 @@ export interface ApprovalPromptInput {
   tool: string;
   params: unknown;
   approval_key: string;
+  /** F5 4.2：内容摘要（脚本类提案引用脚本内容 sha256；卡面附前缀——同路径重写可辨） */
+  content_digest?: string;
   attempt: number;
   round: number;
 }
@@ -45,7 +47,9 @@ const NUMBER_KEYS: Readonly<Record<string, string>> = { "1": "g", "2": "a", "3":
 const requestLine = (input: ApprovalPromptInput): string => {
   const copy = approvalCopyFor({ tool: input.tool, params: input.params });
   const subject = copy ?? `${input.tool} 参数=${JSON.stringify(input.params ?? null)}`;
-  return `⛔ 审批请求：${subject} 会话=${input.approval_session_id} 第 ${String(input.attempt)} 次提案 key=${input.approval_key}`;
+  // F5 4.2：脚本类提案附内容摘要前缀（同路径重写的提案在卡面可辨；缺省＝既有渲染零变化）
+  const contentNote = input.content_digest !== undefined ? `｜内容摘要=${contentDigestPrefix(input.content_digest) ?? input.content_digest}` : "";
+  return `⛔ 审批请求：${subject} 会话=${input.approval_session_id} 第 ${String(input.attempt)} 次提案 key=${input.approval_key}${contentNote}`;
 };
 
 const question = (rl: readline.Interface, prompt: string): Promise<string> =>

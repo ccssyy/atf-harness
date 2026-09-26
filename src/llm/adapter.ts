@@ -12,6 +12,7 @@
 import { err, ok, type Result } from "../bridge/index.js";
 import { type LlmDecision } from "./provider.js";
 import { type LlmContextEvent } from "../core/session/index.js";
+import { renderGuidanceText } from "../core/run/blockGuidance.js";
 import {
   SUMMARY_ARRAY_MAX_ITEMS,
   SUMMARY_RESULT_FALLBACK_CHARS,
@@ -172,6 +173,9 @@ const mapEvent = (event: LlmContextEvent, toolResultSummaryCapChars: number): Re
       // ok:true/ok:false 两注入点）／guidance（业务阻断码一行文案，ok:false 注入点）。
       // 切片 2 白名单未含 → 真实流投影被拦（provider_failure；第二次同类事故，测试盲区＝
       // 脚本面 provider 不经本投影）。纯增量补登；摘要化语义见下（B4·裁定甲）。
+      // F5 改动二同步（2026-09-26，投影三同步之二·摘要化路径）：guidance 允许结构化形态
+      // （内核三段式 guidance 段），摘要渲染走 renderGuidanceText 单源——字符串零回归，
+      // 对象人读展开，绝不静默丢段。
       const violation = rejectUndeclared(event.payload, ["tool", "ok", "result", "reason", "call_ref", "block", "detail", "nudge", "guidance"], event.type);
       if (violation !== null) return err(adapterError(violation));
       if (typeof event.payload["tool"] !== "string") return err(adapterError("tool/result.tool 非法"));
@@ -190,8 +194,8 @@ const mapEvent = (event: LlmContextEvent, toolResultSummaryCapChars: number): Re
       // 逐字节不变）。
       const parts: (string | undefined)[] =
         okFlag === true
-          ? [structuredResultSummary(event.payload["result"], toolResultSummaryCapChars), event.payload["guidance"] as string | undefined, event.payload["nudge"] as string | undefined]
-          : [String(event.payload["reason"] ?? ""), adviceTextOf(event.payload), event.payload["guidance"] as string | undefined, event.payload["nudge"] as string | undefined];
+          ? [structuredResultSummary(event.payload["result"], toolResultSummaryCapChars), renderGuidanceText(event.payload["guidance"]), event.payload["nudge"] as string | undefined]
+          : [String(event.payload["reason"] ?? ""), adviceTextOf(event.payload), renderGuidanceText(event.payload["guidance"]), event.payload["nudge"] as string | undefined];
       const summary = parts.filter((part): part is string => typeof part === "string" && part !== "").join("｜");
       return ok({ role: "tool_result", tool: event.payload["tool"], ok: okFlag, summary, source_event_id: event.id });
     }
@@ -222,6 +226,9 @@ const mapEvent = (event: LlmContextEvent, toolResultSummaryCapChars: number): Re
           "channel",
           "host_id",
           "requires_human_review",
+          // F5 4.2（2026-09-26）：内容摘要随 request 落账（脚本类提案；白名单对齐实际写入
+          // 形态——投影三同步之一；摘要化路径见 approval 分支 readableSummary 全 payload 透传）
+          "content_digest",
         ],
         event.type,
       );

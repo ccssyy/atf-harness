@@ -94,6 +94,13 @@ const APPROVAL_COPY: Readonly<Record<string, ApprovalCopyBuilder>> = {
     const count = Array.isArray(decisions) ? decisions.length : 0;
     return `标签体检裁决提交：对数据集 ${dataset} 的 ${String(count)} 项待确认项提交你逐项确认的处置（逐项留痕、原始标注不改写；未决项保持待确认，全部确认前准入仍阻断）`;
   },
+  // F5 改动四 4.1（2026-09-26）：confirm 型请示审批行文案（卡面全文由 TUI 渲染
+  // renderConfirmRequestLines；本行＝机制态一行摘要）。
+  ask_user_for_input: (params) => {
+    const title = paramString(params, "title");
+    const candidate = paramString(params, "candidate_ref");
+    return `用户确认请示（${title !== "（未提供）" ? title : "抽取契约发布确认"}）：确认候选 ${candidate} 后才可发布——请对照卡面核对 Prompt 实文、字段序与坐标策略；确认凭据将以你的应答落账（含审批会话号）`;
+  },
 };
 
 export const approvalCopyFor = (input: { tool: string; params: unknown }): string | null => {

@@ -67,6 +67,8 @@ export type ApprovalStub = (input: {
   attempt: number;
   /** clarification 轮次(同一 request 链内从 1 起);首轮 = 0 */
   round: number;
+  /** F5 4.2：内容摘要（脚本类提案，proposalApprovalKey 派生；缺省＝既有形态零增量） */
+  content_digest?: string;
 }) => Promise<ApprovalStubResponse>;
 
 /** run 层注入的会话写依赖(由 runner 闭包提供:走 GuardedSessionLog 同一写路径与终局折算)。 */
@@ -85,6 +87,9 @@ export interface ApprovalTrackInput {
   tool: string;
   params: unknown;
   approval_key: string;
+  /** F5 4.2：内容摘要（脚本类提案；executor 经 proposalApprovalKey 派生后透传；
+   *  缺省＝非脚本类既有形态零增量）。随 approval/request 落账（payload.content_digest）。 */
+  content_digest?: string;
   /** 被审批的 tool/call 事件 id(runner 落盘后回填) */
   tool_call_id: number;
 }
@@ -183,7 +188,7 @@ export const createApprovalTrackHandler = (deps: ApprovalTrackDeps): ApprovalHan
   };
 
   return async (input: ApprovalTrackInput): Promise<ApprovalTrackVerdict> => {
-    const { tool, params, approval_key, tool_call_id } = input;
+    const { tool, params, approval_key, content_digest, tool_call_id } = input;
 
     // ── 凭据预检(重入/恢复):同 tool_call_id 已有 granted 时不重复问询 ──
     const existing = findExistingCredential(deps.events, tool_call_id);
@@ -239,6 +244,8 @@ export const createApprovalTrackHandler = (deps: ApprovalTrackDeps): ApprovalHan
         tool,
         params,
         approval_key,
+        // F5 4.2：内容摘要随 request 落账（同路径重写的提案在账面可区分；缺省不写＝既有形态零增量）
+        ...(content_digest !== undefined ? { content_digest } : {}),
         attempt: st.attempt,
         ...(supersedes !== undefined ? { supersedes } : {}),
       },
@@ -262,6 +269,7 @@ export const createApprovalTrackHandler = (deps: ApprovalTrackDeps): ApprovalHan
           approval_key,
           attempt: st.attempt,
           round,
+          ...(content_digest !== undefined ? { content_digest } : {}),
         });
       } catch (cause) {
         return { kind: "blocked", block: trackBlock(tool, "approval_track_failed", `桩对端故障: ${String(cause)}`) };
@@ -329,6 +337,7 @@ export const createApprovalTrackHandler = (deps: ApprovalTrackDeps): ApprovalHan
               tool,
               params,
               approval_key,
+              ...(content_digest !== undefined ? { content_digest } : {}),
               attempt: st.attempt,
             },
           });
