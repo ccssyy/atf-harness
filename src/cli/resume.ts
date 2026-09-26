@@ -5,9 +5,11 @@
  *   node dist/cli/resume.js --list --runs-root <dir> --run-id <id>
  *   node dist/cli/resume.js --answer <granted|advised|denied|abort> [--note "…"] [--request <事件id>]
  *       --runs-root <dir> --run-id <id> --scenario-id <id> [--mock <对端脚本路径>]
- *   node dist/cli/resume.js --recover-orphan-turn --runs-root <dir> --run-id <id>
- *       （B2 孤儿 turn 受控修复：仅当末 turn 无 turn/end 且流内零审批待办时合成收口
- *       turn/end（reason=orphan_recovered）；否则拒绝并给指引——fail-closed 不放松）
+ *   node dist/cli/resume.js --recover-orphan-turn --runs-root <dir> --run-id <id> [--note "…"]
+ *       （B2 孤儿 turn 受控修复：仅当末 turn 无 turn/end 时合成收口 turn/end
+ *       （reason=orphan_recovered）；否则拒绝并给指引——fail-closed 不放松。
+ *       F4：孤儿 turn 内待办审批一并批处理合成 denied——origin=orphan_recovery_batch
+ *       机器来源留痕，非人工应答）
  *
  * 红线（ADR-07）：本命令即「人触发」的动作本身——答复由人显式给出，无任何非交互/
  * 自动应答模式；provider 配置经 ATF_LLM_CONFIG（0600）或 ATF_LLM_* 环境变量注入（D2）。
@@ -169,24 +171,32 @@ if (!args.ok) {
   process.exitCode = await printPendingList(args.value.runsRoot, args.value.runId);
 } else if (args.value.mode === "recover-orphan") {
   // B2（走查修复批 2026-09-23）：孤儿 turn 受控修复——显式旗标触发；条件不满足仍拒绝并给指引
-  // （fail-closed 不放松）。修复后经 TUI 同 run 重进续跑（continue 通道；流尾零待办时才可修复，
-  // 应答通道无待办可答，continue 即恢复路径）。
-  const recovered = await recoverOrphanTurn(sessionLogPathFor(args.value.runsRoot, args.value.runId));
+  // （fail-closed 不放松）。F4（2026-09-26）：孤儿 turn 内待办审批一并批处理合成 denied
+  // （origin=orphan_recovery_batch 机器来源留痕，非人工应答；--note 可传真实处置）；修复后经
+  // TUI 同 run 重进续跑（continue 通道）。
+  const recovered = await recoverOrphanTurn(
+    sessionLogPathFor(args.value.runsRoot, args.value.runId),
+    ...(args.value.note !== undefined ? [{ note: args.value.note }] : []),
+  );
   if (!recovered.ok) {
     console.error(formatThreePartLines({
       fact: "孤儿 turn 修复未执行（会话流未改动）",
       cause: `[${recovered.error.code}] ${recovered.error.message}`,
-      fix: recovered.error.code === "pending_approvals"
-        ? "先经应答通道处理待办：node dist/cli/resume.js --list --runs-root … --run-id …；待办清零后重试本命令"
-        : "核对 --runs-root/--run-id 与会话流状态后重试；无孤儿时无需修复",
+      fix: "核对 --runs-root/--run-id 与会话流状态后重试；无孤儿时无需修复",
     }));
     process.exitCode = 1;
   } else {
-    const { event, diagnosis } = recovered.value;
+    const { event, diagnosis, batch_responses } = recovered.value;
     console.log(
       `孤儿 turn 已收口：turn=${String(diagnosis.turn_index)} 合成 turn/end 事件 id=${String(event.id)}` +
       `（reason=orphan_recovered，step_count=${String(diagnosis.step_count)} 按流内实计）`,
     );
+    if (batch_responses.length > 0) {
+      console.log(
+        `批处理：孤儿 turn 内待办审批 ${String(batch_responses.length)} 条已合成 denied` +
+        `（actor=orphan-recovery，origin=orphan_recovery_batch——非人工应答${args.value.note !== undefined ? "；note=真实处置" : ""}；事件 id: ${batch_responses.map((item) => String(item.id)).join(", ")}）`,
+      );
+    }
     console.log("续跑：node dist/ui/tui.js --runs-root … --run-id … --instruction \"<新指令>\"（continue 通道，历史由事实日志重放重建）");
     process.exitCode = 0;
   }

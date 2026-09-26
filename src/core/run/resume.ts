@@ -5,9 +5,13 @@
  *   - list pending：listPendingApprovals(events)——待人工应答的审批请求（纯函数，事件流推导）；
  *   - submit answer：四类应答 granted / advised / denied / abort（abort ↔ 问答轨 verdict "aborted"）。
  * CLI 前端 = 本接口的第一个消费者（src/cli/resume.ts）；socket / 界面后续作为新前端接入，
- * 不改会话语义。**红线**：通道只能由人触发——本模块不含任何自动应答路径，应答唯一的
- * 写入点 = 调用方显式提交（CLI 子命令）；harness 侧的 approval/response 只有 timeout
- * （actor="harness"，超时审计留痕，非应答）与 runner 内问答轨编排两条既有路径。
+ * 不改会话语义。
+ * **红线（ADR-07）**：人工应答只能由人触发——应答写入点 = 调用方显式提交（CLI 子命令）；
+ * harness 侧的 approval/response 共三条路径：① timeout（actor="harness"，超时审计留痕，
+ * 非应答）；② runner 内问答轨编排；③ F4 孤儿恢复批处理（recoverOrphanTurn，actor=
+ * "orphan-recovery"，payload 恒带 origin=orphan_recovery_batch 机器来源标记——审计可分辨
+ * "人批"与"恢复批处理"；**恒 denied 永不合成 granted**，不伪造授权、不放松 suspended 前置，
+ * 非人工应答）。
  *
  * pending 判定（事件流纯函数，durability 公理同范式）：
  *   approval/request 为待办 ⇔ 流内不存在以它为 request_event_ref 的非 timeout 应答；
@@ -332,9 +336,10 @@ export const parseResumeArgs = (argv: readonly string[]): Result<ResumeCliArgs, 
     if (scenarioId === undefined) return err("answer 模式须 --scenario-id（账本 scope_ref 定位键）");
   }
   if (recoverFlag && verdict !== undefined) {
-    // 应答与孤儿修复互斥：可修复的孤儿流定义上零待办审批（有待办即拒修），应答无从谈起。
-    // 以独立旗标位判定（mode 为 last-wins，双旗标同给时 mode 已被覆盖——不能依赖 mode）。
-    return err("--recover-orphan-turn 与 --answer 互斥（孤儿修复不涉及应答；见 --list 确认待办）");
+    // 人工应答与孤儿修复互斥（F4 后孤儿修复对待办自带批处理合成 denied——机器来源留痕，
+    // 不与人工应答混用）。以独立旗标位判定（mode 为 last-wins，双旗标同给时 mode 已被
+    // 覆盖——不能依赖 mode）。
+    return err("--recover-orphan-turn 与 --answer 互斥（孤儿修复自带批处理应答，不与人工应答混用；见 --list 确认待办）");
   }
   if (recoverFlag && mode !== "recover-orphan") {
     return err("--recover-orphan-turn 与 --list 互斥");
@@ -359,13 +364,32 @@ export const sessionLogPathFor = (runsRoot: string, runId: string): string => jo
 // B2：孤儿 turn 受控修复通道（走查修复批 2026-09-23，指令 7158bf43）
 // 现状（走查报告 8628d036 §三 B2）：进程异常退出后末 turn 无 turn/end，resume/continue
 // 一律拒收（fail-closed），只能运维手工改 journal。修法：fail-closed 不放松，补显式受控
-// 修复通道——仅当「末 turn 无 turn/end 且流内零审批待办」时合成收口 turn/end
-// （reason=orphan_recovered，step_count 按流内实计，projection 字段位由 SessionLog.append
-// 按既有落盘形态生成，payload.note 留痕）；有待办仍拒绝并给指引。TUI 只提示不自动修。
+// 修复通道——仅当「末 turn 无 turn/end」时合成收口 turn/end（reason=orphan_recovered，
+// step_count 按流内实计，projection 字段位由 SessionLog.append 按既有落盘形态生成，
+// payload.note 留痕）。TUI 只提示不自动修。
+// F4（2026-09-26，指令 docs/_owner/ATF-Harness_指令_F4_孤儿turn审批恢复死锁_20260925.md，
+// owner 方案甲）：孤儿＋待办审批此前互斥死锁——resume --answer 要求末 turn suspended（孤儿
+// 态不可达），recover 要求待办清零（依赖 answer），两个 fail-closed 护栏各自正确、组合后
+// 无出路（走查 v077g run-regress-v077g 实证事故）。修复：恢复通道对孤儿 turn 内待办审批
+// 先批处理合成 denied 应答（恒 denied 永不合成 granted——不伪造授权；payload 恒带
+// origin=orphan_recovery_batch 机器来源标记，非人工应答；--note 可传真实处置入 reason），
+// 随后合成 turn/end 收口，一次显式命令内完成、全程账本留痕。应答逐条独立持久化，中断后
+// 重跑幂等（待办清零后仅补合成 turn/end）。恢复后 run 回到干净收口态，操作员重进 TUI 以
+// 新指令续跑。
 // ---------------------------------------------------------------------------
 
 /** 合成收口事件的 reason 取值（turn/end.payload.reason 增量取值；payload 自由 JSON 零 schema 变更）。 */
 export const ORPHAN_RECOVERED_REASON = "orphan_recovered";
+
+/** F4 批处理应答的机器来源标记（approval/response.payload.origin 纯增量字段；非人工应答审计位）。 */
+export const ORPHAN_RECOVERY_ORIGIN = "orphan_recovery_batch";
+
+/** F4 批处理应答的账面 actor（区别于 cli-operator/stub-host 等人工/宿主粒度身份）。 */
+export const ORPHAN_RECOVERY_ACTOR = "orphan-recovery";
+
+/** F4 批处理应答缺省 reason（--note 未传时；传了则以 note 为真实处置入 reason）。 */
+export const ORPHAN_RECOVERY_DENY_REASON =
+  "孤儿恢复批处理（非人工应答）：宿主进程异常退出致审批挂起失去宿主 turn，恢复通道按 fail-closed 合成否决；如需继续该动作请重进 TUI 重新提案";
 
 /** 孤儿 turn 诊断（纯函数消费 deriveLoopStateFromEvents，durability 公理同范式）。 */
 export interface OrphanTurnDiagnosis {
@@ -380,7 +404,7 @@ export interface OrphanTurnDiagnosis {
 }
 
 export interface OrphanRecoveryError {
-  code: "invalid_input" | "no_orphan" | "pending_approvals" | "session_failure";
+  code: "invalid_input" | "no_orphan" | "session_failure";
   message: string;
 }
 
@@ -413,14 +437,18 @@ const orphanRecoveryResolver: DigestResolver = {
 };
 
 /**
- * 孤儿 turn 受控修复：诊断 → 条件核验（零待办）→ 经 GuardedSessionLog（与 runner 同一
- * 写路径：schema 校验 + id/ts/projection 生成 + durability 落盘）合成收口 turn/end。
- * 任一条件不满足 → 结构化拒绝（流零改动，fail-closed 不放松）。
+ * 孤儿 turn 受控修复：诊断 → 条件核验 → 经 GuardedSessionLog（与 runner 同一写路径：
+ * schema 校验 + id/ts/projection 生成 + durability 落盘）——F4：孤儿 turn 内待办审批先
+ * 批处理合成 denied 应答（机器来源标记；恒 denied 不伪造授权），随后合成收口 turn/end。
+ * 流读取/诊断失败 → 结构化拒绝（流零改动，fail-closed 不放松）；批处理应答逐条独立
+ * 持久化，中断后重跑幂等（待办清零后仅补合成 turn/end）。
  */
 export const recoverOrphanTurn = async (
   sessionLogPath: string,
-  options: { now?: () => string } = {},
-): Promise<Result<{ event: SessionEvent; diagnosis: OrphanTurnDiagnosis }, OrphanRecoveryError>> => {
+  options: { now?: () => string; note?: string } = {},
+): Promise<
+  Result<{ event: SessionEvent; diagnosis: OrphanTurnDiagnosis; batch_responses: SessionEvent[] }, OrphanRecoveryError>
+> => {
   const stream = await readSessionStream(sessionLogPath);
   if (!stream.ok) {
     return err({ code: "invalid_input", message: `会话流读取失败（流未改动）: ${stream.error.message}` });
@@ -437,16 +465,6 @@ export const recoverOrphanTurn = async (
           : "末 turn 已收口（无孤儿；续跑直接走 TUI continue / resume 应答通道）",
     });
   }
-  // 待办核验：孤儿流内存在待办审批 = 挂起语义被孤儿截断——先经应答通道，不得绕过问答轨（ADR-07）
-  const pending = listPendingApprovals(events);
-  if (pending.length > 0) {
-    return err({
-      code: "pending_approvals",
-      message:
-        `末 turn 为孤儿且存在 ${String(pending.length)} 条待办审批（request 事件 id: ${pending.map((item) => String(item.request_event_id)).join(", ")}）——孤儿收口拒绝（fail-closed）：` +
-        "先经 resume 应答通道处理待办（node dist/cli/resume.js --list / --answer …），待办清零后再修复",
-    });
-  }
   // scratchRoot 与 RunWorkspace 十目录布局同口径（runs/<run_id>/scratch）；铁律一扫描对
   // 无引用事件为透传，此处取约定路径仅为复用 runner 同一写路径入口（单一落盘口径）。
   const scratchRoot = join(dirname(sessionLogPath), "scratch");
@@ -455,6 +473,34 @@ export const recoverOrphanTurn = async (
     return err({ code: "session_failure", message: `会话日志打开失败（流未改动）: ${guarded.error.message}` });
   }
   const session = guarded.value;
+  // F4：孤儿＋待办审批批处理（死锁修复主径）——恒 denied（fail-closed 方向，永不合成
+  // granted）、actor=orphan-recovery、origin=orphan_recovery_batch 机器来源标记（审计可
+  // 分辨"人批"与"恢复批处理"）；--note 传真实处置则入 reason，否则缺省说明。
+  const pending = listPendingApprovals(events);
+  const batchResponses: SessionEvent[] = [];
+  const trimmedNote = options.note?.trim();
+  for (const item of pending) {
+    const appended = await session.append({
+      type: "approval/response",
+      payload: {
+        approval_session_id: item.approval_session_id,
+        request_event_ref: item.request_event_id,
+        verdict: "denied",
+        actor: ORPHAN_RECOVERY_ACTOR,
+        reason: trimmedNote !== undefined && trimmedNote !== "" ? trimmedNote : ORPHAN_RECOVERY_DENY_REASON,
+        origin: ORPHAN_RECOVERY_ORIGIN,
+      },
+    });
+    if (!appended.ok) {
+      await session.close().catch(() => undefined);
+      return err({ code: "session_failure", message: `批处理应答落盘失败（request ${String(item.request_event_id)}，已落 ${String(batchResponses.length)} 条——重跑本命令幂等收口）: ${appended.error.message}` });
+    }
+    if (appended.value.status === "rejected") {
+      await session.close().catch(() => undefined);
+      return err({ code: "session_failure", message: "批处理应答被会话守卫拒绝（意外命中，fail-closed）" });
+    }
+    batchResponses.push(appended.value.event);
+  }
   const payload: Record<string, unknown> = {
     reason: ORPHAN_RECOVERED_REASON,
     step_count: diagnosis.step_count,
@@ -462,7 +508,10 @@ export const recoverOrphanTurn = async (
     // note 留痕：合成事实与来源通道可追溯（turn/end payload 自由 JSON，纯增量字段）
     note:
       `孤儿 turn 受控修复：进程异常退出致末 turn 未收口，经 CLI --recover-orphan-turn 合成收口` +
-      `（流内实计 step_count=${String(diagnosis.step_count)}/decision_count=${String(diagnosis.decision_count)}，合成前末事件 id=${String(diagnosis.last_event_id)}）`,
+      `（流内实计 step_count=${String(diagnosis.step_count)}/decision_count=${String(diagnosis.decision_count)}，合成前末事件 id=${String(diagnosis.last_event_id)}）` +
+      (batchResponses.length > 0
+        ? `；批处理：孤儿 turn 内待办审批 ${String(batchResponses.length)} 条已合成 denied（origin=${ORPHAN_RECOVERY_ORIGIN}，非人工应答${trimmedNote !== undefined && trimmedNote !== "" ? "，note=真实处置" : ""}）`
+        : ""),
   };
   const appended = await session.append({ type: "turn/end", payload });
   await session.close().catch(() => undefined);
@@ -473,5 +522,5 @@ export const recoverOrphanTurn = async (
     // 铁律一守卫对无引用事件不触达——命中即守卫语义意外变化，fail-closed 上报
     return err({ code: "session_failure", message: "合成收口被会话守卫拒绝（意外命中，fail-closed）" });
   }
-  return ok({ event: appended.value.event, diagnosis });
+  return ok({ event: appended.value.event, diagnosis, batch_responses: batchResponses });
 };

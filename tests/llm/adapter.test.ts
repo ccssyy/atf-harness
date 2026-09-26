@@ -60,6 +60,32 @@ describe("切片 2 · VERIFY 1 B1 adapter 映射", () => {
     expect(badPayload.ok).toBe(false);
   });
 
+  it("F4：孤儿恢复批处理应答（origin 机器来源标记）投影通过——白名单对齐实际写入形态；未声明字段仍拒绝", () => {
+    // recoverOrphanTurn 实际写入形态（恒 denied＋origin=orphan_recovery_batch，非人工应答）
+    const batched = adaptProjectionToMessages([
+      event(1, "approval/request", { tool: "atf_admit_data", approval_session_id: "aps-1", approval_key: "k", attempt: 1, tool_call_id: 2, params: { dataset_id: "ds" }, question: "是否准入?" }),
+      event(2, "approval/response", {
+        approval_session_id: "aps-1",
+        request_event_ref: 1,
+        verdict: "denied",
+        actor: "orphan-recovery",
+        reason: "孤儿恢复批处理（非人工应答）",
+        origin: "orphan_recovery_batch",
+      }),
+    ]);
+    expect(batched.ok).toBe(true);
+    if (!batched.ok) return;
+    expect(batched.value.map((message) => message.role)).toEqual(["approval", "approval"]);
+    // 摘要化路径：readableSummary 全 payload 透传——机器来源标记对模型可见（非人工应答可分辨）
+    const responseMessage = batched.value[1];
+    if (responseMessage?.role !== "approval") throw new Error("unreachable");
+    expect(responseMessage.summary).toContain("orphan_recovery_batch");
+    // 白名单未放宽：approval/response 上未声明字段照旧拒绝
+    const undeclared = adaptProjectionToMessages([event(1, "approval/response", { verdict: "denied", actor: "host", hasty: true })]);
+    expect(undeclared.ok).toBe(false);
+    if (!undeclared.ok) expect(undeclared.error.message).toContain("未声明字段");
+  });
+
   it("映射结果不含预算/治理内部字段（模型不可见延续）", () => {
     const context: LlmContextEvent[] = [
       event(1, "user/message", { text: "hi" }),

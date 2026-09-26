@@ -248,13 +248,24 @@ const main = async (): Promise<void> => {
       const stream = await readSessionStream(sessionLogPathFor(args.runsRoot, runId));
       const eventCount = stream.ok ? stream.value.length : 0;
       const pending = stream.ok ? listPendingApprovals(stream.value).length : 0;
-      renderer.appendLine(`检测到既有会话（${String(eventCount)} 事件，由事实日志重放重建）${pending > 0 ? `；待办审批 ${String(pending)} 项——须经 CLI resume 应答后才能续跑` : ""}`);
+      const orphan = stream.ok ? diagnoseOrphanTurn(stream.value) !== null : false;
+      // F4（2026-09-26）：挂起应答提示只覆盖非孤儿流——孤儿态下 resume --answer 会被
+      // suspended 前置拒收（死锁半边），待办经孤儿修复批处理解决，文案不再误导。
+      renderer.appendLine(
+        `检测到既有会话（${String(eventCount)} 事件，由事实日志重放重建）` +
+        `${pending > 0 && !orphan ? `；待办审批 ${String(pending)} 项——须经 CLI resume 应答后才能续跑` : ""}`,
+      );
       // B2（走查修复批 2026-09-23）：孤儿 turn 检测——只提示一条修复命令，不自动修
       //（落盘流非显式旗标不得改动；runner continue 前置对孤儿流仍 fail-closed 拒收）。
-      if (stream.ok && diagnoseOrphanTurn(stream.value) !== null) {
+      // F4：孤儿态给出含批处理的完整修复命令（孤儿＋待办审批死锁的出口；硬约束④）。
+      if (orphan) {
         renderer.appendLine(
           `⚠ 检测到孤儿 turn（末 turn 未收口——进程异常退出残留）：续跑将被拒收。修复命令：` +
-          `node dist/cli/resume.js --recover-orphan-turn --runs-root ${args.runsRoot} --run-id ${runId}（修复后重进本界面输入新指令续跑）`,
+          `node dist/cli/resume.js --recover-orphan-turn --runs-root ${args.runsRoot} --run-id ${runId}` +
+          (pending > 0
+            ? `（内含待办审批 ${String(pending)} 项将一并批处理合成 denied——origin=orphan_recovery_batch 机器来源留痕，非人工应答；--note 可传真实处置）`
+            : "") +
+          `（修复后重进本界面输入新指令续跑）`,
         );
       }
     }

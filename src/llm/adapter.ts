@@ -229,6 +229,10 @@ const mapEvent = (event: LlmContextEvent, toolResultSummaryCapChars: number): Re
           // F5 4.2（2026-09-26）：内容摘要随 request 落账（脚本类提案；白名单对齐实际写入
           // 形态——投影三同步之一；摘要化路径见 approval 分支 readableSummary 全 payload 透传）
           "content_digest",
+          // F4（2026-09-26）：孤儿恢复批处理应答的机器来源标记（origin=orphan_recovery_batch，
+          // 恒 denied 非人工应答；白名单对齐 recoverOrphanTurn 实际写入形态——投影三同步之一，
+          // 摘要化路径同 approval 分支 readableSummary 全 payload 透传）
+          "origin",
         ],
         event.type,
       );
