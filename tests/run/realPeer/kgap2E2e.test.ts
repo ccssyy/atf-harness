@@ -106,13 +106,13 @@ describeIfPinned("K-Gap-2 接线批真内核 e2e——propose→（缺料时）e
     "全链：登记→propose(聚类确认)→execute 落料→propose(划分确认)→request 携确认态→completed；env 含 ATF_SKILLS_AUTO_INSTALL=0（K2 回滚门 ATF_LABEL_QC_REQUIRED=0——本链定位 K-Gap-2，体检必经归重跑②专验）",
     { timeout: 240_000 },
     async () => {
-      // pin 实测锚：当前 checkout HEAD == v0.7.7b0（45c0533）
+      // pin 实测锚：当前 checkout HEAD == v0.7.8b0（d291270）
       const headSha = await new Promise<string>((resolve, reject) => {
         execFile("git", ["-C", cli.ok ? (cli as { ok: true; path: string }).path : "", "rev-parse", "HEAD"], (error, stdout) =>
           error === null ? resolve(stdout.trim()) : reject(error),
         );
       });
-      expect(headSha).toBe("45c05339078575534653d1ca3b0dc1cc91fa50f4");
+      expect(headSha).toBe("d291270cb6af6ada4227c832ac00a2eeea0276af");
 
       // K2 体检必经回滚门（re-pin 2026-09-23）：本用例定位 K-Gap-2 料门链路；
       // 体检必经链路归重跑②专验——此处显式回滚旧语义，进程 env 经 fixture baseEnv 透传。

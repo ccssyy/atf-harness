@@ -7,13 +7,13 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 2026-09-25：v0.7.6b0 → v0.7.7b0，唯一真相源 = bridge.contract.yaml atf_upstream，
+// 当前 pin（re-pin 2026-09-26：v0.7.7b0 → v0.7.8b0，唯一真相源 = bridge.contract.yaml atf_upstream，
 // 本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.7b0（K1-K3 走查实锤缺陷修复批发版：K3 顺序性短路＋K1 可发现性＋
-// K2 双 Prompt 对齐，行为加固批含 module-contracts.md §13.10 补登；零契约面变更——
-// 无新 Gate/reason code/Schema 版本，会话协议轴 1／桥接契约轴 2 零 diff）——HEAD==tag commit 45c0533，无 sha 备注。
-export const ATF_UPSTREAM_TAG = "v0.7.7b0";
-export const ATF_UPSTREAM_COMMIT_SHA = "45c05339078575534653d1ca3b0dc1cc91fa50f4";
+// 本轮 pin 取值＝tag v0.7.8b0（F5 确认凭据与流程顺序强制批＋F1 行动指令段补丁发版：F1 处置
+// 路径回流＋F5 确认凭据强制与发布面 guidance；补登不 bump——零契约面变更，会话协议轴 1／
+// 桥接契约轴 2 零 diff；harness 伴随件已由 F5-H 87854c4 备齐，本批零新增）——HEAD==tag commit d291270，无 sha 备注。
+export const ATF_UPSTREAM_TAG = "v0.7.8b0";
+export const ATF_UPSTREAM_COMMIT_SHA = "d291270cb6af6ada4227c832ac00a2eeea0276af";
 
 export interface AtfCliInvocation {
   command: string;

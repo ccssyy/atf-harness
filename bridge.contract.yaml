@@ -763,8 +763,8 @@ atf_cli:
 # （mock 已回 2）"的表述作废】，真实对端以内核批次二实现为准。
 # ---------------------------------------------------------------------
 atf_upstream:
-  tag: v0.7.7b0
-  commit_sha: 45c05339078575534653d1ca3b0dc1cc91fa50f4
-  pinned_at: "2026-09-25"
-  baseline: 内核方法面 14／harness 工具面 9（含 label_qc 两工具，R-3 接线已合入）＋丙线本地治理面 4（A7 atf_read/edit/write/bash，批 P 续作 v2 已合入）；K1-K3 走查实锤缺陷修复批随 v0.7.7b0 首次入 pin（K3 顺序性短路：G1 证据缺失入口短路零读数零落盘、gates 变长依存链序列废除占位 block、逐闸 evaluated:true 来源标记＋atf_gate query 面 legacy 兼容标记 summary_format；K1 policy_template 可直提完整形态＋invalid_params 三段式回流；K2 双 Prompt 对齐）——module-contracts.md §13.10 补登为**零契约面变更**（无新 Gate/reason code/Schema 版本，纯行为加固）；harness 伴随件消费随批：canonical 白名单补登（atf_data_admission_request status+=blocked／summary_ref·summary_sha256 null 容忍／gates[].evaluated／g1_short_circuit；atf_gate summary_format）＋摘要化路径升 modern 形态（smokeR2/trialL1aReal 逐闸 evaluated:true）＋mock 投影用例；pin＝tag v0.7.7b0 commit 45c0533（HEAD==tag，无 sha 备注；re-pin 2026-09-25，内核 K1-K3 发版随裁定《ATF_裁定_批Pv2合并与K1K3发版与回归走查_20260925》）
+  tag: v0.7.8b0
+  commit_sha: d291270cb6af6ada4227c832ac00a2eeea0276af
+  pinned_at: "2026-09-26"
+  baseline: 内核方法面 14／harness 工具面 9（含 label_qc 两工具，R-3 接线已合入）＋丙线本地治理面 4（A7 atf_read/edit/write/bash，批 P 续作 v2 已合入）；F5 确认凭据与流程顺序强制批＋F1 行动指令段补丁随 v0.7.8b0 首次入 pin（F5 改动一确认凭据机制强制：candidate_digest 必填＋引擎重算比对 fail-closed＋at 时序合理性＋approval_ref 透传＋experiment-config 实验门产物标记 gate_produced 受理强制＋确认报告 field_schema 权威修复；F5 改动二发布面回流节点指引：三段式 current_node/missing/legal_path 内核唯一映射表＋publish_contract blocked 输出 guidance 段；F1 行动指令段补丁：invalid_params 模板/摘要类回流文案尾追加[处置路径]，纯文案补登）——补登不 bump，**零契约面变更**（无新 Gate/reason code/Schema 版本，会话协议轴 1／桥接契约轴 2 零 diff）；harness 伴随件已由 F5-H（87854c4，批②收口合入 main）备齐（guidance 三段投影白名单与确认凭据字段，内核键名采用已备别名），本批零新增伴随件；pin＝tag v0.7.8b0 commit d291270（HEAD==tag，无 sha 备注；re-pin 2026-09-26，内核批①发版随《ATF_决议_F5F1F2F4四批验收与合并授权_20260926》，执行批《ATF_指令_批②收口与批③repin授权_20260926》）
   contract_version: 1
