@@ -43,6 +43,14 @@ import {
   TOOL_CUT_REASON,
   type NoProgressObservation,
 } from "./noProgress.js";
+import {
+  CrossTurnNoProgressDetector,
+  CROSS_TURN_NUDGE_NOTE,
+  executionStateChange,
+  resolveCrossTurnNoProgressConfig,
+  type CrossTurnEscalation,
+  type CrossTurnVerdict,
+} from "./noProgressCrossTurn.js";
 import { gapCardFor, guidanceLineFor, integrityGateBlockedGuidance, isMaterialGapCode, lengthTruncatedGapCard } from "./blockGuidance.js";
 import { findExistingCredential } from "../tools/credentialState.js";
 import { synthesizeUserConfirmation } from "../confirmRequest.js";
@@ -187,6 +195,14 @@ export interface TurnFailureSummary {
   gap_card?: TurnGapCard;
   /** no_progress 族收口时本 turn 已切断的工具 */
   cut_tools?: string[];
+  /** F2（2026-09-26）：跨 turn 无进展收口时携带（机查档位与窗口诊断面；turn 内收口不带）。
+   *  escalation：nudge=档1（不收口，仅回流文案）／cut=档2（终止当前 turn 链）／
+   *  run_close=档3（run 级收口报告）。 */
+  cross_turn?: {
+    window_turns: number;
+    overlap_permille: number;
+    escalation: CrossTurnEscalation;
+  };
   hint: {
     /** 仅被拒工具含 atf_gate 时携带：合法 GateId 清单（GATE_LEGAL_IDS 单源） */
     gate_ids?: string[];
@@ -788,6 +804,10 @@ export class ScenarioRunner {
       let turnRejectCalls: Array<{ tool: string; reason: string; params_digest: string }> = [];
       // D-f-4：无进展检测器（每 turn 重建＝切断与计数的恢复语义，见 noProgress.ts）
       let turnNoProgress = new NoProgressDetector();
+      // F2：跨 turn 无进展检测器（本 run 分支恒一个实例——不随 turn 重建即跨 turn 语义本身；
+      // 窗口状态由事件流游标增量推导，resume/continue 历史装载后首次 update 即重建）。
+      const crossTurnNoProgress = new CrossTurnNoProgressDetector(resolveCrossTurnNoProgressConfig());
+      crossTurnNoProgress.update(events);
       // D-f-3/D-f-6：本 turn 最后一个 material-gap 回流（收口自动出缺口卡用）
       let turnLastMaterialGap: { tool: string; reason: string } | undefined;
       // D-f-2：本 turn 最近工具动作（阻塞说明 stuck_at 素材；不上屏步数）
@@ -838,6 +858,8 @@ export class ScenarioRunner {
         stuckAt: string;
         providerError?: TurnBlockingDescription["provider_error"];
         gapCardOverride?: TurnFailureSummary["gap_card"];
+        /** F2：跨 turn 无进展收口的机查档位与窗口诊断面（档 2/档 3 收口径携带） */
+        crossTurn?: NonNullable<TurnFailureSummary["cross_turn"]>;
       }): TurnFailureSummary => {
         const gap = turnLastMaterialGap;
         const gapCard = input.gapCardOverride ?? (gap !== undefined ? gapCardFor(gap.tool, gap.reason) : undefined);
@@ -853,6 +875,7 @@ export class ScenarioRunner {
           },
           ...(gapCard !== undefined ? { gap_card: gapCard } : {}),
           ...(input.cutTools !== undefined && input.cutTools.length > 0 ? { cut_tools: [...input.cutTools] } : {}),
+          ...(input.crossTurn !== undefined ? { cross_turn: input.crossTurn } : {}),
           hint: {
             ...(turnRejectCalls.some((call) => call.tool === "atf_gate") ? { gate_ids: [...GATE_LEGAL_IDS] } : {}),
             note: COLLAPSE_NOTES[input.reason],
@@ -1578,7 +1601,23 @@ export class ScenarioRunner {
 
           // D-f-4：无进展检测（模型面；脚本径豁免）——在回流 payload 构造前记录，nudge 文案
           // 随本拍回流进模型上下文（payload.nudge）；切断升级的收口检查在本拍回填之后。
+          // F2：跨 turn 裁决先行消费（窗口只含已闭 turn，本拍不影响裁决；增量游标幂等）。
           let nudgeNote: string | undefined;
+          let crossVerdict: CrossTurnVerdict | null = null;
+          if (!("decisionFace" in provider)) {
+            crossTurnNoProgress.update(events);
+            crossVerdict = crossTurnNoProgress.verdict();
+            // F2 本 turn 实时自纠豁免（指令约束②）：闭 turn 窗口看不到本 turn 的实时落账——
+            // open turn 已出现状态事实，或本拍执行即为落账（admission 重试成功／gate advance
+            // 放行）⇒ 介入判据全部撤销（单源 executionStateChange 与闭 turn 判据同口径）。
+            if (
+              crossVerdict.tier !== "none" &&
+              (crossTurnNoProgress.openTurnHasStateChange(events) ||
+                (result.kind === "executed" && executionStateChange(step.tool, step.params, result.result)))
+            ) {
+              crossVerdict = null;
+            }
+          }
           if (!("decisionFace" in provider) && (result.kind === "executed" || result.kind === "blocked" || result.kind === "rejected" || result.kind === "input_violation")) {
             const observation: NoProgressObservation =
               result.kind === "executed"
@@ -1588,6 +1627,8 @@ export class ScenarioRunner {
                   : { kind: result.kind, reason: result.reason };
             const verdict = turnNoProgress.record(step.tool, step.params, observation);
             if (verdict.tier === "nudge") nudgeNote = NO_PROGRESS_NUDGE_NOTE;
+            // F2 档 1：跨 turn nudge 同 payload.nudge 字段回流（两源同拍时拼接，turn 内文案在后）
+            if (crossVerdict?.tier === "nudge") nudgeNote = nudgeNote === undefined ? CROSS_TURN_NUDGE_NOTE : `${CROSS_TURN_NUDGE_NOTE}；${nudgeNote}`;
           }
           // D-f-3：业务阻断码 guidance 一行回填（注册表命中才附；未登记码零加工透传）
           const backfillGuidance = result.kind === "rejected" || result.kind === "input_violation" ? guidanceLineFor(result.reason) : undefined;
@@ -1623,6 +1664,28 @@ export class ScenarioRunner {
               reason: turnNoProgress.collapseReason(),
               cutTools: turnNoProgress.cutTools(),
               stuckAt: `重复调用无进展（控制面）：${turnNoProgress.cutTools().join("、")} 已被本 turn 切断`,
+            }));
+            break;
+          }
+
+          // F2 档 2/档 3：跨 turn 无进展切断／收口（本拍结果已回填——可观测性优先；模型面 only，
+          // 脚本径豁免同 D-f；位于结果分流之前——隔离 D-a R-2 的 E1/E2 连续计数，同 turn 内切断
+          // 补正#1 的机制隔离纪律）。档 2＝终止当前 turn 链（turn 级收口，run 非终局）；档 3＝
+          // run 级收口报告（collapseTurn 形态同档 2——BranchOutcome 零扩面，run 级定性由
+          // failure_summary.cross_turn.escalation="run_close" 机查承载）。
+          if (crossVerdict !== null && (crossVerdict.tier === "cut" || crossVerdict.tier === "run_close")) {
+            provider = null;
+            await collapseTurn(buildCollapseSummary({
+              reason: "no_progress",
+              stuckAt:
+                crossVerdict.tier === "cut"
+                  ? `跨 turn 无进展（控制面护栏）：连续 ${String(crossVerdict.windowTurns)} 轮同类操作且无新事实落账——本轮已收口（turn 链终止）`
+                  : `跨 turn 无进展（控制面护栏）：切断后仍持续同类绕圈（连续 ${String(crossVerdict.windowTurns)} 轮、无新事实落账）——run 级收口，请换路径后以新指令续跑`,
+              crossTurn: {
+                window_turns: crossVerdict.windowTurns,
+                overlap_permille: crossVerdict.overlapPermille,
+                escalation: crossVerdict.tier,
+              },
             }));
             break;
           }

@@ -70,7 +70,9 @@ export const LOOP_MAX_TURNS = 8;
 
 const loggedEnvOverrides = new Set<string>();
 
-const envPositiveInt = (raw: string | undefined, fallback: number, label: string): number => {
+/** env 正整数覆盖解析（F2 批 2026-09-26 起导出共用：run 层跨 turn 无进展阈值同纪律）。
+ *  语义不变：未设/空/解析失败一律 fail-closed 回退默认值；覆盖/非法各记一行 stderr。 */
+export const envPositiveInt = (raw: string | undefined, fallback: number, label: string): number => {
   if (raw === undefined || raw.trim() === "") return fallback;
   const parsed = Number(raw);
   const valid = Number.isInteger(parsed) && parsed > 0;

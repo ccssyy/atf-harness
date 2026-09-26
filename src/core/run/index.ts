@@ -70,6 +70,17 @@ export {
   type NoProgressVerdict,
 } from "./noProgress.js";
 export {
+  CrossTurnNoProgressDetector,
+  CROSS_TURNS_DEFAULT,
+  CROSS_TURNS_OVERLAP_PERMILLE_DEFAULT,
+  CROSS_TURN_NUDGE_NOTE,
+  executionStateChange,
+  resolveCrossTurnNoProgressConfig,
+  type CrossTurnEscalation,
+  type CrossTurnNoProgressConfig,
+  type CrossTurnVerdict,
+} from "./noProgressCrossTurn.js";
+export {
   BLOCK_CODE_GUIDANCE,
   gapCardFor,
   guidanceFor,
