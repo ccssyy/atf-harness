@@ -54,7 +54,8 @@ import { DiffRenderer } from "./renderer.js";
 import { formatEventDetailLines, formatEventLine, statusLineFor } from "./eventView.js";
 import { collapseLines } from "./collapseView.js";
 import { askApproval, TUI_ACTOR } from "./approval.js";
-import { buildInitInvocation, buildRealPeerDescriptor, effectiveScopeMode, parseArgs, repoRootDefault, resolveKernelDir, usage } from "./tuiArgs.js";
+import { continuesInteractive } from "./turnContinuation.js";
+import { buildInitInvocation, buildRealPeerDescriptor, effectiveScopeMode, initPresetArtifactOk, parseArgs, repoRootDefault, resolveKernelDir, usage } from "./tuiArgs.js";
 import { launchCardKey, launchCardLines, launchConfirmationText, synthesizeLaunchAction } from "./launchCard.js";
 import {
   applyLabelQcField,
@@ -169,14 +170,25 @@ const main = async (): Promise<void> => {
     const home = mkdtempSync(join(tmpdir(), "atf-tui-home-"));
     const init = buildInitInvocation(kernel.path, wsRoot);
     const initRun = await execFileP(init.command, init.args, { cwd: init.cwd, env: { ...process.env, ...init.env, HOME: home } });
+    // F8-B1（批② 20260928，指令 1eb91324）：init 非零退出＝预置失败——显式报错拒绝启动，
+    // 横幅口径 home=… init=failed（走查 v078 实锚：临时 home 无 config.json 全程无提示）。
     if (initRun.exitCode !== 0) {
       rmSync(home, { recursive: true, force: true });
-      renderer.appendLine(`✗ atf init 预置失败(exit=${String(initRun.exitCode)})——不进入会话（D-1 fail-closed）：${(initRun.stderr !== "" ? initRun.stderr : initRun.stdout).slice(0, 300)}`);
+      renderer.appendLine(`✗ atf init 预置失败（home=${home} init=failed，exit=${String(initRun.exitCode)}）——不进入会话（D-1 fail-closed）：${(initRun.stderr !== "" ? initRun.stderr : initRun.stdout).slice(0, 300)}`);
+      process.exitCode = 1;
+      return;
+    }
+    // F8-B1：init 退出码 0 ≠ 预置成立——配置根工件核验（内核 init 契约＝建立 ~/.atf/config.json，
+    // workspace_init.py:8/:34-39）；缺失即 init=failed，fail-closed 拒绝进入 bind。
+    if (!initPresetArtifactOk(home)) {
+      const initArtifact = join(home, ".atf", "config.json");
+      rmSync(home, { recursive: true, force: true });
+      renderer.appendLine(`✗ atf init 预置失败（home=${home} init=failed，exit=0 但配置根工件缺失: ${initArtifact}）——不进入会话（D-1 fail-closed，F8-B1）`);
       process.exitCode = 1;
       return;
     }
     peerReal = { kernelDir: kernel.path, wsRoot, home };
-    renderer.appendLine(`真内核对端预置完成：内核=${kernel.path}（${kernel.source}，pin ${ATF_UPSTREAM_TAG}）· 隔离 HOME=${home}`);
+    renderer.appendLine(`真内核对端预置完成：home=${home} init=ok · 内核=${kernel.path}（${kernel.source}，pin ${ATF_UPSTREAM_TAG}）`);
   }
 
   // 批 3「创作执行面」：工作区工具面装配（§一/§二/§三）。内核目录可解析即启用——
@@ -473,18 +485,24 @@ const main = async (): Promise<void> => {
           fix: "按原因修正后重新发起会话；已落盘事件可经 CLI resume/--list 追溯",
         }));
         process.exitCode = report.exit_code;
-        break;
-      }
-      if (report.outcome.kind !== "completed" && report.outcome.kind !== "turn_failed") {
+        // F8-B2（批② 20260928）：TTY 交互下 failed 不再硬退——回到新指令循环（输入态可靠
+        // 复位，连续两轮失败 turn 不卡死输入）；非 TTY 维持既有退出语义。
+        if (!continuesInteractive(report.outcome.kind, process.stdin.isTTY === true)) break;
+        renderer.appendLine("（交互终端：turn 失败不退出——输入新指令继续，或直接回车退出）");
+      } else if (report.outcome.kind !== "completed" && report.outcome.kind !== "turn_failed") {
         const block = report.outcome.block;
         renderer.appendLine(`block: ${block.reason} —— ${block.message}`);
         if (report.outcome.kind === "suspended") {
           renderer.appendLine("挂起可续：node dist/cli/resume.js --answer <granted|advised|denied|abort> --runs-root … --run-id … --scenario-id …（应答后重进本 TUI 续跑）");
         }
         process.exitCode = report.exit_code;
-        break;
+        // F8-B2：aborted 等 block 族在 TTY 交互下同样回到新指令循环（abort 后 send 输入必须
+        // 可达 prompt 管线）；suspended/approval_missing/session_rejected 保留退出（恢复通道指引）。
+        if (!continuesInteractive(report.outcome.kind, process.stdin.isTTY === true)) break;
+        renderer.appendLine("（交互终端：turn 已收口——输入新指令继续，或直接回车退出）");
+      } else {
+        process.exitCode = report.exit_code;
       }
-      process.exitCode = report.exit_code;
       // B3：reset 键 ＋ B4：多轮续跑入口——仅交互终端（非 TTY 冒烟单 turn 后直接退出）
       if (process.stdin.isTTY !== true) break;
       let nextInstruction: string | null = null;

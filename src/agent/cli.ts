@@ -38,7 +38,7 @@ import { createBudgetFinishTurn, maxTurnsFromEnv, resolveV1ExitCode, type V1RunO
 import { createProviderStreamFn } from "./providerStreamFn.js";
 import { createScriptedStreamFn, loadFauxScript } from "./fauxScript.js";
 import { createHookRegistry, prepareRequestViaHook, wireEventHooks, V1_HOOK_NAMES, type V1HookRegistry } from "./hooks.js";
-import { createJsonlSessionRepo, type SessionLike } from "./sessionMirror.js";
+import { createJsonlSessionRepo, setLaneModelFace, type SessionLike } from "./sessionMirror.js";
 import { createProposalContentDigestFor } from "../core/tools/proposalContent.js";
 import { createTemAfterToolMirror, createTemTransformContext } from "./tem/retrieval.js";
 import { envFingerprint, scanEvidenceEvents } from "./tem/evidence.js";
@@ -492,9 +492,13 @@ export interface V1HeadlessDeps {
 /** v1 headless 单 run（装配方；测试直用）。返回退出码。 */
 export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
   const repo = createJsonlSessionRepo(deps.sessionsRoot);
+  const modelTag = deps.providerConfig?.model ?? "faux-script";
+  // F7（批② 20260928，指令 1eb91324）：lane 模型面随装配注入真实 provider/model——
+  // sessionMirror 旧硬编码 deepseek/faux-spike 使 lane 显示与实际模型面断接（走查 v078 实锚）。
+  // 次序纪律：必须在 session 创建/ensureTemBranch 之前——lane 配置首写即用真实面。
+  setLaneModelFace({ provider: deps.providerConfig?.provider_id ?? "harness", modelId: modelTag });
   const session = await repo.create({ cwd: deps.sessionsRoot }, BACKGROUND_CONTEXT);
   await ensureTemBranch(session);
-  const modelTag = deps.providerConfig?.model ?? "faux-script";
 
   const streamFn =
     deps.streamFn !== undefined
@@ -577,7 +581,18 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
 
   // ---- 终局判定（闭集；次序＝人中止/挂起/审批缺失 优先于 预算/故障——ADR-07 锚语义）----
   const lastAssistant = lastAssistantMessage(agent.state.messages);
-  const hasFinalAnswer = lastAssistant !== undefined && !lastAssistant.content.some((block) => block.type === "toolCall");
+  const lastAssistantHasToolCall = lastAssistant !== undefined && lastAssistant.content.some((block) => block.type === "toolCall");
+  const lastAssistantText =
+    lastAssistant === undefined
+      ? ""
+      : lastAssistant.content
+          .filter((block) => block.type === "text")
+          .map((block) => (block as { text: string }).text)
+          .join("")
+          .trim();
+  // F7（批② 20260928）：final_answer 须有非空文本——空 assistant 文本且无工具调用不再计为
+  // completed（走查 v078 实锚：首轮空文本即 completed、静默 exit 0）。
+  const hasFinalAnswer = lastAssistant !== undefined && !lastAssistantHasToolCall && lastAssistantText !== "";
   let outcome: V1RunOutcome;
   const terminalAudit = [...audit].reverse().find((entry) => ["aborted", "suspended", "blocked_approval_missing"].includes(entry.verdict));
   if (terminalAudit !== undefined && !hasFinalAnswer) {
@@ -593,6 +608,12 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
     outcome = { kind: "failed", error: failure };
   } else if (hasFinalAnswer) {
     outcome = { kind: "completed" };
+  } else if (lastAssistant !== undefined && !lastAssistantHasToolCall) {
+    // F7：空 assistant 文本且无工具调用——专用错误码 fail-closed（禁静默 completed/exit 0）
+    outcome = {
+      kind: "failed",
+      error: `empty_final_answer: 模型面返回空 assistant 文本（stop_reason=${String((lastAssistant as { stopReason?: string }).stopReason ?? "unknown")}）且无工具调用——不静默 completed（F7 批 20260928）`,
+    };
   } else {
     outcome = { kind: "failed", error: agent.state.errorMessage ?? "run 未达终局（无 final_answer；faux 脚本耗尽或循环异常收尾）" };
   }

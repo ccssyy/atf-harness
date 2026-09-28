@@ -183,5 +183,10 @@ export const buildRealPeerDescriptor = (kernelDir: string, wsRoot: string, home:
 export const buildInitInvocation = (kernelDir: string, wsRoot: string): AtfCliInvocation =>
   deriveAtfCommand(kernelDir, ["init", "--workspace-root", wsRoot]);
 
+/** F8-B1（批② 20260928，指令 1eb91324）：init 预置工件核验——内核 init 契约＝建立配置根
+ *  `~/.atf/config.json`（内核 workspace_init.py:8/:34-39）。退出码 0 ≠ 预置成立：工件缺失
+ *  即 init=failed（走查 v078 实锚：临时 home 无 config.json 而全程无提示）。纯读判定。 */
+export const initPresetArtifactOk = (home: string): boolean => existsSync(join(home, ".atf", "config.json"));
+
 /** 仓库根（tui.ts 与本模块缺省值共用；dist/ui/tuiArgs.js → 仓库根两级之上）。 */
 export const repoRootDefault = (): string => fileURLToPath(new URL("../..", import.meta.url));

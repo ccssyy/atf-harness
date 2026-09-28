@@ -252,11 +252,24 @@ const BRANCH = "main";
 /** lane 配置/状态（库 fork 的 AgentLane 校验面：pi.lane.config＋pi.lane.state 两 value
  *  须在位——lane 机制由 harness 层维护，spike 镜像侧自备最小合法形态；payload 结构对齐
  *  harness/runtime types 的 LaneConfiguration/LaneState）。 */
+/** lane 模型面（F7 批 20260928，指令 1eb91324：装配时注入真实 provider/model——旧硬编码
+ *  deepseek/faux-spike 使 lane 显示与实际模型面断接，走查 v078 实锚）。缺省＝legacy 值
+ *  （未注入面时向后兼容：spike/poc 等直用 sessionMirror 的既有面零变化）。 */
+let laneModelFace: { provider: string; modelId: string } = { provider: "deepseek", modelId: "faux-spike" };
+
+/** 装配单点注入（runV1Headless 在 modelTag 确定后调用；session 镜像 lane 配置据此显示真实模型面）。 */
+export const setLaneModelFace = (face: { provider: string; modelId: string }): void => {
+  laneModelFace = { ...face };
+};
+
+/** 当前 lane 模型面（测试/诊断只读面）。 */
+export const laneModelFaceNow = (): { provider: string; modelId: string } => ({ ...laneModelFace });
+
 const configureLaneIfNeeded = async (session: Session): Promise<void> => {
   const configExisting = await session.getValue(laneConfig(BRANCH), context);
   if (configExisting !== undefined) return;
   const configuration = {
-    model: { provider: "deepseek", modelId: "faux-spike" },
+    model: { ...laneModelFace },
     thinkingLevel: "off" as const,
     activeToolNames: ["atf_workspace_status", "atf_gate"],
   };

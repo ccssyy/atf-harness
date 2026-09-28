@@ -3,7 +3,7 @@
  * 设计稿 §6 测试计划 ①–⑥ 全量）——解析/互斥/缺 ws-root 报错/D-2 内核目录/D-3 scope-mode/
  * descriptor 组装。纯面单测：零 spawn、零网络。
  */
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -11,6 +11,7 @@ import {
   buildInitInvocation,
   buildRealPeerDescriptor,
   effectiveScopeMode,
+  initPresetArtifactOk,
   parseArgs,
   resolveKernelDir,
 } from "../../src/ui/tuiArgs.js";
@@ -134,5 +135,19 @@ describe("W2：descriptor 与 init 调用面组装（deriveAtfCommand 单点衍�
     expect(init.command).toBe("python3");
     expect(init.args).toEqual(["-m", "agentic_training_flow", "init", "--workspace-root", "/ws"]);
     expect(init.cwd).toBe("/kern");
+  });
+
+  it("F8-B1：init 预置工件核验（initPresetArtifactOk）——配置根在位 ok／缺失 failed", () => {
+    const home = mkdtempSync(join(tmpdir(), "w2-init-artifact-"));
+    try {
+      // 未 init：工件缺失 → failed（走查 v078 实锚：exit 0 但无 config.json 全程无提示）
+      expect(initPresetArtifactOk(home)).toBe(false);
+      // init 契约工件（内核 workspace_init.py：~/.atf/config.json 配置根）在位 → ok
+      mkdirSync(join(home, ".atf"), { recursive: true });
+      writeFileSync(join(home, ".atf", "config.json"), "{}");
+      expect(initPresetArtifactOk(home)).toBe(true);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });
