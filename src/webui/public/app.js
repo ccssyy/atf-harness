@@ -29,6 +29,7 @@ function selectSession(id) {
   renderSessionList();
   pollEvents();
   rebuildMetrics();
+  void refreshSelector(); // 选择器随会话切换刷新（模型清单随 provider）
 }
 
 async function pollEvents() {
@@ -417,6 +418,7 @@ for (const tab of document.querySelectorAll(".loss-tab")) {
 setInterval(pollEvents, 3_000);
 setInterval(refreshGpu, 30_000);
 setInterval(() => { if (state.current !== null) rebuildMetrics(); }, 5_000);
+void refreshSelector().then(() => undefined); // 批⑯prime A：启动即渲染选择器行（常显）
 void newTask().then(() => {
   refreshGpu();
   refreshSessions();
