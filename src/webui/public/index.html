@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ATF 训练 Agent</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="layout">
+    <aside id="left">
+      <div class="left-head">ATF 训练 Agent</div>
+      <button id="new-task" class="new-task">＋ 新建任务</button>
+      <div id="session-list"></div>
+      <div id="status-card" class="status-card">
+        <div class="status-row"><span id="gpu-dot" class="dot red"></span>GPU <span id="gpu-text">检测中…</span></div>
+        <div class="status-row"><span class="dot green"></span>embedding 服务</div>
+        <div class="status-row"><span class="dot green"></span>内核 pin <span id="pin-text"></span></div>
+      </div>
+    </aside>
+    <main id="center">
+      <div id="chat"></div>
+      <div id="composer">
+        <div id="intent-panel" class="hidden">
+          <div class="intent-item" data-fill="基于 pl 数据训一个字段抽取模型">新建训练任务</div>
+          <div class="intent-item" data-fill="查看历史 run">查看历史 run</div>
+          <div class="intent-item" data-fill="总结一下刚才那个 run">总结训练</div>
+          <div class="intent-item" data-fill="对比最近两轮指标">对比指标</div>
+        </div>
+        <textarea id="input" rows="2" placeholder="输入任务或回复（/ 唤起常用意图；Enter 发送）"></textarea>
+      </div>
+    </main>
+    <aside id="right">
+      <div class="right-head">分段监控</div>
+      <div id="segment-panel" class="segment-panel">
+        <div class="seg-card dim" data-seg="register">登记卡 <span class="seg-state">⏸</span></div>
+        <div class="seg-card dim" data-seg="split">切分卡 <span class="seg-state">⏸</span></div>
+        <div class="seg-card dim" data-seg="label_qc">体检卡 <span class="seg-state">⏸</span></div>
+        <div class="seg-card dim" data-seg="candidate">候选 <span class="seg-state">⏸</span></div>
+        <div class="seg-card dim" data-seg="publish">发布 <span class="seg-state">⏸</span></div>
+      </div>
+      <div class="right-head">产物抽屉</div>
+      <div id="artifact-drawer" class="artifact-drawer"><div class="dim">（暂无产物）</div></div>
+      <div class="report-entry">📄 <a id="report-link" href="#" target="_blank">report.md（界面同源声明）</a></div>
+    </aside>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

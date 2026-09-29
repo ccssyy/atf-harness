@@ -331,6 +331,10 @@ export interface AssembleV1Deps {
   /** v2 A7 四工具治理面（atf_read/edit/write/bash；缺省不挂接）。roots[0]＝主根
    *  （相对路径落点，scratch 优先），runs 根随装配追加；env 追加面见 fileTools。 */
   fileTools?: { roots: readonly string[] };
+  /** 批⑬ WebUI（2026-09-29）：宿主追加工具（只读四件/atf_config_confirm 等——缺省不注入＝既有行为逐位不变）。 */
+  extraTools?: import("@earendil-works/pi-agent-core").AgentTool[];
+  /** 批⑬ WebUI：追加工具的审批豁免面（interactive/只读工具自带确认语义——缺省空＝零变化）。 */
+  exemptTools?: readonly string[];
   /** 外部共享账本闸锁（runChildSubtask 子装配透传同一把；缺省＝subagent 挂接时自建）。 */
   gateLock?: import("./approvalHook.js").GateLock;
   streamFn: (model: never, context: TranscriptContext, options?: SimpleStreamOptions) => unknown;
@@ -368,6 +372,8 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
   if (deps.fileTools !== undefined) {
     tools.push(...buildFileAgentTools({ roots: deps.fileTools.roots }));
   }
+  // 批⑬ WebUI（2026-09-29）：宿主追加工具（只读四件/atf_config_confirm 等——缺省不注入＝既有行为逐位不变）。
+  tools.push(...(deps.extraTools ?? []));
   // v2：并发执行体（主链＋并行 fan-out/deferred 子任务）共享同一把账本闸锁——
   // 闸段（query→预录→consume）串行化，watermark 语义不被并发破坏（subagent 缺省不挂接＝无锁，语义零变化）。
   const gateLock = deps.gateLock ?? (deps.subagent !== undefined ? createGateLock() : undefined);
@@ -424,17 +430,22 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
         ? { contentDigestFor: createProposalContentDigestFor({ roots: () => deps.fileTools!.roots }) }
         : {}),
       ...(surface !== undefined ? { surface } : {}),
-      ...(deps.subagent !== undefined
-        ? {
-            exemptTools: [
-              "dispatch_training_subtask",
-              "dispatch_parallel_training_subtask",
-              "atf_deferred_spawn",
-              "atf_deferred_poll",
-              "atf_deferred_cancel",
-            ],
-          }
-        : {}),
+      ...(() => {
+        // 批⑬：豁免面＝subagent 伴生五件（既有）＋宿主追加（WebUI interactive/只读，缺省空）。
+        const exempt = [
+          ...(deps.subagent !== undefined
+            ? [
+                "dispatch_training_subtask",
+                "dispatch_parallel_training_subtask",
+                "atf_deferred_spawn",
+                "atf_deferred_poll",
+                "atf_deferred_cancel",
+              ]
+            : []),
+          ...(deps.exemptTools ?? []),
+        ];
+        return exempt.length > 0 ? { exemptTools: exempt } : {};
+      })(),
       ...(gateLock !== undefined ? { gateLock } : {}),
     }),
     afterToolCall: createTemAfterToolMirror({ session: deps.session, runId, model: envFingerprint(deps.modelTag).model }),
