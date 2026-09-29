@@ -62,7 +62,15 @@ export type ChatEvent =
       answered?: { verdict: "confirmed" | "denied"; via: "button" | "text"; at: string };
       at: string;
     }
-  | { seq: number; kind: "system_notice"; level: "info" | "warn" | "error"; text: string; at: string };
+  | { seq: number; kind: "system_notice"; level: "info" | "warn" | "error"; text: string; at: string }
+  /** 批⑯prime B：流式四事件（过程流逐段转发——对齐主流 agent 体验）。
+   *  thinking_delta：模型思考增量（GLM reasoning_content 分帧；无 thinking provider 不发——降级不伪造）。
+   *  thinking_done：思考收口（前端折叠为「已思考 N 字 ▸」）。 */
+  | { seq: number; kind: "thinking_delta"; text: string; at: string }
+  | { seq: number; kind: "thinking_done"; chars: number; at: string }
+  | { seq: number; kind: "text_delta"; text: string; at: string }
+  | { seq: number; kind: "tool_start"; tool: string; params: Record<string, unknown>; at: string }
+  | { seq: number; kind: "tool_end"; tool: string; resultSummary: string; isError: boolean; at: string };
 
 /** 三态标签中文名（渲染单源）。 */
 export const FIELD_TAG_LABELS: Record<string, string> = {
@@ -143,6 +151,16 @@ export const renderChatEvent = (event: ChatEvent): string => {
     }
     case "system_notice":
       return `<div class="msg system_notice level-${event.level}">${esc(event.text)}</div>`;
+    case "thinking_delta":
+      return `<div class="msg thinking_delta streaming"><div class="thinking-block"><span class="thinking-label">思考中…</span> <span class="thinking-body">${esc(event.text)}</span></div></div>`;
+    case "thinking_done":
+      return `<div class="msg thinking_done collapsed"><div class="thinking-block folded">已思考 ${String(event.chars)} 字 ▸</div></div>`;
+    case "text_delta":
+      return `<div class="msg text_delta streaming"><div class="text">${esc(event.text)}</div></div>`;
+    case "tool_start":
+      return `<div class="msg tool_card live"><div class="card-title">⚙ tool: ${esc(event.tool)} <span class="badge running">运行中</span></div><pre class="params">${esc(JSON.stringify(event.params, null, 1))}</pre></div>`;
+    case "tool_end":
+      return `<div class="msg tool_end"><div class="card-title">⚙ tool: ${esc(event.tool)} <span class="badge done-badge">${event.isError ? "失败" : "完成"}</span></div><div class="result">${esc(event.resultSummary)}</div></div>`;
   }
 };
 

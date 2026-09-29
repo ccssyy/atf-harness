@@ -406,7 +406,7 @@ describe("e2e 冒烟（HTTP 面；场景 2-6 对应）", () => {
       () => JSON.stringify((manager.getSession(second.id)?.events ?? []).map((event) => event.kind)),
     );
     const secondEvents = manager.getSession(second.id)?.events ?? [];
-    expect(JSON.stringify(secondEvents.map((event) => [event.kind, event.kind === "tool_card" ? event.tool : ""]))).toContain("atf_run_list");
+    expect(JSON.stringify(secondEvents.map((event) => [event.kind, event.kind === "tool_card" || event.kind === "tool_start" ? event.tool : ""]))).toContain("atf_run_list");
 
     // 场景 6：第三会话绑同一 run → 拒绝并提示活跃会话
     const third = (await post("/api/sessions", {})) as { id: string };

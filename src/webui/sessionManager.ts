@@ -508,26 +508,63 @@ export class WebUiSessionManager {
     });
     void atfToolDeps;
     session.agent = assembled.agent;
-    // 工具卡投影（批⑬）：tool_execution_start/end → tool_card（运行中徽标→完成＋结果摘要）
+    // 批⑯prime B：过程流式渲染——逐事件即时 emit 到 SSE（对齐主流 agent 体验）：
+    // thinking_delta/text_delta 逐段（GLM reasoning_content 与 content 分帧，上游本就流式）；
+    // 工具流式两段式（tool_start 建 live 卡 → tool_end 更新完成）——原"turn 完成打包发"移除。
+    // 降级：provider 不吐 thinking 流（如 DeepSeek 关思考）→ 无 thinking 事件，直接正文流（不伪造空思考区）。
     const toolCardSeqs = new Map<string, number>();
-    assembled.agent.subscribe((event: { type: string; toolCallId?: string; toolName?: string; args?: unknown; result?: unknown; isError?: boolean }) => {
+    const streamCursors: { think: number | null; text: number | null; thinkChars: number } = { think: null, text: null, thinkChars: 0 };
+    assembled.agent.subscribe((event: {
+      type: string;
+      toolCallId?: string;
+      toolName?: string;
+      args?: unknown;
+      isError?: boolean;
+      assistantMessageEvent?: { type: string; delta?: string };
+    }) => {
+      // —— 思考/正文增量（message_update 携 AssistantMessageEvent 分帧）——
+      if (event.type === "message_update" && event.assistantMessageEvent !== undefined) {
+        const delta = event.assistantMessageEvent;
+        if (delta.type === "thinking_delta" && typeof delta.delta === "string" && delta.delta !== "") {
+          this.emit(session, { kind: "thinking_delta", text: delta.delta, at: new Date().toISOString() });
+          streamCursors.think = session.seq;
+          streamCursors.thinkChars += delta.delta.length;
+          return;
+        }
+        if (delta.type === "thinking_end") {
+          if (streamCursors.think !== null && streamCursors.thinkChars > 0) {
+            this.emit(session, { kind: "thinking_done", chars: streamCursors.thinkChars, at: new Date().toISOString() });
+          }
+          streamCursors.think = null;
+          streamCursors.thinkChars = 0;
+          return;
+        }
+        if (delta.type === "text_delta" && typeof delta.delta === "string" && delta.delta !== "") {
+          this.emit(session, { kind: "text_delta", text: delta.delta, at: new Date().toISOString() });
+          streamCursors.text = session.seq;
+          return;
+        }
+      }
+      // —— 工具流式两段式 ——
       if (event.type === "tool_execution_start" && typeof event.toolName === "string") {
         const card = this.emit(session, {
-          kind: "tool_card",
+          kind: "tool_start",
           tool: event.toolName,
-          running: true,
           params: (event.args ?? {}) as Record<string, unknown>,
           at: new Date().toISOString(),
         });
         if (event.toolCallId !== undefined) toolCardSeqs.set(event.toolCallId, card.seq);
+        return;
       }
       if (event.type === "tool_execution_end" && event.toolCallId !== undefined) {
-        const seq = toolCardSeqs.get(event.toolCallId);
-        const card = seq !== undefined ? session.events.find((candidate) => candidate.seq === seq) : undefined;
-        if (card !== undefined && card.kind === "tool_card") {
-          card.running = false;
-          card.resultSummary = event.isError === true ? "执行失败" : "完成";
-        }
+        this.emit(session, {
+          kind: "tool_end",
+          tool: event.toolName ?? "",
+          resultSummary: event.isError === true ? "执行失败" : "完成",
+          isError: event.isError === true,
+          at: new Date().toISOString(),
+        });
+        return;
       }
     });
     return ok(assembled.agent);

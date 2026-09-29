@@ -37,17 +37,100 @@ async function pollEvents() {
   const chat = $("#chat");
   for (const event of data.events) {
     state.cursor = Math.max(state.cursor, event.seq);
+    applyStreamingEvent(chat, event);
+  }
+  refreshSessions();
+}
+
+/** 批⑯prime B：流式事件增量渲染——思考灰字区逐段追加（完成后折叠）、正文增量、
+ *  工具 live 卡两段式（start 建 live 卡→end 更新完成）。历史重放走同一函数（按 seq 顺序）。 */
+function applyStreamingEvent(chat, event) {
+  const kind = event.html.match(/class="msg (\w+)/)?.[1] ?? "";
+  // —— 流式追加类：合并进既有流块而非新节点 ——
+  if (kind === "thinking_delta") {
+    let block = document.getElementById("live-thinking");
+    if (block === null) {
+      block = document.createElement("div");
+      block.id = "live-thinking";
+      block.className = "msg thinking_delta streaming";
+      block.innerHTML = `<div class="thinking-block"><span class="thinking-label">思考中…</span> <span class="thinking-body"></span></div>`;
+      chat.appendChild(block);
+    }
+    block.querySelector(".thinking-body").textContent += extractText(event.html);
+    chat.scrollTop = chat.scrollHeight;
+    return;
+  }
+  if (kind === "thinking_done") {
+    const block = document.getElementById("live-thinking");
+    if (block !== null) {
+      const chars = (event.html.match(/已思考 (\d+) 字/) ?? [])[1] ?? "0";
+      block.className = "msg thinking_done collapsed";
+      block.innerHTML = `<div class="thinking-block folded">已思考 ${chars} 字 ▸</div>`;
+      block.id = "folded-thinking-" + String(event.seq);
+      block.onclick = () => block.classList.toggle("collapsed");
+    }
+    return;
+  }
+  if (kind === "text_delta") {
+    let block = document.getElementById("live-text");
+    if (block === null) {
+      block = document.createElement("div");
+      block.id = "live-text";
+      block.className = "msg text_delta streaming";
+      block.innerHTML = `<div class="text"></div>`;
+      chat.appendChild(block);
+    }
+    block.querySelector(".text").textContent += extractText(event.html);
+    chat.scrollTop = chat.scrollHeight;
+    return;
+  }
+  // —— 工具两段式：start 建 live 卡；end 更新并解除 live ——
+  if (kind === "tool_start") {
     const wrap = document.createElement("div");
     wrap.innerHTML = event.html;
     const node = wrap.firstElementChild;
     if (node !== null) {
-      wireButtons(node);
+      node.dataset.live = "1";
       chat.appendChild(node);
       chat.scrollTop = chat.scrollHeight;
-      if (node.classList.contains("confirm_card") && node.querySelector("[data-action='confirm']") !== null) state.pendingCardSeq = event.seq;
+    }
+    return;
+  }
+  if (kind === "tool_end") {
+    const live = chat.querySelector(".tool_card.live") ?? chat.querySelector(".tool_card");
+    if (live !== null) {
+      const title = live.querySelector(".card-title");
+      if (title !== null) {
+        const badge = event.html.includes("失败") ? `<span class="badge red">失败</span>` : `<span class="badge done-badge">完成</span>`;
+        title.innerHTML = `${title.textContent?.split("⚙ tool:")[1]?.trim().split(" 运行中")[0] ?? ""} `.replace(/^\s+/, "⚙ tool: ") + badge;
+        title.innerHTML = `⚙ tool: ${live.dataset.tool ?? ""} ${badge}`;
+      }
+      live.classList.remove("live");
+      const result = document.createElement("div");
+      result.className = "result";
+      result.textContent = event.html.match(/<div class="result">([\s\S]*?)<\/div>/)?.[1] ?? "完成";
+      live.appendChild(result);
+      chat.scrollTop = chat.scrollHeight;
+      return;
     }
   }
-  refreshSessions();
+  // —— 其余组件：整卡渲染（既有路径） ——
+  const wrap = document.createElement("div");
+  wrap.innerHTML = event.html;
+  const node = wrap.firstElementChild;
+  if (node !== null) {
+    wireButtons(node);
+    chat.appendChild(node);
+    chat.scrollTop = chat.scrollHeight;
+    if (node.classList.contains("confirm_card") && node.querySelector("[data-action='confirm']") !== null) state.pendingCardSeq = event.seq;
+  }
+}
+
+function extractText(html) {
+  const body = html.match(/<span class="thinking-body">([\s\S]*?)<\/span>/);
+  if (body !== null) return body[1];
+  const textDiv = html.match(/<div class="text">([\s\S]*?)<\/div>/);
+  return textDiv?.[1] ?? "";
 }
 
 async function refreshSessions() {
@@ -157,7 +240,8 @@ async function refreshSelector() {
     option.textContent = model.id;
     select.appendChild(option);
   }
-  if (state.current !== null && state.cursor > 0) $("#selector-row").classList.remove("hidden");
+  // 批⑯prime A：选择器会话创建即常显（用户第一句话前就要选模型——原 cursor>0 条件删除）
+  $("#selector-row").classList.remove("hidden");
 }
 
 async function refreshContext() {
