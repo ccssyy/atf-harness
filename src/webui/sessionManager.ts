@@ -27,6 +27,7 @@ import { ensureTemBranch } from "../agent/tem/store.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/pi-agent-core";
 import type { ChatEvent } from "./chatModel.js";
 import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, hasConfigSnapshot, loadConfigSnapshot, parseConfigEditText, saveConfigSnapshot } from "./configConfirm.js";
+import { GpuQueueOrchestrator, queueHitText, formatWaited } from "./gpuQueue.js";
 import { computeContextUsage, type ApprovalPolicy, type ContextUsage, type ScenarioProfileId, type SettingsStore } from "./settings.js";
 import { buildReadOnlyAgentTools } from "./readOnlyTools.js";
 
@@ -73,6 +74,9 @@ interface Session {
   contextUsedTokens: number;
   /** 批⑭：运行时热切覆盖（缺省＝settings default；新 turn 生效不重启 loop——pi-ai 换实例语义） */
   providerOverride?: { provider_id: string; model: string; effort?: string };
+  /** 批⑯ 增量 A：GPU 排队编排（训练段放行后入队；命中→琥珀确认卡） */
+  queue?: GpuQueueOrchestrator;
+  queueStartedAt?: number;
   pending?: PendingConfirm;
   agent: import("@earendil-works/pi-agent-core").Agent | null;
   bridge: AtfBridgeConnection | null;
@@ -272,6 +276,28 @@ export class WebUiSessionManager {
     } else if (event.kind === "danger_confirm") {
       event.pending = false;
       event.answered = { verdict: verdict === "denied" ? "denied" : "confirmed", via, at: new Date().toISOString() };
+      // 批⑯ 增量 A：真跑确认后进入排队语义（替代静态 gpu_window_pending——排队中每 5 分钟探测，
+      // 命中→琥珀确认卡再放行；本编排器产出命中事件，真跑启动仍由 danger 卡二次确认守门）
+      if (verdict !== "denied" && session.queue === undefined) {
+        const orchestrator = new GpuQueueOrchestrator();
+        session.queue = orchestrator;
+        session.queueStartedAt = Date.now();
+        orchestrator.enqueue(session.boundRunId ?? session.id, (chatEvent) => this.emit(session, chatEvent), () => {
+          // 命中：琥珀确认卡（危险动作守门不变——用户仍需点确认）
+          void this.emitDangerConfirm(session.id, {
+            title: queueHitText(0),
+            gpuCount: 1,
+            estimate: "按任务卡",
+            command: "bash train.sh（GPU 窗口已命中——训练启动放行）",
+          });
+        });
+        this.emit(session, {
+          kind: "system_notice",
+          level: "info",
+          text: `排队已入列（run=${session.boundRunId ?? session.id}）——${formatWaited(0)}起计`,
+          at: new Date().toISOString(),
+        });
+      }
     }
   }
 

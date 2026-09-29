@@ -16,6 +16,7 @@ import { loadLlmProviderConfig } from "../llm/providerConfig.js";
 import { WebUiSessionManager, chatBudgetFromEnv, parseBudgetFromEnv, type SessionManagerDeps } from "./sessionManager.js";
 import { openSettingsStore, redactProviders, envProfilePath, writeEnvProfile, SCENARIO_PROFILES, APPROVAL_POLICIES, type ApprovalPolicy, type ScenarioProfileId } from "./settings.js";
 import { listRuns, queryNvidiaSmi } from "./readOnlyTools.js";
+import { ingestTrainerLogLines, readLossSeries, lossSeriesPath } from "./logParser.js";
 import { renderChatEvent } from "./chatModel.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
@@ -26,6 +27,11 @@ const publicDir = existsSync(join(dirname(fileURLToPath(import.meta.url)), "publ
 const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
 
 const env = process.env;
+
+const readLossSeriesLen = (runsRoot: string, sessionId: string): number => {
+  const path = lossSeriesPath(join(runsRoot, sessionId));
+  return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as unknown[]).length : 0;
+};
 
 const json = (res: ServerResponse, code: number, payload: unknown): void => {
   res.writeHead(code, { "content-type": "application/json; charset=utf-8" });
@@ -127,10 +133,18 @@ export const startWebUiServer = (overrides: WebUiServerOverrides = {}): WebUiSer
       if ((req.headers.accept ?? "").includes("text/event-stream")) {
         res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
         let cursor = since;
+        let lossCursor = readLossSeriesLen(runsRoot, id);
         const timer = setInterval(() => {
           for (const event of manager.eventsSince(id, cursor)) {
             cursor = event.seq;
             res.write(`data: ${JSON.stringify({ seq: event.seq, html: renderChatEvent(event) })}\n\n`);
+          }
+          // 批⑯ 增量 B：metrics_delta——页面刷新从文件重建（GET /api/metrics），SSE 只推增量
+          const total = readLossSeriesLen(runsRoot, String(eventsMatch[1] ?? ""));
+          if (total > lossCursor) {
+            const points = readLossSeries(join(runsRoot, String(eventsMatch[1] ?? ""))).slice(lossCursor);
+            lossCursor = total;
+            res.write(`data: ${JSON.stringify({ type: "metrics_delta", points })}\n\n`);
           }
           res.write(": ping\n\n");
         }, 1_000);
@@ -298,6 +312,33 @@ export const startWebUiServer = (overrides: WebUiServerOverrides = {}): WebUiSer
         return;
       }
       json(res, 200, { used_tokens: usage.usedTokens, remaining_tokens: usage.remainingTokens, context_window: usage.contextWindow, remaining_ratio: usage.remainingRatio, low: usage.low });
+      return;
+    }
+    // ---- 批⑯ 增量 B：监控数据面 ----
+    const metricsMatch = path.match(/^\/api\/sessions\/([^/]+)\/metrics$/);
+    if (metricsMatch !== null && req.method === "GET") {
+      // 页面刷新从文件重建曲线（全量）
+      const sessionId = metricsMatch[1] ?? "";
+      json(res, 200, { points: readLossSeries(join(runsRoot, sessionId)), count: readLossSeries(join(runsRoot, sessionId)).length });
+      return;
+    }
+    const ingestMatch = path.match(/^\/api\/sessions\/([^/]+)\/metrics\/ingest$/);
+    if (ingestMatch !== null && req.method === "POST") {
+      // 日志行进料（合成测试/M1 真实 tail 共用）：解析→落盘→返回新增点（SSE metrics_delta 增量推）
+      const body = await readBody(req);
+      const lines = Array.isArray(body["lines"]) ? (body["lines"] as unknown[]).map((line) => String(line)) : [];
+      const added = ingestTrainerLogLines(join(runsRoot, ingestMatch[1] ?? ""), lines, new Date().toISOString());
+      json(res, 200, { added, count: added.length });
+      return;
+    }
+    const lossFileMatch = path.match(/^\/api\/sessions\/([^/]+)\/loss-series\.json$/);
+    if (lossFileMatch !== null && req.method === "GET") {
+      const artifactPath = lossSeriesPath(join(runsRoot, lossFileMatch[1] ?? ""));
+      if (!existsSync(artifactPath)) {
+        json(res, 404, { error: "loss-series 不存在" });
+        return;
+      }
+      json(res, 200, { points: readLossSeries(join(runsRoot, lossFileMatch[1] ?? "")) });
       return;
     }
     json(res, 404, { error: "not found" });

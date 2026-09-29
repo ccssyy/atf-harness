@@ -28,6 +28,7 @@ function selectSession(id) {
   $("#chat").innerHTML = "";
   renderSessionList();
   pollEvents();
+  rebuildMetrics();
 }
 
 async function pollEvents() {
@@ -276,8 +277,62 @@ $("#model-select").onchange = () => {
 const originalPoll = pollEvents;
 setInterval(() => { if (settingsState.providers.length > 0) { refreshContext().catch(() => undefined); } }, 5_000);
 
+
+// ---- 批⑯：监控数据面（文件重建 + SSE metrics_delta 增量）与 GPU 排队语义展示 ----
+const metricsState = { points: [], tab: "loss" };
+
+function renderLossChart() {
+  const svg = document.getElementById("loss-svg");
+  const legend = document.getElementById("loss-legend");
+  if (svg === null) return;
+  const points = metricsState.points;
+  const series = metricsState.tab === "grad"
+    ? [{ key: "grad_norm", color: "#16a34a", dash: "" }]
+    : [
+        { key: "train_loss", color: "#1d4ed8", dash: "" },
+        { key: "eval_loss", color: "#94a3b8", dash: "3 2" },
+      ];
+  let html = "";
+  for (const s of series) {
+    const pts = points.filter((p) => p[s.key] !== undefined);
+    if (pts.length === 0) continue;
+    const values = pts.map((p) => p[s.key]);
+    const max = Math.max(...values), min = Math.min(...values);
+    const range = max - min || 1;
+    const path = pts.map((p, i) => `${i === 0 ? "" : " "}${(i / Math.max(1, pts.length - 1)) * 100},${38 - ((p[s.key] - min) / range) * 34 - 2}`).join(" ");
+    html += `<polyline points="${path}" fill="none" stroke="${s.color}" stroke-width="1.2"${s.dash ? ` stroke-dasharray="${s.dash}"` : ""}/>`;
+  }
+  svg.innerHTML = html === "" ? `<text x="50" y="22" text-anchor="middle" font-size="4" fill="#94a3b8">等待训练日志…</text>` : html;
+  legend.innerHTML = series.map((s) => `<span><span class="swatch" style="background:${s.color}"></span>${s.key}${s.dash ? "（虚线）" : ""}</span>`).join("");
+  // KPI 卡随最新行刷新
+  const last = points[points.length - 1];
+  if (last !== undefined) {
+    const set = (id, v) => { const el = document.getElementById(id); if (el !== null) el.textContent = v; };
+    set("kpi-train", last.train_loss !== undefined ? String(last.train_loss) : "—");
+    set("kpi-eval", last.eval_loss !== undefined ? String(last.eval_loss) : "—");
+    set("kpi-lr", last.learning_rate !== undefined ? String(last.learning_rate) : "—");
+  }
+}
+
+async function rebuildMetrics() {
+  if (state.current === null) return;
+  const data = await api(`/api/sessions/${state.current}/metrics`);
+  metricsState.points = data.points ?? [];
+  renderLossChart();
+}
+
+for (const tab of document.querySelectorAll(".loss-tab")) {
+  tab.onclick = () => {
+    for (const t of document.querySelectorAll(".loss-tab")) t.classList.remove("active");
+    tab.classList.add("active");
+    metricsState.tab = tab.dataset.tab;
+    renderLossChart();
+  };
+}
+
 setInterval(pollEvents, 3_000);
 setInterval(refreshGpu, 30_000);
+setInterval(() => { if (state.current !== null) rebuildMetrics(); }, 5_000);
 void newTask().then(() => {
   refreshGpu();
   refreshSessions();

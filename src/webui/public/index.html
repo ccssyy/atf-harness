@@ -52,20 +52,16 @@
         <div class="train-pct">0%</div>
         <div class="train-sub">DRY_RUN 校验已过 · 等确认+GPU</div>
         <div class="progress"><div class="bar" style="width:0%"></div></div>
-        <div class="loss-chart" aria-label="Loss 双线占位">
-          <svg viewBox="0 0 100 40" preserveAspectRatio="none">
-            <polyline points="0,8 20,14 40,20 60,26 80,30 100,33" fill="none" stroke="#1d4ed8" stroke-width="1.2"/>
-            <polyline points="0,14 20,18 40,24 60,28 80,31 100,33" fill="none" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="3 2"/>
-          </svg>
-        </div>
-        <div class="loss-legend"><span><span class="swatch" style="background:#1d4ed8"></span>train_loss</span><span><span class="swatch" style="background:#94a3b8"></span>eval_loss（虚线）</span></div>
+        <div class="loss-tabs"><button class="loss-tab active" data-tab="loss">Loss 双线</button><button class="loss-tab" data-tab="grad">梯度范数</button></div>
+        <div class="loss-chart" aria-label="训练曲线（三线同图可切 tab）"><svg id="loss-svg" viewBox="0 0 100 40" preserveAspectRatio="none"></svg></div>
+        <div class="loss-legend" id="loss-legend"></div>
         <div class="kpi-grid">
-          <div class="kpi-card"><div class="kpi-label">train_loss</div><div class="kpi-value">—</div></div>
-          <div class="kpi-card"><div class="kpi-label">eval_loss</div><div class="kpi-value">—</div></div>
-          <div class="kpi-card"><div class="kpi-label">lr</div><div class="kpi-value">—</div></div>
-          <div class="kpi-card"><div class="kpi-label">GPU 显存</div><div class="kpi-value">—</div></div>
+          <div class="kpi-card"><div class="kpi-label">train_loss</div><div class="kpi-value" id="kpi-train">—</div></div>
+          <div class="kpi-card"><div class="kpi-label">eval_loss</div><div class="kpi-value" id="kpi-eval">—</div></div>
+          <div class="kpi-card"><div class="kpi-label">lr</div><div class="kpi-value" id="kpi-lr">—</div></div>
+          <div class="kpi-card"><div class="kpi-label">GPU 显存</div><div class="kpi-value" id="kpi-mem">—</div></div>
         </div>
-        <div class="env-card">环境：节点=本机 · 模型=— · pin=v0.7.8b0</div>
+        <div class="env-card">环境：节点=本机 · 模型=— · pin=v0.7.8b0 · <a id="tb-link" href="#" title="逐层梯度可视化留 M2（tensorboard 外链占位）">tensorboard 外链</a></div>
       </div>
       <div class="right-head">产物抽屉</div>
       <div id="artifact-drawer" class="artifact-drawer"><div class="dim">（暂无产物）</div></div>
