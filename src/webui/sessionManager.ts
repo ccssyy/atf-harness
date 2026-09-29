@@ -21,6 +21,7 @@ import type { FileToolHost } from "../agent/fileTools.js";
 import { assembleV1Agent, type AssembledV1Agent } from "../agent/cli.js";
 import { createProviderStreamFn } from "../agent/providerStreamFn.js";
 import type { ApprovalRequestInfo, ApprovalSurface, ApprovalSurfaceVerdict } from "../agent/approvalSurface.js";
+import { createFauxStreamFn, fauxAssistantMessage } from "../agent/fauxStream.js";
 import { createJsonlSessionRepo, setLaneModelFace } from "../agent/sessionMirror.js";
 import { ensureTemBranch } from "../agent/tem/store.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/pi-agent-core";
@@ -445,7 +446,16 @@ export class WebUiSessionManager {
     const rawStreamFn =
       this.deps.streamFn !== undefined
         ? this.deps.streamFn
-        : createProviderStreamFn(this.deps.providerConfig as { provider_id: string; model: string; base_url: string; api_key: string }).streamFn;
+        : this.deps.providerConfig !== undefined
+          ? createProviderStreamFn(this.deps.providerConfig).streamFn
+          : (_model: never, _context: never, _options?: never): unknown =>
+              // 无 GLM 配置（ATF_LLM_CONFIG 未设）：结构化降级响应（fail-closed 不装配真 provider）
+              createFauxStreamFn([
+                fauxAssistantMessage(
+                  [{ type: "text", text: "模型宿主未配置（ATF_LLM_CONFIG 未设）——请在设置页区 1 配置 Provider 并设置对应凭据 env 后重试。" }],
+                  "stop",
+                ),
+              ])(_model, _context, _options);
     const assembled = assembleV1Agent({
       bridge,
       session: mirrored as never,

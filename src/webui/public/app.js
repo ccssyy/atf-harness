@@ -51,6 +51,14 @@ async function pollEvents() {
 
 async function refreshSessions() {
   const data = await api("/api/sessions");
+  // 批⑮：结果摘要行接真数据（atf_run_list 产物摘要——只读枚举，展示层拼接）
+  try {
+    const runs = (await api("/api/runs")).runs ?? [];
+    for (const session of data.sessions) {
+      const run = runs.find((candidate) => candidate.run_id === session.boundRunId);
+      if (run !== undefined) session.resultSummary = (run.artifacts ?? []).slice(0, 2).join(" · ") || session.resultSummary;
+    }
+  } catch { /* runs 枚举失败不阻塞会话列表 */ }
   state.sessions = data.sessions;
   renderSessionList();
 }
@@ -68,6 +76,8 @@ function wireButtons(node) {
         await api(`/api/sessions/${state.current}/confirm`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "edit" }) });
       }
       pollEvents();
+      const monitor = $("#train-monitor");
+      if (monitor !== null) monitor.classList.remove("hidden"); // 训练段起：切换到训练监控视图
     };
   }
 }

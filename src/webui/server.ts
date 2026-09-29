@@ -19,7 +19,10 @@ import { listRuns, queryNvidiaSmi } from "./readOnlyTools.js";
 import { renderChatEvent } from "./chatModel.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
-const publicDir = join(dirname(fileURLToPath(import.meta.url)), "public");
+// public/ 走源树单源（前端零构建——dist/webui/public 不存在；展示层即 src 侧文件）
+const publicDir = existsSync(join(dirname(fileURLToPath(import.meta.url)), "public"))
+  ? join(dirname(fileURLToPath(import.meta.url)), "public")
+  : join(repoRoot, "src", "webui", "public");
 const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
 
 const env = process.env;
