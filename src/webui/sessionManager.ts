@@ -26,6 +26,7 @@ import { ensureTemBranch } from "../agent/tem/store.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/pi-agent-core";
 import type { ChatEvent } from "./chatModel.js";
 import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, hasConfigSnapshot, loadConfigSnapshot, parseConfigEditText, saveConfigSnapshot } from "./configConfirm.js";
+import { computeContextUsage, type ApprovalPolicy, type ContextUsage, type ScenarioProfileId, type SettingsStore } from "./settings.js";
 import { buildReadOnlyAgentTools } from "./readOnlyTools.js";
 
 /** 分布式 Omit（union 收窄安全）。 */
@@ -67,6 +68,10 @@ interface Session {
   resultSummary?: string;
   events: ChatEvent[];
   seq: number;
+  /** 批⑭：上下文用量粗估（chars/2，每 turn 后更新——§二.2 剩余量递减） */
+  contextUsedTokens: number;
+  /** 批⑭：运行时热切覆盖（缺省＝settings default；新 turn 生效不重启 loop——pi-ai 换实例语义） */
+  providerOverride?: { provider_id: string; model: string; effort?: string };
   pending?: PendingConfirm;
   agent: import("@earendil-works/pi-agent-core").Agent | null;
   bridge: AtfBridgeConnection | null;
@@ -79,6 +84,10 @@ export interface SessionManagerDeps {
   runsRoot: string;
   /** 会话 JSONL 根（webui 会话壳落盘面）。 */
   sessionsRoot: string;
+  /** 批⑭：设置存储（providers/审批三档/profile——server 装配点注入）。 */
+  settings?: SettingsStore;
+  /** 批⑭：场景档（会话头徽标；新 run 携带对应缺省）。 */
+  scenarioProfile?: ScenarioProfileId;
   /** 桥接 spawn（mock/real 由调用方定——与 cli.ts 同参形态）。 */
   bridgeCommand: { argv: readonly string[]; cwd?: string; env?: Record<string, string> };
   /** providerConfig（GLM 宿主走 ATF_LLM_CONFIG 解析产物；测试注入 streamFn 时可省）。 */
@@ -97,12 +106,47 @@ export class WebUiSessionManager {
   private readonly deps: SessionManagerDeps;
   private readonly parseBudget: number;
   private readonly chatBudget: number;
+  /** 批⑭：审批策略（三档；切换即时生效于新 turn——已挂起卡不受影响）。 */
+  public approvalPolicy: ApprovalPolicy = "per_card";
+  /** 批⑭：场景档徽标（会话头）。 */
+  public scenarioProfile: ScenarioProfileId = "first_train";
 
   public constructor(deps: SessionManagerDeps) {
     this.deps = deps;
     this.parseBudget = deps.parseBudget ?? parseBudgetFromEnv();
     this.chatBudget = deps.chatBudget ?? chatBudgetFromEnv();
+    if (deps.settings !== undefined) {
+      this.approvalPolicy = deps.settings.get().approval_policy;
+      this.scenarioProfile = deps.settings.get().profile;
+    }
+    if (deps.scenarioProfile !== undefined) this.scenarioProfile = deps.scenarioProfile;
     mkdirSync(deps.sessionsRoot, { recursive: true });
+  }
+
+  /** 批⑭：审批策略热切（§一.区2：即时生效于新 turn；已挂起卡不受影响——pending 存活）。 */
+  public setApprovalPolicy(policy: ApprovalPolicy): void {
+    this.approvalPolicy = policy;
+  }
+
+  /** 批⑭：模型/effort 运行时热切（§二.1：新 turn 生效不重启 loop——pi-ai 换实例语义）＋对话流留痕。 */
+  public setModelOverride(id: string, override: { provider_id: string; model: string; effort?: string }): boolean {
+    const session = this.sessions.get(id);
+    if (session === undefined) return false;
+    session.providerOverride = override;
+    this.emit(session, {
+      kind: "system_notice",
+      level: "info",
+      text: `已切换到 ${override.provider_id} · ${override.model}${override.effort !== undefined ? ` · effort ${override.effort}` : ""}（下一条消息生效）`,
+      at: new Date().toISOString(),
+    });
+    return true;
+  }
+
+  /** 批⑭：上下文剩余量（§二.2：粗估 chars/2；剩余 <20% low 提示，只提示不强制）。 */
+  public contextUsage(id: string, contextWindow: number): ContextUsage | null {
+    const session = this.sessions.get(id);
+    if (session === undefined) return null;
+    return computeContextUsage(session.contextUsedTokens, contextWindow);
   }
 
   /** 新建会话（§一 左栏「+ 新建任务」）。 */
@@ -114,6 +158,7 @@ export class WebUiSessionManager {
       state: "idle",
       events: [],
       seq: 0,
+      contextUsedTokens: 0,
       agent: null,
       bridge: null,
       modelCalls: 0,
@@ -360,8 +405,19 @@ export class WebUiSessionManager {
     const atfToolDeps: AtfAgentToolDeps = { bridge, scopeRefBox: { current: undefined } };
     const fileHost: FileToolHost = { env: process.env, roots: [scratchDir] };
     const surface: ApprovalSurface = {
-      ask: async (info: ApprovalRequestInfo) =>
-        await new Promise<ApprovalSurfaceVerdict>((resolve) => {
+      ask: async (info: ApprovalRequestInfo) => {
+        // 批⑭ 审批三档（§一.区2）：danger_only＝配置/发布确认批量放行（单 run 一次应答），
+        // train.sh 真跑（danger 卡走 emitDangerConfirm 不经本面）仍必确认；demo＝只读白名单
+        // 自动放行、管线写仍逐卡（永不全免）。已挂起卡不受影响（本面只对新 ask 生效）。
+        if (this.approvalPolicy === "danger_only" && (info.tool === "ask_user_for_input" || info.tool === "atf_config_confirm")) {
+          this.emit(session, { kind: "system_notice", level: "info", text: `审批策略=危险动作必确认：${info.tool} 批量放行（真跑类仍逐卡）`, at: new Date().toISOString() });
+          return { kind: "granted" } as ApprovalSurfaceVerdict;
+        }
+        if (this.approvalPolicy === "demo" && info.tool === "atf_config_confirm") {
+          this.emit(session, { kind: "system_notice", level: "info", text: `审批策略=演示模式：${info.tool} 自动放行（只读白名单；管线写仍逐卡）`, at: new Date().toISOString() });
+          return { kind: "granted" } as ApprovalSurfaceVerdict;
+        }
+        return await new Promise<ApprovalSurfaceVerdict>((resolve) => {
           const event = this.emit(session, {
             kind: "confirm_card",
             cardType: "approval",
@@ -383,7 +439,8 @@ export class WebUiSessionManager {
             resolve: async () => undefined,
           };
           session.state = "awaiting_confirm";
-        }),
+          });
+      },
     };
     const rawStreamFn =
       this.deps.streamFn !== undefined
@@ -563,6 +620,9 @@ export class WebUiSessionManager {
         .map((block) => block.text ?? "")
         .join("")
         .trim();
+      // 批⑭：上下文用量粗估（输入＋历史＋系统提示，chars/2 每 turn 后更新——§二.2 递减）
+      session.contextUsedTokens = computeContextUsage(session.contextUsedTokens, Number.MAX_SAFE_INTEGER).usedTokens +
+        Math.ceil((JSON.stringify(agent.state.messages).length + 3200) / 2);
       if (text !== "") {
         this.emit(session, { kind: "agent_text", text, at: new Date().toISOString() });
         session.resultSummary = text.slice(0, 40);

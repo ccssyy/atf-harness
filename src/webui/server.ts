@@ -14,6 +14,7 @@ import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import { loadLlmProviderConfig } from "../llm/providerConfig.js";
 import { WebUiSessionManager, chatBudgetFromEnv, parseBudgetFromEnv, type SessionManagerDeps } from "./sessionManager.js";
+import { openSettingsStore, redactProviders, envProfilePath, writeEnvProfile, SCENARIO_PROFILES, APPROVAL_POLICIES, type ApprovalPolicy, type ScenarioProfileId } from "./settings.js";
 import { listRuns, queryNvidiaSmi } from "./readOnlyTools.js";
 import { renderChatEvent } from "./chatModel.js";
 
@@ -48,19 +49,26 @@ export interface WebUiServerHandle {
   manager: WebUiSessionManager;
   runsRoot: string;
   port: number;
+  settings: ReturnType<typeof openSettingsStore>;
 }
 
-/** 服务装配工厂（e2e 注入 overrides：streamFn/runsRoot/port 等；生产入口走底部直跑守卫）。 */
-export const startWebUiServer = (overrides: {
+export interface WebUiServerOverrides {
   runsRoot?: string;
   sessionsRoot?: string;
   streamFn?: (model: never, context: never, options?: never) => unknown;
   providerConfig?: { provider_id: string; model: string; base_url: string; api_key: string };
   port?: number;
-} = {}): WebUiServerHandle => {
+  /** 批⑭：设置存储注入（e2e 用 tmp 路径；缺省 webui/providers.json）。 */
+  settingsStore?: ReturnType<typeof openSettingsStore>;
+}
+
+/** 服务装配工厂（e2e 注入 overrides：streamFn/runsRoot/port 等；生产入口走底部直跑守卫）。 */
+export const startWebUiServer = (overrides: WebUiServerOverrides = {}): WebUiServerHandle => {
   const runsRoot = overrides.runsRoot ?? env["ATF_WEBUI_RUNS_ROOT"] ?? join(repoRoot, "tmp", "webui-runs");
   const sessionsRoot = overrides.sessionsRoot ?? env["ATF_WEBUI_SESSIONS_ROOT"] ?? join(repoRoot, "tmp", "webui-sessions");
   const listenPort = overrides.port ?? Number(env["ATF_WEBUI_PORT"] ?? 8629);
+  // 批⑭：设置存储（webui/providers.json 运行时配置，重载热生效——§一.区1；e2e 注入 tmp）
+  const settings = overrides.settingsStore ?? openSettingsStore(env["ATF_WEBUI_SETTINGS"] ?? join(repoRoot, "webui", "providers.json"));
   let providerConfig: SessionManagerDeps["providerConfig"];
   if (overrides.providerConfig !== undefined) providerConfig = overrides.providerConfig;
   else if (env["ATF_LLM_CONFIG"] !== undefined && env["ATF_LLM_CONFIG"] !== "") {
@@ -76,6 +84,7 @@ export const startWebUiServer = (overrides: {
     ...(overrides.streamFn !== undefined ? { streamFn: overrides.streamFn } : {}),
     parseBudget: parseBudgetFromEnv(env),
     chatBudget: chatBudgetFromEnv(env),
+    settings,
   });
 
   let gpuCache: { at: number; payload: unknown } = { at: 0, payload: null };
@@ -136,6 +145,18 @@ export const startWebUiServer = (overrides: {
         json(res, 400, { error: "text 必填" });
         return;
       }
+      const modelCommand = text.match(/^\/model\s+(\S+)(?:\s+effort\s+(\S+))?/);
+      if (modelCommand !== null) {
+        // 批⑭：选择器切换（§二.1）——新 turn 生效不重启 loop（pi-ai 换实例语义）＋system_notice 留痕
+        const provider = settings.get().providers.find((entry) => entry.models.some((model) => model.id === modelCommand[1]));
+        manager.setModelOverride(messageMatch[1] ?? "", {
+          provider_id: provider?.id ?? settings.get().default_provider,
+          model: modelCommand[1] ?? "",
+          ...(modelCommand[2] !== undefined ? { effort: modelCommand[2] } : {}),
+        });
+        json(res, 200, { accepted: true, model_switch: true });
+        return;
+      }
       void manager.postUserMessage(messageMatch[1] ?? "", text);
       json(res, 200, { accepted: true });
       return;
@@ -170,10 +191,116 @@ export const startWebUiServer = (overrides: {
       json(res, 200, { run_id: runId, path: rel, text: readFileSync(artifactPath, "utf8") });
       return;
     }
+    // ---- 批⑭ 设置 API（七条）----
+    if (path === "/api/settings/providers" && req.method === "GET") {
+      // 红线：key 只回 env 变量名＋脱敏尾 4 位（永不明文）
+      const doc = settings.get();
+      json(res, 200, {
+        providers: redactProviders(doc.providers, (envName) => settings.keyTail(envName)),
+        default_provider: doc.default_provider,
+        policies: APPROVAL_POLICIES,
+        profiles: SCENARIO_PROFILES,
+      });
+      return;
+    }
+    if (path === "/api/settings/providers" && req.method === "PUT") {
+      const body = await readBody(req);
+      const doc = settings.get();
+      // PUT 收 env 变量名（api_key_env）；任何请求体里的 api_key 字段直接剥除（不落盘）
+      const incoming = Array.isArray(body["providers"]) ? (body["providers"] as Array<Record<string, unknown>>) : doc.providers;
+      const providers = incoming
+        .map((provider) => {
+          const { api_key: _stripped, ...rest } = provider as Record<string, unknown> & { api_key?: unknown };
+          return rest as unknown as (typeof doc.providers)[number];
+        })
+        .filter((provider) => typeof provider.id === "string" && provider.id !== "");
+      const next = settings.put({
+        providers,
+        ...(typeof body["default_provider"] === "string" ? { default_provider: body["default_provider"] } : {}),
+      });
+      json(res, 200, { providers: redactProviders(next.providers, (envName) => settings.keyTail(envName)), default_provider: next.default_provider });
+      return;
+    }
+    const testMatch = path.match(/^\/api\/settings\/providers\/([^/]+)\/test$/);
+    if (testMatch !== null && req.method === "POST") {
+      const provider = settings.get().providers.find((entry) => entry.id === testMatch[1]);
+      if (provider === undefined) {
+        json(res, 404, { error: "provider 不存在" });
+        return;
+      }
+      json(res, 200, { result: await settings.testProvider(provider) });
+      return;
+    }
+    if (path === "/api/settings/approval" && req.method === "GET") {
+      const doc = settings.get();
+      json(res, 200, { approval_policy: doc.approval_policy, policies: APPROVAL_POLICIES });
+      return;
+    }
+    if (path === "/api/settings/approval" && req.method === "PUT") {
+      const body = await readBody(req);
+      const policy = body["approval_policy"] as ApprovalPolicy | undefined;
+      if (policy === undefined || !APPROVAL_POLICIES.some((entry) => entry.id === policy)) {
+        json(res, 400, { error: "approval_policy 非法（per_card | danger_only | demo）" });
+        return;
+      }
+      settings.put({ approval_policy: policy });
+      manager.setApprovalPolicy(policy);
+      json(res, 200, { approval_policy: policy });
+      return;
+    }
+    if (path === "/api/settings/env-profile" && req.method === "GET") {
+      json(res, 200, { env_profile: settings.get().env_profile, write_path: envProfilePath(env["HOME"] ?? "") });
+      return;
+    }
+    if (path === "/api/settings/env-profile" && req.method === "PUT") {
+      const body = await readBody(req);
+      const current = settings.get().env_profile;
+      const next = {
+        train_env: typeof body["train_env"] === "string" ? body["train_env"] : current.train_env,
+        eval_env: typeof body["eval_env"] === "string" ? body["eval_env"] : current.eval_env,
+        gpu_visible_devices: typeof body["gpu_visible_devices"] === "string" ? body["gpu_visible_devices"] : current.gpu_visible_devices,
+        master_port: typeof body["master_port"] === "number" ? body["master_port"] : current.master_port,
+        base_model_dir: typeof body["base_model_dir"] === "string" ? body["base_model_dir"] : current.base_model_dir,
+      };
+      settings.put({ env_profile: next });
+      const written = env["ATF_WEBUI_WRITE_ENV_PROFILE"] === "1" ? writeEnvProfile(env["HOME"] ?? "", next) : null;
+      json(res, 200, { env_profile: next, written_path: written });
+      return;
+    }
+    if (path === "/api/settings/profile" && req.method === "GET") {
+      json(res, 200, { profile: settings.get().profile, profiles: SCENARIO_PROFILES });
+      return;
+    }
+    if (path === "/api/settings/profile" && req.method === "PUT") {
+      const body = await readBody(req);
+      const profile = body["profile"] as ScenarioProfileId | undefined;
+      if (profile === undefined || !SCENARIO_PROFILES.some((entry) => entry.id === profile)) {
+        json(res, 400, { error: "profile 非法（first_train | walkthrough | demo）" });
+        return;
+      }
+      const preset = SCENARIO_PROFILES.find((entry) => entry.id === profile);
+      settings.put({ profile, ...(preset !== undefined ? { approval_policy: preset.approval_policy } : {}) });
+      manager.setApprovalPolicy(preset?.approval_policy ?? manager.approvalPolicy);
+      json(res, 200, { profile, approval_policy: manager.approvalPolicy });
+      return;
+    }
+    const contextMatch = path.match(/^\/api\/sessions\/([^/]+)\/context$/);
+    if (contextMatch !== null && req.method === "GET") {
+      const doc = settings.get();
+      const provider = doc.providers.find((entry) => entry.id === doc.default_provider);
+      const model = provider?.models.find((entry) => entry.id === provider.default_model) ?? provider?.models[0];
+      const usage = manager.contextUsage(contextMatch[1] ?? "", model?.context_window ?? 200_000);
+      if (usage === null) {
+        json(res, 404, { error: "会话不存在" });
+        return;
+      }
+      json(res, 200, { used_tokens: usage.usedTokens, remaining_tokens: usage.remainingTokens, context_window: usage.contextWindow, remaining_ratio: usage.remainingRatio, low: usage.low });
+      return;
+    }
     json(res, 404, { error: "not found" });
   });
   server.listen(listenPort);
-  return { server, manager, runsRoot, port: listenPort };
+  return { server, manager, runsRoot, port: listenPort, settings };
 };
 
 const executedDirectly =

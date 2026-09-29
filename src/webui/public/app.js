@@ -126,6 +126,146 @@ for (const item of document.querySelectorAll(".intent-item")) {
   };
 }
 
+
+// ---- 批⑭：选择器行 / 设置页五区 / 档位徽标 ----
+const settingsState = { providers: [], defaultProvider: "", policy: null, profile: null, contextWindow: 200000, sessionModels: [] };
+
+async function refreshSelector() {
+  const data = await api("/api/settings/providers");
+  settingsState.providers = data.providers;
+  settingsState.defaultProvider = data.default_provider;
+  const provider = data.providers.find((p) => p.id === data.default_provider) ?? data.providers[0];
+  const select = $("#model-select");
+  if (provider === undefined || select === null) return;
+  settingsState.sessionModels = provider.models.map((m) => m.id);
+  settingsState.contextWindow = (provider.models.find((m) => m.id === provider.default_model) ?? provider.models[0])?.context_window ?? 200000;
+  select.innerHTML = "";
+  for (const model of provider.models) {
+    const option = document.createElement("option");
+    option.value = model.id;
+    option.textContent = model.id;
+    select.appendChild(option);
+  }
+  if (state.current !== null && state.cursor > 0) $("#selector-row").classList.remove("hidden");
+}
+
+async function refreshContext() {
+  if (state.current === null) return;
+  const usage = await api(`/api/sessions/${state.current}/context`);
+  const meter = $("#context-meter");
+  if (meter === null || usage.used_tokens === undefined) return;
+  const remainK = Math.round(usage.remaining_tokens / 1000);
+  meter.textContent = `上下文: 剩余 ${String(remainK)}k`;
+  $("#selector-row").classList.toggle("low", usage.low === true);
+  if (usage.low === true) meter.textContent += "（建议新开会话或压缩）";
+}
+
+function renderProfileBadge() {
+  const badge = $("#profile-badge");
+  const labels = { first_train: "首训档", walkthrough: "走查档", demo: "演示档" };
+  if (badge !== null && settingsState.profile !== null) badge.textContent = labels[settingsState.profile] ?? String(settingsState.profile);
+}
+
+async function openSettings() {
+  $("#settings-view").classList.remove("hidden");
+  const data = await api("/api/settings/providers");
+  settingsState.providers = data.providers;
+  settingsState.defaultProvider = data.default_provider;
+  const approval = await api("/api/settings/approval");
+  settingsState.policy = approval.approval_policy;
+  const profileData = await api("/api/settings/profile");
+  settingsState.profile = profileData.profile;
+  const envData = await api("/api/settings/env-profile");
+  renderProfileBadge();
+  // 区 1 providers（key 只显 env 变量名＋尾4位）
+  const list = $("#provider-list");
+  list.innerHTML = "";
+  for (const provider of data.providers) {
+    const row = document.createElement("div");
+    row.className = "provider-row";
+    row.innerHTML = `<b>${provider.name}</b>（${provider.id}）· ${provider.base_url} · key: <code>${provider.api_key_env}</code>` +
+      (provider.key_tail !== null ? `（尾4位 ${provider.key_tail}）` : "（未设 env）") +
+      ` · 模型: ${provider.models.map((m) => m.id).join(", ")} ` +
+      `<button class="btn" data-test="${provider.id}">[测试连接]</button>`;
+    list.appendChild(row);
+  }
+  for (const button of list.querySelectorAll("button[data-test]")) {
+    button.onclick = async () => {
+      button.textContent = "测试中…";
+      const result = await api(`/api/settings/providers/${button.dataset.test}/test`, { method: "POST" });
+      const resultData = result.result;
+      button.textContent = resultData.ok === true ? `✓ ${String(resultData.models.length)} 个模型` : `✗ ${resultData.reason}`;
+    };
+  }
+  const defaultSelect = $("#default-provider");
+  defaultSelect.innerHTML = "";
+  for (const provider of data.providers) {
+    const option = document.createElement("option");
+    option.value = provider.id;
+    option.textContent = provider.name;
+    if (provider.id === data.default_provider) option.selected = true;
+    defaultSelect.appendChild(option);
+  }
+  // 区 2 审批三档
+  const policyList = $("#policy-list");
+  policyList.innerHTML = "";
+  for (const policy of approval.policies) {
+    const row = document.createElement("div");
+    row.className = "policy-row";
+    row.innerHTML = `<input type="radio" name="policy" value="${policy.id}" ${policy.id === approval.approval_policy ? "checked" : ""}/> <b>${policy.label}</b> — ${policy.behavior}`;
+    policyList.appendChild(row);
+  }
+  // 区 3 env-profile
+  $("#env-train").value = envData.env_profile.train_env ?? "";
+  $("#env-eval").value = envData.env_profile.eval_env ?? "";
+  $("#env-gpu").value = envData.env_profile.gpu_visible_devices ?? "auto";
+  $("#env-port").value = envData.env_profile.master_port ?? 29517;
+  $("#env-model-dir").value = envData.env_profile.base_model_dir ?? "";
+  $("#env-result").textContent = `回写路径: ${envData.write_path}`;
+  // 区 4 profiles
+  const profileList = $("#profile-list");
+  profileList.innerHTML = "";
+  for (const profile of profileData.profiles) {
+    const row = document.createElement("div");
+    row.className = "profile-row";
+    row.innerHTML = `<input type="radio" name="profile" value="${profile.id}" ${profile.id === profileData.profile ? "checked" : ""}/> <b>${profile.label}</b><span class="profile-badge-current">${profile.notes}</span>`;
+    profileList.appendChild(row);
+  }
+}
+
+async function saveSettings() {
+  const policy = document.querySelector("input[name='policy']:checked")?.value;
+  if (policy !== undefined) await api("/api/settings/approval", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ approval_policy: policy }) });
+  const profile = document.querySelector("input[name='profile']:checked")?.value;
+  if (profile !== undefined) await api("/api/settings/profile", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ profile }) });
+  await api("/api/settings/providers", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ default_provider: $("#default-provider").value, providers: settingsState.providers }) });
+  await refreshSelector();
+  renderProfileBadge();
+}
+
+async function saveEnvProfile() {
+  const result = await api("/api/settings/env-profile", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({
+    train_env: $("#env-train").value,
+    eval_env: $("#env-eval").value,
+    gpu_visible_devices: $("#env-gpu").value,
+    master_port: Number($("#env-port").value),
+    base_model_dir: $("#env-model-dir").value,
+  }) });
+  $("#env-result").textContent = `已保存（回写路径: ${result.written_path ?? result.env_profile.train_env}）——下次 run 生效`;
+}
+
+$("#open-settings").onclick = () => void openSettings();
+$("#close-settings").onclick = () => { $("#settings-view").classList.add("hidden"); };
+$("#env-save").onclick = () => void saveEnvProfile();
+$("#env-test").onclick = () => { $("#env-result").textContent = "探测 venv python 可执行性——需 --peer real 环境（M1/M2 批接线）；当前为档案保存面。"; };
+$("#model-select").onchange = () => {
+  if (state.current === null) return;
+  void api(`/api/sessions/${state.current}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: `/model ${$("#model-select").value} effort ${$("#effort-select").value}` }) });
+};
+// /model 指令（服务端 system_notice 留痕）
+const originalPoll = pollEvents;
+setInterval(() => { if (settingsState.providers.length > 0) { refreshContext().catch(() => undefined); } }, 5_000);
+
 setInterval(pollEvents, 3_000);
 setInterval(refreshGpu, 30_000);
 void newTask().then(() => {

@@ -9,9 +9,10 @@
 <body>
   <div id="layout">
     <aside id="left">
-      <div class="left-head">ATF 训练 Agent</div>
+      <div class="left-head">ATF 训练 Agent <span id="profile-badge" class="badge pause">首训档</span></div>
       <button id="new-task" class="new-task">＋ 新建任务</button>
       <div id="session-list"></div>
+      <div class="left-actions"><button id="open-settings" class="gear" title="设置（/settings）">⚙ 设置</button></div>
       <div id="status-card" class="status-card">
         <div class="status-row"><span id="gpu-dot" class="dot red"></span>GPU <span id="gpu-text">检测中…</span></div>
         <div class="status-row"><span class="dot green"></span>embedding 服务</div>
@@ -19,6 +20,14 @@
       </div>
     </aside>
     <main id="center">
+      <div id="selector-row" class="selector-row hidden">
+        <label>模型: <select id="model-select"></select></label>
+        <label>effort: <select id="effort-select">
+          <option value="minimal">minimal</option><option value="low">low</option>
+          <option value="medium" selected>medium</option><option value="high">high</option><option value="xhigh">xhigh</option>
+        </select></label>
+        <span id="context-meter">上下文: —</span>
+      </div>
       <div id="chat"></div>
       <div id="composer">
         <div id="intent-panel" class="hidden">
@@ -43,6 +52,39 @@
       <div id="artifact-drawer" class="artifact-drawer"><div class="dim">（暂无产物）</div></div>
       <div class="report-entry">📄 <a id="report-link" href="#" target="_blank">report.md（界面同源声明）</a></div>
     </aside>
+  </div>
+  <div id="settings-view" class="hidden">
+    <div class="settings-head"><button id="close-settings" class="btn">← 返回对话</button><span>设置</span></div>
+    <div class="settings-body">
+      <section class="settings-section">
+        <h3>区 1 · 模型与 Provider</h3>
+        <div id="provider-list"></div>
+        <label class="row">默认线: <select id="default-provider"></select></label>
+      </section>
+      <section class="settings-section">
+        <h3>区 2 · 审批策略（三档）</h3>
+        <div id="policy-list"></div>
+      </section>
+      <section class="settings-section">
+        <h3>区 3 · 训练环境（写 env-profile，下次 run 生效）</h3>
+        <label class="row">train_env: <input id="env-train" /></label>
+        <label class="row">eval_env: <input id="env-eval" /></label>
+        <label class="row">GPU 卡（auto 或如 0,1）: <input id="env-gpu" /></label>
+        <label class="row">master_port: <input id="env-port" type="number" /></label>
+        <label class="row">基模型目录: <input id="env-model-dir" /></label>
+        <button class="btn" id="env-test">[测试连接]（探测 venv python）</button>
+        <button class="btn primary" id="env-save">保存 env-profile</button>
+        <div id="env-result" class="hint"></div>
+      </section>
+      <section class="settings-section">
+        <h3>区 4 · 场景 Profiles</h3>
+        <div id="profile-list"></div>
+      </section>
+      <section class="settings-section">
+        <h3>区 5 · 系统信息（只读）</h3>
+        <div id="system-info" class="hint">内核 pin：v0.7.8b0（升级走 re-pin 三步，owner 批准后执行）；harness 运行面＝本进程；沙箱边界：scratch TCB 外执行＋路径白名单（scratch 主根＋runs 根）；账本路径：runs/&lt;id&gt;/session.jsonl；护栏 env：ATF_WEBUI_PARSE_BUDGET／ATF_WEBUI_CHAT_BUDGET（运维面，模型不可见）。</div>
+      </section>
+    </div>
   </div>
   <script src="/app.js"></script>
 </body>

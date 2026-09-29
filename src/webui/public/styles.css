@@ -61,3 +61,21 @@ body { margin: 0; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
 .answered { font-size: 13px; color: #15803d; margin-top: 6px; }
 .confirm-report { font-size: 13px; color: #475569; margin-bottom: 6px; }
 .cost { font-size: 13px; color: #b91c1c; margin: 6px 0; }
+
+/* 批⑭ 设置页与选择器 */
+.left-actions { margin-top: auto; }
+.gear { background: #1e293b; color: #e2e8f0; border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer; width: 100%; }
+.selector-row { display: flex; gap: 16px; padding: 6px 24px; font-size: 13px; color: #334155; border-bottom: 1px solid #e2e8f0; align-items: center; }
+.selector-row.hidden { display: none; }
+.selector-row.low { color: #b45309; background: #fffbeb; }
+#settings-view { position: fixed; inset: 0; background: #f8fafc; z-index: 50; overflow-y: auto; padding: 20px 32px; }
+#settings-view.hidden { display: none; }
+.settings-head { display: flex; gap: 16px; align-items: center; font-weight: 600; font-size: 18px; margin-bottom: 12px; }
+.settings-section { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; margin-bottom: 14px; }
+.settings-section h3 { margin: 0 0 10px; font-size: 15px; }
+.provider-row { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; flex-wrap: wrap; font-size: 13px; }
+.provider-row input { width: 220px; }
+.policy-row, .profile-row { padding: 6px 0; display: flex; gap: 10px; align-items: center; font-size: 14px; }
+.row { display: block; padding: 4px 0; font-size: 13px; }
+.row input, .row select { margin-left: 6px; }
+.profile-badge-current { background: #dbeafe; color: #1d4ed8; border-radius: 999px; padding: 1px 10px; font-size: 12px; }
