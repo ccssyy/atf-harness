@@ -419,3 +419,41 @@ describe("e2e 冒烟（HTTP 面；场景 2-6 对应）", () => {
     handle.server.close();
   }, 30_000);
 });
+
+// ---------------------------------------------------------------- 批⑰ Bug1：report.md 静态直开路由
+
+describe("批⑰ Bug1：report.md 静态直开（/static/run/:id/report/report.md；只读＋防穿越）", () => {
+  it("存在→200 text/plain 内联；缺失→404；非法 runId→400；segment md 同样可达", async () => {
+    const runsRoot = tempRoot();
+    mkdirSync(join(runsRoot, "run-s17", "report"), { recursive: true });
+    writeFileSync(join(runsRoot, "run-s17", "report", "report.md"), "# run-s17 报告\n界面同源声明正文。");
+    writeFileSync(join(runsRoot, "run-s17", "report", "segment-1.md"), "# 段 1\n");
+    const handle = startWebUiServer({ runsRoot, sessionsRoot: tempRoot(), port: 0 });
+    const address = handle.server.address();
+    const base = `http://127.0.0.1:${String(typeof address === "object" && address !== null ? address.port : handle.port)}`;
+
+    const hit = await fetch(`${base}/static/run/run-s17/report/report.md`);
+    expect(hit.status).toBe(200);
+    expect(hit.headers.get("content-type")).toContain("text/plain");
+    expect(await hit.text()).toContain("# run-s17 报告");
+
+    const segment = await fetch(`${base}/static/run/run-s17/report/segment-1.md`);
+    expect(segment.status).toBe(200);
+    expect(await segment.text()).toContain("# 段 1");
+
+    const miss = await fetch(`${base}/static/run/run-empty/report/report.md`);
+    expect(miss.status).toBe(404);
+
+    const evil = await fetch(`${base}/static/run/${encodeURIComponent("../sneak")}/report/report.md`);
+    expect(evil.status).toBe(400);
+
+    // 前端静态面：report-link 不再指向 "#"（由 JS 按 run 绑定接线）；设置页保存按钮在位
+    const page = await (await fetch(`${base}/`)).text();
+    expect(page).toContain('id="report-link"');
+    expect(page).toContain('id="providers-save"');
+    expect(page).toContain('id="policy-save"');
+    expect(page).toContain('id="env-save"');
+
+    handle.server.close();
+  });
+});

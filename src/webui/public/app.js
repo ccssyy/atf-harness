@@ -30,6 +30,38 @@ function selectSession(id) {
   pollEvents();
   rebuildMetrics();
   void refreshSelector(); // 选择器随会话切换刷新（模型清单随 provider）
+  void refreshReportLink(); // 批⑰ Bug1：report 入口随会话/run 绑定刷新
+}
+
+// 批⑰ Bug1：report.md 入口＝直开当前 run 的静态报告（/static/run/<id>/report/report.md），
+// 不新建任何会话；无 run 绑定或报告未生成 → 占位提示。
+async function refreshReportLink() {
+  const link = $("#report-link");
+  if (link === null) return;
+  const session = state.sessions.find((s) => s.id === state.current);
+  const runId = session?.boundRunId;
+  const placeholder = () => {
+    link.removeAttribute("href");
+    link.textContent = "report.md（暂无报告·run 完成后生成）";
+    link.onclick = (event) => event.preventDefault();
+  };
+  if (runId === undefined || runId === null || runId === "") {
+    placeholder();
+    return;
+  }
+  try {
+    const probe = await fetch(`/api/report/${runId}`);
+    if (!probe.ok) {
+      placeholder();
+      return;
+    }
+  } catch {
+    placeholder();
+    return;
+  }
+  link.onclick = null;
+  link.href = `/static/run/${runId}/report/report.md`;
+  link.textContent = "report.md";
 }
 
 async function pollEvents() {
@@ -146,6 +178,7 @@ async function refreshSessions() {
   } catch { /* runs 枚举失败不阻塞会话列表 */ }
   state.sessions = data.sessions;
   renderSessionList();
+  void refreshReportLink(); // 批⑰：run 绑定/报告生成后入口自动点亮
 }
 
 function wireButtons(node) {
@@ -273,16 +306,20 @@ async function openSettings() {
   settingsState.profile = profileData.profile;
   const envData = await api("/api/settings/env-profile");
   renderProfileBadge();
-  // 区 1 providers（key 只显 env 变量名＋尾4位）
+  // 区 1 providers（批⑰ Bug2 最小可交互：base_url / key env 名可编辑；key 只显 env 变量名＋尾4位）
   const list = $("#provider-list");
   list.innerHTML = "";
+  const esc = (value) => String(value).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
   for (const provider of data.providers) {
     const row = document.createElement("div");
     row.className = "provider-row";
-    row.innerHTML = `<b>${provider.name}</b>（${provider.id}）· ${provider.base_url} · key: <code>${provider.api_key_env}</code>` +
-      (provider.key_tail !== null ? `（尾4位 ${provider.key_tail}）` : "（未设 env）") +
-      ` · 模型: ${provider.models.map((m) => m.id).join(", ")} ` +
-      `<button class="btn" data-test="${provider.id}">[测试连接]</button>`;
+    row.innerHTML = `<b>${esc(provider.name)}</b>（${esc(provider.id)}）` +
+      `<label>base_url <input data-id="${esc(provider.id)}" data-field="base_url" value="${esc(provider.base_url)}"/></label>` +
+      `<label>key env <input data-id="${esc(provider.id)}" data-field="api_key_env" value="${esc(provider.api_key_env)}"/></label>` +
+      `<span>key: <code>${esc(provider.api_key_env)}</code>` +
+      (provider.key_tail !== null ? `（尾4位 ${esc(provider.key_tail)}）` : "（未设 env）") + `</span>` +
+      ` <span>模型: ${provider.models.map((m) => esc(m.id)).join(", ")}</span> ` +
+      `<button class="btn" data-test="${esc(provider.id)}">[测试连接]</button>`;
     list.appendChild(row);
   }
   for (const button of list.querySelectorAll("button[data-test]")) {
@@ -329,14 +366,31 @@ async function openSettings() {
   }
 }
 
-async function saveSettings() {
-  const policy = document.querySelector("input[name='policy']:checked")?.value;
-  if (policy !== undefined) await api("/api/settings/approval", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ approval_policy: policy }) });
-  const profile = document.querySelector("input[name='profile']:checked")?.value;
-  if (profile !== undefined) await api("/api/settings/profile", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ profile }) });
-  await api("/api/settings/providers", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ default_provider: $("#default-provider").value, providers: settingsState.providers }) });
+// 批⑰ Bug2：区 1/2/4 保存接线（原 saveSettings 为孤儿函数——页面无按钮调用，改了即"丢失"＝不可交互感知）
+async function saveProviders() {
+  for (const input of document.querySelectorAll("#provider-list input[data-id]")) {
+    const provider = settingsState.providers.find((p) => p.id === input.dataset.id);
+    if (provider !== undefined && input.dataset.field !== undefined) provider[input.dataset.field] = input.value;
+  }
+  const result = await api("/api/settings/providers", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ default_provider: $("#default-provider").value, providers: settingsState.providers }) });
+  $("#providers-result").textContent = result.default_provider !== undefined ? "已保存（新 run 生效）" : `保存失败：${result.error ?? "未知原因"}`;
   await refreshSelector();
+}
+
+async function savePolicy() {
+  const policy = document.querySelector("input[name='policy']:checked")?.value;
+  if (policy === undefined) return;
+  const result = await api("/api/settings/approval", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ approval_policy: policy }) });
+  $("#policy-result").textContent = result.approval_policy !== undefined ? "已保存（即时生效——新 turn 起）" : `保存失败：${result.error ?? "未知原因"}`;
+}
+
+async function saveProfileChoice() {
+  const profile = document.querySelector("input[name='profile']:checked")?.value;
+  if (profile === undefined) return;
+  const result = await api("/api/settings/profile", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ profile }) });
+  settingsState.profile = result.profile ?? null;
   renderProfileBadge();
+  $("#profile-result").textContent = result.profile !== undefined ? "已保存（档位徽标已更新）" : `保存失败：${result.error ?? "未知原因"}`;
 }
 
 async function saveEnvProfile() {
@@ -347,11 +401,16 @@ async function saveEnvProfile() {
     master_port: Number($("#env-port").value),
     base_model_dir: $("#env-model-dir").value,
   }) });
-  $("#env-result").textContent = `已保存（回写路径: ${result.written_path ?? result.env_profile.train_env}）——下次 run 生效`;
+  $("#env-result").textContent = `已保存（新 run 生效）——回写路径: ${result.written_path ?? envProfileWriteHint()}`;
 }
+
+const envProfileWriteHint = () => "ATF_WEBUI_WRITE_ENV_PROFILE=1 时回写 ~/.atf/env-profiles/webui-default.json";
 
 $("#open-settings").onclick = () => void openSettings();
 $("#close-settings").onclick = () => { $("#settings-view").classList.add("hidden"); };
+$("#providers-save").onclick = () => void saveProviders();
+$("#policy-save").onclick = () => void savePolicy();
+$("#profile-save").onclick = () => void saveProfileChoice();
 $("#env-save").onclick = () => void saveEnvProfile();
 $("#env-test").onclick = () => { $("#env-result").textContent = "探测 venv python 可执行性——需 --peer real 环境（M1/M2 批接线）；当前为档案保存面。"; };
 $("#model-select").onchange = () => {
@@ -419,7 +478,12 @@ setInterval(pollEvents, 3_000);
 setInterval(refreshGpu, 30_000);
 setInterval(() => { if (state.current !== null) rebuildMetrics(); }, 5_000);
 void refreshSelector().then(() => undefined); // 批⑯prime A：启动即渲染选择器行（常显）
-void newTask().then(() => {
+// 批⑰ Bug1：启动不再无条件 newTask（原行为＝每次刷新/新标签打开都建空会话——
+// report.md target=_blank 新标签加载应用即"新建了一个会话"的机制核心）。
+// 改为：列表空才建；否则选最近会话。
+void refreshSessions().then(async () => {
+  if (state.sessions.length === 0) await newTask();
+  else selectSession(state.sessions[0].id);
   refreshGpu();
-  refreshSessions();
+  void refreshReportLink();
 });

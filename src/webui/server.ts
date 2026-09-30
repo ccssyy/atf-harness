@@ -208,6 +208,24 @@ export const startWebUiServer = (overrides: WebUiServerOverrides = {}): WebUiSer
       json(res, 200, { run_id: runId, path: rel, text: readFileSync(artifactPath, "utf8") });
       return;
     }
+    // 批⑰ Bug1：report.md 直开静态面（/static/run/<id>/report/report.md；只读＋runId 白名单防穿越）
+    const staticRunMatch = path.match(/^\/static\/run\/([^/]+)\/report\/(report\.md|segment-[A-Za-z0-9_-]+\.md)$/);
+    if (staticRunMatch !== null && req.method === "GET") {
+      const runId = staticRunMatch[1] ?? "";
+      const file = staticRunMatch[2] ?? "report.md";
+      if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(runId) || runId.includes("..")) {
+        json(res, 400, { error: "非法 run id" });
+        return;
+      }
+      const artifactPath = join(runsRoot, runId, "report", file);
+      if (!existsSync(artifactPath)) {
+        json(res, 404, { error: "报告不存在" });
+        return;
+      }
+      res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+      res.end(readFileSync(artifactPath, "utf8"));
+      return;
+    }
     // ---- 批⑭ 设置 API（七条）----
     if (path === "/api/settings/providers" && req.method === "GET") {
       // 红线：key 只回 env 变量名＋脱敏尾 4 位（永不明文）

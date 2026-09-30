@@ -65,7 +65,7 @@
       </div>
       <div class="right-head">产物抽屉</div>
       <div id="artifact-drawer" class="artifact-drawer"><div class="dim">（暂无产物）</div></div>
-      <div class="report-entry">📄 <a id="report-link" href="#" target="_blank">report.md（界面同源声明）</a></div>
+      <div class="report-entry">📄 <a id="report-link" href="#" target="_blank">report.md</a></div>
     </aside>
   </div>
   <div id="settings-view" class="hidden">
@@ -75,10 +75,14 @@
         <h3>区 1 · 模型与 Provider</h3>
         <div id="provider-list"></div>
         <label class="row">默认线: <select id="default-provider"></select></label>
+        <button class="btn primary" id="providers-save">保存 Provider 设置</button>
+        <span id="providers-result" class="hint"></span>
       </section>
       <section class="settings-section">
         <h3>区 2 · 审批策略（三档）</h3>
         <div id="policy-list"></div>
+        <button class="btn primary" id="policy-save">保存审批策略</button>
+        <span id="policy-result" class="hint"></span>
       </section>
       <section class="settings-section">
         <h3>区 3 · 训练环境（写 env-profile，下次 run 生效）</h3>
@@ -94,6 +98,8 @@
       <section class="settings-section">
         <h3>区 4 · 场景 Profiles</h3>
         <div id="profile-list"></div>
+        <button class="btn primary" id="profile-save">保存场景档位</button>
+        <span id="profile-result" class="hint"></span>
       </section>
       <section class="settings-section">
         <h3>区 5 · 系统信息（只读）</h3>
