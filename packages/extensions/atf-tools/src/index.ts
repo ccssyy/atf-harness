@@ -23,6 +23,7 @@ import { BridgeManager, buildBridgeTools } from "./bridgeFace.js";
 import { buildFileTools } from "./fileFace.js";
 import { buildPipelineTool } from "./pipelineFace.js";
 import { buildConfirmTools } from "./confirmFace.js";
+import { buildRunTrainingTool, buildEvalTools, type TrainingToolsConfig } from "./trainingFace.js";
 
 /** Cordis 插件名（loader 诊断用）。 */
 export const name = "atf-tools";
@@ -37,6 +38,7 @@ export interface AtfToolsConfig {
   runsRoot: string;
   kernelDir: string;
   execHome: string;
+  logDir: string;
   bridgeCommand: string;
   pipelineCommand: string;
   pipelineTimeoutMs: number;
@@ -59,10 +61,13 @@ export const Config = z.object({
     .string()
     .default(process.env["ATF_DSH_PIPELINE_COMMAND"] ?? `node ${join(repoRoot, "tests", "fixtures", "mock_pipeline.mjs")}`),
   pipelineTimeoutMs: z.number().default(120_000),
+  logDir: z
+    .string()
+    .default(process.env["ATF_DSH_LOG_DIR"] ?? "/data/sam/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/training-logs"),
 });
 
 export function apply(ctx: any, config: AtfToolsConfig): void {
-  console.log(`[atf-tools] apply()——注册 11＋2 个 atf_* 工具（M2 增 atf_config_confirm/atf_publish_confirm）（runsRoot=${config.runsRoot}）`);
+  console.log(`[atf-tools] apply()——注册 11＋2＋3 个 atf_* 工具（M2.75 增训练执行段三投影）（runsRoot=${config.runsRoot}）`);
   // （M2 时序注记：loader.create 动态行会触发 atf-ui 双 mount——已移除；atf-ui 行由 profile patch 静态装配。）
   const manager = new BridgeManager(bridgeArgv(config.bridgeCommand), repoRoot);
 
@@ -70,6 +75,9 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   for (const tool of buildFileTools(config.runsRoot)) ctx.tools.register(tool);
   ctx.tools.register(buildPipelineTool(ctx, config.pipelineCommand, config.pipelineTimeoutMs));
   for (const tool of buildConfirmTools({ runsRoot: config.runsRoot, ctx })) ctx.tools.register(tool);
+  const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx };
+  ctx.tools.register(buildRunTrainingTool(ctx, trainCfg));
+  for (const tool of buildEvalTools(ctx, { runsRoot: config.runsRoot, logDir: config.logDir })) ctx.tools.register(tool);
 
   // 连通性自检探针（M1 验收辅助；保留为装配诊断面）
   ctx.tools.register(
