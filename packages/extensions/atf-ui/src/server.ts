@@ -39,7 +39,7 @@ interface RunScan {
   run_id: string;
   state: string;
   artifacts: string[];
-  segments: Record<string, boolean>;
+  segments: Record<string, boolean | string>;
   training: { active: boolean; loss: unknown; pending_confirm: unknown };
   report: { files: string[] };
 }
@@ -77,8 +77,13 @@ function scanRuns(runsRoot: string): RunScan[] {
         register: has("registration.json") || has("dataset"),
         split: has("split") || has("dataset/split"),
         label_qc: has("label_qc") || has("qc"),
+        // 实验配置段：config-snapshot 已确认=done；pending-confirm 在场=active（等待四卡应答）
+        experiment_config: has("webui/config-snapshot.json") ? true : has("webui/pending-confirm.json") ? "active" : false,
         candidate: has("contract-candidate.json"),
         publish: has("report") && reportFiles.some((f) => f.startsWith("segment-")),
+        // admission 沿 train.sh 存在（生成即过 DRY_RUN 准入自检面）
+        admission: has("launch/train.sh") || has("admission.json"),
+        training: has("training/loss-series.json"),
       },
       training: {
         active: has("training/loss-series.json"),

@@ -3,13 +3,16 @@
  * 单源纪律：段语义沿批⑮定稿；空态文案单源导出（client 直引）。
  */
 
-/** 管线前五段（批⑮ 定稿口径；training 段由 loss-series 激活，不入此列）。 */
+/** 管线八段（批⑳ 打回修正：八段全渲染——登记/体检/实验配置/发布/切分/admission/训练/评估）。 */
 export const SEGMENTS = [
-  { key: "register", label: "登记卡" },
-  { key: "split", label: "切分卡" },
-  { key: "label_qc", label: "体检卡" },
-  { key: "candidate", label: "候选" },
-  { key: "publish", label: "发布" },
+  { key: "register", label: "数据登记" },
+  { key: "label_qc", label: "标注体检" },
+  { key: "experiment_config", label: "实验配置" },
+  { key: "publish", label: "契约发布" },
+  { key: "split", label: "数据切分" },
+  { key: "admission", label: "准入检查" },
+  { key: "training", label: "训练执行" },
+  { key: "evaluate", label: "评估与可视化" },
 ];
 
 /** 空态文案（GPU 排队语义——文案单源，client 直引不另写）。 */
@@ -17,6 +20,19 @@ export const QUEUE_IDLE_TEXT = "等待训练启动 · DRY_RUN 已过 · 排队�
 
 /** KPI 2×2 的键（指令组件 2）。 */
 export const KPI_KEYS = ["train_loss", "eval_loss", "learning_rate", "gpu_mem"];
+
+/** 段四态：done 完成 / active 进行中 / failed 失败 / pending 待办。 */
+function segmentStatus(run, key) {
+  const seg = run.segments?.[key];
+  if (seg === "failed") return "failed";
+  if (seg === "active") return "active";
+  if (seg === true) return "done";
+  // 进行中语义：训练段有 loss 流即 active；评估段有推理中标记（预留）；
+  // 实验配置段有 pending 确认卡即 active（等待用户四卡应答）。
+  if (key === "training" && run.training?.active === true) return "active";
+  if (key === "experiment_config" && run.training?.pending_confirm) return "active";
+  return "pending";
+}
 
 /**
  * @param runs - 同步器 scanRuns 的 run 形态（run_id/state/segments/training/report）。
@@ -29,7 +45,7 @@ export function buildMonitorSnapshot(runs) {
     runs: runs.map((run) => ({
       run_id: run.run_id,
       state: run.state ?? "unknown",
-      segments: SEGMENTS.map(({ key, label }) => ({ key, label, lit: run.segments?.[key] === true })),
+      segments: SEGMENTS.map(({ key, label }) => ({ key, label, status: segmentStatus(run, key) })),
       training: {
         active: run.training?.active === true,
         points: Array.isArray(run.training?.loss) ? run.training.loss : [],

@@ -41,8 +41,10 @@ describe("atf-ui 快照构造（段推导/曲线/KPI/空态文案单源）", () 
   it("buildMonitorSnapshot：五段逐卡 lit 推导（前三亮后二暗）＋loss 点列透传", () => {
     const snap = buildMonitorSnapshot([run]);
     expect(snap.schema).toBe("AtfMonitor/v1");
-    expect(snap.runs[0]?.segments.map((s) => s.key)).toEqual(SEGMENTS.map((s) => s.key));
-    expect(snap.runs[0]?.segments.filter((s) => s.lit).map((s) => s.key)).toEqual(["register", "split"]);
+    expect(snap.runs[0]?.segments.map((s) => s.key)).toEqual([
+      "register", "label_qc", "experiment_config", "publish", "split", "admission", "training", "evaluate",
+    ]);
+    expect(snap.runs[0]?.segments.filter((s) => s.status === "done").map((s) => s.key)).toEqual(["register", "split"]);
     expect(snap.runs[0]?.training.points).toHaveLength(2);
   });
 
@@ -180,8 +182,8 @@ describe("ui-atf-monitor ＋ ui-atf-artifacts（同一面板：分段卡＋三�
   it("分段感知：run-x 五卡齐（前两 lit）＋run 选择器", () => {
     const html = renderPanelWithData();
     expect(html).toContain("run-x");
-    expect(html).toContain("登记卡");
-    expect(html).toContain("体检卡");
+    expect(html).toContain("数据登记");
+    expect(html).toContain("标注体检");
     expect(html).toContain("发布");
   });
 
@@ -240,9 +242,9 @@ describe("atf-ui 服务端同步器（apply→monitor/artifacts.json 落盘）",
     expect(name).toBe("atf-ui");
     const effects: Array<() => void> = [];
     applyPlugin({ effect: (run: () => () => void) => { effects.push(run()); } }, { runsRoot: root, intervalMs: 60_000 });
-    const monitor = JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as { runs: Array<{ run_id: string; segments: Array<{ key: string; lit: boolean }>; training: { active: boolean } }> };
+    const monitor = JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as { runs: Array<{ run_id: string; segments: Array<{ key: string; status: string }>; training: { active: boolean } }> };
     expect(monitor.runs[0]?.run_id).toBe("run-sync");
-    expect(monitor.runs[0]?.segments.find((s) => s.key === "register")?.lit).toBe(true);
+    expect(monitor.runs[0]?.segments.find((s) => s.key === "register")?.status).toBe("done");
     expect(monitor.runs[0]?.training.active).toBe(true);
     const artifacts = JSON.parse(readFileSync(join(root, "atf-ui", "artifacts.json"), "utf8")) as { runs: Array<{ artifacts: unknown[] }> };
     expect(artifacts.runs[0]?.artifacts.length).toBeGreaterThan(0);

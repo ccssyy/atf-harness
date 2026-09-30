@@ -5,7 +5,7 @@ export declare const KPI_KEYS: readonly string[];
 export interface AtfRunScan {
   run_id: string;
   state?: string;
-  segments?: Record<string, boolean>;
+  segments?: Record<string, boolean | string>;
   training?: { active?: boolean; loss?: unknown; pending_confirm?: unknown };
   report?: { files?: string[] };
   artifacts?: string[];
@@ -16,7 +16,7 @@ export interface AtfMonitorSnapshot {
   runs: Array<{
     run_id: string;
     state: string;
-    segments: Array<{ key: string; label: string; lit: boolean }>;
+    segments: Array<{ key: string; label: string; status: "done" | "active" | "failed" | "pending" }>;
     training: { active: boolean; points: Array<Record<string, unknown>>; pending_confirm: unknown };
   }>;
 }
