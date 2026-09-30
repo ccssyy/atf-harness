@@ -75,7 +75,9 @@ describe("core 边界守卫（T01）", () => {
     for (const range of Object.values(pkg.dependencies ?? {})) {
       expect(/^[0-9]/.test(range), `运行时依赖须锁 exact（禁 ^/~ 漂移）: ${range}`).toBe(true);
     }
-    const allowed = new Set(["typescript", "vitest", "@types/node"]);
+    // 批⑱-M2 增 react 系（锁版本）：atf-ui client 组件的渲染快照/交互测试工具面
+    // （生产运行面零 react 依赖——DSH 浏览器自带；devDependencies 仅测试渲染需要）
+    const allowed = new Set(["typescript", "vitest", "@types/node", "react", "react-dom", "@types/react", "@types/react-dom"]);
     for (const name of Object.keys(pkg.devDependencies ?? {})) {
       expect(allowed.has(name), `devDependencies 出现未登记项: ${name}`).toBe(true);
     }

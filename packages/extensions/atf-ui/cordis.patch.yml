@@ -1,0 +1,4 @@
+# 批⑱-M2：atf-ui 服务端半（web bundle 层——与 webServer 同 ctx，panel 路由可达）
+- insert:
+    - id: atf-ui
+      name: '@atf/dsh-atf-ui'

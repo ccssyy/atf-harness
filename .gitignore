@@ -7,3 +7,17 @@ coverage/
 *.log
 tmp/
 docs/_owner/
+/lefthook.yml
+
+# 批⑱-M2（复核修正）：vendor/dsh 以 git submodule 引入（锁 commit 639ed015，见 vendor/dsh/LOCK.md）——
+# submodule 内部的构建产物/依赖由 submodule 自身治理，父仓只存指针。
+vendor/dsh/deepseek-harness/node_modules/
+vendor/dsh/deepseek-harness/dist/
+vendor/dsh/deepseek-harness/**/node_modules/
+vendor/dsh/deepseek-harness/**/dist/
+vendor/dsh/deepseek-harness/**/lib/
+vendor/dsh/deepseek-harness/**/*.tsbuildinfo
+
+# 批⑱-M2（复核修正）：DSH 运行时 home 全目录不入仓（含 .credentials.yaml 运行时凭据/sessions/storages——
+# 曾因缺此段误入 commit，已 squash 重做）。GLM 接线配置的交付副本在 poc/web-profile-cordis-patch.yml。
+poc/dsh-home/

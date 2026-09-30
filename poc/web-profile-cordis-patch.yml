@@ -1,0 +1,30 @@
+# 批⑱-M0 PoC：GLM 接入（ATF 既有授权线；key 走 env 引用——红线"key 不落配置"）。
+# 覆盖 llm-pi-ai 行（dsh-base 里 mount dormant：零路由）——override 语义为整行替换。
+# base_url＝ATF 授权线的 GLM coding 端点（与 /root/.atf-harness/llm.json glm 条目同源）。
+# 启动前置：source /root/.atf-harness/.env（注入 ATF_LLM_KEY_GLM 进进程 env——
+# dsh-base credentials 语义＝inherited environment 优先，按请求解析，不落盘）。
+- id: llm-pi-ai
+  config:
+    providers:
+      glm-atf:
+        apiKeyEnv: ATF_LLM_KEY_GLM
+        displayName: GLM（ATF 授权线）
+        api: openai-completions
+        baseURL: https://open.bigmodel.cn/api/coding/paas/v4
+        models:
+          - id: glm-5.3-flash
+          - id: glm-5.3
+- id: ui-settings-general
+  name: "@deepseek-ai/dsh-client-ui-settings-general"
+  config:
+    welcomeNoticeVersion: 2026-09-28.1
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: glm-atf
+    model: glm-5.3
+# 批⑱-M1：atf_* 工具投影插件（@atf/dsh-atf-tools——本仓 packages/extensions/atf-tools，
+# 经 ATF-Harness/node_modules symlink 消费；vendor 源码零改动）
+- insert:
+    - id: atf-tools
+      name: '@atf/dsh-atf-tools'

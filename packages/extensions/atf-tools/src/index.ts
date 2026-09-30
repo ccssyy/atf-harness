@@ -22,6 +22,7 @@ import { looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
 import { BridgeManager, buildBridgeTools } from "./bridgeFace.js";
 import { buildFileTools } from "./fileFace.js";
 import { buildPipelineTool } from "./pipelineFace.js";
+import { buildConfirmTools } from "./confirmFace.js";
 
 /** Cordis 插件名（loader 诊断用）。 */
 export const name = "atf-tools";
@@ -61,12 +62,14 @@ export const Config = z.object({
 });
 
 export function apply(ctx: any, config: AtfToolsConfig): void {
-  console.log(`[atf-tools] apply()——注册 11 个 atf_* 工具（runsRoot=${config.runsRoot}）`);
+  console.log(`[atf-tools] apply()——注册 11＋2 个 atf_* 工具（M2 增 atf_config_confirm/atf_publish_confirm）（runsRoot=${config.runsRoot}）`);
+  // （M2 时序注记：loader.create 动态行会触发 atf-ui 双 mount——已移除；atf-ui 行由 profile patch 静态装配。）
   const manager = new BridgeManager(bridgeArgv(config.bridgeCommand), repoRoot);
 
   for (const tool of buildBridgeTools(ctx, manager, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, execHome: config.execHome })) ctx.tools.register(tool);
   for (const tool of buildFileTools(config.runsRoot)) ctx.tools.register(tool);
   ctx.tools.register(buildPipelineTool(ctx, config.pipelineCommand, config.pipelineTimeoutMs));
+  for (const tool of buildConfirmTools({ runsRoot: config.runsRoot, ctx })) ctx.tools.register(tool);
 
   // 连通性自检探针（M1 验收辅助；保留为装配诊断面）
   ctx.tools.register(
