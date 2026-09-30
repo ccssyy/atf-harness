@@ -360,7 +360,7 @@ describe("e2e 冒烟（HTTP 面；场景 2-6 对应）", () => {
       fauxAssistantMessage([{ type: "toolCall", id: "e2", name: "atf_run_list", arguments: {} }], "toolUse"),
       fauxFinalAnswer("run-e2e：登记/切分/体检/发布四段已完成，配置已确认，训练待放行（gpu_window_pending）。"),
     ]);
-    const handle = startWebUiServer({ runsRoot, sessionsRoot: tempRoot(), streamFn: streamFn as never, port: 0 });
+    const handle = await startWebUiServer({ runsRoot, sessionsRoot: tempRoot(), streamFn: streamFn as never, port: 0 });
     const manager = handle.manager;
     const address = handle.server.address();
     const actualPort = typeof address === "object" && address !== null ? address.port : handle.port;
@@ -428,7 +428,7 @@ describe("批⑰ Bug1：report.md 静态直开（/static/run/:id/report/report.m
     mkdirSync(join(runsRoot, "run-s17", "report"), { recursive: true });
     writeFileSync(join(runsRoot, "run-s17", "report", "report.md"), "# run-s17 报告\n界面同源声明正文。");
     writeFileSync(join(runsRoot, "run-s17", "report", "segment-1.md"), "# 段 1\n");
-    const handle = startWebUiServer({ runsRoot, sessionsRoot: tempRoot(), port: 0 });
+    const handle = await startWebUiServer({ runsRoot, sessionsRoot: tempRoot(), port: 0 });
     const address = handle.server.address();
     const base = `http://127.0.0.1:${String(typeof address === "object" && address !== null ? address.port : handle.port)}`;
 

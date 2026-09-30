@@ -127,7 +127,7 @@ describe("context 计数递减（§二.2）", () => {
 describe("设置 API 七条（HTTP 面）", () => {
   it("GET/PUT providers＋test 404＋approval/profile PUT 校验＋context 计数", async () => {
     const runsRoot = tempRoot();
-    const handle = startWebUiServer({
+    const handle = await startWebUiServer({
       runsRoot,
       sessionsRoot: tempRoot(),
       settingsStore: openSettingsStore(join(tempRoot(), "providers.json")),

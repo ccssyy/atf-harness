@@ -138,7 +138,7 @@ describe("批⑯A：GPU 排队语义（命中条件＋编排）", () => {
 describe("批⑯B 管道 HTTP 冒烟（ingest→loss-series→GET 重建）", () => {
   it("POST ingest 合成日志 → GET metrics 重建全量＋loss-series.json 落盘", async () => {
     const runsRoot = tempRoot();
-    const handle = startWebUiServer({ runsRoot, sessionsRoot: tempRoot(), port: 0 });
+    const handle = await startWebUiServer({ runsRoot, sessionsRoot: tempRoot(), port: 0 });
     const base = `http://127.0.0.1:${String((handle.server.address() as { port: number }).port)}`;
     const post = async (path: string, body: unknown): Promise<Record<string, unknown>> =>
       (await (await fetch(base + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json()) as Record<string, unknown>;

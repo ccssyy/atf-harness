@@ -72,19 +72,47 @@ export interface WebUiServerOverrides {
 }
 
 /** 服务装配工厂（e2e 注入 overrides：streamFn/runsRoot/port 等；生产入口走底部直跑守卫）。 */
-export const startWebUiServer = (overrides: WebUiServerOverrides = {}): WebUiServerHandle => {
+/** 批⑲：provider 就绪状态（启动竞态热修——加载 await 于 listen 前；失败/缺失 fail-closed 分级）。 */
+export interface ProviderReadyState {
+  /** ready=providerConfig 就绪（注入或 env 加载成功）；failed=env 有 config 但加载失败；none=env 未配置（设置页运行时配置场景） */
+  status: "ready" | "failed" | "none";
+  error?: string;
+  hint?: string;
+  provider_id?: string;
+  model?: string;
+}
+
+export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Promise<WebUiServerHandle> => {
   const runsRoot = overrides.runsRoot ?? env["ATF_WEBUI_RUNS_ROOT"] ?? join(repoRoot, "tmp", "webui-runs");
   const sessionsRoot = overrides.sessionsRoot ?? env["ATF_WEBUI_SESSIONS_ROOT"] ?? join(repoRoot, "tmp", "webui-sessions");
   const listenPort = overrides.port ?? Number(env["ATF_WEBUI_PORT"] ?? 8629);
   // 批⑭：设置存储（webui/providers.json 运行时配置，重载热生效——§一.区1；e2e 注入 tmp）
   const settings = overrides.settingsStore ?? openSettingsStore(env["ATF_WEBUI_SETTINGS"] ?? join(repoRoot, "webui", "providers.json"));
   let providerConfig: SessionManagerDeps["providerConfig"];
-  if (overrides.providerConfig !== undefined) providerConfig = overrides.providerConfig;
-  else if (env["ATF_LLM_CONFIG"] !== undefined && env["ATF_LLM_CONFIG"] !== "") {
-    void loadLlmProviderConfig(env).then((resolved) => {
-      if (resolved.ok) providerConfig = { provider_id: resolved.value.provider_id, model: resolved.value.model, base_url: resolved.value.base_url, api_key: resolved.value.api_key };
-    });
+  /** 批⑲ 修正一：provider 加载 await 于 listen 前——失败/缺失进入分级 fail-closed（health/sessions 闸）。 */
+  let providerState: ProviderReadyState = { status: "none" };
+  if (overrides.providerConfig !== undefined) {
+    providerConfig = overrides.providerConfig;
+    providerState = { status: "ready", provider_id: providerConfig.provider_id, model: providerConfig.model };
+  } else if (env["ATF_LLM_CONFIG"] !== undefined && env["ATF_LLM_CONFIG"] !== "") {
+    const resolved = await loadLlmProviderConfig(env);
+    if (resolved.ok) {
+      providerConfig = { provider_id: resolved.value.provider_id, model: resolved.value.model, base_url: resolved.value.base_url, api_key: resolved.value.api_key };
+      providerState = { status: "ready", provider_id: resolved.value.provider_id, model: resolved.value.model };
+      console.log(`LLM provider 已加载: ${resolved.value.provider_id}/${resolved.value.model} (来源: ATF_LLM_CONFIG)`);
+    } else {
+      providerState = {
+        status: "failed",
+        error: `LLM provider 配置加载失败 (${resolved.error.code}): ${resolved.error.message}`,
+        hint: `检查 ATF_LLM_CONFIG=${env["ATF_LLM_CONFIG"]} 的文件/权限/必填键；或经设置页/环境修正后重启`,
+      };
+      console.error(`[webui] ${providerState.error}\n[webui] 指路: ${providerState.hint}`);
+    }
+  } else {
+    console.log("[webui] 未配置模型宿主（可经设置页配置，或设 ATF_LLM_CONFIG 后重启）——会话创建在配置就绪前 fail-closed");
   }
+  /** 会话创建就绪闸：providerConfig 就绪 ∥ 测试/宿主注入 streamFn（注入＝模型宿主等价物）。 */
+  const sessionsReady = (): boolean => providerConfig !== undefined || overrides.streamFn !== undefined;
   const manager = new WebUiSessionManager({
     runsRoot,
     sessionsRoot,
@@ -121,6 +149,16 @@ export const startWebUiServer = (overrides: WebUiServerOverrides = {}): WebUiSer
       return;
     }
     if (path === "/api/sessions" && req.method === "POST") {
+      // 批⑲ 修正一：会话创建 fail-closed——provider 未就绪（env 加载失败/未配置且无宿主注入）→ 503＋指路
+      if (!sessionsReady()) {
+        json(res, 503, {
+          error: providerState.status === "failed"
+            ? `模型宿主加载失败，会话创建暂不可用: ${providerState.error ?? ""}`.trim()
+            : "模型宿主未配置，会话创建暂不可用（可经设置页配置或设 ATF_LLM_CONFIG 后重启）",
+          provider_state: providerState.status,
+        });
+        return;
+      }
       const body = await readBody(req);
       const instruction = typeof body["instruction"] === "string" ? body["instruction"] : undefined;
       json(res, 200, { id: manager.createSession(instruction) });
@@ -185,6 +223,16 @@ export const startWebUiServer = (overrides: WebUiServerOverrides = {}): WebUiSer
       const edits = typeof body["edits"] === "object" && body["edits"] !== null ? (body["edits"] as Record<string, string>) : {};
       await manager.answerConfirm(confirmMatch[1] ?? "", { action, edits, via: "button" });
       json(res, 200, { accepted: true });
+      return;
+    }
+    if (path === "/api/health" && req.method === "GET") {
+      // 批⑲：provider 就绪显式面（failed=env 加载失败；none=未配置；ready=正常）
+      json(res, 200, {
+        status: providerState.status === "ready" ? "ok" : providerState.status,
+        provider: providerState.status === "ready" ? { provider_id: providerState.provider_id, model: providerState.model } : null,
+        ...(providerState.error !== undefined ? { error: providerState.error } : {}),
+        ...(providerState.hint !== undefined ? { hint: providerState.hint } : {}),
+      });
       return;
     }
     if (path === "/api/gpu" && req.method === "GET") {

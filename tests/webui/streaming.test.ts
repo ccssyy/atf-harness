@@ -117,7 +117,8 @@ describe("批⑯prime：manager 逐事件转发与重放", () => {
 
 describe("批⑯prime A：选择器常显（数据面）", () => {
   it("空会话下 providers/settings API 即可用（前端选择器渲染数据源不依赖 cursor）", async () => {
-    const handle = startWebUiServer({ runsRoot: tempRoot(), sessionsRoot: tempRoot(), port: 0 });
+    // 批⑲：sessions 创建就绪闸——注入 streamFn（模型宿主等价物）以过闸
+    const handle = await startWebUiServer({ runsRoot: tempRoot(), sessionsRoot: tempRoot(), port: 0, streamFn: createFauxStreamFn([]) as never });
     const base = `http://127.0.0.1:${String((handle.server.address() as { port: number }).port)}`;
     const providers = (await (await fetch(`${base}/api/settings/providers`)).json()) as { providers: unknown[] };
     expect(providers.providers.length).toBeGreaterThan(0);
