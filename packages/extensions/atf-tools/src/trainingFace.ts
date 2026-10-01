@@ -118,6 +118,13 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       schema: { type: "object", additionalProperties: true },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
+    presentCall: function(args: { action: string; run_id: string }) {
+      return {
+        card: "generic" as const,
+        title: args.action === "status" ? `训练状态查询 — ${args.run_id}` : `训练执行 — ${args.run_id}`,
+        kind: "other" as const,
+      }
+    },
     async execute(args: { action: string; train_sh: string; run_id: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       if (args.action === "status") {
         const running = tmuxHas("atf-training-run");
@@ -178,6 +185,9 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       schema: { type: "object", additionalProperties: true },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
+    presentCall: function(args: { action: string; run_id: string }) {
+      return { card: "generic" as const, title: `评估 — ${args.run_id}`, kind: "other" as const }
+    },
     async execute(args: { action: string; run_id: string; adapter_path?: string; eval_assets_dir: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       if (args.action === "status") {
         const evalDir = join(cfg.runsRoot, args.run_id, "eval");
@@ -207,6 +217,9 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     output: {
       schema: { type: "object", additionalProperties: true },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
+    },
+    presentCall: function(args: { run_id: string }) {
+      return { card: "generic" as const, title: `badcase 分析 — ${args.run_id}`, kind: "other" as const }
     },
     async execute(args: { run_id: string; style_cluster_manifest?: string }) {
       const runDir = join(cfg.runsRoot, args.run_id);

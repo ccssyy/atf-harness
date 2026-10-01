@@ -63,6 +63,14 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       schema: { type: "object", additionalProperties: true },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
+    presentCall: function(args: { action: string; run_id: string }) {
+      // pending 态卡面——九要素确认标题（具体 fields 在 execute 中构造后经 content 呈现）
+      return {
+        card: "generic" as const,
+        title: args.action === "amend" ? `九要素配置确认（改参重呈）— ${args.run_id}` : `九要素训练配置确认 — ${args.run_id}`,
+        kind: "other" as const,
+      }
+    },
     async execute(args: { action: "present" | "amend"; run_id: string; overrides?: Record<string, unknown>; amend_text?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       const runDir = join(runsRoot, args.run_id);
       // 现值基线：已确认快照（不重问）→ pending 卡现值 → 缺省
