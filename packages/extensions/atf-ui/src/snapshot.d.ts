@@ -10,9 +10,16 @@ export interface AtfRunScan {
   report?: { files?: string[] };
   artifacts?: string[];
 }
+export interface AtfGpuStatus {
+  offline: boolean;
+  utilization?: string;
+  memoryUsed?: string;
+  memoryTotal?: string;
+}
 export interface AtfMonitorSnapshot {
   schema: string;
   generated_at: string;
+  gpu: AtfGpuStatus;
   runs: Array<{
     run_id: string;
     state: string;
@@ -25,7 +32,8 @@ export interface AtfArtifactsSnapshot {
   generated_at: string;
   runs: Array<{ run_id: string; artifacts: Array<{ name: string; path: string; kind: string }> }>;
 }
-export declare function buildMonitorSnapshot(runs: AtfRunScan[]): AtfMonitorSnapshot;
+export declare function buildMonitorSnapshot(runs: AtfRunScan[], gpu?: AtfGpuStatus): AtfMonitorSnapshot;
+export declare function formatTaskCard(monitorRun: Pick<AtfMonitorSnapshot["runs"][number], "segments">): string;
 export declare function buildArtifactsSnapshot(runs: AtfRunScan[]): AtfArtifactsSnapshot;
 export declare function parseLossSeries(text: string): Array<Record<string, unknown>>;
 export declare function lossSvgPath(points: Array<Record<string, unknown>>, key: string, w?: number, h?: number): string | null;

@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildRunTrainingTool, buildEvalTools, parseTrainerLine, startLossIngest } from "../../packages/extensions/atf-tools/src/trainingFace.js";
+import { buildRunTrainingTool, buildEvalTools, parseTrainerLine, renderTaskCardText, startLossIngest } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 
 const repoRoot = "/data/sam/ATF-Harness";
 const tempRoots: string[] = [];
@@ -69,6 +69,53 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     const result = await tool.execute({ action: "status", train_sh: join(root, "x.sh"), run_id: "r1" }, fakeExec);
     expect(result.ckpts as string[]).toEqual(["checkpoint-30"]);
     expect(String(result.latest_ckpt)).toContain("checkpoint-30");
+  });
+
+  it("status：八段任务卡段状态（目录标记推导与监控同步器同源）＋render 渲染 checklist", async () => {
+    const root = tempRoot();
+    const runDir = join(root, "r-task");
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "registration.json"), "{}");
+    writeFileSync(join(runDir, "training", "loss-series.json"), JSON.stringify([{ train_loss: 0.4 }]));
+    const tool = buildRunTrainingTool(noApproval, { runsRoot: root, logDir: root, ctx: noApproval }) as unknown as Tool & { output: { render: (args: unknown, value: unknown) => Array<{ type: string; text: string }> } };
+    const result = await tool.execute({ action: "status", train_sh: join(root, "x.sh"), run_id: "r-task" }, fakeExec);
+    const segments = result.segments as Array<{ key: string; status: string }>;
+    expect(segments.find((s) => s.key === "register")?.status).toBe("done");
+    // 段语义：loss-series 在场=done（面板口径）；进程态 running 单列
+    expect(segments.find((s) => s.key === "training")?.status).toBe("done");
+    const blocks = tool.output.render({}, result);
+    const text = blocks[0]?.text ?? "";
+    expect(text).toContain("训练任务卡 — run r-task");
+    expect(text).toContain("✓ 数据登记");
+    expect(text).toContain("进度 2/8");
+    expect(text).toMatch(/运行中|未运行/); // tmux 在场与否二态均如实
+    expect(text).toContain("loss 点数：1");
+    // start 结果不走任务卡（保持 JSON 卡面）
+    const startBlocks = tool.output.render({}, { started: true, tmux: "atf-training-run" });
+    expect(startBlocks[0]?.text).toContain('"started"');
+  });
+});
+
+describe("任务卡卡面（renderTaskCardText——liveness 覆盖语义）", () => {
+  const base = { action: "status", run_id: "r1", loss_points: 3, segments: [
+    { key: "register", label: "数据登记", status: "done" as const },
+    { key: "training", label: "训练执行", status: "done" as const },
+    { key: "evaluate", label: "评估与可视化", status: "pending" as const },
+  ] };
+  it("running=true：训练段提升 active（tmux 探测为进程态权威）", () => {
+    const text = renderTaskCardText({ ...base, running: true });
+    expect(text).toContain("● 训练执行");
+    expect(text).toContain("运行中（tmux atf-training-run）");
+    expect(text).toContain("进度 1/3");
+  });
+  it("running=false：训练段按段语义 done（loss-series 在场）", () => {
+    const text = renderTaskCardText({ ...base, running: false });
+    expect(text).toContain("✓ 训练执行");
+    expect(text).toContain("未运行");
+  });
+  it("非 status/无段状态 → null（调用方保持 JSON 卡面）", () => {
+    expect(renderTaskCardText({ action: "start" })).toBeNull();
+    expect(renderTaskCardText({ action: "status" })).toBeNull();
   });
 });
 

@@ -36,12 +36,14 @@ function segmentStatus(run, key) {
 
 /**
  * @param runs - 同步器 scanRuns 的 run 形态（run_id/state/segments/training/report）。
- * @returns monitor.json 快照：每 run 段状态＋训练视图数据。
+ * @param gpu - GPU 实测面（queryNvidiaSmi 结果；缺省 offline——不猜测）。
+ * @returns monitor.json 快照：每 run 段状态＋训练视图数据＋GPU 状态行。
  */
-export function buildMonitorSnapshot(runs) {
+export function buildMonitorSnapshot(runs, gpu) {
   return {
     schema: "AtfMonitor/v1",
     generated_at: new Date().toISOString(),
+    gpu: gpu ?? { offline: true },
     runs: runs.map((run) => ({
       run_id: run.run_id,
       state: run.state ?? "unknown",
@@ -53,6 +55,21 @@ export function buildMonitorSnapshot(runs) {
       },
     })),
   };
+}
+
+/**
+ * 任务卡 checklist 文本（chat 卡面单源——atf_run_training status 的 output.render 与
+ * panel 共用口径）：八段逐行，四态标记 ✓ done／● active／✗ failed／○ pending。
+ * @param monitorRun - buildMonitorSnapshot 展开后的单 run 形态（segments 为四态数组）。
+ * @returns 多行文本（无尾随换行）。
+ */
+export function formatTaskCard(monitorRun) {
+  const MARKS = { done: "✓", active: "●", failed: "✗", pending: "○" };
+  const lines = (monitorRun?.segments ?? []).map((seg) => `${MARKS[seg.status] ?? "○"} ${seg.label}`);
+  const doneCount = (monitorRun?.segments ?? []).filter((seg) => seg.status === "done").length;
+  const total = (monitorRun?.segments ?? []).length;
+  lines.push(`进度 ${doneCount}/${total}`);
+  return lines.join("\n");
 }
 
 /**

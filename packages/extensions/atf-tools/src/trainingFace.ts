@@ -15,6 +15,8 @@ import { spawn, execFile } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
+import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
+import { scanRunDir } from "../../atf-ui/src/server.js";
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
 import { asToolValue } from "./schemaTranslate.js";
 
@@ -103,12 +105,40 @@ export interface TrainingToolsConfig {
   ctx: { get(service: string): unknown };
 }
 
+/** status 结果形状（任务卡卡面输入）。 */
+export interface TrainingStatusValue {
+  action?: string;
+  run_id?: string;
+  segments?: Array<{ key: string; label: string; status: "done" | "active" | "failed" | "pending" }>;
+  running?: boolean;
+  loss_points?: number;
+  ckpts?: string[];
+  latest_ckpt?: string;
+}
+
+/** 任务卡卡面文本（chat 卡单点——批㉑三段任务卡入口）：status 结果渲染八段 checklist。
+ *  liveness 权威面＝tmux 探测：running=true 时训练段展示提升 active（段标记的
+ *  loss-series 在场=done 是面板段语义，进程态由本覆盖呈现，两者不混）。 */
+export function renderTaskCardText(value: TrainingStatusValue): string | null {
+  if (value?.action !== "status" || !Array.isArray(value.segments)) return null;
+  const segs = value.running === true
+    ? value.segments.map((s) => (s.key === "training" && s.status === "done" ? { ...s, status: "active" as const } : s))
+    : value.segments;
+  return [
+    `训练任务卡 — run ${value.run_id ?? "?"}`,
+    formatTaskCard({ segments: segs }),
+    `训练进程：${value.running === true ? "运行中（tmux atf-training-run）" : "未运行"}`,
+    `loss 点数：${String(value.loss_points ?? 0)}`,
+    ...(Array.isArray(value.ckpts) && value.ckpts.length > 0 ? [`checkpoint：${value.ckpts.join("、")}`, `latest：${value.latest_ckpt ?? ""}`] : []),
+  ].join("\n");
+}
+
 /** atf_run_training（action: start/status）——danger 必确认。 */
 export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg: TrainingToolsConfig) =>
   defineTool({
     name: "atf_run_training",
     description:
-      "训练执行（danger 必确认——GPU 时长代价显性化）：action=start 校验 train.sh（DRY_RUN 过）→审批卡放行→tmux atf-training-run 常驻执行＋stdout tail 进料监控（loss-series）→返回启动凭据；action=status 查询运行状态/checkpoint 落盘/loss 进度。异常即停即报，不静默重试。",
+      "训练执行（danger 必确认——GPU 时长代价显性化）：action=start 校验 train.sh（DRY_RUN 过）→审批卡放行→tmux atf-training-run 常驻执行＋stdout tail 进料监控（loss-series）→返回启动凭据；action=status 查询运行状态并返回八段任务卡（chat 流可见的 checklist——训练推进期请周期调用 status，把最新任务卡呈现给用户）。异常即停即报，不静默重试。",
     parameters: {
       action: { type: "string", required: true, enum: ["start", "status"], description: "start=放行后启动训练；status=查询状态与 ckpt" },
       train_sh: { type: "string", required: true, description: "train.sh 绝对路径（须已通过 DRY_RUN 校验）" },
@@ -116,7 +146,12 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
     },
     output: {
       schema: { type: "object", additionalProperties: true },
-      render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
+      render: (_args, value) => {
+        // 任务卡 chat 卡面：status 结果带段状态时渲染八段 checklist——run 推进期 agent
+        // 每次 status 轮询即把最新任务卡贴进对话流；其余形态保持 JSON 卡面。
+        const card = renderTaskCardText(value as TrainingStatusValue);
+        return [{ type: "text" as const, text: card ?? JSON.stringify(value, null, 1) }];
+      },
     },
     presentCall: function(args: { action: string; run_id: string }) {
       return {
@@ -134,7 +169,9 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
           : [];
         const lossPath = join(ckptDir, "loss-series.json");
         const points = existsSync(lossPath) ? (JSON.parse(readFileSync(lossPath, "utf8")) as unknown[]).length : 0;
-        return asToolValue({ action: "status", running, run_id: args.run_id, ckpts, loss_points: points, ...(ckpts.length > 0 ? { latest_ckpt: `runs/${args.run_id}/training/${ckpts[ckpts.length - 1]}` } : {}) });
+        // 八段任务卡段状态（与监控同步器同源推导——scanRunDir 单源）
+        const segments = buildMonitorSnapshot([scanRunDir(cfg.runsRoot, args.run_id)]).runs[0]?.segments ?? [];
+        return asToolValue({ action: "status", running, run_id: args.run_id, segments, ckpts, loss_points: points, ...(ckpts.length > 0 ? { latest_ckpt: `runs/${args.run_id}/training/${ckpts[ckpts.length - 1]}` } : {}) });
       }
       // —— start：danger 必确认 ——
       const verdict = await requestApproval(ctx, exec, "atf_run_training", `真实 GPU 训练启动确认：GPU 2 单卡 · max_steps 30（短跑锁死）· 预计 20 分钟 · train.sh=${args.train_sh}`);

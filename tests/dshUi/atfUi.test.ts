@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildMonitorSnapshot, buildArtifactsSnapshot, QUEUE_IDLE_TEXT, SEGMENTS } from "../../packages/extensions/atf-ui/src/snapshot.js";
+import { buildMonitorSnapshot, buildArtifactsSnapshot, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS } from "../../packages/extensions/atf-ui/src/snapshot.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -41,6 +41,21 @@ describe("快照构造纯函数（八段四态推导＋loss 曲线＋KPI＋空�
     expect(QUEUE_IDLE_TEXT).toContain("排队中");
     expect(QUEUE_IDLE_TEXT).toContain("DRY_RUN");
   });
+  it("gpu 字段：缺省 offline（不猜测）；实测面透传（批㉑三段 GPU 状态卡数据面）", () => {
+    const offline = buildMonitorSnapshot([sampleRun]);
+    expect(offline.gpu).toEqual({ offline: true });
+    const live = buildMonitorSnapshot([sampleRun], { offline: false, utilization: "12%", memoryUsed: "3497 MiB", memoryTotal: "81920 MiB" });
+    expect(live.gpu).toMatchObject({ offline: false, utilization: "12%" });
+  });
+  it("formatTaskCard：八段 checklist 四态标记＋进度行（chat 任务卡单源）", () => {
+    const snap = buildMonitorSnapshot([sampleRun]);
+    const card = formatTaskCard(snap.runs[0]!);
+    expect(card).toContain("✓ 数据登记");
+    expect(card).toContain("✓ 数据切分");
+    expect(card).toContain("● 训练执行");
+    expect(card).toContain("○ 标注体检");
+    expect(card).toContain("进度 2/8");
+  });
 });
 
 describe("atf-ui 同步器落盘（scan→monitor/artifacts/panel）", () => {
@@ -51,14 +66,16 @@ describe("atf-ui 同步器落盘（scan→monitor/artifacts/panel）", () => {
     writeFileSync(join(runDir, "registration.json"), "{}");
     writeFileSync(join(runDir, "session.jsonl"), "{}\n");
     writeFileSync(join(runDir, "training", "loss-series.json"), JSON.stringify([{ train_loss: 0.4 }]));
-    const { name, apply: applyPlugin } = await import("../../packages/extensions/atf-ui/src/server.js");
+    const { name, apply: applyPlugin, tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
     expect(name).toBe("atf-ui");
     const effects: Array<() => void> = [];
     applyPlugin({ effect: (run: () => () => void) => { effects.push(run()); } }, { runsRoot: root, intervalMs: 60_000 });
-    const monitor = JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as { runs: Array<{ run_id: string; segments: Array<{ key: string; status: string }>; training: { active: boolean } }> };
+    await tickOnce({ runsRoot: root, intervalMs: 60_000 });
+    const monitor = JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as { runs: Array<{ run_id: string; segments: Array<{ key: string; status: string }>; training: { active: boolean } }>; gpu: { offline: boolean } };
     expect(monitor.runs[0]?.run_id).toBe("run-sync");
     expect(monitor.runs[0]?.segments.find((s) => s.key === "register")?.status).toBe("done");
     expect(monitor.runs[0]?.training.active).toBe(true);
+    expect(monitor.gpu).toMatchObject({ offline: expect.any(Boolean) });
     const artifacts = JSON.parse(readFileSync(join(root, "atf-ui", "artifacts.json"), "utf8")) as { runs: Array<{ artifacts: unknown[] }> };
     expect(artifacts.runs[0]?.artifacts.length).toBeGreaterThan(0);
     const panelHtml = readFileSync(join(root, "atf-ui", "panel.html"), "utf8");

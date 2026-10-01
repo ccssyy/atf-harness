@@ -1,219 +1,168 @@
-/** atf-ui client 半——品牌 slot＋快捷指令＋确认指引＋监控面板（批⑳dot1 修正版）。 */
+/** atf-ui client 半——GPU 状态一行卡＋快捷指令胶囊（批㉑三段）。
+ *  品牌沿 owner 路线 2 裁定：维持 DSH 默认文案（替换随 M3 persona/identity config 正道），
+ *  本文件不含任何品牌覆盖（slot/CSS/DOM 文本替换均不设）。
+ *  数据：workspaceFiles.read 轮询 <runsRoot>/atf-ui/monitor.json（同步器 5s 快照单源，
+ *  gpu 字段＝nvidia-smi 实测面）；sessionId 经 header.utilities 的 session-scoped
+ *  inject 工厂捕获（批⑳实证通道）。
+ *  挂载面（DSH slot 契约，批㉑三段实证）：conversation.session.header.utilities＝list
+ *  （GPU 显隐开关＋sessionId 捕获）；conversation.composer.dock＝list（GPU 一行卡＋胶囊，
+ *  与 ui-chat stats 同槽共存）；conversation.approval.detail＝single（ui-chat 独占——
+ *  第三方注册会顶掉其 seat 致其 apply 抛错，故不挂）。 */
 window.__ModuleLoader__.load({
   id: '@atf/dsh-atf-ui',
   factory: function(require) {
     var React = require('react')
+
+    var MONITOR_PATH = '/data/sam/ATF-Harness/tmp/webui-runs/atf-ui/monitor.json'
+    var POLL_MS = 5000
+
     var remoteFace = null
-
-    function BrandMark() {
-      return React.createElement('span', {
-        style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                 width: 24, height: 24, borderRadius: 6,
-                 background: 'var(--atf-accent,#1d4ed8)', color: '#fff',
-                 fontSize: 10, fontWeight: 700, flexShrink: 0 }
-      }, 'ATF')
-    }
-    function BrandName() {
-      return React.createElement('span', { style: { fontWeight: 600, fontSize: 14 } }, 'ATF 训练 Agent')
-    }
-    function ConfirmGuide() {
-      return React.createElement('div', {
-        style: { border: '1px dashed #b45309', borderRadius: 8, padding: 8, fontSize: 11, color: '#b45309' }
-      },
-        React.createElement('b', null, 'ATF 确认卡应答方式'),
-        '确认并继续＝Allow once；逐项修改＝回复「lr 改 2e-4」；拒绝＝Reject。三态：⚠ 缺省／◆ 登记／? 确认。')
+    var store = {
+      sessionId: undefined,
+      open: true,
+      listeners: new Set(),
+      setOpen: function(v) { this.open = v; this.listeners.forEach(function(fn) { fn() }) },
+      subscribe: function(fn) { var s = this; s.listeners.add(fn); return function() { s.listeners.delete(fn) } },
+      getOpen: function() { return this.open },
     }
 
-    function AtfMonitor(props) {
-      var mon = props.monitor
+    /** monitor.json 轮询（sessionId 由 header.utilities 注入后生效；未就绪期静默等下周期）。 */
+    function useMonitor() {
+      var _s = React.useState(null)
+      var data = _s[0], setData = _s[1]
+      React.useEffect(function() {
+        var alive = true
+        var read = function() {
+          var sid = store.sessionId
+          if (sid === undefined || remoteFace === null) return
+          remoteFace.workspaceFiles.read(sid, MONITOR_PATH, {}, new AbortController().signal)
+            .then(function(result) {
+              if (!alive || !result || result.ok === false) return
+              try { setData(JSON.parse(result.value.text)) } catch { /* 下周期重试 */ }
+            })
+            .catch(function() { /* 离线/未就绪——下周期重试 */ })
+        }
+        read()
+        var t = setInterval(read, POLL_MS)
+        return function() { alive = false; clearInterval(t) }
+      }, [])
+      return data
+    }
+
+    /** 在跑 run 挑选（只读展示推导）：第一个有推进（done>0 或 active 段）的 run。 */
+    function pickActiveRun(mon) {
       var runs = (mon && mon.runs) || []
-      var _r = React.useState(runs.length ? runs[0].run_id : ''), runId = _r[0]
-      var run = runs.find(function(r) { return r.run_id === runId }) || runs[0]
-      if (!run) return React.createElement('div', { style: { color: '#64748b', fontSize: 11 } }, '（暂无 run）')
-      var pts = (run.training && Array.isArray(run.training.points)) ? run.training.points : []
-      var segs = (run.segments || []).map(function(s, i) {
-        var icon, iconBg, fg
-        if (s.status === 'done') { iconBg = 'var(--atf-success,#16a34a)'; icon = '✓'; fg = 'var(--atf-textPrimary,#0f172a)' }
-        else if (s.status === 'active') { iconBg = 'var(--atf-warning,#f59e0b)'; icon = '●'; fg = 'var(--atf-textPrimary,#0f172a)' }
-        else { iconBg = 'var(--atf-cardElevated,#e2e8f0)'; icon = String(i + 1); fg = 'var(--atf-textSecondary,#64748b)' }
-        return React.createElement('div', { key: s.key, style: { display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' } },
-          React.createElement('span', { style: { width: 20, height: 20, borderRadius: '50%', background: iconBg, color: fg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, flexShrink: 0 } }, icon),
-          React.createElement('span', { style: s.status === 'done' ? { textDecoration: 'line-through', opacity: 0.6 } : { fontWeight: 500 } }, s.label))
-      })
-      var pts_ = pts
-      var trainPath = null
-      if (pts_.length > 1) {
-        var losses = pts_.map(function(p) { return p.train_loss || 0 })
-        var mn = Math.min.apply(null, losses), mx = Math.max.apply(null, losses), rng = mx - mn || 1
-        trainPath = losses.map(function(v, i) { return (i / (losses.length - 1) * 300).toFixed(1) + ',' + (76 - ((v - mn) / rng) * 72).toFixed(1) }).join(' ')
+      for (var i = 0; i < runs.length; i++) {
+        var segs = runs[i].segments || []
+        var done = segs.filter(function(s) { return s.status === 'done' }).length
+        var trainingActive = segs.some(function(s) { return s.key === 'training' && s.status === 'active' })
+        var waiting = segs.some(function(s) { return s.key === 'experiment_config' && s.status === 'active' })
+        if (done > 0 || trainingActive || waiting) return { run: runs[i], done: done, total: segs.length, trainingActive: trainingActive, waiting: waiting }
       }
-      var kpis = { train_loss: pts_.length ? String(pts_[pts_.length-1].train_loss) : '—', eval_loss: '—', learning_rate: '—', gpu_mem: '—' }
-      return React.createElement('div', null,
-        React.createElement('select', { style: { marginBottom: 4, width: '100%', padding: '3px 6px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 12 },
-          value: runId, onChange: function(e) { runId = e.target.value; forceUpdate() } },
-          runs.map(function(r) { return React.createElement('option', { key: r.run_id, value: r.run_id }, r.run_id) })),
-        React.createElement('div', null, segs),
-        pts_.length === 0
-          ? React.createElement('div', { style: { color: '#b45309', background: '#fef3c7', borderRadius: 6, padding: 6, margin: '6px 0', fontSize: 12 } }, '等待训练启动 · DRY_RUN 已过 · 排队中')
-          : React.createElement('div', null,
-              React.createElement('div', { style: { fontSize: 20, fontWeight: 700 } }, pts_.length + ' 步'),
-              trainPath ? React.createElement('svg', { viewBox: '0 0 300 80', style: { width: '100%', height: 60 } },
-                React.createElement('polyline', { points: trainPath, fill: 'none', stroke: '#1d4ed8', strokeWidth: 1.5 })) : null,
-              React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginTop: 4 } },
-                Object.keys(kpis).map(function(k) {
-                  return React.createElement('div', { key: k, style: { background: 'var(--atf-cardElevated,#e2e8f0)', borderRadius: 6, padding: '4px 6px' } },
-                    React.createElement('div', { style: { fontSize: 10, color: '#64748b' } }, k),
-                    React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, kpis[k]))
-                }))))
+      return null
     }
 
-    function AtfArtifacts(props) {
-      var runs = (props.artifacts && props.artifacts.runs) || []
-      return React.createElement('div', null,
-        runs.map(function(run) {
-          return React.createElement('div', { key: run.run_id, style: { border: '1px solid #e2e8f0', borderRadius: 8, padding: 6, marginBottom: 4 } },
-            React.createElement('div', { style: { fontWeight: 600, fontSize: 12 } }, 'run ' + run.run_id),
-            run.artifacts.length === 0
-              ? React.createElement('div', { style: { color: '#64748b', fontSize: 11 } }, '（暂无产物）')
-              : run.artifacts.map(function(a, i) {
-                  return React.createElement('div', { key: i, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', fontSize: 11 } },
-                    React.createElement('span', null, a.name),
-                    React.createElement('button', { style: { border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontSize: 11 },
-                      onClick: function() {
-                        var text = '查看 ' + a.name
-                        var url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
-                        window.open(url, '_blank')
-                      } }, '[预览]'))
-                }))
-        }))
+    /** GPU 状态一行卡（紧凑单行——指令三段形态：GPU util/显存/在跑 run）。 */
+    function GpuCard() {
+      var open = React.useSyncExternalStore(
+        function(fn) { return store.subscribe(fn) },
+        function() { return store.getOpen() },
+      )
+      var mon = useMonitor()
+      if (!open) return null
+      var gpu = (mon && mon.gpu) || null
+      var parts = []
+      if (gpu === null) {
+        parts.push('GPU 监控就绪中…')
+      } else if (gpu.offline === true) {
+        parts.push('GPU 离线（nvidia-smi 不可用）')
+      } else {
+        parts.push('GPU ' + String(gpu.utilization || '—'))
+        parts.push('显存 ' + String(gpu.memoryUsed || '—') + '/' + String(gpu.memoryTotal || '—'))
+      }
+      var active = mon === null ? null : pickActiveRun(mon)
+      if (active !== null) {
+        parts.push(active.run.run_id + ' 段 ' + active.done + '/' + active.total)
+        if (active.trainingActive) parts.push('训练中')
+        else if (active.waiting) parts.push('等确认')
+      } else if (gpu !== null && gpu.offline !== true) {
+        parts.push('暂无推进 run')
+      }
+      var dotColor = active !== null && active.trainingActive ? '#f59e0b' : active !== null ? '#1d4ed8' : '#16a34a'
+      return React.createElement('div', { className: 'atf-gpu-card' },
+        React.createElement('span', { className: 'atf-gpu-dot', style: { background: dotColor } }),
+        React.createElement('span', null, parts.join(' · ')))
     }
 
-    var _updateFns = []
-    function forceUpdate() { _updateFns.forEach(function(fn) { fn() }) }
+    var PILLS = [
+      { label: '新建训练', msg: '我想启动一个新的训练任务' },
+      { label: '查状态', msg: '查看当前训练任务状态' },
+      { label: '继续上次', msg: '继续上次的训练任务' },
+      { label: '对比两轮', msg: '对比最近两轮训练的指标' },
+    ]
 
     return {
-      inject: ['slots', 'remote'],
+      inject: ['slots', 'remote', 'remote.workspaceFiles'],
       apply: function(ctx) {
         remoteFace = ctx.remote
 
-        // CSS（语义 token 双主题）
         if (typeof document !== 'undefined') {
           var style = document.createElement('style')
           style.dataset.plugin = '@atf/dsh-atf-ui'
           style.textContent = [
-            '.atf-scope{--atf-accent:#1d4ed8;--atf-cardElevated:#e2e8f0;--atf-textPrimary:#0f172a;--atf-textSecondary:#64748b;--atf-success:#16a34a;--atf-warning:#f59e0b;}',
-            '.atf-dock{position:fixed;top:0;right:0;width:400px;max-height:100vh;overflow-y:auto;background:#fff;border-left:1px solid #e2e8f0;z-index:40;padding:12px;font-family:"PingFang SC",sans-serif;font-size:13px;color:#0f172a;}',
-            '.atf-dock-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}',
-            '.atf-dock-title{font-weight:600;font-size:15px;margin:10px 0 4px;}',
-            '.atf-btn{border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px;}',
-            '.atf-dim{color:#64748b;font-size:11px;}',
-            '.atf-seg-line{display:flex;align-items:center;gap:12px;padding:8px 0;}',
+            // 语义回退链：优先 DSH 变量，fallback 内置（亮/暗跟随壳）
+            '.atf-gpu-card{display:inline-flex;align-items:center;gap:7px;font-size:12px;',
+            '  color:var(--dsh-text-secondary,#64748b);',
+            '  background:rgba(128,128,128,.08);',
+            '  border:1px solid rgba(128,128,128,.18);',
+            '  border-radius:8px;padding:3px 10px;margin:2px 0 4px;}',
+            '.atf-gpu-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}',
+            '.atf-pill-row{display:flex;gap:8px;flex-wrap:wrap;padding:2px 0;}',
+            '.atf-pill{border:0;background:rgba(128,128,128,.1);border-radius:8px;padding:4px 12px;cursor:pointer;font-size:13px;}',
           ].join('')
           document.head.append(style)
-          // 品牌覆盖 CSS（延迟注入——等待 DSH 壳渲染完毕后生效）
-          setTimeout(function() {
-            var brandStyle = document.createElement('style')
-            brandStyle.dataset.plugin = '@atf/dsh-atf-ui-brand'
-            brandStyle.textContent = [
-              // 侧栏品牌区：隐藏 DSH fallback，显示 ATF
-              '[class*=sidebar] [class*=brand] { visibility: hidden; position: relative; }',
-              '[class*=sidebar] [class*=brand]::after {',
-              '  content: "ATF 训练 Agent";',
-              '  visibility: visible; position: absolute; left: 0; top: 0;',
-              '  font-weight: 600; font-size: 14px; color: var(--atf-textPrimary,#0f172a);',
-              '}',
-              // 侧栏顶栏 brand mark 区域：隐藏 DSH 图标，显示 ATF 徽标
-              '[class*=sidebar] [class*=brand] [class*=mark], [class*=sidebar] img[class*=logo] { display: none !important; }',
-              '[class*=sidebar] [class*=brand]::before {',
-              '  content: "ATF";',
-              '  display: inline-block; width: 24px; height: 24px; border-radius: 6px;',
-              '  background: var(--atf-accent,#1d4ed8); color: #fff; font-size: 10px; font-weight: 700;',
-              '  text-align: center; line-height: 24px; margin-right: 8px; vertical-align: middle;',
-              '  visibility: visible; position: relative;',
-              '}',
-            ].join('')
-            document.head.append(brandStyle)
-          }, 2000)
         }
 
-        // 修正 1：品牌 slot 注入
-        ctx.slots.inject('sidebar.brand.mark', function() {
-          return ctx.slots.register({ name: 'sidebar.brand.mark', id: 'atf-brand-mark' }, BrandMark)
-        })
-        ctx.slots.inject('sidebar.brand.name', function() {
-          return ctx.slots.register({ name: 'sidebar.brand.name', id: 'atf-brand-name' }, BrandName)
-        })
-
-        // ---- 批⑳dot1 补充：DOM 层品牌文本替换（sidebar fallback 的 slot 注入依赖
-        //  render tree 时序，此处用 setTimeout 在壳渲染完毕后直接替换文本——可靠兜底） ----
-        setTimeout(function() {
-          var done = false
-          function tryReplace() {
-            if (done) return
-            var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false)
-            var node
-            while ((node = walker.nextNode())) {
-              if (node.textContent && node.textContent.indexOf('DSH Local Build') !== -1) {
-                node.textContent = node.textContent.replace(/DSH Local Build[^\n]*/, 'ATF 训练 Agent')
-                done = true
-              }
-            }
-            if (!done) setTimeout(tryReplace, 1000)
-          }
-          tryReplace()
-        }, 3000)
-
-        // 修正 2：审批面板指引卡
-        ctx.slots.inject('conversation.approval.detail', function() {
-          return ctx.slots.register({ name: 'conversation.approval.detail', id: 'atf-confirm-guide' }, ConfirmGuide)
+        // GPU 卡显隐开关（session-scoped：inject 工厂收 sessionId——批⑳实证通道；
+        // 本处同时是 sessionId 进 store 的唯一捕获点）
+        ctx.slots.inject('conversation.session.header.utilities', function() {
+          return ctx.slots.register({
+            name: 'conversation.session.header.utilities',
+            id: 'atf-gpu-toggle',
+            order: 900,
+            inject: function(sessionId) {
+              store.sessionId = sessionId
+              return { toggle: function() { store.setOpen(!store.getOpen()) } }
+            },
+          }, function(injected) {
+            return React.createElement('button', {
+              className: 'atf-pill', title: 'GPU 状态卡显隐',
+              onClick: injected.toggle,
+            }, 'GPU')
+          })
         })
 
-        // 快捷指令胶囊
+        // 通道 C：composer.dock（list 槽）——GPU 一行卡＋快捷指令胶囊（输入框上方，会话内常显）
         ctx.slots.inject('conversation.composer.dock', function() {
-          var pills = [
-            { label: '新建训练', msg: '我想启动一个新的训练任务' },
-            { label: '查状态', msg: '查看当前训练任务状态' },
-            { label: '继续上次', msg: '继续上次的训练任务' },
-            { label: '对比两轮', msg: '对比最近两轮训练的指标' },
-          ]
-          return ctx.slots.register({ name: 'conversation.composer.dock', id: 'atf-quick-pills' }, function() {
-            return React.createElement('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', padding: '4px 0' } },
-              pills.map(function(pill) {
-                return React.createElement('button', { key: pill.label,
-                  style: { border: 0, background: 'rgba(128,128,128,.1)', borderRadius: 8, padding: '4px 12px', cursor: 'pointer', fontSize: 13 },
-                  onClick: function() {
-                    var ta = document.querySelector('textarea')
-                    if (ta) { ta.value = pill.msg; ta.dispatchEvent(new Event('input', { bubbles: true })); ta.focus() }
-                  },
-                }, pill.label)
-              }))
+          return ctx.slots.register({ name: 'conversation.composer.dock', id: 'atf-dock-row' }, function() {
+            return React.createElement('div', null,
+              React.createElement(GpuCard),
+              React.createElement('div', { className: 'atf-pill-row' },
+                PILLS.map(function(pill) {
+                  return React.createElement('button', {
+                    key: pill.label, className: 'atf-pill',
+                    onClick: function() {
+                      // 输入面＝contenteditable 富输入（DSH 壳无 textarea）——execCommand 插入保 React 状态同步
+                      var input = document.querySelector('textarea') || document.querySelector('[contenteditable=\"true\"]')
+                      if (input) {
+                        input.focus()
+                        document.execCommand('insertText', false, pill.msg)
+                      }
+                    },
+                  }, pill.label)
+                })))
           })
         })
-
-        // 监控面板（shell.overlay 右侧停靠）
-        ctx.slots.inject('shell.overlay', function() {
-          return ctx.slots.register({ name: 'shell.overlay', id: 'atf-dock-panel' }, function() {
-            var remote = ctx.remote
-            var _s = React.useState({ runs: [] }), data = _s[0], setData = _s[1]
-            React.useEffect(function() {
-              var read = function() {
-                remote.workspaceFiles.read(store.sessionId, '/data/sam/ATF-Harness/tmp/webui-runs/atf-ui/monitor.json', new AbortController().signal)
-                  .then(function(r) { if (r) setData(typeof r === 'string' ? JSON.parse(r) : r) })
-                  .catch(function() {})
-              }
-              read()
-              var t = setInterval(read, 5000)
-              return function() { clearInterval(t) }
-            }, [])
-            return React.createElement('div', { style: { position: 'fixed', top: 0, right: 0, width: 400, maxHeight: '100vh', overflowY: 'auto', background: '#fff', borderLeft: '1px solid #e2e8f0', zIndex: 40, padding: 12 } },
-              React.createElement('div', { style: { fontWeight: 600, marginBottom: 8, fontSize: 15 } }, '分段监控'),
-              React.createElement(AtfMonitor, { monitor: data }),
-              React.createElement('div', { style: { fontWeight: 600, marginTop: 10, marginBottom: 4, fontSize: 15 } }, '产物抽屉'),
-              React.createElement(AtfArtifacts, { artifacts: data }))
-          })
-        })
-
-        var store = { sessionId: undefined }
       },
     }
   },
