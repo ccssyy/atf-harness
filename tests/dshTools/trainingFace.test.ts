@@ -5,8 +5,21 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import net from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildRunTrainingTool, buildEvalTools, parseTrainerLine, renderTaskCardText, startLossIngest } from "../../packages/extensions/atf-tools/src/trainingFace.js";
+import {
+  buildRunTrainingTool,
+  buildEvalTools,
+  deriveDeclaredModelName,
+  extractMasterPort,
+  formatPortConflictNote,
+  modelLabelLooksDefault,
+  parseTrainerLine,
+  probePortOccupant,
+  renderTaskCardText,
+  startLossIngest,
+  terminateOccupant,
+} from "../../packages/extensions/atf-tools/src/trainingFace.js";
 
 const repoRoot = "/data/sam/ATF-Harness";
 const tempRoots: string[] = [];
@@ -24,12 +37,23 @@ const approvalCtx = (outcome: string) => ({ get: (s: string) => (s === "approval
 const fakeExec = { callId: "t" };
 type Tool = { name: string; execute: (args: unknown, exec: unknown) => Promise<Record<string, unknown>> };
 
-/** mock train.sh：DRY_RUN 打印 ADMISSION=pass 后正常退出（校验面 mock）。 */
-const writeMockTrainSh = (root: string, admissionPass = true): string => {
+/** mock train.sh：DRY_RUN 打印 ADMISSION=pass 后正常退出（校验面 mock）；masterPort>0 时声明端口。 */
+const writeMockTrainSh = (root: string, admissionPass = true, masterPort = 39_001): string => {
   const path = join(root, "train.sh");
-  writeFileSync(path, admissionPass ? "#!/bin/bash\necho 'SHA=pass entries=1'\necho 'ADMISSION=pass keys=1'\nexit 0\n" : "#!/bin/bash\necho 'admission broken'\nexit 1\n");
+  const portLine = masterPort > 0 ? `export MASTER_PORT=\${MASTER_PORT:-${masterPort}}\n` : "";
+  writeFileSync(path, admissionPass
+    ? `#!/bin/bash\n${portLine}echo 'SHA=pass entries=1'\necho 'ADMISSION=pass keys=1'\nexit 0\n`
+    : "#!/bin/bash\necho 'admission broken'\nexit 1\n");
   return path;
 };
+
+/** 在本进程内占住一个端口（测试结束由调用方关闭）。 */
+const holdPort = (port: number): Promise<net.Server> =>
+  new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.once("error", reject);
+    srv.listen(port, "0.0.0.0", () => resolve(srv));
+  });
 
 describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚举）", () => {
   it("start：无审批服务 → 结构化拒绝（danger fail-closed，不启动）", async () => {
@@ -177,6 +201,114 @@ describe("parseTrainerLine 与 loss 进料（监控管道协议）", () => {
     const parsed = JSON.parse(readFileSync(series, "utf8")) as Array<{ train_loss: number }>;
     expect(parsed).toHaveLength(1);
     expect(parsed[0]?.train_loss).toBe(0.5);
+  });
+});
+
+describe("批⑳dot3 修复 3——训练启动端口预检（撞前知道）", () => {
+  it("extractMasterPort：两形态解析＋缺省回退", () => {
+    expect(extractMasterPort("export MASTER_PORT=${MASTER_PORT:-29517}")).toBe(29517);
+    expect(extractMasterPort("export MASTER_PORT=29765")).toBe(29765);
+    expect(extractMasterPort("无端口声明")).toBe(29517);
+  });
+
+  it("probePortOccupant：空闲→null；占用→占用者身份（pid＋residueLike=false）", async () => {
+    // 空闲端口（避让常用段）
+    const free = 39311;
+    expect(await probePortOccupant(free)).toBeNull();
+    const srv = await holdPort(39312);
+    try {
+      const occupant = await probePortOccupant(39312);
+      expect(occupant).not.toBeNull();
+      expect(occupant?.pid).toBeGreaterThan(0);
+      expect(occupant?.residueLike).toBe(false); // 本测试进程 cmdline 无训练特征
+    } finally {
+      srv.close();
+    }
+  });
+
+  it("formatPortConflictNote：残留态带[确认清理并重试]，非残留态 fail-closed 文案", () => {
+    const residue = formatPortConflictNote(29517, { pid: 71790, name: "pt_elastic", cmdline: "/usr/local/bin/torchrun --master_port 29517", residueLike: true });
+    expect(residue).toContain("端口 29517 已被进程 71790(");
+    expect(residue).toContain("疑似上轮残留");
+    expect(residue).toContain("[确认清理并重试] [手动处理]");
+    const foreign = formatPortConflictNote(29517, { pid: 42, name: "nginx", cmdline: "nginx: worker", residueLike: false });
+    expect(foreign).toContain("非训练进程，不自动清理");
+  });
+
+  it("start：端口被非训练进程占用 → fail-closed 结构化拒绝（不进审批、不进 tmux）", async () => {
+    const root = tempRoot();
+    const trainSh = writeMockTrainSh(root, true, 39313);
+    const srv = await holdPort(39313);
+    try {
+      let approvalCalls = 0;
+      const countingCtx = { get: (s: string) => (s === "approval" ? { request: async () => { approvalCalls += 1; return "allowed-once"; } } : undefined) };
+      const tool = buildRunTrainingTool(countingCtx, { runsRoot: root, logDir: root, ctx: countingCtx }) as unknown as Tool;
+      const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
+      expect(result.error).toBe("port_occupied_non_residue");
+      expect(result.port).toBe(39313);
+      expect(approvalCalls).toBe(0); // 根因上卡面前不消耗审批
+      expect(tmuxAbsent("atf-training-run")).toBe(true);
+    } finally {
+      srv.close();
+    }
+  });
+
+  it("start：端口被疑似残留占用 → danger 卡呈现根因 → [确认清理并重试] → 清理后成功启动（全链）", async () => {
+    const root = tempRoot();
+    const trainSh = writeMockTrainSh(root, true, 39314);
+    // 残留态占用者：脚本文件名含 torchrun（cmdline 特征命中 TRAINING_RESIDUE_PATTERN）
+    const stubPath = join(root, "torchrun-stub.js");
+    writeFileSync(stubPath, "require('net').createServer().listen(39314,'0.0.0.0',()=>console.log('hold'));\nsetInterval(()=>{},1000);\n");
+    const { spawn } = await import("node:child_process");
+    const stub = spawn(process.execPath, [stubPath], { stdio: "ignore" });
+    const stubExited = new Promise((r) => stub.once("exit", r));
+    await new Promise((r) => setTimeout(r, 600)); // 等 stub 绑定
+    try {
+      expect((await probePortOccupant(39314))?.residueLike).toBe(true);
+      const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
+      const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
+      expect(result.started).toBe(true);
+      await Promise.race([stubExited, new Promise((r) => setTimeout(r, 2000))]);
+      expect(stub.exitCode !== null || stub.signalCode !== null).toBe(true); // 占用者已被清理
+      await new Promise((r) => setTimeout(r, 500)); // mock 秒退后端口归零
+      expect(await probePortOccupant(39314)).toBeNull();
+    } finally {
+      try { stub.kill("SIGKILL"); } catch { /* 已退 */ }
+    }
+  });
+
+  it("terminateOccupant：SIGTERM 宽限后真实退出", async () => {
+    const { spawn } = await import("node:child_process");
+    const sleeper = spawn("sleep", ["30"]);
+    const exited = new Promise((r) => sleeper.once("exit", r));
+    const killed = await terminateOccupant(sleeper.pid!);
+    expect(killed).toBe(true);
+    await exited; // 等内核回收（子进程 zombie 窗口内 kill(pid,0) 仍成功）
+  });
+});
+
+describe("批⑳dot3 修复 2——评估声明名与标签泄漏防线（harness 侧）", () => {
+  it("deriveDeclaredModelName：basename＋adapter 后缀（禁 OpenAI 缺省名的源头）", () => {
+    expect(deriveDeclaredModelName("/data/LLM_model/Qwen3-VL-32B-Instruct", true)).toBe("Qwen3-VL-32B-Instruct-lora");
+    expect(deriveDeclaredModelName("Qwen3-VL-32B-Instruct/", false)).toBe("Qwen3-VL-32B-Instruct");
+  });
+
+  it("modelLabelLooksDefault：gpt-/claude- 前缀＝缺省泄漏；声明名放行", () => {
+    expect(modelLabelLooksDefault("gpt-3.5-turbo")).toBe(true);
+    expect(modelLabelLooksDefault("claude-3-sonnet")).toBe(true);
+    expect(modelLabelLooksDefault("Qwen3-VL-32B-Instruct-lora")).toBe(false);
+    expect(modelLabelLooksDefault(42)).toBe(false);
+  });
+
+  it("atf_evaluate status：历史 metrics 含缺省标签 → model_label_warning 如实带出", async () => {
+    const root = tempRoot();
+    const evalDir = join(root, "r1", "eval");
+    mkdirSync(evalDir, { recursive: true });
+    writeFileSync(join(evalDir, "metrics_summary.json"), JSON.stringify({ model: "gpt-3.5-turbo", pages: 10 }));
+    const tool = buildEvalTools(noApproval, { runsRoot: root, logDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
+    const result = await tool.execute({ action: "status", run_id: "r1", eval_assets_dir: root }, fakeExec);
+    expect(String(result["model_label_warning"])).toContain("标签泄漏");
+    expect(result["metrics_summary"]).toBeTruthy();
   });
 });
 

@@ -11,7 +11,8 @@
  * 审批：run_training= danger 必确认（GPU/时长）；evaluate= 确认（资源占用）；analyze= 轻量。
  * 环境纪律沿 M0：GPU/端口/venv 走 env-profile；异常即停即报不静默重试。
  */
-import { spawn, execFile } from "node:child_process";
+import { spawn, execFile, execSync } from "node:child_process";
+import * as net from "node:net";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
@@ -77,6 +78,112 @@ export function startLossIngest(logPath: string, seriesPath: string, intervalMs 
     } catch { /* 下周期重试 */ }
   }, intervalMs);
   return () => clearInterval(timer);
+}
+
+/** 训练 master 端口占用者（批⑳dot3 修复 3）。 */
+export interface PortOccupant {
+  pid: number;
+  name: string;
+  cmdline: string;
+  /** 疑似上轮训练残留（torchrun/launcher/llamafactory/deepspeed 特征）——唯此类允许自动清理。 */
+  residueLike: boolean;
+}
+
+/** 残留特征（cmdline/进程名任一命中即疑似上轮训练残留）。 */
+export const TRAINING_RESIDUE_PATTERN = /torchrun|launcher\.py|llamafactory|deepspeed|pt_elastic/i;
+
+/** train.sh 文本 → master_port（`MASTER_PORT=${MASTER_PORT:-N}` 与 `MASTER_PORT=N` 两形态；缺省 29517）。 */
+export function extractMasterPort(trainShText: string, fallback = 29_517): number {
+  const m = /MASTER_PORT=(?:\$\{MASTER_PORT:-)?(\d{4,5})/.exec(trainShText);
+  return m ? Number(m[1]) : fallback;
+}
+
+/** bind 探测：true＝端口空闲（探测套接字即关）；false＝已被占。 */
+const bindProbe = (port: number): Promise<boolean> =>
+  new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once("error", () => resolve(false));
+    srv.once("listening", () => srv.close(() => resolve(true)));
+    srv.listen(port, "0.0.0.0");
+  });
+
+/** ss -tlnp → 占用者身份（ss 不可用/无 pid 时信息尽力而为，pid=0 表示未能识别）。 */
+const portOccupantFromSs = (port: number): PortOccupant | null => {
+  try {
+    const out = execSync("ss -tlnp 2>/dev/null", { timeout: 5_000, maxBuffer: 4 * 1024 * 1024 }).toString();
+    const line = out.split("\n").find((l) => l.includes(`:${port} `));
+    if (line === undefined) return { pid: 0, name: "", cmdline: "", residueLike: false };
+    const pidMatch = /pid=(\d+)/.exec(line);
+    const nameMatch = /\("([^"]+)"/.exec(line);
+    const pid = pidMatch !== null ? Number(pidMatch[1]) : 0;
+    let cmdline = "";
+    if (pid > 0) {
+      try {
+        cmdline = readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").filter(Boolean).join(" ").slice(0, 160);
+      } catch { /* 权限或已消失 */ }
+    }
+    const residueLike = TRAINING_RESIDUE_PATTERN.test(`${nameMatch?.[1] ?? ""} ${cmdline}`);
+    return { pid, name: nameMatch?.[1] ?? "", cmdline, residueLike };
+  } catch {
+    return { pid: 0, name: "", cmdline: "", residueLike: false };
+  }
+};
+
+/** 端口占用探针：null＝空闲；其余为占用（占用者身份尽力识别）。 */
+export async function probePortOccupant(port: number): Promise<PortOccupant | null> {
+  const free = await bindProbe(port);
+  if (free) return null;
+  return portOccupantFromSs(port);
+}
+
+/** 清理疑似残留占用进程：SIGTERM→3s 宽限→SIGKILL；返回是否已退出。 */
+export async function terminateOccupant(pid: number): Promise<boolean> {
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    return true; // 已不存在
+  }
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return true;
+    }
+  }
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    return true;
+  }
+  await new Promise((r) => setTimeout(r, 500));
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/** danger 卡端口冲突文案（根因上卡面——撞前知道）。 */
+export function formatPortConflictNote(port: number, occupant: PortOccupant): string {
+  const who = occupant.pid > 0
+    ? `进程 ${occupant.pid}(${(occupant.cmdline || occupant.name || "未知").slice(0, 120)})`
+    : "未知进程（占用者身份识别不可用）";
+  return occupant.residueLike
+    ? `端口 ${port} 已被${who}占用——疑似上轮残留，建议清理后重试 [确认清理并重试] [手动处理]`
+    : `端口 ${port} 已被${who}占用——非训练进程，不自动清理，请手动处理后重试 [手动处理]`;
+}
+
+/** 评估服务声明名：basename(model_name_or_path)＋adapter 后缀（批⑳dot3 修复 2——禁 OpenAI 缺省名）。 */
+export function deriveDeclaredModelName(modelNameOrPath: string, hasAdapter: boolean): string {
+  const base = modelNameOrPath.split("/").filter(Boolean).pop() ?? modelNameOrPath;
+  return hasAdapter ? `${base}-lora` : base;
+}
+
+/** metrics_summary 落盘标签的前缀复核（gpt- 或 claude- 前缀即缺省泄漏）。 */
+export function modelLabelLooksDefault(model: unknown): boolean {
+  return typeof model === "string" && /^(gpt-|claude-)/i.test(model.trim());
 }
 
 /** tmux 面查询（会话存在/进程退出判定——守卫 tmux 缺失环境）。 */
@@ -173,10 +280,8 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         const segments = buildMonitorSnapshot([scanRunDir(cfg.runsRoot, args.run_id)]).runs[0]?.segments ?? [];
         return asToolValue({ action: "status", running, run_id: args.run_id, segments, ckpts, loss_points: points, ...(ckpts.length > 0 ? { latest_ckpt: `runs/${args.run_id}/training/${ckpts[ckpts.length - 1]}` } : {}) });
       }
-      // —— start：danger 必确认 ——
-      const verdict = await requestApproval(ctx, exec, "atf_run_training", `真实 GPU 训练启动确认：GPU 2 单卡 · max_steps 30（短跑锁死）· 预计 20 分钟 · train.sh=${args.train_sh}`);
-      if (!verdict.ok) return approvalDeniedResult("atf_run_training", verdict.outcome);
-      // DRY_RUN 前置校验
+      // —— start：DRY_RUN 校验 → 端口预检（批⑳dot3 修复 3）→ danger 必确认 → 启动 ——
+      // DRY_RUN 前置校验（打印型零副作用，先于审批——坏脚本不进卡面）
       const dry = await runCapture("bash", [args.train_sh], 60_000).then(async (r) => {
         void r;
         const env = { ...process.env, DRY_RUN: "1" } as Record<string, string>;
@@ -190,6 +295,23 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       });
       if (dry.code !== 0 || !dry.stdout.includes("ADMISSION=pass")) {
         return asToolValue({ started: false, error: "DRY_RUN 未通过（数据准入/命令面校验失败）——不启动训练", dry_stdout_head: dry.stdout.slice(0, 500) });
+      }
+      // 端口预检：占用即根因上卡面；非训练进程占用 fail-closed 不自动清理
+      const port = extractMasterPort(readFileSync(args.train_sh, "utf8"));
+      const occupant = await probePortOccupant(port);
+      if (occupant !== null && !occupant.residueLike) {
+        return asToolValue({ started: false, error: "port_occupied_non_residue", port, occupant, note: formatPortConflictNote(port, occupant) });
+      }
+      const conflictNote = occupant !== null ? `\n${formatPortConflictNote(port, occupant)}` : "";
+      const verdict = await requestApproval(ctx, exec, "atf_run_training", `真实 GPU 训练启动确认（GPU/时长代价以九要素确认卡与 train.sh 为准）：train.sh=${args.train_sh}${conflictNote}`);
+      if (!verdict.ok) return approvalDeniedResult("atf_run_training", verdict.outcome);
+      if (occupant !== null) {
+        // 卡面 [确认清理并重试] 语义：SIGTERM→宽限→SIGKILL，复探仍占用即保留现场停手
+        const killed = occupant.pid > 0 ? await terminateOccupant(occupant.pid) : false;
+        const still = killed ? await probePortOccupant(port) : occupant;
+        if (!killed || still !== null) {
+          return asToolValue({ started: false, error: "port_occupied_cleanup_failed", port, note: "清理后端口仍被占用——保留现场停手，请手动处理" });
+        }
       }
       // tmux 常驻＋tee 日志＋tail 进料
       const logPath = join(cfg.logDir, "train-stdout.log");
@@ -230,16 +352,22 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         const evalDir = join(cfg.runsRoot, args.run_id, "eval");
         const files = ["raw_predictions.jsonl", "metrics_summary.json", "badcases.jsonl", "indexes.csv"].filter((f) => existsSync(join(evalDir, f)));
         const summary = files.includes("metrics_summary.json") ? JSON.parse(readFileSync(join(evalDir, "metrics_summary.json"), "utf8")) : null;
-        return asToolValue({ action: "status", files, ...(summary !== null ? { metrics_summary: summary } : {}) });
+        // metrics 落盘标签复核（批⑳dot3 修复 2）：gpt-*/claude-* 前缀＝缺省泄漏，如实带警示
+        const labelWarning = summary !== null && modelLabelLooksDefault((summary as Record<string, unknown>)["model"])
+          ? "metrics_summary.model 为 OpenAI 风格缺省名（标签泄漏——实际推理为本机 adapter，数值真实）；新评估须以 declared_model 为 --model"
+          : undefined;
+        return asToolValue({ action: "status", files, ...(summary !== null ? { metrics_summary: summary } : {}), ...(labelWarning !== undefined ? { model_label_warning: labelWarning } : {}) });
       }
       const verdict = await requestApproval(ctx, exec, "atf_evaluate", `评估启动确认：评估服务（GPU 加载 base+adapter）＋holdout 推理——资源占用约 30GB/15 分钟`);
       if (!verdict.ok) return approvalDeniedResult("atf_evaluate", verdict.outcome);
       const adapter = args.adapter_path ?? join(cfg.runsRoot, args.run_id, "training", "checkpoint-30");
       if (!existsSync(adapter)) return asToolValue({ started: false, error: `adapter 不存在: ${adapter}` });
+      // 声明名（批⑳dot3 修复 2）：basename(model_name_or_path)+adapter 后缀——run_formal_eval --model 取此名（runner 侧 gpt-*/claude-* fail-closed）
+      const declared = deriveDeclaredModelName("/data/LLM_model/Qwen3-VL-32B-Instruct", true);
       const { execSync } = await import("node:child_process");
       try { execSync(`tmux kill-session -t atf-eval-service 2>/dev/null`); } catch { /* 无旧 */ }
       execSync(`tmux new-session -d -s atf-eval-service "CUDA_VISIBLE_DEVICES=2 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 API_PORT=8200 llamafactory-cli api --model_name_or_path /data/LLM_model/Qwen3-VL-32B-Instruct --adapter_name_or_path ${adapter} --template qwen3_vl --finetuning_type lora --quantization_bit 4 --quantization_method bnb 2>&1 | tee -a ${cfg.logDir}/eval-api.log"`);
-      return asToolValue({ started: true, service: "llamafactory api @8200", adapter, eval_assets: args.eval_assets_dir, note: "服务启动中（加载约 2 分钟）——就绪后以 run_formal_eval.py 消费 /v1（四件套落 runs/<run_id>/eval/）" });
+      return asToolValue({ started: true, service: "llamafactory api @8200", declared_model: declared, adapter, eval_assets: args.eval_assets_dir, note: `服务启动中（加载约 2 分钟）——就绪后以 run_formal_eval.py 消费 /v1：--model 须传 declared_model（${declared}，禁 gpt-*/claude-* 缺省名，runner 侧已 fail-closed）；四件套落 runs/<run_id>/eval/` });
     },
   });
 
