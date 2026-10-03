@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS } from "../../packages/extensions/atf-ui/src/snapshot.js";
+import { injectMonitorGlobal } from "../../packages/extensions/atf-ui/src/server.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -82,5 +83,78 @@ describe("atf-ui 同步器落盘（scan→monitor/artifacts/panel）", () => {
     expect(panelHtml).toContain("AtfMonitor/v1");
     expect(panelHtml).toContain("排队中");
     for (const d of effects) d();
+  });
+});
+
+describe("批㉘ monitor 路径注入（tapIndex → window.__ATF_UI_CONFIG__.monitorPath）", () => {
+  const DEFAULT_TAIL = join("tmp", "webui-runs", "atf-ui", "monitor.json");
+  /** 带 webServer 假身的 ctx：捕获 tapIndex 变换并收集 effect disposer。 */
+  const ctxWithWebServer = () => {
+    const taps: Array<(html: string) => string> = [];
+    const effects: Array<() => void> = [];
+    const ctx = {
+      effect: (run: () => () => void) => { effects.push(run()); },
+      webServer: {
+        tapIndex: (transform: (html: string) => string) => {
+          taps.push(transform);
+          return () => { const at = taps.indexOf(transform); if (at !== -1) taps.splice(at, 1); };
+        },
+      },
+    };
+    return { ctx, taps, effects };
+  };
+  const appliedHtml = async (config: unknown): Promise<string> => {
+    const { apply: applyPlugin } = await import("../../packages/extensions/atf-ui/src/server.js");
+    const { ctx, taps, effects } = ctxWithWebServer();
+    applyPlugin(ctx, config);
+    const html = taps[0]!("<!DOCTYPE html><html><head><title>t</title></head><body></body></html>");
+    for (const d of effects) d();
+    return html;
+  };
+
+  it("缺省：无 env → 注入原缺省路径（owner runsRoot 语义，向后兼容＝3080 零变化）", async () => {
+    const savedDsh = process.env["ATF_DSH_RUNS_ROOT"];
+    const savedWebui = process.env["ATF_WEBUI_RUNS_ROOT"];
+    delete process.env["ATF_DSH_RUNS_ROOT"];
+    delete process.env["ATF_WEBUI_RUNS_ROOT"];
+    try {
+      const html = await appliedHtml({});
+      expect(html).toContain("__ATF_UI_CONFIG__");
+      expect(html).toContain(DEFAULT_TAIL);
+      expect(html).toContain("</head>");
+    } finally {
+      if (savedDsh !== undefined) process.env["ATF_DSH_RUNS_ROOT"] = savedDsh;
+      if (savedWebui !== undefined) process.env["ATF_WEBUI_RUNS_ROOT"] = savedWebui;
+    }
+  });
+  it("覆盖：ATF_WEBUI_RUNS_ROOT 在场 → 注入 <RUNS_ROOT>/atf-ui/monitor.json", async () => {
+    const savedDsh = process.env["ATF_DSH_RUNS_ROOT"];
+    delete process.env["ATF_DSH_RUNS_ROOT"];
+    process.env["ATF_WEBUI_RUNS_ROOT"] = "/tmp/b28-runs-override";
+    try {
+      const html = await appliedHtml({});
+      expect(html).toContain(join("/tmp/b28-runs-override", "atf-ui", "monitor.json"));
+      expect(html).not.toContain(DEFAULT_TAIL);
+    } finally {
+      delete process.env["ATF_WEBUI_RUNS_ROOT"];
+      if (savedDsh !== undefined) process.env["ATF_DSH_RUNS_ROOT"] = savedDsh;
+    }
+  });
+  it("优先级：ATF_DSH_RUNS_ROOT 压过 ATF_WEBUI_RUNS_ROOT（dsh 原生轴优先，双设不漂移）", async () => {
+    process.env["ATF_DSH_RUNS_ROOT"] = "/tmp/b28-runs-dsh";
+    process.env["ATF_WEBUI_RUNS_ROOT"] = "/tmp/b28-runs-webui";
+    try {
+      const html = await appliedHtml({});
+      expect(html).toContain(join("/tmp/b28-runs-dsh", "atf-ui", "monitor.json"));
+      expect(html).not.toContain("/tmp/b28-runs-webui");
+    } finally {
+      delete process.env["ATF_DSH_RUNS_ROOT"];
+      delete process.env["ATF_WEBUI_RUNS_ROOT"];
+    }
+  });
+  it("显式 config.runsRoot 最高优先（同步器写盘位＝注入位同一单源）＋无 head 锚前置不抛", async () => {
+    const html = await appliedHtml({ runsRoot: "/tmp/b28-runs-config" });
+    expect(html).toContain(join("/tmp/b28-runs-config", "atf-ui", "monitor.json"));
+    expect(injectMonitorGlobal("<html><body>x</body></html>", "/p/m.json")).toContain("/p/m.json");
   });
 });

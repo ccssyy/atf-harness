@@ -27,19 +27,32 @@ export interface AtfUiConfig {
   intervalMs: number;
 }
 
-/** 缺省解析（runsRoot 缺省 env 或仓根 tmp/webui-runs——批㉑三段起不再用 cwd 相对值）。 */
+/** 缺省解析（runsRoot 缺省 env 或仓根 tmp/webui-runs——批㉑三段起不再用 cwd 相对值；
+ *  批㉘ 补 ATF_WEBUI_RUNS_ROOT 兜底位（指令覆盖轴，排在 ATF_DSH_RUNS_ROOT 之后——dsh 原生轴优先；
+ *  两实例现役均只设 ATF_DSH_RUNS_ROOT，缺省行为零变化）。 */
 const resolveConfig = (raw: unknown): AtfUiConfig => {
   const value = (raw ?? {}) as Record<string, unknown>;
   return {
     runsRoot:
       typeof value["runsRoot"] === "string"
         ? (value["runsRoot"] as string)
-        : (process.env["ATF_DSH_RUNS_ROOT"] ?? join(repoRoot, "tmp", "webui-runs")),
+        : (process.env["ATF_DSH_RUNS_ROOT"] ?? process.env["ATF_WEBUI_RUNS_ROOT"] ?? join(repoRoot, "tmp", "webui-runs")),
     intervalMs: typeof value["intervalMs"] === "number" ? (value["intervalMs"] as number) : 5_000,
   };
 };
 
 const OUT_DIR = "atf-ui";
+
+/** monitor 快照路径单源（同步器写盘位＝client 半轮询位——批㉘注入面共用了同一推导）。 */
+export const monitorPathOf = (runsRoot: string): string => join(runsRoot, OUT_DIR, "monitor.json");
+
+/** index HTML 注入（纯函数）：`</head>` 前插 per-instance monitor 路径全局；
+ *  无 head 锚则整体前置。值经 JSON.stringify 转义，路径含特殊字符也安全。 */
+export const injectMonitorGlobal = (html: string, monitorPath: string): string => {
+  const snippet = `<script>window.__ATF_UI_CONFIG__=Object.assign({},window.__ATF_UI_CONFIG__,{monitorPath:${JSON.stringify(monitorPath)}});</script>`;
+  const at = html.toLowerCase().indexOf("</head>");
+  return at === -1 ? snippet + html : html.slice(0, at) + snippet + html.slice(at);
+};
 
 export interface RunScan {
   run_id: string;
@@ -126,9 +139,26 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
   }
 }
 
-export function apply(ctx: { effect(run: () => () => void, label: string): void }, config: unknown): void {
+/** 前置服务（cordis 注入声明）：webServer 在场时经 tapIndex 把 monitor 路径注入 index——
+ *  client 半据此轮询 per-instance 快照（批㉘；无 webServer 的裸挂载面——如 vitest 直调——跳过注入）。 */
+export const inject = ["webServer"];
+
+export function apply(
+  ctx: {
+    effect(run: () => () => void, label: string): void;
+    webServer?: { tapIndex(transform: (html: string) => string): () => void };
+  },
+  config: unknown,
+): void {
   const resolved = resolveConfig(config);
   console.log(`[atf-ui] 同步器启动（runsRoot=${resolved.runsRoot}，interval=${String(resolved.intervalMs)}ms）`);
+  const webServer = ctx.webServer;
+  if (webServer !== undefined) {
+    const monitorPath = monitorPathOf(resolved.runsRoot);
+    const dispose = webServer.tapIndex((html) => injectMonitorGlobal(html, monitorPath));
+    ctx.effect(() => dispose, "atf-ui: monitor 路径 index 注入");
+    console.log(`[atf-ui] monitor 路径已注入 index（monitorPath=${monitorPath}）`);
+  }
   void tickOnce(resolved);
   const timer: NodeJS.Timeout = setInterval(() => void tickOnce(resolved), resolved.intervalMs);
   ctx.effect(() => () => clearInterval(timer), "atf-ui: runs 同步器");
