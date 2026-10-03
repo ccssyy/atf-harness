@@ -146,12 +146,12 @@ describe("任务卡卡面（renderTaskCardText——liveness 覆盖语义）", (
 describe("atf_evaluate（确认＋四件套 status）", () => {
   it("start：审批 unavailable → fail-closed 结构化拒绝（同 seam 语义）；放行后 adapter 缺失 → 如实报不启动", async () => {
     const root = tempRoot();
-    const denied = buildEvalTools(approvalCtx("unavailable"), { runsRoot: root, logDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
+    const denied = buildEvalTools(approvalCtx("unavailable"), { runsRoot: root, logDir: root, kernelDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
     if (denied === undefined) throw new Error("atf_evaluate missing");
     const deniedResult = (await denied.execute({ action: "start", run_id: "r1", eval_assets_dir: root }, fakeExec)) as Record<string, unknown>;
     expect(deniedResult["error"]).toBe("approval_denied");
     expect(deniedResult["outcome"]).toBe("unavailable");
-    const allowed = buildEvalTools(approvalCtx("allowed-once"), { runsRoot: root, logDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
+    const allowed = buildEvalTools(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, kernelDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
     const missing = (await allowed.execute({ action: "start", run_id: "r1", adapter_path: join(root, "no-adapter"), eval_assets_dir: root }, fakeExec)) as Record<string, unknown>;
     expect(missing["started"]).toBe(false);
     expect(String(missing["error"])).toContain("no-adapter");
@@ -163,7 +163,7 @@ describe("atf_evaluate（确认＋四件套 status）", () => {
     mkdirSync(evalDir, { recursive: true });
     writeFileSync(join(evalDir, "raw_predictions.jsonl"), "{}\n");
     writeFileSync(join(evalDir, "metrics_summary.json"), JSON.stringify({ micro: { f1: 0.29 } }));
-    const tool = buildEvalTools(noApproval, { runsRoot: root, logDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
+    const tool = buildEvalTools(noApproval, { runsRoot: root, logDir: root, kernelDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
     const result = await tool.execute({ action: "status", run_id: "r1", eval_assets_dir: root }, fakeExec);
     const files = result.files as string[];
     expect(files.slice().sort()).toEqual(["metrics_summary.json", "raw_predictions.jsonl"]);
@@ -172,14 +172,118 @@ describe("atf_evaluate（确认＋四件套 status）", () => {
   });
 });
 
-describe("atf_analyze_badcases（一键链轻量＋manifest 透传）", () => {
-  it("缺 eval 产物 → 链如实报失败路径（不静默造数）；viewer 路径返回", async () => {
+describe("atf_analyze_badcases（批㉕B 段1 两步链——冻结账本→一键链，pin 单源）", () => {
+  /** 造 mock pin 脚本；recordArgv 给出时两脚本把各自 argv 追加进该文件（调用面断言用）。 */
+  const writeMockPinScripts = (pinRoot: string, opts: { freezeFail?: boolean; chainFail?: boolean; recordArgv?: string } = {}) => {
+    const record = opts.recordArgv
+      ? `import json as _json, sys as _sys\nopen(${JSON.stringify(opts.recordArgv)}, "a").write(_json.dumps(_sys.argv[1:]) + "\\n")\n`
+      : "";
+    const freezeScript = join(pinRoot, "skills", "atf-evaluate-checkpoints", "scripts", "build_raw_badcase_input.py");
+    const chainScript = join(pinRoot, "skills", "atf-analyze-badcases", "scripts", "run_analysis_chain.py");
+    mkdirSync(join(pinRoot, "skills", "atf-evaluate-checkpoints", "scripts"), { recursive: true });
+    mkdirSync(join(pinRoot, "skills", "atf-analyze-badcases", "scripts"), { recursive: true });
+    writeFileSync(freezeScript, `#!/usr/bin/env python3
+${record}import json, os, sys
+args = sys.argv[1:]
+out_dir = args[args.index("--out-dir") + 1]
+${opts.freezeFail
+      ? `sys.stderr.write('freeze broken\\n'); sys.exit(2)`
+      : `os.makedirs(out_dir, exist_ok=True)
+open(os.path.join(out_dir, "raw-badcase-analysis.v1.json"), "w").write("{}")
+print(json.dumps({"argv": args}))`}`);
+    writeFileSync(chainScript, `#!/usr/bin/env python3
+${record}import json, os, sys
+args = sys.argv[1:]
+${opts.chainFail
+      ? `sys.stderr.write('chain broken\\n'); sys.exit(3)`
+      : `out_dir = args[args.index("--output-dir") + 1]
+os.makedirs(os.path.join(out_dir, "viewer"), exist_ok=True)
+os.makedirs(os.path.join(out_dir, "report"), exist_ok=True)
+open(os.path.join(out_dir, "viewer", "viewer.html"), "w").write("<html></html>")
+open(os.path.join(out_dir, "report", "report.md"), "w").write("# report")
+print(json.dumps({"argv": args}))`}`);
+    return { freezeScript, chainScript };
+  };
+  /** 造评估四件套＋L1 eval 资产（images 布局＝assets 上级 images/，m12 同款）。 */
+  const writeEvalFixtures = (root: string): { evalDir: string; assets: string } => {
+    const evalDir = join(root, "r1", "eval");
+    mkdirSync(evalDir, { recursive: true });
+    writeFileSync(join(evalDir, "badcases.jsonl"), "{}\n");
+    writeFileSync(join(evalDir, "raw_predictions.jsonl"), "{}\n");
+    const assets = join(root, "l1", "eval");
+    mkdirSync(join(root, "l1", "images"), { recursive: true });
+    mkdirSync(assets, { recursive: true });
+    writeFileSync(join(root, "l1", "images", "p1.png"), "png");
+    writeFileSync(join(assets, "eval_labels.jsonl"), JSON.stringify({ page_id: "p1", image: "images/p1.png" }) + "\n");
+    return { evalDir, assets };
+  };
+  const analyzeOf = (runsRoot: string, kernelDir: string): Tool =>
+    (buildEvalTools(noApproval, { runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_analyze_badcases") as Tool);
+
+  it("两步链：冻结账本落 analysis/ledger/，一键链收 --raw-mainline，产物路径对齐 <out>/viewer＋<out>/report", async () => {
     const root = tempRoot();
-    const tools = buildEvalTools(noApproval, { runsRoot: root, logDir: root });
-    const analyze = (tools as Tool[]).find((t) => t.name === "atf_analyze_badcases") as Tool;
-    const result = await analyze.execute({ run_id: "r-missing" }, fakeExec);
-    expect(result.ok).toBe(false);
-    expect(result.viewer_html).toContain("viewer.html");
+    const pin = tempRoot();
+    writeMockPinScripts(pin);
+    const { assets } = writeEvalFixtures(root);
+    const result = await analyzeOf(root, pin).execute({ run_id: "r1", eval_assets_dir: assets }, fakeExec);
+    expect(result.ok).toBe(true);
+    expect(String(result.ledger)).toContain(join("analysis", "ledger", "raw-badcase-analysis.v1.json"));
+    expect(result.viewer_ready).toBe(true);
+    expect(String(result.viewer_html)).toContain(join("analysis", "viewer", "viewer.html"));
+    expect(result.report_ready).toBe(true);
+    expect(String(result.report_md)).toContain(join("analysis", "report", "report.md"));
+  });
+
+  it("链调用参数：--raw-mainline 指向冻结产物＋--labels/--images-dir 显式传（无 l1/ 的 run 可跑）", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    const argvLog = join(pin, "chain-argv.jsonl");
+    writeMockPinScripts(pin, { recordArgv: argvLog });
+    const { assets } = writeEvalFixtures(root);
+    await analyzeOf(root, pin).execute({ run_id: "r1", eval_assets_dir: assets, coordinate_space: "qwen_axis_1000", gt_coordinate_space: "qwen_axis_1000" }, fakeExec);
+    const calls = (readFileSync(argvLog, "utf8").trim().split("\n").map((l) => JSON.parse(l) as string[]));
+    expect(calls).toHaveLength(2); // freeze＋chain 各一次
+    const chainArgs = calls[1] as string[];
+    const rawIdx = chainArgs.indexOf("--raw-mainline");
+    expect(rawIdx).toBeGreaterThan(-1);
+    expect(chainArgs[rawIdx + 1]).toContain(join("analysis", "ledger", "raw-badcase-analysis.v1.json"));
+    const labelsIdx = chainArgs.indexOf("--labels");
+    expect(chainArgs[labelsIdx + 1]).toBe(join(assets, "eval_labels.jsonl"));
+    // 坐标声明透传（不设缺省——声明了才传，链侧条款 fail-closed 兜底）
+    const coordIdx = chainArgs.indexOf("--coordinate-space");
+    expect(coordIdx).toBeGreaterThan(-1);
+    expect(chainArgs[coordIdx + 1]).toBe("qwen_axis_1000");
+    expect(chainArgs[chainArgs.indexOf("--gt-coordinate-space") + 1]).toBe("qwen_axis_1000");
+  });
+
+  it("freeze 失败 → 结构化报错不进链；chain 失败 → 报 step=chain 且账本可续查", async () => {
+    const root = tempRoot();
+    const pinFailFreeze = tempRoot();
+    writeMockPinScripts(pinFailFreeze, { freezeFail: true });
+    const { assets } = writeEvalFixtures(root);
+    const freezeFail = await analyzeOf(root, pinFailFreeze).execute({ run_id: "r1", eval_assets_dir: assets }, fakeExec);
+    expect(freezeFail).toMatchObject({ ok: false, step: "freeze" });
+    expect(String(freezeFail.stderr_tail)).toContain("freeze broken");
+    const pinFailChain = tempRoot();
+    writeMockPinScripts(pinFailChain, { chainFail: true });
+    const chainFail = await analyzeOf(root, pinFailChain).execute({ run_id: "r1", eval_assets_dir: assets }, fakeExec);
+    expect(chainFail).toMatchObject({ ok: false, step: "chain" });
+    expect(String(chainFail.ledger)).toContain("raw-badcase-analysis.v1.json");
+  });
+
+  it("pin 脚本缺失／四件套不齐／资产缺失 → 各自结构化报缺（不猜测）", async () => {
+    const root = tempRoot();
+    const emptyPin = tempRoot();
+    const noScript = await analyzeOf(root, emptyPin).execute({ run_id: "r1" }, fakeExec);
+    expect(noScript.error).toBe("skill_script_missing");
+    const pin = tempRoot();
+    writeMockPinScripts(pin);
+    const noEval = await analyzeOf(root, pin).execute({ run_id: "r-missing" }, fakeExec);
+    expect(noEval.error).toBe("eval_products_missing");
+    const { assets } = writeEvalFixtures(root);
+    rmSync(join(assets, "eval_labels.jsonl"));
+    const noAssets = await analyzeOf(root, pin).execute({ run_id: "r1", eval_assets_dir: assets }, fakeExec);
+    expect(noAssets.error).toBe("eval_assets_missing");
   });
 });
 
@@ -305,7 +409,7 @@ describe("批⑳dot3 修复 2——评估声明名与标签泄漏防线（harnes
     const evalDir = join(root, "r1", "eval");
     mkdirSync(evalDir, { recursive: true });
     writeFileSync(join(evalDir, "metrics_summary.json"), JSON.stringify({ model: "gpt-3.5-turbo", pages: 10 }));
-    const tool = buildEvalTools(noApproval, { runsRoot: root, logDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
+    const tool = buildEvalTools(noApproval, { runsRoot: root, logDir: root, kernelDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
     const result = await tool.execute({ action: "status", run_id: "r1", eval_assets_dir: root }, fakeExec);
     expect(String(result["model_label_warning"])).toContain("标签泄漏");
     expect(result["metrics_summary"]).toBeTruthy();

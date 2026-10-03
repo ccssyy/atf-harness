@@ -77,7 +77,7 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   for (const tool of buildConfirmTools({ runsRoot: config.runsRoot, ctx })) ctx.tools.register(tool);
   const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx };
   ctx.tools.register(buildRunTrainingTool(ctx, trainCfg));
-  for (const tool of buildEvalTools(ctx, { runsRoot: config.runsRoot, logDir: config.logDir })) ctx.tools.register(tool);
+  for (const tool of buildEvalTools(ctx, { runsRoot: config.runsRoot, logDir: config.logDir, kernelDir: config.kernelDir })) ctx.tools.register(tool);
 
   // 连通性自检探针（M1 验收辅助；保留为装配诊断面）
   ctx.tools.register(

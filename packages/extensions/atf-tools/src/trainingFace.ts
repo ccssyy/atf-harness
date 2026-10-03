@@ -7,7 +7,8 @@
  *    （atf-training-run）＋stdout tail 进料（HF dict 行→loss-series.json 追加——批⑯协议）→
  *    status 查询完成/ckpt。非阻塞两段式（start/status）——工具不阻塞 agent turn。
  *  - atf_evaluate：llamafactory api（8200，bnb 同训练形态）＋run_formal_eval.py 四件套——start/status 同款。
- *  - atf_analyze_badcases：run_analysis_chain.py 一键链（--style-cluster-manifest 透传——M2.5 聚类产物喂链）。
+ *  - atf_analyze_badcases：两步链（批㉕B 段1 正道化）——build_raw_badcase_input.py 冻结账本 →
+ *    run_analysis_chain.py --raw-mainline 一键链；脚本一律取 <kernelDir>/skills/（pin 单源）。
  * 审批：run_training= danger 必确认（GPU/时长）；evaluate= 确认（资源占用）；analyze= 轻量。
  * 环境纪律沿 M0：GPU/端口/venv 走 env-profile；异常即停即报不静默重试。
  */
@@ -328,8 +329,8 @@ function mkdirForce(dir: string): void {
   import("node:fs").then((fs) => fs.mkdirSync(dir, { recursive: true }));
 }
 
-/** atf_evaluate / atf_analyze_badcases 构造（评估与一键链——start/status 与轻量直跑）。 */
-export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string }): unknown[] {
+/** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
+export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string }): unknown[] {
   const evaluate = defineTool({
     name: "atf_evaluate",
     description:
@@ -374,10 +375,15 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
   const analyze = defineTool({
     name: "atf_analyze_badcases",
     description:
-      "badcase 一键链（轻量）：run_analysis_chain.py --run <实验目录>（含 --style-cluster-manifest 透传——实验门②聚类产物喂分析链）→ viewer.html（GT/预测叠图）与 report.html 路径回报。",
+      "badcase 两步链（轻量，批㉕B 段1 正道化）：①build_raw_badcase_input.py 冻结账本（评估四件套＋L1 eval 资产→RawBadcaseAnalysis/v1，落 analysis/ledger/）②run_analysis_chain.py --raw-mainline <冻结账本> 一键链→viewer.html（GT/预测叠图）与 report/。脚本一律取 <kernelDir>/skills/（pin 单源，禁源工作树绝对路径）。无训练数据/无审阅时链按合同显式声明跳过。",
     parameters: {
       run_id: { type: "string", required: true, description: "run 标识（实验目录＝runs/<run_id>）" },
-      style_cluster_manifest: { type: "string", description: "StyleClusterManifest 路径（实验门②产出——缺省沿 L1 产物位）" },
+      eval_assets_dir: { type: "string", description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl；缺省 runs/<run_id>/l1/eval）" },
+      lane: { type: "string", description: "评估 lane（缺省 goods，与冻结账本/链一致）" },
+      doc_type: { type: "string", description: "单据类型名（如 装箱单；缺省沿脚本中性缺省「单据」）" },
+      style_cluster_manifest: { type: "string", description: "StyleClusterManifest 路径（实验门②产出——缺省沿 L1 产物位 runs/<run_id>/l1/style-cluster-manifest.json）" },
+      coordinate_space: { type: "string", description: "预测坐标空间声明（qwen_axis_1000|original_pixel；SKILL.md 条款：无法从 ExperimentConfig 派生时必传，链侧 fail-closed 拒绝静默缺省）" },
+      gt_coordinate_space: { type: "string", description: "GT 标签坐标空间声明（闭集同上；GT 与预测可分属不同空间）" },
     },
     output: {
       schema: { type: "object", additionalProperties: true },
@@ -386,23 +392,85 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     presentCall: function(args: { run_id: string }) {
       return { card: "generic" as const, title: `badcase 分析 — ${args.run_id}`, kind: "other" as const }
     },
-    async execute(args: { run_id: string; style_cluster_manifest?: string }) {
+    async execute(args: { run_id: string; eval_assets_dir?: string; lane?: string; doc_type?: string; style_cluster_manifest?: string; coordinate_space?: string; gt_coordinate_space?: string }) {
       const runDir = join(cfg.runsRoot, args.run_id);
-      const script = "/data/sam/AgenticTrainingFlow/skills/atf-analyze-badcases/scripts/run_analysis_chain.py";
-      const chainArgs = ["--run", runDir, "--eval-dir", join(runDir, "eval"), "--predictions", join(runDir, "eval", "raw_predictions.jsonl"), "--badcases", join(runDir, "eval", "badcases.jsonl"), "--output-dir", join(runDir, "analysis")];
+      // pin 单源脚本面（批㉕B 段1：禁 ATF 源工作树绝对路径）
+      const freezeScript = join(cfg.kernelDir, "skills", "atf-evaluate-checkpoints", "scripts", "build_raw_badcase_input.py");
+      const chainScript = join(cfg.kernelDir, "skills", "atf-analyze-badcases", "scripts", "run_analysis_chain.py");
+      for (const script of [freezeScript, chainScript]) {
+        if (!existsSync(script)) {
+          return asToolValue({ ok: false, error: "skill_script_missing", script, note: "pin 内技能脚本缺失——核 kernelDir 装配" });
+        }
+      }
+      const evalDir = join(runDir, "eval");
+      const assetsDir = args.eval_assets_dir ?? join(runDir, "l1", "eval");
+      const labelsPath = join(assetsDir, "eval_labels.jsonl");
+      if (!existsSync(join(evalDir, "badcases.jsonl")) || !existsSync(join(evalDir, "raw_predictions.jsonl"))) {
+        return asToolValue({ ok: false, error: "eval_products_missing", eval_dir: evalDir, note: "评估四件套不齐（badcases+raw_predictions 必备）——先完成评估再分析" });
+      }
+      if (!existsSync(labelsPath)) {
+        return asToolValue({ ok: false, error: "eval_assets_missing", eval_assets_dir: assetsDir, note: "eval_labels.jsonl 缺失——传 eval_assets_dir 指向 L1 EvaluationAssets/v1 目录" });
+      }
+      const lane = args.lane ?? "goods";
+      // 图片根确定性解析（eval_labels 的 image 相对路径基准）：优先 assets 上级，退 assets 本身；都不中即结构化报缺
+      const imagesDir = resolveImagesRoot(assetsDir);
+      if (imagesDir === null) {
+        return asToolValue({ ok: false, error: "images_root_unresolved", eval_assets_dir: assetsDir, note: "eval_labels 首行 image 路径在 assets 上级与本目录下都不存在——核资产布局" });
+      }
+      // ① 冻结账本（build_raw_badcase_input.py——SKILL.md 执行流程步 1）
+      const ledgerDir = join(runDir, "analysis", "ledger");
+      const freezeArgs = [freezeScript, "--eval-dir", evalDir, "--assets", assetsDir, "--lane", lane, "--out-dir", ledgerDir];
+      if (args.doc_type !== undefined) freezeArgs.push("--doc-type", args.doc_type);
+      const frozen = await runCapture("python3", freezeArgs, 120_000);
+      const ledgerPath = join(ledgerDir, "raw-badcase-analysis.v1.json");
+      if (frozen.code !== 0 || !existsSync(ledgerPath)) {
+        return asToolValue({ ok: false, step: "freeze", exit_code: frozen.code, ledger: ledgerPath, stderr_tail: frozen.stderr.slice(-800), note: "冻结账本失败（build_raw_badcase_input 非零退出或未产出）——不进一键链" });
+      }
+      // ② 一键链（run_analysis_chain.py——--raw-mainline 必填补齐；产物布局 <out>/report＋<out>/viewer）
+      const chainArgs = [
+        chainScript, "--run", runDir, "--raw-mainline", ledgerPath,
+        "--labels", labelsPath, "--images-dir", imagesDir,
+        "--output-dir", join(runDir, "analysis"),
+      ];
       const manifest = args.style_cluster_manifest ?? join(runDir, "l1", "style-cluster-manifest.json");
       if (existsSync(manifest)) chainArgs.push("--style-cluster-manifest", manifest);
-      const result = await runCapture("python3", [script, ...chainArgs], 300_000);
-      const viewer = join(runDir, "analysis", "viewer.html");
+      // 坐标声明透传（不设缺省——缺失时链侧按 SKILL.md fail-closed 拒绝静默取默认值）
+      if (args.coordinate_space !== undefined) chainArgs.push("--coordinate-space", args.coordinate_space);
+      if (args.gt_coordinate_space !== undefined) chainArgs.push("--gt-coordinate-space", args.gt_coordinate_space);
+      const chained = await runCapture("python3", chainArgs, 300_000);
+      const viewerPath = join(runDir, "analysis", "viewer", "viewer.html");
+      const reportMd = join(runDir, "analysis", "report", "report.md");
+      const reportHtml = join(runDir, "analysis", "report", "report.html");
+      if (chained.code !== 0) {
+        return asToolValue({ ok: false, step: "chain", exit_code: chained.code, ledger: ledgerPath, stderr_tail: chained.stderr.slice(-800), note: "一键链失败——冻结账本已落 ledger/ 可续查" });
+      }
       return asToolValue({
-        ok: result.code === 0,
-        exit_code: result.code,
-        viewer_html: existsSync(viewer) ? viewer : join(runDir, "analysis", "viewer.html", "viewer.html"),
-        report_html: join(runDir, "analysis", "report.html"),
-        ...(result.code !== 0 ? { stderr_tail: result.stderr.slice(-800) } : {}),
+        ok: true,
+        ledger: ledgerPath,
+        viewer_html: viewerPath,
+        report_md: reportMd,
+        report_html: reportHtml,
+        viewer_ready: existsSync(viewerPath),
+        report_ready: existsSync(reportMd),
       });
     },
   });
 
   return [evaluate, analyze];
+}
+
+/** eval_labels 首行 image 相对路径的根目录确定性解析：assets 上级优先，assets 本身次之，未中返回 null。 */
+export function resolveImagesRoot(assetsDir: string): string | null {
+  try {
+    const first = readFileSync(join(assetsDir, "eval_labels.jsonl"), "utf8").split("\n").find((l) => l.trim() !== "");
+    if (first === undefined) return null;
+    const image = (JSON.parse(first) as Record<string, unknown>)["image"];
+    if (typeof image !== "string" || image === "") return null;
+    for (const root of [join(assetsDir, ".."), assetsDir]) {
+      if (existsSync(join(root, image))) return root;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
