@@ -15,7 +15,7 @@
 import { spawn, execFile, execSync } from "node:child_process";
 import * as net from "node:net";
 import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
 import { scanRunDir } from "../../atf-ui/src/server.js";
@@ -246,11 +246,12 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
   defineTool({
     name: "atf_run_training",
     description:
-      "训练执行（danger 必确认——GPU 时长代价显性化）：action=start 校验 train.sh（DRY_RUN 过）→审批卡放行→tmux atf-training-run 常驻执行＋stdout tail 进料监控（loss-series）→返回启动凭据；action=status 查询运行状态并返回八段任务卡（chat 流可见的 checklist——训练推进期请周期调用 status，把最新任务卡呈现给用户）。异常即停即报，不静默重试。",
+      "训练本机重跑（批㉕B 段4 降格定界——atf_launch_execute 为唯一编排执行点，本工具仅限「账本已放行 config 的本机重跑」）：action=start 校验 train.sh（DRY_RUN 过）→prelaunch 报告在场检查（prepare SKILL.md:84 确认制——缺失拒绝）→端口预检→danger 卡放行→tmux atf-training-run 常驻执行＋stdout tail 进料监控（loss-series）；action=status 查询运行状态并返回八段任务卡（chat 流可见的 checklist——训练推进期请周期调用 status，把最新任务卡呈现给用户）。异常即停即报，不静默重试。",
     parameters: {
       action: { type: "string", required: true, enum: ["start", "status"], description: "start=放行后启动训练；status=查询状态与 ckpt" },
       train_sh: { type: "string", required: true, description: "train.sh 绝对路径（须已通过 DRY_RUN 校验）" },
       run_id: { type: "string", required: true, description: "run 标识（监控数据/ckpt 归属）" },
+      prelaunch_report: { type: "string", description: "build_prelaunch_report.py 产物路径（缺省自动扫 train.sh 同目录 prelaunch*——两处皆无即拒绝启动）" },
     },
     output: {
       schema: { type: "object", additionalProperties: true },
@@ -268,7 +269,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         kind: "other" as const,
       }
     },
-    async execute(args: { action: string; train_sh: string; run_id: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+    async execute(args: { action: string; train_sh: string; run_id: string; prelaunch_report?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       if (args.action === "status") {
         const running = tmuxHas("atf-training-run");
         const ckptDir = join(cfg.runsRoot, args.run_id, "training");
@@ -296,6 +297,11 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       });
       if (dry.code !== 0 || !dry.stdout.includes("ADMISSION=pass")) {
         return asToolValue({ started: false, error: "DRY_RUN 未通过（数据准入/命令面校验失败）——不启动训练", dry_stdout_head: dry.stdout.slice(0, 500) });
+      }
+      // prelaunch 报告在场检查（批㉕B 段4——prepare SKILL.md:84「报告未生成视为训练放行准入未闭合」）
+      const prelaunch = args.prelaunch_report ?? findPrelaunchReport(dirname(args.train_sh));
+      if (prelaunch === null) {
+        return asToolValue({ started: false, error: "prelaunch_report_missing", train_sh: args.train_sh, note: "授权启动前必须产出 build_prelaunch_report.py 报告（prepare SKILL.md:84——报告未生成视为训练放行准入未闭合）；编排启动走 atf_launch_execute（唯一编排执行点）" });
       }
       // 端口预检：占用即根因上卡面；非训练进程占用 fail-closed 不自动清理
       const port = extractMasterPort(readFileSync(args.train_sh, "utf8"));
@@ -327,6 +333,16 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
 
 function mkdirForce(dir: string): void {
   import("node:fs").then((fs) => fs.mkdirSync(dir, { recursive: true }));
+}
+
+/** prelaunch 报告在场探测：目录内 prelaunch*（md/json）任一即返回路径；无则 null。 */
+export function findPrelaunchReport(dir: string): string | null {
+  try {
+    const hits = readdirSync(dir).filter((f) => /^prelaunch.*\.(md|json)$/i.test(f)).sort();
+    return hits.length > 0 ? join(dir, hits[0] as string) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** 固定编号 checkpoint 校验（SKILL.md 环节④：显式路径声明，拒 latest/符号链接/无编号目录）。 */

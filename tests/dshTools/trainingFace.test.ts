@@ -12,6 +12,7 @@ import {
   buildRunTrainingTool,
   buildEvalTools,
   deriveDeclaredModelName,
+  findPrelaunchReport,
   validateFixedCheckpoint,
   extractMasterPort,
   formatPortConflictNote,
@@ -46,6 +47,8 @@ const writeMockTrainSh = (root: string, admissionPass = true, masterPort = 39_00
   writeFileSync(path, admissionPass
     ? `#!/bin/bash\n${portLine}echo 'SHA=pass entries=1'\necho 'ADMISSION=pass keys=1'\nexit 0\n`
     : "#!/bin/bash\necho 'admission broken'\nexit 1\n");
+  // 段4 起 start 链带 prelaunch 在场检查——缺省夹具默认在场（缺失场景由用例显式删除）
+  writeFileSync(join(root, "prelaunch-report.md"), "# 训练前报告\n");
   return path;
 };
 
@@ -74,6 +77,38 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
     expect(result.started).toBe(false);
     expect(String(result.dry_stdout_head)).toContain("admission broken");
+  });
+
+  it("start：prelaunch 报告缺失 → prelaunch_report_missing 拒绝（prepare SKILL.md:84 确认制；不进审批不进 tmux）", async () => {
+    const root = tempRoot();
+    const trainSh = writeMockTrainSh(root, true);
+    rmSync(join(root, "prelaunch-report.md"));
+    let calls = 0;
+    const ctx = { get: (s: string) => (s === "approval" ? { request: async () => { calls += 1; return "allowed-once"; } } : undefined) };
+    const tool = buildRunTrainingTool(ctx, { runsRoot: root, logDir: root, ctx }) as unknown as Tool;
+    const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
+    expect(result.started).toBe(false);
+    expect(result.error).toBe("prelaunch_report_missing");
+    expect(String(result.note)).toContain("atf_launch_execute");
+    expect(calls).toBe(0);
+    expect(tmuxAbsent("atf-training-run")).toBe(true);
+  });
+
+  it("start：prelaunch 报告在场（显式路径或 train.sh 同目录 prelaunch*）→ 通过在场检查继续后续链", async () => {
+    const root = tempRoot();
+    const trainSh = writeMockTrainSh(root, true); // 夹具自带 prelaunch-report.md（在场）
+    const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
+    const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
+    expect(result.started).toBe(true); // 在场检查过后走完端口预检＋danger 放行
+    expect(await probePortOccupant(39_001)).toBeNull(); // mock 秒退后端口归零
+  });
+
+  it("findPrelaunchReport：prelaunch*.md/json 命中，其他文件不命中", () => {
+    const root = tempRoot();
+    expect(findPrelaunchReport(root)).toBeNull();
+    writeFileSync(join(root, "prelaunch-report.md"), "x");
+    writeFileSync(join(root, "train.sh"), "x");
+    expect(findPrelaunchReport(root)).toContain("prelaunch-report.md");
   });
 
   it("start：审批放行 + DRY_RUN 过 → tmux 常驻启动＋返回启动凭据（mock 秒退脚本）", async () => {
