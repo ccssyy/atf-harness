@@ -14,7 +14,7 @@
  */
 import { spawn, execFile, execSync } from "node:child_process";
 import * as net from "node:net";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
@@ -329,17 +329,112 @@ function mkdirForce(dir: string): void {
   import("node:fs").then((fs) => fs.mkdirSync(dir, { recursive: true }));
 }
 
+/** 固定编号 checkpoint 校验（SKILL.md 环节④：显式路径声明，拒 latest/符号链接/无编号目录）。 */
+export function validateFixedCheckpoint(path: string): { ok: true } | { ok: false; reason: string } {
+  const base = path.split("/").filter(Boolean).pop() ?? "";
+  if (base === "latest") return { ok: false, reason: "checkpoint_latest_forbidden" };
+  if (!/^checkpoint-\d+$/.test(base)) return { ok: false, reason: "checkpoint_explicit_number_required" };
+  try {
+    if (lstatSync(path).isSymbolicLink()) return { ok: false, reason: "checkpoint_symlink_forbidden" };
+  } catch {
+    return { ok: false, reason: "checkpoint_dir_missing" };
+  }
+  if (!existsSync(join(path, "adapter_model.safetensors"))) return { ok: false, reason: "checkpoint_adapter_missing" };
+  return { ok: true };
+}
+
+/** 评估编号轮目录（ADR-0007 决定 2：N＝轮内第几次评估动作，复评递增）。 */
+export function deriveEvalRoundDir(runDir: string): string {
+  const evalRoot = join(runDir, "eval");
+  let maxN = 0;
+  try {
+    for (const entry of readdirSync(evalRoot, { withFileTypes: true })) {
+      const m = /^(\d+)-\d{8}$/.exec(entry.name);
+      if (entry.isDirectory() && m !== null) maxN = Math.max(maxN, Number(m[1]));
+    }
+  } catch { /* eval 根不存在＝首轮 */ }
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return join(evalRoot, `${maxN + 1}-${date}`);
+}
+
+interface EvalStatusValue {
+  action: string;
+  run_id: string;
+  eval_round?: string;
+  service?: Record<string, unknown>;
+  orchestration?: Record<string, unknown>;
+  files?: string[];
+  metrics_summary?: unknown;
+  model_label_warning?: string;
+  model_matches_manifest?: boolean;
+  running?: boolean;
+}
+
+/** atf_evaluate status：最新评估轮的服务 receipt/编排状态/四件套与 model 标签复核。 */
+export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelDir: string }): Promise<ReturnType<typeof asToolValue>> {
+  const evalRoot = join(cfg.runsRoot, runId, "eval");
+  let latest: string | null = null;
+  try {
+    const rounds = readdirSync(evalRoot, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && /^\d+-\d{8}$/.test(e.name)).map((e) => e.name).sort();
+    latest = rounds.length > 0 ? join(evalRoot, rounds[rounds.length - 1] ?? "") : null;
+  } catch { /* 无评估轮 */ }
+  const { execSync } = await import("node:child_process");
+  let running = false;
+  try { execSync(`tmux has-session -t atf-eval-orch 2>/dev/null`); running = true; } catch { /* 未运行 */ }
+  if (latest === null) return asToolValue({ action: "status", run_id: runId, running, note: "无评估轮目录——先 start" });
+  const serviceReceiptPath = join(latest, "service", "service", "service_receipt.json");
+  const service = existsSync(serviceReceiptPath) ? JSON.parse(readFileSync(serviceReceiptPath, "utf8")) as Record<string, unknown> : null;
+  const orchEval = join(latest, "orch", "eval");
+  const statePath = join(orchEval, "state.json");
+  const blockPath = join(orchEval, "orch-block.json");
+  const ingestPath = join(orchEval, "ingest.json");
+  const orchestration: Record<string, unknown> = {
+    ...(existsSync(statePath) ? JSON.parse(readFileSync(statePath, "utf8")) as Record<string, unknown> : {}),
+    ...(existsSync(blockPath) ? { block: JSON.parse(readFileSync(blockPath, "utf8")) } : {}),
+    ...(existsSync(ingestPath) ? { ingest: JSON.parse(readFileSync(ingestPath, "utf8")) } : {}),
+  };
+  const files = ["raw_predictions.jsonl", "metrics_summary.json", "badcases.jsonl", "indexes.csv"].filter((f) => existsSync(join(orchEval, f)));
+  const summaryPath = join(orchEval, "metrics_summary.json");
+  const summary = existsSync(summaryPath) ? JSON.parse(readFileSync(summaryPath, "utf8")) : null;
+  const labelWarning = summary !== null && modelLabelLooksDefault((summary as Record<string, unknown>)["model"])
+    ? "metrics_summary.model 为 OpenAI 风格缺省名（标签泄漏）——正道链 --model 取自 service manifest 期望名，不应出现该形态"
+    : undefined;
+  // model 与 manifest 对拍：serving 名域隔离（<run_id>_<逻辑名>）
+  const manifestPath = join(latest, "service", "service_manifest.json");
+  let modelMatchesManifest: boolean | undefined;
+  if (summary !== null && existsSync(manifestPath)) {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
+    const expected = (manifest["expected_model_names"] as string[] | undefined) ?? [];
+    modelMatchesManifest = expected.includes(String((summary as Record<string, unknown>)["model"]));
+  }
+  const value: EvalStatusValue = {
+    action: "status", run_id: runId, eval_round: latest, running,
+    ...(service !== null ? { service } : {}),
+    orchestration,
+    files,
+    ...(summary !== null ? { metrics_summary: summary } : {}),
+    ...(labelWarning !== undefined ? { model_label_warning: labelWarning } : {}),
+    ...(modelMatchesManifest !== undefined ? { model_matches_manifest: modelMatchesManifest } : {}),
+  };
+  return asToolValue(value);
+}
+
 /** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
 export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string }): unknown[] {
   const evaluate = defineTool({
     name: "atf_evaluate",
     description:
-      "评估触发（确认——资源占用）：action=start 启动评估服务（llamafactory api，bnb 同训练形态加载 adapter）＋run_formal_eval 四件套推理（后台）；action=status 查询进度。四件套落 runs/<run_id>/eval/。",
+      "评估触发（批㉕B 段3 正道链——确认制＋EVAL_RELEASE 审批账本，绕行 llamafactory api 形态已删除）：action=start 编排 pin 内正道链 generate_eval_service（vllm serve＋AWQ base）→build_service_prelaunch_report（九必报项确认报告）→用户确认（确认卡＝EVAL_RELEASE 放行，--record-eval-release 落账本）→generate_eval_orchestration（tmux 后台：服务自启→staging→run_formal_eval→回灌）；action=status 查询服务 receipt/编排状态/四件套与 model 标签。机器事实三件（eval_env/awq_base/cuda_visible_devices）一律来自 deploy/env-profile，缺即 MissingFactsBlock 停下问用户。评估轮目录＝runs/<run_id>/eval/<N>-<日期>/{service,ckpt-plan,orch}（ADR-0007）。",
     parameters: {
-      action: { type: "string", required: true, enum: ["start", "status"], description: "start=启动评估（后台）；status=查询四件套产出" },
+      action: { type: "string", required: true, enum: ["start", "status"], description: "start=确认并启动正道链（后台编排）；status=查询进度与四件套" },
       run_id: { type: "string", required: true, description: "run 标识" },
-      adapter_path: { type: "string", description: "adapter checkpoint 绝对路径（如 runs/<id>/training/checkpoint-30）" },
+      adapter_path: { type: "string", required: true, description: "adapter checkpoint 目录绝对路径——固定编号（checkpoint-<数字>），拒 latest/符号链接/缺省猜测（SKILL.md 环节④条款）" },
       eval_assets_dir: { type: "string", required: true, description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl）" },
+      field_config: { type: "string", required: true, description: "PromptFieldConfig/v1 JSON 路径（评估 prompt 与训练同渲染器）" },
+      service_config: { type: "string", required: true, description: "EvalServiceConfig/v1 JSON 路径（按 SKILL.md 作者声明：port/TP/gpu_memory_utilization/max_model_len/mm 像素对/adapters 挂载表——adapters[].path 即本次 staging 的 adapter 源）" },
+      env_profile: { type: "string", required: true, description: "环境档案名（评估环境配置层——确认报告九必报项⑤端口/连接的数据源）" },
+      deploy: { type: "string", description: "可选 deploy.local.yaml 路径（显式机器事实，优先于环境档案）" },
     },
     output: {
       schema: { type: "object", additionalProperties: true },
@@ -348,27 +443,94 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     presentCall: function(args: { action: string; run_id: string }) {
       return { card: "generic" as const, title: `评估 — ${args.run_id}`, kind: "other" as const }
     },
-    async execute(args: { action: string; run_id: string; adapter_path?: string; eval_assets_dir: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
-      if (args.action === "status") {
-        const evalDir = join(cfg.runsRoot, args.run_id, "eval");
-        const files = ["raw_predictions.jsonl", "metrics_summary.json", "badcases.jsonl", "indexes.csv"].filter((f) => existsSync(join(evalDir, f)));
-        const summary = files.includes("metrics_summary.json") ? JSON.parse(readFileSync(join(evalDir, "metrics_summary.json"), "utf8")) : null;
-        // metrics 落盘标签复核（批⑳dot3 修复 2）：gpt-*/claude-* 前缀＝缺省泄漏，如实带警示
-        const labelWarning = summary !== null && modelLabelLooksDefault((summary as Record<string, unknown>)["model"])
-          ? "metrics_summary.model 为 OpenAI 风格缺省名（标签泄漏——实际推理为本机 adapter，数值真实）；新评估须以 declared_model 为 --model"
-          : undefined;
-        return asToolValue({ action: "status", files, ...(summary !== null ? { metrics_summary: summary } : {}), ...(labelWarning !== undefined ? { model_label_warning: labelWarning } : {}) });
+    async execute(args: { action: string; run_id: string; adapter_path: string; eval_assets_dir: string; field_config: string; service_config: string; env_profile: string; deploy?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+      const skill = (name: string, script: string): string => join(cfg.kernelDir, "skills", name, "scripts", script);
+      const genService = skill("atf-evaluate-checkpoints", "generate_eval_service.py");
+      const prelaunch = skill("atf-evaluate-checkpoints", "build_service_prelaunch_report.py");
+      const ckptPlanGen = skill("atf-evaluate-checkpoints", "generate_checkpoint_plan.py");
+      const orchestration = skill("atf-evaluate-checkpoints", "generate_eval_orchestration.py");
+      const runner = skill("atf-evaluate-checkpoints", "run_formal_eval.py");
+      if (args.action === "status") return evalStatus(args.run_id, cfg);
+      for (const script of [genService, prelaunch, ckptPlanGen, orchestration, runner]) {
+        if (!existsSync(script)) return asToolValue({ started: false, error: "skill_script_missing", script, note: "pin 内技能脚本缺失——核 kernelDir 装配" });
       }
-      const verdict = await requestApproval(ctx, exec, "atf_evaluate", `评估启动确认：评估服务（GPU 加载 base+adapter）＋holdout 推理——资源占用约 30GB/15 分钟`);
+      // —— start：固定编号 adapter 校验 → 生成服务件 → 确认报告 → EVAL_RELEASE 确认卡 → 账本登记 → 编排（tmux 后台） ——
+      const adapterCheck = validateFixedCheckpoint(args.adapter_path);
+      if (!adapterCheck.ok) return asToolValue({ started: false, error: adapterCheck.reason, adapter_path: args.adapter_path, note: "SKILL.md 环节④：固定编号显式声明——latest/符号链接/最大编号推断一律拒绝" });
+      const runDir = join(cfg.runsRoot, args.run_id);
+      if (!existsSync(args.service_config)) return asToolValue({ started: false, error: "service_config_missing", path: args.service_config });
+      if (!existsSync(join(args.eval_assets_dir, "eval_labels.jsonl")) || !existsSync(join(args.eval_assets_dir, "test_images.json"))) {
+        return asToolValue({ started: false, error: "eval_assets_missing", eval_assets_dir: args.eval_assets_dir, note: "test_images.json+eval_labels.jsonl 必备" });
+      }
+      const roundDir = deriveEvalRoundDir(runDir);
+      const serviceDir = join(roundDir, "service");
+      const deployArgs = args.deploy !== undefined ? ["--deploy", args.deploy] : [];
+      // ① 生成服务件（机器事实 fail-closed 在脚本内：exit 2＝MissingFactsBlock——停下问用户，不进确认卡）
+      const generated = await runCapture("python3", [genService, "--config", args.service_config, "--env-profile", args.env_profile, ...deployArgs, "--out", serviceDir], 120_000);
+      const blockPath = join(serviceDir, "machine-facts-block.json");
+      if (generated.code !== 0) {
+        const block = existsSync(blockPath) ? JSON.parse(readFileSync(blockPath, "utf8")) as Record<string, unknown> : null;
+        return asToolValue({
+          started: false, error: "machine_facts_missing", eval_round: roundDir,
+          ...(block !== null ? { missing_facts_block: block } : { stderr_tail: generated.stderr.slice(-800) }),
+          note: "机器事实不设默认值：缺事实停下来问用户（ask_user_for_input），禁止猜测继续——补 deploy/env-profile 后重试",
+        });
+      }
+      const manifest = JSON.parse(readFileSync(join(serviceDir, "service_manifest.json"), "utf8")) as Record<string, unknown>;
+      const expectedModels = (manifest["expected_model_names"] as string[] | undefined) ?? [];
+      const leaking = expectedModels.filter((m) => modelLabelLooksDefault(m));
+      if (leaking.length > 0) return asToolValue({ started: false, error: "serving_model_label_default_leak", models: leaking, note: "service manifest 期望模型名含 OpenAI 风格缺省名——gpt-*/claude-* 前缀拒收（批⑳.3 防线）" });
+      // ② 确认报告（九必报项，产物反生成自 service_manifest）
+      const reportPath = join(serviceDir, "service-prelaunch-report.md");
+      const reported = await runCapture("python3", [prelaunch, "--service-dir", serviceDir, "--env-profile", args.env_profile, "--out", reportPath,
+        "--field-config", args.field_config, "--prompt-renderer", skill("atf-admit-training-data", "render_prompt.py")], 120_000);
+      if (reported.code !== 0 || !existsSync(reportPath)) {
+        return asToolValue({ started: false, error: "prelaunch_report_failed", eval_round: roundDir, stderr_tail: reported.stderr.slice(-800), note: "确认报告未产出＝EVAL_RELEASE 准入未闭合（SKILL.md 确认制）" });
+      }
+      // ③ EVAL_RELEASE 确认卡：九必报项报告全文上卡，Allow once＝确认并落放行账本
+      const reportText = readFileSync(reportPath, "utf8");
+      const verdict = await requestApproval(ctx, exec, "atf_evaluate",
+        `评估服务 EVAL_RELEASE 确认（放行＝审批账本登记 config sha256，编排按其过闸）：\n${reportText.slice(0, 4000)}`);
       if (!verdict.ok) return approvalDeniedResult("atf_evaluate", verdict.outcome);
-      const adapter = args.adapter_path ?? join(cfg.runsRoot, args.run_id, "training", "checkpoint-30");
-      if (!existsSync(adapter)) return asToolValue({ started: false, error: `adapter 不存在: ${adapter}` });
-      // 声明名（批⑳dot3 修复 2）：basename(model_name_or_path)+adapter 后缀——run_formal_eval --model 取此名（runner 侧 gpt-*/claude-* fail-closed）
-      const declared = deriveDeclaredModelName("/data/LLM_model/Qwen3-VL-32B-Instruct", true);
+      const recorded = await runCapture("python3", [genService, "--record-eval-release", "--config", args.service_config, "--service-dir", serviceDir, "--note", "atf_evaluate 确认卡放行（九必报项报告已确认）"], 60_000);
+      if (recorded.code !== 0) {
+        return asToolValue({ started: false, error: "eval_release_record_failed", stderr_tail: recorded.stderr.slice(-800), note: "放行登记失败——不启动编排，账本唯一真相不造假" });
+      }
+      // ④ checkpoint staging 计划（selections 由已确认的 adapter_path 编译，非猜测）
+      const ckptPlanDir = join(roundDir, "ckpt-plan");
+      mkdirSync(ckptPlanDir, { recursive: true });
+      const ckptPlanPath = join(ckptPlanDir, "CheckpointPlan.v1.json");
+      writeFileSync(ckptPlanPath, JSON.stringify({
+        schema_version: "CheckpointPlan/v1",
+        run_id: args.run_id,
+        staging_root: join(roundDir, "staging"),
+        selections: [{ lane: "goods", checkpoint_dir: args.adapter_path, staged_name: `${args.run_id}_eval` }],
+      }, null, 1) + "\n", "utf8");
+      const planned = await runCapture("python3", [ckptPlanGen, "--config", ckptPlanPath, "--out", ckptPlanDir], 120_000);
+      if (planned.code !== 0) {
+        return asToolValue({ started: false, error: "checkpoint_plan_failed", eval_round: roundDir, stderr_tail: planned.stderr.slice(-800) });
+      }
+      // ⑤ 编排件（base_url 显式取自 service manifest 端口——G11 收口：编排/runner 端口缺省分歧在产品路径不生效）
+      const port = Number((manifest["request_defaults"] as Record<string, unknown> | undefined)?.["port"] ?? (JSON.parse(readFileSync(args.service_config, "utf8")) as Record<string, unknown>)["port"]);
+      const orchDir = join(roundDir, "orch");
+      const orchArgs = [orchestration, "--service", serviceDir, "--ckpt", ckptPlanDir, "--out", orchDir,
+        "--eval-runner", runner, "--assets", args.eval_assets_dir, "--field-config", args.field_config,
+        "--base-url", `http://127.0.0.1:${port}/v1`, "--env-profile", args.env_profile];
+      const orchPlanned = await runCapture("python3", orchArgs, 120_000);
+      if (orchPlanned.code !== 0) {
+        return asToolValue({ started: false, error: "orchestration_plan_failed", eval_round: roundDir, stderr_tail: orchPlanned.stderr.slice(-800) });
+      }
+      // ⑥ tmux 后台执行编排（服务自启→健康等待→staging→runner→回灌）；runner 附加参数经 $@ 透传
+      mkdirForce(cfg.logDir);
       const { execSync } = await import("node:child_process");
-      try { execSync(`tmux kill-session -t atf-eval-service 2>/dev/null`); } catch { /* 无旧 */ }
-      execSync(`tmux new-session -d -s atf-eval-service "CUDA_VISIBLE_DEVICES=2 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 API_PORT=8200 llamafactory-cli api --model_name_or_path /data/LLM_model/Qwen3-VL-32B-Instruct --adapter_name_or_path ${adapter} --template qwen3_vl --finetuning_type lora --quantization_bit 4 --quantization_method bnb 2>&1 | tee -a ${cfg.logDir}/eval-api.log"`);
-      return asToolValue({ started: true, service: "llamafactory api @8200", declared_model: declared, adapter, eval_assets: args.eval_assets_dir, note: `服务启动中（加载约 2 分钟）——就绪后以 run_formal_eval.py 消费 /v1：--model 须传 declared_model（${declared}，禁 gpt-*/claude-* 缺省名，runner 侧已 fail-closed）；四件套落 runs/<run_id>/eval/` });
+      try { execSync(`tmux kill-session -t atf-eval-orch 2>/dev/null`); } catch { /* 无旧 */ }
+      execSync(`tmux new-session -d -s atf-eval-orch "bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode mode0 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`);
+      return asToolValue({
+        started: true, eval_round: roundDir, tmux: "atf-eval-orch",
+        serving_models: expectedModels, service_manifest: join(serviceDir, "service_manifest.json"),
+        prelaunch_report: reportPath, release: "eval-release 账本已登记（config sha256）",
+        note: "编排后台执行中（服务自启→staging→run_formal_eval→回灌，runner --model 取 manifest 期望名）——status 查询 receipt/四件套/model 标签",
+      });
     },
   });
 

@@ -2,7 +2,8 @@
  * 批⑱M2.75 测试锚——训练执行段三工具投影（atf_run_training/atf_evaluate/atf_analyze_badcases）：
  * 协议适配＋danger_confirm 联动＋mock 执行（DRY_RUN mock train.sh／status 枚举）。
  */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import net from "node:net";
@@ -11,6 +12,7 @@ import {
   buildRunTrainingTool,
   buildEvalTools,
   deriveDeclaredModelName,
+  validateFixedCheckpoint,
   extractMasterPort,
   formatPortConflictNote,
   modelLabelLooksDefault,
@@ -143,32 +145,178 @@ describe("任务卡卡面（renderTaskCardText——liveness 覆盖语义）", (
   });
 });
 
-describe("atf_evaluate（确认＋四件套 status）", () => {
-  it("start：审批 unavailable → fail-closed 结构化拒绝（同 seam 语义）；放行后 adapter 缺失 → 如实报不启动", async () => {
-    const root = tempRoot();
-    const denied = buildEvalTools(approvalCtx("unavailable"), { runsRoot: root, logDir: root, kernelDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
-    if (denied === undefined) throw new Error("atf_evaluate missing");
-    const deniedResult = (await denied.execute({ action: "start", run_id: "r1", eval_assets_dir: root }, fakeExec)) as Record<string, unknown>;
-    expect(deniedResult["error"]).toBe("approval_denied");
-    expect(deniedResult["outcome"]).toBe("unavailable");
-    const allowed = buildEvalTools(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, kernelDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
-    const missing = (await allowed.execute({ action: "start", run_id: "r1", adapter_path: join(root, "no-adapter"), eval_assets_dir: root }, fakeExec)) as Record<string, unknown>;
-    expect(missing["started"]).toBe(false);
-    expect(String(missing["error"])).toContain("no-adapter");
+describe("atf_evaluate（批㉕B 段3 正道链——机器事实 fail-closed＋EVAL_RELEASE 确认卡）", () => {
+  type Tool = { name: string; execute: (args: unknown, exec: unknown) => Promise<Record<string, unknown>> };
+  const evalOf = (runsRoot: string, kernelDir: string, ctx: { get: (s: string) => unknown }): Tool =>
+    (buildEvalTools(ctx, { runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
+
+  /** mock pin：generate_eval_service 可控失败（exit 2＋block JSON）或成功（写 manifest）；prelaunch 写报告；其余写最小产物。 */
+  const writeMockPin = (pin: string, opts: { machineFactsFail?: boolean; labelLeak?: boolean } = {}) => {
+    const dir = join(pin, "skills", "atf-evaluate-checkpoints", "scripts");
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(join(pin, "skills", "atf-admit-training-data", "scripts"), { recursive: true });
+    writeFileSync(join(pin, "skills", "atf-admit-training-data", "scripts", "render_prompt.py"), "# renderer\n");
+    const models = opts.labelLeak
+      ? ["gpt-4o", "gpt-4o-lora"]
+      : ["test-awq-base", "run-regress-formal-02_ckpt141"];
+    const gen = join(dir, "generate_eval_service.py");
+    writeFileSync(gen, `#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+if "--record-eval-release" in args:
+    print(json.dumps({"recorded": True})); sys.exit(0)
+out = args[args.index("--out") + 1]
+${opts.machineFactsFail
+      ? `os.makedirs(out, exist_ok=True)
+open(os.path.join(out, "machine-facts-block.json"), "w").write(json.dumps({"schema_version": "MissingFactsBlock/v1", "block": "machine_facts_missing", "missing": ["paths.awq_base"], "how_to_provide": {}, "rule": "机器事实不设默认值"}))
+sys.stderr.write("machine_fact_missing:paths.awq_base\\n"); sys.exit(2)`
+      : `os.makedirs(out, exist_ok=True)
+open(os.path.join(out, "service_manifest.json"), "w").write(json.dumps({"expected_model_names": ${JSON.stringify(models)}, "config_sha256": "a" * 64, "request_defaults": {"port": 5021, "temperature": 0}}))
+print(json.dumps({"out": out}))`}`);
+    writeFileSync(join(dir, "run_formal_eval.py"), "# runner mock（编排件引用存在性）\n");
+    writeFileSync(join(dir, "generate_eval_orchestration.py"), `#!/usr/bin/env python3
+import os, sys
+args = sys.argv[1:]
+out = args[args.index("--out") + 1]
+os.makedirs(out, exist_ok=True)
+open(os.path.join(out, "eval_orchestration.sh"), "w").write("#!/bin/bash\\necho '[mock] no-op orchestration'\\nexit 0\\n")
+print("{}")`);
+    writeFileSync(join(dir, "generate_checkpoint_plan.py"), `#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+out = args[args.index("--out") + 1]
+os.makedirs(out, exist_ok=True)
+open(os.path.join(out, "ckpt_plan.json"), "w").write("{}")
+print("{}")`);
+    writeFileSync(join(dir, "build_service_prelaunch_report.py"), `#!/usr/bin/env python3
+import os, sys
+args = sys.argv[1:]
+out = args[args.index("--out") + 1]
+open(out, "w").write("# 九必报项\\n- GPU 现状\\n- 端口(环境档案层)\\n")
+print("{}")`);
+    // ckpt-plan 与 orchestration 的 --out 语义：ckpt-plan 产 ckpt_plan.json＋stage_checkpoints.sh；orch 产 eval_orchestration.sh（零 effect 假件）
+    writeFileSync(join(dir, "generate_checkpoint_plan.py"), `#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+out = args[args.index("--out") + 1]
+os.makedirs(out, exist_ok=True)
+open(os.path.join(out, "ckpt_plan.json"), "w").write("{}")
+open(os.path.join(out, "stage_checkpoints.sh"), "w").write("#!/bin/bash\\nexit 0\\n")
+print("{}")`);
+    writeFileSync(join(dir, "generate_eval_orchestration.py"), `#!/usr/bin/env python3
+import os, sys
+args = sys.argv[1:]
+out = args[args.index("--out") + 1]
+os.makedirs(out, exist_ok=True)
+open(os.path.join(out, "eval_orchestration.sh"), "w").write("#!/bin/bash\\necho '[dry-smoke] no-op orchestration'\\nexit 0\\n")
+print("{}")`);
+  };
+  const writeFixtureInputs = (root: string) => {
+    const assets = join(root, "assets");
+    mkdirSync(assets, { recursive: true });
+    writeFileSync(join(assets, "eval_labels.jsonl"), "{}\n");
+    writeFileSync(join(assets, "test_images.json"), "{}");
+    const serviceConfig = join(root, "EvalServiceConfig.v1.json");
+    writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", run_id: "run-regress-formal-02", port: 5021 }));
+    const ckpt = join(root, "training", "checkpoint-141");
+    mkdirSync(ckpt, { recursive: true });
+    writeFileSync(join(ckpt, "adapter_model.safetensors"), "x");
+    return { assets, serviceConfig, ckpt };
+  };
+  const startArgs = (root: string, f: { assets: string; serviceConfig: string; ckpt: string }, pin: string) => ({
+    action: "start", run_id: "run-regress-formal-02", adapter_path: f.ckpt,
+    eval_assets_dir: f.assets, field_config: join(root, "field-config.json"),
+    service_config: f.serviceConfig, env_profile: "a800-local", deploy: join(root, "deploy.local.yaml"),
   });
 
-  it("status：四件套文件枚举＋metrics_summary 透出", async () => {
+  it("start：pin 脚本缺失 → skill_script_missing（不进审批）", async () => {
     const root = tempRoot();
-    const evalDir = join(root, "r1", "eval");
-    mkdirSync(evalDir, { recursive: true });
-    writeFileSync(join(evalDir, "raw_predictions.jsonl"), "{}\n");
-    writeFileSync(join(evalDir, "metrics_summary.json"), JSON.stringify({ micro: { f1: 0.29 } }));
-    const tool = buildEvalTools(noApproval, { runsRoot: root, logDir: root, kernelDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
-    const result = await tool.execute({ action: "status", run_id: "r1", eval_assets_dir: root }, fakeExec);
-    const files = result.files as string[];
-    expect(files.slice().sort()).toEqual(["metrics_summary.json", "raw_predictions.jsonl"]);
-    const summary = result.metrics_summary as { micro: { f1: number } };
-    expect(summary.micro.f1).toBe(0.29);
+    let calls = 0;
+    const ctx = { get: (s: string) => (s === "approval" ? { request: async () => { calls += 1; return "allowed-once"; } } : undefined) };
+    const result = await evalOf(root, tempRoot(), ctx).execute(startArgs(root, writeFixtureInputs(root), root), fakeExec);
+    expect(result.started).toBe(false);
+    expect(result.error).toBe("skill_script_missing");
+    expect(calls).toBe(0);
+  });
+
+  it("adapter 固定编号校验：latest/无编号/符号链接/缺目录各拒；checkpoint-<数字> 过", async () => {
+    expect(validateFixedCheckpoint("/x/latest")).toMatchObject({ ok: false });
+    expect(validateFixedCheckpoint("/x/checkpoint-abc")).toMatchObject({ ok: false });
+    expect(validateFixedCheckpoint("/x/does-not-exist/checkpoint-9")).toMatchObject({ ok: false });
+    const root = tempRoot();
+    const real = join(root, "checkpoint-141");
+    mkdirSync(real, { recursive: true });
+    writeFileSync(join(real, "adapter_model.safetensors"), "x");
+    expect(validateFixedCheckpoint(real)).toEqual({ ok: true });
+    const link = join(root, "checkpoint-7");
+    symlinkSync(real, link);
+    expect(validateFixedCheckpoint(link)).toMatchObject({ ok: false, reason: "checkpoint_symlink_forbidden" });
+  });
+
+  it("start：机器事实缺失（脚本 exit 2＋MissingFactsBlock）→ 结构化报缺＋指路，不进审批不启动", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPin(pin, { machineFactsFail: true });
+    const f = writeFixtureInputs(root);
+    let calls = 0;
+    const ctx = { get: (s: string) => (s === "approval" ? { request: async () => { calls += 1; return "allowed-once"; } } : undefined) };
+    const result = await evalOf(root, pin, ctx).execute(startArgs(root, f, pin), fakeExec);
+    expect(result.started).toBe(false);
+    expect(result.error).toBe("machine_facts_missing");
+    const block = result.missing_facts_block as Record<string, unknown>;
+    expect(block.missing).toEqual(["paths.awq_base"]);
+    expect(String(block.rule)).toContain("不设默认值");
+    expect(calls).toBe(0);
+  });
+
+  it("start：manifest 期望模型名含 gpt-*/claude-* → serving_model_label_default_leak 拒收", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPin(pin, { labelLeak: true });
+    const f = writeFixtureInputs(root);
+    const result = await evalOf(root, pin, noApproval).execute(startArgs(root, f, pin), fakeExec);
+    expect(result.started).toBe(false);
+    expect(result.error).toBe("serving_model_label_default_leak");
+  });
+
+  it("start 全链（mock pin）：确认报告上卡→放行→账本登记→ckpt 计划→编排件→tmux 后台（runner/坐标经 $@ 透传）", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPin(pin);
+    const f = writeFixtureInputs(root);
+    const seen: string[] = [];
+    const ctx = { get: (s: string) => (s === "approval" ? { request: async (req: { reason: string }) => { seen.push(req.reason); return "allowed-once"; } } : undefined) };
+    const result = await evalOf(root, pin, ctx).execute(startArgs(root, f, pin), fakeExec);
+    expect(result.started).toBe(true);
+    expect(result.tmux).toBe("atf-eval-orch");
+    expect(String(result.eval_round)).toMatch(/1-\d{8}$/); // 首轮
+    expect(String(result.release)).toContain("eval-release");
+    // 确认卡带九必报项报告内容
+    expect(seen[0]).toContain("九必报项");
+    try { execSync("tmux kill-session -t atf-eval-orch 2>/dev/null"); } catch { /* 清理 */ }
+  });
+
+  it("status：轮目录布局下 receipt/state/四件套/model 与 manifest 对拍", async () => {
+    const root = tempRoot();
+    const round = join(root, "run-e2e", "eval", "1-20261003");
+    const orchEval = join(round, "orch", "eval");
+    mkdirSync(orchEval, { recursive: true });
+    mkdirSync(join(round, "service", "service"), { recursive: true });
+    writeFileSync(join(round, "service", "service", "service_receipt.json"), JSON.stringify({ status: "ready", models: ["m1"] }));
+    writeFileSync(join(round, "service", "service_manifest.json"), JSON.stringify({ expected_model_names: ["base", "run-e2e_ckpt141"] }));
+    writeFileSync(join(orchEval, "state.json"), JSON.stringify({ state: "eval_complete" }));
+    for (const f of ["raw_predictions.jsonl", "metrics_summary.json", "badcases.jsonl", "indexes.csv"]) writeFileSync(join(orchEval, f), "{}\n");
+    writeFileSync(join(orchEval, "metrics_summary.json"), JSON.stringify({ model: "run-e2e_ckpt141", micro: { f1: 0.26 } }));
+    const tools = buildEvalTools(noApproval, { runsRoot: root, logDir: root, kernelDir: root });
+    const evaluate = (tools as Tool[]).find((t) => t.name === "atf_evaluate") as Tool;
+    const result = await evaluate.execute({ action: "status", run_id: "run-e2e", adapter_path: "x", eval_assets_dir: root, field_config: "x", service_config: "x", env_profile: "x" }, fakeExec);
+    expect(result.eval_round).toBe(join(round));
+    expect(result.files as string[]).toHaveLength(4);
+    expect(result.model_matches_manifest).toBe(true);
+    const orchestration = result.orchestration as Record<string, unknown>;
+    expect(orchestration.state).toBe("eval_complete");
+    const service = result.service as Record<string, unknown>;
+    expect(service.status).toBe("ready");
   });
 });
 
@@ -404,15 +552,19 @@ describe("批⑳dot3 修复 2——评估声明名与标签泄漏防线（harnes
     expect(modelLabelLooksDefault(42)).toBe(false);
   });
 
-  it("atf_evaluate status：历史 metrics 含缺省标签 → model_label_warning 如实带出", async () => {
+  it("atf_evaluate status：轮内 metrics 含缺省标签 → model_label_warning 如实带出（正道链不应出现该形态）", async () => {
     const root = tempRoot();
-    const evalDir = join(root, "r1", "eval");
-    mkdirSync(evalDir, { recursive: true });
-    writeFileSync(join(evalDir, "metrics_summary.json"), JSON.stringify({ model: "gpt-3.5-turbo", pages: 10 }));
+    const orchEval = join(root, "r1", "eval", "1-20261003", "orch", "eval");
+    mkdirSync(orchEval, { recursive: true });
+    writeFileSync(join(orchEval, "metrics_summary.json"), JSON.stringify({ model: "gpt-3.5-turbo", pages: 10 }));
+    const serviceDir2 = join(root, "r1", "eval", "1-20261003", "service");
+    mkdirSync(serviceDir2, { recursive: true });
+    writeFileSync(join(serviceDir2, "service_manifest.json"), JSON.stringify({ expected_model_names: ["b", "r1_x"] }));
     const tool = buildEvalTools(noApproval, { runsRoot: root, logDir: root, kernelDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
-    const result = await tool.execute({ action: "status", run_id: "r1", eval_assets_dir: root }, fakeExec);
+    const result = await tool.execute({ action: "status", run_id: "r1", adapter_path: "x", eval_assets_dir: root, field_config: "x", service_config: "x", env_profile: "x" }, fakeExec);
     expect(String(result["model_label_warning"])).toContain("标签泄漏");
     expect(result["metrics_summary"]).toBeTruthy();
+    expect(result["model_matches_manifest"]).toBe(false);
   });
 });
 
