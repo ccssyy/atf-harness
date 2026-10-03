@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { renderChatEvent, renderChatHtml, type ChatEvent } from "../../src/webui/chatModel.js";
-import { buildConfigConfirmFields, parseConfigEditText, loadConfigSnapshot, saveConfigSnapshot, hasConfigSnapshot } from "../../src/webui/configConfirm.js";
+import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, parseConfigEditText, loadConfigSnapshot, saveConfigSnapshot, hasConfigSnapshot } from "../../src/webui/configConfirm.js";
 import { buildReadOnlyAgentTools, listRuns } from "../../src/webui/readOnlyTools.js";
 import { WebUiSessionManager, parseBudgetFromEnv, chatBudgetFromEnv } from "../../src/webui/sessionManager.js";
 import { startWebUiServer } from "../../src/webui/server.js";
@@ -111,7 +111,25 @@ describe("config_confirm：九要素卡与纯文字应答", () => {
     expect(byKey["learning_rate"]).toEqual({ key: "learning_rate", value: "2e-4", tag: "need_confirm" });
     expect(byKey["deepspeed"]).toEqual({ key: "deepspeed", value: "ds_z3_offload_config.json", tag: "from_registry" });
     expect(byKey["cutoff_len"]).toEqual({ key: "cutoff_len", value: "9000", tag: "default_used" });
-    expect(fields.length).toBe(9);
+    // 批㉚ 段1:九要素＋KB 门禁四项（token 上限/像素对/负样本带——原则二投影面）
+    expect(fields.length).toBe(13);
+  });
+
+  it("批㉚ 段1:KB 门禁四项入卡——label 带 KB 来源标注与改法,纯文字别名可改", () => {
+    const fields = buildConfigConfirmFields({}, {});
+    const byKey = Object.fromEntries(fields.map((field) => [field.key, field]));
+    const keyMeta = Object.fromEntries(CONFIG_CONFIRM_KEYS.map((entry) => [entry.key, entry]));
+    // 原则二:KB 建议值在卡面必须携带来源标注（未校准）与含义/改法
+    expect(byKey["max_total_tokens"]?.tag).toBe("default_used");
+    expect(keyMeta["max_total_tokens"]?.label).toContain("KB 建议·未校准");
+    expect(keyMeta["max_total_tokens"]?.label).toContain("--max-total-tokens");
+    expect(keyMeta["image_min_pixels"]?.label).toContain("训练/评估必须同一对值");
+    expect(keyMeta["image_max_pixels"]?.default).toBe("16384000");
+    expect(keyMeta["negative_ratio_target"]?.label).toContain("KB 建议·未校准");
+    // 纯文字别名:token/像素可改（负样本带含逗号,纯文字值模式天然以逗号分隔多编辑——
+    // 该项经 overrides 显式形态承载,不入纯文字别名断言）
+    expect(parseConfigEditText("token 改 8192")?.edits).toEqual({ max_total_tokens: "8192" });
+    expect(parseConfigEditText("像素下限 改 65536")?.edits).toEqual({ image_min_pixels: "65536" });
   });
 
   it("纯文字解析：lr 改 2e-4 其他 ok → {learning_rate:2e-4}；不可解析 → null", () => {
@@ -263,7 +281,7 @@ describe("会话语义（spawn mock pipeline）", () => {
     );
     // 卡面：缺省标已用缺省⚠、九要素齐全
     const cardEvent = manager.getSession(sessionId)?.events.find((event) => event.kind === "confirm_card");
-    expect(cardEvent !== undefined && cardEvent.kind === "confirm_card" && cardEvent.fields.length === 9).toBe(true);
+    expect(cardEvent !== undefined && cardEvent.kind === "confirm_card" && cardEvent.fields.length === 13).toBe(true);
     // 纯文字改参 → 重呈卡（lr 更新）
     await manager.postUserMessage(sessionId, "lr 改 2e-4 其他 ok");
     await waitFor(() => {

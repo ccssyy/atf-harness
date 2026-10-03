@@ -21,6 +21,13 @@ export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; de
   { key: "lora_rank", label: "lora_rank", default: "32" },
   { key: "lora_alpha", label: "lora_alpha", default: "64" },
   { key: "dataset_keys", label: "数据集键", default: "（由登记面推导）" },
+  // 批㉚ 段1（owner 原则二投影面）:KB 来源参数入卡——缺省值＝KB 建议（未校准），
+  // label 携带含义＋来源标注＋改法；未经用户确认/修改不得进生效配置
+  // （内核实验门 fail-closed 同语义:kb_suggestion 态拒绝产出配置）。
+  { key: "max_total_tokens", label: "token 上限（KB 建议·未校准｜含义:单样本最大 token 量,超长单据截断/拒绝构造｜改法:实验门 --max-total-tokens）", default: "4096" },
+  { key: "image_min_pixels", label: "像素下限（KB 建议·未校准｜原则一:训练/评估必须同一对值,评估服务只引用训练确认值）", default: "4194304" },
+  { key: "image_max_pixels", label: "像素上限（KB 建议·未校准｜与像素下限成对确认）", default: "16384000" },
+  { key: "negative_ratio_target", label: "负样本目标带（KB 建议·未校准）", default: "0.02,0.05" },
 ];
 
 /** 卡面字段构造：值来源三态（显式覆盖 from_registry/用户值 need_confirm/缺省 default_used）。 */
@@ -60,6 +67,16 @@ export const parseConfigEditText = (text: string): { edits: Record<string, strin
     lora_rank: "lora_rank",
     alpha: "lora_alpha",
     lora_alpha: "lora_alpha",
+    // 批㉚ 段1:KB 来源参数别名（原则二投影面——纯文字应答可改这些值）
+    token: "max_total_tokens",
+    token上限: "max_total_tokens",
+    max_total_tokens: "max_total_tokens",
+    像素下限: "image_min_pixels",
+    image_min_pixels: "image_min_pixels",
+    像素上限: "image_max_pixels",
+    image_max_pixels: "image_max_pixels",
+    负样本: "negative_ratio_target",
+    negative_ratio_target: "negative_ratio_target",
   };
   const edits: Record<string, string> = {};
   const pattern = /([A-Za-z_·\u4e00-\u9fff]+?)\s*(?:改|为|设置成|设置成|=|:|：)\s*([^\s，。；,;]+)/g;
