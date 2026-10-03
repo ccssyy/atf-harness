@@ -8,13 +8,13 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 2026-10-03：v0.7.8b0 → v0.7.9b0，唯一真相源 = bridge.contract.yaml atf_upstream，
+// 当前 pin（re-pin 2026-10-03：v0.7.9b0 → v0.7.10b0，唯一真相源 = bridge.contract.yaml atf_upstream，
 // 本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.9b0（批㉕A-v2 内核发版：批⑨ F10＋批⑩⑪ 准备链缺省表/结构化拒绝＋
-// 批⑳.3 model 标签 guard 与 media_dir 缺省＋qw2_5_vl 占位除名＋D-5 deepspeed 档位别名——
-// 补登不 bump，零契约面变更，会话协议轴 1／桥接契约轴 2 零 diff）——HEAD==tag commit 5896b6e，无 sha 备注。
-export const ATF_UPSTREAM_TAG = "v0.7.9b0";
-export const ATF_UPSTREAM_COMMIT_SHA = "5896b6e55f4331b0061230d956a4ab0205202b81";
+// 本轮 pin 取值＝tag v0.7.10b0（批㉖K 内核收编：批㉕B 段4 pin 文本批七文件 SKILL.md 条款
+// G6-G12 落档逐字收编＋七版本号 +0.1＋history 档案段——纯文本批零契约面变更，
+// 会话协议轴 1／桥接契约轴 2 零 diff）——HEAD==tag commit 258e796，无 sha 备注。
+export const ATF_UPSTREAM_TAG = "v0.7.10b0";
+export const ATF_UPSTREAM_COMMIT_SHA = "258e7961c8b8839e8eb6f2a4393bb4dfe9ad5532";
 
 export interface AtfCliInvocation {
   command: string;

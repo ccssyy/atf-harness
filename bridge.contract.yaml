@@ -763,8 +763,8 @@ atf_cli:
 # （mock 已回 2）"的表述作废】，真实对端以内核批次二实现为准。
 # ---------------------------------------------------------------------
 atf_upstream:
-  tag: v0.7.9b0
-  commit_sha: 5896b6e55f4331b0061230d956a4ab0205202b81
+  tag: v0.7.10b0
+  commit_sha: 258e7961c8b8839e8eb6f2a4393bb4dfe9ad5532
   pinned_at: "2026-10-03"
-  baseline: 内核方法面 14／harness 工具面 9（含 label_qc 两工具，R-3 接线已合入）＋丙线本地治理面 4（A7 atf_read/edit/write/bash，批 P 续作 v2 已合入）；v0.7.9b0 批㉕A-v2 内核发版随《ATF_指令_批㉕一令五段Skill对齐修复_20261003》段3（内核件＝批⑨ F10 anchor 拒绝面可观测性＋批⑩ deepspeed 缺省与结构化拒绝＋批⑪ 训练必需键缺省表与编译器收集式拒绝＋批⑳.3 model 标签 guard 与 media_dir 缺省补全＋qw2_5_vl 占位件除名＋D-5 deepspeed 档位别名映射〔ds_z3_offload=全 offload 档／ds_z3_fp8=optimizer-only 档，名实澄清〕）——补登不 bump，**零契约面变更**（无新 Gate/reason code/Schema 版本，会话协议轴 1／桥接契约轴 2 零 diff）；re-pin 2026-10-03（批㉕B 段2，S1 版本偏斜收口：pin↔内核 main 9 文件 diff 清零）；pin＝tag v0.7.9b0 commit 5896b6e（HEAD==tag，无 sha 备注）
+  baseline: 内核方法面 14／harness 工具面 9（含 label_qc 两工具，R-3 接线已合入）＋丙线本地治理面 4（A7 atf_read/edit/write/bash，批 P 续作 v2 已合入）；v0.7.10b0 批㉖K 内核收编随《ATF_指令_批㉖_收尾合并与内核收编_20261003》第2部分（内核件＝批㉕B 段4 pin 文本批七文件 SKILL.md 条款 G6-G12 落档逐字收编〔G6 image pixels 必显影+PIN_DEFAULTS 兜底／G7 viewer 坐标派生限定一键链承载／G8 两脚本条款补登／G9 三处跨 skill 引用补前缀／G10 check_run_layout --baseline 条款／G11 端口缺省仅兜底／G12 evidence-repair-request.md 模板条款〕＋七 SKILL.md 版本号各 +0.1＋history 档案段——纯文本批，**零契约面变更**（无新 Gate/reason code/Schema 版本，会话协议轴 1／桥接契约轴 2 零 diff）；re-pin 2026-10-03（批㉖K 操作6，pin↔内核 main atf-* 12 目录 diff 清零）；pin＝tag v0.7.10b0 commit 258e796（HEAD==tag，无 sha 备注）
   contract_version: 1
