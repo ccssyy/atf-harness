@@ -1,11 +1,12 @@
 /** 批⑳ 测试锚——atf-ui 服务端同步器纯函数（snapshot.js 八段四态推导）。
  *  client.js 浏览器组件的渲染验证走 DSH 真跑（浏览器环境），不在 vitest 覆盖范围。 */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS } from "../../packages/extensions/atf-ui/src/snapshot.js";
-import { injectMonitorGlobal } from "../../packages/extensions/atf-ui/src/server.js";
+import { discoverViewerDirs, injectMonitorGlobal, resolveViewerRequest, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -22,13 +23,47 @@ const sampleRun = {
   training: { active: true, loss: [{ train_loss: 0.5, eval_loss: 0.6, grad_norm: 1.2, learning_rate: 1e-4 }, { train_loss: 0.3, eval_loss: 0.55, grad_norm: 0.9, learning_rate: 1e-4 }], pending_confirm: null },
   report: { files: ["report.md", "segment-1.md"] },
   artifacts: ["session.jsonl", "contract-candidate.json", "launch/train.sh"],
+  viewers: ["analysis-b29", "analysis"],
 };
+
+/** 造一个 run 的 viewer 产物树（两形态兼容测试夹具）：analysis/ ＋ analysis-b29/ ＋ .bak 排除面。 */
+function seedViewerTree(runDir: string, analysisName: string, files: Record<string, string>): string {
+  const viewerDir = join(runDir, analysisName, "viewer");
+  mkdirSync(viewerDir, { recursive: true });
+  for (const [name, body] of Object.entries(files)) writeFileSync(join(viewerDir, name), body);
+  return viewerDir;
+}
 
 describe("快照构造纯函数（八段四态推导＋loss 曲线＋KPI＋空态文案单源）", () => {
   it("buildMonitorSnapshot：八段逐卡 status 推导", () => {
     const snap = buildMonitorSnapshot([sampleRun]);
     expect(snap.runs[0]?.segments.map((s) => s.key)).toEqual(SEGMENTS.map((s) => s.key));
     expect(snap.runs[0]?.segments.filter((s) => s.status === "done").map((s) => s.key)).toEqual(["register", "split"]);
+  });
+  it("批㉛段1 viewers 字段：monitor 透传（缺省空数组不炸），artifacts 入列 viewer 行", () => {
+    const snap = buildMonitorSnapshot([sampleRun]);
+    expect(snap.runs[0]?.viewers).toEqual(["analysis-b29", "analysis"]);
+    expect(buildMonitorSnapshot([{ ...sampleRun, viewers: undefined }]).runs[0]?.viewers).toEqual([]);
+    const arts = buildArtifactsSnapshot([sampleRun]).runs[0]?.artifacts;
+    const viewerRow = arts?.find((a) => a.kind === "html");
+    expect(viewerRow?.path).toBe("run-x/analysis-b29/viewer/viewer.html");
+    expect(viewerRow?.name).toContain("analysis-b29");
+  });
+  it("批㉛段1 discoverViewerDirs：两形态兼容（analysis/＋analysis-b29/），.bak 排除，mtime 新者在前", async () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-v");
+    const older = seedViewerTree(runDir, "analysis", { "viewer.html": "<html>a</html>" });
+    seedViewerTree(runDir, "analysis-b29", { "viewer.html": "<html>b29</html>" });
+    seedViewerTree(runDir, "analysis.bak-b24", { "viewer.html": "<html>bak</html>" });
+    const old = new Date(Date.now() - 60_000);
+    utimesSync(join(older, "viewer.html"), old, old);
+    expect(discoverViewerDirs(runDir)).toEqual(["analysis-b29", "analysis"]);
+  });
+  it("批㉛段1 discoverViewerDirs：无 viewer 目录 → 空数组；run 目录缺失不抛", () => {
+    const root = tempRoot();
+    mkdirSync(join(root, "run-empty"), { recursive: true });
+    expect(discoverViewerDirs(join(root, "run-empty"))).toEqual([]);
+    expect(discoverViewerDirs(join(root, "run-missing"))).toEqual([]);
   });
   it("buildArtifactsSnapshot：逐段入列产物行", () => {
     const snap = buildArtifactsSnapshot([sampleRun]);
@@ -156,5 +191,127 @@ describe("批㉘ monitor 路径注入（tapIndex → window.__ATF_UI_CONFIG__.mo
     const html = await appliedHtml({ runsRoot: "/tmp/b28-runs-config" });
     expect(html).toContain(join("/tmp/b28-runs-config", "atf-ui", "monitor.json"));
     expect(injectMonitorGlobal("<html><body>x</body></html>", "/p/m.json")).toContain("/p/m.json");
+  });
+});
+
+describe("批㉛段1 viewer 静态路由（resolveViewerRequest fail-closed＋handler 壳鉴权/回包）", () => {
+  const P = VIEWER_ROUTE_PREFIX;
+  const seed = (): { root: string; runDir: string; viewers: string[] } => {
+    const root = tempRoot();
+    const runDir = join(root, "run-v");
+    seedViewerTree(runDir, "analysis", {
+      "viewer.html": "<html>latest</html>",
+      "viewer_data.json": "{}",
+      "not-servable.exe": "x",
+    });
+    mkdirSync(join(runDir, "analysis", "viewer", "images"), { recursive: true });
+    writeFileSync(join(runDir, "analysis", "viewer", "images", "abc.png"), "PNG");
+    seedViewerTree(runDir, "analysis-b29", { "viewer.html": "<html>b29</html>" });
+    // mtime：analysis 更新（首选），analysis-b29 更旧
+    const now = new Date();
+    utimesSync(join(runDir, "analysis-b29", "viewer", "viewer.html"), now, now);
+    const later = new Date(Date.now() + 60_000);
+    utimesSync(join(runDir, "analysis", "viewer", "viewer.html"), later, later);
+    const viewers = discoverViewerDirs(runDir);
+    expect(viewers).toEqual(["analysis", "analysis-b29"]);
+    return { root, runDir, viewers };
+  };
+
+  it("resolveViewerRequest：默认 viewer.html／显式 analysis 变体／相对资源三形态", () => {
+    const { root, viewers } = seed();
+    expect(resolveViewerRequest(root, `${P}/run-v/`, viewers)?.abs).toBe(join(root, "run-v", "analysis", "viewer", "viewer.html"));
+    expect(resolveViewerRequest(root, `${P}/run-x/viewer.html`, viewers)).toBeNull();
+    expect(resolveViewerRequest(root, `${P}/run-v/analysis-b29/viewer.html`, viewers)?.abs).toBe(join(root, "run-v", "analysis-b29", "viewer", "viewer.html"));
+    expect(resolveViewerRequest(root, `${P}/run-v/images/abc.png`, viewers)?.type).toBe("image/png");
+  });
+  it("resolveViewerRequest：fail-closed（未知 run／analysis 不在清单／.. 越界／不可服务扩展名）", () => {
+    const { root, viewers } = seed();
+    expect(resolveViewerRequest(root, `${P}/run-missing/`, viewers)).toBeNull();
+    // analysis.bak-b24 物理存在但不在发现清单 → URL 不可达
+    expect(resolveViewerRequest(root, `${P}/run-v/analysis.bak-b24/viewer.html`, viewers)).toBeNull();
+    expect(resolveViewerRequest(root, `${P}/run-v/../run-v/viewer.html`, viewers)).toBeNull();
+    expect(resolveViewerRequest(root, `${P}/run-v/images/../viewer.html`, viewers)).toBeNull();
+    expect(resolveViewerRequest(root, `${P}/run-v/not-servable.exe`, viewers)).toBeNull();
+    expect(resolveViewerRequest(root, `${P}/../etc/passwd`, viewers)).toBeNull();
+    expect(resolveViewerRequest(root, `${P}/`, viewers)).toBeNull();
+  });
+  it("handler：壳鉴权 401／目录式 302 补尾斜杠／200 回包带 content-type／404／405", () => {
+    const { root, viewers } = seed();
+    const viewersOf = (runId: string) => (runId === "run-v" ? viewers : []);
+    type FakeReq = { url: string; method: string };
+    type FakeRes = {
+      statusCode: number;
+      headers: Record<string, unknown>;
+      body: unknown;
+      ended: boolean;
+      writeHead(c: number, h?: Record<string, unknown>): void;
+      end(b?: unknown): void;
+    };
+    const fakeReq = (url: string, method = "GET"): FakeReq => ({ url, method });
+    const fakeRes = (): FakeRes => {
+      const res: FakeRes = {
+        statusCode: 0,
+        headers: {},
+        body: undefined,
+        ended: false,
+        writeHead(c, h) { res.statusCode = c; Object.assign(res.headers, h ?? {}); },
+        end(b) { res.ended = true; if (b !== undefined) res.body = b; },
+      };
+      return res;
+    };
+    const call = (handler: (req: IncomingMessage, res: ServerResponse) => void, req: FakeReq, res: FakeRes): void => {
+      (handler as unknown as (r: FakeReq, s: FakeRes) => void)(req, res);
+    };
+    // 401：connection 拒绝
+    const rejecting = viewerRouteHandler({ runsRoot: root, viewersOf, reject: () => 401 });
+    const r401 = fakeRes();
+    call(rejecting, fakeReq(`${P}/run-v/`), r401);
+    expect(r401.statusCode).toBe(401);
+    // 302：裸 runId 补尾斜杠（相对资源前缀守恒）
+    const serving = viewerRouteHandler({ runsRoot: root, viewersOf });
+    const r302 = fakeRes();
+    call(serving, fakeReq(`${P}/run-v`), r302);
+    expect(r302.statusCode).toBe(302);
+    expect(r302.headers["location"]).toBe(`${P}/run-v/`);
+    // 200：viewer.html＋images（图片带 max-age）
+    const r200 = fakeRes();
+    call(serving, fakeReq(`${P}/run-v/`), r200);
+    expect(r200.statusCode).toBe(200);
+    expect(r200.headers["content-type"]).toContain("text/html");
+    expect(String(r200.body)).toContain("latest");
+    const rImg = fakeRes();
+    call(serving, fakeReq(`${P}/run-v/images/abc.png`), rImg);
+    expect(rImg.headers["content-type"]).toBe("image/png");
+    expect(rImg.headers["cache-control"]).toContain("max-age=3600");
+    // 404：未知 run 与越权扩展名同形
+    const r404 = fakeRes();
+    call(serving, fakeReq(`${P}/run-other/`), r404);
+    expect(r404.statusCode).toBe(404);
+    const rExe = fakeRes();
+    call(serving, fakeReq(`${P}/run-v/not-servable.exe`), rExe);
+    expect(rExe.statusCode).toBe(404);
+    // 405：写方法不开
+    const r405 = fakeRes();
+    call(serving, fakeReq(`${P}/run-v/`, "POST"), r405);
+    expect(r405.statusCode).toBe(405);
+  });
+  it("apply：webServer＋connection 在场 → prefix 路由注册（含 VIEWER_ROUTE_PREFIX）", async () => {
+    const root = tempRoot();
+    const registered: Array<{ kind: string; path: string }> = [];
+    const effects: Array<() => void> = [];
+    const { apply: applyPlugin } = await import("../../packages/extensions/atf-ui/src/server.js");
+    applyPlugin(
+      {
+        effect: (run: () => () => void) => { effects.push(run()); },
+        webServer: {
+          tapIndex: () => () => {},
+          register: (route) => { registered.push({ kind: route.kind, path: route.path }); return () => {}; },
+        },
+        connection: { requestRejection: () => undefined },
+      },
+      { runsRoot: root, intervalMs: 60_000 },
+    );
+    expect(registered).toContainEqual({ kind: "prefix", path: VIEWER_ROUTE_PREFIX });
+    for (const d of effects) d();
   });
 });

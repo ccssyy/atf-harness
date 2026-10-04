@@ -1,9 +1,11 @@
-/** atf-ui client 半——GPU 状态一行卡＋快捷指令胶囊（批㉑三段）。
+/** atf-ui client 半——GPU 状态一行卡＋快捷指令胶囊＋badcase viewer 内嵌浮层（批㉑三段＋批㉛段1）。
  *  品牌沿 owner 路线 2 裁定：维持 DSH 默认文案（替换随 M3 persona/identity config 正道），
  *  本文件不含任何品牌覆盖（slot/CSS/DOM 文本替换均不设）。
  *  数据：workspaceFiles.read 轮询 <runsRoot>/atf-ui/monitor.json（同步器 5s 快照单源，
- *  gpu 字段＝nvidia-smi 实测面）；sessionId 经 header.utilities 的 session-scoped
- *  inject 工厂捕获（批⑳实证通道）。
+ *  gpu 字段＝nvidia-smi 实测面，viewers 字段＝run 维度 badcase viewer 发现清单——批㉛段1）；
+ *  sessionId 经 header.utilities 的 session-scoped inject 工厂捕获（批⑳实证通道）。
+ *  viewer 渲染：iframe 指 server 半静态路由 /atf-ui/viewer/<runId>/（同源 cookie 鉴权，
+ *  不重建 viewer 本身——产物由 atf-analyze-badcases skill 链产出）。
  *  挂载面（DSH slot 契约，批㉑三段实证）：conversation.session.header.utilities＝list
  *  （GPU 显隐开关＋sessionId 捕获）；conversation.composer.dock＝list（GPU 一行卡＋胶囊，
  *  与 ui-chat stats 同槽共存）；conversation.approval.detail＝single（ui-chat 独占——
@@ -24,10 +26,13 @@ window.__ModuleLoader__.load({
     var store = {
       sessionId: undefined,
       open: true,
+      // 批㉛段1：badcase viewer 浮层状态（null=关；{runId}=开着并指向该 run）
+      viewer: null,
       listeners: new Set(),
       setOpen: function(v) { this.open = v; this.listeners.forEach(function(fn) { fn() }) },
       subscribe: function(fn) { var s = this; s.listeners.add(fn); return function() { s.listeners.delete(fn) } },
       getOpen: function() { return this.open },
+      setViewer: function(v) { this.viewer = v; this.listeners.forEach(function(fn) { fn() }) },
     }
 
     /** monitor.json 轮询（sessionId 由 header.utilities 注入后生效；未就绪期静默等下周期）。 */
@@ -66,6 +71,11 @@ window.__ModuleLoader__.load({
       return null
     }
 
+    /** 有 viewer 产物的 run 清单（批㉛段1：monitor.json viewers 字段，空数组＝无挂载面）。 */
+    function runsWithViewers(mon) {
+      return ((mon && mon.runs) || []).filter(function(r) { return (r.viewers || []).length > 0 })
+    }
+
     /** GPU 状态一行卡（紧凑单行——指令三段形态：GPU util/显存/在跑 run）。 */
     function GpuCard() {
       var open = React.useSyncExternalStore(
@@ -93,9 +103,61 @@ window.__ModuleLoader__.load({
         parts.push('暂无推进 run')
       }
       var dotColor = active !== null && active.trainingActive ? '#f59e0b' : active !== null ? '#1d4ed8' : '#16a34a'
+      // 批㉛段1：当前推进 run 有 viewer 产物 → 行内直达入口（无则不渲染，不留死按钮）
+      var activeViewers = active !== null ? ((mon.runs.find(function(r) { return r.run_id === active.run.run_id }) || {}).viewers || []) : []
       return React.createElement('div', { className: 'atf-gpu-card' },
         React.createElement('span', { className: 'atf-gpu-dot', style: { background: dotColor } }),
-        React.createElement('span', null, parts.join(' · ')))
+        React.createElement('span', null, parts.join(' · ')),
+        activeViewers.length > 0
+          ? React.createElement('button', {
+              className: 'atf-viewer-link',
+              title: '内嵌打开 badcase 可视化（' + active.run.run_id + '）',
+              onClick: function() { store.setViewer({ runId: active.run.run_id }) },
+            }, 'badcase 可视化')
+          : null)
+    }
+
+    /** badcase viewer 浮层（批㉛段1）：run 维度选择＋iframe 内嵌渲染 viewer.html
+     *  （不重建 viewer 本身——静态服务路由 /atf-ui/viewer/<runId>/ 同源 cookie 鉴权）。 */
+    function ViewerOverlay() {
+      var viewer = React.useSyncExternalStore(
+        function(fn) { return store.subscribe(fn) },
+        function() { return store.viewer },
+      )
+      var mon = useMonitor()
+      var candidates = runsWithViewers(mon)
+      var runId = viewer && candidates.some(function(r) { return r.run_id === viewer.runId })
+        ? viewer.runId
+        : (candidates[0] ? candidates[0].run_id : (viewer ? viewer.runId : null))
+      if (viewer === null) return null
+      return React.createElement('div', {
+        className: 'atf-viewer-overlay',
+        onClick: function(e) { if (e.target === e.currentTarget) store.setViewer(null) },
+      },
+        React.createElement('div', { className: 'atf-viewer-frame' },
+          React.createElement('div', { className: 'atf-viewer-head' },
+            React.createElement('b', null, 'badcase 可视化'),
+            candidates.length > 0
+              ? React.createElement('select', {
+                  className: 'atf-viewer-select',
+                  value: runId || '',
+                  onChange: function(e) { store.setViewer({ runId: e.target.value }) },
+                },
+                candidates.map(function(r) {
+                  return React.createElement('option', { key: r.run_id, value: r.run_id }, r.run_id)
+                }))
+              : React.createElement('span', { className: 'atf-viewer-empty' }, '（当前 runsRoot 无 viewer 产物——先跑 atf-analyze-badcases 生成）'),
+            React.createElement('button', {
+              className: 'atf-pill', title: '关闭',
+              onClick: function() { store.setViewer(null) },
+            }, '×')),
+          runId
+            ? React.createElement('iframe', {
+                className: 'atf-viewer-iframe',
+                src: '/atf-ui/viewer/' + encodeURIComponent(runId) + '/',
+                title: 'badcase viewer',
+              })
+            : null))
     }
 
     var PILLS = [
@@ -123,6 +185,19 @@ window.__ModuleLoader__.load({
             '.atf-gpu-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}',
             '.atf-pill-row{display:flex;gap:8px;flex-wrap:wrap;padding:2px 0;}',
             '.atf-pill{border:0;background:rgba(128,128,128,.1);border-radius:8px;padding:4px 12px;cursor:pointer;font-size:13px;}',
+            // 批㉛段1：viewer 直达入口＋浮层
+            '.atf-viewer-link{border:0;background:transparent;color:#1d4ed8;cursor:pointer;',
+            '  font-size:12px;padding:0;text-decoration:underline;text-underline-offset:2px;}',
+            '.atf-viewer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;',
+            '  display:flex;align-items:center;justify-content:center;}',
+            '.atf-viewer-frame{width:min(1100px,94vw);height:min(86vh,900px);background:#fff;',
+            '  border-radius:12px;display:flex;flex-direction:column;overflow:hidden;',
+            '  box-shadow:0 18px 60px rgba(0,0,0,.35);}',
+            '.atf-viewer-head{display:flex;align-items:center;gap:10px;padding:8px 12px;',
+            '  border-bottom:1px solid rgba(128,128,128,.25);font-size:13px;}',
+            '.atf-viewer-select{font-size:12px;padding:2px 6px;border-radius:6px;}',
+            '.atf-viewer-empty{color:#64748b;font-size:12px;}',
+            '.atf-viewer-iframe{flex:1;border:0;width:100%;}',
           ].join('')
           document.head.append(style)
         }
@@ -146,7 +221,7 @@ window.__ModuleLoader__.load({
           })
         })
 
-        // 通道 C：composer.dock（list 槽）——GPU 一行卡＋快捷指令胶囊（输入框上方，会话内常显）
+        // 通道 C：composer.dock（list 槽）——GPU 一行卡＋快捷指令胶囊＋viewer 浮层（输入框上方，会话内常显）
         ctx.slots.inject('conversation.composer.dock', function() {
           return ctx.slots.register({ name: 'conversation.composer.dock', id: 'atf-dock-row' }, function() {
             return React.createElement('div', null,
@@ -164,7 +239,12 @@ window.__ModuleLoader__.load({
                       }
                     },
                   }, pill.label)
-                })))
+                }),
+                React.createElement('button', {
+                  className: 'atf-pill', title: '内嵌打开 badcase 可视化',
+                  onClick: function() { store.setViewer({ runId: null }) },
+                }, 'badcase 可视化')),
+              React.createElement(ViewerOverlay))
           })
         })
       },

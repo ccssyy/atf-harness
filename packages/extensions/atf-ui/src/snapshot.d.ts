@@ -9,6 +9,8 @@ export interface AtfRunScan {
   training?: { active?: boolean; loss?: unknown; pending_confirm?: unknown };
   report?: { files?: string[] };
   artifacts?: string[];
+  /** 批㉛段1：badcase viewer 发现清单（scanRunDir 两形态推导；缺省空数组＝无挂载面）。 */
+  viewers?: string[];
 }
 export interface AtfGpuStatus {
   offline: boolean;
@@ -24,6 +26,7 @@ export interface AtfMonitorSnapshot {
     run_id: string;
     state: string;
     segments: Array<{ key: string; label: string; status: "done" | "active" | "failed" | "pending" }>;
+    viewers: string[];
     training: { active: boolean; points: Array<Record<string, unknown>>; pending_confirm: unknown };
   }>;
 }

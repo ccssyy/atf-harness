@@ -8,9 +8,10 @@
  * 目录枚举是 workspace-scoped（DSH 文档口径），故枚举在服务端做、client 只读成品文件。
  * 纯函数（buildMonitorSnapshot/buildArtifactsSnapshot）在 ./snapshot.js，本仓 vitest 直测。
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { buildArtifactsSnapshot, buildMonitorSnapshot } from "./snapshot.js";
 import { PANEL_HTML } from "./panel.js";
 import { queryNvidiaSmi } from "../../../../src/webui/readOnlyTools.js";
@@ -61,6 +62,7 @@ export interface RunScan {
   segments: Record<string, boolean | string>;
   training: { active: boolean; loss: unknown; pending_confirm: unknown };
   report: { files: string[] };
+  viewers: string[];
 }
 
 /** 单 run 目录标记推导（任务卡 chat 卡面与同步器同源——trainingFace status 复用本出口）。 */
@@ -106,7 +108,36 @@ export function scanRunDir(root: string, runId: string): RunScan {
       pending_confirm: readJson(join("webui", "pending-confirm.json")),
     },
     report: { files: reportFiles },
+    viewers: discoverViewerDirs(dir),
   };
+}
+
+/**
+ * badcase viewer 产物发现（批㉛段1）：run 下以 `analysis` 开头的目录里的
+ * `viewer/viewer.html`，两形态兼容（批㉕B 两步链 `analysis/` ＋ 批㉙ 命名变体
+ * `analysis-b29/`）。`.bak` 备份目录不入列（历史备份不是现役产物，也不得经 URL
+ * 服务）；`analysis-input` 无 viewer 子目录自然落选。
+ * 排序＝viewer.html mtime 新者在前（A 重评后重建的 viewer 即首选），mtime 同值按名升序。
+ */
+export function discoverViewerDirs(runDir: string): string[] {
+  let entries: string[];
+  try {
+    entries = readdirSync(runDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && e.name.startsWith("analysis") && !e.name.includes(".bak"))
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
+  const stamp = (name: string): number => {
+    try {
+      return statSync(join(runDir, name, "viewer", "viewer.html")).mtimeMs;
+    } catch {
+      return -1;
+    }
+  };
+  return entries
+    .filter((name) => stamp(name) >= 0)
+    .sort((a, b) => (stamp(b) - stamp(a)) || (a < b ? -1 : a > b ? 1 : 0));
 }
 
 function scanRuns(runsRoot: string): RunScan[] {
@@ -119,6 +150,62 @@ function scanRuns(runsRoot: string): RunScan[] {
   }
   return runs;
 }
+
+/**
+ * viewer 静态路由 handler 工厂：壳鉴权（connection.requestRejection——401/403 沿壳语义）
+ * → GET/HEAD 门 → 逐 run 现役 viewer 清单解析（resolveViewerRequest fail-closed）→ 读盘回包。
+ * html/json no-store（刷新即新），图片类 max-age=3600（sha 文件名内容寻址）。
+ * @param deps - runsRoot 与每 run viewer 清单的即时发现（每次请求现查，不缓存）。
+ */
+export const viewerRouteHandler = (deps: {
+  runsRoot: string;
+  viewersOf: (runId: string) => string[];
+  reject?: (req: IncomingMessage) => 401 | 403 | undefined;
+}) =>
+(req: IncomingMessage, res: ServerResponse): void => {
+  const rejection = deps.reject?.(req);
+  if (rejection !== undefined) {
+    res.writeHead(rejection, { "content-type": "text/plain; charset=utf-8" });
+    res.end("dsh web authentication required\n");
+    return;
+  }
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.writeHead(405, { allow: "GET, HEAD" });
+    res.end();
+    return;
+  }
+  let pathname: string;
+  try {
+    const url = new URL(req.url ?? "/", "http://x");
+    pathname = url.pathname
+      .split("/")
+      .map((seg) => decodeURIComponent(seg))
+      .join("/");
+  } catch {
+    res.writeHead(400);
+    res.end();
+    return;
+  }
+  // 目录式收尾：无尾斜杠的裸 runId 需 302 补斜杠，viewer 相对资源才能落在正确前缀下。
+  const parts = pathname.slice(VIEWER_ROUTE_PREFIX.length).split("/").filter((p) => p !== "");
+  if (parts.length === 1 && !req.url!.endsWith("/")) {
+    res.writeHead(302, { location: pathname + "/" });
+    res.end();
+    return;
+  }
+  const resolved = resolveViewerRequest(deps.runsRoot, pathname, deps.viewersOf(parts[0]!));
+  if (resolved === null) {
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    res.end("not found\n");
+    return;
+  }
+  const body = readFileSync(resolved.abs);
+  res.writeHead(200, {
+    "content-type": resolved.type,
+    "cache-control": resolved.type.startsWith("image/") ? "public, max-age=3600" : "no-store",
+  });
+  res.end(req.method === "HEAD" ? undefined : body);
+};
 
 export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
   try {
@@ -140,13 +227,92 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
 }
 
 /** 前置服务（cordis 注入声明）：webServer 在场时经 tapIndex 把 monitor 路径注入 index——
- *  client 半据此轮询 per-instance 快照（批㉘；无 webServer 的裸挂载面——如 vitest 直调——跳过注入）。 */
-export const inject = ["webServer"];
+ *  client 半据此轮询 per-instance 快照（批㉘；无 webServer 的裸挂载面——如 vitest 直调——跳过注入）。
+ *  批㉛段1 增 connection：viewer 静态路由沿用壳既有信任面（requestRejection → 401/403），
+ *  不在壳鉴权之外开裸口。 */
+export const inject = ["webServer", "connection"];
+
+/** viewer 静态服务路由前缀（prefix 注册：本前缀与其下任意子路径都进本 handler）。 */
+export const VIEWER_ROUTE_PREFIX = "/atf-ui/viewer";
+
+/** 路径段合法形态：字母数字开头，仅 字母数字._-；`..` 与分隔符天然被拒。 */
+const SEG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+const VIEWER_MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+};
+
+/**
+ * viewer 路由请求解析（纯函数，vitest 直测——安全面单源）。
+ *
+ * URL 形态（pathname 均为 decodeURIComponent 后逐段校验）：
+ *   `/atf-ui/viewer/<runId>`                    → 首选 viewer 的 viewer.html（调用方需先重定向补尾斜杠，
+ *                                                 相对资源才能落在 runId 目录下）
+ *   `/atf-ui/viewer/<runId>/`                   → 首选 viewer 的 viewer.html
+ *   `/atf-ui/viewer/<runId>/<analysis>/…`       → 指定 analysis 变体（必须在已发现清单内）
+ *   `/atf-ui/viewer/<runId>/images/<sha>.png`   → 首选 viewer 的相对资源
+ *
+ * fail-closed：runId 段不合法 / analysis 不在发现清单 / 子路径段非法或越出 viewer 根 /
+ * 扩展名不在 MIME 表 → null（调用方回 404）。
+ * @returns 绝对文件路径与 content-type；不可服务即 null。
+ */
+export const resolveViewerRequest = (
+  runsRoot: string,
+  pathname: string,
+  viewers: string[],
+): { abs: string; type: string } | null => {
+  const rest = pathname.slice(VIEWER_ROUTE_PREFIX.length);
+  const parts = rest.split("/").filter((p) => p !== "");
+  if (parts.length === 0 || !SEG_RE.test(parts[0]!)) return null;
+  const runId = parts[0]!;
+  if (viewers.length === 0) return null;
+  let analysis: string;
+  let sub: string[];
+  if (parts.length >= 2 && viewers.includes(parts[1]!)) {
+    analysis = parts[1]!;
+    sub = parts.slice(2);
+  } else {
+    analysis = viewers[0]!;
+    sub = parts.slice(1);
+  }
+  if (sub.length === 0) sub = ["viewer.html"];
+  for (const seg of sub) {
+    if (!SEG_RE.test(seg)) return null;
+  }
+  const viewerRoot = resolve(join(runsRoot, runId, analysis, "viewer"));
+  const abs = resolve(join(viewerRoot, ...sub));
+  if (abs !== viewerRoot && !abs.startsWith(viewerRoot + sep)) return null;
+  const last = sub[sub.length - 1]!;
+  const dot = last.lastIndexOf(".");
+  if (dot <= 0) return null;
+  const mime = VIEWER_MIME[last.slice(dot).toLowerCase()];
+  if (mime === undefined) return null;
+  try {
+    if (!statSync(abs).isFile()) return null;
+  } catch {
+    return null;
+  }
+  return { abs, type: mime };
+};
 
 export function apply(
   ctx: {
     effect(run: () => () => void, label: string): void;
-    webServer?: { tapIndex(transform: (html: string) => string): () => void };
+    webServer?: {
+      tapIndex(transform: (html: string) => string): () => void;
+      register?(route: { kind: "exact" | "prefix"; path: string; handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void> }): () => void;
+    };
+    connection?: { requestRejection(req: IncomingMessage): 401 | 403 | undefined };
   },
   config: unknown,
 ): void {
@@ -158,6 +324,22 @@ export function apply(
     const dispose = webServer.tapIndex((html) => injectMonitorGlobal(html, monitorPath));
     ctx.effect(() => dispose, "atf-ui: monitor 路径 index 注入");
     console.log(`[atf-ui] monitor 路径已注入 index（monitorPath=${monitorPath}）`);
+    // 批㉛段1：badcase viewer 静态路由（鉴权沿壳 connection 信任面；connection/register 缺席的
+    // 裸挂载面跳过不开口——tapIndex-only 消费方零变化）
+    const connection = ctx.connection;
+    if (connection !== undefined && webServer.register !== undefined) {
+      const disposeRoute = webServer.register({
+        kind: "prefix",
+        path: VIEWER_ROUTE_PREFIX,
+        handler: viewerRouteHandler({
+          runsRoot: resolved.runsRoot,
+          viewersOf: (runId) => discoverViewerDirs(join(resolved.runsRoot, runId)),
+          reject: (req) => connection.requestRejection(req),
+        }),
+      });
+      ctx.effect(() => disposeRoute, "atf-ui: viewer 静态路由");
+      console.log(`[atf-ui] viewer 静态路由已注册（${VIEWER_ROUTE_PREFIX}/<runId>/）`);
+    }
   }
   void tickOnce(resolved);
   const timer: NodeJS.Timeout = setInterval(() => void tickOnce(resolved), resolved.intervalMs);

@@ -48,6 +48,8 @@ export function buildMonitorSnapshot(runs, gpu) {
       run_id: run.run_id,
       state: run.state ?? "unknown",
       segments: SEGMENTS.map(({ key, label }) => ({ key, label, status: segmentStatus(run, key) })),
+      // 批㉛段1：badcase viewer 产物发现（scanRunDir 两形态兼容推导，空数组＝无挂载面）
+      viewers: Array.isArray(run.viewers) ? run.viewers : [],
       training: {
         active: run.training?.active === true,
         points: Array.isArray(run.training?.loss) ? run.training.loss : [],
@@ -94,6 +96,10 @@ function deriveArtifacts(run) {
   if (has("contract-candidate.json")) rows.push({ name: "契约件（含 digest）", path: `${run.run_id}/contract-candidate.json`, kind: "json" });
   if (run.segments?.split === true) rows.push({ name: "切分清单", path: `${run.run_id}/dataset`, kind: "dir" });
   if (has("launch/train.sh")) rows.push({ name: "train.sh", path: `${run.run_id}/launch/train.sh`, kind: "sh" });
+  // 批㉛段1：viewer 产物行（按 manifest 式发现清单入列，不重复罗列——每变体一行指向 viewer.html）
+  for (const dir of run.viewers ?? []) {
+    rows.push({ name: `badcase viewer（${dir}）`, path: `${run.run_id}/${dir}/viewer/viewer.html`, kind: "html" });
+  }
   for (const file of run.report?.files ?? []) {
     const kind = file.endsWith(".md") ? "md" : "json";
     const label = file === "report.md" ? "report.md（界面同源声明）" : file.startsWith("segment-") ? `分段报告 ${file}` : file;
