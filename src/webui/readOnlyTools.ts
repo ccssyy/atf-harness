@@ -134,6 +134,45 @@ export interface GpuStatus {
   topProcesses: string[];
 }
 
+/** 单卡状态（批㉝H 多卡聚合面——monitor.json gpu_all 逐卡条目）。 */
+export interface GpuCardStatus {
+  index: string;
+  utilization: string;
+  memoryUsed: string;
+  memoryTotal: string;
+}
+
+/** nvidia-smi 全卡输出解析（纯函数，vitest 直测）：`index,util,used,total` 逐行 → 逐卡列表；
+ *  无有效行 → null（调用方如实报离线不猜测）。 */
+export const parseNvidiaSmiAll = (stdout: string): GpuCardStatus[] | null => {
+  const cards: GpuCardStatus[] = [];
+  for (const line of stdout.trim().split("\n")) {
+    if (line === "") continue;
+    const cell = line.split(",").map((c) => c.trim());
+    if (cell.length < 4) continue;
+    cards.push({ index: cell[0]!, utilization: `${cell[1]!}%`, memoryUsed: `${cell[2]!}MiB`, memoryTotal: `${cell[3]!}MiB` });
+  }
+  return cards.length > 0 ? cards : null;
+};
+
+/** nvidia-smi 全卡查询（逐卡列表；不可用/非零退出 → null，调用方如实报离线不猜测）。
+ *  与 queryNvidiaSmi（首行单卡面，atf_gpu_status 工具面保持零变化）分立采集。 */
+export const queryNvidiaSmiAll = async (): Promise<GpuCardStatus[] | null> => {
+  try {
+    const stdout = await new Promise<string>((resolve, reject) => {
+      execFile(
+        "nvidia-smi",
+        ["--query-gpu=index,utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"],
+        { timeout: 5_000 },
+        (error, stdoutText) => (error === null ? resolve(stdoutText) : reject(error)),
+      );
+    });
+    return parseNvidiaSmiAll(stdout);
+  } catch {
+    return null;
+  }
+};
+
 /** nvidia-smi 查询（不可用/非零退出 → null，调用方如实报离线）。 */
 export const queryNvidiaSmi = async (): Promise<GpuStatus | null> => {
   try {

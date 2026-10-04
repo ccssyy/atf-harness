@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildMonitorSnapshot, buildArtifactsSnapshot, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage } from "../../packages/extensions/atf-ui/src/snapshot.js";
-import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, discoverViewerDirs, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveViewerRequest, scanRunDir, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
+import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage } from "../../packages/extensions/atf-ui/src/snapshot.js";
+import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveViewerRequest, scanRunDir, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -495,5 +495,87 @@ describe("批㉛段3.1 右栏监控面（Loss 历史回退＋评估 KPI＋环境
     const scanLate = scanRunDir(root, "run-art");
     const snap3 = buildArtifactsSnapshot([{ ...scanLate, metrics: { round: "latest" } }]);
     expect((snap3.runs[0]?.artifacts ?? []).map((r) => r.name)).toContain("eval metrics_summary");
+  });
+});
+
+describe("批㉝H GPU 多卡聚合（gpu_all 采集解析＋绑卡声明两态＋快照下发）", () => {
+  it("parseNvidiaSmiAll：逐行 index,util,used,total → 逐卡列表；空/坏输出 → null（不猜测）", async () => {
+    const { parseNvidiaSmiAll } = await import("../../src/webui/readOnlyTools.js");
+    const cards = parseNvidiaSmiAll("0, 0, 0, 81920\n1, 12, 8429, 81920\n");
+    expect(cards).toEqual([
+      { index: "0", utilization: "0%", memoryUsed: "0MiB", memoryTotal: "81920MiB" },
+      { index: "1", utilization: "12%", memoryUsed: "8429MiB", memoryTotal: "81920MiB" },
+    ]);
+    expect(parseNvidiaSmiAll("")).toBeNull();
+    expect(parseNvidiaSmiAll("not,enough,cells")).toBeNull();
+  });
+  it("formatGpuAll：全卡聚合显示串（GPU0 0%/0MiB · GPU1 12%/8429MiB）；空列表 → null（client 回退单卡面）", () => {
+    expect(formatGpuAll([{ index: "0", utilization: "0%", memoryUsed: "0MiB", memoryTotal: "81920MiB" }, { index: "1", utilization: "12%", memoryUsed: "8429MiB", memoryTotal: "81920MiB" }]))
+      .toBe("GPU0 0%/0MiB · GPU1 12%/8429MiB");
+    expect(formatGpuAll([])).toBeNull();
+    expect(formatGpuAll(undefined)).toBeNull();
+  });
+  it("formatGpuBinding 两态：train.sh 声明／deploy_effective 声明；缺席/空 → null（仅显示全卡聚合）", () => {
+    expect(formatGpuBinding({ devices: "0", source: "train_sh" })).toBe("绑卡：0（train.sh CUDA_VISIBLE_DEVICES）");
+    expect(formatGpuBinding({ devices: "2", source: "deploy_effective" })).toBe("绑卡：2（deploy_effective.visible_devices）");
+    expect(formatGpuBinding(null)).toBeNull();
+    expect(formatGpuBinding({ devices: "", source: "train_sh" })).toBeNull();
+  });
+  it("gpuBindingOf：train.sh CUDA_VISIBLE_DEVICES 优先＞manifest deploy_effective 回退＞两处缺席 null", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-bind");
+    mkdirSync(join(runDir, "launch"), { recursive: true });
+    // 两处在场且不一致 → train.sh（实际执行面）优先
+    writeFileSync(join(runDir, "launch", "train.sh"), "set -e\nexport CUDA_VISIBLE_DEVICES=2\n");
+    writeFileSync(join(runDir, "launch", "launch_manifest.json"), JSON.stringify({ deploy_effective: { visible_devices: "0" } }));
+    expect(gpuBindingOf(runDir)).toEqual({ devices: "2", source: "train_sh" });
+    // train.sh 无 CUDA 行（或缺席）→ manifest 声明面回退
+    writeFileSync(join(runDir, "launch", "train.sh"), "set -e\n");
+    expect(gpuBindingOf(runDir)).toEqual({ devices: "0", source: "deploy_effective" });
+    // 两处都缺席 → null（client 不显示绑卡，仅全卡聚合）
+    rmSync(join(runDir, "launch"), { recursive: true });
+    expect(gpuBindingOf(runDir)).toBeNull();
+    expect(gpuBindingOf(join(root, "run-missing"))).toBeNull();
+  });
+  it("buildMonitorSnapshot：gpu_all 透传（缺省空数组）＋gpu_binding 逐 run 下发（缺省 null）——旧调用两参不炸", () => {
+    const offline = buildMonitorSnapshot([sampleRun]);
+    expect(offline.gpu_all).toEqual([]);
+    expect(offline.runs[0]?.gpu_binding).toBeNull();
+    const live = buildMonitorSnapshot(
+      [{ ...sampleRun, gpu_binding: { devices: "0,1", source: "deploy_effective" } }],
+      { offline: false, utilization: "12%", memoryUsed: "3497 MiB", memoryTotal: "81920 MiB" },
+      [{ index: "0", utilization: "12%", memoryUsed: "3497MiB", memoryTotal: "81920MiB" }],
+    );
+    expect(live.gpu_all).toHaveLength(1);
+    expect(live.runs[0]?.gpu_binding).toEqual({ devices: "0,1", source: "deploy_effective" });
+    // 首 fetch 前 gpu 首行单卡面保留（旧 client 回退面零变化）
+    expect(live.gpu).toMatchObject({ offline: false, utilization: "12%" });
+  });
+  it("tickOnce→monitor.json：gpu_all 数组落盘（真机逐卡/无 GPU 空数组——形态如实）＋scanRunDir gpu_binding 随快照", async () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-h");
+    mkdirSync(join(runDir, "launch"), { recursive: true });
+    writeFileSync(join(runDir, "registration.json"), "{}");
+    writeFileSync(join(runDir, "launch", "train.sh"), "export CUDA_VISIBLE_DEVICES=3\n");
+    const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
+    await tickOnce({ runsRoot: root, intervalMs: 60_000 });
+    const monitor = JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as {
+      gpu_all: Array<{ index: string; utilization: string; memoryUsed: string; memoryTotal: string }>;
+      runs: Array<{ run_id: string; gpu_binding: { devices: string; source: string } | null }>;
+    };
+    expect(Array.isArray(monitor.gpu_all)).toBe(true);
+    for (const c of monitor.gpu_all) {
+      expect(c).toMatchObject({ index: expect.any(String), utilization: expect.stringMatching(/%$/), memoryUsed: expect.stringMatching(/MiB$/) });
+    }
+    expect(monitor.runs.find((r) => r.run_id === "run-h")?.gpu_binding).toEqual({ devices: "3", source: "train_sh" });
+  });
+  it("client.js 双份同语义钉子：聚合/绑卡副本两处都在（裸服务不打包——改动同步）", () => {
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    for (const phrase of ["formatGpuAllLocal", "formatGpuBindingLocal", "train.sh CUDA_VISIBLE_DEVICES", "deploy_effective.visible_devices", "当前 run "]) {
+      expect(clientSource).toContain(phrase);
+    }
+    // 渲染面两处都在：GPU 状态条（dock）＋监控面板环境卡 GPU 行
+    expect(clientSource).toContain("gpu_binding");
+    expect(clientSource).toContain("'GPU：' + gpuRow");
   });
 });

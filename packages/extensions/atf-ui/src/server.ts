@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { buildArtifactsSnapshot, buildMonitorSnapshot } from "./snapshot.js";
 import { PANEL_HTML } from "./panel.js";
-import { queryNvidiaSmi } from "../../../../src/webui/readOnlyTools.js";
+import { queryNvidiaSmi, queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
 
 /** Cordis 插件名。 */
@@ -67,6 +67,8 @@ export interface RunScan {
   launch: LaunchSurface;
   metrics: EvalMetricsSurface | null;
   env: EnvSurface;
+  /** 批㉝H：绑卡声明（train.sh/manifest——null＝读不到，client 仅显示全卡聚合）。 */
+  gpu_binding: GpuBinding | null;
 }
 
 /** 批㉛段2：Web 发起训练面（monitor.json 下发——client 摘要对话框与发起消息模板的数据源）。 */
@@ -104,6 +106,37 @@ export interface EnvSurface {
   deepspeed: string;
   lane: string;
 }
+
+/** 批㉝H：run 绑卡声明——train.sh 实际执行面（export CUDA_VISIBLE_DEVICES）优先，
+ *  回退 launch_manifest.json deploy_effective.visible_devices（声明面）。 */
+export interface GpuBinding {
+  devices: string;
+  source: "train_sh" | "deploy_effective";
+}
+
+/** 绑卡声明推导（纯函数）：train.sh 的 `export CUDA_VISIBLE_DEVICES=…` ＞ manifest
+ *  deploy_effective.visible_devices；两处都缺席 → null（client 仅显示全卡聚合，不猜测）。 */
+export const gpuBindingOf = (runDir: string): GpuBinding | null => {
+  try {
+    const trainSh = readFileSync(join(runDir, "launch", "train.sh"), "utf8");
+    const m = /^\s*export\s+CUDA_VISIBLE_DEVICES=(.+)$/m.exec(trainSh);
+    if (m !== null) {
+      const devices = m[1]!.trim().replace(/^["']|["']$/g, "");
+      if (devices !== "") return { devices, source: "train_sh" };
+    }
+  } catch {
+    // train.sh 缺席 → manifest 声明面回退
+  }
+  const manifest = readJsonFile(join(runDir, "launch", "launch_manifest.json"));
+  if (manifest !== null && typeof manifest === "object") {
+    const deploy = (manifest as Record<string, unknown>)["deploy_effective"];
+    if (deploy !== null && typeof deploy === "object") {
+      const devices = (deploy as Record<string, unknown>)["visible_devices"];
+      if (typeof devices === "string" && devices !== "") return { devices, source: "deploy_effective" };
+    }
+  }
+  return null;
+};
 
 const numOrNull = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
 const strOrNull = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
@@ -259,6 +292,7 @@ export function scanRunDir(root: string, runId: string): RunScan {
     launch: buildLaunchSurface(dir),
     metrics: latestEvalMetrics(dir),
     env: buildEnvSurface(readJsonFile(iterationConfigPathOf(dir)) as Record<string, unknown> | null, runId),
+    gpu_binding: gpuBindingOf(dir),
   };
 }
 
@@ -463,9 +497,11 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     const outDir = join(resolved.runsRoot, OUT_DIR);
     mkdirSync(outDir, { recursive: true });
     const runs = scanRuns(resolved.runsRoot);
-    // GPU 状态（nvidia-smi 包装——不可用如实 offline，不猜测；快照单源随 monitor.json 下发）
+    // GPU 状态（nvidia-smi 包装——不可用如实 offline，不猜测；快照单源随 monitor.json 下发）。
+    // 批㉝H：gpu_all 全卡面并采（首行单卡面保留——atf_gpu_status 工具与旧 client 回退共用）。
     const gpu = await queryNvidiaSmi();
-    const monitor = buildMonitorSnapshot(runs, gpu === null ? { offline: true } : { offline: false, ...gpu });
+    const gpuAll = await queryNvidiaSmiAll();
+    const monitor = buildMonitorSnapshot(runs, gpu === null ? { offline: true } : { offline: false, ...gpu }, gpuAll ?? undefined);
     const artifacts = buildArtifactsSnapshot(runs);
     writeFileSync(join(outDir, "monitor.json"), `${JSON.stringify(monitor, null, 1)}\n`, "utf8");
     writeFileSync(join(outDir, "artifacts.json"), `${JSON.stringify(artifacts, null, 1)}\n`, "utf8");

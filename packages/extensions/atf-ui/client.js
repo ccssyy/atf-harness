@@ -2,7 +2,8 @@
  *  品牌沿 owner 路线 2 裁定：维持 DSH 默认文案（替换随 M3 persona/identity config 正道），
  *  本文件不含任何品牌覆盖（slot/CSS/DOM 文本替换均不设）。
  *  数据：workspaceFiles.read 轮询 <runsRoot>/atf-ui/monitor.json（同步器 5s 快照单源，
- *  gpu 字段＝nvidia-smi 实测面，viewers 字段＝run 维度 badcase viewer 发现清单——批㉛段1）；
+ *  gpu 字段＝nvidia-smi 首行单卡面，gpu_all/gpu_binding＝批㉝H 多卡聚合与绑卡声明，
+ *  viewers 字段＝run 维度 badcase viewer 发现清单——批㉛段1）；
  *  sessionId 经 header.utilities 的 session-scoped inject 工厂捕获（批⑳实证通道）。
  *  viewer 渲染：iframe 指 server 半静态路由 /atf-ui/viewer/<runId>/（同源 cookie 鉴权，
  *  不重建 viewer 本身——产物由 atf-analyze-badcases skill 链产出）。
@@ -135,6 +136,22 @@ window.__ModuleLoader__.load({
       return lines.join('\n')
     }
 
+    /** 批㉝H：全卡聚合显示串＋绑卡标注——与 snapshot.js formatGpuAll/formatGpuBinding
+     *  同语义的 client 本地副本（裸服务不打包无法 require；tests/dshUi/atfUi.test.ts
+     *  有双份同语义钉子，改动同步）。 */
+    function formatGpuAllLocal(gpuAll) {
+      if (!gpuAll || gpuAll.length === 0) return null
+      return gpuAll.map(function(c) {
+        return 'GPU' + String(c && c.index !== undefined ? c.index : '?') + ' ' + String((c && c.utilization) || '—') + '/' + String((c && c.memoryUsed) || '—')
+      }).join(' · ')
+    }
+    function formatGpuBindingLocal(binding) {
+      if (!binding || typeof binding !== 'object') return null
+      if (typeof binding.devices !== 'string' || binding.devices === '') return null
+      var src = binding.source === 'deploy_effective' ? 'deploy_effective.visible_devices' : 'train.sh CUDA_VISIBLE_DEVICES'
+      return '绑卡：' + binding.devices + '（' + src + '）'
+    }
+
     /** Loss 曲线 polyline points（批㉛段3.1——与 snapshot.js lossSvgPath 同语义的 client 本地副本：
      *  裸服务不打包无法 require；归一 0..w，点不足 2 返回 null 不画）。 */
     function lossPoints(values, w, h) {
@@ -180,6 +197,13 @@ window.__ModuleLoader__.load({
       var pct = function(v) { return typeof v === 'number' ? (v * 100).toFixed(1) + '%' : '—' }
       var env = (run && run.env) || null
       var gpu = (mon && mon.gpu) || null
+      // 批㉝H：GPU 行多卡聚合（gpu_all 缺席回退首行单卡面）＋所选 run 绑卡标注（读不到不显示）
+      var gpuAllText = formatGpuAllLocal(mon && mon.gpu_all)
+      var gpuRow = gpu === null ? '—'
+        : gpu.offline ? '离线'
+        : gpuAllText !== null ? gpuAllText
+        : (gpu.utilization || '—') + ' · ' + (gpu.memoryUsed || '—') + '/' + (gpu.memoryTotal || '—')
+      var gpuBindText = run ? formatGpuBindingLocal(run.gpu_binding) : null
       var kpis = [
         { label: 'F1（micro）', value: pct(m ? m.f1 : null) },
         { label: 'precision', value: pct(m ? m.precision : null) },
@@ -271,7 +295,7 @@ window.__ModuleLoader__.load({
               React.createElement('div', { className: 'atf-monitor-sec' },
                 React.createElement('div', { className: 'atf-monitor-title' }, '环境'),
                 React.createElement('div', { className: 'atf-monitor-env' },
-                  React.createElement('div', null, 'GPU：' + (gpu === null ? '—' : gpu.offline ? '离线' : (gpu.utilization || '—') + ' · ' + (gpu.memoryUsed || '—') + '/' + (gpu.memoryTotal || '—'))),
+                  React.createElement('div', null, 'GPU：' + gpuRow + (gpuBindText !== null ? ' · ' + gpuBindText : '')),
                   React.createElement('div', null, '基模型：' + (env ? env.base_model : '—')),
                   React.createElement('div', null, '数据集：' + (env ? env.dataset_keys : '—')),
                   React.createElement('div', null, 'deepspeed：' + (env ? env.deepspeed : '—')),
@@ -378,7 +402,8 @@ window.__ModuleLoader__.load({
             : null))
     }
 
-    /** GPU 状态一行卡（紧凑单行——指令三段形态：GPU util/显存/在跑 run）。 */
+    /** GPU 状态一行卡（批㉝H 多卡聚合形态：逐卡 util/显存汇总＋当前推进 run 绑卡标注；
+     *  gpu_all 缺席（旧快照/采集失败）回退首行单卡面——双向向后兼容）。 */
     function GpuCard() {
       var open = React.useSyncExternalStore(
         function(fn) { return store.subscribe(fn) },
@@ -387,11 +412,20 @@ window.__ModuleLoader__.load({
       var mon = useMonitor()
       if (!open) return null
       var gpu = (mon && mon.gpu) || null
+      var gpuAllText = formatGpuAllLocal(mon && mon.gpu_all)
+      // 悬停明细：逐卡显存 used/total（聚合行只显 used，total 进 title 不占行宽）
+      var gpuAllTitle = mon && Array.isArray(mon.gpu_all) && mon.gpu_all.length > 0
+        ? mon.gpu_all.map(function(c) {
+            return 'GPU' + c.index + ' 显存 ' + c.memoryUsed + '/' + c.memoryTotal
+          }).join(' · ')
+        : undefined
       var parts = []
       if (gpu === null) {
         parts.push('GPU 监控就绪中…')
       } else if (gpu.offline === true) {
         parts.push('GPU 离线（nvidia-smi 不可用）')
+      } else if (gpuAllText !== null) {
+        parts.push(gpuAllText)
       } else {
         parts.push('GPU ' + String(gpu.utilization || '—'))
         parts.push('显存 ' + String(gpu.memoryUsed || '—') + '/' + String(gpu.memoryTotal || '—'))
@@ -401,6 +435,9 @@ window.__ModuleLoader__.load({
         parts.push(active.run.run_id + ' 段 ' + active.done + '/' + active.total)
         if (active.trainingActive) parts.push('训练中')
         else if (active.waiting) parts.push('等确认')
+        // 批㉝H：当前推进 run 绑卡声明（train.sh/manifest——读不到不显示，仅全卡聚合）
+        var bindText = formatGpuBindingLocal(active.run.gpu_binding)
+        if (bindText !== null) parts.push('当前 run ' + bindText)
       } else if (gpu !== null && gpu.offline !== true) {
         parts.push('暂无推进 run')
       }
@@ -409,7 +446,7 @@ window.__ModuleLoader__.load({
       var activeViewers = active !== null ? ((mon.runs.find(function(r) { return r.run_id === active.run.run_id }) || {}).viewers || []) : []
       return React.createElement('div', { className: 'atf-gpu-card' },
         React.createElement('span', { className: 'atf-gpu-dot', style: { background: dotColor } }),
-        React.createElement('span', null, parts.join(' · ')),
+        React.createElement('span', { title: gpuAllTitle }, parts.join(' · ')),
         activeViewers.length > 0
           ? React.createElement('button', {
               className: 'atf-viewer-link',

@@ -36,14 +36,18 @@ function segmentStatus(run, key) {
 
 /**
  * @param runs - 同步器 scanRuns 的 run 形态（run_id/state/segments/training/report）。
- * @param gpu - GPU 实测面（queryNvidiaSmi 结果；缺省 offline——不猜测）。
+ * @param gpu - GPU 首行单卡面（queryNvidiaSmi 结果；缺省 offline——不猜测）。
+ * @param gpuAll - 批㉝H 全卡面（queryNvidiaSmiAll 逐卡列表；缺省/不可用 → 空数组，
+ *   client 回退首行单卡面——旧快照与新 client 双向向后兼容）。
  * @returns monitor.json 快照：每 run 段状态＋训练视图数据＋GPU 状态行。
  */
-export function buildMonitorSnapshot(runs, gpu) {
+export function buildMonitorSnapshot(runs, gpu, gpuAll) {
   return {
     schema: "AtfMonitor/v1",
     generated_at: new Date().toISOString(),
     gpu: gpu ?? { offline: true },
+    // 批㉝H：全卡聚合面（GPU0 0%/0MiB · GPU1 12%/8429MiB——逐卡 util/显存）
+    gpu_all: Array.isArray(gpuAll) ? gpuAll : [],
     runs: runs.map((run) => ({
       run_id: run.run_id,
       state: run.state ?? "unknown",
@@ -55,6 +59,8 @@ export function buildMonitorSnapshot(runs, gpu) {
       // 批㉛段3.1：右栏监控面（评估轮 KPI＋环境卡）
       metrics: run.metrics ?? null,
       env: run.env ?? null,
+      // 批㉝H：绑卡声明（train.sh CUDA_VISIBLE_DEVICES＞deploy_effective.visible_devices；null＝读不到）
+      gpu_binding: run.gpu_binding ?? null,
       training: {
         active: run.training?.active === true,
         points: Array.isArray(run.training?.loss) ? run.training.loss : [],
@@ -62,6 +68,24 @@ export function buildMonitorSnapshot(runs, gpu) {
       },
     })),
   };
+}
+
+/** 批㉝H：全卡聚合显示串——「GPU0 0%/0MiB · GPU1 12%/8429MiB」（空列表 → null，
+ *  client 回退首行单卡面）。client.js 有同语义裸服务副本（双份钉子见 tests/dshUi）。 */
+export function formatGpuAll(gpuAll) {
+  if (!Array.isArray(gpuAll) || gpuAll.length === 0) return null;
+  return gpuAll
+    .map((c) => `GPU${String(c?.index ?? "?")} ${String(c?.utilization ?? "—")}/${String(c?.memoryUsed ?? "—")}`)
+    .join(" · ");
+}
+
+/** 批㉝H：绑卡标注——「绑卡：0（train.sh CUDA_VISIBLE_DEVICES）」；缺席/空 → null
+ *  （仅显示全卡聚合）。client.js 有同语义裸服务副本（双份钉子见 tests/dshUi）。 */
+export function formatGpuBinding(binding) {
+  if (binding === null || typeof binding !== "object") return null;
+  if (typeof binding.devices !== "string" || binding.devices === "") return null;
+  const source = binding.source === "deploy_effective" ? "deploy_effective.visible_devices" : "train.sh CUDA_VISIBLE_DEVICES";
+  return `绑卡：${binding.devices}（${source}）`;
 }
 
 /**

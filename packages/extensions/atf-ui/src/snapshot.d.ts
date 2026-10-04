@@ -17,6 +17,8 @@ export interface AtfRunScan {
   metrics?: unknown;
   /** 批㉛段3.1：环境卡面（基模型/数据集键/deepspeed/lane；null＝无 IterationConfig）。 */
   env?: unknown;
+  /** 批㉝H：绑卡声明（train_sh＝CUDA_VISIBLE_DEVICES／deploy_effective＝visible_devices；null＝读不到）。 */
+  gpu_binding?: { devices: string; source: "train_sh" | "deploy_effective" } | null;
 }
 export interface AtfGpuStatus {
   offline: boolean;
@@ -24,10 +26,19 @@ export interface AtfGpuStatus {
   memoryUsed?: string;
   memoryTotal?: string;
 }
+/** 批㉝H：全卡面逐卡条目（queryNvidiaSmiAll 采集——index/utilization/memoryUsed/memoryTotal）。 */
+export interface AtfGpuCardStatus {
+  index: string;
+  utilization: string;
+  memoryUsed: string;
+  memoryTotal: string;
+}
 export interface AtfMonitorSnapshot {
   schema: string;
   generated_at: string;
   gpu: AtfGpuStatus;
+  /** 批㉝H：全卡聚合面（空数组＝不可用/旧快照，client 回退首行单卡面）。 */
+  gpu_all: AtfGpuCardStatus[];
   runs: Array<{
     run_id: string;
     state: string;
@@ -36,6 +47,7 @@ export interface AtfMonitorSnapshot {
     launch: unknown;
     metrics: unknown;
     env: unknown;
+    gpu_binding: { devices: string; source: "train_sh" | "deploy_effective" } | null;
     training: { active: boolean; points: Array<Record<string, unknown>>; pending_confirm: unknown };
   }>;
 }
@@ -44,7 +56,11 @@ export interface AtfArtifactsSnapshot {
   generated_at: string;
   runs: Array<{ run_id: string; artifacts: Array<{ name: string; path: string; kind: string }> }>;
 }
-export declare function buildMonitorSnapshot(runs: AtfRunScan[], gpu?: AtfGpuStatus): AtfMonitorSnapshot;
+export declare function buildMonitorSnapshot(runs: AtfRunScan[], gpu?: AtfGpuStatus, gpuAll?: AtfGpuCardStatus[]): AtfMonitorSnapshot;
+/** 批㉝H：全卡聚合显示串（空列表 → null）；client.js 有同语义裸服务副本。 */
+export declare function formatGpuAll(gpuAll: AtfGpuCardStatus[] | null | undefined): string | null;
+/** 批㉝H：绑卡标注（缺席 → null）；client.js 有同语义裸服务副本。 */
+export declare function formatGpuBinding(binding: { devices: string; source: "train_sh" | "deploy_effective" } | null | undefined): string | null;
 export declare function formatTaskCard(monitorRun: Pick<AtfMonitorSnapshot["runs"][number], "segments">): string;
 export declare function buildArtifactsSnapshot(runs: AtfRunScan[]): AtfArtifactsSnapshot;
 export declare function parseLossSeries(text: string): Array<Record<string, unknown>>;
