@@ -13,6 +13,10 @@ export interface AtfRunScan {
   viewers?: string[];
   /** 批㉛段2：Web 发起训练面（train.sh/快照/IterationConfig/prelaunch/摘要；null＝不可发起）。 */
   launch?: unknown;
+  /** 批㉛段3.1：评估轮 KPI 面（micro f1/precision/recall＋page_exact_rate；null＝无评估轮）。 */
+  metrics?: unknown;
+  /** 批㉛段3.1：环境卡面（基模型/数据集键/deepspeed/lane；null＝无 IterationConfig）。 */
+  env?: unknown;
 }
 export interface AtfGpuStatus {
   offline: boolean;
@@ -30,6 +34,8 @@ export interface AtfMonitorSnapshot {
     segments: Array<{ key: string; label: string; status: "done" | "active" | "failed" | "pending" }>;
     viewers: string[];
     launch: unknown;
+    metrics: unknown;
+    env: unknown;
     training: { active: boolean; points: Array<Record<string, unknown>>; pending_confirm: unknown };
   }>;
 }

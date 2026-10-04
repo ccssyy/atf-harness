@@ -65,6 +65,8 @@ export interface RunScan {
   report: { files: string[] };
   viewers: string[];
   launch: LaunchSurface;
+  metrics: EvalMetricsSurface | null;
+  env: EnvSurface;
 }
 
 /** 批㉛段2：Web 发起训练面（monitor.json 下发——client 摘要对话框与发起消息模板的数据源）。 */
@@ -83,6 +85,121 @@ export interface IterationSummaryRow {
   source: "iteration_config" | "config_snapshot" | "default";
   meaning: string;
 }
+
+/** 批㉛段3.1：评估轮指标面（KPI 2×2 数据源——eval 四件套同源 metrics_summary.json）。 */
+export interface EvalMetricsSurface {
+  round: string;
+  model: string;
+  pages: number | null;
+  f1: number | null;
+  precision: number | null;
+  recall: number | null;
+  exact: number | null;
+}
+
+/** 批㉛段3.1：环境卡面（IterationConfig 同源——基模型/数据集/deepspeed/lane）。 */
+export interface EnvSurface {
+  base_model: string;
+  dataset_keys: string;
+  deepspeed: string;
+  lane: string;
+}
+
+const numOrNull = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
+const strOrNull = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
+
+/** metrics_summary.json（FormalEvalSummary/v1）→ KPI 2×2 面（纯函数，vitest 直测）。 */
+export const parseEvalMetrics = (raw: unknown, round: string): EvalMetricsSurface | null => {
+  if (raw === null || typeof raw !== "object") return null;
+  const sum = raw as Record<string, unknown>;
+  const micro = (sum["micro"] ?? {}) as Record<string, unknown>;
+  const model = strOrNull(sum["model"]) ?? "—";
+  return {
+    round,
+    model,
+    pages: numOrNull(sum["pages"]),
+    f1: numOrNull(micro["f1"]),
+    precision: numOrNull(micro["precision"]),
+    recall: numOrNull(micro["recall"]),
+    exact: numOrNull(sum["page_exact_rate"]),
+  };
+};
+
+/** 最新评估轮发现：<run>/eval/<N-日期> 取 N 最大者；无轮目录回退 eval 根 metrics_summary.json。 */
+export const latestEvalMetrics = (runDir: string): EvalMetricsSurface | null => {
+  const evalRoot = join(runDir, "eval");
+  let best: { round: string; n: number } | null = null;
+  try {
+    for (const entry of readdirSync(evalRoot, { withFileTypes: true })) {
+      const m = /^(\d+)-(\d{8})$/.exec(entry.name);
+      if (entry.isDirectory() && m !== null) {
+        const n = Number(m[1]);
+        if (best === null || n > best.n) best = { round: entry.name, n };
+      }
+    }
+  } catch {
+    return null;
+  }
+  if (best !== null) {
+    const raw = readJsonFile(join(evalRoot, best.round, "orch", "eval", "metrics_summary.json"));
+    const parsed = parseEvalMetrics(raw, best.round);
+    if (parsed !== null) return parsed;
+  }
+  const rootRaw = readJsonFile(join(evalRoot, "metrics_summary.json"));
+  return parseEvalMetrics(rootRaw, "latest");
+};
+
+/** 训练历史曲线（live loss-series.json 缺席时的回退源）：最新 checkpoint 的 trainer_state.json
+ *  log_history → {step, train_loss, learning_rate, epoch} 点列（client Loss 曲线 train 线）。 */
+export const trainerHistoryLoss = (runDir: string): Array<Record<string, number>> => {
+  const trainingDir = join(runDir, "training");
+  let ckpts: Array<{ name: string; n: number }> = [];
+  try {
+    for (const entry of readdirSync(trainingDir, { withFileTypes: true })) {
+      const m = /^checkpoint-(\d+)$/.exec(entry.name);
+      if (entry.isDirectory() && m !== null) ckpts.push({ name: entry.name, n: Number(m[1]) });
+    }
+  } catch {
+    return [];
+  }
+  ckpts.sort((a, b) => b.n - a.n);
+  for (const ckpt of ckpts) {
+    const raw = readJsonFile(join(trainingDir, ckpt.name, "trainer_state.json"));
+    if (raw === null || typeof raw !== "object") continue;
+    const history = (raw as Record<string, unknown>)["log_history"];
+    if (!Array.isArray(history)) continue;
+    const points: Array<Record<string, number>> = [];
+    for (const p of history) {
+      if (p === null || typeof p !== "object") continue;
+      const row = p as Record<string, unknown>;
+      const step = numOrNull(row["step"]);
+      const loss = numOrNull(row["loss"]);
+      if (step === null || loss === null) continue;
+      const point: Record<string, number> = { step, train_loss: loss };
+      const lr = numOrNull(row["learning_rate"]);
+      const epoch = numOrNull(row["epoch"]);
+      if (lr !== null) point["learning_rate"] = lr;
+      if (epoch !== null) point["epoch"] = epoch;
+      points.push(point);
+    }
+    if (points.length > 0) return points;
+  }
+  return [];
+};
+
+/** 环境卡面构造（IterationConfig 同源；缺席字段如实 —）。 */
+export const buildEnvSurface = (iter: Record<string, unknown> | null, runId: string): EnvSurface => {
+  const training = (iter?.["training"] ?? {}) as Record<string, unknown>;
+  const dataset = (iter?.["dataset"] ?? {}) as Record<string, unknown>;
+  const baseModel = (iter?.["base_model"] ?? {}) as Record<string, unknown>;
+  const keys = dataset["dataset_keys"];
+  return {
+    base_model: strOrNull(baseModel["path"])?.split("/").filter(Boolean).pop() ?? "—",
+    dataset_keys: Array.isArray(keys) && keys.every((k) => typeof k === "string") ? (keys as string[]).join(",") : "—",
+    deepspeed: strOrNull(training["deepspeed"]) ?? "—",
+    lane: strOrNull(iter?.["lane"]) ?? "—",
+  };
+};
 
 /** 单 run 目录标记推导（任务卡 chat 卡面与同步器同源——trainingFace status 复用本出口）。 */
 export function scanRunDir(root: string, runId: string): RunScan {
@@ -108,7 +225,17 @@ export function scanRunDir(root: string, runId: string): RunScan {
           : has("registration.json") || has("dataset")
             ? "registered"
             : "unknown",
-    artifacts: ["session.jsonl", "contract-candidate.json", "launch/train.sh", "webui/config-snapshot.json"].filter(has),
+    artifacts: [
+      "session.jsonl",
+      "contract-candidate.json",
+      "launch/train.sh",
+      "launch/launch_manifest.json",
+      "webui/config-snapshot.json",
+      "eval/metrics_summary.json",
+      "eval/badcases.jsonl",
+      "eval/raw_predictions.jsonl",
+      "eval/indexes.csv",
+    ].filter(has),
     segments: {
       register: has("registration.json") || has("dataset"),
       split: has("split") || has("dataset/split"),
@@ -123,12 +250,15 @@ export function scanRunDir(root: string, runId: string): RunScan {
     },
     training: {
       active: has("training/loss-series.json"),
-      loss: has("training/loss-series.json") ? readJson(join("training", "loss-series.json")) : null,
+      // 批㉛段3.1：live loss-series 缺席 → 最新 checkpoint trainer_state.json 历史回退
+      loss: has("training/loss-series.json") ? readJson(join("training", "loss-series.json")) : trainerHistoryLoss(dir),
       pending_confirm: readJson(join("webui", "pending-confirm.json")),
     },
     report: { files: reportFiles },
     viewers: discoverViewerDirs(dir),
     launch: buildLaunchSurface(dir),
+    metrics: latestEvalMetrics(dir),
+    env: buildEnvSurface(readJsonFile(iterationConfigPathOf(dir)) as Record<string, unknown> | null, runId),
   };
 }
 

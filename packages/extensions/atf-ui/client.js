@@ -30,12 +30,16 @@ window.__ModuleLoader__.load({
       viewer: null,
       // 批㉛段2：发起训练对话框状态（null=关；{runId, mode}）
       train: null,
+      // 批㉛段3.1：右栏训练监控抽屉（默认收起——chat 不受挡；打开后选 run 联动）
+      monitorOpen: false,
+      monitorRunId: null,
       listeners: new Set(),
       setOpen: function(v) { this.open = v; this.listeners.forEach(function(fn) { fn() }) },
       subscribe: function(fn) { var s = this; s.listeners.add(fn); return function() { s.listeners.delete(fn) } },
       getOpen: function() { return this.open },
       setViewer: function(v) { this.viewer = v; this.listeners.forEach(function(fn) { fn() }) },
       setTrain: function(v) { this.train = v; this.listeners.forEach(function(fn) { fn() }) },
+      setMonitor: function(open, runId) { this.monitorOpen = open; if (runId !== undefined) this.monitorRunId = runId; this.listeners.forEach(function(fn) { fn() }) },
     }
 
     /** monitor.json 轮询（sessionId 由 header.utilities 注入后生效；未就绪期静默等下周期）。 */
@@ -53,6 +57,31 @@ window.__ModuleLoader__.load({
               try { setData(JSON.parse(result.value.text)) } catch { /* 下周期重试 */ }
             })
             .catch(function() { /* 离线/未就绪——下周期重试 */ })
+        }
+        read()
+        var t = setInterval(read, POLL_MS)
+        return function() { alive = false; clearInterval(t) }
+      }, [])
+      return data
+    }
+
+    /** artifacts.json 轮询（批㉛段3.3 产物抽屉数据源——同步器同批写盘）。 */
+    function useArtifacts() {
+      var _s = React.useState(null)
+      var data = _s[0], setData = _s[1]
+      React.useEffect(function() {
+        var alive = true
+        var read = function() {
+          var sid = store.sessionId
+          if (sid === undefined || remoteFace === null) return
+          // 与 monitor.json 同目录同名换文件（同步器同批写盘——atf-ui/artifacts.json）
+          var artsPath = MONITOR_PATH.replace(/monitor\.json$/, 'artifacts.json')
+          remoteFace.workspaceFiles.read(sid, artsPath, {}, new AbortController().signal)
+            .then(function(result) {
+              if (!alive || !result || result.ok === false) return
+              try { setData(JSON.parse(result.value.text)) } catch { /* 下周期重试 */ }
+            })
+            .catch(function() { /* 下周期重试 */ })
         }
         read()
         var t = setInterval(read, POLL_MS)
@@ -104,6 +133,167 @@ window.__ModuleLoader__.load({
         ? '⑤ 放行执行：atf_launch_execute（launch_sh=scratch 内 launch.sh，config=同一 IterationConfig，note 注明 owner 书面授权）——唯一编排执行点，manifest sha 对拍 fail-closed；'
         : '⑤ 到此止：不执行 atf_launch_execute、不启动 tmux、不占 GPU——本轮仅 DRY_RUN 验收，真实训练候我单独书面点头。')
       return lines.join('\n')
+    }
+
+    /** Loss 曲线 polyline points（批㉛段3.1——与 snapshot.js lossSvgPath 同语义的 client 本地副本：
+     *  裸服务不打包无法 require；归一 0..w，点不足 2 返回 null 不画）。 */
+    function lossPoints(values, w, h) {
+      if (!values || values.length < 2) return null
+      var min = Math.min.apply(null, values), max = Math.max.apply(null, values)
+      var range = max - min || 1
+      return values.map(function(v, i) {
+        return ((i / (values.length - 1)) * w).toFixed(1) + ',' + (h - 4 - ((v - min) / range) * (h - 8)).toFixed(1)
+      }).join(' ')
+    }
+
+    /** 右栏训练监控抽屉（批㉛段3.1）：Loss 双线曲线（train 实线/eval 虚线——live run 的
+     *  loss-series 双值；历史 run 为 trainer_state 单线，eval 侧如实标注无序列）＋KPI 2×2
+     *  （F1/precision/recall/exact——最新评估轮 metrics_summary 同源）＋环境卡（基模型/数据集/
+     *  deepspeed/lane＋GPU 实测行）。数据源＝monitor.json（5s 快照单源，只读）。 */
+    function MonitorPanel() {
+      var open = React.useSyncExternalStore(
+        function(fn) { return store.subscribe(fn) },
+        function() { return store.monitorOpen },
+      )
+      var selRunId = React.useSyncExternalStore(
+        function(fn) { return store.subscribe(fn) },
+        function() { return store.monitorRunId },
+      )
+      var mon = useMonitor()
+      var arts = useArtifacts()
+      // 批㉛段3.2：Loss 点选选中态（hook 须在条件 return 之前——React hooks 顺序不变量）
+      var _sel = React.useState(null)
+      var selIdx = _sel[0], setSelIdx = _sel[1]
+      if (!open) return null
+      var runs = (mon && mon.runs) || []
+      var runId = selRunId && runs.some(function(r) { return r.run_id === selRunId }) ? selRunId : (runs[0] ? runs[0].run_id : null)
+      var run = runId ? runs.find(function(r) { return r.run_id === runId }) : null
+      var points = (run && run.training && run.training.points) || []
+      var trainVals = points.map(function(p) { return p.train_loss }).filter(function(v) { return typeof v === 'number' })
+      var evalVals = points.map(function(p) { return p.eval_loss }).filter(function(v) { return typeof v === 'number' })
+      var W = 300, H = 80
+      var trainPts = lossPoints(trainVals, W, H)
+      var evalPts = evalVals.length >= 2 ? lossPoints(evalVals, W, H) : null
+      var done = run ? run.segments.filter(function(s) { return s.status === 'done' }).length : 0
+      var active = run ? run.segments.some(function(s) { return s.status === 'active' }) : false
+      var m = (run && run.metrics) || null
+      var pct = function(v) { return typeof v === 'number' ? (v * 100).toFixed(1) + '%' : '—' }
+      var env = (run && run.env) || null
+      var gpu = (mon && mon.gpu) || null
+      var kpis = [
+        { label: 'F1（micro）', value: pct(m ? m.f1 : null) },
+        { label: 'precision', value: pct(m ? m.precision : null) },
+        { label: 'recall', value: pct(m ? m.recall : null) },
+        { label: 'exact（页级）', value: pct(m ? m.exact : null) },
+      ]
+      // 批㉛段3.2：Loss 点选联动——点即选（圆标＋step/loss 读数），一键跳该 run 的 badcase 可视化
+      var spikeIdx = null
+      if (trainVals.length >= 3) {
+        var worstRatio = 0
+        for (var i = 1; i < trainVals.length - 1; i++) {
+          var neigh = (trainVals[i - 1] + trainVals[i + 1]) / 2 || 1e-9
+          var ratio = trainVals[i] / neigh
+          if (ratio > worstRatio) { worstRatio = ratio; spikeIdx = i }
+        }
+        if (worstRatio <= 1.15) spikeIdx = null
+      }
+      var markIdx = selIdx !== null ? selIdx : spikeIdx
+      var mark = null
+      if (markIdx !== null && markIdx !== undefined && trainVals.length >= 2) {
+        var mv = trainVals[markIdx]
+        var mn = Math.min.apply(null, trainVals), mx = Math.max.apply(null, trainVals)
+        var mr = mx - mn || 1
+        var px = (markIdx / (trainVals.length - 1)) * W
+        var py = H - 4 - ((mv - mn) / mr) * (H - 8)
+        mark = { x: px, y: py, loss: mv, step: points[markIdx] && typeof points[markIdx].step === 'number' ? points[markIdx].step : null, isSpike: selIdx === null && spikeIdx !== null }
+      }
+      var runArtifacts = null
+      if (arts && arts.runs) {
+        var artRun = arts.runs.find(function(r) { return r.run_id === runId })
+        runArtifacts = artRun ? artRun.artifacts : []
+      }
+      return React.createElement('div', { className: 'atf-monitor-panel' },
+        React.createElement('div', { className: 'atf-monitor-head' },
+          React.createElement('b', null, '训练监控'),
+          React.createElement('select', {
+            className: 'atf-viewer-select', value: runId || '',
+            onChange: function(e) { store.setMonitor(true, e.target.value) },
+          },
+            runs.map(function(r) { return React.createElement('option', { key: r.run_id, value: r.run_id }, r.run_id) })),
+          React.createElement('button', { className: 'atf-pill', title: '收起', onClick: function() { store.setMonitor(false) } }, '×')),
+        run === null
+          ? React.createElement('div', { className: 'atf-monitor-empty' }, '（monitor 快照就绪中…）')
+          : React.createElement('div', { className: 'atf-monitor-body' },
+              React.createElement('div', { className: 'atf-monitor-status' },
+                React.createElement('span', { className: 'atf-gpu-dot', style: { background: active ? '#f59e0b' : '#16a34a' } }),
+                React.createElement('span', null, (active ? '训练中 · ' : '空闲 · ') + '段 ' + done + '/' + run.segments.length)),
+              React.createElement('div', { className: 'atf-monitor-sec' },
+                React.createElement('div', { className: 'atf-monitor-title' }, 'Loss 曲线'),
+                React.createElement('svg', { className: 'atf-monitor-chart', viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none' },
+                  trainPts ? React.createElement('polyline', { points: trainPts, fill: 'none', stroke: '#1d4ed8', strokeWidth: 1.5 }) : null,
+                  evalPts ? React.createElement('polyline', { points: evalPts, fill: 'none', stroke: '#94a3b8', strokeWidth: 1.5, strokeDasharray: '4 3' }) : null,
+                  mark ? React.createElement('circle', {
+                    cx: mark.x, cy: mark.y, r: 3.5,
+                    fill: mark.isSpike ? '#dc2626' : '#1d4ed8', stroke: '#fff', strokeWidth: 1,
+                  }) : null,
+                  trainVals.length >= 2 ? trainVals.map(function(v, idx) {
+                    var mn2 = Math.min.apply(null, trainVals), mx2 = Math.max.apply(null, trainVals)
+                    var r2 = mx2 - mn2 || 1
+                    return React.createElement('circle', {
+                      key: idx, cx: (idx / (trainVals.length - 1)) * W,
+                      cy: H - 4 - ((v - mn2) / r2) * (H - 8), r: 7,
+                      fill: 'transparent',
+                      style: { cursor: 'pointer' },
+                      onClick: function() { setSelIdx(idx === selIdx ? null : idx) },
+                    })
+                  }) : null),
+                React.createElement('div', { className: 'atf-monitor-legend' },
+                  React.createElement('span', null, React.createElement('span', { className: 'atf-sw', style: { background: '#1d4ed8' } }), 'train（' + trainVals.length + ' 点）'),
+                  React.createElement('span', null, React.createElement('span', { className: 'atf-sw atf-sw-dash', style: { background: evalPts ? '#94a3b8' : 'transparent' } }), evalVals.length >= 2 ? 'eval' : 'eval（本轮无 eval_loss 序列）')),
+                mark ? React.createElement('div', { className: 'atf-monitor-spike' },
+                  React.createElement('span', null, (mark.isSpike ? '突刺点' : '选中点') + '：' + (mark.step !== null ? 'step ' + mark.step + ' · ' : '') + 'loss ' + mark.loss),
+                  (run && (run.viewers || []).length > 0)
+                    ? React.createElement('button', {
+                        className: 'atf-viewer-link',
+                        title: '打开该 run 的 badcase 可视化（段1 viewer 入口）',
+                        onClick: function() { store.setViewer({ runId: runId }) },
+                      }, '查看 badcase →')
+                    : React.createElement('span', { className: 'atf-viewer-empty' }, '（该 run 无 viewer 产物）')) : React.createElement('div', { className: 'atf-monitor-spike' }, React.createElement('span', { className: 'atf-viewer-empty' }, '点击曲线任一点查看读数；红点＝自动识别的突刺'))),
+              React.createElement('div', { className: 'atf-monitor-sec' },
+                React.createElement('div', { className: 'atf-monitor-title' }, '评估 KPI', m ? React.createElement('span', { className: 'atf-monitor-round' }, ' ' + m.round) : null),
+                React.createElement('div', { className: 'atf-kpi-grid' },
+                  kpis.map(function(k) {
+                    return React.createElement('div', { key: k.label, className: 'atf-kpi-card' },
+                      React.createElement('div', { className: 'atf-kpi-label' }, k.label),
+                      React.createElement('div', { className: 'atf-kpi-value' }, k.value))
+                  })),
+                m ? React.createElement('div', { className: 'atf-monitor-sub' }, 'model：' + m.model + (m.pages !== null ? ' · ' + m.pages + ' 页' : '')) : React.createElement('div', { className: 'atf-monitor-sub' }, '（无评估轮产物——评估四件套入列后显示）')),
+              React.createElement('div', { className: 'atf-monitor-sec' },
+                React.createElement('div', { className: 'atf-monitor-title' }, '环境'),
+                React.createElement('div', { className: 'atf-monitor-env' },
+                  React.createElement('div', null, 'GPU：' + (gpu === null ? '—' : gpu.offline ? '离线' : (gpu.utilization || '—') + ' · ' + (gpu.memoryUsed || '—') + '/' + (gpu.memoryTotal || '—'))),
+                  React.createElement('div', null, '基模型：' + (env ? env.base_model : '—')),
+                  React.createElement('div', null, '数据集：' + (env ? env.dataset_keys : '—')),
+                  React.createElement('div', null, 'deepspeed：' + (env ? env.deepspeed : '—')),
+                  React.createElement('div', null, 'lane：' + (env ? env.lane : '—')))),
+              React.createElement('div', { className: 'atf-monitor-sec' },
+                React.createElement('div', { className: 'atf-monitor-title' }, '产物抽屉'),
+                runArtifacts === null
+                  ? React.createElement('div', { className: 'atf-viewer-empty' }, '（artifacts.json 就绪中…）')
+                  : runArtifacts.length === 0
+                    ? React.createElement('div', { className: 'atf-viewer-empty' }, '（该 run 无产物入列）')
+                    : React.createElement('div', { className: 'atf-art-list' },
+                        runArtifacts.map(function(a) {
+                          var isViewer = a.kind === 'html'
+                          return React.createElement('div', { key: a.path, className: 'atf-art-row' },
+                            React.createElement('span', { className: 'atf-art-kind' }, a.kind),
+                            isViewer
+                              ? React.createElement('button', {
+                                  className: 'atf-viewer-link', title: '内嵌打开（段1 viewer 入口）',
+                                  onClick: function() { store.setViewer({ runId: runId }) },
+                                }, a.name)
+                              : React.createElement('span', { className: 'atf-art-name', title: a.path }, a.name))
+                        })))))
     }
 
     /** 发起训练对话框（批㉛段2）：run 选择＋IterationConfig 四件套摘要（含义＋值＋来源标注＋
@@ -326,12 +516,41 @@ window.__ModuleLoader__.load({
             '.atf-train-mean{color:var(--dsh-text-secondary,#64748b);font-size:11px;}',
             '.atf-train-actions{display:flex;gap:10px;align-items:center;}',
             '.atf-train-send{background:#1d4ed8;color:#fff;}',
+            // 批㉛段3.1：右栏训练监控抽屉
+            '.atf-monitor-panel{position:fixed;top:0;right:0;bottom:0;width:360px;background:var(--dsh-bg,#fff);',
+            '  border-left:1px solid rgba(128,128,128,.25);box-shadow:-8px 0 24px rgba(0,0,0,.12);z-index:900;',
+            '  display:flex;flex-direction:column;font-size:12px;color:var(--dsh-text-primary,#1e293b);}',
+            '.atf-monitor-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(128,128,128,.2);}',
+            '.atf-monitor-body{flex:1;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:12px;}',
+            '.atf-monitor-empty{padding:20px 12px;color:var(--dsh-text-secondary,#64748b);}',
+            '.atf-monitor-status{display:flex;align-items:center;gap:8px;font-weight:600;}',
+            '.atf-monitor-sec{border:1px solid rgba(128,128,128,.18);border-radius:10px;padding:8px 10px;}',
+            '.atf-monitor-title{font-weight:600;margin-bottom:6px;}',
+            '.atf-monitor-round{font-weight:400;font-size:11px;color:var(--dsh-text-secondary,#64748b);}',
+            '.atf-monitor-chart{width:100%;height:80px;border:1px dashed rgba(128,128,128,.25);border-radius:6px;background:rgba(128,128,128,.04);}',
+            '.atf-monitor-legend{display:flex;gap:12px;font-size:10px;color:var(--dsh-text-secondary,#64748b);margin-top:4px;}',
+            '.atf-sw{display:inline-block;width:12px;height:3px;vertical-align:middle;margin-right:4px;}',
+            '.atf-sw-dash{background-image:linear-gradient(90deg,#94a3b8 60%,transparent 40%);background-size:6px 3px;}',
+            '.atf-monitor-sub{font-size:11px;color:var(--dsh-text-secondary,#64748b);margin-top:6px;}',
+            '.atf-kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}',
+            '.atf-kpi-card{border:1px solid rgba(128,128,128,.18);border-radius:8px;padding:6px 8px;}',
+            '.atf-kpi-label{font-size:10px;color:var(--dsh-text-secondary,#64748b);}',
+            '.atf-kpi-value{font-size:15px;font-weight:600;}',
+            '.atf-monitor-env{display:flex;flex-direction:column;gap:3px;}',
+            // 批㉛段3.2/3.3：Loss 点选联动＋产物抽屉
+            '.atf-monitor-spike{display:flex;align-items:center;gap:8px;font-size:11px;margin-top:5px;',
+            '  color:var(--dsh-text-primary,#1e293b);}',
+            '.atf-art-list{display:flex;flex-direction:column;}',
+            '.atf-art-row{display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px dashed rgba(128,128,128,.15);font-size:11px;}',
+            '.atf-art-row:last-child{border-bottom:0;}',
+            '.atf-art-kind{flex:none;width:34px;text-align:center;border:1px solid rgba(128,128,128,.25);border-radius:4px;',
+            '  font-size:9px;color:var(--dsh-text-secondary,#64748b);padding:1px 0;}',
           ].join('')
           document.head.append(style)
         }
 
         // GPU 卡显隐开关（session-scoped：inject 工厂收 sessionId——批⑳实证通道；
-        // 本处同时是 sessionId 进 store 的唯一捕获点）
+        // 本处同时是 sessionId 进 store 的唯一捕获点）＋右栏监控开关（批㉛段3.1）
         ctx.slots.inject('conversation.session.header.utilities', function() {
           return ctx.slots.register({
             name: 'conversation.session.header.utilities',
@@ -342,10 +561,15 @@ window.__ModuleLoader__.load({
               return { toggle: function() { store.setOpen(!store.getOpen()) } }
             },
           }, function(injected) {
-            return React.createElement('button', {
-              className: 'atf-pill', title: 'GPU 状态卡显隐',
-              onClick: injected.toggle,
-            }, 'GPU')
+            return React.createElement('div', { style: { display: 'flex', gap: 6 } },
+              React.createElement('button', {
+                className: 'atf-pill', title: 'GPU 状态卡显隐',
+                onClick: injected.toggle,
+              }, 'GPU'),
+              React.createElement('button', {
+                className: 'atf-pill', title: '右栏训练监控（Loss 曲线/KPI/环境卡）',
+                onClick: function() { store.setMonitor(!store.monitorOpen) },
+              }, '监控'))
           })
         })
 
@@ -377,7 +601,8 @@ window.__ModuleLoader__.load({
                   onClick: function() { store.setTrain({ runId: null, mode: 'dry_run' }) },
                 }, '发起训练')),
               React.createElement(ViewerOverlay),
-              React.createElement(TrainDialog))
+              React.createElement(TrainDialog),
+              React.createElement(MonitorPanel))
           })
         })
       },

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage } from "../../packages/extensions/atf-ui/src/snapshot.js";
-import { buildIterationSummary, buildLaunchSurface, discoverViewerDirs, injectMonitorGlobal, resolveViewerRequest, scanRunDir, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
+import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, discoverViewerDirs, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveViewerRequest, scanRunDir, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -396,5 +396,104 @@ describe("批㉛段2 发起训练面（IterationConfig 四件套摘要＋launch 
     for (const phrase of ["ADMISSION=pass", "already_recorded", "到此止", "真实训练候我单独书面点头", "atf_launch_execute"]) {
       expect(clientSource).toContain(phrase);
     }
+  });
+});
+
+describe("批㉛段3.1 右栏监控面（Loss 历史回退＋评估 KPI＋环境卡）", () => {
+  it("trainerHistoryLoss：最新 checkpoint trainer_state.log_history → 点列；无 checkpoint → 空数组", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-h");
+    mkdirSync(join(runDir, "training", "checkpoint-96"), { recursive: true });
+    mkdirSync(join(runDir, "training", "checkpoint-141"), { recursive: true });
+    writeFileSync(
+      join(runDir, "training", "checkpoint-96", "trainer_state.json"),
+      JSON.stringify({ log_history: [{ step: 2, loss: 0.9, epoch: 0.1 }] }),
+    );
+    writeFileSync(
+      join(runDir, "training", "checkpoint-141", "trainer_state.json"),
+      JSON.stringify({ log_history: [{ step: 2, loss: 0.6885, learning_rate: 7.1e-6, epoch: 0.04 }, { step: 4, loss: 0.726, learning_rate: 2.1e-5, epoch: 0.09 }] }),
+    );
+    const points = trainerHistoryLoss(runDir);
+    expect(points).toHaveLength(2);
+    expect(points[0]).toMatchObject({ step: 2, train_loss: 0.6885 });
+    // 无训练产物 → 空数组不抛
+    expect(trainerHistoryLoss(join(root, "run-missing"))).toEqual([]);
+  });
+  it("parseEvalMetrics：FormalEvalSummary/v1 → KPI 面（f1/precision/recall/exact）；坏形态 null", () => {
+    const parsed = parseEvalMetrics(
+      { model: "Qwen3-VL-32B-Instruct-lora", pages: 10, page_exact_rate: 0.0, micro: { precision: 0.5143, recall: 0.1773, f1: 0.2637 } },
+      "4-20261004",
+    );
+    expect(parsed).toMatchObject({ round: "4-20261004", model: "Qwen3-VL-32B-Instruct-lora", pages: 10, f1: 0.2637, precision: 0.5143, recall: 0.1773, exact: 0.0 });
+    expect(parseEvalMetrics(null, "x")).toBeNull();
+    expect(parseEvalMetrics("junk", "x")).toBeNull();
+  });
+  it("latestEvalMetrics：轮目录取 N 最大者（orch/eval/metrics_summary.json），无轮回退 eval 根", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-e");
+    mkdirSync(join(runDir, "eval", "3-20261003", "orch", "eval"), { recursive: true });
+    mkdirSync(join(runDir, "eval", "4-20261004", "orch", "eval"), { recursive: true });
+    writeFileSync(join(runDir, "eval", "3-20261003", "orch", "eval", "metrics_summary.json"), JSON.stringify({ model: "old", micro: { f1: 0.1 } }));
+    writeFileSync(join(runDir, "eval", "4-20261004", "orch", "eval", "metrics_summary.json"), JSON.stringify({ model: "new", pages: 10, micro: { f1: 0.26 } }));
+    expect(latestEvalMetrics(runDir)).toMatchObject({ round: "4-20261004", f1: 0.26 });
+    // 无轮目录：eval 根 metrics_summary 兜底（round=latest）
+    rmSync(join(runDir, "eval", "3-20261003"), { recursive: true });
+    rmSync(join(runDir, "eval", "4-20261004"), { recursive: true });
+    writeFileSync(join(runDir, "eval", "metrics_summary.json"), JSON.stringify({ model: "root-fallback", micro: { f1: 0.2 } }));
+    expect(latestEvalMetrics(runDir)).toMatchObject({ round: "latest", model: "root-fallback" });
+  });
+  it("buildEnvSurface：IterationConfig 同源（基模型取尾段/数据集键逗连/deepspeed/lane）；缺席如实 —", () => {
+    const env = buildEnvSurface(
+      { base_model: { path: "/data/LLM_model/Qwen3-VL-32B-Instruct" }, dataset: { dataset_keys: ["pl_goods"] }, training: { deepspeed: "ds_z3_fp8_config.json" }, lane: "pl_goods" },
+      "run-x",
+    );
+    expect(env).toEqual({ base_model: "Qwen3-VL-32B-Instruct", dataset_keys: "pl_goods", deepspeed: "ds_z3_fp8_config.json", lane: "pl_goods" });
+    expect(buildEnvSurface(null, "run-x")).toEqual({ base_model: "—", dataset_keys: "—", deepspeed: "—", lane: "—" });
+  });
+  it("scanRunDir→monitor：metrics/env 随快照下发；live loss-series 优先于 trainer 历史回退", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-m31");
+    mkdirSync(join(runDir, "training", "checkpoint-10"), { recursive: true });
+    mkdirSync(join(runDir, "eval", "4-20261004", "orch", "eval"), { recursive: true });
+    writeFileSync(join(runDir, "training", "checkpoint-10", "trainer_state.json"), JSON.stringify({ log_history: [{ step: 1, loss: 1.2 }] }));
+    writeFileSync(join(runDir, "eval", "4-20261004", "orch", "eval", "metrics_summary.json"), JSON.stringify({ model: "m", micro: { f1: 0.3, precision: 0.4, recall: 0.5 }, page_exact_rate: 0.1, pages: 9 }));
+    const scan = scanRunDir(root, "run-m31");
+    expect(scan.metrics).toMatchObject({ round: "4-20261004", f1: 0.3, exact: 0.1 });
+    expect(scan.env).toMatchObject({ base_model: "—", deepspeed: "—" });
+    expect(scan.training.active).toBe(false);
+    expect(scan.training.loss).toHaveLength(1);
+    // live loss-series 在场 → 覆盖历史回退，active=true
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "loss-series.json"), JSON.stringify([{ train_loss: 0.5, eval_loss: 0.6 }]));
+    const scan2 = scanRunDir(root, "run-m31");
+    expect(scan2.training.active).toBe(true);
+    expect(scan2.training.loss).toEqual([{ train_loss: 0.5, eval_loss: 0.6 }]);
+    const snap = buildMonitorSnapshot([scan2]);
+    expect(snap.runs[0]?.metrics).toMatchObject({ f1: 0.3 });
+    expect(snap.runs[0]?.env).not.toBeNull();
+  });
+  it("批㉛段3.3 产物抽屉：launch manifest＋eval 轮四件套按轮索引入列（不重复罗列）", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-art");
+    mkdirSync(join(runDir, "launch"), { recursive: true });
+    mkdirSync(join(runDir, "eval", "4-20261004", "orch", "eval"), { recursive: true });
+    writeFileSync(join(runDir, "launch", "launch_manifest.json"), "{}");
+    writeFileSync(join(runDir, "eval", "4-20261004", "orch", "eval", "metrics_summary.json"), JSON.stringify({ model: "m", micro: {} }));
+    for (const f of ["badcases.jsonl", "raw_predictions.jsonl", "indexes.csv"]) writeFileSync(join(runDir, "eval", f), "x");
+    const scan = scanRunDir(root, "run-art");
+    const rows = buildArtifactsSnapshot([scan]).runs[0]?.artifacts ?? [];
+    const names = rows.map((r) => r.name);
+    expect(names).toContain("launch manifest（sha 索引）");
+    expect(names).toContain("eval metrics_summary（4-20261004）");
+    expect(names).toContain("eval badcases.jsonl");
+    expect(names).toContain("eval raw_predictions.jsonl");
+    expect(names).toContain("eval indexes.csv");
+    // 无轮目录（metrics.round=latest）→ eval 根兜底行（不带轮名）——根 metrics_summary 在场才入列
+    const snap2 = buildArtifactsSnapshot([{ ...scan, metrics: { round: "latest" } }]);
+    expect((snap2.runs[0]?.artifacts ?? []).map((r) => r.name)).not.toContain("eval metrics_summary");
+    writeFileSync(join(runDir, "eval", "metrics_summary.json"), JSON.stringify({ model: "root", micro: {} }));
+    const scanLate = scanRunDir(root, "run-art");
+    const snap3 = buildArtifactsSnapshot([{ ...scanLate, metrics: { round: "latest" } }]);
+    expect((snap3.runs[0]?.artifacts ?? []).map((r) => r.name)).toContain("eval metrics_summary");
   });
 });
