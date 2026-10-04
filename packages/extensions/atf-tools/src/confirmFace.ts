@@ -52,7 +52,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const configTool = defineTool({
     name: "atf_config_confirm",
     description:
-      "九要素训练配置确认卡（审批必经）：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 解析用户纯文字应答（如「lr 改 2e-4 其他 ok」）并重呈。确认（审批面板 Allow once）后 config-snapshot 落盘 runs/<run_id>/webui/。卡面与审批面板均按 ATF 九要素格式渲染（三态标记：⚠已用缺省/◆来自登记/?需确认）。",
+      "九要素训练配置确认卡（审批必经）：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 解析用户纯文字应答（如「lr 改 2e-4 其他 ok」）并重呈。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——批㉛段2 登记源，卡面与 Web 摘要同源）＞缺省。确认（审批面板 Allow once）后 config-snapshot 落盘 runs/<run_id>/webui/。卡面与审批面板均按 ATF 九要素格式渲染（三态标记：⚠已用缺省/◆来自登记/?需确认）。",
     parameters: {
       action: { type: "string", required: true, enum: ["present", "amend"], description: "present=构造/重呈卡；amend=解析纯文字应答后重呈" },
       run_id: { type: "string", required: true, description: "run 标识（快照与 pending 卡落点）" },
@@ -73,11 +73,35 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
     },
     async execute(args: { action: "present" | "amend"; run_id: string; overrides?: Record<string, unknown>; amend_text?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       const runDir = join(runsRoot, args.run_id);
-      // 现值基线：已确认快照（不重问）→ pending 卡现值 → 缺省
+      // 现值基线：已确认快照（不重问）→ run 的 IterationConfig 实值（批㉛段2：登记源，确认卡
+      // 与 Web 摘要同源——deepspeed 等实值不再落回泛化缺省）→ pending 卡现值 → 缺省
       const snapshotPath = join(runDir, "webui", "config-snapshot.json");
-      const baseline: Record<string, string> = existsSync(snapshotPath)
-        ? (JSON.parse(readFileSync(snapshotPath, "utf8")) as Record<string, string>)
-        : {};
+      // saveConfigSnapshot 形态＝{schema_version, confirmed}——基线取 confirmed 子对象
+      // （批㉛段2 修正：原实现整文件映射，快照确认值从未真正入卡基线）
+      const snapshot = (() => {
+        if (!existsSync(snapshotPath)) return {} as Record<string, string>;
+        try {
+          const parsed = JSON.parse(readFileSync(snapshotPath, "utf8")) as { confirmed?: Record<string, string> };
+          return parsed.confirmed ?? ({} as Record<string, string>);
+        } catch {
+          return {} as Record<string, string>;
+        }
+      })();
+      const iterPath = join(runDir, "prep", "iteration-config", "iteration-config.json");
+      let iterTraining: Record<string, string> = {};
+      if (existsSync(iterPath)) {
+        try {
+          const iter = JSON.parse(readFileSync(iterPath, "utf8")) as { training?: Record<string, unknown> };
+          if (iter.training !== undefined && iter.training !== null && typeof iter.training === "object") {
+            for (const [key, value] of Object.entries(iter.training)) {
+              if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") iterTraining[key] = String(value);
+            }
+          }
+        } catch {
+          iterTraining = {};
+        }
+      }
+      const baseline = { ...iterTraining, ...snapshot };
       const rawOverrides = (args.overrides ?? {}) as Record<string, unknown>;
       const overrides: Record<string, string> = {};
       for (const [key, value] of Object.entries(rawOverrides)) overrides[key] = String(value);
@@ -97,7 +121,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         const base = buildConfigConfirmFields({}, { fromRegistry: Object.keys(baseline).length > 0 ? baseline : undefined });
         return base.map((field) => (amended[field.key] !== undefined ? { key: field.key, value: String(amended[field.key]), tag: "need_confirm" as const } : field));
       })();
-      const title = args.action === "amend" ? `九要素训练配置确认（改参重呈）— run ${args.run_id}` : `九要素训练配置确认 — run ${args.run_id}`;
+      const title = args.action === "amend" ? `九要素配置确认（改参重呈）— run ${args.run_id}` : `九要素训练配置确认 — run ${args.run_id}`;
       const note = amendNote ?? "确认请点审批面板 Allow once；逐项修改可直接回复如「lr 改 2e-4」。";
       // pending 卡落盘（ui-atf-confirm / 刷新重建的同源数据）
       writePending(runsRoot, args.run_id, { kind: "config_confirm", run_id: args.run_id, title, fields, note, at: new Date().toISOString() });

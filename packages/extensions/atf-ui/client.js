@@ -28,11 +28,14 @@ window.__ModuleLoader__.load({
       open: true,
       // 批㉛段1：badcase viewer 浮层状态（null=关；{runId}=开着并指向该 run）
       viewer: null,
+      // 批㉛段2：发起训练对话框状态（null=关；{runId, mode}）
+      train: null,
       listeners: new Set(),
       setOpen: function(v) { this.open = v; this.listeners.forEach(function(fn) { fn() }) },
       subscribe: function(fn) { var s = this; s.listeners.add(fn); return function() { s.listeners.delete(fn) } },
       getOpen: function() { return this.open },
       setViewer: function(v) { this.viewer = v; this.listeners.forEach(function(fn) { fn() }) },
+      setTrain: function(v) { this.train = v; this.listeners.forEach(function(fn) { fn() }) },
     }
 
     /** monitor.json 轮询（sessionId 由 header.utilities 注入后生效；未就绪期静默等下周期）。 */
@@ -74,6 +77,115 @@ window.__ModuleLoader__.load({
     /** 有 viewer 产物的 run 清单（批㉛段1：monitor.json viewers 字段，空数组＝无挂载面）。 */
     function runsWithViewers(mon) {
       return ((mon && mon.runs) || []).filter(function(r) { return (r.viewers || []).length > 0 })
+    }
+
+    /** 可发起训练的 run 清单（批㉛段2：launch.train_sh 或 iteration_config 在场）。 */
+    function launchableRuns(mon) {
+      return ((mon && mon.runs) || []).filter(function(r) {
+        var l = r.launch
+        return !!l && (l.train_sh === true || !!l.iteration_config)
+      })
+    }
+
+    /** 训练发起消息模板（批㉛段2）——与 snapshot.js buildTrainLaunchMessage 单源语义
+     *  同步维护（client 半裸服务不打包，无法 require 仓内模块；tests/dshUi/atfUi.test.ts
+     *  有双份同语义钉子：两处模板都须含 DRY_RUN 止步条款与真训 owner 点头句，改动同步）。 */
+    function trainLaunchMessage(plan) {
+      var real = plan.mode === 'real'
+      var lines = [
+        '发起训练（' + plan.run_id + ' · ' + (real ? '真实训练' : 'DRY_RUN 验收') + '）：',
+        '请按 prepare/run SKILL.md 正道链执行并逐步回报：',
+        '① atf_config_confirm present（run_id=' + plan.run_id + '）——九要素卡呈我确认' + (plan.summaryCount > 0 ? '（Web 摘要已核：' + plan.summaryCount + ' 项来自 IterationConfig，其余为缺省/KB 未校准值，卡面如实标注）' : '') + '；',
+        '② 我 Allow once 后：DRY_RUN 校验——DRY_RUN=1 bash 该 run 的 train.sh，输出须含 ADMISSION=pass；',
+        '③ prelaunch 报告在场检查（train.sh 同目录 prelaunch*.md|json）——缺失则按 prepare SKILL.md:84 以 build_prelaunch_report.py 生成到 scratch 并回报路径（不回写 run 目录）；',
+        '④ 账本登记核验：generate_train_launch.py --record-training-release --config <该 IterationConfig>（已放行过则如实回报 already_recorded），贴 ledger 命中行作登记证据；',
+      ]
+      lines.push(real
+        ? '⑤ 放行执行：atf_launch_execute（launch_sh=scratch 内 launch.sh，config=同一 IterationConfig，note 注明 owner 书面授权）——唯一编排执行点，manifest sha 对拍 fail-closed；'
+        : '⑤ 到此止：不执行 atf_launch_execute、不启动 tmux、不占 GPU——本轮仅 DRY_RUN 验收，真实训练候我单独书面点头。')
+      return lines.join('\n')
+    }
+
+    /** 发起训练对话框（批㉛段2）：run 选择＋IterationConfig 四件套摘要（含义＋值＋来源标注＋
+     *  可改提示）＋DRY_RUN/真训形态＋生成发起消息（chat 通道走 atf_config_confirm 确认卡——
+     *  批㉑ M2 内嵌审批通道，批准/驳回都在 chat 流）。摘要数据＝monitor.json launch.summary
+     *  （同步器 buildIterationSummary 四件套——token_gate 语义＝构造准入闸门，非推理截断根因）。 */
+    function TrainDialog() {
+      var train = React.useSyncExternalStore(
+        function(fn) { return store.subscribe(fn) },
+        function() { return store.train },
+      )
+      var mon = useMonitor()
+      var candidates = launchableRuns(mon)
+      var runId = train && train.runId && candidates.some(function(r) { return r.run_id === train.runId })
+        ? train.runId
+        : (candidates[0] ? candidates[0].run_id : null)
+      var run = runId ? candidates.find(function(r) { return r.run_id === runId }) : null
+      var mode = train && train.mode === 'real' ? 'real' : 'dry_run'
+      if (train === null) return null
+      var summary = (run && run.launch && run.launch.summary) || []
+      var sendMsg = function() {
+        var iterCount = summary.filter(function(row) { return row.source === 'iteration_config' }).length
+        var msg = trainLaunchMessage({ run_id: runId, mode: mode, summaryCount: iterCount })
+        var input = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]')
+        if (input) {
+          input.focus()
+          document.execCommand('insertText', false, msg)
+        }
+        store.setTrain(null)
+      }
+      return React.createElement('div', {
+        className: 'atf-viewer-overlay',
+        onClick: function(e) { if (e.target === e.currentTarget) store.setTrain(null) },
+      },
+        React.createElement('div', { className: 'atf-viewer-frame atf-train-frame' },
+          React.createElement('div', { className: 'atf-viewer-head' },
+            React.createElement('b', null, '发起训练'),
+            candidates.length > 0
+              ? React.createElement('select', {
+                  className: 'atf-viewer-select',
+                  value: runId || '',
+                  onChange: function(e) { store.setTrain({ runId: e.target.value, mode: mode }) },
+                },
+                candidates.map(function(r) {
+                  return React.createElement('option', { key: r.run_id, value: r.run_id }, r.run_id)
+                }))
+              : React.createElement('span', { className: 'atf-viewer-empty' }, '（当前 runsRoot 无可发起 run——需 train.sh 或 IterationConfig 在场）'),
+            React.createElement('button', { className: 'atf-pill', title: '关闭', onClick: function() { store.setTrain(null) } }, '×')),
+          runId
+            ? React.createElement('div', { className: 'atf-train-body' },
+                React.createElement('div', { className: 'atf-train-facts' },
+                  React.createElement('span', null, 'train.sh：' + (run.launch.train_sh ? '在场 ✓' : '缺席（需先走 prepare 链）')),
+                  React.createElement('span', null, 'prelaunch 报告：' + (run.launch.prelaunch_report ? '在场 ✓' : '缺席（链内按 SKILL.md:84 生成）')),
+                  React.createElement('span', null, '配置快照：' + (run.launch.config_snapshot ? '已确认 ✓' : '未确认（确认卡后落盘）'))),
+                React.createElement('div', { className: 'atf-train-mode' },
+                  React.createElement('label', null,
+                    React.createElement('input', {
+                      type: 'radio', name: 'atf-train-mode', checked: mode === 'dry_run',
+                      onChange: function() { store.setTrain({ runId: runId, mode: 'dry_run' }) },
+                    }), 'DRY_RUN 验收（缺省——确认卡→DRY_RUN 校验→账本核验后止步，不开真训）'),
+                  React.createElement('label', null,
+                    React.createElement('input', {
+                      type: 'radio', name: 'atf-train-mode', checked: mode === 'real',
+                      onChange: function() { store.setTrain({ runId: runId, mode: 'real' }) },
+                    }), '真实训练（须 owner 单独书面点头；单卡 ≤180min 授权轴）')),
+                React.createElement('div', { className: 'atf-train-summary' },
+                  React.createElement('div', { className: 'atf-train-sum-head' },
+                    React.createElement('span', null, 'IterationConfig 摘要（四件套：含义＋值＋来源标注＋可改）'),
+                    React.createElement('span', { className: 'atf-viewer-empty' }, '改法：消息/卡面回复如「lr 改 2e-4」')),
+                  summary.map(function(row) {
+                    return React.createElement('div', { key: row.key, className: 'atf-train-row' },
+                      React.createElement('span', { className: 'atf-train-key', title: row.meaning }, row.key),
+                      React.createElement('span', { className: 'atf-train-val' }, row.value),
+                      React.createElement('span', {
+                        className: 'atf-train-src' + (row.source === 'default' ? ' atf-train-src-warn' : ''),
+                      }, row.source === 'iteration_config' ? '来自 IterationConfig' : row.source === 'config_snapshot' ? '来自登记快照' : '缺省/KB 未校准 ⚠'),
+                      React.createElement('span', { className: 'atf-train-mean', title: row.meaning }, row.meaning.split('｜')[0]))
+                  })),
+                React.createElement('div', { className: 'atf-train-actions' },
+                  React.createElement('button', { className: 'atf-pill atf-train-send', onClick: sendMsg }, '生成发起消息（进 chat 正道链）'),
+                  React.createElement('span', { className: 'atf-viewer-empty' }, '消息进 chat 后走确认卡批准/驳回（M2 内嵌通道）；批准≠放行真训——真训另有闸。')))
+            : null))
     }
 
     /** GPU 状态一行卡（紧凑单行——指令三段形态：GPU util/显存/在跑 run）。 */
@@ -198,6 +310,22 @@ window.__ModuleLoader__.load({
             '.atf-viewer-select{font-size:12px;padding:2px 6px;border-radius:6px;}',
             '.atf-viewer-empty{color:#64748b;font-size:12px;}',
             '.atf-viewer-iframe{flex:1;border:0;width:100%;}',
+            // 批㉛段2：发起训练对话框
+            '.atf-train-frame{width:min(880px,94vw);}',
+            '.atf-train-body{flex:1;display:flex;flex-direction:column;gap:8px;padding:10px 12px;overflow:hidden;font-size:12px;}',
+            '.atf-train-facts{display:flex;gap:14px;flex-wrap:wrap;color:var(--dsh-text-secondary,#64748b);}',
+            '.atf-train-mode{display:flex;flex-direction:column;gap:4px;}',
+            '.atf-train-mode label{display:flex;gap:6px;align-items:center;cursor:pointer;}',
+            '.atf-train-summary{flex:1;overflow:auto;border:1px solid rgba(128,128,128,.2);border-radius:8px;padding:6px 8px;}',
+            '.atf-train-sum-head{display:flex;justify-content:space-between;align-items:baseline;font-weight:600;padding:2px 0 6px;}',
+            '.atf-train-row{display:grid;grid-template-columns:minmax(150px,auto) minmax(90px,auto) minmax(120px,auto) 1fr;gap:8px;padding:3px 0;border-bottom:1px dashed rgba(128,128,128,.15);}',
+            '.atf-train-key{font-family:monospace;font-size:11px;}',
+            '.atf-train-val{font-weight:600;}',
+            '.atf-train-src{color:#1d4ed8;font-size:11px;}',
+            '.atf-train-src-warn{color:#b45309;}',
+            '.atf-train-mean{color:var(--dsh-text-secondary,#64748b);font-size:11px;}',
+            '.atf-train-actions{display:flex;gap:10px;align-items:center;}',
+            '.atf-train-send{background:#1d4ed8;color:#fff;}',
           ].join('')
           document.head.append(style)
         }
@@ -243,8 +371,13 @@ window.__ModuleLoader__.load({
                 React.createElement('button', {
                   className: 'atf-pill', title: '内嵌打开 badcase 可视化',
                   onClick: function() { store.setViewer({ runId: null }) },
-                }, 'badcase 可视化')),
-              React.createElement(ViewerOverlay))
+                }, 'badcase 可视化'),
+                React.createElement('button', {
+                  className: 'atf-pill', title: '发起训练（IterationConfig 摘要→确认卡→正道链）',
+                  onClick: function() { store.setTrain({ runId: null, mode: 'dry_run' }) },
+                }, '发起训练')),
+              React.createElement(ViewerOverlay),
+              React.createElement(TrainDialog))
           })
         })
       },

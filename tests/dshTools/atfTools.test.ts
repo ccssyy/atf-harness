@@ -6,13 +6,14 @@
  * 复用面：真 mock 桥（tests/fixtures/mock_atf.mjs——契约忠实对端）与真 mock pipeline
  * （tests/fixtures/mock_pipeline.mjs）；文件面走临时 runs 目录。
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { BridgeManager, allDefinitions, BRIDGE_TOOL_NAMES, buildBridgeTools } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
 import { buildFileTools } from "../../packages/extensions/atf-tools/src/fileFace.js";
 import { buildPipelineTool, PIPELINE_STAGES } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
+import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 import { translateParameters } from "../../packages/extensions/atf-tools/src/schemaTranslate.js";
 import { TOOL_DEFINITIONS, WORKSPACE_TOOL_DEFINITIONS } from "../../src/core/tools/index.js";
 
@@ -220,5 +221,58 @@ describe("atf_pipeline_stage 集成（mock pipeline）＋审批 seam", () => {
       expect(result).toMatchObject({ error: "approval_denied", outcome });
     }
     expect(PIPELINE_STAGES).toEqual(["register", "split", "label_qc", "candidate", "publish", "training_prep"]);
+  });
+});
+
+describe("批㉛段2 atf_config_confirm 现值基线（run 的 IterationConfig 入登记源）", () => {
+  const tempRoots2: string[] = [];
+  const tempRoot2 = (): string => {
+    const root = mkdtempSync(join(tmpdir(), "k31-confirm-test-"));
+    tempRoots2.push(root);
+    return root;
+  };
+  afterEach(() => {
+    for (const root of tempRoots2.splice(0)) rmSync(root, { recursive: true, force: true });
+  });
+  const seedRun = (root: string, withSnapshot: boolean): string => {
+    const runDir = join(root, "run-c");
+    mkdirSync(join(runDir, "prep", "iteration-config"), { recursive: true });
+    writeFileSync(
+      join(runDir, "prep", "iteration-config", "iteration-config.json"),
+      JSON.stringify({ schema_version: "IterationConfig/v1", training: { learning_rate: "1e-4", deepspeed: "ds_z3_fp8_config.json", cutoff_len: 9000 } }),
+    );
+    if (withSnapshot) {
+      mkdirSync(join(runDir, "webui"), { recursive: true });
+      writeFileSync(join(runDir, "webui", "config-snapshot.json"), JSON.stringify({ confirmed: { learning_rate: "5e-5" } }));
+    }
+    return root;
+  };
+  it("present：IterationConfig training 实值以◆来自登记入卡（snapshot 优先），deepspeed 不再落泛化缺省", async () => {
+    const root = seedRun(tempRoot2(), false);
+    const tools = buildConfirmTools({ runsRoot: root, ctx: approvalCtx("allowed-once") });
+    const result = (await findTool(tools, "atf_config_confirm").execute({ action: "present", run_id: "run-c" }, fakeExec)) as { ok?: boolean; fields?: Array<{ key: string; value: string; tag: string }> };
+    expect(result.ok).toBe(true);
+    const byKey = Object.fromEntries((result.fields ?? []).map((f) => [f.key, f]));
+    expect(byKey["deepspeed"]).toEqual({ key: "deepspeed", value: "ds_z3_fp8_config.json", tag: "from_registry" });
+    expect(byKey["learning_rate"]).toMatchObject({ value: "1e-4", tag: "from_registry" });
+    expect(byKey["cutoff_len"]).toMatchObject({ value: "9000", tag: "from_registry" });
+    expect(byKey["max_total_tokens"]).toMatchObject({ tag: "default_used" });
+    // 确认后快照按卡面现值落盘（webui/config-snapshot.json）
+    const snap = JSON.parse(readFileSync(join(root, "run-c", "webui", "config-snapshot.json"), "utf8")) as { confirmed: Record<string, string> };
+    expect(snap.confirmed["deepspeed"]).toBe("ds_z3_fp8_config.json");
+  });
+  it("已确认快照压过 IterationConfig（不重问语义）；驳回路径 fail-closed 不落快照", async () => {
+    const root = seedRun(tempRoot2(), true);
+    const tools = buildConfirmTools({ runsRoot: root, ctx: approvalCtx("allowed-once") });
+    const result = (await findTool(tools, "atf_config_confirm").execute({ action: "present", run_id: "run-c" }, fakeExec)) as { fields?: Array<{ key: string; value: string; tag: string }> };
+    const byKey = Object.fromEntries((result.fields ?? []).map((f) => [f.key, f]));
+    expect(byKey["learning_rate"]).toMatchObject({ value: "5e-5", tag: "from_registry" });
+    expect(byKey["deepspeed"]).toMatchObject({ value: "ds_z3_fp8_config.json", tag: "from_registry" });
+    const denied = buildConfirmTools({ runsRoot: root, ctx: approvalCtx("rejected") });
+    const runDir = join(root, "run-c");
+    rmSync(join(runDir, "webui", "config-snapshot.json"));
+    const rej = (await findTool(denied, "atf_config_confirm").execute({ action: "present", run_id: "run-c" }, fakeExec)) as Record<string, unknown>;
+    expect(rej).toMatchObject({ error: "approval_denied", outcome: "rejected" });
+    expect(rej).toMatchObject({ tool: "atf_config_confirm" });
   });
 });

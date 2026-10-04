@@ -11,6 +11,8 @@ export interface AtfRunScan {
   artifacts?: string[];
   /** 批㉛段1：badcase viewer 发现清单（scanRunDir 两形态推导；缺省空数组＝无挂载面）。 */
   viewers?: string[];
+  /** 批㉛段2：Web 发起训练面（train.sh/快照/IterationConfig/prelaunch/摘要；null＝不可发起）。 */
+  launch?: unknown;
 }
 export interface AtfGpuStatus {
   offline: boolean;
@@ -27,6 +29,7 @@ export interface AtfMonitorSnapshot {
     state: string;
     segments: Array<{ key: string; label: string; status: "done" | "active" | "failed" | "pending" }>;
     viewers: string[];
+    launch: unknown;
     training: { active: boolean; points: Array<Record<string, unknown>>; pending_confirm: unknown };
   }>;
 }
@@ -42,3 +45,8 @@ export declare function parseLossSeries(text: string): Array<Record<string, unkn
 export declare function lossSvgPath(points: Array<Record<string, unknown>>, key: string, w?: number, h?: number): string | null;
 export declare function deriveKpis(points: Array<Record<string, unknown>>): Record<string, string>;
 export declare function deriveTrainingState(points: Array<Record<string, unknown>>): "idle" | "training";
+export declare function buildTrainLaunchMessage(plan: {
+  run_id: string;
+  mode: "dry_run" | "real";
+  summary?: Array<{ key: string; value: string; source: string }>;
+}): string;

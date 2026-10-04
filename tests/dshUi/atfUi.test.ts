@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildMonitorSnapshot, buildArtifactsSnapshot, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS } from "../../packages/extensions/atf-ui/src/snapshot.js";
-import { discoverViewerDirs, injectMonitorGlobal, resolveViewerRequest, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
+import { buildMonitorSnapshot, buildArtifactsSnapshot, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage } from "../../packages/extensions/atf-ui/src/snapshot.js";
+import { buildIterationSummary, buildLaunchSurface, discoverViewerDirs, injectMonitorGlobal, resolveViewerRequest, scanRunDir, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -313,5 +313,88 @@ describe("批㉛段1 viewer 静态路由（resolveViewerRequest fail-closed＋ha
     );
     expect(registered).toContainEqual({ kind: "prefix", path: VIEWER_ROUTE_PREFIX });
     for (const d of effects) d();
+  });
+});
+
+describe("批㉛段2 发起训练面（IterationConfig 四件套摘要＋launch 扫描＋消息模板）", () => {
+  it("buildIterationSummary：值源优先级 iteration_config＞snapshot＞缺省，来源标注如实", () => {
+    const rows = buildIterationSummary(
+      { learning_rate: "1e-4", num_train_epochs: 3, lora_rank: 32 },
+      { learning_rate: "5e-5", lora_alpha: "16", max_total_tokens: "8192" },
+    );
+    const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
+    expect(byKey["learning_rate"]).toMatchObject({ value: "1e-4", source: "iteration_config" });
+    expect(byKey["num_train_epochs"]).toMatchObject({ value: "3", source: "iteration_config" });
+    expect(byKey["lora_alpha"]).toMatchObject({ value: "16", source: "config_snapshot" });
+    expect(byKey["cutoff_len"]).toMatchObject({ source: "default" });
+    expect(byKey["max_total_tokens"]).toMatchObject({ value: "8192", source: "config_snapshot" });
+    expect(byKey["image_min_pixels"]?.source).toBe("default");
+    expect(byKey["learning_rate"]?.meaning).toContain("来自 IterationConfig");
+    expect(byKey["image_min_pixels"]?.meaning).toContain("未校准");
+    // 四件套＝含义＋值＋来源标注＋可改（meaning 承载含义与来源；label 沿批㉚ 卡面）
+    expect(rows.every((r) => r.key && r.label && r.value !== undefined && r.meaning.length > 0)).toBe(true);
+  });
+  it("token_gate 语义修正（批㉛段2）：max_total_tokens＝构造准入闸门，不引用「评估截断根因」错误归因", () => {
+    const rows = buildIterationSummary(null, null);
+    const tokenRow = rows.find((r) => r.key === "max_total_tokens");
+    expect(tokenRow?.meaning).toContain("构造准入闸门");
+    expect(tokenRow?.meaning).toContain("不作用于评估推理长度");
+    expect(tokenRow?.meaning).not.toContain("截断根因");
+    expect(tokenRow?.meaning).not.toContain("评估推理截断由 token_gate");
+  });
+  it("buildLaunchSurface：train.sh/快照/IterationConfig/prelaunch 四件扫描＋training 子对象值映射", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-t");
+    mkdirSync(join(runDir, "launch"), { recursive: true });
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    mkdirSync(join(runDir, "prep", "iteration-config"), { recursive: true });
+    writeFileSync(join(runDir, "launch", "train.sh"), "#!/usr/bin/env bash\n");
+    writeFileSync(join(runDir, "launch", "prelaunch-report.md"), "# prelaunch\n");
+    writeFileSync(join(runDir, "webui", "config-snapshot.json"), JSON.stringify({ confirmed: { learning_rate: "2e-4" } }));
+    writeFileSync(
+      join(runDir, "prep", "iteration-config", "iteration-config.json"),
+      JSON.stringify({ schema_version: "IterationConfig/v1", training: { learning_rate: "1e-4", cutoff_len: 9000 } }),
+    );
+    const surface = buildLaunchSurface(runDir);
+    expect(surface.train_sh).toBe(true);
+    expect(surface.config_snapshot).toBe(true);
+    expect(surface.iteration_config).toBe("prep/iteration-config/iteration-config.json");
+    expect(surface.prelaunch_report).toContain("prelaunch-report.md");
+    expect(surface.summary.find((r) => r.key === "learning_rate")).toMatchObject({ value: "1e-4", source: "iteration_config" });
+    expect(surface.summary.find((r) => r.key === "cutoff_len")).toMatchObject({ value: "9000", source: "iteration_config" });
+    expect(surface.summary.find((r) => r.key === "lora_rank")?.source).toBe("default");
+  });
+  it("scanRunDir→monitor：launch 面随快照下发（缺席 run 全 false/null 不炸）", async () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-m");
+    mkdirSync(join(runDir, "prep", "iteration-config"), { recursive: true });
+    writeFileSync(join(runDir, "prep", "iteration-config", "iteration-config.json"), JSON.stringify({ training: { learning_rate: "3e-4" } }));
+    const scan = scanRunDir(root, "run-m");
+    expect(scan.launch.train_sh).toBe(false);
+    expect(scan.launch.summary.find((r) => r.key === "learning_rate")).toMatchObject({ value: "3e-4", source: "iteration_config" });
+    const snap = buildMonitorSnapshot([scan]);
+    expect(snap.runs[0]?.launch).not.toBeNull();
+    const empty = buildMonitorSnapshot([{ ...scan, launch: undefined }]);
+    expect(empty.runs[0]?.launch).toBeNull();
+  });
+  it("buildTrainLaunchMessage：DRY_RUN 止步条款＋真训形态 atf_launch_execute，账本核验在列", () => {
+    const dry = buildTrainLaunchMessage({ run_id: "run-x", mode: "dry_run", summary: [{ key: "lr", value: "1e-4", source: "iteration_config" }] });
+    expect(dry).toContain("atf_config_confirm present（run_id=run-x）");
+    expect(dry).toContain("ADMISSION=pass");
+    expect(dry).toContain("--record-training-release");
+    expect(dry).toContain("already_recorded");
+    expect(dry).toContain("到此止");
+    expect(dry).toContain("真实训练候我单独书面点头");
+    expect(dry).not.toContain("放行执行：atf_launch_execute");
+    const real = buildTrainLaunchMessage({ run_id: "run-x", mode: "real" });
+    expect(real).toContain("atf_launch_execute");
+    expect(real).toContain("manifest sha 对拍 fail-closed");
+    expect(real).not.toContain("到此止");
+  });
+  it("client.js 模板双份同语义钉子：DRY_RUN 止步与真训 owner 点头句两处都在（裸服务不打包——改动同步）", () => {
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    for (const phrase of ["ADMISSION=pass", "already_recorded", "到此止", "真实训练候我单独书面点头", "atf_launch_execute"]) {
+      expect(clientSource).toContain(phrase);
+    }
   });
 });

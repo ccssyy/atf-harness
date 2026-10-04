@@ -50,6 +50,8 @@ export function buildMonitorSnapshot(runs, gpu) {
       segments: SEGMENTS.map(({ key, label }) => ({ key, label, status: segmentStatus(run, key) })),
       // 批㉛段1：badcase viewer 产物发现（scanRunDir 两形态兼容推导，空数组＝无挂载面）
       viewers: Array.isArray(run.viewers) ? run.viewers : [],
+      // 批㉛段2：Web 发起训练面（train.sh/快照/IterationConfig/prelaunch/摘要四件套）
+      launch: run.launch ?? null,
       training: {
         active: run.training?.active === true,
         points: Array.isArray(run.training?.loss) ? run.training.loss : [],
@@ -116,6 +118,37 @@ export function parseLossSeries(text) {
   } catch {
     return [];
   }
+}
+
+/**
+ * 批㉛段2：训练发起消息模板（client『发起训练』对话框单源——chat 通道正道链指令）。
+ * DRY_RUN 缺省：确认卡批准 → DRY_RUN 校验（ADMISSION=pass）→ prelaunch 在场检查 →
+ * 账本登记核验 → 止步不开真训（真训须 owner 单独书面点头）。真训形态把第⑤条换为
+ * 放行执行语义（仍须经 atf_launch_execute 唯一编排执行点）。
+ * @param {{run_id: string, mode: "dry_run"|"real", summary?: Array<{key: string, value: string, source: string}>}} plan
+ * @returns 多行消息文本。
+ */
+export function buildTrainLaunchMessage(plan) {
+  const runId = plan?.run_id ?? "";
+  const real = plan?.mode === "real";
+  const lines = [
+    `发起训练（${runId} · ${real ? "真实训练" : "DRY_RUN 验收"}）：`,
+    "请按 prepare/run SKILL.md 正道链执行并逐步回报：",
+    `① atf_config_confirm present（run_id=${runId}）——九要素卡呈我确认${plan?.summary && plan.summary.length > 0 ? `（Web 摘要已核：${plan.summary.filter((r) => r.source === "iteration_config").length} 项来自 IterationConfig，其余为缺省/KB 未校准值，卡面如实标注）` : ""}；`,
+    "② 我 Allow once 后：DRY_RUN 校验——DRY_RUN=1 bash 该 run 的 train.sh，输出须含 ADMISSION=pass；",
+    "③ prelaunch 报告在场检查（train.sh 同目录 prelaunch*.md|json）——缺失则按 prepare SKILL.md:84 以 build_prelaunch_report.py 生成到 scratch 并回报路径（不回写 run 目录）；",
+    "④ 账本登记核验：generate_train_launch.py --record-training-release --config <该 IterationConfig>（已放行过则如实回报 already_recorded），贴 ledger 命中行作登记证据；",
+  ];
+  if (real) {
+    lines.push(
+      "⑤ 放行执行：atf_launch_execute（launch_sh=scratch 内 launch.sh，config=同一 IterationConfig，note 注明 owner 书面授权）——唯一编排执行点，manifest sha 对拍 fail-closed；",
+    );
+  } else {
+    lines.push(
+      "⑤ 到此止：不执行 atf_launch_execute、不启动 tmux、不占 GPU——本轮仅 DRY_RUN 验收，真实训练候我单独书面点头。",
+    );
+  }
+  return lines.join("\n");
 }
 
 /** SVG polyline points 串（0..w 归一；points 不足 2 → null 不画）。 */

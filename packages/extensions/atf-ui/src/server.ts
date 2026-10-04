@@ -15,6 +15,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { buildArtifactsSnapshot, buildMonitorSnapshot } from "./snapshot.js";
 import { PANEL_HTML } from "./panel.js";
 import { queryNvidiaSmi } from "../../../../src/webui/readOnlyTools.js";
+import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
 
 /** Cordis 插件名。 */
 export const name = "atf-ui";
@@ -63,6 +64,24 @@ export interface RunScan {
   training: { active: boolean; loss: unknown; pending_confirm: unknown };
   report: { files: string[] };
   viewers: string[];
+  launch: LaunchSurface;
+}
+
+/** 批㉛段2：Web 发起训练面（monitor.json 下发——client 摘要对话框与发起消息模板的数据源）。 */
+export interface LaunchSurface {
+  train_sh: boolean;
+  config_snapshot: boolean;
+  iteration_config: string | null;
+  prelaunch_report: string | null;
+  summary: IterationSummaryRow[];
+}
+
+export interface IterationSummaryRow {
+  key: string;
+  label: string;
+  value: string;
+  source: "iteration_config" | "config_snapshot" | "default";
+  meaning: string;
 }
 
 /** 单 run 目录标记推导（任务卡 chat 卡面与同步器同源——trainingFace status 复用本出口）。 */
@@ -109,8 +128,109 @@ export function scanRunDir(root: string, runId: string): RunScan {
     },
     report: { files: reportFiles },
     viewers: discoverViewerDirs(dir),
+    launch: buildLaunchSurface(dir),
   };
 }
+
+/**
+ * 批㉛段2：IterationConfig 摘要（四件套标准：含义＋值＋来源标注＋可改）——纯函数 vitest 直测。
+ *
+ * 值源优先级：run 的 IterationConfig 实值（source=iteration_config，标注「来自 IterationConfig」）
+ * ＞ webui/config-snapshot.json（source=config_snapshot）＞ 批㉚ 段1 缺省表（source=default，
+ * KB 四项如实标注「KB 建议·未校准」）。可改轴＝meaning 尾注（KB 项沿批㉚ label 的改法；核心项
+ * 走 chat 纯文字应答「lr 改 2e-4」通道，client 对话框统一提示）。
+ *
+ * token_gate 语义（批㉛段2 修正，A 重评实证）：max_total_tokens 是**数据构造期准入闸门**——
+ * 超限样本在构造期截断/拒绝，不作用于评估推理长度（推理截断根因是服务端 completion 缺省，
+ * 批㉙ A 重评已证伪「token_gate 4096＝截断根因」的段1 提案归因）；摘要面不得引用错误归因。
+ */
+export const ITERATION_MEANINGS: Record<string, string> = {
+  learning_rate: "学习率（LoRA 微调优化步长）",
+  num_train_epochs: "训练轮数（全量数据过几遍）",
+  per_device_train_batch_size: "单卡 batch（每次前向的样本数）",
+  gradient_accumulation_steps: "梯度累积（累积几步做一次更新；等效 batch＝单卡 batch×累积）",
+  cutoff_len: "样本截断长度（训练序列最大 token 数）",
+  deepspeed: "DeepSpeed 分布式配置（显存/卸载策略）",
+  lora_rank: "LoRA 秩（容量/参数量）",
+  lora_alpha: "LoRA alpha（缩放系数，与 rank 成对）",
+  dataset_keys: "数据集键（登记面推导的 variants 条目）",
+  max_total_tokens: "构造准入闸门：单样本超限在数据构造期截断/拒绝——不作用于评估推理长度（推理截断由服务端 completion 参数决定，批㉙ A 重评实证）",
+  image_min_pixels: "像素下限（训练/评估必须同一对值，评估服务只引用训练确认值）",
+  image_max_pixels: "像素上限（与像素下限成对确认）",
+  negative_ratio_target: "负样本目标带（构造期配比目标）",
+};
+
+/** KB 四项（批㉚ 段1 入卡来源——未经确认不进生效配置，卡面/摘要均如实标注未校准）。 */
+const KB_KEYS = new Set(["max_total_tokens", "image_min_pixels", "image_max_pixels", "negative_ratio_target"]);
+
+export const buildIterationSummary = (
+  iterValues: Record<string, unknown> | null,
+  snapshot: Record<string, string> | null,
+): IterationSummaryRow[] =>
+  CONFIG_CONFIRM_KEYS.map((entry) => {
+    const raw = iterValues?.[entry.key];
+    const iterValue = raw !== undefined && (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") ? String(raw) : undefined;
+    const snapValue = snapshot?.[entry.key];
+    const [value, source] =
+      iterValue !== undefined
+        ? [iterValue, "iteration_config" as const]
+        : snapValue !== undefined
+          ? [snapValue, "config_snapshot" as const]
+          : [entry.default, "default" as const];
+    const sourceNote =
+      source === "iteration_config"
+        ? "来自 IterationConfig"
+        : source === "config_snapshot"
+          ? "来自登记快照"
+          : KB_KEYS.has(entry.key)
+            ? "KB 建议·未校准（未经确认不进生效配置）"
+            : "已用缺省（未经确认）";
+    const meaning = `${ITERATION_MEANINGS[entry.key] ?? entry.label}｜来源：${sourceNote}`;
+    return { key: entry.key, label: entry.label, value, source, meaning };
+  });
+
+/** IterationConfig 落点（批㉙ 链产物形态：<run>/prep/iteration-config/iteration-config.json）。 */
+export const iterationConfigPathOf = (runDir: string): string => join(runDir, "prep", "iteration-config", "iteration-config.json");
+
+const readJsonFile = (abs: string): unknown => {
+  try {
+    return JSON.parse(readFileSync(abs, "utf8")) as unknown;
+  } catch {
+    return null;
+  }
+};
+
+/** 批㉛段2：单 run 发起面扫描（train.sh/快照/IterationConfig/prelaunch 报告/摘要）。 */
+export const buildLaunchSurface = (dir: string): LaunchSurface => {
+  const trainSh = existsSync(join(dir, "launch", "train.sh"));
+  const snapshotPath = join(dir, "webui", "config-snapshot.json");
+  const snapshot = hasConfigSnapshotFile(snapshotPath) ? (readJsonFile(snapshotPath) as { confirmed?: Record<string, string> } | null) : null;
+  const iterPath = iterationConfigPathOf(dir);
+  const iter = existsSync(iterPath) ? (readJsonFile(iterPath) as Record<string, unknown> | null) : null;
+  const reportDir = join(dir, "launch");
+  let prelaunch: string | null = null;
+  try {
+    const hit = readdirSync(reportDir).filter((f) => /^prelaunch.*\.(md|json)$/i.test(f)).sort();
+    prelaunch = hit.length > 0 ? join(reportDir, hit[0]!) : null;
+  } catch {
+    prelaunch = null;
+  }
+  return {
+    train_sh: trainSh,
+    config_snapshot: existsSync(snapshotPath),
+    iteration_config: iter !== null ? "prep/iteration-config/iteration-config.json" : null,
+    prelaunch_report: prelaunch,
+    summary: buildIterationSummary(iter?.["training"] !== undefined && iter?.["training"] !== null && typeof iter["training"] === "object" ? (iter["training"] as Record<string, unknown>) : iter, snapshot?.confirmed ?? null),
+  };
+};
+
+const hasConfigSnapshotFile = (path: string): boolean => {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+};
 
 /**
  * badcase viewer 产物发现（批㉛段1）：run 下以 `analysis` 开头的目录里的
