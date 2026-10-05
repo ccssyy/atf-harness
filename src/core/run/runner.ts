@@ -201,6 +201,7 @@ export const resolveRunExitCode = (outcome: BranchOutcome): 0 | 1 | 75 | 78 | 79
 // 零行为变化）。出口面原位 re-export（barrel 与消费方 import 零改动）。
 export type { ToolResultPayload } from "./toolResultPayload.js";
 import { buildToolResultPayload, gateFor, type ToolResultPayload } from "./toolResultPayload.js";
+import { loadRunHistory } from "./runHistory.js";
 
 /** A3:credential_indeterminate 终态的人工核对上报材料(固定五项)。 */
 export interface CredentialIndeterminateReport {
@@ -525,25 +526,24 @@ export class ScenarioRunner {
       // （durability 公理：恢复只读本侧事件流）；此后 appendEvent 顺序续接，报告 events = 全流。
       if (resumeMode || continueMode) {
         const historyLabel = resumeMode ? "resume" : "continue";
-        const historyText = await readFile(ws.sessionLogPath, "utf8").then(
-          (text) => ok(text),
-          (cause: NodeJS.ErrnoException) => err({ message: `会话流读取失败: ${String(cause.message)}`, code: cause.code }),
-        );
-        if (!historyText.ok) {
-          outcome = { kind: "failed", error: runError("session_failure", `${historyLabel} 装载既有会话流失败`, historyText.error) };
+        // G1 拆解单元④：读＋校验收口 runHistory.ts（错误 detail 保真透传——零行为变化）
+        const history = await loadRunHistory(ws.sessionLogPath);
+        if (!history.ok) {
+          outcome = {
+            kind: "failed",
+            error:
+              history.error.kind === "read"
+                ? runError("session_failure", `${historyLabel} 装载既有会话流失败`, history.error.error)
+                : runError("session_failure", `${historyLabel} 既有会话流校验失败（fail-closed）`, history.error.error),
+          };
           return finalize();
         }
-        const parsed = parseSessionStream(historyText.value);
-        if (!parsed.ok) {
-          outcome = { kind: "failed", error: runError("session_failure", `${historyLabel} 既有会话流校验失败（fail-closed）`, parsed.error) };
-          return finalize();
-        }
-        if (continueMode && parsed.value.length === 0) {
+        if (continueMode && history.value.length === 0) {
           outcome = { kind: "failed", error: runError("invalid_input", "continue 前置不满足：会话流为空（新 run 请走全新会话，勿用 continue）") };
           return finalize();
         }
-        events.push(...parsed.value);
-        for (const historical of parsed.value) options.onEvent?.(historical, "history");
+        events.push(...history.value);
+        for (const historical of history.value) options.onEvent?.(historical, "history");
       }
       const approvalHandler = options.approvalSurface === undefined
         ? undefined
