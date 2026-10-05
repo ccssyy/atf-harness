@@ -51,8 +51,6 @@ import {
   type CrossTurnVerdict,
 } from "./noProgressCrossTurn.js";
 import { guidanceLineFor, integrityGateBlockedGuidance, isMaterialGapCode, lengthTruncatedGapCard } from "./blockGuidance.js";
-import { findExistingCredential } from "../tools/credentialState.js";
-import { synthesizeUserConfirmation } from "../confirmRequest.js";
 import { injectMemoryEntries, type MemoryReadInjector } from "./memoryInjection.js";
 import {
   approvalParamsDigest,
@@ -198,53 +196,11 @@ export const resolveRunExitCode = (outcome: BranchOutcome): 0 | 1 | 75 | 78 | 79
   }
 };
 
-/** tool/result 事件 payload 形态(结构化回填,供 Faux 断言失败路径与 B2 block 回填验证)。
- *  P2-S2(A1/R3):call_ref = 被回填的 tool/call 事件 id——凭据消费事实的显式配对键。
- *  D-f 批:nudge/guidance 为可选回填附注（无进展 nudge 指引／业务阻断码 guidance 行；
- *  payload 自由 JSON,模型经 convertToLlm 可见——零 schema 变更）。 */
-export type ToolResultPayload =
-  | { tool: string; ok: true; result: unknown; call_ref: number; nudge?: string }
-  | { tool: string; ok: false; reason: string; call_ref: number; block?: ToolBlock; detail?: unknown; nudge?: string; guidance?: string };
-
-/**
- * F5 改动四 4.1（2026-09-26）：confirm 型请示的确认凭据并入。
- *
- * ask_user_for_input 的本地 handler 只产卡面材料（无账面访问权）；问答轨 granted 落账后，
- * runner 在 tool/result 落盘前按应答事件合成 user_confirmation 并入结果——随凭据下发：
- *   by/at   ＝ granted 应答事件的 actor/ts（账面事实，非本进程时钟编造）；
- *   candidate_digest ＝ handler 对候选文件的复算值（结果体透传）；
- *   approval_ref ＝ approval_session_id（内核仅透传落账与格式校验，改动一 1.3）。
- * 凭据链缺失（无 request/granted——理论上 gate 已拦，防御径）→ 原结果返回（并入跳过，
- *  不伪造凭据——fail-closed）。
- */
-const mergeConfirmationCredential = (
-  events: readonly SessionEvent[],
-  toolCallId: number,
-  tool: string,
-  result: unknown,
-): unknown => {
-  if (tool !== "ask_user_for_input" || !isPlainRecordValue(result) || result["ok"] !== true) return result;
-  const credential = findExistingCredential(events, toolCallId);
-  if (credential === null) return result;
-  const granted = events.find(
-    (event) =>
-      event.type === "approval/response" &&
-      (event.payload as Record<string, unknown>)["request_event_ref"] === credential.request_event_ref &&
-      (event.payload as Record<string, unknown>)["verdict"] === "granted",
-  );
-  if (granted === undefined) return result;
-  const actor = (granted.payload as Record<string, unknown>)["actor"];
-  const userConfirmation = synthesizeUserConfirmation({
-    actor: typeof actor === "string" && actor !== "" ? actor : "unknown-operator",
-    answeredAt: granted.ts,
-    candidateDigest: typeof result["candidate_digest"] === "string" ? result["candidate_digest"] : "",
-    approvalSessionId: credential.approval_session_id,
-  });
-  return { ...result, user_confirmation: userConfirmation, approval_session_id: credential.approval_session_id };
-};
-
-const isPlainRecordValue = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+// G1 拆解单元③（批㉞H-H3）：tool/result 回填构造/确认凭据并入/审批 gate 接线迁
+// toolResultPayload.ts（守卫管道边界——主循环/resume 重派/确认直填三处同构分流收口单源；
+// 零行为变化）。出口面原位 re-export（barrel 与消费方 import 零改动）。
+export type { ToolResultPayload } from "./toolResultPayload.js";
+import { buildToolResultPayload, gateFor, type ToolResultPayload } from "./toolResultPayload.js";
 
 /** A3:credential_indeterminate 终态的人工核对上报材料(固定五项)。 */
 export interface CredentialIndeterminateReport {
@@ -885,9 +841,7 @@ export class ScenarioRunner {
                   outcome = { kind: "failed", error: runError("invalid_input", "resume 重派失败：原 tool/call 事件缺失或形状非法（凭据回溯链断裂，fail-closed）", { tool_call_id: target.value.tool_call_id }) };
                   provider = null;
                 } else {
-                  const gate: ApprovalGate = {
-                    handler: (gateInput) => resumeHandler({ ...gateInput, tool_call_id: originalCall.id }),
-                  };
+                  const gate: ApprovalGate | undefined = gateFor(resumeHandler, originalCall.id);
                   const result: ToolCallOutcome = await executor.execute(callPayload.tool, callPayload.params, gate);
                   if (result.kind === "suspended" || result.kind === "aborted") {
                     outcome = result.kind === "suspended"
@@ -903,16 +857,13 @@ export class ScenarioRunner {
                       result.kind === "executed" && callPayload.tool === "atf_gate"
                         ? integrityGateBlockedGuidance((result.result as { gate?: unknown } | null | undefined)?.gate, result.result)
                         : undefined;
-                    const payload: ToolResultPayload =
-                      result.kind === "executed"
-                        ? { tool: callPayload.tool, ok: true, result: mergeConfirmationCredential(events, originalCall.id, callPayload.tool, result.result), call_ref: originalCall.id, ...(gateBlockedGuidance !== undefined ? { guidance: gateBlockedGuidance } : {}) }
-                        : result.kind === "rejected"
-                          ? { tool: callPayload.tool, ok: false, reason: result.reason, call_ref: originalCall.id, detail: result.detail }
-                          : result.kind === "input_violation"
-                            ? { tool: callPayload.tool, ok: false, reason: result.reason, call_ref: originalCall.id, detail: result.detail }
-                            : result.kind === "failed"
-                              ? { tool: callPayload.tool, ok: false, reason: "failed", call_ref: originalCall.id, detail: result.error }
-                              : { tool: callPayload.tool, ok: false, reason: result.block.reason, call_ref: originalCall.id, block: result.block };
+                    const payload: ToolResultPayload = buildToolResultPayload({
+                      tool: callPayload.tool,
+                      callRef: originalCall.id,
+                      result,
+                      events,
+                      ...(gateBlockedGuidance !== undefined ? { executedGuidance: gateBlockedGuidance } : {}),
+                    });
                     const backfilled = await appendEvent({ type: "tool/result", payload });
                     if (backfilled === null) {
                       provider = null; // 会话写路径失败已在 appendEvent 内折算
@@ -997,9 +948,7 @@ export class ScenarioRunner {
         });
         if (call === null) return; // 会话写路径失败已在 appendEvent 内折算
         turnLastTool = action.tool;
-        const gate: ApprovalGate | undefined = approvalHandler === undefined
-          ? undefined
-          : { handler: (gateInput) => approvalHandler({ ...gateInput, tool_call_id: call.id }) };
+        const gate: ApprovalGate | undefined = gateFor(approvalHandler, call.id);
         const result: ToolCallOutcome = await executor.execute(action.tool, action.params, gate);
         if (result.kind === "suspended" || result.kind === "aborted") {
           outcome = result.kind === "suspended"
@@ -1014,16 +963,13 @@ export class ScenarioRunner {
         if ((result.kind === "rejected" || result.kind === "input_violation") && isMaterialGapCode(result.reason)) {
           turnLastMaterialGap = { tool: action.tool, reason: result.reason };
         }
-        const payload: ToolResultPayload =
-          result.kind === "executed"
-            ? { tool: action.tool, ok: true, result: mergeConfirmationCredential(events, call.id, action.tool, result.result), call_ref: call.id }
-            : result.kind === "rejected"
-              ? { tool: action.tool, ok: false, reason: result.reason, call_ref: call.id, detail: result.detail, ...(backfillGuidance !== undefined ? { guidance: backfillGuidance } : {}) }
-              : result.kind === "input_violation"
-                ? { tool: action.tool, ok: false, reason: result.reason, call_ref: call.id, detail: result.detail, ...(backfillGuidance !== undefined ? { guidance: backfillGuidance } : {}) }
-                : result.kind === "failed"
-                  ? { tool: action.tool, ok: false, reason: "failed", call_ref: call.id, detail: result.error }
-                  : { tool: action.tool, ok: false, reason: result.block.reason, call_ref: call.id, block: result.block };
+        const payload: ToolResultPayload = buildToolResultPayload({
+          tool: action.tool,
+          callRef: call.id,
+          result,
+          events,
+          ...(backfillGuidance !== undefined ? { guidance: backfillGuidance } : {}),
+        });
         const backfilled = await appendEvent({ type: "tool/result", payload });
         if (backfilled === null) return;
         if (result.kind === "executed") return; // 决策循环继续：模型下一拍读到结果
@@ -1418,9 +1364,7 @@ export class ScenarioRunner {
           }
           // P2-S2:审批面缺省 = 账本轨-only(Phase 1 逐位一致,headless 等价性);
           // 声明后账本轨优先,未命中走问答轨(handler 发起/延续审批会话)。
-          const gate: ApprovalGate | undefined = approvalHandler === undefined
-            ? undefined
-            : { handler: (gateInput) => approvalHandler({ ...gateInput, tool_call_id: call.id }) };
+          const gate: ApprovalGate | undefined = gateFor(approvalHandler, call.id);
           const result: ToolCallOutcome = await executor.execute(step.tool, step.params, gate);
 
           // 证据链：cite_admitted_fact = 把最近一次成功准入的三元组作为本 tool/result 的 domain_refs
@@ -1489,16 +1433,15 @@ export class ScenarioRunner {
               ? integrityGateBlockedGuidance((result.result as { gate?: unknown } | null | undefined)?.gate, result.result)
               : undefined;
 
-          const payload: ToolResultPayload =
-            result.kind === "executed"
-              ? { tool: step.tool, ok: true, result: mergeConfirmationCredential(events, call.id, step.tool, result.result), call_ref: call.id, ...(nudgeNote !== undefined ? { nudge: nudgeNote } : {}), ...(gateBlockedGuidance !== undefined ? { guidance: gateBlockedGuidance } : {}) }
-              : result.kind === "rejected"
-                ? { tool: step.tool, ok: false, reason: result.reason, call_ref: call.id, detail: result.detail, ...(nudgeNote !== undefined ? { nudge: nudgeNote } : {}), ...(backfillGuidance !== undefined ? { guidance: backfillGuidance } : {}) }
-                : result.kind === "input_violation"
-                  ? { tool: step.tool, ok: false, reason: result.reason, call_ref: call.id, detail: result.detail, ...(nudgeNote !== undefined ? { nudge: nudgeNote } : {}), ...(backfillGuidance !== undefined ? { guidance: backfillGuidance } : {}) }
-                  : result.kind === "failed"
-                    ? { tool: step.tool, ok: false, reason: "failed", call_ref: call.id, detail: result.error }
-                    : { tool: step.tool, ok: false, reason: result.block.reason, call_ref: call.id, block: result.block, ...(nudgeNote !== undefined ? { nudge: nudgeNote } : {}) };
+          const payload: ToolResultPayload = buildToolResultPayload({
+            tool: step.tool,
+            callRef: call.id,
+            result,
+            events,
+            ...(nudgeNote !== undefined ? { nudge: nudgeNote } : {}),
+            ...(backfillGuidance !== undefined ? { guidance: backfillGuidance } : {}),
+            ...(gateBlockedGuidance !== undefined ? { executedGuidance: gateBlockedGuidance } : {}),
+          });
           const appended = await appendEvent({ type: "tool/result", payload, domain_refs: refs });
           if (appended === null) break;
 
