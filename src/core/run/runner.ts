@@ -87,7 +87,8 @@ import {
   type SessionEvent,
   type SessionEventInput,
 } from "../session/index.js";
-import { compactionTriggerTokens, turnTokenBudget, TURN_BUDGET_WARN_RATIO, TURN_HARD_STEP_FUSE_DEFAULT } from "../session/constantsBudget.js";
+import { compactionTriggerTokens, turnTokenBudget, TURN_HARD_STEP_FUSE_DEFAULT } from "../session/constantsBudget.js";
+import { budgetWarnedThisTurnOf, turnEstimateTokensOf, withBudgetWarningNudge } from "./turnBudget.js";
 import {
   createApprovalTrackHandler,
   readStreamMaxId,
@@ -691,42 +692,9 @@ export class ScenarioRunner {
           });
 
       // ---------------- 批 2.5 §二：turn 级 token 预算（层一/层二） ----------------
-      // 估算同源：payload chars/2（与 compaction 同一除数）；自末次 turn/start 起的实质事件
-      // 增量（durability 公理——从事件流确定性推导，无跨 turn 可变状态）。单位＝est tokens。
-      const BUDGET_WARN_MARKER = "预算提示";
-      const turnEstimateTokens = (): number => {
-        let start = 0;
-        for (let i = events.length - 1; i >= 0; i -= 1) {
-          if ((events[i] as SessionEvent).type === "turn/start") {
-            start = i;
-            break;
-          }
-        }
-        let total = 0;
-        for (let i = start; i < events.length; i += 1) {
-          const event = events[i] as SessionEvent;
-          if (event.type === "session/compaction" || event.type === "session/repair" || event.type === "assistant/attempt") continue;
-          total += Math.ceil(JSON.stringify(event.payload).length / 2);
-        }
-        return total;
-      };
+      // G1 拆解单元①（批㉞H-H3）：估算/警告判定/渐进注入迁 turnBudget.ts（事件流纯推导，
+      // 零行为变化）；此处保留预算解析（options 注入 seam——编排层职责）。
       const effectiveTurnTokenBudget = (): number => options.budgets?.turnTokenBudget ?? turnTokenBudget();
-      const budgetWarnedThisTurn = (): boolean => {
-        let start = 0;
-        for (let i = events.length - 1; i >= 0; i -= 1) {
-          if ((events[i] as SessionEvent).type === "turn/start") {
-            start = i;
-            break;
-          }
-        }
-        for (let i = start; i < events.length; i += 1) {
-          const event = events[i] as SessionEvent;
-          if (event.type !== "tool/result") continue;
-          const nudge = (event.payload as { nudge?: unknown } | null | undefined)?.nudge;
-          if (typeof nudge === "string" && nudge.includes(BUDGET_WARN_MARKER)) return true;
-        }
-        return false;
-      };
 
       /** 追加事件（无引用步骤不应触发铁律一——命中即 harness 故障）。 */
       const appendEvent = async (input: SessionEventInput): Promise<SessionEvent | null> => {
@@ -737,16 +705,9 @@ export class ScenarioRunner {
         }
         // 批 2.5 层二：渐进警告——本拍 tool/result 落盘前，若含本拍增量已达预算 80% 且本 turn
         // 未警告过 → nudge 注入收敛提示（复用 D-f 既有 nudge 字段，零新增 payload 字段——
-        // 两跳核最强形式：跳 1 schema 零改、跳 2 白名单零扩）。
-        if (input.type === "tool/result" && !budgetWarnedThisTurn()) {
-          const candidateEstimate = turnEstimateTokens() + Math.ceil(JSON.stringify(input.payload).length / 2);
-          const budget = effectiveTurnTokenBudget();
-          if (candidateEstimate >= budget * TURN_BUDGET_WARN_RATIO) {
-            const payload = input.payload as { nudge?: unknown };
-            const existing = typeof payload["nudge"] === "string" ? (payload["nudge"] as string) : undefined;
-            const warning = `${BUDGET_WARN_MARKER}：本 turn 估算用量已达 ${Math.min(100, Math.floor((candidateEstimate / budget) * 100))}%（预算 ${String(budget)} est tokens），请尽快收口（给出最终答复或向用户汇报）。`;
-            payload["nudge"] = existing !== undefined ? `${warning}；${existing}` : warning;
-          }
+        // 两跳核最强形式：跳 1 schema 零改、跳 2 白名单零扩；构造在 turnBudget.ts 单元）。
+        if (input.type === "tool/result" && !budgetWarnedThisTurnOf(events)) {
+          withBudgetWarningNudge(events, input.payload as { nudge?: unknown }, effectiveTurnTokenBudget());
         }
         const appended = await session.append(input);
         if (!appended.ok) {
@@ -1307,7 +1268,7 @@ export class ScenarioRunner {
         // 本层度量本 turn 增量，compaction 度量会话存量。
         if (!("decisionFace" in provider)) {
           const budget = effectiveTurnTokenBudget();
-          if (turnEstimateTokens() >= budget) {
+          if (turnEstimateTokensOf(events) >= budget) {
             provider = null;
             await collapseTurn(buildCollapseSummary({
               reason: "budget_exhausted",
