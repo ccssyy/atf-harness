@@ -8,13 +8,14 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 2026-10-03：v0.7.9b0 → v0.7.10b0，唯一真相源 = bridge.contract.yaml atf_upstream，
+// 当前 pin（re-pin 2026-10-05：v0.7.10b0 → v0.7.11b0，唯一真相源 = bridge.contract.yaml atf_upstream，
 // 本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.10b0（批㉖K 内核收编：批㉕B 段4 pin 文本批七文件 SKILL.md 条款
-// G6-G12 落档逐字收编＋七版本号 +0.1＋history 档案段——纯文本批零契约面变更，
-// 会话协议轴 1／桥接契约轴 2 零 diff）——HEAD==tag commit 258e796，无 sha 备注。
-export const ATF_UPSTREAM_TAG = "v0.7.10b0";
-export const ATF_UPSTREAM_COMMIT_SHA = "258e7961c8b8839e8eb6f2a4393bb4dfe9ad5532";
+// 本轮 pin 取值＝tag v0.7.11b0（批㉟K 内核发版：收编五批——批㉚段1/批㉝K-2/批㉝K-3/批㉜/批㉞K
+// 批㉟K 发版收编五批（批㉚段1 确认卡四件套＋批㉝K-2 参数手册＋批㉝K-3 旧名清理＋
+// 批㉜ viewer 坐标修复＋批㉞K viewer 字段跳框；另含 D-K1 贯通资产）——纯文本/资产批
+// 零契约面变更，会话协议轴 1／桥接契约轴 2 零 diff——HEAD==tag==main 四点同指 27e4f77。
+export const ATF_UPSTREAM_TAG = "v0.7.11b0";
+export const ATF_UPSTREAM_COMMIT_SHA = "27e4f7712c921b729f415c85ebeae556e5c12a19";
 
 export interface AtfCliInvocation {
   command: string;
