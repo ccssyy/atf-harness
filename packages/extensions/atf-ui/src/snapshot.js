@@ -61,6 +61,8 @@ export function buildMonitorSnapshot(runs, gpu, gpuAll) {
       env: run.env ?? null,
       // 批㉝H：绑卡声明（train.sh CUDA_VISIBLE_DEVICES＞deploy_effective.visible_devices；null＝读不到）
       gpu_binding: run.gpu_binding ?? null,
+      // 批㉞H：逐 eval 轮对比面（两轮对比视图数据源；空数组＝无轮产物）
+      eval_rounds: Array.isArray(run.eval_rounds) ? run.eval_rounds : [],
       training: {
         active: run.training?.active === true,
         points: Array.isArray(run.training?.loss) ? run.training.loss : [],

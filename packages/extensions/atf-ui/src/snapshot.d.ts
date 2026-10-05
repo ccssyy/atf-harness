@@ -19,6 +19,8 @@ export interface AtfRunScan {
   env?: unknown;
   /** 批㉝H：绑卡声明（train_sh＝CUDA_VISIBLE_DEVICES／deploy_effective＝visible_devices；null＝读不到）。 */
   gpu_binding?: { devices: string; source: "train_sh" | "deploy_effective" } | null;
+  /** 批㉞H：逐 eval 轮对比面（scanEvalRounds 产物；空数组＝无轮产物）。 */
+  eval_rounds?: unknown[];
 }
 export interface AtfGpuStatus {
   offline: boolean;
@@ -48,6 +50,8 @@ export interface AtfMonitorSnapshot {
     metrics: unknown;
     env: unknown;
     gpu_binding: { devices: string; source: "train_sh" | "deploy_effective" } | null;
+    /** 批㉞H：逐 eval 轮对比面（两轮对比视图数据源；空数组＝无轮产物）。 */
+    eval_rounds: unknown[];
     training: { active: boolean; points: Array<Record<string, unknown>>; pending_confirm: unknown };
   }>;
 }

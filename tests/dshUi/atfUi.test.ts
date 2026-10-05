@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage } from "../../packages/extensions/atf-ui/src/snapshot.js";
-import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveViewerRequest, scanRunDir, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
+import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveViewerRequest, scanEvalRounds, scanRunDir, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -577,5 +577,88 @@ describe("批㉝H GPU 多卡聚合（gpu_all 采集解析＋绑卡声明两态�
     // 渲染面两处都在：GPU 状态条（dock）＋监控面板环境卡 GPU 行
     expect(clientSource).toContain("gpu_binding");
     expect(clientSource).toContain("'GPU：' + gpuRow");
+  });
+});
+
+describe("批㉞H 两轮评估对比（badcases 计数＋轮面扫描组装＋快照下发）", () => {
+  /** 双轮夹具：3-20261003（无口径键＋含 finish=length 截断行）／4-20261004（口径 12800＋全 stop）；1-20260999 无 orch/eval 不入列。 */
+  const seedCompareRounds = (runDir: string): void => {
+    const mk = (round: string, summary: Record<string, unknown>, badcases: string | null) => {
+      const dir = join(runDir, "eval", round, "orch", "eval");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "metrics_summary.json"), JSON.stringify(summary));
+      if (badcases !== null) writeFileSync(join(dir, "badcases.jsonl"), badcases);
+    };
+    mk("3-20261003",
+      { model: "m-ckpt100", pages: 10, page_exact_rate: 0.0, micro: { precision: 0.5525, recall: 0.4015, f1: 0.465 }, fields: { container_no: { f1: 0.2941 }, goods_carton: { f1: 0.4643 } } },
+      [
+        JSON.stringify({ page_id: "p1", field: "container_no", finish_reason: "stop", fp: 0, fn: 2 }),
+        JSON.stringify({ page_id: "p2", field: "goods_carton", finish_reason: "length", fp: 1, fn: 0 }),
+        JSON.stringify({ page_id: "p3", field: "container_no", finish_reason: "stop", fp: 0, fn: 1 }),
+        "{bad json line",
+        JSON.stringify({ page_id: "p4", field: "goods_carton", finish_reason: "stop", fp: 3, fn: 0 }),
+      ].join("\n") + "\n");
+    mk("4-20261004",
+      { model: "m-ckpt141", pages: 10, page_exact_rate: 0.0, request_max_completion_tokens: 12800, micro: { precision: 0.5436, recall: 0.3842, f1: 0.4502 }, fields: { container_no: { f1: 0.2941 } } },
+      [
+        JSON.stringify({ page_id: "p1", field: "container_no", finish_reason: "stop" }),
+        JSON.stringify({ page_id: "p2", field: "seal_no", finish_reason: "stop" }),
+      ].join("\n") + "\n");
+    mkdirSync(join(runDir, "eval", "1-20260999", "ckpt-plan"), { recursive: true });
+  };
+
+  it("parseEvalBadcases 轮A（3-20261003）：finish=length 截断行计数＋by_field 计数；坏行跳过", async () => {
+    const { parseEvalBadcases } = await import("../../packages/extensions/atf-ui/src/server.js");
+    const root = tempRoot();
+    const runDir = join(root, "run-cmp");
+    seedCompareRounds(runDir);
+    const text = readFileSync(join(runDir, "eval", "3-20261003", "orch", "eval", "badcases.jsonl"), "utf8");
+    expect(parseEvalBadcases(text)).toEqual({
+      total: 4,
+      finish_reason: { stop: 3, length: 1 },
+      by_field: { container_no: 2, goods_carton: 2 },
+    });
+  });
+  it("parseEvalBadcases 轮B（4-20261004）：全 stop 计数；空文本零计数不抛", async () => {
+    const { parseEvalBadcases } = await import("../../packages/extensions/atf-ui/src/server.js");
+    const root = tempRoot();
+    const runDir = join(root, "run-cmp");
+    seedCompareRounds(runDir);
+    const text = readFileSync(join(runDir, "eval", "4-20261004", "orch", "eval", "badcases.jsonl"), "utf8");
+    expect(parseEvalBadcases(text)).toEqual({ total: 2, finish_reason: { stop: 2 }, by_field: { container_no: 1, seal_no: 1 } });
+    expect(parseEvalBadcases("")).toEqual({ total: 0, finish_reason: {}, by_field: {} });
+  });
+  it("scanEvalRounds 对比组装：两轮按 N 升序（口径键轮A null／轮B 12800；fields_f1 轮B 缺键如实短面；无 orch/eval 轮不入列；badcases 缺席轮 null）", async () => {
+    const { scanEvalRounds } = await import("../../packages/extensions/atf-ui/src/server.js");
+    const root = tempRoot();
+    const runDir = join(root, "run-cmp");
+    seedCompareRounds(runDir);
+    // 再造一轮有 metrics 无 badcases（缺席面如实 null）
+    mkdirSync(join(runDir, "eval", "5-20261005", "orch", "eval"), { recursive: true });
+    writeFileSync(join(runDir, "eval", "5-20261005", "orch", "eval", "metrics_summary.json"), JSON.stringify({ model: "m5", micro: { f1: 0.5 }, fields: {} }));
+    const rounds = scanEvalRounds(runDir);
+    expect(rounds.map((r) => r.round)).toEqual(["3-20261003", "4-20261004", "5-20261005"]);
+    expect(rounds[0]?.metrics).toMatchObject({ f1: 0.465, max_completion_tokens: null });
+    expect(rounds[1]?.metrics).toMatchObject({ f1: 0.4502, max_completion_tokens: 12800 });
+    expect(rounds[0]?.fields_f1).toEqual({ container_no: 0.2941, goods_carton: 0.4643 });
+    expect(rounds[1]?.fields_f1).toEqual({ container_no: 0.2941 });
+    expect(rounds[0]?.badcases).toMatchObject({ total: 4, finish_reason: { length: 1 } });
+    expect(rounds[2]?.badcases).toBeNull();
+    expect(rounds[2]?.fields_f1).toBeNull();
+    expect(scanEvalRounds(join(root, "run-missing"))).toEqual([]);
+  });
+  it("对比组装下发：scanRunDir→monitor eval_rounds 透传（缺省空数组）＋client 对比面钉子（占位文案不造数据）", async () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-cmp");
+    seedCompareRounds(runDir);
+    const scan = scanRunDir(root, "run-cmp");
+    expect(scan.eval_rounds).toHaveLength(2);
+    const snap = buildMonitorSnapshot([scan]);
+    expect(snap.runs[0]?.eval_rounds).toHaveLength(2);
+    expect(buildMonitorSnapshot([{ ...scan, eval_rounds: undefined }]).runs[0]?.eval_rounds).toEqual([]);
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    for (const phrase of ["评估对比", "atf-cmp-grid", "finish=length 行数", "max_completion_tokens", "字段级数据需分析链产出", "不足两轮"]) {
+      expect(clientSource).toContain(phrase);
+    }
   });
 });

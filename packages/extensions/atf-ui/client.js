@@ -181,6 +181,11 @@ window.__ModuleLoader__.load({
       // 批㉛段3.2：Loss 点选选中态（hook 须在条件 return 之前——React hooks 顺序不变量）
       var _sel = React.useState(null)
       var selIdx = _sel[0], setSelIdx = _sel[1]
+      // 批㉞H：评估对比双轮选择态（同上——hooks 前置；null＝缺省取末两轮）
+      var _cmpA = React.useState(null)
+      var cmpA = _cmpA[0], setCmpA = _cmpA[1]
+      var _cmpB = React.useState(null)
+      var cmpB = _cmpB[0], setCmpB = _cmpB[1]
       if (!open) return null
       var runs = (mon && mon.runs) || []
       var runId = selRunId && runs.some(function(r) { return r.run_id === selRunId }) ? selRunId : (runs[0] ? runs[0].run_id : null)
@@ -204,6 +209,45 @@ window.__ModuleLoader__.load({
         : gpuAllText !== null ? gpuAllText
         : (gpu.utilization || '—') + ' · ' + (gpu.memoryUsed || '—') + '/' + (gpu.memoryTotal || '—')
       var gpuBindText = run ? formatGpuBindingLocal(run.gpu_binding) : null
+      // 批㉞H：两轮评估对比数据准备（eval_rounds——KPI 并排＋口径标注＋finish_reason＋错误类型＋字段级 F1）
+      var cmpRounds = (run && run.eval_rounds) || []
+      var cmpNames = cmpRounds.map(function(r) { return r.round })
+      var cmpDefB = cmpRounds.length >= 1 ? cmpRounds[cmpRounds.length - 1].round : null
+      var cmpDefA = cmpRounds.length >= 2 ? cmpRounds[cmpRounds.length - 2].round : cmpDefB
+      var cmpAName = cmpA !== null && cmpNames.indexOf(cmpA) >= 0 ? cmpA : cmpDefA
+      var cmpBName = cmpB !== null && cmpNames.indexOf(cmpB) >= 0 ? cmpB : cmpDefB
+      var cmpRa = cmpRounds.find(function(r) { return r.round === cmpAName }) || null
+      var cmpRb = cmpRounds.find(function(r) { return r.round === cmpBName }) || null
+      var cmpM = function(r) { return r && r.metrics ? r.metrics : null }
+      var cmpPct = function(surf, key) { return surf && typeof surf[key] === 'number' ? (surf[key] * 100).toFixed(1) + '%' : '—' }
+      var cmpTok = function(surf) { return surf && typeof surf.max_completion_tokens === 'number' ? String(surf.max_completion_tokens) : '—' }
+      var cmpFr = function(r, key) { return r && r.badcases && typeof r.badcases.finish_reason[key] === 'number' ? String(r.badcases.finish_reason[key]) : '—' }
+      var cmpTotal = function(r) { return r && r.badcases && typeof r.badcases.total === 'number' ? String(r.badcases.total) : '—' }
+      // 错误类型计数（by_field 联合键，按 A+B 计数降序取 top6）
+      var cmpFieldKeys = []
+      var cmpFieldSeen = {}
+      ;[cmpRa, cmpRb].forEach(function(r) {
+        if (!r || !r.badcases || !r.badcases.by_field) return
+        Object.keys(r.badcases.by_field).forEach(function(k) {
+          if (!cmpFieldSeen[k]) { cmpFieldSeen[k] = true; cmpFieldKeys.push(k) }
+        })
+      })
+      cmpFieldKeys.sort(function(x, y) {
+        var sa = ((cmpRa && cmpRa.badcases && cmpRa.badcases.by_field[x]) || 0) + ((cmpRb && cmpRb.badcases && cmpRb.badcases.by_field[x]) || 0)
+        var sb = ((cmpRa && cmpRa.badcases && cmpRa.badcases.by_field[y]) || 0) + ((cmpRb && cmpRb.badcases && cmpRb.badcases.by_field[y]) || 0)
+        return sb - sa || (x < y ? -1 : 1)
+      })
+      var cmpFieldTop = cmpFieldKeys.slice(0, 6)
+      // 字段级 F1（两轮 fields_f1 联合键——现有产物已含则展示，双缺占位不造数据）
+      var cmpF1Keys = []
+      var cmpF1Seen = {}
+      ;[cmpRa, cmpRb].forEach(function(r) {
+        if (!r || !r.fields_f1) return
+        Object.keys(r.fields_f1).forEach(function(k) {
+          if (!cmpF1Seen[k]) { cmpF1Seen[k] = true; cmpF1Keys.push(k) }
+        })
+      })
+      cmpF1Keys.sort()
       var kpis = [
         { label: 'F1（micro）', value: pct(m ? m.f1 : null) },
         { label: 'precision', value: pct(m ? m.precision : null) },
@@ -292,6 +336,47 @@ window.__ModuleLoader__.load({
                       React.createElement('div', { className: 'atf-kpi-value' }, k.value))
                   })),
                 m ? React.createElement('div', { className: 'atf-monitor-sub' }, 'model：' + m.model + (m.pages !== null ? ' · ' + m.pages + ' 页' : '')) : React.createElement('div', { className: 'atf-monitor-sub' }, '（无评估轮产物——评估四件套入列后显示）')),
+              // 批㉞H：两轮评估并排对比（KPI＋口径＋finish_reason＋错误类型＋字段级 F1）
+              React.createElement('div', { className: 'atf-monitor-sec' },
+                React.createElement('div', { className: 'atf-monitor-title' }, '评估对比'),
+                cmpRounds.length < 2
+                  ? React.createElement('div', { className: 'atf-viewer-empty' }, '（不足两轮——对比需 ≥2 个 eval 轮次，当前 ' + cmpRounds.length + ' 轮）')
+                  : React.createElement('div', null,
+                      React.createElement('div', { className: 'atf-cmp-pickers' },
+                        React.createElement('select', { className: 'atf-viewer-select', value: cmpAName || '', onChange: function(e) { setCmpA(e.target.value) } },
+                          cmpRounds.map(function(r) { return React.createElement('option', { key: r.round, value: r.round }, r.round) })),
+                        React.createElement('span', { className: 'atf-viewer-empty' }, 'vs'),
+                        React.createElement('select', { className: 'atf-viewer-select', value: cmpBName || '', onChange: function(e) { setCmpB(e.target.value) } },
+                          cmpRounds.map(function(r) { return React.createElement('option', { key: 'b-' + r.round, value: r.round }, r.round) }))),
+                      React.createElement('div', { className: 'atf-cmp-grid' },
+                        [['指标', cmpAName, cmpBName],
+                         ['F1（micro）', cmpPct(cmpM(cmpRa), 'f1'), cmpPct(cmpM(cmpRb), 'f1')],
+                         ['precision', cmpPct(cmpM(cmpRa), 'precision'), cmpPct(cmpM(cmpRb), 'precision')],
+                         ['recall', cmpPct(cmpM(cmpRa), 'recall'), cmpPct(cmpM(cmpRb), 'recall')],
+                         ['exact（页级）', cmpPct(cmpM(cmpRa), 'exact'), cmpPct(cmpM(cmpRb), 'exact')],
+                         ['口径 max_completion_tokens', cmpTok(cmpM(cmpRa)), cmpTok(cmpM(cmpRb))],
+                         ['badcase 行数', cmpTotal(cmpRa), cmpTotal(cmpRb)],
+                         ['finish=length 行数', cmpFr(cmpRa, 'length'), cmpFr(cmpRb, 'length')],
+                         ['finish=stop 行数', cmpFr(cmpRa, 'stop'), cmpFr(cmpRb, 'stop')]]
+                          .concat(cmpFieldTop.map(function(k) {
+                            return ['错误·' + k,
+                              cmpRa && cmpRa.badcases && cmpRa.badcases.by_field[k] !== undefined ? String(cmpRa.badcases.by_field[k]) : '—',
+                              cmpRb && cmpRb.badcases && cmpRb.badcases.by_field[k] !== undefined ? String(cmpRb.badcases.by_field[k]) : '—']
+                          }))
+                          .concat(cmpF1Keys.map(function(k) {
+                            return ['F1·' + k,
+                              cmpRa && cmpRa.fields_f1 && typeof cmpRa.fields_f1[k] === 'number' ? (cmpRa.fields_f1[k] * 100).toFixed(1) + '%' : '—',
+                              cmpRb && cmpRb.fields_f1 && typeof cmpRb.fields_f1[k] === 'number' ? (cmpRb.fields_f1[k] * 100).toFixed(1) + '%' : '—']
+                          }))
+                          .map(function(row, i) {
+                            return React.createElement('div', { key: 'cmp-' + i, className: 'atf-cmp-row' + (i === 0 ? ' atf-cmp-head' : '') },
+                              React.createElement('span', { className: 'atf-cmp-label' }, row[0]),
+                              React.createElement('span', { className: 'atf-cmp-val' }, row[1]),
+                              React.createElement('span', { className: 'atf-cmp-val' }, row[2]))
+                          })),
+                      cmpRa && cmpRb && !cmpRa.fields_f1 && !cmpRb.fields_f1
+                        ? React.createElement('div', { className: 'atf-monitor-sub' }, '（字段级数据需分析链产出——当前产物无 fields 面）')
+                        : null)),
               React.createElement('div', { className: 'atf-monitor-sec' },
                 React.createElement('div', { className: 'atf-monitor-title' }, '环境'),
                 React.createElement('div', { className: 'atf-monitor-env' },
@@ -574,6 +659,12 @@ window.__ModuleLoader__.load({
             '.atf-kpi-label{font-size:10px;color:var(--dsh-text-secondary,#64748b);}',
             '.atf-kpi-value{font-size:15px;font-weight:600;}',
             '.atf-monitor-env{display:flex;flex-direction:column;gap:3px;}',
+            // 批㉞H：两轮评估对比（三列网格——指标｜A 轮｜B 轮）
+            '.atf-cmp-pickers{display:flex;align-items:center;gap:6px;margin-bottom:6px;}',
+            '.atf-cmp-grid{display:grid;grid-template-columns:150px 1fr 1fr;font-size:11px;}',
+            '.atf-cmp-row{display:contents;}',
+            '.atf-cmp-row>span{padding:2px 6px;border-bottom:1px dashed rgba(128,128,128,.15);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+            '.atf-cmp-head>span{font-weight:600;color:var(--dsh-text-secondary,#64748b);}',
             // 批㉛段3.2/3.3：Loss 点选联动＋产物抽屉
             '.atf-monitor-spike{display:flex;align-items:center;gap:8px;font-size:11px;margin-top:5px;',
             '  color:var(--dsh-text-primary,#1e293b);}',

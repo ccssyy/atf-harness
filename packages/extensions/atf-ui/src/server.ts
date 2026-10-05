@@ -69,6 +69,8 @@ export interface RunScan {
   env: EnvSurface;
   /** 批㉝H：绑卡声明（train.sh/manifest——null＝读不到，client 仅显示全卡聚合）。 */
   gpu_binding: GpuBinding | null;
+  /** 批㉞H：逐 eval 轮对比面（两轮对比视图数据源——空数组＝无轮产物）。 */
+  eval_rounds: EvalRoundFace[];
 }
 
 /** 批㉛段2：Web 发起训练面（monitor.json 下发——client 摘要对话框与发起消息模板的数据源）。 */
@@ -97,6 +99,8 @@ export interface EvalMetricsSurface {
   precision: number | null;
   recall: number | null;
   exact: number | null;
+  /** 批㉞H：推理长度口径（request_max_completion_tokens——轮产物缺该键如实 null，不猜测）。 */
+  max_completion_tokens: number | null;
 }
 
 /** 批㉛段3.1：环境卡面（IterationConfig 同源——基模型/数据集/deepspeed/lane）。 */
@@ -155,12 +159,12 @@ export const parseEvalMetrics = (raw: unknown, round: string): EvalMetricsSurfac
     precision: numOrNull(micro["precision"]),
     recall: numOrNull(micro["recall"]),
     exact: numOrNull(sum["page_exact_rate"]),
+    max_completion_tokens: numOrNull(sum["request_max_completion_tokens"]),
   };
 };
 
 /** 最新评估轮发现：<run>/eval/<N-日期> 取 N 最大者；无轮目录回退 eval 根 metrics_summary.json。 */
-export const latestEvalMetrics = (runDir: string): EvalMetricsSurface | null => {
-  const evalRoot = join(runDir, "eval");
+export const latestEvalMetrics = (runDir: string): EvalMetricsSurface | null => {  const evalRoot = join(runDir, "eval");
   let best: { round: string; n: number } | null = null;
   try {
     for (const entry of readdirSync(evalRoot, { withFileTypes: true })) {
@@ -180,6 +184,84 @@ export const latestEvalMetrics = (runDir: string): EvalMetricsSurface | null => 
   }
   const rootRaw = readJsonFile(join(evalRoot, "metrics_summary.json"));
   return parseEvalMetrics(rootRaw, "latest");
+};
+
+/** 批㉞H：单轮 badcases.jsonl 计数面（纯函数，vitest 直测）——finish_reason 分布
+ *  （finish=length 截断行计数）＋错误字段计数；坏行如实跳过，total＝有效行数。 */
+export interface BadcaseCounts {
+  total: number;
+  finish_reason: Record<string, number>;
+  by_field: Record<string, number>;
+}
+
+export const parseEvalBadcases = (text: string): BadcaseCounts => {
+  const counts: BadcaseCounts = { total: 0, finish_reason: {}, by_field: {} };
+  for (const line of text.split("\n")) {
+    if (line.trim() === "") continue;
+    let row: Record<string, unknown>;
+    try {
+      row = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (row === null || typeof row !== "object") continue;
+    counts.total += 1;
+    const finish = typeof row["finish_reason"] === "string" ? row["finish_reason"] : "unknown";
+    counts.finish_reason[finish] = (counts.finish_reason[finish] ?? 0) + 1;
+    const field = typeof row["field"] === "string" ? row["field"] : "unknown";
+    counts.by_field[field] = (counts.by_field[field] ?? 0) + 1;
+  }
+  return counts;
+};
+
+/** 批㉞H：单 eval 轮对比面（两轮并排对比视图数据源——只读现有产物，不造数据）。 */
+export interface EvalRoundFace {
+  round: string;
+  metrics: EvalMetricsSurface | null;
+  badcases: BadcaseCounts | null;
+  /** 字段级 F1（metrics_summary fields.*.f1——现有产物已含则展示；缺席 null＝client 占位）。 */
+  fields_f1: Record<string, number> | null;
+}
+
+/** 逐轮扫描 <run>/eval/<N-日期>/orch/eval/：metrics_summary 在场才入列（按 N 升序——
+ *  对比选择器时间序）；badcases.jsonl 与 fields 缺席如实 null。 */
+export const scanEvalRounds = (runDir: string): EvalRoundFace[] => {
+  const evalRoot = join(runDir, "eval");
+  const found: Array<{ name: string; n: number }> = [];
+  try {
+    for (const entry of readdirSync(evalRoot, { withFileTypes: true })) {
+      const m = /^(\d+)-(\d{8})$/.exec(entry.name);
+      if (entry.isDirectory() && m !== null) found.push({ name: entry.name, n: Number(m[1]) });
+    }
+  } catch {
+    return [];
+  }
+  found.sort((a, b) => a.n - b.n);
+  const rounds: EvalRoundFace[] = [];
+  for (const { name } of found) {
+    const evalDir = join(evalRoot, name, "orch", "eval");
+    const summary = readJsonFile(join(evalDir, "metrics_summary.json"));
+    const metrics = parseEvalMetrics(summary, name);
+    if (metrics === null) continue;
+    let badcases: BadcaseCounts | null = null;
+    try {
+      badcases = parseEvalBadcases(readFileSync(join(evalDir, "badcases.jsonl"), "utf8"));
+    } catch {
+      badcases = null;
+    }
+    let fieldsF1: Record<string, number> | null = null;
+    const fields = summary !== null && typeof summary === "object" ? (summary as Record<string, unknown>)["fields"] : null;
+    if (fields !== null && typeof fields === "object") {
+      const map: Record<string, number> = {};
+      for (const [key, value] of Object.entries(fields as Record<string, unknown>)) {
+        const f1 = value !== null && typeof value === "object" ? numOrNull((value as Record<string, unknown>)["f1"]) : null;
+        if (f1 !== null) map[key] = f1;
+      }
+      fieldsF1 = Object.keys(map).length > 0 ? map : null;
+    }
+    rounds.push({ round: name, metrics, badcases, fields_f1: fieldsF1 });
+  }
+  return rounds;
 };
 
 /** 训练历史曲线（live loss-series.json 缺席时的回退源）：最新 checkpoint 的 trainer_state.json
@@ -293,6 +375,7 @@ export function scanRunDir(root: string, runId: string): RunScan {
     metrics: latestEvalMetrics(dir),
     env: buildEnvSurface(readJsonFile(iterationConfigPathOf(dir)) as Record<string, unknown> | null, runId),
     gpu_binding: gpuBindingOf(dir),
+    eval_rounds: scanEvalRounds(dir),
   };
 }
 
