@@ -16,15 +16,15 @@ describe("G1 单元③ toolResultPayload（守卫管道·回填构造）", () =>
     expect(violation).toMatchObject({ ok: false, reason: "schema", detail: "d" });
     const failed = buildToolResultPayload({ tool: "t", callRef: 7, events: EVENTS, result: { kind: "failed", error: { message: "boom" } } as ToolCallOutcome });
     expect(failed).toEqual({ tool: "t", ok: false, reason: "failed", call_ref: 7, detail: { message: "boom" } });
-    const blocked = buildToolResultPayload({ tool: "t", callRef: 7, events: EVENTS, result: { kind: "blocked", block: { reason: "approval_denied", message: "m" } } as ToolCallOutcome });
-    expect(blocked).toEqual({ tool: "t", ok: false, reason: "approval_denied", call_ref: 7, block: { reason: "approval_denied", message: "m" } });
+    const blocked = buildToolResultPayload({ tool: "t", callRef: 7, events: EVENTS, result: { kind: "blocked", block: { reason: "approval_denied", message: "m", tool: "t", exit_code: 1 } } as ToolCallOutcome });
+    expect(blocked).toEqual({ tool: "t", ok: false, reason: "approval_denied", call_ref: 7, block: { reason: "approval_denied", message: "m", tool: "t", exit_code: 1 } });
   });
   it("附注纪律：nudge 附 executed/rejected/input_violation/blocked 不附 failed；guidance 附 rejected/input_violation；executedGuidance 附 executed", () => {
     const base = { tool: "t", callRef: 1, events: EVENTS, nudge: "n", guidance: "g", executedGuidance: "eg" } as const;
     expect(buildToolResultPayload({ ...base, result: { kind: "executed", result: 1 } as ToolCallOutcome })).toMatchObject({ nudge: "n", guidance: "eg" });
     expect(buildToolResultPayload({ ...base, result: { kind: "rejected", reason: "r" } as ToolCallOutcome })).toMatchObject({ nudge: "n", guidance: "g" });
     expect(buildToolResultPayload({ ...base, result: { kind: "input_violation", reason: "r" } as ToolCallOutcome })).toMatchObject({ nudge: "n", guidance: "g" });
-    expect(buildToolResultPayload({ ...base, result: { kind: "blocked", block: { reason: "b", message: "m" } } as ToolCallOutcome })).toMatchObject({ nudge: "n" });
+    expect(buildToolResultPayload({ ...base, result: { kind: "blocked", block: { reason: "approval_denied", message: "m", tool: "t", exit_code: 1 } } as ToolCallOutcome })).toMatchObject({ nudge: "n" });
     const failed = buildToolResultPayload({ ...base, result: { kind: "failed", error: {} } as ToolCallOutcome });
     expect("nudge" in failed).toBe(false); // failed 径恒不附 nudge（主循环既有语义）
     expect("guidance" in failed).toBe(false);
