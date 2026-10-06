@@ -16,7 +16,8 @@
 import { type BridgeError } from "../../bridge/index.js";
 import { checkSchema, validateCanonicalOutput, type SchemaNode } from "./canonical.js";
 import { rpcMethodFor } from "./methodOverrides.js";
-import { type LedgerRecord, type ScopeRef, proposalApprovalKey } from "./approvalKey.js";
+import { runLedgerGate } from "./ledgerGate.js";
+import { type ScopeRef, proposalApprovalKey } from "./approvalKey.js";
 import { requiresApprovalFor } from "./toolDefinition.js";
 import { approvalMissingBlock, approvalTrackBlock, toolError, toolErrorFromBridge, type ToolBlock, type ToolError } from "./errors.js";
 import { type ToolRegistry } from "./registry.js";
@@ -157,7 +158,9 @@ export class ToolExecutor {
    *  记录(取链首 sequence 最小者),命中 → {approval_ref, record_id} 消费放行;
    *  无可消费记录 + 无 gate → blocked(approval_missing,Phase 1 逐位一致);
    *  未命中 + gate → 问答轨编排(handler 发起/延续审批会话,granted 附带持久化前置)。
-   *  scope_ref 缺省 = harness 配置故障,无法核对授权状态 → failed(fail-closed,不猜测)。 */
+   *  scope_ref 缺省 = harness 配置故障,无法核对授权状态 → failed(fail-closed,不猜测)。
+   *  批㊶-H:query→比对→consume 调用骨架单源 core/tools/ledgerGate.ts runLedgerGate,
+   *  本方法保留终态映射(ToolCallOutcome 词汇面)——与收口前逐位一致。 */
   private async approve(definition: ToolDefinition, params: unknown, approval?: ApprovalGate, operationId?: string): Promise<ApprovalOutcome> {
     if (this.scopeRef === undefined) {
       return {
@@ -175,83 +178,94 @@ export class ToolExecutor {
     // 内部状态键，非账本键（approvalKey.ts 头注）。
     const proposalKey = proposalApprovalKey(definition.name, params, this.local?.contentDigestFor !== undefined ? await this.local.contentDigestFor(definition.name, params) : undefined);
     const auditKey = { tool: definition.name, params_digest: proposalKey.params_digest };
-    const queried = await this.request(
-      "ledger_query",
-      "ledger_query",
-      // L1b B5：operation_id 可选透传（契约已登记；缺省不传＝既有行为逐位不变）
-      operationId !== undefined ? { scope_ref: this.scopeRef, operation_id: operationId } : { scope_ref: this.scopeRef },
-      LEDGER_QUERY_CANONICAL,
-    );
-    if (!queried.ok) {
-      // 账本面故障 = 无法确认授权状态 → fail-closed,不猜测审批通过
-      return { ok: false, outcome: { kind: "failed", error: queried.error ?? toolError("bridge_failure", "账本查询失败") } };
-    }
-    const records = (queried.result as { records: LedgerRecord[] }).records;
-    const live = records[0];
-    if (live === undefined) {
-      if (approval === undefined) {
-        return {
-          ok: false,
-          outcome: {
-            kind: "blocked",
-            block: approvalMissingBlock(
-              definition.name,
-              `审批缺失：账本无可消费记录（tool=${definition.name}）——headless 下进程须以 exit 78 终止`,
-              { scope_ref: this.scopeRef, audit_key: auditKey, ledger_records: records },
-            ),
-          },
-        };
-      }
-      // 问答轨(账本未命中且已声明审批面):编排 handler 发起 request → 等待应答 → 分支处置
-      let verdict: ApprovalTrackVerdict;
-      try {
-        verdict = await approval.handler({
-          tool: definition.name,
-          params,
-          approval_key: proposalKey.approval_key,
-          ...(proposalKey.content_digest !== undefined ? { content_digest: proposalKey.content_digest } : {}),
-        });
-      } catch (cause) {
-        // 禁止异常穿越边界:编排层故障折算结构化 block(fail-closed,不放行)
-        return {
-          ok: false,
-          outcome: {
-            kind: "blocked",
-            block: approvalTrackBlock(definition.name, "approval_track_failed", `问答轨编排故障: ${String(cause)}`),
-          },
-        };
-      }
-      switch (verdict.kind) {
-        case "granted":
-          return { ok: true };
-        case "suspended":
-          return { ok: false, outcome: { kind: "suspended", tool: definition.name, block: verdict.block } };
-        case "aborted":
-          return { ok: false, outcome: { kind: "aborted", tool: definition.name, block: verdict.block } };
-        default:
-          // denied / reproposal / blocked:结构化回填(非终局类由 runner 按 block.reason 分流换路径)
-          return { ok: false, outcome: { kind: "blocked", block: verdict.block } };
-      }
-    }
-    // 消费：{approval_ref, record_id} 逐值一致校验（契约 v2；对端强制一次性语义）
-    const consumed = await this.request(
-      "ledger_consume",
-      "ledger_consume",
-      { approval_ref: live.approval_id, record_id: live.record_id },
-      LEDGER_CONSUME_CANONICAL,
-    );
-    if (consumed.ok) return { ok: true };
-    if (consumed.rejected !== undefined) {
-      // 预录存在但消费时已被吃掉/不匹配/不存在（一次性语义在对端强制）→ 授权不可用 → blocked
-      return {
-        ok: false,
-        outcome: {
-          kind: "blocked",
-          block: approvalMissingBlock(definition.name, "审批消费失败（记录已消费、不匹配或不存在）——一次性语义 fail-closed", consumed.rejected),
+    const scopeRef = this.scopeRef;
+    return runLedgerGate<ApprovalOutcome>(
+      this.connection,
+      () => scopeRef,
+      {
+        onQueryFailure: (failure) => {
+          // 账本面故障 = 无法确认授权状态 → fail-closed,不猜测审批通过
+          const error =
+            failure.canonicalError !== undefined
+              ? failure.canonicalError
+              : failure.bridgeError !== undefined && failure.bridgeError.code !== "request_rejected"
+                ? toolErrorFromBridge(failure.bridgeError)
+                : toolError("bridge_failure", "账本查询失败");
+          return { ok: false, outcome: { kind: "failed", error } };
         },
-      };
-    }
-    return { ok: false, outcome: { kind: "failed", error: consumed.error ?? toolError("bridge_failure", "审批消费失败") } };
+        onNoRecord: async (records) => {
+          if (approval === undefined) {
+            return {
+              ok: false,
+              outcome: {
+                kind: "blocked",
+                block: approvalMissingBlock(
+                  definition.name,
+                  `审批缺失：账本无可消费记录（tool=${definition.name}）——headless 下进程须以 exit 78 终止`,
+                  { scope_ref: scopeRef, audit_key: auditKey, ledger_records: records },
+                ),
+              },
+            };
+          }
+          // 问答轨(账本未命中且已声明审批面):编排 handler 发起 request → 等待应答 → 分支处置
+          let verdict: ApprovalTrackVerdict;
+          try {
+            verdict = await approval.handler({
+              tool: definition.name,
+              params,
+              approval_key: proposalKey.approval_key,
+              ...(proposalKey.content_digest !== undefined ? { content_digest: proposalKey.content_digest } : {}),
+            });
+          } catch (cause) {
+            // 禁止异常穿越边界:编排层故障折算结构化 block(fail-closed,不放行)
+            return {
+              ok: false,
+              outcome: {
+                kind: "blocked",
+                block: approvalTrackBlock(definition.name, "approval_track_failed", `问答轨编排故障: ${String(cause)}`),
+              },
+            };
+          }
+          switch (verdict.kind) {
+            case "granted":
+              return { ok: true };
+            case "suspended":
+              return { ok: false, outcome: { kind: "suspended", tool: definition.name, block: verdict.block } };
+            case "aborted":
+              return { ok: false, outcome: { kind: "aborted", tool: definition.name, block: verdict.block } };
+            default:
+              // denied / reproposal / blocked:结构化回填(非终局类由 runner 按 block.reason 分流换路径)
+              return { ok: false, outcome: { kind: "blocked", block: verdict.block } };
+          }
+        },
+        onConsumeFailure: (failure) => {
+          if (failure.bridgeError !== undefined && failure.bridgeError.code === "request_rejected") {
+            // 预录存在但消费时已被吃掉/不匹配/不存在（一次性语义在对端强制）→ 授权不可用 → blocked
+            const { code } = (failure.bridgeError.detail ?? {}) as { code?: string };
+            return {
+              ok: false,
+              outcome: {
+                kind: "blocked",
+                block: approvalMissingBlock(
+                  definition.name,
+                  "审批消费失败（记录已消费、不匹配或不存在）——一次性语义 fail-closed",
+                  { kind: "rejected", tool: "ledger_consume", reason: code ?? "rejected", detail: failure.bridgeError.detail },
+                ),
+              },
+            };
+          }
+          const error =
+            failure.canonicalError !== undefined
+              ? failure.canonicalError
+              : failure.bridgeError !== undefined
+                ? toolErrorFromBridge(failure.bridgeError)
+                : toolError("bridge_failure", "审批消费失败");
+          return { ok: false, outcome: { kind: "failed", error } };
+        },
+        onGranted: () => ({ ok: true }),
+      },
+      operationId !== undefined ? { operationId } : undefined,
+    );
   }
 
   /** 桥接请求 + canonical 校验（对端 ok=false → rejected 结构化回填；其余折算 failed）。
@@ -282,41 +296,6 @@ export class ToolExecutor {
 
 type ApprovalOutcome = { ok: true } | { ok: false; outcome: ToolCallOutcome };
 
-// ledger 方法自身的 canonical output（与 bridge.contract.yaml methods 段 v2 对等）
-/** ledger_query canonical output（MCP 外壳同用，沿用桥接契约不另造）。 */
-export const LEDGER_QUERY_CANONICAL: SchemaNode = {
-  type: "object",
-  required: ["ok", "records"],
-  properties: {
-    ok: { const: true },
-    records: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["record_id", "approval_id", "sequence", "state"],
-        properties: {
-          record_id: { type: "string" },
-          approval_id: { type: "string" },
-          sequence: { type: "integer" },
-          state: { type: "string" },
-          command_id: { type: "string", optional: true },
-          actor: { type: "string", optional: true },
-          operation_id: { type: "string", optional: true },
-          attempt_id: { type: "string", optional: true },
-          evidence_refs: { type: "array", optional: true, items: { type: "string" } },
-        },
-      },
-    },
-  },
-};
-
-/** ledger_consume canonical output（MCP 外壳同用，沿用桥接契约不另造）。 */
-export const LEDGER_CONSUME_CANONICAL: SchemaNode = {
-  type: "object",
-  required: ["ok", "record_id", "state"],
-  properties: {
-    ok: { const: true },
-    record_id: { type: "string" },
-    state: { const: "consumed" },
-  },
-};
+// ledger 双 canonical 已随账本闸骨架迁 core/tools/ledgerGate.ts（批㊶-H 共享内核收口）；
+// 此处 re-export 维持既有 import 面（index.ts / approvalHook / MCP 外壳）零变化。
+export { LEDGER_CONSUME_CANONICAL, LEDGER_QUERY_CANONICAL } from "./ledgerGate.js";
