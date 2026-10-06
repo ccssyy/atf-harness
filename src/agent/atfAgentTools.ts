@@ -2,7 +2,8 @@
  * 工具挂接层（方案丙 §三「tool 挂接层」）——ATF 内核桥 tool 化。
  *
  * 丙 v1（批 P）：九工具全挂接——TOOL_DEFINITIONS 全量投影（桥接契约单源，D-b 不引入
- * 第二权威），点号方法映射表与 core/tools/executor.ts 同表恢复。
+ * 第二权威），点号方法映射经 core/tools/methodOverrides.ts 单源（批㊶-H 共享内核收口，
+ * 原丙线镜像表已删）。
  * 门 1a spike 双工具面保留为过滤视图（SPIKE_TOOL_NAMES）。
  *
  * 执行径（职责切分）：审批在 beforeToolCall hook（approvalHook.ts，账本闸继承主线语义）；
@@ -20,6 +21,7 @@ import {
   type SchemaNode,
   type ToolDefinition,
 } from "../core/tools/index.js";
+import { rpcMethodFor } from "../core/tools/methodOverrides.js";
 import { type ScopeRef } from "../core/tools/approvalKey.js";
 import { FILE_TOOL_DEFINITIONS } from "./fileTools.js";
 
@@ -28,17 +30,8 @@ export interface SpikeBridgeTransport {
   request(method: string, params?: unknown): Promise<{ ok: true; value: unknown } | { ok: false; error: BridgeError }>;
 }
 
-/** 工具名 → RPC 方法显式映射（R1 D-1：模型面工具名不允许 "."；与 core/tools/executor.ts
- *  TOOL_METHOD_OVERRIDES 同表——门 2 抽共享单点，本表为丙线镜像）。 */
-const TOOL_METHOD_OVERRIDES: Readonly<Record<string, string>> = {
-  atf_data_admission_request: "atf_data_admission.request",
-  atf_preparation_propose: "atf_preparation.propose",
-  atf_style_cluster_execute: "atf_style_cluster.execute",
-  atf_label_qc_inspect: "atf_label_qc.inspect",
-  atf_label_qc_resolve: "atf_label_qc.resolve",
-};
-
-const rpcMethodFor = (toolName: string): string => TOOL_METHOD_OVERRIDES[toolName] ?? toolName;
+// 工具名 → RPC 方法映射已单源化至 core/tools/methodOverrides.ts（批㊶-H 共享内核收口；
+// import 的 rpcMethodFor 即唯一折叠出口——与甲线 executor 同源，守护测试锚发射一致性）。
 
 /** 门 1a spike 双工具面（status 经桥执行＋gate 审批受试）。 */
 export const SPIKE_TOOL_NAMES: readonly string[] = ["atf_workspace_status", "atf_gate"];

@@ -15,6 +15,7 @@
  */
 import { type BridgeError } from "../../bridge/index.js";
 import { checkSchema, validateCanonicalOutput, type SchemaNode } from "./canonical.js";
+import { rpcMethodFor } from "./methodOverrides.js";
 import { type LedgerRecord, type ScopeRef, proposalApprovalKey } from "./approvalKey.js";
 import { requiresApprovalFor } from "./toolDefinition.js";
 import { approvalMissingBlock, approvalTrackBlock, toolError, toolErrorFromBridge, type ToolBlock, type ToolError } from "./errors.js";
@@ -81,19 +82,8 @@ export interface BridgeTransport {
   request(method: string, params?: unknown): Promise<{ ok: true; value: unknown } | { ok: false; error: BridgeError }>;
 }
 
-/** toolName → RPC method 显式映射（R1 D-1，2026-09-20）：模型面工具名不允许 "."，
- *  点号方法经此表映射；未注册项恒等映射（既有工具零行为变化）。
- *  K-Gap-2 接线批（2026-09-21）增两项（方法面 10→12）。
- *  R-3 接线批（2026-09-23）增两项（方法面 12→14，内核 §13.13/§13.14）。 */
-const TOOL_METHOD_OVERRIDES: Readonly<Record<string, string>> = {
-  atf_data_admission_request: "atf_data_admission.request",
-  atf_preparation_propose: "atf_preparation.propose",
-  atf_style_cluster_execute: "atf_style_cluster.execute",
-  atf_label_qc_inspect: "atf_label_qc.inspect",
-  atf_label_qc_resolve: "atf_label_qc.resolve",
-};
-
-const rpcMethodFor = (toolName: string): string => TOOL_METHOD_OVERRIDES[toolName] ?? toolName;
+// toolName → RPC method 显式映射已单源化至 ./methodOverrides.ts（批㊶-H 共享内核收口；
+// 本行 import 的 rpcMethodFor 即唯一折叠出口，守护测试锚两线一致性）。
 
 export class ToolExecutor {
   public constructor(
