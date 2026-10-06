@@ -21,6 +21,7 @@ import type { FileToolHost } from "../agent/fileTools.js";
 import { assembleV1Agent, type AssembledV1Agent } from "../agent/cli.js";
 import { createProviderStreamFn } from "../agent/providerStreamFn.js";
 import type { ApprovalRequestInfo, ApprovalSurface, ApprovalSurfaceVerdict } from "../agent/approvalSurface.js";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { createFauxStreamFn, fauxAssistantMessage } from "../agent/fauxStream.js";
 import { createJsonlSessionRepo, setLaneModelFace } from "../agent/sessionMirror.js";
 import { ensureTemBranch } from "../agent/tem/store.js";
@@ -44,6 +45,21 @@ export const chatBudgetFromEnv = (env: NodeJS.ProcessEnv = process.env): number 
   const raw = env["ATF_WEBUI_CHAT_BUDGET"];
   const parsed = raw === undefined ? Number.NaN : Number(raw);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+};
+
+/**
+ * 批㊵（D-LLM-1 R3 WebUI 面）：effort 词表（用户面）→ pi-ai ModelThinkingLevel 映射。
+ * "none"＝D-LLM-1 用户契约词（思考关闭），映射 "off"；其余闭集值原样（pi-ai 六档＋off）。
+ * 闭集外/缺省 → undefined（不干预当前档——fail-closed 不猜）。模型实支持子集由 provider
+ * 目录 thinkingLevelMap 裁剪（GLM coding 线＝off/low/high/max），端点不认的档位由 provider
+ * 报错如实透传。
+ */
+export const EFFORT_THINKING_LEVELS: readonly string[] = ["off", "none", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+export const effortToThinkingLevel = (effort: string | undefined): ThinkingLevel | undefined => {
+  if (effort === undefined || effort === "") return undefined;
+  if (effort === "none") return "off";
+  return (EFFORT_THINKING_LEVELS as readonly string[]).includes(effort) ? (effort as ThinkingLevel) : undefined;
 };
 
 export interface SessionSummary {
@@ -133,10 +149,22 @@ export class WebUiSessionManager {
     this.approvalPolicy = policy;
   }
 
-  /** 批⑭：模型/effort 运行时热切（§二.1：新 turn 生效不重启 loop——pi-ai 换实例语义）＋对话流留痕。 */
+  /** 批⑭：模型/effort 运行时热切（§二.1：新 turn 生效不重启 loop——pi-ai 换实例语义）＋对话流留痕。
+   *  批㊵补全：effort 闭集校验（fail-closed 拒闭集外值）＋消费链接通（ensureAgent 的
+   *  thinkingLevelSource 每请求读取——切换对后续请求即时生效，历史不回改；模型/provider
+   *  切换消费仍待接——本批只落档位面）。 */
   public setModelOverride(id: string, override: { provider_id: string; model: string; effort?: string }): boolean {
     const session = this.sessions.get(id);
     if (session === undefined) return false;
+    if (override.effort !== undefined && effortToThinkingLevel(override.effort) === undefined) {
+      this.emit(session, {
+        kind: "system_notice",
+        level: "warn",
+        text: `推理档位 ${override.effort} 不在闭集（${EFFORT_THINKING_LEVELS.join("/")}）——切换拒绝（fail-closed），当前档位不变`,
+        at: new Date().toISOString(),
+      });
+      return false;
+    }
     session.providerOverride = override;
     this.emit(session, {
       kind: "system_notice",
@@ -493,6 +521,12 @@ export class WebUiSessionManager {
       followUpMode: "all",
       contextTokens: 24_000,
       keepRecentTokens: 8_000,
+      // 批㊵（D-LLM-1 R3）：推理档位消费链接通——初始档取会话当前 override（若有），
+      // 运行时源每请求读取（/model X effort Y 切档 → 后续请求即时生效，历史不回改）。
+      ...(effortToThinkingLevel(session.providerOverride?.effort) !== undefined
+        ? { initialThinkingLevel: effortToThinkingLevel(session.providerOverride?.effort) }
+        : {}),
+      thinkingLevelSource: () => effortToThinkingLevel(session.providerOverride?.effort),
       fileTools: { roots: [scratchDir] },
       exemptTools: [
         "atf_config_confirm",

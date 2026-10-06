@@ -11,9 +11,23 @@
         displayName: GLM（ATF 授权线）
         api: openai-completions
         baseURL: https://open.bigmodel.cn/api/coding/paas/v4
+        # 批㊵（D-LLM-1 R3 WebUI 面 · A 面）：推理档位声明——thinkingFormat=zai（GLM coding
+        # 端点思考协议：thinking 二态＋reasoning_effort 档位）；reasoningEfforts 照 pi-ai 目录
+        # zai-coding-cn 条目 glm-5.3 的 thinkingLevelMap 原文（off/low/high/max——不造档位），
+        # 激活 dsh 原生模型选择器「推理等级」子菜单（ui-model-selection）。能力面同源声明：
+        # contextWindow/maxTokens＝目录值（用户可用到模型上限，D-LLM-1 R4 不预降）。
+        compat:
+          thinkingFormat: zai
         models:
           - id: glm-5.3-flash
           - id: glm-5.3
+            contextWindow: 1000000
+            maxTokens: 131072
+            reasoningEfforts:
+              off:
+              low: low
+              high: high
+              max: max
 - id: ui-settings-general
   name: "@deepseek-ai/dsh-client-ui-settings-general"
   config:

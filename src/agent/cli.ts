@@ -25,7 +25,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { Agent, BACKGROUND_CONTEXT, type AgentEvent, type AgentMessage, type QueueMode } from "@earendil-works/pi-agent-core";
+import { Agent, BACKGROUND_CONTEXT, type AgentEvent, type AgentMessage, type QueueMode, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TranscriptContext, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { AtfBridgeConnection } from "../bridge/connection.js";
 import { deriveAtfCommand } from "../bridge/atfCommand.js";
@@ -338,6 +338,16 @@ export interface AssembleV1Deps {
   exemptTools?: readonly string[];
   /** 外部共享账本闸锁（runChildSubtask 子装配透传同一把；缺省＝subagent 挂接时自建）。 */
   gateLock?: import("./approvalHook.js").GateLock;
+  /** 批㊵（D-LLM-1 R3 WebUI 面）：初始推理档位——进 Agent initialState（首轮即生效）。
+   *  词表＝pi-ai ModelThinkingLevel（off/minimal/low/medium/high/xhigh/max）；模型实支持
+   *  子集以 provider 目录 thinkingLevelMap 为准（GLM coding 线＝off/low/high/max），装配
+   *  不裁剪——端点不认的档位由 provider 报错如实透传（fail-visible 不猜）。 */
+  initialThinkingLevel?: ThinkingLevel;
+  /** 批㊵：运行时档位源——每请求经 prepareRequest 读取（库 AgentRequestUpdate.thinkingLevel
+   *  通道），返回 undefined＝不干预（维持当前档）；切换对后续请求即时生效，历史不回改。
+   *  与 initialThinkingLevel 独立：宿主（如批⑬ WebUI 的 providerOverride.effort）只接此面
+   *  即得运行时可切。 */
+  thinkingLevelSource?: () => ThinkingLevel | undefined;
   streamFn: (model: never, context: TranscriptContext, options?: SimpleStreamOptions) => unknown;
   modelTag: string;
   approval: { kind: "headless" } | { kind: "interactive"; timeoutMs: number } | { kind: "surface"; surface: ApprovalSurface };
@@ -421,6 +431,10 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
     initialState: {
       systemPrompt: deps.systemSuffix !== undefined ? `${HARNESS_SYSTEM_PROMPT}\n${deps.systemSuffix}` : HARNESS_SYSTEM_PROMPT,
       tools,
+      // 批㊵：初始档位（缺省不携带＝库默认 off；loop 把 initialState.thinkingLevel 折算进
+      // config.reasoning，经 streamFn options.reasoning 透传 pi-ai——丙线 streamFn 已 spread
+      // options，链路零新增装配件）。
+      ...(deps.initialThinkingLevel !== undefined ? { thinkingLevel: deps.initialThinkingLevel } : {}),
     },
     streamFn: deps.streamFn as never,
     beforeToolCall: createApprovalBeforeToolCall({
@@ -454,7 +468,13 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
     }),
     afterToolCall: createTemAfterToolMirror({ session: deps.session, runId, model: envFingerprint(deps.modelTag).model }),
     transformContext,
-    prepareRequest: prepareRequestViaHook(registry),
+    // 批㊵：prepareRequest 双面——既有 before_request hook 桥（观测）＋运行时档位源
+    // （AgentRequestUpdate.thinkingLevel——每请求读取，切换即时生效于后续请求）。
+    prepareRequest: async (request) => {
+      await prepareRequestViaHook(registry)(request);
+      const thinkingLevel = deps.thinkingLevelSource?.();
+      return thinkingLevel === undefined ? undefined : { thinkingLevel };
+    },
     onPayload: (payload: unknown) => {
       void registry.invoke("before_payload", { bytes: JSON.stringify(payload ?? {}).length });
     },
