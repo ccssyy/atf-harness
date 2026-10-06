@@ -24,8 +24,13 @@ import { requiresApprovalFor, validateCanonicalOutput } from "../core/tools/inde
 import type { AtfAgentToolDeps, SpikeBridgeTransport } from "./atfAgentTools.js";
 import { toolDefinitionFor } from "./atfAgentTools.js";
 import { surfaceVerdictToAudit, type ApprovalSurface } from "./approvalSurface.js";
+import { buildApprovalAuditStreamEntry, type ApprovalAuditSource, type ApprovalAuditStream } from "./approvalAudit.js";
 
-/** 审批闸审计留痕（spike 演示/测试断言面；门 2 起入会话事件流）。 */
+/**
+ * 审批闸审计留痕（双面）：内存数组＝进程内消费面（终局判定/子任务分类/测试断言）；
+ * session custom entry 留痕＝持久审计面（批㊳ 1.1，命名空间 approval_audit，best-effort
+ * fail-open——写失败不阻断审批流，见 approvalAudit.ts 文件头；欠账③闭合）。
+ */
 export interface ApprovalAuditEntry {
   tool: string;
   verdict:
@@ -63,6 +68,9 @@ export interface ApprovalHookDeps extends AtfAgentToolDeps {
    *  FileToolHost roots 注入，proposalContent.createProposalContentDigestFor）。缺省不
    *  注入＝key 派生与既有逐位一致（零回归）。只改提案 key，不改任何放行判定。 */
   contentDigestFor?: (tool: string, params: unknown) => Promise<string | undefined>;
+  /** 批㊳ 1.1：审批留痕入流（过闸判定 → approval_audit custom entry；best-effort
+   *  fail-open）。缺省不注入＝纯内存留痕（既有行为零变化；装配线经 cli.ts 注入）。 */
+  auditStream?: ApprovalAuditStream;
 }
 
 /** 账本闸临界区锁（task-of-once 互斥；错误不滞留锁队列）。 */
@@ -111,6 +119,17 @@ export const createApprovalBeforeToolCall =
     // 并发执行体（主链＋并行 fan-out 子任务）共享闸锁时串行化「query→(问答轨预录)→
     // consume」——锁不放行任何动作，只防并发交叉消费破坏账本 watermark 语义（逐条
     // 确认卡、授权对象不错位）。缺省无锁＝单执行体顺序执行，语义零变化。
+    // 批㊳ 1.1：过闸判定同步留痕入 session 流（与裁定同时落盘——崩溃后转录可回溯）；
+    // best-effort fail-open：写失败不阻断审批流（stderr 由流侧记录）。只读直通/豁免面/
+    // 未注册工具拦截无提案键，不入流面（字段闭集纪律，见 approvalAudit.ts）。
+    const emitAudit = async (proposalKey: string, verdict: ApprovalAuditEntry["verdict"], source: ApprovalAuditSource): Promise<void> => {
+      if (deps.auditStream === undefined) return;
+      try {
+        await deps.auditStream.write(buildApprovalAuditStreamEntry(proposalKey, verdict, source));
+      } catch {
+        /* fail-open：注入面异常亦不阻断（approvalAudit.ts 文件头语义） */
+      }
+    };
     const runGate = async (): Promise<BeforeToolCallResult | undefined> => {
     // F5 4.2：问答轨提案 key 派生纳入脚本内容摘要（同路径重写 → key 必变）；缺省/非脚本类
     // 与既有 approvalKeyFor 逐位一致。params_digest（审计/账本 evidence_refs 消费面）不变。
@@ -122,12 +141,14 @@ export const createApprovalBeforeToolCall =
     const auditKey = { tool: toolName, params_digest: proposalKey.params_digest };
     if (deps.scopeRefBox.current === undefined) {
       deps.audit.push({ tool: toolName, verdict: "blocked_scope_ref_missing", requiresApproval: true, detail: { audit_key: auditKey.params_digest } });
+      await emitAudit(proposalKey.approval_key, "blocked_scope_ref_missing", "ledger");
       return block(`审批账本查询缺少 scope_ref（契约 v2 定位键）——先经 atf_workspace_status 获取；fail-closed 不猜测: ${toolName}`);
     }
     const queried = await requestCanonical(deps.bridge, "ledger_query", { scope_ref: deps.scopeRefBox.current }, LEDGER_QUERY_CANONICAL);
     if (!queried.ok) {
       // 账本面故障/schema 违规 = 无法确认授权状态 → fail-closed（主线同语义）
       deps.audit.push({ tool: toolName, verdict: "blocked_ledger_failure", requiresApproval: true, detail: { code: queried.code } });
+      await emitAudit(proposalKey.approval_key, "blocked_ledger_failure", "ledger");
       return block(`账本查询失败（${queried.code}）——无法确认授权状态，fail-closed: ${toolName}`);
     }
     const records = queried.value.records;
@@ -144,9 +165,11 @@ export const createApprovalBeforeToolCall =
         });
       } catch {
         deps.audit.push({ tool: toolName, verdict: "blocked_track_failed", requiresApproval: true, detail: { why: "surface 故障" } });
+        await emitAudit(proposalKey.approval_key, "blocked_track_failed", "surface");
         return { block: true, reason: `问答轨 surface 故障——fail-closed 不放行: ${toolName}` };
       }
       deps.audit.push({ tool: toolName, verdict: surfaceVerdictToAudit(verdict), requiresApproval: true, detail: { audit_key: auditKey.params_digest } });
+      await emitAudit(proposalKey.approval_key, surfaceVerdictToAudit(verdict), "surface");
       if (verdict.kind === "denied") {
         // 否决＝结构化回填非终局（模型可换路径；DENIAL_LOOP_LIMIT 语义归门 2）
         return { block: true, reason: `操作员否决（denied）: ${toolName}——请如实转述并停止该路径` };
@@ -176,17 +199,20 @@ export const createApprovalBeforeToolCall =
       );
       if (!recorded.ok) {
         deps.audit.push({ tool: toolName, verdict: "blocked_ledger_failure", requiresApproval: true, detail: { code: recorded.code, why: "granted 预录失败" } });
+        await emitAudit(proposalKey.approval_key, "blocked_ledger_failure", "ledger");
         return block(`放行预录失败（${recorded.code}）——fail-closed 不放行: ${toolName}`);
       }
       const reQueried = await requestCanonical(deps.bridge, "ledger_query", { scope_ref: deps.scopeRefBox.current }, LEDGER_QUERY_CANONICAL);
       const reLive = reQueried.ok ? reQueried.value.records[0] : undefined;
       if (!reQueried.ok || reLive === undefined) {
         deps.audit.push({ tool: toolName, verdict: "blocked_ledger_failure", requiresApproval: true, detail: { why: "granted 预录后无可消费记录" } });
+        await emitAudit(proposalKey.approval_key, "blocked_ledger_failure", "ledger");
         return block(`放行预录后账本无可消费记录——fail-closed: ${toolName}`);
       }
       const reConsumed = await requestCanonical(deps.bridge, "ledger_consume", { approval_ref: reLive.approval_id, record_id: reLive.record_id }, LEDGER_CONSUME_CANONICAL);
       if (!reConsumed.ok) {
         deps.audit.push({ tool: toolName, verdict: "blocked_consume_failure", requiresApproval: true, detail: { code: reConsumed.code } });
+        await emitAudit(proposalKey.approval_key, "blocked_consume_failure", "ledger");
         return block(`审批消费失败（${reConsumed.code}）——一次性语义 fail-closed: ${toolName}`);
       }
       return undefined; // 问答轨放行 → 工具执行
@@ -198,6 +224,7 @@ export const createApprovalBeforeToolCall =
         requiresApproval: true,
         detail: { audit_key: auditKey.params_digest, ledger_records: records },
       });
+      await emitAudit(proposalKey.approval_key, "blocked_approval_missing", "ledger");
       return block(
         `审批缺失：账本无可消费记录（tool=${toolName}）——headless 下进程须以 exit 78 终止（ADR-07；无有效授权的高危动作一律拒绝）`,
       );
@@ -206,9 +233,11 @@ export const createApprovalBeforeToolCall =
     if (!consumed.ok) {
       // 预录存在但消费失败（已被吃/不匹配/不存在/schema 违规）→ 授权不可用 → fail-closed（主线同语义）
       deps.audit.push({ tool: toolName, verdict: "blocked_consume_failure", requiresApproval: true, detail: { code: consumed.code } });
+      await emitAudit(proposalKey.approval_key, "blocked_consume_failure", "ledger");
       return block(`审批消费失败（${consumed.code}）——一次性语义 fail-closed: ${toolName}`);
     }
     deps.audit.push({ tool: toolName, verdict: "allow_ledger", requiresApproval: true, detail: { record_id: live.record_id } });
+    await emitAudit(proposalKey.approval_key, "allow_ledger", "ledger");
     return undefined; // 账本放行 → 工具执行
     };
     return deps.gateLock !== undefined ? deps.gateLock.run(runGate) : runGate();

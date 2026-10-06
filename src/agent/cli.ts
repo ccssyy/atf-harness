@@ -33,6 +33,7 @@ import { HARNESS_SYSTEM_PROMPT } from "../llm/systemPrompt.js";
 import { loadLlmProviderConfig, type ResolvedLlmProviderConfig } from "../llm/providerConfig.js";
 import { buildAtfAgentTools, type SpikeBridgeTransport } from "./atfAgentTools.js";
 import { createApprovalBeforeToolCall, type ApprovalAuditEntry } from "./approvalHook.js";
+import { createSessionApprovalAuditStream } from "./approvalAudit.js";
 import { createInteractiveApprovalSurface, type ApprovalSurface } from "./approvalSurface.js";
 import { createBudgetFinishTurn, maxTurnsFromEnv, resolveV1ExitCode, type V1RunOutcome } from "./budget.js";
 import { createProviderStreamFn } from "./providerStreamFn.js";
@@ -426,6 +427,9 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
       bridge: deps.bridge,
       scopeRefBox,
       audit,
+      // 批㊳ 1.1：过闸判定同步留痕入本 session（approval_audit custom entry；best-effort
+      // fail-open——写失败不阻断审批流，stderr 记录；子装配各自 session 各自留痕）。
+      auditStream: createSessionApprovalAuditStream(deps.session),
       ...(deps.fileTools !== undefined
         ? { contentDigestFor: createProposalContentDigestFor({ roots: () => deps.fileTools!.roots }) }
         : {}),
