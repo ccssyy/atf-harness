@@ -1,6 +1,8 @@
 /** atf-ui client 半——GPU 状态一行卡＋快捷指令胶囊＋badcase viewer 内嵌浮层（批㉑三段＋批㉛段1）。
- *  品牌沿 owner 路线 2 裁定：维持 DSH 默认文案（替换随 M3 persona/identity config 正道），
- *  本文件不含任何品牌覆盖（slot/CSS/DOM 文本替换均不设）。
+ *  品牌（批㊳ M3-2，档二 · 轴 C）：sidebar.brand.mark/name＋conversation.hero.brand.mark 三座位
+ *  占位（沿官方 ui-brand-official 嵌套 inject 模式——官方占位被 build profile gate 关闭，
+ *  非 official 构建座位空置，第三方 priority 0 直入无冲突面）；M3-1 persona/M3-4 标题经
+ *  config/build-env 两轴，不在本文件。
  *  数据：workspaceFiles.read 轮询 <runsRoot>/atf-ui/monitor.json（同步器 5s 快照单源，
  *  gpu 字段＝nvidia-smi 首行单卡面，gpu_all/gpu_binding＝批㉝H 多卡聚合与绑卡声明，
  *  viewers 字段＝run 维度 badcase viewer 发现清单——批㉛段1）；
@@ -591,6 +593,29 @@ window.__ModuleLoader__.load({
       { label: '对比两轮', msg: '对比最近两轮训练的指标' },
     ]
 
+    // 批㊳ M3-2：ATF 品牌位组件（文字标——owner 终验可调；mark 位收宿主 {size} 呈现请求，
+    // hero 位另传 className 一并透传，宿主样式不丢）
+    function AtfBrandMark(props) {
+      var size = (props && props.size) || 24
+      return React.createElement('span', {
+        className: props && props.className,
+        style: {
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: size, height: size, borderRadius: Math.max(4, Math.round(size / 5)),
+          background: '#1d4ed8', color: '#fff', fontWeight: 700,
+          fontSize: Math.round(size * 0.4), letterSpacing: '.02em',
+          fontFamily: 'system-ui,-apple-system,sans-serif', flex: 'none',
+        },
+      }, 'ATF')
+    }
+
+    function AtfBrandName() {
+      return React.createElement('span', {
+        style: { fontWeight: 600, fontSize: 14, fontFamily: 'system-ui,-apple-system,sans-serif' },
+      }, 'ATF 训练 Agent')
+    }
+
+
     return {
       inject: ['slots', 'remote', 'remote.workspaceFiles'],
       apply: function(ctx) {
@@ -732,6 +757,25 @@ window.__ModuleLoader__.load({
               React.createElement(TrainDialog),
               React.createElement(MonitorPanel))
           })
+        })
+
+        // 批㊳ M3-2（档二品牌 · 轴 C）：brand slot 占位——沿官方嵌套 inject 模式
+        // （ui-brand-official/src/client/index.ts:16-23）。声明感知：slot 声明已在则同步
+        // 占位、未在则等声明提交后执行（免疫加载时序）；回调返回 disposer 数组（iterable
+        // 契约，registry.ts inject 文档面）。占位后侧栏 fallback（"DSH 本地构建"）与
+        // 版本徽标一并由我方组件接管面。
+        ctx.slots.inject('sidebar.brand.mark', function() {
+          return ctx.slots.inject('sidebar.brand.name', function() {
+            return [
+              ctx.slots.register({ name: 'sidebar.brand.mark' }, AtfBrandMark),
+              ctx.slots.register({ name: 'sidebar.brand.name' }, AtfBrandName),
+            ]
+          })
+        })
+
+        // 空态 hero 鱼标位（顺手——EmptyHero renderSlot({size:34,className})）
+        ctx.slots.inject('conversation.hero.brand.mark', function() {
+          return ctx.slots.register({ name: 'conversation.hero.brand.mark' }, AtfBrandMark)
         })
       },
     }

@@ -28,3 +28,12 @@
 - insert:
     - id: atf-tools
       name: '@atf/dsh-atf-tools'
+# 批㊳ M3-1（档二品牌 · 轴 A）：system-prompt 行整行替换——includeHarnessIdentity:false
+# 关掉首段 "You are an AI agent powered by DeepSeek Harness."；personaPrefix 换 ATF 身份
+# （{{model}}/{{cwd}} 为已注册变量）；personaSuffix 必须重述（漏重述即丢段——方案 §五.4）。
+- id: system-prompt
+  config:
+    includeHarnessIdentity: false
+    personaPrefix: >-
+      You are the ATF training agent (ATF 训练 Agent), powered by the {{model}} model.
+    personaSuffix: Your working directory is {{cwd}}.
