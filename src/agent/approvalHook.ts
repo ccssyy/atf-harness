@@ -93,10 +93,21 @@ export const createGateLock = (): GateLock => {
  *  terminate 即整批终局。门 2 引入问答轨后 suspended/denied 类不再 terminate）。 */
 const block = (reason: string): BeforeToolCallResult => ({ block: true, reason, terminate: true });
 
+/** 批㊳ 段 1.2（丙线欠账①）：denial 升级阈值——同 proposalApprovalKey 的 denied 计数达
+ *  2 → terminate:true 终局 aborted（exit 79），回填文本注明「同一提案多次被拒，已终止」。
+ * 计数源＝hook 内存计数（选型依据登记执行报告：①1.1 留痕面为 best-effort fail-open
+ * 辅助面，升级判定（治理控制流）不建立在可能丢失的流上——fail-open 不外溢进判定；
+ * ②转录面自 1.1 起有 verdict 载体，但其权威性不及甲线 12 事件流（写入失败＝运行失败），
+ * 纯推导口径的前提不成立；③子装配（subagent/deferred）各自独立 session 树，转录重放
+ * 跨执行体维度同样不可聚合，与内存计数同界）。内存计数与 1.1 留痕入流互补：计数面供
+ * 升级判定（进程内精确），流面供审计追溯（持久 best-effort）。 */
+export const DENIAL_ESCALATION_LIMIT = 2;
+
 /** 组装 beforeToolCall hook（Agent 构造参数 beforeToolCall 直用）。 */
-export const createApprovalBeforeToolCall =
-  (deps: ApprovalHookDeps) =>
-  async (context: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> => {
+export const createApprovalBeforeToolCall = (deps: ApprovalHookDeps) => {
+  // 1.2 denial 计数（闭包态＝本 hook 实例生命周期；跨执行体各计各的——见 DENIAL_ESCALATION_LIMIT 选型③）
+  const denialCounts = new Map<string, number>();
+  return async (context: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> => {
     const toolName = context.toolCall.name;
     const params = context.args;
     if ((deps.exemptTools ?? []).includes(toolName)) {
@@ -171,7 +182,20 @@ export const createApprovalBeforeToolCall =
       deps.audit.push({ tool: toolName, verdict: surfaceVerdictToAudit(verdict), requiresApproval: true, detail: { audit_key: auditKey.params_digest } });
       await emitAudit(proposalKey.approval_key, surfaceVerdictToAudit(verdict), "surface");
       if (verdict.kind === "denied") {
-        // 否决＝结构化回填非终局（模型可换路径；DENIAL_LOOP_LIMIT 语义归门 2）
+        // 批㊳ 1.2：同提案二次被拒 → 升级终止（exit 79；决议「不静默重试」口径闭合）
+        const denialCount = (denialCounts.get(proposalKey.approval_key) ?? 0) + 1;
+        denialCounts.set(proposalKey.approval_key, denialCount);
+        if (denialCount >= DENIAL_ESCALATION_LIMIT) {
+          deps.audit.push({
+            tool: toolName,
+            verdict: "aborted",
+            requiresApproval: true,
+            detail: { why: "denial_escalation", denial_count: denialCount, audit_key: auditKey.params_digest },
+          });
+          await emitAudit(proposalKey.approval_key, "aborted", "surface");
+          return block(`同一提案多次被拒，已终止（denied ×${String(denialCount)}）: ${toolName}——run 以 exit 79 收口`);
+        }
+        // 否决＝结构化回填非终局（模型可换路径；同提案再次被拒即升级终止，批㊳ 1.2）
         return { block: true, reason: `操作员否决（denied）: ${toolName}——请如实转述并停止该路径` };
       }
       if (verdict.kind === "suspended" || verdict.kind === "aborted") {
@@ -242,6 +266,7 @@ export const createApprovalBeforeToolCall =
     };
     return deps.gateLock !== undefined ? deps.gateLock.run(runGate) : runGate();
   };
+};
 
 /** ledger_record canonical（契约 v2 审批链 §13.8 形态；问答轨 granted 持久化前置消费）。 */
 const LEDGER_RECORD_CANONICAL = {
