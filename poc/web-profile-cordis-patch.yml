@@ -37,3 +37,58 @@
     personaPrefix: >-
       You are the ATF training agent (ATF 训练 Agent), powered by the {{model}} model.
     personaSuffix: Your working directory is {{cwd}}.
+
+# 批㊴ M3-1 收尾（owner 两裁 10-06 11:55 选项 A＋措辞定调）：preset-standard persona 覆写——
+# web 会话缺省走 agent preset，其 persona 插件按设计遮蔽部署级 persona（system-prompt 行对
+# preset 作用域不生效）；本行照 Web 编辑器保存形态按 id 整行覆写（plugins 全量重述），仅 persona
+# prefix 换 owner 定稿：自称只提 ATF 训练 Agent，不绑模型厂商/型号（模型可切换——禁"由 X 驱动"式）。
+# 维护代价（选项 A 声明）：vendor bump 时 preset 上游变更不自动流入，须随 bump 重同步本覆写行
+# （重放清单见 vendor/dsh/patches/README.md）。
+- id: preset-standard
+  name: '@deepseek-ai/dsh-agent-preset'
+  config:
+    id: standard
+    order: 1
+    plugins:
+      - id: persona
+        name: '@deepseek-ai/dsh-persona'
+        config:
+          suffix: Your working directory is {{cwd}}.
+          prefix: You are the ATF training agent (ATF 训练 Agent). {{model}} is the currently configured underlying model.
+      - id: agent-instructions
+        name: '@deepseek-ai/dsh-agent-instructions'
+        config:
+          maxBytes: 65536
+      - id: tool-bash
+        name: '@deepseek-ai/dsh-tool-bash'
+        disabled: !!js process.platform === 'win32'
+      - id: tool-pwsh
+        name: '@deepseek-ai/dsh-tool-pwsh'
+        disabled: !!js process.platform !== 'win32'
+      - id: tool-fs
+        name: '@deepseek-ai/dsh-tool-fs'
+      - id: tool-fs-search
+        name: '@deepseek-ai/dsh-tool-fs-search'
+        config:
+          sampleOverCapGlobResults: false
+      - id: tool-jobs
+        name: '@deepseek-ai/dsh-tool-jobs'
+      - id: skill-filesystem
+        name: '@deepseek-ai/dsh-skill-filesystem'
+      - id: tool-skill
+        name: '@deepseek-ai/dsh-tool-skill'
+      - id: command-goal
+        name: '@deepseek-ai/dsh-command-goal'
+      - id: tool-goal
+        name: '@deepseek-ai/dsh-tool-goal'
+      - id: planning
+        name: cordis:group
+        group: true
+        isolate:
+          planMode: true
+        config:
+          - id: plan-mode
+            name: '@deepseek-ai/dsh-plan-mode'
+            config:
+              section: |
+                You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
