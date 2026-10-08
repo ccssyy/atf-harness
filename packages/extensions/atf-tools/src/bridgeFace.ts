@@ -52,12 +52,18 @@ export class BridgeManager {
   constructor(
     private readonly command: readonly string[],
     private readonly cwd: string,
+    /** 批㊶-E-H 项 2.1：桥子进程私有 env 增量（PYTHONPATH 等——不污进程面）。 */
+    private readonly childEnv?: Readonly<Record<string, string>>,
   ) {}
 
   private async get(): Promise<AtfBridgeConnection> {
     if (this.connection !== null) return this.connection;
     if (this.connecting === null) {
-      this.connecting = AtfBridgeConnection.spawn({ command: this.command, cwd: this.cwd }).then((spawned) => {
+      this.connecting = AtfBridgeConnection.spawn({
+        command: this.command,
+        cwd: this.cwd,
+        ...(this.childEnv !== undefined ? { env: this.childEnv } : {}),
+      }).then((spawned) => {
         if (!spawned.ok) {
           this.connecting = null;
           throw new Error(`atf 桥 spawn 失败（${spawned.error.code}）: ${spawned.error.message}`);

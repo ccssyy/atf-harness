@@ -18,6 +18,7 @@ import z from "@deepseek-ai/schemastery";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineTool } from "@deepseek-ai/dsh-tools";
+import { resolveBridgeDeployment, kernelVersionSync } from "../../../../src/bridge/bridgeCommand.js";
 import { looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
 import { BridgeManager, buildBridgeTools } from "./bridgeFace.js";
 import { buildFileTools } from "./fileFace.js";
@@ -69,7 +70,15 @@ export const Config = z.object({
 export function apply(ctx: any, config: AtfToolsConfig): void {
   console.log(`[atf-tools] apply()——注册 11＋2＋3 个 atf_* 工具（M2.75 增训练执行段三投影）（runsRoot=${config.runsRoot}）`);
   // （M2 时序注记：loader.create 动态行会触发 atf-ui 双 mount——已移除；atf-ui 行由 profile patch 静态装配。）
-  const manager = new BridgeManager(bridgeArgv(config.bridgeCommand), repoRoot);
+  // 批㊶-E-H 项 2.1：桥对端装配单源（src/bridge/bridgeCommand.ts）——ATF_DSH_BRIDGE_COMMAND
+  // 在场即真内核 argv＋PYTHONPATH（子进程私有 env，派生自 kernelDir/src）；缺席保留 mock。
+  const deployment = resolveBridgeDeployment({ commandValue: config.bridgeCommand, kernelDir: config.kernelDir, env: process.env });
+  const kernelVersion = deployment.mode === "real" ? kernelVersionSync(deployment.kernelRoot) : null;
+  const bridgeLine = deployment.mode === "real"
+    ? `real（${deployment.argv.join(" ")}${deployment.childEnv["PYTHONPATH"] !== undefined ? ` ｜ PYTHONPATH=${deployment.childEnv["PYTHONPATH"]}` : ""}）内核 ${kernelVersion ?? "版本未知（git describe 不可用）"}`
+    : `mock（${deployment.argv.join(" ")}——设 ATF_DSH_BRIDGE_COMMAND 切真内核）`;
+  console.log(`[atf-tools] 桥对端: ${bridgeLine}`);
+  const manager = new BridgeManager(deployment.argv, repoRoot, deployment.childEnv);
 
   for (const tool of buildBridgeTools(ctx, manager, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, execHome: config.execHome })) ctx.tools.register(tool);
   for (const tool of buildFileTools(config.runsRoot)) ctx.tools.register(tool);
@@ -95,6 +104,3 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
     }),
   );
 }
-
-/** 命令串 → argv（首词为可执行，余词按空格切分——Config 面保持简单；带引号路径走 env 形态的 node 包装）。 */
-const bridgeArgv = (command: string): string[] => command.trim().split(/\s+/);

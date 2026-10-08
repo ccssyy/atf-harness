@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage } from "../../packages/extensions/atf-ui/src/snapshot.js";
-import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveViewerRequest, scanEvalRounds, scanRunDir, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
+import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveViewerRequest, scanEvalRounds, scanRunDir, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -191,6 +191,46 @@ describe("批㉘ monitor 路径注入（tapIndex → window.__ATF_UI_CONFIG__.mo
     const html = await appliedHtml({ runsRoot: "/tmp/b28-runs-config" });
     expect(html).toContain(join("/tmp/b28-runs-config", "atf-ui", "monitor.json"));
     expect(injectMonitorGlobal("<html><body>x</body></html>", "/p/m.json")).toContain("/p/m.json");
+  });
+});
+
+describe("批㊶-E 项 2.3 桥类型徽标注入面（__ATF_UI_CONFIG__.bridge 扩键——白名单两键＋投影用例）", () => {
+  it("注入两态：real 带 version／mock 无 version——键面白名单（mode/version，不含路径命令面）", () => {
+    const realHtml = injectMonitorGlobal("<html></html>", "/p/m.json", { mode: "real", version: "v0.7.11b0" });
+    expect(realHtml).toContain('"bridge":{"mode":"real","version":"v0.7.11b0"}');
+    const mockHtml = injectMonitorGlobal("<html></html>", "/p/m.json", { mode: "mock", version: null });
+    expect(mockHtml).toContain('"bridge":{"mode":"mock","version":null}');
+    // 旧装配面（不传 bridge）＝批㉘形态零变化——client 回退不渲染徽标
+    expect(injectMonitorGlobal("<html></html>", "/p/m.json")).not.toContain("bridge");
+  });
+
+  it("bridgeBadgeSurface：mock 缺省（无 env）——mode mock 且 version null（不触 git）", () => {
+    const saved = process.env["ATF_DSH_BRIDGE_COMMAND"];
+    delete process.env["ATF_DSH_BRIDGE_COMMAND"];
+    try {
+      const surface = bridgeBadgeSurface({}, "/data/sam/ATF-Harness");
+      expect(surface).toEqual({ mode: "mock", version: null });
+    } finally {
+      if (saved !== undefined) process.env["ATF_DSH_BRIDGE_COMMAND"] = saved;
+    }
+  });
+
+  it("bridgeBadgeSurface：env 指真内核（probe 桩确认包在位）＝real，版本自 kernelRoot git describe", () => {
+    const savedBridge = process.env["ATF_DSH_BRIDGE_COMMAND"];
+    const savedKernel = process.env["ATF_DSH_KERNEL_DIR"];
+    process.env["ATF_DSH_KERNEL_DIR"] = "/data/sam/ATF-Harness";
+    try {
+      const surface = bridgeBadgeSurface(
+        { ATF_DSH_BRIDGE_COMMAND: "python3 -m agentic_training_flow serve", ATF_DSH_KERNEL_DIR: "/data/sam/ATF-Harness" },
+        "/data/sam/ATF-Harness",
+        (p) => p === join("/data/sam/ATF-Harness", "src", "agentic_training_flow"),
+      );
+      expect(surface.mode).toBe("real");
+      expect(surface.version).toMatch(/^v?\S+/);
+    } finally {
+      if (savedBridge !== undefined) process.env["ATF_DSH_BRIDGE_COMMAND"] = savedBridge; else delete process.env["ATF_DSH_BRIDGE_COMMAND"];
+      if (savedKernel !== undefined) process.env["ATF_DSH_KERNEL_DIR"] = savedKernel; else delete process.env["ATF_DSH_KERNEL_DIR"];
+    }
   });
 });
 

@@ -529,9 +529,25 @@ window.__ModuleLoader__.load({
         parts.push('暂无推进 run')
       }
       var dotColor = active !== null && active.trainingActive ? '#f59e0b' : active !== null ? '#1d4ed8' : '#16a34a'
+      // 批㊶-E-H 项 2.3：桥类型徽标（__ATF_UI_CONFIG__.bridge 注入面——旧装配面无此键不渲染，
+      // 向后兼容）。real＝内核 real·<版本>（版本探测不到如实省略）；mock＝⚠ mock 提示。
+      var bridgeCfg = (typeof window !== 'undefined' && window.__ATF_UI_CONFIG__ && window.__ATF_UI_CONFIG__.bridge) || null
+      var bridgeBadge = null
+      if (bridgeCfg !== null && bridgeCfg.mode === 'real') {
+        bridgeBadge = React.createElement('span', {
+          title: 'ATF 内核桥（真内核）',
+          style: { color: '#16a34a', fontWeight: 600, flex: 'none' },
+        }, '内核 real' + (bridgeCfg.version ? '·' + bridgeCfg.version : ''))
+      } else if (bridgeCfg !== null) {
+        bridgeBadge = React.createElement('span', {
+          title: '桥对端为 mock 内核（非真内核）——设 ATF_DSH_BRIDGE_COMMAND 切换',
+          style: { color: '#dc2626', fontWeight: 600, flex: 'none' },
+        }, '⚠ mock')
+      }
       // 批㉛段1：当前推进 run 有 viewer 产物 → 行内直达入口（无则不渲染，不留死按钮）
       var activeViewers = active !== null ? ((mon.runs.find(function(r) { return r.run_id === active.run.run_id }) || {}).viewers || []) : []
       return React.createElement('div', { className: 'atf-gpu-card' },
+        bridgeBadge,
         React.createElement('span', { className: 'atf-gpu-dot', style: { background: dotColor } }),
         React.createElement('span', { title: gpuAllTitle }, parts.join(' · ')),
         activeViewers.length > 0

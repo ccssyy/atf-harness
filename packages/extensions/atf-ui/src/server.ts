@@ -16,6 +16,7 @@ import { buildArtifactsSnapshot, buildMonitorSnapshot } from "./snapshot.js";
 import { PANEL_HTML } from "./panel.js";
 import { queryNvidiaSmi, queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
+import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
 
 /** Cordis 插件名。 */
 export const name = "atf-ui";
@@ -49,11 +50,33 @@ const OUT_DIR = "atf-ui";
 export const monitorPathOf = (runsRoot: string): string => join(runsRoot, OUT_DIR, "monitor.json");
 
 /** index HTML 注入（纯函数）：`</head>` 前插 per-instance monitor 路径全局；
- *  无 head 锚则整体前置。值经 JSON.stringify 转义，路径含特殊字符也安全。 */
-export const injectMonitorGlobal = (html: string, monitorPath: string): string => {
-  const snippet = `<script>window.__ATF_UI_CONFIG__=Object.assign({},window.__ATF_UI_CONFIG__,{monitorPath:${JSON.stringify(monitorPath)}});</script>`;
+ *  无 head 锚则整体前置。值经 JSON.stringify 转义，路径含特殊字符也安全。
+ *  批㊶-E-H 项 2.3：扩键 bridge——桥类型徽标数据源（白名单两键 mode/version，
+ *  摘要化不含路径命令面；缺席键＝旧装配面，client 回退不渲染徽标）。 */
+export interface BridgeBadgeSurface {
+  mode: "mock" | "real";
+  /** 内核 git describe tag（real 且可探测时有值；null＝如实无版本）。 */
+  version: string | null;
+}
+
+export const injectMonitorGlobal = (html: string, monitorPath: string, bridge?: BridgeBadgeSurface): string => {
+  const config: Record<string, unknown> = { monitorPath };
+  if (bridge !== undefined) config["bridge"] = bridge;
+  const snippet = `<script>window.__ATF_UI_CONFIG__=Object.assign({},window.__ATF_UI_CONFIG__,${JSON.stringify(config)});</script>`;
   const at = html.toLowerCase().indexOf("</head>");
   return at === -1 ? snippet + html : html.slice(0, at) + snippet + html.slice(at);
+};
+
+/**
+ * 桥徽标面推导（批㊶-E-H 项 2.3）：与 atf-tools 装配同源（src/bridge/bridgeCommand.ts
+ * 单源＋同进程同 env——本插件不持 Config，env 缺省值与 atf-tools Config 缺省一致）。
+ * real 时探测内核版本（git describe，fail-soft null）。
+ */
+export const bridgeBadgeSurface = (env: Readonly<Record<string, string | undefined>>, repoRootValue: string, probe?: (path: string) => boolean): BridgeBadgeSurface => {
+  const kernelDir = env["ATF_DSH_KERNEL_DIR"] ?? env["ATF_CLI_PATH"] ?? join(repoRootValue, ".atf-pinned");
+  const commandValue = env["ATF_DSH_BRIDGE_COMMAND"] ?? `node ${join(repoRootValue, "tests", "fixtures", "mock_atf.mjs")}`;
+  const deployment: BridgeDeployment = resolveBridgeDeployment({ commandValue, kernelDir, env, ...(probe !== undefined ? { probe } : {}) });
+  return { mode: deployment.mode, version: deployment.mode === "real" ? kernelVersionSync(deployment.kernelRoot) : null };
 };
 
 export interface RunScan {
@@ -687,11 +710,14 @@ export function apply(
 ): void {
   const resolved = resolveConfig(config);
   console.log(`[atf-ui] 同步器启动（runsRoot=${resolved.runsRoot}，interval=${String(resolved.intervalMs)}ms）`);
+  // 批㊶-E-H 项 2.3：桥徽标注入面（与 atf-tools 装配单源同 env 推导；boot 日志一行桥类型）
+  const bridge = bridgeBadgeSurface(process.env, repoRoot);
+  console.log(`[atf-ui] 桥类型: ${bridge.mode === "real" ? `real${bridge.version !== null ? `·${bridge.version}` : ""}` : "mock（⚠ 缺省——设 ATF_DSH_BRIDGE_COMMAND 切真内核）"}`);
   const webServer = ctx.webServer;
   if (webServer !== undefined) {
     const monitorPath = monitorPathOf(resolved.runsRoot);
-    const dispose = webServer.tapIndex((html) => injectMonitorGlobal(html, monitorPath));
-    ctx.effect(() => dispose, "atf-ui: monitor 路径 index 注入");
+    const dispose = webServer.tapIndex((html) => injectMonitorGlobal(html, monitorPath, bridge));
+    ctx.effect(() => dispose, "atf-ui: monitor 路径＋桥徽标 index 注入");
     console.log(`[atf-ui] monitor 路径已注入 index（monitorPath=${monitorPath}）`);
     // 批㉛段1：badcase viewer 静态路由（鉴权沿壳 connection 信任面；connection/register 缺席的
     // 裸挂载面跳过不开口——tapIndex-only 消费方零变化）
