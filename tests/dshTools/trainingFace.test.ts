@@ -2,7 +2,7 @@
  * 批⑱M2.75 测试锚——训练执行段三工具投影（atf_run_training/atf_evaluate/atf_analyze_badcases）：
  * 协议适配＋danger_confirm 联动＋mock 执行（DRY_RUN mock train.sh／status 枚举）。
  */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,6 +20,7 @@ import {
   parseTrainerLine,
   probePortOccupant,
   renderTaskCardText,
+  rotateTrainLog,
   startLossIngest,
   terminateOccupant,
 } from "../../packages/extensions/atf-tools/src/trainingFace.js";
@@ -613,3 +614,33 @@ function tmuxAbsent(session: string): boolean {
     return true;
   }
 }
+
+describe("批㊶-E 项 7a（P28）训练日志启动轮转（rotateTrainLog）", () => {
+  it("旧 log 在场 → 原地更名 train-stdout.<启动时间戳>.log，原路径清空待新写入", () => {
+    const root = tempRoot();
+    const logPath = join(root, "train-stdout.log");
+    writeFileSync(logPath, "上一次尝试的 traceback\n");
+    const rotated = rotateTrainLog(logPath, new Date(2026, 9, 8, 12, 30, 45));
+    expect(rotated).toBe(join(root, "train-stdout.20261008-123045.log"));
+    expect(existsSync(logPath)).toBe(false);
+    expect(readFileSync(rotated!, "utf8")).toContain("上一次尝试的 traceback");
+  });
+
+  it("log 缺席 → no-op（null，不创建任何文件）", () => {
+    const root = tempRoot();
+    expect(rotateTrainLog(join(root, "train-stdout.log"), new Date())).toBeNull();
+    expect(readdirSync(root)).toEqual([]);
+  });
+
+  it("同秒已存在同名归档 → 追加毫秒序防覆盖（历史一个不丢）", () => {
+    const root = tempRoot();
+    const now = new Date(2026, 9, 8, 12, 30, 45, 120);
+    const logPath = join(root, "train-stdout.log");
+    writeFileSync(join(root, "train-stdout.20261008-123045.log"), "更早的归档\n");
+    writeFileSync(logPath, "本次要归档的\n");
+    const rotated = rotateTrainLog(logPath, now);
+    expect(rotated).toBe(join(root, "train-stdout.20261008-123045.120.log"));
+    expect(readFileSync(rotated!, "utf8")).toContain("本次要归档的");
+    expect(readFileSync(join(root, "train-stdout.20261008-123045.log"), "utf8")).toContain("更早的归档");
+  });
+});

@@ -14,7 +14,7 @@
  */
 import { spawn, execFile, execSync } from "node:child_process";
 import * as net from "node:net";
-import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync, mkdirSync, appendFileSync, renameSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
@@ -323,16 +323,40 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // tmux 常驻＋tee 日志＋tail 进料
       const logPath = join(cfg.logDir, "train-stdout.log");
       mkdirForce(cfg.logDir);
+      // 批㊶-E-H 项 7a（P28）：启动轮转——旧 train-stdout.log 归档为带启动时间戳副本，
+      // 当前日志只含本次尝试（tee -a 在新文件上追加；历史保留可追溯）
+      const rotated = rotateTrainLog(logPath);
       const { execSync } = await import("node:child_process");
       try { execSync(`tmux kill-session -t atf-training-run 2>/dev/null`); } catch { /* 无旧会话 */ }
       execSync(`tmux new-session -d -s atf-training-run "bash ${args.train_sh} 2>&1 | tee -a ${logPath}"`);
       startLossIngest(logPath, join(cfg.runsRoot, args.run_id, "training", "loss-series.json"));
-      return asToolValue({ started: true, tmux: "atf-training-run", run_id: args.run_id, log: logPath, note: "训练已启动（tail 进料监控中）——status 查询进度与 ckpt；完成回报 ckpt 路径" });
+      return asToolValue({
+        started: true,
+        tmux: "atf-training-run",
+        run_id: args.run_id,
+        log: logPath,
+        ...(rotated !== null ? { previous_log: rotated } : {}),
+        note: "训练已启动（tail 进料监控中）——status 查询进度与 ckpt；完成回报 ckpt 路径",
+      });
     },
   });
 
 function mkdirForce(dir: string): void {
   import("node:fs").then((fs) => fs.mkdirSync(dir, { recursive: true }));
+}
+
+/** 批㊶-E-H 项 7a（P28）训练日志启动轮转：train-stdout.log 已存在 → 原地更名为
+ *  train-stdout.<启动时间戳>.log（历史保留可追溯，当前日志只含本次尝试）；
+ *  不存在即 no-op。返回归档路径（null＝无可轮转）。同名归档已存在（同秒两次启动）
+ *  追加毫秒序避免覆盖。 */
+export function rotateTrainLog(logPath: string, now: Date = new Date()): string | null {
+  if (!existsSync(logPath)) return null;
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  let rotated = join(dirname(logPath), `train-stdout.${stamp}.log`);
+  if (existsSync(rotated)) rotated = join(dirname(logPath), `train-stdout.${stamp}.${String(now.getMilliseconds()).padStart(3, "0")}.log`);
+  renameSync(logPath, rotated);
+  return rotated;
 }
 
 /** prelaunch 报告在场探测：目录内 prelaunch*（md/json）任一即返回路径；无则 null。 */
