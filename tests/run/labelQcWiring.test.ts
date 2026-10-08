@@ -54,12 +54,12 @@ const execute = async (transport: BridgeTransport, tool: string, params: unknown
   return executor.execute(tool, params, grantedGate);
 };
 
-describe("审批策略矩阵：label_qc 两工具均须审批（写动作）", () => {
-  it("inspect/resolve requires_approval=true（requiresApprovalFor 单一出口）", () => {
+describe("审批策略矩阵：label_qc 两工具分流（批㊶-F2——inspect 确定性检测免审；resolve 裁决须审批）", () => {
+  it("inspect requires_approval=false／resolve=true（requiresApprovalFor 单一出口）", () => {
     const registry = ToolRegistry.createDefault();
     const inspect = registry.get("atf_label_qc_inspect");
     const resolve = registry.get("atf_label_qc_resolve");
-    expect(inspect.ok && requiresApprovalFor(inspect.value, { dataset_id: "ds" })).toBe(true);
+    expect(inspect.ok && requiresApprovalFor(inspect.value, { dataset_id: "ds" })).toBe(false);
     expect(resolve.ok && requiresApprovalFor(resolve.value, { dataset_id: "ds", actor: "a", report_digest: "d", decisions: [] })).toBe(true);
   });
 });

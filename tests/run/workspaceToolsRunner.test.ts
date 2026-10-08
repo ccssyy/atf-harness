@@ -106,13 +106,13 @@ const toolResultsOf = (events: readonly LlmContextEvent[], tool: string): Array<
 };
 
 describe("批 3 §一：执行类审批链（runner 全管线）", () => {
-  it("无预录无问答轨 → atf_scratch_exec blocked approval_missing（exit 78，fail-closed 不执行）", { timeout: 60_000 }, async () => {
+  it("批㊶-F2 免审后：无预录无问答轨 → atf_scratch_exec 直执行（不再 blocked approval_missing；治理护栏仍由 scratch 边界承载）", { timeout: 60_000 }, async () => {
     const env = makeHosts();
     try {
       const runId = `b3-exec-${randomUUID()}`;
       env.host.scratchDir = join(env.runsRoot, runId, "scratch");
       const seen: LlmContextEvent[][] = [];
-      const argv = ["python3", "-c", "print('should-not-run')"];
+      const argv = ["python3", "-c", "print('f2-exempt-direct-run')"];
       const ran = await ScenarioRunner.runBranch(scenarioOf(runId, "执行脚本"), "main", {
         runsRoot: env.runsRoot,
         mockCommand: ["node", mockPath],
@@ -123,10 +123,13 @@ describe("批 3 §一：执行类审批链（runner 全管线）", () => {
       });
       expect(ran.ok).toBe(true);
       if (!ran.ok) throw new Error("unreachable");
-      expect(ran.value.outcome.kind).toBe("approval_missing");
-      expect(ran.value.exit_code).toBe(78);
-      // 未获授权 → 命令未执行（scratch 无 .tmp 执行痕迹以外的产物；关键是无 tool/result ok:true）
-      expect(toolResultsOf(seen[0] ?? [], "atf_scratch_exec")).toHaveLength(0);
+      expect(ran.value.outcome.kind).toBe("completed");
+      expect(ran.value.exit_code).toBe(0);
+      const results = toolResultsOf(ran.value.events, "atf_scratch_exec");
+      expect(results).toHaveLength(1);
+      const result = results[0]?.result as Record<string, unknown>;
+      expect(result["ok"]).toBe(true);
+      expect(result["stdout"]).toContain("f2-exempt-direct-run");
     } finally {
       rmSync(env.runsRoot, { recursive: true, force: true });
       rmSync(env.kernelDir, { recursive: true, force: true });

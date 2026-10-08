@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { checkSchema, validateCanonicalOutput, type SchemaNode } from "../../src/core/tools/canonical.js";
-import { ToolRegistry, toModelVisible } from "../../src/core/tools/index.js";
+import { ToolRegistry, toModelVisible, WORKSPACE_TOOL_DEFINITIONS, requiresApprovalFor } from "../../src/core/tools/index.js";
 import { TOOL_DEFINITIONS } from "../../src/core/tools/toolDefinition.js";
+import { spikeRequiresApproval } from "../../src/agent/atfAgentTools.js";
 import { approvalParamsDigest, stableStringify } from "../../src/core/tools/approvalKey.js";
 
 /**
@@ -244,5 +245,45 @@ describe("F5 白名单同步：atf_gate guidance 容结构化三段式对象", (
 
   it("guidance 缺省形态零回归", () => {
     expect(validate("atf_gate", { ok: true, gate: "G1", status: "pass" }).ok).toBe(true);
+  });
+});
+
+describe("批㊶-F2 审批标注增补（转派记录——免审清单/高危清单/两线一致性）", () => {
+  const contractByName = new Map(TOOL_DEFINITIONS.map((definition) => [definition.name, definition]));
+  const workspaceByName = new Map(WORKSPACE_TOOL_DEFINITIONS.map((definition) => [definition.name, definition]));
+  const byName = (name: string) => contractByName.get(name) ?? workspaceByName.get(name);
+
+  it("免审清单逐值 false（任意 params）＋两线（executor/atfAgentTools）全工具面 requiresApprovalFor 逐工具相等", () => {
+    // 免审清单（批㊶-F2 改 scratch_exec/label_qc_inspect；fact_scan/workspace_status/preparation_propose 既有 false 确认维持）
+    for (const name of ["atf_scratch_exec", "atf_label_qc_inspect", "atf_fact_scan", "atf_workspace_status", "atf_preparation_propose"]) {
+      const definition = byName(name);
+      expect(definition, name).toBeDefined();
+      expect(requiresApprovalFor(definition!, {})).toBe(false);
+      expect(requiresApprovalFor(definition!, {任意: "params"})).toBe(false);
+    }
+    // 两线一致性：甲线消费点（executor import 的 requiresApprovalFor）≡ 丙线消费点
+    // （atfAgentTools spikeRequiresApproval）——全工具面（9 契约＋scratch 线 5）逐工具相等，
+    // 防未来任一线另立本地判定分叉（沿 methodOverrides 静态防分叉先例）。
+    expect(TOOL_DEFINITIONS).toHaveLength(9);
+    expect(WORKSPACE_TOOL_DEFINITIONS).toHaveLength(5);
+    for (const definition of [...TOOL_DEFINITIONS, ...WORKSPACE_TOOL_DEFINITIONS]) {
+      for (const params of [{}, { action: "query" }, { action: "advance" }, {任意: 1}]) {
+        expect(spikeRequiresApproval(definition, params)).toBe(requiresApprovalFor(definition, params));
+      }
+    }
+  });
+
+  it("高危清单逐值 true＋atf_gate 谓词三态（advance→true／query→false／缺失→true fail-closed 不回退）", () => {
+    for (const name of ["atf_admit_data", "atf_data_admission_request", "atf_style_cluster_execute", "atf_label_qc_resolve", "atf_launch_execute"]) {
+      const definition = byName(name);
+      expect(definition, name).toBeDefined();
+      expect(requiresApprovalFor(definition!, {})).toBe(true);
+    }
+    const gate = byName("atf_gate");
+    expect(gate).toBeDefined();
+    expect(requiresApprovalFor(gate!, { action: "advance" })).toBe(true);
+    expect(requiresApprovalFor(gate!, { action: "query" })).toBe(false);
+    expect(requiresApprovalFor(gate!, {})).toBe(true);
+    expect(requiresApprovalFor(gate!, { action: "非法值" })).toBe(true);
   });
 });

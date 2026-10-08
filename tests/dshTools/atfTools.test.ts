@@ -112,10 +112,11 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
     expect(result).not.toHaveProperty("error");
   }, 20_000);
 
-  it("atf_scratch_exec：无审批服务时 fail-closed 拒绝（不触桥）", async () => {
+  it("atf_scratch_exec：批㊶-F2 免审后无审批服务也直执行（本地治理径，不再 fail-closed 卡审批）", async () => {
     const tools = buildBridgeTools(noApprovalCtx, manager, localRoots);
     const result = (await findTool(tools, "atf_scratch_exec").execute({ argv: ["python3", "-c", "print(1)"] }, fakeExec)) as Record<string, unknown>;
-    expect(result).toMatchObject({ error: "approval_denied", outcome: "unavailable" });
+    expect(result).not.toMatchObject({ error: "approval_denied" });
+    expect(JSON.stringify(result)).toContain("1");
   }, 20_000);
 
   it("atf_admit_data：审批 rejected → 结构化拒绝（不触桥）", async () => {

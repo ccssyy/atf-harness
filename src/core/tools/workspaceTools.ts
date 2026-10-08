@@ -322,7 +322,11 @@ export const WORKSPACE_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     description:
       "在 scratch 工作区内受控执行 Python（须审批）：工作目录＝scratch、env 白名单（已注入 PYTHONPATH=<内核>/src 与 python3 解释器，可直接 import 内核包）、stdout 上限、超时保护。用途：执行内核 skills 的 scripts/（如 atf-prepare-training 的 generate_train_launch.py、atf-run-training 的 generate_launch_orchestration.py、评估与 badcase 分析脚本）——这些脚本直接 import 内核包、不经 CLI。产物用 --out 指到 scratch 内相对路径。执行结束后 harness 自动检测 scratch 内是否已生成 launch.sh（训练启动就绪信号）。禁止用它执行启动类脚本（launch.sh/train.sh 由 harness 在用户确认后执行）。",
     parameters: SCRATCH_EXEC_PARAMS,
-    requires_approval: true,
+    // 批㊶-F2（2026-10-08 转派裁定）：requires_approval true→false——临时目录只写执行非
+    // 治理点（uat 448 弹卡中 59 次误弹根因）；治理语义由既有护栏承载（scratch 区 T0 边界、
+    // env 白名单、禁止启动类脚本条款、launch.sh 仅经 atf_launch_execute 放行）。
+    // description 内「须审批」字样待文案面另批修正。
+    requires_approval: false,
     canonical_output: SCRATCH_EXEC_CANONICAL,
   },
   {

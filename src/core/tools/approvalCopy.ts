@@ -68,6 +68,8 @@ const APPROVAL_COPY: Readonly<Record<string, ApprovalCopyBuilder>> = {
     return echo !== "" ? `${base}。${echo}` : base;
   },
   // 批 3「创作执行面」（2026-09-22）：工作区工具审批人读文案。
+  // 批㊶-F2 注（2026-10-08 转派裁定）：atf_scratch_exec requires_approval 已改 false——
+  // 本分支成为死分支（免审后不再进卡面）。保留不删：标注面回退或文案面复用时即接回。
   atf_scratch_exec: (params) => {
     const argv = (params as { argv?: unknown } | null)?.argv;
     const commandText = Array.isArray(argv) && argv.every((part) => typeof part === "string")

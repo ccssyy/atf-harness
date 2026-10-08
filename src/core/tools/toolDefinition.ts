@@ -344,6 +344,9 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     // R-3 接线批（2026-09-23）：方法面 12→14 之 S1。写动作须审批：不可变体检报告＋逐项证据
     // 切片落登记面，直接改变准入前置状态（pending>0 即整体阻断；K2 启用后无报告亦阻断）。
     // RPC 经 executor 显式映射到 atf_label_qc.inspect（内核 §13.13）。
+    // 批㊶-F2（2026-10-08 转派裁定）：requires_approval true→false——inspect/resolve 已拆分
+    // 为两个独立工具定义，体检＝确定性检测（幂等可重跑、不改原始标注），裁决语义归
+    // atf_label_qc_resolve（保持 true）。description 内「须审批」字样待文案面另批修正。
     description:
       "标签体检（写动作，须审批）：对已登记数据集的成对 png/json 标注执行 Q1–Q4 确定性检测（同框同值同字段疑似重复／同框同值异字段需确认归属／值与框形态不匹配／框越界），写不可变体检报告与逐项证据切片到登记面。纯检测不改原始标注、幂等可重跑。qc_params 可省（缺省 iou_threshold=0.9、bounds_tolerance=0；自定义取值以本描述为准，无坐标制参数）。检出不待确认问题可直接请求数据准入；检出待确认项（counts.pending>0）→ 向用户呈现待确认清单逐项裁决（经确认卡或按报告项组装 atf_label_qc_resolve），全部确认前该数据集准入保持阻断。Q2 归属判断＝整图理解：内核永不下发 crop，证据切片以 image_workspace_ref 指向整图（仅来源在工作区内时给值，外部来源如实置空）。",
     parameters: {
@@ -371,7 +374,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         },
       },
     },
-    requires_approval: true,
+    requires_approval: false,
     canonical_output: {
       type: "object",
       required: ["ok", "dataset_id", "pin", "report_ref", "report_file_sha256", "report_digest", "counts", "human_summary"],

@@ -242,8 +242,8 @@ describe("F5 4.1：confirm 型请示全链（问答轨落账 → 确认凭据随
   });
 });
 
-describe("F5 4.2：同路径重写 → 提案 key 变化（问答轨全管线）", () => {
-  it("atf_scratch_exec 同 argv 两次提案：approval_key 不同、content_digest 随 request 落账", { timeout: 60_000 }, async () => {
+describe("F5 4.2（批㊶-F2 后）：scratch_exec 免审——同 argv 两次调用零审批请求直执行", () => {
+  it("atf_scratch_exec 两次调用零 approval/request（提案键管线随免审退场；键派生单测留 approvalContentKey）", { timeout: 60_000 }, async () => {
     const env = makeEnv();
     try {
       const runId = `f5-key-${randomUUID()}`;
@@ -261,21 +261,13 @@ describe("F5 4.2：同路径重写 → 提案 key 变化（问答轨全管线）
             decision: { type: "tool_call", tool: "atf_scratch_exec", params: { argv } },
           },
         ],
-        async () => ({ verdict: "granted", actor: "stub-host" }),
       );
       expect(report.outcome.kind).toBe("completed");
       const requests = eventsOf(report)
         .filter((event) => event.type === "approval/request")
         .map((event) => event.payload as Record<string, unknown>)
         .filter((payload) => payload["tool"] === "atf_scratch_exec");
-      expect(requests).toHaveLength(2);
-      const first = requests[0] as unknown as { approval_key: string; content_digest?: string };
-      const second = requests[1] as unknown as { approval_key: string; content_digest?: string };
-      expect(first.approval_key).not.toBe(second.approval_key);
-      expect(first.content_digest).toBeDefined();
-      expect(second.content_digest).toBeDefined();
-      expect(first.content_digest).not.toBe(second.content_digest);
-      expect(second.approval_key).toBe(`${first.approval_key.split(":")[0]}:${second.content_digest}`);
+      expect(requests).toHaveLength(0);
     } finally {
       env.cleanup();
     }
