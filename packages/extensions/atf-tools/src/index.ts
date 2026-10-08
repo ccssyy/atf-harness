@@ -19,6 +19,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { resolveBridgeDeployment, kernelVersionSync } from "../../../../src/bridge/bridgeCommand.js";
+import { registerApprovalExempt } from "./approvalExempt.js";
 import { looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
 import { BridgeManager, buildBridgeTools } from "./bridgeFace.js";
 import { buildFileTools } from "./fileFace.js";
@@ -79,6 +80,12 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
     : `mock（${deployment.argv.join(" ")}——设 ATF_DSH_BRIDGE_COMMAND 切真内核）`;
   console.log(`[atf-tools] 桥对端: ${bridgeLine}`);
   const manager = new BridgeManager(deployment.argv, repoRoot, deployment.childEnv);
+
+  // 批㊶-F-H 项 1：bash/write 类审批豁免 answerer（择案 A——waterfall 头部 prepend；
+  // 高危治理点 atf_* 全体不进类仍走人工面板；详见 approvalExempt.ts 头注）
+  if (registerApprovalExempt(ctx)) {
+    console.log("[atf-tools] bash/write 免审 answerer 已挂（approval/request waterfall 头部；atf_* 契约工具审批语义零变化）");
+  }
 
   for (const tool of buildBridgeTools(ctx, manager, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, execHome: config.execHome })) ctx.tools.register(tool);
   for (const tool of buildFileTools(config.runsRoot)) ctx.tools.register(tool);

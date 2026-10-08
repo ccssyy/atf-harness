@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { BridgeManager, allDefinitions, BRIDGE_TOOL_NAMES, buildBridgeTools } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
+import { approvalExemptAnswerer, registerApprovalExempt } from "../../packages/extensions/atf-tools/src/approvalExempt.js";
 import { buildFileTools } from "../../packages/extensions/atf-tools/src/fileFace.js";
 import { buildPipelineTool, PIPELINE_STAGES } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
@@ -274,5 +275,50 @@ describe("批㉛段2 atf_config_confirm 现值基线（run 的 IterationConfig �
     const rej = (await findTool(denied, "atf_config_confirm").execute({ action: "present", run_id: "run-c" }, fakeExec)) as Record<string, unknown>;
     expect(rej).toMatchObject({ error: "approval_denied", outcome: "rejected" });
     expect(rej).toMatchObject({ tool: "atf_config_confirm" });
+  });
+});
+
+describe("批㊶-F-H 项 1 bash/write 免审 answerer（waterfall 头部——择案 A）", () => {
+  it("bash 调用不再产生审批请求：bash/write/edit 自动 allowed-once 且 next() 零触达（面板不见）＋stderr 告警保留", async () => {
+    const errWrites: string[] = [];
+    const original = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: unknown) => { errWrites.push(String(chunk)); return true; }) as typeof process.stderr.write;
+    try {
+      for (const toolName of ["bash", "write", "edit"]) {
+        let nextCalled = false;
+        const outcome = await approvalExemptAnswerer({ toolName, reason: "sandbox_permissions=danger-full-access 升级" }, async () => {
+          nextCalled = true;
+          return "rejected";
+        });
+        expect(outcome).toBe("allowed-once");
+        expect(nextCalled).toBe(false);
+      }
+      expect(errWrites.join("")).toContain("[atf-approval] 沙箱不可用，bash 以无隔离模式执行（免审）");
+    } finally {
+      process.stderr.write = original;
+    }
+  });
+
+  it("atf_run_training 仍产生审批请求：atf_* 全体 next() 原路（人工面板语义零变化）＋注册面 prepend 抢桥前", async () => {
+    for (const toolName of ["atf_run_training", "atf_admit_data", "atf_evaluate", "atf_gate", "atf_publish_confirm", "atf_config_confirm", "atf_scratch_exec"]) {
+      const fallbackOutcome = "unavailable";
+      let nextCalled = false;
+      const outcome = await approvalExemptAnswerer({ toolName, reason: "真实 GPU 训练启动确认" }, async () => {
+        nextCalled = true;
+        return fallbackOutcome;
+      });
+      expect(nextCalled).toBe(true);
+      expect(outcome).toBe(fallbackOutcome);
+    }
+    // 注册面：'approval/request'＋prepend: true（先于 api-remotes client 转发桥——桥 apply 更早）
+    let captured: { event: string; options?: { prepend?: boolean } } | null = null;
+    const registered = registerApprovalExempt({
+      on: (event, _listener, options) => { captured = { event, options }; return () => true; },
+    });
+    expect(registered).toBe(true);
+    expect(captured!.event).toBe("approval/request");
+    expect(captured!.options?.prepend).toBe(true);
+    // 裸装配面（无 ctx.on）跳过不抛
+    expect(registerApprovalExempt({})).toBe(false);
   });
 });
