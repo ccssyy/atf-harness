@@ -124,6 +124,13 @@
               section: |
                 You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
 
+# —— 后台作业数上限（会话护栏部分兜底：每 owner 并发作业数上限；解析/对话失控的
+#   完整护栏无宿主等价 seam——PARSE_BUDGET 随宿主消亡、CHAT_BUDGET 候选另批）——————
+- id: jobs
+  name: '@deepseek-ai/dsh-jobs-local'
+  config:
+    maxConcurrentJobsPerOwner: 10
+
 # —— goal 续轮引擎（host 层；仅关工具不关引擎＝历史会话未完 goal 仍续——三行齐关）——
 - id: goal-round-driver
   name: '@deepseek-ai/dsh-goal-round-driver'
@@ -141,11 +148,14 @@
       read-only:
         sandbox: read-only
         approval: ask
+        name: Read only
       workspace-write:
         sandbox: workspace-write
         approval: ask
+        name: Workspace write
       # OS 沙箱关＋应用层工作区白名单恒开＋审批独立 ask——非全文件系统放行。
       danger-full-access:
         sandbox: danger-full-access
         approval: ask
+        name: Full access
     defaultPreset: danger-full-access

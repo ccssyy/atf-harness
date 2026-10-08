@@ -489,6 +489,37 @@ window.__ModuleLoader__.load({
             : null))
     }
 
+    // 批㊶-K 项 4：对话流训练进度卡（conversation.chat.turnTail——每轮尾部；训练中才渲染。
+    // 数据源＝monitor.json（与 GpuCard 同源单源：pickActiveRun 推导），零新数据面）
+    function TrainingProgressCard() {
+      var mon = useMonitor()
+      var active = mon === null ? null : pickActiveRun(mon)
+      // 训练中判据＝run.training.active（monitor 单源布尔——loss-series 在场且新鲜；
+      // 段状态此时为 done 不作判据）
+      if (active === null || !(active.run && active.run.training && active.run.training.active === true)) return null
+      var run = active.run
+      var lossText = ''
+      var pts = (run.training && run.training.points) || []
+      for (var i = pts.length - 1; i >= 0; i--) {
+        if (typeof pts[i].train_loss === 'number') { lossText = ' · loss ' + pts[i].train_loss; break }
+      }
+      return React.createElement('div', {
+        className: 'atf-train-progress',
+        style: {
+          display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12,
+          color: 'var(--dsh-text-secondary,#64748b)', background: 'rgba(128,128,128,.08)',
+          borderRadius: 8, padding: '3px 10px', margin: '4px 0',
+        },
+      },
+        React.createElement('span', { className: 'atf-gpu-dot', style: { background: '#f59e0b' } }),
+        React.createElement('span', null,
+          '训练中 · ' + run.run_id + ' · 段 ' + active.done + '/' + active.total + lossText),
+        React.createElement('button', {
+          className: 'atf-pill', title: '打开右栏训练监控（Loss 曲线）',
+          onClick: function() { store.setMonitor(true, run.run_id) },
+        }, '曲线'))
+    }
+
     /** GPU 状态一行卡（批㉝H 多卡聚合形态：逐卡 util/显存汇总＋当前推进 run 绑卡标注；
      *  gpu_all 缺席（旧快照/采集失败）回退首行单卡面——双向向后兼容）。 */
     function GpuCard() {
@@ -546,8 +577,17 @@ window.__ModuleLoader__.load({
       }
       // 批㉛段1：当前推进 run 有 viewer 产物 → 行内直达入口（无则不渲染，不留死按钮）
       var activeViewers = active !== null ? ((mon.runs.find(function(r) { return r.run_id === active.run.run_id }) || {}).viewers || []) : []
+      // 批㊶-K 项 3：部署默认权限档徽标（会话现值由宿主头部指示器与 atf_permission_status 承载）
+      var permCfg = (typeof window !== 'undefined' && window.__ATF_UI_CONFIG__ && window.__ATF_UI_CONFIG__.permissionPreset) || null
+      var permBadge = permCfg !== null
+        ? React.createElement('span', {
+            title: '部署默认权限档（会话现值见顶部档位指示；档位变更须经界面人工操作）',
+            style: { color: '#64748b', fontWeight: 600, flex: 'none' },
+          }, '档位 ' + (permCfg.label || permCfg.key || ''))
+        : null
       return React.createElement('div', { className: 'atf-gpu-card' },
         bridgeBadge,
+        permBadge,
         React.createElement('span', { className: 'atf-gpu-dot', style: { background: dotColor } }),
         React.createElement('span', { title: gpuAllTitle }, parts.join(' · ')),
         activeViewers.length > 0
@@ -740,6 +780,11 @@ window.__ModuleLoader__.load({
                 onClick: function() { store.setMonitor(!store.monitorOpen) },
               }, '监控'))
           })
+        })
+
+        // 批㊶-K 项 4：turnTail 训练进度卡（每轮尾部；训练中才渲染）
+        ctx.slots.inject('conversation.chat.turnTail', function() {
+          return ctx.slots.register({ name: 'conversation.chat.turnTail', id: 'atf-train-progress' }, TrainingProgressCard)
         })
 
         // 通道 C：composer.dock（list 槽）——GPU 一行卡＋快捷指令胶囊＋viewer 浮层（输入框上方，会话内常显）

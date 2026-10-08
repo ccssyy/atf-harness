@@ -72,6 +72,6 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
     expect(model?.config).toEqual({ provider: "zai-coding-cn", model: "glm-5.3-flash" });
     // 覆写不丢模板其余行（insert 无 id 行原样保留）
     expect(rows.filter((row) => row["id"] === undefined).length).toBeGreaterThan(0);
-    expect(rows.length).toBe(8);
+    expect(rows.length).toBe(9); // 模板 9 行（批㊶-K 增 jobs 兜底行）
   });
 });

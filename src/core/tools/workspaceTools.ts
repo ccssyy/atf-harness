@@ -34,6 +34,7 @@ import {
   SCRATCH_WRITE_MAX_BYTES,
   type LaunchReady,
 } from "../workspace/scratchExec.js";
+import { startLossIngest } from "../workspace/lossIngest.js";
 import {
   listSkills,
   readSkillBody,
@@ -552,6 +553,11 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
   });
   if (!launched.ok) return rejected(launched.error.reason, { message: launched.error.message });
   const state = await readLaunchState(launchShAbs);
+  // 批㊶-K 项 4：登记放行后同挂曲线进料（harness-launch-*.log 此前全仓零消费＝曲线进料断根因面；
+  // 共享 lossIngest 单源——run 目录由 scratch 约定上溯：runs/<run_id>/scratch → runs/<run_id>/training）
+  const runDir = dirname(host.scratchDir);
+  const lossSeriesPath = join(runDir, "training", "loss-series.json");
+  startLossIngest(logPath, lossSeriesPath);
   return {
     kind: "executed",
     result: {
@@ -563,6 +569,8 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
       ...(typeof state?.["effect_started"] === "boolean" ? { effect_started: state["effect_started"] as boolean } : {}),
       ...(launched.value.pid !== null ? { pid: launched.value.pid } : {}),
       log_path: launched.value.log_path,
+      loss_ingest_attached: true,
+      loss_series_path: lossSeriesPath,
       timed_out: launched.value.timed_out,
       ...(launched.value.exit_code !== null ? { exit_code: launched.value.exit_code } : {}),
       launch_sh: launchShRel,

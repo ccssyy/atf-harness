@@ -21,65 +21,12 @@ import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.
 import { scanRunDir } from "../../atf-ui/src/server.js";
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
 import { asToolValue } from "./schemaTranslate.js";
+import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
+import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText } from "./gpuQueueFace.js";
 
-/** HF Trainer dict 行解析（批⑯ logParser 协议口径）→ loss-series 点。 */
-export function parseTrainerLine(line: string): { train_loss: number; grad_norm: number | null; learning_rate: number | null; epoch: number } | null {
-  const m = /\{'loss':[^}]+\}/.exec(line);
-  if (!m) return null;
-  try {
-    const d = astEval(m[0]);
-    if (typeof d.loss !== "number") return null;
-    return {
-      train_loss: d.loss,
-      grad_norm: typeof d.grad_norm === "number" ? d.grad_norm : null,
-      learning_rate: typeof d.learning_rate === "number" ? d.learning_rate : null,
-      epoch: typeof d.epoch === "number" ? d.epoch : 0,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/** 受控字面量求值（HF 日志 dict——单引号 Python 形态；仅本格式，其他内容抛错走 null 路径）。 */
-function astEval(text: string): Record<string, number | string> {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval -- 输入限定为训练日志的 dict 行
-  const fn = new Function(`return (${text.replace(/'/g, '"')})`) as () => Record<string, number | string>;
-  return fn();
-}
-
-/** tail 进料循环：解析新日志行→追加 loss-series.json（批⑯协议）。返回停止函数。 */
-export function startLossIngest(logPath: string, seriesPath: string, intervalMs = 3000): () => void {
-  const read = (): Array<Record<string, unknown>> => {
-    try {
-      return JSON.parse(readFileSync(seriesPath, "utf8")) as Array<Record<string, unknown>>;
-    } catch {
-      return [];
-    }
-  };
-  const timer = setInterval(() => {
-    try {
-      if (!existsSync(logPath)) return;
-      const series = read();
-      let pos = series.length === 0 ? 0 : -1;
-      const text = readFileSync(logPath, "utf8");
-      const lines = text.split("\n").filter((l) => l.trim() !== "");
-      const points: Array<Record<string, unknown>> = [];
-      for (const line of lines) {
-        const p = parseTrainerLine(line);
-        if (p !== null) {
-          points.push({ step: points.length + 1, ...p, at: new Date().toISOString() });
-        }
-      }
-      if (points.length > series.length) {
-        const merged = [...series, ...points.slice(series.length)];
-        mkdirSync(join(seriesPath, ".."), { recursive: true });
-        writeFileSync(seriesPath, `${JSON.stringify(merged, null, 1)}\n`, "utf8");
-        void pos;
-      }
-    } catch { /* 下周期重试 */ }
-  }, intervalMs);
-  return () => clearInterval(timer);
-}
+// 批㊶-K 项 4：进料面提取共享（src/core/workspace/lossIngest.ts）——atf_launch_execute
+// 登记放行后同挂（harness-launch-*.log 此前无人监控＝曲线进料断根因面）；本文件 re-export 兼容面。
+export { parseTrainerLine, startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 
 /** 训练 master 端口占用者（批⑳dot3 修复 3）。 */
 export interface PortOccupant {
@@ -312,6 +259,16 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       const conflictNote = occupant !== null ? `\n${formatPortConflictNote(port, occupant)}` : "";
       const verdict = await requestApproval(ctx, exec, "atf_run_training", `真实 GPU 训练启动确认（GPU/时长代价以九要素确认卡与 train.sh 为准）：train.sh=${args.train_sh}${conflictNote}`);
       if (!verdict.ok) return approvalDeniedResult("atf_run_training", verdict.outcome);
+      // 批㊶-K 项 1：GPU 排队编排（真跑 danger 放行后入队——原 WebUI 语义迁移：周期探测
+      // util<20%＋显存<10GB 连续 2 周期；命中→琥珀再确认卡人工放行（真跑守门不变）；
+      // 无超时；编排器零启动调用。env ATF_GPU_POLL_MS 可配，缺省 300s）
+      const gpuPollMs = gpuQueuePollMsFromEnv(process.env);
+      if (gpuPollMs !== null) {
+        const windowState = await awaitGpuWindow({ pollMs: gpuPollMs, signal: exec.signal as { aborted: boolean } | undefined });
+        if (windowState.kind === "aborted") return approvalDeniedResult("atf_run_training", "cancelled");
+        const amber = await requestApproval(ctx, exec, "atf_run_training", `${queueHitText(windowState.gpuIndex)}（已等待 ${windowState.waitedText}）——GPU 窗口命中，确认启动训练（train.sh=${args.train_sh}）`);
+        if (!amber.ok) return approvalDeniedResult("atf_run_training", amber.outcome);
+      }
       if (occupant !== null) {
         // 卡面 [确认清理并重试] 语义：SIGTERM→宽限→SIGKILL，复探仍占用即保留现场停手
         const killed = occupant.pid > 0 ? await terminateOccupant(occupant.pid) : false;

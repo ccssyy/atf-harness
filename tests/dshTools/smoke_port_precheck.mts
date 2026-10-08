@@ -29,6 +29,7 @@ const before = await probePortOccupant(PORT);
 log(`占用探针: pid=${before?.pid} residueLike=${before?.residueLike} cmdline=${(before?.cmdline ?? "").slice(0, 80)}`);
 
 // ③ 完整链：审批卡（含端口冲突文案）→ 清理 → tmux 启动 mock
+process.env["ATF_GPU_POLL_MS"] = "0"; // 批㊶-K：GPU 排队直启旁路（冒烟不等待真实窗口）
 const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "smoke-dot3" }, { callId: "smoke" });
 log(`启动结果: ${JSON.stringify(result)}`);
 

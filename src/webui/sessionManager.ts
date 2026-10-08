@@ -9,6 +9,13 @@
  * 调用护栏＝纯运维面（§二）：ATF_WEBUI_PARSE_BUDGET（缺省 5）连续解析失败 → 放弃解析、以
  * 结构化问题向用户索取信息（优雅降级）；ATF_WEBUI_CHAT_BUDGET（缺省 0＝不设限）防失控兜底，
  * 触发呈现为人话（"任务已终止并记录原因"），禁技术字样直出对话流。
+ 
+ * ── 宿主收敛注记（批㊶-K，2026-10-08）———————————————————————————————
+ * 自研 WebUI 已由 DSH 宿主替代为现役产品面（装配见 deploy/profiles/web/ 模板与
+ * packages/extensions/{atf-tools,atf-ui} 扩展）。本文件降级为历史资产/欠账迁移来源：
+ * GPU 队列编排已迁 atf-tools（gpuQueueFace）；会话护栏 PARSE_BUDGET 随宿主消亡、
+ * CHAT_BUDGET 登记候选（部分兜底＝部署面 jobs 每_owner 作业数上限）；其余欠账见
+ * 批㊶-I 迁移欠账清单。新的产品能力不在本文件开发。
  */
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";

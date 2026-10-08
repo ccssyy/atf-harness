@@ -26,6 +26,8 @@ import {
 } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 
 const repoRoot = "/data/sam/ATF-Harness";
+// 批㊶-K：GPU 排队编排直启旁路（测试不等待真实 GPU 窗口）
+process.env["ATF_GPU_POLL_MS"] = "0";
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
   const root = mkdtempSync(join(tmpdir(), "m2dot75-test-"));

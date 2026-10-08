@@ -23,7 +23,7 @@ import { registerApprovalExempt } from "./approvalExempt.js";
 import { buildFileGuardTools, registerPathGuard } from "./fileGuardFace.js";
 import { deriveFileToolRoots } from "../../../../src/agent/fileRoots.js";
 import type { FileToolHost } from "../../../../src/agent/fileTools.js";
-import { looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
+import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
 import { BridgeManager, buildBridgeTools } from "./bridgeFace.js";
 import { buildFileTools } from "./fileFace.js";
 import { buildPipelineTool } from "./pipelineFace.js";
@@ -108,6 +108,54 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx };
   ctx.tools.register(buildRunTrainingTool(ctx, trainCfg));
   for (const tool of buildEvalTools(ctx, { runsRoot: config.runsRoot, logDir: config.logDir, kernelDir: config.kernelDir })) ctx.tools.register(tool);
+
+  // 批㊶-K 项 3：档位可见性只读工具（当前档＋部署默认档＋全部可选档两维度——
+  // 零切换路径：档位/审批面变更须经界面人工操作；文案产品口径）
+  ctx.tools.register(
+    defineTool({
+      name: "atf_permission_status",
+      description:
+        "查询当前会话的权限档与审批面（只读）：返回当前生效档位、部署默认档位，以及全部可选档位（每档含文件沙箱层与审批面两个维度的说明）。档位或审批面的变更须经用户在界面人工操作——本工具只读，不提供任何改档路径。当用户询问当前权限档/审批要求时调用本工具如实回答。",
+      parameters: {},
+      output: {
+        schema: looseObjectOutput,
+        render: renderAsJsonText,
+      },
+      async execute(_args: Record<string, unknown>, exec: { agent?: { session?: unknown } }): Promise<ReturnType<typeof asToolValue>> {
+        const service = ctx.get("permissionPresets") as
+          | {
+              current?: (session: unknown) => string;
+              defaultPreset?: string;
+              config?: { presets?: Record<string, { sandbox?: string; approval?: string; name?: string }> };
+              catalog?: () => { options: Array<{ value: string; name: string; description?: string }>; defaultPreset: string };
+            }
+          | undefined;
+        if (service === undefined || typeof service.catalog !== "function") {
+          return asToolValue({ error: "unavailable", message: "权限档服务未挂载（装配面缺失）——如实告知用户当前无法查询" });
+        }
+        const catalog = service.catalog();
+        const session = exec.agent?.session;
+        const current = session !== undefined && typeof service.current === "function" ? service.current(session) : undefined;
+        const fallbackDefault = service.defaultPreset ?? catalog.defaultPreset;
+        const presetSpecs = service.config?.presets ?? {};
+        return asToolValue({
+          current_preset: current ?? fallbackDefault ?? "unknown",
+          deployment_default: fallbackDefault ?? "unknown",
+          presets: catalog.options.map((option) => {
+            const spec = presetSpecs[option.value];
+            return {
+              value: option.value,
+              name: option.name ?? spec?.name ?? option.value,
+              file_sandbox: spec?.sandbox ?? "unknown",
+              approval: spec?.approval ?? "unknown",
+              ...(option.description !== undefined ? { description: option.description } : {}),
+            };
+          }),
+          note: "档位与审批面的变更须经用户在界面人工操作",
+        });
+      },
+    }),
+  );
 
   // 连通性自检探针（M1 验收辅助；保留为装配诊断面）
   ctx.tools.register(

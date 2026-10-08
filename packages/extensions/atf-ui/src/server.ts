@@ -59,9 +59,10 @@ export interface BridgeBadgeSurface {
   version: string | null;
 }
 
-export const injectMonitorGlobal = (html: string, monitorPath: string, bridge?: BridgeBadgeSurface): string => {
+export const injectMonitorGlobal = (html: string, monitorPath: string, bridge?: BridgeBadgeSurface, permissionPreset?: { key: string; label: string }): string => {
   const config: Record<string, unknown> = { monitorPath };
   if (bridge !== undefined) config["bridge"] = bridge;
+  if (permissionPreset !== undefined) config["permissionPreset"] = permissionPreset;
   const snippet = `<script>window.__ATF_UI_CONFIG__=Object.assign({},window.__ATF_UI_CONFIG__,${JSON.stringify(config)});</script>`;
   const at = html.toLowerCase().indexOf("</head>");
   return at === -1 ? snippet + html : html.slice(0, at) + snippet + html.slice(at);
@@ -622,7 +623,7 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
  *  client 半据此轮询 per-instance 快照（批㉘；无 webServer 的裸挂载面——如 vitest 直调——跳过注入）。
  *  批㉛段1 增 connection：viewer 静态路由沿用壳既有信任面（requestRejection → 401/403），
  *  不在壳鉴权之外开裸口。 */
-export const inject = ["webServer", "connection"];
+export const inject = ["webServer", "connection", "permissionPresets"];
 
 /** viewer 静态服务路由前缀（prefix 注册：本前缀与其下任意子路径都进本 handler）。 */
 export const VIEWER_ROUTE_PREFIX = "/atf-ui/viewer";
@@ -712,11 +713,24 @@ export function apply(
   console.log(`[atf-ui] 同步器启动（runsRoot=${resolved.runsRoot}，interval=${String(resolved.intervalMs)}ms）`);
   // 批㊶-E-H 项 2.3：桥徽标注入面（与 atf-tools 装配单源同 env 推导；boot 日志一行桥类型）
   const bridge = bridgeBadgeSurface(process.env, repoRoot);
+  // 批㊶-K 项 3：部署默认权限档注入（GpuCard 徽标数据源——会话现值由宿主头部指示器与
+  // atf_permission_status 承载，本键只表部署默认档）
+  const permissionService = (ctx as { permissionPresets?: { defaultPreset?: string; catalog?: () => { options: Array<{ value: string; name: string }>; defaultPreset: string } } }).permissionPresets;
+  let permissionPreset: { key: string; label: string } | undefined;
+  if (permissionService !== undefined && typeof permissionService.catalog === "function") {
+    try {
+      const key = permissionService.defaultPreset ?? permissionService.catalog().defaultPreset;
+      const label = permissionService.catalog().options.find((option) => option.value === key)?.name ?? key;
+      permissionPreset = { key, label };
+    } catch {
+      permissionPreset = undefined;
+    }
+  }
   console.log(`[atf-ui] 桥类型: ${bridge.mode === "real" ? `real${bridge.version !== null ? `·${bridge.version}` : ""}` : "mock（⚠ 缺省——设 ATF_DSH_BRIDGE_COMMAND 切真内核）"}`);
   const webServer = ctx.webServer;
   if (webServer !== undefined) {
     const monitorPath = monitorPathOf(resolved.runsRoot);
-    const dispose = webServer.tapIndex((html) => injectMonitorGlobal(html, monitorPath, bridge));
+    const dispose = webServer.tapIndex((html) => injectMonitorGlobal(html, monitorPath, bridge, permissionPreset));
     ctx.effect(() => dispose, "atf-ui: monitor 路径＋桥徽标 index 注入");
     console.log(`[atf-ui] monitor 路径已注入 index（monitorPath=${monitorPath}）`);
     // 批㉛段1：badcase viewer 静态路由（鉴权沿壳 connection 信任面；connection/register 缺席的
