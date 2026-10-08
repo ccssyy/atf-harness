@@ -20,6 +20,9 @@ import { fileURLToPath } from "node:url";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { resolveBridgeDeployment, kernelVersionSync } from "../../../../src/bridge/bridgeCommand.js";
 import { registerApprovalExempt } from "./approvalExempt.js";
+import { buildFileGuardTools, registerPathGuard } from "./fileGuardFace.js";
+import { deriveFileToolRoots } from "../../../../src/agent/fileRoots.js";
+import type { FileToolHost } from "../../../../src/agent/fileTools.js";
 import { looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
 import { BridgeManager, buildBridgeTools } from "./bridgeFace.js";
 import { buildFileTools } from "./fileFace.js";
@@ -65,7 +68,7 @@ export const Config = z.object({
   pipelineTimeoutMs: z.number().default(120_000),
   logDir: z
     .string()
-    .default(process.env["ATF_DSH_LOG_DIR"] ?? "/data/sam/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/training-logs"),
+    .default(process.env["ATF_DSH_LOG_DIR"] ?? join(repoRoot, "tmp", "atf-logs")),
 });
 
 export function apply(ctx: any, config: AtfToolsConfig): void {
@@ -85,6 +88,17 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // 高危治理点 atf_* 全体不进类仍走人工面板；详见 approvalExempt.ts 头注）
   if (registerApprovalExempt(ctx)) {
     console.log("[atf-tools] bash/write 免审 answerer 已挂（approval/request waterfall 头部；atf_* 契约工具审批语义零变化）");
+  }
+
+  // 批㊶-H/I：文件工具路径守卫＋A7 治理四件挂载（案 甲单轨）——白名单根＝派生集
+  // （配置声明面镜像，fileRoots.ts）＋env 附加集；产品资产零具体目录（增补裁定）。
+  const fileRoots = deriveFileToolRoots({ env: process.env });
+  const fileHost: FileToolHost = { roots: fileRoots.roots, env: process.env };
+  for (const tool of buildFileGuardTools(fileHost)) ctx.tools.register(tool);
+  if (registerPathGuard(ctx, fileHost)) {
+    console.log(
+      `[atf-tools] 文件路径守卫已挂（tools/pre-execute prepend；守卫 glob/grep/read_image，封闭 vendor read/edit/write 改道 A7；A7 四件挂载）白名单根 ${String(fileRoots.roots.length)} 个（派生集＝配置声明面镜像＋env 附加集）`,
+    );
   }
 
   for (const tool of buildBridgeTools(ctx, manager, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, execHome: config.execHome })) ctx.tools.register(tool);
