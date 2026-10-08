@@ -1,0 +1,19 @@
+# uat 实例 overlay 样例（变量名占位——真实 overlay 在 deploy/instances/<实例>.overlay.yml，
+# 入 .gitignore；实例差异只落这一层，产品模板零实例值）。
+# 行语义：与模板同 id 的行整行覆写（后写覆盖）；新行追加。
+- id: agent-default-model
+  config:
+    provider: <实例业务选择，如 zai-coding-cn>
+    model: <实例业务选择>
+# 业务 provider 追加（如同事 2026-10-08 17:23 经 Web 编辑器加入的 zai-coding-cn——
+# 保留与否由实例声明；key 一律 env 引用，经 Web 凭据存储或实例 env 文件 provisioning）。
+# - id: llm-pi-ai
+#   config:
+#     providers:
+#       glm-atf: …（模板整行覆写时须全量重述 providers）
+#       <实例 provider 名>:
+#         apiKeyEnv: <实例 key env 名>
+#         api: openai-completions
+#         baseURL: <实例端点>
+#         models:
+#           - id: <实例模型>

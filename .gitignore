@@ -21,3 +21,5 @@ vendor/dsh/deepseek-harness/**/*.tsbuildinfo
 # 批⑱-M2（复核修正）：DSH 运行时 home 全目录不入仓（含 .credentials.yaml 运行时凭据/sessions/storages——
 # 曾因缺此段误入 commit，已 squash 重做）。GLM 接线配置的交付副本在 poc/web-profile-cordis-patch.yml。
 poc/dsh-home/
+deploy/instances/
+poc/dsh-home-tongshi/

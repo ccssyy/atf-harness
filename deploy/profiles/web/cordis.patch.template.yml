@@ -1,0 +1,151 @@
+# ============================================================================
+# ATF 部署模板（产品级单源）——deploy/profiles/web/cordis.patch.template.yml
+# 批㊶-H/I（2026-10-08）：审批映射双旋钮解耦＋工具单轨（A7 治理面）＋goal 产品收敛
+#   ＋品牌覆写（M3 定稿）。产品层零具体绝对路径（增补裁定：产品/实例分层）——
+#   实例差异（env 值、凭据引用、业务 provider 选择）一律走 per-instance overlay。
+#
+# 用法（实例机器上，产品仓根）：
+#   python3 deploy/profiles/web/generate.py \
+#     --overlay deploy/instances/<实例>.overlay.yml \
+#     --out <DSH_HOME>/profiles/web/cordis.patch.yml
+#   python3 deploy/profiles/web/check-drift.py \
+#     --overlay deploy/instances/<实例>.overlay.yml \
+#     --deployed <DSH_HOME>/profiles/web/cordis.patch.yml
+#
+# vendor bump 同步义务（vendor/dsh/patches/README.md 台账）：preset-standard 覆写行
+# 为 plugins 全量重述——bump 后对照 packages/bundle/web-app/presets/standard.patch.yml
+# 重同步本模板内同名行（仅保 ATF persona 定稿文案），再重生成实例文件。
+# ============================================================================
+
+# —— LLM provider（ATF 授权线；key 走 env 引用——红线"key 不落配置"）——————
+# 推理档位声明（compat.thinkingFormat=zai）激活 dsh 原生模型选择器推理子菜单；
+# reasoningEfforts 照 pi-ai 目录原文（不造档位）；contextWindow/maxTokens＝目录值。
+- id: llm-pi-ai
+  config:
+    providers:
+      glm-atf:
+        apiKeyEnv: ATF_LLM_KEY_GLM
+        displayName: GLM（ATF 授权线）
+        api: openai-completions
+        baseURL: https://open.bigmodel.cn/api/coding/paas/v4
+        compat:
+          thinkingFormat: zai
+        models:
+          - id: glm-5.3-flash
+          - id: glm-5.3
+            contextWindow: 1000000
+            maxTokens: 131072
+            reasoningEfforts:
+              "off":
+              low: low
+              high: high
+              max: max
+
+- id: ui-settings-general
+  config:
+    welcomeNoticeVersion: 2026-09-28.1
+
+- id: agent-default-model
+  config:
+    provider: glm-atf
+    model: glm-5.3
+
+# —— atf_* 工具投影插件（治理面：桥接 17 方法＋只读四件＋A7 治理四件＋路径守卫
+#   ＋bash/write 免审 answerer——全部由插件装配，此处仅 insert 行）————————————
+- insert:
+    - id: atf-tools
+      name: '@atf/dsh-atf-tools'
+
+# —— M3 品牌定稿（owner 10-06 裁定文案；vendor bump 随台账重同步）——————————
+- id: system-prompt
+  config:
+    includeHarnessIdentity: false
+    personaPrefix: >-
+      You are the ATF training agent (ATF 训练 Agent), powered by the {{model}} model.
+    personaSuffix: Your working directory is {{cwd}}.
+
+- id: preset-standard
+  name: '@deepseek-ai/dsh-agent-preset'
+  config:
+    id: standard
+    order: 1
+    plugins:
+      - id: persona
+        name: '@deepseek-ai/dsh-persona'
+        config:
+          suffix: Your working directory is {{cwd}}.
+          prefix: You are the ATF training agent (ATF 训练 Agent). {{model}} is the currently configured underlying model.
+      - id: agent-instructions
+        name: '@deepseek-ai/dsh-agent-instructions'
+        config:
+          maxBytes: 65536
+      # 批㊶-I 段 C 单轨：vendor bash 通道关闭——bash 能力由 A7 atf_bash 承接
+      # （白名单守卫＋命令分类＋命令串绝对路径扫描；atf-tools 插件挂载）。
+      - id: tool-bash
+        name: '@deepseek-ai/dsh-tool-bash'
+        disabled: true
+      # vendor pwsh 仅 Windows 语义（vendor 原行 !!js 条件在本部署面恒真）——Linux 恒关。
+      - id: tool-pwsh
+        name: '@deepseek-ai/dsh-tool-pwsh'
+        disabled: true
+      # vendor fs/search 保留挂载：glob/grep/read_image 经 pre-execute 白名单守卫
+      # （atf-tools 路径守卫）；read/edit/write 由守卫恒 deny 并改道 atf_read/atf_edit/atf_write。
+      - id: tool-fs
+        name: '@deepseek-ai/dsh-tool-fs'
+      - id: tool-fs-search
+        name: '@deepseek-ai/dsh-tool-fs-search'
+        config:
+          sampleOverCapGlobResults: false
+      - id: tool-jobs
+        name: '@deepseek-ai/dsh-tool-jobs'
+      - id: skill-filesystem
+        name: '@deepseek-ai/dsh-skill-filesystem'
+      - id: tool-skill
+        name: '@deepseek-ai/dsh-tool-skill'
+      # 批㊶-I 段 B：goal 产品收敛——自主多轮循环是能力面开关，须显式开启。
+      # 三行齐关（模型工具＋人类命令＋host 续轮引擎）才彻底；重开＝模板按实例
+      # 显式开启三行＋收敛 maxGoalRounds（vendor 自报 blocked ≥3 轮机制照用）。
+      # 重开时须覆写 create_goal 描述去掉"infer goal intent"推断授权，覆写不可行则维持 disabled。
+      - id: tool-goal
+        name: '@deepseek-ai/dsh-tool-goal'
+        disabled: true
+      - id: command-goal
+        name: '@deepseek-ai/dsh-command-goal'
+        disabled: true
+      - id: planning
+        name: cordis:group
+        group: true
+        isolate:
+          planMode: true
+        config:
+          - id: plan-mode
+            name: '@deepseek-ai/dsh-plan-mode'
+            config:
+              section: |
+                You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
+# —— goal 续轮引擎（host 层；仅关工具不关引擎＝历史会话未完 goal 仍续——三行齐关）——
+- id: goal-round-driver
+  name: '@deepseek-ai/dsh-goal-round-driver'
+  disabled: true
+
+# —— 审批映射双旋钮解耦（批㊶-I 段 A；owner 裁定：任何档位下文件面都必须限在
+#   工作区内放行——"无沙箱"不等于"无边界"：文件面边界由应用层白名单守卫（恒开）
+#   承担，权限档位只决定 OS 级沙箱层有无）。——————————————————————————————
+#   ⚠ approval: never 仅限无头 CI 场景显式声明（vendor 语义＝每个审批请求一律拒绝，
+#   非免打扰）——禁止作为交互实例缺省；本模板各档 approval 恒 ask，overlay 不得改写。
+- id: permission
+  name: '@deepseek-ai/dsh-permission-presets'
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+      # OS 沙箱关＋应用层工作区白名单恒开＋审批独立 ask——非全文件系统放行。
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: ask
+    defaultPreset: danger-full-access
