@@ -22,6 +22,7 @@ import { scanRunDir } from "../../atf-ui/src/server.js";
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
+import { tmuxHasSession } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText } from "./gpuQueueFace.js";
 
 // 批㊶-K 项 4：进料面提取共享（src/core/workspace/lossIngest.ts）——atf_launch_execute
@@ -134,16 +135,8 @@ export function modelLabelLooksDefault(model: unknown): boolean {
   return typeof model === "string" && /^(gpt-|claude-)/i.test(model.trim());
 }
 
-/** tmux 面查询（会话存在/进程退出判定——守卫 tmux 缺失环境）。 */
-const tmuxHas = (session: string): boolean => {
-  try {
-    const { execSync } = require("node:child_process") as typeof import("node:child_process");
-    execSync(`tmux has-session -t ${session} 2>/dev/null`);
-    return true;
-  } catch {
-    return false;
-  }
-};
+/** tmux 面查询（会话存在判定——批㊶-L L-1 单源委托：src/core/workspace/tmuxLiveness.ts，会话名常量同源）。 */
+const tmuxHas = (session: string): boolean => tmuxHasSession(session);
 
 const runCapture = (cmd: string, args: readonly string[], timeoutMs: number): Promise<{ code: number | null; stdout: string; stderr: string }> =>
   new Promise((resolve) => {
@@ -226,7 +219,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         const lossPath = join(ckptDir, "loss-series.json");
         const points = existsSync(lossPath) ? (JSON.parse(readFileSync(lossPath, "utf8")) as unknown[]).length : 0;
         // 八段任务卡段状态（与监控同步器同源推导——scanRunDir 单源）
-        const segments = buildMonitorSnapshot([scanRunDir(cfg.runsRoot, args.run_id)]).runs[0]?.segments ?? [];
+        const segments = buildMonitorSnapshot([scanRunDir(cfg.runsRoot, args.run_id, { trainingTmuxPresent: tmuxHas("atf-training-run") })]).runs[0]?.segments ?? [];
         return asToolValue({ action: "status", running, run_id: args.run_id, segments, ckpts, loss_points: points, ...(ckpts.length > 0 ? { latest_ckpt: `runs/${args.run_id}/training/${ckpts[ckpts.length - 1]}` } : {}) });
       }
       // —— start：DRY_RUN 校验 → 端口预检（批⑳dot3 修复 3）→ danger 必确认 → 启动 ——

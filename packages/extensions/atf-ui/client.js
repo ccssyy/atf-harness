@@ -282,7 +282,14 @@ window.__ModuleLoader__.load({
         var artRun = arts.runs.find(function(r) { return r.run_id === runId })
         runArtifacts = artRun ? artRun.artifacts : []
       }
-      return React.createElement('div', { className: 'atf-monitor-panel' },
+      // 批㊶-L L-4：运行时测量宿主顶栏实高让位（取不到回落 56px；测量失败静默）——
+      // 修复头部行被应用顶栏遮挡致 × 不可达。
+      var topOffset = 56
+      try {
+        var bar = document.querySelector('header') || document.querySelector('[class*="topbar"]') || document.querySelector('[class*="app-header"]')
+        if (bar && bar.offsetHeight > 0) topOffset = bar.offsetHeight + 4
+      } catch (e) { /* 静默回落 */ }
+      return React.createElement('div', { className: 'atf-monitor-panel', style: { top: topOffset } },
         React.createElement('div', { className: 'atf-monitor-head' },
           React.createElement('b', null, '训练监控'),
           React.createElement('select', {
@@ -489,35 +496,66 @@ window.__ModuleLoader__.load({
             : null))
     }
 
-    // 批㊶-K 项 4：对话流训练进度卡（conversation.chat.turnTail——每轮尾部；训练中才渲染。
-    // 数据源＝monitor.json（与 GpuCard 同源单源：pickActiveRun 推导），零新数据面）
+    // 批㊶-K 项 4＋批㊶-L L-3：对话流训练进度卡（conversation.chat.turnTail——每轮尾部）。
+    // 渲染条件（L-3 owner 裁定②放宽）：训练中 或 任一段 done——完成态常驻转绿，不再消失。
+    // 数据源＝monitor.json（与 GpuCard 同源单源：pickActiveRun 推导），零新数据面。
+    // 训练中判据＝run.training.active（monitor 单源布尔——loss-series 在场且新鲜；
+    // 段状态此时为 done 不作判据）。
+    // 展开态为本地组件态（不持久化）；完成态隐藏 loss 与曲线入口（取实现简洁——
+    // 完成后曲线读取走右栏监控面板，卡片只承载进度结论）。
+    var SEGMENT_MARK = { done: '✓', active: '●', pending: '○' }
+    function segmentMark(status) { return SEGMENT_MARK[status] || '✗' }
     function TrainingProgressCard() {
+      // hooks 全部前置（条件早退不得跨 hook——React rules of hooks）
       var mon = useMonitor()
+      var expandedState = React.useState(false)
+      var expanded = expandedState[0], setExpanded = expandedState[1]
       var active = mon === null ? null : pickActiveRun(mon)
-      // 训练中判据＝run.training.active（monitor 单源布尔——loss-series 在场且新鲜；
-      // 段状态此时为 done 不作判据）
-      if (active === null || !(active.run && active.run.training && active.run.training.active === true)) return null
+      if (active === null) return null
       var run = active.run
+      var trainingNow = !!(run.training && run.training.active === true)
+      var anyDone = (run.segments || []).some(function(seg) { return seg.status === 'done' })
+      if (!trainingNow && !anyDone) return null
       var lossText = ''
       var pts = (run.training && run.training.points) || []
       for (var i = pts.length - 1; i >= 0; i--) {
         if (typeof pts[i].train_loss === 'number') { lossText = ' · loss ' + pts[i].train_loss; break }
       }
+      var dotColor = trainingNow ? '#f59e0b' : '#16a34a'
+      var headText = (trainingNow ? '训练中 · ' : '已完成 · ') + run.run_id + ' · 段 ' + active.done + '/' + active.total
+      var rowStyle = {
+        display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12,
+        color: 'var(--dsh-text-secondary,#64748b)', background: 'rgba(128,128,128,.08)',
+        borderRadius: 8, padding: '3px 10px', margin: '4px 0', cursor: 'pointer',
+      }
+      var head = React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 7 } },
+        React.createElement('span', { className: 'atf-gpu-dot', style: { background: dotColor } }),
+        React.createElement('span', null, headText + (trainingNow ? lossText : '')))
+      var curveBtn = trainingNow
+        ? React.createElement('button', {
+            className: 'atf-pill', title: '打开右栏训练监控（Loss 曲线）',
+            onClick: function(e) { e.stopPropagation(); store.setMonitor(true, run.run_id) },
+          }, '曲线')
+        : null
+      var expandHint = React.createElement('span', { style: { opacity: 0.7 } }, expanded ? '▾' : '▸')
+      var body = expanded
+        ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 2, padding: '4px 0 2px' } },
+            (run.segments || []).map(function(seg, idx) {
+              return React.createElement('div', { key: seg.key || idx, style: { display: 'flex', gap: 6, alignItems: 'center' } },
+                React.createElement('span', { style: { width: 14, textAlign: 'center', color: seg.status === 'done' ? '#16a34a' : seg.status === 'active' ? '#f59e0b' : 'var(--dsh-text-secondary,#94a3b8)' } }, segmentMark(seg.status)),
+                React.createElement('span', null, seg.label || seg.key || ''))
+            }),
+            React.createElement('div', { style: { fontWeight: 600, marginTop: 2 } }, '进度 ' + active.done + '/' + active.total))
+        : null
       return React.createElement('div', {
         className: 'atf-train-progress',
-        style: {
-          display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12,
-          color: 'var(--dsh-text-secondary,#64748b)', background: 'rgba(128,128,128,.08)',
-          borderRadius: 8, padding: '3px 10px', margin: '4px 0',
-        },
+        style: { display: 'inline-flex', flexDirection: 'column', background: 'rgba(128,128,128,.08)', borderRadius: 8, padding: '3px 10px', margin: '4px 0' },
+        onClick: function() { setExpanded(!expanded) },
+        title: expanded ? '收起进度明细' : '展开八段进度明细',
       },
-        React.createElement('span', { className: 'atf-gpu-dot', style: { background: '#f59e0b' } }),
-        React.createElement('span', null,
-          '训练中 · ' + run.run_id + ' · 段 ' + active.done + '/' + active.total + lossText),
-        React.createElement('button', {
-          className: 'atf-pill', title: '打开右栏训练监控（Loss 曲线）',
-          onClick: function() { store.setMonitor(true, run.run_id) },
-        }, '曲线'))
+        React.createElement('div', { style: { display: 'inline-flex', alignItems: 'center', gap: 7 } },
+          head, expandHint, curveBtn),
+        body)
     }
 
     /** GPU 状态一行卡（批㉝H 多卡聚合形态：逐卡 util/显存汇总＋当前推进 run 绑卡标注；
@@ -775,12 +813,23 @@ window.__ModuleLoader__.load({
                 className: 'atf-pill', title: 'GPU 状态卡显隐',
                 onClick: injected.toggle,
               }, 'GPU'),
-              React.createElement('button', {
-                className: 'atf-pill', title: '右栏训练监控（Loss 曲线/KPI/环境卡）',
-                onClick: function() { store.setMonitor(!store.monitorOpen) },
-              }, '监控'))
+              React.createElement(MonitorTogglePill))
           })
         })
+
+        // 批㊶-L L-4：监控开关（订阅 store 的真实组件——普函数渲染体不重渲，开关态需自订阅）
+        function MonitorTogglePill() {
+          var open = React.useSyncExternalStore(
+            function(fn) { return store.subscribe(fn) },
+            function() { return store.monitorOpen },
+          )
+          return React.createElement('button', {
+            className: 'atf-pill' + (open ? ' atf-pill-on' : ''),
+            style: open ? { borderColor: '#1d4ed8', color: '#1d4ed8', fontWeight: 600 } : undefined,
+            title: open ? '监控（开——点击关闭右栏面板）' : '监控（关——点击打开右栏面板）',
+            onClick: function() { store.setMonitor(!store.monitorOpen) },
+          }, '监控')
+        }
 
         // 批㊶-K 项 4：turnTail 训练进度卡（每轮尾部；训练中才渲染）
         ctx.slots.inject('conversation.chat.turnTail', function() {

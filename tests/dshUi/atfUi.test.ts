@@ -6,7 +6,8 @@ import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage } from "../../packages/extensions/atf-ui/src/snapshot.js";
-import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveViewerRequest, scanEvalRounds, scanRunDir, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
+import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveTrainActiveWindowMs, resolveViewerRequest, scanEvalRounds, scanRunDir, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
+import { TRAINING_TMUX_SESSION, tmuxHasSession } from "../../src/core/workspace/tmuxLiveness.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -700,5 +701,58 @@ describe("批㉞H 两轮评估对比（badcases 计数＋轮面扫描组装＋�
     for (const phrase of ["评估对比", "atf-cmp-grid", "finish=length 行数", "max_completion_tokens", "字段级数据需分析链产出", "不足两轮"]) {
       expect(clientSource).toContain(phrase);
     }
+  });
+});
+
+describe("批㊶-L L-1 训练活跃终结判定（tmux 注入＋mtime 新鲜窗口）", () => {
+  const seedRun = (root: string, runId: string, freshMs: number | null): string => {
+    const runDir = join(root, runId);
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "loss-series.json"), "[]");
+    if (freshMs !== null) {
+      const t = new Date(Date.now() - freshMs);
+      utimesSync(join(runDir, "training", "loss-series.json"), t, t);
+    }
+    return runDir;
+  };
+
+  it("tmux 在场 → 恒 active（mtime 过期不灭）；env 窗口解析三态", () => {
+    const root = tempRoot();
+    seedRun(root, "run-l1", 3_600_000);
+    const scan = scanRunDir(root, "run-l1", { trainingTmuxPresent: true, nowMs: Date.now(), freshWindowMs: 180_000 });
+    expect(scan.training.active).toBe(true);
+    expect(resolveTrainActiveWindowMs({})).toBe(180_000);
+    expect(resolveTrainActiveWindowMs({ ATF_TRAIN_ACTIVE_WINDOW_MS: "5000" })).toBe(5_000);
+    expect(resolveTrainActiveWindowMs({ ATF_TRAIN_ACTIVE_WINDOW_MS: "0" })).toBe(180_000);
+    expect(resolveTrainActiveWindowMs({ ATF_TRAIN_ACTIVE_WINDOW_MS: "abc" })).toBe(180_000);
+    expect(resolveTrainActiveWindowMs({ ATF_TRAIN_ACTIVE_WINDOW_MS: "-1" })).toBe(180_000);
+  });
+
+  it("tmux 不在场：mtime 新鲜窗口内 active；过期终结（false）", () => {
+    const root = tempRoot();
+    seedRun(root, "run-fresh", 10_000);
+    expect(scanRunDir(root, "run-fresh", { trainingTmuxPresent: false, nowMs: Date.now(), freshWindowMs: 180_000 }).training.active).toBe(true);
+    seedRun(root, "run-stale", 3_600_000);
+    expect(scanRunDir(root, "run-stale", { trainingTmuxPresent: false, nowMs: Date.now(), freshWindowMs: 180_000 }).training.active).toBe(false);
+    // 注入缺席（旧调用方）＝tmux 视为不在场 → 仅 mtime 判据
+    seedRun(root, "run-default", 10_000);
+    expect(scanRunDir(root, "run-default").training.active).toBe(true);
+  });
+
+  it("liveness 共享单源：会话名常量与探测函数（tmux 缺席环境如实 false）", () => {
+    expect(TRAINING_TMUX_SESSION).toBe("atf-training-run");
+    expect(typeof tmuxHasSession()).toBe("boolean");
+  });
+});
+
+describe("批㊶-L L-2 segments 补 evaluate 推导", () => {
+  it("metrics_summary 在场 → evaluate done；缺席 → pending（false）", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-ev");
+    mkdirSync(join(runDir, "eval"), { recursive: true });
+    writeFileSync(join(runDir, "eval", "metrics_summary.json"), "{}");
+    expect(scanRunDir(root, "run-ev").segments.evaluate).toBe(true);
+    const root2 = tempRoot();
+    expect(scanRunDir(root2, "run-noev").segments.evaluate).toBe(false);
   });
 });

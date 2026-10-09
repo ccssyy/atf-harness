@@ -17,6 +17,7 @@ import { PANEL_HTML } from "./panel.js";
 import { queryNvidiaSmi, queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
+import { tmuxHasSession } from "../../../../src/core/workspace/tmuxLiveness.js";
 
 /** Cordis 插件名。 */
 export const name = "atf-ui";
@@ -341,7 +342,43 @@ export const buildEnvSurface = (iter: Record<string, unknown> | null, runId: str
 };
 
 /** 单 run 目录标记推导（任务卡 chat 卡面与同步器同源——trainingFace status 复用本出口）。 */
-export function scanRunDir(root: string, runId: string): RunScan {
+/** 批㊶-L L-1：训练活跃新鲜窗口缺省（毫秒）——env `ATF_TRAIN_ACTIVE_WINDOW_MS` 可配。 */
+export const TRAIN_ACTIVE_WINDOW_MS_DEFAULT = 180_000;
+export const TRAIN_ACTIVE_WINDOW_MS_ENV = "ATF_TRAIN_ACTIVE_WINDOW_MS";
+
+/** 新鲜窗口解析（gpuQueuePollMsFromEnv 同风格）：非法/≤0 回落缺省。 */
+export const resolveTrainActiveWindowMs = (env: NodeJS.ProcessEnv): number => {
+  const raw = env[TRAIN_ACTIVE_WINDOW_MS_ENV];
+  if (raw === undefined || raw.trim() === "") return TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
+  return parsed;
+};
+
+/** 训练活跃注入面（调用方——同步器循环每周期探测一次 tmux，不逐 run）。 */
+export interface ScanLiveness {
+  /** tmux 训练会话在场（探测异常按 false——fail-closed 回落 mtime 窗口判据）。 */
+  trainingTmuxPresent?: boolean;
+  freshWindowMs?: number;
+  nowMs?: number;
+}
+
+/** loss-series mtime 新鲜判定（now/window 注入可测；stat 失败按不新鲜）。 */
+const lossSeriesFresh = (dir: string, liveness: ScanLiveness | undefined): boolean => {
+  try {
+    const windowMs = liveness?.freshWindowMs ?? TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
+    const now = liveness?.nowMs ?? Date.now();
+    return now - statSync(join(dir, "training", "loss-series.json")).mtimeMs <= windowMs;
+  } catch {
+    return false;
+  }
+};
+
+/** 训练活跃终判：tmux 在场优先；否则回落 mtime 新鲜窗口。 */
+const trainingActiveLive = (dir: string, liveness: ScanLiveness | undefined): boolean =>
+  liveness?.trainingTmuxPresent === true || lossSeriesFresh(dir, liveness);
+
+export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness): RunScan {
   const dir = join(root, runId);
   const has = (rel: string): boolean => existsSync(join(dir, rel));
   const readJson = (rel: string): unknown => {
@@ -386,9 +423,15 @@ export function scanRunDir(root: string, runId: string): RunScan {
       // admission 沿 train.sh 存在（生成即过 DRY_RUN 准入自检面）
       admission: has("launch/train.sh") || has("admission.json"),
       training: has("training/loss-series.json"),
+      // 批㊶-L L-2：评估段锚＝eval/metrics_summary.json（评估完成的确定性产物；
+      // badcases.jsonl 为可选分析产物不作为完成判据——锚选型理由）
+      evaluate: has("eval/metrics_summary.json"),
     },
     training: {
-      active: has("training/loss-series.json"),
+      // 批㊶-L L-1：终结判定——active＝loss-series 在场 &&（tmux 训练会话在场 || mtime
+      // 在新鲜窗口内；窗口缺省 180s，env 可配）。tmux 布尔由同步器循环注入；探测异常
+      // 按false＝fail-closed 回落 mtime 窗口。训练段 done 语义不变（在场＝done）。
+      active: has("training/loss-series.json") && trainingActiveLive(dir, liveness),
       // 批㉛段3.1：live loss-series 缺席 → 最新 checkpoint trainer_state.json 历史回退
       loss: has("training/loss-series.json") ? readJson(join("training", "loss-series.json")) : trainerHistoryLoss(dir),
       pending_confirm: readJson(join("webui", "pending-confirm.json")),
@@ -531,13 +574,13 @@ export function discoverViewerDirs(runDir: string): string[] {
     .sort((a, b) => (stamp(b) - stamp(a)) || (a < b ? -1 : a > b ? 1 : 0));
 }
 
-function scanRuns(runsRoot: string): RunScan[] {
+function scanRuns(runsRoot: string, liveness?: ScanLiveness): RunScan[] {
   const root = join(runsRoot);
   if (!existsSync(root)) return [];
   const runs: RunScan[] = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name === OUT_DIR) continue;
-    runs.push(scanRunDir(root, entry.name));
+    runs.push(scanRunDir(root, entry.name, liveness));
   }
   return runs;
 }
@@ -603,7 +646,17 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     if (!existsSync(resolved.runsRoot)) return;
     const outDir = join(resolved.runsRoot, OUT_DIR);
     mkdirSync(outDir, { recursive: true });
-    const runs = scanRuns(resolved.runsRoot);
+    // 批㊶-L L-1：tmux 探测每周期一次（不逐 run）；异常按 false fail-closed 回落 mtime 窗口
+    let trainingTmuxPresent = false;
+    try {
+      trainingTmuxPresent = tmuxHasSession();
+    } catch {
+      trainingTmuxPresent = false;
+    }
+    const runs = scanRuns(resolved.runsRoot, {
+      trainingTmuxPresent,
+      freshWindowMs: resolveTrainActiveWindowMs(process.env),
+    });
     // GPU 状态（nvidia-smi 包装——不可用如实 offline，不猜测；快照单源随 monitor.json 下发）。
     // 批㉝H：gpu_all 全卡面并采（首行单卡面保留——atf_gpu_status 工具与旧 client 回退共用）。
     const gpu = await queryNvidiaSmi();
