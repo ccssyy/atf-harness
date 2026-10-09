@@ -170,3 +170,58 @@ describe("批㊶-N N-5 会话绑定＋三级作用域", () => {
     expect(SEGMENT_ORDER).toHaveLength(8);
   });
 });
+
+describe("批㊶-O O-1 绑 run 取证（trainingEvidence 映射）", () => {
+  const seedFull = (root: string, runId: string): string => {
+    const runDir = join(root, runId);
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "loss-series.json"), "[]");
+    for (const [dir, file] of [["", "registration.json"], ["", "label_qc"], ["webui", "config-snapshot.json"], ["", "contract-candidate.json"], ["", "split"], ["launch", "train.sh"]] as Array<[string, string]>) {
+      mkdirSync(join(runDir, dir), { recursive: true });
+      writeFileSync(join(runDir, dir, file), "{}");
+    }
+    return runDir;
+  };
+
+  it("①取证匹配本 run → active true", () => {
+    const root = tempRoot();
+    seedFull(root, "run-mine");
+    const scan = scanRunDir(root, "run-mine", { trainingEvidence: { "run-mine": true }, nowMs: Date.now(), freshWindowMs: 180_000 });
+    expect(scan.training.active).toBe(true);
+  });
+
+  it("②取证匹配他 run（本 run 无映射）→ active false——泛匹配假阳性根除", () => {
+    const root = tempRoot();
+    const runDir = seedFull(root, "run-mine");
+    // 历史形态：loss-series mtime 陈旧（真实回归场景）
+    const staleAt = new Date(Date.now() - 600_000);
+    utimesSync(join(runDir, "training", "loss-series.json"), staleAt, staleAt);
+    const scan = scanRunDir(root, "run-mine", { trainingEvidence: { "run-other": true }, nowMs: Date.now(), freshWindowMs: 180_000 });
+    expect(scan.training.active).toBe(false);
+  });
+
+  it("③无匹配回落 mtime 新鲜窗口单判据：新鲜→true；过期→false", () => {
+    const root = tempRoot();
+    const runDir = seedFull(root, "run-m3");
+    utimesSync(join(runDir, "training", "loss-series.json"), new Date(), new Date());
+    const scanFresh = scanRunDir(root, "run-m3", { trainingEvidence: {}, nowMs: Date.now(), freshWindowMs: 180_000 });
+    expect(scanFresh.training.active).toBe(true);
+    const staleAt = new Date(Date.now() - 600_000);
+    utimesSync(join(runDir, "training", "loss-series.json"), staleAt, staleAt);
+    const scanStale = scanRunDir(root, "run-m3", { trainingEvidence: {}, nowMs: Date.now(), freshWindowMs: 180_000 });
+    expect(scanStale.training.active).toBe(false);
+  });
+
+  it("回归锚：现存 atf-* 会话族在场（取证无本 run 映射）时历史 run active 全 false（批㊶-O 假阳性场景）", () => {
+    const root = tempRoot();
+    const staleAt = new Date(Date.now() - 600_000);
+    for (const runId of ["run-regress-formal-01", "run-regress-formal-02", "run-regress-large-pl"]) {
+      const runDir = seedFull(root, runId);
+      utimesSync(join(runDir, "training", "loss-series.json"), staleAt, staleAt);
+    }
+    const liveness = { trainingEvidence: {}, nowMs: Date.now(), freshWindowMs: 180_000 };
+    for (const runId of ["run-regress-formal-01", "run-regress-formal-02", "run-regress-large-pl"]) {
+      expect(scanRunDir(root, runId, liveness).training.active).toBe(false);
+    }
+  });
+});

@@ -17,7 +17,7 @@ import { PANEL_HTML } from "./panel.js";
 import { queryNvidiaSmi, queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
-import { tmuxHasSession, tmuxTrainingFamilyPresent } from "../../../../src/core/workspace/tmuxLiveness.js";
+import { tmuxHasSession, tmuxTrainingFamilyPresent, listTrainingSessionCmdlines } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { orderGuarded, readProgress, progressFresh, readBindings, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
@@ -364,8 +364,10 @@ export const resolveTrainActiveWindowMs = (env: NodeJS.ProcessEnv): number => {
 export interface ScanLiveness {
   /** tmux 训练会话在场（探测异常按 false——fail-closed 回落 mtime 窗口判据）。 */
   trainingTmuxPresent?: boolean;
-  /** 批㊶-N N-2：tmux 会族前缀 atf-* 任一会话在场（更宽活性面——LlamaFactory 直跑等）。 */
-  trainingTmuxFamilyPresent?: boolean;
+  /** 批㊶-O O-1：绑 run 取证映射（run_id → 该 run 训练会话进程链含 run_id 的布尔）。
+   *  在场时 training.active＝本 run 映射值；未命中回落 mtime 新鲜窗口单判据。
+   *  （批㊶-N N-2 会族泛匹配 trainingTmuxFamilyPresent 自本批起不再参与 active 判定。） */
+  trainingEvidence?: Record<string, boolean>;
   /** 批㊶-N N-2：training-logs 目录 mtime 新鲜（编排日志写入活性）。 */
   trainingLogsFresh?: boolean;
   freshWindowMs?: number;
@@ -433,13 +435,15 @@ const evalRoundAnchored = (runDir: string): boolean => {
   return false;
 };
 
-/** 训练活跃终判（批㊶-N N-2 扩充）：tmux 指定会话／会族前缀 atf-*／training-logs mtime
- *  新鲜／loss-series mtime 新鲜——任一即 live。 */
-const trainingActiveLive = (dir: string, liveness: ScanLiveness | undefined): boolean =>
-  liveness?.trainingTmuxPresent === true ||
-  liveness?.trainingTmuxFamilyPresent === true ||
-  liveness?.trainingLogsFresh === true ||
-  lossSeriesFresh(dir, liveness);
+/** 训练活跃终判（批㊶-O O-1 修正）：绑 run tmux 取证优先；无匹配回落 mtime 新鲜窗口
+ *  （N-2 既有窗口判据）；泛匹配会族布尔不再参与（假阳性根除）。run_dir 保留签名兼容。 */
+const trainingActiveLive = (dir: string, runId: string, liveness: ScanLiveness | undefined): boolean => {
+  if (liveness?.trainingEvidence !== undefined) {
+    if (liveness.trainingEvidence[runId] === true) return true;
+    return lossSeriesFresh(dir, liveness);
+  }
+  return lossSeriesFresh(dir, liveness);
+};
 
 export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness): RunScan {
   const dir = join(root, runId);
@@ -523,7 +527,7 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness)
       // 批㊶-L L-1＋批㊶-N N-2：终结判定——active＝训练产物锚在场（loss-series／
       // adapter_model.safetensors／all_results.json 三选一）&&（tmux 在场 || 会族前缀
       // atf-* 任一会话 || training-logs mtime 新鲜 || loss-series mtime 新鲜；窗口 env 可配）。
-      active: trainingAnchorPresent(dir) && trainingActiveLive(dir, liveness),
+      active: trainingAnchorPresent(dir) && trainingActiveLive(dir, runId, liveness),
       // 批㉛段3.1：live loss-series 缺席 → 最新 checkpoint trainer_state.json 历史回退
       loss: has("training/loss-series.json") ? readJson(join("training", "loss-series.json")) : trainerHistoryLoss(dir),
       pending_confirm: readJson(join("webui", "pending-confirm.json")),
@@ -670,6 +674,17 @@ export function discoverViewerDirs(runDir: string): string[] {
     .sort((a, b) => (stamp(b) - stamp(a)) || (a < b ? -1 : a > b ? 1 : 0));
 }
 
+/** 同步器周期内 run_id 清单（目录枚举一次——取证映射的目标集）。 */
+const resolvedRunIds = (runsRoot: string): string[] => {
+  try {
+    return readdirSync(runsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name !== OUT_DIR)
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+};
+
 function scanRuns(runsRoot: string, liveness?: ScanLiveness): RunScan[] {
   const root = join(runsRoot);
   if (!existsSync(root)) return [];
@@ -749,16 +764,20 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     } catch {
       trainingTmuxPresent = false;
     }
-    // 批㊶-N N-2：会族前缀＋training-logs mtime 活性面
-    let trainingTmuxFamilyPresent = false;
+    // 批㊶-O O-1：绑 run 取证（per-run 独立——枚举 atf-* 会话进程链 cmdline 含 run_id）
+    const trainingEvidence: Record<string, boolean> = {};
     try {
-      trainingTmuxFamilyPresent = tmuxTrainingFamilyPresent();
+      for (const entry of listTrainingSessionCmdlines()) {
+        for (const runId of resolvedRunIds(resolved.runsRoot)) {
+          if (entry.cmdline.includes(runId)) trainingEvidence[runId] = true;
+        }
+      }
     } catch {
-      trainingTmuxFamilyPresent = false;
+      // 取证异常＝空映射（回落 mtime 窗口）
     }
     const runs = scanRuns(resolved.runsRoot, {
       trainingTmuxPresent,
-      trainingTmuxFamilyPresent,
+      trainingEvidence,
       trainingLogsFresh: trainingLogsFreshAt(resolved.runsRoot, resolveTrainActiveWindowMs(process.env)),
       freshWindowMs: resolveTrainActiveWindowMs(process.env),
     });

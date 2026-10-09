@@ -22,7 +22,7 @@ import { scanRunDir } from "../../atf-ui/src/server.js";
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
-import { tmuxHasSession } from "../../../../src/core/workspace/tmuxLiveness.js";
+import { tmuxHasSession, tmuxTrainingEvidenceFor } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText } from "./gpuQueueFace.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding, writeProgress } from "../../../../src/core/workspace/runFacts.js";
@@ -228,7 +228,10 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         const lossPath = join(ckptDir, "loss-series.json");
         const points = existsSync(lossPath) ? (JSON.parse(readFileSync(lossPath, "utf8")) as unknown[]).length : 0;
         // 八段任务卡段状态（与监控同步器同源推导——scanRunDir 单源）
-        const segments = buildMonitorSnapshot([scanRunDir(cfg.runsRoot, args.run_id, { trainingTmuxPresent: tmuxHas("atf-training-run") })]).runs[0]?.segments ?? [];
+        const segments = buildMonitorSnapshot([scanRunDir(cfg.runsRoot, args.run_id, {
+          trainingTmuxPresent: tmuxHas("atf-training-run"),
+          trainingEvidence: { [args.run_id]: tmuxTrainingEvidenceFor(args.run_id) },
+        })]).runs[0]?.segments ?? [];
         // 批㊶-N N-3：段内进度持久化（loss-series 末点→round/total_rounds/loss 推导；写失败静默）
         let lastLoss: number | null = null;
         try {
