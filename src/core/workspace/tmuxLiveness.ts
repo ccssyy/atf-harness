@@ -17,3 +17,14 @@ export const tmuxHasSession = (session: string = TRAINING_TMUX_SESSION): boolean
     return false;
   }
 };
+
+/** 批㊶-N N-2：tmux 训练会话族判定——前缀 `atf-` 任一会话在场即 true（实况会话族
+ *  atf-dsh/atf-dsh-tongshi/atf-m12/atf-v078…；tmux 不可用＝false fail-closed）。 */
+export const tmuxTrainingFamilyPresent = (): boolean => {
+  try {
+    const out = execSync("tmux list-sessions -F '#S' 2>/dev/null", { encoding: "utf8" });
+    return out.split("\n").some((name) => name.trim().startsWith("atf-"));
+  } catch {
+    return false;
+  }
+};

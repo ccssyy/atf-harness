@@ -612,8 +612,8 @@ describe("批㉝H GPU 多卡聚合（gpu_all 采集解析＋绑卡声明两态�
   });
   it("client.js 双份同语义钉子：聚合/绑卡副本两处都在（裸服务不打包——改动同步）", () => {
     const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
-    // 批㊶-M M-5：「当前 run 」逐卡文字聚合撤销（GPU 组徽章 N/8 活跃＋hover title 承接）——钉子随语义更新
-    for (const phrase of ["formatGpuAllLocal", "formatGpuBindingLocal", "train.sh CUDA_VISIBLE_DEVICES", "deploy_effective.visible_devices", "N/8 活跃"]) {
+    // 批㊶-M M-5＋批㊶-N N-4：GPU 组徽章撤销（GPU 摘要移监控面板头部详情行）——钉子随语义更新
+    for (const phrase of ["formatGpuAllLocal", "formatGpuBindingLocal", "train.sh CUDA_VISIBLE_DEVICES", "deploy_effective.visible_devices", "无训练进行中"]) {
       expect(clientSource).toContain(phrase);
     }
     // 渲染面两处都在：GPU 状态条（dock）＋监控面板环境卡 GPU 行
@@ -747,11 +747,17 @@ describe("批㊶-L L-1 训练活跃终结判定（tmux 注入＋mtime 新鲜窗�
 });
 
 describe("批㊶-L L-2 segments 补 evaluate 推导", () => {
-  it("metrics_summary 在场 → evaluate done；缺席 → pending（false）", () => {
+  it("metrics_summary 在场 → evaluate done；缺席 → pending（false；批㊶-N 段序守卫下前序全成立）", () => {
     const root = tempRoot();
     const runDir = join(root, "run-ev");
     mkdirSync(join(runDir, "eval"), { recursive: true });
     writeFileSync(join(runDir, "eval", "metrics_summary.json"), "{}");
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "loss-series.json"), "[]");
+    for (const [dir, file] of [["", "registration.json"], ["", "label_qc"], ["webui", "config-snapshot.json"], ["", "contract-candidate.json"], ["", "split"], ["launch", "train.sh"]] as Array<[string, string]>) {
+      mkdirSync(join(runDir, dir), { recursive: true });
+      writeFileSync(join(runDir, dir, file), "{}");
+    }
     expect(scanRunDir(root, "run-ev").segments.evaluate).toBe(true);
     const root2 = tempRoot();
     expect(scanRunDir(root2, "run-noev").segments.evaluate).toBe(false);

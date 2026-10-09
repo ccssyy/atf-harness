@@ -19,6 +19,13 @@ import { buildConfigConfirmFields, parseConfigEditText, saveConfigSnapshot } fro
 type ConfigConfirmField = { key: string; value: string; tag: "need_confirm" | "from_registry" | "default_used" };
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
+import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
+
+/** 批㊶-N N-5：会话身份提取（exec.agent.session.id；取不到＝undefined 如实跳过）。 */
+const sessionIdOfExec = (exec: unknown): string | undefined => {
+  const id = (exec as { agent?: { session?: { id?: unknown } } }).agent?.session?.id;
+  return typeof id === "string" && id !== "" ? id : undefined;
+};
 import { asToolValue } from "./schemaTranslate.js";
 
 /** 三态标记（卡面文本化：⚠ 已用缺省／◆ 来自登记／? 需确认——与手搓批⑮三态标签同源语义）。 */
@@ -137,6 +144,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       saveConfigSnapshot(runDir, confirmed);
       // 批㊶-M M-3 段事实轨：实验配置确认成功即登记（experiment_config 段）
       appendSegmentFact(join(deps.runsRoot, args.run_id), "experiment_config", "atf_config_confirm");
+      // 批㊶-N N-5：会话绑定
+      const sessionIdCfg = sessionIdOfExec(exec);
+      if (sessionIdCfg !== undefined) appendBinding(join(deps.runsRoot, args.run_id), sessionIdCfg);
       return asToolValue({ ok: true, run_id: args.run_id, confirmed: true, fields, snapshot: "webui/config-snapshot.json", ...(amendNote !== undefined ? { amend: amendNote } : {}) });
     },
   });
@@ -174,6 +184,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       if (!verdict.ok) return approvalDeniedResult("atf_publish_confirm", verdict.outcome);
       // 批㊶-M M-3 段事实轨：契约发布确认成功即登记（publish 段）
       appendSegmentFact(join(deps.runsRoot, args.run_id), "publish", "atf_publish_confirm");
+      // 批㊶-N N-5：会话绑定
+      const sessionIdPub = sessionIdOfExec(exec);
+      if (sessionIdPub !== undefined) appendBinding(join(deps.runsRoot, args.run_id), sessionIdPub);
       return asToolValue({ ok: true, run_id: args.run_id, confirmed: true, digest: candidateDigest, artifact: "contract-candidate.json" });
     },
   });

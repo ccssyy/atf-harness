@@ -43,6 +43,7 @@ function segmentStatus(run, key) {
  */
 export function buildMonitorSnapshot(runs, gpu, gpuAll) {
   return {
+    // schema: v2 (additive, 2026-10-09, 批㊶-N)——只增不改（progress/bound_sessions 两键；禁改名/改值/删除）
     schema: "AtfMonitor/v1",
     generated_at: new Date().toISOString(),
     gpu: gpu ?? { offline: true },
@@ -63,6 +64,10 @@ export function buildMonitorSnapshot(runs, gpu, gpuAll) {
       gpu_binding: run.gpu_binding ?? null,
       // 批㉞H：逐 eval 轮对比面（两轮对比视图数据源；空数组＝无轮产物）
       eval_rounds: Array.isArray(run.eval_rounds) ? run.eval_rounds : [],
+      // 批㊶-N N-3：段内进度（additive——过期/缺失 null）
+      progress: run.progress ?? null,
+      // 批㊶-N N-5：会话绑定集（additive——可空数组）
+      bound_sessions: Array.isArray(run.bound_sessions) ? run.bound_sessions : [],
       training: {
         active: run.training?.active === true,
         points: Array.isArray(run.training?.loss) ? run.training.loss : [],

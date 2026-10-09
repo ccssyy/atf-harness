@@ -17,8 +17,10 @@ import { PANEL_HTML } from "./panel.js";
 import { queryNvidiaSmi, queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
-import { tmuxHasSession } from "../../../../src/core/workspace/tmuxLiveness.js";
+import { tmuxHasSession, tmuxTrainingFamilyPresent } from "../../../../src/core/workspace/tmuxLiveness.js";
+import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
+import { orderGuarded, readProgress, progressFresh, readBindings, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
 
 /** Cordis 插件名。 */
 export const name = "atf-ui";
@@ -87,7 +89,9 @@ export interface RunScan {
   state: string;
   artifacts: string[];
   segments: Record<string, boolean | string>;
-  training: { active: boolean; loss: unknown; pending_confirm: unknown };
+  training: { active: boolean; loss: unknown; pending_confirm: unknown; progress?: RunProgress | null };
+  /** 批㊶-N N-5：会话绑定集（additive——可空数组）。 */
+  bound_sessions?: string[];
   report: { files: string[] };
   viewers: string[];
   launch: LaunchSurface;
@@ -360,9 +364,50 @@ export const resolveTrainActiveWindowMs = (env: NodeJS.ProcessEnv): number => {
 export interface ScanLiveness {
   /** tmux 训练会话在场（探测异常按 false——fail-closed 回落 mtime 窗口判据）。 */
   trainingTmuxPresent?: boolean;
+  /** 批㊶-N N-2：tmux 会族前缀 atf-* 任一会话在场（更宽活性面——LlamaFactory 直跑等）。 */
+  trainingTmuxFamilyPresent?: boolean;
+  /** 批㊶-N N-2：training-logs 目录 mtime 新鲜（编排日志写入活性）。 */
+  trainingLogsFresh?: boolean;
   freshWindowMs?: number;
   nowMs?: number;
 }
+
+/** 批㊶-N N-1：八段有序键（snapshot SEGMENTS 同源序）。 */
+const SEGMENT_ORDER_KEYS: readonly string[] = [
+  "register", "label_qc", "experiment_config", "publish", "split", "admission", "training", "evaluate",
+];
+
+/** 批㊶-N N-2：training-logs 目录活性（目录树内任一文件 mtime 在窗口内即 fresh；
+ *  目录缺失/异常＝false）。 */
+export const trainingLogsFreshAt = (root: string, windowMs: number, nowMs: number = Date.now()): boolean => {
+  // ATF_DSH_LOG_DIR 轴优先（绝对路径独立轴——编排/训练日志写入位）；回落 runsRoot/training-logs
+  const candidates = [process.env["ATF_DSH_LOG_DIR"], join(root, "training-logs")].filter((p): p is string => typeof p === "string" && p !== "");
+  for (const logsDir of candidates) {
+    try {
+      if (!existsSync(logsDir)) continue;
+      for (const entry of readdirSync(logsDir, { withFileTypes: true })) {
+        if (entry.isFile()) {
+          const at = statSync(join(logsDir, entry.name)).mtimeMs;
+          if (nowMs - at <= windowMs) return true;
+        }
+      }
+    } catch {
+      // 目录不可读＝查下一个候选
+    }
+  }
+  return false;
+};
+
+/** 批㊶-N N-2：训练完成产物锚三选一（loss-series＝atf-ui 进料路径副产品；
+ *  adapter_model.safetensors／all_results.json＝LlamaFactory 真实完成产物）。 */
+const trainingAnchorPresent = (runDir: string): boolean =>
+  hasAny(runDir, [
+    join("training", "loss-series.json"),
+    join("training", "adapter_model.safetensors"),
+    join("training", "all_results.json"),
+  ]);
+
+const hasAny = (runDir: string, rels: readonly string[]): boolean => rels.some((rel) => existsSync(join(runDir, rel)));
 
 /** loss-series mtime 新鲜判定（now/window 注入可测；stat 失败按不新鲜）。 */
 const lossSeriesFresh = (dir: string, liveness: ScanLiveness | undefined): boolean => {
@@ -388,9 +433,13 @@ const evalRoundAnchored = (runDir: string): boolean => {
   return false;
 };
 
-/** 训练活跃终判：tmux 在场优先；否则回落 mtime 新鲜窗口。 */
+/** 训练活跃终判（批㊶-N N-2 扩充）：tmux 指定会话／会族前缀 atf-*／training-logs mtime
+ *  新鲜／loss-series mtime 新鲜——任一即 live。 */
 const trainingActiveLive = (dir: string, liveness: ScanLiveness | undefined): boolean =>
-  liveness?.trainingTmuxPresent === true || lossSeriesFresh(dir, liveness);
+  liveness?.trainingTmuxPresent === true ||
+  liveness?.trainingTmuxFamilyPresent === true ||
+  liveness?.trainingLogsFresh === true ||
+  lossSeriesFresh(dir, liveness);
 
 export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness): RunScan {
   const dir = join(root, runId);
@@ -407,6 +456,31 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness)
   };
   const reportDir = join(dir, "report");
   const reportFiles = existsSync(reportDir) ? readdirSync(reportDir).filter((f) => f.endsWith(".md") || f.endsWith(".json")) : [];
+
+  // 批㊶-N N-1：段序守卫两段装配——先按锚/事实轨算全段原始 done 图，再逐段经 orderGuarded
+  // 抑制（后段 done 前提＝前段 done 成立；评估先于训练的陈旧倒挂场景在此天然覆盖）。
+  const rawDone: Record<string, boolean> = {
+    register: segmentDone("register", has("registration.json") || has("dataset")),
+    label_qc: segmentDone("label_qc", has("label_qc") || has("qc")),
+    experiment_config: has("webui/config-snapshot.json"),
+    publish: (has("report") && reportFiles.some((f) => f.startsWith("segment-"))) || has("contract-candidate.json"),
+    split: has("split") || has("dataset/split"),
+    admission: has("launch/train.sh") || has("admission.json") || has("training/train.sh"),
+    training: trainingAnchorPresent(dir),
+    evaluate: has("eval/metrics_summary.json") || evalRoundAnchored(dir),
+  };
+  const doneMap: Record<string, boolean> = {};
+  for (const key of SEGMENT_ORDER_KEYS) {
+    doneMap[key] = orderGuarded(key, rawDone[key] === true, doneMap);
+  }
+  // 批㊶-N N-3：段内进度（progress.json 镜像＋fresh 布尔；过期/缺失置 null——additive）
+  const progressRaw = readProgress(dir);
+  const nowMs = liveness?.nowMs ?? Date.now();
+  const progress: RunProgress | null = progressRaw !== null && progressFresh(progressRaw, nowMs, liveness?.freshWindowMs ?? resolveTrainActiveWindowMs(process.env))
+    ? progressRaw
+    : null;
+  // 批㊶-N N-5：会话绑定集（binding.json append 轨镜像；可空）
+  const boundSessions = readBindings(dir).map((binding) => binding.session_id);
   return {
     run_id: runId,
     state: has("webui/config-snapshot.json")
@@ -430,34 +504,34 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness)
       "eval/indexes.csv",
     ].filter(has),
     segments: {
-      register: segmentDone("register", has("registration.json") || has("dataset")),
-      split: segmentDone("split", has("split") || has("dataset/split")),
-      label_qc: segmentDone("label_qc", has("label_qc") || has("qc")),
-      // 实验配置段：config-snapshot 已确认=done；pending-confirm 在场=active（等待四卡应答）
-      experiment_config: segmentDone("experiment_config", has("webui/config-snapshot.json"))
+      register: doneMap["register"] === true,
+      split: doneMap["split"] === true,
+      label_qc: doneMap["label_qc"] === true,
+      // 实验配置段：done（守卫后）＝config-snapshot 已确认；pending-confirm 在场=active（等待四卡应答）
+      experiment_config: doneMap["experiment_config"] === true
         ? true
         : has("webui/pending-confirm.json")
           ? "active"
           : false,
       candidate: has("contract-candidate.json"),
-      // 批㊶-M 锚兼容：publish 加 contract-candidate.json（轮产物形态兼容）
-      publish: segmentDone("publish", (has("report") && reportFiles.some((f) => f.startsWith("segment-"))) || has("contract-candidate.json")),
-      // admission 沿 train.sh 存在（生成即过 DRY_RUN 准入自检面）；锚兼容加 training/train.sh
-      admission: segmentDone("admission", has("launch/train.sh") || has("admission.json") || has("training/train.sh")),
-      training: segmentDone("training", has("training/loss-series.json")),
-      // 批㊶-L L-2＋批㊶-M 锚兼容：评估锚补逐轮目录 eval/<round>/metrics_summary.json
-      // （badcases.jsonl 为可选分析产物不作完成判据——锚选型理由）
-      evaluate: segmentDone("evaluate", has("eval/metrics_summary.json") || evalRoundAnchored(dir)),
+      publish: doneMap["publish"] === true,
+      admission: doneMap["admission"] === true,
+      training: doneMap["training"] === true,
+      evaluate: doneMap["evaluate"] === true,
     },
     training: {
-      // 批㊶-L L-1：终结判定——active＝loss-series 在场 &&（tmux 训练会话在场 || mtime
-      // 在新鲜窗口内；窗口缺省 180s，env 可配）。tmux 布尔由同步器循环注入；探测异常
-      // 按false＝fail-closed 回落 mtime 窗口。训练段 done 语义不变（在场＝done）。
-      active: has("training/loss-series.json") && trainingActiveLive(dir, liveness),
+      // 批㊶-L L-1＋批㊶-N N-2：终结判定——active＝训练产物锚在场（loss-series／
+      // adapter_model.safetensors／all_results.json 三选一）&&（tmux 在场 || 会族前缀
+      // atf-* 任一会话 || training-logs mtime 新鲜 || loss-series mtime 新鲜；窗口 env 可配）。
+      active: trainingAnchorPresent(dir) && trainingActiveLive(dir, liveness),
       // 批㉛段3.1：live loss-series 缺席 → 最新 checkpoint trainer_state.json 历史回退
       loss: has("training/loss-series.json") ? readJson(join("training", "loss-series.json")) : trainerHistoryLoss(dir),
       pending_confirm: readJson(join("webui", "pending-confirm.json")),
+      // 批㊶-N N-3：段内进度（additive——fresh 过期/缺失置 null）
+      progress,
     },
+    // 批㊶-N N-5：会话绑定集（additive——可空数组）
+    bound_sessions: boundSessions,
     report: { files: reportFiles },
     viewers: discoverViewerDirs(dir),
     launch: buildLaunchSurface(dir),
@@ -675,8 +749,17 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     } catch {
       trainingTmuxPresent = false;
     }
+    // 批㊶-N N-2：会族前缀＋training-logs mtime 活性面
+    let trainingTmuxFamilyPresent = false;
+    try {
+      trainingTmuxFamilyPresent = tmuxTrainingFamilyPresent();
+    } catch {
+      trainingTmuxFamilyPresent = false;
+    }
     const runs = scanRuns(resolved.runsRoot, {
       trainingTmuxPresent,
+      trainingTmuxFamilyPresent,
+      trainingLogsFresh: trainingLogsFreshAt(resolved.runsRoot, resolveTrainActiveWindowMs(process.env)),
       freshWindowMs: resolveTrainActiveWindowMs(process.env),
     });
     // GPU 状态（nvidia-smi 包装——不可用如实 offline，不猜测；快照单源随 monitor.json 下发）。

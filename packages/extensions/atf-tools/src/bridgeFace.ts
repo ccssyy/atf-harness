@@ -20,6 +20,13 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { translateParameters, looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
+import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
+
+/** 批㊶-N N-5：会话身份提取（exec.agent.session.id；取不到＝undefined 如实跳过）。 */
+const sessionIdOfExec = (exec: unknown): string | undefined => {
+  const id = (exec as { agent?: { session?: { id?: unknown } } }).agent?.session?.id;
+  return typeof id === "string" && id !== "" ? id : undefined;
+};
 
 /** M1 指令清单里的桥接工具名（桥接契约面 ∪ 工作区治理分册）。 */
 export const BRIDGE_TOOL_NAMES: readonly string[] = [
@@ -151,6 +158,11 @@ export const buildBridgeTools = (
             const runIdForFact = typeof args["run_id"] === "string" && args["run_id"] !== "" ? args["run_id"] : "default";
             if (segment !== undefined && localRoots !== undefined) {
               appendSegmentFact(join(localRoots.runsRoot, runIdForFact), segment, definition.name);
+              // 批㊶-N N-5：会话绑定（桥接面——run_id 显式给出时才绑定；default 归属不明不绑）
+              const sessionIdBridge = sessionIdOfExec(exec);
+              if (sessionIdBridge !== undefined && runIdForFact !== "default") {
+                appendBinding(join(localRoots.runsRoot, runIdForFact), sessionIdBridge);
+              }
             }
           }
           return asToolValue(result.details);

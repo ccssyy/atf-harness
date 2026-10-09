@@ -141,6 +141,14 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     mkdirSync(join(runDir, "training"), { recursive: true });
     writeFileSync(join(runDir, "registration.json"), "{}");
     writeFileSync(join(runDir, "training", "loss-series.json"), JSON.stringify([{ train_loss: 0.4 }]));
+    // 批㊶-N N-1 段序守卫：前序段锚补齐（真实 run 形态——否则 training active 前移）
+    writeFileSync(join(runDir, "label_qc"), "{}");
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    writeFileSync(join(runDir, "webui", "config-snapshot.json"), "{}");
+    writeFileSync(join(runDir, "contract-candidate.json"), "{}");
+    mkdirSync(join(runDir, "split"), { recursive: true });
+    mkdirSync(join(runDir, "launch"), { recursive: true });
+    writeFileSync(join(runDir, "launch", "train.sh"), "#!/bin/bash\n");
     const tool = buildRunTrainingTool(noApproval, { runsRoot: root, logDir: root, ctx: noApproval }) as unknown as Tool & { output: { render: (args: unknown, value: unknown) => Array<{ type: string; text: string }> } };
     const result = await tool.execute({ action: "status", train_sh: join(root, "x.sh"), run_id: "r-task" }, fakeExec);
     const segments = result.segments as Array<{ key: string; status: string }>;
@@ -151,7 +159,7 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     const text = blocks[0]?.text ?? "";
     expect(text).toContain("训练任务卡 — run r-task");
     expect(text).toContain("✓ 数据登记");
-    expect(text).toContain("进度 2/8");
+    expect(text).toContain("进度 7/8"); // 批㊶-N 段序守卫后前 7 段 done（原 2/8 夹具期）
     expect(text).toMatch(/运行中|未运行/); // tmux 在场与否二态均如实
     expect(text).toContain("loss 点数：1");
     // start 结果不走任务卡（保持 JSON 卡面）

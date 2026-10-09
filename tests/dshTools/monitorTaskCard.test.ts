@@ -58,37 +58,51 @@ describe("批㊶-M M-3 段事实轨（webui/segments.json）", () => {
   });
 });
 
+/** 批㊶-N 段序守卫下锚兜底夹具：前序段锚全成立（守卫不抑制本段锚兜底）。 */
+function seedPredecessors(runDir: string): void {
+  for (const [dir, file] of [["", "registration.json"], ["", "label_qc"], ["webui", "config-snapshot.json"], ["", "contract-candidate.json"], ["", "split"], ["launch", "train.sh"]] as Array<[string, string]>) {
+    mkdirSync(join(runDir, dir), { recursive: true });
+    writeFileSync(join(runDir, dir, file), "{}");
+  }
+}
+
 describe("批㊶-M 锚兼容三例", () => {
-  it("admission：training/train.sh 在场即 done（launch/train.sh 兜底保持）", () => {
+  it("admission：training/train.sh 在场即 done（launch/train.sh 兜底保持；前序成立下锚兜底）", () => {
     const root = tempRoot();
     const runDir = join(root, "run-adm");
+    seedPredecessors(runDir);
     mkdirSync(join(runDir, "training"), { recursive: true });
     writeFileSync(join(runDir, "training", "train.sh"), "#!/bin/bash\n");
     expect(scanRunDir(root, "run-adm").segments.admission).toBe(true);
     const root2 = tempRoot();
     const runDir2 = join(root2, "run-adm2");
-    mkdirSync(join(runDir2, "launch"), { recursive: true });
-    writeFileSync(join(runDir2, "launch", "train.sh"), "#!/bin/bash\n");
+    seedPredecessors(runDir2);
     expect(scanRunDir(root2, "run-adm2").segments.admission).toBe(true);
   });
 
-  it("evaluate：逐轮目录 eval/<round>/metrics_summary.json 在场即 done（顶层锚保持）", () => {
+  it("evaluate：逐轮目录 eval/<round>/metrics_summary.json 在场即 done（顶层锚保持；前序成立下锚兜底）", () => {
     const root = tempRoot();
     const runDir = join(root, "run-eval");
+    seedPredecessors(runDir);
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "loss-series.json"), "[]");
     mkdirSync(join(runDir, "eval", "2-20261008"), { recursive: true });
     writeFileSync(join(runDir, "eval", "2-20261008", "metrics_summary.json"), "{}");
     expect(scanRunDir(root, "run-eval").segments.evaluate).toBe(true);
     const root2 = tempRoot();
     const runDir2 = join(root2, "run-eval-top");
+    seedPredecessors(runDir2);
+    mkdirSync(join(runDir2, "training"), { recursive: true });
+    writeFileSync(join(runDir2, "training", "loss-series.json"), "[]");
     mkdirSync(join(runDir2, "eval"), { recursive: true });
     writeFileSync(join(runDir2, "eval", "metrics_summary.json"), "{}");
     expect(scanRunDir(root2, "run-eval-top").segments.evaluate).toBe(true);
   });
 
-  it("publish：contract-candidate.json 在场即 done（segment-* 报告兜底保持）", () => {
+  it("publish：contract-candidate.json 在场即 done（segment-* 报告兜底保持；前序成立下锚兜底）", () => {
     const root = tempRoot();
     const runDir = join(root, "run-pub");
-    mkdirSync(runDir, { recursive: true });
+    seedPredecessors(runDir);
     writeFileSync(join(runDir, "contract-candidate.json"), "{}");
     expect(scanRunDir(root, "run-pub").segments.publish).toBe(true);
   });

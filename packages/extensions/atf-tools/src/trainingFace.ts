@@ -25,6 +25,14 @@ import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { tmuxHasSession } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText } from "./gpuQueueFace.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
+import { appendBinding, writeProgress } from "../../../../src/core/workspace/runFacts.js";
+
+/** 批㊶-N N-5：会话身份提取（exec.agent.session.id——vendor ToolExecutionInput 链路；
+ *  取不到＝undefined，调用方如实跳过绑定量不造挂点）。 */
+const sessionIdOf = (exec: unknown): string | undefined => {
+  const id = (exec as { agent?: { session?: { id?: unknown } } }).agent?.session?.id;
+  return typeof id === "string" && id !== "" ? id : undefined;
+};
 
 // 批㊶-K 项 4：进料面提取共享（src/core/workspace/lossIngest.ts）——atf_launch_execute
 // 登记放行后同挂（harness-launch-*.log 此前无人监控＝曲线进料断根因面）；本文件 re-export 兼容面。
@@ -221,6 +229,26 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         const points = existsSync(lossPath) ? (JSON.parse(readFileSync(lossPath, "utf8")) as unknown[]).length : 0;
         // 八段任务卡段状态（与监控同步器同源推导——scanRunDir 单源）
         const segments = buildMonitorSnapshot([scanRunDir(cfg.runsRoot, args.run_id, { trainingTmuxPresent: tmuxHas("atf-training-run") })]).runs[0]?.segments ?? [];
+        // 批㊶-N N-3：段内进度持久化（loss-series 末点→round/total_rounds/loss 推导；写失败静默）
+        let lastLoss: number | null = null;
+        try {
+          if (existsSync(lossPath)) {
+            const series = JSON.parse(readFileSync(lossPath, "utf8")) as Array<{ train_loss?: number }>;
+            for (let i = series.length - 1; i >= 0; i -= 1) {
+              if (typeof series[i]?.train_loss === "number") { lastLoss = series[i]!.train_loss!; break; }
+            }
+          }
+        } catch { /* 进度推导失败＝无进度 */ }
+        if (lastLoss !== null) {
+          writeProgress(join(cfg.runsRoot, args.run_id), {
+            round: points,
+            loss: lastLoss,
+            updated_at: new Date().toISOString(),
+          });
+        }
+        // 批㊶-N N-5：会话绑定（exec.agent.session.id——vendor 链路实锚）
+        const sessionId = sessionIdOf(exec);
+        if (sessionId !== undefined) appendBinding(join(cfg.runsRoot, args.run_id), sessionId);
         return asToolValue({ action: "status", running, run_id: args.run_id, segments, ckpts, loss_points: points, ...(ckpts.length > 0 ? { latest_ckpt: `runs/${args.run_id}/training/${ckpts[ckpts.length - 1]}` } : {}) });
       }
       // —— start：DRY_RUN 校验 → 端口预检（批⑳dot3 修复 3）→ danger 必确认 → 启动 ——
@@ -283,6 +311,9 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       startLossIngest(logPath, join(cfg.runsRoot, args.run_id, "training", "loss-series.json"));
       // 批㊶-M M-3 段事实轨：训练启动成功即登记（training 段）
       appendSegmentFact(join(cfg.runsRoot, args.run_id), "training", "atf_run_training");
+      // 批㊶-N N-5：会话绑定
+      const sessionIdStart = sessionIdOf(exec);
+      if (sessionIdStart !== undefined) appendBinding(join(cfg.runsRoot, args.run_id), sessionIdStart);
       return asToolValue({
         started: true,
         tmux: "atf-training-run",
@@ -520,6 +551,9 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       execSync(`tmux new-session -d -s atf-eval-orch "bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode mode0 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`);
       // 批㊶-M M-3 段事实轨：评估编排启动成功即登记（evaluate 段）
       appendSegmentFact(join(cfg.runsRoot, args.run_id), "evaluate", "atf_evaluate");
+      // 批㊶-N N-5：会话绑定
+      const sessionIdEval = sessionIdOf(exec);
+      if (sessionIdEval !== undefined) appendBinding(join(cfg.runsRoot, args.run_id), sessionIdEval);
       return asToolValue({
         started: true, eval_round: roundDir, tmux: "atf-eval-orch",
         serving_models: expectedModels, service_manifest: join(serviceDir, "service_manifest.json"),
