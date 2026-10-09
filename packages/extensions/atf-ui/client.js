@@ -290,7 +290,8 @@ window.__ModuleLoader__.load({
         if (bar && bar.offsetHeight > 0) topOffset = bar.offsetHeight + 4
       } catch (e) { /* 静默回落 */ }
       return React.createElement('div', { className: 'atf-monitor-panel', style: { top: topOffset } },
-        React.createElement('div', { className: 'atf-monitor-head' },
+        // 批㊶-M M-5：部署默认档低频信息降级至此（dock 徽章撤销——档位唯一出口＝原生选择器）
+        React.createElement('div', { className: 'atf-monitor-head', title: '部署缺省 ' + (((typeof window !== 'undefined' && window.__ATF_UI_CONFIG__ && window.__ATF_UI_CONFIG__.permissionPreset) || {}).label || ((typeof window !== 'undefined' && window.__ATF_UI_CONFIG__ && window.__ATF_UI_CONFIG__.permissionPreset) || {}).key || '—') + '，会话内可经下方选择器切换' },
           React.createElement('b', null, '训练监控'),
           React.createElement('select', {
             className: 'atf-viewer-select', value: runId || '',
@@ -496,70 +497,189 @@ window.__ModuleLoader__.load({
             : null))
     }
 
-    // 批㊶-K 项 4＋批㊶-L L-3：对话流训练进度卡（conversation.chat.turnTail——每轮尾部）。
-    // 渲染条件（L-3 owner 裁定②放宽）：训练中 或 任一段 done——完成态常驻转绿，不再消失。
-    // 数据源＝monitor.json（与 GpuCard 同源单源：pickActiveRun 推导），零新数据面。
-    // 训练中判据＝run.training.active（monitor 单源布尔——loss-series 在场且新鲜；
-    // 段状态此时为 done 不作判据）。
-    // 展开态为本地组件态（不持久化）；完成态隐藏 loss 与曲线入口（取实现简洁——
-    // 完成后曲线读取走右栏监控面板，卡片只承载进度结论）。
+    // ── 批㊶-M M-4：悬浮任务卡（portal 会话区右上角；turnTail 卡下线迁移至此——
+    // 批㊶-K 项4→批㊶-M 迁移留痕）。数据源＝monitor.json 既有字段（segments 四态数组/
+    // training.points/train_loss/eval_rounds），零新数据面。四态色唯一来源＝DSH design
+    // token（--dsw-static-*／--dsw-alias-*），亮暗主题随 token 自动切换，禁硬编码 hex。
+    var STATE_COLORS = {
+      done: 'var(--dsw-static-green-500)',
+      active: 'var(--dsw-static-amber-500)',
+      pending: 'var(--dsw-static-neutral-500)',
+      fail: 'var(--dsw-static-red-500)',
+    }
+    var STATE_PENDING_DOT = 'var(--dsw-static-neutral-400)'
+    function taskStateOf(active, run) {
+      // 四态推导（纯函数——src/client.taskState.ts 单源同构，vitest 直测那份）：训练中/失败/完成/空闲
+      if (run === null || run === undefined) return 'idle'
+      var trainingNow = run.training && run.training.active === true
+      if (trainingNow) return 'active'
+      var failed = (run.segments || []).some(function(seg) { return seg.status === 'fail' })
+      if (failed) return 'fail'
+      if ((run.segments || []).some(function(seg) { return seg.status === 'done' })) return 'done'
+      return 'idle'
+    }
+    var STATE_TEXT = { done: '已完成', active: '训练中', fail: '失败', idle: '空闲' }
     var SEGMENT_MARK = { done: '✓', active: '●', pending: '○' }
     function segmentMark(status) { return SEGMENT_MARK[status] || '✗' }
-    function TrainingProgressCard() {
-      // hooks 全部前置（条件早退不得跨 hook——React rules of hooks）
+
+    /** 悬浮任务卡（收起徽标默认；展开四区——附录 A 规格）。 */
+    function FloatingTaskCard() {
       var mon = useMonitor()
       var expandedState = React.useState(false)
       var expanded = expandedState[0], setExpanded = expandedState[1]
+      var seenStateRef = React.useRef(null)
+      var pulseState = React.useState(0)
+      var pulseTick = pulseState[1]
       var active = mon === null ? null : pickActiveRun(mon)
-      if (active === null) return null
-      var run = active.run
-      var trainingNow = !!(run.training && run.training.active === true)
-      var anyDone = (run.segments || []).some(function(seg) { return seg.status === 'done' })
-      if (!trainingNow && !anyDone) return null
-      var lossText = ''
+      var run = active !== null ? active.run : null
+      var state = taskStateOf(active, run)
+      // 段状态跃迁呼吸一次（一次性 tick 触发 CSS animation 重放；不循环）
+      React.useEffect(function() {
+        var key = run ? run.run_id + ':' + state + ':' + (active ? active.done : 0) : ''
+        if (seenStateRef.current !== null && seenStateRef.current !== key) pulseTick(function(n) { return n + 1 })
+        seenStateRef.current = key
+      }, [run ? run.run_id : '', state, active ? active.done : 0])
+      if (run === null) return null
+      var color = STATE_COLORS[state]
+      var colorText = state === 'pending' ? 'var(--dsw-static-neutral-500)' : color
       var pts = (run.training && run.training.points) || []
+      var lastLoss = null
       for (var i = pts.length - 1; i >= 0; i--) {
-        if (typeof pts[i].train_loss === 'number') { lossText = ' · loss ' + pts[i].train_loss; break }
+        if (typeof pts[i].train_loss === 'number') { lastLoss = pts[i].train_loss; break }
       }
-      var dotColor = trainingNow ? '#f59e0b' : '#16a34a'
-      var headText = (trainingNow ? '训练中 · ' : '已完成 · ') + run.run_id + ' · 段 ' + active.done + '/' + active.total
-      var rowStyle = {
-        display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12,
-        color: 'var(--dsh-text-secondary,#64748b)', background: 'rgba(128,128,128,.08)',
-        borderRadius: 8, padding: '3px 10px', margin: '4px 0', cursor: 'pointer',
+      var lastCkpt = Array.isArray(run.ckpts) && run.ckpts.length > 0 ? run.ckpts[run.ckpts.length - 1] : null
+      var segDetail = function(seg) {
+        if (seg.key === 'training' && lastLoss !== null) return 'loss ' + lastLoss
+        if (seg.key === 'training' && lastCkpt !== null) return String(lastCkpt)
+        if (seg.key === 'evaluate' && Array.isArray(run.eval_rounds) && run.eval_rounds.length > 0) {
+          var lastRound = run.eval_rounds[run.eval_rounds.length - 1]
+          return lastRound && lastRound.round ? String(lastRound.round) : ''
+        }
+        return ''
       }
-      var head = React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 7 } },
-        React.createElement('span', { className: 'atf-gpu-dot', style: { background: dotColor } }),
-        React.createElement('span', null, headText + (trainingNow ? lossText : '')))
-      var curveBtn = trainingNow
-        ? React.createElement('button', {
-            className: 'atf-pill', title: '打开右栏训练监控（Loss 曲线）',
-            onClick: function(e) { e.stopPropagation(); store.setMonitor(true, run.run_id) },
-          }, '曲线')
-        : null
-      var expandHint = React.createElement('span', { style: { opacity: 0.7 } }, expanded ? '▾' : '▸')
-      var body = expanded
-        ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 2, padding: '4px 0 2px' } },
-            (run.segments || []).map(function(seg, idx) {
-              return React.createElement('div', { key: seg.key || idx, style: { display: 'flex', gap: 6, alignItems: 'center' } },
-                React.createElement('span', { style: { width: 14, textAlign: 'center', color: seg.status === 'done' ? '#16a34a' : seg.status === 'active' ? '#f59e0b' : 'var(--dsh-text-secondary,#94a3b8)' } }, segmentMark(seg.status)),
-                React.createElement('span', null, seg.label || seg.key || ''))
-            }),
-            React.createElement('div', { style: { fontWeight: 600, marginTop: 2 } }, '进度 ' + active.done + '/' + active.total))
-        : null
+      var pulseStyle = pulseTick !== null && pulseTick !== undefined
+        ? { animation: 'atf-card-pulse 1.2s ease-in-out 1' }
+        : undefined
+      if (!expanded) {
+        // A-1 收起徽标态（横向胶囊；四态配色；呼吸一次）
+        return React.createElement('div', {
+          className: 'atf-task-card-collapsed' + (pulseTick > 0 ? ' atf-card-pulsing' : ''),
+          style: {
+            position: 'fixed', right: 16, top: (topBarOffset() + 16),
+            display: 'inline-flex', alignItems: 'center', gap: 7, height: 32, padding: '0 12px',
+            borderRadius: 16, cursor: 'pointer', zIndex: 800,
+            border: '1px solid ' + (state === 'fail' ? 'var(--dsw-static-red-500)' : 'var(--dsw-alias-border-l3)'),
+            background: 'var(--dsw-alias-bg-layer-2)',
+            boxShadow: '0 2px 8px rgba(0,0,0,.10)',
+            ...pulseStyle,
+          },
+          onClick: function() { setExpanded(true) },
+          title: '展开训练任务进度（八段明细）',
+        },
+          React.createElement('span', { style: { width: 8, height: 8, borderRadius: 4, background: color, flex: 'none' } }),
+          React.createElement('span', { style: { fontFamily: 'monospace', fontSize: 13, color: colorText, fontWeight: 600 } }, (active ? active.done : 0) + '/8'),
+          React.createElement('span', { style: { fontSize: 12, color: colorText } }, STATE_TEXT[state]))
+      }
+      // A-2 展开态（264px 四区）
       return React.createElement('div', {
-        className: 'atf-train-progress',
-        style: { display: 'inline-flex', flexDirection: 'column', background: 'rgba(128,128,128,.08)', borderRadius: 8, padding: '3px 10px', margin: '4px 0' },
-        onClick: function() { setExpanded(!expanded) },
-        title: expanded ? '收起进度明细' : '展开八段进度明细',
+        className: 'atf-task-card',
+        style: {
+          position: 'fixed', right: 16, top: (topBarOffset() + 16), width: 264, zIndex: 800,
+          borderRadius: 12, border: '1px solid var(--dsw-alias-border-l3)',
+          background: 'var(--dsw-alias-bg-layer-2)', boxShadow: '0 6px 24px rgba(0,0,0,.14)',
+          padding: 12, display: 'flex', flexDirection: 'column', gap: 10,
+        },
       },
-        React.createElement('div', { style: { display: 'inline-flex', alignItems: 'center', gap: 7 } },
-          head, expandHint, curveBtn),
-        body)
+        // ① 头部行
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottom: '1px solid var(--dsw-alias-border-l4)' } },
+          React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: 'var(--dsw-alias-label-primary)' } }, '训练任务'),
+          React.createElement('span', { style: { display: 'inline-flex', gap: 8 } },
+            React.createElement('button', {
+              className: 'atf-pill', title: '收起为徽标', style: { padding: '0 6px' },
+              onClick: function() { setExpanded(false) },
+            }, '⤢'),
+            React.createElement('button', {
+              className: 'atf-pill', title: '更多（占位）', style: { padding: '0 6px' },
+              onClick: function() { /* 菜单占位 */ },
+            }, '···'))),
+        // ② 进度区（大数字＋态标＋run 行）
+        React.createElement('div', null,
+          React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: 10 } },
+            React.createElement('span', { style: { fontSize: 28, fontWeight: 700, color: 'var(--dsw-alias-label-primary)', fontFamily: 'monospace' } },
+              (active ? active.done : 0), React.createElement('span', { style: { fontSize: 14, color: 'var(--dsw-alias-label-tertiary)' } }, '/8')),
+            React.createElement('span', {
+              style: { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: colorText,
+                border: '1px solid ' + color, borderRadius: 10, padding: '1px 8px' },
+            },
+              React.createElement('span', { style: { width: 7, height: 7, borderRadius: 4, background: color, display: 'inline-block', ...(state === 'active' ? { animation: 'atf-card-pulse 1.2s ease-in-out infinite' } : {}) } }),
+              STATE_TEXT[state])),
+          React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+            run.run_id)),
+        // ③ 八段清单区
+        React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
+          (run.segments || []).map(function(seg, idx) {
+            var markColor = seg.status === 'done' ? STATE_COLORS.done : seg.status === 'active' ? STATE_COLORS.active : seg.status === 'pending' ? STATE_PENDING_DOT : STATE_COLORS.fail
+            var detail = segDetail(seg)
+            return React.createElement('div', { key: seg.key || idx, style: { display: 'flex', gap: 8, padding: '5px 0', alignItems: 'flex-start' } },
+              React.createElement('span', {
+                style: { width: 18, height: 18, borderRadius: 9, flex: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, color: seg.status === 'pending' ? 'var(--dsw-alias-label-tertiary)' : '#fff',
+                  background: seg.status === 'done' ? STATE_COLORS.done : seg.status === 'active' ? STATE_COLORS.active : seg.status === 'pending' ? 'transparent' : STATE_COLORS.fail,
+                  border: seg.status === 'pending' ? '1px solid ' + STATE_PENDING_DOT : 'none',
+                  ...(seg.status === 'active' ? { animation: 'atf-card-pulse 1.2s ease-in-out infinite' } : {}),
+                },
+              }, seg.status === 'pending' ? '' : segmentMark(seg.status)),
+              React.createElement('div', { style: { display: 'flex', flexDirection: 'column', lineHeight: 1.3 } },
+                React.createElement('span', { style: { fontSize: 13, color: 'var(--dsw-alias-label-primary)' } }, seg.label || seg.key || ''),
+                detail !== '' ? React.createElement('span', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace' } }, detail) : null))
+          })),
+        // ④ 动作行
+        React.createElement('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
+          React.createElement('button', {
+            className: 'atf-pill', title: '打开右栏训练监控（Loss 曲线）',
+            onClick: function() { store.setMonitor(true, run.run_id) },
+          }, '查看曲线'),
+          React.createElement('button', {
+            className: 'atf-pill', title: '查询训练任务状态',
+            onClick: function() {
+              var input = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]')
+              if (input) {
+                input.focus()
+                document.execCommand('insertText', false, '查看当前训练任务状态：调用 atf_run_training action=status，run_id=' + run.run_id + '，并把八段任务卡贴出来')
+              }
+            },
+          }, '查状态')))
+    }
+    /** 宿主顶栏实高（批㊶-L L-4 测量先例——候选链＋回落 56，静默）。 */
+    function topBarOffset() {
+      try {
+        var bar = document.querySelector('header') || document.querySelector('[class*="topbar"]') || document.querySelector('[class*="app-header"]')
+        if (bar && bar.offsetHeight > 0) return bar.offsetHeight + 4
+      } catch (e) { /* 静默 */ }
+      return 56
     }
 
-    /** GPU 状态一行卡（批㉝H 多卡聚合形态：逐卡 util/显存汇总＋当前推进 run 绑卡标注；
-     *  gpu_all 缺席（旧快照/采集失败）回退首行单卡面——双向向后兼容）。 */
+    /** dock 行三组徽章（批㊶-M M-5——附录 B 规格：GPU 组／内核／推进 run；
+     *  档位徽章撤销（控制面已单源 DSH 原生选择器——部署默认档降级监控面板低频文案）；
+     *  GPU 逐卡文字聚合撤销（组徽章 N/8 活跃＋逐卡圆点 hover 承接）。
+     *  chip 双行规格：高约 40px、圆角 8px、内边距 8×10px、底色 --dsw-alias-bg-layer-2、
+     *  标签上小字（11px 浅色 --dsw-alias-label-tertiary）数值下（13px 等宽）；组间 12px。 */
+    function dockChip(label, valueNode, opts) {
+      var o = opts || {}
+      return React.createElement('div', {
+        title: o.title,
+        style: {
+          display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 1,
+          height: 40, padding: '8px 10px', borderRadius: 8,
+          background: 'var(--dsw-alias-bg-layer-2)',
+          border: o.active ? '1px solid var(--dsw-static-amber-500)' : 'none',
+          flex: 'none', minWidth: o.minWidth,
+        },
+      },
+        React.createElement('span', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', lineHeight: 1.1 } }, label),
+        React.createElement('span', { style: { fontSize: 13, fontFamily: 'monospace', color: o.valueColor || 'var(--dsw-alias-label-primary)', lineHeight: 1.2, display: 'inline-flex', alignItems: 'center', gap: 5 } }, valueNode))
+    }
+
     function GpuCard() {
       var open = React.useSyncExternalStore(
         function(fn) { return store.subscribe(fn) },
@@ -568,73 +688,43 @@ window.__ModuleLoader__.load({
       var mon = useMonitor()
       if (!open) return null
       var gpu = (mon && mon.gpu) || null
-      var gpuAllText = formatGpuAllLocal(mon && mon.gpu_all)
-      // 悬停明细：逐卡显存 used/total（聚合行只显 used，total 进 title 不占行宽）
-      var gpuAllTitle = mon && Array.isArray(mon.gpu_all) && mon.gpu_all.length > 0
-        ? mon.gpu_all.map(function(c) {
-            return 'GPU' + c.index + ' 显存 ' + c.memoryUsed + '/' + c.memoryTotal
-          }).join(' · ')
-        : undefined
-      var parts = []
-      if (gpu === null) {
-        parts.push('GPU 监控就绪中…')
-      } else if (gpu.offline === true) {
-        parts.push('GPU 离线（nvidia-smi 不可用）')
-      } else if (gpuAllText !== null) {
-        parts.push(gpuAllText)
-      } else {
-        parts.push('GPU ' + String(gpu.utilization || '—'))
-        parts.push('显存 ' + String(gpu.memoryUsed || '—') + '/' + String(gpu.memoryTotal || '—'))
-      }
-      var active = mon === null ? null : pickActiveRun(mon)
-      if (active !== null) {
-        parts.push(active.run.run_id + ' 段 ' + active.done + '/' + active.total)
-        if (active.trainingActive) parts.push('训练中')
-        else if (active.waiting) parts.push('等确认')
-        // 批㉝H：当前推进 run 绑卡声明（train.sh/manifest——读不到不显示，仅全卡聚合）
-        var bindText = formatGpuBindingLocal(active.run.gpu_binding)
-        if (bindText !== null) parts.push('当前 run ' + bindText)
-      } else if (gpu !== null && gpu.offline !== true) {
-        parts.push('暂无推进 run')
-      }
-      var dotColor = active !== null && active.trainingActive ? '#f59e0b' : active !== null ? '#1d4ed8' : '#16a34a'
-      // 批㊶-E-H 项 2.3：桥类型徽标（__ATF_UI_CONFIG__.bridge 注入面——旧装配面无此键不渲染，
-      // 向后兼容）。real＝内核 real·<版本>（版本探测不到如实省略）；mock＝⚠ mock 提示。
+      var cards = (mon && Array.isArray(mon.gpu_all)) ? mon.gpu_all : []
+      // GPU 组徽章数据选择（活跃卡过滤——纯函数口径 vitest 直测同源）
+      var activeCards = cards.filter(function(c) {
+        var util = parseFloat(String(c.utilization || '').replace('%', ''))
+        var mem = parseFloat(String(c.memoryUsed || '').replace(/[^\d.]/g, ''))
+        return Number.isFinite(util) && (util >= 20 || (Number.isFinite(mem) && mem >= 1000))
+      })
+      var gpuValueColor = activeCards.length > 0 ? 'var(--dsw-static-amber-500)' : 'var(--dsw-static-neutral-500)'
+      var gpuDots = cards.map(function(c, idx) {
+        var isActive = activeCards.some(function(a) { return a.index === c.index })
+        return React.createElement('span', { key: c.index || idx, style: { width: 6, height: 6, borderRadius: 3, background: isActive ? 'var(--dsw-static-amber-500)' : 'var(--dsw-static-neutral-400)', display: 'inline-block' } })
+      })
+      var gpuTitle = cards.length > 0
+        ? cards.map(function(c) { return 'GPU' + c.index + ' 利用率 ' + c.utilization + ' · 显存 ' + c.memoryUsed + '/' + c.memoryTotal }).join('\n')
+        : (gpu === null ? 'GPU 监控就绪中' : gpu.offline === true ? 'GPU 离线（nvidia-smi 不可用）' : 'GPU 状态不可用')
+      var gpuLabel = gpu !== null && gpu.offline === true ? 'GPU 离线' : 'GPU'
+      var gpuValue = gpu !== null && gpu.offline === true ? '—' : activeCards.length + '/' + cards.length + ' 活跃'
+
+      // 内核徽标（沿 real 徽标语义——绿点前缀）
       var bridgeCfg = (typeof window !== 'undefined' && window.__ATF_UI_CONFIG__ && window.__ATF_UI_CONFIG__.bridge) || null
-      var bridgeBadge = null
-      if (bridgeCfg !== null && bridgeCfg.mode === 'real') {
-        bridgeBadge = React.createElement('span', {
-          title: 'ATF 内核桥（真内核）',
-          style: { color: '#16a34a', fontWeight: 600, flex: 'none' },
-        }, '内核 real' + (bridgeCfg.version ? '·' + bridgeCfg.version : ''))
-      } else if (bridgeCfg !== null) {
-        bridgeBadge = React.createElement('span', {
-          title: '桥对端为 mock 内核（非真内核）——设 ATF_DSH_BRIDGE_COMMAND 切换',
-          style: { color: '#dc2626', fontWeight: 600, flex: 'none' },
-        }, '⚠ mock')
-      }
-      // 批㉛段1：当前推进 run 有 viewer 产物 → 行内直达入口（无则不渲染，不留死按钮）
-      var activeViewers = active !== null ? ((mon.runs.find(function(r) { return r.run_id === active.run.run_id }) || {}).viewers || []) : []
-      // 批㊶-K 项 3：部署默认权限档徽标（会话现值由宿主头部指示器与 atf_permission_status 承载）
-      var permCfg = (typeof window !== 'undefined' && window.__ATF_UI_CONFIG__ && window.__ATF_UI_CONFIG__.permissionPreset) || null
-      var permBadge = permCfg !== null
-        ? React.createElement('span', {
-            title: '部署默认权限档（会话现值见顶部档位指示；档位变更须经界面人工操作）',
-            style: { color: '#64748b', fontWeight: 600, flex: 'none' },
-          }, '档位 ' + (permCfg.label || permCfg.key || ''))
-        : null
-      return React.createElement('div', { className: 'atf-gpu-card' },
-        bridgeBadge,
-        permBadge,
-        React.createElement('span', { className: 'atf-gpu-dot', style: { background: dotColor } }),
-        React.createElement('span', { title: gpuAllTitle }, parts.join(' · ')),
-        activeViewers.length > 0
-          ? React.createElement('button', {
-              className: 'atf-viewer-link',
-              title: '内嵌打开 badcase 可视化（' + active.run.run_id + '）',
-              onClick: function() { store.setViewer({ runId: active.run.run_id }) },
-            }, 'badcase 可视化')
-          : null)
+      var kernelValue = bridgeCfg === null
+        ? '—'
+        : bridgeCfg.mode === 'real'
+          ? React.createElement('span', null,
+              React.createElement('span', { style: { width: 7, height: 7, borderRadius: 4, background: 'var(--dsw-static-green-500)', display: 'inline-block', marginRight: 5 } }),
+              'real' + (bridgeCfg.version ? ' · ' + bridgeCfg.version : ''))
+          : React.createElement('span', { style: { color: 'var(--dsw-static-red-500)' } }, '⚠ mock')
+
+      // 推进 run 徽章（琥珀描边＝活跃；run_id 尾段＋段 N/8）
+      var active = mon === null ? null : pickActiveRun(mon)
+      var runTail = active !== null ? String(active.run.run_id).split('-').slice(-2).join('-') : '—'
+      var runValue = active !== null ? runTail + ' · 段 ' + active.done + '/' + active.total : '—'
+
+      return React.createElement('div', { className: 'atf-gpu-card', style: { display: 'inline-flex', alignItems: 'center', gap: 12 } },
+        dockChip(gpuLabel, React.createElement('span', null, gpuValue, React.createElement('span', { style: { display: 'inline-flex', gap: 2, marginLeft: 4 } }, gpuDots)), { title: gpuTitle, valueColor: gpuValueColor, minWidth: 96 }),
+        dockChip('内核', kernelValue, { title: bridgeCfg && bridgeCfg.mode === 'real' ? 'ATF 内核桥（真内核）' : bridgeCfg ? '桥对端为 mock 内核（非真内核）——设 ATF_DSH_BRIDGE_COMMAND 切换' : '内核桥状态未知' }),
+        dockChip('推进 run', runValue, { title: active !== null ? '当前推进 run：' + active.run.run_id : '暂无推进 run', active: active !== null, minWidth: 132 }))
     }
 
     /** badcase viewer 浮层（批㉛段1）：run 维度选择＋iframe 内嵌渲染 viewer.html
@@ -756,9 +846,11 @@ window.__ModuleLoader__.load({
             '.atf-train-src-warn{color:#b45309;}',
             '.atf-train-mean{color:var(--dsh-text-secondary,#64748b);font-size:11px;}',
             '.atf-train-actions{display:flex;gap:10px;align-items:center;}',
+            // 批㊶-M M-4：段状态跃迁呼吸（一次性动画——animation 属性由内联 pulseStyle 触发一次）
+            '@keyframes atf-card-pulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}',
             '.atf-train-send{background:#1d4ed8;color:#fff;}',
             // 批㉛段3.1：右栏训练监控抽屉
-            '.atf-monitor-panel{position:fixed;top:0;right:0;bottom:0;width:360px;background:var(--dsh-bg,#fff);',
+            '.atf-monitor-panel{position:fixed;right:0;bottom:0;width:360px;background:var(--dsh-bg,#fff);',
             '  border-left:1px solid rgba(128,128,128,.25);box-shadow:-8px 0 24px rgba(0,0,0,.12);z-index:900;',
             '  display:flex;flex-direction:column;font-size:12px;color:var(--dsh-text-primary,#1e293b);}',
             '.atf-monitor-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(128,128,128,.2);}',
@@ -831,15 +923,14 @@ window.__ModuleLoader__.load({
           }, '监控')
         }
 
-        // 批㊶-K 项 4：turnTail 训练进度卡（每轮尾部；训练中才渲染）
-        ctx.slots.inject('conversation.chat.turnTail', function() {
-          return ctx.slots.register({ name: 'conversation.chat.turnTail', id: 'atf-train-progress' }, TrainingProgressCard)
-        })
+        // 批㊶-K 项4 的 turnTail 训练进度卡已下线（批㊶-M 迁移至会话区右上悬浮任务卡——
+        // FloatingTaskCard 在 dock 行组件处挂载；slot 不再占用）
 
         // 通道 C：composer.dock（list 槽）——GPU 一行卡＋快捷指令胶囊＋viewer 浮层（输入框上方，会话内常显）
         ctx.slots.inject('conversation.composer.dock', function() {
           return ctx.slots.register({ name: 'conversation.composer.dock', id: 'atf-dock-row' }, function() {
             return React.createElement('div', null,
+              React.createElement(FloatingTaskCard),
               React.createElement(GpuCard),
               React.createElement('div', { className: 'atf-pill-row' },
                 PILLS.map(function(pill) {

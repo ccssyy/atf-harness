@@ -19,6 +19,7 @@ import { toAtfAgentTool } from "../../../../src/agent/atfAgentTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { translateParameters, looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
+import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 
 /** M1 指令清单里的桥接工具名（桥接契约面 ∪ 工作区治理分册）。 */
 export const BRIDGE_TOOL_NAMES: readonly string[] = [
@@ -142,6 +143,16 @@ export const buildBridgeTools = (
           const bridge = await manager.transport();
           const agentTool = toAtfAgentTool(definition, { bridge, scopeRefBox: { current: undefined } });
           const result = await agentTool.execute(`dsh-${exec.callId ?? "call"}`, args);
+          // 批㊶-M M-3 段事实轨：桥接面工具成功即登记（register/label_qc——run 归属取参数）
+          const details = result.details as Record<string, unknown> | undefined;
+          if (details !== undefined && details !== null && typeof details === "object" && !("error" in details)) {
+            const segmentByTool: Record<string, string> = { atf_admit_data: "register", atf_label_qc_inspect: "label_qc" };
+            const segment = segmentByTool[definition.name];
+            const runIdForFact = typeof args["run_id"] === "string" && args["run_id"] !== "" ? args["run_id"] : "default";
+            if (segment !== undefined && localRoots !== undefined) {
+              appendSegmentFact(join(localRoots.runsRoot, runIdForFact), segment, definition.name);
+            }
+          }
           return asToolValue(result.details);
         },
       }),

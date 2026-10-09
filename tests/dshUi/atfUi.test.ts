@@ -612,7 +612,8 @@ describe("批㉝H GPU 多卡聚合（gpu_all 采集解析＋绑卡声明两态�
   });
   it("client.js 双份同语义钉子：聚合/绑卡副本两处都在（裸服务不打包——改动同步）", () => {
     const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
-    for (const phrase of ["formatGpuAllLocal", "formatGpuBindingLocal", "train.sh CUDA_VISIBLE_DEVICES", "deploy_effective.visible_devices", "当前 run "]) {
+    // 批㊶-M M-5：「当前 run 」逐卡文字聚合撤销（GPU 组徽章 N/8 活跃＋hover title 承接）——钉子随语义更新
+    for (const phrase of ["formatGpuAllLocal", "formatGpuBindingLocal", "train.sh CUDA_VISIBLE_DEVICES", "deploy_effective.visible_devices", "N/8 活跃"]) {
       expect(clientSource).toContain(phrase);
     }
     // 渲染面两处都在：GPU 状态条（dock）＋监控面板环境卡 GPU 行

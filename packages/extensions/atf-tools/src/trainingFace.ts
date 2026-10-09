@@ -24,6 +24,7 @@ import { asToolValue } from "./schemaTranslate.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { tmuxHasSession } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText } from "./gpuQueueFace.js";
+import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 
 // 批㊶-K 项 4：进料面提取共享（src/core/workspace/lossIngest.ts）——atf_launch_execute
 // 登记放行后同挂（harness-launch-*.log 此前无人监控＝曲线进料断根因面）；本文件 re-export 兼容面。
@@ -280,6 +281,8 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       try { execSync(`tmux kill-session -t atf-training-run 2>/dev/null`); } catch { /* 无旧会话 */ }
       execSync(`tmux new-session -d -s atf-training-run "bash ${args.train_sh} 2>&1 | tee -a ${logPath}"`);
       startLossIngest(logPath, join(cfg.runsRoot, args.run_id, "training", "loss-series.json"));
+      // 批㊶-M M-3 段事实轨：训练启动成功即登记（training 段）
+      appendSegmentFact(join(cfg.runsRoot, args.run_id), "training", "atf_run_training");
       return asToolValue({
         started: true,
         tmux: "atf-training-run",
@@ -515,6 +518,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const { execSync } = await import("node:child_process");
       try { execSync(`tmux kill-session -t atf-eval-orch 2>/dev/null`); } catch { /* 无旧 */ }
       execSync(`tmux new-session -d -s atf-eval-orch "bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode mode0 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`);
+      // 批㊶-M M-3 段事实轨：评估编排启动成功即登记（evaluate 段）
+      appendSegmentFact(join(cfg.runsRoot, args.run_id), "evaluate", "atf_evaluate");
       return asToolValue({
         started: true, eval_round: roundDir, tmux: "atf-eval-orch",
         serving_models: expectedModels, service_manifest: join(serviceDir, "service_manifest.json"),

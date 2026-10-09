@@ -18,6 +18,7 @@ import { buildConfigConfirmFields, parseConfigEditText, saveConfigSnapshot } fro
 /** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型）。 */
 type ConfigConfirmField = { key: string; value: string; tag: "need_confirm" | "from_registry" | "default_used" };
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
+import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { asToolValue } from "./schemaTranslate.js";
 
 /** 三态标记（卡面文本化：⚠ 已用缺省／◆ 来自登记／? 需确认——与手搓批⑮三态标签同源语义）。 */
@@ -134,6 +135,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const confirmed: Record<string, string> = {};
       for (const field of fields) confirmed[field.key] = field.value;
       saveConfigSnapshot(runDir, confirmed);
+      // 批㊶-M M-3 段事实轨：实验配置确认成功即登记（experiment_config 段）
+      appendSegmentFact(join(deps.runsRoot, args.run_id), "experiment_config", "atf_config_confirm");
       return asToolValue({ ok: true, run_id: args.run_id, confirmed: true, fields, snapshot: "webui/config-snapshot.json", ...(amendNote !== undefined ? { amend: amendNote } : {}) });
     },
   });
@@ -169,6 +172,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       writePending(runsRoot, args.run_id, { kind: "publish_confirm", run_id: args.run_id, title, digest: candidateDigest, at: new Date().toISOString() });
       const verdict = await requestApproval(ctx, exec, "atf_publish_confirm", `${title}\n${body}\n确认发布请点 Allow once。`);
       if (!verdict.ok) return approvalDeniedResult("atf_publish_confirm", verdict.outcome);
+      // 批㊶-M M-3 段事实轨：契约发布确认成功即登记（publish 段）
+      appendSegmentFact(join(deps.runsRoot, args.run_id), "publish", "atf_publish_confirm");
       return asToolValue({ ok: true, run_id: args.run_id, confirmed: true, digest: candidateDigest, artifact: "contract-candidate.json" });
     },
   });

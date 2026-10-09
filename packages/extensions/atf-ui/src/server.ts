@@ -18,6 +18,7 @@ import { queryNvidiaSmi, queryNvidiaSmiAll } from "../../../../src/webui/readOnl
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
 import { tmuxHasSession } from "../../../../src/core/workspace/tmuxLiveness.js";
+import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 
 /** Cordis 插件名。 */
 export const name = "atf-ui";
@@ -374,6 +375,19 @@ const lossSeriesFresh = (dir: string, liveness: ScanLiveness | undefined): boole
   }
 };
 
+/** 批㊶-M 锚兼容：逐轮目录 eval/<round>/metrics_summary.json 扫描（任一轮在场即 true）。 */
+const evalRoundAnchored = (runDir: string): boolean => {
+  const evalRoot = join(runDir, "eval");
+  try {
+    for (const entry of readdirSync(evalRoot, { withFileTypes: true })) {
+      if (entry.isDirectory() && existsSync(join(evalRoot, entry.name, "metrics_summary.json"))) return true;
+    }
+  } catch {
+    // eval 根缺失＝无轮产物
+  }
+  return false;
+};
+
 /** 训练活跃终判：tmux 在场优先；否则回落 mtime 新鲜窗口。 */
 const trainingActiveLive = (dir: string, liveness: ScanLiveness | undefined): boolean =>
   liveness?.trainingTmuxPresent === true || lossSeriesFresh(dir, liveness);
@@ -381,6 +395,9 @@ const trainingActiveLive = (dir: string, liveness: ScanLiveness | undefined): bo
 export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness): RunScan {
   const dir = join(root, runId);
   const has = (rel: string): boolean => existsSync(join(dir, rel));
+  // 批㊶-M M-3：段事实轨优先（webui/segments.json 有记录的段直接 done），启发式锚降级兜底
+  const segmentDone = (segment: string, heuristicFallback: boolean): boolean =>
+    hasSegmentFact(dir, segment) || heuristicFallback;
   const readJson = (rel: string): unknown => {
     try {
       return JSON.parse(readFileSync(join(dir, rel), "utf8")) as unknown;
@@ -413,19 +430,24 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness)
       "eval/indexes.csv",
     ].filter(has),
     segments: {
-      register: has("registration.json") || has("dataset"),
-      split: has("split") || has("dataset/split"),
-      label_qc: has("label_qc") || has("qc"),
+      register: segmentDone("register", has("registration.json") || has("dataset")),
+      split: segmentDone("split", has("split") || has("dataset/split")),
+      label_qc: segmentDone("label_qc", has("label_qc") || has("qc")),
       // 实验配置段：config-snapshot 已确认=done；pending-confirm 在场=active（等待四卡应答）
-      experiment_config: has("webui/config-snapshot.json") ? true : has("webui/pending-confirm.json") ? "active" : false,
+      experiment_config: segmentDone("experiment_config", has("webui/config-snapshot.json"))
+        ? true
+        : has("webui/pending-confirm.json")
+          ? "active"
+          : false,
       candidate: has("contract-candidate.json"),
-      publish: has("report") && reportFiles.some((f) => f.startsWith("segment-")),
-      // admission 沿 train.sh 存在（生成即过 DRY_RUN 准入自检面）
-      admission: has("launch/train.sh") || has("admission.json"),
-      training: has("training/loss-series.json"),
-      // 批㊶-L L-2：评估段锚＝eval/metrics_summary.json（评估完成的确定性产物；
-      // badcases.jsonl 为可选分析产物不作为完成判据——锚选型理由）
-      evaluate: has("eval/metrics_summary.json"),
+      // 批㊶-M 锚兼容：publish 加 contract-candidate.json（轮产物形态兼容）
+      publish: segmentDone("publish", (has("report") && reportFiles.some((f) => f.startsWith("segment-"))) || has("contract-candidate.json")),
+      // admission 沿 train.sh 存在（生成即过 DRY_RUN 准入自检面）；锚兼容加 training/train.sh
+      admission: segmentDone("admission", has("launch/train.sh") || has("admission.json") || has("training/train.sh")),
+      training: segmentDone("training", has("training/loss-series.json")),
+      // 批㊶-L L-2＋批㊶-M 锚兼容：评估锚补逐轮目录 eval/<round>/metrics_summary.json
+      // （badcases.jsonl 为可选分析产物不作完成判据——锚选型理由）
+      evaluate: segmentDone("evaluate", has("eval/metrics_summary.json") || evalRoundAnchored(dir)),
     },
     training: {
       // 批㊶-L L-1：终结判定——active＝loss-series 在场 &&（tmux 训练会话在场 || mtime
