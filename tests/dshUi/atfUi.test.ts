@@ -717,11 +717,15 @@ describe("批㊶-L L-1 训练活跃终结判定（tmux 注入＋mtime 新鲜窗�
     return runDir;
   };
 
-  it("tmux 在场 → 恒 active（mtime 过期不灭）；env 窗口解析三态", () => {
+  it("批㊶-O O-1：泛匹配 tmux 在场不再恒 active（须绑 run 取证或 mtime 新鲜）；env 窗口解析三态", () => {
     const root = tempRoot();
     seedRun(root, "run-l1", 3_600_000);
+    // 泛匹配布尔 trainingTmuxPresent=true 但无本 run 取证、mtime 过期 → 抑制（假阳性根除）
     const scan = scanRunDir(root, "run-l1", { trainingTmuxPresent: true, nowMs: Date.now(), freshWindowMs: 180_000 });
-    expect(scan.training.active).toBe(true);
+    expect(scan.training.active).toBe(false);
+    // 本 run 取证命中 → active（mtime 过期不灭）
+    const scanEvidence = scanRunDir(root, "run-l1", { trainingTmuxPresent: true, trainingEvidence: { "run-l1": true }, nowMs: Date.now(), freshWindowMs: 180_000 });
+    expect(scanEvidence.training.active).toBe(true);
     expect(resolveTrainActiveWindowMs({})).toBe(180_000);
     expect(resolveTrainActiveWindowMs({ ATF_TRAIN_ACTIVE_WINDOW_MS: "5000" })).toBe(5_000);
     expect(resolveTrainActiveWindowMs({ ATF_TRAIN_ACTIVE_WINDOW_MS: "0" })).toBe(180_000);
