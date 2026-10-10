@@ -986,13 +986,13 @@ window.__ModuleLoader__.load({
             '  font-size:12px;padding:0;text-decoration:underline;text-underline-offset:2px;}',
             '.atf-viewer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;',
             '  display:flex;align-items:center;justify-content:center;}',
-            '.atf-viewer-frame{width:min(1100px,94vw);height:min(86vh,900px);background:#fff;',
+            '.atf-viewer-frame{width:min(1100px,94vw);height:min(86vh,900px);background:var(--dsw-alias-bg-layer-1,#fff);',
             '  border-radius:12px;display:flex;flex-direction:column;overflow:hidden;',
             '  box-shadow:0 18px 60px rgba(0,0,0,.35);}',
             '.atf-viewer-head{display:flex;align-items:center;gap:10px;padding:8px 12px;',
             '  border-bottom:1px solid rgba(128,128,128,.25);font-size:13px;}',
             '.atf-viewer-select{font-size:12px;padding:2px 6px;border-radius:6px;}',
-            '.atf-viewer-empty{color:#64748b;font-size:12px;}',
+            '.atf-viewer-empty{color:var(--dsw-alias-label-tertiary,#64748b);font-size:12px;}',
             '.atf-viewer-iframe{flex:1;border:0;width:100%;}',
             // 批㉛段2：发起训练对话框
             '.atf-train-frame{width:min(880px,94vw);}',
@@ -1006,7 +1006,7 @@ window.__ModuleLoader__.load({
             '.atf-train-key{font-family:monospace;font-size:11px;}',
             '.atf-train-val{font-weight:600;}',
             '.atf-train-src{color:var(--dsw-alias-brand-primary,#1d4ed8);font-size:11px;}',
-            '.atf-train-src-warn{color:#b45309;}',
+            '.atf-train-src-warn{color:var(--dsw-alias-state-warn-label,#b45309);}',
             '.atf-train-mean{color:var(--dsh-text-secondary,#64748b);font-size:11px;}',
             '.atf-train-actions{display:flex;gap:10px;align-items:center;}',
             // 批㊶-M M-4：段状态跃迁呼吸（一次性动画——animation 属性由内联 pulseStyle 触发一次）
@@ -1080,7 +1080,7 @@ window.__ModuleLoader__.load({
           )
           return React.createElement('button', {
             className: 'atf-pill' + (open ? ' atf-pill-on' : ''),
-            style: open ? { borderColor: '#1d4ed8', color: '#1d4ed8', fontWeight: 600 } : undefined,
+            style: open ? { borderColor: 'var(--dsw-alias-brand-primary,#1d4ed8)', color: 'var(--dsw-alias-brand-primary,#1d4ed8)', fontWeight: 600 } : undefined,
             title: open ? '监控（开——点击关闭右栏面板）' : '监控（关——点击打开右栏面板）',
             onClick: function() { store.setMonitor(!store.monitorOpen) },
           }, '监控')
