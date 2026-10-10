@@ -19,8 +19,10 @@ import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/w
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
 import { tmuxHasSession, tmuxTrainingFamilyPresent, listTrainingSessionCmdlines } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
+import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
 import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { orderGuarded, readProgress, progressFresh, readBindings, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
+import { readAlerts } from "../../../../src/core/workspace/trainProbe.js";
 
 /** Cordis 插件名。 */
 export const name = "atf-ui";
@@ -92,6 +94,8 @@ export interface RunScan {
   training: { active: boolean; loss: unknown; pending_confirm: unknown; progress?: RunProgress | null };
   /** 批㊶-N N-5：会话绑定集（additive——可空数组）。 */
   bound_sessions?: string[];
+  /** 批㊶-P P-2：训练探针告警（additive——{level,reason,since}，无告警 null）。 */
+  probe?: { level: "error" | "warn"; reason: string; since: string } | null;
   report: { files: string[] };
   viewers: string[];
   launch: LaunchSurface;
@@ -485,6 +489,9 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness)
     : null;
   // 批㊶-N N-5：会话绑定集（binding.json append 轨镜像；可空）
   const boundSessions = readBindings(dir).map((binding) => binding.session_id);
+  // 批㊶-P P-2：探针告警面（alerts.json 末条；同步器另行驱动判定与落盘）
+  const probeAlerts = readAlerts(dir);
+  const probe = probeAlerts.length > 0 ? probeAlerts[probeAlerts.length - 1]! : null;
   return {
     run_id: runId,
     state: has("webui/config-snapshot.json")
@@ -536,6 +543,8 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness)
     },
     // 批㊶-N N-5：会话绑定集（additive——可空数组）
     bound_sessions: boundSessions,
+    // 批㊶-P P-2：训练探针（additive）
+    probe,
     report: { files: reportFiles },
     viewers: discoverViewerDirs(dir),
     launch: buildLaunchSurface(dir),
@@ -781,6 +790,33 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
       trainingLogsFresh: trainingLogsFreshAt(resolved.runsRoot, resolveTrainActiveWindowMs(process.env)),
       freshWindowMs: resolveTrainActiveWindowMs(process.env),
     });
+    // 批㊶-P P-2：训练探针（per-run——active run 才判定；告警落 alerts.json＋monitor probe 面见 snapshot 组装）
+    try {
+      for (const run of runs) {
+        if (!run.training.active) continue;
+        const runDir = join(resolved.runsRoot, run.run_id);
+        let logTail = "";
+        const logsDir = process.env["ATF_DSH_LOG_DIR"];
+        if (logsDir !== undefined && existsSync(logsDir)) {
+          try {
+            const trainLog = join(logsDir, "train-stdout.log");
+            if (existsSync(trainLog)) logTail = readFileSync(trainLog, "utf8").slice(-8000);
+          } catch { /* 日志不可读＝OOM 特征不可判 */ }
+        }
+        probeAndRecord(runDir, {
+          trainingActive: true,
+          tmuxEvidence: trainingEvidence[run.run_id] === true,
+          lossSeriesFresh: existsSync(join(runDir, "training", "loss-series.json")),
+          trainingDone: run.segments.training === true,
+          lossPoints: Array.isArray(run.training.loss) ? (run.training.loss as Array<Record<string, unknown>>) : [],
+          progress: readProgress(runDir),
+          logTailText: logTail,
+          nowMs: Date.now(),
+        });
+      }
+    } catch {
+      // 探针异常不阻断同步器
+    }
     // GPU 状态（nvidia-smi 包装——不可用如实 offline，不猜测；快照单源随 monitor.json 下发）。
     // 批㉝H：gpu_all 全卡面并采（首行单卡面保留——atf_gpu_status 工具与旧 client 回退共用）。
     const gpu = await queryNvidiaSmi();

@@ -68,6 +68,8 @@ export function buildMonitorSnapshot(runs, gpu, gpuAll) {
       progress: run.progress ?? null,
       // 批㊶-N N-5：会话绑定集（additive——可空数组）
       bound_sessions: Array.isArray(run.bound_sessions) ? run.bound_sessions : [],
+      // 批㊶-P P-2：训练探针（additive——{level,reason,since}，无告警 null；schema v2 续）
+      probe: run.probe ?? null,
       training: {
         active: run.training?.active === true,
         points: Array.isArray(run.training?.loss) ? run.training.loss : [],

@@ -19,6 +19,18 @@ import { buildConfigConfirmFields, parseConfigEditText, saveConfigSnapshot } fro
 type ConfigConfirmField = { key: string; value: string; tag: "need_confirm" | "from_registry" | "default_used" };
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
+import {
+  FIXED_SMART_DEFAULTS,
+  deriveGradAccum,
+  clampLearningRate,
+  clampEpochs,
+  clampLoraRank,
+  loraAlphaFor,
+  clampCutoffLen,
+  clampImageMaxPixels,
+  SMART_DEEPSPEED_DEFAULT,
+  applyConfirmedToIterationConfig,
+} from "../../../../src/core/workspace/smartDefaults.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 
 /** 批㊶-N N-5：会话身份提取（exec.agent.session.id；取不到＝undefined 如实跳过）。 */
@@ -109,7 +121,35 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           iterTraining = {};
         }
       }
+      // 批㊶-P P-1：三层智能缺省组装——
+      //   L3 模型建议值（iteration-config 建议）经 harness clamp（epochs/lr/rank/cutoff/像素）；
+      //   L2 派生（global_batch=256 目标 → accum 派生；deepspeed 缺省切 ds_z3_offload）；
+      //   L1 固定智能缺省（用户不感知——确认卡不展开，落 train.sh 生成面）。
+      // 保守缺省（bs1/accum8）仅作建议值缺失时兜底——链路级修正（bl run bs2/accum8/128 被打回
+      // bs1/accum1/8 的根因＝实验门 train 段空时 TRAINING_REQUIRED_KEY_DEFAULTS 直落）。
+      const L3_CLAMPERS: Record<string, (raw: string | number) => string | number> = {
+        learning_rate: clampLearningRate,
+        num_train_epochs: clampEpochs,
+        lora_rank: clampLoraRank,
+        cutoff_len: clampCutoffLen,
+        image_max_pixels: clampImageMaxPixels,
+      };
+      for (const key of Object.keys(iterTraining)) {
+        const clamp = L3_CLAMPERS[key];
+        const rawValue = iterTraining[key];
+        if (clamp !== undefined && rawValue !== undefined) iterTraining[key] = String(clamp(rawValue));
+      }
+      if (iterTraining["lora_rank"] !== undefined) iterTraining["lora_alpha"] = String(loraAlphaFor(Number(iterTraining["lora_rank"])));
       const baseline = { ...iterTraining, ...snapshot };
+      // L2 派生（bs×nproc 除尽 256 校验——除不尽/矛盾即停点问题串）
+      const bsNum = Number(baseline["per_device_train_batch_size"] ?? 2);
+      const accumDerived = deriveGradAccum(Number.isFinite(bsNum) && bsNum > 0 ? bsNum : 2);
+      if ("error" in accumDerived) {
+        return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: accumDerived.error });
+      }
+      baseline["gradient_accumulation_steps"] = String(accumDerived.accum);
+      // P-1c：deepspeed 智能缺省＝ds_z3_offload（显式 > 缺省——iteration-config 显式声明优先）
+      if (baseline["deepspeed"] === undefined) baseline["deepspeed"] = SMART_DEEPSPEED_DEFAULT;
       const rawOverrides = (args.overrides ?? {}) as Record<string, unknown>;
       const overrides: Record<string, string> = {};
       for (const [key, value] of Object.entries(rawOverrides)) overrides[key] = String(value);
@@ -142,6 +182,15 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const confirmed: Record<string, string> = {};
       for (const field of fields) confirmed[field.key] = field.value;
       saveConfigSnapshot(runDir, confirmed);
+      // 批㊶-P P-1a：确认快照回写 iteration-config training 段＋param_sources 标注
+      // （harness 侧生成物后处理——内核 generate_iteration_config 无确认卡通路[实锚]；
+      //  prelaunch 报告"无确认记录"由此消除，链路级修正）。写失败静默（fail-open）。
+      const iterConfigLive = join(runDir, "prep", "iteration-config.json");
+      const iterConfigLegacy = join(runDir, "prep", "iteration-config", "iteration-config.json");
+      for (const candidate of [iterConfigLive, iterConfigLegacy]) {
+        const patched = applyConfirmedToIterationConfig(candidate, confirmed);
+        void patched;
+      }
       // 批㊶-M M-3 段事实轨：实验配置确认成功即登记（experiment_config 段）
       appendSegmentFact(join(deps.runsRoot, args.run_id), "experiment_config", "atf_config_confirm");
       // 批㊶-N N-5：会话绑定

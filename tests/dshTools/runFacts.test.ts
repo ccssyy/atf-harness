@@ -225,3 +225,18 @@ describe("批㊶-O O-1 绑 run 取证（trainingEvidence 映射）", () => {
     }
   });
 });
+
+describe("批㊶-P P-2 探针经 scanRunDir→monitor 投影链（alerts.json→probe 面）", () => {
+  it("alerts.json 末条 → scanRunDir.probe（additive 面）；无 alerts → null", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-probe");
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    writeFileSync(join(runDir, "webui", "alerts.json"), JSON.stringify([
+      { level: "error", reason: "训练疑似停滞 · 进度已停更 449 分钟（阈值 15 分钟，自适应步长基线）", since: "2026-10-10T03:29:22.140Z" },
+    ]));
+    const scan = scanRunDir(root, "run-probe");
+    expect(scan.probe).toMatchObject({ level: "error", reason: expect.stringContaining("停滞") });
+    const scanEmpty = scanRunDir(root, "run-noalert");
+    expect(scanEmpty.probe).toBeNull();
+  });
+});

@@ -319,6 +319,30 @@ window.__ModuleLoader__.load({
             onClick: function() { setShowAll(!showAll) },
           }, '全部'),
           React.createElement('button', { className: 'atf-pill', title: '收起', onClick: function() { store.setMonitor(false) } }, '×')),
+        // 批㊶-P P-2：探针告警行（error 红/warn 琥珀＋"重新发起"预填按钮——不自动代发）
+        // 作用域：当前选中 run（选择器联动）——probe 面随 monitor.json 下发
+        (function() {
+          var selRunId = store.monitorRunId
+          var runs = (mon && mon.runs) || []
+          var activeRun = null
+          if (selRunId) activeRun = { run: runs.find(function(r) { return r.run_id === selRunId }) || null }
+          if (activeRun === null) activeRun = pickScopedActiveRun(mon, store.sessionId)
+          var probe = activeRun !== null && activeRun.run ? (activeRun.run.probe || null) : null
+          if (probe === null) return null
+          var isOom = probe.reason.indexOf('out of memory') >= 0 || probe.reason.indexOf('OOM') >= 0
+          var reissue = isOom
+            ? '重新发起训练（OOM 降档）：调用 atf_run_training 工具 action=start，train_sh 沿用原 launch/train.sh，batch 改 1、梯度累积翻倍（全局批量 256 不变）——请确认后执行。'
+            : '重新发起训练：调用 atf_run_training 工具 action=start 沿用原参数——请确认后执行。'
+          return React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px', fontSize: 12, color: probe.level === 'error' ? 'var(--dsw-static-red-500)' : 'var(--dsw-static-amber-500)' } },
+            React.createElement('span', null, probe.reason + ' · ' + probe.since.slice(11, 19)),
+            React.createElement('button', {
+              className: 'atf-pill', title: '在会话预填重发指令（含降档参数如适用）——点击后自行发送',
+              onClick: function() {
+                var input = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]')
+                if (input) { input.focus(); document.execCommand('insertText', false, reissue) }
+              },
+            }, '重新发起'))
+        })(),
         // 批㊶-N N-4：dock 撤销的 GPU 摘要与内核版本信息移此处（低频详情行；部署缺省档已注 title）
         React.createElement('div', { style: { fontSize: 11, color: 'var(--dsh-alias-label-tertiary,#64748b)', padding: '2px 12px 0', fontFamily: 'monospace' } },
           (function() {
@@ -564,6 +588,11 @@ window.__ModuleLoader__.load({
       var run = active !== null ? active.run : null
       var progress = run !== null && run.training && run.training.active === true ? (run.progress || null) : null
       var state = taskStateOf(active, run)
+      // 批㊶-P P-2：探针告警红点（error 红/warn 琥珀，沿 DSH token）
+      var probe = (run && run.probe) || null
+      var probeDot = probe !== null
+        ? React.createElement('span', { style: { width: 8, height: 8, borderRadius: 4, flex: 'none', background: probe.level === 'error' ? 'var(--dsw-static-red-500)' : 'var(--dsw-static-amber-500)' }, title: probe.reason })
+        : null
       // 段状态跃迁呼吸一次（一次性 tick 触发 CSS animation 重放；不循环）
       React.useEffect(function() {
         var key = run ? run.run_id + ':' + state + ':' + (active ? active.done : 0) : ''
@@ -619,6 +648,7 @@ window.__ModuleLoader__.load({
           title: '展开训练任务进度（八段明细）',
         },
           React.createElement('span', { style: { width: 8, height: 8, borderRadius: 4, background: color, flex: 'none' } }),
+          probeDot,
           // 批㊶-N N-3：训练中态徽标优先段内进度（"第 6/8 轮"——无则回退 N/8）
           React.createElement('span', { style: { fontFamily: 'monospace', fontSize: 13, color: colorText, fontWeight: 600 } },
             state === 'active' && progress && typeof progress.round === 'number'
