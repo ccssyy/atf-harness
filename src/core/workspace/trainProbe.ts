@@ -11,15 +11,24 @@
  *
  * 通知出口两路：monitor additive per-run probe 字段（{level, reason, since}，无告警 null）＋
  * alerts.json append（上限截断）——模型调 status 随状态返回。全自动代发不在本批（归批㊶-Q）。
+ *
+ * 批㊶-Q 通报面（additive，只增不改）：level 并入 "info"（通报非告警——自动确认/OOM 重发
+ * 通报呈现）；ProbeAlert 增可选 kind（probe=探针判定[缺省回填语义]／config_auto=全自动档
+ * 配置自动确认通报／train_auto=全自动档训练自动放行通报／oom_fallback=OOM 降档重发通报）。
+ * 缺 kind 的既有条目按 probe 语义消费（client 兼容）。
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { readProgress, progressFresh, type RunProgress } from "./runFacts.js";
 
+export type ProbeAlertKind = "probe" | "config_auto" | "train_auto" | "oom_fallback";
+
 export interface ProbeAlert {
-  level: "error" | "warn";
+  level: "error" | "warn" | "info";
   reason: string;
   since: string;
+  /** 批㊶-Q additive：通报/告警来源面；缺省按 probe（探针判定）消费。 */
+  kind?: ProbeAlertKind;
 }
 
 /** 训练日志 OOM 特征（大小写不敏感子串）。 */
@@ -57,6 +66,12 @@ const appendAlert = (runDir: string, alert: ProbeAlert): void => {
   } catch {
     // fail-open
   }
+};
+
+/** 批㊶-Q：通报写入通用出口（段2 自动确认通报／段3 OOM 重发通报共用——appendAlert 同一
+ *  幂等＋上限＋fail-open 语义；kind 由调用方给：config_auto/train_auto/oom_fallback）。 */
+export const appendNotification = (runDir: string, alert: ProbeAlert): void => {
+  appendAlert(runDir, alert);
 };
 
 /** 进度历史步间隔中位数（从 progress.json 历史不可得时——由 loss 点间距近似；无基线返回 null）。
@@ -97,11 +112,11 @@ export const probeRun = (input: ProbeInput): ProbeAlert | null => {
   const since = new Date(input.nowMs).toISOString();
   // error·OOM（日志特征）
   if (OOM_PATTERN.test(input.logTailText)) {
-    return { level: "error", reason: "CUDA out of memory（训练日志 OOM 特征）——建议重发：bs 1、梯度累积翻倍、全局批量 256 不变", since };
+    return { level: "error", kind: "probe", reason: "CUDA out of memory（训练日志 OOM 特征）——建议重发：bs 1、梯度累积翻倍、全局批量 256 不变", since };
   }
   // error·进程消失（沿 O-1 取证链）
   if (input.trainingActive && !input.tmuxEvidence && !input.lossSeriesFresh && !input.trainingDone) {
-    return { level: "error", reason: "训练进程消失（tmux 取证无本 run 会话且产物停止更新）", since };
+    return { level: "error", kind: "probe", reason: "训练进程消失（tmux 取证无本 run 会话且产物停止更新）", since };
   }
   // error·假死（自适应停更阈值）
   if (input.trainingActive && input.progress !== null) {
@@ -131,7 +146,7 @@ export const probeRun = (input: ProbeInput): ProbeAlert | null => {
       const tail = losses.slice(-n);
       const allSame = tail.every((v) => v === tail[0]);
       if (allSame && tail.length >= 3) {
-        return { level: "warn", reason: `loss 连续 ${tail.length} 个周期无变化（值 ${tail[0]}）`, since };
+        return { level: "warn", kind: "probe", reason: `loss 连续 ${tail.length} 个周期无变化（值 ${tail[0]}）`, since };
       }
     }
   }

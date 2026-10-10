@@ -15,10 +15,14 @@ import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildConfigConfirmFields, parseConfigEditText, saveConfigSnapshot } from "../../../../src/webui/configConfirm.js";
 
-/** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型）。 */
-type ConfigConfirmField = { key: string; value: string; tag: "need_confirm" | "from_registry" | "default_used" };
+/** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型；批㊶-Q 增第四态 agent_recommend，
+ *  仅全自动档采纳 agent 参数推荐时由本文件后处理标注，buildConfigConfirmFields 不产出该态）。 */
+type ConfigConfirmField = { key: string; value: string; tag: "need_confirm" | "from_registry" | "default_used" | "agent_recommend" };
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
+import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
+import { evalAgentRecommend, type RecommendVerdict } from "../../../../src/core/workspace/agentRecommend.js";
+import { isAutoTrainingTier, AUTO_TRAINING_PRESET } from "./autoTrainingTier.js";
 import {
   FIXED_SMART_DEFAULTS,
   deriveGradAccum,
@@ -40,11 +44,13 @@ const sessionIdOfExec = (exec: unknown): string | undefined => {
 };
 import { asToolValue } from "./schemaTranslate.js";
 
-/** 三态标记（卡面文本化：⚠ 已用缺省／◆ 来自登记／? 需确认——与手搓批⑮三态标签同源语义）。 */
+/** 三态标记（卡面文本化：⚠ 已用缺省／◆ 来自登记／? 需确认——与手搓批⑮三态标签同源语义）。
+ *  批㊶-Q 增第四态：◇ agent 推荐（全自动档采纳的 agent 参数推荐——来源标注进 sources/通报）。 */
 const TAG_MARK: Record<ConfigConfirmField["tag"], string> = {
   default_used: "已用缺省 ⚠",
   from_registry: "来自登记 ◆",
   need_confirm: "需确认 ?",
+  agent_recommend: "agent 推荐 ◇",
 };
 
 const renderFields = (fields: ConfigConfirmField[]): string =>
@@ -72,12 +78,14 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const configTool = defineTool({
     name: "atf_config_confirm",
     description:
-      "九要素训练配置确认卡（审批必经）：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 解析用户纯文字应答（如「lr 改 2e-4 其他 ok」）并重呈。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——批㉛段2 登记源，卡面与 Web 摘要同源）＞缺省。确认（审批面板 Allow once）后 config-snapshot 落盘 runs/<run_id>/webui/。卡面与审批面板均按 ATF 九要素格式渲染（三态标记：⚠已用缺省/◆来自登记/?需确认）。",
+      "九要素训练配置确认卡：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 解析用户纯文字应答（如「lr 改 2e-4 其他 ok」）并重呈。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——批㉛段2 登记源，卡面与 Web 摘要同源）＞缺省。手动档（权限档）：审批面板 Allow once 确认后 config-snapshot 落盘。全自动训练档（会话档位=auto_training，经界面人工切换）：本工具免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend 纯文字（同样免阻塞）。" +
+      "全自动档 agent 参数推荐（recommend 参数，本档专属）：训练提交前基于任务描述＋数据集统计（样本数/长度分布/模态）＋经验锚点给出 epochs/lr/rank/cutoff 推荐值并附 reason（理由）。经验锚点（owner 手工训练经验，参考知识非硬规则）：样本 2万–3万 → 3 epochs；4万以上 → 2 epochs；小样本（<1万）宜多轮并防过拟合（配早停观察）。护栏：epochs∈[1,10] 整数、lr∈[5e-5,5e-4]、lora_rank∈{16,32,64,128}（alpha=2×rank 联动）、cutoff≤12800、像素∈{800000,1600000}、bs 正整数——越界推荐被拦截并回退固定建议（不静默修正），拦截事实进通报；推荐缺失同样回退。lora_alpha 不单独推荐（随 rank 联动）。",
     parameters: {
       action: { type: "string", required: true, enum: ["present", "amend"], description: "present=构造/重呈卡；amend=解析纯文字应答后重呈" },
       run_id: { type: "string", required: true, description: "run 标识（快照与 pending 卡落点）" },
       overrides: { type: "object", additionalProperties: true, description: "显式覆盖值（present 形态：{learning_rate:\"2e-4\",...}）" },
       amend_text: { type: "string", description: "amend 形态：用户纯文字应答原文（如「lr 改 2e-4 其他 ok」）" },
+      recommend: { type: "object", additionalProperties: true, description: "全自动档专属 agent 参数推荐：{epochs:3, learning_rate:\"2e-4\", lora_rank:32, cutoff_len:9000, reason:\"2.8万样本→3 epochs 防欠拟合\"}——越界键被拦截回退，手动档不消费" },
     },
     output: {
       schema: { type: "object", additionalProperties: true },
@@ -91,7 +99,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         kind: "other" as const,
       }
     },
-    async execute(args: { action: "present" | "amend"; run_id: string; overrides?: Record<string, unknown>; amend_text?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+    async execute(args: { action: "present" | "amend"; run_id: string; overrides?: Record<string, unknown>; amend_text?: string; recommend?: Record<string, unknown> }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       const runDir = join(runsRoot, args.run_id);
       // 现值基线：已确认快照（不重问）→ run 的 IterationConfig 实值（批㉛段2：登记源，确认卡
       // 与 Web 摘要同源——deepspeed 等实值不再落回泛化缺省）→ pending 卡现值 → 缺省
@@ -163,14 +171,118 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         amended = parsed.edits;
         amendNote = `已按应答改参：${Object.keys(parsed.edits).join(", ")}；其余按现值确认`;
       }
-      const fields = (() => {
+      let fields: ConfigConfirmField[] = (() => {
         if (amended === undefined) return buildConfigConfirmFields(overrides, { fromRegistry: Object.keys(baseline).length > 0 ? baseline : undefined });
         // 改参重呈：现值基线保持原三态，仅应答改动项升 need_confirm（值替换）
         const base = buildConfigConfirmFields({}, { fromRegistry: Object.keys(baseline).length > 0 ? baseline : undefined });
         return base.map((field) => (amended[field.key] !== undefined ? { key: field.key, value: String(amended[field.key]), tag: "need_confirm" as const } : field));
       })();
+      // 批㊶-Q 段2：全自动档分支——档位=auto_training 时不调用 requestApproval 阻塞，
+      // 以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐（护栏校验）直接落 config-snapshot，
+      // 卡面内容转为通报（告警行＋alerts.json，含每键取值＋来源标注）。手动档行为零变化。
+      const autoTier = isAutoTrainingTier(ctx, exec);
+      const recommendReport: RecommendVerdict[] = [];
+      const reason = (() => {
+        const rawRecommend = (args.recommend ?? {}) as Record<string, unknown>;
+        return typeof rawRecommend["reason"] === "string" ? rawRecommend["reason"] : undefined;
+      })();
+      if (autoTier && args.action !== "amend") {
+        const rawRecommend = (args.recommend ?? {}) as Record<string, unknown>;
+        const baselineByKey = new Map(fields.map((field) => [field.key, field.value]));
+        for (const [key, value] of Object.entries(rawRecommend)) {
+          if (key === "reason") continue;
+          const baselineValue = baselineByKey.get(key) ?? "";
+          const verdict = evalAgentRecommend(key, value, baselineValue, reason);
+          recommendReport.push(verdict);
+          if (verdict.accepted) {
+            const field = fields.find((f) => f.key === key);
+            if (field !== undefined) {
+              field.value = verdict.terminal;
+              field.tag = "agent_recommend";
+            }
+            // alpha 随 rank 联动（确定性，非判断）：rank 推荐被采纳 → alpha=2×rank 同标 agent 推荐
+            if (key === "lora_rank") {
+              const alphaField = fields.find((f) => f.key === "lora_alpha");
+              if (alphaField !== undefined) {
+                alphaField.value = String(loraAlphaFor(Number(verdict.terminal)));
+                alphaField.tag = "agent_recommend";
+                recommendReport.push({ key: "lora_alpha", accepted: true, terminal: alphaField.value, source: verdict.source, note: `alpha 随 rank=${verdict.terminal} 联动（2×rank）` });
+              }
+            }
+          }
+        }
+        // bs 被推荐改动 → accum 重派生（L2 整除校验，除不尽即停点问题串，禁静默取整）
+        const bsField = fields.find((f) => f.key === "per_device_train_batch_size");
+        const baselineBs = String(baseline["per_device_train_batch_size"] ?? "");
+        if (bsField !== undefined && bsField.value !== baselineBs) {
+          const bsNumNew = Number(bsField.value);
+          if (!Number.isFinite(bsNumNew) || bsNumNew <= 0 || !Number.isInteger(bsNumNew)) {
+            return asToolValue({ ok: false, run_id: args.run_id, error: "recommend_bs_invalid", note: `推荐 bs=${bsField.value} 不是正整数——拦截，未落快照` });
+          }
+          const reDerived = deriveGradAccum(bsNumNew);
+          if ("error" in reDerived) {
+            return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: reDerived.error });
+          }
+          const accumField = fields.find((f) => f.key === "gradient_accumulation_steps");
+          if (accumField !== undefined) {
+            accumField.value = String(reDerived.accum);
+            accumField.tag = "agent_recommend";
+            recommendReport.push({ key: "gradient_accumulation_steps", accepted: true, terminal: String(reDerived.accum), source: "default:harness-smart-defaults", note: `accum 随 bs=${bsField.value} 派生（gb=${reDerived.globalBatch} 不变）` });
+          }
+        }
+      }
       const title = args.action === "amend" ? `九要素配置确认（改参重呈）— run ${args.run_id}` : `九要素训练配置确认 — run ${args.run_id}`;
       const note = amendNote ?? "确认请点审批面板 Allow once；逐项修改可直接回复如「lr 改 2e-4」。";
+      if (autoTier) {
+        // —— 全自动档：免阻塞落快照＋通报呈现（无静默：每键取值＋来源标注可回看） ——
+        const sources: Record<string, string> = {};
+        for (const field of fields) {
+          sources[field.key] =
+            field.tag === "agent_recommend"
+              ? (recommendReport.find((v) => v.key === field.key && v.accepted)?.source ?? "default:harness-smart-defaults")
+              : field.tag === "need_confirm"
+                ? "user-specified"
+                : "default:harness-smart-defaults";
+        }
+        const confirmed: Record<string, string> = {};
+        for (const field of fields) confirmed[field.key] = field.value;
+        const rejectedNotes = recommendReport.filter((v) => !v.accepted).map((v) => v.note);
+        const recommendSummary = args.action === "amend"
+          ? `；改参：${Object.keys(amended ?? {}).join(", ") || "（纯确认）"}`
+          : recommendReport.length > 0
+            ? `；agent 推荐：${recommendReport.map((v) => `${v.key}=${v.terminal}${v.accepted ? "✓" : "✗"}`).join(" ")}${reason !== undefined && reason.trim() !== "" ? `（理由：${reason.replace(/\s+/g, " ").slice(0, 80)}）` : ""}`
+            : "；agent 推荐缺失——全键回退固定建议";
+        const notification = `全自动训练档·配置自动确认（免审批，run ${args.run_id}）——${fields.map((f) => `${f.key}=${f.value}[${sources[f.key]}]`).join(" ")}${recommendSummary}${rejectedNotes.length > 0 ? `；拦截：${rejectedNotes.join("；")}` : ""}`;
+        // 不写 pending 卡（无卡可应答——卡面内容转为通报）；改参走 amend 纯文字（同样免阻塞）
+        appendNotification(runDir, { level: "info", kind: "config_auto", reason: notification, since: new Date().toISOString() });
+        saveConfigSnapshot(runDir, confirmed, { auto: true, tier: AUTO_TRAINING_PRESET, sources });
+        const iterConfigLiveAuto = join(runDir, "prep", "iteration-config.json");
+        const iterConfigLegacyAuto = join(runDir, "prep", "iteration-config", "iteration-config.json");
+        for (const candidate of [iterConfigLiveAuto, iterConfigLegacyAuto]) {
+          const patched = applyConfirmedToIterationConfig(candidate, confirmed, "default:harness-smart-defaults", sources);
+          void patched;
+        }
+        appendSegmentFact(join(deps.runsRoot, args.run_id), "experiment_config", "atf_config_confirm");
+        const sessionIdAuto = sessionIdOfExec(exec);
+        if (sessionIdAuto !== undefined) appendBinding(join(deps.runsRoot, args.run_id), sessionIdAuto);
+        return asToolValue({
+          ok: true,
+          run_id: args.run_id,
+          confirmed: true,
+          auto: true,
+          tier: AUTO_TRAINING_PRESET,
+          fields,
+          sources,
+          ...(recommendReport.length > 0 ? { recommend_report: recommendReport } : { recommend: "missing_fallback_defaults" }),
+          notification,
+          snapshot: "webui/config-snapshot.json",
+          ...(amendNote !== undefined ? { amend: amendNote } : {}),
+        });
+      }
+      if (args.recommend !== undefined) {
+        // 手动档：recommend 为全自动档专属通道——零消费零行为变化（回归红线），仅如实回注
+        return asToolValue({ ok: false, run_id: args.run_id, note: "recommend 为全自动训练档专属（当前会话为权限档）——手动档请用 overrides/pure 文字 amend；档位切换须经界面人工操作" });
+      }
       // pending 卡落盘（ui-atf-confirm / 刷新重建的同源数据）
       writePending(runsRoot, args.run_id, { kind: "config_confirm", run_id: args.run_id, title, fields, note, at: new Date().toISOString() });
       // 审批面板主体＝九要素多行（ATF 格式三态标记）

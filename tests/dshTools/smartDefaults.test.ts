@@ -1,7 +1,7 @@
 /**
  * 批㊶-P 测试锚——三层缺省纯函数／OOM 降档／param_sources 补丁／探针三态＋自适应基线。
  */
-import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -25,7 +25,7 @@ import {
   readAlerts,
   OOM_PATTERN,
 } from "../../src/core/workspace/trainProbe.js";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -169,5 +169,32 @@ describe("批㊶-P P-2 训练探针（自适应基线）", () => {
     expect(alerts).toHaveLength(1);
     expect(alerts[0]?.reason).toContain("进程消失");
     void probeAndRecord;
+  });
+});
+
+// 批㊶-Q 段2：全自动档逐键来源回写（additive 第四参——手动路径零变化）
+describe("批㊶-Q applyConfirmedToIterationConfig perKeySources（逐键来源覆盖）", () => {
+  it("perKeySources 逐键生效；缺省键落 blanket source；手动两参调用零变化", () => {
+    const runDir = tempRoot();
+    const iterPath = join(runDir, "prep", "iteration-config.json");
+    mkdirSync(join(iterPath, ".."), { recursive: true });
+    writeFileSync(iterPath, JSON.stringify({ schema_version: "IterationConfig/v1", training: { learning_rate: "1e-4", lora_rank: 32 } }));
+    const patched = applyConfirmedToIterationConfig(
+      iterPath,
+      { learning_rate: "2e-4", lora_rank: "64", seed: "42" },
+      "default:harness-smart-defaults",
+      { learning_rate: "default:agent-recommend:2.8万样本→lr2e-4" },
+    );
+    expect(patched).toMatchObject({ updated: ["learning_rate", "lora_rank", "seed"] });
+    const config = JSON.parse(readFileSync(iterPath, "utf8")) as { param_sources: Record<string, string>; training: Record<string, unknown> };
+    expect(config.param_sources["learning_rate"]).toBe("default:agent-recommend:2.8万样本→lr2e-4");
+    expect(config.param_sources["lora_rank"]).toBe("default:harness-smart-defaults");
+    expect(config.param_sources["seed"]).toBe("default:harness-smart-defaults");
+    expect(config.training["learning_rate"]).toBe("2e-4");
+    // 手动两参调用：全键 user-specified（P 批语义零变化）
+    const manual = applyConfirmedToIterationConfig(iterPath, { seed: "42" });
+    expect(manual).toMatchObject({ updated: ["seed"] });
+    const config2 = JSON.parse(readFileSync(iterPath, "utf8")) as { param_sources: Record<string, string> };
+    expect(config2.param_sources["seed"]).toBe("user-specified");
   });
 });

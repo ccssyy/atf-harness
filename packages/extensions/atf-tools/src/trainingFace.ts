@@ -20,6 +20,8 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
 import { scanRunDir } from "../../atf-ui/src/server.js";
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
+import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
+import { isAutoTrainingTier } from "./autoTrainingTier.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { tmuxHasSession, tmuxTrainingEvidenceFor } from "../../../../src/core/workspace/tmuxLiveness.js";
@@ -282,8 +284,21 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         return asToolValue({ started: false, error: "port_occupied_non_residue", port, occupant, note: formatPortConflictNote(port, occupant) });
       }
       const conflictNote = occupant !== null ? `\n${formatPortConflictNote(port, occupant)}` : "";
-      const verdict = await requestApproval(ctx, exec, "atf_run_training", `真实 GPU 训练启动确认（GPU/时长代价以九要素确认卡与 train.sh 为准）：train.sh=${args.train_sh}${conflictNote}`);
-      if (!verdict.ok) return approvalDeniedResult("atf_run_training", verdict.outcome);
+      // 批㊶-Q 段2：全自动训练档（会话档位=auto_training）——训练放行免阻塞，danger 卡语义
+      // 切换为通报呈现（alerts.json＋告警行，可回看）；ADR-07 内核侧账本闸门不变（train.sh 内
+      // 放行记录校验原样保留，无记录 exit 78）。手动档审批链零变化。
+      const autoTierStart = isAutoTrainingTier(ctx, exec);
+      if (autoTierStart) {
+        appendNotification(join(cfg.runsRoot, args.run_id), {
+          level: "info",
+          kind: "train_auto",
+          since: new Date().toISOString(),
+          reason: `全自动训练档·训练自动放行（免审批）：train.sh=${args.train_sh}——真实 GPU 训练（GPU/时长代价以 train.sh 为准）${conflictNote !== "" ? `；${conflictNote.trim()}` : ""}`,
+        });
+      } else {
+        const verdict = await requestApproval(ctx, exec, "atf_run_training", `真实 GPU 训练启动确认（GPU/时长代价以九要素确认卡与 train.sh 为准）：train.sh=${args.train_sh}${conflictNote}`);
+        if (!verdict.ok) return approvalDeniedResult("atf_run_training", verdict.outcome);
+      }
       // 批㊶-K 项 1：GPU 排队编排（真跑 danger 放行后入队——原 WebUI 语义迁移：周期探测
       // util<20%＋显存<10GB 连续 2 周期；命中→琥珀再确认卡人工放行（真跑守门不变）；
       // 无超时；编排器零启动调用。env ATF_GPU_POLL_MS 可配，缺省 300s）
@@ -291,8 +306,11 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       if (gpuPollMs !== null) {
         const windowState = await awaitGpuWindow({ pollMs: gpuPollMs, signal: exec.signal as { aborted: boolean } | undefined });
         if (windowState.kind === "aborted") return approvalDeniedResult("atf_run_training", "cancelled");
-        const amber = await requestApproval(ctx, exec, "atf_run_training", `${queueHitText(windowState.gpuIndex)}（已等待 ${windowState.waitedText}）——GPU 窗口命中，确认启动训练（train.sh=${args.train_sh}）`);
-        if (!amber.ok) return approvalDeniedResult("atf_run_training", amber.outcome);
+        // 批㊶-Q：全自动档免琥珀再确认（通报已覆盖放行事实；窗口命中即启动）
+        if (!autoTierStart) {
+          const amber = await requestApproval(ctx, exec, "atf_run_training", `${queueHitText(windowState.gpuIndex)}（已等待 ${windowState.waitedText}）——GPU 窗口命中，确认启动训练（train.sh=${args.train_sh}）`);
+          if (!amber.ok) return approvalDeniedResult("atf_run_training", amber.outcome);
+        }
       }
       if (occupant !== null) {
         // 卡面 [确认清理并重试] 语义：SIGTERM→宽限→SIGKILL，复探仍占用即保留现场停手
@@ -322,8 +340,11 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         tmux: "atf-training-run",
         run_id: args.run_id,
         log: logPath,
+        ...(autoTierStart ? { auto: true, tier: "auto_training" } : {}),
         ...(rotated !== null ? { previous_log: rotated } : {}),
-        note: "训练已启动（tail 进料监控中）——status 查询进度与 ckpt；完成回报 ckpt 路径",
+        note: autoTierStart
+          ? "训练已启动（全自动档·免审批放行已通报）——status 查询进度与 ckpt；完成回报 ckpt 路径"
+          : "训练已启动（tail 进料监控中）——status 查询进度与 ckpt；完成回报 ckpt 路径",
       });
     },
   });

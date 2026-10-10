@@ -314,6 +314,9 @@ window.__ModuleLoader__.load({
           }, '全部'),
           React.createElement('button', { className: 'atf-pill', title: '收起右栏 tab', onClick: function() { store.setMonitor(false) } }, '×')),
         // 批㊶-P P-2：探针告警行（error 红/warn 琥珀＋"重新发起"预填按钮——不自动代发）
+        // 批㊶-Q 通报面（段1/2/3）：level=info 走品牌色；kind chip＝「全自动训练」（config_auto/
+        // train_auto）与「OOM 降档重发」（oom_fallback）——品牌描边 chip，与权限档色语义独立；
+        // 通报类不设"重新发起"按钮（自动链已处理，可回看；改参经会话 amend 唤出）。
         // 作用域：当前选中 run（选择器联动）——probe 面随 monitor.json 下发
         (function() {
           var selRunId = store.monitorRunId
@@ -323,13 +326,22 @@ window.__ModuleLoader__.load({
           if (activeRun === null) activeRun = pickScopedActiveRun(mon, store.sessionId)
           var probe = activeRun !== null && activeRun.run ? (activeRun.run.probe || null) : null
           if (probe === null) return null
-          var isOom = probe.reason.indexOf('out of memory') >= 0 || probe.reason.indexOf('OOM') >= 0
-          var reissue = isOom
+          var kind = probe.kind || 'probe'
+          var isAutoNotice = kind === 'config_auto' || kind === 'train_auto' || kind === 'oom_fallback'
+          var rowColor = probe.level === 'error' ? 'var(--dsw-static-red-500)' : probe.level === 'warn' ? 'var(--dsw-static-amber-500)' : 'var(--dsw-alias-brand-primary,#1d4ed8)'
+          var chip = null
+          if (kind === 'config_auto' || kind === 'train_auto') {
+            chip = React.createElement('span', { style: { flex: 'none', fontSize: 10, lineHeight: '14px', padding: '0 6px', borderRadius: 7, border: '1px solid var(--dsw-alias-brand-primary,#1d4ed8)', color: 'var(--dsw-alias-brand-primary,#1d4ed8)', fontWeight: 600 } }, '全自动训练')
+          } else if (kind === 'oom_fallback') {
+            chip = React.createElement('span', { style: { flex: 'none', fontSize: 10, lineHeight: '14px', padding: '0 6px', borderRadius: 7, border: '1px solid var(--dsw-alias-brand-primary,#1d4ed8)', color: 'var(--dsw-alias-brand-primary,#1d4ed8)', fontWeight: 600 } }, 'OOM 降档重发')
+          }
+          var reissue = (probe.reason.indexOf('out of memory') >= 0 || probe.reason.indexOf('OOM') >= 0)
             ? '重新发起训练（OOM 降档）：调用 atf_run_training 工具 action=start，train_sh 沿用原 launch/train.sh，batch 改 1、梯度累积翻倍（全局批量 256 不变）——请确认后执行。'
             : '重新发起训练：调用 atf_run_training 工具 action=start 沿用原参数——请确认后执行。'
-          return React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px', fontSize: 12, color: probe.level === 'error' ? 'var(--dsw-static-red-500)' : 'var(--dsw-static-amber-500)' } },
+          return React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px', fontSize: 12, color: rowColor } },
+            chip,
             React.createElement('span', null, probe.reason + ' · ' + probe.since.slice(11, 19)),
-            React.createElement('button', {
+            !isAutoNotice && React.createElement('button', {
               className: 'atf-pill', title: '在会话预填重发指令（含降档参数如适用）——点击后自行发送',
               onClick: function() {
                 var input = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]')
@@ -582,10 +594,10 @@ window.__ModuleLoader__.load({
       var run = active !== null ? active.run : null
       var progress = run !== null && run.training && run.training.active === true ? (run.progress || null) : null
       var state = taskStateOf(active, run)
-      // 批㊶-P P-2：探针告警红点（error 红/warn 琥珀，沿 DSH token）
+      // 批㊶-P P-2：探针告警红点（error 红/warn 琥珀，沿 DSH token；批㊶-Q info＝品牌色通报点）
       var probe = (run && run.probe) || null
       var probeDot = probe !== null
-        ? React.createElement('span', { style: { width: 8, height: 8, borderRadius: 4, flex: 'none', background: probe.level === 'error' ? 'var(--dsw-static-red-500)' : 'var(--dsw-static-amber-500)' }, title: probe.reason })
+        ? React.createElement('span', { style: { width: 8, height: 8, borderRadius: 4, flex: 'none', background: probe.level === 'error' ? 'var(--dsw-static-red-500)' : probe.level === 'warn' ? 'var(--dsw-static-amber-500)' : 'var(--dsw-alias-brand-primary,#1d4ed8)' }, title: probe.reason })
         : null
       // 段状态跃迁呼吸一次（一次性 tick 触发 CSS animation 重放；不循环）
       React.useEffect(function() {

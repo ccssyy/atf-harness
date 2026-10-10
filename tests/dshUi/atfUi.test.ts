@@ -812,3 +812,32 @@ describe("批㊶-M2 段 2 scanRuns 特征过滤（布局规范＋防御）", () 
     void scans;
   });
 });
+
+// 批㊶-Q 通报面（段1/2/3 additive）：probe 面随 alerts 末条流转（info·kind 通报条目原样透传）
+describe("批㊶-Q probe 通报面（info·kind additive——alerts 末条透传）", () => {
+  it("scanRunDir probe 面：alerts 末条（info·config_auto）原样透传 level/kind/reason；无 alerts → null", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-q");
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    writeFileSync(join(runDir, "webui", "alerts.json"), JSON.stringify([
+      { level: "error", kind: "probe", reason: "训练疑似停滞", since: "2026-10-10T08:00:00.000Z" },
+      { level: "info", kind: "config_auto", reason: "全自动训练档·配置自动确认（免审批，run run-q）——learning_rate=2e-4[default:agent-recommend:x]", since: "2026-10-10T09:00:00.000Z" },
+    ]));
+    const scan = scanRunDir(root, "run-q");
+    expect(scan.probe).toMatchObject({ level: "info", kind: "config_auto" });
+    expect(String(scan.probe?.reason)).toContain("全自动训练档·配置自动确认");
+    // 通报类 OOM 条目（kind=oom_fallback）同样透传（client 据 kind 渲染 OOM 降档重发 chip）
+    writeFileSync(join(runDir, "webui", "alerts.json"), JSON.stringify([
+      { level: "info", kind: "oom_fallback", reason: "OOM 自动降档重发（run run-q）：bs 2→1", since: "2026-10-10T09:30:00.000Z" },
+    ]));
+    expect(scanRunDir(root, "run-q").probe).toMatchObject({ level: "info", kind: "oom_fallback" });
+  });
+  it("client.js 通报面钉子：全自动训练 chip／OOM 降档重发 chip／info 品牌色／通报类无重发按钮（裸服务不打包——源面锚）", () => {
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    for (const phrase of ["全自动训练", "OOM 降档重发", "config_auto", "oom_fallback", "dsw-alias-brand-primary"]) {
+      expect(clientSource).toContain(phrase);
+    }
+    // 通报类（isAutoNotice）不渲染"重新发起"按钮——探针类保留
+    expect(clientSource).toContain("!isAutoNotice && React.createElement('button'");
+  });
+});

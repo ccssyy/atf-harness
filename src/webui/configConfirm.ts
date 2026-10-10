@@ -104,10 +104,11 @@ export const loadConfigSnapshot = (runDir: string): Record<string, string> | nul
   }
 };
 
-export const saveConfigSnapshot = (runDir: string, confirmed: Record<string, string>): void => {
+export const saveConfigSnapshot = (runDir: string, confirmed: Record<string, string>, meta?: { auto?: boolean; tier?: string; sources?: Record<string, string> }): void => {
   const path = snapshotPath(runDir);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify({ schema_version: "WebUiConfigSnapshot/v1", confirmed }, null, 1)}\n`, "utf8");
+  // 批㊶-Q additive：全自动档快照附 auto/tier/sources 通报面（只增不改——既有消费方读 confirmed 不受影响）
+  writeFileSync(path, `${JSON.stringify({ schema_version: "WebUiConfigSnapshot/v1", confirmed, ...(meta?.auto === true ? { auto: true, ...(meta.tier !== undefined ? { tier: meta.tier } : {}), ...(meta.sources !== undefined ? { sources: meta.sources } : {}) } : {}) }, null, 1)}\n`, "utf8");
 };
 
 export const hasConfigSnapshot = (runDir: string): boolean => existsSync(snapshotPath(runDir));

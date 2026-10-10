@@ -8,7 +8,9 @@
  * 目录枚举是 workspace-scoped（DSH 文档口径），故枚举在服务端做、client 只读成品文件。
  * 纯函数（buildMonitorSnapshot/buildArtifactsSnapshot）在 ./snapshot.js，本仓 vitest 直测。
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { execFile, execFileSync } from "node:child_process";
+import * as net from "node:net";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -20,6 +22,8 @@ import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } fro
 import { tmuxHasSession, tmuxTrainingFamilyPresent, listTrainingSessionCmdlines } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
+import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/workspace/oomFallback.js";
+import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { orderGuarded, readProgress, progressFresh, readBindings, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
 import { readAlerts } from "../../../../src/core/workspace/trainProbe.js";
@@ -65,10 +69,13 @@ export interface BridgeBadgeSurface {
   version: string | null;
 }
 
-export const injectMonitorGlobal = (html: string, monitorPath: string, bridge?: BridgeBadgeSurface, permissionPreset?: { key: string; label: string }): string => {
+export const injectMonitorGlobal = (html: string, monitorPath: string, bridge?: BridgeBadgeSurface, permissionPreset?: { key: string; label: string }, permissionPresets?: Array<{ key: string; label: string }>): string => {
   const config: Record<string, unknown> = { monitorPath };
   if (bridge !== undefined) config["bridge"] = bridge;
   if (permissionPreset !== undefined) config["permissionPreset"] = permissionPreset;
+  // 批㊶-Q 段1 additive：档位目录投影（key+label 两键白名单同形态——auto_training 等新档随
+  // catalog 自然流入；徽章/切换 UI 由原生选择器承载，本面为目录数据源）
+  if (permissionPresets !== undefined) config["permissionPresets"] = permissionPresets;
   const snippet = `<script>window.__ATF_UI_CONFIG__=Object.assign({},window.__ATF_UI_CONFIG__,${JSON.stringify(config)});</script>`;
   const at = html.toLowerCase().indexOf("</head>");
   return at === -1 ? snippet + html : html.slice(0, at) + snippet + html.slice(at);
@@ -94,8 +101,8 @@ export interface RunScan {
   training: { active: boolean; loss: unknown; pending_confirm: unknown; progress?: RunProgress | null };
   /** 批㊶-N N-5：会话绑定集（additive——可空数组）。 */
   bound_sessions?: string[];
-  /** 批㊶-P P-2：训练探针告警（additive——{level,reason,since}，无告警 null）。 */
-  probe?: { level: "error" | "warn"; reason: string; since: string } | null;
+  /** 批㊶-P P-2：训练探针告警（additive——{level,reason,since,kind?}，无告警 null；批㊶-Q level 并入 info＋kind 通报面）。 */
+  probe?: { level: "error" | "warn" | "info"; reason: string; since: string; kind?: string } | null;
   report: { files: string[] };
   viewers: string[];
   launch: LaunchSurface;
@@ -820,7 +827,7 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
             if (existsSync(trainLog)) logTail = readFileSync(trainLog, "utf8").slice(-8000);
           } catch { /* 日志不可读＝OOM 特征不可判 */ }
         }
-        probeAndRecord(runDir, {
+        const alert = probeAndRecord(runDir, {
           trainingActive: true,
           tmuxEvidence: trainingEvidence[run.run_id] === true,
           lossSeriesFresh: existsSync(join(runDir, "training", "loss-series.json")),
@@ -830,6 +837,46 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
           logTailText: logTail,
           nowMs: Date.now(),
         });
+        // 批㊶-Q 段3：OOM 自动降档重发（两档统一生效）——护栏全 fail-closed（状态文件/bs 已 1/
+        // 补丁失败/端口占用/DRY_RUN 不过均只通报不重发）；通报先于重发落 alerts.json。
+        if (alert !== null) {
+          try {
+            await maybeAutoOomFallback({
+              runDir,
+              runId: run.run_id,
+              logDir: process.env["ATF_DSH_LOG_DIR"] ?? join(runDir, "training-logs"),
+              alert: { level: alert.level, kind: alert.kind, reason: alert.reason, since: alert.since },
+              now: () => new Date(),
+              log: (line) => console.log(line),
+              ...nodeOomFallbackIo,
+              dryRun: (abs) => new Promise((resolve) => {
+                execFile("bash", [abs], { timeout: 60_000, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, DRY_RUN: "1" } }, (error, stdout) => {
+                  const raw = error === null ? 0 : (error as NodeJS.ErrnoException & { code?: number | string }).code;
+                  resolve({ code: typeof raw === "number" ? raw : 1, stdout: String(stdout) });
+                });
+              }),
+              probePort: (port) => new Promise((resolveProbe) => {
+                // bind 探测（trainingFace probePortOccupant 的保守同语义：能绑定＝空闲 null；
+                // 占用即非 null 对象——身份不识别，护栏 fail-closed 不清理）
+                const srv = net.createServer();
+                srv.once("error", () => resolveProbe({ occupied: true }));
+                srv.once("listening", () => srv.close(() => resolveProbe(null)));
+                srv.listen(port, "0.0.0.0");
+              }),
+              tmux: (command) => {
+                try { execFileSync("/bin/sh", ["-c", command], { timeout: 10_000 }); } catch { /* 会话不存在/已退出＝预期内 */ }
+              },
+              rotateLog: (logPath) => {
+                if (!existsSync(logPath)) return;
+                const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15);
+                try { renameSync(logPath, `${logPath}.${stamp}`); } catch { /* 同名冲突放弃轮转（tee -a 兜底） */ }
+              },
+              startIngest: (logPath, seriesPath) => {
+                void startLossIngest(logPath, seriesPath);
+              },
+            });
+          } catch { /* 重发编排异常不阻断同步器（下周期护栏/状态再判） */ }
+        }
       }
     } catch {
       // 探针异常不阻断同步器
@@ -947,20 +994,25 @@ export function apply(
   // atf_permission_status 承载，本键只表部署默认档）
   const permissionService = (ctx as { permissionPresets?: { defaultPreset?: string; catalog?: () => { options: Array<{ value: string; name: string }>; defaultPreset: string } } }).permissionPresets;
   let permissionPreset: { key: string; label: string } | undefined;
+  // 批㊶-Q 段1：档位目录投影（additive——全部可选档 key+label；全自动训练档随 catalog 流入）
+  let permissionPresetsCatalog: Array<{ key: string; label: string }> | undefined;
   if (permissionService !== undefined && typeof permissionService.catalog === "function") {
     try {
-      const key = permissionService.defaultPreset ?? permissionService.catalog().defaultPreset;
-      const label = permissionService.catalog().options.find((option) => option.value === key)?.name ?? key;
+      const catalog = permissionService.catalog();
+      const key = permissionService.defaultPreset ?? catalog.defaultPreset;
+      const label = catalog.options.find((option) => option.value === key)?.name ?? key;
       permissionPreset = { key, label };
+      permissionPresetsCatalog = catalog.options.map((option) => ({ key: option.value, label: option.name ?? option.value }));
     } catch {
       permissionPreset = undefined;
+      permissionPresetsCatalog = undefined;
     }
   }
   console.log(`[atf-ui] 桥类型: ${bridge.mode === "real" ? `real${bridge.version !== null ? `·${bridge.version}` : ""}` : "mock（⚠ 缺省——设 ATF_DSH_BRIDGE_COMMAND 切真内核）"}`);
   const webServer = ctx.webServer;
   if (webServer !== undefined) {
     const monitorPath = monitorPathOf(resolved.runsRoot);
-    const dispose = webServer.tapIndex((html) => injectMonitorGlobal(html, monitorPath, bridge, permissionPreset));
+    const dispose = webServer.tapIndex((html) => injectMonitorGlobal(html, monitorPath, bridge, permissionPreset, permissionPresetsCatalog));
     ctx.effect(() => dispose, "atf-ui: monitor 路径＋桥徽标 index 注入");
     console.log(`[atf-ui] monitor 路径已注入 index（monitorPath=${monitorPath}）`);
     // 批㉛段1：badcase viewer 静态路由（鉴权沿壳 connection 信任面；connection/register 缺席的

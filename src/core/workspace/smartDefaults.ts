@@ -144,11 +144,15 @@ export const paramSourceFor = (tag: "need_confirm" | "from_registry" | "default_
 };
 
 /** 把确认快照（confirmed 字段集）回写 iteration-config 的 training 段＋param_sources（harness 侧
- *  生成物后处理——内核 generate_iteration_config 无确认卡通路，实锚；零内核写入）。 */
+ *  生成物后处理——内核 generate_iteration_config 无确认卡通路，实锚；零内核写入）。
+ *  批㊶-Q additive：perKeySources 可选——逐键来源覆盖（全自动档：agent 推荐键＝
+ *  default:agent-recommend:<简据>、改参键＝user-specified、其余＝default:harness-smart-defaults；
+ *  来源串均在内核 param_sources.py 既有文法内（user-specified／default:<依据>），闭集零扩展）。 */
 export const applyConfirmedToIterationConfig = (
   iterConfigPath: string,
   confirmed: Record<string, string>,
   source: string = "user-specified",
+  perKeySources?: Record<string, string>,
 ): { updated: string[] } | { error: string } => {
   if (!existsSync(iterConfigPath)) return { error: `iteration_config_missing:${iterConfigPath}` };
   try {
@@ -159,7 +163,7 @@ export const applyConfirmedToIterationConfig = (
     for (const [key, value] of Object.entries(confirmed)) {
       if (key in training || key in FIXED_SMART_DEFAULTS) {
         training[key] = value;
-        sources[key] = source;
+        sources[key] = perKeySources?.[key] ?? source;
         updated.push(key);
       }
     }
