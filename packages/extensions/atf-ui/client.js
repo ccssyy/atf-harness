@@ -294,14 +294,8 @@ window.__ModuleLoader__.load({
         var artRun = arts.runs.find(function(r) { return r.run_id === runId })
         runArtifacts = artRun ? artRun.artifacts : []
       }
-      // 批㊶-L L-4：运行时测量宿主顶栏实高让位（取不到回落 56px；测量失败静默）——
-      // 修复头部行被应用顶栏遮挡致 × 不可达。
-      var topOffset = 56
-      try {
-        var bar = document.querySelector('header') || document.querySelector('[class*="topbar"]') || document.querySelector('[class*="app-header"]')
-        if (bar && bar.offsetHeight > 0) topOffset = bar.offsetHeight + 4
-      } catch (e) { /* 静默回落 */ }
-      return React.createElement('div', { className: 'atf-monitor-panel', style: { top: topOffset } },
+      // 批㊶-M2 段 3：迁原生右栏 pane tab——壳样式交互随框架（fixed 壳已下线，L-4 遮挡自然消失）
+      return React.createElement('div', { className: 'atf-monitor-panel', style: { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', fontSize: 12 } },
         // 批㊶-M M-5：部署默认档低频信息降级至此（dock 徽章撤销——档位唯一出口＝原生选择器）
         React.createElement('div', { className: 'atf-monitor-head', title: '部署缺省 ' + (((typeof window !== 'undefined' && window.__ATF_UI_CONFIG__ && window.__ATF_UI_CONFIG__.permissionPreset) || {}).label || ((typeof window !== 'undefined' && window.__ATF_UI_CONFIG__ && window.__ATF_UI_CONFIG__.permissionPreset) || {}).key || '—') + '，会话内可经下方选择器切换' },
           React.createElement('b', null, '训练监控'),
@@ -314,11 +308,11 @@ window.__ModuleLoader__.load({
               : runs.map(function(r) { return React.createElement('option', { key: r.run_id, value: r.run_id }, r.run_id) })),
           React.createElement('button', {
             className: 'atf-pill' + (showAll ? ' atf-pill-on' : ''),
-            style: showAll ? { borderColor: '#1d4ed8', color: '#1d4ed8', fontWeight: 600 } : undefined,
+            style: showAll ? { borderColor: 'var(--dsw-alias-brand-primary,#1d4ed8)', color: 'var(--dsw-alias-brand-primary,#1d4ed8)', fontWeight: 600 } : undefined,
             title: showAll ? '全部实例（开——显示全量 run）' : '全部实例（关——只列本会话绑定 run）',
             onClick: function() { setShowAll(!showAll) },
           }, '全部'),
-          React.createElement('button', { className: 'atf-pill', title: '收起', onClick: function() { store.setMonitor(false) } }, '×')),
+          React.createElement('button', { className: 'atf-pill', title: '收起右栏 tab', onClick: function() { store.setMonitor(false) } }, '×')),
         // 批㊶-P P-2：探针告警行（error 红/warn 琥珀＋"重新发起"预填按钮——不自动代发）
         // 作用域：当前选中 run（选择器联动）——probe 面随 monitor.json 下发
         (function() {
@@ -356,16 +350,16 @@ window.__ModuleLoader__.load({
           ? React.createElement('div', { className: 'atf-monitor-empty' }, '（monitor 快照就绪中…）')
           : React.createElement('div', { className: 'atf-monitor-body' },
               React.createElement('div', { className: 'atf-monitor-status' },
-                React.createElement('span', { className: 'atf-gpu-dot', style: { background: active ? '#f59e0b' : '#16a34a' } }),
+                React.createElement('span', { className: 'atf-gpu-dot', style: { background: active ? 'var(--dsw-static-amber-500)' : 'var(--dsw-static-neutral-400)' } }),
                 React.createElement('span', null, (active ? '训练中 · ' : '空闲 · ') + '段 ' + done + '/' + run.segments.length)),
               React.createElement('div', { className: 'atf-monitor-sec' },
                 React.createElement('div', { className: 'atf-monitor-title' }, 'Loss 曲线'),
                 React.createElement('svg', { className: 'atf-monitor-chart', viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none' },
-                  trainPts ? React.createElement('polyline', { points: trainPts, fill: 'none', stroke: '#1d4ed8', strokeWidth: 1.5 }) : null,
-                  evalPts ? React.createElement('polyline', { points: evalPts, fill: 'none', stroke: '#94a3b8', strokeWidth: 1.5, strokeDasharray: '4 3' }) : null,
+                  trainPts ? React.createElement('polyline', { points: trainPts, fill: 'none', stroke: 'var(--dsw-alias-brand-primary,#1d4ed8)', strokeWidth: 1.5 }) : null,
+                  evalPts ? React.createElement('polyline', { points: evalPts, fill: 'none', stroke: 'var(--dsw-static-neutral-400,#94a3b8)', strokeWidth: 1.5, strokeDasharray: '4 3' }) : null,
                   mark ? React.createElement('circle', {
                     cx: mark.x, cy: mark.y, r: 3.5,
-                    fill: mark.isSpike ? '#dc2626' : '#1d4ed8', stroke: '#fff', strokeWidth: 1,
+                    fill: mark.isSpike ? 'var(--dsw-static-red-500)' : 'var(--dsw-alias-brand-primary,#1d4ed8)', stroke: 'var(--dsw-alias-bg-layer-1,#fff)', strokeWidth: 1,
                   }) : null,
                   trainVals.length >= 2 ? trainVals.map(function(v, idx) {
                     var mn2 = Math.min.apply(null, trainVals), mx2 = Math.max.apply(null, trainVals)
@@ -379,8 +373,8 @@ window.__ModuleLoader__.load({
                     })
                   }) : null),
                 React.createElement('div', { className: 'atf-monitor-legend' },
-                  React.createElement('span', null, React.createElement('span', { className: 'atf-sw', style: { background: '#1d4ed8' } }), 'train（' + trainVals.length + ' 点）'),
-                  React.createElement('span', null, React.createElement('span', { className: 'atf-sw atf-sw-dash', style: { background: evalPts ? '#94a3b8' : 'transparent' } }), evalVals.length >= 2 ? 'eval' : 'eval（本轮无 eval_loss 序列）')),
+                  React.createElement('span', null, React.createElement('span', { className: 'atf-sw', style: { background: 'var(--dsw-alias-brand-primary,#1d4ed8)' } }), 'train（' + trainVals.length + ' 点）'),
+                  React.createElement('span', null, React.createElement('span', { className: 'atf-sw atf-sw-dash', style: { background: evalPts ? 'var(--dsw-static-neutral-400,#94a3b8)' : 'transparent' } }), evalVals.length >= 2 ? 'eval' : 'eval（本轮无 eval_loss 序列）')),
                 mark ? React.createElement('div', { className: 'atf-monitor-spike' },
                   React.createElement('span', null, (mark.isSpike ? '突刺点' : '选中点') + '：' + (mark.step !== null ? 'step ' + mark.step + ' · ' : '') + 'loss ' + mark.loss),
                   (run && (run.viewers || []).length > 0)
@@ -970,7 +964,7 @@ window.__ModuleLoader__.load({
 
 
     return {
-      inject: ['slots', 'remote', 'remote.workspaceFiles'],
+      inject: ['slots', 'remote', 'remote.workspaceFiles', 'sidebarRightTabs', 'sidebarRight'],
       apply: function(ctx) {
         remoteFace = ctx.remote
 
@@ -988,7 +982,7 @@ window.__ModuleLoader__.load({
             '.atf-pill-row{display:flex;gap:8px;flex-wrap:wrap;padding:2px 0;}',
             '.atf-pill{border:0;background:rgba(128,128,128,.1);border-radius:8px;padding:4px 12px;cursor:pointer;font-size:13px;}',
             // 批㉛段1：viewer 直达入口＋浮层
-            '.atf-viewer-link{border:0;background:transparent;color:#1d4ed8;cursor:pointer;',
+            '.atf-viewer-link{border:0;background:transparent;color:var(--dsw-alias-brand-primary,#1d4ed8);cursor:pointer;',
             '  font-size:12px;padding:0;text-decoration:underline;text-underline-offset:2px;}',
             '.atf-viewer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;',
             '  display:flex;align-items:center;justify-content:center;}',
@@ -1011,13 +1005,13 @@ window.__ModuleLoader__.load({
             '.atf-train-row{display:grid;grid-template-columns:minmax(150px,auto) minmax(90px,auto) minmax(120px,auto) 1fr;gap:8px;padding:3px 0;border-bottom:1px dashed rgba(128,128,128,.15);}',
             '.atf-train-key{font-family:monospace;font-size:11px;}',
             '.atf-train-val{font-weight:600;}',
-            '.atf-train-src{color:#1d4ed8;font-size:11px;}',
+            '.atf-train-src{color:var(--dsw-alias-brand-primary,#1d4ed8);font-size:11px;}',
             '.atf-train-src-warn{color:#b45309;}',
             '.atf-train-mean{color:var(--dsh-text-secondary,#64748b);font-size:11px;}',
             '.atf-train-actions{display:flex;gap:10px;align-items:center;}',
             // 批㊶-M M-4：段状态跃迁呼吸（一次性动画——animation 属性由内联 pulseStyle 触发一次）
             '@keyframes atf-card-pulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}',
-            '.atf-train-send{background:#1d4ed8;color:#fff;}',
+            '.atf-train-send{background:var(--dsw-alias-brand-primary,#1d4ed8);color:#fff;}',
             // 批㉛段3.1：右栏训练监控抽屉
             '.atf-monitor-panel{position:fixed;right:0;bottom:0;width:360px;background:var(--dsh-bg,#fff);',
             '  border-left:1px solid rgba(128,128,128,.25);box-shadow:-8px 0 24px rgba(0,0,0,.12);z-index:900;',
@@ -1032,7 +1026,7 @@ window.__ModuleLoader__.load({
             '.atf-monitor-chart{width:100%;height:80px;border:1px dashed rgba(128,128,128,.25);border-radius:6px;background:rgba(128,128,128,.04);}',
             '.atf-monitor-legend{display:flex;gap:12px;font-size:10px;color:var(--dsh-text-secondary,#64748b);margin-top:4px;}',
             '.atf-sw{display:inline-block;width:12px;height:3px;vertical-align:middle;margin-right:4px;}',
-            '.atf-sw-dash{background-image:linear-gradient(90deg,#94a3b8 60%,transparent 40%);background-size:6px 3px;}',
+            '.atf-sw-dash{background-image:linear-gradient(90deg,var(--dsw-static-neutral-400,#94a3b8) 60%,transparent 40%);background-size:6px 3px;}',
             '.atf-monitor-sub{font-size:11px;color:var(--dsh-text-secondary,#64748b);margin-top:6px;}',
             '.atf-kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}',
             '.atf-kpi-card{border:1px solid rgba(128,128,128,.18);border-radius:8px;padding:6px 8px;}',
@@ -1094,6 +1088,27 @@ window.__ModuleLoader__.load({
 
         // 批㊶-K 项4 的 turnTail 训练进度卡已下线（批㊶-M 迁移至会话区右上悬浮任务卡——
         // FloatingTaskCard 在 dock 行组件处挂载；slot 不再占用）
+
+        // 批㊶-M2 段 3：监控面板迁 DSH 原生右栏 pane tab（sidebar.right.pane.tab——沿 ui-deliverables
+        // 同款挂法；sidebarRightTabs.register 声明 tab 类型＋slots 注册 tab body）。自绘 fixed 面板
+        // （MonitorPanel）下线——L-4 顶栏遮挡问题随迁移自然消失。曲线 SVG/hex 债项随迁 token 化。
+        ctx.effect(function() {
+          ctx.sidebarRightTabs.register({
+            id: '@atf/dsh-atf-ui',
+            kind: 'atf-training-monitor',
+            patterns: ['dsh-resource://atf-training-monitor/**'],
+            priority: 'builtin',
+            canOpen: function() { return true },
+            title: function() { return '训练监控' },
+          })
+        }, 'atf-ui: training-monitor tab type')
+        ctx.slots.inject('sidebar.right.pane.tab', function() {
+          return ctx.slots.register({
+            name: 'sidebar.right.pane.tab',
+            key: '@atf/dsh-atf-ui',
+            children: { 'atf.monitor.actions': { kind: 'list', scope: 'session' } },
+          }, function() { return React.createElement(MonitorBody) })
+        })
 
         // 通道 C：composer.dock（list 槽）——GPU 一行卡＋快捷指令胶囊＋viewer 浮层（输入框上方，会话内常显）
         ctx.slots.inject('conversation.composer.dock', function() {

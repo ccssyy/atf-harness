@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage } from "../../packages/extensions/atf-ui/src/snapshot.js";
-import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveTrainActiveWindowMs, resolveViewerRequest, scanEvalRounds, scanRunDir, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
+import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveTrainActiveWindowMs, resolveViewerRequest, scanEvalRounds, scanRunDir, looksLikeRun, RUN_MARKER_RELS, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
 import { TRAINING_TMUX_SESSION, tmuxHasSession } from "../../src/core/workspace/tmuxLiveness.js";
 
 const tempRoots: string[] = [];
@@ -598,6 +598,8 @@ describe("批㉝H GPU 多卡聚合（gpu_all 采集解析＋绑卡声明两态�
     mkdirSync(join(runDir, "launch"), { recursive: true });
     writeFileSync(join(runDir, "registration.json"), "{}");
     writeFileSync(join(runDir, "launch", "train.sh"), "export CUDA_VISIBLE_DEVICES=3\n");
+    // 批㊶-M2 段 2：run 特征过滤——夹具补 launch_manifest.json（特征锚之一）
+    writeFileSync(join(runDir, "launch", "launch_manifest.json"), "{}");
     const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
     await tickOnce({ runsRoot: root, intervalMs: 60_000 });
     const monitor = JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as {
@@ -765,5 +767,48 @@ describe("批㊶-L L-2 segments 补 evaluate 推导", () => {
     expect(scanRunDir(root, "run-ev").segments.evaluate).toBe(true);
     const root2 = tempRoot();
     expect(scanRunDir(root2, "run-noev").segments.evaluate).toBe(false);
+  });
+});
+
+describe("批㊶-M2 段 2 scanRuns 特征过滤（布局规范＋防御）", () => {
+  it("有特征收录：webui/ 或 training/ 或 eval/ 或 prep/ 或 launch_manifest.json 任一", () => {
+    for (const rel of ["webui/x.json", "training/loss.json", "eval/metrics_summary.json", "prep/iteration-config.json", "launch_manifest.json"]) {
+      const root = tempRoot();
+      const runDir = join(root, "run-f");
+      mkdirSync(join(runDir, rel, ".."), { recursive: true });
+      writeFileSync(join(runDir, rel), "{}");
+      expect(looksLikeRun(runDir), rel).toBe(true);
+    }
+    expect(RUN_MARKER_RELS.length).toBe(6); // 批㊶-O 补：launch/launch_manifest.json 路径锚
+  });
+  it("无特征忽略：atf-ui 输出面（monitor.json/artifacts.json/panel.html）与空目录不收录", () => {
+    const root = tempRoot();
+    const atfDir = join(root, "atf-ui");
+    mkdirSync(atfDir, { recursive: true });
+    writeFileSync(join(atfDir, "monitor.json"), "{}");
+    expect(looksLikeRun(atfDir)).toBe(false);
+    expect(looksLikeRun(join(root, "empty"))).toBe(false);
+  });
+  it("嵌套遗留形态不误判：runs/runs/<真 run> 外层无特征即忽略", () => {
+    const root = tempRoot();
+    const nested = join(root, "runs", "run-x");
+    mkdirSync(join(nested, "webui"), { recursive: true });
+    writeFileSync(join(nested, "webui", "binding.json"), "[]");
+    expect(looksLikeRun(join(root, "runs"))).toBe(false);
+    expect(looksLikeRun(nested)).toBe(true);
+  });
+  it("scanRunDir 集成：无特征目录不出现在扫描结果", () => {
+    const root = tempRoot();
+    const atfDir = join(root, "atf-ui");
+    mkdirSync(atfDir, { recursive: true });
+    writeFileSync(join(atfDir, "monitor.json"), "{}");
+    const runDir = join(root, "run-real");
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    writeFileSync(join(runDir, "webui", "binding.json"), "[]");
+    const scans = [scanRunDir(root, "atf-ui"), scanRunDir(root, "run-real")];
+    expect(scans[0]!.run_id).toBe("atf-ui");
+    expect(scans[1]!.run_id).toBe("run-real");
+    expect(scanRunDir(root, "atf-ui").segments).toBeDefined();
+    void scans;
   });
 });

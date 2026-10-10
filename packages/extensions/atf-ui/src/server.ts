@@ -683,11 +683,26 @@ export function discoverViewerDirs(runDir: string): string[] {
     .sort((a, b) => (stamp(b) - stamp(a)) || (a < b ? -1 : a > b ? 1 : 0));
 }
 
-/** 同步器周期内 run_id 清单（目录枚举一次——取证映射的目标集）。 */
+/** 批㊶-M2 段 2：run 特征判定（防御性——目录含特征之一才收录为 run）。
+ *  特征集＝launch_manifest.json／prep/／training/／webui/／eval/（防 atf-ui/default 等混入）。 */
+export const RUN_MARKER_RELS: readonly string[] = [
+  join("launch", "launch_manifest.json"),
+  "launch_manifest.json",
+  "prep",
+  "training",
+  "webui",
+  "eval",
+];
+
+export const looksLikeRun = (dir: string): boolean =>
+  RUN_MARKER_RELS.some((rel) => existsSync(join(dir, rel)));
+
+/** 同步器周期内 run_id 清单（目录枚举一次——取证映射的目标集；特征过滤后）。 */
 const resolvedRunIds = (runsRoot: string): string[] => {
   try {
     return readdirSync(runsRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && entry.name !== OUT_DIR)
+      .filter((entry) => looksLikeRun(join(runsRoot, entry.name)))
       .map((entry) => entry.name);
   } catch {
     return [];
@@ -700,6 +715,8 @@ function scanRuns(runsRoot: string, liveness?: ScanLiveness): RunScan[] {
   const runs: RunScan[] = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name === OUT_DIR) continue;
+    // 批㊶-M2 段 2：特征防御——无 run 特征目录忽略（atf-ui/default/嵌套遗留等不误判）
+    if (!looksLikeRun(join(root, entry.name))) continue;
     runs.push(scanRunDir(root, entry.name, liveness));
   }
   return runs;

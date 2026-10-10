@@ -14,6 +14,10 @@
 
 ## 守护纪律
 
+- **单树收敛（批㊶-M2）**：实例 env 须声明 `ATF_DSH_RUNS_ROOT=<workspace>/runs`——工具链写入/监控扫描/模型文件面三面同源；tmp 侧独立 runsRoot 布局已废弃。
+
+## 守护纪律
+
 - 产品资产零具体绝对路径：tests/dshTools/fileGuard.test.ts 静态守护（①）；
 - 派生集＝配置声明面：同文件守护（②）——白名单根由 src/agent/fileRoots.ts 从
   声明面（env 名镜像＋内核配置/env-profiles 声明）自动重建，附加集只走 env；
