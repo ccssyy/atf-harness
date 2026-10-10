@@ -504,11 +504,18 @@ export class WebUiSessionManager {
           });
       },
     };
+    // 装配 fail-closed（pi-ai 目录无模型等）收束为 Result.err——错误以 system_notice 进事件流，
+    // 不经消息入口的 void 调用点逃逸为 unhandled rejection（startupRace 退出码定性修复）。
+    const assembledProviderStreamFn =
+      this.deps.streamFn === undefined && this.deps.providerConfig !== undefined
+        ? this.tryAssembleProviderStreamFn(this.deps.providerConfig)
+        : undefined;
+    if (typeof assembledProviderStreamFn === "string") return err(assembledProviderStreamFn);
     const rawStreamFn =
       this.deps.streamFn !== undefined
         ? this.deps.streamFn
-        : this.deps.providerConfig !== undefined
-          ? createProviderStreamFn(this.deps.providerConfig).streamFn
+        : assembledProviderStreamFn !== undefined
+          ? assembledProviderStreamFn
           : (_model: never, _context: never, _options?: never): unknown =>
               // 无 GLM 配置（ATF_LLM_CONFIG 未设）：结构化降级响应（fail-closed 不装配真 provider）
               createFauxStreamFn([
@@ -686,6 +693,17 @@ export class WebUiSessionManager {
   /** streamFn 包装（运维面护栏·对话预算）：超限直接终止并人话呈现（"任务已终止并记录原因"，
    *  禁技术字样直出对话流）；解析护栏在 turn 结束面统计（见 runAgentTurn）——事件流是库内
    *  队列，push 拦截点晚于入队，不可靠。 */
+  /** provider streamFn 装配（fail-closed 收束：目录无模型等装配错误以文案返回，调用点转 err）。 */
+  private tryAssembleProviderStreamFn(
+    config: NonNullable<SessionManagerDeps["providerConfig"]>,
+  ): ReturnType<typeof createProviderStreamFn>["streamFn"] | string {
+    try {
+      return createProviderStreamFn(config).streamFn;
+    } catch (error) {
+      return `provider streamFn 装配失败（fail-closed）: ${(error as Error).message}`;
+    }
+  }
+
   private guardStreamFn(session: Session, inner: (model: never, context: never, options?: never) => unknown): (model: never, context: never, options?: never) => unknown {
     return (model: never, context: never, options?: never) => {
       session.modelCalls += 1;
