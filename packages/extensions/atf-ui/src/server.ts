@@ -26,6 +26,8 @@ import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/wo
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readTrainerLogTail, buildProgressFromTrainerLog, readNumTrainEpochs, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
+import { bucketedRunEntries, flatRunDirNames, resolveRunDir, sweepAnsweredPendings } from "../../../../src/core/workspace/runLayout.js";
+import { checkApprovalLedgerStartup, ledgerEnvPrefixForShell } from "../../../../src/core/workspace/approvalLedger.js";
 import { readAlerts } from "../../../../src/core/workspace/trainProbe.js";
 
 /** Cordis 插件名。 */
@@ -95,6 +97,8 @@ export const bridgeBadgeSurface = (env: Readonly<Record<string, string | undefin
 
 export interface RunScan {
   run_id: string;
+  /** 批㊶Q增补三 段3：工作区桶名（分桶形态＝桶名；平铺存量/系统级＝null——additive）。 */
+  workspace: string | null;
   state: string;
   artifacts: string[];
   segments: Record<string, boolean | string>;
@@ -456,8 +460,10 @@ const trainingActiveLive = (dir: string, runId: string, liveness: ScanLiveness |
   return lossSeriesFresh(dir, liveness);
 };
 
-export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness): RunScan {
-  const dir = join(root, runId);
+/** 单 run 目录扫描（root＋runId 双形态兼容：分桶调用方传 dirname(runDir) 作 root 或以
+ *  workspace 段拼接——dir 单点推导于此）。workspace 为投影标注（批㊶Q增补三 段3 additive）。 */
+export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness, workspace: string | null = null): RunScan {
+  const dir = workspace !== null ? join(root, workspace, runId) : join(root, runId);
   const has = (rel: string): boolean => existsSync(join(dir, rel));
   // 批㊶-M M-3：段事实轨优先（webui/segments.json 有记录的段直接 done），启发式锚降级兜底
   const segmentDone = (segment: string, heuristicFallback: boolean): boolean =>
@@ -501,6 +507,8 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness)
   const probe = probeAlerts.length > 0 ? probeAlerts[probeAlerts.length - 1]! : null;
   return {
     run_id: runId,
+    // 批㊶Q增补三 段3：工作区归属标注（additive——分桶＝桶名，平铺/系统级＝null）
+    workspace,
     state: has("webui/config-snapshot.json")
       ? "config_confirmed"
       : has("launch/train.sh")
@@ -704,27 +712,36 @@ export const RUN_MARKER_RELS: readonly string[] = [
 export const looksLikeRun = (dir: string): boolean =>
   RUN_MARKER_RELS.some((rel) => existsSync(join(dir, rel)));
 
-/** 同步器周期内 run_id 清单（目录枚举一次——取证映射的目标集；特征过滤后）。 */
+/** 同步器周期内 run_id 清单（目录枚举一次——取证映射的目标集；特征过滤后。
+ *  批㊶Q增补三 段3：平铺＋分桶双形态并集，run_id 恒为裸名）。 */
 const resolvedRunIds = (runsRoot: string): string[] => {
-  try {
-    return readdirSync(runsRoot, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && entry.name !== OUT_DIR)
-      .filter((entry) => looksLikeRun(join(runsRoot, entry.name)))
-      .map((entry) => entry.name);
-  } catch {
-    return [];
+  const ids: string[] = [];
+  for (const name of flatRunDirNames(runsRoot)) {
+    if (name === OUT_DIR) continue;
+    if (looksLikeRun(join(runsRoot, name))) ids.push(name);
   }
+  for (const entry of bucketedRunEntries(runsRoot)) {
+    if (entry.workspace === OUT_DIR || entry.runId === OUT_DIR) continue;
+    if (looksLikeRun(entry.dir)) ids.push(entry.runId);
+  }
+  return ids;
 };
 
+/** 批㊶Q增补三 段3：runsRoot 双层扫描（平铺存量原地保留＋分桶新形态并存——向后兼容）。 */
 function scanRuns(runsRoot: string, liveness?: ScanLiveness): RunScan[] {
   const root = join(runsRoot);
   if (!existsSync(root)) return [];
   const runs: RunScan[] = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name === OUT_DIR) continue;
+  for (const name of flatRunDirNames(root)) {
+    if (name === OUT_DIR) continue;
     // 批㊶-M2 段 2：特征防御——无 run 特征目录忽略（atf-ui/default/嵌套遗留等不误判）
-    if (!looksLikeRun(join(root, entry.name))) continue;
-    runs.push(scanRunDir(root, entry.name, liveness));
+    if (!looksLikeRun(join(root, name))) continue;
+    runs.push(scanRunDir(root, name, liveness, null));
+  }
+  for (const entry of bucketedRunEntries(root)) {
+    if (entry.workspace === OUT_DIR || entry.runId === OUT_DIR) continue;
+    if (!looksLikeRun(entry.dir)) continue;
+    runs.push(scanRunDir(root, entry.runId, liveness, entry.workspace));
   }
   return runs;
 }
@@ -738,6 +755,8 @@ function scanRuns(runsRoot: string, liveness?: ScanLiveness): RunScan[] {
 export const viewerRouteHandler = (deps: {
   runsRoot: string;
   viewersOf: (runId: string) => string[];
+  /** 批㊶Q增补三 段3：run 目录双形态解析（缺省平铺拼接——分桶实例由宿主传 resolveRunDir）。 */
+  runDirOf?: (runId: string) => string;
   reject?: (req: IncomingMessage) => 401 | 403 | undefined;
 }) =>
 (req: IncomingMessage, res: ServerResponse): void => {
@@ -771,7 +790,7 @@ export const viewerRouteHandler = (deps: {
     res.end();
     return;
   }
-  const resolved = resolveViewerRequest(deps.runsRoot, pathname, deps.viewersOf(parts[0]!));
+  const resolved = resolveViewerRequest(deps.runsRoot, pathname, deps.viewersOf(parts[0]!), deps.runDirOf);
   if (resolved === null) {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     res.end("not found\n");
@@ -818,11 +837,17 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
       trainingLogsFresh: trainingLogsFreshAt(resolved.runsRoot, resolveTrainActiveWindowMs(process.env)),
       freshWindowMs: resolveTrainActiveWindowMs(process.env),
     });
+    // 批㊶Q增补三 段4.2：pending-confirm 存量清理扫描（确认/放行完成即删，含存量——
+    // 完成证据判据 fail-open；等待中的卡不动。cr_r2 09:36 确认后残留 8h＋实证）
+    try {
+      sweepAnsweredPendings(resolved.runsRoot);
+    } catch { /* 清理扫描异常不阻断同步器 */ }
     // 批㊶-P P-2：训练探针（per-run——active run 才判定；告警落 alerts.json＋monitor probe 面见 snapshot 组装）
     try {
       for (const run of runs) {
         if (!run.training.active) continue;
-        const runDir = join(resolved.runsRoot, run.run_id);
+        // 批㊶Q增补三 段3：run 实际目录（分桶/平铺按 scan 标注推导）
+        const runDir = run.workspace !== null ? join(resolved.runsRoot, run.workspace, run.run_id) : join(resolved.runsRoot, run.run_id);
         // 批㊶Q增补二1：progress 持续写链——训练运行中随 trainer_log 步进刷新 progress.json
         // （节流 ≥30s/次防刷盘；epoch 语义轮次＋percentage additive）。P 批断点修复：
         // progress 原仅 status 查询时写（低频），浮卡进度与探针活跃判据双双失真。
@@ -870,6 +895,8 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
               runId: run.run_id,
               logDir: process.env["ATF_DSH_LOG_DIR"] ?? join(runDir, "training-logs"),
               alert: { level: alert.level, kind: alert.kind, reason: alert.reason, since: alert.since },
+              // 批㊶Q增补三 段1：重发命令账本 env 同款显式注入（与 atf_run_training start 同源）
+              ledgerEnvPrefix: ledgerEnvPrefixForShell(process.env),
               now: () => new Date(),
               log: (line) => console.log(line),
               ...nodeOomFallbackIo,
@@ -964,6 +991,7 @@ export const resolveViewerRequest = (
   runsRoot: string,
   pathname: string,
   viewers: string[],
+  runDirOf: (runId: string) => string = (runId) => join(runsRoot, runId),
 ): { abs: string; type: string } | null => {
   const rest = pathname.slice(VIEWER_ROUTE_PREFIX.length);
   const parts = rest.split("/").filter((p) => p !== "");
@@ -983,7 +1011,7 @@ export const resolveViewerRequest = (
   for (const seg of sub) {
     if (!SEG_RE.test(seg)) return null;
   }
-  const viewerRoot = resolve(join(runsRoot, runId, analysis, "viewer"));
+  const viewerRoot = resolve(join(runDirOf(runId), analysis, "viewer"));
   const abs = resolve(join(viewerRoot, ...sub));
   if (abs !== viewerRoot && !abs.startsWith(viewerRoot + sep)) return null;
   const last = sub[sub.length - 1]!;
@@ -1012,6 +1040,16 @@ export function apply(
 ): void {
   const resolved = resolveConfig(config);
   console.log(`[atf-ui] 同步器启动（runsRoot=${resolved.runsRoot}，interval=${String(resolved.intervalMs)}ms）`);
+  // 批㊶Q增补三 段1②：放行账本启动校验（WebUI 侧告警面——env×$HOME 双路径明示；
+  // fail-fast 裁决在 atf-tools 写入侧，本面只告警不阻断监控同步器）
+  const ledgerCheck = checkApprovalLedgerStartup(process.env);
+  if (!ledgerCheck.dirWritable) {
+    console.error(`[atf-ui] ⚠ 放行账本目录不可写（atf-tools 侧已 fail-fast）：${ledgerCheck.message}`);
+  } else if (ledgerCheck.mismatch) {
+    console.warn(`[atf-ui] ⚠ ${ledgerCheck.message}`);
+  } else {
+    console.log(`[atf-ui] ${ledgerCheck.message}`);
+  }
   // 批㊶-E-H 项 2.3：桥徽标注入面（与 atf-tools 装配单源同 env 推导；boot 日志一行桥类型）
   const bridge = bridgeBadgeSurface(process.env, repoRoot);
   // 批㊶-K 项 3：部署默认权限档注入（GpuCard 徽标数据源——会话现值由宿主头部指示器与
@@ -1043,15 +1081,17 @@ export function apply(
     // 裸挂载面跳过不开口——tapIndex-only 消费方零变化）
     const connection = ctx.connection;
     if (connection !== undefined && webServer.register !== undefined) {
-      const disposeRoute = webServer.register({
-        kind: "prefix",
-        path: VIEWER_ROUTE_PREFIX,
-        handler: viewerRouteHandler({
-          runsRoot: resolved.runsRoot,
-          viewersOf: (runId) => discoverViewerDirs(join(resolved.runsRoot, runId)),
-          reject: (req) => connection.requestRejection(req),
-        }),
-      });
+        const disposeRoute = webServer.register({
+          kind: "prefix",
+          path: VIEWER_ROUTE_PREFIX,
+          handler: viewerRouteHandler({
+            runsRoot: resolved.runsRoot,
+            // 批㊶Q增补三 段3：viewer 目录发现走双形态解析（平铺存量＋分桶新形态）
+            viewersOf: (runId) => discoverViewerDirs(resolveRunDir(resolved.runsRoot, runId)),
+            runDirOf: (runId) => resolveRunDir(resolved.runsRoot, runId),
+            reject: (req) => connection.requestRejection(req),
+          }),
+        });
       ctx.effect(() => disposeRoute, "atf-ui: viewer 静态路由");
       console.log(`[atf-ui] viewer 静态路由已注册（${VIEWER_ROUTE_PREFIX}/<runId>/）`);
     }

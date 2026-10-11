@@ -36,6 +36,7 @@ import {
   applyConfirmedToIterationConfig,
 } from "../../../../src/core/workspace/smartDefaults.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
+import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
 
 /** 批㊶-N N-5：会话身份提取（exec.agent.session.id；取不到＝undefined 如实跳过）。 */
 const sessionIdOfExec = (exec: unknown): string | undefined => {
@@ -65,26 +66,27 @@ interface ConfirmDeps {
   ctx: { get(service: string): unknown };
 }
 
-/** pending 卡落盘（刷新重建源：runs/<run>/webui/pending-confirm.json）。 */
-const writePending = (runsRoot: string, runId: string, payload: Record<string, unknown>): void => {
-  const dir = join(runsRoot, runId, "webui");
+/** pending 卡落盘（刷新重建源：<runDir>/webui/pending-confirm.json——runDir 双形态解析归调用方）。 */
+const writePending = (runDir: string, payload: Record<string, unknown>): void => {
+  const dir = join(runDir, "webui");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "pending-confirm.json"), `${JSON.stringify(payload, null, 1)}\n`, "utf8");
 };
 
 /** 批㊶Q增补二3：pending 卡清理（确认/放行完成后——备份先行改名 .answered.<毫秒戳>.json，
  *  审计留存；文件缺席/改名失败静默 fail-open）。残留实证：P 批 run-regress-large-pl 确认
- *  完成后卡文件留存 8h＋，UI 持续渲染待确认态。 */
-const clearPending = (runsRoot: string, runId: string): void => {
+ *  完成后卡文件留存 8h＋，UI 持续渲染待确认态。批㊶Q增补三段4.2：存量残留在同步器侧
+ *  sweepAnsweredPendings 兜底（完成证据判据），本函数只管本 run 完成即清。 */
+const clearPending = (runDir: string): void => {
   try {
-    const path = join(runsRoot, runId, "webui", "pending-confirm.json");
+    const path = join(runDir, "webui", "pending-confirm.json");
     if (!existsSync(path)) return;
     renameSync(path, `${path}.answered.${Date.now()}.json`);
   } catch { /* fail-open */ }
 };
 
 export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
-  const { runsRoot, ctx } = deps;
+  const { ctx } = deps;
 
   const configTool = defineTool({
     name: "atf_config_confirm",
@@ -111,7 +113,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       }
     },
     async execute(args: { action: "present" | "amend"; run_id: string; overrides?: Record<string, unknown>; amend_text?: string; recommend?: Record<string, unknown> }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
-      const runDir = join(runsRoot, args.run_id);
+      // 批㊶Q增补三 段3：run 目录双形态解析（新建带发起会话工作区归属——runs/<工作区>/<run_id>）
+      const runDir = resolveRunDir(deps.runsRoot, args.run_id, { workspace: sessionWorkspaceSlug(exec) });
       // 现值基线：已确认快照（不重问）→ run 的 IterationConfig 实值（批㉛段2：登记源，确认卡
       // 与 Web 摘要同源——deepspeed 等实值不再落回泛化缺省）→ pending 卡现值 → 缺省
       const snapshotPath = join(runDir, "webui", "config-snapshot.json");
@@ -268,16 +271,16 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         appendNotification(runDir, { level: "info", kind: "config_auto", reason: notification, since: new Date().toISOString() });
         saveConfigSnapshot(runDir, confirmed, { auto: true, tier: AUTO_TRAINING_PRESET, sources });
         // 批㊶Q增补二3：自动档同样确认完成——历史残留 pending 卡（如手动卡后切档）一并清理
-        clearPending(runsRoot, args.run_id);
+        clearPending(runDir);
         const iterConfigLiveAuto = join(runDir, "prep", "iteration-config.json");
         const iterConfigLegacyAuto = join(runDir, "prep", "iteration-config", "iteration-config.json");
         for (const candidate of [iterConfigLiveAuto, iterConfigLegacyAuto]) {
           const patched = applyConfirmedToIterationConfig(candidate, confirmed, "default:harness-smart-defaults", sources);
           void patched;
         }
-        appendSegmentFact(join(deps.runsRoot, args.run_id), "experiment_config", "atf_config_confirm");
+        appendSegmentFact(runDir, "experiment_config", "atf_config_confirm");
         const sessionIdAuto = sessionIdOfExec(exec);
-        if (sessionIdAuto !== undefined) appendBinding(join(deps.runsRoot, args.run_id), sessionIdAuto);
+        if (sessionIdAuto !== undefined) appendBinding(runDir, sessionIdAuto);
         return asToolValue({
           ok: true,
           run_id: args.run_id,
@@ -297,7 +300,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         return asToolValue({ ok: false, run_id: args.run_id, note: "recommend 为全自动训练档专属（当前会话为权限档）——手动档请用 overrides/pure 文字 amend；档位切换须经界面人工操作" });
       }
       // pending 卡落盘（ui-atf-confirm / 刷新重建的同源数据）
-      writePending(runsRoot, args.run_id, { kind: "config_confirm", run_id: args.run_id, title, fields, note, at: new Date().toISOString() });
+      writePending(runDir, { kind: "config_confirm", run_id: args.run_id, title, fields, note, at: new Date().toISOString() });
       // 审批面板主体＝九要素多行（ATF 格式三态标记）
       const verdict = await requestApproval(ctx, exec, "atf_config_confirm", `${title}\n${renderFields(fields)}\n${note}`);
       if (!verdict.ok) {
@@ -308,7 +311,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       for (const field of fields) confirmed[field.key] = field.value;
       saveConfigSnapshot(runDir, confirmed);
       // 批㊶Q增补二3：确认完成即清 pending 卡（备份改名 .answered——残留则 UI 持续渲染待确认态）
-      clearPending(runsRoot, args.run_id);
+      clearPending(runDir);
       // 批㊶-P P-1a：确认快照回写 iteration-config training 段＋param_sources 标注
       // （harness 侧生成物后处理——内核 generate_iteration_config 无确认卡通路[实锚]；
       //  prelaunch 报告"无确认记录"由此消除，链路级修正）。写失败静默（fail-open）。
@@ -319,10 +322,10 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         void patched;
       }
       // 批㊶-M M-3 段事实轨：实验配置确认成功即登记（experiment_config 段）
-      appendSegmentFact(join(deps.runsRoot, args.run_id), "experiment_config", "atf_config_confirm");
+      appendSegmentFact(runDir, "experiment_config", "atf_config_confirm");
       // 批㊶-N N-5：会话绑定
       const sessionIdCfg = sessionIdOfExec(exec);
-      if (sessionIdCfg !== undefined) appendBinding(join(deps.runsRoot, args.run_id), sessionIdCfg);
+      if (sessionIdCfg !== undefined) appendBinding(runDir, sessionIdCfg);
       return asToolValue({ ok: true, run_id: args.run_id, confirmed: true, fields, snapshot: "webui/config-snapshot.json", ...(amendNote !== undefined ? { amend: amendNote } : {}) });
     },
   });
@@ -340,7 +343,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
     async execute(args: { run_id: string; digest?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
-      const candidatePath = join(runsRoot, args.run_id, "contract-candidate.json");
+      // 批㊶Q增补三 段3：run 目录双形态解析（同 configTool）
+      const runDir = resolveRunDir(deps.runsRoot, args.run_id, { workspace: sessionWorkspaceSlug(exec) });
+      const candidatePath = join(runDir, "contract-candidate.json");
       let candidateDigest = args.digest;
       if (candidateDigest === undefined && existsSync(candidatePath)) {
         try {
@@ -355,16 +360,16 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       }
       const title = `发布确认（digest 凭据）— run ${args.run_id}`;
       const body = `  artifact: contract-candidate.json\n  digest: ${candidateDigest}`;
-      writePending(runsRoot, args.run_id, { kind: "publish_confirm", run_id: args.run_id, title, digest: candidateDigest, at: new Date().toISOString() });
+      writePending(runDir, { kind: "publish_confirm", run_id: args.run_id, title, digest: candidateDigest, at: new Date().toISOString() });
       const verdict = await requestApproval(ctx, exec, "atf_publish_confirm", `${title}\n${body}\n确认发布请点 Allow once。`);
       if (!verdict.ok) return approvalDeniedResult("atf_publish_confirm", verdict.outcome);
       // 批㊶Q增补二3：放行完成即清 pending 卡（同确认卡语义）
-      clearPending(runsRoot, args.run_id);
+      clearPending(runDir);
       // 批㊶-M M-3 段事实轨：契约发布确认成功即登记（publish 段）
-      appendSegmentFact(join(deps.runsRoot, args.run_id), "publish", "atf_publish_confirm");
+      appendSegmentFact(runDir, "publish", "atf_publish_confirm");
       // 批㊶-N N-5：会话绑定
       const sessionIdPub = sessionIdOfExec(exec);
-      if (sessionIdPub !== undefined) appendBinding(join(deps.runsRoot, args.run_id), sessionIdPub);
+      if (sessionIdPub !== undefined) appendBinding(runDir, sessionIdPub);
       return asToolValue({ ok: true, run_id: args.run_id, confirmed: true, digest: candidateDigest, artifact: "contract-candidate.json" });
     },
   });

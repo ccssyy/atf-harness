@@ -88,6 +88,8 @@ export interface OomFallbackDeps {
   rotateLog: (logPath: string) => void;
   /** loss 进料重启（同步器进程内 tail 循环）。 */
   startIngest: (logPath: string, seriesPath: string) => void;
+  /** 批㊶Q增补三 段1：tmux 命令账本 env 前缀（旧 tmux 服务端不传播新变量——检查器同源注入；空串＝沿缺省式）。 */
+  ledgerEnvPrefix?: string;
 }
 
 export interface OomFallbackOutcome {
@@ -174,7 +176,9 @@ export const maybeAutoOomFallback = async (deps: OomFallbackDeps): Promise<OomFa
     deps.rotateLog(logPath);
   } catch { /* 轮转失败不阻断重发（tee -a 追加语义兜底） */ }
   deps.tmux(`tmux kill-session -t atf-training-run 2>/dev/null`);
-  deps.tmux(`tmux new-session -d -s atf-training-run "bash ${fallbackScript} 2>&1 | tee -a ${logPath}"`);
+  // 批㊶Q增补三 段1：与 atf_run_training start 同款账本 env 显式前缀（写入方/检查器同源——缺省空串）
+  const ledgerPrefix = deps.ledgerEnvPrefix ?? "";
+  deps.tmux(`tmux new-session -d -s atf-training-run "${ledgerPrefix}bash ${fallbackScript} 2>&1 | tee -a ${logPath}"`);
   deps.startIngest(logPath, join(runDir, "training", "loss-series.json"));
   writeState({ status: "relaunched", bs: 1, accum: fallback.accum, global_batch: fallback.globalBatch, fallback_script: "launch/train-oom-fallback.sh", origin_alert_since: alert.since });
   deps.log(`[atf-ui] OOM 自动降档重发：run ${runId} bs ${params.bs}→1 accum ${params.accum}→${fallback.accum}（gb 256 不变）`);

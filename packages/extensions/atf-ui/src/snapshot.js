@@ -51,6 +51,9 @@ export function buildMonitorSnapshot(runs, gpu, gpuAll) {
     gpu_all: Array.isArray(gpuAll) ? gpuAll : [],
     runs: runs.map((run) => ({
       run_id: run.run_id,
+      // 批㊶Q增补三 段3：工作区桶标注（additive——分桶＝桶名，平铺存量/系统级＝null；
+      // client 作用域过滤［本会话绑定 ∪ 同工作区桶］的数据源之一）
+      workspace: run.workspace ?? null,
       state: run.state ?? "unknown",
       segments: SEGMENTS.map(({ key, label }) => ({ key, label, status: segmentStatus(run, key) })),
       // 批㉛段1：badcase viewer 产物发现（scanRunDir 两形态兼容推导，空数组＝无挂载面）
@@ -124,6 +127,8 @@ export function buildArtifactsSnapshot(runs) {
     generated_at: new Date().toISOString(),
     runs: runs.map((run) => ({
       run_id: run.run_id,
+      // 批㊶Q增补三 段3：分桶 run 的产物路径带桶前缀（runsRoot 相对路径如实）
+      path_prefix: run.workspace ? `${run.workspace}/` : "",
       artifacts: deriveArtifacts(run),
     })),
   };
@@ -132,29 +137,32 @@ export function buildArtifactsSnapshot(runs) {
 function deriveArtifacts(run) {
   const rows = [];
   const has = (rel) => (run.artifacts ?? []).includes(rel) || run.report?.files?.some((f) => rel.includes(f));
-  if (has("session.jsonl")) rows.push({ name: "登记件 session.jsonl", path: `${run.run_id}/session.jsonl`, kind: "jsonl" });
-  if (has("contract-candidate.json")) rows.push({ name: "契约件（含 digest）", path: `${run.run_id}/contract-candidate.json`, kind: "json" });
-  if (run.segments?.split === true) rows.push({ name: "切分清单", path: `${run.run_id}/dataset`, kind: "dir" });
-  if (has("launch/train.sh")) rows.push({ name: "train.sh", path: `${run.run_id}/launch/train.sh`, kind: "sh" });
-  if (has("launch/launch_manifest.json")) rows.push({ name: "launch manifest（sha 索引）", path: `${run.run_id}/launch/launch_manifest.json`, kind: "json" });
+  // 批㊶Q增补三 段3：分桶 run 产物路径＝<workspace>/<run_id>/…（runsRoot 相对；平铺＝<run_id>/…）
+  const pre = run.workspace ? `${run.workspace}/` : "";
+  const rid = `${pre}${run.run_id}`;
+  if (has("session.jsonl")) rows.push({ name: "登记件 session.jsonl", path: `${rid}/session.jsonl`, kind: "jsonl" });
+  if (has("contract-candidate.json")) rows.push({ name: "契约件（含 digest）", path: `${rid}/contract-candidate.json`, kind: "json" });
+  if (run.segments?.split === true) rows.push({ name: "切分清单", path: `${rid}/dataset`, kind: "dir" });
+  if (has("launch/train.sh")) rows.push({ name: "train.sh", path: `${rid}/launch/train.sh`, kind: "sh" });
+  if (has("launch/launch_manifest.json")) rows.push({ name: "launch manifest（sha 索引）", path: `${rid}/launch/launch_manifest.json`, kind: "json" });
   // 批㉛段3.3：评估产物面（最新轮四件套——按轮目录索引，不重复罗列历史轮）
   const round = run.metrics?.round;
   if (round !== undefined && round !== "latest") {
-    rows.push({ name: `eval metrics_summary（${round}）`, path: `${run.run_id}/eval/${round}/orch/eval/metrics_summary.json`, kind: "json" });
+    rows.push({ name: `eval metrics_summary（${round}）`, path: `${rid}/eval/${round}/orch/eval/metrics_summary.json`, kind: "json" });
   } else if (has("eval/metrics_summary.json")) {
-    rows.push({ name: "eval metrics_summary", path: `${run.run_id}/eval/metrics_summary.json`, kind: "json" });
+    rows.push({ name: "eval metrics_summary", path: `${rid}/eval/metrics_summary.json`, kind: "json" });
   }
-  if (has("eval/badcases.jsonl")) rows.push({ name: "eval badcases.jsonl", path: `${run.run_id}/eval/badcases.jsonl`, kind: "jsonl" });
-  if (has("eval/raw_predictions.jsonl")) rows.push({ name: "eval raw_predictions.jsonl", path: `${run.run_id}/eval/raw_predictions.jsonl`, kind: "jsonl" });
-  if (has("eval/indexes.csv")) rows.push({ name: "eval indexes.csv", path: `${run.run_id}/eval/indexes.csv`, kind: "csv" });
+  if (has("eval/badcases.jsonl")) rows.push({ name: "eval badcases.jsonl", path: `${rid}/eval/badcases.jsonl`, kind: "jsonl" });
+  if (has("eval/raw_predictions.jsonl")) rows.push({ name: "eval raw_predictions.jsonl", path: `${rid}/eval/raw_predictions.jsonl`, kind: "jsonl" });
+  if (has("eval/indexes.csv")) rows.push({ name: "eval indexes.csv", path: `${rid}/eval/indexes.csv`, kind: "csv" });
   // 批㉛段1：viewer 产物行（按 manifest 式发现清单入列，不重复罗列——每变体一行指向 viewer.html）
   for (const dir of run.viewers ?? []) {
-    rows.push({ name: `badcase viewer（${dir}）`, path: `${run.run_id}/${dir}/viewer/viewer.html`, kind: "html" });
+    rows.push({ name: `badcase viewer（${dir}）`, path: `${rid}/${dir}/viewer/viewer.html`, kind: "html" });
   }
   for (const file of run.report?.files ?? []) {
     const kind = file.endsWith(".md") ? "md" : "json";
     const label = file === "report.md" ? "report.md（界面同源声明）" : file.startsWith("segment-") ? `分段报告 ${file}` : file;
-    rows.push({ name: label, path: `${run.run_id}/report/${file}`, kind });
+    rows.push({ name: label, path: `${rid}/report/${file}`, kind });
   }
   return rows;
 }

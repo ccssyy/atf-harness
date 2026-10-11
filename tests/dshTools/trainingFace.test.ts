@@ -28,6 +28,8 @@ import {
 const repoRoot = "/data/sam/ATF-Harness";
 // 批㊶-K：GPU 排队编排直启旁路（测试不等待真实 GPU 窗口）
 process.env["ATF_GPU_POLL_MS"] = "0";
+// 批㊶Q增补三 段2：start 探活窗口 3s（长驻夹具 feed→settle 2s 全程 ≤3s；秒退夹具首轮即判 dead）
+process.env["ATF_TRAIN_STARTUP_PROBE_MS"] = "3000";
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
   const root = mkdtempSync(join(tmpdir(), "m2dot75-test-"));
@@ -51,6 +53,16 @@ const writeMockTrainSh = (root: string, admissionPass = true, masterPort = 39_00
     ? `#!/bin/bash\n${portLine}echo 'SHA=pass entries=1'\necho 'ADMISSION=pass keys=1'\nexit 0\n`
     : "#!/bin/bash\necho 'admission broken'\nexit 1\n");
   // 段4 起 start 链带 prelaunch 在场检查——缺省夹具默认在场（缺失场景由用例显式删除）
+  writeFileSync(join(root, "prelaunch-report.md"), "# 训练前报告\n");
+  return path;
+};
+
+/** 长驻 mock train.sh（批㊶Q增补三 段2）：进料行（SHA/ADMISSION pass）后 sleep 保活——
+ *  探活 feed_ok 路径夹具；tmux 会话由测试尾声 kill（见各用例 finally）。 */
+const writeLongRunningTrainSh = (root: string, masterPort = 39_001): string => {
+  const path = join(root, "train.sh");
+  // DRY_RUN=1 校验步即退（runCapture 60s 超时面）；真跑形态进料行＋sleep 20 保活供探活
+  writeFileSync(path, `#!/bin/bash\nexport MASTER_PORT=\${MASTER_PORT:-${masterPort}}\necho 'SHA=pass entries=1'\necho 'ADMISSION=pass keys=1'\nif [ "\${DRY_RUN:-0}" = "1" ]; then exit 0; fi\nsleep 20\n`);
   writeFileSync(join(root, "prelaunch-report.md"), "# 训练前报告\n");
   return path;
 };
@@ -99,11 +111,15 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
 
   it("start：prelaunch 报告在场（显式路径或 train.sh 同目录 prelaunch*）→ 通过在场检查继续后续链", async () => {
     const root = tempRoot();
-    const trainSh = writeMockTrainSh(root, true); // 夹具自带 prelaunch-report.md（在场）
+    const trainSh = writeLongRunningTrainSh(root); // 夹具自带 prelaunch-report.md（在场）；长驻供探活 feed_ok
     const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
-    const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
-    expect(result.started).toBe(true); // 在场检查过后走完端口预检＋danger 放行
-    expect(await probePortOccupant(39_001)).toBeNull(); // mock 秒退后端口归零
+    try {
+      const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
+      expect(result.started).toBe(true); // 在场检查过后走完端口预检＋danger 放行＋探活
+      expect(String(result.note)).toContain("探活");
+    } finally {
+      try { execSync("tmux kill-session -t atf-training-run 2>/dev/null"); } catch { /* 已退出 */ }
+    }
   });
 
   it("findPrelaunchReport：prelaunch*.md/json 命中，其他文件不命中", () => {
@@ -126,12 +142,28 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
       return;
     }
     const root = tempRoot();
-    const trainSh = writeMockTrainSh(root, true);
+    const trainSh = writeLongRunningTrainSh(root);
+    const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
+    try {
+      const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
+      expect(result.started).toBe(true);
+      expect(result.tmux).toBe("atf-training-run");
+      // 批㊶Q增补三 段2：note 与实况一致——feed_ok 注明探活已确认进料
+      expect(String(result.note)).toContain("探活已确认进料");
+      expect((result.probe as Record<string, unknown>).outcome).toBe("feed_ok");
+    } finally {
+      try { execSync("tmux kill-session -t atf-training-run 2>/dev/null"); } catch { /* 已退出 */ }
+    }
+  });
+
+  it("start：秒退脚本 → 探活判 dead → started:false＋startup_failed（段2 终结 started:true 假成功——VERIFY 3 构造）", async () => {
+    const root = tempRoot();
+    const trainSh = writeMockTrainSh(root, true); // 秒退（exit 0 但进程退出）
     const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
     const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
-    expect(result.started).toBe(true);
-    expect(result.tmux).toBe("atf-training-run");
-    expect(String(result.note)).toContain("status");
+    expect(result.started).toBe(false);
+    expect(result.error).toBe("startup_failed");
+    expect(String(result.note)).toContain("训练未启动成功");
   });
 
   it("status：ckpt 枚举＋loss 点数（runs/<id>/training 布局）", async () => {
@@ -565,7 +597,7 @@ describe("批⑳dot3 修复 3——训练启动端口预检（撞前知道）", 
     // 批㊶Q增补二防护：本用例全链含 tmux kill-session atf-training-run——真训练在场即 skip（防误杀）
     try { execSync("tmux has-session -t atf-training-run 2>/dev/null"); console.warn("[guard] 真实训练在场——跳过全链锚"); return; } catch { /* 无真训练，可跑 */ }
     const root = tempRoot();
-    const trainSh = writeMockTrainSh(root, true, 39314);
+    const trainSh = writeLongRunningTrainSh(root, 39314);
     // 残留态占用者：脚本文件名含 torchrun（cmdline 特征命中 TRAINING_RESIDUE_PATTERN）
     const stubPath = join(root, "torchrun-stub.js");
     writeFileSync(stubPath, "require('net').createServer().listen(39314,'0.0.0.0',()=>console.log('hold'));\nsetInterval(()=>{},1000);\n");
@@ -577,13 +609,12 @@ describe("批⑳dot3 修复 3——训练启动端口预检（撞前知道）", 
       expect((await probePortOccupant(39314))?.residueLike).toBe(true);
       const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
       const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
-      expect(result.started).toBe(true);
+      expect(result.started).toBe(true); // 清理后长驻夹具过探活（批㊶Q增补三 段2）
       await Promise.race([stubExited, new Promise((r) => setTimeout(r, 2000))]);
       expect(stub.exitCode !== null || stub.signalCode !== null).toBe(true); // 占用者已被清理
-      await new Promise((r) => setTimeout(r, 500)); // mock 秒退后端口归零
-      expect(await probePortOccupant(39314)).toBeNull();
     } finally {
       try { stub.kill("SIGKILL"); } catch { /* 已退 */ }
+      try { execSync("tmux kill-session -t atf-training-run 2>/dev/null"); } catch { /* 已退出 */ }
     }
   });
 
@@ -664,5 +695,94 @@ describe("批㊶-E 项 7a（P28）训练日志启动轮转（rotateTrainLog）",
     expect(rotated).toBe(join(root, "train-stdout.20261008-123045.120.log"));
     expect(readFileSync(rotated!, "utf8")).toContain("本次要归档的");
     expect(readFileSync(join(root, "train-stdout.20261008-123045.log"), "utf8")).toContain("更早的归档");
+  });
+});
+
+// ── 批㊶Q增补三 段2：start 探活（终结 started:true 假成功）──
+import { probeTrainingStartup, resolveStartupProbeMs, STARTUP_FEED_RE, STARTUP_TERMINAL_RE } from "../../packages/extensions/atf-tools/src/trainingFace.js";
+
+describe("批㊶Q增补三 段2——启动探活 probeTrainingStartup（注入面直测）", () => {
+  // 可注入时钟：sleep 步进假时钟（窗口/settle 全走 now()——真实零等待）
+  const clock = (start = 1_000) => {
+    let t = start;
+    return {
+      now: (): number => t,
+      sleep: async (ms: number): Promise<void> => { t += ms; },
+    };
+  };
+  it("进料确认（SHA=pass＋ADMISSION=pass）＋稳定后进程存活 → feed_ok", async () => {
+    const c = clock();
+    const result = await probeTrainingStartup({
+      logPath: "/nonexistent",
+      windowMs: 100,
+      readTail: () => "SHA=pass entries=1\nADMISSION=pass keys=1\n",
+      sessionAlive: () => true,
+      sleep: c.sleep,
+      now: c.now,
+    });
+    expect(result.outcome).toBe("feed_ok");
+    expect(result.feedSeen).toBe(true);
+  });
+  it("放行闸失败（缺少放行记录）→ dead＋exit 78＋原因可见", async () => {
+    const c = clock();
+    const result = await probeTrainingStartup({
+      logPath: "/nonexistent",
+      windowMs: 100,
+      readTail: () => "真实训练缺少用户放行记录(subject=abc)\n",
+      sessionAlive: () => true,
+      sleep: c.sleep,
+      now: c.now,
+    });
+    expect(result.outcome).toBe("dead");
+    expect(result.exitCode).toBe(78);
+    expect(result.reason).toContain("放行记录"); // 真实闸门文案「缺少用户放行记录」——截取含之
+  });
+  it("脚本崩溃（Traceback）→ dead；tmux 会话消失 → dead（进程退出）", async () => {
+    const c = clock();
+    const crash = await probeTrainingStartup({
+      logPath: "/nonexistent",
+      windowMs: 100,
+      readTail: () => "Traceback (most recent call last):\nAssertionError\n",
+      sessionAlive: () => true,
+      sleep: c.sleep,
+      now: c.now,
+    });
+    expect(crash.outcome).toBe("dead");
+    expect(crash.exitCode).toBeNull();
+    const died = await probeTrainingStartup({
+      logPath: "/nonexistent",
+      windowMs: 100,
+      readTail: () => "",
+      sessionAlive: () => false,
+      sleep: async () => undefined,
+      now: c.now,
+    });
+    expect(died.outcome).toBe("dead");
+    expect(died.reason).toContain("退出");
+  });
+  it("窗口耗尽仍存活无进料 → alive_no_feed（如实，不假报进料）", async () => {
+    const c = clock();
+    const result = await probeTrainingStartup({
+      logPath: "/nonexistent",
+      windowMs: 0,
+      readTail: () => "",
+      sessionAlive: () => true,
+      sleep: c.sleep,
+      now: c.now,
+    });
+    expect(result.outcome).toBe("alive_no_feed");
+    expect(result.feedSeen).toBe(false);
+  });
+  it("特征正则闭集：ADMISSION=fail 命中终止；ADMISSION=pass 不命中", () => {
+    expect(STARTUP_TERMINAL_RE.test("ADMISSION=fail")).toBe(true);
+    expect(STARTUP_TERMINAL_RE.test("ADMISSION=pass keys=1")).toBe(false);
+    expect(STARTUP_FEED_RE.test("SHA=pass entries=1\nADMISSION=pass keys=1")).toBe(true);
+    expect(STARTUP_FEED_RE.test("SHA=pass entries=1")).toBe(false);
+  });
+  it("探活窗口 env 解析（非法/≤0 回落缺省 10s）", () => {
+    expect(resolveStartupProbeMs({})).toBe(10_000);
+    expect(resolveStartupProbeMs({ ATF_TRAIN_STARTUP_PROBE_MS: "15000" })).toBe(15_000);
+    expect(resolveStartupProbeMs({ ATF_TRAIN_STARTUP_PROBE_MS: "bad" })).toBe(10_000);
+    expect(resolveStartupProbeMs({ ATF_TRAIN_STARTUP_PROBE_MS: "0" })).toBe(10_000);
   });
 });

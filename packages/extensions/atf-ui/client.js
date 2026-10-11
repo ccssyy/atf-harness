@@ -97,6 +97,22 @@ window.__ModuleLoader__.load({
       return data
     }
 
+    /** 批㊶Q增补三 段3：工作区作用域集——本会话绑定 run ∪ 同工作区桶 run。
+     *  myWorkspace 取自绑定 run 的 workspace 桶标注（monitor.json 单源；平铺存量/系统级
+     *  标注 null＝退回纯绑定集，与 N-5 行为一致）。「全部实例」显式切换在调用方保留。 */
+    function scopedRuns(mon, sessionId) {
+      var all = (mon && mon.runs) || []
+      var bound = all.filter(function(r) { return Array.isArray(r.bound_sessions) && r.bound_sessions.indexOf(sessionId) >= 0 })
+      var myWorkspace = null
+      for (var i = 0; i < bound.length; i++) {
+        if (typeof bound[i].workspace === 'string' && bound[i].workspace !== '') { myWorkspace = bound[i].workspace; break }
+      }
+      if (myWorkspace === null) return bound
+      return all.filter(function(r) {
+        return r.workspace === myWorkspace || (Array.isArray(r.bound_sessions) && r.bound_sessions.indexOf(sessionId) >= 0)
+      })
+    }
+
     /** 在跑 run 挑选（只读展示推导）：第一个有推进（done>0 或 active 段）的 run。 */
     function pickActiveRun(mon) {
       var runs = (mon && mon.runs) || []
@@ -203,9 +219,8 @@ window.__ModuleLoader__.load({
       if (!open) return React.createElement('div', { className: 'atf-monitor-panel', style: { padding: '20px 12px', height: '100%', overflow: 'auto' } },
         React.createElement('div', { className: 'atf-monitor-empty' }, '监控已关闭——点顶栏「监控」按钮重新打开'))
       var allRuns = (mon && mon.runs) || []
-      var runs = showAll
-        ? allRuns
-        : allRuns.filter(function(r) { return Array.isArray(r.bound_sessions) && r.bound_sessions.indexOf(store.sessionId) >= 0 })
+      // 批㊶Q增补三 段3：缺省作用域＝本会话绑定 ∪ 同工作区桶；「全部实例」显式切换＝全量
+      var runs = showAll ? allRuns : scopedRuns(mon, store.sessionId)
       var runId = selRunId && runs.some(function(r) { return r.run_id === selRunId }) ? selRunId : (runs[0] ? runs[0].run_id : null)
       var run = runId ? runs.find(function(r) { return r.run_id === runId }) : null
       var points = (run && run.training && run.training.points) || []
@@ -892,9 +907,8 @@ window.__ModuleLoader__.load({
      *  捕获通道；monitor.json bound_sessions 单源过滤——未绑定存量 run 不进浮卡/dock）。 */
     function pickScopedActiveRun(mon, sessionId) {
       if (!mon || !Array.isArray(mon.runs)) return null
-      const scopeRuns = sessionId
-        ? mon.runs.filter(function(r) { return Array.isArray(r.bound_sessions) && r.bound_sessions.indexOf(sessionId) >= 0 })
-        : null
+      // 批㊶Q增补三 段3：作用域＝本会话绑定 ∪ 同工作区桶（scopedRuns；无绑定集＝不进浮卡/dock——存量未绑定归全部视图）
+      const scopeRuns = sessionId ? scopedRuns(mon, sessionId) : null
       const pool = scopeRuns && scopeRuns.length > 0 ? scopeRuns : []  // 无绑定集＝不进浮卡/dock（存量未绑定归全部视图）
       for (let i = 0; i < pool.length; i++) {
         const run = pool[i]

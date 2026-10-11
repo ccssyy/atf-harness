@@ -21,6 +21,7 @@ import { translateParameters, looseObjectOutput, renderAsJsonText, asToolValue }
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
+import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
 
 /** 批㊶-N N-5：会话身份提取（exec.agent.session.id；取不到＝undefined 如实跳过）。 */
 const sessionIdOfExec = (exec: unknown): string | undefined => {
@@ -101,10 +102,12 @@ export class BridgeManager {
   }
 }
 
-/** 本地治理工具的 run 落点（M1 语义：scratch 落 runs/<run_id>/scratch，缺省 run "default"）。 */
-const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHome: string }, args: Record<string, unknown>): LocalToolHost => {
+/** 本地治理工具的 run 落点（M1 语义：scratch 落 runs/<run_id>/scratch，缺省 run "default"）。
+ *  批㊶Q增补三 段3：双形态解析——新建 run 按发起会话工作区入桶（runs/<工作区>/<run_id>，
+ *  workspace 归属由调用方传 exec 推导；default 系统级留根目录）。 */
+const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHome: string }, args: Record<string, unknown>, workspace?: string | null): LocalToolHost => {
   const runId = typeof args["run_id"] === "string" && args["run_id"] !== "" ? args["run_id"] : "default";
-  const scratchDir = join(localRoots.runsRoot, runId, "scratch");
+  const scratchDir = join(resolveRunDir(localRoots.runsRoot, runId, { workspace: workspace ?? null }), "scratch");
   mkdirSync(scratchDir, { recursive: true });
   return {
     scratchDir,
@@ -142,7 +145,7 @@ export const buildBridgeTools = (
           const localHandler = WORKSPACE_TOOL_HANDLERS[definition.name];
           if (localHandler !== undefined) {
             if (localRoots === undefined) throw new Error(`本地治理工具 ${definition.name} 缺 localRoots 装配（runsRoot/kernelDir/execHome）`);
-            const host = localHostFor(localRoots, args);
+            const host = localHostFor(localRoots, args, sessionWorkspaceSlug(exec));
             const localResult = await localHandler(args, host);
             if (localResult.kind === "executed") return asToolValue(localResult.result);
             return asToolValue({ error: "rejected", tool: definition.name, reason: localResult.reason, ...(localResult.detail !== undefined ? { detail: localResult.detail } : {}) });
@@ -157,11 +160,13 @@ export const buildBridgeTools = (
             const segment = segmentByTool[definition.name];
             const runIdForFact = typeof args["run_id"] === "string" && args["run_id"] !== "" ? args["run_id"] : "default";
             if (segment !== undefined && localRoots !== undefined) {
-              appendSegmentFact(join(localRoots.runsRoot, runIdForFact), segment, definition.name);
+              // 批㊶Q增补三 段3：段事实/绑定落实际 run 目录（双形态解析——dir 已由 scratch 建立或存量平铺）
+              const factRunDir = resolveRunDir(localRoots.runsRoot, runIdForFact);
+              appendSegmentFact(factRunDir, segment, definition.name);
               // 批㊶-N N-5：会话绑定（桥接面——run_id 显式给出时才绑定；default 归属不明不绑）
               const sessionIdBridge = sessionIdOfExec(exec);
               if (sessionIdBridge !== undefined && runIdForFact !== "default") {
-                appendBinding(join(localRoots.runsRoot, runIdForFact), sessionIdBridge);
+                appendBinding(factRunDir, sessionIdBridge);
               }
             }
           }

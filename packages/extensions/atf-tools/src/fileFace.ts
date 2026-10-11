@@ -6,12 +6,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { listRuns, queryNvidiaSmi } from "../../../../src/webui/readOnlyTools.js";
+import { resolveRunDir } from "../../../../src/core/workspace/runLayout.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 
 /** metrics_summary 读取（readOnlyTools 内部逻辑的同款复用——读文件 JSON，缺/坏 → null）。 */
 const readMetrics = (runsRoot: string, runId: string): Record<string, unknown> | null => {
-  const path = join(runsRoot, runId, "report", "metrics_summary.json");
+  // 批㊶Q增补三 段3：run 目录双形态解析（平铺存量＋分桶新形态兼容）
+  const path = join(resolveRunDir(runsRoot, runId), "report", "metrics_summary.json");
   if (!existsSync(path)) return null;
   try {
     return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
@@ -47,7 +49,7 @@ export const buildFileTools = (runsRoot: string): unknown[] => [
     },
     async execute(args: { run_id: string; segment?: number }) {
       const rel = args.segment === undefined ? "report/report.md" : `report/segment-${String(args.segment)}.md`;
-      const path = join(runsRoot, args.run_id, rel);
+      const path = join(resolveRunDir(runsRoot, args.run_id), rel);
       if (!existsSync(path)) return asToolValue({ run_id: args.run_id, path: rel, exists: false, note: "报告不存在（该 run 无此段记录）" });
       return asToolValue({ run_id: args.run_id, path: rel, exists: true, text: readFileSync(path, "utf8").slice(0, 8000) });
     },

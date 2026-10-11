@@ -15,7 +15,7 @@
 import { spawn, execFile, execSync } from "node:child_process";
 import * as net from "node:net";
 import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync, mkdirSync, appendFileSync, renameSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
 import { scanRunDir } from "../../atf-ui/src/server.js";
@@ -27,6 +27,108 @@ import { tmuxHasSession, tmuxTrainingEvidenceFor } from "../../../../src/core/wo
 import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText } from "./gpuQueueFace.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding, writeProgress } from "../../../../src/core/workspace/runFacts.js";
+import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+import { appendLedgerAuditComment, ledgerEnvPrefixForShell } from "../../../../src/core/workspace/approvalLedger.js";
+
+// ── 批㊶Q增补三 段2：start 探活（终结 started:true 假成功）──
+
+/** 探活窗口缺省（毫秒）——env `ATF_TRAIN_STARTUP_PROBE_MS` 可配（非法/≤0 回落缺省）。 */
+export const STARTUP_PROBE_MS_DEFAULT = 10_000;
+export const STARTUP_PROBE_MS_ENV = "ATF_TRAIN_STARTUP_PROBE_MS";
+
+export const resolveStartupProbeMs = (env: NodeJS.ProcessEnv): number => {
+  const raw = env[STARTUP_PROBE_MS_ENV];
+  if (raw === undefined || raw.trim() === "") return STARTUP_PROBE_MS_DEFAULT;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return STARTUP_PROBE_MS_DEFAULT;
+  return parsed;
+};
+
+/** 进料确认特征（train.sh 数据准入自检产出：SHA=pass＋ADMISSION=pass）。 */
+export const STARTUP_FEED_RE = /SHA=pass[\s\S]*ADMISSION=pass|ADMISSION=pass[\s\S]*SHA=pass/i;
+
+/** 终止特征（闸门失败／脚本崩溃——命中即 started:false）。exit 78＝train.sh 放行记录闸专用码。
+ *  真实闸门文案＝「真实训练缺少用户放行记录(subject=…)」（train.sh 生成面实锚——「用户」可省略形态并容）。 */
+export const STARTUP_TERMINAL_RE = /缺少.{0,4}放行记录|Traceback|ADMISSION[ =:]*(fail|error)/i;
+
+export interface StartupProbeResult {
+  /** feed_ok＝进料确认且进程存活；alive_no_feed＝窗口内无进料但进程存活（llamafactory 启动中）；dead＝终止特征/进程退出。 */
+  outcome: "feed_ok" | "alive_no_feed" | "dead";
+  feedSeen: boolean;
+  /** 日志尾摘要（dead 时含终止特征上下文——用户可见可指导）。 */
+  tail: string;
+  /** 终止原因（dead 时；缺少放行记录→闸门 78 语义）。 */
+  reason?: string;
+  /** exit code（仅缺少放行记录→78 可知；其余如实 null）。 */
+  exitCode?: number | null;
+}
+
+const readLogTail = (logPath: string, bytes: number): string => {
+  try {
+    if (!existsSync(logPath)) return "";
+    const text = readFileSync(logPath, "utf8");
+    return text.length > bytes ? text.slice(-bytes) : text;
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * 启动探活（段2——start 拉起 tmux 后不立即返回）：窗口内轮询 train-stdout，
+ * 终止特征/进程退出 → dead；进料确认（SHA/ADMISSION pass）后再稳定 2s 且进程存活 → feed_ok；
+ * 窗口耗尽进程仍存活 → alive_no_feed（如实标注，不假报进料）。注入面（读日志/tmux 存活/等待）可测。
+ */
+export async function probeTrainingStartup(input: {
+  logPath: string;
+  windowMs?: number;
+  pollMs?: number;
+  settleMs?: number;
+  readTail?: (logPath: string, bytes: number) => string;
+  sessionAlive?: () => boolean;
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+}): Promise<StartupProbeResult> {
+  const windowMs = input.windowMs ?? resolveStartupProbeMs(process.env);
+  const pollMs = input.pollMs ?? 500;
+  const settleMs = input.settleMs ?? 2_000;
+  const readTail = input.readTail ?? readLogTail;
+  const sessionAlive = input.sessionAlive ?? (() => true);
+  const now = input.now ?? Date.now;
+  const step = async (ms: number): Promise<void> => {
+    await (input.sleep ?? ((delay: number) => new Promise<void>((r) => setTimeout(r, delay))))(ms);
+  };
+  const startedAt = now();
+  let feedSeenAt: number | null = null;
+  let tail = "";
+  for (;;) {
+    tail = readTail(input.logPath, 4000);
+    if (STARTUP_FEED_RE.test(tail)) feedSeenAt = feedSeenAt ?? now();
+    const terminal = STARTUP_TERMINAL_RE.exec(tail);
+    if (terminal !== null) {
+      return {
+        outcome: "dead",
+        feedSeen: feedSeenAt !== null,
+        tail,
+        reason: `终止特征「${terminal[0].slice(0, 80)}」`,
+        exitCode: /缺少.{0,4}放行记录/.test(tail) ? 78 : null,
+      };
+    }
+    if (!sessionAlive()) {
+      return { outcome: "dead", feedSeen: feedSeenAt !== null, tail, reason: "训练进程已退出（tmux 会话消失）", exitCode: null };
+    }
+    // 进料确认后稳定 settleMs 且进程存活 → feed_ok（settle 不受窗口截断——确认态优先）
+    if (feedSeenAt !== null && now() - feedSeenAt >= settleMs) {
+      return { outcome: "feed_ok", feedSeen: true, tail };
+    }
+    // 窗口只约束进料等待期（进料未现）：耗尽即出——进程存活与否在出口处终判
+    if (feedSeenAt === null && now() - startedAt >= windowMs) break;
+    const remaining = feedSeenAt !== null ? Math.max(50, settleMs - (now() - feedSeenAt)) : Math.max(50, Math.min(pollMs, windowMs - (now() - startedAt)));
+    await step(remaining);
+  }
+  return sessionAlive()
+    ? { outcome: "alive_no_feed", feedSeen: false, tail }
+    : { outcome: "dead", feedSeen: false, tail, reason: "训练进程已退出（tmux 会话消失）", exitCode: null };
+}
 
 /** 批㊶-N N-5：会话身份提取（exec.agent.session.id——vendor ToolExecutionInput 链路；
  *  取不到＝undefined，调用方如实跳过绑定量不造挂点）。 */
@@ -220,16 +322,18 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       }
     },
     async execute(args: { action: string; train_sh: string; run_id: string; prelaunch_report?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+      // 批㊶Q增补三 段3：run 目录双形态解析（存量平铺＋新桶 runs/<工作区>/<run_id>——单源 resolveRunDir）
+      const runDir = resolveRunDir(cfg.runsRoot, args.run_id);
       if (args.action === "status") {
         const running = tmuxHas("atf-training-run");
-        const ckptDir = join(cfg.runsRoot, args.run_id, "training");
+        const ckptDir = join(runDir, "training");
         const ckpts = existsSync(ckptDir)
           ? (await import("node:fs")).readdirSync(ckptDir, { withFileTypes: true }).filter((d) => d.isDirectory() && d.name.startsWith("checkpoint-")).map((d) => d.name)
           : [];
         const lossPath = join(ckptDir, "loss-series.json");
         const points = existsSync(lossPath) ? (JSON.parse(readFileSync(lossPath, "utf8")) as unknown[]).length : 0;
-        // 八段任务卡段状态（与监控同步器同源推导——scanRunDir 单源）
-        const segments = buildMonitorSnapshot([scanRunDir(cfg.runsRoot, args.run_id, {
+        // 八段任务卡段状态（与监控同步器同源推导——scanRunDir 单源；双形态根＝dirname(runDir)）
+        const segments = buildMonitorSnapshot([scanRunDir(dirname(runDir), basename(runDir), {
           trainingTmuxPresent: tmuxHas("atf-training-run"),
           trainingEvidence: { [args.run_id]: tmuxTrainingEvidenceFor(args.run_id) },
         })]).runs[0]?.segments ?? [];
@@ -244,7 +348,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
           }
         } catch { /* 进度推导失败＝无进度 */ }
         if (lastLoss !== null) {
-          writeProgress(join(cfg.runsRoot, args.run_id), {
+          writeProgress(runDir, {
             round: points,
             loss: lastLoss,
             updated_at: new Date().toISOString(),
@@ -252,7 +356,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         }
         // 批㊶-N N-5：会话绑定（exec.agent.session.id——vendor 链路实锚）
         const sessionId = sessionIdOf(exec);
-        if (sessionId !== undefined) appendBinding(join(cfg.runsRoot, args.run_id), sessionId);
+        if (sessionId !== undefined) appendBinding(runDir, sessionId);
         return asToolValue({ action: "status", running, run_id: args.run_id, segments, ckpts, loss_points: points, ...(ckpts.length > 0 ? { latest_ckpt: `runs/${args.run_id}/training/${ckpts[ckpts.length - 1]}` } : {}) });
       }
       // —— start：DRY_RUN 校验 → 端口预检（批⑳dot3 修复 3）→ danger 必确认 → 启动 ——
@@ -318,25 +422,55 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // 批㊶-E-H 项 7a（P28）：启动轮转——旧 train-stdout.log 归档为带启动时间戳副本，
       // 当前日志只含本次尝试（tee -a 在新文件上追加；历史保留可追溯）
       const rotated = rotateTrainLog(logPath);
+      // 批㊶Q增补三 段1③：生成面审计注释（幂等——生效账本路径写入脚本尾注释，便于事后审计）
+      appendLedgerAuditComment(args.train_sh, process.env);
+      // 段1① 检查器侧同源：旧 tmux 服务端不传播新 env 变量——账本路径显式前缀注入
+      // （未设 ATF_APPROVAL_LEDGER 时为空串＝沿 train.sh 内 ${...:-$HOME/...} 缺省式）
+      const ledgerPrefix = ledgerEnvPrefixForShell(process.env);
       const { execSync } = await import("node:child_process");
       try { execSync(`tmux kill-session -t atf-training-run 2>/dev/null`); } catch { /* 无旧会话 */ }
-      execSync(`tmux new-session -d -s atf-training-run "bash ${args.train_sh} 2>&1 | tee -a ${logPath}"`);
-      startLossIngest(logPath, join(cfg.runsRoot, args.run_id, "training", "loss-series.json"));
-      // 批㊶-M M-3 段事实轨：训练启动成功即登记（training 段）
-      appendSegmentFact(join(cfg.runsRoot, args.run_id), "training", "atf_run_training");
+      execSync(`tmux new-session -d -s atf-training-run "${ledgerPrefix}bash ${args.train_sh} 2>&1 | tee -a ${logPath}"`);
+      // 批㊶Q增补三 段2：启动探活（窗口内 tail train-stdout——终止特征/进程退出 → started:false
+      // ＋exit＋stderr 摘要；SHA/ADMISSION 进料确认＋进程存活 → started:true；窗口耗尽仍存活
+      // → started:true 但 note 如实标注未见进料。终结 started:true 假成功——cr_r2 三连败实锚）。
+      const probe = await probeTrainingStartup({
+        logPath,
+        sessionAlive: () => tmuxHas("atf-training-run"),
+      });
+      if (probe.outcome === "dead") {
+        return asToolValue({
+          started: false,
+          error: "startup_failed",
+          reason: probe.reason ?? "终止特征",
+          exit_code: probe.exitCode ?? null,
+          run_id: args.run_id,
+          train_sh: args.train_sh,
+          log_tail: probe.tail.slice(-800),
+          note: probe.exitCode === 78
+            ? "启动探活：放行记录闸失败（exit 78——账本无本 config 的放行记录）——先经 --record-training-release 登记（或核 ATF_APPROVAL_LEDGER 双轴）后重推"
+            : "启动探活发现终止特征——训练未启动成功；按 log_tail 摘要处理后重推",
+        });
+      }
+      startLossIngest(logPath, join(runDir, "training", "loss-series.json"));
+      // 批㊶-M M-3 段事实轨：训练启动确认后登记（training 段——探活 dead 不登记）
+      appendSegmentFact(runDir, "training", "atf_run_training");
       // 批㊶-N N-5：会话绑定
       const sessionIdStart = sessionIdOf(exec);
-      if (sessionIdStart !== undefined) appendBinding(join(cfg.runsRoot, args.run_id), sessionIdStart);
+      if (sessionIdStart !== undefined) appendBinding(runDir, sessionIdStart);
+      const feedNote = probe.outcome === "feed_ok"
+        ? "探活已确认进料（SHA=pass/ADMISSION=pass 且进程存活）"
+        : `探活窗口（${String(resolveStartupProbeMs(process.env))}ms）内未见进料行但进程存活（llamafactory 启动中）——status 跟进确认`;
       return asToolValue({
         started: true,
         tmux: "atf-training-run",
         run_id: args.run_id,
         log: logPath,
+        probe: { outcome: probe.outcome, feed_seen: probe.feedSeen },
         ...(autoTierStart ? { auto: true, tier: "auto_training" } : {}),
         ...(rotated !== null ? { previous_log: rotated } : {}),
         note: autoTierStart
-          ? "训练已启动（全自动档·免审批放行已通报）——status 查询进度与 ckpt；完成回报 ckpt 路径"
-          : "训练已启动（tail 进料监控中）——status 查询进度与 ckpt；完成回报 ckpt 路径",
+          ? `训练已启动（全自动档·免审批放行已通报；${feedNote}）——status 查询进度与 ckpt；完成回报 ckpt 路径`
+          : `训练已启动（${feedNote}）——status 查询进度与 ckpt；完成回报 ckpt 路径`,
       });
     },
   });
@@ -412,7 +546,7 @@ interface EvalStatusValue {
 
 /** atf_evaluate status：最新评估轮的服务 receipt/编排状态/四件套与 model 标签复核。 */
 export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelDir: string }): Promise<ReturnType<typeof asToolValue>> {
-  const evalRoot = join(cfg.runsRoot, runId, "eval");
+  const evalRoot = join(resolveRunDir(cfg.runsRoot, runId), "eval");
   let latest: string | null = null;
   try {
     const rounds = readdirSync(evalRoot, { withFileTypes: true })
@@ -497,7 +631,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // —— start：固定编号 adapter 校验 → 生成服务件 → 确认报告 → EVAL_RELEASE 确认卡 → 账本登记 → 编排（tmux 后台） ——
       const adapterCheck = validateFixedCheckpoint(args.adapter_path);
       if (!adapterCheck.ok) return asToolValue({ started: false, error: adapterCheck.reason, adapter_path: args.adapter_path, note: "SKILL.md 环节④：固定编号显式声明——latest/符号链接/最大编号推断一律拒绝" });
-      const runDir = join(cfg.runsRoot, args.run_id);
+      // 批㊶Q增补三 段3：双形态解析（新 run 按发起会话工作区入桶——创建形态带归属）
+      const runDir = resolveRunDir(cfg.runsRoot, args.run_id, { workspace: sessionWorkspaceSlug(exec) });
       if (!existsSync(args.service_config)) return asToolValue({ started: false, error: "service_config_missing", path: args.service_config });
       if (!existsSync(join(args.eval_assets_dir, "eval_labels.jsonl")) || !existsSync(join(args.eval_assets_dir, "test_images.json"))) {
         return asToolValue({ started: false, error: "eval_assets_missing", eval_assets_dir: args.eval_assets_dir, note: "test_images.json+eval_labels.jsonl 必备" });
@@ -566,10 +701,10 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       try { execSync(`tmux kill-session -t atf-eval-orch 2>/dev/null`); } catch { /* 无旧 */ }
       execSync(`tmux new-session -d -s atf-eval-orch "bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode mode0 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`);
       // 批㊶-M M-3 段事实轨：评估编排启动成功即登记（evaluate 段）
-      appendSegmentFact(join(cfg.runsRoot, args.run_id), "evaluate", "atf_evaluate");
+      appendSegmentFact(runDir, "evaluate", "atf_evaluate");
       // 批㊶-N N-5：会话绑定
       const sessionIdEval = sessionIdOf(exec);
-      if (sessionIdEval !== undefined) appendBinding(join(cfg.runsRoot, args.run_id), sessionIdEval);
+      if (sessionIdEval !== undefined) appendBinding(runDir, sessionIdEval);
       return asToolValue({
         started: true, eval_round: roundDir, tmux: "atf-eval-orch",
         serving_models: expectedModels, service_manifest: join(serviceDir, "service_manifest.json"),
@@ -600,7 +735,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       return { card: "generic" as const, title: `badcase 分析 — ${args.run_id}`, kind: "other" as const }
     },
     async execute(args: { run_id: string; eval_assets_dir?: string; lane?: string; doc_type?: string; style_cluster_manifest?: string; coordinate_space?: string; gt_coordinate_space?: string }) {
-      const runDir = join(cfg.runsRoot, args.run_id);
+      const runDir = resolveRunDir(cfg.runsRoot, args.run_id);
       // pin 单源脚本面（批㉕B 段1：禁 ATF 源工作树绝对路径）
       const freezeScript = join(cfg.kernelDir, "skills", "atf-evaluate-checkpoints", "scripts", "build_raw_badcase_input.py");
       const chainScript = join(cfg.kernelDir, "skills", "atf-analyze-badcases", "scripts", "run_analysis_chain.py");

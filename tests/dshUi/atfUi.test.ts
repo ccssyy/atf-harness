@@ -878,3 +878,46 @@ describe("批㊶-Q probe 通报面（info·kind additive——alerts 末条透�
     expect(clientSource).toContain("!isAutoNotice && React.createElement('button'");
   });
 });
+
+describe("批㊶Q增补三 段3——工作区桶投影与作用域过滤（单根多桶＋存量平铺兼容）", () => {
+  it("scanRunDir workspace 标注：分桶＝桶名，平铺缺省 null；buildMonitorSnapshot 投影 additive", () => {
+    const root = tempRoot();
+    const bucketDir = join(root, "ci_smoke", "cr_r3");
+    mkdirSync(join(bucketDir, "training"), { recursive: true });
+    const flatDir = join(root, "cr_flat");
+    mkdirSync(flatDir, { recursive: true });
+    const bucketed = scanRunDir(root, "cr_r3", undefined, "ci_smoke");
+    expect(bucketed.workspace).toBe("ci_smoke");
+    expect(bucketed.run_id).toBe("cr_r3");
+    const flat = scanRunDir(root, "cr_flat");
+    expect(flat.workspace).toBeNull();
+    const mon = buildMonitorSnapshot([bucketed, flat]);
+    expect((mon.runs[0] as Record<string, unknown>)["workspace"]).toBe("ci_smoke");
+    expect((mon.runs[1] as Record<string, unknown>)["workspace"]).toBeNull();
+  });
+  it("buildArtifactsSnapshot：分桶 run 产物路径带桶前缀（runsRoot 相对如实）；平铺形态不变", () => {
+    const bucketedRun = { ...sampleRun, workspace: "ci_smoke", artifacts: ["session.jsonl"] };
+    const arts = buildArtifactsSnapshot([bucketedRun]).runs[0] as unknown as Record<string, unknown>;
+    expect(arts["path_prefix"]).toBe("ci_smoke/");
+    expect((arts["artifacts"] as Array<{ path: string }>).some((a) => a.path === "ci_smoke/run-x/session.jsonl")).toBe(true);
+    const flatArts = buildArtifactsSnapshot([{ ...sampleRun, artifacts: ["session.jsonl"] }]).runs[0] as unknown as Record<string, unknown>;
+    expect(flatArts["path_prefix"]).toBe("");
+    expect((flatArts["artifacts"] as Array<{ path: string }>).some((a) => a.path === "run-x/session.jsonl")).toBe(true);
+  });
+  it("client.js 工作区作用域钉子：scopedRuns＝绑定∪同桶（裸服务不打包——源面锚）", () => {
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    // 作用域函数在位且语义键齐全（workspace 桶标注＋bound_sessions 并集）
+    expect(clientSource).toContain("function scopedRuns(mon, sessionId)");
+    expect(clientSource).toContain("r.workspace === myWorkspace");
+    // 浮卡/dock 与监控选择器两消费面都走 scopedRuns（「全部实例」显式切换保留）
+    expect(clientSource).toContain("const scopeRuns = sessionId ? scopedRuns(mon, sessionId) : null");
+    expect(clientSource).toContain("var runs = showAll ? allRuns : scopedRuns(mon, store.sessionId)");
+    expect(clientSource).toContain("myWorkspace === null) return bound");
+  });
+  it("viewer 路由 runDirOf 注入钉子（分桶实例 viewer 发现走双形态解析）", () => {
+    const serverSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/src/server.ts"), "utf8");
+    expect(serverSource).toContain("runDirOf: (runId) => resolveRunDir(resolved.runsRoot, runId)");
+    expect(serverSource).toContain("sweepAnsweredPendings(resolved.runsRoot)");
+    expect(serverSource).toContain("ledgerEnvPrefix: ledgerEnvPrefixForShell(process.env)");
+  });
+});

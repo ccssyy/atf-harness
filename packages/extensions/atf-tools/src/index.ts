@@ -19,6 +19,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { resolveBridgeDeployment, kernelVersionSync } from "../../../../src/bridge/bridgeCommand.js";
+import { checkApprovalLedgerStartup } from "../../../../src/core/workspace/approvalLedger.js";
 import { registerApprovalExempt } from "./approvalExempt.js";
 import { buildFileGuardTools, registerPathGuard } from "./fileGuardFace.js";
 import { deriveFileToolRoots } from "../../../../src/agent/fileRoots.js";
@@ -73,6 +74,17 @@ export const Config = z.object({
 
 export function apply(ctx: any, config: AtfToolsConfig): void {
   console.log(`[atf-tools] apply()——注册 11＋2＋3 个 atf_* 工具（M2.75 增训练执行段三投影）（runsRoot=${config.runsRoot}）`);
+  // 批㊶Q增补三 段1②：放行账本启动校验（fail-fast）——env 显式配置而目录不可写即拒绝启动；
+  // env 与 $HOME 推导不一致 → 启动即告警（两路径明示，杜绝静默分轴——10-08 在册债 cr_r2 三连败实锚）。
+  const ledgerCheck = checkApprovalLedgerStartup(process.env);
+  if (!ledgerCheck.dirWritable) {
+    throw new Error(`[atf-tools] 放行账本目录不可写（fail-fast）：${ledgerCheck.message}`);
+  }
+  if (ledgerCheck.mismatch) {
+    console.warn(`[atf-tools] ⚠ ${ledgerCheck.message}`);
+  } else {
+    console.log(`[atf-tools] ${ledgerCheck.message}`);
+  }
   // （M2 时序注记：loader.create 动态行会触发 atf-ui 双 mount——已移除；atf-ui 行由 profile patch 静态装配。）
   // 批㊶-E-H 项 2.1：桥对端装配单源（src/bridge/bridgeCommand.ts）——ATF_DSH_BRIDGE_COMMAND
   // 在场即真内核 argv＋PYTHONPATH（子进程私有 env，派生自 kernelDir/src）；缺席保留 mock。
