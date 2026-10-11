@@ -130,7 +130,7 @@ describe("批㊶-S5 §九——默认基模型锚点（确认卡基线＋防线�
     writeFileSync(iterPath, `${JSON.stringify({ base_model: { family: "qwen3_vl", path: "/old" }, training: { learning_rate: "1e-4" } }, null, 1)}\n`);
     const result = applyConfirmedToIterationConfig(iterPath, { base_model_path: "/data/LLM_model/Qwen3-VL-32B-Instruct" });
     expect("updated" in result && result.updated).toContain("base_model_path");
-    const patched = JSON.parse(readFileSync(iterPath, "utf8")) as { base_model: { path: string }; training: Record<string, unknown> };
+    const patched = JSON.parse(readFileSync(iterPath, "utf8")) as { base_model: { path: string; family?: string }; training: Record<string, unknown> };
     expect(patched.base_model.path).toBe("/data/LLM_model/Qwen3-VL-32B-Instruct");
     expect(patched.base_model.family).toBe("qwen3_vl"); // 其余 base_model 字段不动
   });

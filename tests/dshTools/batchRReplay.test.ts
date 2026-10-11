@@ -92,9 +92,11 @@ describe("批㊶R前置 VERIFY3 工具面真机重演（确认卡拦截＋卡数
         return undefined;
       },
     };
-    const [configTool] = buildConfirmTools({ runsRoot: REPLAY_RUNS, ctx: tierCtx }) as unknown as Array<{
+    const tools = buildConfirmTools({ runsRoot: REPLAY_RUNS, ctx: tierCtx }) as unknown as Array<{
       execute: (args: Record<string, unknown>, exec: unknown) => Promise<Record<string, unknown>>;
     }>;
+    const configTool = tools[0];
+    if (configTool === undefined) throw new Error("confirm tool missing");
     const result = await configTool.execute(
       { action: "present", run_id: REPLAY_ID, recommend: { reason: "VERIFY3：实件配置重演（单卡×z3_offload 拦截靶）" } },
       { callId: "verify3", agent: { session: { id: "verify-session", header: { cwd: "/data/chris/docops/tasks/ci_smoke" } } } },

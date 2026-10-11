@@ -132,16 +132,18 @@ export interface NprocGuardHit {
 }
 
 /**
- * 反模式拦截（确定性，建卡/生效配置时——批㊶R前置 指令件第 4 项）：
+ * 反模式拦截（确定性，建卡/生效配置时——批㊶R前置 指令件第 4 项；批㊶-S5 门2修正回退参照）：
  *   A. nproc_per_node=1 × deepspeed 含 z3_offload → 拦截回退＋note（ZeRO-3 需多卡分片）；
  *   B. nproc 与可用卡数不一致 → 拦截：超上限（物理事实）任何来源都回退；低于上限仅在
- *      非用户显式形态（default_used/from_registry/agent_recommend）回退拉满——降档仅
- *      用户明确要求（need_confirm＝用户显式，放行不改）。
+ *      非用户显式形态（default_used/from_registry/agent_recommend）回退——**回退参照＝
+ *      设置面训练卡数基线（baselineNproc，拉满偏置承载点）?? 探测可用卡数**；与参照相等
+ *      不回退（设置基线＝操作者显式配置，非静默低配）。降档仅用户明确要求
+ *      （need_confirm＝用户显式，放行不改）。
  * 可用卡数机器事实缺失时：触发 A/B 需回退即返回 error（machine-facts 停下问），不设默认值。
  */
 export const guardNprocAntiPatterns = (
   fields: ReadonlyArray<NprocGuardField>,
-  ctx: { gpuCount: number | null },
+  ctx: { gpuCount: number | null; baselineNproc?: string | null },
 ): { hits: NprocGuardHit[] } | { error: string } => {
   const nprocField = fields.find((f) => f.key === "nproc_per_node");
   const deepspeedField = fields.find((f) => f.key === "deepspeed");
@@ -170,11 +172,15 @@ export const guardNprocAntiPatterns = (
       });
       return { hits };
     }
-    if (nproc < gpuCount && nprocField.tag !== "need_confirm") {
+    const reference = ctx.baselineNproc !== undefined && ctx.baselineNproc !== null && ctx.baselineNproc.trim() !== ""
+      ? Number.parseInt(ctx.baselineNproc, 10)
+      : gpuCount;
+    if (nproc < gpuCount && nproc !== reference && nprocField.tag !== "need_confirm") {
+      const target = Math.min(reference, gpuCount);
       hits.push({
         key: "nproc_per_node",
-        revertedTo: String(gpuCount),
-        note: `卡数拉满回退：训练卡数 ${nproc} 低于可用卡数 ${gpuCount} 且非用户显式降档（owner 偏置：训练默认拉满、训练时长优先）——已回退为 ${gpuCount}`,
+        revertedTo: String(target),
+        note: `卡数基线回退：训练卡数 ${nproc} 低于基线参照 ${target} 且非用户显式降档（owner 偏置：训练默认拉满、训练时长优先）——已回退为 ${target}`,
       });
     }
   }

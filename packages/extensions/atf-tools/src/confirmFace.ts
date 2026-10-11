@@ -197,7 +197,19 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         const anchor = defaultBaseModelPath(process.env);
         if (anchor !== null) baseline["base_model_path"] = anchor;
       }
+      // 批㊶-S5 门2修复①：训练卡数基线取值链——设置面五字段块 train_gpu_baseline ＞
+      // 未配置回退探测拉满（gpuCount）＞ 机器事实缺失停下问（§二③语义；确认卡仍逐次可改）
+      const settingsBaseline: string | null = ((): string | null => {
+        try {
+          const raw = openSettingsStore(instanceSettingsPath(process.env)).get().storage.train_gpu_baseline.trim();
+          console.log("[s5dbg] closure raw =", JSON.stringify(raw), "path =", instanceSettingsPath(process.env));
+          return raw !== "" && Number.isFinite(Number(raw)) && Number(raw) > 0 ? raw : null;
+        } catch {
+          return null;
+        }
+      })();
       const explicitNproc = overrides["nproc_per_node"] ?? amended?.["nproc_per_node"];
+      console.log("[s5dbg] baseline.nproc =", JSON.stringify(baseline["nproc_per_node"]), "| settingsBaseline =", JSON.stringify(settingsBaseline), "| explicit =", JSON.stringify(explicitNproc));
       if (baseline["nproc_per_node"] === undefined && explicitNproc === undefined) {
         if (settingsBaseline !== null) {
           baseline["nproc_per_node"] = settingsBaseline;
@@ -283,7 +295,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       // 批㊶R前置④：反模式拦截（确定性——建卡时；本 fields 即生效配置输入，拦截先于卡面/快照）
       //   A. 单卡×z3_offload → 回退可用卡数＋note；B. 超机器事实上限/非用户显式低配 → 回退拉满
       //   （need_confirm＝用户显式降档放行）；回退后 accum 随卡数重派生（整除校验不过即停点）。
-      const guardResult = guardNprocAntiPatterns(fields, { gpuCount });
+      const guardResult = guardNprocAntiPatterns(fields, { gpuCount, baselineNproc: settingsBaseline });
       if ("error" in guardResult) {
         return asToolValue({ ok: false, run_id: args.run_id, error: "nproc_anti_pattern_blocked", note: guardResult.error });
       }
