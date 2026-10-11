@@ -59,6 +59,8 @@ export interface RunProgress {
   step_remaining?: number;
   eta_s?: number;
   loss?: number;
+  /** 批㊶Q增补二1 additive：trainer_log percentage 直通（0-100）。 */
+  percentage?: number;
   updated_at: string;
 }
 
@@ -91,8 +93,87 @@ export const writeProgress = (runDir: string, progress: RunProgress): void => {
 export const progressFresh = (progress: RunProgress | null, nowMs: number, windowMs: number): boolean => {
   if (progress === null) return false;
   const at = Date.parse(progress.updated_at);
-  if (!Number.isFinite(at)) return false;
+  if (Number.isFinite(at) === false) return false;
   return nowMs - at <= windowMs;
+};
+
+// ── 批㊶Q增补二1：progress 持续写链（trainer_log 步进单源）──
+
+/** trainer_log.jsonl 末行形态（llamafactory 原生步进面——每 logging_steps 追加一行 JSON）。 */
+export interface TrainerLogTail {
+  current_steps: number;
+  total_steps: number;
+  loss: number;
+  epoch: number;
+  percentage: number;
+}
+
+/** trainer_log.jsonl 末行解析（纯函数——非 JSON/缺键/字段非数＝null，不猜测）。 */
+export const parseTrainerLogLine = (line: string): TrainerLogTail | null => {
+  const trimmed = line.trim();
+  if (trimmed === "") return null;
+  try {
+    const raw = JSON.parse(trimmed) as Record<string, unknown>;
+    const num = (key: string): number | null => {
+      const v = raw[key];
+      return typeof v === "number" && Number.isFinite(v) ? v : null;
+    };
+    const current = num("current_steps");
+    const total = num("total_steps");
+    const loss = num("loss");
+    const epoch = num("epoch");
+    const percentage = num("percentage");
+    if (current === null || total === null || loss === null || epoch === null || percentage === null) return null;
+    return { current_steps: current, total_steps: total, loss, epoch, percentage };
+  } catch {
+    return null;
+  }
+};
+
+/** trainer_log.jsonl 末行读取（文件缺席/空/末行损坏＝null；末行取最后一条非空行）。 */
+export const readTrainerLogTail = (runDir: string): TrainerLogTail | null => {
+  const path = join(runDir, "training", "trainer_log.jsonl");
+  if (!existsSync(path)) return null;
+  try {
+    const lines = readFileSync(path, "utf8").split("\n").filter((l) => l.trim() !== "");
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const parsed = parseTrainerLogLine(lines[i] as string);
+      if (parsed !== null) return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/** iteration-config num_train_epochs 读取（两候选路径沿 confirmFace 同款；缺/非法＝null）。 */
+export const readNumTrainEpochs = (runDir: string): number | null => {
+  for (const rel of ["prep/iteration-config.json", "prep/iteration-config/iteration-config.json"]) {
+    const path = join(runDir, rel);
+    if (!existsSync(path)) continue;
+    try {
+      const raw = JSON.parse(readFileSync(path, "utf8")) as { training?: Record<string, unknown> };
+      const v = raw.training?.["num_train_epochs"];
+      const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+      if (Number.isFinite(n) && n > 0) return n;
+    } catch { /* 下一路候选 */ }
+  }
+  return null;
+};
+
+/** progress 组装（纯函数）：epoch 语义轮次（round＝当前轮 1-based＝floor(epoch)+1，
+ *  numEpochs 可得时封顶），percentage additive 键；
+ *  total_rounds 仅在 numEpochs 可得时写（缺源不造数）。 */
+export const buildProgressFromTrainerLog = (tail: TrainerLogTail, numEpochs: number | null, nowIso: string): RunProgress => {
+  const round = Math.floor(tail.epoch) + 1;
+  return {
+    round: numEpochs !== null ? Math.min(numEpochs, round) : round,
+    ...(numEpochs !== null ? { total_rounds: numEpochs } : {}),
+    step_remaining: Math.max(0, tail.total_steps - tail.current_steps),
+    loss: tail.loss,
+    percentage: tail.percentage,
+    updated_at: nowIso,
+  };
 };
 
 /** 段内进度人读文案（浮卡段明细行）："第 6/8 轮 · 剩余 17 步 · loss 0.0589"。 */

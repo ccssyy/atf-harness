@@ -115,6 +115,16 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
   });
 
   it("start：审批放行 + DRY_RUN 过 → tmux 常驻启动＋返回启动凭据（mock 秒退脚本）", async () => {
+    // 批㊶Q增补二防护（20261011 事故教训）：本用例真实执行 tmux kill-session atf-training-run
+    // （trainingFace 启动链固有清理）——真训练在场时必须 skip，否则误杀生产训练
+    // （增补一真训 run-regress-large-pl 143/186 即被本用例全量跑误杀，checkpoint-141 resume 恢复）。
+    const realTrainingAlive = (() => {
+      try { execSync("tmux has-session -t atf-training-run 2>/dev/null"); return true; } catch { return false; }
+    })();
+    if (realTrainingAlive) {
+      console.warn("[guard] 真实训练会话 atf-training-run 在场——跳过 tmux 启动锚（防误杀）");
+      return;
+    }
     const root = tempRoot();
     const trainSh = writeMockTrainSh(root, true);
     const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
@@ -552,6 +562,8 @@ describe("批⑳dot3 修复 3——训练启动端口预检（撞前知道）", 
   });
 
   it("start：端口被疑似残留占用 → danger 卡呈现根因 → [确认清理并重试] → 清理后成功启动（全链）", async () => {
+    // 批㊶Q增补二防护：本用例全链含 tmux kill-session atf-training-run——真训练在场即 skip（防误杀）
+    try { execSync("tmux has-session -t atf-training-run 2>/dev/null"); console.warn("[guard] 真实训练在场——跳过全链锚"); return; } catch { /* 无真训练，可跑 */ }
     const root = tempRoot();
     const trainSh = writeMockTrainSh(root, true, 39314);
     // 残留态占用者：脚本文件名含 torchrun（cmdline 特征命中 TRAINING_RESIDUE_PATTERN）

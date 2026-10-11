@@ -26,6 +26,8 @@ window.__ModuleLoader__.load({
     var POLL_MS = 5000
 
     var remoteFace = null
+    // 批㊶Q增补一：右栏导航面暂存（apply 赋值；组件在 factory 闭包拿不到 ctx——沿 remoteFace 先例）
+    var sidebarFace = null
     var store = {
       sessionId: undefined,
       open: true,
@@ -197,7 +199,9 @@ window.__ModuleLoader__.load({
       // 批㊶-N N-5 三级作用域（hooks 已前置）：缺省只列本会话绑定 run；"全部实例"显式切换＝全量
       var showAllState = React.useState(false)
       var showAll = showAllState[0], setShowAll = showAllState[1]
-      if (!open) return null
+      // 批㊶Q增补一：pane body 常挂后关闭态不再返回 null（空 pane 疑似故障）——空态占位指路
+      if (!open) return React.createElement('div', { className: 'atf-monitor-panel', style: { padding: '20px 12px', height: '100%', overflow: 'auto' } },
+        React.createElement('div', { className: 'atf-monitor-empty' }, '监控已关闭——点顶栏「监控」按钮重新打开'))
       var allRuns = (mon && mon.runs) || []
       var runs = showAll
         ? allRuns
@@ -312,7 +316,14 @@ window.__ModuleLoader__.load({
             title: showAll ? '全部实例（开——显示全量 run）' : '全部实例（关——只列本会话绑定 run）',
             onClick: function() { setShowAll(!showAll) },
           }, '全部'),
-          React.createElement('button', { className: 'atf-pill', title: '收起右栏 tab', onClick: function() { store.setMonitor(false) } }, '×')),
+          React.createElement('button', { className: 'atf-pill', title: '收起右栏面板（内容关闭；tab 由右栏原生 × 收）',
+            onClick: function() {
+              store.setMonitor(false)
+              // 批㊶Q增补一：× 收右栏列（fail-open——导航面缺席/异常时仅关内容，空态兜底）
+              try {
+                if (sidebarFace && typeof sidebarFace.isExpanded === 'function' && sidebarFace.isExpanded()) sidebarFace.toggleExpanded()
+              } catch (e) { /* fail-open */ }
+            } }, '×')),
         // 批㊶-P P-2：探针告警行（error 红/warn 琥珀＋"重新发起"预填按钮——不自动代发）
         // 批㊶-Q 通报面（段1/2/3）：level=info 走品牌色；kind chip＝「全自动训练」（config_auto/
         // train_auto）与「OOM 降档重发」（oom_fallback）——品牌描边 chip，与权限档色语义独立；
@@ -338,11 +349,13 @@ window.__ModuleLoader__.load({
           var reissue = (probe.reason.indexOf('out of memory') >= 0 || probe.reason.indexOf('OOM') >= 0)
             ? '重新发起训练（OOM 降档）：调用 atf_run_training 工具 action=start，train_sh 沿用原 launch/train.sh，batch 改 1、梯度累积翻倍（全局批量 256 不变）——请确认后执行。'
             : '重新发起训练：调用 atf_run_training 工具 action=start 沿用原参数——请确认后执行。'
-          return React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px', fontSize: 12, color: rowColor } },
+          return React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 8, padding: '4px 12px', fontSize: 12, color: rowColor } },
             chip,
-            React.createElement('span', null, probe.reason + ' · ' + probe.since.slice(11, 19)),
+            // 批㊶Q增补一：长通报文本换行收窄（flex:1+minWidth:0+break-all——原单行溢出被 pane 裁切）
+            React.createElement('span', { style: { flex: 1, minWidth: 0, wordBreak: 'break-all' } }, probe.reason + ' · ' + probe.since.slice(11, 19)),
             !isAutoNotice && React.createElement('button', {
               className: 'atf-pill', title: '在会话预填重发指令（含降档参数如适用）——点击后自行发送',
+              style: { flex: 'none' },
               onClick: function() {
                 var input = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]')
                 if (input) { input.focus(); document.execCommand('insertText', false, reissue) }
@@ -350,7 +363,7 @@ window.__ModuleLoader__.load({
             }, '重新发起'))
         })(),
         // 批㊶-N N-4：dock 撤销的 GPU 摘要与内核版本信息移此处（低频详情行；部署缺省档已注 title）
-        React.createElement('div', { style: { fontSize: 11, color: 'var(--dsh-alias-label-tertiary,#64748b)', padding: '2px 12px 0', fontFamily: 'monospace' } },
+        React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary,#64748b)', padding: '2px 12px 0', fontFamily: 'monospace' } },
           (function() {
             var gpu = (mon && mon.gpu) || null
             var gpuText = gpu === null ? 'GPU —' : gpu.offline === true ? 'GPU 离线' : formatGpuAllLocal(mon && mon.gpu_all) || ('GPU ' + (gpu.utilization || '—'))
@@ -472,6 +485,46 @@ window.__ModuleLoader__.load({
                                 }, a.name)
                               : React.createElement('span', { className: 'atf-art-name', title: a.path }, a.name))
                         })))))
+    }
+
+    /** 批㊶Q增补一：pane tab body 真身。批㊶-M2 段3 迁移留断点——本符号被引用却从未定义
+     *  （createElement(undefined) 渲染恒空，pane 本体空白），而 MonitorPanel 仍挂 dock 且
+     *  CSS fixed 壳未清，以视口右缘全高条（z-900）形态顶替 pane 位置形成"看似正常"假象，
+     *  实际盖住浮卡、吞右缘点击（遮挡根因，hit-test 实证）。本体＝转调 MonitorPanel 共用
+     *  内容体；挂载期发布 CSS 变量 --atf-pane-offset（pane 左缘让位量）供浮卡避让——
+     *  浮层与右栏 pane tab 不重叠、不覆盖面板顶栏（几何上不可能）。 */
+    function MonitorBody() {
+      React.useEffect(function() {
+        var root = document.documentElement
+        var update = function() {
+          var offset = '0px'
+          var panel = document.querySelector('.atf-monitor-panel')
+          if (panel) {
+            var r = panel.getBoundingClientRect()
+            if (r.width > 0 && r.height > 0 && r.left < window.innerWidth) offset = (window.innerWidth - r.left + 16) + 'px'
+          }
+          root.style.setProperty('--atf-pane-offset', offset)
+        }
+        update()
+        var ro = 'ResizeObserver' in window ? new ResizeObserver(update) : null
+        var panel = document.querySelector('.atf-monitor-panel')
+        if (panel && ro) ro.observe(panel)
+        window.addEventListener('resize', update)
+        // pane 滑入/内容挂载晚于本 effect——两帧＋一次尾随补测（动画 350ms 后宽度已定）
+        var raf = requestAnimationFrame(function() { requestAnimationFrame(update) })
+        var t = setTimeout(function() {
+          var p2 = document.querySelector('.atf-monitor-panel')
+          if (p2 && ro) { ro.observe(p2); update() }
+        }, 400)
+        return function() {
+          if (ro) ro.disconnect()
+          window.removeEventListener('resize', update)
+          cancelAnimationFrame(raf)
+          clearTimeout(t)
+          root.style.setProperty('--atf-pane-offset', '0px')
+        }
+      }, [])
+      return React.createElement(MonitorPanel)
     }
 
     /** 发起训练对话框（批㉛段2）：run 选择＋IterationConfig 四件套摘要（含义＋值＋来源标注＋
@@ -642,7 +695,7 @@ window.__ModuleLoader__.load({
         return React.createElement('div', {
           className: 'atf-task-card-collapsed' + (pulseTick > 0 ? ' atf-card-pulsing' : ''),
           style: {
-            position: 'fixed', right: 16, top: (topBarOffset() + 16),
+            position: 'fixed', right: 'calc(16px + var(--atf-pane-offset, 0px))', top: (topBarOffset() + 16),
             display: 'inline-flex', alignItems: 'center', gap: 7, height: 32, padding: '0 12px',
             borderRadius: 16, cursor: 'pointer', zIndex: 800,
             border: '1px solid ' + (state === 'fail' ? 'var(--dsw-static-red-500)' : 'var(--dsw-alias-border-l3)'),
@@ -666,7 +719,7 @@ window.__ModuleLoader__.load({
       return React.createElement('div', {
         className: 'atf-task-card',
         style: {
-          position: 'fixed', right: 16, top: (topBarOffset() + 16), width: 264, zIndex: 800,
+          position: 'fixed', right: 'calc(16px + var(--atf-pane-offset, 0px))', top: (topBarOffset() + 16), width: 264, zIndex: 800,
           borderRadius: 12, border: '1px solid var(--dsw-alias-border-l3)',
           background: 'var(--dsw-alias-bg-layer-2)', boxShadow: '0 6px 24px rgba(0,0,0,.14)',
           padding: 12, display: 'flex', flexDirection: 'column', gap: 10,
@@ -766,7 +819,7 @@ window.__ModuleLoader__.load({
       return React.createElement('div', {
         className: 'atf-task-card',
         style: {
-          position: 'fixed', right: 16, top: (topBarOffset() + 16), width: 264, zIndex: 800,
+          position: 'fixed', right: 'calc(16px + var(--atf-pane-offset, 0px))', top: (topBarOffset() + 16), width: 264, zIndex: 800,
           borderRadius: 12, border: '1px solid var(--dsw-alias-border-l3)',
           background: 'var(--dsw-alias-bg-layer-2)', boxShadow: '0 6px 24px rgba(0,0,0,.14)',
           padding: 12, display: 'flex', flexDirection: 'column', gap: 10,
@@ -979,6 +1032,7 @@ window.__ModuleLoader__.load({
       inject: ['slots', 'remote', 'remote.workspaceFiles', 'sidebarRightTabs', 'sidebarRight'],
       apply: function(ctx) {
         remoteFace = ctx.remote
+        sidebarFace = ctx.sidebarRight || null
 
         if (typeof document !== 'undefined') {
           var style = document.createElement('style')
@@ -1024,25 +1078,28 @@ window.__ModuleLoader__.load({
             // 批㊶-M M-4：段状态跃迁呼吸（一次性动画——animation 属性由内联 pulseStyle 触发一次）
             '@keyframes atf-card-pulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}',
             '.atf-train-send{background:var(--dsw-alias-brand-primary,#1d4ed8);color:#fff;}',
-            // 批㉛段3.1：右栏训练监控抽屉
-            '.atf-monitor-panel{position:fixed;right:0;bottom:0;width:360px;background:var(--dsh-bg,#fff);',
-            '  border-left:1px solid rgba(128,128,128,.25);box-shadow:-8px 0 24px rgba(0,0,0,.12);z-index:900;',
-            '  display:flex;flex-direction:column;font-size:12px;color:var(--dsh-text-primary,#1e293b);}',
+            // 批㉛段3.1：右栏训练监控抽屉——批㊶Q增补一修复：fixed 壳（position:fixed/right/
+            // bottom/width:360/z-index:900/border-left/box-shadow）随批㊶-M2 迁 pane 移除——
+            // 残留曾使面板以视口右缘全高条（z-900）形态渲染，盖住 z-800 浮卡并吞右缘点击
+            // （pane 本体因 MonitorBody 未定义恒空，fixed 条恰好盖在 pane 位置形成假象）。
+            // 面板现居 pane body 内自然块级布局；背景/描边随 pane 主题，自身只保留排版。
+            '.atf-monitor-panel{display:flex;flex-direction:column;min-width:0;',
+            '  font-size:12px;color:var(--dsw-alias-label-primary,#1e293b);}',
             '.atf-monitor-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(128,128,128,.2);}',
             '.atf-monitor-body{flex:1;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:12px;}',
-            '.atf-monitor-empty{padding:20px 12px;color:var(--dsh-text-secondary,#64748b);}',
+            '.atf-monitor-empty{padding:20px 12px;color:var(--dsw-alias-label-secondary,#64748b);}',
             '.atf-monitor-status{display:flex;align-items:center;gap:8px;font-weight:600;}',
             '.atf-monitor-sec{border:1px solid rgba(128,128,128,.18);border-radius:10px;padding:8px 10px;}',
             '.atf-monitor-title{font-weight:600;margin-bottom:6px;}',
-            '.atf-monitor-round{font-weight:400;font-size:11px;color:var(--dsh-text-secondary,#64748b);}',
+            '.atf-monitor-round{font-weight:400;font-size:11px;color:var(--dsw-alias-label-secondary,#64748b);}',
             '.atf-monitor-chart{width:100%;height:80px;border:1px dashed rgba(128,128,128,.25);border-radius:6px;background:rgba(128,128,128,.04);}',
-            '.atf-monitor-legend{display:flex;gap:12px;font-size:10px;color:var(--dsh-text-secondary,#64748b);margin-top:4px;}',
+            '.atf-monitor-legend{display:flex;gap:12px;font-size:10px;color:var(--dsw-alias-label-secondary,#64748b);margin-top:4px;}',
             '.atf-sw{display:inline-block;width:12px;height:3px;vertical-align:middle;margin-right:4px;}',
             '.atf-sw-dash{background-image:linear-gradient(90deg,var(--dsw-static-neutral-400,#94a3b8) 60%,transparent 40%);background-size:6px 3px;}',
-            '.atf-monitor-sub{font-size:11px;color:var(--dsh-text-secondary,#64748b);margin-top:6px;}',
+            '.atf-monitor-sub{font-size:11px;color:var(--dsw-alias-label-secondary,#64748b);margin-top:6px;}',
             '.atf-kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}',
             '.atf-kpi-card{border:1px solid rgba(128,128,128,.18);border-radius:8px;padding:6px 8px;}',
-            '.atf-kpi-label{font-size:10px;color:var(--dsh-text-secondary,#64748b);}',
+            '.atf-kpi-label{font-size:10px;color:var(--dsw-alias-label-secondary,#64748b);}',
             '.atf-kpi-value{font-size:15px;font-weight:600;}',
             '.atf-monitor-env{display:flex;flex-direction:column;gap:3px;}',
             // 批㉞H：两轮评估对比（三列网格——指标｜A 轮｜B 轮）
@@ -1053,7 +1110,7 @@ window.__ModuleLoader__.load({
             '.atf-cmp-head>span{font-weight:600;color:var(--dsh-text-secondary,#64748b);}',
             // 批㉛段3.2/3.3：Loss 点选联动＋产物抽屉
             '.atf-monitor-spike{display:flex;align-items:center;gap:8px;font-size:11px;margin-top:5px;',
-            '  color:var(--dsh-text-primary,#1e293b);}',
+            '  color:var(--dsw-alias-label-primary,#1e293b);}',
             '.atf-art-list{display:flex;flex-direction:column;}',
             '.atf-art-row{display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px dashed rgba(128,128,128,.15);font-size:11px;}',
             '.atf-art-row:last-child{border-bottom:0;}',
@@ -1094,7 +1151,15 @@ window.__ModuleLoader__.load({
             className: 'atf-pill' + (open ? ' atf-pill-on' : ''),
             style: open ? { borderColor: 'var(--dsw-alias-brand-primary,#1d4ed8)', color: 'var(--dsw-alias-brand-primary,#1d4ed8)', fontWeight: 600 } : undefined,
             title: open ? '监控（开——点击关闭右栏面板）' : '监控（关——点击打开右栏面板）',
-            onClick: function() { store.setMonitor(!store.monitorOpen) },
+            onClick: function() {
+              var next = !store.monitorOpen
+              store.setMonitor(next)
+              // 批㊶Q增补一：开＝真开右栏原生 tab（openResource 走注册 kind 的 glob 路由；
+              // 修复前只切 store 态——pane tab 从未打开，面板以 dock fixed 条顶替）。fail-open。
+              if (next && sidebarFace && typeof sidebarFace.openResource === 'function') {
+                try { sidebarFace.openResource('dsh-resource://atf-training-monitor/monitor') } catch (e) { /* fail-open：store 态已切，pane 未开时空态兜底 */ }
+              }
+            },
           }, '监控')
         }
 
@@ -1152,8 +1217,9 @@ window.__ModuleLoader__.load({
                   onClick: function() { store.setTrain({ runId: null, mode: 'dry_run' }) },
                 }, '发起训练')),
               React.createElement(ViewerOverlay),
-              React.createElement(TrainDialog),
-              React.createElement(MonitorPanel))
+              React.createElement(TrainDialog))
+              // 批㊶Q增补一：MonitorPanel 卸离 dock——pane body（MonitorBody）唯一挂载；
+              // dock 遗留挂载曾是 fixed 全高条假 pane 的载体（遮挡根因，见 MonitorBody 注）
           })
         })
 

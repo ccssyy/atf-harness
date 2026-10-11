@@ -1,6 +1,6 @@
 /** 批⑳ 测试锚——atf-ui 服务端同步器纯函数（snapshot.js 八段四态推导）。
  *  client.js 浏览器组件的渲染验证走 DSH 真跑（浏览器环境），不在 vitest 覆盖范围。 */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -119,6 +119,32 @@ describe("atf-ui 同步器落盘（scan→monitor/artifacts/panel）", () => {
     expect(panelHtml).toContain("AtfMonitor/v1");
     expect(panelHtml).toContain("排队中");
     for (const d of effects) d();
+  });
+});
+
+describe("批㊶Q增补二1 progress 持续写链（tickOnce 同步器——trainer_log 步进刷新 progress.json）", () => {
+  it("active run＋trainer_log 在场 → progress.json 落盘（epoch 语义＋percentage）；无 trainer_log 不写", async () => {
+    const root = tempRoot();
+    const mk = (runId: string, withTrainerLog: boolean): void => {
+      const runDir = join(root, runId);
+      mkdirSync(join(runDir, "training"), { recursive: true });
+      writeFileSync(join(runDir, "registration.json"), "{}");
+      writeFileSync(join(runDir, "session.jsonl"), "{}\n");
+      writeFileSync(join(runDir, "training", "loss-series.json"), JSON.stringify([{ train_loss: 0.4 }]));
+      if (withTrainerLog) {
+        writeFileSync(join(runDir, "training", "trainer_log.jsonl"), JSON.stringify({ current_steps: 140, total_steps: 186, loss: 0.0646, epoch: 4.52, percentage: 75.27 }) + "\n");
+        mkdirSync(join(runDir, "prep", "iteration-config"), { recursive: true });
+        writeFileSync(join(runDir, "prep", "iteration-config", "iteration-config.json"), JSON.stringify({ training: { num_train_epochs: 6 } }));
+      }
+    };
+    mk("run-with-log", true);
+    mk("run-no-log", false);
+    const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
+    await tickOnce({ runsRoot: root, intervalMs: 60_000 });
+    const withLog = JSON.parse(readFileSync(join(root, "run-with-log", "webui", "progress.json"), "utf8")) as Record<string, unknown>;
+    expect(withLog).toMatchObject({ round: 5, total_rounds: 6, step_remaining: 46, loss: 0.0646, percentage: 75.27 });
+    expect(typeof withLog.updated_at).toBe("string");
+    expect(existsSync(join(root, "run-no-log", "webui", "progress.json"))).toBe(false);
   });
 });
 

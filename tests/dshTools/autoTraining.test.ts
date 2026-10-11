@@ -9,7 +9,7 @@
  * 段3 OOM 自动降档重发：批参解析/补丁纯函数＋编排护栏（通报前置·每 run 一次·bs1 不重发·
  *   端口占用停手·DRY_RUN 不过不重发）。
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -17,6 +17,7 @@ import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confi
 import { currentPresetKey, isAutoTrainingTier } from "../../packages/extensions/atf-tools/src/autoTrainingTier.js";
 import { readTrainShBatchParams, patchTrainShForOom, maybeAutoOomFallback, oomFallbackStatePath } from "../../src/core/workspace/oomFallback.js";
 import { injectMonitorGlobal } from "../../packages/extensions/atf-ui/src/server.js";
+import { buildRunTrainingTool } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 
 const repoRoot = join(import.meta.dirname, "..", "..");
 
@@ -99,9 +100,15 @@ describe("批㊶-Q 段1 档位面（auto_training 注册＋投影 catalog＋uat 
     expect(profile).toMatch(/auto_training:\n\s+sandbox: danger-full-access\n\s+approval: ask\n\s+name: 全自动训练/);
     expect(profile).toContain("defaultPreset: danger-full-access");
   });
-  it("uat profile（dsh-home-tongshi）本批零触碰——无 auto_training 键（同事真训现场冻结）", () => {
+  it("模板注册 auto_training（批㊶Q增补一裁定 2：uat 随窗——两环境同款自模板单源出）；defaultPreset 仍为 danger-full-access", () => {
+    const template = readFileSync(join(repoRoot, "deploy", "profiles", "web", "cordis.patch.template.yml"), "utf8");
+    expect(template).toMatch(/auto_training:\n\s+sandbox: danger-full-access\n\s+approval: ask\n\s+name: 全自动训练/);
+    expect(template).toContain("defaultPreset: danger-full-access");
+  });
+  it("uat profile（dsh-home-tongshi）已随窗注册 auto_training（批㊶Q增补一裁定 2；生成物与 dev 同款）", () => {
     const profile = readFileSync(join(repoRoot, "poc", "dsh-home-tongshi", "profiles", "web", "cordis.patch.yml"), "utf8");
-    expect(profile).not.toContain("auto_training");
+    expect(profile).toMatch(/auto_training:\n\s+sandbox: danger-full-access\n\s+approval: ask\n\s+name: 全自动训练/);
+    expect(profile).toContain("defaultPreset: danger-full-access");
   });
   it("投影面：injectMonitorGlobal 增 catalog additive 键（key+label 两键形态，auto_training 流入）；旧键零变化", () => {
     const html = injectMonitorGlobal(
@@ -235,16 +242,29 @@ describe("批㊶-Q 段2 atf_config_confirm 全自动分支（免阻塞落快照�
 });
 
 describe("批㊶-Q 段2 手动档回归（确认卡行为零变化＋recommend 不消费）", () => {
-  it("手动档 present：审批链原样（requestApproval 调用＋pending 卡落盘），alerts 无 config_auto 通报", async () => {
+  it("手动档 present：审批链原样（requestApproval 调用），确认完成后 pending 卡清（增补二3——.answered 备份留存），alerts 无 config_auto 通报", async () => {
     const root = seedRun(tempRoot("kQ-manual-"));
     const recorded = { approvals: [] as string[] };
     const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx("danger-full-access", recorded) });
     const result = (await findTool(tools, "atf_config_confirm").execute({ action: "present", run_id: "run-q" }, sessionExec)) as Record<string, unknown>;
     expect(recorded.approvals).toHaveLength(1);
     expect(result).toMatchObject({ ok: true, confirmed: true });
-    expect(existsSync(join(root, "run-q", "webui", "pending-confirm.json"))).toBe(true);
+    // 增补二3：确认完成即清 pending 卡（备份改名 .answered——原文件不在场）
+    expect(existsSync(join(root, "run-q", "webui", "pending-confirm.json"))).toBe(false);
+    const webuiFiles = readdirSync(join(root, "run-q", "webui"));
+    expect(webuiFiles.some((f) => f.startsWith("pending-confirm.json.answered."))).toBe(true);
     expect(existsSync(join(root, "run-q", "webui", "alerts.json"))).toBe(false);
     expect(result["auto"]).toBeUndefined();
+  });
+  it("增补二3：自动档确认清理历史残留 pending 卡（手动卡后切档场景）", async () => {
+    const root = seedRun(tempRoot("kQ-auto-pending-"));
+    mkdirSync(join(root, "run-q", "webui"), { recursive: true });
+    writeFileSync(join(root, "run-q", "webui", "pending-confirm.json"), '{"kind":"config_confirm","run_id":"run-q"}');
+    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx("auto_training") });
+    await findTool(tools, "atf_config_confirm").execute({ action: "present", run_id: "run-q" }, sessionExec);
+    expect(existsSync(join(root, "run-q", "webui", "pending-confirm.json"))).toBe(false);
+    const webuiFiles = readdirSync(join(root, "run-q", "webui"));
+    expect(webuiFiles.some((f) => f.startsWith("pending-confirm.json.answered."))).toBe(true);
   });
   it("手动档 recommend 参数不消费（自动档专属）——不落快照不通报，结构化提示", async () => {
     const root = seedRun(tempRoot("kQ-manual-rec-"));
@@ -416,5 +436,78 @@ describe("批㊶-Q 段3 OOM 自动降档重发（纯函数＋编排护栏）", (
     const portBusy = await mk({ code: 0, stdout: "ADMISSION=pass" }, { occupied: true });
     expect(portBusy.triggered).toBe(false);
     expect(readAlertsFile(join(portBusy.runDir)).find((a) => a["kind"] === "oom_fallback")).toMatchObject({ level: "warn" });
+  });
+});
+
+// ------------------------------------------------- 批㊶Q增补一 danger 卡收窄（裁定 1 乙）
+
+
+/** 审批结果可控的 ctx 桩（tierCtx 的 request 恒 allowed-once——本组需要 rejected 形态）。 */
+const tierCtxOutcome = (tier: string, outcome: string, recorded: { approvals: string[] }) => ({
+  get: (service: string) => {
+    if (service === "permissionPresets") {
+      return {
+        current: (session: unknown) => (session !== undefined ? tier : "danger-full-access"),
+        defaultPreset: "danger-full-access",
+      };
+    }
+    if (service === "approval") {
+      return { request: async (req: { reason: string }) => { recorded.approvals.push(req.reason); return outcome; } };
+    }
+    return undefined;
+  },
+});
+
+describe("批㊶Q增补一 danger 卡任何档位阻塞（owner 裁定 1 乙——真实 GPU 训练启动确认永远人工审批）", () => {
+  /** start 前置夹具：DRY_RUN 过（ADMISSION=pass）＋prelaunch 报告在场＋冷端口。 */
+  const seedStart = (root: string): { trainSh: string } => {
+    const runDir = join(root, "run-q");
+    const launchDir = join(runDir, "launch");
+    mkdirSync(launchDir, { recursive: true });
+    const trainSh = join(launchDir, "train.sh");
+    writeFileSync(trainSh, TRAIN_SH_TEMPLATE.replace("29517", "39577"));
+    writeFileSync(join(launchDir, "prelaunch-report.md"), "# prelaunch（增补一 danger 锚夹具）\n");
+    return { trainSh };
+  };
+
+  it("全自动档 start：danger 卡仍阻塞——审批恰一次（理由含真实 GPU 训练启动确认），拒绝即结构化拒绝，无 train_auto 通报", async () => {
+    const root = tempRoot("kQz1-auto-");
+    const { trainSh } = seedStart(root);
+    const recorded = { approvals: [] as string[] };
+    const tool = buildRunTrainingTool(tierCtxOutcome("auto_training", "rejected", recorded), { runsRoot: root, logDir: join(root, "logs"), ctx: {} as never });
+    const result = (await (tool as unknown as DshToolLike).execute(
+      { action: "start", train_sh: trainSh, run_id: "run-q" },
+      sessionExec,
+    )) as Record<string, unknown>;
+    // danger 卡任何档位阻塞：审批调用恰一次；拒绝即不开训
+    expect(recorded.approvals).toHaveLength(1);
+    expect(recorded.approvals[0]).toContain("真实 GPU 训练启动确认");
+    expect(result).toMatchObject({ error: "approval_denied", outcome: "rejected" });
+    // 不再转通报（train_auto 通报块已随裁定 1 乙移除）
+    expect(existsSync(join(root, "run-q", "webui", "alerts.json"))).toBe(false);
+  });
+
+  it("手动档 start 全链不变：同样 danger 卡一次审批＋拒绝即停（与全自动档同语义）", async () => {
+    const root = tempRoot("kQz1-manual-");
+    const { trainSh } = seedStart(root);
+    const recorded = { approvals: [] as string[] };
+    const tool = buildRunTrainingTool(tierCtxOutcome("danger-full-access", "rejected", recorded), { runsRoot: root, logDir: join(root, "logs"), ctx: {} as never });
+    const result = (await (tool as unknown as DshToolLike).execute(
+      { action: "start", train_sh: trainSh, run_id: "run-q" },
+      sessionExec,
+    )) as Record<string, unknown>;
+    expect(recorded.approvals).toHaveLength(1);
+    expect(recorded.approvals[0]).toContain("真实 GPU 训练启动确认");
+    expect(result).toMatchObject({ error: "approval_denied", outcome: "rejected" });
+  });
+
+  it("源码锚：GPU 琥珀卡免再确认分支在位（全自动档通报化语义保持）＋train_auto 放行通报块已移除", () => {
+    const src = readFileSync(join(repoRoot, "packages", "extensions", "atf-tools", "src", "trainingFace.ts"), "utf8");
+    // 琥珀卡：全自动档免再确认（窗口命中即启动）保持 Q 批语义
+    expect(src).toContain("if (!autoTierStart)");
+    // 裁定 1 乙：train_auto「训练自动放行（免审批）」通报块不再存在
+    expect(src).not.toContain("训练自动放行");
+    // danger 卡无条件审批（任何档位）
+    expect(src).toContain("danger 卡\n      // 恢复任何档位阻塞");
   });
 });

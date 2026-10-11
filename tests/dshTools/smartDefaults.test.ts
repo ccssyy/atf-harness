@@ -107,6 +107,18 @@ describe("批㊶-P P-2 训练探针（自适应基线）", () => {
     }
     return points;
   };
+  // 变化 loss 序列（避开 warn·loss 停滞判据——同值三周期抢跑；增补二锚专用于 error·假死语义）
+  const lossPointsVaried = (gapsSec: number[]): Array<Record<string, unknown>> => {
+    const points: Array<Record<string, unknown>> = [];
+    let at = Date.now() - gapsSec.reduce((a, b) => a + b, 0) * 1000;
+    let v = 0.5;
+    for (const gap of gapsSec) {
+      at += gap * 1000;
+      v -= 0.01;
+      points.push({ train_loss: v, at: new Date(at).toISOString() });
+    }
+    return points;
+  };
 
   it("中位数基线：300s 间隔 → 阈值 max(900,600)=900s；无基线 → 保守 1800s", () => {
     expect(staleThresholdSec(medianStepIntervalSec(lossPoints([300, 300, 300, 300])))).toBe(900);
@@ -114,16 +126,51 @@ describe("批㊶-P P-2 训练探针（自适应基线）", () => {
     expect(staleThresholdSec(medianStepIntervalSec(lossPoints([30, 30])))).toBe(600);
   });
 
-  it("error·假死：active＋progress 停更超自适应阈值 → error（步长数分钟场景——100s 间隔基线阈值 600s）", () => {
-    const points = lossPoints([100, 100, 100]);
+  it("error·假死（增补二2 修正语义）：活跃证据全过期（loss 点过期＋trainer_log 过期）＋progress 停更 → error", () => {
+    // 手造末点过期列（helper 末点恒 now）：间隔 20/40s→median 30→阈值 600s；末点 now-700s 全证据过期
+    const now = Date.now();
+    const points = [
+      { train_loss: 0.5, at: new Date(now - 760_000).toISOString() },
+      { train_loss: 0.49, at: new Date(now - 740_000).toISOString() },
+      { train_loss: 0.48, at: new Date(now - 700_000).toISOString() },
+    ];
     const alert = probeRun({
       trainingActive: true, tmuxEvidence: true, lossSeriesFresh: true, trainingDone: false,
       lossPoints: points,
+      trainerLogMtimeMs: Date.now() - 700_000,
       progress: { round: 6, loss: 0.3, updated_at: new Date(Date.now() - 610_000).toISOString() },
       logTailText: "", nowMs: Date.now(),
     });
     expect(alert?.level).toBe("error");
     expect(alert?.reason).toContain("停滞");
+    expect(alert?.reason).toContain("产物已停更");
+  });
+  it("增补二2：progress 停更但 loss-series 增量新鲜 → null（P 批误报场景反演——progress 单独不构成假死）", () => {
+    const alert = probeRun({
+      trainingActive: true, tmuxEvidence: true, lossSeriesFresh: true, trainingDone: false,
+      lossPoints: lossPointsVaried([100, 100, 100]), // 末点＝now（健康增量）
+      progress: { round: 1, loss: 0.42, updated_at: new Date(Date.now() - 8 * 3_600_000).toISOString() }, // 停更 8h
+      logTailText: "", nowMs: Date.now(),
+    });
+    expect(alert).toBeNull();
+  });
+  it("增补二2：loss 点过期但 trainer_log 步进新鲜 → null（活跃证据取两者较新）", () => {
+    const alert = probeRun({
+      trainingActive: true, tmuxEvidence: true, lossSeriesFresh: true, trainingDone: false,
+      lossPoints: lossPointsVaried([700, 700, 700]),
+      trainerLogMtimeMs: Date.now() - 60_000,
+      progress: { round: 1, loss: 0.42, updated_at: new Date(Date.now() - 610_000).toISOString() },
+      logTailText: "", nowMs: Date.now(),
+    });
+    expect(alert).toBeNull();
+  });
+  it("增补二2：无进展历史（progress null＋无 loss 点＋无 trainer_log）→ null（信息不足 fail-open）", () => {
+    const alert = probeRun({
+      trainingActive: true, tmuxEvidence: true, lossSeriesFresh: true, trainingDone: false,
+      lossPoints: [], progress: null, trainerLogMtimeMs: null,
+      logTailText: "", nowMs: Date.now(),
+    });
+    expect(alert).toBeNull();
   });
 
   it("error·进程消失：取证消失＋产物过窗＋未 done → error；OOM 特征 → error（降档建议文案）", () => {

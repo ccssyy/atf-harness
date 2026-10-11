@@ -240,3 +240,51 @@ describe("批㊶-P P-2 探针经 scanRunDir→monitor 投影链（alerts.json→
     expect(scanEmpty.probe).toBeNull();
   });
 });
+
+// ── 批㊶Q增补二1：progress 持续写链（trainer_log 步进单源）──
+
+import {
+  buildProgressFromTrainerLog,
+  parseTrainerLogLine,
+  readNumTrainEpochs,
+  readTrainerLogTail,
+} from "../../src/core/workspace/runFacts.js";
+
+describe("批㊶Q增补二1 progress 持续写链（trainer_log 步进解析＋progress 组装＋epochs 读取）", () => {
+  it("parseTrainerLogLine：合法行全键解析；缺键/坏 JSON/空行 → null（不猜测）", () => {
+    const ok = parseTrainerLogLine('{"current_steps": 140, "total_steps": 186, "loss": 0.0646, "lr": 3.66e-5, "epoch": 4.52, "percentage": 75.27}');
+    expect(ok).toEqual({ current_steps: 140, total_steps: 186, loss: 0.0646, epoch: 4.52, percentage: 75.27 });
+    expect(parseTrainerLogLine('{"current_steps": 1}')).toBeNull();
+    expect(parseTrainerLogLine("not-json")).toBeNull();
+    expect(parseTrainerLogLine("")).toBeNull();
+  });
+  it("readTrainerLogTail：真文件取末条非空行；缺席/全空 → null", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-p");
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "trainer_log.jsonl"), '{"current_steps": 1, "total_steps": 186, "loss": 0.42, "epoch": 0.07, "percentage": 0.5}\n\n{"current_steps": 2, "total_steps": 186, "loss": 0.41, "epoch": 0.14, "percentage": 1.1}\n');
+    expect(readTrainerLogTail(runDir)).toEqual({ current_steps: 2, total_steps: 186, loss: 0.41, epoch: 0.14, percentage: 1.1 });
+    expect(readTrainerLogTail(join(root, "run-absent"))).toBeNull();
+  });
+  it("buildProgressFromTrainerLog：epoch 语义轮次（1-based 封顶）＋percentage＋step_remaining；epochs 缺源不写 total_rounds", () => {
+    const p1 = buildProgressFromTrainerLog({ current_steps: 140, total_steps: 186, loss: 0.0646, epoch: 4.52, percentage: 75.27 }, 6, "2026-10-11T01:00:00Z");
+    expect(p1).toMatchObject({ round: 5, total_rounds: 6, step_remaining: 46, loss: 0.0646, percentage: 75.27, updated_at: "2026-10-11T01:00:00Z" });
+    const p2 = buildProgressFromTrainerLog({ current_steps: 186, total_steps: 186, loss: 0.06, epoch: 6, percentage: 100 }, 6, "n");
+    expect(p2.round).toBe(6); // 完成态封顶不越界
+    const p3 = buildProgressFromTrainerLog({ current_steps: 10, total_steps: 186, loss: 0.4, epoch: 0.2, percentage: 5.4 }, null, "n");
+    expect(p3.round).toBe(1);
+    expect(p3.total_rounds).toBeUndefined();
+  });
+  it("readNumTrainEpochs：live 路径优先／legacy 回退／缺席非法 → null", () => {
+    const root = tempRoot();
+    const live = join(root, "run-live");
+    mkdirSync(join(live, "prep"), { recursive: true });
+    writeFileSync(join(live, "prep", "iteration-config.json"), JSON.stringify({ training: { num_train_epochs: 6 } }));
+    expect(readNumTrainEpochs(live)).toBe(6);
+    const legacy = join(root, "run-legacy");
+    mkdirSync(join(legacy, "prep", "iteration-config"), { recursive: true });
+    writeFileSync(join(legacy, "prep", "iteration-config", "iteration-config.json"), JSON.stringify({ training: { num_train_epochs: "3" } }));
+    expect(readNumTrainEpochs(legacy)).toBe(3);
+    expect(readNumTrainEpochs(join(root, "run-none"))).toBeNull();
+  });
+});

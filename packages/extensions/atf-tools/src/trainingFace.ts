@@ -20,7 +20,6 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
 import { scanRunDir } from "../../atf-ui/src/server.js";
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
-import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
 import { isAutoTrainingTier } from "./autoTrainingTier.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
@@ -284,21 +283,14 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         return asToolValue({ started: false, error: "port_occupied_non_residue", port, occupant, note: formatPortConflictNote(port, occupant) });
       }
       const conflictNote = occupant !== null ? `\n${formatPortConflictNote(port, occupant)}` : "";
-      // 批㊶-Q 段2：全自动训练档（会话档位=auto_training）——训练放行免阻塞，danger 卡语义
-      // 切换为通报呈现（alerts.json＋告警行，可回看）；ADR-07 内核侧账本闸门不变（train.sh 内
-      // 放行记录校验原样保留，无记录 exit 78）。手动档审批链零变化。
+      // 批㊶-Q 段2：全自动训练档（会话档位=auto_training）——九要素确认卡与 GPU 琥珀卡
+      // （下方 amber 段）维持通报化/免再确认。批㊶Q增补一（owner 裁定 1 乙）：danger 卡
+      // 恢复任何档位阻塞——真实 GPU 训练启动确认永远保留人工审批（真实 GPU 代价操作一次
+      // 人工确认，产品纪律）；ADR-07 内核侧账本闸门不变（train.sh 内放行记录校验原样保留，
+      // 无记录 exit 78）。手动档审批链零变化。
       const autoTierStart = isAutoTrainingTier(ctx, exec);
-      if (autoTierStart) {
-        appendNotification(join(cfg.runsRoot, args.run_id), {
-          level: "info",
-          kind: "train_auto",
-          since: new Date().toISOString(),
-          reason: `全自动训练档·训练自动放行（免审批）：train.sh=${args.train_sh}——真实 GPU 训练（GPU/时长代价以 train.sh 为准）${conflictNote !== "" ? `；${conflictNote.trim()}` : ""}`,
-        });
-      } else {
-        const verdict = await requestApproval(ctx, exec, "atf_run_training", `真实 GPU 训练启动确认（GPU/时长代价以九要素确认卡与 train.sh 为准）：train.sh=${args.train_sh}${conflictNote}`);
-        if (!verdict.ok) return approvalDeniedResult("atf_run_training", verdict.outcome);
-      }
+      const verdict = await requestApproval(ctx, exec, "atf_run_training", `真实 GPU 训练启动确认（GPU/时长代价以九要素确认卡与 train.sh 为准）：train.sh=${args.train_sh}${conflictNote}`);
+      if (!verdict.ok) return approvalDeniedResult("atf_run_training", verdict.outcome);
       // 批㊶-K 项 1：GPU 排队编排（真跑 danger 放行后入队——原 WebUI 语义迁移：周期探测
       // util<20%＋显存<10GB 连续 2 周期；命中→琥珀再确认卡人工放行（真跑守门不变）；
       // 无超时；编排器零启动调用。env ATF_GPU_POLL_MS 可配，缺省 300s）

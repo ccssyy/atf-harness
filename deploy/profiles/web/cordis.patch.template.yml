@@ -158,4 +158,12 @@
         sandbox: danger-full-access
         approval: ask
         name: Full access
+      # 批㊶-Q 全自动智能训练档（批㊶Q增补一 owner 裁定 2：uat 随窗注册——两环境同款）。
+      # 档位语义在 ATF 工具层（autoTrainingTier）；approval 恒 ask 与三档同旋钮。
+      # 批㊶Q增补一（裁定 1 乙）：danger 卡（真实 GPU 训练启动确认）任何档位保留阻塞。
+      auto_training:
+        sandbox: danger-full-access
+        approval: ask
+        name: 全自动训练
+        description: 训练链自动确认＋通报呈现（真实放行账本闸门不变；切档须经界面人工操作）
     defaultPreset: danger-full-access

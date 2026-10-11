@@ -2,9 +2,11 @@
  * 批㊶-P P-2——训练探针（自适应步长基线）＋告警面（run 目录本地 alerts.json，fail-open）。
  *
  * 判定四态（同步器 5s 扫描内 per-run）：
- *   error·假死    —— training.active=true 且 progress.updated_at 停更超阈值；
- *                    阈值＝max(progress 历史步间隔中位数×3, 10 分钟)；无历史基线＝30 分钟保守缺省
+ *   error·假死    —— training.active=true 且活跃证据（loss-series 末点增量／trainer_log 步进写入）
+ *                    全部停更超阈值；阈值＝max(loss 点步间隔中位数×3, 10 分钟)；无基线＝30 分钟保守缺省
  *                    （owner 修订：单步可能数分钟，替代一刀切 3 分钟）。
+ *                    批㊶Q增补二2 修正：progress 停更单独不构成假死（progress 仅 status 时写——
+ *                    P 批判据脱节实证：健康训练误报停滞 8h、alerts 50 条打满）。
  *   error·进程消失 —— tmux 绑 run 取证消失＋loss-series mtime 过窗＋training 段未 done（沿 O-1）。
  *   error·OOM     —— 训练日志匹配 CUDA out of memory 特征 → 触发 P-1 OOM 降档建议（bs1/accum×2/gb256 预填）。
  *   warn·loss 停滞 —— loss 连续 N 个判定周期无变化（N 自适应沿基线机制）；仅提示不打断。
@@ -103,6 +105,8 @@ export interface ProbeInput {
   trainingDone: boolean;
   lossPoints: Array<Record<string, unknown>>;
   progress: RunProgress | null;
+  /** 批㊶Q增补二2：trainer_log.jsonl mtime（步进写入活性；null＝无此证据面）。 */
+  trainerLogMtimeMs?: number | null;
   logTailText: string;
   nowMs: number;
 }
@@ -118,15 +122,27 @@ export const probeRun = (input: ProbeInput): ProbeAlert | null => {
   if (input.trainingActive && !input.tmuxEvidence && !input.lossSeriesFresh && !input.trainingDone) {
     return { level: "error", kind: "probe", reason: "训练进程消失（tmux 取证无本 run 会话且产物停止更新）", since };
   }
-  // error·假死（自适应停更阈值）
-  if (input.trainingActive && input.progress !== null) {
+  // error·假死（批㊶Q增补二2 判据修正）：活跃证据＝loss-series 末点增量或 trainer_log 步进写入
+  // （两者 mtime/时间戳任一在自适应阈值内即健康）；progress 停更单独不构成假死——P 批判据
+  // 脱节实证：progress 仅 status 查询时写（低频），健康训练被误报停滞 8h（alerts 50 条打满）。
+  // 无任何进展历史（progress null 且无 loss 点）＝信息不足不判（fail-open）。
+  if (input.trainingActive) {
     const median = medianStepIntervalSec(input.lossPoints);
-    const thresholdSec = staleThresholdSec(median);
-    const updatedAt = Date.parse(input.progress.updated_at);
-    if (Number.isFinite(updatedAt) && input.nowMs - updatedAt > thresholdSec * 1000) {
+    const thresholdMs = staleThresholdSec(median) * 1000;
+    let lastEvidenceAt: number | null = null;
+    for (let i = input.lossPoints.length - 1; i >= 0; i -= 1) {
+      const at = Date.parse(String(input.lossPoints[i]?.["at"] ?? ""));
+      if (Number.isFinite(at)) { lastEvidenceAt = at; break; }
+    }
+    if (input.trainerLogMtimeMs !== null && input.trainerLogMtimeMs !== undefined && Number.isFinite(input.trainerLogMtimeMs)) {
+      lastEvidenceAt = lastEvidenceAt === null ? input.trainerLogMtimeMs : Math.max(lastEvidenceAt, input.trainerLogMtimeMs);
+    }
+    const progressStale = input.progress !== null && Number.isFinite(Date.parse(input.progress.updated_at)) &&
+      input.nowMs - Date.parse(input.progress.updated_at) > thresholdMs;
+    if (progressStale && lastEvidenceAt !== null && input.nowMs - lastEvidenceAt > thresholdMs) {
       return {
         level: "error",
-        reason: `训练疑似停滞 · 进度已停更 ${Math.round((input.nowMs - updatedAt) / 60000)} 分钟（阈值 ${Math.round(thresholdSec / 60)} 分钟，自适应步长基线）`,
+        reason: `训练疑似停滞 · 进度与产物已停更 ${Math.round((input.nowMs - (lastEvidenceAt ?? input.nowMs)) / 60000)} 分钟（阈值 ${Math.round(thresholdMs / 60000)} 分钟，自适应步长基线）`,
         since,
       };
     }

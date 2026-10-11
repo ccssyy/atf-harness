@@ -10,7 +10,7 @@
  * 纯文字应答链（指令验收 1）：用户回复「lr 改 2e-4」→ GLM 调本工具 action=amend →
  * parseConfigEditText 解析 → 新 fields 重呈。
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildConfigConfirmFields, parseConfigEditText, saveConfigSnapshot } from "../../../../src/webui/configConfirm.js";
@@ -70,6 +70,17 @@ const writePending = (runsRoot: string, runId: string, payload: Record<string, u
   const dir = join(runsRoot, runId, "webui");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "pending-confirm.json"), `${JSON.stringify(payload, null, 1)}\n`, "utf8");
+};
+
+/** 批㊶Q增补二3：pending 卡清理（确认/放行完成后——备份先行改名 .answered.<毫秒戳>.json，
+ *  审计留存；文件缺席/改名失败静默 fail-open）。残留实证：P 批 run-regress-large-pl 确认
+ *  完成后卡文件留存 8h＋，UI 持续渲染待确认态。 */
+const clearPending = (runsRoot: string, runId: string): void => {
+  try {
+    const path = join(runsRoot, runId, "webui", "pending-confirm.json");
+    if (!existsSync(path)) return;
+    renameSync(path, `${path}.answered.${Date.now()}.json`);
+  } catch { /* fail-open */ }
 };
 
 export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
@@ -256,6 +267,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         // 不写 pending 卡（无卡可应答——卡面内容转为通报）；改参走 amend 纯文字（同样免阻塞）
         appendNotification(runDir, { level: "info", kind: "config_auto", reason: notification, since: new Date().toISOString() });
         saveConfigSnapshot(runDir, confirmed, { auto: true, tier: AUTO_TRAINING_PRESET, sources });
+        // 批㊶Q增补二3：自动档同样确认完成——历史残留 pending 卡（如手动卡后切档）一并清理
+        clearPending(runsRoot, args.run_id);
         const iterConfigLiveAuto = join(runDir, "prep", "iteration-config.json");
         const iterConfigLegacyAuto = join(runDir, "prep", "iteration-config", "iteration-config.json");
         for (const candidate of [iterConfigLiveAuto, iterConfigLegacyAuto]) {
@@ -294,6 +307,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const confirmed: Record<string, string> = {};
       for (const field of fields) confirmed[field.key] = field.value;
       saveConfigSnapshot(runDir, confirmed);
+      // 批㊶Q增补二3：确认完成即清 pending 卡（备份改名 .answered——残留则 UI 持续渲染待确认态）
+      clearPending(runsRoot, args.run_id);
       // 批㊶-P P-1a：确认快照回写 iteration-config training 段＋param_sources 标注
       // （harness 侧生成物后处理——内核 generate_iteration_config 无确认卡通路[实锚]；
       //  prelaunch 报告"无确认记录"由此消除，链路级修正）。写失败静默（fail-open）。
@@ -343,6 +358,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       writePending(runsRoot, args.run_id, { kind: "publish_confirm", run_id: args.run_id, title, digest: candidateDigest, at: new Date().toISOString() });
       const verdict = await requestApproval(ctx, exec, "atf_publish_confirm", `${title}\n${body}\n确认发布请点 Allow once。`);
       if (!verdict.ok) return approvalDeniedResult("atf_publish_confirm", verdict.outcome);
+      // 批㊶Q增补二3：放行完成即清 pending 卡（同确认卡语义）
+      clearPending(runsRoot, args.run_id);
       // 批㊶-M M-3 段事实轨：契约发布确认成功即登记（publish 段）
       appendSegmentFact(join(deps.runsRoot, args.run_id), "publish", "atf_publish_confirm");
       // 批㊶-N N-5：会话绑定

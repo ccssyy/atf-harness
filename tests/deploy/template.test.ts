@@ -33,14 +33,17 @@ afterEach(() => {
 });
 
 describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收敛／工具单轨）", () => {
-  it("审批映射双旋钮解耦：三档 approval 恒 ask（never 不得出现）＋defaultPreset=danger-full-access（OS 沙箱关＋白名单恒开语义）", () => {
-    const permission = rowById(templateRows(), "permission") as { config?: { presets?: Record<string, { approval?: string }>; defaultPreset?: string } };
+  it("审批映射双旋钮解耦：四档 approval 恒 ask（never 不得出现）＋defaultPreset=danger-full-access（OS 沙箱关＋白名单恒开语义）", () => {
+    const permission = rowById(templateRows(), "permission") as { config?: { presets?: Record<string, { approval?: string; sandbox?: string; name?: string }>; defaultPreset?: string } };
     expect(permission).toBeDefined();
     const presets = permission?.config?.presets ?? {};
-    expect(Object.keys(presets).sort()).toEqual(["danger-full-access", "read-only", "workspace-write"]);
+    // 批㊶Q增补一裁定 2：auto_training 入模板单源（两环境同款）——四档闭集
+    expect(Object.keys(presets).sort()).toEqual(["auto_training", "danger-full-access", "read-only", "workspace-write"]);
     for (const [name, preset] of Object.entries(presets)) {
       expect(preset.approval, name).toBe("ask");
     }
+    // auto_training 档形态与 dev 实例同款（sandbox 关＋应用层审批 ask＋中文名）
+    expect(presets["auto_training"]).toMatchObject({ sandbox: "danger-full-access", approval: "ask", name: "全自动训练" });
     expect(JSON.stringify(templateRows())).not.toContain("approval: never");
     expect(permission?.config?.defaultPreset).toBe("danger-full-access");
   });

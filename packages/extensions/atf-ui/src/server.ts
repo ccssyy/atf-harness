@@ -25,7 +25,7 @@ import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
 import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/workspace/oomFallback.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
-import { orderGuarded, readProgress, progressFresh, readBindings, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
+import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readTrainerLogTail, buildProgressFromTrainerLog, readNumTrainEpochs, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
 import { readAlerts } from "../../../../src/core/workspace/trainProbe.js";
 
 /** Cordis 插件名。 */
@@ -785,6 +785,10 @@ export const viewerRouteHandler = (deps: {
   res.end(req.method === "HEAD" ? undefined : body);
 };
 
+// 批㊶Q增补二1：progress 持续写链节流（≥30s/run 防刷盘——决议 §四.1）＋常量。
+const PROGRESS_SYNC_MIN_MS = 30_000;
+const progressSyncLastMs = new Map<string, number>();
+
 export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
   try {
     if (!existsSync(resolved.runsRoot)) return;
@@ -819,6 +823,19 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
       for (const run of runs) {
         if (!run.training.active) continue;
         const runDir = join(resolved.runsRoot, run.run_id);
+        // 批㊶Q增补二1：progress 持续写链——训练运行中随 trainer_log 步进刷新 progress.json
+        // （节流 ≥30s/次防刷盘；epoch 语义轮次＋percentage additive）。P 批断点修复：
+        // progress 原仅 status 查询时写（低频），浮卡进度与探针活跃判据双双失真。
+        try {
+          const nowMs = Date.now();
+          if (nowMs - (progressSyncLastMs.get(run.run_id) ?? 0) >= PROGRESS_SYNC_MIN_MS) {
+            const tail = readTrainerLogTail(runDir);
+            if (tail !== null) {
+              writeProgress(runDir, buildProgressFromTrainerLog(tail, readNumTrainEpochs(runDir), new Date(nowMs).toISOString()));
+              progressSyncLastMs.set(run.run_id, nowMs);
+            }
+          }
+        } catch { /* progress 持续链 fail-open（下周期再试） */ }
         let logTail = "";
         const logsDir = process.env["ATF_DSH_LOG_DIR"];
         if (logsDir !== undefined && existsSync(logsDir)) {
@@ -827,6 +844,12 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
             if (existsSync(trainLog)) logTail = readFileSync(trainLog, "utf8").slice(-8000);
           } catch { /* 日志不可读＝OOM 特征不可判 */ }
         }
+        // 批㊶Q增补二2：trainer_log.jsonl mtime（步进写入活性——探针活跃证据源之一）
+        let trainerLogMtimeMs: number | null = null;
+        try {
+          const trainerLogPath = join(runDir, "training", "trainer_log.jsonl");
+          if (existsSync(trainerLogPath)) trainerLogMtimeMs = statSync(trainerLogPath).mtimeMs;
+        } catch { /* 不可读＝null（判据按无此证据处理） */ }
         const alert = probeAndRecord(runDir, {
           trainingActive: true,
           tmuxEvidence: trainingEvidence[run.run_id] === true,
@@ -834,6 +857,7 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
           trainingDone: run.segments.training === true,
           lossPoints: Array.isArray(run.training.loss) ? (run.training.loss as Array<Record<string, unknown>>) : [],
           progress: readProgress(runDir),
+          trainerLogMtimeMs,
           logTailText: logTail,
           nowMs: Date.now(),
         });
