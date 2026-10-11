@@ -17,6 +17,9 @@ export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; de
   // 静态缺省留空＝机器事实未探测位（confirmFace 以 detectAvailableGpuCount 注入基线——
   // owner 裁定：训练默认拉满可用卡；visible_devices 缺失＝machine-facts 停下问，不设默认值）
   { key: "nproc_per_node", label: "训练卡数 nproc_per_node", default: "" },
+  // 批㊶-S5 §九：基模型路径入卡（默认＝模型库位置下 Qwen3-VL-32B-Instruct——owner 偏置锚点，
+  // confirmFace 以 defaultBaseModelPath 注入基线；卡上可改；写回 iteration-config base_model.path）
+  { key: "base_model_path", label: "基模型路径 base_model_path", default: "" },
   { key: "num_train_epochs", label: "训练轮数 epochs", default: "3" },
   { key: "per_device_train_batch_size", label: "单卡 batch", default: "1" },
   { key: "gradient_accumulation_steps", label: "梯度累积", default: "8" },
@@ -64,6 +67,9 @@ export const parseConfigEditText = (text: string): { edits: Record<string, strin
     卡数: "nproc_per_node",
     nproc: "nproc_per_node",
     nproc_per_node: "nproc_per_node",
+    基模型: "base_model_path",
+    base_model: "base_model_path",
+    base_model_path: "base_model_path",
     accum: "gradient_accumulation_steps",
     梯度累积: "gradient_accumulation_steps",
     cutoff: "cutoff_len",

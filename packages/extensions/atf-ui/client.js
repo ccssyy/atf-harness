@@ -47,6 +47,8 @@ window.__ModuleLoader__.load({
       setTrain: function(v) { this.train = v; this.listeners.forEach(function(fn) { fn() }) },
       setMonitor: function(open, runId) { this.monitorOpen = open; if (runId !== undefined) this.monitorRunId = runId; this.listeners.forEach(function(fn) { fn() }) },
       setTaskCard: function(v) { this.taskCardOpen = v; this.listeners.forEach(function(fn) { fn() }) },
+      // 批㊶-S5：设置浮层状态（null=关；{}=开）
+      setSettings: function(v) { this.settings = v; this.listeners.forEach(function(fn) { fn() }) },
     }
 
     /** monitor.json 轮询（sessionId 由 header.utilities 注入后生效；未就绪期静默等下周期）。 */
@@ -540,6 +542,110 @@ window.__ModuleLoader__.load({
         }
       }, [])
       return React.createElement(MonitorPanel)
+    }
+
+    /** 批㊶-S5 设置面板（B2——四区块浮层；数据源＝/atf-ui/settings 鉴权 GET/POST，同源 cookie）。
+     *  区块 1 根目录与存储（根/模型库·校验态红绿＋原因）；区块 2 运行环境（训练/评估 venv）；
+     *  区块 3 训练卡数基线（占位＝探测拉满）；区块 4 只读信息（灰底）。根变更保存前弹确认卡。 */
+    function SettingsPanel() {
+      var open = React.useSyncExternalStore(
+        function(fn) { return store.subscribe(fn) },
+        function() { return store.settings !== null && store.settings !== undefined },
+      )
+      var _st = React.useState(null)
+      var data = _st[0], setData = _st[1]
+      var _err = React.useState({})
+      var errors = _err[0], setErrors = _err[1]
+      var _form = React.useState(null)
+      var form = _form[0], setForm = _form[1]
+      var _msg = React.useState(null)
+      var msg = _msg[0], setMsg = _msg[1]
+      React.useEffect(function() {
+        if (!open) return
+        fetch('/atf-ui/settings', { credentials: 'same-origin' })
+          .then(function(r) { return r.json() })
+          .then(function(d) {
+            setData(d)
+            setForm({
+              atf_root: (d.storage.effective.atf_root || ''),
+              model_root: (d.storage.effective.model_root || ''),
+              train_env: (d.storage.effective.train_env || ''),
+              eval_env: (d.storage.effective.eval_env || ''),
+              train_gpu_baseline: (d.gpu_baseline_effective || ''),
+            })
+          })
+          .catch(function() { setMsg({ kind: 'err', text: '设置面读取失败（鉴权或服务不可用）' }) })
+      }, [open])
+      if (!open) return null
+      var field = function(key, label, placeholder, opts) {
+        opts = opts || {}
+        var err = errors[key]
+        return React.createElement('div', { style: { marginBottom: 10 } },
+          React.createElement('div', { style: { fontSize: 12, marginBottom: 3, color: 'var(--dsw-alias-label-primary,#1e293b)' } }, label),
+          React.createElement('input', {
+            value: (form && form[key]) || '', placeholder: placeholder || '',
+            style: {
+              width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '5px 8px', borderRadius: 6,
+              border: err ? '1px solid var(--dsw-static-red-500)' : '1px solid var(--dsw-alias-border-l3)',
+            },
+            onChange: function(e) { setForm(Object.assign({}, form, (function(o){ o[key] = e.target.value; return o })({}))) },
+          }),
+          err ? React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-static-red-500)', marginTop: 2 } }, err) : null,
+          opts.note ? React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary,#64748b)', marginTop: 2 } }, opts.note) : null)
+      }
+      var ro = (data && data.readonly) || {}
+      var save = function() {
+        if (form.atf_root !== ((data && data.storage.effective.atf_root) || '')) {
+          // §三.4 根目录变更警示卡
+          if (!window.confirm('根目录已改动：影响新建任务的目录归属，历史记录仍指向原位置。确认保存？')) return
+        }
+        setMsg(null)
+        fetch('/atf-ui/settings', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ storage: form }),
+        })
+          .then(function(r) { return r.json().then(function(b) { return { status: r.status, body: b } }) })
+          .then(function(r) {
+            if (r.status === 400) { setErrors(r.body.errors || {}); setMsg({ kind: 'err', text: '保存被拒绝——请修正标红项' }); return }
+            setErrors({})
+            setMsg({
+              kind: 'ok',
+              text: '已保存' + ((r.body.created_subdirs || []).length > 0 ? '（已创建约定子目录：' + r.body.created_subdirs.join('、') + '）' : '') + (r.body.warning ? '。' + r.body.warning : ''),
+            })
+          })
+          .catch(function() { setMsg({ kind: 'err', text: '保存失败（网络/服务不可用）' }) })
+      }
+      var blockTitle = function(t) { return React.createElement('div', { style: { fontWeight: 600, fontSize: 13, margin: '10px 0 6px', color: 'var(--dsw-alias-label-primary,#1e293b)' } }, t) }
+      return React.createElement('div', {
+        className: 'atf-viewer-overlay',
+        onClick: function(e) { if (e.target === e.currentTarget) store.setSettings(null) },
+      },
+        React.createElement('div', { className: 'atf-viewer-frame', style: { width: 'min(680px,94vw)', height: 'auto', maxHeight: '88vh' } },
+          React.createElement('div', { className: 'atf-viewer-head' },
+            React.createElement('b', null, '设置'),
+            React.createElement('span', { className: 'atf-viewer-empty' }, '根目录只影响新建任务的归属，现有数据位置不变'),
+            React.createElement('button', { className: 'atf-pill', onClick: function() { store.setSettings(null) } }, '×')),
+          React.createElement('div', { style: { padding: '10px 16px 16px', overflow: 'auto' } },
+            !data ? React.createElement('div', { className: 'atf-viewer-empty' }, '设置面读取中…') : React.createElement('div', null,
+              blockTitle('根目录与存储'),
+              field('atf_root', 'ATF 根目录', '统一根目录绝对路径（约定子目录 datasets/runs/logs 自动创建）'),
+              field('model_root', '模型库位置', '模型库绝对路径（改动＝下次任务生效）'),
+              blockTitle('运行环境'),
+              field('train_env', '训练环境（venv 绝对路径）', '未配置＝任务发起时询问'),
+              field('eval_env', '评估环境（venv 绝对路径）', '未配置＝任务发起时询问'),
+              blockTitle('训练卡数基线'),
+              field('train_gpu_baseline', '训练卡数基线', '默认＝探测可用卡数拉满（' + String((data && data.gpu_detected) || '—') + ' 卡）；确认卡仍可逐次改'),
+              blockTitle('只读信息'),
+              React.createElement('div', { style: { fontSize: 12, background: 'rgba(128,128,128,.08)', borderRadius: 8, padding: '8px 10px', lineHeight: 1.8 } },
+                React.createElement('div', null, '内核版本：' + (ro.kernel_version || '—')),
+                React.createElement('div', null, '审批记录位置：' + (ro.approval_ledger || '—')),
+                React.createElement('div', null, '模型凭据：' + (ro.key_status || '—')),
+                React.createElement('div', null, '实例：' + (ro.instance_id || '—'))),
+              msg ? React.createElement('div', { style: { fontSize: 12, marginTop: 10, color: msg.kind === 'err' ? 'var(--dsw-static-red-500)' : 'var(--dsw-static-green-500)' } }, msg.text) : null,
+              React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 } },
+                React.createElement('button', { className: 'atf-pill', onClick: function() { store.setSettings(null) } }, '关闭'),
+                React.createElement('button', { className: 'atf-pill atf-train-send', onClick: save }, '保存')))))
     }
 
     /** 发起训练对话框（批㉛段2）：run 选择＋IterationConfig 四件套摘要（含义＋值＋来源标注＋
@@ -1151,7 +1257,11 @@ window.__ModuleLoader__.load({
                 className: 'atf-pill', title: 'GPU 状态卡显隐',
                 onClick: injected.toggle,
               }, 'GPU'),
-              React.createElement(MonitorTogglePill))
+              React.createElement(MonitorTogglePill),
+              React.createElement('button', {
+                className: 'atf-pill', title: '设置（根目录与存储／运行环境／训练卡数基线）',
+                onClick: function() { store.setSettings({}) },
+              }, '设置'))
           })
         })
 
@@ -1231,7 +1341,8 @@ window.__ModuleLoader__.load({
                   onClick: function() { store.setTrain({ runId: null, mode: 'dry_run' }) },
                 }, '发起训练')),
               React.createElement(ViewerOverlay),
-              React.createElement(TrainDialog))
+              React.createElement(TrainDialog),
+              React.createElement(SettingsPanel))
               // 批㊶Q增补一：MonitorPanel 卸离 dock——pane body（MonitorBody）唯一挂载；
               // dock 遗留挂载曾是 fixed 全高条假 pane 的载体（遮挡根因，见 MonitorBody 注）
           })

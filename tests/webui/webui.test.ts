@@ -113,7 +113,7 @@ describe("config_confirm：九要素卡与纯文字应答", () => {
     expect(byKey["cutoff_len"]).toEqual({ key: "cutoff_len", value: "9000", tag: "default_used" });
     // 批㉚ 段1:九要素＋KB 门禁四项（token 上限/像素对/负样本带——原则二投影面）；
     // 批㊶R前置 扩键五同步①：卡数显性卡入键表（13→14）
-    expect(fields.length).toBe(14);
+    expect(fields.length).toBe(15);
   });
 
   it("批㉚ 段1:KB 门禁四项入卡——label 带 KB 来源标注与改法,纯文字别名可改", () => {
@@ -282,7 +282,7 @@ describe("会话语义（spawn mock pipeline）", () => {
     );
     // 卡面：缺省标已用缺省⚠、九要素齐全
     const cardEvent = manager.getSession(sessionId)?.events.find((event) => event.kind === "confirm_card");
-    expect(cardEvent !== undefined && cardEvent.kind === "confirm_card" && cardEvent.fields.length === 14).toBe(true); // 批㊶R前置：13→14
+    expect(cardEvent !== undefined && cardEvent.kind === "confirm_card" && cardEvent.fields.length === 15).toBe(true); // 批㊶R前置 13→14＋批㊶-S5 §九 14→15
     // 纯文字改参 → 重呈卡（lr 更新）
     await manager.postUserMessage(sessionId, "lr 改 2e-4 其他 ok");
     await waitFor(() => {

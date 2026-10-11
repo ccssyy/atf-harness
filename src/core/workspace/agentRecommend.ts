@@ -9,8 +9,18 @@
  * 回退语义（红线·不猜不编造）：推荐缺失该键 / 值不可解析 / 越界 → 终值取基线建议
  * （iteration-config L3 clamp 值＞固定缺省），来源 default:harness-smart-defaults，拦截事实进通报。
  */
+import { statSync } from "node:fs";
 import { CONFIG_CONFIRM_KEYS } from "../../webui/configConfirm.js";
 import { CLAMP_DOMAINS } from "./smartDefaults.js";
+
+/** 本地目录在位（agentRecommend 内联探测——防线①同源口径的轻量形）。 */
+const existsSyncDir = (path: string): boolean => {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+};
 
 /** 推荐护栏可消费的键集（九要素卡键集为闭集——卡外键一律拒收）。 */
 export const RECOMMENDABLE_KEYS: ReadonlySet<string> = new Set(CONFIG_CONFIRM_KEYS.map((entry) => entry.key));
@@ -94,6 +104,13 @@ export const evalAgentRecommend = (key: string, raw: unknown, baseline: string, 
       const value = num(raw);
       if (value === null) return reject("不可解析为数值");
       if (!(CLAMP_DOMAINS.image_max_pixels as number[]).includes(value)) return reject(`像素两档 {800000, 1600000}`);
+      break;
+    }
+    case "base_model_path": {
+      // 批㊶-S5 §九：基模型推荐确定性校验＝本地目录在位（防线①同源口径；家族名/HF id 拦截）
+      const value = typeof raw === "string" ? raw.trim() : "";
+      if (value === "") return reject("路径为空");
+      if (!existsSyncDir(value)) return reject("不是本地存在的目录（防线①同源口径）");
       break;
     }
     case "nproc_per_node": {

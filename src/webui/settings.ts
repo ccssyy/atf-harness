@@ -35,6 +35,30 @@ export interface EnvProfileSettings {
   base_model_dir: string;
 }
 
+/** 批㊶-S5：存储与运行环境设置块（§二区块 1/2/3——五字段；""＝未配置）。
+ *  单源纪律：本块只存设置面值；运行时生效值以 instance env > env-profile 现行优先级读取
+ *  （effectiveStorageValues 解析器投影），设置面保存不改写 boot env——漂移在只读区显性呈现。 */
+export interface StorageSettings {
+  /** ATF 根目录（新建任务归属；约定子目录 datasets/runs/logs 挂其下——仅新建生效） */
+  atf_root: string;
+  /** 模型库位置（独立大盘，不入根；运行时生效值＝env ATF_MODEL_ROOT） */
+  model_root: string;
+  /** 训练环境（venv 绝对路径；""＝未配置——任务发起时停下问，现行行为） */
+  train_env: string;
+  /** 评估环境（venv 绝对路径） */
+  eval_env: string;
+  /** 训练卡数基线（""＝探测可用卡数拉满；确认卡照旧逐次可改） */
+  train_gpu_baseline: string;
+}
+
+export const EMPTY_STORAGE_SETTINGS: StorageSettings = {
+  atf_root: "",
+  model_root: "",
+  train_env: "",
+  eval_env: "",
+  train_gpu_baseline: "",
+};
+
 export interface SettingsDoc {
   schema_version: "WebUiSettings/v1";
   providers: ProviderEntry[];
@@ -42,6 +66,8 @@ export interface SettingsDoc {
   approval_policy: ApprovalPolicy;
   env_profile: EnvProfileSettings;
   profile: ScenarioProfileId;
+  /** 批㊶-S5：存储与运行环境（区块 1/2/3）——缺席视为全未配置 */
+  storage: StorageSettings;
 }
 
 /** 上下文窗口 per-model 覆盖（区 1：数字输入，缺省按 provider 预设）——providers.json 内嵌。 */
@@ -96,6 +122,7 @@ const DEFAULT_SETTINGS = (): SettingsDoc => ({
   approval_policy: "per_card",
   env_profile: { train_env: "system", eval_env: "", gpu_visible_devices: "auto", master_port: 29517, base_model_dir: "" },
   profile: "first_train",
+  storage: { ...EMPTY_STORAGE_SETTINGS },
 });
 
 // ---------------------------------------------------------------- 读写（热生效）
@@ -112,6 +139,7 @@ const loadDoc = (settingsPath: string): SettingsDoc => {
       approval_policy: parsed.approval_policy ?? fallback.approval_policy,
       env_profile: { ...fallback.env_profile, ...(typeof parsed.env_profile === "object" && parsed.env_profile !== null ? parsed.env_profile : {}) },
       profile: parsed.profile ?? fallback.profile,
+      storage: { ...fallback.storage, ...(typeof parsed.storage === "object" && parsed.storage !== null ? parsed.storage : {}) },
     };
   } catch {
     return DEFAULT_SETTINGS();

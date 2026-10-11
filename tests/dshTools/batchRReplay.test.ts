@@ -24,6 +24,16 @@ describe("批㊶R前置 VERIFY 工具面真机重演（真件×真根；现场�
       console.warn(`[guard] 重演现场缺席（${trainSh}）——skip`);
       return;
     }
+    // arrange（幂等——VERIFY3 的确认流会把合法锚点写回 base_model.path，跨用例自污染会解除
+    // 本用例的靶形；且靶形一旦解除，陈旧 train.sh 携原放行 sha 越账本闸真起训——20261012 事故实证）
+    const iterPathV1 = join(REPLAY_RUNS, REPLAY_ID, "prep", "iteration-config", "iteration-config.json");
+    const iterDocV1 = JSON.parse(readFileSync(iterPathV1, "utf8")) as { base_model: Record<string, unknown>; training: Record<string, unknown> };
+    iterDocV1.base_model = { family: "qwen3_vl", path: "qwen3_vl" };
+    iterDocV1.training["nproc_per_node"] = 1;
+    writeFileSync(iterPathV1, `${JSON.stringify(iterDocV1, null, 1)}\n`);
+    rmSync(join(REPLAY_RUNS, REPLAY_ID, "webui", "config-snapshot.json"), { force: true });
+    // 双保险：即使靶形意外失效，也不得进 GPU 队列/真训（本锚定位＝秒拒面）
+    process.env["ATF_GPU_POLL_MS"] = "0";
     // 真机实例 boot env 带 ATF_MODEL_ROOT（deploy/instances/*.env）——测试进程对齐注入
     const savedModelRoot = process.env["ATF_MODEL_ROOT"];
     process.env["ATF_MODEL_ROOT"] = MODEL_ROOT;

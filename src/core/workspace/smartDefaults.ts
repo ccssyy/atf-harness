@@ -57,6 +57,17 @@ export const CLAMP_DOMAINS = {
   image_max_pixels: [800000, 1600000] as number[],
 };
 
+// ── 批㊶-S5 §九：默认基模型锚点（owner 10-12 裁定——确认卡基线默认，卡上可改；非全局锁定）──
+/** 默认基模型目录名（锚点＝owner 偏置；路径由模型库位置派生，零绝对路径硬编码）。 */
+export const DEFAULT_BASE_MODEL_NAME = "Qwen3-VL-32B-Instruct";
+
+/** 默认基模型路径派生（模型库位置 env ＞ null——不猜）。防线①消费同一值（VERIFY §九）。 */
+export const defaultBaseModelPath = (env: Readonly<Record<string, string | undefined>>): string | null => {
+  const root = env["ATF_MODEL_ROOT"];
+  if (typeof root !== "string" || root.trim() === "") return null;
+  return join(root.trim(), DEFAULT_BASE_MODEL_NAME);
+};
+
 /** 全局批量目标（owner 修订：iteration-config 全局目标）。 */
 export const GLOBAL_BATCH_TARGET = 256;
 /** 单实例 GPU 数（N-2 附录：nproc 8 卡固定缺省——批㊶R前置起仅作 kernel 面历史缺省，
@@ -274,6 +285,15 @@ export const applyConfirmedToIterationConfig = (
     const sources = (config["param_sources"] ?? {}) as Record<string, string>;
     const updated: string[] = [];
     for (const [key, value] of Object.entries(confirmed)) {
+      if (key === "base_model_path") {
+        // 批㊶-S5 §九：基模型路径＝base_model 段嵌套字段（非 training 段）——确认值写回该位
+        const baseModel = (config["base_model"] ?? {}) as Record<string, unknown>;
+        baseModel["path"] = value;
+        config["base_model"] = baseModel;
+        sources[key] = perKeySources?.[key] ?? source;
+        updated.push(key);
+        continue;
+      }
       if (key in training || key in FIXED_SMART_DEFAULTS || CONFIRM_PERSIST_EXTRA_KEYS.has(key)) {
         training[key] = value;
         sources[key] = perKeySources?.[key] ?? source;

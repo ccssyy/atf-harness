@@ -36,9 +36,12 @@ import {
   applyConfirmedToIterationConfig,
   detectAvailableGpuCount,
   guardNprocAntiPatterns,
+  defaultBaseModelPath,
 } from "../../../../src/core/workspace/smartDefaults.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+import { openSettingsStore } from "../../../../src/webui/settings.js";
+import { instanceSettingsPath } from "../../../../src/webui/storageSettings.js";
 
 /** 批㊶-N N-5：会话身份提取（exec.agent.session.id；取不到＝undefined 如实跳过）。 */
 const sessionIdOfExec = (exec: unknown): string | undefined => {
@@ -99,6 +102,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
     description:
       "九要素训练配置确认卡：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 解析用户纯文字应答（如「lr 改 2e-4 其他 ok」）并重呈。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——批㉛段2 登记源，卡面与 Web 摘要同源）＞缺省。手动档（权限档）：审批面板 Allow once 确认后 config-snapshot 落盘。全自动训练档（会话档位=auto_training，经界面人工切换）：本工具免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend 纯文字（同样免阻塞）。" +
       "全自动档 agent 参数推荐（recommend 参数，本档专属）：训练提交前基于任务描述＋数据集统计（样本数/长度分布/模态）＋经验锚点给出 epochs/lr/rank/cutoff 推荐值并附 reason（理由）。经验锚点（owner 手工训练经验，参考知识非硬规则）：样本 2万–3万 → 3 epochs；4万以上 → 2 epochs；小样本（<1万）宜多轮并防过拟合（配早停观察）。护栏：epochs∈[1,10] 整数、lr∈[5e-5,5e-4]、lora_rank∈{16,32,64,128}（alpha=2×rank 联动）、cutoff≤12800、像素∈{800000,1600000}、bs 正整数、nproc∈[1,可用卡数]——越界推荐被拦截并回退固定建议（不静默修正），拦截事实进通报；推荐缺失同样回退。lora_alpha 不单独推荐（随 rank 联动）。" +
+      "基模型锚点（owner 裁定 2026-10-12 §九）：确认卡基模型字段默认值＝模型库位置下的 Qwen3-VL-32B-Instruct（owner 偏置锚点，非查表推导；卡上可改，改动经防线①本地复核）。评估侧继续锚定 -AWQ 变体（现状不变）。" +
       "卡数偏置（owner 裁定 2026-10-11）：训练卡数默认拉满本机可用卡（nproc_per_node=机器事实可用卡数），训练时长优先；代价（显存/时长）如实呈现给用户，不作降档依据；降档仅在用户任务上下文明确要求时采纳。卡数维度无成文锚点——不编造「数据规模→卡数」映射、不查表推荐，卡数只来自机器事实与用户显式要求；自动档默认低于可用卡的 nproc 推荐会被护栏回退拉满。",
     parameters: {
       action: { type: "string", required: true, enum: ["present", "amend"], description: "present=构造/重呈卡；amend=解析纯文字应答后重呈" },
@@ -187,12 +191,21 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       // iteration-config/快照显式值（from_registry）优先保留；用户显式覆盖（overrides/amend）
       // 次之且可低于机器事实（降档仅用户明确要求）；两者皆缺且机器事实缺失＝machine-facts
       // 停下问（不设默认值——指令硬约束）
+      // 批㊶-S5 §九：基模型路径基线（默认锚点＝模型库位置下 Qwen3-VL-32B-Instruct——owner 偏置，
+      // 卡上可改；模型库未配置则不注入、字段走空缺省需确认）
+      if (baseline["base_model_path"] === undefined) {
+        const anchor = defaultBaseModelPath(process.env);
+        if (anchor !== null) baseline["base_model_path"] = anchor;
+      }
       const explicitNproc = overrides["nproc_per_node"] ?? amended?.["nproc_per_node"];
       if (baseline["nproc_per_node"] === undefined && explicitNproc === undefined) {
-        if (gpuCount === null) {
+        if (settingsBaseline !== null) {
+          baseline["nproc_per_node"] = settingsBaseline;
+        } else if (gpuCount === null) {
           return asToolValue({ ok: false, run_id: args.run_id, error: "machine_facts_missing", note: "训练卡数基线不可得：visible_devices（CUDA_VISIBLE_DEVICES）与 nvidia-smi 皆未提供可用卡数——停下问用户，不设默认值" });
+        } else {
+          baseline["nproc_per_node"] = String(gpuCount);
         }
-        baseline["nproc_per_node"] = String(gpuCount);
       }
       // L2 派生（bs×nproc 除尽 256 校验——除不尽/矛盾即停点问题串；nproc 用基线/显式卡数非静态缺省）
       const bsNum = Number(baseline["per_device_train_batch_size"] ?? 2);

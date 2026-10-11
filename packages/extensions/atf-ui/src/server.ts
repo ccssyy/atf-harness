@@ -27,7 +27,17 @@ import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readTrainerLogTail, buildProgressFromTrainerLog, readNumTrainEpochs, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
 import { bucketedRunEntries, flatRunDirNames, resolveRunDir, sweepAnsweredPendings } from "../../../../src/core/workspace/runLayout.js";
-import { checkApprovalLedgerStartup, ledgerEnvPrefixForShell } from "../../../../src/core/workspace/approvalLedger.js";
+import { checkApprovalLedgerStartup, ledgerEnvPrefixForShell, homeLedgerPathOf } from "../../../../src/core/workspace/approvalLedger.js";
+import { openSettingsStore, type SettingsStore } from "../../../../src/webui/settings.js";
+import {
+  instanceSettingsPath,
+  effectiveStorageValues,
+  validateDirWritable,
+  validateVenvPath,
+  validateGpuBaseline,
+  ensureConventionSubdirs,
+} from "../../../../src/webui/storageSettings.js";
+import { detectAvailableGpuCount } from "../../../../src/core/workspace/smartDefaults.js";
 import { readAlerts } from "../../../../src/core/workspace/trainProbe.js";
 
 /** Cordis 插件名。 */
@@ -585,6 +595,7 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness,
 export const ITERATION_MEANINGS: Record<string, string> = {
   learning_rate: "学习率（LoRA 微调优化步长）",
   nproc_per_node: "训练卡数（单机并行进程数＝GPU 数——批㊶R前置：默认拉满可用卡，训练时长优先；降档仅用户明确要求）",
+  base_model_path: "基模型路径（本地绝对路径——默认＝模型库位置下 Qwen3-VL-32B-Instruct，owner 偏置锚点；家族名/HF id 无效）",
   num_train_epochs: "训练轮数（全量数据过几遍）",
   per_device_train_batch_size: "单卡 batch（每次前向的样本数）",
   gradient_accumulation_steps: "梯度累积（累积几步做一次更新；等效 batch＝单卡 batch×累积）",
@@ -948,6 +959,34 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
   }
 }
 
+/** 批㊶-S5 B2：只读信息区块组装（灰底无编辑——§二.4；账本路径/凭据值/pin/桥命令锁死只读）。
+ *  key_status 只显「已配置/未配置」，不回任何凭据值（env_key 纪律沿用）。 */
+export interface SettingsReadonlyBlock {
+  kernel_version: string;
+  approval_ledger: string;
+  key_status: string;
+  instance_id: string;
+}
+
+export const buildSettingsReadonlyBlock = (
+  env: Readonly<Record<string, string | undefined>>,
+  bridge: BridgeBadgeSurface,
+  repoRootValue: string,
+): SettingsReadonlyBlock => {
+  const dshHome = env["DSH_HOME"] ?? env["HOME"] ?? repoRootValue;
+  const instanceId = dshHome.split("/").filter(Boolean).pop() ?? "unknown";
+  const keyConfigured = ["ATF_LLM_KEY_GLM", "ZAI_CODING_CN_API_KEY", "ATF_LLM_CONFIG"].some((k) => {
+    const v = env[k];
+    return typeof v === "string" && v.trim() !== "";
+  });
+  return {
+    kernel_version: bridge.mode === "real" ? (bridge.version ?? "real（版本未知）") : "mock",
+    approval_ledger: homeLedgerPathOf(env["HOME"] ?? ""),
+    key_status: keyConfigured ? "已配置" : "未配置",
+    instance_id: instanceId,
+  };
+};
+
 /** 前置服务（cordis 注入声明）：webServer 在场时经 tapIndex 把 monitor 路径注入 index——
  *  client 半据此轮询 per-instance 快照（批㉘；无 webServer 的裸挂载面——如 vitest 直调——跳过注入）。
  *  批㉛段1 增 connection：viewer 静态路由沿用壳既有信任面（requestRejection → 401/403），
@@ -1096,6 +1135,92 @@ export function apply(
       ctx.effect(() => disposeRoute, "atf-ui: viewer 静态路由");
       console.log(`[atf-ui] viewer 静态路由已注册（${VIEWER_ROUTE_PREFIX}/<runId>/）`);
     }
+  }
+  // 批㊶-S5 B1/B2：设置面数据层（实例隔离 store——<HOME>/.atf/webui-settings.json，env 可覆写）
+  // ＋鉴权 GET/POST 路由（connection 信任面沿 viewer 路由先例）。webServer 缺席的裸挂载面跳过。
+  const settingsStore: SettingsStore | null = webServer !== undefined
+    ? openSettingsStore(instanceSettingsPath(process.env))
+    : null;
+  if (webServer !== undefined && webServer.register !== undefined) {
+    const gpuCountNow = (): number | null => detectAvailableGpuCount(process.env);
+    const settingsPayload = (): Record<string, unknown> => {
+      const doc = (settingsStore as SettingsStore).get();
+      const effective = effectiveStorageValues(process.env, doc.storage);
+      return {
+        storage: { set: doc.storage, effective },
+        gpu_detected: gpuCountNow(),
+        gpu_baseline_effective: doc.storage.train_gpu_baseline.trim() !== "" ? doc.storage.train_gpu_baseline : String(gpuCountNow() ?? ""),
+        readonly: buildSettingsReadonlyBlock(process.env, bridgeBadgeSurface(process.env, repoRoot), repoRoot),
+        hints: {
+          root_note: "根目录只影响新建任务的归属，现有数据位置不变",
+          model_root_note: "模型库位置改动＝下次任务生效",
+          env_priority: "实际生效值以实例 env 优先；设置值与生效值不一致时以生效值为准（重启/下次任务后对齐）",
+        },
+      };
+    };
+    const disposeSettings = webServer.register({
+      kind: "exact",
+      path: "/atf-ui/settings",
+      handler: (req, res) => {
+        const rejection = ctx.connection?.requestRejection(req);
+        if (rejection !== undefined) {
+          res.writeHead(rejection, { "content-type": "text/plain; charset=utf-8" });
+          res.end("dsh web authentication required\n");
+          return;
+        }
+        void (async (): Promise<void> => {
+          if (req.method === "GET") {
+            res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+            res.end(JSON.stringify(settingsPayload()));
+            return;
+          }
+          if (req.method !== "POST") {
+            res.writeHead(405, { allow: "GET, POST" });
+            res.end();
+            return;
+          }
+          // POST：fail-fast 校验全集（B3）→ 过则落 store＋约定子目录
+          let body = "";
+          req.on("data", (chunk: Buffer) => { body += String(chunk); });
+          req.on("end", () => {
+            let incoming: Record<string, unknown> = {};
+            try { incoming = JSON.parse(body === "" ? "{}" : body) as Record<string, unknown>; } catch { /* 空体容忍 */ }
+            const raw = (incoming["storage"] ?? {}) as Record<string, unknown>;
+            const str = (k: string): string => (typeof raw[k] === "string" ? (raw[k] as string).trim() : "");
+            const next = {
+              atf_root: str("atf_root"),
+              model_root: str("model_root"),
+              train_env: str("train_env"),
+              eval_env: str("eval_env"),
+              train_gpu_baseline: str("train_gpu_baseline"),
+            };
+            const errors: Record<string, string> = {};
+            if (next.atf_root !== "") { const v = validateDirWritable(next.atf_root); if (!v.ok) errors["atf_root"] = v.reason; }
+            if (next.model_root !== "") { const v = validateDirWritable(next.model_root); if (!v.ok) errors["model_root"] = v.reason; }
+            const vTrain = validateVenvPath(next.train_env); if (!vTrain.ok) errors["train_env"] = vTrain.reason;
+            const vEval = validateVenvPath(next.eval_env); if (!vEval.ok) errors["eval_env"] = vEval.reason;
+            const vGpu = validateGpuBaseline(next.train_gpu_baseline, gpuCountNow()); if (!vGpu.ok) errors["train_gpu_baseline"] = vGpu.reason;
+            if (Object.keys(errors).length > 0) {
+              res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
+              res.end(JSON.stringify({ saved: false, errors }));
+              return;
+            }
+            (settingsStore as SettingsStore).put({ storage: next });
+            const created = next.atf_root !== "" ? ensureConventionSubdirs(next.atf_root) : [];
+            const rootChanged = next.atf_root !== "" && next.atf_root !== effectiveStorageValues(process.env, { atf_root: "", model_root: "", train_env: "", eval_env: "", train_gpu_baseline: "" }).atf_root;
+            res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+            res.end(JSON.stringify({
+              saved: true,
+              storage: next,
+              created_subdirs: created,
+              warning: rootChanged ? "根目录已变更：影响新建任务的目录归属，历史记录仍指向原位置" : "",
+            }));
+          });
+        })();
+      },
+    });
+    ctx.effect(() => disposeSettings, "atf-ui: 设置面路由");
+    console.log("[atf-ui] 设置面路由已注册（/atf-ui/settings——四区块，实例隔离 store）");
   }
   void tickOnce(resolved);
   const timer: NodeJS.Timeout = setInterval(() => void tickOnce(resolved), resolved.intervalMs);
