@@ -41,6 +41,17 @@ describe("快照构造纯函数（八段四态推导＋loss 曲线＋KPI＋空�
     expect(snap.runs[0]?.segments.map((s) => s.key)).toEqual(SEGMENTS.map((s) => s.key));
     expect(snap.runs[0]?.segments.filter((s) => s.status === "done").map((s) => s.key)).toEqual(["register", "split"]);
   });
+  it("批㊶Q增补二2 progress 投影键位：training.progress 回退兼容（scanRunDir 实挂 training 子键——浮卡 N-3 数据源断点修正）", () => {
+    const withTrainingProgress = buildMonitorSnapshot([
+      { ...sampleRun, training: { ...sampleRun.training, progress: { round: 5, total_rounds: 6, step_remaining: 44, loss: 0.0623, percentage: 76.34, updated_at: "2026-10-11T01:46:21Z" } } },
+    ]);
+    expect(withTrainingProgress.runs[0]?.progress).toMatchObject({ round: 5, total_rounds: 6, percentage: 76.34 });
+    // 顶层键形态（历史兼容面）依旧直通
+    const withTopProgress = buildMonitorSnapshot([{ ...sampleRun, progress: { round: 1, updated_at: "n" } } as typeof sampleRun]);
+    expect(withTopProgress.runs[0]?.progress).toMatchObject({ round: 1 });
+    // 双缺＝null
+    expect(buildMonitorSnapshot([sampleRun]).runs[0]?.progress).toBeNull();
+  });
   it("批㉛段1 viewers 字段：monitor 透传（缺省空数组不炸），artifacts 入列 viewer 行", () => {
     const snap = buildMonitorSnapshot([sampleRun]);
     expect(snap.runs[0]?.viewers).toEqual(["analysis-b29", "analysis"]);

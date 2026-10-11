@@ -64,8 +64,10 @@ export function buildMonitorSnapshot(runs, gpu, gpuAll) {
       gpu_binding: run.gpu_binding ?? null,
       // 批㉞H：逐 eval 轮对比面（两轮对比视图数据源；空数组＝无轮产物）
       eval_rounds: Array.isArray(run.eval_rounds) ? run.eval_rounds : [],
-      // 批㊶-N N-3：段内进度（additive——过期/缺失 null）
-      progress: run.progress ?? null,
+      // 批㊶-N N-3：段内进度（additive——过期/缺失 null）。批㊶Q增补二2 键位修正：
+      // scanRunDir 的 progress 实挂 run.training.progress（N 批以来顶层键从未投影——
+      // 浮卡 N-3 进度行数据源恒空的断点）；两形态兼容取值。
+      progress: run.progress ?? run.training?.progress ?? null,
       // 批㊶-N N-5：会话绑定集（additive——可空数组）
       bound_sessions: Array.isArray(run.bound_sessions) ? run.bound_sessions : [],
       // 批㊶-P P-2：训练探针（additive——{level,reason,since}，无告警 null；schema v2 续）
