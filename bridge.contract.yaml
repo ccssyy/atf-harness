@@ -763,8 +763,8 @@ atf_cli:
 # （mock 已回 2）"的表述作废】，真实对端以内核批次二实现为准。
 # ---------------------------------------------------------------------
 atf_upstream:
-  tag: v0.7.11b0
-  commit_sha: 27e4f7712c921b729f415c85ebeae556e5c12a19
-  pinned_at: "2026-10-05"
-  baseline: 内核方法面 14／harness 工具面 9（含 label_qc 两工具，R-3 接线已合入）＋丙线本地治理面 4（A7 atf_read/edit/write/bash，批 P 续作 v2 已合入）；v0.7.11b0 批㉟K 内核发版（收编五批——批㉚段1 确认卡四件套/四态解析 ef52343＋批㉝K-2 参数手册 4bbfaf9＋批㉝K-3 旧名清理 c00565c＋批㉜ viewer 坐标修复 6861e67＋批㉞K viewer 字段跳框 6de2ec7；另含 D-K1 贯通资产入 git 469bfde）；纯文本/资产批，**零契约面变更**（无新 Gate/reason code/Schema 版本，会话协议轴 1／桥接契约轴 2 零 diff）；re-pin 2026-10-05（批㉟H 段2，pin↔内核 main atf-* 目录 diff 清零）；pin＝tag v0.7.11b0 commit 27e4f77（HEAD==tag==main 四点同指）
+  tag: v0.7.5b1
+  commit_sha: 496657493ec8e75a8708826503fae655be69167a
+  pinned_at: "2026-10-11"
+  baseline: 内核方法面 14／harness 工具面 9（含 label_qc 两工具，R-3 接线已合入）＋丙线本地治理面 4（A7 atf_read/edit/write/bash，批 P 续作 v2 已合入）；v0.7.5b1 批㊶R前置 内核补丁（4966574：模型路径生成面/报告面双防线——base_model 本地校验 base_model_path_not_local＋本机清单回流 ATF_MODEL_ROOT，报告面渲染前同码复核不产报告；卡数一致性 nproc×visible_devices 透传校验 _count_visible_devices/_validate_gpu_count_linkage；_skills_pack 镜像同步；纯增量，**零契约面变更**——无新 Gate/reason code/Schema 版本，会话协议轴 1／桥接契约轴 2 零 diff）；re-pin 2026-10-11（批㊶R前置 门 2 已过 9ae9f123，worktree 27e4f77→4966574 前移 15 commits 不丢内容）；pin＝tag v0.7.5b1 commit 4966574（HEAD==tag==main 四点同指）
   contract_version: 1

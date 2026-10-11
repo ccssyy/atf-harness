@@ -15,7 +15,7 @@ import { BRIDGE_CONTRACT_VERSION } from "../../src/bridge/index.js";
  *     （内核 stdio-session-contract.md §13.8 对齐：setup-only 预录，补登不 bump）；
  *   - 【K3 补登 2026-09-17】atf_flow_anchor 升为运行时方法面（内核 §13.9 对齐：
  *     流程位置纯读出口，三态 current/stale/missing；INV-A：stale 不得自行推断；补登不 bump）；
- *   - atf_upstream pin = v0.7.11b0（re-pin 2026-10-05 批㉟H；pin sha＝内核发版 tag v0.7.11b0 commit 27e4f77，批㉟K 收编五批＋D-K1 资产〔纯文本/资产批零契约面变更〕；tag/sha 自检锚定，会话协议版本轴保持 1）。
+ *   - atf_upstream pin = v0.7.5b1（re-pin 2026-10-11 批㊶R前置 门 2 后段；pin sha＝内核补丁 tag v0.7.5b1 commit 4966574，模型路径双防线＋卡数一致性〔纯增量零契约面变更〕；tag/sha 自检锚定，会话协议版本轴保持 1）。
  * 契约 v2 方法面补登（2026-09-13，《ATF-Harness_Owner指令_推送授权与bind_run补登_20260913.md》）：
  *   - 运行时方法面扩为 握手 + 会话上下文（atf.bind_run）+ 4 工具 + 2 账本；
  *   - contract_version 仍为 2（方法面补登不 bump，沿用批次一先例）；
@@ -162,9 +162,9 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/- facts_log_tail_corrupt/);
   });
 
-  it("atf_upstream pin 升至 v0.7.11b0（re-pin 2026-10-05 批㉟H；pin＝tag commit 27e4f77，批㉟K 发版五批收编）", () => {
-    expect(contract).toMatch(/  tag: v0\.7\.11b0/);
-    expect(contract).toMatch(/  commit_sha: 27e4f7712c921b729f415c85ebeae556e5c12a19/);
+  it("atf_upstream pin 升至 v0.7.5b1（re-pin 2026-10-11 批㊶R前置；pin＝tag commit 4966574，模型路径双防线＋卡数一致性）", () => {
+    expect(contract).toMatch(/  tag: v0\.7\.5b1/);
+    expect(contract).toMatch(/  commit_sha: 496657493ec8e75a8708826503fae655be69167a/);
     // 会话协议版本轴不随 re-pin 变动（内核方法面补登不 bump）；桥接契约版本轴恒 2（另轴）
     expect(contract).toMatch(/  contract_version: 1/);
   });

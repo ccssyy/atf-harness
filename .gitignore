@@ -23,3 +23,6 @@ vendor/dsh/deepseek-harness/**/*.tsbuildinfo
 poc/dsh-home/
 deploy/instances/
 poc/dsh-home-tongshi/
+
+# ZCode 会话本地工具配置（ignore 镜像——不入仓）
+.zcodeignore
