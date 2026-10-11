@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage } from "../../packages/extensions/atf-ui/src/snapshot.js";
-import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveTrainActiveWindowMs, resolveViewerRequest, scanEvalRounds, scanRunDir, looksLikeRun, RUN_MARKER_RELS, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
+import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveTrainActiveWindowMs, resolveViewerRequest, scanEvalRounds, scanRunDir, scanRuns, looksLikeRun, RUN_MARKER_RELS, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
 import { TRAINING_TMUX_SESSION, tmuxHasSession } from "../../src/core/workspace/tmuxLiveness.js";
 
 const tempRoots: string[] = [];
@@ -919,5 +919,28 @@ describe("批㊶Q增补三 段3——工作区桶投影与作用域过滤（单�
     expect(serverSource).toContain("runDirOf: (runId) => resolveRunDir(resolved.runsRoot, runId)");
     expect(serverSource).toContain("sweepAnsweredPendings(resolved.runsRoot)");
     expect(serverSource).toContain("ledgerEnvPrefix: ledgerEnvPrefixForShell(process.env)");
+  });
+});
+
+describe("批㊶Q增补三 段3——scanRuns 双层扫描（幻影 run 防回潮：真机 24 条污染实证）", () => {
+  it("平铺 run 的内部子目录（launch/eval/l1/publish-ws-*）不作桶降层；真桶 run 正常收录", () => {
+    const root = tempRoot();
+    // 平铺存量 run：内部结构含 launch/（其下还有 webui/——真机幻影形态 cr_r2/launch/webui）
+    const flat = join(root, "cr_r2");
+    mkdirSync(join(flat, "launch", "webui"), { recursive: true });
+    mkdirSync(join(flat, "webui"), { recursive: true });
+    writeFileSync(join(flat, "launch", "train.sh"), "#!/bin/bash\n");
+    writeFileSync(join(flat, "launch", "webui", "pending-confirm.json"), "{}\n");
+    writeFileSync(join(flat, "webui", "config-snapshot.json"), "{}\n");
+    // 真桶：ci_smoke 工作区内的分桶 run
+    const bucketed = join(root, "ci_smoke", "cr_r3", "launch");
+    mkdirSync(bucketed, { recursive: true });
+    writeFileSync(join(bucketed, "train.sh"), "#!/bin/bash\n");
+    writeFileSync(join(root, "ci_smoke", "cr_r3", "launch", "launch_manifest.json"), "{}\n");
+    const runs = scanRuns(root);
+    const ids = runs.map((r) => `${r.workspace ?? ""}/${r.run_id}`).sort();
+    expect(ids).toEqual(["/cr_r2", "ci_smoke/cr_r3"]); // sort 序："/" < 字母
+    expect(runs.find((r) => r.run_id === "cr_r2")?.workspace).toBeNull();
+    expect(runs.find((r) => r.run_id === "cr_r3")?.workspace).toBe("ci_smoke");
   });
 });

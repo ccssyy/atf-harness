@@ -713,33 +713,33 @@ export const looksLikeRun = (dir: string): boolean =>
   RUN_MARKER_RELS.some((rel) => existsSync(join(dir, rel)));
 
 /** 同步器周期内 run_id 清单（目录枚举一次——取证映射的目标集；特征过滤后。
- *  批㊶Q增补三 段3：平铺＋分桶双形态并集，run_id 恒为裸名）。 */
+ *  批㊶Q增补三 段3：平铺＋分桶双形态并集，run_id 恒为裸名；平铺 run 自身子目录
+ *  不作桶降层（launch/eval 等内部结构不产幻影 run——真机 24 条污染实证后修正）。 */
 const resolvedRunIds = (runsRoot: string): string[] => {
   const ids: string[] = [];
-  for (const name of flatRunDirNames(runsRoot)) {
-    if (name === OUT_DIR) continue;
-    if (looksLikeRun(join(runsRoot, name))) ids.push(name);
-  }
+  const flatRuns = new Set(flatRunDirNames(runsRoot).filter((name) => name !== OUT_DIR && looksLikeRun(join(runsRoot, name))));
+  for (const name of flatRuns) ids.push(name);
   for (const entry of bucketedRunEntries(runsRoot)) {
-    if (entry.workspace === OUT_DIR || entry.runId === OUT_DIR) continue;
+    if (flatRuns.has(entry.workspace) || entry.workspace === OUT_DIR || entry.runId === OUT_DIR) continue;
     if (looksLikeRun(entry.dir)) ids.push(entry.runId);
   }
   return ids;
 };
 
-/** 批㊶Q增补三 段3：runsRoot 双层扫描（平铺存量原地保留＋分桶新形态并存——向后兼容）。 */
-function scanRuns(runsRoot: string, liveness?: ScanLiveness): RunScan[] {
+/** 批㊶Q增补三 段3：runsRoot 双层扫描（平铺存量原地保留＋分桶新形态并存——向后兼容）。
+ *  桶降层只对非 run 的一级目录进行（平铺 run 的 launch/eval/l1 等子目录是 run 内部
+ *  结构不是工作区桶——否则幻影 run 污染全量视图）。 */
+/** 导出供 vitest 直测（真机 24 条幻影污染实证后的防回潮锚）。 */
+export function scanRuns(runsRoot: string, liveness?: ScanLiveness): RunScan[] {
   const root = join(runsRoot);
   if (!existsSync(root)) return [];
   const runs: RunScan[] = [];
-  for (const name of flatRunDirNames(root)) {
-    if (name === OUT_DIR) continue;
-    // 批㊶-M2 段 2：特征防御——无 run 特征目录忽略（atf-ui/default/嵌套遗留等不误判）
-    if (!looksLikeRun(join(root, name))) continue;
+  const flatRuns = new Set(flatRunDirNames(root).filter((name) => name !== OUT_DIR && looksLikeRun(join(root, name))));
+  for (const name of flatRuns) {
     runs.push(scanRunDir(root, name, liveness, null));
   }
   for (const entry of bucketedRunEntries(root)) {
-    if (entry.workspace === OUT_DIR || entry.runId === OUT_DIR) continue;
+    if (flatRuns.has(entry.workspace) || entry.workspace === OUT_DIR || entry.runId === OUT_DIR) continue;
     if (!looksLikeRun(entry.dir)) continue;
     runs.push(scanRunDir(root, entry.runId, liveness, entry.workspace));
   }
