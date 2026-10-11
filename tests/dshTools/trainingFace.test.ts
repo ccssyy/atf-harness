@@ -45,6 +45,19 @@ const approvalCtx = (outcome: string) => ({ get: (s: string) => (s === "approval
 const fakeExec = { callId: "t" };
 type Tool = { name: string; execute: (args: unknown, exec: unknown) => Promise<Record<string, unknown>> };
 
+/** 批㊶R前置 防线③ 夹具：run r1 的 iteration-config 指向本地假模型目录（含 config.json）。 */
+const seedRunModelFixture = (root: string, runId = "r1", basePath?: string): string => {
+  const modelDir = basePath ?? join(root, "models", "fake-model");
+  mkdirSync(join(modelDir), { recursive: true });
+  writeFileSync(join(modelDir, "config.json"), "{}\n");
+  mkdirSync(join(root, runId, "prep"), { recursive: true });
+  writeFileSync(
+    join(root, runId, "prep", "iteration-config.json"),
+    `${JSON.stringify({ base_model: { path: modelDir }, training: { learning_rate: "1e-4", num_train_epochs: 3 } }, null, 1)}\n`,
+  );
+  return modelDir;
+};
+
 /** mock train.sh：DRY_RUN 打印 ADMISSION=pass 后正常退出（校验面 mock）；masterPort>0 时声明端口。 */
 const writeMockTrainSh = (root: string, admissionPass = true, masterPort = 39_001): string => {
   const path = join(root, "train.sh");
@@ -54,6 +67,7 @@ const writeMockTrainSh = (root: string, admissionPass = true, masterPort = 39_00
     : "#!/bin/bash\necho 'admission broken'\nexit 1\n");
   // 段4 起 start 链带 prelaunch 在场检查——缺省夹具默认在场（缺失场景由用例显式删除）
   writeFileSync(join(root, "prelaunch-report.md"), "# 训练前报告\n");
+  seedRunModelFixture(root);
   return path;
 };
 
@@ -64,6 +78,7 @@ const writeLongRunningTrainSh = (root: string, masterPort = 39_001): string => {
   // DRY_RUN=1 校验步即退（runCapture 60s 超时面）；真跑形态进料行＋sleep 20 保活供探活
   writeFileSync(path, `#!/bin/bash\nexport MASTER_PORT=\${MASTER_PORT:-${masterPort}}\necho 'SHA=pass entries=1'\necho 'ADMISSION=pass keys=1'\nif [ "\${DRY_RUN:-0}" = "1" ]; then exit 0; fi\nsleep 20\n`);
   writeFileSync(join(root, "prelaunch-report.md"), "# 训练前报告\n");
+  seedRunModelFixture(root);
   return path;
 };
 
@@ -784,5 +799,34 @@ describe("批㊶Q增补三 段2——启动探活 probeTrainingStartup（注入�
     expect(resolveStartupProbeMs({ ATF_TRAIN_STARTUP_PROBE_MS: "15000" })).toBe(15_000);
     expect(resolveStartupProbeMs({ ATF_TRAIN_STARTUP_PROBE_MS: "bad" })).toBe(10_000);
     expect(resolveStartupProbeMs({ ATF_TRAIN_STARTUP_PROBE_MS: "0" })).toBe(10_000);
+  });
+});
+
+describe("批㊶R前置——防线③ start 面复核接线（审批前秒拒＋清单回流）", () => {
+  it("qwen3_vl 家族名误填 → started:false＋model_path_missing＋models 清单（不进审批不进 tmux）", async () => {
+    const root = tempRoot();
+    const trainSh = writeMockTrainSh(root, true);
+    // 覆写夹具：base_model.path 改为家族名（防线③靶形）
+    writeFileSync(join(root, "r1", "prep", "iteration-config.json"), `${JSON.stringify({ base_model: { path: "qwen3_vl" }, training: {} }, null, 1)}\n`);
+    let approvalCalls = 0;
+    const countingCtx = { get: (s: string) => (s === "approval" ? { request: async () => { approvalCalls += 1; return "allowed-once"; } } : undefined) };
+    const tool = buildRunTrainingTool(countingCtx, { runsRoot: root, logDir: root, ctx: countingCtx }) as unknown as Tool;
+    const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
+    expect(result.started).toBe(false);
+    expect(result.error).toBe("model_path_missing");
+    expect(result.model_path).toBe("qwen3_vl");
+    expect(Array.isArray(result.models)).toBe(true);
+    expect(String(result.note)).toContain("不进训练进程");
+    expect(approvalCalls).toBe(0); // 拦截先于审批——不消耗 danger 卡
+  });
+  it("iteration-config 缺席 → started:false＋model_path_missing（不猜测缺省模型）", async () => {
+    const root = tempRoot();
+    const trainSh = writeMockTrainSh(root, true);
+    rmSync(join(root, "r1", "prep"), { recursive: true, force: true });
+    const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
+    const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
+    expect(result.started).toBe(false);
+    expect(result.error).toBe("model_path_missing");
+    expect((result as Record<string, unknown>).reason).toBe("iteration_config_missing");
   });
 });

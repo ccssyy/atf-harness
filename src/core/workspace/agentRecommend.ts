@@ -41,8 +41,13 @@ const num = (raw: unknown): number | null => {
   return null;
 };
 
+export interface RecommendLimits {
+  /** 可用卡数机器事实（批㊶R前置：nproc 推荐上界；null＝机器事实缺失——nproc 推荐一律拦截回退）。 */
+  maxNproc?: number | null;
+}
+
 /** 单键推荐判定（纯函数）：域内原样采纳（不做判断）；越界/不可解析/未知键拦截回退基线。 */
-export const evalAgentRecommend = (key: string, raw: unknown, baseline: string, reason?: string): RecommendVerdict => {
+export const evalAgentRecommend = (key: string, raw: unknown, baseline: string, reason?: string, limits?: RecommendLimits): RecommendVerdict => {
   if (!RECOMMENDABLE_KEYS.has(key)) {
     return { key, accepted: false, terminal: baseline, source: "default:harness-smart-defaults", note: `推荐键 ${key} 不在九要素卡键集——拦截` };
   }
@@ -89,6 +94,15 @@ export const evalAgentRecommend = (key: string, raw: unknown, baseline: string, 
       const value = num(raw);
       if (value === null) return reject("不可解析为数值");
       if (!(CLAMP_DOMAINS.image_max_pixels as number[]).includes(value)) return reject(`像素两档 {800000, 1600000}`);
+      break;
+    }
+    case "nproc_per_node": {
+      // 批㊶R前置（扩键五同步③）：clamp [1, 可用卡数]——上界＝机器事实（缺失即拦截，不设默认）
+      const value = num(raw);
+      if (value === null || !Number.isInteger(value) || value < 1) return reject("须为正整数");
+      const maxNproc = limits?.maxNproc;
+      if (maxNproc === null || maxNproc === undefined) return reject("可用卡数机器事实缺失——回退固定建议（停下问用户）");
+      if (value > maxNproc) return reject(`nproc 域 [1, 可用卡数 ${maxNproc}]`);
       break;
     }
     default:

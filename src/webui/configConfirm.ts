@@ -13,6 +13,10 @@ import { join, dirname } from "node:path";
 /** 九要素键与缺省值（缺省语义与 generate_iteration_config 批⑪缺省表同源对齐）。 */
 export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; default: string }> = [
   { key: "learning_rate", label: "学习率 lr", default: "1e-4" },
+  // 批㊶R前置（扩键五同步①）：卡数显性卡——字段名与 config training 段对齐（nproc_per_node）；
+  // 静态缺省留空＝机器事实未探测位（confirmFace 以 detectAvailableGpuCount 注入基线——
+  // owner 裁定：训练默认拉满可用卡；visible_devices 缺失＝machine-facts 停下问，不设默认值）
+  { key: "nproc_per_node", label: "训练卡数 nproc_per_node", default: "" },
   { key: "num_train_epochs", label: "训练轮数 epochs", default: "3" },
   { key: "per_device_train_batch_size", label: "单卡 batch", default: "1" },
   { key: "gradient_accumulation_steps", label: "梯度累积", default: "8" },
@@ -56,6 +60,10 @@ export const parseConfigEditText = (text: string): { edits: Record<string, strin
     轮数: "num_train_epochs",
     batch: "per_device_train_batch_size",
     单卡: "per_device_train_batch_size",
+    // 批㊶R前置：卡数别名（纯文字应答可改卡数——「卡数改 4」）
+    卡数: "nproc_per_node",
+    nproc: "nproc_per_node",
+    nproc_per_node: "nproc_per_node",
     accum: "gradient_accumulation_steps",
     梯度累积: "gradient_accumulation_steps",
     cutoff: "cutoff_len",

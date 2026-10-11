@@ -14,6 +14,7 @@
  * 在位，零内核写入），经 confirmFace deepspeed 缺省切换引用。
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
 // ── L1 固定智能缺省（附录 A 第一层）──
@@ -58,8 +59,116 @@ export const CLAMP_DOMAINS = {
 
 /** 全局批量目标（owner 修订：iteration-config 全局目标）。 */
 export const GLOBAL_BATCH_TARGET = 256;
-/** 单实例 GPU 数（N-2 附录：nproc 8 卡固定缺省）。 */
+/** 单实例 GPU 数（N-2 附录：nproc 8 卡固定缺省——批㊶R前置起仅作 kernel 面历史缺省，
+ *  确认卡基线改走机器事实探测 detectAvailableGpuCount，不再静态取 8）。 */
 export const NPROC_DEFAULT = 8;
+
+// ── 批㊶R前置：训练卡数机器事实（owner 裁定 10-11：训练默认拉满可用卡·训练时长优先）──
+
+/** 端口占用探测同风格的卡数探测（nvidia-smi -L 逐行 GPU 计数；不可用＝null 不猜测）。 */
+const probeGpuCount = (): number | null => {
+  try {
+    const out = execFileSync("nvidia-smi", ["-L"], { timeout: 8_000, encoding: "utf8" });
+    const count = out.split("\n").filter((line) => /^GPU\s+\d+:/.test(line)).length;
+    return count > 0 ? count : null;
+  } catch {
+    return null;
+  }
+};
+
+/** CUDA_VISIBLE_DEVICES 解析（逗号索引与 a-b 区间两形态；空/非法＝null——不猜）。 */
+export const parseVisibleDevicesCount = (raw: string): number | null => {
+  const tokens = raw.split(",").map((t) => t.trim()).filter((t) => t !== "");
+  if (tokens.length === 0) return null;
+  let count = 0;
+  for (const token of tokens) {
+    const range = /^(\d+)-(\d+)$/.exec(token);
+    if (range !== null) {
+      const lo = Number(range[1]);
+      const hi = Number(range[2]);
+      if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi < lo) return null;
+      count += hi - lo + 1;
+      continue;
+    }
+    if (!/^\d+$/.test(token)) return null;
+    count += 1;
+  }
+  return count > 0 ? count : null;
+};
+
+/** 可用卡数机器事实（解析序：CUDA_VISIBLE_DEVICES env ＞ nvidia-smi 实测；两者皆缺＝null
+ *  ——机器事实缺失＝停下问用户，不设默认值）。probe 可注入（vitest 假件直测）。 */
+export const detectAvailableGpuCount = (
+  env: Readonly<Record<string, string | undefined>> = process.env,
+  probe: () => number | null = probeGpuCount,
+): number | null => {
+  const cvd = env["CUDA_VISIBLE_DEVICES"];
+  if (typeof cvd === "string" && cvd.trim() !== "") return parseVisibleDevicesCount(cvd.trim());
+  return probe();
+};
+
+/** 反模式护栏判定输入（字段形态＝确认卡 fields 子集所需两键）。 */
+export interface NprocGuardField {
+  key: string;
+  value: string;
+  tag: "need_confirm" | "from_registry" | "default_used" | "agent_recommend";
+}
+
+export interface NprocGuardHit {
+  key: "nproc_per_node" | "deepspeed";
+  revertedTo: string;
+  note: string;
+}
+
+/**
+ * 反模式拦截（确定性，建卡/生效配置时——批㊶R前置 指令件第 4 项）：
+ *   A. nproc_per_node=1 × deepspeed 含 z3_offload → 拦截回退＋note（ZeRO-3 需多卡分片）；
+ *   B. nproc 与可用卡数不一致 → 拦截：超上限（物理事实）任何来源都回退；低于上限仅在
+ *      非用户显式形态（default_used/from_registry/agent_recommend）回退拉满——降档仅
+ *      用户明确要求（need_confirm＝用户显式，放行不改）。
+ * 可用卡数机器事实缺失时：触发 A/B 需回退即返回 error（machine-facts 停下问），不设默认值。
+ */
+export const guardNprocAntiPatterns = (
+  fields: ReadonlyArray<NprocGuardField>,
+  ctx: { gpuCount: number | null },
+): { hits: NprocGuardHit[] } | { error: string } => {
+  const nprocField = fields.find((f) => f.key === "nproc_per_node");
+  const deepspeedField = fields.find((f) => f.key === "deepspeed");
+  if (nprocField === undefined) return { hits: [] };
+  const nproc = Number.parseInt(nprocField.value, 10);
+  if (!Number.isFinite(nproc) || nproc <= 0) return { error: `nproc_per_node 非法（${nprocField.value}）——须为正整数，不猜测` };
+  const hits: NprocGuardHit[] = [];
+  const gpuCount = ctx.gpuCount;
+  const deepspeed = deepspeedField?.value ?? "";
+  // A：单卡 × z3_offload（确定性反模式——与来源无关）
+  if (nproc === 1 && /z3_offload/i.test(deepspeed)) {
+    if (gpuCount === null) return { error: "反模式拦截需回退但可用卡数机器事实缺失（CUDA_VISIBLE_DEVICES/nvidia-smi 皆不可得）——停下问用户，不设默认值" };
+    hits.push({
+      key: "nproc_per_node",
+      revertedTo: String(gpuCount),
+      note: `反模式拦截：训练卡数=1 × deepspeed=${deepspeed}（ZeRO-3 需多卡分片，单卡无收益且易崩）——已回退为可用卡数 ${gpuCount}；如需单卡请同时换非 z3 deepspeed 配置`,
+    });
+    return { hits };
+  }
+  if (gpuCount !== null) {
+    if (nproc > gpuCount) {
+      hits.push({
+        key: "nproc_per_node",
+        revertedTo: String(gpuCount),
+        note: `反模式拦截：训练卡数 ${nproc} 超过本机可用卡数 ${gpuCount}（机器事实物理上限）——已回退为 ${gpuCount}`,
+      });
+      return { hits };
+    }
+    if (nproc < gpuCount && nprocField.tag !== "need_confirm") {
+      hits.push({
+        key: "nproc_per_node",
+        revertedTo: String(gpuCount),
+        note: `卡数拉满回退：训练卡数 ${nproc} 低于可用卡数 ${gpuCount} 且非用户显式降档（owner 偏置：训练默认拉满、训练时长优先）——已回退为 ${gpuCount}`,
+      });
+    }
+  }
+  return { hits };
+};
 
 /** L2 派生：grad_accum = 256/(bs×nproc)；除不尽/矛盾组合返回问题串（禁止静默取整）。 */
 export const deriveGradAccum = (bs: number, nproc: number = NPROC_DEFAULT): { accum: number; globalBatch: number } | { error: string } => {
@@ -143,6 +252,10 @@ export const paramSourceFor = (tag: "need_confirm" | "from_registry" | "default_
   }
 };
 
+/** 批㊶R前置：确认卡扩键持久化白名单补充（nproc_per_node 属 training 段字段——
+ *  旧链 iteration-config 可能缺席该键，确认值须仍能写回，否则内核生成面沿旧值）。 */
+export const CONFIRM_PERSIST_EXTRA_KEYS: ReadonlySet<string> = new Set(["nproc_per_node"]);
+
 /** 把确认快照（confirmed 字段集）回写 iteration-config 的 training 段＋param_sources（harness 侧
  *  生成物后处理——内核 generate_iteration_config 无确认卡通路，实锚；零内核写入）。
  *  批㊶-Q additive：perKeySources 可选——逐键来源覆盖（全自动档：agent 推荐键＝
@@ -161,7 +274,7 @@ export const applyConfirmedToIterationConfig = (
     const sources = (config["param_sources"] ?? {}) as Record<string, string>;
     const updated: string[] = [];
     for (const [key, value] of Object.entries(confirmed)) {
-      if (key in training || key in FIXED_SMART_DEFAULTS) {
+      if (key in training || key in FIXED_SMART_DEFAULTS || CONFIRM_PERSIST_EXTRA_KEYS.has(key)) {
         training[key] = value;
         sources[key] = perKeySources?.[key] ?? source;
         updated.push(key);

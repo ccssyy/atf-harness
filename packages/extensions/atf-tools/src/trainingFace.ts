@@ -29,6 +29,7 @@ import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.j
 import { appendBinding, writeProgress } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
 import { appendLedgerAuditComment, ledgerEnvPrefixForShell } from "../../../../src/core/workspace/approvalLedger.js";
+import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 
 // ── 批㊶Q增补三 段2：start 探活（终结 started:true 假成功）──
 
@@ -263,6 +264,8 @@ export interface TrainingToolsConfig {
   /** 训练日志落点目录（tail 进料源与 tee 目标同路径）。 */
   logDir: string;
   ctx: { get(service: string): unknown };
+  /** 批㊶R前置 状态面：本机模型清单（apply 启动扫描注入——入工具描述供 agent 会话内可见）。 */
+  models?: { root: string; names: string[] };
 }
 
 /** status 结果形状（任务卡卡面输入）。 */
@@ -298,7 +301,10 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
   defineTool({
     name: "atf_run_training",
     description:
-      "训练本机重跑（批㉕B 段4 降格定界——atf_launch_execute 为唯一编排执行点，本工具仅限「账本已放行 config 的本机重跑」）：action=start 校验 train.sh（DRY_RUN 过）→prelaunch 报告在场检查（prepare SKILL.md:84 确认制——缺失拒绝）→端口预检→danger 卡放行→tmux atf-training-run 常驻执行＋stdout tail 进料监控（loss-series）；action=status 查询运行状态并返回八段任务卡（chat 流可见的 checklist——训练推进期请周期调用 status，把最新任务卡呈现给用户）。异常即停即报，不静默重试。",
+      "训练本机重跑（批㉕B 段4 降格定界——atf_launch_execute 为唯一编排执行点，本工具仅限「账本已放行 config 的本机重跑」）：action=start 校验 train.sh（DRY_RUN 过）→prelaunch 报告在场检查（prepare SKILL.md:84 确认制——缺失拒绝）→base_model.path 本地复核（批㊶R前置 防线③——家族名/HF id 一律拒）→端口预检→danger 卡放行→tmux atf-training-run 常驻执行＋stdout tail 进料监控（loss-series）；action=status 查询运行状态并返回八段任务卡（chat 流可见的 checklist——训练推进期请周期调用 status，把最新任务卡呈现给用户）。异常即停即报，不静默重试。" +
+      (cfg.models !== undefined
+        ? `本机可用模型清单（ATF_MODEL_ROOT=${cfg.models.root}）：${cfg.models.names.length > 0 ? cfg.models.names.join("、") : "（空）"}——iteration-config 的 base_model.path 必须是这些本地目录的绝对路径，禁止填 HF 家族名/仓库 id（如 qwen3_vl）。`
+        : ""),
     parameters: {
       action: { type: "string", required: true, enum: ["start", "status"], description: "start=放行后启动训练；status=查询状态与 ckpt" },
       train_sh: { type: "string", required: true, description: "train.sh 绝对路径（须已通过 DRY_RUN 校验）" },
@@ -379,6 +385,24 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       const prelaunch = args.prelaunch_report ?? findPrelaunchReport(dirname(args.train_sh));
       if (prelaunch === null) {
         return asToolValue({ started: false, error: "prelaunch_report_missing", train_sh: args.train_sh, note: "授权启动前必须产出 build_prelaunch_report.py 报告（prepare SKILL.md:84——报告未生成视为训练放行准入未闭合）；编排启动走 atf_launch_execute（唯一编排执行点）" });
+      }
+      // 批㊶R前置 防线③（start 面复核——纵深防御：内核旧版 skills 残留于某实例时仍拦截）：
+      // 读 iteration-config 的 base_model.path 本地复核；失败秒拒＋本机可用模型清单回流
+      // （payload 纯增量＝补登不 bump；不进审批、不进 tmux、不产任何训练进程）
+      const startRunDir = resolveRunDir(cfg.runsRoot, args.run_id);
+      const modelCheck = checkStartModelPath(startRunDir, process.env);
+      if (!modelCheck.ok) {
+        return asToolValue({
+          started: false,
+          error: "model_path_missing",
+          reason: modelCheck.reason,
+          model_path: modelCheck.path ?? null,
+          models: modelCheck.models,
+          models_root: modelCheck.root,
+          train_sh: args.train_sh,
+          run_id: args.run_id,
+          note: `start 面复核拒绝：iteration-config 的 base_model.path（${modelCheck.path ?? "缺席"}）${modelCheck.reasonText}——不进训练进程。本机可用模型（${modelCheck.root}）：${modelCheck.models.length > 0 ? modelCheck.models.join("、") : "（清单为空）"}；请改用本地绝对路径后重推`,
+        });
       }
       // 端口预检：占用即根因上卡面；非训练进程占用 fail-closed 不自动清理
       const port = extractMasterPort(readFileSync(args.train_sh, "utf8"));
@@ -474,6 +498,43 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       });
     },
   });
+
+/** 批㊶R前置 防线③：start 面 iteration-config base_model.path 本地复核（确定性三态）。
+ *  合法＝本地目录在位（config.json 缺席如实降级为 config_json_missing 拒绝——HF 本地模型
+ *  目录必有 config.json，缺失即不可训）；失败附本机可用模型清单（扫描 ATF_MODEL_ROOT）。 */
+export function checkStartModelPath(
+  runDir: string,
+  env: Readonly<Record<string, string | undefined>>,
+): { ok: true; path: string } | { ok: false; path: string | null; reason: string; reasonText: string; models: string[]; root: string } {
+  const candidates = [join(runDir, "prep", "iteration-config.json"), join(runDir, "prep", "iteration-config", "iteration-config.json")];
+  let configPath: string | null = null;
+  let iter: Record<string, unknown> | null = null;
+  for (const candidate of candidates) {
+    try {
+      if (!existsSync(candidate)) continue;
+      iter = JSON.parse(readFileSync(candidate, "utf8")) as Record<string, unknown>;
+      configPath = candidate;
+      break;
+    } catch {
+      continue;
+    }
+  }
+  const inventory = scanLocalModels(env);
+  const fail = (path: string | null, reason: string, reasonText: string): { ok: false; path: string | null; reason: string; reasonText: string; models: string[]; root: string } =>
+    ({ ok: false, path, reason, reasonText, models: inventory.models, root: inventory.root });
+  if (iter === null || configPath === null) return fail(null, "iteration_config_missing", "缺席（prep/iteration-config 两候选路径均无）——先走确认卡落快照回写链");
+  const baseModel = iter["base_model"];
+  const path = baseModel !== null && typeof baseModel === "object" ? (baseModel as Record<string, unknown>)["path"] : undefined;
+  if (typeof path !== "string" || path.trim() === "") return fail(null, "base_model_path_absent", "缺席（base_model.path 未声明）——不猜测缺省模型");
+  if (!existsSync(path)) return fail(path, "not_local_dir", "不是本地存在的目录（疑似 HF 家族名/仓库 id 误填）");
+  try {
+    if (!lstatSync(path).isDirectory()) return fail(path, "not_local_dir", "不是本地目录（是文件）");
+  } catch {
+    return fail(path, "not_local_dir", "本地探测失败（权限/挂载）");
+  }
+  if (!existsSync(join(path, "config.json"))) return fail(path, "config_json_missing", "本地目录在位但缺 config.json——不可训（不静默放行）");
+  return { ok: true, path };
+}
 
 function mkdirForce(dir: string): void {
   import("node:fs").then((fs) => fs.mkdirSync(dir, { recursive: true }));

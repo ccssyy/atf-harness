@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { resolveBridgeDeployment, kernelVersionSync } from "../../../../src/bridge/bridgeCommand.js";
 import { checkApprovalLedgerStartup } from "../../../../src/core/workspace/approvalLedger.js";
+import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { registerApprovalExempt } from "./approvalExempt.js";
 import { buildFileGuardTools, registerPathGuard } from "./fileGuardFace.js";
 import { deriveFileToolRoots } from "../../../../src/agent/fileRoots.js";
@@ -96,6 +97,11 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   console.log(`[atf-tools] 桥对端: ${bridgeLine}`);
   const manager = new BridgeManager(deployment.argv, repoRoot, deployment.childEnv);
 
+  // 批㊶R前置 状态面：本机模型清单（启动扫描一次——boot 日志投影＋atf_run_training 描述注入；
+  // 根＝env ATF_MODEL_ROOT（实例层注入）；未配置/缺席如实空清单不猜测）
+  const modelInventory = scanLocalModels(process.env);
+  console.log(`[atf-tools] 本机模型清单：${modelInventory.models.length} 个（${modelInventory.root}${modelInventory.error !== undefined ? `｜${modelInventory.error}` : ""}）${modelInventory.models.length > 0 ? `：${modelInventory.models.join("、")}` : ""}`);
+
   // 批㊶-F-H 项 1：bash/write 类审批豁免 answerer（择案 A——waterfall 头部 prepend；
   // 高危治理点 atf_* 全体不进类仍走人工面板；详见 approvalExempt.ts 头注）
   if (registerApprovalExempt(ctx)) {
@@ -117,7 +123,7 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   for (const tool of buildFileTools(config.runsRoot)) ctx.tools.register(tool);
   ctx.tools.register(buildPipelineTool(ctx, config.pipelineCommand, config.pipelineTimeoutMs));
   for (const tool of buildConfirmTools({ runsRoot: config.runsRoot, ctx })) ctx.tools.register(tool);
-  const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx };
+  const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx, models: { root: modelInventory.root, names: modelInventory.models } };
   ctx.tools.register(buildRunTrainingTool(ctx, trainCfg));
   for (const tool of buildEvalTools(ctx, { runsRoot: config.runsRoot, logDir: config.logDir, kernelDir: config.kernelDir })) ctx.tools.register(tool);
 
@@ -173,14 +179,18 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   ctx.tools.register(
     defineTool({
       name: "atf_hello",
-      description: "atf-tools 装配自检探针：返回固定问候与桥接工具清单（连通性诊断用）。",
+      description: "atf-tools 装配自检探针：返回固定问候与桥接工具清单（连通性诊断用），附本机可用模型清单（ATF_MODEL_ROOT 扫描——训练 base_model.path 选型参考）。",
       parameters: {},
       output: {
         schema: looseObjectOutput,
         render: renderAsJsonText,
       },
       async execute() {
-        return { greeting: "atf-tools 已挂载", package: "@atf/dsh-atf-tools@0.1.0", tools: 11 };
+        // 批㊶R前置 状态面 additive：本机模型清单（启动扫描结果随装配闭包携带）
+        return {
+          greeting: "atf-tools 已挂载", package: "@atf/dsh-atf-tools@0.1.0", tools: 11,
+          local_models: { root: modelInventory.root, count: modelInventory.models.length, models: modelInventory.models, ...(modelInventory.error !== undefined ? { error: modelInventory.error } : {}) },
+        };
       },
     }),
   );

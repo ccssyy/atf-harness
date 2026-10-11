@@ -584,6 +584,7 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness,
  */
 export const ITERATION_MEANINGS: Record<string, string> = {
   learning_rate: "学习率（LoRA 微调优化步长）",
+  nproc_per_node: "训练卡数（单机并行进程数＝GPU 数——批㊶R前置：默认拉满可用卡，训练时长优先；降档仅用户明确要求）",
   num_train_epochs: "训练轮数（全量数据过几遍）",
   per_device_train_batch_size: "单卡 batch（每次前向的样本数）",
   gradient_accumulation_steps: "梯度累积（累积几步做一次更新；等效 batch＝单卡 batch×累积）",

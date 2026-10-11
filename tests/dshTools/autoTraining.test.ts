@@ -459,7 +459,8 @@ const tierCtxOutcome = (tier: string, outcome: string, recorded: { approvals: st
 });
 
 describe("批㊶Q增补一 danger 卡任何档位阻塞（owner 裁定 1 乙——真实 GPU 训练启动确认永远人工审批）", () => {
-  /** start 前置夹具：DRY_RUN 过（ADMISSION=pass）＋prelaunch 报告在场＋冷端口。 */
+  /** start 前置夹具：DRY_RUN 过（ADMISSION=pass）＋prelaunch 报告在场＋冷端口＋
+   *  批㊶R前置 防线③ 模型夹具（run-q iteration-config 指向本地假模型目录）。 */
   const seedStart = (root: string): { trainSh: string } => {
     const runDir = join(root, "run-q");
     const launchDir = join(runDir, "launch");
@@ -467,6 +468,11 @@ describe("批㊶Q增补一 danger 卡任何档位阻塞（owner 裁定 1 乙—�
     const trainSh = join(launchDir, "train.sh");
     writeFileSync(trainSh, TRAIN_SH_TEMPLATE.replace("29517", "39577"));
     writeFileSync(join(launchDir, "prelaunch-report.md"), "# prelaunch（增补一 danger 锚夹具）\n");
+    const modelDir = join(root, "models", "fake-model");
+    mkdirSync(modelDir, { recursive: true });
+    writeFileSync(join(modelDir, "config.json"), "{}\n");
+    mkdirSync(join(runDir, "prep"), { recursive: true });
+    writeFileSync(join(runDir, "prep", "iteration-config.json"), `${JSON.stringify({ base_model: { path: modelDir }, training: {} }, null, 1)}\n`);
     return { trainSh };
   };
 

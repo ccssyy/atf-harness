@@ -34,6 +34,8 @@ import {
   clampImageMaxPixels,
   SMART_DEEPSPEED_DEFAULT,
   applyConfirmedToIterationConfig,
+  detectAvailableGpuCount,
+  guardNprocAntiPatterns,
 } from "../../../../src/core/workspace/smartDefaults.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
@@ -64,6 +66,8 @@ const cardBlocks = (title: string, fields: ConfigConfirmField[], note: string) =
 interface ConfirmDeps {
   runsRoot: string;
   ctx: { get(service: string): unknown };
+  /** 批㊶R前置：可用卡数探测注入（vitest 假件；缺省＝真实机器事实通道 nvidia-smi/CUDA_VISIBLE_DEVICES）。 */
+  gpuProbe?: () => number | null;
 }
 
 /** pending 卡落盘（刷新重建源：<runDir>/webui/pending-confirm.json——runDir 双形态解析归调用方）。 */
@@ -87,12 +91,15 @@ const clearPending = (runDir: string): void => {
 
 export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const { ctx } = deps;
+  // 批㊶R前置②：可用卡数机器事实（建卡期一次探测；null＝缺失→建卡时按 machine-facts 停下问）
+  const gpuCount = detectAvailableGpuCount(process.env, deps.gpuProbe);
 
   const configTool = defineTool({
     name: "atf_config_confirm",
     description:
       "九要素训练配置确认卡：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 解析用户纯文字应答（如「lr 改 2e-4 其他 ok」）并重呈。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——批㉛段2 登记源，卡面与 Web 摘要同源）＞缺省。手动档（权限档）：审批面板 Allow once 确认后 config-snapshot 落盘。全自动训练档（会话档位=auto_training，经界面人工切换）：本工具免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend 纯文字（同样免阻塞）。" +
-      "全自动档 agent 参数推荐（recommend 参数，本档专属）：训练提交前基于任务描述＋数据集统计（样本数/长度分布/模态）＋经验锚点给出 epochs/lr/rank/cutoff 推荐值并附 reason（理由）。经验锚点（owner 手工训练经验，参考知识非硬规则）：样本 2万–3万 → 3 epochs；4万以上 → 2 epochs；小样本（<1万）宜多轮并防过拟合（配早停观察）。护栏：epochs∈[1,10] 整数、lr∈[5e-5,5e-4]、lora_rank∈{16,32,64,128}（alpha=2×rank 联动）、cutoff≤12800、像素∈{800000,1600000}、bs 正整数——越界推荐被拦截并回退固定建议（不静默修正），拦截事实进通报；推荐缺失同样回退。lora_alpha 不单独推荐（随 rank 联动）。",
+      "全自动档 agent 参数推荐（recommend 参数，本档专属）：训练提交前基于任务描述＋数据集统计（样本数/长度分布/模态）＋经验锚点给出 epochs/lr/rank/cutoff 推荐值并附 reason（理由）。经验锚点（owner 手工训练经验，参考知识非硬规则）：样本 2万–3万 → 3 epochs；4万以上 → 2 epochs；小样本（<1万）宜多轮并防过拟合（配早停观察）。护栏：epochs∈[1,10] 整数、lr∈[5e-5,5e-4]、lora_rank∈{16,32,64,128}（alpha=2×rank 联动）、cutoff≤12800、像素∈{800000,1600000}、bs 正整数、nproc∈[1,可用卡数]——越界推荐被拦截并回退固定建议（不静默修正），拦截事实进通报；推荐缺失同样回退。lora_alpha 不单独推荐（随 rank 联动）。" +
+      "卡数偏置（owner 裁定 2026-10-11）：训练卡数默认拉满本机可用卡（nproc_per_node=机器事实可用卡数），训练时长优先；代价（显存/时长）如实呈现给用户，不作降档依据；降档仅在用户任务上下文明确要求时采纳。卡数维度无成文锚点——不编造「数据规模→卡数」映射、不查表推荐，卡数只来自机器事实与用户显式要求；自动档默认低于可用卡的 nproc 推荐会被护栏回退拉满。",
     parameters: {
       action: { type: "string", required: true, enum: ["present", "amend"], description: "present=构造/重呈卡；amend=解析纯文字应答后重呈" },
       run_id: { type: "string", required: true, description: "run 标识（快照与 pending 卡落点）" },
@@ -163,15 +170,6 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       }
       if (iterTraining["lora_rank"] !== undefined) iterTraining["lora_alpha"] = String(loraAlphaFor(Number(iterTraining["lora_rank"])));
       const baseline = { ...iterTraining, ...snapshot };
-      // L2 派生（bs×nproc 除尽 256 校验——除不尽/矛盾即停点问题串）
-      const bsNum = Number(baseline["per_device_train_batch_size"] ?? 2);
-      const accumDerived = deriveGradAccum(Number.isFinite(bsNum) && bsNum > 0 ? bsNum : 2);
-      if ("error" in accumDerived) {
-        return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: accumDerived.error });
-      }
-      baseline["gradient_accumulation_steps"] = String(accumDerived.accum);
-      // P-1c：deepspeed 智能缺省＝ds_z3_offload（显式 > 缺省——iteration-config 显式声明优先）
-      if (baseline["deepspeed"] === undefined) baseline["deepspeed"] = SMART_DEEPSPEED_DEFAULT;
       const rawOverrides = (args.overrides ?? {}) as Record<string, unknown>;
       const overrides: Record<string, string> = {};
       for (const [key, value] of Object.entries(rawOverrides)) overrides[key] = String(value);
@@ -185,6 +183,30 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         amended = parsed.edits;
         amendNote = `已按应答改参：${Object.keys(parsed.edits).join(", ")}；其余按现值确认`;
       }
+      // 批㊶R前置②：卡数基线＝机器事实拉满（owner 裁定：训练默认拉满可用卡·训练时长优先）——
+      // iteration-config/快照显式值（from_registry）优先保留；用户显式覆盖（overrides/amend）
+      // 次之且可低于机器事实（降档仅用户明确要求）；两者皆缺且机器事实缺失＝machine-facts
+      // 停下问（不设默认值——指令硬约束）
+      const explicitNproc = overrides["nproc_per_node"] ?? amended?.["nproc_per_node"];
+      if (baseline["nproc_per_node"] === undefined && explicitNproc === undefined) {
+        if (gpuCount === null) {
+          return asToolValue({ ok: false, run_id: args.run_id, error: "machine_facts_missing", note: "训练卡数基线不可得：visible_devices（CUDA_VISIBLE_DEVICES）与 nvidia-smi 皆未提供可用卡数——停下问用户，不设默认值" });
+        }
+        baseline["nproc_per_node"] = String(gpuCount);
+      }
+      // L2 派生（bs×nproc 除尽 256 校验——除不尽/矛盾即停点问题串；nproc 用基线/显式卡数非静态缺省）
+      const bsNum = Number(baseline["per_device_train_batch_size"] ?? 2);
+      const nprocNum = Number(baseline["nproc_per_node"] ?? explicitNproc);
+      if (!Number.isFinite(nprocNum) || nprocNum <= 0) {
+        return asToolValue({ ok: false, run_id: args.run_id, error: "nproc_invalid", note: `nproc_per_node 现值（${baseline["nproc_per_node"] ?? explicitNproc}）非正整数——停下核实，不猜测` });
+      }
+      const accumDerived = deriveGradAccum(Number.isFinite(bsNum) && bsNum > 0 ? bsNum : 2, nprocNum);
+      if ("error" in accumDerived) {
+        return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: accumDerived.error });
+      }
+      baseline["gradient_accumulation_steps"] = String(accumDerived.accum);
+      // P-1c：deepspeed 智能缺省＝ds_z3_offload（显式 > 缺省——iteration-config 显式声明优先）
+      if (baseline["deepspeed"] === undefined) baseline["deepspeed"] = SMART_DEEPSPEED_DEFAULT;
       let fields: ConfigConfirmField[] = (() => {
         if (amended === undefined) return buildConfigConfirmFields(overrides, { fromRegistry: Object.keys(baseline).length > 0 ? baseline : undefined });
         // 改参重呈：现值基线保持原三态，仅应答改动项升 need_confirm（值替换）
@@ -206,7 +228,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         for (const [key, value] of Object.entries(rawRecommend)) {
           if (key === "reason") continue;
           const baselineValue = baselineByKey.get(key) ?? "";
-          const verdict = evalAgentRecommend(key, value, baselineValue, reason);
+          const verdict = evalAgentRecommend(key, value, baselineValue, reason, { maxNproc: gpuCount });
           recommendReport.push(verdict);
           if (verdict.accepted) {
             const field = fields.find((f) => f.key === key);
@@ -245,8 +267,31 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           }
         }
       }
+      // 批㊶R前置④：反模式拦截（确定性——建卡时；本 fields 即生效配置输入，拦截先于卡面/快照）
+      //   A. 单卡×z3_offload → 回退可用卡数＋note；B. 超机器事实上限/非用户显式低配 → 回退拉满
+      //   （need_confirm＝用户显式降档放行）；回退后 accum 随卡数重派生（整除校验不过即停点）。
+      const guardResult = guardNprocAntiPatterns(fields, { gpuCount });
+      if ("error" in guardResult) {
+        return asToolValue({ ok: false, run_id: args.run_id, error: "nproc_anti_pattern_blocked", note: guardResult.error });
+      }
+      const guardNotes: string[] = [];
+      for (const hit of guardResult.hits) {
+        if (hit.key !== "nproc_per_node") continue;
+        const nprocField = fields.find((f) => f.key === "nproc_per_node");
+        if (nprocField !== undefined) nprocField.value = hit.revertedTo;
+        const bsField = fields.find((f) => f.key === "per_device_train_batch_size");
+        const bsGuard = Number(bsField?.value ?? "2");
+        const reDerived = deriveGradAccum(Number.isFinite(bsGuard) && bsGuard > 0 ? bsGuard : 2, Number(hit.revertedTo));
+        if ("error" in reDerived) {
+          return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: reDerived.error });
+        }
+        const accumField = fields.find((f) => f.key === "gradient_accumulation_steps");
+        if (accumField !== undefined) accumField.value = String(reDerived.accum);
+        guardNotes.push(hit.note);
+      }
       const title = args.action === "amend" ? `九要素配置确认（改参重呈）— run ${args.run_id}` : `九要素训练配置确认 — run ${args.run_id}`;
-      const note = amendNote ?? "确认请点审批面板 Allow once；逐项修改可直接回复如「lr 改 2e-4」。";
+      const baseNote = amendNote ?? "确认请点审批面板 Allow once；逐项修改可直接回复如「lr 改 2e-4」。";
+      const note = guardNotes.length > 0 ? `${baseNote}\n${guardNotes.join("\n")}` : baseNote;
       if (autoTier) {
         // —— 全自动档：免阻塞落快照＋通报呈现（无静默：每键取值＋来源标注可回看） ——
         const sources: Record<string, string> = {};
@@ -266,7 +311,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           : recommendReport.length > 0
             ? `；agent 推荐：${recommendReport.map((v) => `${v.key}=${v.terminal}${v.accepted ? "✓" : "✗"}`).join(" ")}${reason !== undefined && reason.trim() !== "" ? `（理由：${reason.replace(/\s+/g, " ").slice(0, 80)}）` : ""}`
             : "；agent 推荐缺失——全键回退固定建议";
-        const notification = `全自动训练档·配置自动确认（免审批，run ${args.run_id}）——${fields.map((f) => `${f.key}=${f.value}[${sources[f.key]}]`).join(" ")}${recommendSummary}${rejectedNotes.length > 0 ? `；拦截：${rejectedNotes.join("；")}` : ""}`;
+        const notification = `全自动训练档·配置自动确认（免审批，run ${args.run_id}）——${fields.map((f) => `${f.key}=${f.value}[${sources[f.key]}]`).join(" ")}${recommendSummary}${rejectedNotes.length > 0 ? `；拦截：${rejectedNotes.join("；")}` : ""}${guardNotes.length > 0 ? `；卡数护栏：${guardNotes.join("；")}` : ""}`;
         // 不写 pending 卡（无卡可应答——卡面内容转为通报）；改参走 amend 纯文字（同样免阻塞）
         appendNotification(runDir, { level: "info", kind: "config_auto", reason: notification, since: new Date().toISOString() });
         saveConfigSnapshot(runDir, confirmed, { auto: true, tier: AUTO_TRAINING_PRESET, sources });
