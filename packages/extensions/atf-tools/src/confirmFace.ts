@@ -202,14 +202,12 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const settingsBaseline: string | null = ((): string | null => {
         try {
           const raw = openSettingsStore(instanceSettingsPath(process.env)).get().storage.train_gpu_baseline.trim();
-          console.log("[s5dbg] closure raw =", JSON.stringify(raw), "path =", instanceSettingsPath(process.env));
           return raw !== "" && Number.isFinite(Number(raw)) && Number(raw) > 0 ? raw : null;
         } catch {
           return null;
         }
       })();
       const explicitNproc = overrides["nproc_per_node"] ?? amended?.["nproc_per_node"];
-      console.log("[s5dbg] baseline.nproc =", JSON.stringify(baseline["nproc_per_node"]), "| settingsBaseline =", JSON.stringify(settingsBaseline), "| explicit =", JSON.stringify(explicitNproc));
       if (baseline["nproc_per_node"] === undefined && explicitNproc === undefined) {
         if (settingsBaseline !== null) {
           baseline["nproc_per_node"] = settingsBaseline;
