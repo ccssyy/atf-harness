@@ -2,18 +2,18 @@
  * 批⑱-M2——确认卡工具面（ui-atf-confirm 的数据与语义源）。
  *
  * atf_config_confirm：九要素训练配置确认卡——构造/改参/重呈/快照全链复用手搓
- * src/webui/configConfirm.ts（buildConfigConfirmFields/parseConfigEditText/
- * saveConfigSnapshot——逻辑零重写）；卡面＝presentCall content 逐行（key: 值 —— 三态标记），
- * 审批面板主体＝displayReason 多行同格式；Allow once＝确认并继续（snapshot 落盘）。
+ * src/webui/configConfirm.ts（buildConfigConfirmFields/saveConfigSnapshot——逻辑零重写）。
+ * 批㊶-W F5 合并版表单化（R2）：第一段改参收集＝DSH 原生问题卡 form intent 表单卡
+ * （vendor patch 0003——逐键输入框＋现值预填＋clamp 域提示；结构化 key=value selected 回传，
+ * 协议零改动）；第二段授权＝审批卡 Allow once（账本留痕不变）。审批卡 Reject → 回表单卡
+ * （带上次值）循环；纯文字 amend 解析链退役（工具链零文字解析引用——自由文本
+ * 永不直达生成面，agent 语义理解走结构化 edits 参数）。
  * atf_publish_confirm：发布确认 digest 卡（契约件 digest 凭据同构）。
- *
- * 纯文字应答链（指令验收 1）：用户回复「lr 改 2e-4」→ GLM 调本工具 action=amend →
- * parseConfigEditText 解析 → 新 fields 重呈。
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { buildConfigConfirmFields, parseConfigEditText, saveConfigSnapshot } from "../../../../src/webui/configConfirm.js";
+import { buildConfigConfirmFields, saveConfigSnapshot } from "../../../../src/webui/configConfirm.js";
 
 /** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型；批㊶-Q 增第四态 agent_recommend，
  *  仅全自动档采纳 agent 参数推荐时由本文件后处理标注，buildConfigConfirmFields 不产出该态）。 */
@@ -25,6 +25,8 @@ import { evalAgentRecommend, type RecommendVerdict } from "../../../../src/core/
 import { isAutoTrainingTier, AUTO_TRAINING_PRESET } from "./autoTrainingTier.js";
 import {
   FIXED_SMART_DEFAULTS,
+  CLAMP_DOMAINS,
+  TRAINING_PIN_CONSTANTS,
   deriveGradAccum,
   clampLearningRate,
   clampEpochs,
@@ -32,6 +34,7 @@ import {
   loraAlphaFor,
   clampCutoffLen,
   clampImageMaxPixels,
+  clampNegativeRatio,
   SMART_DEEPSPEED_DEFAULT,
   applyConfirmedToIterationConfig,
   detectAvailableGpuCount,
@@ -49,6 +52,64 @@ const sessionIdOfExec = (exec: unknown): string | undefined => {
   return typeof id === "string" && id !== "" ? id : undefined;
 };
 import { asToolValue } from "./schemaTranslate.js";
+
+/** DSH user-questions 服务消费面（结构类型——零 import；plan-mode 同款直调 ask() 通道）。 */
+interface FormAskService {
+  ask(request: {
+    questions: ReadonlyArray<{
+      id: string;
+      question: string;
+      header?: string;
+      detail?: string;
+      intent: {
+        kind: "form";
+        fields: ReadonlyArray<{ key: string; label: string; value?: string; placeholder?: string; hint?: string; required?: boolean }>;
+        submitLabel?: string;
+      };
+    }>;
+    agent?: unknown;
+    signal?: unknown;
+  }): Promise<{ answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string>; custom?: string }> }>;
+}
+
+/** 表单卡答案 → 结构化 edits（selected 逐条 `key=value`——首个 = 拆分；结构化解析，
+ *  非自由文本正则——批㊶-W F5 文字解析链退役后的唯一回传面）。 */
+export const editsFromFormAnswers = (answers: { answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string> }> }): Record<string, string> => {
+  const edits: Record<string, string> = {};
+  for (const item of answers.answers) {
+    for (const entry of item.selected) {
+      const eq = entry.indexOf("=");
+      if (eq <= 0) continue;
+      const key = entry.slice(0, eq).trim();
+      if (key !== "") edits[key] = entry.slice(eq + 1).trim();
+    }
+  }
+  return edits;
+};
+
+/** clamp 域提示（表单卡逐键 hint——min/max 可读；数值全部单源派生零硬编码）。 */
+export const domainHintOf = (key: string, gpuCount: number | null): string | undefined => {
+  switch (key) {
+    case "learning_rate":
+      return `域 [${CLAMP_DOMAINS.lr.min.toExponential().replace("e-", "e-")}, ${CLAMP_DOMAINS.lr.max.toExponential()}]（LoRA 惯用科学计数法）`;
+    case "num_train_epochs":
+      return `域 [${CLAMP_DOMAINS.epochs.min}, ${CLAMP_DOMAINS.epochs.max}] 整数`;
+    case "lora_rank":
+      return `档位 {${CLAMP_DOMAINS.lora_rank.join(", ")}}（alpha=2×rank 联动）`;
+    case "cutoff_len":
+      return `≤ ${CLAMP_DOMAINS.cutoff_len.max}`;
+    case "image_max_pixels":
+      return `两档 {${(CLAMP_DOMAINS.image_max_pixels as number[]).join(", ")}}`;
+    case "negative_ratio_target":
+      return `构造带 [${CLAMP_DOMAINS.negative_ratio.min}, ${CLAMP_DOMAINS.negative_ratio.max}]`;
+    case "nproc_per_node":
+      return gpuCount !== null ? `[1, 可用卡数 ${gpuCount}]` : "须为本机可用卡数内（机器事实）";
+    case "max_total_tokens":
+      return `正整数（单源参考 ${TRAINING_PIN_CONSTANTS.max_total_tokens}）`;
+    default:
+      return undefined;
+  }
+};
 
 /** 三态标记（卡面文本化：⚠ 已用缺省／◆ 来自登记／? 需确认——与手搓批⑮三态标签同源语义）。
  *  批㊶-Q 增第四态：◇ agent 推荐（全自动档采纳的 agent 参数推荐——来源标注进 sources/通报）。 */
@@ -95,13 +156,13 @@ const clearPending = (runDir: string): void => {
 
 /** 批㊶-U §五：双段式共用 helper（问题卡收改参→amend 校验 clamp 重呈→审批卡落闸）。
  *  四张确认卡统一复用（九要素/评估 EVAL_RELEASE/凭据卡退化/S1 publish_model 随后）——
- *  禁每卡手搓。语义＝§三方案 A：第一段 agent 以问题卡呈现值清单＋改参指引（编排指引面，
- *  非硬编码模板）；第二段授权仍走审批卡 Allow once（账本留痕不变）。凭据卡（amendable=false）
+ *  禁每卡手搓。批㊶-W F5：第一段指引改表单卡语义（改参在表单卡改值提交；纯文字应答
+ *  通道退役）；第二段授权仍走审批卡 Allow once（账本留痕不变）。凭据卡（amendable=false）
  *  退化形式：仅统一卡面说明＋复核通道，不虚构可调参数（诚实呈现原则）。 */
 export const dualStageNote = (cardLabel: string, opts?: { amendable?: boolean; amendNote?: string; extra?: string }): string => {
   const amendable = opts?.amendable !== false;
   const head = amendable
-    ? `${cardLabel}（双段式：改参回复直接发聊天，如「参数名=值」；不改回复「按现值确认」）`
+    ? `${cardLabel}（双段式：改参在表单卡改值提交；不改直接提交表单，再于审批卡点 Allow once）`
     : `${cardLabel}（凭据确认卡：无可调参数；如对凭据有疑义请回复说明，复核通道＝聊天重呈）`;
   const tail = [opts?.amendNote, opts?.extra].filter((x): x is string => typeof x === "string" && x !== "");
   return [head, ...tail].join("｜");
@@ -121,15 +182,15 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const configTool = defineTool({
     name: "atf_config_confirm",
     description:
-      "九要素训练配置确认卡：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 解析用户纯文字应答（如「lr 改 2e-4 其他 ok」）并重呈。批㊶-U 方案 A 双段式编排（present 时执行）：第一段改参收集——先以 DSH 原生问题卡（ask 卡）向用户呈十五键现值清单＋改参指引（「直接回复要改的项，如 epochs=4、lr=2e-4；不改直接回复『按现值确认』」）；用户应答后第二段授权——有改动走 action=amend（校验＋clamp 重呈），最终授权一律走审批卡 Allow once（账本留痕不变）。问题卡只收集改参、不承载授权（审批≠请示，闸门语义不迁移）。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——批㉛段2 登记源，卡面与 Web 摘要同源）＞缺省。手动档（权限档）：审批面板 Allow once 确认后 config-snapshot 落盘。全自动训练档（会话档位=auto_training，经界面人工切换）：本工具免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend 纯文字（同样免阻塞）。" +
-      "全自动档 agent 参数推荐（recommend 参数，本档专属）：训练提交前基于任务描述＋数据集统计（样本数/长度分布/模态）＋经验锚点给出 epochs/lr/rank/cutoff 推荐值并附 reason（理由）。经验锚点（owner 手工训练经验，参考知识非硬规则）：样本 2万–3万 → 3 epochs；4万以上 → 2 epochs；小样本（<1万）宜多轮并防过拟合（配早停观察）。护栏：epochs∈[1,10] 整数、lr∈[5e-5,5e-4]、lora_rank∈{16,32,64,128}（alpha=2×rank 联动）、cutoff≤12800、像素∈{800000,1600000}、bs 正整数、nproc∈[1,可用卡数]——越界推荐被拦截并回退固定建议（不静默修正），拦截事实进通报；推荐缺失同样回退。lora_alpha 不单独推荐（随 rank 联动）。" +
+      "九要素训练配置确认卡：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 应用结构化改参（edits 传键值对象）后重呈。批㊶-W F5 合并版双段式编排（present/amend 同链）：第一段改参收集——工具内部直接以 DSH 原生问题卡 form intent 表单卡向用户呈十五键逐键输入框（现值预填＋clamp 域提示），用户改值/直接提交即回结构化 key=value；第二段授权——有改动走确定性 clamp（越界回退域边界＋可读说明），最终授权一律走审批卡 Allow once（账本留痕不变）；审批卡 Reject → 回表单卡（带上次值）循环，用户关闭表单卡＝取消（结构化拒绝）。问题卡只收集改参、不承载授权（审批≠请示，闸门语义不迁移）；用户在聊天里的改参话术由 agent 语义理解后转 edits 结构化参数（自由文本永不直达生成面）。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——批㉛段2 登记源，卡面与 Web 摘要同源）＞缺省。手动档（权限档）：审批面板 Allow once 确认后 config-snapshot 落盘。全自动训练档（会话档位=auto_training，经界面人工切换）：present 免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend（同样免阻塞）。" +
+      "全自动档 agent 参数推荐（recommend 参数，本档专属）：训练提交前基于任务描述＋数据集统计（样本数/长度分布/模态）＋经验锚点给出 epochs/lr/rank/cutoff/负样本带推荐值并附 reason（理由）。经验锚点（owner 手工训练经验，参考知识非硬规则）：样本 2万–3万 → 3 epochs；4万以上 → 2 epochs；小样本（<1万）宜多轮并防过拟合（配早停观察）。护栏：epochs∈[1,10] 整数、lr∈[5e-5,5e-4]、lora_rank∈{16,32,64,128}（alpha=2×rank 联动）、cutoff≤12800、像素两档∈{802816,1605632}（批㊶-W F1 单源）、负样本构造带∈[0.02,0.05]（F2 R1 终裁——空对象构造配额）、bs 正整数、nproc∈[1,可用卡数]——越界推荐被拦截并回退固定建议（不静默修正），拦截事实进通报；推荐缺失同样回退。lora_alpha 不单独推荐（随 rank 联动）。" +
       "基模型锚点（owner 裁定 2026-10-12 §九）：确认卡基模型字段默认值＝模型库位置下的 Qwen3-VL-32B-Instruct（owner 偏置锚点，非查表推导；卡上可改，改动经防线①本地复核）。评估侧继续锚定 -AWQ 变体（现状不变）。" +
       "卡数偏置（owner 裁定 2026-10-11）：训练卡数默认拉满本机可用卡（nproc_per_node=机器事实可用卡数），训练时长优先；代价（显存/时长）如实呈现给用户，不作降档依据；降档仅在用户任务上下文明确要求时采纳。卡数维度无成文锚点——不编造「数据规模→卡数」映射、不查表推荐，卡数只来自机器事实与用户显式要求；自动档默认低于可用卡的 nproc 推荐会被护栏回退拉满。",
     parameters: {
-      action: { type: "string", required: true, enum: ["present", "amend"], description: "present=构造/重呈卡；amend=解析纯文字应答后重呈" },
+      action: { type: "string", required: true, enum: ["present", "amend"], description: "present=构造/重呈卡；amend=应用结构化改参后重呈（edits 键值对象）" },
       run_id: { type: "string", required: true, description: "run 标识（快照与 pending 卡落点）" },
       overrides: { type: "object", additionalProperties: true, description: "显式覆盖值（present 形态：{learning_rate:\"2e-4\",...}）" },
-      amend_text: { type: "string", description: "amend 形态：用户纯文字应答原文（如「lr 改 2e-4 其他 ok」）" },
+      edits: { type: "object", additionalProperties: true, description: "amend 结构化改参（用户聊天话术经 agent 语义理解后的键值对象，如 {num_train_epochs:\"4\", learning_rate:\"2e-4\"}）——clamp 校验后随表单卡重呈双确认" },
       recommend: { type: "object", additionalProperties: true, description: "全自动档专属 agent 参数推荐：{epochs:3, learning_rate:\"2e-4\", lora_rank:32, cutoff_len:9000, reason:\"2.8万样本→3 epochs 防欠拟合\"}——越界键被拦截回退，手动档不消费" },
     },
     output: {
@@ -144,7 +205,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         kind: "other" as const,
       }
     },
-    async execute(args: { action: "present" | "amend"; run_id: string; overrides?: Record<string, unknown>; amend_text?: string; recommend?: Record<string, unknown> }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+    async execute(args: { action: "present" | "amend"; run_id: string; overrides?: Record<string, unknown>; edits?: Record<string, unknown>; recommend?: Record<string, unknown> }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批㊶Q增补三 段3：run 目录双形态解析（新建带发起会话工作区归属——runs/<工作区>/<run_id>）
       const runDir = resolveRunDir(deps.runsRoot, args.run_id, { workspace: sessionWorkspaceSlug(exec) });
       // 现值基线：已确认快照（不重问）→ run 的 IterationConfig 实值（批㉛段2：登记源，确认卡
@@ -200,31 +261,41 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       for (const [key, value] of Object.entries(rawOverrides)) overrides[key] = String(value);
       let amendNote: string | undefined;
       let amended: Record<string, string> | undefined;
-      if (args.action === "amend") {
-        const parsed = parseConfigEditText(args.amend_text ?? "");
-        if (parsed === null) {
-          return asToolValue({ ok: false, note: "无法从应答解析出配置改动——请用户换一种说法（如「lr 改 2e-4 其他 ok」）", run_id: args.run_id });
-        }
-        amended = parsed.edits;
-        // 批㊶-U §二.2：改参值一律过确定性护栏（同 L3 clamp 域）——越界回退到域边界＋说明可读（不静默）
-        const AMEND_CLAMPERS: Record<string, (raw: string | number) => string | number> = {
-          learning_rate: clampLearningRate,
-          num_train_epochs: clampEpochs,
-          lora_rank: clampLoraRank,
-          cutoff_len: clampCutoffLen,
-          image_max_pixels: clampImageMaxPixels,
-        };
+      // 批㊶-W F5：结构化值域 clamp 表（amend edits 与表单卡提交共用——文字解析链退役，
+      // clamp 只认结构化值；负样本构造带 F2 入表）。
+      const STRUCTURED_CLAMPERS: Record<string, (raw: string | number) => string | number> = {
+        learning_rate: clampLearningRate,
+        num_train_epochs: clampEpochs,
+        lora_rank: clampLoraRank,
+        cutoff_len: clampCutoffLen,
+        image_max_pixels: clampImageMaxPixels,
+        negative_ratio_target: clampNegativeRatio,
+      };
+      const clampEdits = (edits: Record<string, string>): string[] => {
         const clampedKeys: string[] = [];
-        for (const [key, rawValue] of Object.entries(amended)) {
-          const clamp = AMEND_CLAMPERS[key];
+        for (const [key, rawValue] of Object.entries(edits)) {
+          const clamp = STRUCTURED_CLAMPERS[key];
           if (clamp === undefined) continue;
           const clamped = String(clamp(rawValue));
           if (clamped !== String(rawValue).trim()) {
-            amended[key] = clamped;
+            edits[key] = clamped;
             clampedKeys.push(`${key}=${String(rawValue).trim()}→${clamped}`);
           }
         }
-        amendNote = `已按应答改参：${Object.keys(parsed.edits).join(", ")}；其余按现值确认${clampedKeys.length > 0 ? `；越界拦截回退（域边界）：${clampedKeys.join("、")}` : ""}`;
+        return clampedKeys;
+      };
+      if (args.action === "amend") {
+        // 批㊶-W F5：结构化 amend——edits 键值对象（用户聊天话术经 agent 语义理解后转入）；
+        // 自由文本解析链退役（自由文本永不直达生成面）。
+        const rawEdits = (args.edits ?? {}) as Record<string, unknown>;
+        if (Object.keys(rawEdits).length === 0) {
+          return asToolValue({ ok: false, run_id: args.run_id, note: "amend 需结构化 edits（键值对象，如 {\"num_train_epochs\":\"4\",\"learning_rate\":\"2e-4\"}）——请把用户改参话术转成具体键值后传入；自由文本不再解析（批㊶-W F5 表单化）" });
+        }
+        amended = {};
+        for (const [key, value] of Object.entries(rawEdits)) amended[key] = String(value);
+        // 改参值一律过确定性护栏（同 L3 clamp 域）——越界回退到域边界＋说明可读（不静默）
+        const clampedKeys = clampEdits(amended);
+        amendNote = `已按结构化改参重呈：${Object.keys(amended).join(", ")}；其余按现值${clampedKeys.length > 0 ? `；越界拦截回退（域边界）：${clampedKeys.join("、")}` : ""}`;
       }
       // 批㊶R前置②：卡数基线＝机器事实拉满（owner 裁定：训练默认拉满可用卡·训练时长优先）——
       // iteration-config/快照显式值（from_registry）优先保留；用户显式覆盖（overrides/amend）
@@ -352,9 +423,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         guardNotes.push(hit.note);
       }
       const title = args.action === "amend" ? `九要素配置确认（改参重呈）— run ${args.run_id}` : `九要素训练配置确认 — run ${args.run_id}`;
-      // 批㊶-U 方案 A：可发现性文案（共用 helper——审批卡 note 明示改参通道）
-      const amendHint = "如需改参，直接回复要改的参数（如 epochs=4、lr=2e-4、nproc=4）；不改直接回复「按现值确认」";
-      const baseNote = dualStageNote("九要素确认卡", { amendNote: amendNote !== undefined ? `${amendNote}；${amendHint}` : `确认请点审批面板 Allow once；${amendHint}` });
+      // 批㊶-W F5：双段式文案（共用 helper——表单卡改值提交，聊天打字路径退役）
+      const baseNote = dualStageNote("九要素确认卡", { amendNote: amendNote });
       const note = guardNotes.length > 0 ? `${baseNote}\n${guardNotes.join("\n")}` : baseNote;
       if (autoTier) {
         // —— 全自动档：免阻塞落快照＋通报呈现（无静默：每键取值＋来源标注可回看） ——
@@ -407,13 +477,102 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       }
       if (args.recommend !== undefined) {
         // 手动档：recommend 为全自动档专属通道——零消费零行为变化（回归红线），仅如实回注
-        return asToolValue({ ok: false, run_id: args.run_id, note: "recommend 为全自动训练档专属（当前会话为权限档）——手动档请用 overrides/pure 文字 amend；档位切换须经界面人工操作" });
+        return asToolValue({ ok: false, run_id: args.run_id, note: "recommend 为全自动训练档专属（当前会话为权限档）——手动档请用 overrides/edits 结构化改参；档位切换须经界面人工操作" });
       }
-      // pending 卡落盘（ui-atf-confirm / 刷新重建的同源数据）
+      // —— 批㊶-W F5：表单卡双段式（手动档）——
+      // 第一段＝DSH 原生问题卡 form intent（vendor patch 0003）：逐键输入框＋现值预填＋clamp
+      // 域提示；提交回结构化 key=value selected。第二段＝审批卡 Allow once（账本不变）。
+      // Reject → 回表单卡（带上次值）循环；关闭表单卡（ASK_CANCELLED）＝结构化取消。
+      const userQuestions = ctx.get("userQuestions") as FormAskService | undefined;
+      if (userQuestions === undefined || typeof userQuestions.ask !== "function") {
+        return asToolValue({ ok: false, run_id: args.run_id, error: "user_questions_unavailable", note: "DSH user-questions 服务未挂载——表单卡通道不可用（fail-closed；不退纯文字链）" });
+      }
       writePending(runDir, { kind: "config_confirm", run_id: args.run_id, title, fields, note, at: new Date().toISOString() });
-      // 审批面板主体＝九要素多行（ATF 格式三态标记）
-      const verdict = await requestApproval(ctx, exec, "atf_config_confirm", `${title}\n${renderFields(fields)}\n${note}`);
-      if (!verdict.ok) {
+      for (;;) {
+        // 批㊶-W 真机修正：typert lossless JSON 拒绝嵌套 undefined（对象键值 undefined
+        // 即「not lossless JSON data」）——可选键一律条件 spread，禁显式 undefined 值。
+        const formFields = fields.map((field) => {
+          const hint = domainHintOf(field.key, gpuCount);
+          return {
+            key: field.key,
+            label: field.key,
+            value: field.value,
+            ...(hint !== undefined ? { hint } : {}),
+            ...(field.key === "max_total_tokens" && field.value.trim() === ""
+              ? { required: true, placeholder: "必填（token 上限缺省已退役——填正整数，单源参考 65536）" }
+              : {}),
+          };
+        });
+        const formDetail = [
+          "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。",
+          ...(amendNote !== undefined ? [amendNote] : []),
+          ...(guardNotes.length > 0 ? [`卡数护栏：${guardNotes.join("；")}`] : []),
+        ].join("\n");
+        let answers: { answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string> }> };
+        try {
+          answers = await userQuestions.ask({
+            questions: [{
+              id: `config-confirm-${args.run_id}`,
+              question: `九要素训练配置确认 — ${args.run_id}`,
+              header: "训练配置",
+              detail: formDetail,
+              intent: { kind: "form", fields: formFields, submitLabel: "确认并继续" },
+            }],
+            agent: exec.agent,
+            signal: exec.signal,
+          });
+        } catch (cause) {
+          if ((cause as { code?: string }).code === "ASK_CANCELLED") {
+            return approvalDeniedResult("atf_config_confirm", "cancelled");
+          }
+          return asToolValue({ ok: false, run_id: args.run_id, error: "form_ask_failed", note: `表单卡应答失败：${String(cause).slice(0, 200)}` });
+        }
+        // 结构化 edits（selected key=value——协议零改动的结构化回传面）
+        const submitted = editsFromFormAnswers(answers);
+        // 与进卡前 fields diff：预填未动的键不算改动（按现值）；必填拦空兜底
+        const beforeByKey = new Map(fields.map((f) => [f.key, f.value]));
+        const changedEdits: Record<string, string> = {};
+        for (const [key, value] of Object.entries(submitted)) {
+          if (value === "") continue;
+          if (beforeByKey.get(key) !== value) changedEdits[key] = value;
+        }
+        const clampedKeys = clampEdits(changedEdits);
+        // bs/nproc 改动 → accum 随卡数重派生（L2 整除校验——与自动档同语义，防 global batch 破）
+        let loopNote = "";
+        if (changedEdits["per_device_train_batch_size"] !== undefined || changedEdits["nproc_per_node"] !== undefined) {
+          const nprocRaw = changedEdits["nproc_per_node"] ?? fields.find((f) => f.key === "nproc_per_node")?.value;
+          const bsRaw = changedEdits["per_device_train_batch_size"] ?? fields.find((f) => f.key === "per_device_train_batch_size")?.value ?? "2";
+          const nprocNow = Number(nprocRaw);
+          const bsNow = Number(bsRaw);
+          if (Number.isFinite(nprocNow) && nprocNow > 0 && Number.isFinite(bsNow) && bsNow > 0) {
+            const reDerived = deriveGradAccum(Math.round(bsNow), Math.round(nprocNow));
+            if ("error" in reDerived) {
+              return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: `改参后 global batch 派生失败（bs=${bsNow}×nproc=${nprocNow}）：${reDerived.error}——请回表单卡调整组合` });
+            }
+            const accumField = fields.find((f) => f.key === "gradient_accumulation_steps");
+            if (accumField !== undefined && changedEdits["gradient_accumulation_steps"] === undefined) {
+              changedEdits["gradient_accumulation_steps"] = String(reDerived.accum);
+              loopNote = `；accum 随派生更新=${reDerived.accum}（gb=${reDerived.globalBatch} 不变）`;
+            }
+          }
+        }
+        for (const [key, value] of Object.entries(changedEdits)) {
+          const field = fields.find((f) => f.key === key);
+          if (field !== undefined) {
+            field.value = value;
+            field.tag = "need_confirm";
+          }
+        }
+        if (clampedKeys.length > 0 || loopNote !== "") {
+          amendNote = `本轮改参：${Object.keys(changedEdits).join(", ") || "（按现值确认）"}${clampedKeys.length > 0 ? `；越界拦截回退（域边界）：${clampedKeys.join("、")}` : ""}${loopNote}`;
+        }
+        // 第二段＝审批卡（授权唯一落点——Reject 回表单卡循环）
+        const verdict = await requestApproval(ctx, exec, "atf_config_confirm", `${title}\n${renderFields(fields)}\n${note}${amendNote !== undefined ? `\n${amendNote}` : ""}`);
+        if (verdict.ok) break;
+        if (verdict.outcome === "rejected") {
+          // Reject → 回表单卡（带上次值——fields 已就地更新）
+          continue;
+        }
         return approvalDeniedResult("atf_config_confirm", verdict.outcome);
       }
       // 确认：全字段按现值落快照（手搓 saveConfigSnapshot 复用）

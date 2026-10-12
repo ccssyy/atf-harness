@@ -1,6 +1,6 @@
 /**
- * 批㊶-K 测试锚——GPU 排队编排（含增补三全卡扫描两用例）／训练进料共享面／
- * 档位可见性只读工具（含审批面实值）。
+ * 批㊶-K 测试锚——GPU 排队编排（批㊶-W F6 四合一语义重写：整组判定＋compute-apps
+ * 归属＋快速二次确认）／训练进料共享面／档位可见性只读工具（含审批面实值）。
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,17 +8,27 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   awaitGpuWindow,
+  buildCardOccupancyTable,
+  classifyCard,
+  formatCardTable,
   formatWaited,
-  gpuCycleHit,
+  gpuGroupWindow,
   gpuQueuePollMsFromEnv,
-  GpuQueueWatcher,
+  GPU_QUEUE_POLL_MS_DEFAULT,
+  GPU_RECHECK_DELAY_MS,
   queueHitText,
   queueStatusText,
 } from "../../packages/extensions/atf-tools/src/gpuQueueFace.js";
+import { resetResidentBaselineForTest } from "../../packages/extensions/atf-tools/src/gpuQueueFace.js";
 import { parseTrainerLine, startLossIngest } from "../../src/core/workspace/lossIngest.js";
 import { apply as applyAtfTools } from "../../packages/extensions/atf-tools/src/index.js";
 
+// 批㊶-W：本文件 applyAtfTools 装配面预检（kernelDir=tempRoot 空）——env 显式声明走
+// 「env 已配置」路径（preflight ①⑥ 跳过派生与文件核查）。
+process.env["ATF_DSH_PIPELINE_COMMAND"] = "node x";
+
 const card = (index: string, utilization: string, memoryUsed: string) => ({ index, utilization: `${utilization}%`, memoryUsed: `${memoryUsed}MiB`, memoryTotal: "81920MiB" });
+const app = (pid: string, processName: string, gpuIndex: string) => ({ pid, processName, usedMemory: "1000", gpuIndex });
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -27,56 +37,164 @@ const tempRoot = (): string => {
   return root;
 };
 afterEach(() => {
+  resetResidentBaselineForTest();
   for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-describe("批㊶-K 项 1 GPU 排队编排（含增补三全卡扫描）", () => {
-  it("增补三·多卡命中非 0 号卡：0 号忙 3 号空闲 → 命中卡位 3（确认卡明示卡号）", () => {
-    const hit = gpuCycleHit([card("0", "95", "60000"), card("3", "5", "2000")]);
-    expect(hit).toEqual({ hit: true, gpuIndex: 3 });
-    expect(queueHitText(hit.gpuIndex)).toBe("GPU 3 已空闲，确认开跑？");
+describe("批㊶-W F6 GPU 探活四合一（整组判定＋归属＋快速二次确认）", () => {
+  it("④ 归属分类：无进程=空闲；训练特征进程=training；基线/新占用=resident；判定与显存数值无关（10GB 阈值退役）", () => {
+    expect(classifyCard([])).toBe("idle");
+    expect(classifyCard([app("10", "/usr/local/bin/python3.10", "0")])).toBe("resident");
+    expect(classifyCard([app("10", "torchrun", "0")])).toBe("training");
+    expect(classifyCard([app("10", "llamafactory-cli", "0")])).toBe("training");
+    expect(classifyCard([app("10", "vllm serve", "0"), app("11", "deepspeed", "0")])).toBe("training");
+    // 高显存占用但无 compute-apps 进程＝空闲（10GB 固定阈值退役——判定不看显存）
+    expect(classifyCard([])).toBe("idle");
   });
 
-  it("增补三·零卡满足继续等待：全忙两周期不触发；连续 2 周期稳定判定保持（先中后忙即清零）", () => {
-    const busy = [card("0", "99", "60000"), card("1", "90", "55000")];
-    expect(gpuCycleHit(busy).hit).toBe(false);
-    const fired: number[] = [];
-    const watcher = new GpuQueueWatcher((gpuIndex) => fired.push(gpuIndex));
-    watcher.cycle(busy, "1 分");
-    watcher.cycle(busy, "2 分");
-    expect(fired).toEqual([]);
-    watcher.cycle([card("2", "3", "500")], "3 分");
-    watcher.cycle(busy, "4 分");
-    watcher.cycle([card("2", "3", "500")], "5 分");
-    watcher.cycle([card("2", "3", "500")], "6 分");
-    expect(fired).toEqual([2]);
+  it("④ 常驻基线快照：首探记录 pid 集合，后续同 pid=resident；训练特征优先于基线", () => {
+    const first = [app("100", "vllm", "0"), app("200", "python3", "1")];
+    buildCardOccupancyTable([card("0", "0", "2000"), card("1", "0", "2000")], first);
+    // 首探之后（基线已建），同 pid 仍 resident；新 pid 也是 resident；训练特征一律 training
+    const table = buildCardOccupancyTable([card("0", "0", "2000"), card("1", "0", "2000"), card("2", "0", "2000")], [
+      app("100", "vllm", "0"), app("300", "python3", "1"), app("400", "torchrun", "2"),
+    ]);
+    expect(table.find((row) => row.index === "0")?.occupancy).toBe("resident");
+    expect(table.find((row) => row.index === "1")?.occupancy).toBe("resident");
+    expect(table.find((row) => row.index === "2")?.occupancy).toBe("training");
   });
 
-  it("解析容错：利用率/显存非数即不命中；等待时长人读格式；排队文案口径", () => {
-    expect(gpuCycleHit([card("0", "N/A", "60000")]).hit).toBe(false);
-    expect(formatWaited(5_000)).toBe("5 秒");
-    expect(formatWaited(125_000)).toBe("2 分 5 秒");
-    expect(queueStatusText("1 分")).toContain("排队中");
+  it("③ 整组判定：requiredCards 张全部空闲才命中；任一占用即不命中；apps 不可得保守不命中", () => {
+    const cards = [card("0", "0", "0"), card("1", "0", "0"), card("2", "95", "60000")];
+    const apps = [app("9", "python3", "2")];
+    expect(gpuGroupWindow(cards, apps, 2).hit).toBe(true);
+    expect(gpuGroupWindow(cards, apps, 3).hit).toBe(false); // 只 2 卡空闲，需 3——不命中
+    expect(gpuGroupWindow(cards, [app("9", "python3", "0"), app("8", "python3", "1")], 2).hit).toBe(false); // 占两卡剩 1——不命中
+    expect(gpuGroupWindow(cards, null, 1).hit).toBe(false); // compute-apps 不可得＝保守不命中（fail-closed）
+    const hit = gpuGroupWindow(cards, apps, 2);
+    expect(hit.gpuIndexes).toEqual([0, 1]);
   });
 
-  it("awaitGpuWindow：注入查询多卡命中非 0 号卡；零卡满足等待至 abort；env 解析（0＝不启用）", async () => {
+  it("⑤ 全卡状态表：逐卡三态＋利用率/显存/进程摘要；amber 卡文案含全卡表", () => {
+    const table = buildCardOccupancyTable(
+      [card("0", "0", "500"), card("1", "99", "60000"), card("2", "3", "1000")],
+      [app("9", "python3", "0"), app("8", "torchrun", "1")],
+    );
+    expect(table).toHaveLength(3);
+    expect(table.find((row) => row.index === "0")).toMatchObject({ occupancy: "resident", process: "9 python3" });
+    expect(table.find((row) => row.index === "1")?.occupancy).toBe("training");
+    expect(table.find((row) => row.index === "2")).toMatchObject({ occupancy: "idle", process: "" });
+    const text = formatCardTable(table);
+    expect(text).toContain("GPU0 常驻");
+    expect(text).toContain("GPU1 训练");
+    expect(text).toContain("GPU2 空闲");
+    const hitText = queueHitText([0, 2], table);
+    expect(hitText).toContain("GPU 0、2 已空闲");
+    expect(hitText).toContain("GPU1 训练");
+    expect(queueStatusText("1 分", 4)).toContain("整组 4 卡");
+  });
+
+  it("① 快速二次确认：首探命中→复探仍命中即放行（不再要求连续 2 个轮询周期）；复探丢窗回轮询", async () => {
+    const sleeps: number[] = [];
+    const sleep = async (ms: number): Promise<void> => { sleeps.push(ms); };
+    const idleCards = [card("0", "2", "500"), card("1", "1", "400")];
+    const busyCards = [card("0", "2", "500"), card("1", "99", "60000")];
+    let firstCall = 0;
     const hit = await awaitGpuWindow({
       pollMs: 10,
-      query: async () => [card("0", "99", "60000"), card("5", "2", "1000")],
+      requiredCards: 2,
+      query: async () => (firstCall++ === 0 ? idleCards : idleCards),
+      queryApps: async () => [],
+      sleep,
       onWaitTick: () => undefined,
     });
-    expect(hit).toEqual({ kind: "hit", gpuIndex: 5, waitedText: expect.stringContaining("秒") });
+    expect(hit.kind).toBe("hit");
+    if (hit.kind === "hit") expect(hit.snapshot.gpuIndexes).toEqual([0, 1]);
+    expect(sleeps).toContain(GPU_RECHECK_DELAY_MS); // 首探命中→7s 复探
+    // 复探丢窗（1 号卡被 compute-apps 占用——F6 判定不看利用率）→ 回轮询，下一周期恢复命中
+    resetResidentBaselineForTest();
+    const seq = [
+      { cards: idleCards, apps: [] as Array<ReturnType<typeof app>> },
+      { cards: busyCards, apps: [app("7", "python3", "1")] },
+      { cards: idleCards, apps: [] as Array<ReturnType<typeof app>> },
+    ];
+    let call = 0;
+    const hit2 = await awaitGpuWindow({
+      pollMs: 10,
+      requiredCards: 2,
+      query: async () => seq[Math.min(call, 2)]!.cards,
+      queryApps: async () => {
+        const idx = Math.min(call, 2);
+        call += 1;
+        return seq[idx]!.apps;
+      },
+      sleep,
+      onWaitTick: () => undefined,
+    });
+    expect(hit2.kind).toBe("hit");
+    expect(call).toBe(4); // 首探＋复探(丢窗)＋次周期首探＋次复探＝4 轮探测——轮询恢复语义
+  });
+
+  it("② 轮询缺省 30s（300s 退役）；0＝不启用；等待时长人读格式", async () => {
+    expect(GPU_QUEUE_POLL_MS_DEFAULT).toBe(30_000);
+    expect(gpuQueuePollMsFromEnv({})).toBe(30_000);
+    expect(gpuQueuePollMsFromEnv({ ATF_GPU_POLL_MS: "0" })).toBeNull();
+    expect(gpuQueuePollMsFromEnv({ ATF_GPU_POLL_MS: "5000" })).toBe(5_000);
+    expect(formatWaited(5_000)).toBe("5 秒");
+    expect(formatWaited(125_000)).toBe("2 分 5 秒");
+  });
+
+  it("awaitGpuWindow：零卡满足等待至 abort；命中带全卡状态表", async () => {
     const controller = new AbortController();
     const waiting = awaitGpuWindow({
       pollMs: 10,
+      requiredCards: 1,
       query: async () => [card("0", "99", "60000")],
+      queryApps: async () => [app("9", "python3", "0")],
       signal: controller.signal,
     });
     setTimeout(() => controller.abort(), 80);
     expect(await waiting).toEqual({ kind: "aborted" });
-    expect(gpuQueuePollMsFromEnv({})).toBe(300_000);
-    expect(gpuQueuePollMsFromEnv({ ATF_GPU_POLL_MS: "0" })).toBeNull();
-    expect(gpuQueuePollMsFromEnv({ ATF_GPU_POLL_MS: "5000" })).toBe(5_000);
+    const hit = await awaitGpuWindow({
+      pollMs: 10,
+      requiredCards: 1,
+      query: async () => [card("4", "2", "1000")],
+      queryApps: async () => [],
+      sleep: async () => undefined,
+      onWaitTick: () => undefined,
+    });
+    expect(hit.kind).toBe("hit");
+    if (hit.kind === "hit") {
+      expect(hit.snapshot.gpuIndexes).toEqual([4]);
+      expect(hit.snapshot.table.find((row) => row.index === "4")?.occupancy).toBe("idle");
+    }
+  });
+
+  it("排队即时反馈：onQueueStatus 首探即报（需 N 空闲 M）＋空闲数变化再报（不刷屏）——owner 批㊶-W 反馈增补", async () => {
+    const reports: Array<{ required: number; idle: number }> = [];
+    const seqs = [
+      { cards: [card("0", "99", "60000"), card("1", "98", "50000")], apps: [app("9", "python3", "0"), app("8", "python3", "1")] },
+      { cards: [card("0", "99", "60000"), card("1", "98", "50000")], apps: [app("9", "python3", "0"), app("8", "python3", "1")] },
+      { cards: [card("0", "2", "500"), card("1", "98", "50000")], apps: [app("9", "python3", "1")] },
+      { cards: [card("0", "2", "500"), card("1", "2", "400")], apps: [] },
+    ];
+    let call = 0;
+    const hit = await awaitGpuWindow({
+      pollMs: 5,
+      requiredCards: 2,
+      query: async () => seqs[Math.min(call, 3)]!.cards,
+      queryApps: async () => {
+        const s = seqs[Math.min(call, 3)]!;
+        call += 1;
+        return s.apps;
+      },
+      sleep: async () => undefined,
+      onWaitTick: () => undefined,
+      onQueueStatus: (status) => reports.push({ required: status.required, idle: status.idle }),
+    });
+    expect(hit.kind).toBe("hit");
+    // 首探报（0 空闲）→ 变化报（1）→ 变化报（2，命中）——同值轮不重复报
+    expect(reports).toEqual([{ required: 2, idle: 0 }, { required: 2, idle: 1 }, { required: 2, idle: 2 }]);
   });
 });
 

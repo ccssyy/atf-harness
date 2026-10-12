@@ -103,7 +103,16 @@ export const evalAgentRecommend = (key: string, raw: unknown, baseline: string, 
     case "image_max_pixels": {
       const value = num(raw);
       if (value === null) return reject("不可解析为数值");
-      if (!(CLAMP_DOMAINS.image_max_pixels as number[]).includes(value)) return reject(`像素两档 {800000, 1600000}`);
+      if (!(CLAMP_DOMAINS.image_max_pixels as number[]).includes(value)) return reject(`像素两档 {${(CLAMP_DOMAINS.image_max_pixels as number[]).join(", ")}}`);
+      break;
+    }
+    case "negative_ratio_target": {
+      // 批㊶-W F2：负样本构造带域校验（[0.02,0.05] R1 终裁；单值或逗号带两形态，带内逐值核域）。
+      const text = String(raw).trim();
+      const parts = text.split(/[,\uFF0C;；]/).map((p) => Number.parseFloat(p.trim()));
+      if (parts.length === 0 || parts.some((p) => !Number.isFinite(p))) return reject("不可解析为数值（单值或逗号带）");
+      const { min, max } = CLAMP_DOMAINS.negative_ratio;
+      if (parts.some((p) => p < min || p > max)) return reject(`负样本构造带 [${min}, ${max}]`);
       break;
     }
     case "base_model_path": {
@@ -120,6 +129,12 @@ export const evalAgentRecommend = (key: string, raw: unknown, baseline: string, 
       const maxNproc = limits?.maxNproc;
       if (maxNproc === null || maxNproc === undefined) return reject("可用卡数机器事实缺失——回退固定建议（停下问用户）");
       if (value > maxNproc) return reject(`nproc 域 [1, 可用卡数 ${maxNproc}]`);
+      break;
+    }
+    case "max_total_tokens": {
+      // 批㊶-W F1：4096 缺省退役（必填）——推荐须为正整数；域参考单源 65536（不夹取，只拦非法）。
+      const value = num(raw);
+      if (value === null || !Number.isInteger(value) || value < 1) return reject("须为正整数");
       break;
     }
     default:

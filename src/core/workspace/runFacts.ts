@@ -9,7 +9,7 @@
  * - 段序：八段有序管线，后段 done 前提＝前段 done 成立（推导层抑制，不报错）。
  * 均为 run 目录本地文件，不进 bridge 契约面。
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 // ── 绑定 ──
@@ -49,6 +49,51 @@ export const appendBinding = (runDir: string, sessionId: string, boundAt: string
   } catch {
     // fail-open：绑定写失败不阻塞工具主流程
   }
+};
+
+// ── 批㊶-W W1：会话→runDir 直传解析（围栏并发会话隔离）──
+
+/** 会话绑定反查：扫 runs 根（平铺＋工作区分桶双形态）逐 run 读 binding.json，
+ *  返回含该 sessionId 且 bound_at 最新的 runDir；无命中＝null。
+ *  调用链直传语义（W1 修法）：atf_bash 围栏可写根优先取本解析值（会话各回各 run），
+ *  进程级 env ATF_BASH_RUN_WORKSPACE 降为过渡态回退（并发互踩消除）。
+ *  runs 数量少（实例级几十）＋单层目录扫描——逐次调用可承受；异常静默 fail-open。 */
+export const resolveSessionRunWorkspace = (runsRoot: string, sessionId: string): string | null => {
+  if (sessionId === "") return null;
+  const hits: Array<{ runDir: string; at: number }> = [];
+  const visit = (runDir: string): void => {
+    for (const binding of readBindings(runDir)) {
+      if (binding.session_id !== sessionId) continue;
+      const at = Date.parse(binding.bound_at);
+      hits.push({ runDir, at: Number.isFinite(at) ? at : 0 });
+    }
+  };
+  try {
+    if (!existsSync(runsRoot)) return null;
+    for (const level1 of readdirSync(runsRoot, { withFileTypes: true })) {
+      if (!level1.isDirectory()) continue;
+      const level1Path = join(runsRoot, level1.name);
+      if (existsSync(join(level1Path, "webui", "binding.json"))) {
+        visit(level1Path);
+        continue;
+      }
+      // 工作区分桶形态：runs/<workspace>/<run_id>/webui/binding.json
+      try {
+        for (const level2 of readdirSync(level1Path, { withFileTypes: true })) {
+          if (!level2.isDirectory()) continue;
+          if (!existsSync(join(level1Path, level2.name, "webui", "binding.json"))) continue;
+          visit(join(level1Path, level2.name));
+        }
+      } catch { /* 桶层不可读——跳过 */ }
+    }
+  } catch {
+    return null;
+  }
+  if (hits.length === 0) return null;
+  // 多 run 绑定同会话：取 bound_at 最新（含非有限时间戳按 0 排序——如实最早）。
+  let best = hits[0] as { runDir: string; at: number };
+  for (const hit of hits) if (hit.at >= best.at) best = hit;
+  return best.runDir;
 };
 
 // ── 段内进度 ──

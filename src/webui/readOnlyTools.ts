@@ -192,6 +192,58 @@ export const queryNvidiaSmiAll = async (): Promise<GpuCardStatus[] | null> => {
   }
 };
 
+// ── 批㊶-W F6 ④：compute-apps 进程归属（gpu_uuid → 卡 index 对表；10GB 固定阈值退役）──
+
+/** 单条 compute-apps 进程（归属判定输入；gpuIndex 由 gpu_uuid 对表派生，对不上＝null）。 */
+export interface GpuComputeApp {
+  pid: string;
+  processName: string;
+  usedMemory: string;
+  gpuIndex: string | null;
+}
+
+/** compute-apps 输出＋index/uuid 对表解析（纯函数）：pid,process_name,used_memory,gpu_uuid
+ *  逐行 × index,gpu_uuid 对表 → 进程归属卡号。两输出任一无效 → null（不猜）。 */
+export const parseComputeAppsWithIndex = (appsOut: string, indexOut: string): GpuComputeApp[] | null => {
+  const uuidToIndex = new Map<string, string>();
+  for (const line of indexOut.trim().split("\n")) {
+    if (line === "") continue;
+    const cell = line.split(",").map((c) => c.trim());
+    if (cell.length < 2) continue;
+    uuidToIndex.set(cell[1]!, cell[0]!);
+  }
+  if (uuidToIndex.size === 0) return null;
+  const apps: GpuComputeApp[] = [];
+  for (const line of appsOut.trim().split("\n")) {
+    if (line === "") continue;
+    const cell = line.split(",").map((c) => c.trim());
+    if (cell.length < 4) continue;
+    apps.push({ pid: cell[0]!, processName: cell[1]!, usedMemory: cell[2]!, gpuIndex: uuidToIndex.get(cell[3]!) ?? null });
+  }
+  return apps;
+};
+
+/** compute-apps 查询（进程归属真源；nvidia-smi 不可用 → null 不猜测）。 */
+export const queryGpuComputeApps = async (): Promise<GpuComputeApp[] | null> => {
+  try {
+    const [appsOut, indexOut] = await Promise.all([
+      new Promise<string>((resolve, reject) => {
+        execFile("nvidia-smi", ["--query-compute-apps=pid,process_name,used_memory,gpu_uuid", "--format=csv,noheader"], { timeout: 5_000 }, (error, text) =>
+          error === null ? resolve(text) : reject(error),
+        );
+      }),
+      new Promise<string>((resolve, reject) => {
+        execFile("nvidia-smi", ["--query-gpu=index,gpu_uuid", "--format=csv,noheader"], { timeout: 5_000 }, (error, text) =>
+          error === null ? resolve(text) : reject(error),
+        );
+      }),
+    ]);
+    return parseComputeAppsWithIndex(appsOut, indexOut);
+  } catch {
+    return null;
+  }
+};
+
 /** nvidia-smi 查询（不可用/非零退出 → null，调用方如实报离线）。 */
 export const queryNvidiaSmi = async (): Promise<GpuStatus | null> => {
   try {

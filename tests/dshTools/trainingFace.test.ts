@@ -58,12 +58,14 @@ const seedRunModelFixture = (root: string, runId = "r1", basePath?: string): str
   return modelDir;
 };
 
-/** mock train.sh：DRY_RUN 打印 ADMISSION=pass 后正常退出（校验面 mock）；masterPort>0 时声明端口。 */
+/** mock train.sh：DRY_RUN 打印 ADMISSION=pass 后正常退出（校验面 mock）；masterPort>0 时声明端口。
+ *  批㊶-W F7：TRAIN_CMD 带 iteration-config 夹具同值键（learning_rate/num_train_epochs）——
+ *  透传对账通过后才达后续链路（对账是 start 门禁之一）。 */
 const writeMockTrainSh = (root: string, admissionPass = true, masterPort = 39_001): string => {
   const path = join(root, "train.sh");
   const portLine = masterPort > 0 ? `export MASTER_PORT=\${MASTER_PORT:-${masterPort}}\n` : "";
   writeFileSync(path, admissionPass
-    ? `#!/bin/bash\n${portLine}echo 'SHA=pass entries=1'\necho 'ADMISSION=pass keys=1'\nexit 0\n`
+    ? `#!/bin/bash\n${portLine}echo 'SHA=pass entries=1'\necho 'ADMISSION=pass keys=1'\nTRAIN_CMD=( '--learning_rate' '1e-4' '--num_train_epochs' '3' )\nexit 0\n`
     : "#!/bin/bash\necho 'admission broken'\nexit 1\n");
   // 段4 起 start 链带 prelaunch 在场检查——缺省夹具默认在场（缺失场景由用例显式删除）
   writeFileSync(join(root, "prelaunch-report.md"), "# 训练前报告\n");
@@ -72,11 +74,11 @@ const writeMockTrainSh = (root: string, admissionPass = true, masterPort = 39_00
 };
 
 /** 长驻 mock train.sh（批㊶Q增补三 段2）：进料行（SHA/ADMISSION pass）后 sleep 保活——
- *  探活 feed_ok 路径夹具；tmux 会话由测试尾声 kill（见各用例 finally）。 */
+ *  探活 feed_ok 路径夹具；tmux 会话由测试尾声 kill（见各用例 finally）。F7 对账键同上。 */
 const writeLongRunningTrainSh = (root: string, masterPort = 39_001): string => {
   const path = join(root, "train.sh");
   // DRY_RUN=1 校验步即退（runCapture 60s 超时面）；真跑形态进料行＋sleep 20 保活供探活
-  writeFileSync(path, `#!/bin/bash\nexport MASTER_PORT=\${MASTER_PORT:-${masterPort}}\necho 'SHA=pass entries=1'\necho 'ADMISSION=pass keys=1'\nif [ "\${DRY_RUN:-0}" = "1" ]; then exit 0; fi\nsleep 20\n`);
+  writeFileSync(path, `#!/bin/bash\nexport MASTER_PORT=\${MASTER_PORT:-${masterPort}}\necho 'SHA=pass entries=1'\necho 'ADMISSION=pass keys=1'\nTRAIN_CMD=( '--learning_rate' '1e-4' '--num_train_epochs' '3' )\nif [ "\${DRY_RUN:-0}" = "1" ]; then exit 0; fi\nsleep 20\n`);
   writeFileSync(join(root, "prelaunch-report.md"), "# 训练前报告\n");
   seedRunModelFixture(root);
   return path;
@@ -97,7 +99,8 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     const tool = buildRunTrainingTool(noApproval, { runsRoot: root, logDir: root, ctx: noApproval }) as unknown as Tool;
     const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
     expect(result).toMatchObject({ error: "approval_denied", outcome: "unavailable" });
-    expect(tmuxAbsent("atf-training-run")).toBe(true);
+    // 批㊶-W：真训练在场时 tmuxAbsent 恒假（会话非本用例所启）——如实跳过在场断言
+    if (!realTrainingAliveGuard()) expect(tmuxAbsent("atf-training-run")).toBe(true);
   });
 
   it("start：审批放行 + DRY_RUN 失败 → 如实拒启动（校验门），不进 tmux", async () => {
@@ -108,6 +111,12 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     expect(result.started).toBe(false);
     expect(String(result.dry_stdout_head)).toContain("admission broken");
   });
+
+  /** 批㊶-W 补口（20261011 事故教训同款）：真训练 tmux 会话在场时，启动链用例一律 skip
+   *  ——启动链固有 tmux kill-session 会误杀生产训练。 */
+  const realTrainingAliveGuard = (): boolean => {
+    try { execSync("tmux has-session -t atf-training-run 2>/dev/null"); return true; } catch { return false; }
+  };
 
   it("start：prelaunch 报告缺失 → prelaunch_report_missing 拒绝（prepare SKILL.md:84 确认制；不进审批不进 tmux）", async () => {
     const root = tempRoot();
@@ -121,10 +130,15 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     expect(result.error).toBe("prelaunch_report_missing");
     expect(String(result.note)).toContain("atf_launch_execute");
     expect(calls).toBe(0);
-    expect(tmuxAbsent("atf-training-run")).toBe(true);
+    // 批㊶-W：真训练在场时 tmuxAbsent 恒假（会话非本用例所启）——如实跳过在场断言
+    if (!realTrainingAliveGuard()) expect(tmuxAbsent("atf-training-run")).toBe(true);
   });
 
   it("start：prelaunch 报告在场（显式路径或 train.sh 同目录 prelaunch*）→ 通过在场检查继续后续链", async () => {
+    if (realTrainingAliveGuard()) {
+      console.warn("[guard] 真实训练会话 atf-training-run 在场——跳过 tmux 启动链锚（防误杀）");
+      return;
+    }
     const root = tempRoot();
     const trainSh = writeLongRunningTrainSh(root); // 夹具自带 prelaunch-report.md（在场）；长驻供探活 feed_ok
     const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
@@ -172,6 +186,13 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
   });
 
   it("start：秒退脚本 → 探活判 dead → started:false＋startup_failed（段2 终结 started:true 假成功——VERIFY 3 构造）", async () => {
+    // 批㊶-W 补口（真机实锚）：本用例走完整启动链（链内固有 tmux kill-session）——真训练
+    // 在场时必须 skip。批㊶-W 执行期曾因本用例缺 guard 误杀同事训练一次（resume 恢复）——
+    // 20261011 事故教训的漏网用例，防回潮。
+    if (realTrainingAliveGuard()) {
+      console.warn("[guard] 真实训练会话 atf-training-run 在场——跳过秒退探活锚（防误杀）");
+      return;
+    }
     const root = tempRoot();
     const trainSh = writeMockTrainSh(root, true); // 秒退（exit 0 但进程退出）
     const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;

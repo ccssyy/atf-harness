@@ -45,11 +45,26 @@ const findTool = (tools: unknown[], name: string): DshToolLike => {
 };
 const fakeExec = { agent: undefined, callId: "test-call-1", signal: undefined };
 const noApprovalCtx = { get: () => undefined };
+/** 批㊶-W F5 表单卡假件（每次 approvalCtx 新建——计数不跨用例）：首次零改动提交；
+ *  审批被拒回卡后第二次＝用户关闭表单卡（ASK_CANCELLED）——防审批恒拒场景死循环
+ *  （Reject 回卡循环的退出路径＝用户关卡取消）。 */
+const formAskOrCancel = (): { ask: (req: unknown) => Promise<unknown> } => {
+  let calls = 0;
+  return {
+    ask: async () => {
+      calls += 1;
+      if (calls > 1) throw Object.assign(new Error("cancelled by user"), { code: "ASK_CANCELLED" });
+      return { answers: [{ id: "config-confirm-x", selected: [] }] };
+    },
+  };
+};
 const approvalCtx = (outcome: string) => ({
-  get: (service: string) =>
-    service === "approval"
-      ? { request: async () => outcome }
-      : undefined,
+  get: (service: string) => {
+    if (service === "approval") return { request: async () => outcome };
+    // 批㊶-W F5：手动档 present 走表单卡链——假件提交/取消序列
+    if (service === "userQuestions") return formAskOrCancel();
+    return undefined;
+  },
 });
 
 // ---------------------------------------------------------------- 注册面（清单完整性）
@@ -263,7 +278,7 @@ describe("批㉛段2 atf_config_confirm 现值基线（run 的 IterationConfig �
     const snap = JSON.parse(readFileSync(join(root, "run-c", "webui", "config-snapshot.json"), "utf8")) as { confirmed: Record<string, string> };
     expect(snap.confirmed["deepspeed"]).toBe("ds_z3_fp8_config.json");
   });
-  it("已确认快照压过 IterationConfig（不重问语义）；驳回路径 fail-closed 不落快照", async () => {
+  it("已确认快照压过 IterationConfig（不重问语义）；驳回→回表单卡→用户关卡＝取消（F5 循环退出路径），fail-closed 不落快照", async () => {
     const root = seedRun(tempRoot2(), true);
     const tools = buildConfirmTools({ runsRoot: root, ctx: approvalCtx("allowed-once") });
     const result = (await findTool(tools, "atf_config_confirm").execute({ action: "present", run_id: "run-c" }, fakeExec)) as { fields?: Array<{ key: string; value: string; tag: string }> };
@@ -274,7 +289,8 @@ describe("批㉛段2 atf_config_confirm 现值基线（run 的 IterationConfig �
     const runDir = join(root, "run-c");
     rmSync(join(runDir, "webui", "config-snapshot.json"));
     const rej = (await findTool(denied, "atf_config_confirm").execute({ action: "present", run_id: "run-c" }, fakeExec)) as Record<string, unknown>;
-    expect(rej).toMatchObject({ error: "approval_denied", outcome: "rejected" });
+    // 批㊶-W F5：审批 Reject → 回表单卡；用户关闭表单卡（ASK_CANCELLED）＝结构化取消（循环退出）
+    expect(rej).toMatchObject({ error: "approval_denied", outcome: "cancelled" });
     expect(rej).toMatchObject({ tool: "atf_config_confirm" });
   });
 });

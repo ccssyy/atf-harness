@@ -9,6 +9,7 @@
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { TRAINING_PIN_CONSTANTS } from "../core/workspace/smartDefaults.js";
 
 /** 九要素键与缺省值（缺省语义与 generate_iteration_config 批⑪缺省表同源对齐）。 */
 export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; default: string }> = [
@@ -28,13 +29,14 @@ export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; de
   { key: "lora_rank", label: "lora_rank", default: "32" },
   { key: "lora_alpha", label: "lora_alpha", default: "64" },
   { key: "dataset_keys", label: "数据集键", default: "（由登记面推导）" },
-  // 批㉚ 段1（owner 原则二投影面）:KB 来源参数入卡——缺省值＝KB 建议（未校准），
-  // label 携带含义＋来源标注＋改法；未经用户确认/修改不得进生效配置
-  // （内核实验门 fail-closed 同语义:kb_suggestion 态拒绝产出配置）。
-  { key: "max_total_tokens", label: "token 上限（KB 建议·未校准｜含义:单样本最大 token 量,超长单据截断/拒绝构造｜改法:实验门 --max-total-tokens）", default: "4096" },
-  { key: "image_min_pixels", label: "像素下限（KB 建议·未校准｜原则一:训练/评估必须同一对值,评估服务只引用训练确认值）", default: "4194304" },
-  { key: "image_max_pixels", label: "像素上限（KB 建议·未校准｜与像素下限成对确认）", default: "16384000" },
-  { key: "negative_ratio_target", label: "负样本目标带（KB 建议·未校准）", default: "0.02,0.05" },
+  // 批㊶-W F1：max_total_tokens 4096 缺省删除（必填——表单卡 required 拦空）；像素缺省
+  // 改引 TRAINING_PIN_CONSTANTS 单源（历史 KB 像素缺省对全链退役，字面值不再见于本文件）。
+  // 批㊶-W §三（owner 终裁）：KB 全链排除——label 不再携带来源标注
+  // （不做参考不做提示；引用零残留——grep 锚 tests/dshTools/batchW.test.ts）。
+  { key: "max_total_tokens", label: "token 上限（必填｜含义:单样本最大 token 量,超长单据截断/拒绝构造）", default: "" },
+  { key: "image_min_pixels", label: "像素下限（原则一:训练/评估必须同一对值,评估服务只引用训练确认值）", default: String(TRAINING_PIN_CONSTANTS.image_min_pixels) },
+  { key: "image_max_pixels", label: "像素上限（与像素下限成对确认;两档闭集）", default: String(TRAINING_PIN_CONSTANTS.image_max_pixels[0]) },
+  { key: "negative_ratio_target", label: "负样本构造带（配额 2%-5%,空对象构造;空自然页可作构造输入之一非配额来源）", default: `${TRAINING_PIN_CONSTANTS.negative_ratio.min},${TRAINING_PIN_CONSTANTS.negative_ratio.max}` },
 ];
 
 /** 卡面字段构造：值来源三态（显式覆盖 from_registry/用户值 need_confirm/缺省 default_used）。 */
@@ -51,9 +53,9 @@ export const buildConfigConfirmFields = (
   });
 
 /** 纯文字应答解析（"lr 改 2e-4 其他 ok"→ {learning_rate:"2e-4"}；"其他 ok"＝其余按当前值确认）。
- *  识别键别名：lr＝learning_rate；epochs/轮数＝num_train_epochs；batch＝per_device_train_batch_size；
- *  accum/梯度累积＝gradient_accumulation_steps；cutoff＝cutoff_len；deepspeed/z＝deepspeed；
- *  lora_rank/rank、lora_alpha/alpha。无法解析出任何改动且非纯确认语 → null（交回 agent/提示）。 */
+ *  批㊶-W F5：atf_config_confirm 工具链的文字 amend 路径已退役（表单卡 intent 结构化收集）；
+ *  本函数仅为 atf-ui 面板既有文字应答通道（sessionManager.resolvePendingByText）保留——
+ *  工具链零引用，勿在新链路接入。 */
 export const parseConfigEditText = (text: string): { edits: Record<string, string>; explicitOnly: boolean } | null => {
   const normalized = text.trim();
   const aliases: Record<string, string> = {
@@ -81,7 +83,7 @@ export const parseConfigEditText = (text: string): { edits: Record<string, strin
     lora_rank: "lora_rank",
     alpha: "lora_alpha",
     lora_alpha: "lora_alpha",
-    // 批㉚ 段1:KB 来源参数别名（原则二投影面——纯文字应答可改这些值）
+    // 批㉚ 段1 承接（批㊶-W §三 KB 标注已除——键本身保留可改）
     token: "max_total_tokens",
     token上限: "max_total_tokens",
     max_total_tokens: "max_total_tokens",

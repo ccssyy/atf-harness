@@ -7,7 +7,8 @@
  *     （除不尽/矛盾组合返回问题串，禁止静默取整）；warmup/save_steps 随总量派生；nnodes/nproc；
  *   L3 模型建议缺省（确认卡主显示，harness clamp）——epochs 1–10、lr 5e-5–5e-4、
  *     lora_rank ∈ {16,32,64,128}（alpha=2×rank 联动）、cutoff_len ≤12800（基准 9000）、
- *     image_max_pixels ∈ {800000, 1600000}（image_min_pixels 65536 固定）。
+ *     image_max_pixels ∈ TRAINING_PIN_CONSTANTS 两档（批㊶-W F1 单源）、
+ *     negative_ratio_target ∈ [0.02,0.05]（批㊶-W F2 构造配额带）。
  * OOM 降档：bs 2→1、grad_accum 翻倍、global_batch 保持 256（预填重发指令用，不自动代发）。
  *
  * 深度学习缺省（ds_z3_offload_config.json）＝内核 assets 既有资产（批㊶-P BUILD 首验核实
@@ -16,6 +17,21 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+
+// ── 批㊶-W F1：训练 pin 单源常量（三面一致：内核种子/护栏闭集/确认卡缺省引用同一组值）──
+/** 单源值（内核 PIN_DEFAULTS 同轴——批㊶-W F1：种子 token 65536、像素两档 802816/1605632、
+ *  负样本构造带 [0.02,0.05]。历史 KB 缺省值组全链退役（字面值不再见于任何配置面——
+ *  grep 锚 tests/dshTools/batchW.test.ts）。 */
+export const TRAINING_PIN_CONSTANTS = {
+  /** max_total_tokens 单源值（缺省已退役——确认卡必填；本值仅作域参考与文档锚）。 */
+  max_total_tokens: 65_536,
+  /** 像素下限（固定）。 */
+  image_min_pixels: 65_536,
+  /** 像素上限两档（闭集）。 */
+  image_max_pixels: [802_816, 1_605_632] as number[],
+  /** 负样本构造配额带（F2 R1 终裁 2%-5%——空对象构造，非空页自然来源）。 */
+  negative_ratio: { min: 0.02, max: 0.05 },
+} as const;
 
 // ── L1 固定智能缺省（附录 A 第一层）──
 export const FIXED_SMART_DEFAULTS: Readonly<Record<string, string>> = {
@@ -54,7 +70,10 @@ export const CLAMP_DOMAINS = {
   lr: { min: 5e-5, max: 5e-4 },
   lora_rank: [16, 32, 64, 128] as number[],
   cutoff_len: { base: 9000, max: 12800 },
-  image_max_pixels: [800000, 1600000] as number[],
+  // 批㊶-W F1：像素上限闭集改引 TRAINING_PIN_CONSTANTS 单源（历史 KB 像素对退役——字面值不复发）。
+  image_max_pixels: TRAINING_PIN_CONSTANTS.image_max_pixels,
+  // 批㊶-W F2：负样本构造带（Agent 建议区间——域内任意值可建议，域外拦截回退）。
+  negative_ratio: TRAINING_PIN_CONSTANTS.negative_ratio,
 };
 
 // ── 批㊶-S5 §九：默认基模型锚点（owner 10-12 裁定——确认卡基线默认，卡上可改；非全局锁定）──
@@ -241,6 +260,17 @@ export const clampImageMaxPixels = (raw: string | number): number => {
     if (Math.abs(candidate - value) < Math.abs(nearest - value)) nearest = candidate;
   }
   return nearest;
+};
+
+/** 批㊶-W F2：负样本构造带 clamp（"0.03" 单值或 "0.02,0.05" 带两形态；带内逐值夹至
+ *  [0.02,0.05]；不可解析＝原样返回交由调用方按需拦截——不猜）。 */
+export const clampNegativeRatio = (raw: string | number): string => {
+  const text = String(raw).trim();
+  const parts = text.split(/[,\uFF0C;；]/).map((p) => Number.parseFloat(p.trim()));
+  if (parts.length === 0 || parts.some((p) => !Number.isFinite(p))) return text;
+  const { min, max } = CLAMP_DOMAINS.negative_ratio;
+  const clamped = parts.map((p) => Math.min(max, Math.max(min, p)));
+  return clamped.map((p) => String(Number(p.toFixed(4)))).join(",");
 };
 
 /** OOM 降档重发参数（P-1 OOM 策略）：bs 2→1、grad_accum 翻倍、global_batch 保持 256。 */

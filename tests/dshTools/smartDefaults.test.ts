@@ -13,6 +13,7 @@ import {
   loraAlphaFor,
   clampCutoffLen,
   clampImageMaxPixels,
+  clampNegativeRatio,
   oomFallbackParams,
   applyConfirmedToIterationConfig,
   SMART_DEEPSPEED_DEFAULT,
@@ -66,11 +67,19 @@ describe("批㊶-P P-1b L3 模型建议 clamp", () => {
     expect(clampLoraRank(30)).toBe(32);
     expect(loraAlphaFor(32)).toBe(64);
   });
-  it("cutoff ≤12800（基准 9000）；image_max_pixels 两档 80万/160万", () => {
+  it("cutoff ≤12800（基准 9000）；image_max_pixels 两档（F1 单源 802816/1605632）；负样本带 clamp", () => {
     expect(clampCutoffLen(9000)).toBe(9000);
     expect(clampCutoffLen(20000)).toBe(12800);
-    expect(clampImageMaxPixels(800000)).toBe(800000);
-    expect(clampImageMaxPixels(4194304)).toBe(1600000); // 最近档位——bl 历史 4.19M 更近 160 万档
+    // 批㊶-W F1：像素闭集改单源两档（历史 800000/1600000 退役——4.19M 就近 1.6M 档语义保持）
+    expect(clampImageMaxPixels(802816)).toBe(802816);
+    expect(clampImageMaxPixels(1605632)).toBe(1605632);
+    expect(clampImageMaxPixels(4194304)).toBe(1605632); // 最近档位——bl 历史 4.19M 更近高档
+    expect(clampImageMaxPixels(800000)).toBe(802816);
+    // 批㊶-W F2：负样本构造带（单值/带两形态；越界逐值夹取）
+    expect(clampNegativeRatio("0.03")).toBe("0.03");
+    expect(clampNegativeRatio("0.02,0.05")).toBe("0.02,0.05");
+    expect(clampNegativeRatio("0.08")).toBe("0.05");
+    expect(clampNegativeRatio("0.01,0.2")).toBe("0.02,0.05");
   });
 });
 

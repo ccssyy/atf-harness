@@ -65,6 +65,10 @@ const tierCtx = (tier: string, recorded?: { approvals: string[] }) => ({
     if (service === "approval") {
       return { request: async (req: { reason: string }) => { recorded?.approvals.push(req.reason); return "allowed-once"; } };
     }
+    if (service === "userQuestions") {
+      // F5 表单卡假件：直接提交（空 selected＝零改动→按现值→审批卡）
+      return { ask: async () => ({ answers: [{ id: "config-confirm-run-q", selected: [] }] }) };
+    }
     return undefined;
   },
 });
@@ -224,12 +228,12 @@ describe("批㊶-Q 段2 atf_config_confirm 全自动分支（免阻塞落快照�
     expect(missing).toMatchObject({ ok: true, recommend: "missing_fallback_defaults" });
     expect(String(missing.notification)).toContain("agent 推荐缺失——全键回退固定建议");
   });
-  it("全自动档 amend 纯文字改参：同样免阻塞，改参键来源 user-specified", async () => {
+  it("全自动档 amend 结构化改参（F5 edits 形态）：同样免阻塞，改参键来源 user-specified", async () => {
     const root = seedRun(tempRoot("kQ-amend-"));
     const recorded = { approvals: [] as string[] };
     const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx("auto_training", recorded) });
     const result = (await findTool(tools, "atf_config_confirm").execute(
-      { action: "amend", run_id: "run-q", amend_text: "lr 改 2e-4 其他 ok" },
+      { action: "amend", run_id: "run-q", edits: { learning_rate: "2e-4" } },
       sessionExec,
     )) as Record<string, unknown>;
     expect(recorded.approvals).toHaveLength(0);

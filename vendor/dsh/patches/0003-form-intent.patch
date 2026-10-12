@@ -1,0 +1,539 @@
+diff --git a/packages/client/ui-user-questions/src/client/FormPanel.module.css b/packages/client/ui-user-questions/src/client/FormPanel.module.css
+new file mode 100644
+index 0000000..d0bba15
+--- /dev/null
++++ b/packages/client/ui-user-questions/src/client/FormPanel.module.css
+@@ -0,0 +1,121 @@
++/* Form panel (ATF 批㊶-W F5 patch 0003) — shares the visual language of the
++ * plan review card: a framed card with a state strip, a body, and a footer. */
++
++.frame {
++  display: flex;
++  flex-direction: column;
++  align-items: stretch;
++  gap: 8px;
++}
++
++.card {
++  display: flex;
++  flex-direction: column;
++  gap: 12px;
++  padding: 16px;
++  border: 1px solid var(--dsh-border-color, rgba(0, 0, 0, 0.12));
++  border-radius: 12px;
++  background: var(--dsh-surface-color, #fff);
++}
++
++.strip {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  font-size: 12px;
++  font-weight: 600;
++  letter-spacing: 0.02em;
++  text-transform: uppercase;
++  opacity: 0.75;
++}
++
++.body {
++  display: flex;
++  flex-direction: column;
++  gap: 8px;
++}
++
++.title {
++  margin: 0;
++  font-size: 15px;
++  font-weight: 600;
++}
++
++.detail {
++  margin: 0;
++  font-size: 12px;
++  opacity: 0.75;
++  white-space: pre-wrap;
++}
++
++.fields {
++  display: flex;
++  flex-direction: column;
++  gap: 10px;
++  max-height: 320px;
++  overflow-y: auto;
++  padding-right: 4px;
++}
++
++.fieldRow {
++  display: flex;
++  flex-direction: column;
++  gap: 4px;
++}
++
++.fieldLabel {
++  font-size: 12px;
++  font-weight: 600;
++}
++
++.requiredMark {
++  margin-left: 2px;
++  color: #d64545;
++}
++
++.fieldInput {
++  width: 100%;
++  box-sizing: border-box;
++  padding: 6px 8px;
++  font: inherit;
++  font-size: 13px;
++  border: 1px solid var(--dsh-border-color, rgba(0, 0, 0, 0.16));
++  border-radius: 8px;
++  background: transparent;
++  color: inherit;
++  resize: vertical;
++}
++
++.fieldInput:focus {
++  outline: none;
++  border-color: var(--dsh-accent-color, #4b6bfb);
++}
++
++.fieldInput:disabled {
++  opacity: 0.6;
++}
++
++.fieldHint {
++  font-size: 11px;
++  opacity: 0.65;
++}
++
++.footer {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++}
++
++.feedback {
++  flex: 1;
++  min-height: 18px;
++  font-size: 12px;
++  color: #d64545;
++  white-space: pre-wrap;
++}
++
++.actions {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++}
+diff --git a/packages/client/ui-user-questions/src/client/FormPanel.tsx b/packages/client/ui-user-questions/src/client/FormPanel.tsx
+new file mode 100644
+index 0000000..3c04765
+--- /dev/null
++++ b/packages/client/ui-user-questions/src/client/FormPanel.tsx
+@@ -0,0 +1,116 @@
++import { useMemo, useState, type ChangeEvent } from 'react'
++import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
++import type { AskUserQuestionFormField } from '@deepseek-ai/dsh-user-questions/types'
++import type { PendingQuestion, QuestionComposerProps, QuestionForm } from './contract/slots.ts'
++import css from './FormPanel.module.css'
++
++/** The panel's own props: the question domain face, the narrowed form, and the locale seat. */
++export type FormPanelProps =
++  { pending: PendingQuestion; form: QuestionForm } & Pick<QuestionComposerProps, 't'>
++
++/** Initial draft values: each field prefilled from its current `value`. */
++const initialDraftOf = (fields: readonly AskUserQuestionFormField[]): Record<string, string> =>
++  Object.fromEntries(fields.map(field => [field.key, field.value ?? '']))
++
++/**
++ * Render a 'form' intent question as a structured multi-field card (ATF
++ * 批㊶-W F5, vendor patch 0003): one labelled input per field, prefilled with
++ * the current value, with the field's domain hint under it. Submitting
++ * encodes every field as a `key=value` entry of the answer's `selected` —
++ * the protocol encoding is unchanged, so a caller reads the same shape the
++ * generic flow produces. A required field left empty is rejected locally
++ * with a visible message; nothing is silently dropped.
++ *
++ * The form collects values only — authorization stays with the caller's own
++ * approval surface downstream.
++ *
++ * @param props - the question domain face, the narrowed form, and `t`.
++ * @returns The form takeover for this request.
++ */
++export function FormPanel({ pending, form, t }: FormPanelProps) {
++  const initial = useMemo(() => initialDraftOf(form.fields), [form.fields])
++  const [values, setValues] = useState<Record<string, string>>(initial)
++  const [busy, setBusy] = useState(false)
++  const [error, setError] = useState<string | null>(null)
++  const update = (key: string, event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
++    setValues(current => ({ ...current, [key]: event.target.value }))
++    setError(null)
++  }
++  const submit = (): void => {
++    const missing = form.fields.filter(field => field.required === true && (values[field.key] ?? '').trim() === '')
++    if (missing.length > 0) {
++      setError(`${t('form.required')}: ${missing.map(field => field.label).join('、')}`)
++      return
++    }
++    const selected = form.fields
++      .map(field => `${field.key}=${(values[field.key] ?? '').trim()}`)
++    // Same settlement shape as the plan review: an rpc send resolves locally
++    // (dismiss after send); a waterfall send is closed by the projection.
++    const remote = pending.snapshot().channel === 'rpc'
++    setBusy(true)
++    setError(null)
++    void pending.answer({ answers: [{ id: form.id, selected }] })
++      .then(() => {
++        if (!remote) return
++        setBusy(false)
++        void pending.dismiss().catch(() => { setError(t('status.sent')) })
++      })
++      .catch((cause: unknown) => {
++        setBusy(false)
++        setError(cause instanceof Error ? cause.message : String(cause))
++      })
++  }
++  return (
++    <div className={css.frame} data-form-key={pending.key}>
++      <section className={css.card} aria-label={form.question} aria-busy={busy}>
++        <div className={css.strip}>
++          <StateDot state={busy ? 'ongoing' : 'warning'} />
++          {form.header ?? t('form.header')}
++        </div>
++        <div className={css.body}>
++          <h3 className={css.title}>{form.question}</h3>
++          {form.detail !== undefined && <p className={css.detail}>{form.detail}</p>}
++          <div className={css.fields}>
++            {form.fields.map(field => (
++              <label key={field.key} className={css.fieldRow}>
++                <span className={css.fieldLabel}>
++                  {field.label}
++                  {field.required === true && <span className={css.requiredMark}>*</span>}
++                </span>
++                {(field.value ?? '').includes('\n') || field.key === 'base_model_path'
++                  ? (
++                    <textarea
++                      className={css.fieldInput}
++                      value={values[field.key] ?? ''}
++                      placeholder={field.placeholder}
++                      disabled={busy}
++                      rows={2}
++                      onChange={event => { update(field.key, event) }}
++                    />
++                  )
++                  : (
++                    <input
++                      className={css.fieldInput}
++                      value={values[field.key] ?? ''}
++                      placeholder={field.placeholder}
++                      disabled={busy}
++                      onChange={event => { update(field.key, event) }}
++                    />
++                  )}
++                {field.hint !== undefined && <span className={css.fieldHint}>{field.hint}</span>}
++              </label>
++            ))}
++          </div>
++        </div>
++        <div className={css.footer}>
++          <div className={css.feedback} role="status">{error}</div>
++          <div className={css.actions}>
++            <Button variant="primary" disabled={busy} onClick={submit}>
++              {form.submitLabel ?? t('form.submit')}
++            </Button>
++          </div>
++        </div>
++      </section>
++    </div>
++  )
++}
+diff --git a/packages/client/ui-user-questions/src/client/QuestionComposer.tsx b/packages/client/ui-user-questions/src/client/QuestionComposer.tsx
+index 33bbcbe..5ddc735 100644
+--- a/packages/client/ui-user-questions/src/client/QuestionComposer.tsx
++++ b/packages/client/ui-user-questions/src/client/QuestionComposer.tsx
+@@ -8,10 +8,11 @@ import {
+   IconChevronRightOutlineRegular, IconChevronUpOutlineRegular, IconCloseOutlineRegular,
+   IconEditOutlineRegular, MarkdownText,
+ } from '@deepseek-ai/dsh-client-ui-primitives'
+-import { planReviewOf, type QuestionAnswer, type QuestionCardSnapshot, type QuestionComposerProps } from './contract/slots.ts'
++import { planReviewOf, formOf, type QuestionAnswer, type QuestionCardSnapshot, type QuestionComposerProps } from './contract/slots.ts'
+ import type { PendingQuestion } from './contract/slots.ts'
+ import type { QuestionDraftAnswer, QuestionDraftProgress } from './draft-store.ts'
+ import { PlanReviewPanel } from './PlanReviewPanel.tsx'
++import { FormPanel } from './FormPanel.tsx'
+ import css from './QuestionComposer.module.css'
+ 
+ /**
+@@ -127,9 +128,10 @@ function AnswerField(props: AnswerFieldProps) {
+  * Session-scoped Slot store, keyed by the pending carrier, so a strict Session
+  * entry remount restores the same request without exposing it to another one.
+  *
+- * One takeover, two presentations: a request that declares a presentation intent this
++ * One takeover, three presentations: a request that declares a presentation intent this
+  * package renders uses that presentation (a plan review is one decision over one
+- * plan, not a question set), and every other request takes the generic flow.
++ * plan; a form is a structured multi-field card), and every other request takes
++ * the generic flow.
+  * The routing lives here, at the one entry that owns the composer seat, so
+  * neither presentation can claim a request the other is already rendering.
+  *
+@@ -139,18 +141,21 @@ function AnswerField(props: AnswerFieldProps) {
+ export function QuestionComposer(props: QuestionComposerProps) {
+   const question = props.matched
+   const review = useMemo(() => planReviewOf(question.questions), [question])
+-  return review === undefined
+-    ? (
+-      <QuestionFlow
+-        key={question.key}
+-        pending={question}
+-        t={props.t}
+-        useStore={props.useStore}
+-        useQuestionCard={props.useQuestionCard}
+-        actions={props.actions}
+-      />
+-    )
+-    : <PlanReviewPanel key={question.key} pending={question} review={review} t={props.t} renderSlot={props.renderSlot} />
++  const form = useMemo(() => formOf(question.questions), [question])
++  return review !== undefined
++    ? <PlanReviewPanel key={question.key} pending={question} review={review} t={props.t} renderSlot={props.renderSlot} />
++    : form !== undefined
++      ? <FormPanel key={question.key} pending={question} form={form} t={props.t} />
++      : (
++        <QuestionFlow
++          key={question.key}
++          pending={question}
++          t={props.t}
++          useStore={props.useStore}
++          useQuestionCard={props.useQuestionCard}
++          actions={props.actions}
++        />
++      )
+ }
+ 
+ type QuestionFlowProps =
+diff --git a/packages/client/ui-user-questions/src/client/contract/slots.ts b/packages/client/ui-user-questions/src/client/contract/slots.ts
+index 4d1e9fd..4a48db3 100644
+--- a/packages/client/ui-user-questions/src/client/contract/slots.ts
++++ b/packages/client/ui-user-questions/src/client/contract/slots.ts
+@@ -4,7 +4,7 @@ import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStor
+ import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+ import type { SessionId } from '@deepseek-ai/dsh-session/types'
+ import type {
+-  AskUserQuestionAnswer, AskUserQuestionAnswerItem, AskUserQuestionItem, UserQuestionState,
++  AskUserQuestionAnswer, AskUserQuestionAnswerItem, AskUserQuestionFormField, AskUserQuestionItem, UserQuestionState,
+ } from '@deepseek-ai/dsh-user-questions/types'
+ import type { createQuestionDraftStore } from '../draft-store.ts'
+ 
+@@ -100,6 +100,48 @@ export function planReviewOf(questions: readonly QuestionItem[]): PlanReview | u
+   }
+ }
+ 
++/**
++ * A request narrowed to the `form` presentation intent (ATF 批㊶-W F5 patch 0003):
++ * everything the form card renders and answers with. Each field is prefilled
++ * from its `value` and the submit encodes every field as a `key=value` entry
++ * of the answer's `selected` — the protocol encoding is unchanged.
++ */
++export interface QuestionForm {
++  /** The form question's id, echoed in the answer. */
++  id: string
++  /** The question text, kept as the card's accessible name. */
++  question: string
++  /** Optional short heading/group label. */
++  header?: string
++  /** Optional supporting detail rendered above the fields. */
++  detail?: string
++  /** Field spec (non-empty — `formOf` narrows it). */
++  fields: readonly AskUserQuestionFormField[]
++  /** Submit button label; the locale default covers it when absent. */
++  submitLabel?: string
++}
++
++/**
++ * Narrow a request to a renderable form card, or return undefined to leave it
++ * to the generic question flow. Accepts one question whose intent is `form`
++ * with a non-empty field list; everything else stays generic.
++ */
++export function formOf(questions: readonly QuestionItem[]): QuestionForm | undefined {
++  if (questions.length !== 1) return undefined
++  // Length-checked above; the index read is the narrowing tax, not a guess.
++  const question = questions[0] as QuestionItem
++  const intent = question.intent
++  if (intent?.kind !== 'form' || !Array.isArray(intent.fields) || intent.fields.length === 0) return undefined
++  return {
++    id: question.id,
++    question: question.question,
++    ...(question.header === undefined ? {} : { header: question.header }),
++    ...(question.detail === undefined ? {} : { detail: question.detail }),
++    fields: intent.fields,
++    ...(intent.submitLabel === undefined ? {} : { submitLabel: intent.submitLabel }),
++  }
++}
++
+ 
+ /** Reload-unique prefix so an unnamed legacy card cannot reuse a persisted draft. */
+ const unnamedQuestionPrefix = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)),
+@@ -225,7 +267,7 @@ export interface QuestionCardSnapshot {
+  */
+ export class PendingQuestion {
+   /** Presentation discriminator used by Session pending-interaction consumers. */
+-  readonly kind: 'question' | 'plan-review'
++  readonly kind: 'question' | 'plan-review' | 'form'
+   /** Render identity and request key for the Session-scoped draft store. */
+   readonly key: string
+   /** Agent/Session identity owning the request. */
+@@ -281,7 +323,7 @@ export class PendingQuestion {
+   ) {
+     this.sessionId = sessionId
+     this.questions = questions
+-    this.kind = planReviewOf(questions) === undefined ? 'question' : 'plan-review'
++    this.kind = planReviewOf(questions) !== undefined ? 'plan-review' : formOf(questions) !== undefined ? 'form' : 'question'
+     this.callId = callId
+     this.review = review
+     this.dismissal = callId === undefined ? 'cancel' : 'hide'
+diff --git a/packages/client/ui-user-questions/src/client/index.ts b/packages/client/ui-user-questions/src/client/index.ts
+index 8ee3962..ed99323 100644
+--- a/packages/client/ui-user-questions/src/client/index.ts
++++ b/packages/client/ui-user-questions/src/client/index.ts
+@@ -369,7 +369,8 @@ export function apply(ctx: ClientContext): void {
+   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-user-questions: dictionaries')
+   const questionDraftStore = createQuestionDraftStore()
+   const registerPendingInteraction = ctx.uiSession.registerPendingInteraction<PendingQuestion>(
+-    pending => pending.kind === 'plan-review' ? 2 : 1,
++    // Form cards rank with plan reviews: both are intent takeovers, not generic flows.
++    pending => pending.kind === 'plan-review' || pending.kind === 'form' ? 2 : 1,
+   )
+   const cards = new QuestionCards(registerPendingInteraction)
+   ctx.effect(() => () => { cards.dispose() }, 'ui-user-questions: cards')
+diff --git a/packages/client/ui-user-questions/src/client/locales.ts b/packages/client/ui-user-questions/src/client/locales.ts
+index d45fd56..0e0e9e1 100644
+--- a/packages/client/ui-user-questions/src/client/locales.ts
++++ b/packages/client/ui-user-questions/src/client/locales.ts
+@@ -33,6 +33,9 @@ export const zh = {
+   'plan.approve': '同意执行',
+   'plan.decline': '拒绝',
+   'plan.discuss': '要求修改',
++  'form.header': '参数确认表单',
++  'form.submit': '提交',
++  'form.required': '必填项未填',
+ } satisfies Record<string, string>
+ 
+ /** The question namespace key union. */
+@@ -71,4 +74,7 @@ export const en = {
+   'plan.approve': 'Approve',
+   'plan.decline': 'Refuse',
+   'plan.discuss': 'Request changes',
++  'form.header': 'Parameter form',
++  'form.submit': 'Submit',
++  'form.required': 'Required fields left empty',
+ } satisfies Record<QuestionKey, string>
+diff --git a/packages/interaction/user-questions/src/index.ts b/packages/interaction/user-questions/src/index.ts
+index 06cb67b..43c7b6c 100644
+--- a/packages/interaction/user-questions/src/index.ts
++++ b/packages/interaction/user-questions/src/index.ts
+@@ -300,9 +300,24 @@ export class UserQuestionService extends TypertRemoteService {
+     // either gap would put a choice the asker never offered — or an approval of
+     // something invisible — in front of the user. Caught at the asker, where
+     // the mistake is, rather than in each UI.
++    // A 'form' intent (ATF patch 0003) asserts its own invariant instead: the
++    // fields it renders are non-empty and well-formed, since a form with no
++    // fields has nothing to collect. It needs no options and no detail.
+     for (const question of request.questions) {
+       const intent = question.intent
+       if (intent === undefined) continue
++      if (intent.kind === 'form') {
++        if (!Array.isArray(intent.fields) || intent.fields.length === 0
++          || intent.fields.some(field =>
++            field === null || typeof field !== 'object'
++            || typeof field.key !== 'string' || field.key === ''
++            || typeof field.label !== 'string' || field.label === '')) {
++          throw new UserQuestionError(
++            `question ${question.id} declares intent form whose fields are empty or malformed`,
++            'BAD_INTENT')
++        }
++        continue
++      }
+       if (!(question.options ?? []).some(option => option.label === intent.approve)) {
+         throw new UserQuestionError(
+           `question ${question.id} declares intent ${intent.kind} whose approve label `
+diff --git a/packages/interaction/user-questions/src/types.ts b/packages/interaction/user-questions/src/types.ts
+index 8cccf99..ce8a951 100644
+--- a/packages/interaction/user-questions/src/types.ts
++++ b/packages/interaction/user-questions/src/types.ts
+@@ -21,17 +21,48 @@ export interface AskUserQuestionOption {
+  * not know a tag renders the generic flow, and the answer encoding is identical
+  * either way — an intent changes presentation only, never the protocol.
+  */
+-export type AskUserQuestionIntent = {
+-  /** A plan submitted for review: `detail` is the plan markdown `ask()` requires, and the decision approves or declines it. */
+-  kind: 'plan-review'
+-  /**
+-   * The option label that approves the plan; every other option declines it.
+-   * Named rather than positional so no UI infers the verdict from option order.
+-   * An `approve` naming no option of its own question is rejected at `ask()`.
+-   */
+-  approve: string
+-  /** Logged tool invocation whose arguments contain the reviewed plan. */
+-  callId?: ToolCallId
++export type AskUserQuestionIntent =
++  | {
++    /** A plan submitted for review: `detail` is the plan markdown `ask()` requires, and the decision approves or declines it. */
++    kind: 'plan-review'
++    /**
++     * The option label that approves the plan; every other option declines it.
++     * Named rather than positional so no UI infers the verdict from option order.
++     * An `approve` naming no option of its own question is rejected at `ask()`.
++     */
++    approve: string
++    /** Logged tool invocation whose arguments contain the reviewed plan. */
++    callId?: ToolCallId
++  }
++  | {
++    /**
++     * A structured form (multi-field card): `fields` are rendered as labelled
++     * inputs prefilled with their current values. Presentation only — the
++     * answer encodes each field as a `key=value` entry of `selected`, so a UI
++     * without form support renders the generic flow and the caller reads the
++     * same encoding either way. (ATF 批㊶-W F5 vendor patch 0003.)
++     */
++    kind: 'form'
++    /** Field spec; at least one field. Empty (or non-array) is rejected at `ask()`. */
++    fields: AskUserQuestionFormField[]
++    /** Submit button label; the UI default covers it when absent. */
++    submitLabel?: string
++  }
++
++/** One labelled input of a 'form' intent question. */
++export interface AskUserQuestionFormField {
++  /** Stable field key; the answer carries it back as a `key=value` selected entry. */
++  key: string
++  /** User-facing label. */
++  label: string
++  /** Current value prefilled into the input. */
++  value?: string
++  /** Empty-field prompt. */
++  placeholder?: string
++  /** Readable domain hint (e.g. clamp bounds) shown under the input. */
++  hint?: string
++  /** When true, an empty value is rejected at submit (client-side) — never silently dropped. */
++  required?: boolean
+ }
+ 
+ /** One question in a user-questions request. */
+diff --git a/packages/plan/plan-mode/tests/plan-mode.spec.ts b/packages/plan/plan-mode/tests/plan-mode.spec.ts
+index 112144c..4b79e12 100644
+--- a/packages/plan/plan-mode/tests/plan-mode.spec.ts
++++ b/packages/plan/plan-mode/tests/plan-mode.spec.ts
+@@ -1076,8 +1076,10 @@ describe('exit_plan_mode', () => {
+     const question = asked[0]?.questions[0]
+     expect(question?.intent).toEqual({ kind: 'plan-review', approve: 'Approve', callId: `call-exit-${callCounter}` })
+     // The named label is one this same question offers, so a UI honouring the
+-    // intent answers a choice this tool accepts.
+-    expect(question?.options?.map(option => option.label)).toContain(question?.intent?.approve)
++    // intent answers a choice this tool accepts. (Narrowed for the tagged
++    // intent union — ATF patch 0003 adds the 'form' kind.)
++    const approve = question?.intent?.kind === 'plan-review' ? question.intent.approve : undefined
++    expect(question?.options?.map(option => option.label)).toContain(approve)
+   })
+ 
+   it('reads a dismissed review as the user taking the turn back, not as a failure', async () => {

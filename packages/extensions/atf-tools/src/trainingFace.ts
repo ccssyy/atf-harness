@@ -25,8 +25,10 @@ import { isAutoTrainingTier } from "./autoTrainingTier.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { tmuxHasSession, tmuxTrainingEvidenceFor } from "../../../../src/core/workspace/tmuxLiveness.js";
-import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText } from "./gpuQueueFace.js";
+import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText, TRAINING_RESIDUE_PATTERN } from "./gpuQueueFace.js";
+import { reconcileConfirmedWithTrainSh, formatReconcileDiff } from "./trainShReconcile.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
+import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
 import { appendBinding, writeProgress } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
 import { appendLedgerAuditComment, ledgerEnvPrefixForShell } from "../../../../src/core/workspace/approvalLedger.js";
@@ -160,8 +162,8 @@ export interface PortOccupant {
   residueLike: boolean;
 }
 
-/** 残留特征（cmdline/进程名任一命中即疑似上轮训练残留）。 */
-export const TRAINING_RESIDUE_PATTERN = /torchrun|launcher\.py|llamafactory|deepspeed|pt_elastic/i;
+/** 残留特征（cmdline/进程名任一命中即疑似上轮训练残留）。单源迁移 gpuQueueFace（批㊶-W F6 ④归属分类共用）——re-export 兼容面。 */
+export { TRAINING_RESIDUE_PATTERN };
 
 /** train.sh 文本 → master_port（`MASTER_PORT=${MASTER_PORT:-N}` 与 `MASTER_PORT=N` 两形态；缺省 29517）。 */
 export function extractMasterPort(trainShText: string, fallback = 29_517): number {
@@ -521,16 +523,83 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       const autoTierStart = isAutoTrainingTier(ctx, exec);
       const verdict = await requestApproval(ctx, exec, "atf_run_training", `真实 GPU 训练启动确认（GPU/时长代价以九要素确认卡与 train.sh 为准）：train.sh=${args.train_sh}${conflictNote}`);
       if (!verdict.ok) return approvalDeniedResult("atf_run_training", verdict.outcome);
-      // 批㊶-K 项 1：GPU 排队编排（真跑 danger 放行后入队——原 WebUI 语义迁移：周期探测
-      // util<20%＋显存<10GB 连续 2 周期；命中→琥珀再确认卡人工放行（真跑守门不变）；
-      // 无超时；编排器零启动调用。env ATF_GPU_POLL_MS 可配，缺省 300s）
+      // 批㊶-W F7：九要素确认值 → train.sh 生成面逐键透传对账（start 面即拒——awb_r1
+      // 首跑 nproc 确认 8 生成 1 被静默丢弃的回归锚）。对账基线＝config-snapshot.confirmed
+      // ＞iteration-config training 段；两处皆缺＝无对账对象（存量 run 重跑兼容——账本
+      // 闸门仍在 train.sh 内），跳过对账并在结果如实标注 reconcile: "skipped_no_baseline"。
+      const confirmedBaseline: Record<string, string> | null = (() => {
+        const snapDir = resolveRunDir(cfg.runsRoot, args.run_id);
+        const snapPath = join(snapDir, "webui", "config-snapshot.json");
+        try {
+          if (existsSync(snapPath)) {
+            const parsed = JSON.parse(readFileSync(snapPath, "utf8")) as { confirmed?: Record<string, string> };
+            if (parsed.confirmed !== undefined && parsed.confirmed !== null) return parsed.confirmed;
+          }
+        } catch { /* 降级 iteration-config */ }
+        for (const candidate of [join(snapDir, "prep", "iteration-config.json"), join(snapDir, "prep", "iteration-config", "iteration-config.json")]) {
+          try {
+            if (!existsSync(candidate)) continue;
+            const iter = JSON.parse(readFileSync(candidate, "utf8")) as { training?: Record<string, unknown> };
+            if (iter.training === undefined || iter.training === null) continue;
+            const flat: Record<string, string> = {};
+            for (const [key, value] of Object.entries(iter.training)) {
+              if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") flat[key] = String(value);
+            }
+            return Object.keys(flat).length > 0 ? flat : null;
+          } catch { /* 下一候选 */ }
+        }
+        return null;
+      })();
+      let reconcileSkipped = false;
+      let requiredCards = 1;
+      let reconcile: ReturnType<typeof reconcileConfirmedWithTrainSh> | null = null;
+      if (confirmedBaseline === null) {
+        reconcileSkipped = true;
+      } else {
+        reconcile = reconcileConfirmedWithTrainSh(confirmedBaseline, readFileSync(args.train_sh, "utf8"));
+        if (!reconcile.ok) {
+          return asToolValue({
+            started: false,
+            error: "train_sh_reconcile_failed",
+            train_sh: args.train_sh,
+            mismatches: reconcile.mismatches,
+            extracted: reconcile.extracted,
+            note: `透传对账失败（确认值与 train.sh 生成面不符——F7 拒绝，不静默换算）：${formatReconcileDiff(reconcile.mismatches)}——重新走 training_prep 生成 train.sh（或修正确认卡）后重推`,
+          });
+        }
+        // 批㊶-W F6 ③：整组判定所需卡数＝train.sh NPROC_PER_NODE ＞ 确认快照 nproc ＞ 1（保守）
+        requiredCards = Math.max(1, Number.parseInt(reconcile.extracted["nproc_per_node"] ?? confirmedBaseline["nproc_per_node"] ?? "1", 10) || 1);
+      }
+      // 批㊶-K 项 1：GPU 排队编排（真跑 danger 放行后入队——批㊶-W F6 四合一：整组 nproc 卡
+      // 空闲判定＋compute-apps 归属＋快速二次确认；命中→琥珀再确认卡人工放行（真跑守门不变）；
+      // 无超时；编排器零启动调用。env ATF_GPU_POLL_MS 可配，缺省 30s）
       const gpuPollMs = gpuQueuePollMsFromEnv(process.env);
       if (gpuPollMs !== null) {
-        const windowState = await awaitGpuWindow({ pollMs: gpuPollMs, signal: exec.signal as { aborted: boolean } | undefined });
+        // 批㊶-W owner 反馈增补：排队即时反馈——首探即报「需 N 卡、空闲 M」，空闲数变化
+        // 再报（挂 alerts 通报面，聊天可见可决策：等或显式降档），不默默轮询。
+        let lastNotifiedIdle = -1;
+        const windowState = await awaitGpuWindow({
+          pollMs: gpuPollMs,
+          requiredCards,
+          signal: exec.signal as { aborted: boolean } | undefined,
+          onQueueStatus: (status) => {
+            if (status.idle === lastNotifiedIdle) return;
+            lastNotifiedIdle = status.idle;
+            const short = status.idle < status.required
+              ? `空闲不足（${status.required} 卡才能开跑）——等待释放，或在聊天显式降档 nproc 后重走确认卡`
+              : "整组空闲数已满足——复探后开跑";
+            appendNotification(runDir, {
+              level: status.idle < status.required ? "warn" : "info",
+              kind: "gpu_queue",
+              reason: `GPU 排队：需 ${status.required} 卡、现空闲 ${status.idle}（已等待 ${status.waitedText}）——${short}`,
+              since: new Date().toISOString(),
+            });
+          },
+        });
         if (windowState.kind === "aborted") return approvalDeniedResult("atf_run_training", "cancelled");
         // 批㊶-Q：全自动档免琥珀再确认（通报已覆盖放行事实；窗口命中即启动）
         if (!autoTierStart) {
-          const amber = await requestApproval(ctx, exec, "atf_run_training", `${queueHitText(windowState.gpuIndex)}（已等待 ${windowState.waitedText}）——GPU 窗口命中，确认启动训练（train.sh=${args.train_sh}）`);
+          const amber = await requestApproval(ctx, exec, "atf_run_training", `${queueHitText(windowState.snapshot.gpuIndexes, windowState.snapshot.table)}（已等待 ${windowState.snapshot.waitedText}）——GPU 窗口命中，确认启动训练（train.sh=${args.train_sh}）`);
           if (!amber.ok) return approvalDeniedResult("atf_run_training", amber.outcome);
         }
       }
@@ -593,6 +662,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         tmux: "atf-training-run",
         run_id: args.run_id,
         log: logPath,
+        reconcile: reconcileSkipped ? "skipped_no_baseline" : "ok",
         probe: { outcome: probe.outcome, feed_seen: probe.feedSeen },
         ...(autoTierStart ? { auto: true, tier: "auto_training" } : {}),
         ...(rotated !== null ? { previous_log: rotated } : {}),

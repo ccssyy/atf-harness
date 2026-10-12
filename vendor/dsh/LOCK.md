@@ -12,3 +12,15 @@
 - 本地远端为 SSH 通道的机器（443 阻）：`git config submodule.vendor/dsh/deepseek-harness.url git@github.com:deepseek-ai/deepseek-harness.git` 后再 init/fetch
 - 纪律：**升级只走独立评估批**（不自动追新；上游明示 developer preview 有破坏性变更）；DSH 源码零改动——atf-ui/atf-tools 经父仓 node_modules symlink 消费其构建产物
 - 运行时 GLM 接线（poc/dsh-home 运行时目录不入仓）：`poc/web-profile-cordis-patch.yml` 为 profile patch 的交付副本（apiKeyEnv env 引用零落盘）
+
+## 本地 patch 清单（worktree 修改态＋patches/ 存档；bump 须重同步）
+
+上游源码以 patch 形态维护（worktree 保持「锁 commit＋patch 已应用」修改态；构建产物 lib/ 随主仓构建流程重建）：
+
+| patch | 批次 | 内容 | 触及文件 |
+|---|---|---|---|
+| `0001-fixed-launch-token.patch` | 批㉟H | `DSH_WEB_LAUNCH_TOKEN` env 支持（固定 token 语义） | `packages/client/connection/src/browser-auth.ts` |
+| `0002-composer-placeholder.patch` | 品牌化批 | composer 占位文案 ATF 化 | `packages/client/ui-conversation/src/client/locales.ts` |
+| `0003-form-intent.patch` | 批㊶-W F5 | user-questions 加 `form` 呈现意图（tagged union＋ask 校验分支＋client formOf/FormPanel 表单卡＋locales 三键）——确认卡表单化底座（表单卡只收改参不承载授权；答案经 selected `key=value` 结构化回传，协议零改动） | `packages/interaction/user-questions/src/{types,index}.ts`、`packages/client/ui-user-questions/src/client/{contract/slots.ts,QuestionComposer.tsx,FormPanel.tsx,FormPanel.module.css,index.ts,locales.ts}`、`packages/plan/plan-mode/tests/plan-mode.spec.ts`（intent 联合类型窄化） |
+
+**bump 重同步**（唯一合法路径＝re-pin 三步同族）：submodule 升级后跑 `vendor/dsh/apply-patches.sh`——按序重放 0001→0003（apply 失败即停，人工评估更新 patch）并重建 host/client 产物。构建命令明细：`tsc -b tsconfig.host.json`＋`tsc -b tsconfig.client.json`＋`tsdown --env.DSH_BUILD_FACE host`＋`pnpm --filter @deepseek-ai/dsh-client-ui-user-questions run bundle`（成本已接受——M3 同族裁定）。

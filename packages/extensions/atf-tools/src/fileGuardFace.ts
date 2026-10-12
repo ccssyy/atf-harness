@@ -21,6 +21,7 @@
 import { isAbsolute, join, resolve, sep } from "node:path";
 import { toFileAgentTool, FILE_TOOL_DEFINITIONS, type FileToolHost } from "../../../../src/agent/fileTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
+import { resolveSessionRunWorkspace } from "../../../../src/core/workspace/runFacts.js";
 import { translateParameters, asToolValue, looseObjectOutput } from "./schemaTranslate.js";
 
 /** pre-execute 守卫的 vendor 工具名闭集。 */
@@ -170,8 +171,13 @@ export const workspaceFenceGuard = (command: string, fence: { writable: string; 
  * A7 四件 DSH 挂载（atf_read/atf_edit/atf_write/atf_bash）：toFileAgentTool 执行径
  * 零重写；atf_bash 先过命令串扫描。审批语义＝白名单守卫承担边界（无弹卡——F-H 分级
  * 「写=免弹」在白名单恒开前提下的产品化）。
+ *
+ * 批㊶-W W1：atf_bash 围栏可写根取值链改双段——exec.agent.session.id 会话绑定反查
+ * （resolveSessionRunWorkspace，并发会话各回各 run）＞ ATF_BASH_RUN_WORKSPACE env
+ * （过渡态回退——批㊶-S1 注入链保留；进程级 last-write-wins 并发互踩局限就此消除）。
+ * deps.runsRoot 缺席（裸装配/旧测试）＝纯 env 链（行为同批㊶-S1）。
  */
-export const buildFileGuardTools = (host: FileToolHost): unknown[] =>
+export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: string }): unknown[] =>
   FILE_TOOL_DEFINITIONS.map((definition) => {
     const agentTool = toFileAgentTool(definition, host);
     return defineTool({
@@ -182,7 +188,7 @@ export const buildFileGuardTools = (host: FileToolHost): unknown[] =>
         schema: looseObjectOutput,
         render: (_args: unknown, value: unknown) => [{ type: "text" as const, text: JSON.stringify(value, null, 1) }],
       },
-      async execute(args: Record<string, unknown>, exec: { callId?: string }) {
+      async execute(args: Record<string, unknown>, exec: { callId?: string; agent?: unknown }) {
         if (definition.name === "atf_bash") {
           const scan = bashCommandGuard(args["command"], host.roots);
           if (!scan.ok) {
@@ -190,13 +196,20 @@ export const buildFileGuardTools = (host: FileToolHost): unknown[] =>
           }
           // 批㊶-S1 §6.2 方案丙：工作区围栏预检（用户零感知——拒绝不弹卡，结构化指路回流；
           // 围栏根＝当前 run 工作区（可写）∪ runs 根 ∪ 登记面 ∪ ATF_WORKSPACE_ALLOWLIST env 单源）
-          // 批㊶-S1 门2修复：可写根注入链＝ATF_BASH_RUN_WORKSPACE（run 绑定处写入）
-          // ＞ runsRoot（fail-closed 只读降级——可写域为空集，写语义命令全部走审批指路）；
+          // 批㊶-W W1：可写根取值链＝会话绑定反查（exec.agent.session.id → runs 根 binding.json）
+          // ＞ ATF_BASH_RUN_WORKSPACE（过渡态回退）；runsRoot 缺席＝纯 env 链。
           // PWD/roots[0]/"." 回退链已删（vendor cwd 错位——核验记录 e9e84230 §二）。
+          const sessionId = ((): string | undefined => {
+            const id = (exec as { agent?: { session?: { id?: unknown } } }).agent?.session?.id;
+            return typeof id === "string" && id !== "" ? id : undefined;
+          })();
+          const sessionRunDir =
+            deps?.runsRoot !== undefined && sessionId !== undefined ? resolveSessionRunWorkspace(deps.runsRoot, sessionId) : null;
           const runWorkspaceEnv = process.env["ATF_BASH_RUN_WORKSPACE"];
-          const runsRootFence = process.env["ATF_DSH_RUNS_ROOT"] ?? "";
-          const fenceRoots = runWorkspaceEnv !== undefined && runWorkspaceEnv.trim() !== ""
-            ? workspaceFenceRoots({ runWorkspace: runWorkspaceEnv.trim(), runsRoot: runsRootFence, allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "" })
+          const runsRootFence = deps?.runsRoot ?? process.env["ATF_DSH_RUNS_ROOT"] ?? "";
+          const runWorkspace = sessionRunDir ?? (runWorkspaceEnv !== undefined && runWorkspaceEnv.trim() !== "" ? runWorkspaceEnv.trim() : "");
+          const fenceRoots = runWorkspace !== ""
+            ? workspaceFenceRoots({ runWorkspace, runsRoot: runsRootFence, allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "" })
             : { writable: "", readable: runsRootFence !== "" ? [runsRootFence, ...workspaceFenceRoots({ runWorkspace: runsRootFence, runsRoot: runsRootFence, allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "" }).readable.filter((r) => r !== runsRootFence)] : [] };
           const fence = workspaceFenceGuard(String(args["command"] ?? ""), fenceRoots);
           if (!fence.ok) {

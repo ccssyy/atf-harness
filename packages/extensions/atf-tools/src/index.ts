@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { resolveBridgeDeployment, kernelVersionSync } from "../../../../src/bridge/bridgeCommand.js";
 import { checkApprovalLedgerStartup } from "../../../../src/core/workspace/approvalLedger.js";
+import { runBootPreflight, formatPreflightFatal, BOOT_PREFLIGHT_PIPELINE_ENV, BOOT_PREFLIGHT_BRIDGE_ENV } from "../../../../src/core/workspace/bootPreflight.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { registerApprovalExempt } from "./approvalExempt.js";
 import { buildFileGuardTools, registerPathGuard } from "./fileGuardFace.js";
@@ -76,6 +77,24 @@ export const Config = z.object({
 
 export function apply(ctx: any, config: AtfToolsConfig): void {
   console.log(`[atf-tools] apply()——注册 11＋2＋3 个 atf_* 工具（M2.75 增训练执行段三投影）（runsRoot=${config.runsRoot}）`);
+  // 批㊶-W：boot 环境预检分级自愈（§五/§6.3——L1 产品写权限内自动补＋留痕；L2 系统级
+  // fail-fast 给可复制命令。先于账本校验与工具装配：env 补齐影响后续全部取值链；
+  // L1 补齐写 preflightEnv 局部束（不写 process.env——并发实例同进程装配互踩面收敛）。
+  const preflight = runBootPreflight(process.env, {}, config.kernelDir);
+  console.log(`[atf-preflight] 预检完成：L1 自愈 ${preflight.autoFixed.length} 项／L2 fatal ${preflight.fatal.length} 项／观察 ${preflight.notes.length} 项`);
+  for (const note of preflight.notes) console.log(`[atf-preflight] ${note}`);
+  const preflightEnv: Record<string, string> = {};
+  for (const fix of preflight.autoFixed) {
+    preflightEnv[fix.key] = fix.value;
+    console.log(`[atf-preflight] L1 ${fix.note}`);
+  }
+  if (preflight.fatal.length > 0) {
+    throw new Error(`[atf-preflight] L2 环境缺失（fail-fast——不静默降级）：\n${formatPreflightFatal(preflight.fatal)}`);
+  }
+  // 批㊶-W F4/L1 自愈联动：Config 在模块加载期固化 env 缺省——preflight 注入晚于固化，
+  // 命令面取值链＝preflight L1 束 ＞ env ＞ Config 固化值（mock 缺省＝测试注入路径）。
+  const pipelineCommand = preflightEnv[BOOT_PREFLIGHT_PIPELINE_ENV] ?? process.env[BOOT_PREFLIGHT_PIPELINE_ENV] ?? config.pipelineCommand;
+  const bridgeCommand = preflightEnv[BOOT_PREFLIGHT_BRIDGE_ENV] ?? process.env[BOOT_PREFLIGHT_BRIDGE_ENV] ?? config.bridgeCommand;
   // 批㊶Q增补三 段1②：放行账本启动校验（fail-fast）——env 显式配置而目录不可写即拒绝启动；
   // env 与 $HOME 推导不一致 → 启动即告警（两路径明示，杜绝静默分轴——10-08 在册债 cr_r2 三连败实锚）。
   const ledgerCheck = checkApprovalLedgerStartup(process.env);
@@ -90,12 +109,13 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // （M2 时序注记：loader.create 动态行会触发 atf-ui 双 mount——已移除；atf-ui 行由 profile patch 静态装配。）
   // 批㊶-E-H 项 2.1：桥对端装配单源（src/bridge/bridgeCommand.ts）——ATF_DSH_BRIDGE_COMMAND
   // 在场即真内核 argv＋PYTHONPATH（子进程私有 env，派生自 kernelDir/src）；缺席保留 mock。
-  const deployment = resolveBridgeDeployment({ commandValue: config.bridgeCommand, kernelDir: config.kernelDir, env: process.env });
+  const deployment = resolveBridgeDeployment({ commandValue: bridgeCommand, kernelDir: config.kernelDir, env: process.env });
   const kernelVersion = deployment.mode === "real" ? kernelVersionSync(deployment.kernelRoot) : null;
   const bridgeLine = deployment.mode === "real"
     ? `real（${deployment.argv.join(" ")}${deployment.childEnv["PYTHONPATH"] !== undefined ? ` ｜ PYTHONPATH=${deployment.childEnv["PYTHONPATH"]}` : ""}）内核 ${kernelVersion ?? "版本未知（git describe 不可用）"}`
     : `mock（${deployment.argv.join(" ")}——设 ATF_DSH_BRIDGE_COMMAND 切真内核）`;
   console.log(`[atf-tools] 桥对端: ${bridgeLine}`);
+  console.log(`[atf-tools] 管线对端: ${pipelineCommand}${process.env[BOOT_PREFLIGHT_PIPELINE_ENV] !== undefined ? "（env 真命令——F4）" : "（mock 缺省——设 ATF_DSH_PIPELINE_COMMAND 切真管线）"}`);
   const manager = new BridgeManager(deployment.argv, repoRoot, deployment.childEnv);
 
   // 批㊶R前置 状态面：本机模型清单（启动扫描一次——boot 日志投影＋atf_run_training 描述注入；
@@ -113,7 +133,8 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // （配置声明面镜像，fileRoots.ts）＋env 附加集；产品资产零具体目录（增补裁定）。
   const fileRoots = deriveFileToolRoots({ env: process.env });
   const fileHost: FileToolHost = { roots: fileRoots.roots, env: process.env };
-  for (const tool of buildFileGuardTools(fileHost)) ctx.tools.register(tool);
+  // 批㊶-W W1：atf_bash 围栏取值链＝会话绑定反查（runsRoot 直传 deps）＞ env 过渡态
+  for (const tool of buildFileGuardTools(fileHost, { runsRoot: config.runsRoot })) ctx.tools.register(tool);
   if (registerPathGuard(ctx, fileHost)) {
     console.log(
       `[atf-tools] 文件路径守卫已挂（tools/pre-execute prepend；守卫 glob/grep/read_image，封闭 vendor read/edit/write 改道 A7；A7 四件挂载）白名单根 ${String(fileRoots.roots.length)} 个（派生集＝配置声明面镜像＋env 附加集）`,
@@ -122,7 +143,7 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
 
   for (const tool of buildBridgeTools(ctx, manager, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, execHome: config.execHome })) ctx.tools.register(tool);
   for (const tool of buildFileTools(config.runsRoot)) ctx.tools.register(tool);
-  ctx.tools.register(buildPipelineTool(ctx, config.pipelineCommand, config.pipelineTimeoutMs));
+  ctx.tools.register(buildPipelineTool(ctx, pipelineCommand, config.pipelineTimeoutMs));
   for (const tool of buildConfirmTools({ runsRoot: config.runsRoot, ctx })) ctx.tools.register(tool);
   const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx, models: { root: modelInventory.root, names: modelInventory.models } };
   ctx.tools.register(buildRunTrainingTool(ctx, trainCfg));

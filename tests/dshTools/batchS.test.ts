@@ -159,16 +159,17 @@ describe("批㊶-S5 B2——只读区块组装与卡面投影", () => {
   });
 });
 
-describe("批㊶-U §五范围升级——共用双段式 helper 四卡统一", () => {
-  it("dualStageNote：可改卡完整双段式文案；凭据卡退化形式不造参数", async () => {
+describe("批㊶-U §五范围升级——共用双段式 helper 四卡统一（批㊶-W F5 表单卡语义改版）", () => {
+  it("dualStageNote：可改卡完整双段式文案（表单卡改值提交）；凭据卡退化形式不造参数", async () => {
     const { dualStageNote } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
     const full = dualStageNote("评估服务 EVAL_RELEASE 确认", { extra: "九必报项报告：…" });
     expect(full).toContain("双段式");
-    expect(full).toContain("按现值确认");
+    expect(full).toContain("改参在表单卡改值提交");
+    expect(full).toContain("Allow once");
     const cred = dualStageNote("契约凭据卡", { amendable: false });
     expect(cred).toContain("无可调参数");
     expect(cred).toContain("复核通道");
-    expect(cred).not.toContain("如需改参");
+    expect(cred).not.toContain("改参在表单卡改值提交");
   });
   it("live 链三卡锚：九要素 note/评估卡/凭据卡均投 helper（禁每卡手搓）", async () => {
     const confirm = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-tools/src/confirmFace.ts"), "utf8");

@@ -209,6 +209,8 @@ const WRITE_CANONICAL: SchemaNode = {
     bytes: { type: "integer" },
     sha256: { type: "string", pattern: HEX64 },
     created: { type: "boolean" },
+    // 批㊶-W F8：产物落点指路（相对落点写回带；绝对路径写缺席）
+    product_path_hint: { type: "string" },
   },
 };
 
@@ -284,7 +286,7 @@ export const FILE_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "atf_write",
     description:
-      "写白名单内文件（写动作，须审批）：创建或整文件覆写（父目录自动创建），返回字节数与 sha256。路径限 workspace runs 根与 scratch 目录（白名单），越界拒绝。产物进 artifacts 只能经既有晋升闸。",
+      "写白名单内文件（写动作，须审批）：创建或整文件覆写（父目录自动创建），返回字节数与 sha256。路径限 workspace runs 根与 scratch 目录（白名单），越界拒绝；产物落点契约——正式产物（报告/分析/发布件）统一写 runs/<run_id>/ 绝对路径（reports/analysis/prep/launch 等既有子目录），相对落点仅限 scratch 临时面。产物进 artifacts 只能经既有晋升闸。",
     parameters: WRITE_PARAMS,
     requires_approval: true,
     canonical_output: WRITE_CANONICAL,
@@ -373,6 +375,10 @@ const readHandler = async (params: Record<string, unknown>, host: FileToolHost):
   });
 };
 
+/** 批㊶-W F8：产物落点契约指路键（相对落点写成功时回带——产物统一 runs/<run_id>/ 绝对路径；
+ *  cwd 相对落点由白名单既有 path_escape 拒绝面覆盖——scratch 相对写语义不变，v2 锚回归保护）。 */
+export const PRODUCT_PATH_HINT = "product_path_hint";
+
 const writeHandler = async (params: Record<string, unknown>, host: FileToolHost): Promise<Result<Record<string, unknown>, { reason: string; message: string }>> => {
   const path = stringParam(params, "path");
   if (path === undefined) return rejected("invalid_input", "path 须为非空字符串");
@@ -391,7 +397,17 @@ const writeHandler = async (params: Record<string, unknown>, host: FileToolHost)
   } catch (cause) {
     return rejected("write_failed", `写入失败: ${cause instanceof Error ? cause.message : String(cause)}`);
   }
-  return ok({ ok: true, path, bytes: Buffer.byteLength(content, "utf8"), sha256: sha256Of(content), created: existing === undefined });
+  // 批㊶-W F8：产物落点契约——相对落点写成功回带指路（产物统一 runs/<run_id>/ 绝对路径；
+  // scratch 临时写不受影响。cwd 相对落点＝越白名单，既有 path_escape 拒绝面覆盖）。
+  const productPathHint = isAbsolute(path) ? undefined : "产物落点契约：正式产物（报告/分析/发布件）请写 runs/<run_id>/ 绝对路径（reports/analysis/prep/launch 等既有子目录）——相对落点仅限 scratch 临时面";
+  return ok({
+    ok: true,
+    path,
+    bytes: Buffer.byteLength(content, "utf8"),
+    sha256: sha256Of(content),
+    created: existing === undefined,
+    ...(productPathHint !== undefined ? { [PRODUCT_PATH_HINT]: productPathHint } : {}),
+  });
 };
 
 const editHandler = async (params: Record<string, unknown>, host: FileToolHost): Promise<Result<Record<string, unknown>, { reason: string; message: string }>> => {

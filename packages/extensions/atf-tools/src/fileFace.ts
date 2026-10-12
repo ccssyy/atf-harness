@@ -5,7 +5,8 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { listRuns, queryNvidiaSmi } from "../../../../src/webui/readOnlyTools.js";
+import { listRuns, queryNvidiaSmi, queryNvidiaSmiAll, queryGpuComputeApps } from "../../../../src/webui/readOnlyTools.js";
+import { buildCardOccupancyTable, formatCardTable } from "./gpuQueueFace.js";
 import { resolveRunDir } from "../../../../src/core/workspace/runLayout.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
@@ -79,7 +80,7 @@ export const buildFileTools = (runsRoot: string): unknown[] => [
   }),
   defineTool({
     name: "atf_gpu_status",
-    description: "GPU 状态（只读，nvidia-smi 包装）：利用率/显存/在跑进程 top3。nvidia-smi 不可用时报 gpu_offline（不猜测）。",
+    description: "GPU 状态（只读，nvidia-smi 包装）：全卡利用率/显存/进程归属（批㊶-W F6：空闲/常驻/训练三态逐卡表＋占用进程摘要；归属判定＝compute-apps 进程，非显存阈值）。nvidia-smi 不可用时报 gpu_offline（不猜测）。",
     parameters: {},
     output: {
       schema: looseObjectOutput,
@@ -88,7 +89,11 @@ export const buildFileTools = (runsRoot: string): unknown[] => [
     async execute() {
       const queried = await queryNvidiaSmi();
       if (queried === null) return asToolValue({ gpu_offline: true, note: "nvidia-smi 不可用或无 GPU——状态如实上报为离线" });
-      return asToolValue({ gpu_offline: false, ...queried });
+      // 批㊶-W F6 ⑤：全卡状态表＋归属（compute-apps 不可得＝归属面如实 unavailable，不猜测）
+      const [cards, apps] = await Promise.all([queryNvidiaSmiAll(), queryGpuComputeApps()]);
+      const table = cards !== null ? buildCardOccupancyTable(cards, apps ?? []) : [];
+      const tableText = cards !== null ? formatCardTable(table) : null;
+      return asToolValue({ gpu_offline: false, ...queried, card_table: table, card_table_text: tableText, ownership_available: apps !== null });
     },
   }),
 ];

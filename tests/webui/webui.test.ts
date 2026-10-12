@@ -118,19 +118,23 @@ describe("config_confirm：九要素卡与纯文字应答", () => {
     expect(fields.length).toBe(15);
   });
 
-  it("批㉚ 段1:KB 门禁四项入卡——label 带 KB 来源标注与改法,纯文字别名可改", () => {
+  it("批㊶-W F1/F2/§三：KB 全链排除——label 无 KB 标注、缺省改单源、4096 必填空、别名可改", () => {
     const fields = buildConfigConfirmFields({}, {});
     const byKey = Object.fromEntries(fields.map((field) => [field.key, field]));
     const keyMeta = Object.fromEntries(CONFIG_CONFIRM_KEYS.map((entry) => [entry.key, entry]));
-    // 原则二:KB 建议值在卡面必须携带来源标注（未校准）与含义/改法
-    expect(byKey["max_total_tokens"]?.tag).toBe("default_used");
-    expect(keyMeta["max_total_tokens"]?.label).toContain("KB 建议·未校准");
-    expect(keyMeta["max_total_tokens"]?.label).toContain("--max-total-tokens");
+    // owner 终裁（§三）：KB 不做参考不做提示——来源标注全链退役
+    expect(keyMeta["max_total_tokens"]?.label).not.toContain("KB");
+    expect(keyMeta["negative_ratio_target"]?.label).not.toContain("KB");
     expect(keyMeta["image_min_pixels"]?.label).toContain("训练/评估必须同一对值");
-    expect(keyMeta["image_max_pixels"]?.default).toBe("16384000");
-    expect(keyMeta["negative_ratio_target"]?.label).toContain("KB 建议·未校准");
-    // 纯文字别名:token/像素可改（负样本带含逗号,纯文字值模式天然以逗号分隔多编辑——
-    // 该项经 overrides 显式形态承载,不入纯文字别名断言）
+    // F1：4096 缺省删除（必填空）；像素缺省改单源 65536/802816
+    expect(keyMeta["max_total_tokens"]?.default).toBe("");
+    expect(keyMeta["image_min_pixels"]?.default).toBe("65536");
+    expect(keyMeta["image_max_pixels"]?.default).toBe("802816");
+    expect(byKey["max_total_tokens"]?.value).toBe("");
+    expect(byKey["image_max_pixels"]?.value).toBe("802816");
+    // F2：负样本构造带缺省＝2%-5%（R1 终裁）
+    expect(keyMeta["negative_ratio_target"]?.default).toBe("0.02,0.05");
+    // 纯文字别名:token/像素可改（面板文字通道保留；工具链已退役 parse）
     expect(parseConfigEditText("token 改 8192")?.edits).toEqual({ max_total_tokens: "8192" });
     expect(parseConfigEditText("像素下限 改 65536")?.edits).toEqual({ image_min_pixels: "65536" });
   });
@@ -521,8 +525,8 @@ describe("批㊶-S2——监控运行列表多桶适配与工作区过滤", () =
   });
 });
 
-describe("批㊶-U——确认卡参数输入化（方案 A 双段式：问题卡收改参·审批卡落闸）", () => {
-  it("纯文字改参等号形态：epochs=4 lr=2e-4 双编辑解析；clamp 域回归", () => {
+describe("批㊶-U——确认卡参数输入化（批㊶-W F5 表单化改版：结构化 edits·表单卡收改参·审批卡落闸）", () => {
+  it("纯文字改参等号形态（面板文字通道保留）：epochs=4 lr=2e-4 双编辑解析；clamp 域回归", () => {
     expect(parseConfigEditText("epochs=4 lr=2e-4")?.edits).toEqual({ num_train_epochs: "4", learning_rate: "2e-4" });
     expect(parseConfigEditText("lr=1e-3")?.edits).toEqual({ learning_rate: "1e-3" }); // 越界值解析在先、clamp 拦截在后
   });
@@ -532,15 +536,158 @@ describe("批㊶-U——确认卡参数输入化（方案 A 双段式：问题�
     expect(parsed?.edits).toEqual({});
     expect(parsed?.explicitOnly).toBe(false);
   });
-  it("审批卡 note 可发现性文案锚（改参通道＋按现值确认——批㊶-U 方案 A）", () => {
+  it("审批卡 note 可发现性文案锚（F5 表单卡语义——改参在表单卡改值提交·审批≠请示）", () => {
     const src = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-tools/src/confirmFace.ts"), "utf8");
-    for (const phrase of ["如需改参，直接回复要改的参数", "不改直接回复「按现值确认」", "双段式编排", "问题卡只收集改参、不承载授权"]) {
+    for (const phrase of ["改参在表单卡改值提交", "双段式", "表单卡只收改参、不承载授权", "自由文本永不直达生成面"]) {
       expect(src).toContain(phrase);
     }
+    // 批㊶-W F5：文字解析链退役——confirmFace 工具链零 parseConfigEditText 引用
+    expect(src).not.toContain("parseConfigEditText");
+    expect(src).not.toContain("amend_text");
   });
 });
 
-describe("批㊶-U §二.2——amend 改参 clamp 护栏（越界回退域边界＋说明可读）", () => {
+describe("批㊶-W F5——表单卡链（结构化 edits＋form intent ask＋Reject 回卡）", () => {
+  /** user-questions 服务假件：记录 ask 调用，可编程序列回答案（selected key=value）。 */
+  const fakeUserQuestions = (script: Array<Record<string, string>>, calls: Array<Record<string, unknown>> = []) => ({
+    ask: async (request: { questions: Array<Record<string, unknown>> }) => {
+      calls.push(request as Record<string, unknown>);
+      const step = script[Math.min(calls.length - 1, script.length - 1)] as Record<string, string>;
+      const fields = (request.questions[0]?.intent as { fields: Array<{ key: string; value?: string }> }).fields;
+      const selected = Object.entries(step).map(([key, value]) => `${key}=${value}`);
+      void fields;
+      return { answers: [{ id: `config-confirm-x`, selected }] };
+    },
+  });
+  it("表单卡 intent 结构锚：form kind＋十五键字段＋现值预填＋clamp 域提示；edits 结构化 amend clamp 生效", async () => {
+    const root = tempRoot();
+    mkdirSync(join(root, "run-f1", "prep"), { recursive: true });
+    const calls: Array<Record<string, unknown>> = [];
+    const tierCtx = {
+      get: (s: string) =>
+        s === "permissionPresets"
+          ? { current: () => "auto_training", defaultPreset: "x" }
+          : s === "approval"
+            ? { request: async () => "allowed-once" }
+            : s === "userQuestions"
+              ? fakeUserQuestions([{ learning_rate: "2e-4" }], calls)
+              : undefined,
+    };
+    const { buildConfirmTools } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
+    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const tool = tools[0]!;
+    const r = await tool.execute(
+      { action: "amend", run_id: "run-f1", edits: { learning_rate: "1e-3", num_train_epochs: "15", lora_rank: "48" } },
+      { callId: "f1", agent: { session: { id: "f1", header: { cwd: "/w" } } } },
+    );
+    // 全自动档：amend 免阻塞落快照（§二.3 不回归）
+    expect(r.ok).toBe(true);
+    expect(r.auto).toBe(true);
+    // 结构化 clamp：越界回退域边界（1e-3→5e-4、15→10、48→32）
+    const fields = (r.fields ?? []) as Array<{ key: string; value: string }>;
+    const get = (k: string): string | undefined => fields.find((f) => f.key === k)?.value;
+    expect(get("learning_rate")).toBe("5e-4");
+    expect(get("num_train_epochs")).toBe("10");
+    expect(get("lora_rank")).toBe("32");
+    expect(String(r.amend ?? "")).toContain("越界拦截回退");
+    expect(String(r.amend ?? "")).toContain("1e-3→5e-4");
+  });
+  it("手动档表单卡链：form intent ask 一次→预填值直接提交（零改动）→审批卡 Allow once 落快照；ask 收到 form 结构", async () => {
+    const root = tempRoot();
+    mkdirSync(join(root, "run-f2", "prep"), { recursive: true });
+    const calls: Array<Record<string, unknown>> = [];
+    let approvalCalls = 0;
+    const tierCtx = {
+      get: (s: string) =>
+        s === "permissionPresets"
+          ? { current: () => "default", defaultPreset: "default" }
+          : s === "approval"
+            ? { request: async () => { approvalCalls += 1; return "allowed-once"; } }
+            : s === "userQuestions"
+              ? fakeUserQuestions([{}], calls)
+              : undefined,
+    };
+    const { buildConfirmTools } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
+    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const tool = tools[0]!;
+    const r = await tool.execute(
+      { action: "present", run_id: "run-f2", overrides: { learning_rate: "2e-4" } },
+      { callId: "f2", agent: { session: { id: "f2", header: { cwd: "/w" } } } },
+    );
+    expect(r.ok).toBe(true);
+    expect(r.confirmed).toBe(true);
+    expect(approvalCalls).toBe(1); // 审批卡一次（表单卡零改动提交直达审批）
+    // form intent 结构锚（F5 VERIFY 4）：kind=form＋fields 键集＋现值预填＋域提示
+    const request = calls[0] as { questions: Array<{ intent: { kind: string; fields: Array<{ key: string; value: string; hint?: string; required?: boolean }> }; question: string }> };
+    const intent = request.questions[0]?.intent;
+    expect(intent?.kind).toBe("form");
+    expect(intent?.fields.length).toBe(15);
+    const lrField = intent?.fields.find((f) => f.key === "learning_rate");
+    expect(lrField?.value).toBe("2e-4"); // 现值预填
+    expect(lrField?.hint).toContain("5e-5"); // clamp 域提示可读
+    expect(intent?.fields.find((f) => f.key === "image_max_pixels")?.hint).toContain("802816");
+    // required 锚：max_total_tokens 空值必填（F1 缺省退役）
+    expect(intent?.fields.find((f) => f.key === "max_total_tokens")?.required).toBe(true);
+  });
+  it("Reject 回表单卡（带上次值）：审批卡拒一次→第二轮回卡→放行；表单卡 ask 恰两次", async () => {
+    const root = tempRoot();
+    mkdirSync(join(root, "run-f3", "prep"), { recursive: true });
+    const calls: Array<Record<string, unknown>> = [];
+    let approvalCalls = 0;
+    const tierCtx = {
+      get: (s: string) =>
+        s === "permissionPresets"
+          ? { current: () => "default", defaultPreset: "default" }
+          : s === "approval"
+            ? { request: async () => { approvalCalls += 1; return approvalCalls === 1 ? "rejected" : "allowed-once"; } }
+            : s === "userQuestions"
+              ? fakeUserQuestions([{ learning_rate: "3e-4" }], calls)
+              : undefined,
+    };
+    const { buildConfirmTools } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
+    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const tool = tools[0]!;
+    const r = await tool.execute(
+      { action: "present", run_id: "run-f3" },
+      { callId: "f3", agent: { session: { id: "f3", header: { cwd: "/w" } } } },
+    );
+    expect(r.ok).toBe(true);
+    expect(calls.length).toBe(2); // Reject → 回表单卡（带上次值）
+    expect(approvalCalls).toBe(2);
+    // 第二轮表单卡预填＝第一轮提交值（带上次值语义）
+    const secondRequest = calls[1] as { questions: Array<{ intent: { fields: Array<{ key: string; value: string }> } }> };
+    expect(secondRequest.questions[0]?.intent.fields.find((f) => f.key === "learning_rate")?.value).toBe("3e-4");
+  });
+  it("表单卡关闭＝取消（ASK_CANCELLED 结构化拒绝）；userQuestions 服务缺失 fail-closed", async () => {
+    const root = tempRoot();
+    mkdirSync(join(root, "run-f4", "prep"), { recursive: true });
+    const cancelCtx = {
+      get: (s: string) =>
+        s === "permissionPresets"
+          ? { current: () => "default", defaultPreset: "default" }
+          : s === "approval"
+            ? { request: async () => "allowed-once" }
+            : s === "userQuestions"
+              ? { ask: async () => { throw Object.assign(new Error("cancelled"), { code: "ASK_CANCELLED" }); } }
+              : undefined,
+    };
+    const { buildConfirmTools } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
+    const tools = buildConfirmTools({ runsRoot: root, ctx: cancelCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const tool = tools[0]!;
+    const r = await tool.execute(
+      { action: "present", run_id: "run-f4" },
+      { callId: "f4", agent: { session: { id: "f4", header: { cwd: "/w" } } } },
+    );
+    expect(r).toMatchObject({ error: "approval_denied", outcome: "cancelled" });
+    // 服务缺失 fail-closed
+    const noServiceCtx = { get: (s: string) => (s === "permissionPresets" ? { current: () => "default", defaultPreset: "default" } : s === "approval" ? { request: async () => "allowed-once" } : undefined) };
+    const tools2 = buildConfirmTools({ runsRoot: root, ctx: noServiceCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const r2 = await tools2[0]!.execute({ action: "present", run_id: "run-f4" }, { callId: "f4b", agent: { session: { id: "f4b", header: { cwd: "/w" } } } });
+    expect(r2.error).toBe("user_questions_unavailable");
+  });
+});
+
+describe("批㊶-W §二.2——amend 改参 clamp 护栏（结构化 edits 版）", () => {
   it("clamp-on-amend：lr=1e-3→5e-4、epochs=15→10、rank=48→32 档位回退；note 带回退说明", async () => {
     const root = tempRoot();
     mkdirSync(join(root, "run-u", "prep"), { recursive: true });
@@ -550,7 +697,7 @@ describe("批㊶-U §二.2——amend 改参 clamp 护栏（越界回退域边�
     const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
     const tool = tools[0]!;
     const r = await tool.execute(
-      { action: "amend", run_id: "run-u", amend_text: "lr 改 1e-3 epochs 改 15 rank 改 48" },
+      { action: "amend", run_id: "run-u", edits: { learning_rate: "1e-3", num_train_epochs: "15", lora_rank: "48" } },
       { callId: "u", agent: { session: { id: "u1", header: { cwd: "/w" } } } },
     );
     const fields = (r.fields ?? []) as Array<{ key: string; value: string }>;
@@ -562,7 +709,7 @@ describe("批㊶-U §二.2——amend 改参 clamp 护栏（越界回退域边�
     expect(note).toContain("越界拦截回退");
     expect(note).toContain("1e-3→5e-4");
   });
-  it("全自动档改参 amend 免阻塞不回归（§二.3）", async () => {
+  it("全自动档改参 amend 免阻塞不回归（§二.3；edits 结构化形态）", async () => {
     const root = tempRoot();
     mkdirSync(join(root, "run-u2", "prep"), { recursive: true });
     let approvalCalls = 0;
@@ -571,10 +718,22 @@ describe("批㊶-U §二.2——amend 改参 clamp 护栏（越界回退域边�
     const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
     const tool = tools[0]!;
     const r = await tool.execute(
-      { action: "amend", run_id: "run-u2", amend_text: "lr 改 2e-4" },
+      { action: "amend", run_id: "run-u2", edits: { learning_rate: "2e-4" } },
       { callId: "u2", agent: { session: { id: "u2", header: { cwd: "/w" } } } },
     );
     expect(r.ok).toBe(true);
     expect(approvalCalls).toBe(0); // 改参免阻塞（闸门在后续 start 审批卡）
+  });
+  it("amend 缺 edits＝结构化拒绝（自由文本不再解析——F5 退役锚）", async () => {
+    const root = tempRoot();
+    const tierCtx = { get: (s: string) => (s === "permissionPresets" ? { current: () => "auto_training", defaultPreset: "x" } : s === "approval" ? { request: async () => "allowed-once" } : undefined) };
+    const { buildConfirmTools } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
+    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const r = await tools[0]!.execute(
+      { action: "amend", run_id: "run-u3", amend_text: "lr 改 2e-4" } as Record<string, unknown>,
+      { callId: "u3", agent: { session: { id: "u3", header: { cwd: "/w" } } } },
+    );
+    expect(r.ok).toBe(false);
+    expect(String(r.note)).toContain("结构化 edits");
   });
 });
