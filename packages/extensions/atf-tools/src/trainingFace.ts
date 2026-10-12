@@ -583,6 +583,8 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // 批㊶-N N-5：会话绑定
       const sessionIdStart = sessionIdOf(exec);
       if (sessionIdStart !== undefined) appendBinding(runDir, sessionIdStart);
+      // 批㊶-S1 门2修复：围栏可写根随 run 切换更新（与 confirmFace 同 helper 语义）
+      process.env["ATF_BASH_RUN_WORKSPACE"] = runDir;
       const feedNote = probe.outcome === "feed_ok"
         ? "探活已确认进料（SHA=pass/ADMISSION=pass 且进程存活）"
         : `探活窗口（${String(resolveStartupProbeMs(process.env))}ms）内未见进料行但进程存活（llamafactory 启动中）——status 跟进确认`;

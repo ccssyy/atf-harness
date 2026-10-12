@@ -148,3 +148,39 @@ describe("批㊶-S1 §6.2——atf_bash 工作区围栏（方案丙）与豁免"
     expect(r3.ok).toBe(false);
   });
 });
+
+describe("批㊶-S1 门2修复——围栏可写根注入链（live 锚）", () => {
+  it("live 锚：env 未设时围栏行为确定性（fail-closed 只读降级——可写域空集·写语义全拒）", () => {
+    const saved = process.env["ATF_BASH_RUN_WORKSPACE"];
+    delete process.env["ATF_BASH_RUN_WORKSPACE"];
+    try {
+      // 未设 env → 可写根空串＝可写域空集（fail-closed）——runs 根只读保留
+      const fenceGuard = workspaceFenceGuard;
+      const runsRoot = "/data/atf/uat/runs";
+      const failClosed = { writable: "", readable: [runsRoot] };
+      const readOk = fenceGuard(`cat ${runsRoot}/cr_r2/eval/report.md`, failClosed);
+      expect(readOk.ok).toBe(true); // 只读根保留——读放行
+      const writeDenied = fenceGuard("echo x > /w/run1/x", failClosed);
+      expect(writeDenied.ok).toBe(false); // 任意写路径（含"曾经的 PWD 假可写根"）一律拒
+      if (!writeDenied.ok) expect(writeDenied.code).toBe(WORKSPACE_PATH_OUTSIDE_ALLOWLIST);
+      const vendorWrite = fenceGuard("touch /data/sam/ATF-Harness/vendor/dsh/x", failClosed);
+      expect(vendorWrite.ok).toBe(false); // vendor 目录不再被误当可写根
+    } finally {
+      if (saved === undefined) delete process.env["ATF_BASH_RUN_WORKSPACE"]; else process.env["ATF_BASH_RUN_WORKSPACE"] = saved;
+    }
+  });
+  it("注入 helper：env 设值后同命令放行（可写根随 run 切换）", async () => {
+    const { injectBashRunWorkspace } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
+    const { workspaceFenceGuard } = await import("../../packages/extensions/atf-tools/src/fileGuardFace.js");
+    const saved = process.env["ATF_BASH_RUN_WORKSPACE"];
+    injectBashRunWorkspace("/w/run9");
+    try {
+      const fence = workspaceFenceRoots({ runWorkspace: process.env["ATF_BASH_RUN_WORKSPACE"] as string, runsRoot: "/data/atf/uat/runs", allowlistEnv: "" });
+      expect(fence.writable).toBe("/w/run9");
+      expect(workspaceFenceGuard("touch /w/run9/out.txt", fence).ok).toBe(true);
+      expect(workspaceFenceGuard("touch /w/other/out.txt", fence).ok).toBe(false);
+    } finally {
+      if (saved === undefined) delete process.env["ATF_BASH_RUN_WORKSPACE"]; else process.env["ATF_BASH_RUN_WORKSPACE"] = saved;
+    }
+  });
+});

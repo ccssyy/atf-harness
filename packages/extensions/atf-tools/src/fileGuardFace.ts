@@ -190,11 +190,14 @@ export const buildFileGuardTools = (host: FileToolHost): unknown[] =>
           }
           // 批㊶-S1 §6.2 方案丙：工作区围栏预检（用户零感知——拒绝不弹卡，结构化指路回流；
           // 围栏根＝当前 run 工作区（可写）∪ runs 根 ∪ 登记面 ∪ ATF_WORKSPACE_ALLOWLIST env 单源）
-          const fenceRoots = workspaceFenceRoots({
-            runWorkspace: process.env["ATF_BASH_RUN_WORKSPACE"] ?? process.env["PWD"] ?? host.roots[0] ?? ".",
-            runsRoot: process.env["ATF_DSH_RUNS_ROOT"] ?? "",
-            allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "",
-          });
+          // 批㊶-S1 门2修复：可写根注入链＝ATF_BASH_RUN_WORKSPACE（run 绑定处写入）
+          // ＞ runsRoot（fail-closed 只读降级——可写域为空集，写语义命令全部走审批指路）；
+          // PWD/roots[0]/"." 回退链已删（vendor cwd 错位——核验记录 e9e84230 §二）。
+          const runWorkspaceEnv = process.env["ATF_BASH_RUN_WORKSPACE"];
+          const runsRootFence = process.env["ATF_DSH_RUNS_ROOT"] ?? "";
+          const fenceRoots = runWorkspaceEnv !== undefined && runWorkspaceEnv.trim() !== ""
+            ? workspaceFenceRoots({ runWorkspace: runWorkspaceEnv.trim(), runsRoot: runsRootFence, allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "" })
+            : { writable: "", readable: runsRootFence !== "" ? [runsRootFence, ...workspaceFenceRoots({ runWorkspace: runsRootFence, runsRoot: runsRootFence, allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "" }).readable.filter((r) => r !== runsRootFence)] : [] };
           const fence = workspaceFenceGuard(String(args["command"] ?? ""), fenceRoots);
           if (!fence.ok) {
             return asToolValue({ ok: false, error: fence.code, tool: definition.name, message: fence.message });

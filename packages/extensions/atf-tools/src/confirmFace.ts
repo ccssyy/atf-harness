@@ -107,6 +107,12 @@ export const dualStageNote = (cardLabel: string, opts?: { amendable?: boolean; a
   return [head, ...tail].join("｜");
 };
 
+/** 批㊶-S1 门2修复：atf_bash 围栏可写根注入（run 绑定处写入——随 run 切换更新；
+ *  进程级 env last-write-wins，并发会话互踩局限执行报告如实登记）。 */
+export const injectBashRunWorkspace = (runDir: string): void => {
+  process.env["ATF_BASH_RUN_WORKSPACE"] = runDir;
+};
+
 export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const { ctx } = deps;
   // 批㊶R前置②：可用卡数机器事实（建卡期一次探测；null＝缺失→建卡时按 machine-facts 停下问）
@@ -384,6 +390,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         appendSegmentFact(runDir, "experiment_config", "atf_config_confirm");
         const sessionIdAuto = sessionIdOfExec(exec);
         if (sessionIdAuto !== undefined) appendBinding(runDir, sessionIdAuto);
+        injectBashRunWorkspace(runDir); // 批㊶-S1 门2修复：围栏可写根随 run 切换更新
         return asToolValue({
           ok: true,
           run_id: args.run_id,
@@ -429,6 +436,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       // 批㊶-N N-5：会话绑定
       const sessionIdCfg = sessionIdOfExec(exec);
       if (sessionIdCfg !== undefined) appendBinding(runDir, sessionIdCfg);
+      injectBashRunWorkspace(runDir); // 批㊶-S1 门2修复
       return asToolValue({ ok: true, run_id: args.run_id, confirmed: true, fields, snapshot: "webui/config-snapshot.json", ...(amendNote !== undefined ? { amend: amendNote } : {}) });
     },
   });
@@ -474,6 +482,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       // 批㊶-N N-5：会话绑定
       const sessionIdPub = sessionIdOfExec(exec);
       if (sessionIdPub !== undefined) appendBinding(runDir, sessionIdPub);
+      injectBashRunWorkspace(runDir); // 批㊶-S1 门2修复
       return asToolValue({ ok: true, run_id: args.run_id, confirmed: true, digest: candidateDigest, artifact: "contract-candidate.json" });
     },
   });
