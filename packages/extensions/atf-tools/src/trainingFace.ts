@@ -13,8 +13,9 @@
  * 环境纪律沿 M0：GPU/端口/venv 走 env-profile；异常即停即报不静默重试。
  */
 import { spawn, execFile, execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import * as net from "node:net";
-import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync, mkdirSync, appendFileSync, renameSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync, mkdirSync, appendFileSync, renameSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
@@ -30,6 +31,13 @@ import { appendBinding, writeProgress } from "../../../../src/core/workspace/run
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
 import { appendLedgerAuditComment, ledgerEnvPrefixForShell } from "../../../../src/core/workspace/approvalLedger.js";
 import { dualStageNote } from "./confirmFace.js";
+import { deriveAtfRoot } from "../../../../src/webui/storageSettings.js";
+
+/** 发布库位缺省派生（统一根 models 子目录——env-only 零字面量；未派生＝null）。 */
+export const derivePublishRoot = (env: Readonly<Record<string, string | undefined>>): string | null => {
+  const root = deriveAtfRoot(env);
+  return root === null ? null : join(root, "models");
+};
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 
 // ── 批㊶Q增补三 段2：start 探活（终结 started:true 假成功）──
@@ -228,6 +236,83 @@ export async function terminateOccupant(pid: number): Promise<boolean> {
   }
 }
 
+/** 批㊶-S1 段 1/2：闭环推荐层事实核对（确定性事实＝实锚目录/产物核对；推荐语由 agent 指引面
+ *  承载——❌禁 if-else 业务规则，本块只列事实与可直用参数）。 */
+export interface EvalReadiness {
+  training_done: boolean;
+  checkpoint_candidates: string[];
+  latest_checkpoint: string | null;
+  eval_assets_dir: string | null;
+  field_config: string | null;
+  split_manifest: string | null;
+  four_set_ready: boolean;
+  badcases_ready: boolean;
+}
+
+export const collectEvalReadiness = (runDir: string): EvalReadiness => {
+  const has = (rel: string): boolean => existsSync(join(runDir, rel));
+  const trainingDir = join(runDir, "training");
+  let ckpts: string[] = [];
+  try {
+    ckpts = existsSync(trainingDir)
+      ? readdirSync(trainingDir, { withFileTypes: true }).filter((d) => d.isDirectory() && /^checkpoint-\d+$/.test(d.name) && existsSync(join(trainingDir, d.name, "adapter_model.safetensors"))).map((d) => d.name).sort()
+      : [];
+  } catch { /* 缺目录＝空候选 */ }
+  let evalAssets: string | null = null;
+  for (const cand of [join(runDir, "l1", "eval"), join(runDir, "eval_assets")]) {
+    if (existsSync(join(cand, "test_images.json")) && existsSync(join(cand, "eval_labels.jsonl"))) { evalAssets = cand; break; }
+  }
+  let fieldConfig: string | null = null;
+  for (const cand of [join(runDir, "l1", "field_config.json"), join(runDir, "prep", "field_config.json")]) {
+    if (existsSync(cand)) { fieldConfig = cand; break; }
+  }
+  let splitManifest: string | null = null;
+  for (const cand of [join(runDir, "l1", "split-manifest.json"), join(runDir, "split", "split-manifest.json")]) {
+    if (existsSync(cand)) { splitManifest = cand; break; }
+  }
+  const evalRoot = join(runDir, "eval");
+  let fourSetReady = false;
+  try {
+    const rounds = readdirSync(evalRoot, { withFileTypes: true }).filter((e) => e.isDirectory() && /^\d+-\d{8}$/.test(e.name)).map((e) => e.name).sort();
+    for (const round of rounds) {
+      const orchEval = join(evalRoot, round, "orch", "eval");
+      if (["raw_predictions.jsonl", "metrics_summary.json", "badcases.jsonl", "indexes.csv"].every((f) => existsSync(join(orchEval, f)))) { fourSetReady = true; break; }
+    }
+  } catch { /* eval 根缺失 */ }
+  const badcasesReady = (() => {
+    try {
+      const rounds = readdirSync(evalRoot, { withFileTypes: true }).filter((e) => e.isDirectory() && /^\d+-\d{8}$/.test(e.name)).map((e) => e.name).sort();
+      for (const round of rounds) {
+        if (existsSync(join(evalRoot, round, "orch", "eval", "badcases.jsonl"))) return true;
+      }
+    } catch { /* 同上 */ }
+    return false;
+  })();
+  return {
+    training_done: ckpts.length > 0,
+    checkpoint_candidates: ckpts,
+    latest_checkpoint: ckpts.length > 0 ? join(trainingDir, ckpts[ckpts.length - 1] as string) : null,
+    eval_assets_dir: evalAssets,
+    field_config: fieldConfig,
+    split_manifest: splitManifest,
+    four_set_ready: fourSetReady,
+    badcases_ready: badcasesReady,
+  };
+};
+
+/** 批㊶-S1 段 3：模型发布（语义 C——归档＋登记＋并入模型清单；§三.2 四件套齐即可，门槛不硬编码）。 */
+export interface ModelPublishCheck {
+  ok: boolean;
+  reason?: string;
+  four_set_ready?: boolean;
+}
+
+export const checkModelPublishPrereq = (runDir: string): ModelPublishCheck => {
+  const readiness = collectEvalReadiness(runDir);
+  if (!readiness.four_set_ready) return { ok: false, reason: "four_set_missing", four_set_ready: false };
+  return { ok: true, four_set_ready: true };
+};
+
 /** danger 卡端口冲突文案（根因上卡面——撞前知道）。 */
 export function formatPortConflictNote(port: number, occupant: PortOccupant): string {
   const who = occupant.pid > 0
@@ -364,7 +449,23 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         // 批㊶-N N-5：会话绑定（exec.agent.session.id——vendor 链路实锚）
         const sessionId = sessionIdOf(exec);
         if (sessionId !== undefined) appendBinding(runDir, sessionId);
-        return asToolValue({ action: "status", running, run_id: args.run_id, segments, ckpts, loss_points: points, ...(ckpts.length > 0 ? { latest_ckpt: `runs/${args.run_id}/training/${ckpts[ckpts.length - 1]}` } : {}) });
+        // 批㊶-S1 段 1/2：闭环推荐层事实核对块（确定性事实；推荐语 agent 指引面承载）
+        const readiness = collectEvalReadiness(resolveRunDir(cfg.runsRoot, args.run_id));
+        return asToolValue({
+          action: "status", running, run_id: args.run_id, segments, ckpts, loss_points: points,
+          ...(ckpts.length > 0 ? { latest_ckpt: `runs/${args.run_id}/training/${ckpts[ckpts.length - 1]}` } : {}),
+          next_steps: {
+            eval_ready: readiness.training_done,
+            checkpoint_candidates: readiness.checkpoint_candidates,
+            latest_checkpoint_path: readiness.latest_checkpoint,
+            eval_assets_dir: readiness.eval_assets_dir,
+            field_config: readiness.field_config,
+            split_manifest: readiness.split_manifest,
+            note: readiness.training_done
+              ? "训练段产物在位——评估衔接参数（run_id/adapter_path 取上方实锚候选）已可直接用于 atf_evaluate start"
+              : "训练段产物未齐（无含 adapter 的 checkpoint）——无评估衔接事实",
+          },
+        });
       }
       // —— start：DRY_RUN 校验 → 端口预检（批⑳dot3 修复 3）→ danger 必确认 → 启动 ——
       // DRY_RUN 前置校验（打印型零副作用，先于审批——坏脚本不进卡面）
@@ -644,6 +745,9 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
     const expected = (manifest["expected_model_names"] as string[] | undefined) ?? [];
     modelMatchesManifest = expected.includes(String((summary as Record<string, unknown>)["model"]));
   }
+  // 批㊶-S1 段 1：四件套齐→可分析/可发布信号（确定性事实核对）
+  const runDirEval = resolveRunDir(cfg.runsRoot, runId);
+  const readiness = collectEvalReadiness(runDirEval);
   const value: EvalStatusValue = {
     action: "status", run_id: runId, eval_round: latest, running,
     ...(service !== null ? { service } : {}),
@@ -653,9 +757,113 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
     ...(labelWarning !== undefined ? { model_label_warning: labelWarning } : {}),
     ...(modelMatchesManifest !== undefined ? { model_matches_manifest: modelMatchesManifest } : {}),
   };
-  return asToolValue(value);
+  return asToolValue({
+    ...value,
+    next_steps: {
+      four_set_ready: readiness.four_set_ready,
+      badcases_ready: readiness.badcases_ready,
+      latest_checkpoint: readiness.latest_checkpoint,
+      publish_prereq_met: checkModelPublishPrereq(runDirEval).ok,
+      note: readiness.four_set_ready
+        ? "四件套齐——坏例分析（atf_analyze_badcases）与模型发布（atf_publish_model）前置事实在位"
+        : "四件套未齐——分析/发布前置事实未满足",
+    },
+  });
 }
 
+
+/** 批㊶-S1 段 3：模型产物发布（语义 C＝归档＋登记＋并入模型清单；U 双段式确认卡）。 */
+export function buildPublishModelTool(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; modelRoot?: string }): unknown {
+  return defineTool({
+    name: "atf_publish_model",
+    description:
+      "模型产物发布（批㊶-S1 段 3——语义 C：归档＋登记＋并入模型清单）：对评估完成的 checkpoint 收口——四件套齐即可发布（指标门槛不硬编码，发布与否由用户在确认卡定）；发布动作＝确定性归档复制（SHA256 清单）到 <发布库位>/<run_id>/<ckpt>/＋manifest＋发布报告。确认卡＝U 双段式（dualStageNote），danger 级 Allow once 落审批账本。已发布模型并入模型清单状态面（训练确认卡基模型可选历史发布作 base——迁移学习；ATF_MODEL_ROOT＋发布库位两源合并、来源标注区分）。发布前置缺四件套即拒（不猜测）。",
+    parameters: {
+      run_id: { type: "string", required: true, description: "run 标识" },
+      checkpoint: { type: "string", required: true, description: "checkpoint 目录名（checkpoint-<数字>；拒 latest/符号链接）" },
+      publish_root: { type: "string", description: "发布库位根（缺省＝统一根 models 子目录——ATF_ATF_ROOT/ATF_DSH_RUNS_ROOT 父目录派生；实例分桶自动）" },
+      note: { type: "string", description: "发布说明（入发布报告）" },
+    },
+    output: { schema: { type: "object", additionalProperties: true }, render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }] },
+    presentCall: function(args: { run_id: string; checkpoint?: string }) {
+      return { card: "generic" as const, title: `模型发布 — ${args.run_id}${args.checkpoint !== undefined ? `/${args.checkpoint}` : ""}`, kind: "other" as const };
+    },
+    async execute(args: { run_id: string; checkpoint: string; publish_root?: string; note?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+      const runDir = resolveRunDir(cfg.runsRoot, args.run_id);
+      if (!/^checkpoint-\d+$/.test(args.checkpoint)) {
+        return asToolValue({ ok: false, error: "checkpoint_name_invalid", note: "checkpoint 须为 checkpoint-<数字> 形态（拒 latest/符号链接/缺省猜测）" });
+      }
+      const ckptDir = join(runDir, "training", args.checkpoint);
+      try {
+        if (lstatSync(ckptDir).isSymbolicLink()) return asToolValue({ ok: false, error: "checkpoint_symlink_forbidden", note: "符号链接 checkpoint 拒绝（SKILL.md 环节④沿用）" });
+      } catch {
+        return asToolValue({ ok: false, error: "checkpoint_missing", note: `checkpoint 目录不存在：${ckptDir}` });
+      }
+      const prereq = checkModelPublishPrereq(runDir);
+      if (!prereq.ok) {
+        return asToolValue({ ok: false, error: prereq.reason, note: "发布前置＝四件套齐即可（当前缺四件套——不猜测不放宽）" });
+      }
+      // 发布库位缺省派生（零绝对路径字面量——统一根 models 子目录；§三.1 语义 C）
+      const publishRoot = args.publish_root?.trim() || derivePublishRoot(process.env);
+      if (publishRoot === null) {
+        return asToolValue({ ok: false, error: "publish_root_unset", note: "发布库位未派生：ATF_ATF_ROOT/ATF_DSH_RUNS_ROOT 皆未提供统一根——publish_root 显式传入或配置后重试" });
+      }
+      const destDir = join(publishRoot, args.run_id, args.checkpoint);
+      // U 双段式确认卡（danger 级 Allow once 落审批账本）
+      const verdict = await requestApproval(ctx, exec, "atf_publish_model",
+        dualStageNote(`模型发布确认 — ${args.run_id}/${args.checkpoint}`, {
+          extra: `发布动作：归档复制 ${ckptDir} → ${destDir}（SHA256 清单）＋manifest＋发布报告${args.note !== undefined ? `｜说明：${args.note}` : ""}。如需改参（publish_root/checkpoint），直接回复；确认请 Allow once（danger 级）。`,
+        }));
+      if (!verdict.ok) return approvalDeniedResult("atf_publish_model", verdict.outcome);
+      // 确定性归档复制（SHA256 清单）——零内核触碰（node fs 实现）
+      const { mkdirSync, readdirSync: rd, copyFileSync } = await import("node:fs");
+      mkdirSync(destDir, { recursive: true });
+      const shaOf = (file: string): string => createHash("sha256").update(readFileSync(file)).digest("hex");
+      const files: Array<{ file: string; sha256: string; bytes: number }> = [];
+      const walk = (dir: string, relBase: string): void => {
+        for (const entry of rd(dir, { withFileTypes: true })) {
+          const src = join(dir, entry.name);
+          const rel = relBase === "" ? entry.name : `${relBase}/${entry.name}`;
+          if (entry.isDirectory()) walk(src, rel);
+          else { copyFileSync(src, join(destDir, rel)); files.push({ file: rel, sha256: shaOf(src), bytes: statSync(src).size }); }
+        }
+      };
+      walk(ckptDir, "");
+      const manifest = {
+        schema_version: "ModelPublish/v1",
+        run_id: args.run_id,
+        checkpoint: args.checkpoint,
+        published_at: new Date().toISOString(),
+        source_dir: ckptDir,
+        dest_dir: destDir,
+        files: files.sort((a, b) => a.file.localeCompare(b.file)),
+        ...(args.note !== undefined ? { note: args.note } : {}),
+      };
+      writeFileSync(join(destDir, "publish-manifest.json"), `${JSON.stringify(manifest, null, 1)}\n`, "utf8");
+      const report = [
+        `# 模型发布报告 — ${args.run_id}/${args.checkpoint}`,
+        "",
+        `- 发布时间：${manifest.published_at}`,
+        `- 源：${ckptDir}`,
+        `- 归档：${destDir}`,
+        `- 文件数：${files.length}（SHA256 清单见 publish-manifest.json）`,
+        ...(args.note !== undefined ? [`- 说明：${args.note}`] : []),
+      ].join("\n");
+      mkdirSync(join(runDir, "publish"), { recursive: true });
+      writeFileSync(join(runDir, "publish", `${args.checkpoint}.md`), `${report}\n`, "utf8");
+      return asToolValue({
+        ok: true,
+        run_id: args.run_id,
+        checkpoint: args.checkpoint,
+        dest_dir: destDir,
+        file_count: files.length,
+        manifest: "publish-manifest.json",
+        report: `publish/${args.checkpoint}.md`,
+        note: "已发布——并入模型清单状态面（发布库位源；ATF_MODEL_ROOT＋发布库位两源合并、来源标注区分）",
+      });
+    },
+  });
+}
 /** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
 export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string }): unknown[] {
   const evaluate = defineTool({

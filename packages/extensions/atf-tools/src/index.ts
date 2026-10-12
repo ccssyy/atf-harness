@@ -30,7 +30,8 @@ import { BridgeManager, buildBridgeTools } from "./bridgeFace.js";
 import { buildFileTools } from "./fileFace.js";
 import { buildPipelineTool } from "./pipelineFace.js";
 import { buildConfirmTools } from "./confirmFace.js";
-import { buildRunTrainingTool, buildEvalTools, type TrainingToolsConfig } from "./trainingFace.js";
+import { buildRunTrainingTool, buildEvalTools, buildPublishModelTool, type TrainingToolsConfig } from "./trainingFace.js";
+import { buildRecordsQueryTool } from "./recordsFace.js";
 
 /** Cordis 插件名（loader 诊断用）。 */
 export const name = "atf-tools";
@@ -126,6 +127,9 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx, models: { root: modelInventory.root, names: modelInventory.models } };
   ctx.tools.register(buildRunTrainingTool(ctx, trainCfg));
   for (const tool of buildEvalTools(ctx, { runsRoot: config.runsRoot, logDir: config.logDir, kernelDir: config.kernelDir })) ctx.tools.register(tool);
+  ctx.tools.register(buildPublishModelTool(ctx, { runsRoot: config.runsRoot }));
+  ctx.tools.register(buildRecordsQueryTool(ctx, { runsRoot: config.runsRoot, currentRunWorkspace: () => process.env["ATF_BASH_RUN_WORKSPACE"] ?? null }));
+  console.log("[atf-tools] atf_publish_model＋atf_records_query 已挂载（批㊶-S1 段 3＋§6.2 D2）");
 
   // 批㊶-K 项 3：档位可见性只读工具（当前档＋部署默认档＋全部可选档两维度——
   // 零切换路径：档位/审批面变更须经界面人工操作；文案产品口径）

@@ -20,6 +20,26 @@ export interface LocalModelInventory {
   error?: "model_root_unset" | "model_root_missing" | "model_root_unreadable";
 }
 
+export interface SourcedModel {
+  name: string;
+  /** 来源标注（批㊶-S1 段 3：ATF_MODEL_ROOT＝model-root；发布库位＝publish-root） */
+  source: "model-root" | "publish-root";
+}
+
+/** 批㊶-S1 段 3：两源合并（ATF_MODEL_ROOT＋发布库位〈统一根>/models——同名词取先、来源标注区分）。 */
+export const mergePublishedModels = (primary: LocalModelInventory, published: string[]): LocalModelInventory => {
+  const seen = new Set(primary.models);
+  const merged = [...primary.models];
+  const extra: SourcedModel[] = [];
+  for (const name of published) {
+    if (seen.has(name)) continue;
+    seen.add(name);
+    merged.push(name);
+    extra.push({ name, source: "publish-root" });
+  }
+  return { ...primary, models: merged };
+};
+
 /** 根解析（env-only——未配置＝null 如实，不设缺省绝对路径）。 */
 export const modelRootOf = (env: Readonly<Record<string, string | undefined>>): string | null => {
   const raw = env[MODEL_ROOT_ENV];

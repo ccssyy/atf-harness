@@ -121,6 +121,51 @@ export const bashCommandGuard = (command: unknown, roots: readonly string[]): { 
   return { ok: true };
 };
 
+/** 批㊶-S1 §6.2 方案丙：atf_bash 工作区围栏白名单单源——
+ *  可写＝当前 run 工作区；可读＝当前工作区 ∪ runs 根 ∪ 内核登记面（datasets/refs）∪ ATF_WORKSPACE_ALLOWLIST。
+ *  与批㊶-G-K 内核白名单（workspace_path_outside_allowlist 机制 6306dbe）同源消费同一 env 值，不另立清单。 */
+export const WORKSPACE_ALLOWLIST_ENV = "ATF_WORKSPACE_ALLOWLIST";
+export const WORKSPACE_PATH_OUTSIDE_ALLOWLIST = "workspace_path_outside_allowlist";
+
+/** 围栏白名单根装配（纯函数）：当前 run 工作区（可写）＋runs 根＋登记面/allowlist env 冒号单源。 */
+export const workspaceFenceRoots = (input: {
+  runWorkspace: string;
+  runsRoot: string;
+  allowlistEnv?: string;
+  registryDirs?: readonly string[];
+}): { writable: string; readable: string[] } => {
+  const readable = new Set<string>([input.runWorkspace, input.runsRoot]);
+  for (const dir of input.registryDirs ?? []) readable.add(dir);
+  for (const dir of (input.allowlistEnv ?? "").split(":")) {
+    const t = dir.trim();
+    if (t !== "") readable.add(t);
+  }
+  return { writable: input.runWorkspace, readable: [...readable] };
+};
+
+/** 越界预检（包装层拒绝不弹卡——结构化指路回流；bash 字符串预检定位「防漫游」非防对抗）。 */
+export const workspaceFenceGuard = (command: string, fence: { writable: string; readable: readonly string[] }): { ok: true } | { ok: false; code: string; message: string } => {
+  if (typeof command !== "string" || command === "") return { ok: true };
+  for (const token of absolutePathTokensFromCommand(command)) {
+    if (pathOutsideRoots(token, fence.readable)) {
+      return {
+        ok: false,
+        code: WORKSPACE_PATH_OUTSIDE_ALLOWLIST,
+        message: `${WORKSPACE_PATH_OUTSIDE_ALLOWLIST}: 命令引用当前工作区围栏外路径 ${token}（可写＝当前 run 工作区 ${fence.writable}；可读＝${fence.readable.join("；")}）——外部任务记录请改用 atf_records.query（任务标识语义化读取）；确需扩域请告知用户该路径，经确认后加入 ATF_WORKSPACE_ALLOWLIST`,
+      };
+    }
+    if (pathOutsideRoots(token, [fence.writable]) && !pathOutsideRoots(token, fence.readable)) {
+      // 可读不可写域内的写语义命令→回流至写闸审批路径（审批语义不迁移）
+      return {
+        ok: false,
+        code: WORKSPACE_PATH_OUTSIDE_ALLOWLIST,
+        message: `${WORKSPACE_PATH_OUTSIDE_ALLOWLIST}: 路径 ${token} 在只读围栏内（可写仅＝当前 run 工作区 ${fence.writable}）——如需写入请在聊天说明并经用户确认后操作`,
+      };
+    }
+  }
+  return { ok: true };
+};
+
 /**
  * A7 四件 DSH 挂载（atf_read/atf_edit/atf_write/atf_bash）：toFileAgentTool 执行径
  * 零重写；atf_bash 先过命令串扫描。审批语义＝白名单守卫承担边界（无弹卡——F-H 分级
@@ -142,6 +187,17 @@ export const buildFileGuardTools = (host: FileToolHost): unknown[] =>
           const scan = bashCommandGuard(args["command"], host.roots);
           if (!scan.ok) {
             return asToolValue({ ok: false, error: FILE_PATH_OUTSIDE_ALLOWLIST, tool: definition.name, message: scan.message });
+          }
+          // 批㊶-S1 §6.2 方案丙：工作区围栏预检（用户零感知——拒绝不弹卡，结构化指路回流；
+          // 围栏根＝当前 run 工作区（可写）∪ runs 根 ∪ 登记面 ∪ ATF_WORKSPACE_ALLOWLIST env 单源）
+          const fenceRoots = workspaceFenceRoots({
+            runWorkspace: process.env["ATF_BASH_RUN_WORKSPACE"] ?? process.env["PWD"] ?? host.roots[0] ?? ".",
+            runsRoot: process.env["ATF_DSH_RUNS_ROOT"] ?? "",
+            allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "",
+          });
+          const fence = workspaceFenceGuard(String(args["command"] ?? ""), fenceRoots);
+          if (!fence.ok) {
+            return asToolValue({ ok: false, error: fence.code, tool: definition.name, message: fence.message });
           }
         }
         const result = await agentTool.execute(`dsh-${exec.callId ?? "call"}`, args);
