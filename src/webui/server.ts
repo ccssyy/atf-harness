@@ -1,4 +1,7 @@
 /**
+ * 历史资产 · 未接线（owner S2a 裁定 2026-10-12）：本文件与 public/app.js 不在 live 实例
+ * import 链上（live 监控＝packages/extensions/atf-ui 扩展）；新能力一律投 live 链，勿改本层。
+ *
  * 批⑬ v2（2026-09-29）——WebUI 服务面（第四宿主入口；node:http 零新增依赖）。
  *
  * 路由：静态三栏前端（/）＋JSON API（sessions/messages/confirm/gpu/runs/report）＋

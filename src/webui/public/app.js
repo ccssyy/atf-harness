@@ -1,3 +1,4 @@
+// 历史资产 · 未接线（owner S2a 裁定 2026-10-12）：本文件不在 live 实例 import 链上（live＝packages/extensions/atf-ui）；新能力一律投 live 链，勿改本文件。
 /* 批⑬ v2 WebUI 前端（零依赖 vanilla；渲染树来自服务端纯函数单源 renderChatEvent）。 */
 const state = { sessions: [], current: null, cursor: 0, pendingCardSeq: null };
 

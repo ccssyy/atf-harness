@@ -217,6 +217,9 @@ window.__ModuleLoader__.load({
       // 批㊶-N N-5 三级作用域（hooks 已前置）：缺省只列本会话绑定 run；"全部实例"显式切换＝全量
       var showAllState = React.useState(false)
       var showAll = showAllState[0], setShowAll = showAllState[1]
+      // 批㊶-S2a：运行列表过滤模式（'workspace'＝本工作区（默认）／'all'＝全部）
+      var _listMode = React.useState('workspace')
+      var listMode = _listMode[0], setListMode = _listMode[1]
       // 批㊶Q增补一：pane body 常挂后关闭态不再返回 null（空 pane 疑似故障）——空态占位指路
       if (!open) return React.createElement('div', { className: 'atf-monitor-panel', style: { padding: '20px 12px', height: '100%', overflow: 'auto' } },
         React.createElement('div', { className: 'atf-monitor-empty' }, '监控已关闭——点顶栏「监控」按钮重新打开'))
@@ -388,6 +391,50 @@ window.__ModuleLoader__.load({
             var kernelText = bridge ? (bridge.mode === 'real' ? '内核 real' + (bridge.version ? '·' + bridge.version : '') : '⚠ mock') : ''
             return gpuText + (kernelText !== '' ? ' ｜ ' + kernelText : '')
           })()),
+        // 批㊶-S2a：运行列表（过滤键＝runs[].workspace；本工作区视图＝当前会话工作区桶精确匹配，
+        // 平铺（null）无法判定归属——只在「全部」出现，不猜；行点击＝选中该 run）
+        (function() {
+          var allRuns = (mon && mon.runs) || []
+          var myWs = null
+          for (var i = 0; i < allRuns.length; i++) {
+            var r0 = allRuns[i]
+            if (Array.isArray(r0.bound_sessions) && r0.bound_sessions.indexOf(store.sessionId) >= 0 && typeof r0.workspace === 'string' && r0.workspace !== '') { myWs = r0.workspace; break }
+          }
+          var visible = listMode === 'workspace'
+            ? allRuns.filter(function(r) { return r.workspace !== null && r.workspace === myWs })
+            : allRuns
+          return React.createElement('div', { className: 'atf-monitor-sec' },
+            React.createElement('div', { className: 'atf-monitor-title', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
+              React.createElement('span', null, '运行列表'),
+              React.createElement('span', null,
+                React.createElement('button', {
+                  className: 'atf-pill' + (listMode === 'workspace' ? ' atf-pill-on' : ''),
+                  style: listMode === 'workspace' ? { borderColor: 'var(--dsw-alias-brand-primary,#1d4ed8)', color: 'var(--dsw-alias-brand-primary,#1d4ed8)', fontWeight: 600 } : undefined,
+                  title: '本工作区（当前会话工作区桶）',
+                  onClick: function() { setListMode('workspace') },
+                }, '本工作区'),
+                ' ',
+                React.createElement('button', {
+                  className: 'atf-pill' + (listMode === 'all' ? ' atf-pill-on' : ''),
+                  style: listMode === 'all' ? { borderColor: 'var(--dsw-alias-brand-primary,#1d4ed8)', color: 'var(--dsw-alias-brand-primary,#1d4ed8)', fontWeight: 600 } : undefined,
+                  title: '全部（含平铺存量）',
+                  onClick: function() { setListMode('all') },
+                }, '全部'))),
+            visible.length === 0
+              ? React.createElement('div', { className: 'atf-viewer-empty' }, listMode === 'workspace' ? '（本工作区无桶内运行——切「全部」查看存量）' : '（暂无运行）')
+              : visible.map(function(r) {
+                  return React.createElement('div', {
+                    key: (r.workspace || 'flat') + '/' + r.run_id,
+                    className: 'atf-run-row',
+                    style: { display: 'flex', gap: 6, padding: '3px 4px', fontSize: 12, cursor: 'pointer', borderBottom: '1px dashed rgba(128,128,128,.15)', alignItems: 'baseline' },
+                    onClick: function() { store.setMonitor(true, r.run_id) },
+                    title: '选中 ' + r.run_id,
+                  },
+                    React.createElement('span', { style: { fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 } }, r.run_id),
+                    React.createElement('span', { style: { color: 'var(--dsw-alias-label-tertiary,#64748b)', flex: 'none' } }, r.workspace === null ? '平铺' : r.workspace),
+                    React.createElement('span', { style: { color: r.training && r.training.active === true ? 'var(--dsw-static-amber-500)' : 'var(--dsw-alias-label-tertiary,#64748b)', flex: 'none' } }, r.training && r.training.active === true ? '训练中' : (r.state || '')))
+                }))
+        })(),
         run === null
           ? React.createElement('div', { className: 'atf-monitor-empty' }, '（monitor 快照就绪中…）')
           : React.createElement('div', { className: 'atf-monitor-body' },
@@ -645,7 +692,7 @@ window.__ModuleLoader__.load({
               msg ? React.createElement('div', { style: { fontSize: 12, marginTop: 10, color: msg.kind === 'err' ? 'var(--dsw-static-red-500)' : 'var(--dsw-static-green-500)' } }, msg.text) : null,
               React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 } },
                 React.createElement('button', { className: 'atf-pill', onClick: function() { store.setSettings(null) } }, '关闭'),
-                React.createElement('button', { className: 'atf-pill atf-train-send', onClick: save }, '保存')))))
+                React.createElement('button', { className: 'atf-pill atf-train-send', onClick: save }, '保存'))))))
     }
 
     /** 发起训练对话框（批㉛段2）：run 选择＋IterationConfig 四件套摘要（含义＋值＋来源标注＋
