@@ -163,3 +163,12 @@ body { margin: 0; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; col
 .msg.tool_card.live { border-color: var(--blue); }
 .msg.text_delta.streaming .text::after { content: "▌"; color: var(--blue); animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: 0; } }
+
+/* 批㊶-S2：运行列表（监控侧栏） */
+.run-list { max-height: 180px; overflow: auto; font-size: 12px; border: 1px solid rgba(128,128,128,.2); border-radius: 6px; }
+.run-row { display: flex; gap: 6px; padding: 3px 8px; border-bottom: 1px dashed rgba(128,128,128,.15); align-items: baseline; }
+.run-row:last-child { border-bottom: 0; }
+.run-id { font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.run-ws { color: #64748b; flex: none; }
+.run-state { color: #1d4ed8; flex: none; }
+#run-ws-filter { font-size: 11px; }

@@ -101,11 +101,31 @@ export interface BucketedRunEntry {
   dir: string;
 }
 
+/** run 目录特征集（单源——atf-ui looksLikeRun 同码 re-export；readOnlyTools 列表共用）。 */
+export const RUN_MARKER_RELS: readonly string[] = [
+  join("launch", "launch_manifest.json"),
+  "launch_manifest.json",
+  "prep",
+  "training",
+  "webui",
+  "eval",
+];
+
+/** run 目录特征判定（任一特征在位＝是 run）。 */
+export const hasRunMarkers = (dir: string): boolean => RUN_MARKER_RELS.some((rel) => existsSync(join(dir, rel)));
+
+export interface BucketedRunEntryOptions {
+  /** 批㊶-S2：跳过「本身是 run」的一级目录再降层（其内部子目录是 run 结构不是桶——
+   *  幻影防护单源化；缺省 false＝调用方自行裁决，true＝按 RUN_MARKER_RELS 判定跳过）。 */
+  skipRunMarkerDirs?: boolean;
+}
+
 /** 分桶层 run 条目（二级扫描：平铺层每个目录视作候选桶，列其子目录——
- *  是否为 run 由调用方 looksLikeRun 裁决；点前缀目录跳过）。 */
-export const bucketedRunEntries = (runsRoot: string): BucketedRunEntry[] => {
+ *  是否为 run 由调用方裁决（或 skipRunMarkerDirs 委托本模块）；点前缀目录跳过）。 */
+export const bucketedRunEntries = (runsRoot: string, opts?: BucketedRunEntryOptions): BucketedRunEntry[] => {
   const entries: BucketedRunEntry[] = [];
   for (const workspace of flatRunDirNames(runsRoot)) {
+    if (opts?.skipRunMarkerDirs === true && hasRunMarkers(join(runsRoot, workspace))) continue;
     let children: string[] = [];
     try {
       children = readdirSync(join(runsRoot, workspace), { withFileTypes: true })

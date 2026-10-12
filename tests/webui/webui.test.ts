@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { renderChatEvent, renderChatHtml, type ChatEvent } from "../../src/webui/chatModel.js";
 import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, parseConfigEditText, loadConfigSnapshot, saveConfigSnapshot, hasConfigSnapshot } from "../../src/webui/configConfirm.js";
+import { filterRunsByWorkspace, makeReadOnlyTools } from "../../src/webui/readOnlyTools.js";
 import { buildReadOnlyAgentTools, listRuns } from "../../src/webui/readOnlyTools.js";
 import { WebUiSessionManager, parseBudgetFromEnv, chatBudgetFromEnv } from "../../src/webui/sessionManager.js";
 import { startWebUiServer } from "../../src/webui/server.js";
@@ -474,5 +475,47 @@ describe("批⑰ Bug1：report.md 静态直开（/static/run/:id/report/report.m
     expect(page).toContain('id="env-save"');
 
     handle.server.close();
+  });
+});
+
+describe("批㊶-S2——监控运行列表多桶适配与工作区过滤", () => {
+  it("listRuns：平铺存量＋桶内 run 并集；桶名不现（幻影防护）；workspace 字段正确；桶内状态推导同码", async () => {
+    const root = tempRoot();
+    // 平铺存量（cr_r2 形态：webui/config-snapshot）
+    mkdirSync(join(root, "cr_r2", "webui"), { recursive: true });
+    writeFileSync(join(root, "cr_r2", "webui", "config-snapshot.json"), "{}");
+    // 桶 ci_smoke：桶内 run 携 config-snapshot 特征＋一个无特征桶内目录
+    mkdirSync(join(root, "ci_smoke", "cr_r3", "webui"), { recursive: true });
+    writeFileSync(join(root, "ci_smoke", "cr_r3", "webui", "config-snapshot.json"), "{}");
+    mkdirSync(join(root, "ci_smoke", "draft-x"), { recursive: true });
+    const runs = await listRuns(root);
+    const ids = runs.map((r) => r.run_id).sort();
+    expect(ids).toEqual(["cr_r2", "cr_r3"]); // 桶名 ci_smoke 不现；draft-x 无特征仍如实列（枚举不猜测）
+    const r2 = runs.find((r) => r.run_id === "cr_r2");
+    const r3 = runs.find((r) => r.run_id === "cr_r3");
+    expect(r2?.workspace).toBeNull();
+    expect(r3?.workspace).toBe("ci_smoke");
+    expect(r3?.state).toBe("config_confirmed"); // 状态推导桶内同码
+    expect(r2?.state).toBe("config_confirmed");
+  });
+  it("filterRunsByWorkspace：桶名精确匹配；null 过滤参＝全量（向后兼容）", async () => {
+    const runs = [
+      { run_id: "a", workspace: null },
+      { run_id: "b", workspace: "ci_smoke" },
+      { run_id: "c", workspace: "br_ws" },
+    ] as Array<Record<string, unknown>>;
+    expect(filterRunsByWorkspace(runs, null)).toHaveLength(3);
+    expect(filterRunsByWorkspace(runs, "ci_smoke").map((r) => r.run_id)).toEqual(["b"]);
+    expect(filterRunsByWorkspace(runs, "nope")).toEqual([]);
+  });
+  it("桶内 run 报告经 resolveRunDir 可取（atf_report_read——B2 路径统一）", async () => {
+    const root = tempRoot();
+    const reportDir = join(root, "ci_smoke", "cr_r3", "report");
+    mkdirSync(reportDir, { recursive: true });
+    writeFileSync(join(reportDir, "report.md"), "# 桶内报告\n");
+    const tools = makeReadOnlyTools({ runsRoot: root });
+    const report = tools.find((t) => t.name === "atf_report_read")!;
+    const out = await report.execute("t", { run_id: "cr_r3" });
+    expect(out.details).toMatchObject({ run_id: "cr_r3", exists: true });
   });
 });

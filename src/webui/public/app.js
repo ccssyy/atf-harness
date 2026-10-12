@@ -166,11 +166,40 @@ function extractText(html) {
   return textDiv?.[1] ?? "";
 }
 
+// 批㊶-S2：运行列表状态（过滤控件——本工作区（默认）／全部；选项来自返回数据 workspace 去重集）
+const runListState = { all: [], self: "", mode: "self" };
+
+async function refreshRuns() {
+  const data = await api("/api/runs");
+  runListState.all = data.runs ?? [];
+  runListState.self = data.workspace_self ?? runListState.self;
+  const wsOptions = [...new Set(runListState.all.map((r) => r.workspace).filter((w) => typeof w === "string" && w !== ""))];
+  const select = document.getElementById("run-ws-filter");
+  if (select !== null) {
+    for (const w of wsOptions) {
+      if ([...select.options].some((o) => o.value === w)) continue;
+      const opt = document.createElement("option");
+      opt.value = w;
+      opt.textContent = w;
+      select.append(opt);
+    }
+  }
+  const mode = select !== null && select.value === "all" ? "all" : "self";
+  const visible = mode === "all" ? runListState.all : runListState.all.filter((r) => r.workspace === runListState.self);
+  const list = document.getElementById("run-list");
+  if (list !== null) {
+    list.innerHTML = visible.length === 0
+      ? '<div class="dim">（本工作区无运行——切「全部」查看存量）</div>'
+      : visible.map((r) => `<div class="run-row"><span class="run-id" title="${r.run_id}">${r.run_id}</span><span class="run-ws">${r.workspace === null ? "平铺" : r.workspace}</span><span class="run-state">${r.state}</span></div>`).join("");
+  }
+  return runListState.all;
+}
+
 async function refreshSessions() {
   const data = await api("/api/sessions");
   // 批⑮：结果摘要行接真数据（atf_run_list 产物摘要——只读枚举，展示层拼接）
   try {
-    const runs = (await api("/api/runs")).runs ?? [];
+    const runs = await refreshRuns();
     for (const session of data.sessions) {
       const run = runs.find((candidate) => candidate.run_id === session.boundRunId);
       if (run !== undefined) session.resultSummary = (run.artifacts ?? []).slice(0, 2).join(" · ") || session.resultSummary;
@@ -464,6 +493,9 @@ async function rebuildMetrics() {
   metricsState.points = data.points ?? [];
   renderLossChart();
 }
+
+const runWsFilter = document.getElementById("run-ws-filter");
+if (runWsFilter !== null) runWsFilter.onchange = () => void refreshRuns();
 
 for (const tab of document.querySelectorAll(".loss-tab")) {
   tab.onclick = () => {

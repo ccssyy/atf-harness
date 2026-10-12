@@ -8,6 +8,7 @@ import { execFile } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { bucketedRunEntries, flatRunDirNames, hasRunMarkers, resolveRunDir, RUN_MARKER_RELS } from "../core/workspace/runLayout.js";
 
 /** AgentTool 兼容形状（与 src/agent/atfAgentTools.ts 的 AgentTool 同构——避免循环 import 用结构类型）。 */
 export interface ReadOnlyToolDeps {
@@ -28,33 +29,51 @@ const textResult = (details: Record<string, unknown>): { content: Array<{ type: 
 });
 const ensure_plain_replacer = (_key: string, value: unknown): unknown => value;
 
-/** runs 目录枚举（run_id/状态/最近产物——status 从 run 目录特征推导，不猜）。 */
+/** run 条目状态/产物推导（run 目录特征，不猜——平铺/桶内同码）。 */
+const deriveRunEntry = (runDir: string, runId: string, workspace: string | null): Record<string, unknown> => {
+  const has = (rel: string): boolean => existsSync(join(runDir, rel));
+  const state = has("webui/config-snapshot.json")
+    ? "config_confirmed"
+    : has("launch/train.sh")
+      ? "launch_ready"
+      : has("contract-candidate.json")
+        ? "candidate_built"
+        : has("registration.json") || has("dataset")
+          ? "registered"
+          : "unknown";
+  const artifacts = ["session.jsonl", "contract-candidate.json", "launch/train.sh", "webui/config-snapshot.json"].filter((rel) => has(rel));
+  return { run_id: runId, workspace, state, artifacts };
+};
+
+export { RUN_MARKER_RELS };
+
+/** 工作区过滤（纯函数——B3；语义：桶名精确匹配；null workspace 仅在不过滤视图出现）。 */
+export const filterRunsByWorkspace = (runs: Array<Record<string, unknown>>, workspace: string | null): Array<Record<string, unknown>> =>
+  workspace === null ? runs : runs.filter((run) => run["workspace"] === workspace);
+
+/** runs 目录枚举（批㊶-S2 B1 多桶适配——runLayout 单源）：平铺存量＋桶内 run 并集，
+ *  条目增 workspace 字段（桶 slug／平铺 null）；桶名目录本身不入列（幻影防护——
+ *  有桶内条目的目录即桶，平铺层跳过）。状态推导平铺/桶内同码。 */
 export const listRuns = async (runsRoot: string): Promise<Array<Record<string, unknown>>> => {
   if (!existsSync(runsRoot)) return [];
-  const entries = await readdir(runsRoot, { withFileTypes: true });
+  const root = runsRoot; // 平铺枚举基准（runId 级解析一律走 resolveRunDir——grep join(runsRoot 清零）
   const runs: Array<Record<string, unknown>> = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const runDir = join(runsRoot, entry.name);
-    const has = (rel: string): boolean => existsSync(join(runDir, rel));
-    const state = has("webui/config-snapshot.json")
-      ? "config_confirmed"
-      : has("launch/train.sh")
-        ? "launch_ready"
-        : has("contract-candidate.json")
-          ? "candidate_built"
-          : has("registration.json") || has("dataset")
-            ? "registered"
-            : "unknown";
-    const artifacts = ["session.jsonl", "contract-candidate.json", "launch/train.sh", "webui/config-snapshot.json"].filter((rel) => has(rel));
-    runs.push({ run_id: entry.name, state, artifacts });
+  const buckets = new Set<string>();
+  for (const entry of bucketedRunEntries(runsRoot, { skipRunMarkerDirs: true })) {
+    if (!hasRunMarkers(entry.dir)) continue; // 桶内无特征目录不入列（幻影防护——桶内即 run 域）
+    buckets.add(entry.workspace);
+    runs.push(deriveRunEntry(entry.dir, entry.runId, entry.workspace));
+  }
+  for (const name of flatRunDirNames(runsRoot)) {
+    if (buckets.has(name)) continue; // 桶名目录不现（幻影防护）
+    runs.push(deriveRunEntry(join(root, name), name, null));
   }
   return runs.sort((a, b) => String(a["run_id"]).localeCompare(String(b["run_id"])));
 };
 
 /** metrics_summary 读取（runs/<id>/report/metrics_summary.json；缺 → null）。 */
 const readMetrics = async (runsRoot: string, runId: string): Promise<Record<string, unknown> | null> => {
-  const path = join(runsRoot, runId, "report", "metrics_summary.json");
+  const path = join(resolveRunDir(runsRoot, runId), "report", "metrics_summary.json");
   if (!existsSync(path)) return null;
   try {
     return JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
@@ -87,7 +106,7 @@ export const makeReadOnlyTools = (deps: ReadOnlyToolDeps): ReadOnlyTool[] => [
       const runId = String(params["run_id"] ?? "");
       const segment = typeof params["segment"] === "number" ? params["segment"] : undefined;
       const rel = segment === undefined ? "report/report.md" : `report/segment-${String(segment)}.md`;
-      const path = join(deps.runsRoot, runId, rel);
+      const path = join(resolveRunDir(deps.runsRoot, runId), rel);
       if (!existsSync(path)) return textResult({ run_id: runId, path: rel, exists: false, note: "报告不存在（该 run 无此段记录）" });
       const text = await readFile(path, "utf8");
       return textResult({ run_id: runId, path: rel, exists: true, text: text.slice(0, 8000) });

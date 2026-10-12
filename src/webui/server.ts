@@ -15,7 +15,8 @@ import { fileURLToPath } from "node:url";
 import { loadLlmProviderConfig } from "../llm/providerConfig.js";
 import { WebUiSessionManager, chatBudgetFromEnv, parseBudgetFromEnv, type SessionManagerDeps } from "./sessionManager.js";
 import { openSettingsStore, redactProviders, envProfilePath, writeEnvProfile, SCENARIO_PROFILES, APPROVAL_POLICIES, type ApprovalPolicy, type ScenarioProfileId } from "./settings.js";
-import { listRuns, queryNvidiaSmi } from "./readOnlyTools.js";
+import { listRuns, filterRunsByWorkspace, queryNvidiaSmi } from "./readOnlyTools.js";
+import { resolveRunDir } from "../core/workspace/runLayout.js";
 import { ingestTrainerLogLines, readLossSeries, lossSeriesPath } from "./logParser.js";
 import { renderChatEvent } from "./chatModel.js";
 
@@ -29,7 +30,7 @@ const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
 const env = process.env;
 
 const readLossSeriesLen = (runsRoot: string, sessionId: string): number => {
-  const path = lossSeriesPath(join(runsRoot, sessionId));
+  const path = lossSeriesPath(resolveRunDir(runsRoot, sessionId));
   return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as unknown[]).length : 0;
 };
 
@@ -180,7 +181,7 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
           // 批⑯ 增量 B：metrics_delta——页面刷新从文件重建（GET /api/metrics），SSE 只推增量
           const total = readLossSeriesLen(runsRoot, String(eventsMatch[1] ?? ""));
           if (total > lossCursor) {
-            const points = readLossSeries(join(runsRoot, String(eventsMatch[1] ?? ""))).slice(lossCursor);
+            const points = readLossSeries(resolveRunDir(runsRoot, String(eventsMatch[1] ?? ""))).slice(lossCursor);
             lossCursor = total;
             res.write(`data: ${JSON.stringify({ type: "metrics_delta", points })}\n\n`);
           }
@@ -240,7 +241,14 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
       return;
     }
     if (path === "/api/runs" && req.method === "GET") {
-      json(res, 200, { runs: await listRuns(runsRoot) });
+      // 批㊶-S2 B3：?workspace=<slug> 过滤（桶名精确匹配；缺省不过滤——响应结构向后兼容，
+      // workspace_self 为 additive 字段＝本实例工作区桶名〔runsRoot 父目录名〕）
+      const runsUrl = new URL(req.url ?? "/", "http://localhost");
+      const workspaceParam = runsUrl.searchParams.get("workspace");
+      const allRuns = await listRuns(runsRoot);
+      const runs = filterRunsByWorkspace(allRuns, workspaceParam);
+      const workspaceSelf = dirname(runsRoot).split("/").filter(Boolean).pop() ?? "";
+      json(res, 200, { runs, ...(workspaceParam === null ? { workspace_self: workspaceSelf } : {}) });
       return;
     }
     const reportMatch = path.match(/^\/api\/report\/([^/]+)$/);
@@ -248,7 +256,7 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
       const runId = reportMatch[1] ?? "";
       const segment = url.searchParams.get("segment");
       const rel = segment === null ? "report/report.md" : `report/segment-${segment}.md`;
-      const artifactPath = join(runsRoot, runId, rel);
+      const artifactPath = join(resolveRunDir(runsRoot, runId), rel);
       if (!existsSync(artifactPath)) {
         json(res, 404, { error: "报告不存在" });
         return;
@@ -265,7 +273,7 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
         json(res, 400, { error: "非法 run id" });
         return;
       }
-      const artifactPath = join(runsRoot, runId, "report", file);
+      const artifactPath = join(resolveRunDir(runsRoot, runId), "report", file);
       if (!existsSync(artifactPath)) {
         json(res, 404, { error: "报告不存在" });
         return;
@@ -385,7 +393,7 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
     if (metricsMatch !== null && req.method === "GET") {
       // 页面刷新从文件重建曲线（全量）
       const sessionId = metricsMatch[1] ?? "";
-      json(res, 200, { points: readLossSeries(join(runsRoot, sessionId)), count: readLossSeries(join(runsRoot, sessionId)).length });
+      json(res, 200, { points: readLossSeries(resolveRunDir(runsRoot, sessionId)), count: readLossSeries(resolveRunDir(runsRoot, sessionId)).length });
       return;
     }
     const ingestMatch = path.match(/^\/api\/sessions\/([^/]+)\/metrics\/ingest$/);
@@ -393,18 +401,18 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
       // 日志行进料（合成测试/M1 真实 tail 共用）：解析→落盘→返回新增点（SSE metrics_delta 增量推）
       const body = await readBody(req);
       const lines = Array.isArray(body["lines"]) ? (body["lines"] as unknown[]).map((line) => String(line)) : [];
-      const added = ingestTrainerLogLines(join(runsRoot, ingestMatch[1] ?? ""), lines, new Date().toISOString());
+      const added = ingestTrainerLogLines(resolveRunDir(runsRoot, String(ingestMatch[1] ?? "")), lines, new Date().toISOString());
       json(res, 200, { added, count: added.length });
       return;
     }
     const lossFileMatch = path.match(/^\/api\/sessions\/([^/]+)\/loss-series\.json$/);
     if (lossFileMatch !== null && req.method === "GET") {
-      const artifactPath = lossSeriesPath(join(runsRoot, lossFileMatch[1] ?? ""));
+      const artifactPath = lossSeriesPath(resolveRunDir(runsRoot, String(lossFileMatch[1] ?? "")));
       if (!existsSync(artifactPath)) {
         json(res, 404, { error: "loss-series 不存在" });
         return;
       }
-      json(res, 200, { points: readLossSeries(join(runsRoot, lossFileMatch[1] ?? "")) });
+      json(res, 200, { points: readLossSeries(resolveRunDir(runsRoot, String(lossFileMatch[1] ?? ""))) });
       return;
     }
     json(res, 404, { error: "not found" });
