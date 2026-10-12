@@ -26,7 +26,7 @@ import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/wo
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readTrainerLogTail, buildProgressFromTrainerLog, readNumTrainEpochs, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
-import { bucketedRunEntries, flatRunDirNames, resolveRunDir, sweepAnsweredPendings } from "../../../../src/core/workspace/runLayout.js";
+import { bucketedRunEntries, flatRunDirNames, resolveRunDir, RUN_MARKER_RELS, sweepAnsweredPendings } from "../../../../src/core/workspace/runLayout.js";
 import { checkApprovalLedgerStartup, ledgerEnvPrefixForShell, homeLedgerPathOf } from "../../../../src/core/workspace/approvalLedger.js";
 import { openSettingsStore, type SettingsStore } from "../../../../src/webui/settings.js";
 import {
@@ -712,14 +712,8 @@ export function discoverViewerDirs(runDir: string): string[] {
 
 /** 批㊶-M2 段 2：run 特征判定（防御性——目录含特征之一才收录为 run）。
  *  特征集＝launch_manifest.json／prep/／training/／webui/／eval/（防 atf-ui/default 等混入）。 */
-export const RUN_MARKER_RELS: readonly string[] = [
-  join("launch", "launch_manifest.json"),
-  "launch_manifest.json",
-  "prep",
-  "training",
-  "webui",
-  "eval",
-];
+// 批㊶-S2：RUN_MARKER_RELS 单源迁至 runLayout（readOnlyTools 共用）——此处 re-export 保持锚路径
+export { RUN_MARKER_RELS };
 
 export const looksLikeRun = (dir: string): boolean =>
   RUN_MARKER_RELS.some((rel) => existsSync(join(dir, rel)));
