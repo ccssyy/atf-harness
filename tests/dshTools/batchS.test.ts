@@ -158,3 +158,22 @@ describe("批㊶-S5 B2——只读区块组装与卡面投影", () => {
     expect(row?.tag).toBe("need_confirm");
   });
 });
+
+describe("批㊶-U §五范围升级——共用双段式 helper 四卡统一", () => {
+  it("dualStageNote：可改卡完整双段式文案；凭据卡退化形式不造参数", async () => {
+    const { dualStageNote } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
+    const full = dualStageNote("评估服务 EVAL_RELEASE 确认", { extra: "九必报项报告：…" });
+    expect(full).toContain("双段式");
+    expect(full).toContain("按现值确认");
+    const cred = dualStageNote("契约凭据卡", { amendable: false });
+    expect(cred).toContain("无可调参数");
+    expect(cred).toContain("复核通道");
+    expect(cred).not.toContain("如需改参");
+  });
+  it("live 链三卡锚：九要素 note/评估卡/凭据卡均投 helper（禁每卡手搓）", async () => {
+    const confirm = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-tools/src/confirmFace.ts"), "utf8");
+    const training = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-tools/src/trainingFace.ts"), "utf8");
+    expect((confirm.match(/dualStageNote\(/g) ?? []).length).toBeGreaterThanOrEqual(2); // 定义＋九要素调用（凭据卡走 body 拼接同 helper）
+    expect(training).toContain("dualStageNote(\"评估服务 EVAL_RELEASE 确认");
+  });
+});

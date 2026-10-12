@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { renderChatEvent, renderChatHtml, type ChatEvent } from "../../src/webui/chatModel.js";
+import { readFileSync } from "node:fs";
 import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, parseConfigEditText, loadConfigSnapshot, saveConfigSnapshot, hasConfigSnapshot } from "../../src/webui/configConfirm.js";
 import { filterRunsByWorkspace, makeReadOnlyTools } from "../../src/webui/readOnlyTools.js";
 import { buildReadOnlyAgentTools, listRuns } from "../../src/webui/readOnlyTools.js";
@@ -517,5 +518,63 @@ describe("批㊶-S2——监控运行列表多桶适配与工作区过滤", () =
     const report = tools.find((t) => t.name === "atf_report_read")!;
     const out = await report.execute("t", { run_id: "cr_r3" });
     expect(out.details).toMatchObject({ run_id: "cr_r3", exists: true });
+  });
+});
+
+describe("批㊶-U——确认卡参数输入化（方案 A 双段式：问题卡收改参·审批卡落闸）", () => {
+  it("纯文字改参等号形态：epochs=4 lr=2e-4 双编辑解析；clamp 域回归", () => {
+    expect(parseConfigEditText("epochs=4 lr=2e-4")?.edits).toEqual({ num_train_epochs: "4", learning_rate: "2e-4" });
+    expect(parseConfigEditText("lr=1e-3")?.edits).toEqual({ learning_rate: "1e-3" }); // 越界值解析在先、clamp 拦截在后
+  });
+  it("「按现值确认」＝纯确认语（零编辑·explicitOnly=false→直达重呈/审批）", () => {
+    const parsed = parseConfigEditText("按现值确认");
+    expect(parsed).not.toBeNull();
+    expect(parsed?.edits).toEqual({});
+    expect(parsed?.explicitOnly).toBe(false);
+  });
+  it("审批卡 note 可发现性文案锚（改参通道＋按现值确认——批㊶-U 方案 A）", () => {
+    const src = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-tools/src/confirmFace.ts"), "utf8");
+    for (const phrase of ["如需改参，直接回复要改的参数", "不改直接回复「按现值确认」", "双段式编排", "问题卡只收集改参、不承载授权"]) {
+      expect(src).toContain(phrase);
+    }
+  });
+});
+
+describe("批㊶-U §二.2——amend 改参 clamp 护栏（越界回退域边界＋说明可读）", () => {
+  it("clamp-on-amend：lr=1e-3→5e-4、epochs=15→10、rank=48→32 档位回退；note 带回退说明", async () => {
+    const root = tempRoot();
+    mkdirSync(join(root, "run-u", "prep"), { recursive: true });
+    const runDir = join(root, "run-u");
+    const tierCtx = { get: (s: string) => (s === "permissionPresets" ? { current: () => "auto_training", defaultPreset: "x" } : s === "approval" ? { request: async () => "allowed-once" } : undefined) };
+    const { buildConfirmTools } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
+    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const tool = tools[0]!;
+    const r = await tool.execute(
+      { action: "amend", run_id: "run-u", amend_text: "lr 改 1e-3 epochs 改 15 rank 改 48" },
+      { callId: "u", agent: { session: { id: "u1", header: { cwd: "/w" } } } },
+    );
+    const fields = (r.fields ?? []) as Array<{ key: string; value: string }>;
+    const get = (k: string): string | undefined => fields.find((f) => f.key === k)?.value;
+    expect(get("learning_rate")).toBe("5e-4");
+    expect(get("num_train_epochs")).toBe("10");
+    expect(get("lora_rank")).toBe("32");
+    const note = String(r.amend ?? "");
+    expect(note).toContain("越界拦截回退");
+    expect(note).toContain("1e-3→5e-4");
+  });
+  it("全自动档改参 amend 免阻塞不回归（§二.3）", async () => {
+    const root = tempRoot();
+    mkdirSync(join(root, "run-u2", "prep"), { recursive: true });
+    let approvalCalls = 0;
+    const tierCtx = { get: (s: string) => (s === "permissionPresets" ? { current: () => "auto_training", defaultPreset: "x" } : s === "approval" ? { request: async () => { approvalCalls += 1; return "allowed-once"; } } : undefined) };
+    const { buildConfirmTools } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
+    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const tool = tools[0]!;
+    const r = await tool.execute(
+      { action: "amend", run_id: "run-u2", amend_text: "lr 改 2e-4" },
+      { callId: "u2", agent: { session: { id: "u2", header: { cwd: "/w" } } } },
+    );
+    expect(r.ok).toBe(true);
+    expect(approvalCalls).toBe(0); // 改参免阻塞（闸门在后续 start 审批卡）
   });
 });

@@ -29,6 +29,7 @@ import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.j
 import { appendBinding, writeProgress } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
 import { appendLedgerAuditComment, ledgerEnvPrefixForShell } from "../../../../src/core/workspace/approvalLedger.js";
+import { dualStageNote } from "./confirmFace.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 
 // ── 批㊶Q增补三 段2：start 探活（终结 started:true 假成功）──
@@ -660,7 +661,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
   const evaluate = defineTool({
     name: "atf_evaluate",
     description:
-      "评估触发（批㉕B 段3 正道链——确认制＋EVAL_RELEASE 审批账本，绕行 llamafactory api 形态已删除）：action=start 编排 pin 内正道链 generate_eval_service（vllm serve＋AWQ base）→build_service_prelaunch_report（九必报项确认报告）→用户确认（确认卡＝EVAL_RELEASE 放行，--record-eval-release 落账本）→generate_eval_orchestration（tmux 后台：服务自启→staging→run_formal_eval→回灌）；action=status 查询服务 receipt/编排状态/四件套与 model 标签。机器事实三件（eval_env/awq_base/cuda_visible_devices）一律来自 deploy/env-profile，缺即 MissingFactsBlock 停下问用户。评估轮目录＝runs/<run_id>/eval/<N>-<日期>/{service,ckpt-plan,orch}（ADR-0007）。",
+      "评估触发（批㉕B 段3 正道链——确认制＋EVAL_RELEASE 审批账本，绕行 llamafactory api 形态已删除）：action=start 编排 pin 内正道链 generate_eval_service（vllm serve＋AWQ base）→build_service_prelaunch_report（九必报项确认报告）→用户确认（确认卡＝EVAL_RELEASE 放行，--record-eval-release 落账本）→generate_eval_orchestration（tmux 后台：服务自启→staging→run_formal_eval→回灌）；action=status 查询服务 receipt/编排状态/四件套与 model 标签。批㊶-U 双段式：确认卡前先以问题卡呈九必报项值清单＋改参指引（可调＝adapter_path/eval_assets_dir/service_config 各项；改参回复聊天，重推 start 重走链）；机器事实三件（eval_env/awq_base/cuda_visible_devices）一律来自 deploy/env-profile，缺即 MissingFactsBlock 停下问用户。评估轮目录＝runs/<run_id>/eval/<N>-<日期>/{service,ckpt-plan,orch}（ADR-0007）。",
     parameters: {
       action: { type: "string", required: true, enum: ["start", "status"], description: "start=确认并启动正道链（后台编排）；status=查询进度与四件套" },
       run_id: { type: "string", required: true, description: "run 标识" },
@@ -725,8 +726,12 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       }
       // ③ EVAL_RELEASE 确认卡：九必报项报告全文上卡，Allow once＝确认并落放行账本
       const reportText = readFileSync(reportPath, "utf8");
+      // 批㊶-U §五：评估卡接双段式 helper（EVAL_RELEASE 账本语义不动——问题卡收改参，
+      // 审批卡落账本；可调参数＝adapter 编号/评估集绑定/service_config 各项，改参经聊天回复）
       const verdict = await requestApproval(ctx, exec, "atf_evaluate",
-        `评估服务 EVAL_RELEASE 确认（放行＝审批账本登记 config sha256，编排按其过闸）：\n${reportText.slice(0, 4000)}`);
+        dualStageNote("评估服务 EVAL_RELEASE 确认（放行＝审批账本登记 config sha256，编排按其过闸）", {
+          extra: `九必报项报告：\n${reportText.slice(0, 4000)}\n可调参数：adapter_path／eval_assets_dir／service_config 各项——如需改参，直接回复要改的项（如 adapter_path=<新路径>）；不改直接回复「按现值确认」`,
+        }));
       if (!verdict.ok) return approvalDeniedResult("atf_evaluate", verdict.outcome);
       const recorded = await runCapture("python3", [genService, "--record-eval-release", "--config", args.service_config, "--service-dir", serviceDir, "--note", "atf_evaluate 确认卡放行（九必报项报告已确认）"], 60_000);
       if (recorded.code !== 0) {

@@ -92,6 +92,21 @@ const clearPending = (runDir: string): void => {
   } catch { /* fail-open */ }
 };
 
+
+/** 批㊶-U §五：双段式共用 helper（问题卡收改参→amend 校验 clamp 重呈→审批卡落闸）。
+ *  四张确认卡统一复用（九要素/评估 EVAL_RELEASE/凭据卡退化/S1 publish_model 随后）——
+ *  禁每卡手搓。语义＝§三方案 A：第一段 agent 以问题卡呈现值清单＋改参指引（编排指引面，
+ *  非硬编码模板）；第二段授权仍走审批卡 Allow once（账本留痕不变）。凭据卡（amendable=false）
+ *  退化形式：仅统一卡面说明＋复核通道，不虚构可调参数（诚实呈现原则）。 */
+export const dualStageNote = (cardLabel: string, opts?: { amendable?: boolean; amendNote?: string; extra?: string }): string => {
+  const amendable = opts?.amendable !== false;
+  const head = amendable
+    ? `${cardLabel}（双段式：改参回复直接发聊天，如「参数名=值」；不改回复「按现值确认」）`
+    : `${cardLabel}（凭据确认卡：无可调参数；如对凭据有疑义请回复说明，复核通道＝聊天重呈）`;
+  const tail = [opts?.amendNote, opts?.extra].filter((x): x is string => typeof x === "string" && x !== "");
+  return [head, ...tail].join("｜");
+};
+
 export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const { ctx } = deps;
   // 批㊶R前置②：可用卡数机器事实（建卡期一次探测；null＝缺失→建卡时按 machine-facts 停下问）
@@ -100,7 +115,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const configTool = defineTool({
     name: "atf_config_confirm",
     description:
-      "九要素训练配置确认卡：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 解析用户纯文字应答（如「lr 改 2e-4 其他 ok」）并重呈。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——批㉛段2 登记源，卡面与 Web 摘要同源）＞缺省。手动档（权限档）：审批面板 Allow once 确认后 config-snapshot 落盘。全自动训练档（会话档位=auto_training，经界面人工切换）：本工具免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend 纯文字（同样免阻塞）。" +
+      "九要素训练配置确认卡：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 解析用户纯文字应答（如「lr 改 2e-4 其他 ok」）并重呈。批㊶-U 方案 A 双段式编排（present 时执行）：第一段改参收集——先以 DSH 原生问题卡（ask 卡）向用户呈十五键现值清单＋改参指引（「直接回复要改的项，如 epochs=4、lr=2e-4；不改直接回复『按现值确认』」）；用户应答后第二段授权——有改动走 action=amend（校验＋clamp 重呈），最终授权一律走审批卡 Allow once（账本留痕不变）。问题卡只收集改参、不承载授权（审批≠请示，闸门语义不迁移）。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——批㉛段2 登记源，卡面与 Web 摘要同源）＞缺省。手动档（权限档）：审批面板 Allow once 确认后 config-snapshot 落盘。全自动训练档（会话档位=auto_training，经界面人工切换）：本工具免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend 纯文字（同样免阻塞）。" +
       "全自动档 agent 参数推荐（recommend 参数，本档专属）：训练提交前基于任务描述＋数据集统计（样本数/长度分布/模态）＋经验锚点给出 epochs/lr/rank/cutoff 推荐值并附 reason（理由）。经验锚点（owner 手工训练经验，参考知识非硬规则）：样本 2万–3万 → 3 epochs；4万以上 → 2 epochs；小样本（<1万）宜多轮并防过拟合（配早停观察）。护栏：epochs∈[1,10] 整数、lr∈[5e-5,5e-4]、lora_rank∈{16,32,64,128}（alpha=2×rank 联动）、cutoff≤12800、像素∈{800000,1600000}、bs 正整数、nproc∈[1,可用卡数]——越界推荐被拦截并回退固定建议（不静默修正），拦截事实进通报；推荐缺失同样回退。lora_alpha 不单独推荐（随 rank 联动）。" +
       "基模型锚点（owner 裁定 2026-10-12 §九）：确认卡基模型字段默认值＝模型库位置下的 Qwen3-VL-32B-Instruct（owner 偏置锚点，非查表推导；卡上可改，改动经防线①本地复核）。评估侧继续锚定 -AWQ 变体（现状不变）。" +
       "卡数偏置（owner 裁定 2026-10-11）：训练卡数默认拉满本机可用卡（nproc_per_node=机器事实可用卡数），训练时长优先；代价（显存/时长）如实呈现给用户，不作降档依据；降档仅在用户任务上下文明确要求时采纳。卡数维度无成文锚点——不编造「数据规模→卡数」映射、不查表推荐，卡数只来自机器事实与用户显式要求；自动档默认低于可用卡的 nproc 推荐会被护栏回退拉满。",
@@ -185,7 +200,25 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           return asToolValue({ ok: false, note: "无法从应答解析出配置改动——请用户换一种说法（如「lr 改 2e-4 其他 ok」）", run_id: args.run_id });
         }
         amended = parsed.edits;
-        amendNote = `已按应答改参：${Object.keys(parsed.edits).join(", ")}；其余按现值确认`;
+        // 批㊶-U §二.2：改参值一律过确定性护栏（同 L3 clamp 域）——越界回退到域边界＋说明可读（不静默）
+        const AMEND_CLAMPERS: Record<string, (raw: string | number) => string | number> = {
+          learning_rate: clampLearningRate,
+          num_train_epochs: clampEpochs,
+          lora_rank: clampLoraRank,
+          cutoff_len: clampCutoffLen,
+          image_max_pixels: clampImageMaxPixels,
+        };
+        const clampedKeys: string[] = [];
+        for (const [key, rawValue] of Object.entries(amended)) {
+          const clamp = AMEND_CLAMPERS[key];
+          if (clamp === undefined) continue;
+          const clamped = String(clamp(rawValue));
+          if (clamped !== String(rawValue).trim()) {
+            amended[key] = clamped;
+            clampedKeys.push(`${key}=${String(rawValue).trim()}→${clamped}`);
+          }
+        }
+        amendNote = `已按应答改参：${Object.keys(parsed.edits).join(", ")}；其余按现值确认${clampedKeys.length > 0 ? `；越界拦截回退（域边界）：${clampedKeys.join("、")}` : ""}`;
       }
       // 批㊶R前置②：卡数基线＝机器事实拉满（owner 裁定：训练默认拉满可用卡·训练时长优先）——
       // iteration-config/快照显式值（from_registry）优先保留；用户显式覆盖（overrides/amend）
@@ -313,7 +346,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         guardNotes.push(hit.note);
       }
       const title = args.action === "amend" ? `九要素配置确认（改参重呈）— run ${args.run_id}` : `九要素训练配置确认 — run ${args.run_id}`;
-      const baseNote = amendNote ?? "确认请点审批面板 Allow once；逐项修改可直接回复如「lr 改 2e-4」。";
+      // 批㊶-U 方案 A：可发现性文案（共用 helper——审批卡 note 明示改参通道）
+      const amendHint = "如需改参，直接回复要改的参数（如 epochs=4、lr=2e-4、nproc=4）；不改直接回复「按现值确认」";
+      const baseNote = dualStageNote("九要素确认卡", { amendNote: amendNote !== undefined ? `${amendNote}；${amendHint}` : `确认请点审批面板 Allow once；${amendHint}` });
       const note = guardNotes.length > 0 ? `${baseNote}\n${guardNotes.join("\n")}` : baseNote;
       if (autoTier) {
         // —— 全自动档：免阻塞落快照＋通报呈现（无静默：每键取值＋来源标注可回看） ——
@@ -427,7 +462,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         return asToolValue({ ok: false, run_id: args.run_id, note: "无契约件 digest（contract-candidate.json 缺失或无 digest 字段）——无可发布凭据，不造数" });
       }
       const title = `发布确认（digest 凭据）— run ${args.run_id}`;
-      const body = `  artifact: contract-candidate.json\n  digest: ${candidateDigest}`;
+      // 批㊶-U §五：凭据卡退化形式——无可调参数不虚构；卡面 note＝统一说明＋复核通道（聊天重呈）
+      const body = `  artifact: contract-candidate.json\n  digest: ${candidateDigest}\n  ${dualStageNote("契约凭据卡", { amendable: false })}`;
       writePending(runDir, { kind: "publish_confirm", run_id: args.run_id, title, digest: candidateDigest, at: new Date().toISOString() });
       const verdict = await requestApproval(ctx, exec, "atf_publish_confirm", `${title}\n${body}\n确认发布请点 Allow once。`);
       if (!verdict.ok) return approvalDeniedResult("atf_publish_confirm", verdict.outcome);
