@@ -19,7 +19,7 @@ import { PANEL_HTML } from "./panel.js";
 import { queryNvidiaSmi, queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
-import { tmuxHasSession, tmuxTrainingFamilyPresent, listTrainingSessionCmdlines } from "../../../../src/core/workspace/tmuxLiveness.js";
+import { probeSession, tmuxTrainingFamilyPresent, listTrainingSessionCmdlines } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
 import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/workspace/oomFallback.js";
@@ -822,7 +822,11 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     // 批㊶-L L-1：tmux 探测每周期一次（不逐 run）；异常按 false fail-closed 回落 mtime 窗口
     let trainingTmuxPresent = false;
     try {
-      trainingTmuxPresent = tmuxHasSession();
+      // 批㊶-ISO E1：探测走命名域单源——前缀未设＝refused（fail-closed 拒触默认 socket，
+      // 指引留痕日志）；tmux 不在场/不可用＝present:false
+      const probe = probeSession();
+      trainingTmuxPresent = probe.present;
+      if (probe.refused !== null) console.warn(`[atf-ui] tmux 探测拒绝（${probe.refused.reason}）：${probe.refused.guidance}`);
     } catch {
       trainingTmuxPresent = false;
     }

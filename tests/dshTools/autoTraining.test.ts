@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 import { currentPresetKey, isAutoTrainingTier } from "../../packages/extensions/atf-tools/src/autoTrainingTier.js";
 import { readTrainShBatchParams, patchTrainShForOom, maybeAutoOomFallback, oomFallbackStatePath } from "../../src/core/workspace/oomFallback.js";
+import { resolveLaunchSessionName, tmuxSocketFlag, TRAINING_TMUX_SESSION } from "../../src/core/workspace/tmuxLiveness.js";
 import { injectMonitorGlobal } from "../../packages/extensions/atf-ui/src/server.js";
 import { buildRunTrainingTool } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 
@@ -353,7 +354,12 @@ describe("批㊶-Q 段3 OOM 自动降档重发（纯函数＋编排护栏）", (
     expect(outcome.triggered).toBe(true);
     expect(calls[0]).toContain("rotate:");
     expect(calls[1]).toContain("kill-session");
+    // 批㊶-ISO E1/D2①：重发会话名走命名域单源＋命令构造带测试 socket 注入（fixture env 同源）
+    expect(calls[1]).toContain(resolveLaunchSessionName(TRAINING_TMUX_SESSION));
+    expect(calls[1]).toContain(tmuxSocketFlag().trim());
     expect(calls[2]).toContain("new-session");
+    expect(calls[2]).toContain(resolveLaunchSessionName(TRAINING_TMUX_SESSION));
+    expect(calls[2]).toContain(tmuxSocketFlag().trim());
     expect(calls[2]).toContain("train-oom-fallback.sh");
     // 通报先于重发（alerts.json 已在 tmux 调用前写盘）
     const alerts = readAlertsFile(runDir);

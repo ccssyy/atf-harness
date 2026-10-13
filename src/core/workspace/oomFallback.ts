@@ -16,6 +16,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { deriveGradAccum } from "./smartDefaults.js";
 import { appendNotification, OOM_PATTERN } from "./trainProbe.js";
+import { resolveLaunchSessionName, tmuxCommand, TRAINING_TMUX_SESSION } from "./tmuxLiveness.js";
 
 /** OOM 降档状态文件（webui/oom-fallback.json——每 run 一次护栏）。 */
 export const oomFallbackStatePath = (runDir: string): string => join(runDir, "webui", "oom-fallback.json");
@@ -175,10 +176,13 @@ export const maybeAutoOomFallback = async (deps: OomFallbackDeps): Promise<OomFa
   try {
     deps.rotateLog(logPath);
   } catch { /* 轮转失败不阻断重发（tee -a 追加语义兜底） */ }
-  deps.tmux(`tmux kill-session -t atf-training-run 2>/dev/null`);
+  // 批㊶-ISO E1：会话名走命名域单源（launch 域——kill/new 同目标名，不跨域）；命令构造走 tmuxCommand
+  // （D2① 测试 socket 注入点同源）
+  const sessionName = resolveLaunchSessionName(TRAINING_TMUX_SESSION);
+  deps.tmux(tmuxCommand(`kill-session -t ${sessionName} 2>/dev/null`));
   // 批㊶Q增补三 段1：与 atf_run_training start 同款账本 env 显式前缀（写入方/检查器同源——缺省空串）
   const ledgerPrefix = deps.ledgerEnvPrefix ?? "";
-  deps.tmux(`tmux new-session -d -s atf-training-run "${ledgerPrefix}bash ${fallbackScript} 2>&1 | tee -a ${logPath}"`);
+  deps.tmux(tmuxCommand(`new-session -d -s ${sessionName} "${ledgerPrefix}bash ${fallbackScript} 2>&1 | tee -a ${logPath}"`));
   deps.startIngest(logPath, join(runDir, "training", "loss-series.json"));
   writeState({ status: "relaunched", bs: 1, accum: fallback.accum, global_batch: fallback.globalBatch, fallback_script: "launch/train-oom-fallback.sh", origin_alert_since: alert.since });
   deps.log(`[atf-ui] OOM 自动降档重发：run ${runId} bs ${params.bs}→1 accum ${params.accum}→${fallback.accum}（gb 256 不变）`);

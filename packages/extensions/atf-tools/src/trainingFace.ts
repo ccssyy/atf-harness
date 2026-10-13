@@ -4,7 +4,7 @@
  * 对齐审计缺口：12 skill 中三段无工具投影——训练执行→评估→可视化无法从 WebUI 对话驱动。
  * 实现要点：
  *  - atf_run_training：train.sh DRY_RUN 校验 → **danger_confirm（GPU/时长显性化）** → tmux 常驻
- *    （atf-training-run）＋stdout tail 进料（HF dict 行→loss-series.json 追加——批⑯协议）→
+ *    （会话名经 tmuxLiveness 命名域单源）＋stdout tail 进料（HF dict 行→loss-series.json 追加——批⑯协议）→
  *    status 查询完成/ckpt。非阻塞两段式（start/status）——工具不阻塞 agent turn。
  *  - atf_evaluate：llamafactory api（8200，bnb 同训练形态）＋run_formal_eval.py 四件套——start/status 同款。
  *  - atf_analyze_badcases：两步链（批㉕B 段1 正道化）——build_raw_badcase_input.py 冻结账本 →
@@ -24,7 +24,7 @@ import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
 import { isAutoTrainingTier } from "./autoTrainingTier.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
-import { tmuxHasSession, tmuxTrainingEvidenceFor } from "../../../../src/core/workspace/tmuxLiveness.js";
+import { probeSession, resolveLaunchSessionName, tmuxCommand, tmuxTrainingEvidenceFor, EVAL_ORCH_TMUX_SESSION, TRAINING_TMUX_SESSION, type SessionProbe } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText, TRAINING_RESIDUE_PATTERN } from "./gpuQueueFace.js";
 import { reconcileConfirmedWithTrainSh, formatReconcileDiff } from "./trainShReconcile.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
@@ -336,8 +336,8 @@ export function modelLabelLooksDefault(model: unknown): boolean {
   return typeof model === "string" && /^(gpt-|claude-)/i.test(model.trim());
 }
 
-/** tmux 面查询（会话存在判定——批㊶-L L-1 单源委托：src/core/workspace/tmuxLiveness.ts，会话名常量同源）。 */
-const tmuxHas = (session: string): boolean => tmuxHasSession(session);
+/** tmux 面查询统一走 src/core/workspace/tmuxLiveness.ts probeSession（批㊶-ISO E1 单源——
+ *  命名域前缀拼装与 fail-closed 拒绝同源，本文件不再自建包装）。 */
 
 const runCapture = (cmd: string, args: readonly string[], timeoutMs: number): Promise<{ code: number | null; stdout: string; stderr: string }> =>
   new Promise((resolve) => {
@@ -362,6 +362,10 @@ export interface TrainingStatusValue {
   run_id?: string;
   segments?: Array<{ key: string; label: string; status: "done" | "active" | "failed" | "pending" }>;
   running?: boolean;
+  /** 批㊶-ISO E1：运行态 tmux 会话名（命名域解析值——随环境前缀自然变化，零开发叙事）。 */
+  tmux?: string;
+  /** 批㊶-ISO E1：tmux 探测被命名域拒绝时的回流（fail-closed——guidance 随卡面可见）。 */
+  tmux_probe?: { ok: false; reason: string; guidance: string } | null;
   loss_points?: number;
   ckpts?: string[];
   latest_ckpt?: string;
@@ -375,10 +379,16 @@ export function renderTaskCardText(value: TrainingStatusValue): string | null {
   const segs = value.running === true
     ? value.segments.map((s) => (s.key === "training" && s.status === "done" ? { ...s, status: "active" as const } : s))
     : value.segments;
+  // 批㊶-ISO E1：进程行随解析会话名自然变化；探测被命名域拒绝时如实呈现拒绝语义（guidance 可见）
+  const processLine = value.running === true
+    ? `运行中（tmux ${value.tmux ?? ""}）`
+    : value.tmux_probe
+      ? `未运行（tmux 探测拒绝：${value.tmux_probe.guidance}）`
+      : "未运行";
   return [
     `训练任务卡 — run ${value.run_id ?? "?"}`,
     formatTaskCard({ segments: segs }),
-    `训练进程：${value.running === true ? "运行中（tmux atf-training-run）" : "未运行"}`,
+    `训练进程：${processLine}`,
     `loss 点数：${String(value.loss_points ?? 0)}`,
     ...(Array.isArray(value.ckpts) && value.ckpts.length > 0 ? [`checkpoint：${value.ckpts.join("、")}`, `latest：${value.latest_ckpt ?? ""}`] : []),
   ].join("\n");
@@ -389,7 +399,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
   defineTool({
     name: "atf_run_training",
     description:
-      "训练本机重跑（批㉕B 段4 降格定界——atf_launch_execute 为唯一编排执行点，本工具仅限「账本已放行 config 的本机重跑」）：action=start 校验 train.sh（DRY_RUN 过）→prelaunch 报告在场检查（prepare SKILL.md:84 确认制——缺失拒绝）→base_model.path 本地复核（批㊶R前置 防线③——家族名/HF id 一律拒）→端口预检→danger 卡放行→tmux atf-training-run 常驻执行＋stdout tail 进料监控（loss-series）；action=status 查询运行状态并返回八段任务卡（chat 流可见的 checklist——训练推进期请周期调用 status，把最新任务卡呈现给用户）。异常即停即报，不静默重试。" +
+      "训练本机重跑（批㉕B 段4 降格定界——atf_launch_execute 为唯一编排执行点，本工具仅限「账本已放行 config 的本机重跑」）：action=start 校验 train.sh（DRY_RUN 过）→prelaunch 报告在场检查（prepare SKILL.md:84 确认制——缺失拒绝）→base_model.path 本地复核（批㊶R前置 防线③——家族名/HF id 一律拒）→端口预检→danger 卡放行→tmux 会话常驻执行＋stdout tail 进料监控（loss-series）；action=status 查询运行状态并返回八段任务卡（chat 流可见的 checklist——训练推进期请周期调用 status，把最新任务卡呈现给用户）。异常即停即报，不静默重试。" +
       (cfg.models !== undefined
         ? `本机可用模型清单（ATF_MODEL_ROOT=${cfg.models.root}）：${cfg.models.names.length > 0 ? cfg.models.names.join("、") : "（空）"}——iteration-config 的 base_model.path 必须是这些本地目录的绝对路径，禁止填 HF 家族名/仓库 id（如 qwen3_vl）。`
         : ""),
@@ -419,7 +429,10 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // 批㊶Q增补三 段3：run 目录双形态解析（存量平铺＋新桶 runs/<工作区>/<run_id>——单源 resolveRunDir）
       const runDir = resolveRunDir(cfg.runsRoot, args.run_id);
       if (args.action === "status") {
-        const running = tmuxHas("atf-training-run");
+        // 批㊶-ISO E1：探测走命名域单源（前缀未设＝refused fail-closed——guidance 随 payload 回流）
+        const probe: SessionProbe = probeSession(TRAINING_TMUX_SESSION);
+        const running = probe.present;
+        const sessionName = resolveLaunchSessionName(TRAINING_TMUX_SESSION);
         const ckptDir = join(runDir, "training");
         const ckpts = existsSync(ckptDir)
           ? (await import("node:fs")).readdirSync(ckptDir, { withFileTypes: true }).filter((d) => d.isDirectory() && d.name.startsWith("checkpoint-")).map((d) => d.name)
@@ -428,7 +441,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         const points = existsSync(lossPath) ? (JSON.parse(readFileSync(lossPath, "utf8")) as unknown[]).length : 0;
         // 八段任务卡段状态（与监控同步器同源推导——scanRunDir 单源；双形态根＝dirname(runDir)）
         const segments = buildMonitorSnapshot([scanRunDir(dirname(runDir), basename(runDir), {
-          trainingTmuxPresent: tmuxHas("atf-training-run"),
+          trainingTmuxPresent: probe.present,
           trainingEvidence: { [args.run_id]: tmuxTrainingEvidenceFor(args.run_id) },
         })]).runs[0]?.segments ?? [];
         // 批㊶-N N-3：段内进度持久化（loss-series 末点→round/total_rounds/loss 推导；写失败静默）
@@ -455,6 +468,8 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         const readiness = collectEvalReadiness(resolveRunDir(cfg.runsRoot, args.run_id));
         return asToolValue({
           action: "status", running, run_id: args.run_id, segments, ckpts, loss_points: points,
+          tmux: sessionName,
+          ...(probe.refused !== null ? { tmux_probe: probe.refused } : {}),
           ...(ckpts.length > 0 ? { latest_ckpt: `runs/${args.run_id}/training/${ckpts[ckpts.length - 1]}` } : {}),
           next_steps: {
             eval_ready: readiness.training_done,
@@ -623,14 +638,22 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // （未设 ATF_APPROVAL_LEDGER 时为空串＝沿 train.sh 内 ${...:-$HOME/...} 缺省式）
       const ledgerPrefix = ledgerEnvPrefixForShell(process.env);
       const { execSync } = await import("node:child_process");
-      try { execSync(`tmux kill-session -t atf-training-run 2>/dev/null`); } catch { /* 无旧会话 */ }
-      execSync(`tmux new-session -d -s atf-training-run "${ledgerPrefix}bash ${args.train_sh} 2>&1 | tee -a ${logPath}"`);
+      // 批㊶-ISO E1：会话名走命名域单源（launch 域不受 fail-closed 限制——pre-kill 与 new-session
+      // 同目标名，天然不跨域）；命令构造走 tmuxCommand（D2① 测试 socket 注入点同源）
+      const sessionName = resolveLaunchSessionName(TRAINING_TMUX_SESSION);
+      try { execSync(tmuxCommand(`kill-session -t ${sessionName} 2>/dev/null`)); } catch { /* 无旧会话 */ }
+      execSync(tmuxCommand(`new-session -d -s ${sessionName} "${ledgerPrefix}bash ${args.train_sh} 2>&1 | tee -a ${logPath}"`));
       // 批㊶Q增补三 段2：启动探活（窗口内 tail train-stdout——终止特征/进程退出 → started:false
       // ＋exit＋stderr 摘要；SHA/ADMISSION 进料确认＋进程存活 → started:true；窗口耗尽仍存活
       // → started:true 但 note 如实标注未见进料。终结 started:true 假成功——cr_r2 三连败实锚）。
       const probe = await probeTrainingStartup({
         logPath,
-        sessionAlive: () => tmuxHas("atf-training-run"),
+        // 批㊶-ISO E1：探测被命名域拒绝（前缀未设）＝tmux 判据不可用——不以 tmux 判死
+        // （交由终止特征与窗口判；避免对自启会话误报「会话消失」），在场/缺席仍如实二态
+        sessionAlive: () => {
+          const p = probeSession(TRAINING_TMUX_SESSION);
+          return p.present || p.refused !== null;
+        },
       });
       if (probe.outcome === "dead") {
         return asToolValue({
@@ -659,7 +682,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         : `探活窗口（${String(resolveStartupProbeMs(process.env))}ms）内未见进料行但进程存活（llamafactory 启动中）——status 跟进确认`;
       return asToolValue({
         started: true,
-        tmux: "atf-training-run",
+        tmux: sessionName,
         run_id: args.run_id,
         log: logPath,
         reconcile: reconcileSkipped ? "skipped_no_baseline" : "ok",
@@ -777,6 +800,9 @@ interface EvalStatusValue {
   model_label_warning?: string;
   model_matches_manifest?: boolean;
   running?: boolean;
+  /** 批㊶-ISO E1：编排会话名（命名域解析值）与探测拒绝回流。 */
+  tmux?: string;
+  tmux_probe?: { ok: false; reason: string; guidance: string } | null;
 }
 
 /** atf_evaluate status：最新评估轮的服务 receipt/编排状态/四件套与 model 标签复核。 */
@@ -789,9 +815,17 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
     latest = rounds.length > 0 ? join(evalRoot, rounds[rounds.length - 1] ?? "") : null;
   } catch { /* 无评估轮 */ }
   const { execSync } = await import("node:child_process");
-  let running = false;
-  try { execSync(`tmux has-session -t atf-eval-orch 2>/dev/null`); running = true; } catch { /* 未运行 */ }
-  if (latest === null) return asToolValue({ action: "status", run_id: runId, running, note: "无评估轮目录——先 start" });
+  // 批㊶-ISO E1：探测走命名域单源（前缀未设＝false fail-closed；refused 随 payload 回流）
+  const orchProbe = probeSession(EVAL_ORCH_TMUX_SESSION);
+  let running = orchProbe.present;
+  if (latest === null) {
+    return asToolValue({
+      action: "status", run_id: runId, running,
+      tmux: resolveLaunchSessionName(EVAL_ORCH_TMUX_SESSION),
+      ...(orchProbe.refused !== null ? { tmux_probe: orchProbe.refused } : {}),
+      note: "无评估轮目录——先 start",
+    });
+  }
   const serviceReceiptPath = join(latest, "service", "service", "service_receipt.json");
   const service = existsSync(serviceReceiptPath) ? JSON.parse(readFileSync(serviceReceiptPath, "utf8")) as Record<string, unknown> : null;
   const orchEval = join(latest, "orch", "eval");
@@ -822,6 +856,8 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
   const readiness = collectEvalReadiness(runDirEval);
   const value: EvalStatusValue = {
     action: "status", run_id: runId, eval_round: latest, running,
+    tmux: resolveLaunchSessionName(EVAL_ORCH_TMUX_SESSION),
+    ...(orchProbe.refused !== null ? { tmux_probe: orchProbe.refused } : {}),
     ...(service !== null ? { service } : {}),
     orchestration,
     files,
@@ -1044,15 +1080,17 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // ⑥ tmux 后台执行编排（服务自启→健康等待→staging→runner→回灌）；runner 附加参数经 $@ 透传
       mkdirForce(cfg.logDir);
       const { execSync } = await import("node:child_process");
-      try { execSync(`tmux kill-session -t atf-eval-orch 2>/dev/null`); } catch { /* 无旧 */ }
-      execSync(`tmux new-session -d -s atf-eval-orch "bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode mode0 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`);
+      // 批㊶-ISO E1：编排会话同入命名域（launch 域——pre-kill/new-session 同目标名）；命令走 tmuxCommand
+      const orchSessionName = resolveLaunchSessionName(EVAL_ORCH_TMUX_SESSION);
+      try { execSync(tmuxCommand(`kill-session -t ${orchSessionName} 2>/dev/null`)); } catch { /* 无旧 */ }
+      execSync(tmuxCommand(`new-session -d -s ${orchSessionName} "bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode mode0 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`));
       // 批㊶-M M-3 段事实轨：评估编排启动成功即登记（evaluate 段）
       appendSegmentFact(runDir, "evaluate", "atf_evaluate");
       // 批㊶-N N-5：会话绑定
       const sessionIdEval = sessionIdOf(exec);
       if (sessionIdEval !== undefined) appendBinding(runDir, sessionIdEval);
       return asToolValue({
-        started: true, eval_round: roundDir, tmux: "atf-eval-orch",
+        started: true, eval_round: roundDir, tmux: orchSessionName,
         serving_models: expectedModels, service_manifest: join(serviceDir, "service_manifest.json"),
         prelaunch_report: reportPath, release: "eval-release 账本已登记（config sha256）",
         note: "编排后台执行中（服务自启→staging→run_formal_eval→回灌，runner --model 取 manifest 期望名）——status 查询 receipt/四件套/model 标签",

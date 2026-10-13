@@ -1,9 +1,11 @@
 /**
  * 批⑱M2.75 测试锚——训练执行段三工具投影（atf_run_training/atf_evaluate/atf_analyze_badcases）：
  * 协议适配＋danger_confirm 联动＋mock 执行（DRY_RUN mock train.sh／status 枚举）。
+ * 批㊶-ISO D2①：本文件全部 tmux 操作（启动链真启停／探活断言／收尾 kill）走 vitest 全局
+ * fixture 建立的独立测试 socket（atf-test-<runid>，见 tests/fixtures/tmuxTestSocket.ts）——
+ * 默认 socket 零触碰；批㊶-W 时代的逐用例真训练 guard 由此退役（结构性规则取代补丁）。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import net from "node:net";
@@ -24,6 +26,8 @@ import {
   startLossIngest,
   terminateOccupant,
 } from "../../packages/extensions/atf-tools/src/trainingFace.js";
+import { EVAL_ORCH_TMUX_SESSION, resolveLaunchSessionName, TRAINING_TMUX_SESSION } from "../../src/core/workspace/tmuxLiveness.js";
+import { tmuxTestOk } from "../fixtures/tmuxTestSocket.js";
 
 const repoRoot = "/data/sam/ATF-Harness";
 // 批㊶-K：GPU 排队编排直启旁路（测试不等待真实 GPU 窗口）
@@ -44,6 +48,10 @@ const noApproval = { get: () => undefined };
 const approvalCtx = (outcome: string) => ({ get: (s: string) => (s === "approval" ? { request: async () => outcome } : undefined) });
 const fakeExec = { callId: "t" };
 type Tool = { name: string; execute: (args: unknown, exec: unknown) => Promise<Record<string, unknown>> };
+
+// 批㊶-ISO D2①：本文件命名域解析值（fixture 注入前缀 env——生产面同源解析；断言/清理共用）
+const launchName = (): string => resolveLaunchSessionName(TRAINING_TMUX_SESSION);
+const evalOrchName = (): string => resolveLaunchSessionName(EVAL_ORCH_TMUX_SESSION);
 
 /** 批㊶R前置 防线③ 夹具：run r1 的 iteration-config 指向本地假模型目录（含 config.json）。 */
 const seedRunModelFixture = (root: string, runId = "r1", basePath?: string): string => {
@@ -99,8 +107,7 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     const tool = buildRunTrainingTool(noApproval, { runsRoot: root, logDir: root, ctx: noApproval }) as unknown as Tool;
     const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
     expect(result).toMatchObject({ error: "approval_denied", outcome: "unavailable" });
-    // 批㊶-W：真训练在场时 tmuxAbsent 恒假（会话非本用例所启）——如实跳过在场断言
-    if (!realTrainingAliveGuard()) expect(tmuxAbsent("atf-training-run")).toBe(true);
+    expect(tmuxAbsent(launchName())).toBe(true);
   });
 
   it("start：审批放行 + DRY_RUN 失败 → 如实拒启动（校验门），不进 tmux", async () => {
@@ -111,12 +118,6 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     expect(result.started).toBe(false);
     expect(String(result.dry_stdout_head)).toContain("admission broken");
   });
-
-  /** 批㊶-W 补口（20261011 事故教训同款）：真训练 tmux 会话在场时，启动链用例一律 skip
-   *  ——启动链固有 tmux kill-session 会误杀生产训练。 */
-  const realTrainingAliveGuard = (): boolean => {
-    try { execSync("tmux has-session -t atf-training-run 2>/dev/null"); return true; } catch { return false; }
-  };
 
   it("start：prelaunch 报告缺失 → prelaunch_report_missing 拒绝（prepare SKILL.md:84 确认制；不进审批不进 tmux）", async () => {
     const root = tempRoot();
@@ -130,15 +131,10 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     expect(result.error).toBe("prelaunch_report_missing");
     expect(String(result.note)).toContain("atf_launch_execute");
     expect(calls).toBe(0);
-    // 批㊶-W：真训练在场时 tmuxAbsent 恒假（会话非本用例所启）——如实跳过在场断言
-    if (!realTrainingAliveGuard()) expect(tmuxAbsent("atf-training-run")).toBe(true);
+    expect(tmuxAbsent(launchName())).toBe(true);
   });
 
   it("start：prelaunch 报告在场（显式路径或 train.sh 同目录 prelaunch*）→ 通过在场检查继续后续链", async () => {
-    if (realTrainingAliveGuard()) {
-      console.warn("[guard] 真实训练会话 atf-training-run 在场——跳过 tmux 启动链锚（防误杀）");
-      return;
-    }
     const root = tempRoot();
     const trainSh = writeLongRunningTrainSh(root); // 夹具自带 prelaunch-report.md（在场）；长驻供探活 feed_ok
     const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
@@ -147,7 +143,7 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
       expect(result.started).toBe(true); // 在场检查过后走完端口预检＋danger 放行＋探活
       expect(String(result.note)).toContain("探活");
     } finally {
-      try { execSync("tmux kill-session -t atf-training-run 2>/dev/null"); } catch { /* 已退出 */ }
+      tmuxTestOk(`kill-session -t ${launchName()}`);
     }
   });
 
@@ -160,39 +156,22 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
   });
 
   it("start：审批放行 + DRY_RUN 过 → tmux 常驻启动＋返回启动凭据（mock 秒退脚本）", async () => {
-    // 批㊶Q增补二防护（20261011 事故教训）：本用例真实执行 tmux kill-session atf-training-run
-    // （trainingFace 启动链固有清理）——真训练在场时必须 skip，否则误杀生产训练
-    // （增补一真训 run-regress-large-pl 143/186 即被本用例全量跑误杀，checkpoint-141 resume 恢复）。
-    const realTrainingAlive = (() => {
-      try { execSync("tmux has-session -t atf-training-run 2>/dev/null"); return true; } catch { return false; }
-    })();
-    if (realTrainingAlive) {
-      console.warn("[guard] 真实训练会话 atf-training-run 在场——跳过 tmux 启动锚（防误杀）");
-      return;
-    }
     const root = tempRoot();
     const trainSh = writeLongRunningTrainSh(root);
     const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
     try {
       const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
       expect(result.started).toBe(true);
-      expect(result.tmux).toBe("atf-training-run");
+      expect(result.tmux).toBe(launchName()); // 批㊶-ISO E1：凭据会话名＝命名域解析值
       // 批㊶Q增补三 段2：note 与实况一致——feed_ok 注明探活已确认进料
       expect(String(result.note)).toContain("探活已确认进料");
       expect((result.probe as Record<string, unknown>).outcome).toBe("feed_ok");
     } finally {
-      try { execSync("tmux kill-session -t atf-training-run 2>/dev/null"); } catch { /* 已退出 */ }
+      tmuxTestOk(`kill-session -t ${launchName()}`);
     }
   });
 
   it("start：秒退脚本 → 探活判 dead → started:false＋startup_failed（段2 终结 started:true 假成功——VERIFY 3 构造）", async () => {
-    // 批㊶-W 补口（真机实锚）：本用例走完整启动链（链内固有 tmux kill-session）——真训练
-    // 在场时必须 skip。批㊶-W 执行期曾因本用例缺 guard 误杀同事训练一次（resume 恢复）——
-    // 20261011 事故教训的漏网用例，防回潮。
-    if (realTrainingAliveGuard()) {
-      console.warn("[guard] 真实训练会话 atf-training-run 在场——跳过秒退探活锚（防误杀）");
-      return;
-    }
     const root = tempRoot();
     const trainSh = writeMockTrainSh(root, true); // 秒退（exit 0 但进程退出）
     const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
@@ -241,13 +220,13 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     expect(text).toMatch(/运行中|未运行/); // tmux 在场与否二态均如实
     expect(text).toContain("loss 点数：1");
     // start 结果不走任务卡（保持 JSON 卡面）
-    const startBlocks = tool.output.render({}, { started: true, tmux: "atf-training-run" });
+    const startBlocks = tool.output.render({}, { started: true, tmux: launchName() });
     expect(startBlocks[0]?.text).toContain('"started"');
   });
 });
 
 describe("任务卡卡面（renderTaskCardText——liveness 覆盖语义）", () => {
-  const base = { action: "status", run_id: "r1", loss_points: 3, segments: [
+  const base = { action: "status", run_id: "r1", loss_points: 3, tmux: launchName(), segments: [
     { key: "register", label: "数据登记", status: "done" as const },
     { key: "training", label: "训练执行", status: "done" as const },
     { key: "evaluate", label: "评估与可视化", status: "pending" as const },
@@ -255,13 +234,21 @@ describe("任务卡卡面（renderTaskCardText——liveness 覆盖语义）", (
   it("running=true：训练段提升 active（tmux 探测为进程态权威）", () => {
     const text = renderTaskCardText({ ...base, running: true });
     expect(text).toContain("● 训练执行");
-    expect(text).toContain("运行中（tmux atf-training-run）");
+    expect(text).toContain(`运行中（tmux ${launchName()}）`); // 批㊶-ISO E1：随命名域解析名自然变化
     expect(text).toContain("进度 1/3");
   });
   it("running=false：训练段按段语义 done（loss-series 在场）", () => {
     const text = renderTaskCardText({ ...base, running: false });
     expect(text).toContain("✓ 训练执行");
     expect(text).toContain("未运行");
+  });
+  it("tmux 探测被命名域拒绝（tmux_probe）→ 未运行＋guidance 回流可见（批㊶-ISO E1 fail-closed）", () => {
+    const text = renderTaskCardText({
+      ...base, running: false,
+      tmux_probe: { ok: false as const, reason: "session_prefix_unset:ATF_TMUX_SESSION_PREFIX", guidance: "该环境未配置 ATF_TMUX_SESSION_PREFIX，禁止触碰默认 socket 会话" },
+    });
+    expect(text).toContain("tmux 探测拒绝");
+    expect(text).toContain("禁止触碰默认 socket 会话");
   });
   it("非 status/无段状态 → null（调用方保持 JSON 卡面）", () => {
     expect(renderTaskCardText({ action: "start" })).toBeNull();
@@ -412,12 +399,12 @@ print("{}")`);
     const ctx = { get: (s: string) => (s === "approval" ? { request: async (req: { reason: string }) => { seen.push(req.reason); return "allowed-once"; } } : undefined) };
     const result = await evalOf(root, pin, ctx).execute(startArgs(root, f, pin), fakeExec);
     expect(result.started).toBe(true);
-    expect(result.tmux).toBe("atf-eval-orch");
+    expect(result.tmux).toBe(evalOrchName()); // 批㊶-ISO E1：编排会话同入命名域
     expect(String(result.eval_round)).toMatch(/1-\d{8}$/); // 首轮
     expect(String(result.release)).toContain("eval-release");
     // 确认卡带九必报项报告内容
     expect(seen[0]).toContain("九必报项");
-    try { execSync("tmux kill-session -t atf-eval-orch 2>/dev/null"); } catch { /* 清理 */ }
+    tmuxTestOk(`kill-session -t ${evalOrchName()}`);
   });
 
   it("status：轮目录布局下 receipt/state/四件套/model 与 manifest 对拍", async () => {
@@ -623,15 +610,13 @@ describe("批⑳dot3 修复 3——训练启动端口预检（撞前知道）", 
       expect(result.error).toBe("port_occupied_non_residue");
       expect(result.port).toBe(39313);
       expect(approvalCalls).toBe(0); // 根因上卡面前不消耗审批
-      expect(tmuxAbsent("atf-training-run")).toBe(true);
+      expect(tmuxAbsent(launchName())).toBe(true);
     } finally {
       srv.close();
     }
   });
 
   it("start：端口被疑似残留占用 → danger 卡呈现根因 → [确认清理并重试] → 清理后成功启动（全链）", async () => {
-    // 批㊶Q增补二防护：本用例全链含 tmux kill-session atf-training-run——真训练在场即 skip（防误杀）
-    try { execSync("tmux has-session -t atf-training-run 2>/dev/null"); console.warn("[guard] 真实训练在场——跳过全链锚"); return; } catch { /* 无真训练，可跑 */ }
     const root = tempRoot();
     const trainSh = writeLongRunningTrainSh(root, 39314);
     // 残留态占用者：脚本文件名含 torchrun（cmdline 特征命中 TRAINING_RESIDUE_PATTERN）
@@ -650,7 +635,7 @@ describe("批⑳dot3 修复 3——训练启动端口预检（撞前知道）", 
       expect(stub.exitCode !== null || stub.signalCode !== null).toBe(true); // 占用者已被清理
     } finally {
       try { stub.kill("SIGKILL"); } catch { /* 已退 */ }
-      try { execSync("tmux kill-session -t atf-training-run 2>/dev/null"); } catch { /* 已退出 */ }
+      tmuxTestOk(`kill-session -t ${launchName()}`);
     }
   });
 
@@ -694,14 +679,8 @@ describe("批⑳dot3 修复 2——评估声明名与标签泄漏防线（harnes
 });
 
 function tmuxAbsent(session: string): boolean {
-  try {
-    // tmux 无该会话时 has-session 非零退出即视为 absent（测试环境 tmux 在位）
-    const { execSync } = require("node:child_process") as typeof import("node:child_process");
-    execSync(`tmux has-session -t ${session} 2>/dev/null`);
-    return false;
-  } catch {
-    return true;
-  }
+  // 批㊶-ISO D2①：探测经独立测试 socket（tmuxTestOk——has-session 命中＝在场）
+  return !tmuxTestOk(`has-session -t ${session}`);
 }
 
 describe("批㊶-E 项 7a（P28）训练日志启动轮转（rotateTrainLog）", () => {

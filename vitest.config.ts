@@ -10,6 +10,9 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     environment: "node",
     testTimeout: 30_000,
+    // 批㊶-ISO D2①：tmux 测试 socket 全局 fixture（逐测试文件建 atf-test-<runid> socket
+    // ＋命名域前缀 env，用毕 kill-server——含 tmux 操作的测试对默认 socket 零触碰）
+    setupFiles: ["tests/fixtures/tmuxTestSocket.ts"],
   },
   resolve: {
     alias: [
