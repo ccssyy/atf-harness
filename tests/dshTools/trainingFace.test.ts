@@ -26,7 +26,7 @@ import {
   startLossIngest,
   terminateOccupant,
 } from "../../packages/extensions/atf-tools/src/trainingFace.js";
-import { EVAL_ORCH_TMUX_SESSION, resolveLaunchSessionName, TRAINING_TMUX_SESSION } from "../../src/core/workspace/tmuxLiveness.js";
+import { evalOrchSessionBase, resolveLaunchSessionName, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
 import { tmuxTestOk } from "../fixtures/tmuxTestSocket.js";
 
 const repoRoot = "/data/sam/ATF-Harness";
@@ -50,8 +50,9 @@ const fakeExec = { callId: "t" };
 type Tool = { name: string; execute: (args: unknown, exec: unknown) => Promise<Record<string, unknown>> };
 
 // 批㊶-ISO D2①：本文件命名域解析值（fixture 注入前缀 env——生产面同源解析；断言/清理共用）
-const launchName = (): string => resolveLaunchSessionName(TRAINING_TMUX_SESSION);
-const evalOrchName = (): string => resolveLaunchSessionName(EVAL_ORCH_TMUX_SESSION);
+// 批㊶-P1 S1：基名作用域化——启动链 run_id 统一 r1，解析名随 run 取（并发 run 各占各的会话）
+const launchName = (runId = "r1"): string => resolveLaunchSessionName(trainingSessionBase(runId));
+const evalOrchName = (runId = "r1"): string => resolveLaunchSessionName(evalOrchSessionBase(runId));
 
 /** 批㊶R前置 防线③ 夹具：run r1 的 iteration-config 指向本地假模型目录（含 config.json）。 */
 const seedRunModelFixture = (root: string, runId = "r1", basePath?: string): string => {
@@ -180,6 +181,129 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     expect(result.error).toBe("startup_failed");
     expect(String(result.note)).toContain("训练未启动成功");
   });
+
+  // —— 批㊶-P1 S3：同 run_id 双启串行闸（防御纵深——请示是一等工具，不静默双启不静默清场）——
+
+  /** userQuestions 假件（form 卡应答——selected 逐条 key=value，与 confirmFace 同回传面）。 */
+  const askCtx = (answer: () => string | { code: string }, withApproval = true) => ({
+    get: (s: string) => {
+      if (s === "userQuestions") {
+        return { ask: async ({ questions }: { questions: ReadonlyArray<{ id: string }> }) => {
+          const a = answer();
+          if (typeof a !== "string") throw Object.assign(new Error("ask cancelled"), { code: a.code });
+          return { answers: [{ id: questions[0]?.id ?? "", selected: [a] }] };
+        } };
+      }
+      return withApproval && s === "approval" ? { request: async () => "allowed-once" } : undefined;
+    },
+  });
+  const seedLiveSession = (): void => { tmuxTestOk(`new-session -d -s ${launchName()} "sleep 120"`); };
+
+  it("start：同 run_id 会话已在场＋请示通道缺失 → double_launch_not_confirmed fail-closed（不清场不双启）", async () => {
+    const root = tempRoot();
+    const trainSh = writeLongRunningTrainSh(root);
+    seedLiveSession();
+    try {
+      // approval 在而 userQuestions 缺——请示不可用即拒绝（fail-closed，不静默重启）
+      const tool = buildRunTrainingTool(approvalCtx("allowed-once"), { runsRoot: root, logDir: root, ctx: approvalCtx("allowed-once") }) as unknown as Tool;
+      const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
+      expect(result.started).toBe(false);
+      expect(result.error).toBe("double_launch_not_confirmed");
+      expect(result.outcome).toBe("user_questions_unavailable");
+      expect(result.tmux).toBe(launchName());
+      // 旧会话原样在场（未 kill——不静默清场）
+      expect(tmuxAbsent(launchName())).toBe(false);
+    } finally {
+      tmuxTestOk(`kill-session -t ${launchName()}`);
+    }
+  });
+
+  it("start：同 run_id 双启请示应答 no → declined 拒绝，旧会话保留", async () => {
+    const root = tempRoot();
+    const trainSh = writeLongRunningTrainSh(root);
+    seedLiveSession();
+    try {
+      const ctx = askCtx(() => "proceed=no");
+      const tool = buildRunTrainingTool(ctx, { runsRoot: root, logDir: root, ctx }) as unknown as Tool;
+      const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
+      expect(result.started).toBe(false);
+      expect(result.error).toBe("double_launch_not_confirmed");
+      expect(result.outcome).toBe("declined");
+      expect(tmuxAbsent(launchName())).toBe(false);
+    } finally {
+      tmuxTestOk(`kill-session -t ${launchName()}`);
+    }
+  });
+
+  it("start：同 run_id 双启请示卡被关闭（ASK_CANCELLED）→ cancelled 拒绝，旧会话保留", async () => {
+    const root = tempRoot();
+    const trainSh = writeLongRunningTrainSh(root);
+    seedLiveSession();
+    try {
+      const ctx = askCtx(() => ({ code: "ASK_CANCELLED" }));
+      const tool = buildRunTrainingTool(ctx, { runsRoot: root, logDir: root, ctx }) as unknown as Tool;
+      const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
+      expect(result.started).toBe(false);
+      expect(result.outcome).toBe("cancelled");
+      expect(tmuxAbsent(launchName())).toBe(false);
+    } finally {
+      tmuxTestOk(`kill-session -t ${launchName()}`);
+    }
+  });
+
+  it("start：同 run_id 双启请示应答 yes → 清旧重启成功（旧会话被替换为本次会话）", async () => {
+    const root = tempRoot();
+    const trainSh = writeLongRunningTrainSh(root);
+    seedLiveSession();
+    try {
+      const ctx = askCtx(() => "proceed=yes");
+      const tool = buildRunTrainingTool(ctx, { runsRoot: root, logDir: root, ctx }) as unknown as Tool;
+      const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec);
+      expect(result.started).toBe(true); // 请示放行→kill 旧→新会话探活 feed_ok
+      expect(result.tmux).toBe(launchName());
+      expect((result.probe as Record<string, unknown>).outcome).toBe("feed_ok");
+    } finally {
+      tmuxTestOk(`kill-session -t ${launchName()}`);
+    }
+  });
+
+  it("start：不同 run_id 不触发闸——r1/r2 并发启动，两会话并存互不踩（工具级并发最小链）", async () => {
+    const root = tempRoot();
+    const trainSh = writeLongRunningTrainSh(root);
+    // r2 自有 run 夹具（start 面模型复核按 run 取 iteration-config——批㊶R前置 防线③同链）
+    seedRunModelFixture(root, "r2");
+    // 两工具实例各自 logDir（tee 目标/轮转互不干扰）；start 链前置跑一遍非 DRY_RUN 夹具
+    // （≈20s/次）——两会话寿命各≈20s，串行二连发会等首会话自然消亡，故并发起停。
+    const ctx = approvalCtx("allowed-once");
+    const tool1 = buildRunTrainingTool(ctx, { runsRoot: root, logDir: join(root, "logs-r1"), ctx }) as unknown as Tool;
+    const tool2 = buildRunTrainingTool(ctx, { runsRoot: root, logDir: join(root, "logs-r2"), ctx }) as unknown as Tool;
+    try {
+      const [r1, r2] = await Promise.all([
+        tool1.execute({ action: "start", train_sh: trainSh, run_id: "r1" }, fakeExec),
+        tool2.execute({ action: "start", train_sh: trainSh, run_id: "r2" }, fakeExec),
+      ]);
+      expect(r1.started).toBe(true);
+      expect(r2.started).toBe(true);
+      expect(r2.tmux).toBe(launchName("r2"));
+      expect(r2.tmux).not.toBe(r1.tmux); // 作用域名互异
+      // liveness 按作用域名判定：两会话各自在场、status 各归各（互不踩）
+      expect(tmuxAbsent(launchName("r1"))).toBe(false);
+      expect(tmuxAbsent(launchName("r2"))).toBe(false);
+      const [s1, s2] = await Promise.all([
+        tool1.execute({ action: "status", train_sh: trainSh, run_id: "r1" }, fakeExec),
+        tool2.execute({ action: "status", train_sh: trainSh, run_id: "r2" }, fakeExec),
+      ]);
+      expect(s1.running).toBe(true);
+      expect(s2.running).toBe(true);
+      expect(s1.tmux).not.toBe(s2.tmux);
+      // 互不踩的 kill 面：收尾 kill r2 后 r1 仍在
+      tmuxTestOk(`kill-session -t ${launchName("r2")}`);
+      expect(tmuxAbsent(launchName("r1"))).toBe(false);
+    } finally {
+      tmuxTestOk(`kill-session -t ${launchName("r1")}`);
+      tmuxTestOk(`kill-session -t ${launchName("r2")}`);
+    }
+  }, 120_000);
 
   it("status：ckpt 枚举＋loss 点数（runs/<id>/training 布局）", async () => {
     const root = tempRoot();
@@ -399,12 +523,13 @@ print("{}")`);
     const ctx = { get: (s: string) => (s === "approval" ? { request: async (req: { reason: string }) => { seen.push(req.reason); return "allowed-once"; } } : undefined) };
     const result = await evalOf(root, pin, ctx).execute(startArgs(root, f, pin), fakeExec);
     expect(result.started).toBe(true);
-    expect(result.tmux).toBe(evalOrchName()); // 批㊶-ISO E1：编排会话同入命名域
+    // 批㊶-P1 S1：编排会话名随 run 取（本用例 run_id=run-regress-formal-02）
+    expect(result.tmux).toBe(evalOrchName("run-regress-formal-02")); // 批㊶-ISO E1：编排会话同入命名域
     expect(String(result.eval_round)).toMatch(/1-\d{8}$/); // 首轮
     expect(String(result.release)).toContain("eval-release");
     // 确认卡带九必报项报告内容
     expect(seen[0]).toContain("九必报项");
-    tmuxTestOk(`kill-session -t ${evalOrchName()}`);
+    tmuxTestOk(`kill-session -t ${evalOrchName("run-regress-formal-02")}`);
   });
 
   it("status：轮目录布局下 receipt/state/四件套/model 与 manifest 对拍", async () => {

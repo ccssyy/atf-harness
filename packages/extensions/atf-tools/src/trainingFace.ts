@@ -24,9 +24,10 @@ import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
 import { isAutoTrainingTier } from "./autoTrainingTier.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
-import { probeSession, resolveLaunchSessionName, tmuxCommand, tmuxTrainingEvidenceFor, EVAL_ORCH_TMUX_SESSION, TRAINING_TMUX_SESSION, type SessionProbe } from "../../../../src/core/workspace/tmuxLiveness.js";
+import { probeSession, resolveLaunchSessionName, tmuxCommand, tmuxTrainingEvidenceFor, evalOrchSessionBase, trainingSessionBase, type SessionProbe } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText, TRAINING_RESIDUE_PATTERN } from "./gpuQueueFace.js";
 import { reconcileConfirmedWithTrainSh, formatReconcileDiff } from "./trainShReconcile.js";
+import { editsFromFormAnswers, type FormAskService } from "./confirmFace.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
 import { appendBinding, writeProgress } from "../../../../src/core/workspace/runFacts.js";
@@ -147,6 +148,48 @@ export async function probeTrainingStartup(input: {
 const sessionIdOf = (exec: unknown): string | undefined => {
   const id = (exec as { agent?: { session?: { id?: unknown } } }).agent?.session?.id;
   return typeof id === "string" && id !== "" ? id : undefined;
+};
+
+/** 批㊶-P1 S3：同 run_id 双启请示闸（防御纵深）——作用域会话在场＝同 run 已有训练会话，
+ *  经请示卡（DSH user-questions——ask_user_for_input 通道）问用户是否清旧重启；确认词
+ *  恰为 `yes` 才放行，取消（ASK_CANCELLED）/其他应答/服务缺失一律拒绝（fail-closed——
+ *  不静默双启不静默清场）。审批≠请示：danger 卡已过≠同意丢旧现场，重启须显式二次确认。 */
+export const confirmDoubleLaunch = async (
+  ctx: { get(service: string): unknown },
+  exec: { agent?: unknown; callId?: string; signal?: unknown },
+  runId: string,
+  sessionName: string,
+): Promise<{ ok: true } | { ok: false; outcome: string; note: string }> => {
+  const userQuestions = ctx.get("userQuestions") as FormAskService | undefined;
+  if (userQuestions === undefined || typeof userQuestions.ask !== "function") {
+    return { ok: false, outcome: "user_questions_unavailable", note: "同 run_id 训练会话已在场且请示通道（user-questions）未挂载——fail-closed 不启动：不静默双启，也不静默清理在跑会话；请先人工核会话现场（tmux 侧）再重推" };
+  }
+  try {
+    const answers = await userQuestions.ask({
+      questions: [{
+        id: `double-launch-${runId}`,
+        question: `训练会话已存在（run ${runId}）——是否清理旧会话并重启？`,
+        header: "双启确认",
+        detail: `同 run_id 的训练会话 ${sessionName} 已在场（重复触发场景）。清理重启＝终止旧会话内进程（现场日志已落盘可追溯）；取消＝本次启动不动旧会话。proceed 填 yes 才重启；留空/no/其他＝取消。`,
+        intent: {
+          kind: "form",
+          fields: [{ key: "proceed", label: "proceed（是否清理重启）", value: "no", hint: "仅接受 yes；no/留空＝取消本次启动" }],
+          submitLabel: "提交",
+        },
+      }],
+      agent: exec.agent,
+      signal: exec.signal,
+    });
+    const proceed = editsFromFormAnswers(answers)["proceed"]?.trim().toLowerCase() === "yes";
+    return proceed
+      ? { ok: true }
+      : { ok: false, outcome: "declined", note: `双启请示未确认（proceed≠yes）——本次不启动，旧会话原样保留（run ${runId}）` };
+  } catch (cause) {
+    if ((cause as { code?: string }).code === "ASK_CANCELLED") {
+      return { ok: false, outcome: "cancelled", note: `双启请示卡被关闭（取消）——本次不启动，旧会话原样保留（run ${runId}）` };
+    }
+    return { ok: false, outcome: "ask_failed", note: `双启请示卡应答失败：${String(cause).slice(0, 200)}——fail-closed 不启动` };
+  }
 };
 
 // 批㊶-K 项 4：进料面提取共享（src/core/workspace/lossIngest.ts）——atf_launch_execute
@@ -430,9 +473,11 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       const runDir = resolveRunDir(cfg.runsRoot, args.run_id);
       if (args.action === "status") {
         // 批㊶-ISO E1：探测走命名域单源（前缀未设＝refused fail-closed——guidance 随 payload 回流）
-        const probe: SessionProbe = probeSession(TRAINING_TMUX_SESSION);
+        // 批㊶-P1 S1：基名作用域化——按 run_id 取名，同实例并发 run 各探各的会话
+        const sessionBase = trainingSessionBase(args.run_id);
+        const probe: SessionProbe = probeSession(sessionBase);
         const running = probe.present;
-        const sessionName = resolveLaunchSessionName(TRAINING_TMUX_SESSION);
+        const sessionName = resolveLaunchSessionName(sessionBase);
         const ckptDir = join(runDir, "training");
         const ckpts = existsSync(ckptDir)
           ? (await import("node:fs")).readdirSync(ckptDir, { withFileTypes: true }).filter((d) => d.isDirectory() && d.name.startsWith("checkpoint-")).map((d) => d.name)
@@ -638,9 +683,26 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // （未设 ATF_APPROVAL_LEDGER 时为空串＝沿 train.sh 内 ${...:-$HOME/...} 缺省式）
       const ledgerPrefix = ledgerEnvPrefixForShell(process.env);
       const { execSync } = await import("node:child_process");
-      // 批㊶-ISO E1：会话名走命名域单源（launch 域不受 fail-closed 限制——pre-kill 与 new-session
-      // 同目标名，天然不跨域）；命令构造走 tmuxCommand（D2① 测试 socket 注入点同源）
-      const sessionName = resolveLaunchSessionName(TRAINING_TMUX_SESSION);
+      // 批㊶-P1 S1：会话名走作用域基名＋命名域单源（launch 域不受 fail-closed 限制——pre-kill
+      // 与 new-session 同目标名，天然不跨域）；命令构造走 tmuxCommand（D2① 测试 socket 注入点同源）。
+      // 批㊶-P1 S3：同 run_id 双启串行闸（防御纵深）——作用域会话在场＝同 run 已有训练，
+      // 经请示卡问用户（确认词 yes 才清旧重启）；拒绝/取消/服务缺失一律不启动（不静默双启）。
+      // 探测被命名域拒绝（前缀未设）＝存在性不可判——launch 域存量语义不变（闸不误伤）。
+      const sessionBase = trainingSessionBase(args.run_id);
+      const sessionName = resolveLaunchSessionName(sessionBase);
+      if (probeSession(sessionBase).present) {
+        const gate = await confirmDoubleLaunch(ctx, exec, args.run_id, sessionName);
+        if (!gate.ok) {
+          return asToolValue({
+            started: false,
+            error: "double_launch_not_confirmed",
+            outcome: gate.outcome,
+            run_id: args.run_id,
+            tmux: sessionName,
+            note: gate.note,
+          });
+        }
+      }
       try { execSync(tmuxCommand(`kill-session -t ${sessionName} 2>/dev/null`)); } catch { /* 无旧会话 */ }
       execSync(tmuxCommand(`new-session -d -s ${sessionName} "${ledgerPrefix}bash ${args.train_sh} 2>&1 | tee -a ${logPath}"`));
       // 批㊶Q增补三 段2：启动探活（窗口内 tail train-stdout——终止特征/进程退出 → started:false
@@ -651,7 +713,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         // 批㊶-ISO E1：探测被命名域拒绝（前缀未设）＝tmux 判据不可用——不以 tmux 判死
         // （交由终止特征与窗口判；避免对自启会话误报「会话消失」），在场/缺席仍如实二态
         sessionAlive: () => {
-          const p = probeSession(TRAINING_TMUX_SESSION);
+          const p = probeSession(sessionBase);
           return p.present || p.refused !== null;
         },
       });
@@ -816,12 +878,14 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
   } catch { /* 无评估轮 */ }
   const { execSync } = await import("node:child_process");
   // 批㊶-ISO E1：探测走命名域单源（前缀未设＝false fail-closed；refused 随 payload 回流）
-  const orchProbe = probeSession(EVAL_ORCH_TMUX_SESSION);
+  // 批㊶-P1 S1：编排基名作用域化——按 run_id 取名（同实例并发 run 评估编排互不踩）
+  const orchBase = evalOrchSessionBase(runId);
+  const orchProbe = probeSession(orchBase);
   let running = orchProbe.present;
   if (latest === null) {
     return asToolValue({
       action: "status", run_id: runId, running,
-      tmux: resolveLaunchSessionName(EVAL_ORCH_TMUX_SESSION),
+      tmux: resolveLaunchSessionName(orchBase),
       ...(orchProbe.refused !== null ? { tmux_probe: orchProbe.refused } : {}),
       note: "无评估轮目录——先 start",
     });
@@ -856,7 +920,7 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
   const readiness = collectEvalReadiness(runDirEval);
   const value: EvalStatusValue = {
     action: "status", run_id: runId, eval_round: latest, running,
-    tmux: resolveLaunchSessionName(EVAL_ORCH_TMUX_SESSION),
+    tmux: resolveLaunchSessionName(orchBase),
     ...(orchProbe.refused !== null ? { tmux_probe: orchProbe.refused } : {}),
     ...(service !== null ? { service } : {}),
     orchestration,
@@ -1081,7 +1145,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       mkdirForce(cfg.logDir);
       const { execSync } = await import("node:child_process");
       // 批㊶-ISO E1：编排会话同入命名域（launch 域——pre-kill/new-session 同目标名）；命令走 tmuxCommand
-      const orchSessionName = resolveLaunchSessionName(EVAL_ORCH_TMUX_SESSION);
+      // 批㊶-P1 S1：编排基名作用域化（run_id 入名——并发 run 各占各的编排会话）
+      const orchSessionName = resolveLaunchSessionName(evalOrchSessionBase(args.run_id));
       try { execSync(tmuxCommand(`kill-session -t ${orchSessionName} 2>/dev/null`)); } catch { /* 无旧 */ }
       execSync(tmuxCommand(`new-session -d -s ${orchSessionName} "bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode mode0 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`));
       // 批㊶-M M-3 段事实轨：评估编排启动成功即登记（evaluate 段）

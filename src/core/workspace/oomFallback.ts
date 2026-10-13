@@ -16,7 +16,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { deriveGradAccum } from "./smartDefaults.js";
 import { appendNotification, OOM_PATTERN } from "./trainProbe.js";
-import { resolveLaunchSessionName, tmuxCommand, TRAINING_TMUX_SESSION } from "./tmuxLiveness.js";
+import { resolveLaunchSessionName, tmuxCommand, trainingSessionBase } from "./tmuxLiveness.js";
 
 /** OOM 降档状态文件（webui/oom-fallback.json——每 run 一次护栏）。 */
 export const oomFallbackStatePath = (runDir: string): string => join(runDir, "webui", "oom-fallback.json");
@@ -177,8 +177,8 @@ export const maybeAutoOomFallback = async (deps: OomFallbackDeps): Promise<OomFa
     deps.rotateLog(logPath);
   } catch { /* 轮转失败不阻断重发（tee -a 追加语义兜底） */ }
   // 批㊶-ISO E1：会话名走命名域单源（launch 域——kill/new 同目标名，不跨域）；命令构造走 tmuxCommand
-  // （D2① 测试 socket 注入点同源）
-  const sessionName = resolveLaunchSessionName(TRAINING_TMUX_SESSION);
+  // （D2① 测试 socket 注入点同源）。批㊶-P1 S1：基名作用域化——本 run 的会话本 run 清（不碰他 run）
+  const sessionName = resolveLaunchSessionName(trainingSessionBase(runId));
   deps.tmux(tmuxCommand(`kill-session -t ${sessionName} 2>/dev/null`));
   // 批㊶Q增补三 段1：与 atf_run_training start 同款账本 env 显式前缀（写入方/检查器同源——缺省空串）
   const ledgerPrefix = deps.ledgerEnvPrefix ?? "";

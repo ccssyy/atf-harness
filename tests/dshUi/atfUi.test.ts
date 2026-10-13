@@ -7,7 +7,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage } from "../../packages/extensions/atf-ui/src/snapshot.js";
 import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveTrainActiveWindowMs, resolveViewerRequest, scanEvalRounds, scanRunDir, scanRuns, looksLikeRun, RUN_MARKER_RELS, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
-import { TRAINING_TMUX_SESSION, tmuxHasSession } from "../../src/core/workspace/tmuxLiveness.js";
+import { tmuxHasSession, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -783,9 +783,9 @@ describe("批㊶-L L-1 训练活跃终结判定（tmux 注入＋mtime 新鲜窗�
     expect(scanRunDir(root, "run-default").training.active).toBe(true);
   });
 
-  it("liveness 共享单源：会话名常量与探测函数（tmux 缺席环境如实 false）", () => {
-    expect(TRAINING_TMUX_SESSION).toBe("atf-training-run");
-    expect(typeof tmuxHasSession()).toBe("boolean");
+  it("liveness 共享单源：作用域基名与探测函数（批㊶-P1 S1——probeSession 必传作用域基名；tmux 缺席环境如实 false）", () => {
+    expect(trainingSessionBase("run-l1")).toBe("atf-training-run-run-l1");
+    expect(typeof tmuxHasSession(trainingSessionBase("run-l1"))).toBe("boolean");
   });
 });
 

@@ -164,6 +164,58 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
   });
 });
 
+// ---------------------------------------------------------------- 批㊶-P1 S2——exec home 会话作用域化
+
+describe("批㊶-P1 S2——exec home 会话子目录化（bridgeFace localHostFor）", () => {
+  /** 经 atf_scratch_exec 让子进程把标记文件写进 $HOME（exec env HOME＝host.home——同链实证）。 */
+  const writeHomeProbe = async (localRoots: { runsRoot: string; kernelDir: string; execHome: string }, exec: unknown): Promise<Record<string, unknown>> => {
+    const manager = new BridgeManager(["node", mockBridgePath], repoRoot);
+    const tools = buildBridgeTools(noApprovalCtx, manager, localRoots);
+    try {
+      return (await findTool(tools, "atf_scratch_exec").execute(
+        { argv: ["python3", "-c", "import os; open(os.path.join(os.environ['HOME'], 'probe.txt'), 'w').write('x')"] },
+        exec,
+      )) as Record<string, unknown>;
+    } finally {
+      await manager.close();
+    }
+  };
+  const execWithSession = (sessionId: string): unknown => ({
+    agent: { session: { id: sessionId, header: { cwd: "/tmp/ws-a" } } },
+    callId: "p1-s2",
+    signal: undefined,
+  });
+
+  it("两会话写互不可见：HOME 各落 <execHome>/<session-id>/ 子目录（散放互踩面消除）", async () => {
+    const execHome = tempRoot();
+    const localRoots = { runsRoot: tempRoot(), kernelDir: join(repoRoot, ".atf-pinned"), execHome };
+    const ra = await writeHomeProbe(localRoots, execWithSession("ses-aaa"));
+    const rb = await writeHomeProbe(localRoots, execWithSession("ses-bbb"));
+    expect(ra).not.toHaveProperty("error");
+    expect(rb).not.toHaveProperty("error");
+    // 各自子目录在位、互不可见
+    expect(readFileSync(join(execHome, "ses-aaa", "probe.txt"), "utf8")).toBe("x");
+    expect(readFileSync(join(execHome, "ses-bbb", "probe.txt"), "utf8")).toBe("x");
+    expect(() => readFileSync(join(execHome, "ses-aaa", "..", "probe.txt"))).toThrow();
+  }, 20_000);
+
+  it("无会话 id（CLI 单会话形态）落 <execHome>/default/", async () => {
+    const execHome = tempRoot();
+    const localRoots = { runsRoot: tempRoot(), kernelDir: join(repoRoot, ".atf-pinned"), execHome };
+    const result = await writeHomeProbe(localRoots, fakeExec);
+    expect(result).not.toHaveProperty("error");
+    expect(readFileSync(join(execHome, "default", "probe.txt"), "utf8")).toBe("x");
+  }, 20_000);
+
+  it("会话 id 路径非法字符折 `_`（目录段安全——不逃出 execHome 根）", async () => {
+    const execHome = tempRoot();
+    const localRoots = { runsRoot: tempRoot(), kernelDir: join(repoRoot, ".atf-pinned"), execHome };
+    const result = await writeHomeProbe(localRoots, execWithSession("ses/x:y"));
+    expect(result).not.toHaveProperty("error");
+    expect(readFileSync(join(execHome, "ses_x_y", "probe.txt"), "utf8")).toBe("x");
+  }, 20_000);
+});
+
 // ---------------------------------------------------------------- 文件面（4 工具逐个）
 
 describe("atf-tools 文件面（临时 runs 目录）", () => {

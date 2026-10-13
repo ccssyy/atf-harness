@@ -53,8 +53,9 @@ const sessionIdOfExec = (exec: unknown): string | undefined => {
 };
 import { asToolValue } from "./schemaTranslate.js";
 
-/** DSH user-questions 服务消费面（结构类型——零 import；plan-mode 同款直调 ask() 通道）。 */
-interface FormAskService {
+/** DSH user-questions 服务消费面（结构类型——零 import；plan-mode 同款直调 ask() 通道）。
+ *  批㊶-P1 S3：导出共享——atf_run_training 双启请示闸同走本通道（请示是一等工具）。 */
+export interface FormAskService {
   ask(request: {
     questions: ReadonlyArray<{
       id: string;

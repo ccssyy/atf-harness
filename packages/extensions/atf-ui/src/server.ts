@@ -20,7 +20,7 @@ import { queryNvidiaSmi, queryNvidiaSmiAll } from "../../../../src/webui/readOnl
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
 import { resolveInstanceKernelDir } from "../../../../src/core/workspace/instancePin.js";
-import { probeSession, tmuxTrainingFamilyPresent, listTrainingSessionCmdlines } from "../../../../src/core/workspace/tmuxLiveness.js";
+import { sessionDomainRefusal, sessionIsScopedFor, listTrainingSessionCmdlines } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
 import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/workspace/oomFallback.js";
@@ -822,23 +822,28 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     if (!existsSync(resolved.runsRoot)) return;
     const outDir = join(resolved.runsRoot, OUT_DIR);
     mkdirSync(outDir, { recursive: true });
-    // 批㊶-L L-1：tmux 探测每周期一次（不逐 run）；异常按 false fail-closed 回落 mtime 窗口
+    // 批㊶-L L-1：tmux 面每周期一次（不逐 run）；异常按 false fail-closed 回落 mtime 窗口。
+    // 批㊶-P1 S1：基名作用域化后无「无 run 单会话」可探——在场布尔＝本命名域作用域会话
+    // 任一在场（枚举面）；命名域拒绝（前缀未设）经单源出口回流日志（fail-closed 留痕）。
     let trainingTmuxPresent = false;
     try {
-      // 批㊶-ISO E1：探测走命名域单源——前缀未设＝refused（fail-closed 拒触默认 socket，
-      // 指引留痕日志）；tmux 不在场/不可用＝present:false
-      const probe = probeSession();
-      trainingTmuxPresent = probe.present;
-      if (probe.refused !== null) console.warn(`[atf-ui] tmux 探测拒绝（${probe.refused.reason}）：${probe.refused.guidance}`);
+      const refused = sessionDomainRefusal();
+      if (refused !== null) {
+        console.warn(`[atf-ui] tmux 探测拒绝（${refused.reason}）：${refused.guidance}`);
+      } else {
+        trainingTmuxPresent = listTrainingSessionCmdlines().length > 0;
+      }
     } catch {
       trainingTmuxPresent = false;
     }
-    // 批㊶-O O-1：绑 run 取证（per-run 独立——枚举 atf-* 会话进程链 cmdline 含 run_id）
+    // 批㊶-O O-1：绑 run 取证（per-run 独立）。批㊶-P1 S1：两判据——作用域会话名尾段
+    // 精确归属（sessionIsScopedFor，`r1` 不误命中 `cr_r1`）＋存量 cmdline 含 run_id。
     const trainingEvidence: Record<string, boolean> = {};
     try {
-      for (const entry of listTrainingSessionCmdlines()) {
+      const cmdlines = listTrainingSessionCmdlines();
+      for (const entry of cmdlines) {
         for (const runId of resolvedRunIds(resolved.runsRoot)) {
-          if (entry.cmdline.includes(runId)) trainingEvidence[runId] = true;
+          if (entry.cmdline.includes(runId) || sessionIsScopedFor(entry.session, runId)) trainingEvidence[runId] = true;
         }
       }
     } catch {

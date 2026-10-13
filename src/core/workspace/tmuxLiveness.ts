@@ -1,5 +1,6 @@
 /**
- * 批㊶-L L-1——训练会话 liveness 权威面（单源）；批㊶-ISO E1——会话命名域单源化。
+ * 批㊶-L L-1——训练会话 liveness 权威面（单源）；批㊶-ISO E1——会话命名域单源化；
+ * 批㊶-P1 S1——会话基名作用域化（run_id 入名）。
  *
  * 会话名解析单源＝resolveSessionName(base)＝ATF_TMUX_SESSION_PREFIX（env）＋ base：
  * dev/uat 两实例在同一容器默认 tmux socket 上靠前缀划分命名域，会话名互不命中
@@ -7,6 +8,12 @@
  * 前缀 env 未设置时 kill/枚举/探测一律 fail-closed 拒绝（B4 语义 {ok:false,reason,guidance}，
  * guidance 随 status 面错误回流可见）；launch（new-session）不受 fail-closed 限制
  * （resolveLaunchSessionName：前缀在则带前缀，未设回退裸 base——存量语义）。
+ *
+ * 批㊶-P1 S1（D1①）：base 由常量改作用域化基名——训练 `atf-training-run-<run_id>`、
+ * 评估 `atf-eval-<run_id>`（run_id 天然唯一——同实例两 run 并发各占各的 tmux 会话，
+ * 探测/kill/存活判定互不踩；resolveSessionName 组合逻辑不变，fail-closed 纪律原样）。
+ * run_id 经 runScopeSlug 折算进 tmux 合法字符域（tmux 会话名禁 `.`/`:`）；枚举面归属
+ * 判定单源＝sessionIsScopedFor（会话名尾段精确对模板——泛 includes 子串假阳性不入）。
  *
  * 命令构造单源＝tmuxCommand(sub)：D2① 测试面经 ATF_TMUX_TEST_SOCKET 注入 `-L`（仅认
  * atf-test-* 值——生产路径不可能被指到业务 socket）；生产无 env＝默认 socket。
@@ -17,9 +24,25 @@
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-export const TRAINING_TMUX_SESSION = "atf-training-run";
-/** 评估编排会话（atf_evaluate ⑥ tmux 后台）——同属命名域（dev/uat 评估编排同型冲突面）。 */
-export const EVAL_ORCH_TMUX_SESSION = "atf-eval-orch";
+/** 批㊶-P1 S1——两类作用域基名模板（grep 实锚：`atf-training-run-`／`atf-eval-`）。 */
+export const TRAINING_BASE_PREFIX = "atf-training-run-";
+export const EVAL_BASE_PREFIX = "atf-eval-";
+
+/** run_id → tmux 会话名合法段（`A-Za-z0-9_-` 外折 `_`；空串折 `default`——与 exec home
+ *  CLI 形态同词表）。折算仅作用于会话名段，绑 run 取证仍按原 run_id 走 cmdline。 */
+export const runScopeSlug = (runId: string): string =>
+  (runId.trim() === "" ? "default" : runId.trim()).replace(/[^A-Za-z0-9_-]/g, "_");
+
+/** 作用域基名（单源）：训练／评估编排（atf_evaluate ⑥ tmux 后台）各按 run_id 取名。 */
+export const trainingSessionBase = (runId: string): string => `${TRAINING_BASE_PREFIX}${runScopeSlug(runId)}`;
+export const evalOrchSessionBase = (runId: string): string => `${EVAL_BASE_PREFIX}${runScopeSlug(runId)}`;
+
+/** 枚举面归属判定（单源）：会话名是否即本 run 的作用域会话（两类模板尾段精确对 slug——
+ *  `r1` 不误命中 `cr_r1` 的会话；前缀段由枚举域 `${前缀}atf-*` 过滤承担）。 */
+export const sessionIsScopedFor = (session: string, runId: string): boolean => {
+  const slug = runScopeSlug(runId);
+  return session.endsWith(`${TRAINING_BASE_PREFIX}${slug}`) || session.endsWith(`${EVAL_BASE_PREFIX}${slug}`);
+};
 
 export const TMUX_SESSION_PREFIX_ENV = "ATF_TMUX_SESSION_PREFIX";
 /** D2① 测试专用 socket 注入 env——仅认 atf-test-* 值（见 tmuxSocketFlag）。 */
@@ -69,8 +92,17 @@ export interface SessionProbe {
   refused: Extract<SessionNameResolution, { ok: false }> | null;
 }
 
-/** 会话在场探测（has-session 枚举语义域——前缀未设 fail-closed 拒绝，不触碰默认 socket）。 */
-export const probeSession = (base: string = TRAINING_TMUX_SESSION): SessionProbe => {
+/** 命名域拒绝探测（诊断面——前缀未设＝refused 回流；判定与 resolveSessionName 同源）。
+ *  批㊶-P1：基名作用域化后同步器不再有「无 run 的单会话探测」，拒绝语义经此独立出口。 */
+export const sessionDomainRefusal = (): { reason: string; guidance: string } | null => {
+  const resolved = resolveSessionName(runScopeSlug("liveness-probe"));
+  return resolved.ok ? null : { reason: resolved.reason, guidance: resolved.guidance };
+};
+
+/** 会话在场探测（has-session 枚举语义域——前缀未设 fail-closed 拒绝，不触碰默认 socket）。
+ *  批㊶-P1 S1：base 必传（作用域化后无默认基名——调用方按 run_id 取 trainingSessionBase/
+ *  evalOrchSessionBase）。 */
+export const probeSession = (base: string): SessionProbe => {
   const resolved = resolveSessionName(base);
   if (!resolved.ok) return { present: false, refused: resolved };
   try {
@@ -82,7 +114,7 @@ export const probeSession = (base: string = TRAINING_TMUX_SESSION): SessionProbe
 };
 
 /** 布尔便捷面（ refused 语义折叠为 false——探测不可用＝不在场，调用方回落 mtime）。 */
-export const tmuxHasSession = (base: string = TRAINING_TMUX_SESSION): boolean => probeSession(base).present;
+export const tmuxHasSession = (base: string): boolean => probeSession(base).present;
 
 /** 批㊶-N N-2：tmux 训练会话族判定——本命名域内 `${前缀}atf-` 任一会话在场即 true
  *  （实况会话族＝训练/评估编排两族；前缀未设＝false fail-closed；tmux 不可用＝false）。
@@ -139,9 +171,13 @@ export const listTrainingSessionCmdlines = (): Array<{ session: string; cmdline:
   }
 };
 
-/** 批㊶-O O-1：绑 run 取证——本命名域任一会话进程链 cmdline 含本 run_id 方判定该 run 训练会话在场。
+/** 批㊶-O O-1：绑 run 取证——本命名域任一会话判定本 run 在场（批㊶-P1 S1 扩充两判据：
+ *  ① 会话名即本 run 作用域会话（sessionIsScopedFor——尾段精确对模板＋slug）；
+ *  ② 进程链 cmdline 含本 run_id（存量判据——作用域化前的兼容面）。
  *  取证异常/无匹配＝false（调用方回落 mtime 新鲜窗口单判据）。只读（不 kill 不改）。 */
 export const tmuxTrainingEvidenceFor = (runId: string): boolean => {
   if (runId === "") return false;
-  return listTrainingSessionCmdlines().some((entry) => entry.cmdline.includes(runId));
+  return listTrainingSessionCmdlines().some(
+    (entry) => entry.cmdline.includes(runId) || sessionIsScopedFor(entry.session, runId),
+  );
 };

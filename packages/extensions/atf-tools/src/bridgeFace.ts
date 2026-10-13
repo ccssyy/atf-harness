@@ -29,6 +29,13 @@ const sessionIdOfExec = (exec: unknown): string | undefined => {
   return typeof id === "string" && id !== "" ? id : undefined;
 };
 
+/** 批㊶-P1 S2：会话 id → exec home 子目录段（路径安全词表 `A-Za-z0-9._-` 外折 `_`；
+ *  空段折 `default`＝CLI 单会话形态）。仅作用于目录名段，会话 id 本体不改动。 */
+const sessionHomeSlug = (sessionId: string): string => {
+  const slug = sessionId.trim().replace(/[^A-Za-z0-9._-]/g, "_");
+  return slug === "" ? "default" : slug;
+};
+
 /** M1 指令清单里的桥接工具名（桥接契约面 ∪ 工作区治理分册）。 */
 export const BRIDGE_TOOL_NAMES: readonly string[] = [
   "atf_workspace_status",
@@ -104,15 +111,22 @@ export class BridgeManager {
 
 /** 本地治理工具的 run 落点（M1 语义：scratch 落 runs/<run_id>/scratch，缺省 run "default"）。
  *  批㊶Q增补三 段3：双形态解析——新建 run 按发起会话工作区入桶（runs/<工作区>/<run_id>，
- *  workspace 归属由调用方传 exec 推导；default 系统级留根目录）。 */
-const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHome: string }, args: Record<string, unknown>, workspace?: string | null): LocalToolHost => {
+ *  workspace 归属由调用方传 exec 推导；default 系统级留根目录）。
+ *  批㊶-P1 S2（D2①）：exec home 会话作用域化——WebUI 会话形态以会话 id 派生子目录
+ *  `exec-home/<session-id>/`；无会话 id（CLI 单会话/测试）落 `exec-home/default/`。
+ *  跨会话同名暂存互踩面（散放 awb_*.json 实锚）在子目录层消除；既有散放文件不迁移
+ *  （D4①——根目录原地保留不冲突）；清理策略候裁本批不实现。 */
+const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHome: string }, args: Record<string, unknown>, exec: unknown): LocalToolHost => {
   const runId = typeof args["run_id"] === "string" && args["run_id"] !== "" ? args["run_id"] : "default";
-  const scratchDir = join(resolveRunDir(localRoots.runsRoot, runId, { workspace: workspace ?? null }), "scratch");
+  const scratchDir = join(resolveRunDir(localRoots.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) }), "scratch");
   mkdirSync(scratchDir, { recursive: true });
+  const sessionId = sessionIdOfExec(exec);
+  const home = join(localRoots.execHome, sessionHomeSlug(sessionId ?? "default"));
+  mkdirSync(home, { recursive: true });
   return {
     scratchDir,
     kernelDir: localRoots.kernelDir,
-    home: localRoots.execHome,
+    home,
     baseEnv: { ATF_SKILLS_AUTO_INSTALL: "0" },
   };
 };
@@ -145,7 +159,7 @@ export const buildBridgeTools = (
           const localHandler = WORKSPACE_TOOL_HANDLERS[definition.name];
           if (localHandler !== undefined) {
             if (localRoots === undefined) throw new Error(`本地治理工具 ${definition.name} 缺 localRoots 装配（runsRoot/kernelDir/execHome）`);
-            const host = localHostFor(localRoots, args, sessionWorkspaceSlug(exec));
+            const host = localHostFor(localRoots, args, exec);
             const localResult = await localHandler(args, host);
             if (localResult.kind === "executed") return asToolValue(localResult.result);
             return asToolValue({ error: "rejected", tool: definition.name, reason: localResult.reason, ...(localResult.detail !== undefined ? { detail: localResult.detail } : {}) });
