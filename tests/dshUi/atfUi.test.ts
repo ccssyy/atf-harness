@@ -6,8 +6,11 @@ import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage } from "../../packages/extensions/atf-ui/src/snapshot.js";
+import { PANEL_HTML } from "../../packages/extensions/atf-ui/src/panel.js";
 import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveTrainActiveWindowMs, resolveViewerRequest, scanEvalRounds, scanRunDir, scanRuns, looksLikeRun, RUN_MARKER_RELS, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
 import { tmuxHasSession, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
+import { progressFresh } from "../../src/core/workspace/runFacts.js";
+import { appendSegmentFact } from "../../src/core/workspace/segmentFacts.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -801,7 +804,7 @@ describe("批㊶-L L-2 segments 补 evaluate 推导", () => {
       mkdirSync(join(runDir, dir), { recursive: true });
       writeFileSync(join(runDir, dir, file), "{}");
     }
-    expect(scanRunDir(root, "run-ev").segments.evaluate).toBe(true);
+    expect(scanRunDir(root, "run-ev", { nowMs: Date.now() + 600_000 }).segments.evaluate).toBe(true); // S-B2：nowMs 过窗（loss-series fresh 窗口期不入前缀）
     const root2 = tempRoot();
     expect(scanRunDir(root2, "run-noev").segments.evaluate).toBe(false);
   });
@@ -942,5 +945,123 @@ describe("批㊶Q增补三 段3——scanRuns 双层扫描（幻影 run 防回�
     expect(ids).toEqual(["/cr_r2", "ci_smoke/cr_r3"]); // sort 序："/" < 字母
     expect(runs.find((r) => r.run_id === "cr_r2")?.workspace).toBeNull();
     expect(runs.find((r) => r.run_id === "cr_r3")?.workspace).toBe("ci_smoke");
+  });
+});
+
+describe("批㊶-S3 S-B2——八段卡判据链修复（lit 硬伤/级联抑制/percentage 出口/fresh 边界）", () => {
+  it("段序守卫豁免：事实轨段（experiment_config/publish）不因 register/label_qc 锚缺席被级联抹除（真机 done=0/8 根因）", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-guard");
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    writeFileSync(join(runDir, "webui", "config-snapshot.json"), "{}\n");
+    // 事实轨：atf_config_confirm/atf_publish_confirm 执行成功记录（真机 awb_r1 同形态）
+    appendSegmentFact(runDir, "experiment_config", "atf_config_confirm");
+    appendSegmentFact(runDir, "publish", "atf_publish_confirm");
+    const scan = scanRunDir(root, "run-guard");
+    expect(scan.segments.experiment_config).toBe(true);
+    expect(scan.segments.publish).toBe(true);
+    // owner 裁定（段显示态保序）：publish 事实反蕴含前段——register/label_qc 随前缀点亮，
+    // 不再出现 ✓○✓○ 间隔态；split/admission/training/evaluate 无证据如实 pending（frontier 后）
+    expect(scan.segments.register).toBe(true);
+    expect(scan.segments.label_qc).toBe(true);
+    expect(scan.segments.split).toBe(false);
+    expect(scan.segments.training).toBe(false);
+  });
+  it("收尾段完成锚入前缀：training/evaluate 证据使全段 8/8 保序点亮（间隔完成态消除）", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-tail");
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "adapter_model.safetensors"), "x");
+    writeFileSync(join(runDir, "training", "all_results.json"), "{}\n");
+    mkdirSync(join(runDir, "eval", "1-20261013", "orch", "eval"), { recursive: true });
+    writeFileSync(join(runDir, "eval", "1-20261013", "orch", "eval", "metrics_summary.json"), "{}\n");
+    const scan = scanRunDir(root, "run-tail");
+    expect(scan.segments.training).toBe(true);
+    expect(scan.segments.evaluate).toBe(true);
+    // 前缀闭包：收尾段证据反蕴含——全段 8/8（后段完成蕴含前段发生，无间隔态）
+    expect(scan.segments.register).toBe(true);
+    expect(scan.segments.admission).toBe(true);
+  });
+  it("snapshot segmentStatus：训练进行中（anchor 在场＋active）→ active 优先于 done（训练全程不再假✓）", () => {
+    const snap = buildMonitorSnapshot([{
+      ...sampleRun,
+      segments: { register: true, training: true },
+      training: { active: true, loss: [], pending_confirm: null },
+    }], { offline: true });
+    expect(snap.runs[0]?.segments.find((s) => s.key === "training")?.status).toBe("active");
+    const snapDone = buildMonitorSnapshot([{
+      ...sampleRun,
+      segments: { register: true, training: true },
+      training: { active: false, loss: [], pending_confirm: null },
+    }], { offline: true });
+    expect(snapDone.runs[0]?.segments.find((s) => s.key === "training")?.status).toBe("done");
+  });
+  it("panel.html 渲染回归：八段卡读四态 status（lit 硬伤退役）＋updated 空引用已删", () => {
+    const panel = PANEL_HTML;
+    expect(panel).not.toContain("s2.lit");
+    expect(panel).toContain("STATE_MARK");
+    expect(panel).not.toContain("getElementById('updated')");
+    // 四态标记闭集在模板（done✓/active●/failed✗/pending 序号）
+    expect(panel).toContain("background:var(--atf-success);color:#fff;font-size:12px;\">✓");
+    expect(panel).toContain("background:var(--atf-warning);color:#fff;font-size:12px;\">●");
+    expect(panel).toContain("background:var(--atf-danger);color:#fff;font-size:12px;\">✗");
+  });
+  it("progressFresh 边界：恰在窗口边界（now-at==window）算 fresh（≤语义）；超一毫秒即过期", () => {
+    const progress = { round: 1, updated_at: new Date(1_000).toISOString() };
+    expect(progressFresh(progress, 1_000 + 180_000, 180_000)).toBe(true);
+    expect(progressFresh(progress, 1_000 + 180_001, 180_000)).toBe(false);
+  });
+});
+
+describe("批㊶-S3 S-B1——通知面投影（monitor.json additive 键三同步）＋client 钉子", () => {
+  it("scanRunDir→monitor 投影白名单：eval_progress 五键闭集/eval_notices 元素键闭集（无路径命令面）", async () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-notice");
+    const orchDir = join(runDir, "eval", "1-20261013", "orch");
+    mkdirSync(orchDir, { recursive: true });
+    writeFileSync(join(orchDir, "progress.jsonl"), [
+      JSON.stringify({ ts: "2026-10-13T21:21:48+0800", phase: "launching", detail: "服务启动/等待就绪中,探活未过", elapsed_s: 0 }),
+      JSON.stringify({ ts: "2026-10-13T21:22:18+0800", phase: "ready", detail: "health 探测通过", elapsed_s: 30 }),
+      "",
+    ].join("\n"), "utf8");
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "adapter_model.safetensors"), "x");
+    appendSegmentFact(runDir, "training", "atf_run_training", "2026-10-13T12:00:00.000Z");
+    const scan = scanRunDir(root, "run-notice");
+    expect(Object.keys(scan.eval_progress ?? {}).sort()).toEqual(["detail", "elapsed_s", "phase", "round", "updated_at"]);
+    expect(scan.eval_notices.length).toBeGreaterThanOrEqual(3);
+    for (const n of scan.eval_notices) {
+      expect(Object.keys(n).every((k) => ["id", "round", "phase", "detail", "elapsed_s", "at", "kind"].includes(k))).toBe(true);
+    }
+    const snap = buildMonitorSnapshot([scan], { offline: true });
+    expect(snap.runs[0]?.eval_progress).toMatchObject({ phase: "ready" });
+    expect(Array.isArray(snap.runs[0]?.eval_notices)).toBe(true);
+    // 无账 run：投影键仍在（null/空数组——schema 形态稳定，client 回退不渲染）
+    const bare = scanRunDir(root, "run-bare");
+    expect(bare.eval_progress).toBeNull();
+    expect(bare.eval_notices).toEqual([]);
+  });
+  it("progress 持续写链节流：同周期内不重写（≥30s/run——决议 §四.1 恒在锚）", () => {
+    const serverSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/src/server.ts"), "utf8");
+    expect(serverSource).toContain("const PROGRESS_SYNC_MIN_MS = 30_000");
+    expect(serverSource).toContain("nowMs - (progressSyncLastMs.get(run.run_id) ?? 0) >= PROGRESS_SYNC_MIN_MS");
+  });
+  it("client.js 通知卡钉子：EvalNoticeStack＋去重已读集＋四态文案＋trainable 指引（裸服务——源面锚）", () => {
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    expect(clientSource).toContain("function EvalNoticeStack()");
+    expect(clientSource).toContain("atf_seen_notices");
+    expect(clientSource).toContain("launching: '评估服务启动中', initializing: '评估服务初始化中', ready: '评估服务就绪', failed: '评估服务失败'");
+    expect(clientSource).toContain("训练收尾完成，可发起评估（atf_evaluate）");
+    // 已读清理上限（localStorage 容量卫生）与新鲜窗口
+    expect(clientSource).toContain("keys.length > 200");
+    expect(clientSource).toContain("EVAL_NOTICE_MAX_AGE_MS");
+    // 挂载在 dock 行（浮卡展开态之后）
+    expect(clientSource).toContain("React.createElement(EvalNoticeStack)");
+  });
+  it("client.js 步进百分比上卡钉子：segDetail 两副本都带 percentage 位；failed 态判定串修正", () => {
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    expect(clientSource.match(/typeof progress\.percentage === 'number'\) bits\.push/g)?.length).toBe(2);
+    expect(clientSource).toContain("seg.status === 'failed'");
+    expect(clientSource).not.toContain("seg.status === 'fail'");
   });
 });

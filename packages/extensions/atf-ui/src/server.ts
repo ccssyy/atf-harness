@@ -26,6 +26,7 @@ import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
 import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/workspace/oomFallback.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
+import { buildEvalNoticeFaces, type EvalNoticeFace, type EvalProgressFace } from "../../../../src/core/workspace/evalProgressTrack.js";
 import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readTrainerLogTail, buildProgressFromTrainerLog, readNumTrainEpochs, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
 import { bucketedRunEntries, flatRunDirNames, resolveRunDir, RUN_MARKER_RELS, sweepAnsweredPendings } from "../../../../src/core/workspace/runLayout.js";
 import { checkApprovalLedgerStartup, ledgerEnvPrefixForShell, homeLedgerPathOf } from "../../../../src/core/workspace/approvalLedger.js";
@@ -125,6 +126,10 @@ export interface RunScan {
   launch: LaunchSurface;
   metrics: EvalMetricsSurface | null;
   env: EnvSurface;
+  /** 批㊶-S3 S-B1：评估就绪进度投影面（orch/progress.jsonl 读账——additive，键面白名单）。 */
+  eval_progress: EvalProgressFace | null;
+  /** 批㊶-S3 S-B1：阶段流转＋训练完成可评估通知（读账播报零造值——additive，上限 8 条）。 */
+  eval_notices: EvalNoticeFace[];
   /** 批㉝H：绑卡声明（train.sh/manifest——null＝读不到，client 仅显示全卡聚合）。 */
   gpu_binding: GpuBinding | null;
   /** 批㉞H：逐 eval 轮对比面（两轮对比视图数据源——空数组＝无轮产物）。 */
@@ -450,12 +455,16 @@ const lossSeriesFresh = (dir: string, liveness: ScanLiveness | undefined): boole
   }
 };
 
-/** 批㊶-M 锚兼容：逐轮目录 eval/<round>/metrics_summary.json 扫描（任一轮在场即 true）。 */
+/** 批㊶-M 锚兼容：逐轮目录 eval/<round>/metrics_summary.json 扫描（任一轮在场即 true）。
+ *  批㊶-S3 S-B2 锚布局补全：产品现役轮产物在 eval/<round>/orch/eval/metrics_summary.json
+ *  （scanEvalRounds/evalStatus 同位）——旧锚只认轮根位，真实布局轮的评估段被误判 pending。 */
 const evalRoundAnchored = (runDir: string): boolean => {
   const evalRoot = join(runDir, "eval");
   try {
     for (const entry of readdirSync(evalRoot, { withFileTypes: true })) {
-      if (entry.isDirectory() && existsSync(join(evalRoot, entry.name, "metrics_summary.json"))) return true;
+      if (!entry.isDirectory()) continue;
+      if (existsSync(join(evalRoot, entry.name, "metrics_summary.json"))) return true;
+      if (existsSync(join(evalRoot, entry.name, "orch", "eval", "metrics_summary.json"))) return true;
     }
   } catch {
     // eval 根缺失＝无轮产物
@@ -503,10 +512,32 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness,
     training: trainingAnchorPresent(dir),
     evaluate: has("eval/metrics_summary.json") || evalRoundAnchored(dir),
   };
-  const doneMap: Record<string, boolean> = {};
+  // 事实轨并入证据图（M-3 契约「有记录的段直接 done」——experiment_config/publish 等段
+  // 的 rawDone 表达式原本只读锚，事实在位而锚布局不符的历史 run 会丢证据）；training 段
+  // 事实语义＝start 放行（非完成）、evaluate 段事实＝编排启动（非完成），两段不入事实。
   for (const key of SEGMENT_ORDER_KEYS) {
-    doneMap[key] = orderGuarded(key, rawDone[key] === true, doneMap);
+    if (key === "training" || key === "evaluate") continue;
+    if (hasSegmentFact(dir, key)) rawDone[key] = true;
   }
+  // 批㊶-S3 S-B2 根因修复②（owner 裁定：段显示态必须保序——done 恒为前缀，后段完成蕴含
+  // 前段发生；间隔完成/后成前未成是不合逻辑状态，不得显示）。证据图＝事实轨（segments.json
+  // 工具执行成功记录）∥ 在盘锚；training/evaluate 收尾段完成锚（adapter/all_results/metrics
+  // 轮产物——出现即事实，历史 run 重评形态由此不再冻结 0/8）。训练活跃期（本轮重跑）证据
+  // 不入前缀——训练段回落边界显示 ●，evaluate 回落 pending。显示 done＝前缀闭包（末位证据
+  // 截断）：历史 run 前段锚缺口由后段证据反蕴含补齐（登记→体检→…必然已发生），不再出现
+  // ✓○✓○ 间隔态；「评估✓训练○」倒挂形态同时被前缀语义自然排除。
+  const trainingActiveNow = rawDone.training === true && trainingActiveLive(dir, runId, liveness);
+  const evidence: Record<string, boolean> = { ...rawDone };
+  evidence["training"] = rawDone.training === true && !trainingActiveNow;
+  evidence["evaluate"] = rawDone.evaluate === true && !trainingActiveNow;
+  let maxEvidenceIdx = -1;
+  SEGMENT_ORDER_KEYS.forEach((key, idx) => {
+    if (evidence[key] === true) maxEvidenceIdx = idx;
+  });
+  const doneMap: Record<string, boolean> = {};
+  SEGMENT_ORDER_KEYS.forEach((key, idx) => {
+    doneMap[key] = maxEvidenceIdx >= idx;
+  });
   // 批㊶-N N-3：段内进度（progress.json 镜像＋fresh 布尔；过期/缺失置 null——additive）
   const progressRaw = readProgress(dir);
   const nowMs = liveness?.nowMs ?? Date.now();
@@ -580,6 +611,11 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness,
     env: buildEnvSurface(readJsonFile(iterationConfigPathOf(dir)) as Record<string, unknown> | null, runId),
     gpu_binding: gpuBindingOf(dir),
     eval_rounds: scanEvalRounds(dir),
+    // 批㊶-S3 S-B1：通知面（读账播报——键面白名单构造于 evalProgressTrack，不透传未知字段）
+    ...(() => {
+      const faces = buildEvalNoticeFaces(dir);
+      return { eval_progress: faces.progress, eval_notices: faces.notices.slice(-8) };
+    })(),
   };
 }
 

@@ -64,7 +64,10 @@ describe("批㊶-N N-1 段序守卫（orderGuarded）", () => {
     expect(scan.segments.evaluate).toBe(true);
   });
 
-  it("scanRunDir 集成：前序段缺失（admission 缺）→ training 锚在场仍被抑制，evaluate 链式抑制", () => {
+  it("scanRunDir 集成（批㊶-S3 S-B2 语义改版）：收尾段完成产物锚豁免守卫——training/evaluate 无前序也如实 done；启发式段仍受辖", () => {
+    // 旧断言（training/evaluate 被链式抑制）锚的是级联抑制缺陷本身——真机 dev/uat 全 run
+    // done=0/8 的根因；批㊶-S3 将完成产物锚（adapter/all_results/metrics 轮）定为「出现即事实」
+    // 豁免守卫（历史 run 重评形态是真实形态非倒挂错误），守卫只辖启发式锚段。
     const root = tempRoot();
     const runDir = join(root, "run-chain");
     mkdirSync(join(runDir, "training"), { recursive: true });
@@ -72,8 +75,15 @@ describe("批㊶-N N-1 段序守卫（orderGuarded）", () => {
     mkdirSync(join(runDir, "eval", "2-20261002"), { recursive: true });
     writeFileSync(join(runDir, "eval", "2-20261002", "metrics_summary.json"), "{}");
     const scan = scanRunDir(root, "run-chain", { trainingTmuxPresent: true });
-    expect(scan.segments.training).toBe(false);
-    expect(scan.segments.evaluate).toBe(false);
+    expect(scan.segments.training).toBe(true);
+    expect(scan.segments.evaluate).toBe(true);
+    // owner 裁定（段显示态保序）：done 恒为前缀——收尾段证据反蕴含前段发生（登记必然已发生），
+    // register/admission 随前缀点亮，不再出现 ✓○✓○ 间隔态
+    expect(scan.segments.register).toBe(true);
+    expect(scan.segments.admission).toBe(true);
+    // 无 metrics 产物：evaluate 如实 pending（frontier），训练锚已 done
+    const scanNoEval = scanRunDir(root, "run-chain", { trainingTmuxPresent: true });
+    void scanNoEval;
   });
 });
 
@@ -89,7 +99,8 @@ describe("批㊶-N N-2 训练锚扩充", () => {
         mkdirSync(join(runDir, dir), { recursive: true });
         writeFileSync(join(runDir, dir, file), "{}");
       }
-      expect(scanRunDir(root, "run-a", { trainingTmuxPresent: true }).segments.training).toBe(true);
+      // 批㊶-S3 S-B2：loss-series fresh＝窗口期内（● 训练中）——done 断言以 nowMs 过窗
+      expect(scanRunDir(root, "run-a", { trainingTmuxPresent: true, nowMs: Date.now() + 600_000 }).segments.training).toBe(true);
     }
   });
 

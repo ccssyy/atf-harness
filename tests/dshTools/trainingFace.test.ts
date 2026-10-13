@@ -334,13 +334,15 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     const result = await tool.execute({ action: "status", train_sh: join(root, "x.sh"), run_id: "r-task" }, fakeExec);
     const segments = result.segments as Array<{ key: string; status: string }>;
     expect(segments.find((s) => s.key === "register")?.status).toBe("done");
-    // 段语义：loss-series 在场=done（面板口径）；进程态 running 单列
-    expect(segments.find((s) => s.key === "training")?.status).toBe("done");
+    // 段语义（批㊶-S3 S-B2 改版）：loss-series fresh＝训练进行中→active（修复前 done 与
+    // 训练全程假✓同根——active 优先于 done）；进程态 running 单列
+    expect(segments.find((s) => s.key === "training")?.status).toBe("active");
     const blocks = tool.output.render({}, result);
     const text = blocks[0]?.text ?? "";
     expect(text).toContain("训练任务卡 — run r-task");
     expect(text).toContain("✓ 数据登记");
-    expect(text).toContain("进度 7/8"); // 批㊶-N 段序守卫后前 7 段 done（原 2/8 夹具期）
+    expect(text).toContain("● 训练执行");
+    expect(text).toContain("进度 6/8"); // 训练段 active 不计入 done（前 6 段 done＋训练进行中）
     expect(text).toMatch(/运行中|未运行/); // tmux 在场与否二态均如实
     expect(text).toContain("loss 点数：1");
     // start 结果不走任务卡（保持 JSON 卡面）

@@ -793,7 +793,8 @@ window.__ModuleLoader__.load({
       if (run === null || run === undefined) return 'idle'
       var trainingNow = run.training && run.training.active === true
       if (trainingNow) return 'active'
-      var failed = (run.segments || []).some(function(seg) { return seg.status === 'fail' })
+      // 批㊶-S3 S-B2 修复④：snapshot 四态串是 'failed'（旧查 'fail' 恒不命中——失败态永不显示）
+      var failed = (run.segments || []).some(function(seg) { return seg.status === 'failed' })
       if (failed) return 'fail'
       if ((run.segments || []).some(function(seg) { return seg.status === 'done' })) return 'done'
       return 'idle'
@@ -801,6 +802,89 @@ window.__ModuleLoader__.load({
     var STATE_TEXT = { done: '已完成', active: '训练中', fail: '失败', idle: '空闲' }
     var SEGMENT_MARK = { done: '✓', active: '●', pending: '○' }
     function segmentMark(status) { return SEGMENT_MARK[status] || '✗' }
+
+    // ── 批㊶-S3 S-B1：评估就绪/可评估会话内通知卡（读账播报零造值）。
+    // 数据源＝monitor.json runs[].eval_notices/eval_progress（additive——同步器读内核编排
+    // orch/progress.jsonl 推导阶段流转，服务端只读账不造值；客户端按 id 去重渲染）。
+    // 「SSE 通道」字面的承载说明：live 链（本扩展）无 SSE 端点（src/webui 历史层才有且
+    // S2a 裁定勿改）——事件驱动语义由「服务端读账状态机＋客户端新 id 渲染」等价承载，
+    // 偏离登记候 owner 验。已读集 localStorage（重启/重开页不重弹旧跳）。
+    var NOTICE_SEEN_KEY = 'atf_seen_notices'
+    var EVAL_NOTICE_MAX_AGE_MS = 24 * 3600 * 1000
+    var PHASE_TEXT = { launching: '评估服务启动中', initializing: '评估服务初始化中', ready: '评估服务就绪', failed: '评估服务失败' }
+    var PHASE_COLOR = {
+      launching: 'var(--dsw-static-amber-500)', initializing: 'var(--dsw-static-amber-500)',
+      ready: 'var(--dsw-static-green-500)', failed: 'var(--dsw-static-red-500)', trainable: 'var(--dsw-static-green-500)',
+    }
+    function noticeSeenMap() {
+      try { var raw = window.localStorage.getItem(NOTICE_SEEN_KEY); return raw === null ? {} : (JSON.parse(raw) || {}) } catch (e) { return {} }
+    }
+    function markNoticeSeen(id) {
+      try {
+        var seen = noticeSeenMap()
+        seen[id] = Date.now()
+        var keys = Object.keys(seen)
+        if (keys.length > 200) {
+          keys.sort(function(a, b) { return seen[a] - seen[b] })
+          for (var k = 0; k < keys.length - 200; k++) delete seen[keys[k]]
+        }
+        window.localStorage.setItem(NOTICE_SEEN_KEY, JSON.stringify(seen))
+      } catch (e) { /* localStorage 不可用＝会话内去重降级（不阻塞监控主面） */ }
+    }
+    function noticeText(n) {
+      if (n && n.kind === 'trainable') return '训练收尾完成，可发起评估（atf_evaluate）'
+      var phase = n && typeof n.phase === 'string' ? n.phase : ''
+      var text = PHASE_TEXT[phase] || phase
+      var bits = []
+      if (typeof n.detail === 'string' && n.detail !== '') bits.push(n.detail)
+      if (typeof n.elapsed_s === 'number') bits.push('已等待 ' + n.elapsed_s + 's')
+      return bits.length > 0 ? text + ' · ' + bits.join(' · ') : text
+    }
+    function EvalNoticeStack() {
+      var mon = useMonitor()
+      var forceState = React.useState(0)
+      var force = forceState[1]
+      var sid = store.sessionId
+      if (mon === null || !sid) return null
+      var seen = noticeSeenMap()
+      var now = Date.now()
+      var cards = []
+      var pool = scopedRuns(mon, sid)
+      for (var i = 0; i < pool.length; i++) {
+        var run = pool[i]
+        var notices = Array.isArray(run.eval_notices) ? run.eval_notices : []
+        for (var j = 0; j < notices.length; j++) {
+          var n = notices[j]
+          if (n === null || typeof n !== 'object' || typeof n.id !== 'string') continue
+          if (seen[n.id]) continue
+          var at = Date.parse(typeof n.at === 'string' ? n.at : '')
+          if (Number.isFinite(at) && now - at > EVAL_NOTICE_MAX_AGE_MS) continue
+          cards.push({ runId: run.run_id || '', n: n })
+        }
+      }
+      if (cards.length === 0) return null
+      return React.createElement('div', { style: { position: 'fixed', right: 'calc(16px + var(--atf-pane-offset, 0px))', top: (topBarOffset() + 56), display: 'flex', flexDirection: 'column', gap: 8, zIndex: 799, maxWidth: 320 } },
+        cards.slice(-4).map(function(card) {
+          var n = card.n
+          var color = PHASE_COLOR[n.kind === 'trainable' ? 'trainable' : (typeof n.phase === 'string' ? n.phase : '')] || 'var(--dsw-static-neutral-500)'
+          return React.createElement('div', {
+            key: n.id,
+            className: 'atf-notice-card',
+            style: {
+              border: '1px solid var(--dsw-alias-border-l3)', borderRadius: 10, padding: '8px 10px',
+              background: 'var(--dsw-alias-bg-layer-2)', boxShadow: '0 4px 16px rgba(0,0,0,.12)',
+              display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer', fontSize: 12,
+            },
+            onClick: function() { markNoticeSeen(n.id); force(function(v) { return v + 1 }) },
+            title: '点击关闭（run ' + card.runId + '）',
+          },
+            React.createElement('span', { style: { width: 8, height: 8, borderRadius: 4, background: color, flex: 'none', marginTop: 4 } }),
+            React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+              React.createElement('div', { style: { fontWeight: 600, color: 'var(--dsw-alias-label-primary)' } }, noticeText(n)),
+              React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, card.runId)),
+            React.createElement('span', { style: { color: 'var(--dsw-alias-label-tertiary)', flex: 'none', padding: '0 2px' } }, '×'))
+        }))
+    }
 
     /** 悬浮任务卡（收起徽标默认；展开四区——附录 A 规格）。 */
     function FloatingTaskCard() {
@@ -840,6 +924,8 @@ window.__ModuleLoader__.load({
           // 批㊶-N N-3：段内进度优先（"第 6/8 轮 · 剩余 17 步 · loss 0.0589"——无回退 loss/ckpt）
           if (progress) {
             var bits = []
+            // 批㊶-S3 S-B2 修复③：步进百分比上卡（trainer_log percentage 直通——持续写链 30s 刷新）
+            if (typeof progress.percentage === 'number') bits.push(String(progress.percentage) + '%')
             if (typeof progress.round === 'number') bits.push(typeof progress.total_rounds === 'number' ? '第 ' + progress.round + '/' + progress.total_rounds + ' 轮' : '第 ' + progress.round + ' 轮')
             if (typeof progress.step_remaining === 'number') bits.push('剩余 ' + progress.step_remaining + ' 步')
             if (typeof progress.loss === 'number') bits.push('loss ' + progress.loss)
@@ -971,6 +1057,8 @@ window.__ModuleLoader__.load({
         if (seg.key === 'training') {
           if (progress) {
             var bits = []
+            // 批㊶-S3 S-B2 修复③：步进百分比上卡（trainer_log percentage 直通——持续写链 30s 刷新）
+            if (typeof progress.percentage === 'number') bits.push(String(progress.percentage) + '%')
             if (typeof progress.round === 'number') bits.push(typeof progress.total_rounds === 'number' ? '第 ' + progress.round + '/' + progress.total_rounds + ' 轮' : '第 ' + progress.round + ' 轮')
             if (typeof progress.step_remaining === 'number') bits.push('剩余 ' + progress.step_remaining + ' 步')
             if (typeof progress.loss === 'number') bits.push('loss ' + progress.loss)
@@ -1364,6 +1452,7 @@ window.__ModuleLoader__.load({
             return React.createElement('div', null,
               React.createElement(FloatingTaskCard),
               React.createElement(FloatingTaskCardExpanded),
+              React.createElement(EvalNoticeStack),
               React.createElement(GpuCard),
               React.createElement('div', { className: 'atf-pill-row' },
                 PILLS.map(function(pill) {

@@ -88,7 +88,9 @@ describe("批㊶-M 锚兼容三例", () => {
     writeFileSync(join(runDir, "training", "loss-series.json"), "[]");
     mkdirSync(join(runDir, "eval", "2-20261008"), { recursive: true });
     writeFileSync(join(runDir, "eval", "2-20261008", "metrics_summary.json"), "{}");
-    expect(scanRunDir(root, "run-eval").segments.evaluate).toBe(true);
+    // 批㊶-S3 S-B2 前缀闭包：loss-series fresh＝训练窗口期内（证据不入前缀）——完成态断言
+    // 以 nowMs 前拨过窗模拟（收尾段评估证据恢复入前缀）
+    expect(scanRunDir(root, "run-eval", { nowMs: Date.now() + 600_000 }).segments.evaluate).toBe(true);
     const root2 = tempRoot();
     const runDir2 = join(root2, "run-eval-top");
     seedPredecessors(runDir2);
@@ -96,7 +98,7 @@ describe("批㊶-M 锚兼容三例", () => {
     writeFileSync(join(runDir2, "training", "loss-series.json"), "[]");
     mkdirSync(join(runDir2, "eval"), { recursive: true });
     writeFileSync(join(runDir2, "eval", "metrics_summary.json"), "{}");
-    expect(scanRunDir(root2, "run-eval-top").segments.evaluate).toBe(true);
+    expect(scanRunDir(root2, "run-eval-top", { nowMs: Date.now() + 600_000 }).segments.evaluate).toBe(true);
   });
 
   it("publish：contract-candidate.json 在场即 done（segment-* 报告兜底保持；前序成立下锚兜底）", () => {

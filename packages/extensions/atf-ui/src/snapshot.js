@@ -24,13 +24,15 @@ export const KPI_KEYS = ["train_loss", "eval_loss", "learning_rate", "gpu_mem"];
 /** 段四态：done 完成 / active 进行中 / failed 失败 / pending 待办。 */
 function segmentStatus(run, key) {
   const seg = run.segments?.[key];
+  // 批㊶-S3 S-B2（owner 裁定：段显示态保序）：训练段活跃即 ●（活跃期证据不入前缀——
+  // scanRunDir 同规则，重跑/降档重发期间训练段不再假✓）；
+  // 完成锚已入前缀的段 done 优先（陈旧 pending-confirm 不越序置 ●——frontier 纪律）；
+  // 实验配置段 pending 确认卡在边界（未 done）时显示 active（等待用户四卡应答）。
+  if (key === "training" && run.training?.active === true) return "active";
+  if (seg === true) return "done";
+  if (key === "experiment_config" && run.training?.pending_confirm) return "active";
   if (seg === "failed") return "failed";
   if (seg === "active") return "active";
-  if (seg === true) return "done";
-  // 进行中语义：训练段有 loss 流即 active；评估段有推理中标记（预留）；
-  // 实验配置段有 pending 确认卡即 active（等待用户四卡应答）。
-  if (key === "training" && run.training?.active === true) return "active";
-  if (key === "experiment_config" && run.training?.pending_confirm) return "active";
   return "pending";
 }
 
@@ -73,6 +75,11 @@ export function buildMonitorSnapshot(runs, gpu, gpuAll) {
       progress: run.progress ?? run.training?.progress ?? null,
       // 批㊶-N N-5：会话绑定集（additive——可空数组）
       bound_sessions: Array.isArray(run.bound_sessions) ? run.bound_sessions : [],
+      // 批㊶-S3 S-B1 通知面（additive——读账播报零造值；键面白名单构造于 evalProgressTrack：
+      // eval_progress 五键闭集 round/phase/detail/elapsed_s/updated_at；eval_notices 元素
+      // {id,round?,phase?,detail?,elapsed_s?,at}∪{id,kind,at}，kind=eval_phase|trainable）
+      eval_progress: run.eval_progress ?? null,
+      eval_notices: Array.isArray(run.eval_notices) ? run.eval_notices : [],
       // 批㊶-P P-2：训练探针（additive——{level,reason,since}，无告警 null；schema v2 续）
       probe: run.probe ?? null,
       training: {

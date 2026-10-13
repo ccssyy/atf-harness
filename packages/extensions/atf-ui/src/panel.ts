@@ -101,17 +101,40 @@ function render(data) {
     : '<div class="dim">（暂无 run）</div>';
   const points = run && Array.isArray(run.training.points) ? run.training.points : [];
   const training = document.getElementById('training');
-  // 八段四态任务卡（codex 式）+角标（批⑳）
+  // 八段四态任务卡（codex 式）+角标（批⑳；批㊶-S3 S-B2 修复①：渲染读四态 status——
+  // 旧版读不存在的 lit 属性（monitor segments 元素为 {key,label,status}），八段恒不点亮）
   const taskEl = document.getElementById('atf-taskcard');
     if (taskEl && run) {
       const segs = run.segments || [];
-      const icon = (lit) => lit ? '✅' : '⬚';
-      taskEl.innerHTML = segs.map((s2, i) =>
-        '<div style="display:flex;gap:12px;padding:8px 0;align-items:center;' + (s2.lit ? '' : 'opacity:.5;') + '">'
-        + '<span style="width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none;'
-        + (s2.lit ? 'background:var(--atf-success);color:#fff;font-size:12px;">✓' : 'background:var(--atf-cardElevated);color:var(--atf-textSecondary);font-size:12px;">' + (i+1))
-        + '</span><span style="' + (s2.lit ? 'text-decoration:line-through;opacity:.7;' : '') + '">'
-        + (i+1) + '. ' + (s2.label || '') + '</span></div>').join('');
+      const STATE_MARK = { done: '✓', active: '●', failed: '✗', pending: '' };
+      taskEl.innerHTML = segs.map((s2, i) => {
+        var st = s2.status || 'pending';
+        var lit = st === 'done';
+        var live = st === 'active';
+        var markBg = lit ? 'background:var(--atf-success);color:#fff;font-size:12px;">✓'
+          : live ? 'background:var(--atf-warning);color:#fff;font-size:12px;">●'
+          : st === 'failed' ? 'background:var(--atf-danger);color:#fff;font-size:12px;">✗'
+          : 'background:var(--atf-cardElevated);color:var(--atf-textSecondary);font-size:12px;">' + (i+1);
+        return '<div style="display:flex;gap:12px;padding:8px 0;align-items:center;' + (lit ? '' : live ? '' : 'opacity:.5;') + '">'
+        + '<span style="width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none;' + markBg + '</span>'
+        + '<span style="' + (lit ? 'text-decoration:line-through;opacity:.7;' : live ? 'color:var(--atf-textPrimary);font-weight:600;' : '') + '">'
+        + (i+1) + '. ' + (s2.label || '') + '</span></div>';
+      }).join(''));
+      // 批㊶-S3 S-B2：步进百分比持续推进行（training.progress fresh 面——同步器 N-3 键；
+      // 过期/缺失 null 不渲染不猜测）＋评估就绪进度行（eval_progress 读账——四态+elapsed）
+      var progLine = '';
+      var rp = run.progress || null;
+      if (rp && typeof rp.percentage === 'number') {
+        progLine += '<div style="font-size:12px;color:var(--atf-textSecondary);padding:4px 0 0;font-family:monospace;">训练步进 '
+          + rp.percentage + '%' + (typeof rp.round === 'number' ? ' · 第 ' + rp.round + (typeof rp.total_rounds === 'number' ? '/' + rp.total_rounds : '') + ' 轮' : '') + '</div>';
+      }
+      var ep = run.eval_progress || null;
+      if (ep && typeof ep.phase === 'string') {
+        var phaseText = { launching: '评估服务启动中', initializing: '评估服务初始化中', ready: '评估服务就绪', failed: '评估服务失败' }[ep.phase] || ep.phase;
+        progLine += '<div style="font-size:12px;color:var(--atf-textSecondary);padding:4px 0 0;">评估（' + esc(ep.round) + '）：' + esc(phaseText)
+          + (typeof ep.elapsed_s === 'number' ? ' · 已等待 ' + ep.elapsed_s + 's' : '') + '</div>';
+      }
+      if (progLine !== '') taskEl.innerHTML += progLine;
     }
     const badge = document.getElementById('atf-cost');
     if (badge) badge.textContent = '调用 ' + points.length + ' 次 · token —';
@@ -136,7 +159,6 @@ function render(data) {
         : run.artifacts.map(a => '<div class="art-row"><span>'+esc(a.name)+'</span>'
           + '<button class="btn" data-path="'+esc(a.path)+'" data-name="'+esc(a.name)+'">[预览]</button></div>').join(''))
       + '</div>').join('');
-  document.getElementById('updated').textContent = '更新于 ' + new Date().toLocaleTimeString();
   const costEl = document.getElementById('atf-cost');
   if (costEl) costEl.textContent = '调用 ' + String((data.monitor?.runs ?? []).reduce((acc, r) => acc + (r.training?.points?.length ?? 0), 0)) + ' 次 · token 累计';
 }

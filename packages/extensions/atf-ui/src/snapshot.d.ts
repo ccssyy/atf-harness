@@ -21,6 +21,10 @@ export interface AtfRunScan {
   gpu_binding?: { devices: string; source: "train_sh" | "deploy_effective" } | null;
   /** 批㉞H：逐 eval 轮对比面（scanEvalRounds 产物；空数组＝无轮产物）。 */
   eval_rounds?: unknown[];
+  /** 批㊶-S3 S-B1：评估就绪进度投影（orch/progress.jsonl 读账；null＝无账）。 */
+  eval_progress?: unknown;
+  /** 批㊶-S3 S-B1：阶段流转＋训练完成可评估通知（读账播报；空数组＝无通知）。 */
+  eval_notices?: unknown[];
 }
 export interface AtfGpuStatus {
   offline: boolean;
@@ -52,6 +56,10 @@ export interface AtfMonitorSnapshot {
     gpu_binding: { devices: string; source: "train_sh" | "deploy_effective" } | null;
     /** 批㉞H：逐 eval 轮对比面（两轮对比视图数据源；空数组＝无轮产物）。 */
     eval_rounds: unknown[];
+    /** 批㊶-S3 S-B1：评估就绪进度投影（键面白名单五键；null＝无账）。 */
+    eval_progress: unknown;
+    /** 批㊶-S3 S-B1：通知面（eval_phase 流转＋trainable 可评估；空数组＝无）。 */
+    eval_notices: unknown[];
     training: { active: boolean; points: Array<Record<string, unknown>>; pending_confirm: unknown };
   }>;
 }
