@@ -51,7 +51,43 @@ window.__ModuleLoader__.load({
       setSettings: function(v) { this.settings = v; this.listeners.forEach(function(fn) { fn() }) },
     }
 
-    /** monitor.json 轮询（sessionId 由 header.utilities 注入后生效；未就绪期静默等下周期）。 */
+    // ── 批㊶-SSE S5：真 SSE 事件流订阅（传输层升级——事件到达即更新，渲染同一份数据）。
+    // 单例 EventSource（每页一条连接——连接上限治理面）；按 event: 键分路（snapshot 全量替换/
+    // gpu、gpu_all、runs 键值合并）；连接失败静默（EventSource 原生自动重连），轮询路保留兜底
+    // ——降级不降功能。通知卡已读集/新鲜窗复用窗口 B 版，零改动。
+    var ssePatchListeners = new Set()
+    var sseState = { es: null, failed: false }
+    function subscribeMonitorPatch(fn) {
+      monitorPatchEnsure()
+      ssePatchListeners.add(fn)
+      return function() { ssePatchListeners.delete(fn) }
+    }
+    function sseDispatch(key, value) {
+      ssePatchListeners.forEach(function(fn) { try { fn(key, value) } catch (e) { /* 单订阅方异常不断流 */ } })
+    }
+    function monitorPatchEnsure() {
+      if (sseState.es !== null || sseState.failed) return
+      if (typeof window === 'undefined' || typeof window.EventSource !== 'function') { sseState.failed = true; return }
+      try {
+        var es = new EventSource('/atf-ui/events')
+        sseState.es = es
+        es.addEventListener('snapshot', function(e) {
+          try { sseDispatch('snapshot', JSON.parse(e.data)) } catch (err) { /* 坏帧丢弃（下帧校正） */ }
+        })
+        var keys = ['gpu', 'gpu_all', 'runs']
+        for (var i = 0; i < keys.length; i++) {
+          (function(key) {
+            es.addEventListener(key, function(e) {
+              try { sseDispatch(key, JSON.parse(e.data)) } catch (err) { /* 坏帧丢弃 */ }
+            })
+          })(keys[i])
+        }
+        es.onerror = function() { /* 静默回退：EventSource 自动重连；轮询路始终兜底（降级不降功能） */ }
+      } catch (e) { sseState.failed = true }
+    }
+
+    /** monitor.json 轮询（sessionId 由 header.utilities 注入后生效；未就绪期静默等下周期）。
+     *  批㊶-SSE S5：SSE 到达即更新同一份 data（触发源换流式，渲染函数复用）；轮询保留兜底。 */
     function useMonitor() {
       var _s = React.useState(null)
       var data = _s[0], setData = _s[1]
@@ -69,7 +105,18 @@ window.__ModuleLoader__.load({
         }
         read()
         var t = setInterval(read, POLL_MS)
-        return function() { alive = false; clearInterval(t) }
+        // 批㊶-SSE S5：订阅事件流补丁——到达即合并（渲染同一份 data，卡面函数零改动）
+        var unsubPatch = subscribeMonitorPatch(function(key, value) {
+          if (!alive) return
+          if (key === 'snapshot' && value !== null && typeof value === 'object') { setData(value); return }
+          setData(function(prev) {
+            if (prev === null || typeof prev !== 'object' || !(key in prev)) return prev
+            var next = Object.assign({}, prev)
+            next[key] = value
+            return next
+          })
+        })
+        return function() { alive = false; clearInterval(t); unsubPatch() }
       }, [])
       return data
     }

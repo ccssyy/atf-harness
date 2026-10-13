@@ -8,7 +8,7 @@
  * 目录枚举是 workspace-scoped（DSH 文档口径），故枚举在服务端做、client 只读成品文件。
  * 纯函数（buildMonitorSnapshot/buildArtifactsSnapshot）在 ./snapshot.js，本仓 vitest 直测。
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { execFile, execFileSync } from "node:child_process";
 import * as net from "node:net";
 import { dirname, join, resolve, sep } from "node:path";
@@ -993,6 +993,8 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     const monitor = buildMonitorSnapshot(runs, gpu === null ? { offline: true } : { offline: false, ...gpu }, gpuAll ?? undefined);
     const artifacts = buildArtifactsSnapshot(runs);
     writeFileSync(join(outDir, "monitor.json"), `${JSON.stringify(monitor, null, 1)}\n`, "utf8");
+    // 批㊶-SSE S2：全 monitor 增量发布（与 snapshot 同一数据源——单源无二账；数据面零改动）
+    publishMonitorEvents(resolved.runsRoot, monitor as unknown as Record<string, unknown>);
     writeFileSync(join(outDir, "artifacts.json"), `${JSON.stringify(artifacts, null, 1)}\n`, "utf8");
     // 自包含面板（数据内嵌——file:// 直开即用；owner 侧刷新页面即取最新快照）
     writeFileSync(join(outDir, "panel.html"), PANEL_HTML.replace("__ATF_DATA_JSON__", JSON.stringify({ monitor, artifacts }).replace(/</g, "\\u003c")), "utf8");
@@ -1109,6 +1111,235 @@ export const resolveViewerRequest = (
   return { abs, type: mime };
 };
 
+// ===== 批㊶-SSE：真 SSE 事件流（D1② 全 monitor 增量／D2② 事件日志与 Last-Event-ID 完整回放）=====
+// 纯传输层：数据面零改动（progress.jsonl 读账/状态机/投影白名单不动）；事件 payload 与
+// monitor.json 各键白名单同源（值直取 buildMonitorSnapshot 产物，不新增字段）。
+// 参照 zai-org/ZCode SSE 工程面四要素：event: 命名／id: 续传序号／retry: 重连间隔／心跳注释帧。
+
+/** D1②：事件键闭集＝monitor 顶层语义键（schema 为常量、generated_at 为 tick 水印非状态——
+ *  两者不入 diff，否则每 tick 全键误报）。嵌套键（segments/progress/eval_progress/eval_notices
+ *  等）变化经由 runs 键整体下发——payload 即 monitor.json runs 数组原形，白名单同源。 */
+export const MONITOR_EVENT_KEYS: readonly string[] = ["gpu", "gpu_all", "runs"];
+
+/** 顶层键 diff（JSON 串比较——值同源直取，浅键足矣）：返回发生变化的事件键序列。 */
+export const diffMonitorKeys = (prev: Record<string, unknown> | null, next: Record<string, unknown>): string[] =>
+  MONITOR_EVENT_KEYS.filter((key) => {
+    if (prev === null || !(key in prev)) return true;
+    return JSON.stringify(prev[key]) !== JSON.stringify(next[key]);
+  });
+
+/** 事件日志滚动阈值（实现侧定，硬约束防无限增长）：单文件 2000 行；滚动保留现役＋1 代归档
+ *  （events.jsonl ↔ events.1.jsonl）——总量硬上限 ≈ 2×2000 行。 */
+export const SSE_EVENTLOG_MAX_LINES = 2_000;
+export const SSE_EVENTLOG_KEEP_ARCHIVES = 1;
+export const SSE_EVENTLOG_DIR = "eventlog";
+
+/** 连接治理阈值：每实例并发上限（env 可配）＋心跳间隔缺省 20s（15–30s 带内；env 供测试/调参）。 */
+export const SSE_MAX_CONNECTIONS_DEFAULT = 8;
+export const SSE_MAX_CONNECTIONS_ENV = "ATF_SSE_MAX_CONNECTIONS";
+export const SSE_HEARTBEAT_MS_DEFAULT = 20_000;
+export const SSE_HEARTBEAT_MS_ENV = "ATF_SSE_HEARTBEAT_MS";
+
+const sseIntEnv = (raw: string | undefined, fallback: number): number => {
+  const parsed = Number(raw);
+  return raw !== undefined && raw.trim() !== "" && Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+export const sseMaxConnections = (env: NodeJS.ProcessEnv = process.env): number =>
+  sseIntEnv(env[SSE_MAX_CONNECTIONS_ENV], SSE_MAX_CONNECTIONS_DEFAULT);
+export const sseHeartbeatMs = (env: NodeJS.ProcessEnv = process.env): number =>
+  sseIntEnv(env[SSE_HEARTBEAT_MS_ENV], SSE_HEARTBEAT_MS_DEFAULT);
+
+/** SSE 事件（传输面形态）：id 单调递增（日志尾恢复——跨重启单调）；event＝monitor 键名或
+ *  snapshot；data＝该键 monitor.json 值原形（白名单同源）。 */
+export interface SseEvent {
+  id: number;
+  event: string;
+  data: unknown;
+}
+
+export const sseEventlogDirOf = (runsRoot: string): string => join(runsRoot, OUT_DIR, SSE_EVENTLOG_DIR);
+
+/** SSE 帧构造（四要素：id/event/data；retry 由握手首帧单独下发） */
+export const sseFrame = (event: SseEvent): string =>
+  `id: ${String(event.id)}\nevent: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`;
+
+interface SseConnection {
+  res: ServerResponse;
+}
+
+const sseConnections = new Set<SseConnection>();
+let sseHeartbeatTimer: NodeJS.Timeout | null = null;
+let sseLastMonitor: Record<string, unknown> | null = null;
+let sseNextId: number | null = null;
+
+/** 测试钩子：清空连接表/缓存/序号（连接本身由调用方 res 销毁）。 */
+export const resetSseStreamStateForTest = (): void => {
+  sseConnections.clear();
+  if (sseHeartbeatTimer !== null) { clearInterval(sseHeartbeatTimer); sseHeartbeatTimer = null; }
+  sseLastMonitor = null;
+  sseNextId = null;
+};
+
+/** 日志尾恢复序号（跨重启单调）：读现役尾行 id，+1 起算；日志缺席＝1 起算。 */
+const sseNextEventId = (runsRoot: string): number => {
+  if (sseNextId !== null) return sseNextId;
+  let last = 0;
+  try {
+    const current = join(sseEventlogDirOf(runsRoot), "events.jsonl");
+    if (existsSync(current)) {
+      const lines = readFileSync(current, "utf8").split("\n").filter((l) => l.trim() !== "");
+      const tail = lines[lines.length - 1];
+      if (tail !== undefined) {
+        const parsed = JSON.parse(tail) as { id?: number };
+        if (typeof parsed.id === "number") last = parsed.id;
+      }
+    }
+  } catch { /* 日志不可读＝序号回退（越界回退快照路径兜底） */ }
+  sseNextId = last + 1;
+  return sseNextId;
+};
+
+/** 事件日志 append（滚动：现役超限→改档归档、归档超代→删除最旧）。写失败降级内存流：
+ *  console.warn 如实留痕，不阻断推送（指令 S3）。返回是否落盘成功。 */
+export const appendEventLog = (runsRoot: string, events: SseEvent[]): boolean => {
+  if (events.length === 0) return true;
+  const dir = sseEventlogDirOf(runsRoot);
+  try {
+    mkdirSync(dir, { recursive: true });
+    const current = join(dir, "events.jsonl");
+    let lines = 0;
+    if (existsSync(current)) lines = readFileSync(current, "utf8").split("\n").filter((l) => l.trim() !== "").length;
+    if (lines + events.length > SSE_EVENTLOG_MAX_LINES) {
+      const archive = join(dir, "events.1.jsonl");
+      if (existsSync(archive)) unlinkSync(archive); // 只保留 1 代归档（SSE_EVENTLOG_KEEP_ARCHIVES）
+      renameSync(current, archive);
+      lines = 0;
+    }
+    appendFileSync(current, events.map((e) => JSON.stringify(e)).join("\n") + "\n", "utf8");
+    return true;
+  } catch (cause) {
+    console.warn("[atf-ui] SSE 事件日志写失败，降级纯内存流:", cause instanceof Error ? cause.message : String(cause));
+    return false;
+  }
+};
+
+/** 回放读取：Last-Event-ID 定位——现役＋归档按代序拼接，返回 id > lastId 的有序事件；
+ *  无缝回放不可保证（lastId 早于最旧保留行＝日志已滚动截断；lastId > 尾行＝客户端来自
+ *  失踪日志/重置序号）→ null（调用方回退全量 snapshot，fail-closed 如实）。 */
+export const readEventsAfter = (runsRoot: string, lastId: number): SseEvent[] | null => {
+  try {
+    const dir = sseEventlogDirOf(runsRoot);
+    const files = [join(dir, "events.1.jsonl"), join(dir, "events.jsonl")].filter((f) => existsSync(f));
+    if (files.length === 0) return null;
+    const events: SseEvent[] = [];
+    let minId = Number.MAX_SAFE_INTEGER;
+    let maxId = 0;
+    for (const file of files) {
+      for (const line of readFileSync(file, "utf8").split("\n")) {
+        if (line.trim() === "") continue;
+        const parsed = JSON.parse(line) as Partial<SseEvent>;
+        if (typeof parsed.id !== "number" || typeof parsed.event !== "string") continue;
+        events.push({ id: parsed.id, event: parsed.event, data: parsed.data });
+        if (parsed.id < minId) minId = parsed.id;
+        if (parsed.id > maxId) maxId = parsed.id;
+      }
+    }
+    if (lastId + 1 < minId || lastId > maxId) return null; // 越界（滚动截断/日志重置）＝无缝回放不可保证
+    return events.filter((e) => e.id > lastId);
+  } catch {
+    return null; // 日志不可读＝fail-closed 回快照
+  }
+};
+
+/** 增量发布（tickOnce 写盘后调用——与 snapshot 同一数据源，单源无二账）：diff→id 分配→
+ *  日志 append（失败降级）→ 活连接 fan-out。首帧基线：prev 为 null 只入缓存不发光
+ *  （初态由连接握手 snapshot 帧承载）。 */
+export const publishMonitorEvents = (runsRoot: string, monitor: Record<string, unknown>): void => {
+  const changed = diffMonitorKeys(sseLastMonitor, monitor);
+  sseLastMonitor = monitor;
+  if (changed.length === 0) return;
+  const base = sseNextEventId(runsRoot);
+  const events: SseEvent[] = changed.map((key, i) => ({ id: base + i, event: key, data: monitor[key] }));
+  sseNextId = base + events.length;
+  appendEventLog(runsRoot, events);
+  for (const conn of sseConnections) {
+    for (const event of events) {
+      try { conn.res.write(sseFrame(event)); } catch { /* 写失败由 res error/close 路径清理 */ }
+    }
+  }
+};
+
+const sseWriteHead = (res: ServerResponse): void => {
+  // 头三件套对齐 zai-org/ZCode（packages/debug/server/index.ts：no-cache, no-transform）
+  res.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache, no-transform",
+    "connection": "keep-alive",
+  });
+  res.write("retry: 5000\n"); // 首帧重连间隔（四要素之 retry）
+};
+
+const sseEnsureHeartbeat = (): void => {
+  if (sseHeartbeatTimer !== null) return;
+  sseHeartbeatTimer = setInterval(() => {
+    for (const conn of sseConnections) {
+      try { conn.res.write(": ping\n\n"); } catch { /* 写失败由 error/close 路径清理 */ }
+    }
+  }, sseHeartbeatMs());
+};
+
+/** SSE 端点 handler 工厂（viewerRouteHandler 同款形态——apply 内以 webServer.register 挂载）。
+ *  鉴权走 requestRejection（不自造）；Last-Event-ID 定位回放，越界回退全量 snapshot。 */
+export const eventsRouteHandler = (deps: {
+  runsRoot: string;
+  reject?: (req: IncomingMessage) => 401 | 403 | undefined;
+}) =>
+(req: IncomingMessage, res: ServerResponse): void => {
+  const rejection = deps.reject?.(req);
+  if (rejection !== undefined) {
+    res.writeHead(rejection, { "content-type": "text/plain; charset=utf-8" });
+    res.end("dsh web authentication required\n");
+    return;
+  }
+  // 连接治理：并发上限 fail-closed（防连接堆积）
+  if (sseConnections.size >= sseMaxConnections()) {
+    res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
+    res.end("sse connection limit reached\n");
+    return;
+  }
+  if (res.writableEnded || res.destroyed) return;
+  sseWriteHead(res);
+  const rawLastId = req.headers["last-event-id"];
+  const lastId = typeof rawLastId === "string" ? Number(rawLastId) : NaN;
+  const hasLastId = Number.isFinite(lastId) && lastId >= 0;
+  const replay = hasLastId ? readEventsAfter(deps.runsRoot, lastId) : null;
+  if (hasLastId && replay !== null) {
+    // D2② 完整回放：定位后按序补发，其后增量由连接注册自然接上
+    //（读日志→写帧→注册全同步段——node 单线程无交叠，零丢失窗口）
+    for (const event of replay) res.write(sseFrame(event));
+  } else {
+    // 首连／越界回退：全量 snapshot（id＝当前日志尾——重连从其后增量续传）
+    const snapshotId = hasLastId ? lastId : sseNextEventId(deps.runsRoot) - 1;
+    res.write(sseFrame({ id: snapshotId, event: "snapshot", data: sseLastMonitor ?? {} }));
+  }
+  // 连接注册（此后增量直达）；心跳由全局单定时器迭代全部连接（末连接离开即停）
+  const conn: SseConnection = { res };
+  sseConnections.add(conn);
+  sseEnsureHeartbeat();
+  res.on("close", () => {
+    sseConnections.delete(conn);
+    if (sseConnections.size === 0 && sseHeartbeatTimer !== null) {
+      clearInterval(sseHeartbeatTimer);
+      sseHeartbeatTimer = null;
+    }
+  });
+  res.on("error", () => {
+    sseConnections.delete(conn);
+    res.destroy();
+  });
+};
+
 export function apply(
   ctx: {
     effect(run: () => () => void, label: string): void;
@@ -1176,6 +1407,18 @@ export function apply(
         });
       ctx.effect(() => disposeRoute, "atf-ui: viewer 静态路由");
       console.log(`[atf-ui] viewer 静态路由已注册（${VIEWER_ROUTE_PREFIX}/<runId>/）`);
+      // 批㊶-SSE S1：真 SSE 事件流端点（D1② 全 monitor 增量／D2② Last-Event-ID 回放）——
+      // 鉴权沿壳 connection 信任面（不自造）；连接上限/心跳/滚动日志阈值见常量段
+      const disposeEvents = webServer.register({
+        kind: "prefix",
+        path: "/atf-ui/events",
+        handler: eventsRouteHandler({
+          runsRoot: resolved.runsRoot,
+          reject: (req) => connection.requestRejection(req),
+        }),
+      });
+      ctx.effect(() => disposeEvents, "atf-ui: SSE 事件流路由");
+      console.log("[atf-ui] SSE 事件流路由已注册（/atf-ui/events）");
     }
   }
   // 批㊶-S5 B1/B2：设置面数据层（实例隔离 store——<HOME>/.atf/webui-settings.json，env 可覆写）
