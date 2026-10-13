@@ -6,12 +6,14 @@
  * （开发态零扰）。显式 PYTHONPATH 缺席时从内核目录派生（内核仓 src 布局：<kernelDir>/src，
  * 探测 agentic_training_flow 包在位才注入——派生不出不猜，握手期错误如实回流）。
  * 消费方：packages/extensions/atf-tools（装配）与 atf-ui（徽标注入）——两插件同进程同
- * env，共用本单源防分叉。内核版本面＝内核目录 `git describe --tags`（pin 工作树为
- * tagged 提交即精确 tag），fail-soft null（徽标如实降级为无版本）。
+ * env，共用本单源防分叉。内核版本面（批㊶-ISO-2 S2）＝boot 行以 bridge 握手实载版本为准
+ * （probeBridgeHandshakeVersionSync）；`git describe --tags`（kernelVersionSync）降交叉核对
+ * 项——fail-soft null（徽标面沿 describe，如实降级为无版本）。
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
+import { encodeRequestFrame } from "./frames.js";
 
 export interface BridgeDeployment {
   /** mock＝缺省开发对端；real＝env/配置显式指真内核。 */
@@ -127,4 +129,85 @@ export const kernelVersionSync = (kernelRoot: string | null, timeoutMs = 3_000):
   } catch {
     return null;
   }
+};
+
+// 批㊶-ISO-2 S2——boot 桥版本行实载化（先实锚：现行版本行＝kernelVersionSync 读 pin worktree
+// 的 git describe，疑非 serve 进程实载——门1件 §一.S2 审计：live 进程 env 无 PYTHONPATH 指
+// pin，实测解析系统 site-packages＝0.4.2b1 与 pin 脱钩）。修复＝版本显示以 bridge 握手
+// （atf.version 的 version 字段——serve 进程实载版本，契约面现成）为准；describe 降交叉
+// 核对项，不一致双显＋warning。
+
+/** 桥版本面（boot 版本行输入——握手实载为准＋describe 交叉核对）。 */
+export interface BridgeBootVersionSurface {
+  /** 握手实载版本（atf.version→version）；握手不可达＝null。 */
+  handshake: string | null;
+  /** 握手失败摘要（code: message 摘要——版本行如实标注「未证实实载」）。 */
+  handshakeError: string | null;
+  /** git describe 交叉核对值（pin 工作树标签；不可用＝null）。 */
+  describe: string | null;
+  /** 握手 vs describe 不一致告警（一致/不可比＝null——双显＋warning 文案）。 */
+  mismatchWarning: string | null;
+}
+
+/**
+ * 桥握手版本探针（同步——boot 装配面 apply() 为同步函数；spawnSync 一次性喂 atf.version
+ * 帧、读首行响应、对端读 EOF 自退）。探针为只读诊断：不写任何状态、不触碰在途进程。
+ * 失败 fail-soft（handshakeError 留因）——boot 版本行降级为 describe 未核对显示。
+ */
+export const probeBridgeHandshakeVersionSync = (deployment: BridgeDeployment, timeoutMs = 8_000): BridgeBootVersionSurface => {
+  const describe = kernelVersionSync(deployment.kernelRoot);
+  let handshake: string | null = null;
+  let handshakeError: string | null = null;
+  if (deployment.argv.length > 0) {
+    const encoded = encodeRequestFrame({ type: "request", id: 1, method: "atf.version" });
+    if (encoded.ok) {
+      try {
+        const run = spawnSync(deployment.argv[0] as string, deployment.argv.slice(1), {
+          input: encoded.value,
+          timeout: timeoutMs,
+          encoding: "utf8",
+          maxBuffer: 4 * 1024 * 1024,
+          ...(Object.keys(deployment.childEnv).length > 0 ? { env: { ...process.env, ...deployment.childEnv } } : {}),
+        });
+        const firstLine = (run.stdout ?? "").split("\n").map((l) => l.trim()).find((l) => l !== "") ?? "";
+        try {
+          const frame = JSON.parse(firstLine) as { type?: string; ok?: boolean; result?: { version?: unknown } };
+          const version = frame.result?.["version"];
+          if (frame.type === "response" && frame.ok === true && typeof version === "string" && version !== "") {
+            handshake = version;
+          } else {
+            handshakeError = `handshake_failed:响应帧非 atf.version 结果（${firstLine.slice(0, 120)}）`;
+          }
+        } catch {
+          handshakeError = `handshake_failed:首行非合法帧（${firstLine.slice(0, 120) || "空"}；stderr 头：${(run.stderr ?? "").slice(0, 120)}）`;
+        }
+      } catch (cause) {
+        handshakeError = `spawn_failed:${String(cause).slice(0, 160)}`;
+      }
+    } else {
+      handshakeError = `protocol_error:${encoded.error.message}`;
+    }
+  }
+  // v 前缀双侧归一（内核 __version__ 无 v、describe tag 带 v；mock 对端自带 v 前缀亦归一）
+  const norm = (s: string): string => s.replace(/^v/, "");
+  const mismatchWarning =
+    handshake !== null && describe !== null && norm(handshake) !== norm(describe)
+      ? `⚠ 版本源不一致（以握手实载为准）：describe=${describe} vs 实载=${handshake}——serve 进程载荷与 pin 工作树标签脱钩（查桥命令 PYTHONPATH 注入链／re-pin 残留）`
+      : null;
+  return { handshake, handshakeError, describe, mismatchWarning };
+};
+
+/** boot 版本行文本（握手实载为准；握手不可达如实降级为 describe 未核对——不假报实载）。 */
+export const formatBridgeBootVersionText = (surface: BridgeBootVersionSurface | null): string => {
+  if (surface === null) return "版本未知（非 real 对端）";
+  if (surface.handshake !== null) {
+    if (surface.describe === null) return `${surface.handshake}（握手实载）`;
+    return surface.mismatchWarning !== null
+      ? `${surface.handshake}（握手实载；describe=${surface.describe} 不一致——以实载为准）`
+      : `${surface.handshake}（握手实载；describe 交叉核对一致）`;
+  }
+  const why = surface.handshakeError !== null ? surface.handshakeError.slice(0, 80) : "探针不可用";
+  return surface.describe !== null
+    ? `describe=${surface.describe}（握手不可达——${why}；实载未证实）`
+    : `版本未知（握手不可达——${why}；describe 亦不可用）`;
 };

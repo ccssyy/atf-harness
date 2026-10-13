@@ -5,7 +5,7 @@
  *   node dist/agent/main.js                        # mock 对端（缺省，零外部依赖）
  *   node dist/agent/main.js --peer real [--ws-root <path>]
  *                                                  # pin 副本真内核（ATF_CLI_PATH 或
- *                                                  # <repo>/.atf-pinned；隔离 HOME；
+ *                                                  # 实例 pin 根单源；隔离 HOME；
  *                                                  # ws-root 缺省 = /tmp 临时工作区）
  *
  * 红线：模型循环恒为 faux streamFn（零真实 Provider 调用）；真内核模式下
@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { AtfBridgeConnection } from "../bridge/connection.js";
 import { deriveAtfCommand } from "../bridge/atfCommand.js";
+import { resolveInstanceKernelDir } from "../core/workspace/instancePin.js";
 import { runGate1aSpike } from "./spike.js";
 import { runGate1bPoc } from "./tem/poc.js";
 
@@ -39,8 +40,7 @@ const main = async (): Promise<number> => {
   let sessionsRoot: string;
   let bindRunId: string | undefined;
   if (peerReal) {
-    const envKernel = process.env["ATF_CLI_PATH"]?.trim();
-    const kernelDir = envKernel !== undefined && envKernel !== "" ? envKernel : join(repoRoot, ".atf-pinned");
+    const kernelDir = resolveInstanceKernelDir(process.env, repoRoot);
     const home = await mkdtemp(join(tmpdir(), "atf-spike-home-"));
     const wsRootResolved = wsRoot ?? (await mkdtemp(join(tmpdir(), "atf-spike-ws-")));
     // 预置（TUI 真对端同序）：atf init（幂等）→ 建 run 骨架目录（内核 run 存在性 =

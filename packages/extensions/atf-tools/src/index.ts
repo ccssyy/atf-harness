@@ -18,9 +18,10 @@ import z from "@deepseek-ai/schemastery";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { resolveBridgeDeployment, kernelVersionSync } from "../../../../src/bridge/bridgeCommand.js";
+import { resolveBridgeDeployment, probeBridgeHandshakeVersionSync, formatBridgeBootVersionText, type BridgeBootVersionSurface } from "../../../../src/bridge/bridgeCommand.js";
 import { checkApprovalLedgerStartup } from "../../../../src/core/workspace/approvalLedger.js";
 import { runBootPreflight, formatPreflightFatal, BOOT_PREFLIGHT_PIPELINE_ENV, BOOT_PREFLIGHT_BRIDGE_ENV } from "../../../../src/core/workspace/bootPreflight.js";
+import { resolveInstanceKernelDir, resolveInstancePinRoot } from "../../../../src/core/workspace/instancePin.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { registerApprovalExempt } from "./approvalExempt.js";
 import { buildFileGuardTools, registerPathGuard } from "./fileGuardFace.js";
@@ -59,7 +60,7 @@ export const Config = z.object({
     .default(process.env["ATF_DSH_RUNS_ROOT"] ?? join(repoRoot, "tmp", "webui-runs")),
   kernelDir: z
     .string()
-    .default(process.env["ATF_DSH_KERNEL_DIR"] ?? process.env["ATF_CLI_PATH"] ?? join(repoRoot, ".atf-pinned")),
+    .default(resolveInstanceKernelDir(process.env, repoRoot)),
   execHome: z
     .string()
     .default(process.env["ATF_DSH_EXEC_HOME"] ?? join(repoRoot, "tmp", "atf-exec-home")),
@@ -80,7 +81,10 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // 批㊶-W：boot 环境预检分级自愈（§五/§6.3——L1 产品写权限内自动补＋留痕；L2 系统级
   // fail-fast 给可复制命令。先于账本校验与工具装配：env 补齐影响后续全部取值链；
   // L1 补齐写 preflightEnv 局部束（不写 process.env——并发实例同进程装配互踩面收敛）。
-  const preflight = runBootPreflight(process.env, {}, config.kernelDir);
+  // 批㊶-ISO-2 S1：实例 pin 根单源（resolveInstancePinRoot——env 显式＞兼容回退共享态）；
+  // 预检做 worktree 实锚校验＋回退留痕（「pin 路径：回退共享态」随 notes 行进 boot 日志）。
+  const instancePin = resolveInstancePinRoot(process.env, repoRoot);
+  const preflight = runBootPreflight(process.env, {}, config.kernelDir, { root: instancePin.root, explicit: instancePin.source === "env" });
   console.log(`[atf-preflight] 预检完成：L1 自愈 ${preflight.autoFixed.length} 项／L2 fatal ${preflight.fatal.length} 项／观察 ${preflight.notes.length} 项`);
   for (const note of preflight.notes) console.log(`[atf-preflight] ${note}`);
   const preflightEnv: Record<string, string> = {};
@@ -110,11 +114,17 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // 批㊶-E-H 项 2.1：桥对端装配单源（src/bridge/bridgeCommand.ts）——ATF_DSH_BRIDGE_COMMAND
   // 在场即真内核 argv＋PYTHONPATH（子进程私有 env，派生自 kernelDir/src）；缺席保留 mock。
   const deployment = resolveBridgeDeployment({ commandValue: bridgeCommand, kernelDir: config.kernelDir, env: process.env });
-  const kernelVersion = deployment.mode === "real" ? kernelVersionSync(deployment.kernelRoot) : null;
+  // 批㊶-ISO-2 S2：boot 版本行以 bridge 握手实载版本为准（atf.version→version——serve 进程
+  // 实载）；kernelVersionSync describe 降交叉核对项，不一致双显＋warning（同步探针 fail-soft，
+  // 握手不可达时如实降级为 describe 未核对显示）。
+  const versionSurface: BridgeBootVersionSurface | null = deployment.mode === "real" ? probeBridgeHandshakeVersionSync(deployment) : null;
   const bridgeLine = deployment.mode === "real"
-    ? `real（${deployment.argv.join(" ")}${deployment.childEnv["PYTHONPATH"] !== undefined ? ` ｜ PYTHONPATH=${deployment.childEnv["PYTHONPATH"]}` : ""}）内核 ${kernelVersion ?? "版本未知（git describe 不可用）"}`
+    ? `real（${deployment.argv.join(" ")}${deployment.childEnv["PYTHONPATH"] !== undefined ? ` ｜ PYTHONPATH=${deployment.childEnv["PYTHONPATH"]}` : ""}）内核 ${formatBridgeBootVersionText(versionSurface)}`
     : `mock（${deployment.argv.join(" ")}——设 ATF_DSH_BRIDGE_COMMAND 切真内核）`;
   console.log(`[atf-tools] 桥对端: ${bridgeLine}`);
+  if (versionSurface?.mismatchWarning !== undefined && versionSurface !== null && versionSurface.mismatchWarning !== null) {
+    console.warn(`[atf-tools] ${versionSurface.mismatchWarning}`);
+  }
   console.log(`[atf-tools] 管线对端: ${pipelineCommand}${process.env[BOOT_PREFLIGHT_PIPELINE_ENV] !== undefined ? "（env 真命令——F4）" : "（mock 缺省——设 ATF_DSH_PIPELINE_COMMAND 切真管线）"}`);
   const manager = new BridgeManager(deployment.argv, repoRoot, deployment.childEnv);
 

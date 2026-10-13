@@ -29,6 +29,7 @@ import { Agent, BACKGROUND_CONTEXT, type AgentEvent, type AgentMessage, type Que
 import type { AssistantMessage, TranscriptContext, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { AtfBridgeConnection } from "../bridge/connection.js";
 import { deriveAtfCommand } from "../bridge/atfCommand.js";
+import { resolveInstanceKernelDir } from "../core/workspace/instancePin.js";
 import { HARNESS_SYSTEM_PROMPT } from "../llm/systemPrompt.js";
 import { loadLlmProviderConfig, type ResolvedLlmProviderConfig } from "../llm/providerConfig.js";
 import { buildAtfAgentTools, type SpikeBridgeTransport } from "./atfAgentTools.js";
@@ -240,8 +241,7 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
   // v2 A7 白名单：--fs-root 追加根（real 对端再追加 workspace runs 根；scratch 主根在 runV1Headless 补）
   const fsRootsExtra: string[] = [...args.fsRoots];
   if (args.peer === "real") {
-    const envKernel = env["ATF_CLI_PATH"]?.trim();
-    const kernelDir = envKernel !== undefined && envKernel !== "" ? envKernel : join(repoRoot, ".atf-pinned");
+    const kernelDir = resolveInstanceKernelDir(env, repoRoot);
     const home = await mkdtemp(join(tmpdir(), "atf-v1-home-"));
     const wsRootResolved = args.wsRoot ?? (await mkdtemp(join(tmpdir(), "atf-v1-ws-")));
     fsRootsExtra.push(join(wsRootResolved, "runs"));

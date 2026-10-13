@@ -102,7 +102,7 @@ describe("W2 §6⑥＋D-2：内核目录解析（ATF_CLI_PATH 覆盖 > 缺省 .a
     expect(!resolved.ok && resolved.error.includes("worktree add")).toBe(true);
   });
 
-  it("env 未设 + 仓内 .atf-pinned 存在 → 缺省命中", () => {
+  it("env 未设 + 仓内 .atf-pinned 存在 → 回退共享 pin（ISO-2 S1 兼容态）", () => {
     const repo = mkdtempSync(join(tmpdir(), "w2-args-repo-"));
     mkdirSync(join(repo, ".atf-pinned"), { recursive: true });
     try {
@@ -110,8 +110,30 @@ describe("W2 §6⑥＋D-2：内核目录解析（ATF_CLI_PATH 覆盖 > 缺省 .a
       expect(resolved.ok).toBe(true);
       if (resolved.ok) {
         expect(resolved.path).toBe(join(repo, ".atf-pinned"));
-        expect(resolved.source).toBe("缺省 .atf-pinned");
+        expect(resolved.source).toBe("回退共享 pin");
       }
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("批㊶-ISO-2 S1：ATF_INSTANCE_PIN_ROOT 设置 → 实例 pin 优先于共享回退（CLI_PATH 仍最优先）", () => {
+    const repo = mkdtempSync(join(tmpdir(), "w2-args-repo-"));
+    const instancePin = join(repo, "instance-pinned");
+    mkdirSync(instancePin, { recursive: true });
+    try {
+      const resolved = resolveKernelDir({ ATF_INSTANCE_PIN_ROOT: instancePin }, repo);
+      expect(resolved.ok).toBe(true);
+      if (resolved.ok) {
+        expect(resolved.path).toBe(instancePin);
+        expect(resolved.source).toBe("ATF_INSTANCE_PIN_ROOT");
+      }
+      // ATF_CLI_PATH 在场仍最优先（既有覆盖轴不变）
+      const legacy = join(repo, ".atf-pinned");
+      mkdirSync(legacy, { recursive: true });
+      const viaCliPath = resolveKernelDir({ ATF_INSTANCE_PIN_ROOT: instancePin, ATF_CLI_PATH: legacy }, repo);
+      expect(viaCliPath.ok).toBe(true);
+      if (viaCliPath.ok) expect(viaCliPath.source).toBe("ATF_CLI_PATH");
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }

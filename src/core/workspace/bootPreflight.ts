@@ -14,6 +14,10 @@
  *   ④ python3 可用（`python3 -c "import sys"` 级探活）→ 失败 L2 fatal（附安装命令）。
  *   ⑤ nvidia-smi 可达 → 失败 L2 fatal（GPU 机器必备；ATF_GPU_REQUIRED=0 显式豁免）。
  *   ⑥ 对端命令文件存在性：env 已配置形态下指向的脚本缺席 → L2 fatal。
+ *   ⑦ pin 树 worktree 实锚（批㊶-ISO-2 S1）：实例 pin 根在场即校验——`git describe --tags`
+ *     可解析（worktree 形态实锚）且 describe tag 与 pin 树版本串（__init__.py __version__）
+ *     一致（沿 test_release_version_consistency 语义）；不可解析/不一致 → L2 fatal（附核查
+ *     命令）。实例 pin 未配置（回退共享态）→ notes 留痕「pin 路径：回退共享态」。
  * L1 补齐＝返回值 autoFixed（调用方写回 process.env）＋boot 日志留痕「已自动补齐 X」；
  * L2 fatal 非空 → 调用方抛错拒绝 boot（fail-closed 纪律不变）。
  */
@@ -59,6 +63,8 @@ export interface PreflightProbes {
   listJsonFiles?: (dir: string) => string[];
   /** JSON 文本读取（缺省 readFileSync）。 */
   readText?: (path: string) => string | null;
+  /** 批㊶-ISO-2 S1：pin 树 tag 探测（缺省 execFileSync `git describe --tags`；null＝不可解析）。 */
+  gitDescribe?: (root: string) => string | null;
 }
 
 export const BOOT_PREFLIGHT_PIPELINE_ENV = "ATF_DSH_PIPELINE_COMMAND";
@@ -73,6 +79,25 @@ const defaultCommandWorks = (command: string, args: readonly string[]): boolean 
   } catch {
     return false;
   }
+};
+
+/** 批㊶-ISO-2 S1：pin 树 tag 探测缺省实现（`git describe --tags`；非 worktree/无 tag/超时＝null）。 */
+const defaultGitDescribe = (root: string): string | null => {
+  try {
+    const out = execFileSync("git", ["-C", root, "describe", "--tags"], { timeout: 5_000, stdio: ["ignore", "pipe", "ignore"] });
+    const tag = out.toString("utf8").trim();
+    return tag !== "" ? tag : null;
+  } catch {
+    return null;
+  }
+};
+
+/** 批㊶-ISO-2 S1：pin 树版本串读取（src/agentic_training_flow/__init__.py `__version__`；缺读＝null）。 */
+export const pinVersionFromTree = (root: string, readText: (path: string) => string | null): string | null => {
+  const text = readText(join(root, "src", "agentic_training_flow", "__init__.py"));
+  if (text === null) return null;
+  const m = /__version__\s*=\s*"([^"]+)"/.exec(text);
+  return m?.[1] ?? null;
 };
 
 /** env-profiles train.env 声明值提取（LD_LIBRARY_PATH 等 env 键——有显式声明才构成自愈源）。 */
@@ -107,9 +132,16 @@ export const declaredLdLibraryPathFromProfiles = (home: string, probes: Prefligh
 };
 
 /** boot 预检主入口（纯逻辑＋可注入探测；调用方＝atf-tools apply）。
- *  kernelDirOverride＝Config 解析后的内核目录（env 缺席时 Config 有 repoRoot/.atf-pinned
- *  缺省——预检与装配取同一值，避免「env 面」与「装配面」错位误报）。 */
-export const runBootPreflight = (env: Record<string, string | undefined>, probes: PreflightProbes = {}, kernelDirOverride?: string): PreflightReport => {
+ *  kernelDirOverride＝Config 解析后的内核目录（env 缺席时 Config 有实例 pin 根缺省——
+ *  预检与装配取同一值，避免「env 面」与「装配面」错位误报）。
+ *  pin（批㊶-ISO-2 S1）＝实例 pin 根解析值（resolveInstancePinRoot）——在场即做 worktree
+ *  实锚校验＋回退共享态留痕；缺席（旧调用方）＝本项跳过。 */
+export const runBootPreflight = (
+  env: Record<string, string | undefined>,
+  probes: PreflightProbes = {},
+  kernelDirOverride?: string,
+  pin?: { root: string; explicit: boolean },
+): PreflightReport => {
   const fileExists = probes.fileExists ?? ((p: string) => existsSync(p));
   const dirExists = probes.dirExists ?? ((p: string) => existsSync(p));
   const commandWorks = probes.commandWorks ?? defaultCommandWorks;
@@ -227,6 +259,41 @@ export const runBootPreflight = (env: Record<string, string | undefined>, probes
         fix: `ls ${scriptArg}  # 核对路径；真内核 pin 副本经 git worktree 检出`,
       });
     }
+  }
+  // ⑦ pin 树 worktree 实锚（批㊶-ISO-2 S1——回退共享态留痕＋tag↔版本串一致性）
+  if (pin !== undefined) {
+    if (!pin.explicit) {
+      notes.push("pin 路径：回退共享态——实例 pin 未配置（ATF_INSTANCE_PIN_ROOT；ISO-2 生效段切实例 pin 后此留痕消失）");
+    }
+    if (dirExists(pin.root)) {
+      const described = (probes.gitDescribe ?? defaultGitDescribe)(pin.root);
+      const version = pinVersionFromTree(pin.root, probes.readText ?? ((p: string) => { try { return readFileSync(p, "utf8"); } catch { return null; } }));
+      if (described === null) {
+        fatal.push({
+          level: "L2",
+          check: "pin_worktree",
+          missing: `pin 树非 worktree 形态或 tag 不可解析：${pin.root}`,
+          fix: `git -C ${pin.root} describe --tags 2>&1; git -C ${pin.root} worktree list  # 核对 pin 树须为内核仓 worktree 检出在发版 tag`,
+        });
+      } else if (version === null) {
+        fatal.push({
+          level: "L2",
+          check: "pin_version",
+          missing: `pin 树版本串不可读（src/agentic_training_flow/__init__.py __version__ 缺失）：${pin.root}`,
+          fix: `ls ${join(pin.root, "src", "agentic_training_flow", "__init__.py")}  # 核对 pin 树完整性（re-pin 残留）`,
+        });
+      } else if (described.replace(/^v/, "") !== version) {
+        fatal.push({
+          level: "L2",
+          check: "pin_version_consistency",
+          missing: `pin 树 tag 与版本串不一致：describe=${described} vs __version__=${version}（${pin.root}）`,
+          fix: `git -C ${pin.root} log --oneline -1  # tag 与版本串须同指（沿 test_release_version_consistency 语义）——re-pin 残留请重做检出`,
+        });
+      } else {
+        notes.push(`pin 树实锚：${described}（worktree describe＝版本串一致）`);
+      }
+    }
+    // pin.root 不存在 → 不在此处 fatal（①②kernelDir 派生检查已覆盖该面，避免双报）
   }
   // 观察面（不阻塞）
   if (env["ATF_MODEL_ROOT"] === undefined || env["ATF_MODEL_ROOT"]?.trim() === "") {

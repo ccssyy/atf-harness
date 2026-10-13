@@ -19,6 +19,7 @@ import { PANEL_HTML } from "./panel.js";
 import { queryNvidiaSmi, queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
+import { resolveInstanceKernelDir } from "../../../../src/core/workspace/instancePin.js";
 import { probeSession, tmuxTrainingFamilyPresent, listTrainingSessionCmdlines } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
@@ -99,7 +100,9 @@ export const injectMonitorGlobal = (html: string, monitorPath: string, bridge?: 
  * real 时探测内核版本（git describe，fail-soft null）。
  */
 export const bridgeBadgeSurface = (env: Readonly<Record<string, string | undefined>>, repoRootValue: string, probe?: (path: string) => boolean): BridgeBadgeSurface => {
-  const kernelDir = env["ATF_DSH_KERNEL_DIR"] ?? env["ATF_CLI_PATH"] ?? join(repoRootValue, ".atf-pinned");
+  // 批㊶-ISO-2 S1：内核目录消费链单源（resolveInstanceKernelDir——ATF_DSH_KERNEL_DIR＞
+  // ATF_CLI_PATH＞实例 pin 根）；徽标版本沿 describe（boot 行实载化为 S2——徽标不 spawn 探针）
+  const kernelDir = resolveInstanceKernelDir(env, repoRootValue);
   const commandValue = env["ATF_DSH_BRIDGE_COMMAND"] ?? `node ${join(repoRootValue, "tests", "fixtures", "mock_atf.mjs")}`;
   const deployment: BridgeDeployment = resolveBridgeDeployment({ commandValue, kernelDir, env, ...(probe !== undefined ? { probe } : {}) });
   return { mode: deployment.mode, version: deployment.mode === "real" ? kernelVersionSync(deployment.kernelRoot) : null };

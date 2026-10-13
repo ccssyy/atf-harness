@@ -9,12 +9,13 @@
  * 裁定口径：--peer 仅接受 real（缺省 mock；与 --mock 互斥）；--peer real 必填 --ws-root
  * （不带 --peer real 时给出即报错）；--peer real 下 scope-mode 强制 canonical（显式非
  * canonical 报错，缺省自动取 canonical——内核 ScopeMode 枚举不含 headless，runner.ts 注记）；
- * 内核目录 = ATF_CLI_PATH 覆盖 > <repoRoot>/.atf-pinned 缺省（D-2）。
+ * 内核目录 = ATF_CLI_PATH 覆盖 > 实例 pin 根单源（ATF_INSTANCE_PIN_ROOT＞共享态回退，D-2＋ISO-2 S1）。
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deriveAtfCommand, type AtfCliInvocation } from "../bridge/atfCommand.js";
+import { INSTANCE_PIN_ROOT_ENV, resolveInstancePinRoot } from "../core/workspace/instancePin.js";
 import type { PeerSpawnDescriptor } from "../core/run/index.js";
 
 export type PeerMode = "mock" | "real";
@@ -49,7 +50,7 @@ export const usage = (): string =>
     "  --scenario-id    场景账面标识（缺省 l1ui-session）",
     "  --scope-mode     账本 scope_mode（缺省 headless；--peer real 下强制 canonical）",
     "  --mock           内核桥接 serve 脚本（缺省 mock 夹具；与 --peer real 互斥）",
-    "  --peer           对端类型：real＝内置真内核对端（.atf-pinned/ATF_CLI_PATH，隔离 HOME，",
+    "  --peer           对端类型：real＝内置真内核对端（实例 pin 根/ATF_CLI_PATH，隔离 HOME，",
     "                   启动时按 --ws-root 预置 atf init；缺省 mock）",
     "  --ws-root        真内核 workspace 根（--peer real 时必填；run 骨架经走查 prep 脚本前置）",
     "",
@@ -148,25 +149,26 @@ export const effectiveScopeMode = (args: TuiArgs): ScopeMode => (args.peer === "
 export interface KernelDirResolution {
   ok: true;
   path: string;
-  /** 来源账面（首屏/报错文案用） */
-  source: "ATF_CLI_PATH" | "缺省 .atf-pinned";
+  /** 来源账面（首屏/报错文案用——批㊶-ISO-2 S1：实例 pin 根单源三态）。 */
+  source: "ATF_CLI_PATH" | "ATF_INSTANCE_PIN_ROOT" | "回退共享 pin";
 }
 
-/** D-2：内核目录解析——ATF_CLI_PATH 已设置时覆盖，否则 <repoRoot>/.atf-pinned；目录须存在。 */
+/** D-2：内核目录解析——ATF_CLI_PATH 已设置时覆盖，否则实例 pin 根单源
+ *  （ATF_INSTANCE_PIN_ROOT＞<repoRoot> 共享态回退——批㊶-ISO-2 S1）；目录须存在。 */
 export const resolveKernelDir = (env: NodeJS.ProcessEnv, repoRoot: string): KernelDirResolution | { ok: false; error: string } => {
   const fromEnv = env["ATF_CLI_PATH"]?.trim();
   if (fromEnv !== undefined && fromEnv !== "") {
     if (!existsSync(fromEnv)) return { ok: false, error: `ATF_CLI_PATH 指向的目录不存在: ${fromEnv}` };
     return { ok: true, path: fromEnv, source: "ATF_CLI_PATH" };
   }
-  const fallback = join(repoRoot, ".atf-pinned");
-  if (!existsSync(fallback)) {
+  const pin = resolveInstancePinRoot(env, repoRoot);
+  if (!existsSync(pin.root)) {
     return {
       ok: false,
-      error: `缺省内核副本不存在: ${fallback}——先建 pin worktree：git -C <ATF_KERNEL_DIR> worktree add ${fallback} <pin tag>（或以 ATF_CLI_PATH 指向 checkout 在 pin 上的只读副本）`,
+      error: `内核 pin 副本不存在: ${pin.root}——先建 pin worktree：git -C <ATF_KERNEL_DIR> worktree add ${pin.root} <pin tag>（或以 ATF_CLI_PATH／${INSTANCE_PIN_ROOT_ENV} 指向 checkout 在 pin 上的只读副本）`,
     };
   }
-  return { ok: true, path: fallback, source: "缺省 .atf-pinned" };
+  return { ok: true, path: pin.root, source: pin.source === "env" ? "ATF_INSTANCE_PIN_ROOT" : "回退共享 pin" };
 };
 
 /** serve 对端 descriptor（D-1/D-2 组装；env 注入 HOME 隔离与 ATF_WORKSPACE_ROOT，模板变量链用）。 */

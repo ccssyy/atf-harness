@@ -29,7 +29,7 @@ afterAll(() => {
   try { execSync(`tmux -L ${socketName} kill-server 2>/dev/null`); } catch { /* 无服务端＝已净 */ }
   // 真机实锚（批㊶-ISO 执行期）：kill-server 与服务端退出存在竞态时 socket 文件可残留——
   // unlink 兜底（死 socket 文件无害但不留痕；live 服务端不受影响——kill-server 已先行）
-  try { unlinkSync(`${process.env["TMUX_TMPDIR"] ?? `/tmp/tmux-${process.getuid()}`}/${socketName}`); } catch { /* 无残留＝已净 */ }
+  try { unlinkSync(`${process.env["TMUX_TMPDIR"] ?? `/tmp/tmux-${process.getuid?.() ?? 0}`}/${socketName}`); } catch { /* 无残留＝已净 */ }
 });
 
 /** 本文件的测试 socket 名（`tmux -L` 值——测试直调 tmux 一律经 tmuxTest/tmuxTestOk 拼装）。 */

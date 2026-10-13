@@ -14,7 +14,8 @@
  *   缺省：runs-root=<repo>/tmp/ui-runs；mock=tests/fixtures/mock_atf.mjs；缺 run-id/
  *   instruction 时交互补问。
  *   W2 --peer real（门 1 裁定 D-1～D-5，2026-09-20）：内置真内核对端——内核副本取
- *   ATF_CLI_PATH 覆盖 > <repo>/.atf-pinned 缺省（HEAD sha 与契约 pin 校验，fail-closed）；
+ *   ATF_CLI_PATH 覆盖 > 实例 pin 根单源（ATF_INSTANCE_PIN_ROOT＞共享态回退——ISO-2 S1；
+ *   HEAD sha 与契约 pin 校验，fail-closed）；
  *   隔离 HOME（<tmp>/atf-tui-home-*，零仓写入，退出即清）；启动预置一次幂等 `atf init
  *   --workspace-root <ws-root>`（失败不进会话）；scope-mode 强制 canonical；run 骨架不
  *   自动建（bind 失败按提示走走查 prep 脚本）。首屏对端核验行 peer=real(<pin tag>)。

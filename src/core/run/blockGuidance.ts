@@ -207,7 +207,7 @@ export const BLOCK_CODE_GUIDANCE: readonly BlockGuidanceEntry[] = [
     code: "skills_root_missing",
     meaning: "技能根不可用（本环境未找到内核 skills 目录）",
     missing: "pin 内核 checkout（<内核>/skills）",
-    producedBy: "环境（ATF_CLI_PATH 或 .atf-pinned）",
+    producedBy: "环境（ATF_CLI_PATH 或实例 pin 根）",
     why: "技能唯一事实源＝pin 内核；缺失时装载降级、读全文不可用",
     actionLine: "如实向用户说明本环境无技能目录，按用户指示改走显式命令路径",
     isMaterialGap: false,
