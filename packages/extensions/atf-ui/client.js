@@ -1068,6 +1068,7 @@ window.__ModuleLoader__.load({
                 detail !== '' ? React.createElement('span', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace' } }, detail) : null))
           })),
         // ④ 动作行
+        TrainlogTailSection(run),
         React.createElement('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
           React.createElement('button', {
             className: 'atf-pill', title: '打开右栏训练监控（Loss 曲线）',
@@ -1165,6 +1166,7 @@ window.__ModuleLoader__.load({
                 React.createElement('span', { style: { fontSize: 13, color: 'var(--dsw-alias-label-primary)' } }, seg.label || seg.key || ''),
                 detail !== '' ? React.createElement('span', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace' } }, detail) : null))
           })),
+        TrainlogTailSection(run),
         React.createElement('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
           React.createElement('button', {
             className: 'atf-pill', title: '打开右栏训练监控（Loss 曲线）',
