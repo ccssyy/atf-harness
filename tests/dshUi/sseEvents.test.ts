@@ -10,10 +10,10 @@ import {
   appendEventLog,
   diffMonitorKeys,
   eventsRouteHandler,
+  resetSseStreamStateForTest,
   MONITOR_EVENT_KEYS,
   publishMonitorEvents,
   readEventsAfter,
-  resetSseStreamStateForTest,
   sseEventlogDirOf,
   SSE_EVENTLOG_MAX_LINES,
   sseFrame,
@@ -26,6 +26,31 @@ const tempRoot = (): string => {
   return root;
 };
 const servers: Server[] = [];
+
+/** 批㊶-TRAIN-OBS-FIX 断点 A 测试辅助：快照路由 handler（生产 apply 同构——读盘双 JSON）。 */
+const snapshotHandlerForTest = (runsRoot: string) =>
+  (req: IncomingMessage, res: ServerResponse): void => {
+    try {
+      const monitorRaw = readFileSync(join(runsRoot, "atf-ui", "monitor.json"));
+      let artifactsRaw = Buffer.from("{}");
+      try { artifactsRaw = readFileSync(join(runsRoot, "atf-ui", "artifacts.json")); } catch { /* 未生成＝空形态 */ }
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ monitor: JSON.parse(monitorRaw.toString("utf8")), artifacts: JSON.parse(artifactsRaw.toString("utf8")) }));
+    } catch {
+      res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
+      res.end("snapshot not ready\n");
+    }
+  };
+const fetchPath = (url: string, path: string): Promise<{ status: number; text: string }> =>
+  new Promise((resolve, reject) => {
+    const req = httpRequest(url + path, { method: "GET" }, (res) => {
+      let text = "";
+      res.on("data", (c: Buffer) => { text += String(c); });
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, text }));
+    });
+    req.on("error", reject);
+    req.end();
+  });
 
 beforeEach(() => {
   process.env["ATF_SSE_HEARTBEAT_MS"] = "80";
@@ -264,6 +289,70 @@ describe("批㊶-SSE S5——客户端订阅钉子（裸服务源面锚）", () 
     const src = clientSource();
     expect(src).toContain("if (key === 'snapshot' && value !== null && typeof value === 'object') { setData(value); return }");
     expect(src).toContain("next[key] = value");
+  });
+});
+
+describe("批㊶-TRAIN-OBS-FIX 断点 A——自有快照端点（apply 捕获路由·GET /atf-ui/snapshot）", () => {
+  it("快照路由：monitor+artifacts 双 JSON 200；鉴权拒绝透传；monitor 未生成 → 503", async () => {
+    const root = tempRoot();
+    const handler = snapshotHandlerForTest(root);
+    const server = createServer((req, res) => handler(req, res));
+    servers.push(server);
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+
+    // monitor 未生成 → 503（boot 竞态 fail-closed）
+    const notReady = await fetchPath(base, "/atf-ui/snapshot");
+    expect(notReady.status).toBe(503);
+
+    // 落盘 monitor → 200 双 JSON（runs 数组在）
+    mkdirSync(join(root, "atf-ui"), { recursive: true });
+    writeFileSync(join(root, "atf-ui", "monitor.json"), JSON.stringify({ schema: "AtfMonitor/v1", generated_at: "n", gpu: { offline: true }, gpu_all: [], runs: [{ run_id: "rA", state: "registered", segments: [], training: { active: false, points: [] } }] }));
+    const ok = await fetchPath(base, "/atf-ui/snapshot");
+    expect(ok.status).toBe(200);
+    const body = JSON.parse(ok.text);
+    expect(body.monitor.runs).toHaveLength(1);
+    expect(body.artifacts).toBeDefined();
+    // 鉴权拒绝透传（403 形态——requestRejection 契约）
+    const denyServer = createServer((req, res) => {
+      res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
+      res.end("dsh web authentication required\n");
+    });
+    servers.push(denyServer);
+    await new Promise<void>((r) => denyServer.listen(0, "127.0.0.1", () => r()));
+    const deny = await fetchPath(`http://127.0.0.1:${(denyServer.address() as { port: number }).port}`, "/atf-ui/snapshot");
+    expect(deny.status).toBe(403);
+    server.close();
+    denyServer.close();
+  });
+});
+
+describe("批㊶-TRAIN-OBS-FIX 断点 B——SSE 半开回收（心跳 flush 回调超一拍未触发 → destroy）", () => {
+  it("写回调挂起的连接下一拍被踢除释放名额；健康连接保留", async () => {
+    process.env["ATF_SSE_HEARTBEAT_MS"] = "80";
+    resetSseStreamStateForTest();
+    const root = tempRoot();
+    const handler = eventsRouteHandler({ runsRoot: root, reject: () => undefined });
+    // 假 res：healthy＝write 回调同步触发；halfOpen＝回调永不触发（半开形态）；destroy 可观测
+    const makeFakeRes = (fires: boolean): any => {
+      const res: any = new (require("node:events").EventEmitter)();
+      res.destroyed = false;
+      res.writableEnded = false;
+      res.write = (_payload: string, cb?: (err: Error | null) => void) => { if (fires && cb) cb(null); return true; };
+      res.destroy = () => { res.destroyed = true; res.emit("close"); };
+      res.writeHead = () => res;
+      res.end = () => res;
+      return res;
+    };
+    const healthy = makeFakeRes(true);
+    const halfOpen = makeFakeRes(false);
+    handler({ headers: {} } as unknown as IncomingMessage, healthy);
+    handler({ headers: {} } as unknown as IncomingMessage, halfOpen);
+    // 两拍后：halfOpen 被踢除（destroyed），healthy 保留
+    await new Promise((r) => setTimeout(r, 260));
+    expect((healthy as any).destroyed).toBeFalsy();
+    expect((halfOpen as any).destroyed).toBe(true);
+    resetSseStreamStateForTest();
   });
 });
 

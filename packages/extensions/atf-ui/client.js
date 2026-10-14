@@ -86,22 +86,22 @@ window.__ModuleLoader__.load({
       } catch (e) { sseState.failed = true }
     }
 
-    /** monitor.json 轮询（sessionId 由 header.utilities 注入后生效；未就绪期静默等下周期）。
-     *  批㊶-SSE S5：SSE 到达即更新同一份 data（触发源换流式，渲染函数复用）；轮询保留兜底。 */
+    /** 批㊶-TRAIN-OBS-FIX 断点 A：读链主通路换 ATF 自有同源快照端点（fetch 随 shell cookie
+     *  过鉴权——不经 remote.mux workspaceFiles.read：该通路真实浏览器恒败且静默吞错无限重试）。
+     *  SSE 到达即更新（触发源换流式）；快照轮询保留兜底。 */
+    function fetchSnapshotOnce(onData) {
+      return fetch('/atf-ui/snapshot', { cache: 'no-store' })
+        .then(function(r) { if (!r.ok) return; return r.json(); })
+        .then(function(d) { if (d !== null && d !== undefined) onData(d); })
+        .catch(function() { /* 离线/未就绪——下周期重取 */ })
+    }
     function useMonitor() {
       var _s = React.useState(null)
       var data = _s[0], setData = _s[1]
       React.useEffect(function() {
         var alive = true
         var read = function() {
-          var sid = store.sessionId
-          if (sid === undefined || remoteFace === null) return
-          remoteFace.workspaceFiles.read(sid, MONITOR_PATH, {}, new AbortController().signal)
-            .then(function(result) {
-              if (!alive || !result || result.ok === false) return
-              try { setData(JSON.parse(result.value.text)) } catch { /* 下周期重试 */ }
-            })
-            .catch(function() { /* 离线/未就绪——下周期重试 */ })
+          fetchSnapshotOnce(function(d) { if (alive && d.monitor) setData(d.monitor) })
         }
         read()
         var t = setInterval(read, POLL_MS)
@@ -121,23 +121,15 @@ window.__ModuleLoader__.load({
       return data
     }
 
-    /** artifacts.json 轮询（批㉛段3.3 产物抽屉数据源——同步器同批写盘）。 */
+    /** artifacts.json 轮询（批㉛段3.3 产物抽屉数据源）——批㊶-TRAIN-OBS-FIX 断点 A：
+     *  同一读链缺陷面，切自有快照端点（d.artifacts）。 */
     function useArtifacts() {
       var _s = React.useState(null)
       var data = _s[0], setData = _s[1]
       React.useEffect(function() {
         var alive = true
         var read = function() {
-          var sid = store.sessionId
-          if (sid === undefined || remoteFace === null) return
-          // 与 monitor.json 同目录同名换文件（同步器同批写盘——atf-ui/artifacts.json）
-          var artsPath = MONITOR_PATH.replace(/monitor\.json$/, 'artifacts.json')
-          remoteFace.workspaceFiles.read(sid, artsPath, {}, new AbortController().signal)
-            .then(function(result) {
-              if (!alive || !result || result.ok === false) return
-              try { setData(JSON.parse(result.value.text)) } catch { /* 下周期重试 */ }
-            })
-            .catch(function() { /* 下周期重试 */ })
+          fetchSnapshotOnce(function(d) { if (alive && d.artifacts) setData(d.artifacts) })
         }
         read()
         var t = setInterval(read, POLL_MS)
@@ -488,6 +480,7 @@ window.__ModuleLoader__.load({
               React.createElement('div', { className: 'atf-monitor-status' },
                 React.createElement('span', { className: 'atf-gpu-dot', style: { background: active ? 'var(--dsw-static-amber-500)' : 'var(--dsw-static-neutral-400)' } }),
                 React.createElement('span', null, (active ? '训练中 · ' : '空闲 · ') + '段 ' + done + '/' + run.segments.length)),
+              TrainlogTailSection(run),
               React.createElement('div', { className: 'atf-monitor-sec' },
                 React.createElement('div', { className: 'atf-monitor-title' }, 'Loss 曲线'),
                 React.createElement('svg', { className: 'atf-monitor-chart', viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none' },
@@ -1224,6 +1217,42 @@ window.__ModuleLoader__.load({
     }
     function trainingNowFresh(run) {
       return !!(run && run.training && run.training.active === true)
+    }
+
+    // ── 批㊶-TRAIN-OBS-FIX 断点 C：日志尾部折叠区（capture-pane 采集面渲染收口）。
+    // 数据源＝monitor.json runs[].trainlog_tail（两键闭集 captured_at/lines）；默认折叠、
+    // 展开等宽只读、行尾省略；字段缺席不渲染不占位。captured_at 相对时间标注。
+    function fmtRelTime(iso) {
+      var at = Date.parse(iso)
+      if (!isFinite(at)) return ''
+      var d = Math.max(0, Date.now() - at)
+      var m = Math.floor(d / 60000)
+      if (m < 1) return '刚刚'
+      if (m < 60) return m + ' 分钟前'
+      var h = Math.floor(m / 60)
+      return h + ' 小时前'
+    }
+    function TrainlogTailSection(run) {
+      var open = React.useState(false)
+      var isOpen = open[0], setOpen = open[1]
+      var tail = run && run.trainlog_tail
+      if (tail === null || tail === undefined || !Array.isArray(tail.lines) || tail.lines.length === 0) return null
+      var rel = fmtRelTime(tail.captured_at)
+      return React.createElement('details', {
+        className: 'atf-trainlog-tail',
+        style: { margin: '8px 0', border: '1px solid var(--dsw-alias-border-l3)', borderRadius: 8, padding: '6px 8px' },
+        onToggle: function(e) { setOpen(e.target.open) },
+      },
+        React.createElement('summary', { style: { cursor: 'pointer', fontSize: 12, color: 'var(--dsw-alias-label-primary)', fontWeight: 600 } },
+          '训练日志（尾部 ' + tail.lines.length + ' 行' + (rel !== '' ? ' · ' + rel : '') + '）'),
+        isOpen ? React.createElement('pre', {
+          style: {
+            margin: '6px 0 0', padding: '6px 8px', borderRadius: 6, maxHeight: 240, overflow: 'auto',
+            fontFamily: 'monospace', fontSize: 11, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+            color: 'var(--dsw-alias-label-secondary,var(--dsw-alias-label-tertiary,#94a3b8))',
+            background: 'var(--dsw-alias-bg-layer-3,rgba(128,128,128,.08))',
+          },
+        }, tail.lines.join('\n')) : null)
     }
 
     /** 训练状态单 chip（dock 主行；点击＝展开浮卡）。 */

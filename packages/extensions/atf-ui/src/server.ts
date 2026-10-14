@@ -1170,6 +1170,8 @@ export const sseFrame = (event: SseEvent): string =>
 
 interface SseConnection {
   res: ServerResponse;
+  /** 上一次心跳写尚未被内核回执（flush 回调未触发）——半开连接判据。 */
+  pending: boolean;
 }
 
 const sseConnections = new Set<SseConnection>();
@@ -1287,8 +1289,25 @@ const sseWriteHead = (res: ServerResponse): void => {
 const sseEnsureHeartbeat = (): void => {
   if (sseHeartbeatTimer !== null) return;
   sseHeartbeatTimer = setInterval(() => {
-    for (const conn of sseConnections) {
-      try { conn.res.write(": ping\n\n"); } catch { /* 写失败由 error/close 路径清理 */ }
+    for (const conn of [...sseConnections]) {
+      // 批㊶-TRAIN-OBS-FIX 断点 B：半开回收——上拍 ping 的 flush 回调至今未触发
+      // （对端消失且无 RST）→ 本拍踢除释放名额（每 2 拍内回收，上限 8 不再被占满）。
+      if (conn.pending) {
+        sseConnections.delete(conn);
+        try { conn.res.destroy(); } catch { /* 已死连接 */ }
+        continue;
+      }
+      conn.pending = true;
+      try {
+        conn.res.write(": ping\n\n", () => { conn.pending = false; });
+      } catch {
+        sseConnections.delete(conn);
+        try { conn.res.destroy(); } catch { /* 已死连接 */ }
+      }
+    }
+    if (sseConnections.size === 0 && sseHeartbeatTimer !== null) {
+      clearInterval(sseHeartbeatTimer);
+      sseHeartbeatTimer = null;
     }
   }, sseHeartbeatMs());
 };
@@ -1328,7 +1347,7 @@ export const eventsRouteHandler = (deps: {
     res.write(sseFrame({ id: snapshotId, event: "snapshot", data: sseLastMonitor ?? {} }));
   }
   // 连接注册（此后增量直达）；心跳由全局单定时器迭代全部连接（末连接离开即停）
-  const conn: SseConnection = { res };
+  const conn: SseConnection = { res, pending: false };
   sseConnections.add(conn);
   sseEnsureHeartbeat();
   res.on("close", () => {
@@ -1417,6 +1436,33 @@ export function apply(
       console.log(`[atf-ui] viewer 静态路由已注册（${VIEWER_ROUTE_PREFIX}/<runId>/）`);
       // 批㊶-SSE S1：真 SSE 事件流端点（D1② 全 monitor 增量／D2② Last-Event-ID 回放）——
       // 鉴权沿壳 connection 信任面（不自造）；连接上限/心跳/滚动日志阈值见常量段
+      // 批㊶-TRAIN-OBS-FIX 断点 A：自有快照端点（GET）——monitor/artifacts 双 JSON 一下发；
+      // 浏览器同源 fetch 随 shell cookie 过鉴权，不经 remote.mux workspaceFiles.read
+      // （该通路真实浏览器恒败且静默——vendor 内部失败点以自有端点整体外绕，vendor 零触碰）。
+      const disposeSnapshot = webServer.register({
+        kind: "exact",
+        path: "/atf-ui/snapshot",
+        handler: (req, res) => {
+          const rejection = connection.requestRejection(req);
+          if (rejection !== undefined) {
+            res.writeHead(rejection, { "content-type": "text/plain; charset=utf-8" });
+            res.end("dsh web authentication required\n");
+            return;
+          }
+          try {
+            const monitorRaw = readFileSync(join(resolved.runsRoot, OUT_DIR, "monitor.json"));
+            let artifactsRaw = Buffer.from("{}");
+            try { artifactsRaw = readFileSync(join(resolved.runsRoot, OUT_DIR, "artifacts.json")); } catch { /* 未生成＝空形态 */ }
+            res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+            res.end(JSON.stringify({ monitor: JSON.parse(monitorRaw.toString("utf8")), artifacts: JSON.parse(artifactsRaw.toString("utf8")) }));
+          } catch {
+            res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
+            res.end("snapshot not ready\n"); // boot 竞态（同步器首 tick 未落盘）——客户端下周期重取
+          }
+        },
+      });
+      ctx.effect(() => disposeSnapshot, "atf-ui: 快照端点");
+      console.log("[atf-ui] 快照端点已注册（/atf-ui/snapshot）");
       const disposeEvents = webServer.register({
         kind: "prefix",
         path: "/atf-ui/events",
