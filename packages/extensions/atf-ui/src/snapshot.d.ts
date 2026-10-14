@@ -25,6 +25,8 @@ export interface AtfRunScan {
   eval_progress?: unknown;
   /** 批㊶-S3 S-B1：阶段流转＋训练完成可评估通知（读账播报；空数组＝无通知）。 */
   eval_notices?: unknown[];
+  /** 批㊶-TRAIN-OBS T3：训练日志尾部投影（两键闭集；null＝缺席）。 */
+  trainlog_tail?: unknown;
 }
 export interface AtfGpuStatus {
   offline: boolean;
@@ -60,6 +62,8 @@ export interface AtfMonitorSnapshot {
     eval_progress: unknown;
     /** 批㊶-S3 S-B1：通知面（eval_phase 流转＋trainable 可评估；空数组＝无）。 */
     eval_notices: unknown[];
+    /** 批㊶-TRAIN-OBS T3：训练日志尾部（capture-pane 采集面；null＝缺席）。 */
+    trainlog_tail: unknown;
     training: { active: boolean; points: Array<Record<string, unknown>>; pending_confirm: unknown };
   }>;
 }

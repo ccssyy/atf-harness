@@ -20,14 +20,15 @@ import { queryNvidiaSmi, queryNvidiaSmiAll } from "../../../../src/webui/readOnl
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
 import { resolveInstanceKernelDir } from "../../../../src/core/workspace/instancePin.js";
-import { sessionDomainRefusal, sessionIsScopedFor, listTrainingSessionCmdlines } from "../../../../src/core/workspace/tmuxLiveness.js";
+import { sessionDomainRefusal, sessionIsScopedFor, listTrainingSessionCmdlines, resolveSessionName, trainingSessionBase } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
 import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/workspace/oomFallback.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { buildEvalNoticeFaces, type EvalNoticeFace, type EvalProgressFace } from "../../../../src/core/workspace/evalProgressTrack.js";
-import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readTrainerLogTail, buildProgressFromTrainerLog, readNumTrainEpochs, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
+import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readNumTrainEpochs, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
+import { trainObsTick, readTrainlogTail, resetTrainObsForTest, type TrainlogTailFace } from "../../../../src/core/workspace/trainObsSync.js";
 import { bucketedRunEntries, flatRunDirNames, resolveRunDir, RUN_MARKER_RELS, sweepAnsweredPendings } from "../../../../src/core/workspace/runLayout.js";
 import { checkApprovalLedgerStartup, ledgerEnvPrefixForShell, homeLedgerPathOf } from "../../../../src/core/workspace/approvalLedger.js";
 import { openSettingsStore, type SettingsStore } from "../../../../src/webui/settings.js";
@@ -130,6 +131,8 @@ export interface RunScan {
   eval_progress: EvalProgressFace | null;
   /** 批㊶-S3 S-B1：阶段流转＋训练完成可评估通知（读账播报零造值——additive，上限 8 条）。 */
   eval_notices: EvalNoticeFace[];
+  /** 批㊶-TRAIN-OBS T3：训练日志尾部投影（capture-pane→trainlog.tail.json 读盘；null＝缺席）。 */
+  trainlog_tail: TrainlogTailFace | null;
   /** 批㉝H：绑卡声明（train.sh/manifest——null＝读不到，client 仅显示全卡聚合）。 */
   gpu_binding: GpuBinding | null;
   /** 批㉞H：逐 eval 轮对比面（两轮对比视图数据源——空数组＝无轮产物）。 */
@@ -616,6 +619,8 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness,
       const faces = buildEvalNoticeFaces(dir);
       return { eval_progress: faces.progress, eval_notices: faces.notices.slice(-8) };
     })(),
+    // 批㊶-TRAIN-OBS T3：日志尾部投影（两键闭集 captured_at/lines——摘要化：行已 200 字符截断）
+    trainlog_tail: readTrainlogTail(dir),
   };
 }
 
@@ -849,10 +854,6 @@ export const viewerRouteHandler = (deps: {
   res.end(req.method === "HEAD" ? undefined : body);
 };
 
-// 批㊶Q增补二1：progress 持续写链节流（≥30s/run 防刷盘——决议 §四.1）＋常量。
-const PROGRESS_SYNC_MIN_MS = 30_000;
-const progressSyncLastMs = new Map<string, number>();
-
 export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
   try {
     if (!existsSync(resolved.runsRoot)) return;
@@ -862,9 +863,11 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     // 批㊶-P1 S1：基名作用域化后无「无 run 单会话」可探——在场布尔＝本命名域作用域会话
     // 任一在场（枚举面）；命名域拒绝（前缀未设）经单源出口回流日志（fail-closed 留痕）。
     let trainingTmuxPresent = false;
+    let tmuxSessionRefused = false;
     try {
       const refused = sessionDomainRefusal();
       if (refused !== null) {
+        tmuxSessionRefused = true;
         console.warn(`[atf-ui] tmux 探测拒绝（${refused.reason}）：${refused.guidance}`);
       } else {
         trainingTmuxPresent = listTrainingSessionCmdlines().length > 0;
@@ -902,19 +905,20 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
         if (!run.training.active) continue;
         // 批㊶Q增补三 段3：run 实际目录（分桶/平铺按 scan 标注推导）
         const runDir = run.workspace !== null ? join(resolved.runsRoot, run.workspace, run.run_id) : join(resolved.runsRoot, run.run_id);
-        // 批㊶Q增补二1：progress 持续写链——训练运行中随 trainer_log 步进刷新 progress.json
-        // （节流 ≥30s/次防刷盘；epoch 语义轮次＋percentage additive）。P 批断点修复：
-        // progress 原仅 status 查询时写（低频），浮卡进度与探针活跃判据双双失真。
+        // 批㊶-TRAIN-OBS T1/T3：训练观测环（同步器 5s 环 per-run 驱动）——trainer_log 末行→
+        // progress.json（5s 颗粒＋eta_s）＋tmux capture-pane→trainlog.tail.json；fail-closed：
+        // 坏行跳过／12 轮停更转 stale 停环／percentage≥100 终态写一次停环／防双开（trainObsSync 内状态表）。
+        // 取代批㊶Q增补二1 的 30s 节流块（5s 颗粒＋eta＋日志尾为本批 D1②/D3 裁定）。
         try {
-          const nowMs = Date.now();
-          if (nowMs - (progressSyncLastMs.get(run.run_id) ?? 0) >= PROGRESS_SYNC_MIN_MS) {
-            const tail = readTrainerLogTail(runDir);
-            if (tail !== null) {
-              writeProgress(runDir, buildProgressFromTrainerLog(tail, readNumTrainEpochs(runDir), new Date(nowMs).toISOString()));
-              progressSyncLastMs.set(run.run_id, nowMs);
-            }
-          }
-        } catch { /* progress 持续链 fail-open（下周期再试） */ }
+          void trainObsTick(run.run_id, runDir, readNumTrainEpochs(runDir), {
+            capture: sseCapturePane,
+            sessionName: (rid) => {
+              if (tmuxSessionRefused) return null; // 命名域拒绝＝缺席不伪造（fail-closed）
+              const r = resolveSessionName(trainingSessionBase(rid));
+              return r.ok ? r.session : null;
+            },
+          });
+        } catch { /* 观测环 fail-open（下周期再试） */ }
         let logTail = "";
         const logsDir = process.env["ATF_DSH_LOG_DIR"];
         if (logsDir !== undefined && existsSync(logsDir)) {
@@ -1339,6 +1343,10 @@ export const eventsRouteHandler = (deps: {
     res.destroy();
   });
 };
+
+/** 批㊶-TRAIN-OBS T3：capture-pane 适配器（eventsRouteHandler 依赖注入形——生产走真 tmux）。 */
+const sseCapturePane = (session: string): Promise<string[] | null> =>
+  import("../../../../src/core/workspace/trainObsSync.js").then((m) => m.captureTrainlogPane(session));
 
 export function apply(
   ctx: {

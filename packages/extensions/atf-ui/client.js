@@ -973,6 +973,11 @@ window.__ModuleLoader__.load({
             var bits = []
             // 批㊶-S3 S-B2 修复③：步进百分比上卡（trainer_log percentage 直通——持续写链 30s 刷新）
             if (typeof progress.percentage === 'number') bits.push(String(progress.percentage) + '%')
+            if (typeof progress.eta_s === 'number' && progress.eta_s >= 0) {
+              var eh = Math.floor(progress.eta_s / 3600), em = Math.floor((progress.eta_s % 3600) / 60), es2 = Math.floor(progress.eta_s % 60)
+              var pad2 = function(n2) { return String(n2).padStart(2, '0') }
+              bits.push('预计剩 ' + (eh > 0 ? eh + ':' + pad2(em) + ':' + pad2(es2) : pad2(em) + ':' + pad2(es2)))
+            }
             if (typeof progress.round === 'number') bits.push(typeof progress.total_rounds === 'number' ? '第 ' + progress.round + '/' + progress.total_rounds + ' 轮' : '第 ' + progress.round + ' 轮')
             if (typeof progress.step_remaining === 'number') bits.push('剩余 ' + progress.step_remaining + ' 步')
             if (typeof progress.loss === 'number') bits.push('loss ' + progress.loss)
@@ -1106,6 +1111,11 @@ window.__ModuleLoader__.load({
             var bits = []
             // 批㊶-S3 S-B2 修复③：步进百分比上卡（trainer_log percentage 直通——持续写链 30s 刷新）
             if (typeof progress.percentage === 'number') bits.push(String(progress.percentage) + '%')
+            if (typeof progress.eta_s === 'number' && progress.eta_s >= 0) {
+              var eh = Math.floor(progress.eta_s / 3600), em = Math.floor((progress.eta_s % 3600) / 60), es2 = Math.floor(progress.eta_s % 60)
+              var pad2 = function(n2) { return String(n2).padStart(2, '0') }
+              bits.push('预计剩 ' + (eh > 0 ? eh + ':' + pad2(em) + ':' + pad2(es2) : pad2(em) + ':' + pad2(es2)))
+            }
             if (typeof progress.round === 'number') bits.push(typeof progress.total_rounds === 'number' ? '第 ' + progress.round + '/' + progress.total_rounds + ' 轮' : '第 ' + progress.round + ' 轮')
             if (typeof progress.step_remaining === 'number') bits.push('剩余 ' + progress.step_remaining + ' 步')
             if (typeof progress.loss === 'number') bits.push('loss ' + progress.loss)

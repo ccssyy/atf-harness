@@ -125,8 +125,15 @@ function render(data) {
       var progLine = '';
       var rp = run.progress || null;
       if (rp && typeof rp.percentage === 'number') {
+        // 批㊶-TRAIN-OBS T2：ETA additive（eta_s 缺失只显示百分比——不占位不显示 null）
+        var etaTxt = '';
+        if (typeof rp.eta_s === 'number' && rp.eta_s >= 0) {
+          var eh = Math.floor(rp.eta_s / 3600), em = Math.floor((rp.eta_s % 3600) / 60), es = Math.floor(rp.eta_s % 60);
+          var pad = function(n2) { return String(n2).padStart(2, '0'); };
+          etaTxt = ' · 预计剩 ' + (eh > 0 ? eh + ':' + pad(em) + ':' + pad(es) : pad(em) + ':' + pad(es));
+        }
         progLine += '<div style="font-size:12px;color:var(--atf-textSecondary);padding:4px 0 0;font-family:monospace;">训练步进 '
-          + rp.percentage + '%' + (typeof rp.round === 'number' ? ' · 第 ' + rp.round + (typeof rp.total_rounds === 'number' ? '/' + rp.total_rounds : '') + ' 轮' : '') + '</div>';
+          + rp.percentage + '%' + etaTxt + (typeof rp.round === 'number' ? ' · 第 ' + rp.round + (typeof rp.total_rounds === 'number' ? '/' + rp.total_rounds : '') + ' 轮' : '') + '</div>';
       }
       var ep = run.eval_progress || null;
       if (ep && typeof ep.phase === 'string') {

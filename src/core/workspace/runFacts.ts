@@ -9,7 +9,7 @@
  * - 段序：八段有序管线，后段 done 前提＝前段 done 成立（推导层抑制，不报错）。
  * 均为 run 目录本地文件，不进 bridge 契约面。
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 
 // ── 绑定 ──
@@ -102,10 +102,13 @@ export interface RunProgress {
   round?: number;
   total_rounds?: number;
   step_remaining?: number;
+  /** 批㊶-TRAIN-OBS 注记：由 trainer_log remaining_time（"H:MM:SS"）换算的预计剩余秒数（源见 buildProgressFromTrainerLog）。 */
   eta_s?: number;
   loss?: number;
   /** 批㊶Q增补二1 additive：trainer_log percentage 直通（0-100）。 */
   percentage?: number;
+  /** 批㊶-TRAIN-OBS additive：记账本连续 12 轮（≈1 分钟）停更标记（停环前末次写入——不猜原因）。 */
+  stale?: boolean;
   updated_at: string;
 }
 
@@ -123,15 +126,46 @@ export const readProgress = (runDir: string): RunProgress | null => {
   }
 };
 
-/** 写进度（写失败静默；字段缺省可空由调用方组装）。 */
+/** 写进度（原子写：tmp＋rename——批㊶-TRAIN-OBS 升级，读侧永不见半截文件；写失败静默）。 */
 export const writeProgress = (runDir: string, progress: RunProgress): void => {
   try {
     const dir = join(runDir, "webui");
     mkdirSync(dir, { recursive: true });
-    writeFileSync(progressPathOf(runDir), `${JSON.stringify(progress, null, 1)}\n`, "utf8");
+    const target = progressPathOf(runDir);
+    const tmp = `${target}.tmp`;
+    writeFileSync(tmp, `${JSON.stringify(progress, null, 1)}\n`, "utf8");
+    renameSync(tmp, target);
   } catch {
     // fail-open
   }
+};
+
+/** "H:MM:SS"｜"MM:SS" → 秒（非负整数秒；形态不符＝null 不猜）。 */
+export const parseRemainingTimeSeconds = (raw: string): number | null => {
+  const m = /^(\d{1,3}):(\d{1,2}):(\d{1,2})$/.exec(raw.trim());
+  if (m !== null) {
+    const h = Number(m[1]), mi = Number(m[2]), s = Number(m[3]);
+    if (mi > 59 || s > 59) return null;
+    return h * 3600 + mi * 60 + s;
+  }
+  const m2 = /^(\d{1,3}):(\d{1,2})$/.exec(raw.trim());
+  if (m2 !== null) {
+    const mi = Number(m2[1]), s = Number(m2[2]);
+    if (s > 59) return null;
+    return mi * 60 + s;
+  }
+  return null;
+};
+
+/** eta_s → 人读（>1h 显示 H:MM:SS，否则 MM:SS；非有限数＝null——缺数不占位）。 */
+export const formatEta = (etaS: number | undefined): string | null => {
+  if (typeof etaS !== "number" || !Number.isFinite(etaS) || etaS < 0) return null;
+  const h = Math.floor(etaS / 3600);
+  const mi = Math.floor((etaS % 3600) / 60);
+  const s = Math.floor(etaS % 60);
+  const mm = String(mi).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 };
 
 /** fresh 判定：updated_at 在新鲜窗口内（解析失败/过期＝false）。 */
@@ -144,16 +178,20 @@ export const progressFresh = (progress: RunProgress | null, nowMs: number, windo
 
 // ── 批㊶Q增补二1：progress 持续写链（trainer_log 步进单源）──
 
-/** trainer_log.jsonl 末行形态（llamafactory 原生步进面——每 logging_steps 追加一行 JSON）。 */
+/** trainer_log.jsonl 末行形态（llamafactory 原生步进面——每 logging_steps 追加一行 JSON）。
+ *  批㊶-TRAIN-OBS：+remaining_time（"H:MM:SS"｜"MM:SS"→eta_s 源）；loss/epoch 降可选——真实终态行
+ *  （percentage 100）缺 loss/lr（A800 现网样本实锚），硬性必填将令终态永远解析失败、"终态写一次后停环"不可达。 */
 export interface TrainerLogTail {
   current_steps: number;
   total_steps: number;
-  loss: number;
-  epoch: number;
+  loss: number | null;
+  epoch: number | null;
   percentage: number;
+  remaining_time: string | null;
 }
 
-/** trainer_log.jsonl 末行解析（纯函数——非 JSON/缺键/字段非数＝null，不猜测）。 */
+/** trainer_log.jsonl 末行解析（纯函数——非 JSON/缺必填键＝null，不猜测；
+ *  必填＝current_steps/total_steps/percentage；loss/epoch/remaining_time 可选缺省 null）。 */
 export const parseTrainerLogLine = (line: string): TrainerLogTail | null => {
   const trimmed = line.trim();
   if (trimmed === "") return null;
@@ -165,11 +203,12 @@ export const parseTrainerLogLine = (line: string): TrainerLogTail | null => {
     };
     const current = num("current_steps");
     const total = num("total_steps");
-    const loss = num("loss");
-    const epoch = num("epoch");
     const percentage = num("percentage");
-    if (current === null || total === null || loss === null || epoch === null || percentage === null) return null;
-    return { current_steps: current, total_steps: total, loss, epoch, percentage };
+    if (current === null || total === null || percentage === null) return null;
+    const epoch = num("epoch");
+    const remainingRaw = raw["remaining_time"];
+    const remainingTime = typeof remainingRaw === "string" ? remainingRaw : null;
+    return { current_steps: current, total_steps: total, loss: num("loss"), epoch, percentage, remaining_time: remainingTime };
   } catch {
     return null;
   }
@@ -210,20 +249,28 @@ export const readNumTrainEpochs = (runDir: string): number | null => {
  *  numEpochs 可得时封顶），percentage additive 键；
  *  total_rounds 仅在 numEpochs 可得时写（缺源不造数）。 */
 export const buildProgressFromTrainerLog = (tail: TrainerLogTail, numEpochs: number | null, nowIso: string): RunProgress => {
-  const round = Math.floor(tail.epoch) + 1;
+  // 批㊶-TRAIN-OBS：epoch 可选（真实终态行缺 epoch 形态兜底）；eta_s 由 remaining_time 换算
+  // （缺失/形态不符＝不写字段——T2 缺数不占位）。
+  const round = tail.epoch !== null ? Math.floor(tail.epoch) + 1 : 1;
+  const eta = tail.remaining_time !== null ? parseRemainingTimeSeconds(tail.remaining_time) : null;
   return {
     round: numEpochs !== null ? Math.min(numEpochs, round) : round,
     ...(numEpochs !== null ? { total_rounds: numEpochs } : {}),
     step_remaining: Math.max(0, tail.total_steps - tail.current_steps),
-    loss: tail.loss,
+    loss: tail.loss ?? undefined,
     percentage: tail.percentage,
+    ...(eta !== null ? { eta_s: eta } : {}),
     updated_at: nowIso,
   };
 };
 
 /** 段内进度人读文案（浮卡段明细行）："第 6/8 轮 · 剩余 17 步 · loss 0.0589"。 */
 export const formatProgressDetail = (progress: RunProgress): string | null => {
+  // 批㊶-TRAIN-OBS T2：percentage/eta additive（缺数不占位——不显示 null/占位符）。
   const parts: string[] = [];
+  if (typeof progress.percentage === "number" && Number.isFinite(progress.percentage)) {
+    parts.push(`${progress.percentage}%`);
+  }
   if (typeof progress.round === "number" && Number.isFinite(progress.round)) {
     parts.push(typeof progress.total_rounds === "number" && Number.isFinite(progress.total_rounds)
       ? `第 ${progress.round}/${progress.total_rounds} 轮`
@@ -231,6 +278,10 @@ export const formatProgressDetail = (progress: RunProgress): string | null => {
   }
   if (typeof progress.step_remaining === "number" && Number.isFinite(progress.step_remaining)) {
     parts.push(`剩余 ${progress.step_remaining} 步`);
+  }
+  const eta = formatEta(progress.eta_s);
+  if (eta !== null) {
+    parts.push(`预计剩 ${eta}`);
   }
   if (typeof progress.loss === "number" && Number.isFinite(progress.loss)) {
     parts.push(`loss ${progress.loss}`);

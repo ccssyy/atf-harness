@@ -263,9 +263,15 @@ import {
 
 describe("批㊶Q增补二1 progress 持续写链（trainer_log 步进解析＋progress 组装＋epochs 读取）", () => {
   it("parseTrainerLogLine：合法行全键解析；缺键/坏 JSON/空行 → null（不猜测）", () => {
+    // 批㊶-TRAIN-OBS：A800 现网真实样本行（run-regress-formal-01 首行——含 remaining_time）
+    const real = parseTrainerLogLine('{"current_steps": 2, "total_steps": 141, "loss": 0.6885, "lr": 7.142857142857143e-06, "epoch": 0.0431266846361186, "percentage": 1.42, "elapsed_time": "0:02:16", "remaining_time": "2:37:53"}');
+    expect(real).toEqual({ current_steps: 2, total_steps: 141, loss: 0.6885, epoch: 0.0431266846361186, percentage: 1.42, remaining_time: "2:37:53" });
+    // 真实终态行（percentage 100 缺 loss/lr）——loss/epoch 降可选后可解析（终态写一次的前提）
+    const terminal = parseTrainerLogLine('{"current_steps": 141, "total_steps": 141, "epoch": 3.0, "percentage": 100.0, "elapsed_time": "2:03:34", "remaining_time": "0:00:00"}');
+    expect(terminal).toEqual({ current_steps: 141, total_steps: 141, loss: null, epoch: 3, percentage: 100, remaining_time: "0:00:00" });
     const ok = parseTrainerLogLine('{"current_steps": 140, "total_steps": 186, "loss": 0.0646, "lr": 3.66e-5, "epoch": 4.52, "percentage": 75.27}');
-    expect(ok).toEqual({ current_steps: 140, total_steps: 186, loss: 0.0646, epoch: 4.52, percentage: 75.27 });
-    expect(parseTrainerLogLine('{"current_steps": 1}')).toBeNull();
+    expect(ok).toEqual({ current_steps: 140, total_steps: 186, loss: 0.0646, epoch: 4.52, percentage: 75.27, remaining_time: null });
+    expect(parseTrainerLogLine('{"current_steps": 1}')).toBeNull(); // 缺必填（total/percentage）
     expect(parseTrainerLogLine("not-json")).toBeNull();
     expect(parseTrainerLogLine("")).toBeNull();
   });
@@ -273,18 +279,23 @@ describe("批㊶Q增补二1 progress 持续写链（trainer_log 步进解析＋p
     const root = tempRoot();
     const runDir = join(root, "run-p");
     mkdirSync(join(runDir, "training"), { recursive: true });
-    writeFileSync(join(runDir, "training", "trainer_log.jsonl"), '{"current_steps": 1, "total_steps": 186, "loss": 0.42, "epoch": 0.07, "percentage": 0.5}\n\n{"current_steps": 2, "total_steps": 186, "loss": 0.41, "epoch": 0.14, "percentage": 1.1}\n');
-    expect(readTrainerLogTail(runDir)).toEqual({ current_steps: 2, total_steps: 186, loss: 0.41, epoch: 0.14, percentage: 1.1 });
+    writeFileSync(join(runDir, "training", "trainer_log.jsonl"), '{"current_steps": 1, "total_steps": 186, "loss": 0.42, "epoch": 0.07, "percentage": 0.5, "remaining_time": "1:00:00"}\n\n{"current_steps": 2, "total_steps": 186, "loss": 0.41, "epoch": 0.14, "percentage": 1.1, "remaining_time": "0:59:00"}\n');
+    expect(readTrainerLogTail(runDir)).toEqual({ current_steps: 2, total_steps: 186, loss: 0.41, epoch: 0.14, percentage: 1.1, remaining_time: "0:59:00" });
     expect(readTrainerLogTail(join(root, "run-absent"))).toBeNull();
   });
   it("buildProgressFromTrainerLog：epoch 语义轮次（1-based 封顶）＋percentage＋step_remaining；epochs 缺源不写 total_rounds", () => {
-    const p1 = buildProgressFromTrainerLog({ current_steps: 140, total_steps: 186, loss: 0.0646, epoch: 4.52, percentage: 75.27 }, 6, "2026-10-11T01:00:00Z");
+    const p1 = buildProgressFromTrainerLog({ current_steps: 140, total_steps: 186, loss: 0.0646, epoch: 4.52, percentage: 75.27, remaining_time: null }, 6, "2026-10-11T01:00:00Z");
     expect(p1).toMatchObject({ round: 5, total_rounds: 6, step_remaining: 46, loss: 0.0646, percentage: 75.27, updated_at: "2026-10-11T01:00:00Z" });
-    const p2 = buildProgressFromTrainerLog({ current_steps: 186, total_steps: 186, loss: 0.06, epoch: 6, percentage: 100 }, 6, "n");
+    expect(p1.eta_s).toBeUndefined(); // remaining_time 缺失＝eta 不写（T2 缺数不占位）
+    const p2 = buildProgressFromTrainerLog({ current_steps: 186, total_steps: 186, loss: 0.06, epoch: 6, percentage: 100, remaining_time: null }, 6, "n");
     expect(p2.round).toBe(6); // 完成态封顶不越界
-    const p3 = buildProgressFromTrainerLog({ current_steps: 10, total_steps: 186, loss: 0.4, epoch: 0.2, percentage: 5.4 }, null, "n");
+    const p3 = buildProgressFromTrainerLog({ current_steps: 10, total_steps: 186, loss: 0.4, epoch: 0.2, percentage: 5.4, remaining_time: null }, null, "n");
     expect(p3.round).toBe(1);
     expect(p3.total_rounds).toBeUndefined();
+    // 批㊶-TRAIN-OBS：eta_s 由 remaining_time 换算（真实样本 2:37:53 → 9473s）
+    const p4 = buildProgressFromTrainerLog({ current_steps: 2, total_steps: 141, loss: 0.6885, epoch: 0.04, percentage: 1.42, remaining_time: "2:37:53" }, null, "n");
+    expect(p4.eta_s).toBe(9473);
+    expect(p4.step_remaining).toBe(139);
   });
   it("readNumTrainEpochs：live 路径优先／legacy 回退／缺席非法 → null", () => {
     const root = tempRoot();

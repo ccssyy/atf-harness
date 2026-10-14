@@ -20,7 +20,7 @@ import { SessionLog } from "../../src/core/session/sessionLog.js";
 const repoRoot = resolve(fileURLToPath(import.meta.url), "../../..");
 const distEntry = join(repoRoot, "dist", "core", "session", "index.js");
 const fixturePath = join(repoRoot, "tests", "fixtures", "p2s1_fsync_child.mjs");
-const srcMarker = join(repoRoot, "src", "session", "sessionLog.ts");
+const srcMarker = join(repoRoot, "src", "core", "session", "sessionLog.ts"); // core 重构后实位（旧路径不存在→ensureDist 恒误判 stale→测试内全量 build 超时）
 
 let built = false;
 const ensureDist = async (): Promise<void> => {

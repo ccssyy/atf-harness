@@ -75,6 +75,9 @@ export function buildMonitorSnapshot(runs, gpu, gpuAll) {
       progress: run.progress ?? run.training?.progress ?? null,
       // 批㊶-N N-5：会话绑定集（additive——可空数组）
       bound_sessions: Array.isArray(run.bound_sessions) ? run.bound_sessions : [],
+      // 批㊶-TRAIN-OBS T3（additive——日志尾部投影：capture-pane→trainlog.tail.json 读盘；
+      // 两键闭集 captured_at/lines，行已 200 字符截断——白名单同源，缺＝null）
+      trainlog_tail: run.trainlog_tail ?? null,
       // 批㊶-S3 S-B1 通知面（additive——读账播报零造值；键面白名单构造于 evalProgressTrack：
       // eval_progress 五键闭集 round/phase/detail/elapsed_s/updated_at；eval_notices 元素
       // {id,round?,phase?,detail?,elapsed_s?,at}∪{id,kind,at}，kind=eval_phase|trainable）

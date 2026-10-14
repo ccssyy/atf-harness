@@ -126,20 +126,17 @@ describe("批㊶-W F4——pipeline register 段真命令触发（非 mock_pipel
 // ---------------------------------------------------------------- F5 结构锚
 
 describe("批㊶-W F5——form intent 结构（vendor 源锚＋结构化 edits 解析）", () => {
-  it("vendor 源锚：types.ts 声明 form kind＋fields；ask 校验 form 分支在位；client formOf/FormPanel 落位", () => {
+  it("vendor 源锚（批㊶-COORD2b 后改版）：F5 表单补丁已随 vendor 工作区还原退场——源面回 639ed01 基线（留档可逆）", () => {
+    // COORD2b（owner 裁"任何本地修改均应清除"）将 F5 以工作区形态存活的 vendor 补丁留档还原
+    // （/tmp/vendor-dirty-backup-20261014.patch＋untracked/）——该补丁从未 commit 进 submodule，
+    // 指针恒 639ed01。源面锚断言随之退役；harness 侧 form intent 逻辑（editsFromFormAnswers/
+    // domainHintOf——本文件后两用例）不受影响照常锚定。已构建 dist（先前构建期烘焙）不受源还原
+    // 影响；重建 bundle 将失去该 UI 面——候 owner 裁（re-apply＋commit 或接受回退）。
     const vendor = join(import.meta.dirname, "../../vendor/dsh/deepseek-harness");
     const types = readFileSync(join(vendor, "packages/interaction/user-questions/src/types.ts"), "utf8");
-    expect(types).toContain("kind: 'form'");
-    expect(types).toContain("AskUserQuestionFormField");
-    const ask = readFileSync(join(vendor, "packages/interaction/user-questions/src/index.ts"), "utf8");
-    expect(ask).toContain("intent.kind === 'form'");
-    const slots = readFileSync(join(vendor, "packages/client/ui-user-questions/src/client/contract/slots.ts"), "utf8");
-    expect(slots).toContain("export function formOf");
-    expect(slots).toContain("'question' | 'plan-review' | 'form'");
-    expect(existsSync(join(vendor, "packages/client/ui-user-questions/src/client/FormPanel.tsx"))).toBe(true);
-    // lib 产物同步（构建面——patch 应用后必须重建）
-    expect(readFileSync(join(vendor, "packages/interaction/user-questions/lib/index.js"), "utf8")).toContain("fields are empty or malformed");
-    expect(readFileSync(join(vendor, "packages/client/ui-user-questions/lib/client.js"), "utf8")).toContain("form");
+    expect(types).not.toContain("AskUserQuestionFormField"); // 源面已回基线（还原后形态锚）
+    expect(existsSync(join(vendor, "packages/client/ui-user-questions/src/client/FormPanel.tsx"))).toBe(false);
+    void existsSync;
   });
   it("editsFromFormAnswers：selected key=value 结构化拆分（首个 = 拆键值；空串/无等号跳过）", () => {
     const edits = editsFromFormAnswers({ answers: [{ id: "q", selected: ["learning_rate=2e-4", "base_model_path=/a/b=c", "junk", "=novalue"] }] });

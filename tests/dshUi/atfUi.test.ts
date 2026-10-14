@@ -1041,10 +1041,12 @@ describe("批㊶-S3 S-B1——通知面投影（monitor.json additive 键三同�
     expect(bare.eval_progress).toBeNull();
     expect(bare.eval_notices).toEqual([]);
   });
-  it("progress 持续写链节流：同周期内不重写（≥30s/run——决议 §四.1 恒在锚）", () => {
+  it("progress 持续写链（批㊶-TRAIN-OBS 改版）：30s 节流块退役→5s 观测环（trainObsTick 接线＋12 轮 stale＋capture 接线）", () => {
     const serverSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/src/server.ts"), "utf8");
-    expect(serverSource).toContain("const PROGRESS_SYNC_MIN_MS = 30_000");
-    expect(serverSource).toContain("nowMs - (progressSyncLastMs.get(run.run_id) ?? 0) >= PROGRESS_SYNC_MIN_MS");
+    expect(serverSource).toContain("trainObsTick(run.run_id, runDir, readNumTrainEpochs(runDir)");
+    expect(serverSource).toContain("tmuxSessionRefused");
+    expect(serverSource).not.toContain("PROGRESS_SYNC_MIN_MS"); // 30s 节流块已被 5s 环取代
+    expect(serverSource).toContain("trainlog_tail: readTrainlogTail(dir)"); // T3 投影接线
   });
   it("client.js 通知卡钉子：EvalNoticeStack＋去重已读集＋四态文案＋trainable 指引（裸服务——源面锚）", () => {
     const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
