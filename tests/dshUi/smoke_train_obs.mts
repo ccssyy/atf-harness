@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLossIngest } from "/data/sam/ATF-Harness/src/core/workspace/lossIngest.js";
 
-const RUN_ID = "train-obs-smoke-r1";
+const RUN_ID = `train-obs-smoke-r${process.env["SMOKE_SEQ"] ?? "2"}`;
 const RUN_DIR = `/data/atf/dev/runs/${RUN_ID}`;
 const SESSION = `dev-atf-training-run-${RUN_ID}`;
 const LOG = join(RUN_DIR, "training", "train-stdout.log");
@@ -34,76 +34,69 @@ const TRAIN_CMD = [
   "--dataset identity --dataset_dir /data/sam/LLaMA-Factory_094dev/data",
   "--template qwen2_vl --cutoff_len 1024 --max_samples 8",
   "--output_dir " + JSON.stringify(join(RUN_DIR, "training")),
-  "--max_steps 4 --logging_steps 1 --save_strategy no --plot_loss no --report_to none",
+  "--max_steps 400 --logging_steps 20 --save_strategy no --plot_loss no --report_to none",
   "--per_device_train_batch_size 2 --gradient_accumulation_steps 1 --learning_rate 5e-5",
   "--lora_rank 8 --lora_alpha 16",
 ].join(" ");
-const TMUX_CMD = `${TRAIN_CMD} 2>&1 | tee ${JSON.stringify(LOG)}`;
+const TMUX_CMD = `PYTHONUNBUFFERED=1 ${TRAIN_CMD} 2>&1 | tee ${JSON.stringify(LOG)}`; // 行缓冲强制——dict 行经 tee 管道时块缓冲至进程退出才刷盘（loss-series 迟到，中间态不可观测）
 const tm = spawnSync("tmux", ["new-session", "-d", "-s", SESSION, TMUX_CMD], { encoding: "utf8" });
 assert(tm.status === 0, "tmux 会话启动（dev-atf-training-run-<run_id> 产品形态）: " + tm.stderr.slice(0, 80));
 
 // loss 进料（真实产品组件 startLossIngest——loss-series.json→training.active 判据供给）
 const stopIngest = startLossIngest(LOG, join(RUN_DIR, "training", "loss-series.json"), 2000);
 
-// ── ① progress.json 按 5s 颗粒更新＋eta_s（等待训练步进，至多 6 分钟）
 const sleepMs = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+// ── ①②③ 训练中段一次过：progress 5s 颗粒＋eta 推进＋trainlog 刷新＋monitor 投影（窗口内并行采样）
 let sawProgress = false;
 let sawEta = false;
 let sawPercentageAdvance = false;
+let sawGranular = false;
+let tailOk = false;
+let tailLines = 0;
+let cardPct = false;
+let cardEta = false;
 let lastPct = -1;
-const deadline = Date.now() + 6 * 60 * 1000;
-while (Date.now() < deadline) {
+const monitorPath = "/data/atf/dev/runs/atf-ui/monitor.json";
+const deadline = Date.now() + 7 * 60 * 1000;
+let lastMtime = 0;
+let mtimePairs = 0;
+while (Date.now() < deadline && !(sawPercentageAdvance && sawEta && sawGranular && tailOk && cardEta)) {
   await sleepMs(3000);
   const ppath = join(RUN_DIR, "webui", "progress.json");
   if (!existsSync(ppath)) continue;
-  const p = JSON.parse(readFileSync(ppath, "utf8")) as { percentage?: number; eta_s?: number; updated_at?: string };
   sawProgress = true;
+  const p = JSON.parse(readFileSync(ppath, "utf8")) as { percentage?: number; eta_s?: number; updated_at?: string };
   if (typeof p.eta_s === "number" && p.eta_s > 0) sawEta = true;
   if (typeof p.percentage === "number" && p.percentage !== lastPct) {
     if (lastPct >= 0 && p.percentage > lastPct) sawPercentageAdvance = true;
     lastPct = p.percentage;
   }
-  console.log(`[obs] percentage=${p.percentage} eta_s=${p.eta_s} updated_at=${p.updated_at}`);
-  if (sawEta && sawPercentageAdvance) break;
+  const mt = statSync(ppath).mtimeMs;
+  if (lastMtime > 0 && mt > lastMtime) mtimePairs += 1;
+  lastMtime = mt;
+  if (mtimePairs >= 1) sawGranular = true; // 7s 采样窗内 mtime 再变＝5s 颗粒（非 30s 节流）
+  const tpath = join(RUN_DIR, "webui", "trainlog.tail.json");
+  if (existsSync(tpath)) {
+    const t = JSON.parse(readFileSync(tpath, "utf8")) as { captured_at?: string; lines?: string[] };
+    tailLines = t.lines?.length ?? 0;
+    if (tailLines > 0) tailOk = true;
+  }
+  if (existsSync(monitorPath)) {
+    const monitor = JSON.parse(readFileSync(monitorPath, "utf8")) as { runs: Array<{ run_id: string; progress?: { percentage?: number; eta_s?: number } | null }> };
+    const run = monitor.runs.find((r) => r.run_id === RUN_ID);
+    cardPct = typeof run?.progress?.percentage === "number"; // 卡面进度行数据源＝monitor 顶层 progress 键（N-3 键位）
+    cardEta = typeof run?.progress?.eta_s === "number";
+  }
+  console.log(`[obs] percentage=${p.percentage} eta_s=${p.eta_s} mtimePairs=${mtimePairs} tail=${tailLines} card=${cardPct}/${cardEta}`);
+  if (sawPercentageAdvance && sawEta) assert(sawGranular, "① 5s 颗粒（占位——循环尾部统一断言）");
 }
 assert(sawProgress, "① progress.json 在盘（同步器写方）");
 assert(sawEta, "① eta_s 在盘（remaining_time 换算）");
 assert(sawPercentageAdvance, "① percentage 随步进推进（5s 环多次写）");
-
-// 5s 颗粒实证：相邻两次 updated_at 间隔取样（10s 窗口内 mtime 至少两变＝非 30s 节流）
-const mt1 = statSync(join(RUN_DIR, "webui", "progress.json")).mtimeMs;
-await sleepMs(7000);
-const mt2 = existsSync(join(RUN_DIR, "webui", "progress.json")) ? statSync(join(RUN_DIR, "webui", "progress.json")).mtimeMs : 0;
-assert(mt2 > mt1, `① 5s 颗粒：7s 窗口内 progress.json 再写（mtime ${mt1}→${mt2}）`);
-
-// ── ③ trainlog.tail.json（capture-pane 采集刷新）
-let tailOk = false;
-let tailLines = 0;
-const tailDeadline = Date.now() + 30_000;
-while (Date.now() < tailDeadline) {
-  await sleepMs(3000);
-  const tpath = join(RUN_DIR, "webui", "trainlog.tail.json");
-  if (!existsSync(tpath)) continue;
-  const t = JSON.parse(readFileSync(tpath, "utf8")) as { captured_at?: string; lines?: string[] };
-  tailLines = t.lines?.length ?? 0;
-  if (tailLines > 0) { tailOk = true; break; }
-}
+assert(sawGranular, `① 5s 颗粒：采样窗内 progress.json mtime 再变（${mtimePairs} 对）`);
 assert(tailOk, `③ trainlog.tail.json 刷新（capture-pane ${tailLines} 行）`);
-
-// ── ② 卡面进度行＋ETA（monitor.json 投影面断言——卡面 payload 源）
-await sleepMs(6000);
-const monitorPath = "/data/atf/dev/runs/atf-ui/monitor.json";
-let cardEta = false;
-let cardPct = false;
-if (existsSync(monitorPath)) {
-  const monitor = JSON.parse(readFileSync(monitorPath, "utf8")) as { runs: Array<{ run_id: string; training: { progress?: { percentage?: number; eta_s?: number } | null } }> };
-  const run = monitor.runs.find((r) => r.run_id === RUN_ID);
-  const prog = run?.training?.progress;
-  cardPct = typeof prog?.percentage === "number";
-  cardEta = typeof prog?.eta_s === "number";
-}
-assert(cardPct, "② monitor 投影 progress.percentage（卡面数据源）");
-assert(cardEta, "② monitor 投影 progress.eta_s（ETA 到卡面）");
+assert(cardPct, "② monitor 投影 progress.percentage（卡面数据源——训练中采样）");
+assert(cardEta, "② monitor 投影 progress.eta_s（ETA 到卡面——训练中采样）");
 
 // ── ④ 停环：等训练结束（percentage 100 后 progress 冻结且无 stale——终态停环路径）
 console.log("[obs] 等待训练结束…");

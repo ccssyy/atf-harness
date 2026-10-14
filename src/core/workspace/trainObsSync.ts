@@ -101,9 +101,12 @@ const writeJsonAtomic = (target: string, payload: unknown): boolean => {
 export const captureTrainlogPane = (session: string): Promise<string[] | null> =>
   new Promise((resolve) => {
     const timer = setTimeout(() => resolve(null), 4000);
-    // 批㊶-ISO E2.2 单源纪律：tmux 命令经 tmuxLiveness tmuxCommand 构造（测试 socket 轴随源）
-    const [bin, ...args] = tmuxCommand(` capture-pane -t ${session} -p -S -40`).split(" ");
-    execFile(bin, args, { timeout: 3500, maxBuffer: 256 * 1024 }, (error, stdout) => {
+    // 批㊶-ISO E2.2 单源纪律：tmux 命令经 tmuxLiveness tmuxCommand 构造（测试 socket 轴随源）；
+    // 空socket旗标时命令串含双空格——trim+多空白分割（空串参数会令 tmux 报错）
+    const parts = tmuxCommand(` capture-pane -t ${session} -p -S -40`).trim().split(/\s+/);
+    const bin = parts[0] as string;
+    const args = parts.slice(1) as string[];
+    execFile(bin, args as readonly string[], { timeout: 3500, maxBuffer: 256 * 1024 }, (error: Error | null, stdout: string): void => {
       clearTimeout(timer);
       if (error !== null && error !== undefined) {
         resolve(null); // 会话不存在/已被杀＝预期内缺席
