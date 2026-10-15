@@ -445,7 +445,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
   defineTool({
     name: "atf_run_training",
     description:
-      "训练本机重跑（批㉕B 段4 降格定界——atf_launch_execute 为唯一编排执行点，本工具仅限「账本已放行 config 的本机重跑」）：action=start 校验 train.sh（DRY_RUN 过）→prelaunch 报告在场检查（prepare SKILL.md:84 确认制——缺失拒绝）→base_model.path 本地复核（批㊶R前置 防线③——家族名/HF id 一律拒）→端口预检→danger 卡放行→tmux 会话常驻执行＋stdout tail 进料监控（loss-series）；action=status 查询运行状态并返回八段任务卡（chat 流可见的 checklist——训练推进期请周期调用 status，把最新任务卡呈现给用户）。异常即停即报，不静默重试。" +
+      "训练本机重跑（降格定界——atf_launch_execute 为唯一编排执行点，本工具仅限「账本已放行 config 的本机重跑」）：action=start 校验 train.sh（DRY_RUN 过）→prelaunch 报告在场检查（prepare SKILL.md:84 确认制——缺失拒绝）→base_model.path 本地复核（防线③——家族名/HF id 一律拒）→端口预检→danger 卡放行→tmux 会话常驻执行＋stdout tail 进料监控（loss-series）；action=status 查询运行状态并返回八段任务卡（chat 流可见的 checklist——训练推进期请周期调用 status，把最新任务卡呈现给用户）。异常即停即报，不静默重试。" +
       (cfg.models !== undefined
         ? `本机可用模型清单（ATF_MODEL_ROOT=${cfg.models.root}）：${cfg.models.names.length > 0 ? cfg.models.names.join("、") : "（空）"}——iteration-config 的 base_model.path 必须是这些本地目录的绝对路径，禁止填 HF 家族名/仓库 id（如 qwen3_vl）。`
         : ""),
@@ -958,7 +958,7 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
   return defineTool({
     name: "atf_publish_model",
     description:
-      "模型产物发布（批㊶-S1 段 3——语义 C：归档＋登记＋并入模型清单）：对评估完成的 checkpoint 收口——四件套齐即可发布（指标门槛不硬编码，发布与否由用户在确认卡定）；发布动作＝确定性归档复制（SHA256 清单）到 <发布库位>/<run_id>/<ckpt>/＋manifest＋发布报告。确认卡＝U 双段式（dualStageNote），danger 级 Allow once 落审批账本。已发布模型并入模型清单状态面（训练确认卡基模型可选历史发布作 base——迁移学习；ATF_MODEL_ROOT＋发布库位两源合并、来源标注区分）。发布前置缺四件套即拒（不猜测）。",
+      "模型产物发布（语义 C：归档＋登记＋并入模型清单）：对评估完成的 checkpoint 收口——四件套齐即可发布（指标门槛不硬编码，发布与否由用户在确认卡定）；发布动作＝确定性归档复制（SHA256 清单）到 <发布库位>/<run_id>/<ckpt>/＋manifest＋发布报告。确认卡＝U 双段式（dualStageNote），danger 级 Allow once 落审批账本。已发布模型并入模型清单状态面（训练确认卡基模型可选历史发布作 base——迁移学习；ATF_MODEL_ROOT＋发布库位两源合并、来源标注区分）。发布前置缺四件套即拒（不猜测）。",
     parameters: {
       run_id: { type: "string", required: true, description: "run 标识" },
       checkpoint: { type: "string", required: true, description: "checkpoint 目录名（checkpoint-<数字>；拒 latest/符号链接）" },
@@ -1050,7 +1050,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
   const evaluate = defineTool({
     name: "atf_evaluate",
     description:
-      "评估触发（批㉕B 段3 正道链——确认制＋EVAL_RELEASE 审批账本，绕行 llamafactory api 形态已删除）：action=start 编排 pin 内正道链 generate_eval_service（vllm serve＋AWQ base）→build_service_prelaunch_report（九必报项确认报告）→用户确认（确认卡＝EVAL_RELEASE 放行，--record-eval-release 落账本）→generate_eval_orchestration（tmux 后台：服务自启→staging→run_formal_eval→回灌）；action=status 查询服务 receipt/编排状态/四件套与 model 标签。批㊶-U 双段式：确认卡前先以问题卡呈九必报项值清单＋改参指引（可调＝adapter_path/eval_assets_dir/service_config 各项；改参回复聊天，重推 start 重走链）；机器事实三件（eval_env/awq_base/cuda_visible_devices）一律来自 deploy/env-profile，缺即 MissingFactsBlock 停下问用户。评估轮目录＝runs/<run_id>/eval/<N>-<日期>/{service,ckpt-plan,orch}（ADR-0007）。",
+      "评估触发（正道链——确认制＋EVAL_RELEASE 审批账本，绕行 llamafactory api 形态已删除）：action=start 编排 pin 内正道链 generate_eval_service（vllm serve＋AWQ base）→build_service_prelaunch_report（九必报项确认报告）→用户确认（确认卡＝EVAL_RELEASE 放行，--record-eval-release 落账本）→generate_eval_orchestration（tmux 后台：服务自启→staging→run_formal_eval→回灌）；action=status 查询服务 receipt/编排状态/四件套与 model 标签。双段式：确认卡前先以问题卡呈九必报项值清单＋改参指引（可调＝adapter_path/eval_assets_dir/service_config 各项；改参回复聊天，重推 start 重走链）；机器事实三件（eval_env/awq_base/cuda_visible_devices）一律来自 deploy/env-profile，缺即 MissingFactsBlock 停下问用户。评估轮目录＝runs/<run_id>/eval/<N>-<日期>/{service,ckpt-plan,orch}（ADR-0007）。",
     parameters: {
       action: { type: "string", required: true, enum: ["start", "status"], description: "start=确认并启动正道链（后台编排）；status=查询进度与四件套" },
       run_id: { type: "string", required: true, description: "run 标识" },
@@ -1105,7 +1105,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const manifest = JSON.parse(readFileSync(join(serviceDir, "service_manifest.json"), "utf8")) as Record<string, unknown>;
       const expectedModels = (manifest["expected_model_names"] as string[] | undefined) ?? [];
       const leaking = expectedModels.filter((m) => modelLabelLooksDefault(m));
-      if (leaking.length > 0) return asToolValue({ started: false, error: "serving_model_label_default_leak", models: leaking, note: "service manifest 期望模型名含 OpenAI 风格缺省名——gpt-*/claude-* 前缀拒收（批⑳.3 防线）" });
+      if (leaking.length > 0) return asToolValue({ started: false, error: "serving_model_label_default_leak", models: leaking, note: "service manifest 期望模型名含 OpenAI 风格缺省名——gpt-*/claude-* 前缀拒收（防线）" });
       // ② 确认报告（九必报项，产物反生成自 service_manifest）
       const reportPath = join(serviceDir, "service-prelaunch-report.md");
       const reported = await runCapture("python3", [prelaunch, "--service-dir", serviceDir, "--env-profile", args.env_profile, "--out", reportPath,
@@ -1178,7 +1178,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
   const analyze = defineTool({
     name: "atf_analyze_badcases",
     description:
-      "badcase 两步链（轻量，批㉕B 段1 正道化）：①build_raw_badcase_input.py 冻结账本（评估四件套＋L1 eval 资产→RawBadcaseAnalysis/v1，落 analysis/ledger/）②run_analysis_chain.py --raw-mainline <冻结账本> 一键链→viewer.html（GT/预测叠图）与 report/。脚本一律取 <kernelDir>/skills/（pin 单源，禁源工作树绝对路径）。无训练数据/无审阅时链按合同显式声明跳过。",
+      "badcase 两步链（轻量，正道化）：①build_raw_badcase_input.py 冻结账本（评估四件套＋L1 eval 资产→RawBadcaseAnalysis/v1，落 analysis/ledger/）②run_analysis_chain.py --raw-mainline <冻结账本> 一键链→viewer.html（GT/预测叠图）与 report/。脚本一律取 <kernelDir>/skills/（pin 单源，禁源工作树绝对路径）。无训练数据/无审阅时链按合同显式声明跳过。",
     parameters: {
       run_id: { type: "string", required: true, description: "run 标识（实验目录＝runs/<run_id>）" },
       eval_assets_dir: { type: "string", description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl；缺省 runs/<run_id>/l1/eval）" },

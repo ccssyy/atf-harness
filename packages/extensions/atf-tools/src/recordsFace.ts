@@ -72,7 +72,7 @@ export function buildRecordsQueryTool(ctx: { get(service: string): unknown }, cf
   return defineTool({
     name: "atf_records_query",
     description:
-      "跨任务记录语义化读取（只读一等工具，批㊶-S1 §6.2 D2）：参数＝任务标识（workspace 可选＋run 名），路径翻译由 harness 完成（对话与卡面不出现路径裸串）。跨出当前工作区的读取需用户点头（U 形式双段问题卡人话确认：「要参考训练任务 X 的记录吗」）；用户在消息中明确点名的任务标识自动登记豁免（同会话后续读取免打扰，登记留痕可回看）。登记不 bump。",
+      "跨任务记录语义化读取（只读一等工具）：参数＝任务标识（workspace 可选＋run 名），路径翻译由 harness 完成（对话与卡面不出现路径裸串）。跨出当前工作区的读取需用户点头（U 形式双段问题卡人话确认：「要参考训练任务 X 的记录吗」）；用户在消息中明确点名的任务标识自动登记豁免（同会话后续读取免打扰，登记留痕可回看）。登记不 bump。",
     parameters: {
       task_run: { type: "string", required: true, description: "任务 run 名（如 run-regress-formal-01）" },
       task_workspace: { type: "string", description: "任务工作区桶名（可选——缺省自动全桶扫描）" },

@@ -638,7 +638,7 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness,
  */
 export const ITERATION_MEANINGS: Record<string, string> = {
   learning_rate: "学习率（LoRA 微调优化步长）",
-  nproc_per_node: "训练卡数（单机并行进程数＝GPU 数——批㊶R前置：默认拉满可用卡，训练时长优先；降档仅用户明确要求）",
+  nproc_per_node: "训练卡数（单机并行进程数＝GPU 数——默认拉满可用卡，训练时长优先；降档仅用户明确要求）",
   base_model_path: "基模型路径（本地绝对路径——默认＝模型库位置下 Qwen3-VL-32B-Instruct，owner 偏置锚点；家族名/HF id 无效）",
   num_train_epochs: "训练轮数（全量数据过几遍）",
   per_device_train_batch_size: "单卡 batch（每次前向的样本数）",
@@ -648,7 +648,7 @@ export const ITERATION_MEANINGS: Record<string, string> = {
   lora_rank: "LoRA 秩（容量/参数量）",
   lora_alpha: "LoRA alpha（缩放系数，与 rank 成对）",
   dataset_keys: "数据集键（登记面推导的 variants 条目）",
-  max_total_tokens: "构造准入闸门：单样本超限在数据构造期截断/拒绝——不作用于评估推理长度（推理截断由服务端 completion 参数决定，批㉙ A 重评实证）",
+  max_total_tokens: "构造准入闸门：单样本超限在数据构造期截断/拒绝——不作用于评估推理长度（推理截断由服务端 completion 参数决定）",
   image_min_pixels: "像素下限（训练/评估必须同一对值，评估服务只引用训练确认值）",
   image_max_pixels: "像素上限（与像素下限成对确认）",
   negative_ratio_target: "负样本目标带（构造期配比目标）",

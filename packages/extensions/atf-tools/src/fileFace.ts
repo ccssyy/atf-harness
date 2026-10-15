@@ -80,7 +80,7 @@ export const buildFileTools = (runsRoot: string): unknown[] => [
   }),
   defineTool({
     name: "atf_gpu_status",
-    description: "GPU 状态（只读，nvidia-smi 包装）：全卡利用率/显存/进程归属（批㊶-W F6：空闲/常驻/训练三态逐卡表＋占用进程摘要；归属判定＝compute-apps 进程，非显存阈值）。nvidia-smi 不可用时报 gpu_offline（不猜测）。",
+    description: "GPU 状态（只读，nvidia-smi 包装）：全卡利用率/显存/进程归属（空闲/常驻/训练三态逐卡表＋占用进程摘要；归属判定＝compute-apps 进程，非显存阈值）。nvidia-smi 不可用时报 gpu_offline（不猜测）。",
     parameters: {},
     output: {
       schema: looseObjectOutput,

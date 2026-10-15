@@ -160,7 +160,7 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   for (const tool of buildEvalTools(ctx, { runsRoot: config.runsRoot, logDir: config.logDir, kernelDir: config.kernelDir, bindRun: (runId) => manager.bindRun(runId) })) ctx.tools.register(tool);
   ctx.tools.register(buildPublishModelTool(ctx, { runsRoot: config.runsRoot }));
   ctx.tools.register(buildRecordsQueryTool(ctx, { runsRoot: config.runsRoot, currentRunWorkspace: () => process.env["ATF_BASH_RUN_WORKSPACE"] ?? null }));
-  console.log("[atf-tools] atf_publish_model＋atf_records_query 已挂载（批㊶-S1 段 3＋§6.2 D2）");
+  console.log("[atf-tools] atf_publish_model＋atf_records_query 已挂载");
 
   // 批㊶-K 项 3：档位可见性只读工具（当前档＋部署默认档＋全部可选档两维度——
   // 零切换路径：档位/审批面变更须经界面人工操作；文案产品口径）

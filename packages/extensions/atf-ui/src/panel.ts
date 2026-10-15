@@ -101,8 +101,8 @@ function render(data) {
     : '<div class="dim">（暂无 run）</div>';
   const points = run && Array.isArray(run.training.points) ? run.training.points : [];
   const training = document.getElementById('training');
-  // 八段四态任务卡（codex 式）+角标（批⑳；批㊶-S3 S-B2 修复①：渲染读四态 status——
-  // 旧版读不存在的 lit 属性（monitor segments 元素为 {key,label,status}），八段恒不点亮）
+  // 八段四态任务卡（codex 式）+角标（渲染读四态 status——旧版读不存在的 lit 属性
+  // （monitor segments 元素为 {key,label,status}），八段恒不点亮）
   const taskEl = document.getElementById('atf-taskcard');
     if (taskEl && run) {
       const segs = run.segments || [];
@@ -120,12 +120,12 @@ function render(data) {
         + '<span style="' + (lit ? 'text-decoration:line-through;opacity:.7;' : live ? 'color:var(--atf-textPrimary);font-weight:600;' : '') + '">'
         + (i+1) + '. ' + (s2.label || '') + '</span></div>';
       }).join(''));
-      // 批㊶-S3 S-B2：步进百分比持续推进行（training.progress fresh 面——同步器 N-3 键；
+      // 步进百分比持续推进行（training.progress fresh 面——同步器键；
       // 过期/缺失 null 不渲染不猜测）＋评估就绪进度行（eval_progress 读账——四态+elapsed）
       var progLine = '';
       var rp = run.progress || null;
       if (rp && typeof rp.percentage === 'number') {
-        // 批㊶-TRAIN-OBS T2：ETA additive（eta_s 缺失只显示百分比——不占位不显示 null）
+        // ETA additive（eta_s 缺失只显示百分比——不占位不显示 null）
         var etaTxt = '';
         if (typeof rp.eta_s === 'number' && rp.eta_s >= 0) {
           var eh = Math.floor(rp.eta_s / 3600), em = Math.floor((rp.eta_s % 3600) / 60), es = Math.floor(rp.eta_s % 60);
