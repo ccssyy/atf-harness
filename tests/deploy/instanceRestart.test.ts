@@ -7,7 +7,7 @@
  * 现行进程）；密钥 env 经 ATF_INSTANCE_KEY_ENV 注入 fixture（真实密钥零读取零外泄）。
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -92,5 +92,41 @@ describe.skipIf(!scriptReady)("批㊶-ISO-2 S3——净室重启脚本净化锚"
 describe.skipIf(scriptReady)("批㊶-ISO-2 S3——脚本缺席（非本机实例层）如实跳过", () => {
   it("instance-restart.sh 不在位——净化锚需要实例层脚本，本机跳过", () => {
     expect(existsSync(script)).toBe(false);
+  });
+});
+
+// 批㊶-UATD（2026-10-16，微批 b0e24bd5）——冷启动修复锚：脚本本体＝实例层资产
+// （deploy/instances/ 整目录 gitignored 纪律），本件锚定其行为面（bash -n＋源面结构）。
+const uatDeployScript = join(repoRoot, "deploy", "instances", "uat-deploy.sh");
+
+describe.skipIf(!existsSync(uatDeployScript))("批㊶-UATD——uat-deploy.sh 冷启动修复锚", () => {
+  it("bash -n 语法过（两运维脚本）", () => {
+    for (const s of [uatDeployScript, script]) {
+      const run = spawnSync("bash", ["-n", s], { encoding: "utf8" });
+      expect(run.status).toBe(0);
+    }
+  });
+
+  it("T1.1 会话自建：send-keys 前检测 has-session·消亡时 new-session -c UAT_REPO（canonical 启动命令不变）", () => {
+    const src = readFileSync(uatDeployScript, "utf8");
+    expect(src).toContain('tmux has-session -t "$UAT_TMUX" 2>/dev/null; then');
+    expect(src).toContain('tmux new-session -d -s "$UAT_TMUX" -c "$UAT_REPO"');
+    expect(src).toContain("批㊶-UATD T1.1：会话自建");
+  });
+
+  it("T1.2 依赖引导段：CI frozen-lockfile install→bin 链/dist 校验→缺失补 build（引导不计入 60s boot 窗口）", () => {
+    const src = readFileSync(uatDeployScript, "utf8");
+    expect(src).toContain("CI=true corepack pnpm install --frozen-lockfile");
+    expect(src).toContain("apps/web/dist/index.html");
+    expect(src).toContain("corepack pnpm build");
+  });
+});
+
+describe.skipIf(!scriptReady)("批㊶-UATD T2——instance-restart.sh uat 分支会话自建", () => {
+  it("uat 条件自建在场；dev 分支行为零变更（缺会话仍 fail-closed）", () => {
+    const src = readFileSync(script, "utf8");
+    expect(src).toContain("批㊶-UATD T2：uat 分支会话自建");
+    expect(src).toContain('[[ "$INSTANCE" == "uat" ]]');
+    expect(src).toContain('echo "[instance-restart] FAIL: tmux 会话不在: $TMUX_SESSION" >&2');
   });
 });
