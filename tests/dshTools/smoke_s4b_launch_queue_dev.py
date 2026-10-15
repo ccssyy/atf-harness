@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
-# 批㊶-S4b T4——GPU 排队补挂编排主路径·dev 真环境六步冒烟 v2（受阻存证件）。
-#
-# ⚠ T4 阻塞实证（2026-10-15，dev Trajectory 铁证）：dev WebUI 的 DSH agent 工具面
-# **没有 atf_launch_execute**——调用回执 UNKNOWN_TOOL（atf_launch_execute 不在扩展投影面
-# BRIDGE_TOOL_NAMES 六件＋trainingFace 投影族；其真实执行链＝harness TUI/resume/runner 的
-# ToolExecutor）。本脚本 Phase B/C/D 已在 dev 实例真跑至模型回合（provider UI 真添＋真
-# LLM 往返成功），工具步于 UNKNOWN_TOOL 处不可达——六步冒烟候 owner 裁定后另批
-# （候选：给 DSH 面补投影 launch_execute，或改走 TUI/runner 链冒烟）。
-# 模型面替身（如实登记）：dev GLM key 额度耗尽（429 code 1310·重置 2026-10-19）——
-# ScriptedPiAiEndpoint（批甲-BUILD T4 冒烟基建·真 HTTP 回环）经 Models 设置页 UI 真
-# provider 承担「发起工具调用」一步；工具链零注入（真审批面/真轮询/真通报/真 handler）。
+# 批㊶-S4b-T4b——GPU 排队补挂编排主路径·dev 真环境六步冒烟 v3（非注入路径）。
+# T4b（owner「1甲」）：BRIDGE_TOOL_NAMES 六件→七件（atf_launch_execute 对 DSH 面开放）——
+# 工具步经 WebUI 面真实可达（前批 UNKNOWN_TOOL 阻断面随补投影消除）。
+# 模型面替身（如实登记）：ScriptedPiAiEndpoint 序列脚本会被会话标题旁路请求吃项（T4 实证），
+# 故改按内容路由端点（tests/dshTools/s4b_router_driver.mjs·真 HTTP 回环·openai-completions
+# wire）——只替代「发起工具调用」一步；工具链零注入（真审批面/真排队轮询/真通报/真 handler）。
 # 六步：①占卡（真 CUDA 进程 GPU7·compute-apps 可见）②触发（工具审批卡 Allow once）
 # ③排队通报（需 8·空闲 7<8 → gpu_queue warn）④释放 ⑤命中琥珀卡（8≥8＋7s 复探）
 # ⑥琥珀放行→launch.sh 执行→queued_hit。
@@ -24,8 +19,9 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 REPO = "/data/sam/ATF-Harness"
-RUN_ID = Path("/tmp/s4b-smoke-runid").read_text().strip()
-RUN_DIR = "/data/atf/dev/runs/" + RUN_ID
+# agent 消息不带 run_id → localHostFor 解析 runId="default"（平铺 runs/default）——
+# launch.sh 桩与 alerts 落点据此铺设（T4b 实证：handler 实际解析路径）。
+RUN_DIR = "/data/atf/dev/runs/default"
 LOG = "/tmp/dsh-web-k28.log"
 OCCPID = int(Path("/tmp/s4b-occpid").read_text().strip()) if Path("/tmp/s4b-occpid").exists() else 47118
 BASE = "http://127.0.0.1:3080"
@@ -70,7 +66,7 @@ def click_allow_once(page_x, timeout_s=60):
     return False
 
 
-ep = subprocess.Popen(["node", "/tmp/s4b-endpoint-driver.mjs"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+ep = subprocess.Popen(["node", "/data/sam/ATF-Harness/tests/dshTools/s4b_router_driver.mjs"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 port = None
 for _ in range(20):
     line = ep.stdout.readline().strip() if ep.poll() is None else ""
@@ -105,58 +101,75 @@ with sync_playwright() as pw:
     check(nav_ok, "PB1 设置页 Models 导航")
     time.sleep(2)
     add_btn = page.locator("button:has-text('Add model provider'), button:has-text('添加模型提供商')").first
-    add_found = False
-    for _ in range(10):
-        if add_btn.count() > 0:
-            add_found = True
-            break
-        time.sleep(1)
-    check(add_found, "PB2 添加提供商入口在场")
-    add_btn.click()
-    time.sleep(2)
-    # 添加方式选择器：手声明路线＝「Custom model API」（CustomProviderCard——route/api/baseURL/models 全字段）
-    custom_btn = page.locator("button:has-text('Custom model API'), button:has-text('自定义模型 API')").first
-    if custom_btn.count() > 0:
-        custom_btn.click()
-        time.sleep(2)
-    page.locator("input[aria-label='Provider ID']:visible, input[aria-label='提供方 ID']:visible").first.fill("s4blocal")
-    time.sleep(0.5)
-    page.locator("input[aria-label='Display name']:visible, input[aria-label='显示名称']:visible").first.fill("S4B Local")
-    time.sleep(0.5)
-    api_sel = page.locator("select[aria-label*='API']:visible, select[aria-label*='协议']:visible").first
-    if api_sel.count() > 0:
-        api_sel.select_option("openai-completions")
-        print("[provider] api=openai-completions", flush=True)
-    page.locator("input[aria-label='Base URL']:visible, input[aria-label='API 地址']:visible").first.fill("http://127.0.0.1:" + str(port))
-    time.sleep(0.5)
-    add_model_btn = page.locator("button:has-text('Add model'):visible, button:has-text('添加模型'):visible").first
-    try:
-        handle = add_model_btn.element_handle(timeout=8000)
-        if handle is None:
-            raise RuntimeError("Add model 钮缺席")
-        page.evaluate("el => el.scrollIntoView({ block: 'center' })", handle)
-        time.sleep(0.5)
-        add_model_btn.click(force=True, timeout=5000)
-        time.sleep(1)
-    except Exception as cause:
-        print("[provider] Add model 点击异常（" + str(cause)[:80] + "）——试缺省模型行", flush=True)
-    # 自定义卡模型行 aria-label 带行序号（Model ID 1 / 模型 ID 1……——实测形态）
-    model_input = page.locator("input[aria-label='Model ID 1']:visible, input[aria-label='模型 ID 1']:visible, input[aria-label='Model ID']:visible").first
-    handle2 = model_input.element_handle(timeout=8000)
-    if handle2 is None:
-        raise RuntimeError("Model ID 输入行缺席（Add model 未生效）")
-    page.evaluate("el => el.scrollIntoView({ block: 'center' })", handle2)
-    model_input.fill("s4b-smoke")
-    time.sleep(0.5)
-    key_input = page.locator("input[aria-label='API key']:visible, input[aria-label='API 密钥']:visible").first
-    if key_input.count() > 0:
-        key_input.fill("sk-s4b-scripted-fake")
-        print("[provider] key 已填（fake）", flush=True)
-    time.sleep(0.5)
-    page.locator("button:has-text('Create provider'), button:has-text('创建提供方'), button:has-text('Save'), button:has-text('保存')").last.click()
-    time.sleep(4)
-    body_text = page.locator("body").inner_text()
-    check("S4B Local" in body_text or "s4blocal" in body_text, "PB3 provider 保存（S4B Local 行在场）")
+    skip_provision = os.environ.get("S4B_SKIP_PROVISION") == "1"
+    if skip_provision:
+        # provisioning 外置（router 固定端口＋部署件 baseURL 对齐＋实例重启）——UI 面零操作
+        print("[provider] S4B_SKIP_PROVISION=1——跳过 Phase B（provider 由部署件承载）", flush=True)
+        check(page.get_by_text("S4B Local", exact=False).count() > 0, "PB-skip S4B Local 行在场（部署件投影）")
+    else:
+        already = page.get_by_text("S4B Local", exact=False).count() > 0
+        add_btn = page.locator("button:has-text('Add model provider'), button:has-text('添加模型提供商')").first
+        add_found = False
+        for _ in range(10):
+            if add_btn.count() > 0:
+                add_found = True
+                break
+            time.sleep(1)
+        check(add_found, "PB2 添加提供商入口在场")
+        if already:
+            print("[provider] S4B Local 已在场——Edit 卡更新 baseURL 至本轮端点", flush=True)
+            edit_btn = page.locator("button[aria-label*='S4B Local'], button[aria-label*='s4blocal']").first
+            edit_btn.click()
+            time.sleep(2)
+            bu = page.locator("input[aria-label='Base URL']:visible, input[aria-label='API 地址']:visible").first
+            bu.fill("http://127.0.0.1:" + str(port))
+            time.sleep(0.5)
+            page.locator("button:has-text('Save'):visible, button:has-text('保存'):visible").last.click()
+            time.sleep(3)
+        else:
+            add_btn.click()
+            time.sleep(2)
+            custom_btn = page.locator("button:has-text('Custom model API'), button:has-text('自定义模型 API')").first
+            if custom_btn.count() > 0:
+                custom_btn.click()
+                time.sleep(2)
+            page.locator("input[aria-label='Provider ID']:visible, input[aria-label='提供方 ID']:visible").first.fill("s4blocal")
+            time.sleep(0.5)
+            page.locator("input[aria-label='Display name']:visible, input[aria-label='显示名称']:visible").first.fill("S4B Local")
+            time.sleep(0.5)
+            api_sel = page.locator("select[aria-label*='API']:visible, select[aria-label*='协议']:visible").first
+            if api_sel.count() > 0:
+                api_sel.select_option("openai-completions")
+                print("[provider] api=openai-completions", flush=True)
+            page.locator("input[aria-label='Base URL']:visible, input[aria-label='API 地址']:visible").first.fill("http://127.0.0.1:" + str(port))
+            time.sleep(0.5)
+            add_model_btn = page.locator("button:has-text('Add model'):visible, button:has-text('添加模型'):visible").first
+            try:
+                handle = add_model_btn.element_handle(timeout=8000)
+                if handle is None:
+                    raise RuntimeError("Add model 钮缺席")
+                page.evaluate("el => el.scrollIntoView({ block: 'center' })", handle)
+                time.sleep(0.5)
+                add_model_btn.click(force=True, timeout=5000)
+                time.sleep(1)
+            except Exception as cause:
+                print("[provider] Add model 点击异常（" + str(cause)[:80] + "）——试缺省模型行", flush=True)
+            model_input = page.locator("input[aria-label='Model ID 1']:visible, input[aria-label='模型 ID 1']:visible, input[aria-label='Model ID']:visible").first
+            handle2 = model_input.element_handle(timeout=8000)
+            if handle2 is None:
+                raise RuntimeError("Model ID 输入行缺席（Add model 未生效）")
+            page.evaluate("el => el.scrollIntoView({ block: 'center' })", handle2)
+            model_input.fill("s4b-smoke")
+            time.sleep(0.5)
+            key_input = page.locator("input[aria-label='API key']:visible, input[aria-label='API 密钥']:visible").first
+            if key_input.count() > 0:
+                key_input.fill("sk-s4b-scripted-fake")
+                print("[provider] key 已填（fake）", flush=True)
+            time.sleep(0.5)
+            page.locator("button:has-text('Create provider'), button:has-text('创建提供方'), button:has-text('Save'), button:has-text('保存')").last.click()
+            time.sleep(4)
+            body_text = page.locator("body").inner_text()
+            check("S4B Local" in body_text or "s4blocal" in body_text, "PB3 provider 保存（S4B Local 行在场）")
     shot(page, "00-s4b-provider-added.png")
     page.keyboard.press("Escape")
     time.sleep(2)

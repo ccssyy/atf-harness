@@ -82,7 +82,9 @@ describe("atf-tools 注册面（11 工具清单＝指令要求）", () => {
       expect(registered).toContain(name);
     }
     // atf_hello 探针由 apply() 注册（不在 build* 工厂面）——工厂面＝指令 11 工具
-    expect(registered).toHaveLength(11);
+    // ＋批㊶-S4b-T4b（owner 产品裁定 2026-10-15「1甲」）：BRIDGE_TOOL_NAMES 六件→七件
+    // （atf_launch_execute 编排执行点对 DSH 面开放）→ registered 11→12。
+    expect(registered).toHaveLength(12);
     await manager.close();
   });
 

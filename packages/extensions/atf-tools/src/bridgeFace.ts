@@ -47,6 +47,10 @@ export const BRIDGE_TOOL_NAMES: readonly string[] = [
   "atf_scratch_exec",
   "atf_skill_read",
   "atf_gate",
+  // 批㊶-S4b-T4b（owner 产品裁定 2026-10-15「1甲」）：编排执行点对 DSH 面开放——
+  // 桥接面六件→七件；本地治理径（WORKSPACE_TOOL_HANDLERS）经 bridgeFace 既有分派执行，
+  // GPU 排队面（createLaunchGpuQueueFace）随 localHandler 注入同场生效。
+  "atf_launch_execute",
 ];
 
 /** 定义查找单源：桥接契约面（TOOL_DEFINITIONS）＋工作区治理分册（WORKSPACE_TOOL_DEFINITIONS，
