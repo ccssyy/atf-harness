@@ -78,3 +78,34 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
     expect(rows.length).toBe(9); // 模板 9 行（批㊶-K 增 jobs 兜底行）
   });
 });
+
+describe("批甲-FIX T1——模型目录 per-model 思考档位闭集（智谱端点能力对账）", () => {
+  /** 模板 glm-atf 路由的 models 配置（PyYAML 归一——本仓零 YAML 依赖纪律沿旧例）。 */
+  const glmModels = (rows: Array<Record<string, unknown>>): Array<Record<string, unknown>> => {
+    const llm = rowById(rows, "llm-pi-ai") as { config?: { providers?: Record<string, { models?: Array<Record<string, unknown>> }> } };
+    return llm?.config?.providers?.["glm-atf"]?.models ?? [];
+  };
+  const effortsOf = (model: Record<string, unknown> | undefined): string[] =>
+    Object.keys(((model?.["reasoningEfforts"] as Record<string, unknown>) ?? {}));
+
+  it("三模型闭集对账：glm-5.3＝off/low/high/max（thinking 可关）；flash／flashx＝low/high/max（无 off——智谱开放文档 2026-10-15：GLM-5.3 与 GLM-5.3-FLASH 仅支持 low/high/max，FlashX thinking 不可关闭）", () => {
+    const rows = templateRows();
+    const models = new Map(glmModels(rows).map((model) => [model["id"] as string, model]));
+    expect(models.size).toBe(3);
+    expect(effortsOf(models.get("glm-5.3"))).toEqual(["off", "low", "high", "max"]);
+    expect(effortsOf(models.get("glm-5.3-flash"))).toEqual(["low", "high", "max"]);
+    expect(effortsOf(models.get("glm-5.3-flashx"))).toEqual(["low", "high", "max"]);
+    // 出处注释在场（声明出处写进配置——「不造档位」审计面）
+    const text = readFileSync(TEMPLATE, "utf8");
+    expect(text).toContain("docs.bigmodel.cn");
+    expect(text).toContain("thinking 不可关闭");
+  });
+
+  it("poc 交付副本与 uat overlay 示例同步：flash 系闭集随行（实例覆写整行时漏声明即无档位控件）", () => {
+    const pocText = readFileSync(join(repo, "poc", "web-profile-cordis-patch.yml"), "utf8");
+    expect(pocText).toContain("GLM-5.3-Flash");
+    expect(pocText).toContain("thinking 不可关，无 off 档");
+    const overlayText = readFileSync(join(repo, "deploy", "profiles", "web", "overlays", "uat.overlay.example.yml"), "utf8");
+    expect(overlayText).toContain("reasoningEfforts 闭集");
+  });
+});

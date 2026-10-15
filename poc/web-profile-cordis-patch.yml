@@ -16,6 +16,8 @@
         # zai-coding-cn 条目 glm-5.3 的 thinkingLevelMap 原文（off/low/high/max——不造档位），
         # 激活 dsh 原生模型选择器「推理等级」子菜单（ui-model-selection）。能力面同源声明：
         # contextWindow/maxTokens＝目录值（用户可用到模型上限，D-LLM-1 R4 不预降）。
+        # 批甲-FIX T1（2026-10-15）per-model 闭集同步：flash／flashx 官方仅 low/high/max
+        # （thinking 不可关，无 off 档——智谱开放文档 2026-10-15 摘录，与模板同源）。
         compat:
           thinkingFormat: zai
         models:
@@ -30,8 +32,16 @@
               max: max
           - id: glm-5.3-flash
             name: GLM-5.3-Flash
+            reasoningEfforts:
+              low: low
+              high: high
+              max: max
           - id: glm-5.3-flashx
             name: GLM-5.3-FlashX
+            reasoningEfforts:
+              low: low
+              high: high
+              max: max
 - id: ui-settings-general
   name: "@deepseek-ai/dsh-client-ui-settings-general"
   config:

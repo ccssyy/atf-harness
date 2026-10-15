@@ -1118,14 +1118,76 @@ describe("批甲-BUILD T1——思考档位快切（client.js 源面锚——浏
     // 空 face 安全：hooks 判空后置（store 缺席不炸 useSyncExternalStore）
     expect(src).toContain("directory ? directory.subscribe(fn) : function() {}");
     expect(src).toContain("if (state === null || state === undefined) return null");
-    // 常显：触发钮＝「思考」＋当前档位值（默认态明示「默认」）
+    // 常显：触发钮＝「思考」＋当前档位值（批甲-FIX T2.2 去「默认」态——链值常显）
     expect(src).toContain("React.createElement('span', { className: 'atf-effort-k' }, '思考')");
-    expect(src).toContain("effectiveEffort === undefined ? '默认' : effortLabelOf(effectiveEffort)");
+    expect(src).not.toContain("'默认'");
     // 拒绝如实显示：RemoteResult 错误码＋原因原样呈现，菜单不关（错误条持续可见）
     expect(src).toContain("result.ok === false");
     expect(src).toContain("result.error.code");
     expect(src).toContain("result.error.message");
     expect(src).toContain("'切换被拒绝：' + error");
     expect(src).toContain("role: 'alert'");
+  });
+});
+
+describe("批甲-FIX——思考档位按模型能力修正（client.js 源面锚——浏览器渲染走 DSH 真跑）", () => {
+  const clientSource = () => readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+
+  it("T1 配套（UI 面）：闭集顺位单源 EFFORT_ORDER 与 EFFORT_CLOSED 同序（最近档距离的度量域——不造档位）", () => {
+    const src = clientSource();
+    expect(src).toContain("var EFFORT_ORDER = ['off', 'low', 'high', 'max']");
+  });
+
+  it("T2.2 去「默认」态：三段取值链（会话最近切换 → 用户 per-model 默认档 ∩目录闭集 → 目录声明序首位）", () => {
+    const src = clientSource();
+    // 链①：会话显式档位优先
+    expect(src).toContain("var chainEffort = (reasoning && state.current && state.current.reasoningEffort !== undefined)\n        ? state.current.reasoningEffort\n        : chainFallbackEffort(choice, offered)");
+    // 链②：用户默认档（effort_defaults）∩目录闭集——不造档位（交集过滤）
+    expect(src).toContain("var ud = userDefaultEffortOf(choice.model)");
+    expect(src).toContain("if (offered[i].id === ud) return ud");
+    // 链③：目录 efforts 顺位最低档＝声明序首位（GLM-5.3→Off；Flash 系→Low）
+    expect(src).toContain("return offered.length > 0 ? offered[0].id : undefined");
+    // 链值固化（ensure）：无显式档位时程序化补选——显示值＝真实送出值（「默认」悬空态消除）
+    expect(src).toContain("function ensureChainEffort(injected, state, choice, offered, refs)");
+    expect(src).toContain("if (state.current !== null && state.current !== undefined && state.current.reasoningEffort !== undefined) return");
+    expect(src).toContain("refs.ensured === key");
+    expect(src).toContain("reasoningEffort: want");
+  });
+
+  it("T2.3 会话内模型切换档位取值：保持/回退（切换落地未带档位）＋越界补偿（提交被拒）＋防环＋sticky 零新机制", () => {
+    const src = clientSource();
+    // 统一同步器（三分支：①补偿 ②保持/回退 ③ensure）
+    expect(src).toContain("function syncEffortSelection(injected, state, choice, offered, refs)");
+    // ② 保持/回退：模型切换落地且选择未携带档位（vendor 两条切换路径均不携带旧档位）——
+    //    目标支持前档则保持，不支持落闭集顺位最近档（不静默跳 max）
+    expect(src).toContain("if (prev !== null && prev.model !== cur.model && cur.reasoningEffort === undefined)");
+    expect(src).toContain("var want2 = ids2.indexOf(kept) >= 0 ? kept : nearestEffort(kept, ids2)");
+    // ① 补偿：跨模型越界档提交被拒才补选；同模型拒绝＝用户选择本身被拒（如实显示不补偿）
+    expect(src).toContain("if (target.provider === cur.provider && target.model === cur.model) return");
+    // 最近档＝闭集顺位差最小者（度量域＝EFFORT_ORDER 声明序）
+    expect(src).toContain("var d = Math.abs(fromIdx - EFFORT_ORDER.indexOf(ids[i]))");
+    expect(src).toContain("if (d < best) { best = d; want = ids[i] }");
+    // 防环：同目标（provider/model/档位）只补一次；会话上下文切换（directory 身份）＝prev 作废不跨会话「保持」
+    expect(src).toContain("refs.compensated = key");
+    expect(src).toContain("if (refs.directory !== injected.directory)");
+    // 跨会话 sticky＝宿主既有语义（selectModel→agentDefaultModel.saveSelection）——零新机制
+    expect(src).toContain("agentDefaultModel.saveSelection");
+  });
+
+  it("T2.1 设置页 per-model 默认档座位：provider-card keyed 槽（key＝llm-pi-ai）＋effort_defaults 单源读写", () => {
+    const src = clientSource();
+    // 座位：keyed 槽注册（产品层——vendor 零写入；组件 createElement 实例化——#310 钉子）
+    expect(src).toContain("scope.slots.inject('settings.models.provider-card'");
+    expect(src).toContain("key: 'llm-pi-ai'");
+    expect(src).toContain("React.createElement(ProviderModelDefaultsBody, props)");
+    // 数据面：/atf-ui/settings effort_defaults 块（GET 读＋POST 写——与 composer 链②同源）
+    expect(src).toContain("function loadEffortDefaults(force)");
+    expect(src).toContain("typeof d.effort_defaults === 'object'");
+    expect(src).toContain("JSON.stringify({ effort_defaults: nextMap })");
+    // 下拉选项＝该模型目录 efforts 闭集（交集过滤——不造档位）；非 glm-atf 卡不渲染
+    expect(src).toContain("if (entry === null || entry === undefined || entry.provider !== 'glm-atf') return null");
+    expect(src).toContain("efforts[li].id === EFFORT_CLOSED[ci].id");
+    // 链中段预取（composer 首帧链值就位）
+    expect(src).toContain("loadEffortDefaults()\n");
   });
 });

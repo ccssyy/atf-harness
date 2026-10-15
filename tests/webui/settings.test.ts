@@ -8,10 +8,12 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   APPROVAL_POLICIES,
+  EFFORT_CLOSED_IDS,
   SCENARIO_PROFILES,
   computeContextUsage,
   estimateTokens,
   openSettingsStore,
+  parseEffortDefaults,
   redactProviders,
   type ProviderEntry,
 } from "../../src/webui/settings.js";
@@ -174,5 +176,40 @@ describe("场景 Profiles（§一.区4）", () => {
   it("三档预设捆绑：首训/走查逐卡、演示档 demo", () => {
     expect(SCENARIO_PROFILES.map((profile) => profile.id)).toEqual(["first_train", "walkthrough", "demo"]);
     expect(SCENARIO_PROFILES.find((profile) => profile.id === "demo")?.approval_policy).toBe("demo");
+  });
+});
+
+describe("批甲-FIX T2.1——per-model 默认思考档（effort_defaults 块）", () => {
+  it("闭集单源：EFFORT_CLOSED_IDS 恰四值（off/low/high/max——目录声明序；不造档位）", () => {
+    expect([...EFFORT_CLOSED_IDS]).toEqual(["off", "low", "high", "max"]);
+  });
+
+  it("parseEffortDefaults 形态清洗：合法条目保留；非闭集值/空键/非字符串丢弃（服务端只验形态不造档位）", () => {
+    expect(parseEffortDefaults({
+      "glm-5.3": "off",
+      "glm-5.3-flash": "low",
+      "": "low",
+      "bad-model": "ultra",
+      "num-model": 3,
+    })).toEqual({ "glm-5.3": "off", "glm-5.3-flash": "low" });
+    expect(parseEffortDefaults(null)).toEqual({});
+    expect(parseEffortDefaults("x")).toEqual({});
+    expect(parseEffortDefaults(["off"])).toEqual({});
+  });
+
+  it("store 往返＋分区隔离：put({effort_defaults}) 持久化且不动 storage；重开 store 读到", () => {
+    const root = tempRoot();
+    const path = join(root, "providers.json");
+    const store = openSettingsStore(path);
+    store.put({ storage: { atf_root: "/tmp/ed-root", model_root: "", train_env: "", eval_env: "", train_gpu_baseline: "" } });
+    const afterEd = store.put({ effort_defaults: { "glm-5.3-flash": "high", "glm-5.3": "low" } });
+    expect(afterEd.effort_defaults).toEqual({ "glm-5.3-flash": "high", "glm-5.3": "low" });
+    expect(afterEd.storage.atf_root).toBe("/tmp/ed-root");
+    const reopened = openSettingsStore(path).get();
+    expect(reopened.effort_defaults).toEqual({ "glm-5.3-flash": "high", "glm-5.3": "low" });
+    expect(reopened.storage.atf_root).toBe("/tmp/ed-root");
+    // 旧文档（无 effort_defaults 键）读取容错＝空对象（缺席＝未配置，链落③）
+    const bare = openSettingsStore(tempRoot()).get();
+    expect(bare.effort_defaults).toEqual({});
   });
 });

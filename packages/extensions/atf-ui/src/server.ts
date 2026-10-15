@@ -31,7 +31,7 @@ import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress,
 import { trainObsTick, readTrainlogTail, resetTrainObsForTest, type TrainlogTailFace } from "../../../../src/core/workspace/trainObsSync.js";
 import { bucketedRunEntries, flatRunDirNames, resolveRunDir, RUN_MARKER_RELS, sweepAnsweredPendings } from "../../../../src/core/workspace/runLayout.js";
 import { checkApprovalLedgerStartup, ledgerEnvPrefixForShell, homeLedgerPathOf } from "../../../../src/core/workspace/approvalLedger.js";
-import { openSettingsStore, type SettingsStore } from "../../../../src/webui/settings.js";
+import { EFFORT_CLOSED_IDS, openSettingsStore, type SettingsDoc, type SettingsStore } from "../../../../src/webui/settings.js";
 import {
   instanceSettingsPath,
   effectiveStorageValues,
@@ -1487,6 +1487,9 @@ export function apply(
       const effective = effectiveStorageValues(process.env, doc.storage);
       return {
         storage: { set: doc.storage, effective },
+        // 批甲-FIX T2.1：per-model 默认思考档（模型 id → 档位 id）——设置页 provider-card
+        // 下拉与 composer 取值链中段共读此块；缺席＝未配置（取值链落到目录顺位最低档）。
+        effort_defaults: doc.effort_defaults ?? {},
         gpu_detected: gpuCountNow(),
         gpu_baseline_effective: doc.storage.train_gpu_baseline.trim() !== "" ? doc.storage.train_gpu_baseline : String(gpuCountNow() ?? ""),
         readonly: buildSettingsReadonlyBlock(process.env, bridgeBadgeSurface(process.env, repoRoot), repoRoot),
@@ -1518,41 +1521,80 @@ export function apply(
             res.end();
             return;
           }
-          // POST：fail-fast 校验全集（B3）→ 过则落 store＋约定子目录
+          // POST：fail-fast 校验全集（B3）→ 过则落 store＋约定子目录。
+          // 批甲-FIX T2.1：body 键分区更新——storage 在场才动 storage（缺省不重写，
+          // 防 effort_defaults 单写清空存储设置）；effort_defaults 在场走形态校验
+          // （键＝模型 id 非空，值＝闭集四值——不造档位，非法键值 400 如实报）。
           let body = "";
           req.on("data", (chunk: Buffer) => { body += String(chunk); });
           req.on("end", () => {
             let incoming: Record<string, unknown> = {};
             try { incoming = JSON.parse(body === "" ? "{}" : body) as Record<string, unknown>; } catch { /* 空体容忍 */ }
-            const raw = (incoming["storage"] ?? {}) as Record<string, unknown>;
-            const str = (k: string): string => (typeof raw[k] === "string" ? (raw[k] as string).trim() : "");
-            const next = {
-              atf_root: str("atf_root"),
-              model_root: str("model_root"),
-              train_env: str("train_env"),
-              eval_env: str("eval_env"),
-              train_gpu_baseline: str("train_gpu_baseline"),
-            };
+            const hasStorage = Object.prototype.hasOwnProperty.call(incoming, "storage");
+            const hasEffortDefaults = Object.prototype.hasOwnProperty.call(incoming, "effort_defaults");
+            if (!hasStorage && !hasEffortDefaults) {
+              res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
+              res.end(JSON.stringify({ saved: false, errors: { body: "无可识别的设置分区（storage / effort_defaults）" } }));
+              return;
+            }
             const errors: Record<string, string> = {};
-            if (next.atf_root !== "") { const v = validateDirWritable(next.atf_root); if (!v.ok) errors["atf_root"] = v.reason; }
-            if (next.model_root !== "") { const v = validateDirWritable(next.model_root); if (!v.ok) errors["model_root"] = v.reason; }
-            const vTrain = validateVenvPath(next.train_env); if (!vTrain.ok) errors["train_env"] = vTrain.reason;
-            const vEval = validateVenvPath(next.eval_env); if (!vEval.ok) errors["eval_env"] = vEval.reason;
-            const vGpu = validateGpuBaseline(next.train_gpu_baseline, gpuCountNow()); if (!vGpu.ok) errors["train_gpu_baseline"] = vGpu.reason;
+            let next = { atf_root: "", model_root: "", train_env: "", eval_env: "", train_gpu_baseline: "" };
+            let rootChanged = false;
+            let created: string[] = [];
+            if (hasStorage) {
+              const raw = (incoming["storage"] ?? {}) as Record<string, unknown>;
+              const str = (k: string): string => (typeof raw[k] === "string" ? (raw[k] as string).trim() : "");
+              next = {
+                atf_root: str("atf_root"),
+                model_root: str("model_root"),
+                train_env: str("train_env"),
+                eval_env: str("eval_env"),
+                train_gpu_baseline: str("train_gpu_baseline"),
+              };
+              if (next.atf_root !== "") { const v = validateDirWritable(next.atf_root); if (!v.ok) errors["atf_root"] = v.reason; }
+              if (next.model_root !== "") { const v = validateDirWritable(next.model_root); if (!v.ok) errors["model_root"] = v.reason; }
+              const vTrain = validateVenvPath(next.train_env); if (!vTrain.ok) errors["train_env"] = vTrain.reason;
+              const vEval = validateVenvPath(next.eval_env); if (!vEval.ok) errors["eval_env"] = vEval.reason;
+              const vGpu = validateGpuBaseline(next.train_gpu_baseline, gpuCountNow()); if (!vGpu.ok) errors["train_gpu_baseline"] = vGpu.reason;
+            }
+            let effortNext: Record<string, string> | null = null;
+            if (hasEffortDefaults) {
+              const rawEd = incoming["effort_defaults"];
+              if (typeof rawEd !== "object" || rawEd === null || Array.isArray(rawEd)) {
+                errors["effort_defaults"] = "须为对象（模型 id → 档位 id）";
+              } else {
+                const bad: string[] = [];
+                const cleaned: Record<string, string> = {};
+                for (const [modelId, effortId] of Object.entries(rawEd as Record<string, unknown>)) {
+                  if (typeof modelId !== "string" || modelId.trim() === "" || typeof effortId !== "string"
+                    || !(EFFORT_CLOSED_IDS as ReadonlyArray<string>).includes(effortId)) {
+                    bad.push(String(modelId));
+                    continue;
+                  }
+                  cleaned[modelId] = effortId;
+                }
+                if (bad.length > 0) errors["effort_defaults"] = "非法条目（模型 id 须非空、档位须属闭集 off/low/high/max）：" + bad.join("、");
+                else effortNext = cleaned;
+              }
+            }
             if (Object.keys(errors).length > 0) {
               res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
               res.end(JSON.stringify({ saved: false, errors }));
               return;
             }
-            (settingsStore as SettingsStore).put({ storage: next });
-            const created = next.atf_root !== "" ? ensureConventionSubdirs(next.atf_root) : [];
-            const rootChanged = next.atf_root !== "" && next.atf_root !== effectiveStorageValues(process.env, { atf_root: "", model_root: "", train_env: "", eval_env: "", train_gpu_baseline: "" }).atf_root;
+            const patch: Record<string, unknown> = {};
+            if (hasStorage) patch["storage"] = next;
+            if (effortNext !== null) patch["effort_defaults"] = effortNext;
+            const savedDoc = (settingsStore as SettingsStore).put(patch as Partial<SettingsDoc>);
+            if (hasStorage) {
+              created = next.atf_root !== "" ? ensureConventionSubdirs(next.atf_root) : [];
+              rootChanged = next.atf_root !== "" && next.atf_root !== effectiveStorageValues(process.env, { atf_root: "", model_root: "", train_env: "", eval_env: "", train_gpu_baseline: "" }).atf_root;
+            }
             res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
             res.end(JSON.stringify({
               saved: true,
-              storage: next,
-              created_subdirs: created,
-              warning: rootChanged ? "根目录已变更：影响新建任务的目录归属，历史记录仍指向原位置" : "",
+              ...(hasStorage ? { storage: next, created_subdirs: created, warning: rootChanged ? "根目录已变更：影响新建任务的目录归属，历史记录仍指向原位置" : "" } : {}),
+              effort_defaults: savedDoc.effort_defaults ?? {},
             }));
           });
         })();

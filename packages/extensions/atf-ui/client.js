@@ -9,6 +9,21 @@
  *  下 turn 生效语义由宿主 selectForNextRequest 承载）。闭集 Off(关)/Low(低)/High(高)/Max(最高)
  *  与目录 efforts 交集呈现；模型无思考档位（reasoning 缺席＝地板语义）控件隐藏；切换被 provider
  *  层拒绝（session/model-unavailable 等 RemoteResult）时错误码＋原因在卡内如实显示，不静默不降档。
+ *  批甲-FIX（2026-10-15，owner 三裁）：
+ *  · T2.2 去「默认」态——当前档位取值链＝①当前会话用户最近手动切换值（state.current
+ *    .reasoningEffort）→②用户为该模型设置的默认档（/atf-ui/settings effort_defaults，∩目录
+ *    闭集）→③目录 efforts 顺位最低档（声明序首位：GLM-5.3→Off；Flash 系→Low）。链值经程序化
+ *    补选固化为会话选择（显示值＝真实送出值，不悬空）；菜单恒闭集值，无闭集外项。
+ *  · T2.3 会话内模型切换档位取值（owner 裁定：目标模型支持当前档位则保持，不支持则落
+ *    该模型顺位最近档，如实呈现不静默跳 max）——vendor 两条模型切换路径落地时均不携带
+ *    旧档位（composer 座 choose／/model 面板 selectionOf），故「保持/回退」由产品层在切换
+ *    落地后补选承接；越界档位提交被拒路径（同模型重选携带陈旧档等）由补偿分支承接（防环）。
+ *    跨会话 sticky＝宿主既有语义（selectModel→agentDefaultModel.saveSelection 全局持久化，
+ *    新建会话经 catalog default 延用），本控件零新机制。
+ *  · T2.1 Models 设置页 per-model 默认档——settings.models.provider-card keyed 槽（key＝
+ *    glm-atf 的 settingsNs 'llm-pi-ai'）注入 ProviderModelDefaults：每模型一个「默认思考等级」
+ *    下拉（选项＝该模型目录 efforts 闭集），持久化走 /atf-ui/settings effort_defaults 块
+ *    （产品层设置单源；vendor 零写入）。
  *  数据：workspaceFiles.read 轮询 <runsRoot>/atf-ui/monitor.json（同步器 5s 快照单源，
  *  gpu 字段＝nvidia-smi 首行单卡面，gpu_all/gpu_binding＝批㉝H 多卡聚合与绑卡声明，
  *  viewers 字段＝run 维度 badcase viewer 发现清单——批㉛段1）；
@@ -34,6 +49,46 @@ window.__ModuleLoader__.load({
     // 3080 缺省行为零变化）。浏览器面不读 env——env 覆盖在 server 半解析后随 index 下发。
     var MONITOR_PATH = (typeof window !== 'undefined' && window.__ATF_UI_CONFIG__ && window.__ATF_UI_CONFIG__.monitorPath) || 'atf-ui/monitor.json'
     var POLL_MS = 5000
+
+    // ── 批甲-FIX T2.1/T2.2：per-model 默认思考档（用户 settings 单源——/atf-ui/settings
+    // effort_defaults 块，模型 id → 档位 id）。设置页 provider-card 下拉写、composer 取值链
+    // 中段读；模块级缓存（apply 时预取——链值首帧即就位，免「最低档闪一拍」）。
+    var effortDefaultsCache = { map: null, promise: null }
+    function loadEffortDefaults(force) {
+      if (force === true) { effortDefaultsCache.map = null; effortDefaultsCache.promise = null }
+      if (effortDefaultsCache.promise === null) {
+        effortDefaultsCache.promise = fetch('/atf-ui/settings', { credentials: 'same-origin', cache: 'no-store' })
+          .then(function(r) { return r.ok ? r.json() : null })
+          .then(function(d) {
+            effortDefaultsCache.map = (d !== null && d !== undefined && typeof d.effort_defaults === 'object' && d.effort_defaults !== null)
+              ? d.effort_defaults : {}
+            return effortDefaultsCache.map
+          })
+          .catch(function() { /* 离线/未就绪——链中段空手而归（落到链③），下个 force 重取 */ })
+      }
+      return effortDefaultsCache.promise
+    }
+    function saveEffortDefaults(nextMap) {
+      return fetch('/atf-ui/settings', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ effort_defaults: nextMap }),
+      })
+        .then(function(r) { return r.json().then(function(b) { return { status: r.status, body: b } }) })
+        .then(function(out) {
+          if (out.status === 200 && out.body && out.body.saved) {
+            effortDefaultsCache.map = (out.body.effort_defaults && typeof out.body.effort_defaults === 'object')
+              ? out.body.effort_defaults : nextMap
+          }
+          return out
+        })
+    }
+    function userDefaultEffortOf(modelId) {
+      var map = effortDefaultsCache.map
+      if (map === null || typeof map !== 'object') return undefined
+      var v = map[modelId]
+      return typeof v === 'string' ? v : undefined
+    }
 
     var remoteFace = null
     // 批㊶Q增补一：右栏导航面暂存（apply 赋值；组件在 factory 闭包拿不到 ctx——沿 remoteFace 先例）
@@ -1400,11 +1455,147 @@ window.__ModuleLoader__.load({
       { id: 'high', label: 'High(高)' },
       { id: 'max', label: 'Max(最高)' },
     ]
+    // 闭集顺位（与 EFFORT_CLOSED 同序）——T2.3 最近档距离的度量域（不造档位，只量距离）
+    var EFFORT_ORDER = ['off', 'low', 'high', 'max']
     var effortLabelOf = function(id) {
       for (var i = 0; i < EFFORT_CLOSED.length; i++) {
         if (EFFORT_CLOSED[i].id === id) return EFFORT_CLOSED[i].label
       }
       return id
+    }
+
+    /** 批甲-FIX T2.2 取值链②③（owner 裁定；①已由调用点先行短路）：
+     *  ② 用户为该模型设置的默认档（/atf-ui/settings effort_defaults）∩目录闭集；
+     *  ③ 目录 efforts 顺位最低档＝声明序首位（GLM-5.3→Off；Flash 系→Low——保守最低档
+     *  为首次缺省，owner 可改）。两段出处均不造值：②是用户显式设置，③是目录声明序。 */
+    function chainFallbackEffort(choice, offered) {
+      if (choice === null || choice === undefined) return undefined
+      var ud = userDefaultEffortOf(choice.model)
+      if (ud !== undefined) {
+        for (var i = 0; i < offered.length; i++) {
+          if (offered[i].id === ud) return ud
+        }
+      }
+      return offered.length > 0 ? offered[0].id : undefined
+    }
+
+    /** T2.2 ensure：会话无显式档位（current.reasoningEffort 缺席）时把链值固化为会话选择——
+     *  显示值＝真实送出值（composer「默认」态悬空即端点缺省 max 的误导面，随固化消除）。
+     *  程序化补选失败静默（writer-held 忙会话等——控件照常显示链值，不弹错误条不重试风暴）。 */
+    function ensureChainEffort(injected, state, choice, offered, refs) {
+      if (state === null || state === undefined || choice === null || choice === undefined) return
+      if (injected.available !== true || typeof injected.select !== 'function') return
+      if (state.status !== 'ready') return
+      if (state.current !== null && state.current !== undefined && state.current.reasoningEffort !== undefined) return
+      if (offered.length === 0) return
+      var key = choice.provider + '/' + choice.model
+      if (refs.ensured === key) return
+      refs.ensured = key
+      loadEffortDefaults().then(function() {
+        var want = chainFallbackEffort(choice, offered)
+        if (want === undefined) return undefined
+        return injected.select({ provider: choice.provider, model: choice.model, reasoningEffort: want })
+      }).then(function(result) {
+        if (result && result.ok === false) { /* 程序化补选被拒——静默（链值显示不变，候下次就绪） */ }
+      }).catch(function() { /* 同上——不阻断控件主面 */ })
+    }
+
+    /** 目录快照 → 目标模型档位 id 集（未在目录＝null；无思考档位＝[]）。 */
+    function effortsOf(state, provider, modelId) {
+      for (var gi = 0; gi < state.groups.length; gi++) {
+        var group = state.groups[gi]
+        if (group.id !== provider) continue
+        for (var mi = 0; mi < group.models.length; mi++) {
+          var model = group.models[mi]
+          if (model.id === modelId) {
+            return (model.reasoning && model.reasoning.efforts && model.reasoning.efforts.length > 0)
+              ? model.reasoning.efforts.map(function(e) { return e.id }) : []
+          }
+        }
+      }
+      return null
+    }
+
+    /** 闭集顺位最近档（|顺位差|最小者——不静默跳 max；度量域＝EFFORT_ORDER 声明序）。 */
+    function nearestEffort(fromId, ids) {
+      var fromIdx = EFFORT_ORDER.indexOf(fromId)
+      var want = null
+      var best = Number.MAX_VALUE
+      for (var i = 0; i < ids.length; i++) {
+        var d = Math.abs(fromIdx - EFFORT_ORDER.indexOf(ids[i]))
+        if (d < best) { best = d; want = ids[i] }
+      }
+      return want
+    }
+
+    /** 程序化补选（失败静默——store 已如实呈现首因，不弹错误条）。 */
+    function quietSelect(injected, selection) {
+      Promise.resolve(injected.select(selection)).then(function(result) {
+        if (result && result.ok === false) { /* 程序化补选被拒——静默 */ }
+      }).catch(function() { /* 同上 */ })
+    }
+
+    /** 统一档位同步器（store 快照驱动——每变重判，各分支自带幂等守卫）：
+     *  ① T2.3 补偿：模型切换提交被拒（选择携带越界档位，host resolveCallConfig 拒
+     *     UNSUPPORTED_REASONING_EFFORT→session/model-unavailable）——同模型拒绝＝用户档位
+     *     选择本身被拒（如实显示不补偿）；跨模型拒绝＝落目标模型顺位最近档补选（防环：同
+     *     目标只补一次）。可可达面：同模型重选携带陈旧档（目录收窄后）等提交全量选择的路径。
+     *  ② T2.3 保持/回退：模型切换已落地但选择未携带档位（vendor 两条切换路径——composer
+     *     座 choose 与 /model 面板 selectionOf——均不携带旧档位，落地即「无显式档位」态）——
+     *     目标支持前档则保持（owner 裁定「支持则保持」），不支持落顺位最近档（如实呈现落点，
+     *     不静默跳 max）；前模型本就无显式档位则不保持，交链②③。
+     *  ③ T2.2 ensure：无显式档位（含切换后前档缺席）——按链固化（用户默认档→顺位最低档）。
+     *  会话上下文切换（directory 身份变化）＝prev 作废——不跨会话「保持」，链语义重起。 */
+    function syncEffortSelection(injected, state, choice, offered, refs) {
+      if (state === null || state === undefined) return
+      if (injected.available !== true || typeof injected.select !== 'function') return
+      if (refs.directory !== injected.directory) {
+        refs.directory = injected.directory
+        refs.prev = null
+        refs.pendingSelection = null
+        refs.compensated = null
+      }
+      if (state.pending !== null && state.pending !== undefined) {
+        refs.pendingSelection = state.pending
+        return
+      }
+      var cur = state.current
+      if (cur === null || cur === undefined) return
+      var prev = refs.prev
+      refs.prev = { provider: cur.provider, model: cur.model, reasoningEffort: cur.reasoningEffort }
+      // ① 补偿：切换提交被拒（越界档位）
+      if (state.status === 'error' && refs.pendingSelection !== null && refs.pendingSelection !== undefined) {
+        var target = refs.pendingSelection
+        refs.pendingSelection = null
+        if (target.provider === cur.provider && target.model === cur.model) return
+        if (target.reasoningEffort === undefined) return
+        var key = target.provider + '/' + target.model + '@' + String(target.reasoningEffort)
+        if (refs.compensated === key) return
+        var ids = effortsOf(state, target.provider, target.model)
+        if (ids === null || ids.length === 0) return
+        var want = nearestEffort(target.reasoningEffort, ids)
+        if (want === null) return
+        refs.compensated = key
+        quietSelect(injected, { provider: target.provider, model: target.model, reasoningEffort: want })
+        return
+      }
+      // ② 保持/回退：切换落地未携带档位
+      if (prev !== null && prev.model !== cur.model && cur.reasoningEffort === undefined) {
+        var kept = prev.reasoningEffort
+        if (kept !== undefined) {
+          var ids2 = effortsOf(state, cur.provider, cur.model)
+          if (ids2 !== null && ids2.length > 0) {
+            var want2 = ids2.indexOf(kept) >= 0 ? kept : nearestEffort(kept, ids2)
+            if (want2 !== null) {
+              quietSelect(injected, { provider: cur.provider, model: cur.model, reasoningEffort: want2 })
+              return
+            }
+          }
+          // ids2 空数组（目标无思考档位）或目录缺席：现选择已不带档位＝正确落点，零动作
+        }
+      }
+      // ③ ensure：链②③固化
+      ensureChainEffort(injected, state, choice, offered, refs)
     }
 
     /** ModelDirectory 快照 → 当前模型 reasoning 面（与原生 ModelSelect 同构解析；未选中模型＝null）。 */
@@ -1446,6 +1637,8 @@ window.__ModuleLoader__.load({
       var posState = React.useState(null)
       var pos = posState[0], setPos = posState[1]
       var triggerRef = React.useRef(null)
+      // 批甲-FIX：统一档位同步器账本（directory 身份/前选择/在途提交/防环/ensure 去重）
+      var watcherRef = React.useRef({ directory: undefined, prev: null, pendingSelection: null, compensated: null, ensured: null })
 
       var choice = currentReasoningOf(state)
       var reasoning = choice !== null ? choice.reasoning : undefined
@@ -1460,12 +1653,23 @@ window.__ModuleLoader__.load({
           }
         }
       }
-      var effectiveEffort = (reasoning && state.current && state.current.reasoningEffort !== undefined)
+      // 批甲-FIX T2.2 去「默认」态——当前档位取值链（owner 裁定）：
+      // ① 当前会话用户最近手动切换值（state.current.reasoningEffort）
+      // → ② 用户为该模型设置的默认档（effort_defaults ∩目录闭集，T2.1）
+      // → ③ 目录 efforts 顺位最低档（声明序首位：GLM-5.3→Off；Flash 系→Low）。
+      // 链值经 ensure 固化为会话选择（见下 effect）——显示值恒为真实送出值。
+      var chainEffort = (reasoning && state.current && state.current.reasoningEffort !== undefined)
         ? state.current.reasoningEffort
-        : (reasoning && reasoning.defaultEffort !== undefined ? reasoning.defaultEffort : undefined)
-      var currentLabel = effectiveEffort === undefined ? '默认' : effortLabelOf(effectiveEffort)
+        : chainFallbackEffort(choice, offered)
+      var currentLabel = chainEffort === undefined ? '—' : effortLabelOf(chainEffort)
       var pending = state.pending !== null && state.pending !== undefined
       var waiting = busy || pending
+
+      // T2.2 链值固化＋T2.3 保持/回退/补偿（统一同步器——store 快照驱动，内含幂等守卫）
+      React.useEffect(function() {
+        syncEffortSelection(injected, state, choice, offered, watcherRef.current)
+        // 依赖面即 store 快照（每变重判；同步器内幂等带守卫）
+      }, [state])
 
       var place = React.useCallback(function() {
         var rect = triggerRef.current && triggerRef.current.getBoundingClientRect()
@@ -1541,7 +1745,7 @@ window.__ModuleLoader__.load({
               },
             },
             offered.map(function(option) {
-              var on = effectiveEffort === option.id
+              var on = chainEffort === option.id
               return React.createElement('button', {
                 key: option.id,
                 type: 'button',
@@ -1578,6 +1782,94 @@ window.__ModuleLoader__.load({
         React.createElement('span', { className: 'atf-effort-v' }, currentLabel),
         React.createElement('span', { className: 'atf-effort-caret' }, waiting ? '…' : '▾')),
         menu)
+    }
+
+    // ── 批甲-FIX T2.1：Models 设置页 per-model「默认思考等级」（settings.models.provider-card
+    // keyed 槽座位；key＝glm-atf 的 settingsNs 'llm-pi-ai'——产品层实施，vendor 零写入）。
+    // 每模型一个下拉，选项＝该模型目录 efforts 闭集（不造档位；目录缺席＝如实占位）；写入
+    // /atf-ui/settings effort_defaults 块（用户 settings 单源）——composer 取值链②读同一份。
+    // 会话内既有显式档位不受改档影响（链①优先）；新会话/未切档会话按新默认档补位。
+    var remoteSessionFace = null
+    function ProviderModelDefaultsBody(props) {
+      var entry = props && props.provider
+      var catalogState = React.useState(null)
+      var catalog = catalogState[0], setCatalog = catalogState[1]
+      var edState = React.useState(effortDefaultsCache.map)
+      var edMap = edState[0], setEdMap = edState[1]
+      var msgState = React.useState(null)
+      var msg = msgState[0], setMsg = msgState[1]
+      React.useEffect(function() {
+        var alive = true
+        loadEffortDefaults().then(function(m) { if (alive) setEdMap(Object.assign({}, m)) })
+        if (remoteSessionFace !== null && typeof remoteSessionFace.modelCatalog === 'function') {
+          remoteSessionFace.modelCatalog().then(function(r) {
+            if (alive && r && r.ok === true) setCatalog(r.value)
+          }).catch(function() { /* 目录缺席＝占位（不造档位） */ })
+        }
+        return function() { alive = false }
+      }, [])
+      if (entry === null || entry === undefined || entry.provider !== 'glm-atf') return null
+      var groups = (catalog !== null && catalog !== undefined && catalog.groups) || []
+      var models = []
+      for (var gi = 0; gi < groups.length; gi++) {
+        if (groups[gi].id !== 'glm-atf') continue
+        models = groups[gi].models || []
+        break
+      }
+      var onChange = function(modelId, effortId) {
+        if (typeof effortId !== 'string' || effortId === '') return
+        var next = Object.assign({}, edMap || {})
+        next[modelId] = effortId
+        setMsg({ kind: 'busy', text: '保存中…' })
+        saveEffortDefaults(next).then(function(out) {
+          if (out.status === 200 && out.body && out.body.saved) {
+            setEdMap(Object.assign({}, (out.body.effort_defaults && typeof out.body.effort_defaults === 'object') ? out.body.effort_defaults : next))
+            setMsg({ kind: 'ok', text: '已保存：' + modelId + ' 默认档＝' + effortLabelOf(effortId) })
+          } else {
+            var errs = out.body && out.body.errors ? JSON.stringify(out.body.errors) : String(out.status)
+            setMsg({ kind: 'err', text: '保存被拒绝：' + errs })
+          }
+        }).catch(function() { setMsg({ kind: 'err', text: '保存失败（网络/服务不可用）' }) })
+      }
+      return React.createElement('div', { className: 'atf-ed-block' },
+        React.createElement('div', { className: 'atf-ed-title' }, '默认思考等级（per-model）'),
+        React.createElement('div', { className: 'atf-ed-note' },
+          '每个模型未手动切档时的补位档（新会话按此延用）；取值链：会话最近切换 → 此处默认档 → 目录顺位最低档。'),
+        catalog === null
+          ? React.createElement('div', { className: 'atf-ed-note' }, '模型目录读取中…')
+          : models.length === 0
+            ? React.createElement('div', { className: 'atf-ed-note' }, '（模型目录无 glm-atf 行——目录未就绪或路由未配置）')
+            : models.map(function(model) {
+                var efforts = (model.reasoning && model.reasoning.efforts) || []
+                var offered = []
+                for (var ci = 0; ci < EFFORT_CLOSED.length; ci++) {
+                  for (var li = 0; li < efforts.length; li++) {
+                    if (efforts[li].id === EFFORT_CLOSED[ci].id) { offered.push(EFFORT_CLOSED[ci]); break }
+                  }
+                }
+                var current = (edMap !== null && edMap !== undefined) ? edMap[model.id] : undefined
+                return React.createElement('div', { key: model.id, className: 'atf-ed-row' },
+                  React.createElement('span', { className: 'atf-ed-model' }, model.name || model.id),
+                  offered.length === 0
+                    ? React.createElement('span', { className: 'atf-ed-note' }, '（无思考档位）')
+                    : React.createElement('select', {
+                        className: 'atf-ed-select',
+                        value: typeof current === 'string' ? current : '',
+                        title: '为 ' + (model.name || model.id) + ' 设置默认思考等级（未手动切档时生效）',
+                        onChange: function(e) { onChange(model.id, e.target.value) },
+                      },
+                      React.createElement('option', { value: '', disabled: true }, '未设置（按顺位最低档）'),
+                      offered.map(function(option) {
+                        return React.createElement('option', { key: option.id, value: option.id }, option.label)
+                      })))
+              }),
+        msg !== null
+          ? React.createElement('div', {
+              className: 'atf-ed-msg',
+              role: 'status',
+              style: msg.kind === 'err' ? { color: 'var(--dsw-alias-state-danger-label,#b91c1c)' } : undefined,
+            }, msg.text)
+          : null)
     }
 
 
@@ -1691,6 +1983,15 @@ window.__ModuleLoader__.load({
             '.atf-effort-pending{padding:2px 8px 4px;font-size:11px;color:var(--dsh-text-secondary,#64748b);}',
             '.atf-effort-err{margin-top:4px;border-top:1px dashed rgba(128,128,128,.25);padding:6px 8px;font-size:11px;',
             '  color:var(--dsw-alias-state-danger-label,#b91c1c);max-width:300px;white-space:normal;word-break:break-all;}',
+            // 批甲-FIX T2.1：设置页 provider-card per-model 默认档座位（排版随卡面；色彩走 token）
+            '.atf-ed-block{border-top:1px dashed rgba(128,128,128,.25);margin-top:10px;padding-top:8px;}',
+            '.atf-ed-title{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary,#1e293b);}',
+            '.atf-ed-note{font-size:11px;color:var(--dsw-alias-label-tertiary,#64748b);margin:3px 0;}',
+            '.atf-ed-row{display:flex;align-items:center;gap:10px;padding:3px 0;font-size:12px;}',
+            '.atf-ed-model{flex:none;min-width:130px;color:var(--dsw-alias-label-primary,#1e293b);}',
+            '.atf-ed-select{font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid rgba(128,128,128,.35);',
+            '  background:transparent;color:inherit;}',
+            '.atf-ed-msg{font-size:11px;margin-top:5px;color:var(--dsw-alias-state-success-label,#15803d);}',
           ].join('')
           document.head.append(style)
         }
@@ -1839,6 +2140,25 @@ window.__ModuleLoader__.load({
             }, function(injected) {
               if (injected === null) return null
               return React.createElement(EffortSelect, injected)
+            })
+          })
+        })
+
+        // 批甲-FIX T2.1：Models 设置页 per-model 默认思考档座位（产品层实施——vendor 零写入）。
+        // settings.models.provider-card＝keyed 槽，owner 按 settingsNs 分发（glm-atf 路由＝
+        // 'llm-pi-ai'——pi-ai 适配器 directoryEntries settingsPath ['providers', <route>] 同源）；
+        // owner props {provider, configured, keyConfigured}。声明感知：slots.inject 工厂在该槽
+        // 声明在位时才执行 register（免疫加载时序）；非 glm-atf 卡不渲染（组件自守卫）。
+        // 链中段预取：apply 即拉 effort_defaults（composer 首帧链值就位，免最低档闪一拍）。
+        loadEffortDefaults()
+        ctx.inject(['slots', 'remote', 'remote.session'], function(scope) {
+          remoteSessionFace = (scope.remote && scope.remote.session) ? scope.remote.session : null
+          scope.slots.inject('settings.models.provider-card', function() {
+            return scope.slots.register({
+              name: 'settings.models.provider-card',
+              key: 'llm-pi-ai',
+            }, function(props) {
+              return React.createElement(ProviderModelDefaultsBody, props)
             })
           })
         })

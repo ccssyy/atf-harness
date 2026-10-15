@@ -68,6 +68,11 @@ export interface SettingsDoc {
   profile: ScenarioProfileId;
   /** 批㊶-S5：存储与运行环境（区块 1/2/3）——缺席视为全未配置 */
   storage: StorageSettings;
+  /** 批甲-FIX T2.1（2026-10-15）：per-model 默认思考档（模型 id → 档位 id——off/low/high/max）。
+   *  用户在 Models 设置页为该模型选定的「默认思考等级」；composer 取值链中段（会话未手动
+   *  切换时的补位值）。缺席＝未配置；档位合法性由客户端按目录 efforts 闭集校验（服务端只验
+   *  形态：键非空、值属闭集四值——不造档位）。 */
+  effort_defaults?: Record<string, string>;
 }
 
 /** 上下文窗口 per-model 覆盖（区 1：数字输入，缺省按 provider 预设）——providers.json 内嵌。 */
@@ -123,9 +128,26 @@ const DEFAULT_SETTINGS = (): SettingsDoc => ({
   env_profile: { train_env: "system", eval_env: "", gpu_visible_devices: "auto", master_port: 29517, base_model_dir: "" },
   profile: "first_train",
   storage: { ...EMPTY_STORAGE_SETTINGS },
+  effort_defaults: {},
 });
 
 // ---------------------------------------------------------------- 读写（热生效）
+
+/** 批甲-FIX T2.1：思考档位闭集四值（目录声明序即 UI 序；服务端只验形态不造档位）。 */
+export const EFFORT_CLOSED_IDS: ReadonlyArray<string> = ["off", "low", "high", "max"];
+
+/** effort_defaults 形态清洗（键＝模型 id 非空；值＝闭集四值之一；其余丢弃；数组拒收）。 */
+export const parseEffortDefaults = (raw: unknown): Record<string, string> => {
+  const out: Record<string, string> = {};
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return out;
+  for (const [modelId, effortId] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof modelId === "string" && modelId.trim() !== "" && typeof effortId === "string"
+      && (EFFORT_CLOSED_IDS as ReadonlyArray<string>).includes(effortId)) {
+      out[modelId] = effortId;
+    }
+  }
+  return out;
+};
 
 const loadDoc = (settingsPath: string): SettingsDoc => {
   if (!existsSync(settingsPath)) return DEFAULT_SETTINGS();
@@ -140,6 +162,7 @@ const loadDoc = (settingsPath: string): SettingsDoc => {
       env_profile: { ...fallback.env_profile, ...(typeof parsed.env_profile === "object" && parsed.env_profile !== null ? parsed.env_profile : {}) },
       profile: parsed.profile ?? fallback.profile,
       storage: { ...fallback.storage, ...(typeof parsed.storage === "object" && parsed.storage !== null ? parsed.storage : {}) },
+      effort_defaults: parseEffortDefaults(parsed.effort_defaults),
     };
   } catch {
     return DEFAULT_SETTINGS();

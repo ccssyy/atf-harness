@@ -26,3 +26,6 @@ poc/dsh-home-tongshi/
 
 # ZCode 会话本地工具配置（ignore 镜像——不入仓）
 .zcodeignore
+
+# 批甲-FIX T3：GLM 真调用隔离 key 根（0600——不入仓）
+/glm-key.env
