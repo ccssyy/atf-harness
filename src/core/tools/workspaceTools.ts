@@ -50,6 +50,27 @@ import { type ToolDefinition } from "./toolDefinition.js";
 
 const HEX64 = "^[0-9a-f]{64}$";
 
+/** 编排主路径 GPU 排队面（批㊶-S4b T1——结构契约归 core，实现由装配方注入）。
+ *  排队语义单源在扩展层 gpuQueueFace 既有面（core 直引不可达：dist 构建图 rootDir=src
+ *  不含 packages/）——本契约只约定返回闭集：轮询旋钮（ATF_GPU_POLL_MS 同源 0＝直启旁路）、
+ *  整组空闲判定、gpu_queue 通报、命中琥珀卡全在适配实现内（gpuQueueFace 同型挂法）。
+ *  装配缺席（host.gpuQueueFace === undefined）＝不排队直启——编排语义回退现状。 */
+export interface LaunchGpuQueueFace {
+  gateLaunch(input: {
+    /** 启动所需卡数；null＝launch.sh/launch_manifest 均未声明 nproc（卡数不可判——
+     *  fail-closed 不排队但发通报，不阻塞主线：owner 裁定固化）。 */
+    requiredCards: number | null;
+    /** run 目录（通报落点——alerts/notifications 既有 gpu_queue 通知面）。 */
+    runDir: string;
+    /** launch.sh 相对路径（通报与琥珀卡文案承载）。 */
+    launchShRel: string;
+  }): Promise<
+    | { verdict: "proceed"; queued: boolean; waited_text?: string; amber?: "approved"; queue_note?: string }
+    | { verdict: "aborted" }
+    | { verdict: "denied"; outcome: string }
+  >;
+}
+
 /** 本地工具宿主（TUI/resume 装配；测试注入临时目录）。 */
 export interface LocalToolHost {
   /** 当前 run 的 scratch 绝对路径（T0 区；一切写与执行的落点） */
@@ -64,6 +85,8 @@ export interface LocalToolHost {
   pythonPath?: string;
   /** launch.sh 执行等待上限覆盖（测试；缺省 120s，未退出不杀） */
   launchWaitMs?: number;
+  /** 编排主路径 GPU 排队面（批㊶-S4b T1；web 桥装配注入——TUI/resume 缺席＝直启回退） */
+  gpuQueueFace?: LaunchGpuQueueFace;
 }
 
 /** 本地 handler 终态（无 failed——环境缺口一律结构化 rejected，模型可转述；见文件头）。 */
@@ -74,6 +97,19 @@ export type LocalToolResult =
 export type LocalToolHandler = (params: unknown, host: LocalToolHost) => Promise<LocalToolResult>;
 
 const rejected = (reason: string, detail?: unknown): LocalToolResult => ({ kind: "rejected", reason, detail });
+
+/** 批㊶-S4b T1：编排启动所需卡数派生（对照 trainingFace 派生逻辑——launch.sh
+ *  NPROC_PER_NODE ＞ launch_manifest nproc_per_node/nproc ＞ null＝卡数不可判）。 */
+export const parseLaunchRequiredCards = (launchShText: string, manifest: Record<string, unknown> | undefined): number | null => {
+  const shMatch = /^NPROC_PER_NODE=['"]?([0-9]+)['"]?\s*$/m.exec(launchShText);
+  if (shMatch !== null) {
+    const parsed = Number.parseInt(shMatch[1] ?? "0", 10);
+    if (Number.isInteger(parsed) && parsed >= 1) return parsed;
+  }
+  const raw = manifest?.["nproc_per_node"] ?? manifest?.["nproc"];
+  const n = typeof raw === "number" ? raw : typeof raw === "string" ? Number.parseInt(raw, 10) : Number.NaN;
+  return Number.isInteger(n) && n >= 1 ? n : null;
+};
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -490,11 +526,13 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
   }
   const trainDirMatch = /^TRAIN_DIR=['\"]?(.+?)['\"]?\s*$/m.exec(launchShText);
   let manifestSha: string | undefined;
+  let manifestRecord: Record<string, unknown> | undefined;
   if (trainDirMatch !== null) {
     const trainDir = (trainDirMatch[1] as string).trim().replace(/^['\"]|['\"]$/g, "");
     try {
       const manifest = JSON.parse(await readFile(join(trainDir, "launch_manifest.json"), "utf8")) as Record<string, unknown>;
       if (typeof manifest["iteration_config_sha256"] === "string") manifestSha = manifest["iteration_config_sha256"];
+      manifestRecord = manifest;
     } catch {
       // manifest 不可读＝放行对拍不可做，下方按 config sha 直录（launch.sh 闸会如实裁决）
     }
@@ -540,6 +578,31 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
     releaseResult = /already_recorded/.test(recorded.value.stdout) ? "already_recorded" : "recorded";
   }
 
+  // 批㊶-S4b T1：GPU 排队补挂编排主路径（挂点＝放行记录登记后、launch.sh 执行前——与
+  // atf_run_training「本机重跑」次要路径的排队语义对称；atf_launch_execute 此前零排队，
+  // 主线经系统 launch 的链路 GPU 忙时直接启动撞车）。排队面经 host.gpuQueueFace 注入
+  // （web 桥装配——扩展层 gpuQueueFace 既有原语同型挂法）；装配缺席＝不排队直启（现状
+  // 语义回退，结果如实标注 gpu_queue:"face_absent"）。卡数不可判＝fail-closed 不排队但
+  // 发通报（不阻塞主线——owner 裁定固化，通报在适配实现内落 gpu_queue 通知面）。
+  let gpuQueueResult: Record<string, unknown> = { gpu_queue: "face_absent" };
+  if (host.gpuQueueFace !== undefined) {
+    const gate = await host.gpuQueueFace.gateLaunch({
+      requiredCards: parseLaunchRequiredCards(launchShText, manifestRecord),
+      runDir: dirname(host.scratchDir),
+      launchShRel,
+    });
+    if (gate.verdict === "aborted") return rejected("gpu_queue_aborted", { message: "GPU 排队等待被中止——launch.sh 未启动" });
+    if (gate.verdict === "denied") {
+      return rejected("gpu_window_hit_not_confirmed", { message: "GPU 窗口命中后未获人工确认——launch.sh 未启动", outcome: gate.outcome });
+    }
+    gpuQueueResult = {
+      gpu_queue: gate.queued ? "queued_hit" : "not_queued",
+      ...(gate.waited_text !== undefined ? { gpu_queue_waited: gate.waited_text } : {}),
+      ...(gate.amber !== undefined ? { gpu_queue_amber: gate.amber } : {}),
+      ...(gate.queue_note !== undefined ? { gpu_queue_note: gate.queue_note } : {}),
+    };
+  }
+
   // ③ 执行 launch.sh（cwd=launch.sh 所在目录；stdout/stderr 落 harness 日志；未退出不杀）
   const launchShAbs = guard.value.resolved;
   const logPath = join(dirname(launchShAbs), "launch", `harness-launch-${new Date().toISOString().replace(/[:.]/g, "-")}.log`);
@@ -574,6 +637,7 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
       timed_out: launched.value.timed_out,
       ...(launched.value.exit_code !== null ? { exit_code: launched.value.exit_code } : {}),
       launch_sh: launchShRel,
+      ...gpuQueueResult,
     },
   };
 };

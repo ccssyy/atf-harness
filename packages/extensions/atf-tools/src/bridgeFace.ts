@@ -12,9 +12,12 @@ import {
   WORKSPACE_TOOL_DEFINITIONS,
   WORKSPACE_TOOL_HANDLERS,
   requiresApprovalFor,
+  type LaunchGpuQueueFace,
   type LocalToolHost,
   type ToolDefinition,
 } from "../../../../src/core/tools/index.js";
+import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
+import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText } from "./gpuQueueFace.js";
 import { toAtfAgentTool } from "../../../../src/agent/atfAgentTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { translateParameters, looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
@@ -147,6 +150,60 @@ const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHom
   };
 };
 
+/** 批㊶-S4b T1：编排主路径 GPU 排队面（host.gpuQueueFace 注入实现——gpuQueueFace 既有面
+ *  同型挂法，对照 trainingFace atf_run_training :636–668 既有接线：ATF_GPU_POLL_MS 同源
+ *  0＝直启旁路；整组 nproc 卡空闲判定＋compute-apps 归属；首探命中 7s 复探；无超时等待；
+ *  gpu_queue 通报面（首探＋空闲数变化再报）；命中琥珀卡＝requestApproval 既有审批面
+ *  （exec 信号 abort 直通）。requiredCards=null＝卡数不可判 fail-closed 不排队但发通报，
+ *  不阻塞主线（owner 裁定固化）。core 直引 gpuQueueFace 不可达（dist 构建图 rootDir=src
+ *  不含 packages/）——经 host 面注入是既有面的唯一干净复用通道。 */
+export const createLaunchGpuQueueFace = (
+  ctx: { get(service: string): unknown },
+  exec: { agent?: unknown; callId?: string; signal?: unknown } | undefined,
+  overrides?: {
+    awaitWindow?: typeof awaitGpuWindow;
+    env?: NodeJS.ProcessEnv;
+  },
+): LaunchGpuQueueFace => ({
+  gateLaunch: async (input) => {
+    const pollMs = gpuQueuePollMsFromEnv(overrides?.env ?? process.env);
+    if (pollMs === null) return { verdict: "proceed", queued: false }; // ATF_GPU_POLL_MS=0＝直启旁路
+    if (input.requiredCards === null) {
+      appendNotification(input.runDir, {
+        level: "warn",
+        kind: "gpu_queue",
+        reason: "GPU 排队：launch.sh／launch_manifest 均未声明 nproc——卡数不可判、未排队（不阻塞主线，直接启动）",
+        since: new Date().toISOString(),
+      });
+      return { verdict: "proceed", queued: false, queue_note: "required_cards_unknown_not_queued" };
+    }
+    let lastNotifiedIdle = -1;
+    const windowState = await (overrides?.awaitWindow ?? awaitGpuWindow)({
+      pollMs,
+      requiredCards: input.requiredCards,
+      signal: exec?.signal as { aborted: boolean } | undefined,
+      onQueueStatus: (status) => {
+        if (status.idle === lastNotifiedIdle) return;
+        lastNotifiedIdle = status.idle;
+        const short = status.idle < status.required
+          ? `空闲不足（${status.required} 卡才能开跑）——等待释放，或在聊天显式降档 nproc 后重走确认卡`
+          : "整组空闲数已满足——复探后开跑";
+        appendNotification(input.runDir, {
+          level: status.idle < status.required ? "warn" : "info",
+          kind: "gpu_queue",
+          reason: `GPU 排队：需 ${status.required} 卡、现空闲 ${status.idle}（已等待 ${status.waitedText}）——${short}`,
+          since: new Date().toISOString(),
+        });
+      },
+    });
+    if (windowState.kind === "aborted") return { verdict: "aborted" };
+    // 命中琥珀卡（放行守门——编排启动的工具审批此前已放行；此处为等待后的二次人工确认）
+    const amber = await requestApproval(ctx, exec ?? {}, "atf_launch_execute", `${queueHitText(windowState.snapshot.gpuIndexes, windowState.snapshot.table)}（已等待 ${windowState.snapshot.waitedText}）——GPU 窗口命中，确认启动编排（launch.sh=${input.launchShRel}）`);
+    if (!amber.ok) return { verdict: "denied", outcome: amber.outcome };
+    return { verdict: "proceed", queued: true, waited_text: windowState.snapshot.waitedText, amber: "approved" };
+  },
+});
+
 export const buildBridgeTools = (
   ctx: { get(service: string): unknown },
   manager: BridgeManager,
@@ -175,7 +232,12 @@ export const buildBridgeTools = (
           const localHandler = WORKSPACE_TOOL_HANDLERS[definition.name];
           if (localHandler !== undefined) {
             if (localRoots === undefined) throw new Error(`本地治理工具 ${definition.name} 缺 localRoots 装配（runsRoot/kernelDir/execHome）`);
+            // 批㊶-S4b T1：编排主路径排队面注入（atf_launch_execute 专用——其余本地工具不受影响；
+            // 审批上下文 ctx/exec 与 gpuQueueFace 既有原语在此装配点同场可达）
             const host = localHostFor(localRoots, args, exec);
+            if (definition.name === "atf_launch_execute") {
+              host.gpuQueueFace = createLaunchGpuQueueFace(ctx, exec as { agent?: unknown; callId?: string; signal?: unknown } | undefined);
+            }
             const localResult = await localHandler(args, host);
             if (localResult.kind === "executed") return asToolValue(localResult.result);
             return asToolValue({ error: "rejected", tool: definition.name, reason: localResult.reason, ...(localResult.detail !== undefined ? { detail: localResult.detail } : {}) });

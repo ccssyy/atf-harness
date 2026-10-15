@@ -23,7 +23,9 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { readProgress, progressFresh, type RunProgress } from "./runFacts.js";
 
-export type ProbeAlertKind = "probe" | "config_auto" | "train_auto" | "oom_fallback";
+// gpu_queue：批㊶-S4b（编排主路径排队）与 trainingFace 既有排队通报共用 kind——
+// 类型闭集补真值（该 kind 此前已在运行时流通，client 徽标面同源消费）。
+export type ProbeAlertKind = "probe" | "config_auto" | "train_auto" | "oom_fallback" | "gpu_queue";
 
 export interface ProbeAlert {
   level: "error" | "warn" | "info";
