@@ -1992,8 +1992,45 @@ window.__ModuleLoader__.load({
             '.atf-ed-select{font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid rgba(128,128,128,.35);',
             '  background:transparent;color:inherit;}',
             '.atf-ed-msg{font-size:11px;margin-top:5px;color:var(--dsw-alias-state-success-label,#15803d);}',
+            // 批甲-FIX2（档位入口单一化）：vendor 座位 effort 文本 span 隐藏——css-modules
+            // 语义段子串选择器（构建哈希前缀免疫）；档位唯一入口＝「思考」控件。
+            '[class*="triggerEffort"]{display:none!important;}',
           ].join('')
           document.head.append(style)
+        }
+
+        // 批甲-FIX2（档位入口单一化）：vendor 座位/菜单 effort 面 JS 覆写（vendor 源码零写入）。
+        // ②座位 title/aria 净名（「X · Max」→「X」；aria 去「, reasoning effort …」尾段——仅值变化
+        // 才写回，防 observer 自激）；③菜单「Effort/推理等级」drill cell 隐藏（en/zh 双语词条闭集——
+        // 隐藏后 effort 列表 pane 无路径可达）。档位唯一入口＝「思考」控件；FIX 既有交付
+        // （目录声明/三段取值链/sticky）零回退。rAF 合帧防抖。
+        if (typeof MutationObserver !== 'undefined') {
+          var atfFix2Scheduled = false
+          var atfFix2Sweep = function() {
+            atfFix2Scheduled = false
+            var seatAria = 'Select model'
+            for (var btn of document.querySelectorAll('button[aria-label*="' + seatAria + '"]')) {
+              var aria = btn.getAttribute('aria-label')
+              if (aria && aria.indexOf(', reasoning effort') >= 0) btn.setAttribute('aria-label', aria.replace(/, reasoning effort[\s\S]*$/, ''))
+              var title = btn.getAttribute('title')
+              if (title && title.indexOf(' · ') >= 0) btn.setAttribute('title', title.split(' · ')[0])
+            }
+            var labels = ['Effort', '推理等级']
+            for (var cell of document.querySelectorAll('[role="menuitem"], [role="menuitemradio"]')) {
+              if (cell.offsetParent === null) continue
+              var first = (cell.innerText || '').split('\n')[0].trim()
+              if (labels.indexOf(first) >= 0 && cell.style.display !== 'none') cell.style.display = 'none'
+            }
+          }
+          var atfFix2Schedule = function() {
+            if (atfFix2Scheduled) return
+            atfFix2Scheduled = true
+            requestAnimationFrame(atfFix2Sweep)
+          }
+          new MutationObserver(atfFix2Schedule).observe(document.documentElement, {
+            childList: true, subtree: true, attributes: true, attributeFilter: ['aria-label', 'title'],
+          })
+          atfFix2Schedule()
         }
 
         // GPU 卡显隐开关（session-scoped：inject 工厂收 sessionId——批⑳实证通道；

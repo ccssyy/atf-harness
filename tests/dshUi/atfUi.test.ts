@@ -1191,3 +1191,23 @@ describe("批甲-FIX——思考档位按模型能力修正（client.js 源面�
     expect(src).toContain("loadEffortDefaults()\n");
   });
 });
+
+describe("批甲-FIX2——档位入口单一化（产品层覆写 vendor 座位 effort 面·vendor 源码零写入）", () => {
+  const clientSource = () => readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+
+  it("座位 effort span CSS 隐藏（css-modules 语义段子串选择器——构建哈希免疫）＋菜单 drill cell 双语词条闭集", () => {
+    const src = clientSource();
+    expect(src).toContain('[class*="triggerEffort"]{display:none!important;}');
+    // 双语词条闭集（en 'Effort'／zh '推理等级'——vendor ui-model-selection locales 同源）
+    expect(src).toContain("var labels = ['Effort', '推理等级']");
+    // 仅值变化才写回（防 observer 自激）
+    expect(src).toContain("if (title && title.indexOf(' · ') >= 0)");
+  });
+
+  it("MutationObserver sweep 在场（React 重渲随附）＋档位唯一入口声明（思考控件）", () => {
+    const src = clientSource();
+    expect(src).toContain("new MutationObserver(atfFix2Schedule).observe(document.documentElement");
+    expect(src).toContain("批甲-FIX2（档位入口单一化）：vendor 座位/菜单 effort 面 JS 覆写（vendor 源码零写入）");
+    expect(src).toContain("档位唯一入口＝「思考」控件；FIX 既有交付");
+  });
+});
