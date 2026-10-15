@@ -16,6 +16,8 @@ import { join, dirname, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import { loadLlmProviderConfig } from "../llm/providerConfig.js";
+import { resolveBridgeDeployment } from "../bridge/bridgeCommand.js";
+import { resolveInstanceKernelDir } from "../core/workspace/instancePin.js";
 import { WebUiSessionManager, chatBudgetFromEnv, parseBudgetFromEnv, type SessionManagerDeps } from "./sessionManager.js";
 import { openSettingsStore, redactProviders, envProfilePath, writeEnvProfile, SCENARIO_PROFILES, APPROVAL_POLICIES, type ApprovalPolicy, type ScenarioProfileId } from "./settings.js";
 import { listRuns, filterRunsByWorkspace, queryNvidiaSmi } from "./readOnlyTools.js";
@@ -73,6 +75,9 @@ export interface WebUiServerOverrides {
   port?: number;
   /** 批⑭：设置存储注入（e2e 用 tmp 路径；缺省 webui/providers.json）。 */
   settingsStore?: ReturnType<typeof openSettingsStore>;
+  /** 批甲-BUILD T2（D3=A）：桥装配宿主注入通道（原样透传——mock/real 由注入方定；
+   *  注入即"显式指定"，不触发 mock 缺省语义）。 */
+  bridgeCommand?: { argv: readonly string[]; cwd?: string; env?: Record<string, string> };
 }
 
 /** 服务装配工厂（e2e 注入 overrides：streamFn/runsRoot/port 等；生产入口走底部直跑守卫）。 */
@@ -115,12 +120,49 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
   } else {
     console.log("[webui] 未配置模型宿主（可经设置页配置，或设 ATF_LLM_CONFIG 后重启）——会话创建在配置就绪前 fail-closed");
   }
-  /** 会话创建就绪闸：providerConfig 就绪 ∥ 测试/宿主注入 streamFn（注入＝模型宿主等价物）。 */
-  const sessionsReady = (): boolean => providerConfig !== undefined || overrides.streamFn !== undefined;
+  /** 批甲-BUILD T2（D3=A）：桥 mock 缺省移除——无显式 mock 指定不再缺省到
+   *  tests/fixtures/mock_atf.mjs。装配优先序：宿主注入 overrides.bridgeCommand（原样）→
+   *  env ATF_WEBUI_BRIDGE_MOCK（显式 mock 通道，通道本身保留）→ env ATF_DSH_BRIDGE_COMMAND
+   *  （真内核，resolveBridgeDeployment 同源解析）→ 测试宿主 streamFn 注入（宿主等价物语境
+   *  ＝测试装配面，沿既有 mock——既有 e2e 兼容）→ 四者皆无＝不装配（fail-closed，指路提示）。 */
+  const mockFlagOn = (() => {
+    const raw = (env["ATF_WEBUI_BRIDGE_MOCK"] ?? "").trim().toLowerCase();
+    return raw !== "" && raw !== "0" && raw !== "false";
+  })();
+  let bridgeCommand: SessionManagerDeps["bridgeCommand"] | undefined;
+  let bridgeReadyError: string | null = null;
+  if (overrides.bridgeCommand !== undefined) {
+    bridgeCommand = overrides.bridgeCommand;
+  } else if (mockFlagOn) {
+    bridgeCommand = { argv: ["node", mockPath], cwd: repoRoot };
+  } else {
+    const bridgeEnvCommand = env["ATF_DSH_BRIDGE_COMMAND"]?.trim();
+    if (bridgeEnvCommand !== undefined && bridgeEnvCommand !== "") {
+      const deployment = resolveBridgeDeployment({
+        commandValue: bridgeEnvCommand,
+        kernelDir: resolveInstanceKernelDir(env, repoRoot),
+        env,
+      });
+      bridgeCommand = {
+        argv: deployment.argv,
+        ...(deployment.childEnv && Object.keys(deployment.childEnv).length > 0 ? { env: deployment.childEnv } : {}),
+      };
+    } else if (overrides.streamFn !== undefined) {
+      bridgeCommand = { argv: ["node", mockPath], cwd: repoRoot };
+    } else {
+      bridgeReadyError = "桥接未配置（mock 缺省已移除）——设 ATF_DSH_BRIDGE_COMMAND（真内核命令）或 ATF_WEBUI_BRIDGE_MOCK=1（显式 mock）后重启";
+      console.error(`[webui] ${bridgeReadyError}`);
+    }
+  }
+  /** 会话创建就绪闸：providerConfig 就绪 ∥ 测试/宿主注入 streamFn（注入＝模型宿主等价物）；
+   *  批甲-BUILD T2（D3=A）并集桥装配就绪——生产无显式桥配置不再缺省 mock，会话创建同样
+   *  fail-closed（指路提示明示真内核 env 与显式 mock 标志两通道）。 */
+  const sessionsReady = (): boolean =>
+    (providerConfig !== undefined || overrides.streamFn !== undefined) && bridgeCommand !== undefined;
   const manager = new WebUiSessionManager({
     runsRoot,
     sessionsRoot,
-    bridgeCommand: { argv: ["node", mockPath], cwd: repoRoot },
+    ...(bridgeCommand !== undefined ? { bridgeCommand } : {}),
     ...(providerConfig !== undefined ? { providerConfig } : {}),
     ...(overrides.streamFn !== undefined ? { streamFn: overrides.streamFn } : {}),
     parseBudget: parseBudgetFromEnv(env),
@@ -153,12 +195,16 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
       return;
     }
     if (path === "/api/sessions" && req.method === "POST") {
-      // 批⑲ 修正一：会话创建 fail-closed——provider 未就绪（env 加载失败/未配置且无宿主注入）→ 503＋指路
+      // 批⑲ 修正一：会话创建 fail-closed——provider 未就绪（env 加载失败/未配置且无宿主注入）→ 503＋指路；
+      // 批甲-BUILD T2：桥未装配（生产无显式桥配置，mock 缺省已移除）→ 同闸 503＋指路。
       if (!sessionsReady()) {
         json(res, 503, {
-          error: providerState.status === "failed"
-            ? `模型宿主加载失败，会话创建暂不可用: ${providerState.error ?? ""}`.trim()
-            : "模型宿主未配置，会话创建暂不可用（可经设置页配置或设 ATF_LLM_CONFIG 后重启）",
+          error:
+            providerConfig === undefined && overrides.streamFn === undefined
+              ? providerState.status === "failed"
+                ? `模型宿主加载失败，会话创建暂不可用: ${providerState.error ?? ""}`.trim()
+                : "模型宿主未配置，会话创建暂不可用（可经设置页配置或设 ATF_LLM_CONFIG 后重启）"
+              : bridgeReadyError ?? "桥接未配置，会话创建暂不可用",
           provider_state: providerState.status,
         });
         return;

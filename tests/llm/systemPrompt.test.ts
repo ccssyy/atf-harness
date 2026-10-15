@@ -1,15 +1,15 @@
 /**
  * 系统提示"训练流程编排者"重写小批（2026-09-23，指令 `640c2827`）——单源与内容断言。
  *
- * - 同源不漂移：HttpLlmProvider（openai-chat wire）与 PiAiLlmProvider（pi-ai wire，
- *   onPayload 捕获）两装配路径的出站系统提示**逐字节等于** systemPrompt.ts 单源常量——
- *   feature flag 切换前后模型看到的提示零漂移；
+ * - 同源不漂移：PiAiLlmProvider（pi-ai wire，onPayload 捕获）出站系统提示**逐字节等于**
+ *   systemPrompt.ts 单源常量（批甲-BUILD T4 起 HttpLlmProvider 随旧自研 codec 路径删除，
+ *   pi-ai 即唯一装配路径）；
  * - 内容六要求抽检（指令 §2.1）：角色定位（编排代理＋K1 阶段闭集锚词）、管线纪律、
  *   阶段感知、自由聊天姿态、审批语义、长度 ≤1200 字；
  * - 治理内部字段负面断言（§2.2）：max_calls/账本/G 门 id/数据形态示例不得入提示词。
  */
 import { describe, expect, it } from "vitest";
-import { HARNESS_SYSTEM_PROMPT, HttpLlmProvider, PiAiLlmProvider } from "../../src/llm/index.js";
+import { HARNESS_SYSTEM_PROMPT, PiAiLlmProvider } from "../../src/llm/index.js";
 import type { LlmContextEvent } from "../../src/core/session/index.js";
 import type { ModelVisibleTool } from "../../src/core/tools/index.js";
 
@@ -17,13 +17,6 @@ const TOOLS: ModelVisibleTool[] = [{ name: "atf_fact_scan", description: "d", pa
 const CTX: readonly LlmContextEvent[] = [
   { id: 1, ts: "t", type: "user/message", payload: { text: "hi" } },
 ] as never;
-
-const HTTP_CONFIG = {
-  provider_id: "fake", protocol: "openai-chat", base_url: "http://127.0.0.1:45333",
-  api_key: "k", model: "m", reasoning: false, reasoning_effort: "low", max_tokens: 4096,
-  context_window: null, compat: { supports_developer_role: false, supports_reasoning_effort: false },
-  timeout_ms: 5000, max_retries: 1, max_calls_per_run: 50,
-} as never;
 
 const PIAI_CONFIG = {
   provider_id: "deepseek", protocol: "pi-ai", base_url: "http://127.0.0.1:45335",
@@ -33,20 +26,7 @@ const PIAI_CONFIG = {
   timeout_ms: 5000, max_retries: 1, max_calls_per_run: 50,
 } as never;
 
-describe("系统提示单源（两 provider 同源不漂移）", () => {
-  it("HttpLlmProvider 出站系统提示逐字节等于单源常量", async () => {
-    let systemContent: unknown;
-    const fetchImpl: typeof fetch = async (_input, init) => {
-      const body = JSON.parse(String(init?.body)) as { messages: Array<Record<string, unknown>> };
-      systemContent = body.messages[0]?.["content"];
-      return new Response(JSON.stringify({ choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: "好" } }] }), { status: 200, headers: { "content-type": "application/json" } });
-    };
-    const provider = new HttpLlmProvider({ config: HTTP_CONFIG, tools: TOOLS, fetchImpl });
-    const decided = await provider.decide(CTX);
-    expect(decided.ok).toBe(true);
-    expect(systemContent).toBe(HARNESS_SYSTEM_PROMPT);
-  });
-
+describe("系统提示单源（pi-ai 唯一装配路径）", () => {
   it("PiAiLlmProvider 出站系统提示逐字节等于单源常量", async () => {
     const payloads: Record<string, unknown>[] = [];
     const sse =

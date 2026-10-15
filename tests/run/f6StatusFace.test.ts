@@ -4,7 +4,7 @@
  * ② 状态面渲染（人读行＋禁直出工程语）
  * ③ guidance 文案修正断言（invalid_params 含"路径不存在或不可达/先探测实际形态"；禁含"示例"）
  * ④ 描述层指引断言（两工具"先探测/查看实际数据形态"；禁含具名形态示例）
- * ⑤ §三 双面覆盖：FakeLlmEndpoint＋HttpLlmProvider 走真投影路径（状态面调用 → 下一拍 decide 成功）
+ * ⑤ §三 双面覆盖：PiAiLlmProvider fetchImpl 脚本桩走真投影路径（状态面调用 → 下一拍 decide 成功；批甲-BUILD T4 迁移）
  */
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
@@ -12,8 +12,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ok } from "../../src/bridge/index.js";
 import {
-  FakeLlmEndpoint,
-  HttpLlmProvider,
+  PiAiLlmProvider,
   loadLlmProviderConfig,
   type LlmProvider,
   type Scenario,
@@ -195,56 +194,63 @@ describe("F6 用例 ④：描述层指引断言（两工具；F6-b 改向）", (
 });
 
 describe("F6 用例 ⑤：§三 双面覆盖——http 投影路径（状态面 → 下一拍 decide 成功）", () => {
-  it("FakeLlmEndpoint＋HttpLlmProvider：概览回流后第二拍投影成功并收束（completed）", { timeout: 60_000 }, async () => {
-    const endpoint = await FakeLlmEndpoint.start({
-      protocol: "openai-chat",
-      script: [
-        { kind: "response", response: { tool_calls: [{ tool: "atf_workspace_status", params: {} }] } },
-        { kind: "response", response: { final_answer: "已按工作区现状核对来源根形态，等待指示。" } },
-      ],
-      expectedApiKey: "f6-fake-key",
-      model: "f6-fake-model",
-    });
-    try {
-      const configPath = join(repoRoot, "tmp", `f6-cfg-${Date.now()}.json`);
-      const { writeFile, chmod } = await import("node:fs/promises");
-      await writeFile(
-        configPath,
-        JSON.stringify({
-          schema_version: "HarnessLlmConfig/v3",
-          default_provider: "f6-fake",
-          timeout_ms: 30000,
-          providers: {
-            "f6-fake": {
-              protocol: "openai-chat",
-              base_url: endpoint.baseUrl,
-              api_key_env: "F6_FAKE_KEY_ENV",
-              models: [{ id: "f6-fake-model", reasoning: false, max_tokens: 4096 }],
-            },
+  it("PiAiLlmProvider（fetchImpl 脚本桩）：概览回流后第二拍投影成功并收束（completed）", { timeout: 60_000 }, async () => {
+    // 批甲-BUILD T4：FakeLlmEndpoint＋HttpLlmProvider 随旧自研 codec 路径删除——
+    // 真投影路径载体换 PiAiLlmProvider ＋ fetchImpl 脚本化 SSE（两拍：tool_calls → final）。
+    const sseOf = (body: string): Response => new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+    const chunkOf = (delta: Record<string, unknown>, finish: string | null = null): string =>
+      `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 1, model: "deepseek-flash", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+    const usage = `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 1, model: "deepseek-flash", choices: [], usage: { prompt_tokens: 10, completion_tokens: 6, total_tokens: 16 } })}\n\n`;
+    const sseToolCall =
+      chunkOf({ role: "assistant", tool_calls: [] }) +
+      chunkOf({ tool_calls: [{ index: 0, id: "call_0", type: "function", function: { name: "atf_workspace_status", arguments: "{}" } }] }) +
+      chunkOf({}, "tool_calls") + usage + "data: [DONE]\n\n";
+    const sseFinal =
+      chunkOf({ role: "assistant", content: "已按工作区现状核对来源根形态，等待指示。" }) +
+      chunkOf({}, "stop") + usage + "data: [DONE]\n\n";
+    const replies = [sseToolCall, sseFinal];
+    let wireCalls = 0;
+    const fetchImpl: typeof fetch = async () => {
+      const body = replies[Math.min(wireCalls, replies.length - 1)] as string;
+      wireCalls += 1;
+      return sseOf(body);
+    };
+    const configPath = join(repoRoot, "tmp", `f6-cfg-${Date.now()}.json`);
+    const { writeFile, chmod } = await import("node:fs/promises");
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        schema_version: "HarnessLlmConfig/v3",
+        default_provider: "deepseek",
+        timeout_ms: 30000,
+        providers: {
+          deepseek: {
+            protocol: "pi-ai",
+            base_url: "http://127.0.0.1:9",
+            api_key_env: "F6_FAKE_KEY_ENV",
+            models: [{ id: "deepseek-flash", reasoning: false, max_tokens: 4096 }],
           },
-        }),
-        { mode: 0o600 },
-      );
-      await chmod(configPath, 0o600);
-      const loaded = await loadLlmProviderConfig({ ATF_LLM_CONFIG: configPath, F6_FAKE_KEY_ENV: "f6-fake-key" });
-      expect(loaded.ok).toBe(true);
-      if (!loaded.ok) return;
-      const provider: LlmProvider = new HttpLlmProvider({ config: loaded.value, tools: ToolRegistry.createDefault().modelVisible() });
-      const ran = await ScenarioRunner.runBranch(scenarioOf(`f6-http-${randomUUID()}`, "看工作区里有什么数据"), "main", {
-        runsRoot: runsRootOf(),
-        mockCommand: ["node", mockPath, "--ws-overview"],
-        modelProvider: provider,
-        approvalSurface: { stub: grantedStub },
-      });
-      expect(ran.ok).toBe(true);
-      if (!ran.ok) throw new Error("unreachable");
-      // 概览透传不 fail-closed：投影两拍全通（第二拍在概览回流之后）
-      expect(ran.value.outcome.kind).toBe("completed");
-      expect(ran.value.exit_code).toBe(0);
-      // 该拍确经真投影路径：伪端点恰收到两次请求（首拍状态面＋次拍收束）
-      expect(endpoint.requests.length).toBe(2);
-    } finally {
-      await endpoint.close().catch(() => undefined);
-    }
+        },
+      }),
+      { mode: 0o600 },
+    );
+    await chmod(configPath, 0o600);
+    const loaded = await loadLlmProviderConfig({ ATF_LLM_CONFIG: configPath, F6_FAKE_KEY_ENV: "f6-fake-key" });
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const provider: LlmProvider = new PiAiLlmProvider({ config: loaded.value, tools: ToolRegistry.createDefault().modelVisible(), fetchImpl });
+    const ran = await ScenarioRunner.runBranch(scenarioOf(`f6-http-${randomUUID()}`, "看工作区里有什么数据"), "main", {
+      runsRoot: runsRootOf(),
+      mockCommand: ["node", mockPath, "--ws-overview"],
+      modelProvider: provider,
+      approvalSurface: { stub: grantedStub },
+    });
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) throw new Error("unreachable");
+    // 概览透传不 fail-closed：投影两拍全通（第二拍在概览回流之后）
+    expect(ran.value.outcome.kind).toBe("completed");
+    expect(ran.value.exit_code).toBe(0);
+    // 该拍确经真投影路径：wire 恰收到两次请求（首拍状态面＋次拍收束）
+    expect(wireCalls).toBe(2);
   });
 });

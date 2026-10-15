@@ -4,8 +4,8 @@
  * 任务（owner 裁定 D4）：读 run 事实索引 → 报数据集登记与闸门状态 → 提下一步建议；
  * 中途故意触发一次 atf_admit_data 以验挂起与放行。
  *
- * 全链形态（门 2 只连本地假端点，零真实网络）：
- *   [run 1]  模型（HttpLlmProvider × 假端点回放）自主只读链 bind_run → workspace_status →
+ * 全链形态（门 2 只连本地脚本化端点，零真实网络；批甲-BUILD T4 起为 pi-ai SSE 回环回放）：
+ *   [run 1]  模型（PiAiLlmProvider × 脚本化端点回放）自主只读链 bind_run → workspace_status →
  *            fact_scan → gate(query)（账本预录授权）→ atf_admit_data（无预录）→ 问答轨
  *            approval/request → headless 等待耗尽 → timeout（actor=harness，超时非否决）
  *            → 挂起 exit 75（INV-2：turn 收口 reason=suspended）。
@@ -26,13 +26,14 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import {
-  FakeLlmEndpoint,
-  HttpLlmProvider,
   LLM_CONFIG_SCHEMA_VERSION,
+  PiAiLlmProvider,
   loadLlmProviderConfig,
   PROVIDER_ENV_VARS,
-  type FakeEndpointScriptItem,
 } from "../llm/index.js";
+// 批甲-BUILD T4：旧 FakeLlmEndpoint/HttpLlmProvider 随自研 codec 路径删除——
+// 冒烟基建换 ScriptedPiAiEndpoint（pi-ai SSE wire 回环回放；脚本形状不变）。
+import { ScriptedPiAiEndpoint, type ScriptedPiAiItem } from "../llm/scriptedPiAiEndpoint.js";
 import { approvalParamsDigest, ToolRegistry } from "../core/tools/index.js";
 import { ScenarioRunner, type ApprovalStubResponse, type BranchRunReport } from "../core/run/index.js";
 import type { Scenario } from "../llm/index.js";
@@ -45,13 +46,14 @@ const cliPath = join(repoRoot, "dist", "cli", "resume.js");
 const FAKE_API_KEY = "fake-l1a-api-key-DO-NOT-USE";
 /** 修订 v2：配置文件只留凭据引用（api_key_env 指向本环境变量名）。 */
 const FAKE_KEY_ENV = "ATF_LLM_KEY_LOCAL_FAKE";
-const FAKE_MODEL = "fake-model-l1a";
-const FAKE_PROVIDER = "local-fake";
+// 批甲-BUILD T4：pi-ai 目录装配 fail-closed——provider/model 须为 pi-ai 目录现役 id。
+const FAKE_MODEL = "deepseek-flash";
+const FAKE_PROVIDER = "deepseek";
 const SCENARIO_ID = "l1a-trial";
 const RUN_ID = "run-l1a-trial";
 
-/** D4 试用脚本（openai-chat canonical 面；假端点经 encodeWireResponse 回放）。 */
-const TRIAL_SCRIPT: FakeEndpointScriptItem[] = [
+/** D4 试用脚本（canonical 语义面；脚本化端点经 pi-ai SSE 回放）。 */
+const TRIAL_SCRIPT: ScriptedPiAiItem[] = [
   { kind: "response", response: { tool_calls: [{ tool: "atf_workspace_status", params: {} }] } },
   { kind: "response", response: { tool_calls: [{ tool: "atf_fact_scan", params: {} }] } },
   { kind: "response", response: { tool_calls: [{ tool: "atf_gate", params: { gate: "g1", action: "query" } }] } },
@@ -111,8 +113,7 @@ const smoke = async (): Promise<string[]> => {
   const runsRoot = join(workDir, "runs");
 
   // ① 本地假端点（127.0.0.1 回环；回放式）
-  const endpoint = await FakeLlmEndpoint.start({
-    protocol: "openai-chat",
+  const endpoint = await ScriptedPiAiEndpoint.start({
     script: [...TRIAL_SCRIPT],
     expectedApiKey: FAKE_API_KEY,
     model: FAKE_MODEL,
@@ -133,7 +134,7 @@ const smoke = async (): Promise<string[]> => {
           max_calls_per_run: 50,
           providers: {
             [FAKE_PROVIDER]: {
-              protocol: "openai-chat",
+              protocol: "pi-ai",
               base_url: endpoint.baseUrl,
               api_key_env: FAKE_KEY_ENV,
               models: [{ id: FAKE_MODEL, reasoning: false, max_tokens: 4096 }],
@@ -155,7 +156,7 @@ const smoke = async (): Promise<string[]> => {
     // ③ run 1：只读链自主完成 → admit 挂起（75）
     const config = await loadLlmProviderConfig(childEnv);
     if (!config.ok) throw new Error(`配置加载失败: ${config.error.message}`);
-    const providerRun1 = new HttpLlmProvider({
+    const providerRun1 = new PiAiLlmProvider({
       config: config.value,
       tools: ToolRegistry.createDefault().modelVisible(),
     });
@@ -227,12 +228,11 @@ const smoke = async (): Promise<string[]> => {
       throw new Error(`假端点请求数不符: 台账 ${String(requests.length)} ≠ run1 ${String(providerRun1.calls)} + resume 1`);
     }
     for (const record of requests) {
-      if (record.path !== "/v1/chat/completions") throw new Error(`零外连违例：请求打到 ${record.path}`);
+      if (!record.path.endsWith("/chat/completions")) throw new Error(`零外连违例：请求打到 ${record.path}`);
       if (record.auth !== "ok") throw new Error(`认证头缺失或不匹配（${record.auth}）`);
-      if (!record.protocolHeaderOk) throw new Error("协议头缺失");
       if (record.apiKeyInBody) throw new Error("脱敏违例：api_key 出现在请求体");
     }
-    evidence.push(`零外连断言: ${String(requests.length)} 笔请求全部命中回环 /v1/chat/completions；认证头一致；key 未入请求体`);
+    evidence.push(`零外连断言: ${String(requests.length)} 笔请求全部命中回环 /chat/completions；认证头一致；key 未入请求体`);
 
     // ⑧ 脱敏断言：全事件 + 报告 + 会话流 + CLI 输出不含 fake key
     const sensitiveSurface = JSON.stringify({

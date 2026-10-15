@@ -179,13 +179,28 @@ describe("批㊶Q增补三 段1③——train.sh 生成面审计注释（幂等�
     const trainSh = join(root, "train.sh");
     const env = { HOME: root, ATF_APPROVAL_LEDGER: "/abs/ledger/training-release.jsonl" };
     writeFileSync(trainSh, "#!/usr/bin/env bash\nexec echo train\n");
-    expect(appendLedgerAuditComment(trainSh, env)).toBe(true);
+    // 批甲-BUILD T3：返回结构化 outcome——写成功＝appended+零噪音（warning null）
+    expect(appendLedgerAuditComment(trainSh, env)).toEqual({ appended: true, warning: null });
     const once = readFileSync(trainSh, "utf8");
     expect(once).toContain(LEDGER_AUDIT_MARKER);
     expect(once).toContain("/abs/ledger/training-release.jsonl");
     expect(once).toContain("${ATF_APPROVAL_LEDGER:-$HOME/.atf/approval-ledger/training-release.jsonl}");
-    expect(appendLedgerAuditComment(trainSh, env)).toBe(false);
+    // 幂等跳过＝零噪音（warning null——告警只属写失败）
+    expect(appendLedgerAuditComment(trainSh, env)).toEqual({ appended: false, warning: null });
     expect(readFileSync(trainSh, "utf8")).toBe(once);
+  });
+  it("审计注释写失败注入→告警在场（含账本路径与失败原因）；文件缺席→零噪音（T3 锚）", () => {
+    const root = tempRoot();
+    const env = { HOME: root, ATF_APPROVAL_LEDGER: "/abs/ledger/training-release.jsonl" };
+    // 写失败注入：train.sh 传目录路径——existsSync 在场而 readFileSync EISDIR，fail-open 捕获后告警
+    const outcome = appendLedgerAuditComment(root, env);
+    expect(outcome.appended).toBe(false);
+    expect(outcome.warning).not.toBeNull();
+    expect(outcome.warning).toContain("/abs/ledger/training-release.jsonl");
+    expect(outcome.warning).toContain("fail-open");
+    expect(outcome.warning).toContain("原因=");
+    // 文件缺席＝非失败（调用方语义：脚本未生成），零噪音
+    expect(appendLedgerAuditComment(join(root, "absent.sh"), env)).toEqual({ appended: false, warning: null });
   });
   it("shell 单引号转义＋env 前缀（未设＝空串）", () => {
     expect(shellSingleQuoted("/a/b'c")).toBe("'/a/b'\\''c'");

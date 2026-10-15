@@ -1,8 +1,9 @@
 /**
  * D-f 补正批（门 2·裁定甲）用例 ⑥：用 run-smoke2-ebbc3a57（冒烟 #2 四跑）的事实日志复现
  * 「修复后同一 run 续跑成功」。四跑失败形态＝首条 guidance 回填后投影被旧白名单拦截 →
- * 每拍 provider_failure。本用例走**真投影路径**（FakeLlmEndpoint＋HttpLlmProvider——
- * adaptProjectionToMessages 在 decide 内真实执行，非脚本面），对真实 32 事件历史投影：
+ * 每拍 provider_failure。本用例走**真投影路径**（批甲-BUILD T4 迁移：PiAiLlmProvider ＋
+ * fetchImpl 脚本化 SSE——adaptProjectionToMessages 在 decide 内真实执行，非脚本面），
+ * 对真实 32 事件历史投影：
  *   - 修复前：tool/result 含未声明字段 "guidance" → 投影 err（四跑实测，见核验记录 §三）；
  *   - 修复后：投影通过、guidance 以 "invalid_params｜【invalid_params】…" 进模型可见摘要、
  *     同 run 续跑（continue turn 3）收口 completed。
@@ -13,8 +14,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { adaptProjectionToMessages } from "../../src/llm/index.js";
-import { FakeLlmEndpoint, HttpLlmProvider, type LlmProvider, type Scenario } from "../../src/llm/index.js";
+import { adaptProjectionToMessages, PiAiLlmProvider, type LlmProvider, type Scenario } from "../../src/llm/index.js";
 import { parseSessionStream, ScenarioRunner, type BranchRunReport } from "../../src/core/run/index.js";
 import { transformContext } from "../../src/core/session/index.js";
 
@@ -71,33 +71,25 @@ describe("D-f 补正批用例 ⑥：四跑 facts 同 run 续跑复现（真投�
     // 内容断言：summary = reason 主体｜guidance 附注（B4 摘要化生效的直接证据）
     expect(guidanceSummary.summary).toMatch(/^invalid_params｜【invalid_params】/);
 
-    // ---- ③ 同 run 续跑（continue turn 3；FakeLlmEndpoint 走真投影路径，零外部调用） ----
-    const endpoint = await FakeLlmEndpoint.start({
-      protocol: "openai-chat",
-      script: [
-        {
-          kind: "response",
-          response: {
-            final_answer: "按回流指引核对：缺料问题已如实向用户说明，本步停止等待指示。",
-          },
-        },
-      ],
-      expectedApiKey: "df-fix-fake-key",
-      model: "deepseek-flash",
-    });
-    try {
+    // ---- ③ 同 run 续跑（continue turn 3；PiAiLlmProvider fetchImpl 脚本桩走真投影路径，零网络） ----
+    const sseReply =
+      `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 1, model: "deepseek-flash", choices: [{ index: 0, delta: { role: "assistant", content: "按回流指引核对：缺料问题已如实向用户说明，本步停止等待指示。" }, finish_reason: null }] })}\n\n` +
+      `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 1, model: "deepseek-flash", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\n` +
+      "data: [DONE]\n\n";
+    let wireCalls = 0;
+    {
       const configPath = join(repoRoot, "tmp", `df-fix-cfg-${Date.now()}.json`);
       const { writeFile, chmod } = await import("node:fs/promises");
       await writeFile(
         configPath,
         JSON.stringify({
           schema_version: "HarnessLlmConfig/v3",
-          default_provider: "df-fix-fake",
+          default_provider: "deepseek",
           timeout_ms: 30000,
           providers: {
-            "df-fix-fake": {
-              protocol: "openai-chat",
-              base_url: endpoint.baseUrl,
+            deepseek: {
+              protocol: "pi-ai",
+              base_url: "http://127.0.0.1:9",
               api_key_env: "DF_FIX_FAKE_KEY_ENV",
               models: [{ id: "deepseek-flash", reasoning: false, max_tokens: 4096 }],
             },
@@ -111,7 +103,11 @@ describe("D-f 补正批用例 ⑥：四跑 facts 同 run 续跑复现（真投�
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
       // provenance 一致性：四跑 model_id = deepseek-flash（runWorkspace 等值校验）
-      const provider: LlmProvider = new HttpLlmProvider({ config: loaded.value, tools: [] });
+      const fetchImpl: typeof fetch = async () => {
+        wireCalls += 1;
+        return new Response(sseReply, { status: 200, headers: { "content-type": "text/event-stream" } });
+      };
+      const provider: LlmProvider = new PiAiLlmProvider({ config: loaded.value, tools: [], fetchImpl });
       const scenario: Scenario = {
         scenario_id: "df-fix-continuation",
         version: 1,
@@ -146,10 +142,8 @@ describe("D-f 补正批用例 ⑥：四跑 facts 同 run 续跑复现（真投�
       expect(report.exit_code).toBe(0);
       const turnEnd = report.events.filter((event) => event.type === "turn/end").at(-1);
       expect(turnEnd?.payload).toMatchObject({ reason: "completed", stop_reason: "final_answer" });
-      // 该拍确经真投影路径：伪端点恰收到一次请求（投影失败则请求不会发生）
-      expect(endpoint.requests.length).toBe(1);
-    } finally {
-      await endpoint.close().catch(() => undefined);
+      // 该拍确经真投影路径：wire 恰收到一次请求（投影失败则请求不会发生）
+      expect(wireCalls).toBe(1);
     }
   }
 

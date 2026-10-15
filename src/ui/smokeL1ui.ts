@@ -15,7 +15,9 @@ import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { FakeLlmEndpoint } from "../llm/fakeEndpoint.js";
+// 批甲-BUILD T4：旧 FakeLlmEndpoint 随自研 codec 路径删除——冒烟基建换 ScriptedPiAiEndpoint
+// （pi-ai SSE wire 回环回放；脚本形状不变）。
+import { ScriptedPiAiEndpoint } from "../llm/scriptedPiAiEndpoint.js";
 import { LLM_CONFIG_SCHEMA_VERSION, PROVIDER_ENV_VARS } from "../llm/providerConfig.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
@@ -25,8 +27,10 @@ const tuiPath = join(repoRoot, "dist", "ui", "tui.js");
 /** 显式标注 fake 的假 key（仓内零凭据纪律：仅运行期注入环境变量，不进配置文件、不进仓）。 */
 const FAKE_API_KEY = "fake-l1ui-api-key-DO-NOT-USE";
 const FAKE_KEY_ENV = "ATF_LLM_KEY_L1UI_FAKE";
-const FAKE_PROVIDER = "local-fake";
-const FAKE_MODEL = "fake-model-l1ui";
+// 批甲-BUILD T4：pi-ai 目录装配 fail-closed——provider/model 须为 pi-ai 目录现役 id
+// （wire 打到本地回环假端点，base_url 覆盖；模型 id 只用于目录命中）。
+const FAKE_PROVIDER = "deepseek";
+const FAKE_MODEL = "deepseek-flash";
 const SCENARIO_ID = "l1ui-smoke";
 const RUN_ID = "run-l1ui-smoke";
 const FINAL_TEXT = "数据集 ds-l1ui 已准入登记（人工放行）；工作区状态只读查询自主完成。";
@@ -88,9 +92,8 @@ const smoke = async (): Promise<string[]> => {
   const runsRoot = join(workDir, "runs");
   await mkdir(runsRoot, { recursive: true });
 
-  // ① 本地假端点（127.0.0.1 回环；回放式；零外连）
-  const endpoint = await FakeLlmEndpoint.start({
-    protocol: "openai-chat",
+  // ① 本地脚本化端点（127.0.0.1 回环；pi-ai SSE 回放；零外连）
+  const endpoint = await ScriptedPiAiEndpoint.start({
     script: [...SCRIPT],
     expectedApiKey: FAKE_API_KEY,
     model: FAKE_MODEL,
@@ -112,7 +115,7 @@ const smoke = async (): Promise<string[]> => {
           max_calls_per_run: 50,
           providers: {
             [FAKE_PROVIDER]: {
-              protocol: "openai-chat",
+              protocol: "pi-ai",
               base_url: endpoint.baseUrl,
               api_key_env: FAKE_KEY_ENV,
               models: [{ id: FAKE_MODEL, reasoning: false, max_tokens: 4096 }],
@@ -209,7 +212,7 @@ const smoke = async (): Promise<string[]> => {
     const requests = endpoint.requests;
     if (requests.length !== 3) throw new Error(`假端点请求数不符: ${String(requests.length)} ≠ 3`);
     for (const record of requests) {
-      if (record.path !== "/v1/chat/completions") throw new Error(`零外连违例：请求打到 ${record.path}`);
+      if (!record.path.endsWith("/chat/completions")) throw new Error(`零外连违例：请求打到 ${record.path}`);
       if (record.auth !== "ok") throw new Error("认证头缺失或不匹配");
       if (record.apiKeyInBody) throw new Error("脱敏违例：api_key 出现在请求体");
     }

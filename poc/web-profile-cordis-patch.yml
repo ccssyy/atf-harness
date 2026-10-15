@@ -8,7 +8,7 @@
     providers:
       glm-atf:
         apiKeyEnv: ATF_LLM_KEY_GLM
-        displayName: GLM（ATF 授权线）
+        displayName: 智谱 GLM
         api: openai-completions
         baseURL: https://open.bigmodel.cn/api/coding/paas/v4
         # 批㊵（D-LLM-1 R3 WebUI 面 · A 面）：推理档位声明——thinkingFormat=zai（GLM coding
@@ -19,8 +19,8 @@
         compat:
           thinkingFormat: zai
         models:
-          - id: glm-5.3-flash
           - id: glm-5.3
+            name: GLM-5.3
             contextWindow: 1000000
             maxTokens: 131072
             reasoningEfforts:
@@ -28,6 +28,10 @@
               low: low
               high: high
               max: max
+          - id: glm-5.3-flash
+            name: GLM-5.3-Flash
+          - id: glm-5.3-flashx
+            name: GLM-5.3-FlashX
 - id: ui-settings-general
   name: "@deepseek-ai/dsh-client-ui-settings-general"
   config:

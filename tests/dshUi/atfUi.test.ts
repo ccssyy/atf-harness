@@ -1082,3 +1082,50 @@ describe("批㊶-S3 S-B1——通知面投影（monitor.json additive 键三同�
     expect(clientSource).toContain("function TrainlogTailSection(props)");
   });
 });
+
+describe("批甲-BUILD T1——思考档位快切（client.js 源面锚——浏览器渲染走 DSH 真跑）", () => {
+  const clientSource = () => readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+
+  it("挂载面：conversation.input.right 槽（输入框右下角·与模型选择并排）＋modelDirectories 共享面＋既有 selectModel RPC（零新桥方法）", () => {
+    const src = clientSource();
+    expect(src).toContain("ctx.inject(['slots', 'modelDirectories', 'sessions', 'remote', 'remote.session']");
+    expect(src).toContain("scope.slots.inject('conversation.input.right'");
+    expect(src).toContain("id: 'atf-effort-select'");
+    // 数据/提交面＝共享 ModelDirectory（与原生模型选择同状态同 RPC——下 turn 生效由宿主承载）
+    expect(src).toContain("models.directoryFor(sessionId)");
+    expect(src).toContain("directory.select(selection)");
+    // inject 工厂 fail-open（空 face＝控件隐藏——契约面要求对象：null 会炸原生 bindInjectSources）
+    expect(src).toContain("} catch (e) {\n                  return {}\n                }");
+  });
+
+  it("UI 闭集恰四值：Off(关)/Low(低)/High(高)/Max(最高)——用户可见面零开发叙事", () => {
+    const src = clientSource();
+    const block = /var EFFORT_CLOSED = \[([\s\S]*?)\]/.exec(src)?.[1] ?? "";
+    expect(block).toContain("{ id: 'off', label: 'Off(关)' }");
+    expect(block).toContain("{ id: 'low', label: 'Low(低)' }");
+    expect(block).toContain("{ id: 'high', label: 'High(高)' }");
+    expect(block).toContain("{ id: 'max', label: 'Max(最高)' }");
+    // 闭集与目录交集呈现（目录超集档位不进控件；efforts 空＝整体隐藏）
+    expect(src).toContain("offered.length === 0) return null");
+    expect(src).toContain("reasoning.efforts[li].id === candidate.id");
+  });
+
+  it("组件边界＋当前档位常显＋拒绝路径如实显示（错误码＋原因在卡内；不静默不降档）", () => {
+    const src = clientSource();
+    // 组件边界：slot 渲染 createElement 实例化（#310 教训），直调形态清零
+    expect(src).toContain("React.createElement(EffortSelect, injected)");
+    expect(src).not.toMatch(/[^.]EffortSelect\(injected\)/);
+    // 空 face 安全：hooks 判空后置（store 缺席不炸 useSyncExternalStore）
+    expect(src).toContain("directory ? directory.subscribe(fn) : function() {}");
+    expect(src).toContain("if (state === null || state === undefined) return null");
+    // 常显：触发钮＝「思考」＋当前档位值（默认态明示「默认」）
+    expect(src).toContain("React.createElement('span', { className: 'atf-effort-k' }, '思考')");
+    expect(src).toContain("effectiveEffort === undefined ? '默认' : effortLabelOf(effectiveEffort)");
+    // 拒绝如实显示：RemoteResult 错误码＋原因原样呈现，菜单不关（错误条持续可见）
+    expect(src).toContain("result.ok === false");
+    expect(src).toContain("result.error.code");
+    expect(src).toContain("result.error.message");
+    expect(src).toContain("'切换被拒绝：' + error");
+    expect(src).toContain("role: 'alert'");
+  });
+});

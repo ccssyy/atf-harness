@@ -1,8 +1,9 @@
 /**
  * 修复批 3（2026-09-23）：compaction 切点对齐测试（指令 §三.1）——
  * 长会话 fixture 中配对（tool/call↔tool/result、approval/request↔response）恰好横跨
- * CHUNK 折叠边界 → 对齐后投影消息序合法（无孤儿闭合半边），且全链路可编码（adapter →
- * 两协议 codec 逐级验收，等价「mock provider 接受」）；审计 payload 携带切点对齐结果
+ * CHUNK 折叠边界 → 对齐后投影消息序合法（无孤儿闭合半边），且投影可继续收发（adapter
+ * 投影逐级验收——批甲-BUILD T4 起「wire 可编码」验收随旧自研 codec 路径删除，投影 ok
+ * 即消息序合法的 fixture 级等价）；审计 payload 携带切点对齐结果
  * （boundary_before/after、reason_aligned）；事件数触发门缺省 512＋进程级可配。
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -18,11 +19,8 @@ import {
   type SessionEvent,
 } from "../../src/core/session/index.js";
 import { adaptProjectionToMessages } from "../../src/llm/index.js";
-import { anthropicMessagesCodec, openaiChatCodec } from "../../src/llm/index.js";
-import type { ModelVisibleTool } from "../../src/core/tools/index.js";
 
 const DIGEST_A = "a".repeat(64);
-const TOOLS: ModelVisibleTool[] = [{ name: "atf_scratch_exec", description: "d", parameters: { type: "object", required: [], properties: {} } }];
 
 let seq = 0;
 const ev = (type: SessionEvent["type"], payload: unknown, extra: Partial<SessionEvent> = {}): SessionEvent => ({
@@ -58,7 +56,7 @@ const usableOf = (events: SessionEvent[]): number => materialOf(events).length -
 const rawBoundaryOf = (events: SessionEvent[]): number => Math.floor(usableOf(events) / COMPACTION_CHUNK) * COMPACTION_CHUNK;
 
 describe("切点对齐：配对横跨 CHUNK 边界 → boundary 前移，投影消息序合法", () => {
-  it("tool/call↔tool/result 横跨边界（重跑① event 164 同型）→ aligned＋全链路两协议编码通过", () => {
+  it("tool/call↔tool/result 横跨边界（重跑① event 164 同型）→ aligned＋投影通过", () => {
     const events = straddlingSession(
       () => [ev("tool/call", { tool: "atf_scratch_exec", params: {} })],
       () => ev("tool/result", { tool: "atf_scratch_exec", ok: true, result: { exit_code: 0 } }),
@@ -71,31 +69,11 @@ describe("切点对齐：配对横跨 CHUNK 边界 → boundary 前移，投影�
     expect(plan.aligned).toBe(true);
     expect(plan.boundary).toBe(95); // 前移到配对起点：call/result 双双保留
 
-    // 全链路（§三.1「可继续收发」的 fixture 级等价）：投影 → adapter → 两协议 codec 均接受
+    // 全链路（§三.1「可继续收发」的 fixture 级等价）：投影 → adapter 接受（消息序合法）
     const projected = projectContext(events);
     const messages = adaptProjectionToMessages(projected, { toolResultSummaryCapChars: 6_000 });
     expect(messages.ok).toBe(true);
     if (!messages.ok) return;
-    const openai = openaiChatCodec.encodeRequestBody({
-      model: "m",
-      system: "S",
-      messages: messages.value,
-      tools: TOOLS,
-      reasoningEffort: "low",
-      developerRole: false,
-      maxTokens: 4096,
-    });
-    expect(openai.ok, openai.ok ? "" : openai.error.message).toBe(true);
-    const anthropic = anthropicMessagesCodec.encodeRequestBody({
-      model: "m",
-      system: "S",
-      messages: messages.value,
-      tools: TOOLS,
-      reasoningEffort: null,
-      developerRole: false,
-      maxTokens: 4096,
-    });
-    expect(anthropic.ok, anthropic.ok ? "" : anthropic.error.message).toBe(true);
 
     // 审计 payload 携带切点对齐结果（§二.3）
     const record = buildCompactionRecord(materialOf(events), plan);
@@ -122,16 +100,6 @@ describe("切点对齐：配对横跨 CHUNK 边界 → boundary 前移，投影�
     const messages = adaptProjectionToMessages(projected, { toolResultSummaryCapChars: 6_000 });
     expect(messages.ok).toBe(true);
     if (!messages.ok) return;
-    const openai = openaiChatCodec.encodeRequestBody({
-      model: "m",
-      system: "S",
-      messages: messages.value,
-      tools: TOOLS,
-      reasoningEffort: null,
-      developerRole: false,
-      maxTokens: 4096,
-    });
-    expect(openai.ok, openai.ok ? "" : openai.error.message).toBe(true);
   });
 
   it("无配对会话：aligned=false（对齐零扰动，原 CHUNK 语义不变）", () => {

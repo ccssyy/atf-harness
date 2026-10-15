@@ -13,7 +13,7 @@
  *
  * 等价性关键语义（fixture 五组锚定，tests/llm/piAiProvider.test.ts）：
  * - 悬空工具调用末尾合成 "[未执行：等待人工审批]" 结果；审批摘要在配对 tool_result 之后
- *   作 user 附言回填——walk 语义与 codecWire 逐条对应（复用同源常量，不复制文案）；
+ *   作 user 附言回填——walk 语义单点在本件（批甲-BUILD T4 起共享助手内联，文案逐字节不变）；
  * - DeepSeek wire 规则（工具轮回合 reasoning_content 回传）由 pi-ai 内建 compat 承接
  *   （requiresReasoningContentOnAssistantMessages，历史无思考时回填空串——门 1 实证语义等价，
  *   DSH 口径"内容不作校验"）；本仓 thinkingEcho 手搓注入在本路径不再使用；
@@ -63,7 +63,6 @@ import {
 import { applyPiaiCompatFloor, piaiProviderFactory } from "./piaiProviders.js";
 import { err, ok, type Result } from "../bridge/index.js";
 import { adaptProjectionToMessages, expandModelResponse, type AdapterMessage, type ModelResponse } from "./adapter.js";
-import { approvalAnnotationText, approvalSummaryLine, danglingToolResultContent, wireToolCallId } from "./codecWire.js";
 import { HARNESS_SYSTEM_PROMPT } from "./systemPrompt.js";
 import { PIAI_REASONING_EFFORTS, type ResolvedLlmProviderConfig } from "./providerConfig.js";
 import { llmError, llmErrorOf, type LlmDecision, type LlmError, type LlmProvider } from "./provider.js";
@@ -129,7 +128,9 @@ const ZERO_USAGE: PiUsage = {
 const QUOTA_MESSAGE_MARKERS: readonly string[] = ["429", "insufficient_quota", "quota", "rate limit", "usage limit", "arrearage"];
 
 // ---------------------------------------------------------------------------
-// AdapterMessage[] → pi-ai Message[] 序列 walk（语义与 codecWire 逐条对应）
+// AdapterMessage[] → pi-ai Message[] 序列 walk
+//（批甲-BUILD T4：四个共享文案/派生助手自 codecWire 内联迁入——原文件随旧自研 codec
+// 路径删除，本路径为唯一存活消费者；文案逐字节不变，等价性 fixture 锚零改）
 // ---------------------------------------------------------------------------
 
 interface WalkState {
@@ -138,6 +139,27 @@ interface WalkState {
   /** 缓冲中的审批附言（在配对 tool_result 之后回填） */
   annotations: string[];
 }
+
+/** 线缆工具调用 id（确定性派生：call_<source_event_id>）。 */
+const wireToolCallId = (sourceEventId: number): string => `call_${String(sourceEventId)}`;
+
+/** 审批摘要一行（approval 消息人读面）。 */
+const approvalSummaryLine = (message: AdapterMessage & { role: "approval" }): string =>
+  `${message.phase === "request" ? "请求" : "应答"}：${message.summary}`;
+
+/** 审批附言文本（缓冲的 approval 摘要拼接）。 */
+const approvalAnnotationText = (lines: readonly string[]): string =>
+  ["[审批往返]", ...lines].join("\n");
+
+/** 悬空工具调用的合成结果内容（形状要求：每个 wire 工具调用必须有结果）。
+ *  首行显式标注未执行——接真实模型后该文本是模型输入，不得被读成"工具已执行"；
+ *  审批摘要与"动作未发生"说明保留（放行判定只读账本/凭据路径，与该文本无关）。 */
+const danglingToolResultContent = (annotations: readonly string[]): string =>
+  [
+    "[未执行：等待人工审批]",
+    ...(annotations.length > 0 ? [approvalAnnotationText(annotations)] : []),
+    "工具调用未执行：审批未在进程内完成，动作未发生。",
+  ].join("\n");
 
 /** 历史重放 AssistantMessage 的脚手架（pi-ai 编码只读 content 块；其余字段类型必填填充）。 */
 interface ReplayScaffold {
@@ -233,7 +255,7 @@ export const walkAdapterMessagesToPi = (
         break;
       }
       case "approval": {
-        // 线缆次序要求：tool_call 与 tool_result 之间不得插入 user——缓冲后随结果回填（同 codecWire）
+        // 线缆次序要求：tool_call 与 tool_result 之间不得插入 user——缓冲后随结果回填（线缆次序语义单点）
         state.annotations.push(approvalSummaryLine(message));
         break;
       }

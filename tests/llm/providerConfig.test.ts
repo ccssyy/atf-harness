@@ -46,7 +46,7 @@ const CATALOG = {
   default_model: "deepseek-flash",
   providers: {
     deepseek: {
-      protocol: "openai-chat",
+      protocol: "pi-ai",
       base_url: "http://127.0.0.1:9",
       api_key_env: KEY_ENV,
       models: [
@@ -54,9 +54,9 @@ const CATALOG = {
         { id: "deepseek-v4-pro", reasoning: true, reasoning_effort: "max", max_tokens: 8192, context_window: 131072 },
       ],
     },
-    "deepseek-anthropic": {
-      protocol: "anthropic-messages",
-      base_url: "http://127.0.0.1:10/anthropic",
+    "deepseek-piai-2": {
+      protocol: "pi-ai",
+      base_url: "http://127.0.0.1:10/piai",
       api_key_env: KEY_ENV,
       compat: { supports_reasoning_effort: false },
       models: [{ id: "deepseek-v4-pro", reasoning: true, max_tokens: 8192 }],
@@ -86,7 +86,7 @@ describe("VERIFY 1——两层正例与默认选择", () => {
     if (!loaded.ok) return;
     expect(loaded.value.provider_id).toBe("deepseek");
     expect(loaded.value.model).toBe("deepseek-flash");
-    expect(loaded.value.protocol).toBe("openai-chat");
+    expect(loaded.value.protocol).toBe("pi-ai");
     expect(loaded.value.base_url).toBe("http://127.0.0.1:9");
     expect(loaded.value.reasoning).toBe(true);
     expect(loaded.value.max_tokens).toBe(4096);
@@ -102,9 +102,9 @@ describe("VERIFY 1——两层正例与默认选择", () => {
     if (loaded.ok) expect(loaded.value.model).toBe("deepseek-flash");
   });
 
-  it("compat 生效：anthropic provider 声明 supports_reasoning_effort:false", async () => {
+  it("compat 生效：第二 provider 声明 supports_reasoning_effort:false", async () => {
     const loaded = await loadLlmProviderConfig(ENV(await writeConfig(CATALOG), {
-      [PROVIDER_ENV_VARS.provider]: "deepseek-anthropic",
+      [PROVIDER_ENV_VARS.provider]: "deepseek-piai-2",
       // default_model 是"选中 provider 内"的默认——跨 provider 未声明该模型时须经 env 显式选择
       [PROVIDER_ENV_VARS.model]: "deepseek-v4-pro",
     }));
@@ -266,11 +266,11 @@ describe("VERIFY 6——校验 fail-closed（规则 6）", () => {
     if (!loaded.ok) expect(loaded.error.code).toBe("config_unreadable");
   });
 
-  it('reasoning_effort="none" 拒绝（模型级与 env 同拦）', async () => {
+  it('reasoning_effort 闭集外值拒绝（模型级与 env 同拦；pi-ai 闭集单源——批甲-BUILD T4 锚）', async () => {
     const body = clone();
-    (deepseekModels(body)[0] as Record<string, unknown>)["reasoning_effort"] = "none";
+    (deepseekModels(body)[0] as Record<string, unknown>)["reasoning_effort"] = "medium";
     expect((await loadLlmProviderConfig(ENV(await writeConfig(body)))).ok).toBe(false);
-    const viaEnv = await loadLlmProviderConfig(ENV(await writeConfig(CATALOG), { [PROVIDER_ENV_VARS.reasoningEffort]: "none" }));
+    const viaEnv = await loadLlmProviderConfig(ENV(await writeConfig(CATALOG), { [PROVIDER_ENV_VARS.reasoningEffort]: "medium" }));
     expect(viaEnv.ok).toBe(false);
   });
 });

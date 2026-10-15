@@ -17,22 +17,26 @@
 # 重同步本模板内同名行（仅保 ATF persona 定稿文案），再重生成实例文件。
 # ============================================================================
 
-# —— LLM provider（ATF 授权线；key 走 env 引用——红线"key 不落配置"）——————
+# —— LLM provider（智谱 GLM；市面对齐 2026-10-15 owner 裁定）——————————————————
+# key 管理走 dsh 托管凭据存储（<DSH_HOME>/.credentials.yaml，0600；web 实例 boot env
+# 不注入 key——env 在场即凭据只读锁（credentials-local describe writable:false），
+# Models 设置页 API Key 栏会被禁用、UI 粘贴被遮蔽；env 注入只留给 CI 类显式意图）。
 # 推理档位声明（compat.thinkingFormat=zai）激活 dsh 原生模型选择器推理子菜单；
-# reasoningEfforts 照 pi-ai 目录原文（不造档位）；contextWindow/maxTokens＝目录值。
+# reasoningEfforts 照 pi-ai 目录原文（不造档位）；contextWindow/maxTokens＝目录值；
+# 模型 name＝市面表述（GLM-5.3 / GLM-5.3-Flash / GLM-5.3-FlashX，端点 /models 实证在架）。
 - id: llm-pi-ai
   config:
     providers:
       glm-atf:
         apiKeyEnv: ATF_LLM_KEY_GLM
-        displayName: GLM（ATF 授权线）
+        displayName: 智谱 GLM
         api: openai-completions
         baseURL: https://open.bigmodel.cn/api/coding/paas/v4
         compat:
           thinkingFormat: zai
         models:
-          - id: glm-5.3-flash
           - id: glm-5.3
+            name: GLM-5.3
             contextWindow: 1000000
             maxTokens: 131072
             reasoningEfforts:
@@ -40,6 +44,10 @@
               low: low
               high: high
               max: max
+          - id: glm-5.3-flash
+            name: GLM-5.3-Flash
+          - id: glm-5.3-flashx
+            name: GLM-5.3-FlashX
 
 - id: ui-settings-general
   config:

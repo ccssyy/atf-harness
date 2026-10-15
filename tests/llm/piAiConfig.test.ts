@@ -1,10 +1,10 @@
 /**
  * pi-ai 换库批（门 2，2026-09-23）——providerConfig 协议条目＋effort 值域闭集单测（指令 §四.2）。
  *
- * - protocol="pi-ai" 被配置层接受（feature flag 生效形态）；
+ * - protocol="pi-ai" 被配置层接受（现役唯一协议——批甲-BUILD T4 起旧自研 codec 协议已下线）；
  * - pi-ai 路径 effort 闭集 none/low/high/max：none 合法（→不传 reasoning，pi-ai 关思考）；
  *   未知值 fail-closed 拒绝（模型级与 env 覆盖两入口都拒）；
- * - 旧路径语义零改：openai-chat 的 "none" 仍拒绝（GPT-5.4 chat 面限制，既有文案）。
+ * - 旧协议 openai-chat 配置 → protocol_unknown 拒绝（指路改配 pi-ai——批甲-BUILD T4 锚）。
  * 凭据纪律沿用：api_key_env 解析缺失 → fail-closed（本文件提供测试 env 值）。
  */
 import { mkdtemp, writeFile, chmod } from "node:fs/promises";
@@ -41,8 +41,8 @@ const baseDoc = (protocol: string, effort: unknown): Record<string, unknown> => 
 });
 
 describe("providerConfig——pi-ai 协议条目与 effort 闭集", () => {
-  it("PROVIDER_PROTOCOLS 恰为三值（openai-chat/anthropic-messages/pi-ai）", () => {
-    expect([...PROVIDER_PROTOCOLS]).toEqual(["openai-chat", "anthropic-messages", "pi-ai"]);
+  it("PROVIDER_PROTOCOLS 收窄单值 pi-ai（批甲-BUILD T4 旧路径删除）", () => {
+    expect([...PROVIDER_PROTOCOLS]).toEqual(["pi-ai"]);
   });
 
   it("pi-ai 协议被接受：解析产物 protocol=pi-ai；none 为合法档位（→不传 reasoning）", async () => {
@@ -75,19 +75,21 @@ describe("providerConfig——pi-ai 协议条目与 effort 闭集", () => {
     expect(loaded.error.message).toContain("xhigh");
   });
 
-  it("旧路径语义零改：openai-chat 的 none 仍拒绝（GPT-5.4 文案不变）", async () => {
+  it("旧协议 openai-chat 配置 → protocol_unknown 拒绝＋指路改配 pi-ai（批甲-BUILD T4 锚）", async () => {
     const { path, env } = await writeConfig(baseDoc("openai-chat", "none"));
     const loaded = await loadLlmProviderConfig({ ...env, [PROVIDER_ENV_VARS.configPath]: path });
     expect(loaded.ok).toBe(false);
     if (loaded.ok) return;
-    expect(loaded.error.message).toContain("GPT-5.4");
+    expect(loaded.error.code).toBe("protocol_unknown");
+    expect(loaded.error.message).toContain("旧自研 codec 直连路径已删除");
+    expect(loaded.error.message).toContain("pi-ai");
   });
 
-  it("旧路径 openai-chat 非闭集值仍直传（既有透传行为零改）", async () => {
-    const { path, env } = await writeConfig(baseDoc("openai-chat", "medium"));
+  it("旧协议 anthropic-messages 配置 → protocol_unknown 拒绝（批甲-BUILD T4 锚）", async () => {
+    const { path, env } = await writeConfig(baseDoc("anthropic-messages", "none"));
     const loaded = await loadLlmProviderConfig({ ...env, [PROVIDER_ENV_VARS.configPath]: path });
-    expect(loaded.ok).toBe(true);
-    if (!loaded.ok) return;
-    expect(loaded.value.reasoning_effort).toBe("medium");
+    expect(loaded.ok).toBe(false);
+    if (loaded.ok) return;
+    expect(loaded.error.code).toBe("protocol_unknown");
   });
 });

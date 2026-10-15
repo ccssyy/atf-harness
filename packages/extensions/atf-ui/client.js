@@ -3,6 +3,12 @@
  *  占位（沿官方 ui-brand-official 嵌套 inject 模式——官方占位被 build profile gate 关闭，
  *  非 official 构建座位空置，第三方 priority 0 直入无冲突面）；M3-1 persona/M3-4 标题经
  *  config/build-env 两轴，不在本文件。
+ *  思考档位快切（批甲-BUILD T1，owner D1＝输入框右下角·与模型选择并排）：conversation.input.right
+ *  槽注入 EffortSelect——数据面＝ui-model-selection 共享 ModelDirectory（ctx.modelDirectories
+ *  .directoryFor(sessionId).store），提交走既有 session.selectModel RPC（零新桥方法零契约 diff；
+ *  下 turn 生效语义由宿主 selectForNextRequest 承载）。闭集 Off(关)/Low(低)/High(高)/Max(最高)
+ *  与目录 efforts 交集呈现；模型无思考档位（reasoning 缺席＝地板语义）控件隐藏；切换被 provider
+ *  层拒绝（session/model-unavailable 等 RemoteResult）时错误码＋原因在卡内如实显示，不静默不降档。
  *  数据：workspaceFiles.read 轮询 <runsRoot>/atf-ui/monitor.json（同步器 5s 快照单源，
  *  gpu 字段＝nvidia-smi 首行单卡面，gpu_all/gpu_binding＝批㉝H 多卡聚合与绑卡声明，
  *  viewers 字段＝run 维度 badcase viewer 发现清单——批㉛段1）；
@@ -11,12 +17,16 @@
  *  不重建 viewer 本身——产物由 atf-analyze-badcases skill 链产出）。
  *  挂载面（DSH slot 契约，批㉑三段实证）：conversation.session.header.utilities＝list
  *  （GPU 显隐开关＋sessionId 捕获）；conversation.composer.dock＝list（GPU 一行卡＋胶囊，
- *  与 ui-chat stats 同槽共存）；conversation.approval.detail＝single（ui-chat 独占——
- *  第三方注册会顶掉其 seat 致其 apply 抛错，故不挂）。 */
+ *  与 ui-chat stats 同槽共存）；conversation.input.right＝list（思考档位快切，批甲-BUILD T1）；
+ *  conversation.approval.detail＝single（ui-chat 独占——第三方注册会顶掉其 seat 致其 apply
+ *  抛错，故不挂）。 */
 window.__ModuleLoader__.load({
   id: '@atf/dsh-atf-ui',
   factory: function(require) {
     var React = require('react')
+    // 批甲-BUILD T1：菜单 portal 用（composer 卡片 overflow 会裁剪就地弹层——body portal＋
+    // 视口锚定与原生 ModelSelect 同型）
+    var ReactDOM = require('react-dom')
 
     // 批㉘ monitor 路径单源：优先读 server 半经 index tap 注入的 per-instance 路径
     // （window.__ATF_UI_CONFIG__.monitorPath＝同步器实际写盘位，随 ATF_DSH_RUNS_ROOT／
@@ -1380,6 +1390,196 @@ window.__ModuleLoader__.load({
       }, 'ATF 训练 Agent')
     }
 
+    // ── 批甲-BUILD T1：思考档位快切（conversation.input.right 槽·输入框右下角与模型选择并排） ──
+    // UI 闭集（owner 裁定，用户可见面零开发叙事——档位文案只此四值）；映射 provider 闭集
+    // none/low/high/max 同位档（live 链 pi-ai 目录 zai-coding-cn glm-5.3 thinkingLevelMap
+    // off/low/high/max——目录 effort id 逐一同位；关＝off 即不送思考参数的 GLM zai 语义位）。
+    var EFFORT_CLOSED = [
+      { id: 'off', label: 'Off(关)' },
+      { id: 'low', label: 'Low(低)' },
+      { id: 'high', label: 'High(高)' },
+      { id: 'max', label: 'Max(最高)' },
+    ]
+    var effortLabelOf = function(id) {
+      for (var i = 0; i < EFFORT_CLOSED.length; i++) {
+        if (EFFORT_CLOSED[i].id === id) return EFFORT_CLOSED[i].label
+      }
+      return id
+    }
+
+    /** ModelDirectory 快照 → 当前模型 reasoning 面（与原生 ModelSelect 同构解析；未选中模型＝null）。 */
+    function currentReasoningOf(state) {
+      if (state === null || state === undefined || state.current === null) return null
+      var groups = state.groups
+      for (var gi = 0; gi < groups.length; gi++) {
+        var group = groups[gi]
+        if (group.id !== state.current.provider) continue
+        for (var mi = 0; mi < group.models.length; mi++) {
+          var model = group.models[mi]
+          if (model.id === state.current.model) {
+            return { provider: group.id, model: model.id, reasoning: model.reasoning }
+          }
+        }
+      }
+      return null
+    }
+
+    /** 思考档位快切控件（session-scoped slot 注入面 {available, directory, load, select}）。
+     *  隐藏语义（地板）：无会话模型选中／模型无 reasoning 面（目录未声明档位）／subagent 寻址
+     *  会话（Agent-bound RPC 不可达）——控件整体不出场，不出「可点但无效」的假面。
+     *  组件边界：含 useState/useSyncExternalStore——slot 渲染必须 createElement 实例化
+     *  （直调即 React #310 整槽崩溃，批㊶-TRAIN-OBS-FIX2 教训钉子）。 */
+    function EffortSelect(props) {
+      var injected = props || {}
+      var available = injected.available === true
+      var directory = injected.directory
+      var state = React.useSyncExternalStore(
+        function(fn) { return directory ? directory.subscribe(fn) : function() {} },
+        function() { return directory ? directory.getSnapshot() : null },
+      )
+      var openState = React.useState(false)
+      var open = openState[0], setOpen = openState[1]
+      var errorState = React.useState(null)
+      var error = errorState[0], setError = errorState[1]
+      var busyState = React.useState(false)
+      var busy = busyState[0], setBusy = busyState[1]
+      var posState = React.useState(null)
+      var pos = posState[0], setPos = posState[1]
+      var triggerRef = React.useRef(null)
+
+      var choice = currentReasoningOf(state)
+      var reasoning = choice !== null ? choice.reasoning : undefined
+      // 闭集∩目录：目录声明的档位才可切换（闭集外目录档位不进本控件——闭集为准；
+      // 目录 efforts 空＝模型不支持思考档位 → 整体隐藏）
+      var offered = []
+      if (reasoning && reasoning.efforts && reasoning.efforts.length > 0) {
+        for (var ci = 0; ci < EFFORT_CLOSED.length; ci++) {
+          var candidate = EFFORT_CLOSED[ci]
+          for (var li = 0; li < reasoning.efforts.length; li++) {
+            if (reasoning.efforts[li].id === candidate.id) { offered.push(candidate); break }
+          }
+        }
+      }
+      var effectiveEffort = (reasoning && state.current && state.current.reasoningEffort !== undefined)
+        ? state.current.reasoningEffort
+        : (reasoning && reasoning.defaultEffort !== undefined ? reasoning.defaultEffort : undefined)
+      var currentLabel = effectiveEffort === undefined ? '默认' : effortLabelOf(effectiveEffort)
+      var pending = state.pending !== null && state.pending !== undefined
+      var waiting = busy || pending
+
+      var place = React.useCallback(function() {
+        var rect = triggerRef.current && triggerRef.current.getBoundingClientRect()
+        if (!rect) return
+        setPos({
+          right: Math.max(8, window.innerWidth - rect.right),
+          bottom: Math.max(8, window.innerHeight - rect.top + 6),
+        })
+      }, [])
+
+      React.useEffect(function() {
+        if (!open) return
+        place()
+        var closeOutside = function(event) {
+          var root = triggerRef.current && triggerRef.current.closest('.atf-effort-root')
+          var menu = event.target && event.target.closest && event.target.closest('.atf-effort-menu')
+          if (menu) return
+          if (root && root.contains(event.target)) return
+          setOpen(false)
+        }
+        var reposition = function() { place() }
+        document.addEventListener('mousedown', closeOutside, true)
+        window.addEventListener('resize', reposition)
+        window.addEventListener('scroll', reposition, true)
+        return function() {
+          document.removeEventListener('mousedown', closeOutside, true)
+          window.removeEventListener('resize', reposition)
+          window.removeEventListener('scroll', reposition, true)
+        }
+      }, [open, place])
+
+      if (state === null || state === undefined) return null
+      if (!available || offered.length === 0) return null
+
+      var toggle = function() {
+        if (open) { setOpen(false); return }
+        setError(null)
+        if (typeof injected.load === 'function') injected.load()
+        setOpen(true)
+      }
+
+      var switchTo = function(effortId) {
+        if (waiting || choice === null) return
+        setBusy(true)
+        Promise.resolve(injected.select({
+          provider: choice.provider,
+          model: choice.model,
+          reasoningEffort: effortId,
+        })).then(function(result) {
+          setBusy(false)
+          if (result && result.ok === false) {
+            // 拒绝路径如实显示：错误码＋原因原样呈现（不静默、不降档——当前档位不动）
+            setError(String(result.error && result.error.code ? result.error.code : 'unknown') + ': ' + String(result.error && result.error.message ? result.error.message : '切换失败'))
+            return
+          }
+          setError(null)
+          setOpen(false)
+        }).catch(function(cause) {
+          setBusy(false)
+          setError('切换异常: ' + String(cause && cause.message ? cause.message : cause))
+        })
+      }
+
+      var menu = open
+        ? ReactDOM.createPortal(
+            React.createElement('div', {
+              className: 'atf-effort-menu',
+              role: 'menu',
+              'aria-label': '思考档位',
+              style: pos || { visibility: 'hidden', right: 8, bottom: 48 },
+              onKeyDown: function(event) {
+                if (event.key === 'Escape') { event.stopPropagation(); setOpen(false) }
+              },
+            },
+            offered.map(function(option) {
+              var on = effectiveEffort === option.id
+              return React.createElement('button', {
+                key: option.id,
+                type: 'button',
+                className: 'atf-effort-row',
+                role: 'menuitemradio',
+                'aria-checked': on,
+                'data-on': on ? '1' : '0',
+                disabled: waiting,
+                title: '思考档位切到 ' + option.label + '（下一条消息生效）',
+                onClick: function() { switchTo(option.id) },
+              },
+              React.createElement('span', null, option.label),
+              React.createElement('span', { className: 'atf-check' }, '✓'))
+            }),
+            waiting ? React.createElement('div', { className: 'atf-effort-pending' }, '切换中…') : null,
+            error !== null
+              ? React.createElement('div', { className: 'atf-effort-err', role: 'alert' }, '切换被拒绝：' + error)
+              : null,
+          ),
+          document.body)
+        : null
+
+      return React.createElement('div', { className: 'atf-effort-root' },
+        React.createElement('button', {
+          ref: triggerRef,
+          type: 'button',
+          className: 'atf-effort-trigger',
+          'aria-haspopup': 'menu',
+          'aria-expanded': open,
+          title: '思考档位：' + currentLabel + '（点开切换，下一条消息生效）',
+          onClick: toggle,
+        },
+        React.createElement('span', { className: 'atf-effort-k' }, '思考'),
+        React.createElement('span', { className: 'atf-effort-v' }, currentLabel),
+        React.createElement('span', { className: 'atf-effort-caret' }, waiting ? '…' : '▾')),
+        menu)
+    }
+
 
     return {
       inject: ['slots', 'remote', 'remote.workspaceFiles', 'sidebarRightTabs', 'sidebarRight'],
@@ -1469,6 +1669,28 @@ window.__ModuleLoader__.load({
             '.atf-art-row:last-child{border-bottom:0;}',
             '.atf-art-kind{flex:none;width:34px;text-align:center;border:1px solid rgba(128,128,128,.25);border-radius:4px;',
             '  font-size:9px;color:var(--dsh-text-secondary,#64748b);padding:1px 0;}',
+            // 批甲-BUILD T1：思考档位快切（composer 工具行内联座位＋body portal 弹出菜单）
+            '.atf-effort-root{position:relative;display:inline-flex;}',
+            '.atf-effort-trigger{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(128,128,128,.25);',
+            '  background:transparent;color:var(--dsw-alias-label-primary,#1e293b);border-radius:8px;padding:3px 8px;',
+            '  font-size:12px;cursor:pointer;white-space:nowrap;}',
+            '.atf-effort-trigger:hover{background:rgba(128,128,128,.08);}',
+            '.atf-effort-k{color:var(--dsh-text-secondary,#64748b);}',
+            '.atf-effort-caret{font-size:10px;color:var(--dsh-text-secondary,#64748b);}',
+            '.atf-effort-menu{position:fixed;z-index:60;min-width:150px;display:flex;flex-direction:column;',
+            '  background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid rgba(128,128,128,.3);border-radius:10px;',
+            '  box-shadow:0 10px 32px rgba(0,0,0,.18);padding:4px;}',
+            '.atf-effort-row{display:flex;align-items:center;justify-content:space-between;gap:8px;border:0;',
+            '  background:transparent;color:inherit;font-size:12px;padding:6px 8px;border-radius:6px;cursor:pointer;',
+            '  text-align:left;white-space:nowrap;}',
+            '.atf-effort-row:hover:not(:disabled){background:rgba(128,128,128,.1);}',
+            '.atf-effort-row:disabled{opacity:.55;cursor:default;}',
+            '.atf-effort-row .atf-check{visibility:hidden;font-size:12px;line-height:1;}',
+            '.atf-effort-row[data-on="1"]{font-weight:600;}',
+            '.atf-effort-row[data-on="1"] .atf-check{visibility:visible;color:var(--dsw-alias-brand-primary,#1d4ed8);}',
+            '.atf-effort-pending{padding:2px 8px 4px;font-size:11px;color:var(--dsh-text-secondary,#64748b);}',
+            '.atf-effort-err{margin-top:4px;border-top:1px dashed rgba(128,128,128,.25);padding:6px 8px;font-size:11px;',
+            '  color:var(--dsw-alias-state-danger-label,#b91c1c);max-width:300px;white-space:normal;word-break:break-all;}',
           ].join('')
           document.head.append(style)
         }
@@ -1579,6 +1801,45 @@ window.__ModuleLoader__.load({
               React.createElement(SettingsPanel))
               // 批㊶Q增补一：MonitorPanel 卸离 dock——pane body（MonitorBody）唯一挂载；
               // dock 遗留挂载曾是 fixed 全高条假 pane 的载体（遮挡根因，见 MonitorBody 注）
+          })
+        })
+
+        // 批甲-BUILD T1（owner D1＝输入框右下角·与模型选择并排）：conversation.input.right
+        // （list 槽，session 域）——思考档位快切 EffortSelect。数据/提交走 ui-model-selection
+        // 共享 ModelDirectory（ctx.modelDirectories.directoryFor(sessionId)）——与原生模型选择
+        // 同一份状态与同一条 session.selectModel RPC（零新桥方法＝契约零 diff；下 turn 生效由
+        // 宿主 selectForNextRequest 既有语义承载，不新造机制）。inject 工厂 fail-open：会话未
+        // 绑定等瞬态返回 null＝控件空渲染，不让槽崩。
+        ctx.inject(['slots', 'modelDirectories', 'sessions', 'remote', 'remote.session'], function(scope) {
+          var models = scope.modelDirectories
+          var sessions = scope.sessions
+          scope.slots.inject('conversation.input.right', function() {
+            return scope.slots.register({
+              name: 'conversation.input.right',
+              id: 'atf-effort-select',
+              order: 100,
+              inject: function(sessionId) {
+                try {
+                  var available = sessions.subagentAddress(sessionId) === undefined
+                  var directory = models.directoryFor(sessionId)
+                  return {
+                    available: available,
+                    directory: directory.store,
+                    load: function() {
+                      if (available) directory.load().catch(function() { /* 错误在 store 上呈现——共享面 */ })
+                    },
+                    select: function(selection) {
+                      return available ? directory.select(selection) : Promise.resolve(undefined)
+                    },
+                  }
+                } catch (e) {
+                  return {}
+                }
+              },
+            }, function(injected) {
+              if (injected === null) return null
+              return React.createElement(EffortSelect, injected)
+            })
           })
         })
 

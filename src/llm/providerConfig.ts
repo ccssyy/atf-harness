@@ -26,29 +26,28 @@
  *
  * fail-closed 纪律：未知顶层/provider/模型键、缺 protocol/base_url/models、空 models、
  * 重复 id、base_url 内嵌 userinfo → 结构化拒绝；reasoning_effort 按协议取值域校验
- * （pi-ai：闭集 none/low/high/max；旧路径："none" 拒绝——GPT-5.4 chat 面限制）。
- * 产物含解析后的 api_key 值——只能交给 HttpLlmProvider / PiAiLlmProvider 私有持有，
+ * （闭集 none/low/high/max——批甲-BUILD T4 起即全仓值域）。
+ * 产物含解析后的 api_key 值——只能交给 PiAiLlmProvider 私有持有，
  * 严禁序列化进事件/载荷/报告。
  */
 import { readFile, stat } from "node:fs/promises";
 import { err, ok, type Result } from "../bridge/index.js";
 
 /**
- * 协议面（pi-ai 换库批 2026-09-23 扩一值）：openai-chat / anthropic-messages = 自研 codec
- * 直连（HttpLlmProvider）；"pi-ai" = `@earendil-works/pi-ai` 底座（PiAiLlmProvider，不经本仓
- * codec/HTTP 层——feature flag 语义只影响 LLM 接入段，模型面契约零改）。
- * openai-responses 仍只预留位不实现。
+ * 协议面（批甲-BUILD T4 旧路径删除后收窄单值）：自研 codec 直连（openai-chat /
+ * anthropic-messages → HttpLlmProvider）整体下线；"pi-ai" = `@earendil-works/pi-ai`
+ * 底座（PiAiLlmProvider）为唯一现役协议。
  */
-export type ProviderProtocol = "openai-chat" | "anthropic-messages" | "pi-ai";
+export type ProviderProtocol = "pi-ai";
 
-export const PROVIDER_PROTOCOLS: readonly ProviderProtocol[] = ["openai-chat", "anthropic-messages", "pi-ai"];
+export const PROVIDER_PROTOCOLS: readonly ProviderProtocol[] = ["pi-ai"];
 
 /**
  * pi-ai 路径 reasoning_effort 值域闭集（D-LLM-1 口径 none/low/high/max；门 1 设计稿 §二.项 1）：
  * - none → 不传 pi-ai reasoning（库内 deepseek 分支自动 thinking:disabled）；
  * - low/high/max → 直传（目录 thinkingLevelMap 命中）；
  * - 未知值 → 配置入口 fail-closed 拒绝（不猜）。
- * 旧路径（openai-chat/anthropic-messages）不受此闭集约束——既有语义零改（none 仍拒绝）。
+ * （批甲-BUILD T4：旧路径不受闭集约束的注记随旧自研 codec 路径删除一并移除——本闭集即全仓值域。）
  */
 export const PIAI_REASONING_EFFORTS: readonly string[] = ["none", "low", "high", "max"];
 
@@ -132,7 +131,7 @@ export interface ModelEntry {
   context_window?: number;
 }
 
-/** 选中 provider+model 的解析产物（HttpLlmProvider 装配唯一入参；api_key 解析值严禁外泄）。 */
+/** 选中 provider+model 的解析产物（PiAiLlmProvider 装配唯一入参；api_key 解析值严禁外泄）。 */
 export interface ResolvedLlmProviderConfig {
   /** provider 别名（provider/switch 与 turn 归属的登记粒度；ADR-09 别名/主机名红线） */
   provider_id: string;
@@ -142,7 +141,7 @@ export interface ResolvedLlmProviderConfig {
   api_key: string;
   /** 选中模型 id */
   model: string;
-  /** 模型级元数据（描述性；reasoning=true ⇒ 对端可能返回思考块，codec 须剥离，规则 5） */
+  /** 模型级元数据（描述性；reasoning=true ⇒ 对端可能返回思考块，展示层须剥离，规则 5） */
   reasoning: boolean;
   /** 生效 reasoning_effort（env > 模型级 > 默认；compat 抑制时不发送——见 supports_reasoning_effort） */
   reasoning_effort: string;
@@ -198,24 +197,14 @@ const rejectUnknownKeys = (payload: Record<string, unknown>, declared: readonly 
   return null;
 };
 
-/** reasoning_effort 值校验（来源无关：默认/模型级/env；旧路径语义零改）。 */
-const checkReasoningEffort = (value: string, source: string): ProviderConfigError | null =>
-  value === "none"
-    ? configError("config_invalid", `${source} reasoning_effort="none" 拒绝：GPT-5.4 起 chat 面 reasoning:none 下工具调用不受支持，本 loop 依赖工具调用`)
-    : null;
-
-/**
- * 协议感知的 reasoning_effort 校验（pi-ai 换库批）：
- * - protocol="pi-ai" → 闭集 none/low/high/max（none 合法＝关思考；未知值 fail-closed）；
- * - 其余协议 → 既有 checkReasoningEffort（逐字节零改）。
- */
+/** reasoning_effort 值校验（协议闭集单值后即全量校验；批甲-BUILD T4 起非 pi-ai 旧分支随旧路径删除）。 */
 const checkReasoningEffortForProtocol = (protocol: ProviderProtocol, value: string, source: string): ProviderConfigError | null => {
-  if (protocol === "pi-ai") {
-    return (PIAI_REASONING_EFFORTS as readonly string[]).includes(value)
-      ? null
-      : configError("config_invalid", `${source} reasoning_effort=${JSON.stringify(value)} 拒绝：pi-ai 路径档位闭集为 ${PIAI_REASONING_EFFORTS.join("/")}（fail-closed，不猜）`);
+  if (protocol !== "pi-ai") {
+    return configError("protocol_unknown", `${source} protocol=${JSON.stringify(protocol)} 已随旧自研 codec 路径下线（唯一支持值 "pi-ai"）`);
   }
-  return checkReasoningEffort(value, source);
+  return (PIAI_REASONING_EFFORTS as readonly string[]).includes(value)
+    ? null
+    : configError("config_invalid", `${source} reasoning_effort=${JSON.stringify(value)} 拒绝：pi-ai 路径档位闭集为 ${PIAI_REASONING_EFFORTS.join("/")}（fail-closed，不猜）`);
 };
 
 /** 文件 → 结构化清单（两层校验，规则 1/6；不含选择与凭据解析）。 */
@@ -267,9 +256,12 @@ const parseCatalog = (file: Record<string, unknown>): Result<ParsedCatalog, Prov
 
     const protocolRaw = entryRaw["protocol"];
     if (!nonEmptyString(protocolRaw) || !(PROVIDER_PROTOCOLS as readonly string[]).includes(protocolRaw)) {
-      const hint = protocolRaw === "openai-responses"
-        ? "openai-responses 只预留 codec 位不实现（硬前提：store:false ＋ 禁用对端服务端工具执行，另批评估）"
-        : `允许值：${PROVIDER_PROTOCOLS.join(" | ")}`;
+      const hint =
+        protocolRaw === "openai-chat" || protocolRaw === "anthropic-messages"
+          ? "旧自研 codec 直连路径已删除（批甲-BUILD T4）——请改配 protocol=\"pi-ai\""
+          : protocolRaw === "openai-responses"
+            ? "openai-responses 只预留位不实现（硬前提：store:false ＋ 禁用对端服务端工具执行，另批评估）"
+            : `允许值：${PROVIDER_PROTOCOLS.join(" | ")}`;
       return err(configError("protocol_unknown", `providers.${providerId}.protocol 非法: ${JSON.stringify(String(protocolRaw ?? null))}。${hint}`));
     }
     const baseUrlRaw = entryRaw["base_url"];

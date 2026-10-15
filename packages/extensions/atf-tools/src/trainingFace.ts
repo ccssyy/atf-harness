@@ -681,7 +681,9 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // 当前日志只含本次尝试（tee -a 在新文件上追加；历史保留可追溯）
       const rotated = rotateTrainLog(logPath);
       // 批㊶Q增补三 段1③：生成面审计注释（幂等——生效账本路径写入脚本尾注释，便于事后审计）
-      appendLedgerAuditComment(args.train_sh, process.env);
+      // 批甲-BUILD T3（D4=A）：写失败 fail-open 语义保留，但出启动日志告警（含账本路径与失败原因）
+      const ledgerAudit = appendLedgerAuditComment(args.train_sh, process.env);
+      if (ledgerAudit.warning !== null) console.error(`[atf-ledger] ${ledgerAudit.warning}`);
       // 段1① 检查器侧同源：旧 tmux 服务端不传播新 env 变量——账本路径显式前缀注入
       // （未设 ATF_APPROVAL_LEDGER 时为空串＝沿 train.sh 内 ${...:-$HOME/...} 缺省式）
       const ledgerPrefix = ledgerEnvPrefixForShell(process.env);

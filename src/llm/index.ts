@@ -41,17 +41,6 @@ export {
   type ProviderProtocol,
   type ResolvedLlmProviderConfig,
 } from "./providerConfig.js";
-export {
-  codecError,
-  PROTOCOL_REQUEST_PATHS,
-  type CodecError,
-  type CodecRequestInput,
-  type ProtocolCodec,
-} from "./codecWire.js";
-export { getCodec } from "./codec.js";
-export { anthropicMessagesCodec, ANTHROPIC_VERSION } from "./anthropicMessagesCodec.js";
-export { openaiChatCodec } from "./openaiChatCodec.js";
-export { HttpLlmProvider, type HttpLlmProviderOptions } from "./httpProvider.js";
 export { HARNESS_SYSTEM_PROMPT } from "./systemPrompt.js";
 export {
   PiAiLlmProvider,
@@ -63,12 +52,6 @@ export {
   type PiAiLlmProviderOptions,
 } from "./piAiProvider.js";
 export { createLlmProviderFromConfig, type CreateLlmProviderOptions } from "./providerFactory.js";
-export {
-  FakeLlmEndpoint,
-  type FakeEndpointRequestRecord,
-  type FakeEndpointScriptItem,
-  type FakeLlmEndpointOptions,
-} from "./fakeEndpoint.js";
 export { ProviderRegistry, createDefaultProviderRegistry, type ProviderFactory } from "./providerRegistry.js";
 export {
   SCENARIO_STEP_TYPES,

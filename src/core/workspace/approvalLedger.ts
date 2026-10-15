@@ -80,19 +80,32 @@ export const ledgerEnvPrefixForShell = (env: Readonly<Record<string, string | un
 
 /**
  * train.sh 生成面审计注释（段1③——幂等；追加于脚本尾，注释行不改变执行语义，
- * `${ATF_APPROVAL_LEDGER:-$HOME/...}` 生成语义原样保留）。写失败静默 fail-open（审计面非闸门）。
- * @returns 是否实际追加了注释（已带标记/写失败＝false）。
+ * `${ATF_APPROVAL_LEDGER:-$HOME/...}` 生成语义原样保留）。写失败 fail-open 语义保留不变
+ * （审计面非闸门——不抛错不阻塞），但不再静默：失败经 warning 结构化回传（含账本路径与
+ * 失败原因），由调用方出启动/运行日志告警（批甲-BUILD T3，D4=A）。
+ * @returns appended＝是否实际追加了注释（已带标记/文件缺席＝false）；warning＝写失败告警
+ *          一行（写成功/幂等跳过/文件缺席＝null——零噪音）。
  */
-export const appendLedgerAuditComment = (trainShPath: string, env: Readonly<Record<string, string | undefined>>): boolean => {
+export interface LedgerAuditAppendOutcome {
+  appended: boolean;
+  /** 写失败告警（含账本路径与失败原因）；非失败一律 null。 */
+  warning: string | null;
+}
+
+export const appendLedgerAuditComment = (trainShPath: string, env: Readonly<Record<string, string | undefined>>): LedgerAuditAppendOutcome => {
+  const effectivePath = env[LEDGER_ENV]?.trim() || homeLedgerPathOf(env["HOME"] ?? "");
   try {
-    if (!existsSync(trainShPath)) return false;
+    if (!existsSync(trainShPath)) return { appended: false, warning: null };
     const text = readFileSync(trainShPath, "utf8");
-    if (text.includes(LEDGER_AUDIT_MARKER)) return false;
-    const effectivePath = env[LEDGER_ENV]?.trim() || homeLedgerPathOf(env["HOME"] ?? "");
+    if (text.includes(LEDGER_AUDIT_MARKER)) return { appended: false, warning: null };
     const line = `# ${LEDGER_AUDIT_MARKER} 生效放行账本=${effectivePath}（脚本内解析序 \${ATF_APPROVAL_LEDGER:-$HOME/.atf/approval-ledger/training-release.jsonl} 保留；本注释行由 harness 追加，不参与执行）\n`;
     appendFileSync(trainShPath, line, "utf8");
-    return true;
-  } catch {
-    return false;
+    return { appended: true, warning: null };
+  } catch (error) {
+    const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    return {
+      appended: false,
+      warning: `放行账本审计注释写入失败（fail-open 不阻塞，审计面缺失）——账本路径=${effectivePath}，train.sh=${trainShPath}，原因=${reason}`,
+    };
   }
 };

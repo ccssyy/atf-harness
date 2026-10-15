@@ -116,8 +116,9 @@ export interface SessionManagerDeps {
   settings?: SettingsStore;
   /** 批⑭：场景档（会话头徽标；新 run 携带对应缺省）。 */
   scenarioProfile?: ScenarioProfileId;
-  /** 桥接 spawn（mock/real 由调用方定——与 cli.ts 同参形态）。 */
-  bridgeCommand: { argv: readonly string[]; cwd?: string; env?: Record<string, string> };
+  /** 桥接 spawn（mock/real 由调用方定——与 cli.ts 同参形态）；批甲-BUILD T2 起 server 工厂
+   *  生产无显式桥配置时缺省不传（mock 缺省移除）——直构调用方既有显式传参零变化。 */
+  bridgeCommand?: { argv: readonly string[]; cwd?: string; env?: Record<string, string> };
   /** providerConfig（GLM 宿主走 ATF_LLM_CONFIG 解析产物；测试注入 streamFn 时可省）。 */
   providerConfig?: { provider_id: string; model: string; base_url: string; api_key: string };
   /** 测试注入 streamFn（优先于 providerConfig）。 */
@@ -449,6 +450,10 @@ export class WebUiSessionManager {
 
   private async ensureAgent(session: Session): Promise<Result<import("@earendil-works/pi-agent-core").Agent, string>> {
     if (session.agent !== null) return ok(session.agent);
+    if (this.deps.bridgeCommand === undefined) {
+      // 批甲-BUILD T2（D3=A）：mock 缺省移除后的 fail-visible 兜底（503 闸漏网直发消息路径）
+      return err("桥接未配置（mock 缺省已移除）——设 ATF_DSH_BRIDGE_COMMAND（真内核命令）或 ATF_WEBUI_BRIDGE_MOCK=1（显式 mock）后重启");
+    }
     const spawned = await AtfBridgeConnection.spawn({
       command: [...this.deps.bridgeCommand.argv],
       ...(this.deps.bridgeCommand.cwd !== undefined ? { cwd: this.deps.bridgeCommand.cwd } : {}),

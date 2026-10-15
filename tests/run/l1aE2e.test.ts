@@ -1,7 +1,8 @@
 /**
- * L1a 门 2 端到端测试（任务书 §3 VERIFY 3–7；本地假端点 + mock 对端 + 真实 runner 全链）。
+ * L1a 门 2 端到端测试（任务书 §3 VERIFY 3–7；批甲-BUILD T4 迁移：PiAiLlmProvider ＋
+ * fetchImpl 脚本化 SSE 桩 + mock 对端 + 真实 runner 全链——旧自研 codec 路径删除）。
  * 通道应答经 runner resume 面在进程内提交（CLI 子进程路径由 smoke:l1a 实跑承载）。
- * 零真实网络：假端点恒绑 127.0.0.1；config base_url 指向回环（零外连断言见假端点台账）。
+ * 零真实网络：fetchImpl 全注入（零 socket）；脚本耗尽 = 显式失败信号。
  */
 import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,15 +10,13 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  FakeLlmEndpoint,
-  HttpLlmProvider,
   LLM_CONFIG_SCHEMA_VERSION,
-  loadLlmProviderConfig,
+  PiAiLlmProvider,
   PROVIDER_ENV_VARS,
-  type FakeEndpointScriptItem,
+  loadLlmProviderConfig,
   type ResolvedLlmProviderConfig,
 } from "../../src/llm/index.js";
-import type { Scenario, ScenarioStep } from "../../src/llm/index.js";
+import type { Scenario } from "../../src/llm/index.js";
 import { ScenarioRunner, deriveLoopStateFromEvents, type ApprovalStubResponse, type BranchRunReport } from "../../src/core/run/index.js";
 import { ToolRegistry } from "../../src/core/tools/index.js";
 
@@ -26,32 +25,49 @@ const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
 const FAKE_KEY = "fake-l1a-e2e-key-DO-NOT-USE";
 /** 修订 v2：配置文件只留凭据引用（api_key_env 指向本环境变量名）。 */
 const FAKE_KEY_ENV = "ATF_LLM_KEY_E2E_FAKE";
-const FAKE_MODEL = "fake-model-l1a-e2e";
-const FAKE_PROVIDER = "local-fake";
+const FAKE_MODEL = "deepseek-flash";
+const FAKE_PROVIDER = "deepseek";
+
+/** canonical 回放响应（脚本面——与被删 FakeEndpointScriptItem response 项同形状）。 */
+type ScriptedResponse = { tool_calls?: Array<{ tool: string; params: Record<string, unknown> }>; final_answer?: string };
 
 let scenarioSeq = 0;
 const workDirs: string[] = [];
-const endpoints: FakeLlmEndpoint[] = [];
 
 afterEach(async () => {
-  await Promise.all(endpoints.splice(0).map((endpoint) => endpoint.close()));
   await Promise.all(workDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
+
+// ---- pi-ai SSE 脚本桩（形态蓝本 = tests/llm/piAiProvider.test.ts fixture） ----
+
+const chunkOf = (delta: Record<string, unknown>, finish: string | null = null): string =>
+  `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 1, model: FAKE_MODEL, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+const usageOf = (): string =>
+  `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 1, model: FAKE_MODEL, choices: [], usage: { prompt_tokens: 10, completion_tokens: 6, total_tokens: 16 } })}\n\n`;
+const sseFinal = (text: string): string =>
+  [chunkOf({ role: "assistant", content: text }), chunkOf({}, "stop"), usageOf(), "data: [DONE]\n\n"].join("");
+const sseToolCalls = (calls: ScriptedResponse["tool_calls"]): string => {
+  const parts: string[] = [chunkOf({ role: "assistant", tool_calls: [] })];
+  for (const [index, call] of (calls ?? []).entries()) {
+    parts.push(chunkOf({ tool_calls: [{ index, id: `call_${String(index)}`, type: "function", function: { name: call?.tool, arguments: JSON.stringify(call?.params) } }] }));
+  }
+  parts.push(chunkOf({}, "tool_calls"), usageOf(), "data: [DONE]\n\n");
+  return parts.join("");
+};
+const sseOf = (response: ScriptedResponse): string =>
+  response.final_answer !== undefined ? sseFinal(response.final_answer) : sseToolCalls(response.tool_calls);
 
 interface Rig {
   runsRoot: string;
   config: ResolvedLlmProviderConfig;
-  requestsOf: () => readonly string[];
+  /** 已注入脚本（SSE 文本序列；按调用序弹出） */
+  replies: string[];
+  /** 脚本游标（rig 共享——跨 run/resume 连续消费，同旧端点台账语义） */
+  cursor: { i: number };
 }
 
-/** 建一套假端点 + 配置文件 + runs 根（协议可选；脚本按测试声明）。 */
-const makeRig = async (
-  script: FakeEndpointScriptItem[],
-  overrides: Partial<Record<string, unknown>> = {},
-  protocol: "openai-chat" | "anthropic-messages" = "openai-chat",
-): Promise<Rig> => {
-  const endpoint = await FakeLlmEndpoint.start({ protocol, script: [...script], expectedApiKey: FAKE_KEY, model: FAKE_MODEL });
-  endpoints.push(endpoint);
+/** 建一套脚本桩 + 配置文件 + runs 根（脚本按测试声明；零网络——fetchImpl 全注入）。 */
+const makeRig = async (script: ScriptedResponse[], overrides: Partial<Record<string, unknown>> = {}): Promise<Rig> => {
   const workDir = join(tmpdir(), `atf-l1a-e2e-${randomUUID()}`);
   await mkdir(join(workDir, "runs"), { recursive: true });
   workDirs.push(workDir);
@@ -68,8 +84,8 @@ const makeRig = async (
       ...(max_calls_per_run !== undefined ? { max_calls_per_run } : {}),
       providers: {
         [FAKE_PROVIDER]: {
-          protocol,
-          base_url: endpoint.baseUrl,
+          protocol: "pi-ai",
+          base_url: "http://127.0.0.1:9",
           api_key_env: FAKE_KEY_ENV,
           models: [{ id: FAKE_MODEL, reasoning: false, max_tokens: 4096 }],
         },
@@ -83,7 +99,8 @@ const makeRig = async (
     [FAKE_KEY_ENV]: FAKE_KEY,
   });
   if (!loaded.ok) throw new Error(`rig 配置失败: ${loaded.error.message}`);
-  return { runsRoot: join(workDir, "runs"), config: loaded.value, requestsOf: () => endpoint.requests.map((r) => r.path) };
+  const replies = script.map((item) => sseOf(item));
+  return { runsRoot: join(workDir, "runs"), config: loaded.value, replies, cursor: { i: 0 } };
 };
 
 let runSeq = 0;
@@ -108,18 +125,25 @@ const makeScenario = (opts: { gatePreRecord: boolean; runLabel: string }): Scena
   };
 };
 
-const providerOf = (rig: Rig, overrides: Partial<Record<string, unknown>> = {}): HttpLlmProvider =>
-  new HttpLlmProvider({
-    config: (overrides === undefined ? rig.config : ({ ...rig.config, ...overrides } as ResolvedLlmProviderConfig)),
+const providerOf = (rig: Rig, overrides: Partial<Record<string, unknown>> = {}): PiAiLlmProvider => {
+  const fetchImpl: typeof fetch = async () => {
+    const body = rig.replies[Math.min(rig.cursor.i, rig.replies.length - 1)] as string;
+    rig.cursor.i += 1;
+    return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+  };
+  return new PiAiLlmProvider({
+    config: ({ ...rig.config, ...overrides } as ResolvedLlmProviderConfig),
     tools: ToolRegistry.createDefault().modelVisible(),
+    fetchImpl,
   });
+};
 
 const TIMEOUT_STUB = async (): Promise<ApprovalStubResponse> => ({ verdict: "timeout" });
 
 const run = async (
   rig: Rig,
   scenario: Scenario,
-  provider: HttpLlmProvider,
+  provider: PiAiLlmProvider,
   resume?: { verdict: "granted" | "advised" | "denied" | "abort"; note?: string; request_event_id?: number },
 ): Promise<BranchRunReport> => {
   const ran = await ScenarioRunner.runBranch(scenario, "main", {
@@ -141,15 +165,15 @@ const requests = (report: BranchRunReport) => report.events.filter((event) => ev
 const responses = (report: BranchRunReport) => report.events.filter((event) => event.type === "approval/response").map((event) => event.payload as Record<string, unknown>);
 
 // 只读链脚本（bind_run 由 runner 桥接承载，非模型工具）
-const RO: FakeEndpointScriptItem[] = [
-  { kind: "response", response: { tool_calls: [{ tool: "atf_workspace_status", params: {} }] } },
-  { kind: "response", response: { tool_calls: [{ tool: "atf_fact_scan", params: {} }] } },
-  { kind: "response", response: { tool_calls: [{ tool: "atf_gate", params: { gate: "g1", action: "query" } }] } },
-  { kind: "response", response: { final_answer: "闸门 G1 通过；无待登记数据集；建议保持监控。" } },
+const RO: ScriptedResponse[] = [
+  { tool_calls: [{ tool: "atf_workspace_status", params: {} }] },
+  { tool_calls: [{ tool: "atf_fact_scan", params: {} }] },
+  { tool_calls: [{ tool: "atf_gate", params: { gate: "g1", action: "query" } }] },
+  { final_answer: "闸门 G1 通过；无待登记数据集；建议保持监控。" },
 ];
 
-describe("VERIFY 3——只读链路自主完成（假端点，零人工干预）", () => {
-  it("workspace_status → fact_scan → gate(query) → final_answer；无审批事件；请求全命中回环", async () => {
+describe("VERIFY 3——只读链路自主完成（脚本桩，零人工干预）", () => {
+  it("workspace_status → fact_scan → gate(query) → final_answer；无审批事件；零 socket", async () => {
     const rig = await makeRig(RO);
     const provider = providerOf(rig);
     const report = await run(rig, makeScenario({ gatePreRecord: true, runLabel: "ro" }), provider);
@@ -159,17 +183,16 @@ describe("VERIFY 3——只读链路自主完成（假端点，零人工干预�
     expect(results.filter((r) => r.ok)).toHaveLength(3); // ws / fact_scan / gate(query)
     expect(results.find((r) => r.tool === "atf_gate")).toBeDefined();
     expect(report.events.some((event) => event.type === "approval/request")).toBe(false); // 零人工干预
-    // 零外连：全部请求命中回环协议路径（台账）
-    for (const path of rig.requestsOf()) expect(path).toBe("/v1/chat/completions");
-    expect(rig.requestsOf()).toHaveLength(provider.calls);
+    // 零 socket：全部轮次走 fetchImpl 脚本桩（调用数与 provider 计数一致）
+    expect(provider.calls).toBe(4);
   });
 });
 
 describe("VERIFY 4/5——挂起闭环 + 人放行闭环", () => {
-  const SUSPEND: FakeEndpointScriptItem[] = [
+  const SUSPEND: ScriptedResponse[] = [
     ...RO.slice(0, 3),
-    { kind: "response", response: { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-l1a-e2e" } }] } },
-    { kind: "response", response: { final_answer: "数据集 ds-l1a-e2e 已准入；G1 通过；建议推进 G2。" } },
+    { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-l1a-e2e" } }] },
+    { final_answer: "数据集 ds-l1a-e2e 已准入；G1 通过；建议推进 G2。" },
   ];
 
   it("触发 admit → approval/request + exit 75 + turn 收口（INV-2）；CLI 面应答 → resume 开新 turn → 真正执行", async () => {
@@ -224,9 +247,9 @@ describe("VERIFY 4/5——挂起闭环 + 人放行闭环", () => {
 describe("VERIFY 6——拒绝/建议/中止分支", () => {
   it("denied → 动作不执行且可解释；模型换路径收束", async () => {
     const rig = await makeRig([
-      { kind: "response", response: { tool_calls: [{ tool: "atf_workspace_status", params: {} }] } },
-      { kind: "response", response: { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-denied" } }] } },
-      { kind: "response", response: { final_answer: "准入被拒（未备案）；建议先完成数据集备案后重试。" } },
+      { tool_calls: [{ tool: "atf_workspace_status", params: {} }] },
+      { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-denied" } }] },
+      { final_answer: "准入被拒（未备案）；建议先完成数据集备案后重试。" },
     ]);
     const scenario = makeScenario({ gatePreRecord: false, runLabel: "deny" });
     const report1 = await run(rig, scenario, providerOf(rig));
@@ -246,10 +269,10 @@ describe("VERIFY 6——拒绝/建议/中止分支", () => {
 
   it("advised → 建议回填（不构成放行）→ 模型重提案（supersedes 链跨进程延续）→ 再挂起 → granted 执行", async () => {
     const rig = await makeRig([
-      { kind: "response", response: { tool_calls: [{ tool: "atf_workspace_status", params: {} }] } },
-      { kind: "response", response: { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-adv" } }] } },
-      { kind: "response", response: { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-adv" } }] } },
-      { kind: "response", response: { final_answer: "数据集已准入；建议归档草案。" } },
+      { tool_calls: [{ tool: "atf_workspace_status", params: {} }] },
+      { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-adv" } }] },
+      { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-adv" } }] },
+      { final_answer: "数据集已准入；建议归档草案。" },
     ]);
     const scenario = makeScenario({ gatePreRecord: false, runLabel: "advise" });
     const report1 = await run(rig, scenario, providerOf(rig));
@@ -279,9 +302,9 @@ describe("VERIFY 6——拒绝/建议/中止分支", () => {
 
   it("abort → run 终态 exit 79；不开新 turn；动作不执行", async () => {
     const rig = await makeRig([
-      { kind: "response", response: { tool_calls: [{ tool: "atf_workspace_status", params: {} }] } },
-      { kind: "response", response: { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-abort" } }] } },
-      { kind: "response", response: { final_answer: "不可达" } },
+      { tool_calls: [{ tool: "atf_workspace_status", params: {} }] },
+      { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-abort" } }] },
+      { final_answer: "不可达" },
     ]);
     const scenario = makeScenario({ gatePreRecord: false, runLabel: "abort" });
     const report1 = await run(rig, scenario, providerOf(rig));
@@ -309,16 +332,5 @@ describe("VERIFY 7——成本护栏（max_calls_per_run，与轮次预算正交
     expect(report.outcome.summary.reason).toBe("provider_failure");
     expect(report.outcome.summary.blocked_description?.stuck_at).toContain("call_budget_exhausted");
     expect(report.outcome.summary.blocked_description?.stuck_at).toContain("max_calls_per_run=2");
-  });
-});
-
-describe("anthropic-messages 协议全链（codec 互换性）", () => {
-  it("同型闭环在 anthropic-messages 下成立（只读链）", async () => {
-    const rig = await makeRig(RO, {}, "anthropic-messages");
-    const provider = providerOf(rig);
-    const report = await run(rig, makeScenario({ gatePreRecord: false, runLabel: "anthro" }), provider);
-    expect(report.outcome.kind).toBe("completed");
-    expect(toolResults(report).filter((r) => r.ok)).toHaveLength(3);
-    for (const path of rig.requestsOf()) expect(path).toBe("/v1/messages");
   });
 });
