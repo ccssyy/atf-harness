@@ -397,6 +397,9 @@ export interface TrainingToolsConfig {
   ctx: { get(service: string): unknown };
   /** 批㊶R前置 状态面：本机模型清单（apply 启动扫描注入——入工具描述供 agent 会话内可见）。 */
   models?: { root: string; names: string[] };
+  /** 批㊶-TRAIN-OBS-FIX2 T1：内核侧会话绑定闭包（BridgeManager.bindRun——装配点注入；
+   *  缺省＝不绑（测试/无桥装配形态）。fail-open 语义在闭包内，工具主流程不感知）。 */
+  bindRun?: (runId: string) => Promise<void>;
 }
 
 /** status 结果形状（任务卡卡面输入）。 */
@@ -737,6 +740,10 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // 批㊶-N N-5：会话绑定
       const sessionIdStart = sessionIdOf(exec);
       if (sessionIdStart !== undefined) appendBinding(runDir, sessionIdStart);
+      // 批㊶-TRAIN-OBS-FIX2 T1：内核侧会话绑定（run 产生成功路径——宿主链对齐
+      // runner.ts:391-395 形态；fail-open 沿 appendBinding 语义——闭包内已兜底，
+      // 消费点再兜一道，任何注入形态都不阻塞启动主流程）
+      try { if (cfg.bindRun !== undefined) await cfg.bindRun(args.run_id); } catch { /* fail-open */ }
       // 批㊶-S1 门2修复：围栏可写根随 run 切换更新（与 confirmFace 同 helper 语义）
       process.env["ATF_BASH_RUN_WORKSPACE"] = runDir;
       const feedNote = probe.outcome === "feed_ok"
@@ -1037,7 +1044,7 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
   });
 }
 /** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
-export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string }): unknown[] {
+export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string; bindRun?: (runId: string) => Promise<void> }): unknown[] {
   const evaluate = defineTool({
     name: "atf_evaluate",
     description:
@@ -1154,6 +1161,9 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 批㊶-N N-5：会话绑定
       const sessionIdEval = sessionIdOf(exec);
       if (sessionIdEval !== undefined) appendBinding(runDir, sessionIdEval);
+      // 批㊶-TRAIN-OBS-FIX2 T1：内核侧会话绑定（评估接管成功路径——评估类一并覆盖；
+      // fail-open 沿 appendBinding 语义——消费点兜底，不阻塞编排启动主流程）
+      try { if (cfg.bindRun !== undefined) await cfg.bindRun(args.run_id); } catch { /* fail-open */ }
       return asToolValue({
         started: true, eval_round: roundDir, tmux: orchSessionName,
         serving_models: expectedModels, service_manifest: join(serviceDir, "service_manifest.json"),

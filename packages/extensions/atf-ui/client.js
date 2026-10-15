@@ -480,7 +480,7 @@ window.__ModuleLoader__.load({
               React.createElement('div', { className: 'atf-monitor-status' },
                 React.createElement('span', { className: 'atf-gpu-dot', style: { background: active ? 'var(--dsw-static-amber-500)' : 'var(--dsw-static-neutral-400)' } }),
                 React.createElement('span', null, (active ? '训练中 · ' : '空闲 · ') + '段 ' + done + '/' + run.segments.length)),
-              TrainlogTailSection(run),
+              React.createElement(TrainlogTailSection, { run: run }),
               React.createElement('div', { className: 'atf-monitor-sec' },
                 React.createElement('div', { className: 'atf-monitor-title' }, 'Loss 曲线'),
                 React.createElement('svg', { className: 'atf-monitor-chart', viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none' },
@@ -1008,9 +1008,15 @@ window.__ModuleLoader__.load({
           React.createElement('span', { style: { width: 8, height: 8, borderRadius: 4, background: color, flex: 'none' } }),
           probeDot,
           // 批㊶-N N-3：训练中态徽标优先段内进度（"第 6/8 轮"——无则回退 N/8）
+          // 批㊶-TRAIN-OBS-FIX2 T2 裁定（10-15）：收起徽标＝进度百分比优先（训练中实时）；
+          // 无百分比回退轮比例（round/total_rounds）→ 段比例（done/8）——additive 不占位
           React.createElement('span', { style: { fontFamily: 'monospace', fontSize: 13, color: colorText, fontWeight: 600 } },
-            state === 'active' && progress && typeof progress.round === 'number'
-              ? (typeof progress.total_rounds === 'number' ? progress.round + '/' + progress.total_rounds : String(progress.round))
+            state === 'active' && progress
+              ? (typeof progress.percentage === 'number'
+                  ? Math.round(progress.percentage) + '%'
+                  : typeof progress.round === 'number'
+                    ? (typeof progress.total_rounds === 'number' ? progress.round + '/' + progress.total_rounds : String(progress.round))
+                    : (active ? active.done : 0) + '/8')
               : (active ? active.done : 0) + '/8'),
           React.createElement('span', { style: { fontSize: 12, color: colorText } }, STATE_TEXT[state]))
       }
@@ -1068,7 +1074,7 @@ window.__ModuleLoader__.load({
                 detail !== '' ? React.createElement('span', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace' } }, detail) : null))
           })),
         // ④ 动作行
-        TrainlogTailSection(run),
+        React.createElement(TrainlogTailSection, { run: run }),
         React.createElement('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
           React.createElement('button', {
             className: 'atf-pill', title: '打开右栏训练监控（Loss 曲线）',
@@ -1166,7 +1172,7 @@ window.__ModuleLoader__.load({
                 React.createElement('span', { style: { fontSize: 13, color: 'var(--dsw-alias-label-primary)' } }, seg.label || seg.key || ''),
                 detail !== '' ? React.createElement('span', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace' } }, detail) : null))
           })),
-        TrainlogTailSection(run),
+        React.createElement(TrainlogTailSection, { run: run }),
         React.createElement('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
           React.createElement('button', {
             className: 'atf-pill', title: '打开右栏训练监控（Loss 曲线）',
@@ -1234,7 +1240,11 @@ window.__ModuleLoader__.load({
       var h = Math.floor(m / 60)
       return h + ' 小时前'
     }
-    function TrainlogTailSection(run) {
+    function TrainlogTailSection(props) {
+      // 批㊶-TRAIN-OBS-FIX2：组件边界修正——本节内含 useState，须以 React.createElement
+      // 挂载（直调形态把钩子记入调用方，条件挂载即 React #310 整槽崩溃——浮卡两条展开
+      // 路径实锚）。props.run 取 run。
+      var run = props.run
       var open = React.useState(false)
       var isOpen = open[0], setOpen = open[1]
       var tail = run && run.trainlog_tail

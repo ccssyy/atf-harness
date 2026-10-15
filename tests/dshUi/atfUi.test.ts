@@ -1066,4 +1066,19 @@ describe("批㊶-S3 S-B1——通知面投影（monitor.json additive 键三同�
     expect(clientSource).toContain("seg.status === 'failed'");
     expect(clientSource).not.toContain("seg.status === 'fail'");
   });
+  it("批㊶-TRAIN-OBS-FIX2 T2 裁定钉子：收起徽标＝进度百分比优先（回退轮比例→段比例；additive）", () => {
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    expect(clientSource).toContain("收起徽标＝进度百分比优先");
+    expect(clientSource).toContain("typeof progress.percentage === 'number'\n                  ? Math.round(progress.percentage) + '%'");
+    // 回退链保序：百分比缺席 → 轮比例；轮缺席 → 段比例（原形态零回归）
+    expect(clientSource).toContain("typeof progress.round === 'number'\n                    ? (typeof progress.total_rounds === 'number' ? progress.round + '/' + progress.total_rounds : String(progress.round))");
+  });
+  it("批㊶-TRAIN-OBS-FIX2 钉子：TrainlogTailSection 组件边界（含 useState 须 createElement 挂载——直调条件挂载即 React #310 整槽崩溃）", () => {
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    // 三调用点（MonitorBody pane＋浮卡自展开＋浮卡 store 展开）全走组件边界
+    expect(clientSource.match(/React\.createElement\(TrainlogTailSection, \{ run: run \}\)/g)?.length).toBe(3);
+    // 直调形态清零（防回归）
+    expect(clientSource).not.toMatch(/[^']TrainlogTailSection\(run\)/);
+    expect(clientSource).toContain("function TrainlogTailSection(props)");
+  });
 });

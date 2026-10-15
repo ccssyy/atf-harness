@@ -102,6 +102,22 @@ export class BridgeManager {
     }
   }
 
+  /** 批㊶-TRAIN-OBS-FIX2 T1：内核侧会话绑定（atf.bind_run——WebUI 宿主链对齐
+   *  core/run/runner.ts:391-395 既有调用形态，connection.request 一跳、session 由
+   *  bridge/内核侧记录，不新造机制）。幂等沿内核 B4（重复绑定允许覆盖＋event 留痕）；
+   *  容错沿 appendBinding 既有语义（fail-open——spawn 失败/断线/error response 一律
+   *  留痕降级，不阻塞工具主流程）。 */
+  async bindRun(runId: string): Promise<void> {
+    if (runId === "") return;
+    try {
+      const bridge = await this.transport();
+      const bound = await bridge.request("atf.bind_run", { run_id: runId });
+      if (!bound.ok) console.warn(`[atf-tools] atf.bind_run fail-open（run=${runId}）: ${bound.error.message}`);
+    } catch (cause) {
+      console.warn(`[atf-tools] atf.bind_run fail-open（run=${runId}）: ${(cause as Error).message}`);
+    }
+  }
+
   async close(): Promise<void> {
     const connection = this.connection;
     this.connection = null;

@@ -155,9 +155,9 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   for (const tool of buildFileTools(config.runsRoot)) ctx.tools.register(tool);
   ctx.tools.register(buildPipelineTool(ctx, pipelineCommand, config.pipelineTimeoutMs));
   for (const tool of buildConfirmTools({ runsRoot: config.runsRoot, ctx })) ctx.tools.register(tool);
-  const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx, models: { root: modelInventory.root, names: modelInventory.models } };
+  const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx, models: { root: modelInventory.root, names: modelInventory.models }, bindRun: (runId) => manager.bindRun(runId) };
   ctx.tools.register(buildRunTrainingTool(ctx, trainCfg));
-  for (const tool of buildEvalTools(ctx, { runsRoot: config.runsRoot, logDir: config.logDir, kernelDir: config.kernelDir })) ctx.tools.register(tool);
+  for (const tool of buildEvalTools(ctx, { runsRoot: config.runsRoot, logDir: config.logDir, kernelDir: config.kernelDir, bindRun: (runId) => manager.bindRun(runId) })) ctx.tools.register(tool);
   ctx.tools.register(buildPublishModelTool(ctx, { runsRoot: config.runsRoot }));
   ctx.tools.register(buildRecordsQueryTool(ctx, { runsRoot: config.runsRoot, currentRunWorkspace: () => process.env["ATF_BASH_RUN_WORKSPACE"] ?? null }));
   console.log("[atf-tools] atf_publish_model＋atf_records_query 已挂载（批㊶-S1 段 3＋§6.2 D2）");
