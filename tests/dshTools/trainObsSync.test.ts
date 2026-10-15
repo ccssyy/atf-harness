@@ -115,30 +115,49 @@ describe("批㊶-TRAIN-OBS T1 状态机（fail-closed 三锚＋12 轮 stale＋�
     expect(p?.eta_s).toBe(9473);
     expect(p?.stale).toBeUndefined();
   });
-  it("12 轮停更：连续 miss 达阈 → 写一次 stale:true 后停环；后续 tick already-stopped 零写", async () => {
-    const root = tempRoot();
-    const runDir = join(root, "run-stale");
-    mkdirSync(runDir, { recursive: true });
-    // 先写一次有效 progress（stale 快照基底）
-    writeProgress(runDir, { percentage: 50, eta_s: 100, updated_at: "2026-10-14T00:00:00Z" });
+  it("R1-b 修正：曾读有效行后 12 轮 miss → stale 写一次（不设 stopped 允许复活）；模型加载窗（首有效行前）不判 stale", async () => {
+    // 场景 1：模型加载窗——trainer_log 缺席（首有效行前不判 stale＝misses 不起算）
+    const loadRoot = tempRoot();
+    const loadDir = join(loadRoot, "run-load");
+    mkdirSync(loadDir, { recursive: true });
+    for (let i = 0; i < 20; i++) {
+      const r = await trainObsTick("run-load", loadDir, null, { capture: async () => null, sessionName: () => null });
+      expect(r).toBe("skipped"); // 加载窗 20 轮全 skip——远超 12 轮阈不触发 stale
+    }
+    expect(existsSync(join(loadDir, "webui", "progress.json"))).toBe(false); // 加载窗零写
+
+    // 场景 2：曾读有效行后 12 轮 miss → stale 写一次
+    const root2 = tempRoot();
+    const runDir2 = join(root2, "run-stale");
+    mkdirSync(join(runDir2, "training"), { recursive: true });
+    // 先放一行有效数据让 seenValid=true，然后删掉文件模拟账本损坏
+    writeFileSync(join(runDir2, "training", "trainer_log.jsonl"), '{"current_steps": 4, "total_steps": 40, "loss": 0.3, "epoch": 1, "percentage": 10.0, "remaining_time": "0:01:00"}\n');
+    await trainObsTick("run-stale2", runDir2, null, { capture: async () => null, sessionName: () => null }); // seenValid=true
+    rmSync(join(runDir2, "training", "trainer_log.jsonl")); // 账本损坏 → tail=null → miss
     const stubWrite = { written: 0 };
     let result = "";
     for (let i = 0; i < TRAIN_OBS_STALE_ROUNDS; i++) {
-      result = await trainObsTick("run-stale", runDir, null, {
+      result = await trainObsTick("run-stale2", runDir2, null, {
         capture: async () => null,
         sessionName: () => null,
         writeProg: (d, p) => { stubWrite.written += 1; writeProgress(d, p); },
       });
     }
     expect(result).toBe("stale-stopped");
-    const p = readProgress(runDir);
-    expect(p?.stale).toBe(true); // 停环前末次写入带 stale 标记
-    expect(p?.percentage).toBe(50); // 基底保留（不伪造进度）
-    const after = readProgress(runDir)?.updated_at;
-    expect(await trainObsTick("run-stale", runDir, null, { capture: async () => null, sessionName: () => null })).toBe("already-stopped");
-    expect(readProgress(runDir)?.updated_at).toBe(after); // 停环零写
+    const p = readProgress(runDir2);
+    expect(p?.stale).toBe(true);
     expect(stubWrite.written).toBe(1); // stale 写恰一次
-    expect(trainObsRunning("run-stale")).toBe(false); // 防双开面：已停不再起
+    // 复活路径：stale 后 trainer_log 新行出现 → 新有效行 → 写复写 stale 标记
+    writeFileSync(join(runDir2, "training", "trainer_log.jsonl"), '{"current_steps": 8, "total_steps": 40, "loss": 0.2, "epoch": 2, "percentage": 20.0, "remaining_time": "0:00:40"}\n');
+    const revived = await trainObsTick("run-stale2", runDir2, null, {
+      capture: async () => null,
+      sessionName: () => null,
+      writeProg: (d, pp) => { stubWrite.written += 1; writeProgress(d, pp); },
+    });
+    expect(revived).toBe("written"); // 复活——不返回 already-stopped
+    const revivedProgress = readProgress(runDir2);
+    expect(revivedProgress?.stale).toBeUndefined(); // stale 标记被新有效行覆盖清除
+    expect(revivedProgress?.percentage).toBe(20);
   });
   it("终态停环：真实终态行（percentage 100 缺 loss）→ 写一次后停环（真实终态行可解析）", async () => {
     const root = tempRoot();

@@ -3,14 +3,14 @@
 # Phase 1 (shell+tsx)：数据链（loss-series stub→active→obs 环→progress/trainlog）
 # Phase 2 (playwright)：真实浏览器渲染验证
 # 零 rm -rf 既有留证·run id 时间戳参数化·C1 断言正确。
-import json, re, subprocess, sys, time
+import json, re, subprocess, sys, time, uuid
 from pathlib import Path
+from playwright.sync_api import sync_playwright
 
 SHOTS = Path("/tmp/trainobs-fix-shots-rerun")
 SHOTS.mkdir(exist_ok=True)
 BASE = "http://127.0.0.1:3080"
-TS = str(int(time.time()) % 100000)
-RUN_ID = "train-obs-smoke-" + TS
+RUN_ID = "train-obs-smoke-" + uuid.uuid4().hex[:8]
 RUN_DIR = "/data/atf/dev/runs/" + RUN_ID
 SESSION = "dev-atf-training-run-" + RUN_ID
 

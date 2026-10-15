@@ -33,11 +33,16 @@ export const TRAINLOG_TAIL_MAX_LINES = 40;
 /** 单行字符截断。 */
 export const TRAINLOG_TAIL_MAX_LINE_CHARS = 200;
 
-/** per-run 观测态（进程内——syncer 重启即复位，progress.json 落盘态不受影响）。 */
+/** per-run 观测态（进程内——syncer 重启即复位，progress.json 落盘态不受影响）。
+ *  批㊶-TRAIN-OBS-FIX R1-b 语义修正：
+ *  - seenValid：曾读到过首条有效行——前首行（模型加载窗）不计 miss 不判 stale；
+ *  - stale 不设 stopped（允许 trainer_log 新行复活重置——清 staleWritten/misses 即恢复写）；
+ *  - stopped 仅由 finished-stopped（percentage ≥100）设置——终态防复活。 */
 interface TrainObsState {
   misses: number;
   stopped: boolean;
   staleWritten: boolean;
+  seenValid: boolean;
 }
 
 const obsStates = new Map<string, TrainObsState>();
@@ -146,33 +151,39 @@ export const trainObsTick = async (
   const now = deps.now ?? (() => new Date());
   let state = obsStates.get(runId);
   if (state === undefined) {
-    state = { misses: 0, stopped: false, staleWritten: false };
+    state = { misses: 0, stopped: false, staleWritten: false, seenValid: false };
     obsStates.set(runId, state);
   }
-  if (state.stopped) return "already-stopped";
+  if (state.stopped) return "already-stopped"; // finished-stopped 终态——防复活
 
   const nowIso = now().toISOString();
   let result: TrainObsTickResult = "skipped";
   const tail = readTail(runDir);
-  if (tail === null) {
+
+  if (tail !== null) {
+    // 有效行：复活（清 stale/misses）→写 progress→终态判定
+    state.seenValid = true;
+    state.misses = 0;
+    state.staleWritten = false;
+    writeProg(runDir, buildProgressFromTrainerLog(tail, numEpochs, nowIso));
+    if (tail.percentage >= 100) {
+      state.stopped = true; // percentage ≥100＝终态——写一次后停环（防复活）
+      result = "finished-stopped";
+    } else {
+      result = "written";
+    }
+  } else if (!state.seenValid) {
+    // R1-b：模型加载窗（首条有效行前）——不计 miss 不判 stale（加载可远超 60s）
+    result = "skipped";
+  } else {
+    // 曾读到过有效行但当前读不到——trainer_log 停更/损坏
     state.misses += 1;
     if (state.misses >= TRAIN_OBS_STALE_ROUNDS && !state.staleWritten) {
-      // 停更判定：写一次带 stale 标记的快照后停环（以盘面末次 progress 为基底——无则最小态）
       const last = lastProgress(runDir);
       const staleSnapshot: RunProgress = { ...(last ?? {}), stale: true, updated_at: nowIso };
       writeProg(runDir, staleSnapshot);
       state.staleWritten = true;
-      state.stopped = true;
-      result = "stale-stopped";
-    }
-  } else {
-    state.misses = 0;
-    writeProg(runDir, buildProgressFromTrainerLog(tail, numEpochs, nowIso));
-    if (tail.percentage >= 100) {
-      state.stopped = true; // 终态写一次（即本次写）后停环
-      result = "finished-stopped";
-    } else {
-      result = "written";
+      result = "stale-stopped"; // 不设 stopped——新行出现即复活
     }
   }
   // T3 日志尾部流：与进度同环（会话名由调用方按命名域单源解析；拒绝/缺席＝null → 缺席不伪造）
