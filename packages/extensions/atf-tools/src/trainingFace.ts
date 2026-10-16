@@ -1045,6 +1045,35 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
     },
   });
 }
+/** 批㊶-EVALCARD（2026-10-16，微批 31cf79ff）：评估授权卡摘要化——human_summary 六字段
+ *  冻结结构（内核 session/tools.py _human_summary 会签表）的 harness 侧确定性投影：
+ *  headline（H1＋接入形态/环境行）＋metrics（生效服务参数表关键行，不二次截断拼串）；
+ *  全文不上卡→「完整报告：<路径>」行（无新落盘动作）。纯函数，单测直测。 */
+export interface EvalReportSummary {
+  headline: string;
+  metrics: string[];
+}
+
+export const summarizeEvalPrelaunchReport = (reportText: string): EvalReportSummary => {
+  const lines = reportText.split("\n");
+  const headline = (lines.find((l) => l.startsWith("# ")) ?? "推理服务接入确认报告").replace(/^#\s+/, "");
+  // metrics：生效服务参数表的键值行（| 参数 | 值 | 来源 | 表——取关键键，值原样不截断）
+  const metricKeys = ["eval_env", "绑卡", "端口/TP", "adapters", "max_model_len", "request_defaults", "环境来源"];
+  const metrics: string[] = [];
+  let inParams = false;
+  for (const line of lines) {
+    if (line.startsWith("## ")) { inParams = line.includes("生效服务参数"); continue; }
+    if (!inParams || !line.startsWith("|")) continue;
+    const cells = line.split("|").map((c) => c.trim()).filter((c) => c !== "");
+    if (cells.length < 2) continue;
+    const key = cells[0] ?? "";
+    if (key === "") continue;
+    const hit = metricKeys.find((k) => key.startsWith(k));
+    if (hit !== undefined) metrics.push(`${key}＝${cells[1] ?? ""}`);
+  }
+  return { headline, metrics };
+};
+
 /** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
 export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string; bindRun?: (runId: string) => Promise<void> }): unknown[] {
   const evaluate = defineTool({
@@ -1113,13 +1142,21 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       if (reported.code !== 0 || !existsSync(reportPath)) {
         return asToolValue({ started: false, error: "prelaunch_report_failed", eval_round: roundDir, stderr_tail: reported.stderr.slice(-800), note: "确认报告未产出＝EVAL_RELEASE 准入未闭合（SKILL.md 确认制）" });
       }
-      // ③ EVAL_RELEASE 确认卡：九必报项报告全文上卡，Allow once＝确认并落放行账本
+      // ③ EVAL_RELEASE 确认卡：卡面摘要化（批㊶-EVALCARD，owner 裁 A 案——确认制语义
+      // 不弱化：九必报项全文落盘可达（路径行），卡面只上 headline/metrics 摘要），
+      // Allow once＝确认并落放行账本
       const reportText = readFileSync(reportPath, "utf8");
+      const summary = summarizeEvalPrelaunchReport(reportText);
       // 批㊶-U §五：评估卡接双段式 helper（EVAL_RELEASE 账本语义不动——问题卡收改参，
       // 审批卡落账本；可调参数＝adapter 编号/评估集绑定/service_config 各项，改参经聊天回复）
       const verdict = await requestApproval(ctx, exec, "atf_evaluate",
         dualStageNote("评估服务 EVAL_RELEASE 确认（放行＝审批账本登记 config sha256，编排按其过闸）", {
-          extra: `九必报项报告：\n${reportText.slice(0, 4000)}\n可调参数：adapter_path／eval_assets_dir／service_config 各项——如需改参，直接回复要改的项（如 adapter_path=<新路径>）；不改直接回复「按现值确认」`,
+          extra: [
+            `确认摘要：${summary.headline}`,
+            ...summary.metrics,
+            `完整报告：${reportPath}`,
+            "可调参数：adapter_path／eval_assets_dir／service_config 各项——如需改参，直接回复要改的项（如 adapter_path=<新路径>）；不改直接回复「按现值确认」",
+          ].join("\n"),
         }));
       if (!verdict.ok) return approvalDeniedResult("atf_evaluate", verdict.outcome);
       const recorded = await runCapture("python3", [genService, "--record-eval-release", "--config", args.service_config, "--service-dir", serviceDir, "--note", "atf_evaluate 确认卡放行（九必报项报告已确认）"], 60_000);

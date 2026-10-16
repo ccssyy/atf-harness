@@ -957,3 +957,53 @@ describe("批㊶R前置——防线③ start 面复核接线（审批前秒拒�
     expect((result as Record<string, unknown>).reason).toBe("iteration_config_missing");
   });
 });
+
+describe("批㊶-EVALCARD——评估授权卡摘要化（微批 31cf79ff）", () => {
+  const REPORT = [
+    "# 推理服务接入确认报告",
+    "",
+    "- 环境档案:`b25-eval-a800` | 接入形态:**编排自起新服务**",
+    "- base_url:`(自起,端口环境层确定)` | 停掉既有服务:**false**",
+    "- GPU 现状:0% · 7123MiB(来源:nvidia-smi 实测)",
+    "",
+    "## 生效服务参数(反生成自 service_manifest.json,来源列即产物字段,无人工叙述)",
+    "",
+    "| 参数 | 值 | 来源 |",
+    "|---|---|---|",
+    "| manifest | `service_manifest.json` | sha256 `abc123…` |",
+    "| 环境来源 | env-profile:b25-eval-a800 | deploy_effective.source |",
+    "| eval_env | `/data/venv/torch291_vllm016_bnb_qwen3vl` | deploy_effective.eval_env |",
+    "| 绑卡 | `7`(可见 1 卡) | deploy_effective.visible_devices |",
+    "| 端口/TP/gpu_mem_util | 8123 / 1(实用 1 卡) / 0.85 | argv |",
+    "| adapters | ['evalcard-smoke_smoke'] | manifest.adapters(serving 名 run 域隔离) |",
+    "| request_defaults | {'temperature': 0} | manifest |",
+    "",
+    "## 参数对账",
+    "",
+    "| 参数 | 评估要求 | 生效/实测 | 判定 |",
+    "|---|---|---|---|",
+    "| temperature | 0(确定性) | 请求侧 request-defaults | ✓ |",
+  ].join("\n");
+
+  it("结构化投影：headline＝H1 行；metrics＝生效服务参数表关键行（值原样不截断）", async () => {
+    const { summarizeEvalPrelaunchReport } = await import("../../packages/extensions/atf-tools/src/trainingFace.js");
+    const s = summarizeEvalPrelaunchReport(REPORT);
+    expect(s.headline).toBe("推理服务接入确认报告");
+    expect(s.metrics.some((m) => m.startsWith("eval_env＝"))).toBe(true);
+    expect(s.metrics.some((m) => m.startsWith("绑卡＝"))).toBe(true);
+    expect(s.metrics.some((m) => m.startsWith("端口/TP/gpu_mem_util＝"))).toBe(true);
+    expect(s.metrics.some((m) => m.startsWith("adapters＝"))).toBe(true);
+    // 不二次截断：长值原样保留
+    const env = s.metrics.find((m) => m.startsWith("eval_env＝")) ?? "";
+    expect(env).toContain("/data/venv/torch291_vllm016_bnb_qwen3vl");
+  });
+
+  it("非参数节不进 metrics（参数对账表不混入）；键闭集外行丢弃（不造档）", async () => {
+    const { summarizeEvalPrelaunchReport } = await import("../../packages/extensions/atf-tools/src/trainingFace.js");
+    const s = summarizeEvalPrelaunchReport(REPORT);
+    // request_defaults 值合法含 temperature 字样——按键前缀断言（键闭集外不进 metrics）
+    expect(s.metrics.some((m) => m.startsWith("temperature"))).toBe(false);
+    expect(s.metrics.some((m) => m.startsWith("manifest＝"))).toBe(false);
+    expect(s.metrics.some((m) => m.startsWith("参数＝"))).toBe(false);
+  });
+});
