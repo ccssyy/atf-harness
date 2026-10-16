@@ -1,7 +1,7 @@
 /**
  * 工具注册表（任务书 S3-1 / owner 口径 #5）：严格内置工具面，不暴露任意注册入口——
  * 工具面收敛由类型与构造共同强制，注册表外工具 = unknown_tool。
- * 批 3：工作区工具面（4 个，workspaceTools.ts 分册）经 createWithWorkspaceTools() 装配，
+ * 批 3：工作区工具面（workspaceTools.ts 分册，现 7 个）经 createWithWorkspaceTools() 装配，
  * 仅 TUI/resume 使用；default 注册表（桥接方法面）不变。
  */
 import { type Result } from "../../bridge/index.js";

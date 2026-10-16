@@ -44,6 +44,13 @@ import {
   type SkillSummary,
 } from "../workspace/skillCatalog.js";
 import { safeScratchPath } from "../workspace/runWorkspace.js";
+import {
+  createExperimentInWorkspace,
+  rebindWorkspaceToPath,
+  resolveDshHome,
+  type CreateExperimentOutcome,
+  type RebindOutcome,
+} from "../workspace/workspaceRegistry.js";
 import { candidateDigestFromText, collectConfirmReport, type ConfirmRequestBody } from "../confirmRequest.js";
 import { type SchemaNode } from "./canonical.js";
 import { type ToolDefinition } from "./toolDefinition.js";
@@ -87,6 +94,9 @@ export interface LocalToolHost {
   launchWaitMs?: number;
   /** 编排主路径 GPU 排队面（批㊶-S4b T1；web 桥装配注入——TUI/resume 缺席＝直启回退） */
   gpuQueueFace?: LaunchGpuQueueFace;
+  /** DSH 家（目录结构 v1 工具链：注册表/会话桶定位根）。web 桥装配注入（DSH_HOME env
+   *  同源）；缺席时 handler 回退 env→~/.dsh 解析链（与 vendor home-paths 缺省一致）。 */
+  dshHome?: string;
 }
 
 /** 本地 handler 终态（无 failed——环境缺口一律结构化 rejected，模型可转述；见文件头）。 */
@@ -286,6 +296,70 @@ const ASK_USER_CANONICAL: SchemaNode = {
   },
 };
 
+/** atf_create_experiment 参数（目录结构 v1：实验是工作区内一等实体）。 */
+const CREATE_EXPERIMENT_PARAMS: SchemaNode = {
+  type: "object",
+  required: ["workspace_path", "experiment_name"],
+  properties: {
+    workspace_path: {
+      type: "string",
+      description: "工作区根目录绝对路径（用户任意位置；目录必须已存在——本工具不代建顶层目录）。身份文件 .atf/workspace.json 缺席时自动初始化",
+    },
+    experiment_name: {
+      type: "string",
+      description: "实验名 slug（[a-z0-9][a-z0-9-]*）：小写字母或数字开头，仅含小写字母/数字/连字符；实验目录为 experiments/<YYYYMMDD>-<名>/",
+    },
+  },
+};
+
+const CREATE_EXPERIMENT_CANONICAL: SchemaNode = {
+  type: "object",
+  required: ["ok", "workspace_path", "workspace_id", "experiment_dir", "experiment_id", "experiment_name", "registry_status", "experiments_count"],
+  properties: {
+    ok: { const: true },
+    workspace_path: { type: "string" },
+    workspace_id: { type: "string", description: "工作区身份 id（uuid，永不改变）" },
+    experiment_dir: { type: "string", description: "实验根目录绝对路径（含 experiment.json 与 runs/）" },
+    experiment_id: { type: "string" },
+    experiment_name: { type: "string" },
+    registry_status: { enum: ["already_registered", "pending_registration"] },
+    registry_note: { type: "string", optional: true, description: "pending_registration 时的指路文案（在 WebUI 添加工作区后归属方能生效）" },
+    experiments_count: { type: "integer" },
+    identity_created: { type: "boolean", optional: true },
+    created_at: { type: "string", optional: true },
+  },
+};
+
+/** atf_rebind_workspace 参数（目录迁移后的按 id 认领）。 */
+const REBIND_WORKSPACE_PARAMS: SchemaNode = {
+  type: "object",
+  required: ["workspace_path"],
+  properties: {
+    workspace_path: {
+      type: "string",
+      description: "工作区新位置绝对路径（迁移后的实际目录，须含 .atf/workspace.json 身份文件——认领按 id 不按 path）",
+    },
+  },
+};
+
+const REBIND_WORKSPACE_CANONICAL: SchemaNode = {
+  type: "object",
+  required: ["ok", "workspace_id", "old_path", "new_path", "registry_updated", "bucket_disposition", "old_anchor_removed"],
+  properties: {
+    ok: { const: true },
+    workspace_id: { type: "string", description: "工作区身份 id（认领单源，永不改变）" },
+    old_path: { type: "string" },
+    new_path: { type: "string" },
+    registry_updated: { type: "boolean", description: "注册表 path 字段是否发生写入（no-op 为 false）" },
+    bucket_disposition: { enum: ["old_bucket_present_kept", "old_bucket_absent", "unchanged"] },
+    bucket_old_name: { type: "string", optional: true },
+    bucket_new_name: { type: "string", optional: true },
+    old_anchor_removed: { type: "boolean" },
+    old_anchor_note: { type: "string", optional: true },
+    note: { type: "string", optional: true, description: "归属语义注记（会话桶零操作＋运行时生效路径）" },
+  },
+};
+
 // ---------------------------------------------------------------------------
 // F5 改动四 4.1（2026-09-26）：confirm 型请示 handler——卡面材料收集（候选摘要复算＋
 // 确认报告收集）。凭据（user_confirmation）不在此层：handler 无账面访问权，runner 在
@@ -344,7 +418,7 @@ const askUserHandler: LocalToolHandler = async (rawParams, host) => {
   };
 };
 
-/** 工作区工具面（5 个；与 TOOL_DEFINITIONS 分册——不进桥接方法面，注册走 createWithWorkspaceTools）。ask_user_for_input 为 F5 改动四 4.1 增补（2026-09-26，工具面 4→5——TUI/resume 装配面；MCP/ACP 不装配零风险）。 */
+/** 工作区工具面（7 个；与 TOOL_DEFINITIONS 分册——不进桥接方法面，注册走 createWithWorkspaceTools）。ask_user_for_input 为 F5 改动四 4.1 增补（2026-09-26，工具面 4→5）；atf_create_experiment／atf_rebind_workspace 为目录结构 v1 工具链增补（2026-10-16，工具面 5→7——TUI/resume 与 WebUI 桥面同源装配；MCP/ACP 不装配零风险）。 */
 export const WORKSPACE_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "atf_scratch_write",
@@ -391,6 +465,22 @@ export const WORKSPACE_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     parameters: ASK_USER_PARAMS,
     requires_approval: true,
     canonical_output: ASK_USER_CANONICAL,
+  },
+  {
+    name: "atf_create_experiment",
+    description:
+      "在工作区内创建实验（须审批）：实验目录 experiments/<YYYYMMDD>-<实验名>/（含 experiment.json 元数据与 runs/），工作区身份文件 .atf/workspace.json 缺席时自动初始化（id=uuid 永不变）。workspace_path 必须是已存在的目录（不代建顶层目录）；实验名重复（同日同名目录已在）即拒绝并指路。工作区未注册到 DSH 侧栏时返回 pending_registration 回执——请引导用户在 WebUI「添加工作区」选择该目录，本工具不代建注册表记录。",
+    parameters: CREATE_EXPERIMENT_PARAMS,
+    requires_approval: true,
+    canonical_output: CREATE_EXPERIMENT_CANONICAL,
+  },
+  {
+    name: "atf_rebind_workspace",
+    description:
+      "工作区目录迁移后的重新定位（须审批）：读新位置 .atf/workspace.json 的身份 id，在 DSH 注册表按 id 定位原记录并更新 path 字段（其余记录零触碰、id 永不改变）。会话桶零操作（会话归属由会话头 cwd 的 realpath 正典承载——旧路径以符号链接续用时既有会话归属保持，旧路径消失时会话显性入任务桶）；旧位置目录仅在确认为真实空目录时删除。新位置必须已含身份文件（随目录迁移带走）；注册表按 id 无记录时拒绝并指路（先在 WebUI 添加工作区建立记录）。注册表写入在实例重启后进入运行时视野——回执附注该语义。",
+    parameters: REBIND_WORKSPACE_PARAMS,
+    requires_approval: true,
+    canonical_output: REBIND_WORKSPACE_CANONICAL,
   },
 ];
 
@@ -642,6 +732,71 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
   };
 };
 
+// ---------------------------------------------------------------- 目录结构 v1 工具链 handler
+// （确定性文件操作单源在 workspaceRegistry.ts——本层只做参数折算与结构化回流：
+//   一切业务错误折算 rejected(invalid_params)＋指路文案，不猜测不代建。）
+
+const createExperimentHandler: LocalToolHandler = async (rawParams, host) => {
+  if (!isPlainObject(rawParams)) return rejected("invalid_input", { message: "参数须为 JSON 对象" });
+  const workspacePath = stringParam(rawParams, "workspace_path");
+  const experimentName = stringParam(rawParams, "experiment_name");
+  if (workspacePath === undefined) return rejected("invalid_params", { message: "workspace_path 须为非空字符串（工作区根目录绝对路径）" });
+  if (experimentName === undefined) return rejected("invalid_params", { message: "experiment_name 须为非空字符串（slug 形态 [a-z0-9][a-z0-9-]*）" });
+  let outcome: CreateExperimentOutcome;
+  try {
+    outcome = createExperimentInWorkspace(workspacePath, experimentName, new Date(), host.dshHome ?? resolveDshHome());
+  } catch (cause) {
+    return rejected("invalid_params", { message: (cause as Error).message });
+  }
+  return {
+    kind: "executed",
+    result: {
+      ok: true,
+      workspace_path: outcome.workspacePath,
+      workspace_id: outcome.workspaceId,
+      experiment_dir: outcome.experimentDir,
+      experiment_id: outcome.experimentId,
+      experiment_name: outcome.experimentName,
+      registry_status: outcome.registryStatus,
+      ...(outcome.registryStatus === "pending_registration"
+        ? { registry_note: "工作区尚未注册到 DSH 侧栏——请在 WebUI「添加工作区」选择该目录（本工具不代建注册表记录）；注册后新会话按 cwd 归属该工作区" }
+        : {}),
+      experiments_count: outcome.experimentsCount,
+      ...(outcome.identityCreated ? { identity_created: true } : {}),
+      created_at: outcome.createdAt,
+    },
+  };
+};
+
+const rebindWorkspaceHandler: LocalToolHandler = async (rawParams, host) => {
+  if (!isPlainObject(rawParams)) return rejected("invalid_input", { message: "参数须为 JSON 对象" });
+  const workspacePath = stringParam(rawParams, "workspace_path");
+  if (workspacePath === undefined) return rejected("invalid_params", { message: "workspace_path 须为非空字符串（迁移后新位置绝对路径）" });
+  const dshHome = host.dshHome ?? resolveDshHome();
+  let outcome: RebindOutcome;
+  try {
+    outcome = rebindWorkspaceToPath(workspacePath, dshHome, new Date());
+  } catch (cause) {
+    return rejected("invalid_params", { message: (cause as Error).message });
+  }
+  return {
+    kind: "executed",
+    result: {
+      ok: true,
+      workspace_id: outcome.workspaceId,
+      old_path: outcome.oldPath,
+      new_path: outcome.newPath,
+      registry_updated: outcome.registryUpdated,
+      bucket_disposition: outcome.bucketDisposition,
+      ...(outcome.bucketOldName !== undefined ? { bucket_old_name: outcome.bucketOldName } : {}),
+      bucket_new_name: outcome.bucketNewName,
+      old_anchor_removed: outcome.oldAnchorRemoved,
+      old_anchor_note: outcome.oldAnchorNote,
+      note: "注册表变更已落盘；会话桶零操作（既有会话归属由会话头 cwd 正典承载——旧路径以符号链接续用则归属保持，旧路径消失则会话显性入任务桶）；运行中的 DSH 实例在重启后进入新归属",
+    },
+  };
+};
+
 /** 工具名 → 本地 handler（executor 本地分派表）。 */
 export const WORKSPACE_TOOL_HANDLERS: Readonly<Record<string, LocalToolHandler>> = {
   atf_scratch_write: scratchWriteHandler,
@@ -649,6 +804,8 @@ export const WORKSPACE_TOOL_HANDLERS: Readonly<Record<string, LocalToolHandler>>
   atf_skill_read: skillReadHandler,
   atf_launch_execute: launchExecuteHandler,
   ask_user_for_input: askUserHandler,
+  atf_create_experiment: createExperimentHandler,
+  atf_rebind_workspace: rebindWorkspaceHandler,
 };
 
 /** 装配 helper（TUI/resume 消费）：技能常驻清单 systemSuffix（skillsRoot 缺失 = undefined，装载降级）。 */

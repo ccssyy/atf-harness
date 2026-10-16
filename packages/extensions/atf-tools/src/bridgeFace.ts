@@ -17,6 +17,7 @@ import {
   type ToolDefinition,
 } from "../../../../src/core/tools/index.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
+import { resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText } from "./gpuQueueFace.js";
 import { toAtfAgentTool } from "../../../../src/agent/atfAgentTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
@@ -51,6 +52,11 @@ export const BRIDGE_TOOL_NAMES: readonly string[] = [
   // 桥接面六件→七件；本地治理径（WORKSPACE_TOOL_HANDLERS）经 bridgeFace 既有分派执行，
   // GPU 排队面（createLaunchGpuQueueFace）随 localHandler 注入同场生效。
   "atf_launch_execute",
+  // 目录结构 v1 工具链（设计基线 D4/D5/D6）：工作区治理两件对 DSH 面开放——七件→九件。
+  // 同为本地治理径（WORKSPACE_TOOL_HANDLERS），确定性文件操作单源 workspaceRegistry.ts；
+  // 注册表写入语义（备份/原子落盘/实例重启生效）随工具回执如实携带。
+  "atf_create_experiment",
+  "atf_rebind_workspace",
 ];
 
 /** 定义查找单源：桥接契约面（TOOL_DEFINITIONS）＋工作区治理分册（WORKSPACE_TOOL_DEFINITIONS，
@@ -139,7 +145,7 @@ export class BridgeManager {
  *  `exec-home/<session-id>/`；无会话 id（CLI 单会话/测试）落 `exec-home/default/`。
  *  跨会话同名暂存互踩面（散放 awb_*.json 实锚）在子目录层消除；既有散放文件不迁移
  *  （D4①——根目录原地保留不冲突）；清理策略候裁本批不实现。 */
-const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHome: string }, args: Record<string, unknown>, exec: unknown): LocalToolHost => {
+const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHome: string; dshHome?: string }, args: Record<string, unknown>, exec: unknown): LocalToolHost => {
   const runId = typeof args["run_id"] === "string" && args["run_id"] !== "" ? args["run_id"] : "default";
   const scratchDir = join(resolveRunDir(localRoots.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) }), "scratch");
   mkdirSync(scratchDir, { recursive: true });
@@ -151,6 +157,9 @@ const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHom
     kernelDir: localRoots.kernelDir,
     home,
     baseEnv: { ATF_SKILLS_AUTO_INSTALL: "0" },
+    // 目录结构 v1 工具链：DSH 家同源注入（装配面显式值优先，回退本进程 DSH_HOME env→
+    // ~/.dsh 解析链——与 vendor home-paths 一致；TUI/resume 装配缺席时 handler 同链回退）。
+    dshHome: localRoots.dshHome ?? resolveDshHome(),
   };
 };
 
