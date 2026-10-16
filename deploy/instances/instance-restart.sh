@@ -114,8 +114,11 @@ if [[ "$INSTANCE" == "uat" ]]; then
   else
     INNER="${UAT_PATH_HEAL} set -a; source $(sq "$UAT_KEY_ENV"); set +a; source $(sq "$ENV_FILE"); set +a; cd $(sq "$UAT_VENDOR") && { setsid nohup env ${BOOT_ENV_PREFIX}corepack pnpm dsh web --no-open --port ${PORT} ${TRUSTED_ARG} > $(sq "$LOG") 2>&1 < /dev/null & echo \$! > $(sq "$UAT_PID"); }"
   fi
-  # env -i 白名单 PATH＝容器内系统最小集（nvm 面由 INNER 自愈解析，版本无关）
-  NET_CMD="ssh -i ${UAT_SSH_KEY} -o BatchMode=yes -o StrictHostKeyChecking=accept-new ${UAT_SSH_TARGET} env -i HOME=/root TERM=$(sq "${TERM:-xterm}") LANG=$(sq "${LANG:-C.UTF-8}") TZ=$(sq "${TZ:-Asia/Shanghai}") PATH=/usr/bin:/bin:/usr/sbin:/sbin bash -c $(sq "$INNER")"
+  # env -i 白名单 PATH＝容器内系统最小集（nvm 面由 INNER 自愈解析，版本无关）。
+  # 远端段整体单引号（BUMP17B 修复）：ssh 把多 argv 空格拼接后由远端默认 shell 再解析，
+  # INNER 多语句（for/do 分号链）在无外层 quoting 时拆词破碎（`syntax error near 'do'`
+  # 实锚）——外层 sq 包整个 env -i … bash -c '<INNER>' 串，远端解析还原双层结构。
+  NET_CMD="ssh -i ${UAT_SSH_KEY} -o BatchMode=yes -o StrictHostKeyChecking=accept-new ${UAT_SSH_TARGET} $(sq "env -i HOME=/root TERM=$(sq "${TERM:-xterm}") LANG=$(sq "${LANG:-C.UTF-8}") TZ=$(sq "${TZ:-Asia/Shanghai}") PATH=/usr/bin:/bin:/usr/sbin:/sbin bash -c $(sq "$INNER")")"
 else
   case "$MODE" in
     --env-cmd)
