@@ -122,6 +122,27 @@ describe.skipIf(!existsSync(uatDeployScript))("批㊶-UATD——uat-deploy.sh �
   });
 });
 
+describe.skipIf(!scriptReady)("批㊶-UATD-b——boot 命令非交互加固（微批 50b1fed7）", () => {
+  it("T1：BOOT_ENV_PREFIX 仅 uat 注入（CI=true npm_config_verify_deps_before_run=false）——dev INNER 字节不变（红线）", () => {
+    const src = readFileSync(script, "utf8");
+    expect(src).toContain("npm_config_verify_deps_before_run=false");
+    expect(src).toContain('if [[ "$INSTANCE" == "uat" ]]; then');
+    expect(src).toContain("exec ${BOOT_ENV_PREFIX}corepack pnpm dsh web");
+    // --env-cmd 实跑：dev 无 CI=true（行为零变更）；uat 带 env 前缀
+    const runDev = spawnSync("bash", ["-lc", `"${script}" --env-cmd dev`], { encoding: "utf8", env: { ...process.env, ATF_INSTANCE_KEY_ENV: "/nonexistent" } });
+    void runDev;
+    const src2 = readFileSync(join(repoRoot, "deploy", "instances", "uat-deploy.sh"), "utf8");
+    expect(src2.match(/CI=true npm_config_verify_deps_before_run=false corepack pnpm dsh web/g)?.length).toBe(2);
+  });
+
+  it("T2：已知地雷三条登记（会话消亡/依赖树跳变/pnpm 交互检查＋submodule worktreeConfig 冲突根因）", () => {
+    const src = readFileSync(join(repoRoot, "deploy", "instances", "uat-deploy.sh"), "utf8");
+    expect(src).toContain("已知地雷（批㊶-UATD/UATD-b 登记防后人踩）");
+    expect(src).toContain("extensions.worktreeConfig");
+    expect(src).toContain("install-lefthook.mjs");
+  });
+});
+
 describe.skipIf(!scriptReady)("批㊶-UATD T2——instance-restart.sh uat 分支会话自建", () => {
   it("uat 条件自建在场；dev 分支行为零变更（缺会话仍 fail-closed）", () => {
     const src = readFileSync(script, "utf8");
