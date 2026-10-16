@@ -407,8 +407,11 @@ describe("目录结构 v1 呈现增强（client.js 源面锚——浏览器渲�
     const source = clientSource();
     expect(source).toContain("'未分组': '任务'");
     expect(source).toContain("'Ungrouped': 'Task'");
-    expect(source).toContain('[data-row-key^="workspace:"] .title');
-    expect(source).toContain(".searchResultWorkspace");
+    // 选择器形态＝dev DOM 实锚（css-modules 哈希类——语义段子串，字面量类永不匹配）：
+    // 组行容器 data-row-key 前缀 workspace:（未分组行实测空前缀 workspace: 同前缀命中）
+    // ＋label span 语义段 title；搜索结果 meta span 语义段 searchResultWorkspace。
+    expect(source).toContain('[data-row-key^="workspace:"] [class*="title"]');
+    expect(source).toContain('[class*="searchResultWorkspace"]');
     expect(source).toContain("span.textContent !== replacement");
   });
 

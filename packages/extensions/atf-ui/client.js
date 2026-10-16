@@ -38,7 +38,9 @@
  *  目录结构 v1（默认桶语义＋目录迁移呈现）：dock 行加挂 LostWorkspacesBanner（/atf-ui/
  *  workspaces 只读端点轮询——exists=false 的工作区卡面标「目录已丢失——可用
  *  atf_rebind_workspace 重新定位」）；vendor「未分组/Ungrouped」桶文案在渲染层覆盖为
- *  「任务/Task」（rAF 合帧 sweep·双语闭集精确匹配·仅值变化写回——与 FIX2 同型防自激）。 */
+ *  「任务/Task」（rAF 合帧 sweep·双语闭集精确匹配·仅值变化写回——与 FIX2 同型防自激；
+ *  W2b 微批修正：label/meta span 为 css-modules 哈希类，选择器取语义段子串＋行容器
+ *  data-row-key 前缀（含未分组行 workspace: 空前缀形态），dev DOM 实锚定案）。 */
 window.__ModuleLoader__.load({
   id: '@atf/dsh-atf-ui',
   factory: function(require) {
@@ -2052,10 +2054,14 @@ window.__ModuleLoader__.load({
         // 才写回，防 observer 自激）；③菜单「Effort/推理等级」drill cell 隐藏（en/zh 双语词条闭集——
         // 隐藏后 effort 列表 pane 无路径可达）。档位唯一入口＝「思考」控件；FIX 既有交付
         // （目录声明/三段取值链/sticky）零回退。rAF 合帧防抖。
-        // 目录结构 v1（默认桶语义）：未归属会话桶的呈现文案「未分组/Ungrouped」→「任务/Task」
-        // ——侧栏工作区分组行标题（[data-row-key^=workspace:] .title）与搜索结果 meta span，
-        // 双语闭集精确匹配改写（仅值变化才写回，防 observer 自激；vendor 文案硬编码于
-        // ui-workspace locales，本扩展渲染层覆盖，vendor 源码零写入）。
+        // 目录结构 v1（默认桶语义）：未归属会话桶的呈现文案「未分组/Ungrouped」→「任务/Task」。
+        // 选择器形态 dev DOM 实锚（2026-10-16 W2b 微批，禁猜纪律）：组行容器
+        // data-row-key 前缀 workspace:（未分组行实测＝空前缀 workspace:——源面 UNGROUPED_KEY
+        // 空串，同前缀命中）；label span 实测类＝css-modules 哈希形（nzO69G_title——字面量
+        // .title 永不匹配＝T2 缺口根因），取语义段子串 [class*="title"]（构建哈希免疫，沿
+        // FIX2 [class*=triggerEffort] 同型先例）；搜索结果 meta span 实测 nzO69G_searchResultWorkspace
+        // 同因改 [class*="searchResultWorkspace"]。改写谓词＝双语闭集精确匹配（仅值变化才
+        // 写回，防 observer 自激）。
         if (typeof MutationObserver !== 'undefined') {
           var atfFix2Scheduled = false
           var atfFix2Sweep = function() {
@@ -2074,7 +2080,7 @@ window.__ModuleLoader__.load({
               if (labels.indexOf(first) >= 0 && cell.style.display !== 'none') cell.style.display = 'none'
             }
             var taskLabel = { '未分组': '任务', 'Ungrouped': 'Task' }
-            var labelSpans = document.querySelectorAll('[data-row-key^="workspace:"] .title, .searchResultWorkspace')
+            var labelSpans = document.querySelectorAll('[data-row-key^="workspace:"] [class*="title"], [class*="searchResultWorkspace"]')
             for (var ls = 0; ls < labelSpans.length; ls++) {
               var span = labelSpans[ls]
               var text = (span.textContent || '').trim()
