@@ -41,6 +41,7 @@ import {
   ensureConventionSubdirs,
 } from "../../../../src/webui/storageSettings.js";
 import { detectAvailableGpuCount } from "../../../../src/core/workspace/smartDefaults.js";
+import { listRegistryRecords, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { readAlerts } from "../../../../src/core/workspace/trainProbe.js";
 
 /** Cordis 插件名。 */
@@ -1463,6 +1464,37 @@ export function apply(
       });
       ctx.effect(() => disposeSnapshot, "atf-ui: 快照端点");
       console.log("[atf-ui] 快照端点已注册（/atf-ui/snapshot）");
+      // 目录结构 v1（设计基线 D5/D6）：工作区注册表清单端点（只读）——registry records
+      // ＋path 目录在位状态（目录丢失呈现面数据源；鉴权沿壳 connection 信任面）。
+      // 注册表本体是 DSH 运行时资产，本端点零写入零改动，只做 stat 级探测。
+      const disposeWorkspaces = webServer.register({
+        kind: "exact",
+        path: "/atf-ui/workspaces",
+        handler: (req, res) => {
+          const rejection = connection.requestRejection(req);
+          if (rejection !== undefined) {
+            res.writeHead(rejection, { "content-type": "text/plain; charset=utf-8" });
+            res.end("dsh web authentication required\n");
+            return;
+          }
+          try {
+            const records = listRegistryRecords(resolveDshHome()).map((record) => ({
+              id: record.id,
+              path: record.path,
+              title: record.title,
+              session_count: record.sessionIds.length,
+              exists: record.exists,
+            }));
+            res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+            res.end(JSON.stringify({ records }));
+          } catch (cause) {
+            res.writeHead(503, { "content-type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ error: "registry_unavailable", message: String(cause) }));
+          }
+        },
+      });
+      ctx.effect(() => disposeWorkspaces, "atf-ui: 工作区注册表清单端点");
+      console.log("[atf-ui] 工作区清单端点已注册（/atf-ui/workspaces——目录丢失呈现数据源·只读）");
       const disposeEvents = webServer.register({
         kind: "prefix",
         path: "/atf-ui/events",

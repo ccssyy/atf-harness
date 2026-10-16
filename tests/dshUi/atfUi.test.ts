@@ -393,7 +393,33 @@ describe("批㉛段1 viewer 静态路由（resolveViewerRequest fail-closed＋ha
       { runsRoot: root, intervalMs: 60_000 },
     );
     expect(registered).toContainEqual({ kind: "prefix", path: VIEWER_ROUTE_PREFIX });
+    expect(registered).toContainEqual({ kind: "exact", path: "/atf-ui/snapshot" });
+    // 目录结构 v1：工作区注册表清单端点（目录丢失呈现数据源——只读）
+    expect(registered).toContainEqual({ kind: "exact", path: "/atf-ui/workspaces" });
     for (const d of effects) d();
+  });
+});
+
+describe("目录结构 v1 呈现增强（client.js 源面锚——浏览器渲染走 DSH 真跑）", () => {
+  const clientSource = (): string => readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+
+  it("任务桶语义钉子：未分组/Ungrouped → 任务/Task 双语闭集精确匹配改写（仅值变化写回防自激）", () => {
+    const source = clientSource();
+    expect(source).toContain("'未分组': '任务'");
+    expect(source).toContain("'Ungrouped': 'Task'");
+    expect(source).toContain('[data-row-key^="workspace:"] .title');
+    expect(source).toContain(".searchResultWorkspace");
+    expect(source).toContain("span.textContent !== replacement");
+  });
+
+  it("目录丢失卡钉子：/atf-ui/workspaces 轮询＋exists=false 过滤＋rebind 指路文案＋dock 挂载", () => {
+    const source = clientSource();
+    expect(source).toContain("'/atf-ui/workspaces'");
+    expect(source).toContain("LostWorkspacesBanner");
+    expect(source).toContain("record.exists === false");
+    expect(source).toContain("可用 atf_rebind_workspace 重新定位");
+    expect(source).toContain("React.createElement(LostWorkspacesBanner)");
+    expect(source).toContain("WORKSPACES_POLL_MS");
   });
 });
 

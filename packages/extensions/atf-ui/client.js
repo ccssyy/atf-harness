@@ -34,7 +34,11 @@
  *  （GPU 显隐开关＋sessionId 捕获）；conversation.composer.dock＝list（GPU 一行卡＋胶囊，
  *  与 ui-chat stats 同槽共存）；conversation.input.right＝list（思考档位快切，批甲-BUILD T1）；
  *  conversation.approval.detail＝single（ui-chat 独占——第三方注册会顶掉其 seat 致其 apply
- *  抛错，故不挂）。 */
+ *  抛错，故不挂）。
+ *  目录结构 v1（默认桶语义＋目录迁移呈现）：dock 行加挂 LostWorkspacesBanner（/atf-ui/
+ *  workspaces 只读端点轮询——exists=false 的工作区卡面标「目录已丢失——可用
+ *  atf_rebind_workspace 重新定位」）；vendor「未分组/Ungrouped」桶文案在渲染层覆盖为
+ *  「任务/Task」（rAF 合帧 sweep·双语闭集精确匹配·仅值变化写回——与 FIX2 同型防自激）。 */
 window.__ModuleLoader__.load({
   id: '@atf/dsh-atf-ui',
   factory: function(require) {
@@ -1333,6 +1337,43 @@ window.__ModuleLoader__.load({
     }
 
     /** 训练状态单 chip（dock 主行；点击＝展开浮卡）。 */
+    // 目录结构 v1（设计基线 D5）：工作区目录丢失呈现——/atf-ui/workspaces（server 半只读
+    // 端点：registry records＋path 目录在位状态）30s 轮询，对 exists=false 的工作区在
+    // composer dock 卡面标「目录已丢失——可用 atf_rebind_workspace 重新定位」。零 vendor
+    // 修改（自有端点＋自有卡面）；端点缺席/未就绪（503）静默下轮重取。
+    var WORKSPACES_POLL_MS = 30000
+    function LostWorkspacesBanner() {
+      var hook = React.useState(null)
+      var records = hook[0]
+      var setRecords = hook[1]
+      React.useEffect(function() {
+        var stopped = false
+        var load = function() {
+          fetch('/atf-ui/workspaces', { credentials: 'same-origin', cache: 'no-store' })
+            .then(function(r) { return r.ok ? r.json() : null })
+            .then(function(d) {
+              if (!stopped && d !== null && d !== undefined && Array.isArray(d.records)) setRecords(d.records)
+            })
+            .catch(function() { /* 离线/未就绪——下个周期重取 */ })
+        }
+        load()
+        var timer = setInterval(load, WORKSPACES_POLL_MS)
+        return function() { stopped = true; clearInterval(timer) }
+      }, [])
+      if (records === null) return null
+      var lost = records.filter(function(record) { return record.exists === false })
+      if (lost.length === 0) return null
+      return React.createElement('div', { className: 'atf-lost-ws', role: 'status' },
+        React.createElement('div', { className: 'atf-lost-ws-title' },
+          '工作区目录已丢失（' + lost.length + '）——可用 atf_rebind_workspace 重新定位'),
+        lost.map(function(record, index) {
+          return React.createElement('div', { key: record.id || index, className: 'atf-lost-ws-row' },
+            React.createElement('span', { className: 'atf-lost-ws-path' }, record.path),
+            React.createElement('span', { className: 'atf-lost-ws-meta' },
+              (record.title || '') + (record.session_count > 0 ? ' · ' + record.session_count + ' 会话' : '')))
+        }))
+    }
+
     function GpuCard() {
       var open = React.useSyncExternalStore(
         function(fn) { return store.subscribe(fn) },
@@ -1995,6 +2036,13 @@ window.__ModuleLoader__.load({
             // 批甲-FIX2（档位入口单一化）：vendor 座位 effort 文本 span 隐藏——css-modules
             // 语义段子串选择器（构建哈希前缀免疫）；档位唯一入口＝「思考」控件。
             '[class*="triggerEffort"]{display:none!important;}',
+            // 目录结构 v1：工作区目录丢失卡（amber 告警面——token 退化色随宿主主题）
+            '.atf-lost-ws{border:1px solid rgba(180,120,20,.45);background:rgba(180,120,20,.08);',
+            '  border-radius:8px;padding:6px 10px;margin:0 0 6px;font-size:12px;}',
+            '.atf-lost-ws-title{font-weight:600;color:var(--dsw-alias-state-warning-label,#92400e);margin-bottom:3px;}',
+            '.atf-lost-ws-row{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}',
+            '.atf-lost-ws-path{font-family:monospace;color:var(--dsw-alias-state-warning-label,#92400e);word-break:break-all;}',
+            '.atf-lost-ws-meta{color:var(--dsw-alias-label-tertiary,#64748b);}',
           ].join('')
           document.head.append(style)
         }
@@ -2004,6 +2052,10 @@ window.__ModuleLoader__.load({
         // 才写回，防 observer 自激）；③菜单「Effort/推理等级」drill cell 隐藏（en/zh 双语词条闭集——
         // 隐藏后 effort 列表 pane 无路径可达）。档位唯一入口＝「思考」控件；FIX 既有交付
         // （目录声明/三段取值链/sticky）零回退。rAF 合帧防抖。
+        // 目录结构 v1（默认桶语义）：未归属会话桶的呈现文案「未分组/Ungrouped」→「任务/Task」
+        // ——侧栏工作区分组行标题（[data-row-key^=workspace:] .title）与搜索结果 meta span，
+        // 双语闭集精确匹配改写（仅值变化才写回，防 observer 自激；vendor 文案硬编码于
+        // ui-workspace locales，本扩展渲染层覆盖，vendor 源码零写入）。
         if (typeof MutationObserver !== 'undefined') {
           var atfFix2Scheduled = false
           var atfFix2Sweep = function() {
@@ -2020,6 +2072,14 @@ window.__ModuleLoader__.load({
               if (cell.offsetParent === null) continue
               var first = (cell.innerText || '').split('\n')[0].trim()
               if (labels.indexOf(first) >= 0 && cell.style.display !== 'none') cell.style.display = 'none'
+            }
+            var taskLabel = { '未分组': '任务', 'Ungrouped': 'Task' }
+            var labelSpans = document.querySelectorAll('[data-row-key^="workspace:"] .title, .searchResultWorkspace')
+            for (var ls = 0; ls < labelSpans.length; ls++) {
+              var span = labelSpans[ls]
+              var text = (span.textContent || '').trim()
+              var replacement = taskLabel[text]
+              if (replacement !== undefined && span.textContent !== replacement) span.textContent = replacement
             }
           }
           var atfFix2Schedule = function() {
@@ -2112,6 +2172,7 @@ window.__ModuleLoader__.load({
               React.createElement(FloatingTaskCardExpanded),
               React.createElement(EvalNoticeStack),
               React.createElement(GpuCard),
+              React.createElement(LostWorkspacesBanner),
               React.createElement('div', { className: 'atf-pill-row' },
                 PILLS.map(function(pill) {
                   return React.createElement('button', {
