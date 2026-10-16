@@ -21,7 +21,11 @@ vendor/dsh/deepseek-harness/**/*.tsbuildinfo
 # 批⑱-M2（复核修正）：DSH 运行时 home 全目录不入仓（含 .credentials.yaml 运行时凭据/sessions/storages——
 # 曾因缺此段误入 commit，已 squash 重做）。GLM 接线配置的交付副本在 poc/web-profile-cordis-patch.yml。
 poc/dsh-home/
-deploy/instances/
+# 批㊶-OPSREPO T0：两运维脚本转正入仓（路径不变；实例层其余资产——env 真值/overlay/备份——仍 ignore，
+# token/密钥真值零入仓红线不变）
+deploy/instances/*
+!deploy/instances/uat-deploy.sh
+!deploy/instances/instance-restart.sh
 poc/dsh-home-tongshi/
 
 # ZCode 会话本地工具配置（ignore 镜像——不入仓）
