@@ -128,9 +128,19 @@ describe.skipIf(!scriptReady)("批㊶-UATD-b——boot 命令非交互加固（�
     expect(src).toContain("npm_config_verify_deps_before_run=false");
     expect(src).toContain('if [[ "$INSTANCE" == "uat" ]]; then');
     expect(src).toContain("exec ${BOOT_ENV_PREFIX}corepack pnpm dsh web");
-    // --env-cmd 实跑：dev 无 CI=true（行为零变更）；uat 带 env 前缀
-    const runDev = spawnSync("bash", ["-lc", `"${script}" --env-cmd dev`], { encoding: "utf8", env: { ...process.env, ATF_INSTANCE_KEY_ENV: "/nonexistent" } });
-    void runDev;
+    // --env-cmd 实跑双锚：dev 输出不含 CI=true/npm_config_verify_deps_before_run（行为零
+    // 变更红线）；uat 输出含两者（T1 非交互 env 注入）。净室命令形态＝打印整串启动命令。
+    const envCmd = (instance: "dev" | "uat"): string => {
+      const run = spawnSync("bash", ["-lc", `"${script}" --env-cmd ${instance}`], { encoding: "utf8" });
+      expect(run.status).toBe(0);
+      return run.stdout ?? "";
+    };
+    const devOut = envCmd("dev");
+    expect(devOut).not.toContain("CI=true");
+    expect(devOut).not.toContain("npm_config_verify_deps_before_run");
+    expect(devOut).toContain("corepack pnpm dsh web");
+    const uatOut = envCmd("uat");
+    expect(uatOut).toContain("CI=true npm_config_verify_deps_before_run=false corepack pnpm dsh web");
     const src2 = readFileSync(join(repoRoot, "deploy", "instances", "uat-deploy.sh"), "utf8");
     expect(src2.match(/CI=true npm_config_verify_deps_before_run=false corepack pnpm dsh web/g)?.length).toBe(2);
   });
