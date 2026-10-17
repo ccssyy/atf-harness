@@ -126,16 +126,17 @@ describe("批㊶-W F4——pipeline register 段真命令触发（非 mock_pipel
 // ---------------------------------------------------------------- F5 结构锚
 
 describe("批㊶-W F5——form intent 结构（vendor 源锚＋结构化 edits 解析）", () => {
-  it("vendor 源锚（批㊶-COORD2b 后改版）：F5 表单补丁已随 vendor 工作区还原退场——源面回 639ed01 基线（留档可逆）", () => {
-    // COORD2b（owner 裁"任何本地修改均应清除"）将 F5 以工作区形态存活的 vendor 补丁留档还原
-    // （/tmp/vendor-dirty-backup-20261014.patch＋untracked/）——该补丁从未 commit 进 submodule，
-    // 指针恒 639ed01。源面锚断言随之退役；harness 侧 form intent 逻辑（editsFromFormAnswers/
-    // domainHintOf——本文件后两用例）不受影响照常锚定。已构建 dist（先前构建期烘焙）不受源还原
-    // 影响；重建 bundle 将失去该 UI 面——候 owner 裁（re-apply＋commit 或接受回退）。
+  it("vendor 源锚（A1 重放收口后形态）：F5 表单补丁已按 LOCK.md 唯一路径重放——worktree 保持「锁 commit＋patch 已应用」修改态", () => {
+    // 2026-10-14 COORD2b 曾按 owner 裁定将 F5 以工作区形态存活的 vendor 补丁留档还原
+    //（源面回 639ed01 基线）——host dev boot 全图跑 src（tsx 源码态实证），源面回退即
+    // 表单卡 BAD_INTENT（"approve label undefined"——2026-10-17 现场复现存档）。
+    // 修复批A 指令裁定按 LOCK.md 唯一路径重放 0001→0003＋四步重建：源面锚随之翻转为
+    // 已应用态（FormPanel.tsx 回归＋form 类型在位）；构建产物一致性另由
+    // askFormIntent.test.ts 的 lib 形态锚承载。
     const vendor = join(import.meta.dirname, "../../vendor/dsh/deepseek-harness");
     const types = readFileSync(join(vendor, "packages/interaction/user-questions/src/types.ts"), "utf8");
-    expect(types).not.toContain("AskUserQuestionFormField"); // 源面已回基线（还原后形态锚）
-    expect(existsSync(join(vendor, "packages/client/ui-user-questions/src/client/FormPanel.tsx"))).toBe(false);
+    expect(types).toContain("AskUserQuestionFormField"); // 重放后源面形态（LOCK.md patch 表 0003）
+    expect(existsSync(join(vendor, "packages/client/ui-user-questions/src/client/FormPanel.tsx"))).toBe(true);
     void existsSync;
   });
   it("editsFromFormAnswers：selected key=value 结构化拆分（首个 = 拆键值；空串/无等号跳过）", () => {

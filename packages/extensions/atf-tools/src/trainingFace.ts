@@ -27,7 +27,8 @@ import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { probeSession, resolveLaunchSessionName, tmuxCommand, tmuxTrainingEvidenceFor, evalOrchSessionBase, trainingSessionBase, type SessionProbe } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText, TRAINING_RESIDUE_PATTERN } from "./gpuQueueFace.js";
 import { reconcileConfirmedWithTrainSh, formatReconcileDiff } from "./trainShReconcile.js";
-import { editsFromFormAnswers, type FormAskService } from "./confirmFace.js";
+import { editsFromFormAnswers, formAskQuestion, type FormAskService } from "./confirmFace.js";
+import { appendAskFailureDiagnostic } from "./askDiagnostics.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
 import { appendBinding, writeProgress } from "../../../../src/core/workspace/runFacts.js";
@@ -159,6 +160,7 @@ export const confirmDoubleLaunch = async (
   exec: { agent?: unknown; callId?: string; signal?: unknown },
   runId: string,
   sessionName: string,
+  runDir?: string,
 ): Promise<{ ok: true } | { ok: false; outcome: string; note: string }> => {
   const userQuestions = ctx.get("userQuestions") as FormAskService | undefined;
   if (userQuestions === undefined || typeof userQuestions.ask !== "function") {
@@ -166,17 +168,14 @@ export const confirmDoubleLaunch = async (
   }
   try {
     const answers = await userQuestions.ask({
-      questions: [{
+      questions: [formAskQuestion({
         id: `double-launch-${runId}`,
         question: `训练会话已存在（run ${runId}）——是否清理旧会话并重启？`,
         header: "双启确认",
         detail: `同 run_id 的训练会话 ${sessionName} 已在场（重复触发场景）。清理重启＝终止旧会话内进程（现场日志已落盘可追溯）；取消＝本次启动不动旧会话。proceed 填 yes 才重启；留空/no/其他＝取消。`,
-        intent: {
-          kind: "form",
-          fields: [{ key: "proceed", label: "proceed（是否清理重启）", value: "no", hint: "仅接受 yes；no/留空＝取消本次启动" }],
-          submitLabel: "提交",
-        },
-      }],
+        fields: [{ key: "proceed", label: "proceed（是否清理重启）", value: "no", hint: "仅接受 yes；no/留空＝取消本次启动" }],
+        submitLabel: "提交",
+      })],
       agent: exec.agent,
       signal: exec.signal,
     });
@@ -185,10 +184,14 @@ export const confirmDoubleLaunch = async (
       ? { ok: true }
       : { ok: false, outcome: "declined", note: `双启请示未确认（proceed≠yes）——本次不启动，旧会话原样保留（run ${runId}）` };
   } catch (cause) {
+    // A1 伴生缺陷收口：卡通道失败落 run 目录诊断（runDir 可得时——路径随 note 可定位）
+    const diagRel = runDir !== undefined
+      ? appendAskFailureDiagnostic(runDir, "atf_run_training", `double-launch-${runId}`, cause)
+      : undefined;
     if ((cause as { code?: string }).code === "ASK_CANCELLED") {
       return { ok: false, outcome: "cancelled", note: `双启请示卡被关闭（取消）——本次不启动，旧会话原样保留（run ${runId}）` };
     }
-    return { ok: false, outcome: "ask_failed", note: `双启请示卡应答失败：${String(cause).slice(0, 200)}——fail-closed 不启动` };
+    return { ok: false, outcome: "ask_failed", note: `双启请示卡应答失败：${String(cause).slice(0, 200)}${diagRel !== undefined ? `（通道诊断已落 run 目录 ${diagRel}）` : ""}——fail-closed 不启动` };
   }
 };
 
@@ -696,7 +699,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       const sessionBase = trainingSessionBase(args.run_id);
       const sessionName = resolveLaunchSessionName(sessionBase);
       if (probeSession(sessionBase).present) {
-        const gate = await confirmDoubleLaunch(ctx, exec, args.run_id, sessionName);
+        const gate = await confirmDoubleLaunch(ctx, exec, args.run_id, sessionName, runDir);
         if (!gate.ok) {
           return asToolValue({
             started: false,

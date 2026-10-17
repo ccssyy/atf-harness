@@ -28,7 +28,7 @@ export default defineConfig({
       { find: "@deepseek-ai/dsh-sandbox", replacement: `${vendor}/packages/sandbox/sandbox/lib/index.js` },
       { find: "@deepseek-ai/dsh-user-approval", replacement: `${vendor}/packages/interaction/user-approval/lib/index.js` },
       { find: "@deepseek-ai/dsh-fs", replacement: `${vendor}/packages/fs/fs/lib/index.js` },
-      { find: "@deepseek-ai/dsh-session", replacement: `${vendor}/packages/session/session/lib/index.js` },
+      { find: "@deepseek-ai/dsh-session", replacement: `${vendor}/packages/core/session/lib/index.js` },
     ],
   },
 });

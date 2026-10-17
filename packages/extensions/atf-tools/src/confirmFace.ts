@@ -16,9 +16,11 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildConfigConfirmFields, saveConfigSnapshot } from "../../../../src/webui/configConfirm.js";
 
 /** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型；批㊶-Q 增第四态 agent_recommend，
- *  仅全自动档采纳 agent 参数推荐时由本文件后处理标注，buildConfigConfirmFields 不产出该态）。 */
-type ConfigConfirmField = { key: string; value: string; tag: "need_confirm" | "from_registry" | "default_used" | "agent_recommend" };
+ *  仅全自动档采纳 agent 参数推荐时由本文件后处理标注，buildConfigConfirmFields 不产出该态）。
+ *  A1 导出：configFormFieldsOf／回归断言共用。 */
+export type ConfigConfirmField = { key: string; value: string; tag: "need_confirm" | "from_registry" | "default_used" | "agent_recommend" };
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
+import { appendAskFailureDiagnostic } from "./askDiagnostics.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
 import { evalAgentRecommend, type RecommendVerdict } from "../../../../src/core/workspace/agentRecommend.js";
@@ -72,6 +74,46 @@ export interface FormAskService {
     signal?: unknown;
   }): Promise<{ answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string>; custom?: string }> }>;
 }
+
+/** 表单卡问题对象单源（A1：confirmFace/trainingFace 两调用面与源面回归断言
+ *  tests/dshTools/askFormIntent.test.ts 同构——intent 形态漂移即测试红）。
+ *  可选键条件 spread（typert lossless 拒绝嵌套 undefined——批㊶-W 真机修正同纪律）。 */
+export const formAskQuestion = (q: {
+  id: string;
+  question: string;
+  header?: string;
+  detail?: string;
+  fields: ReadonlyArray<{ key: string; label: string; value?: string; placeholder?: string; hint?: string; required?: boolean }>;
+  submitLabel: string;
+}): {
+  id: string;
+  question: string;
+  header?: string;
+  detail?: string;
+  intent: { kind: "form"; fields: ReadonlyArray<{ key: string; label: string; value?: string; placeholder?: string; hint?: string; required?: boolean }>; submitLabel: string };
+} => ({
+  id: q.id,
+  question: q.question,
+  ...(q.header !== undefined ? { header: q.header } : {}),
+  ...(q.detail !== undefined ? { detail: q.detail } : {}),
+  intent: { kind: "form", fields: q.fields, submitLabel: q.submitLabel },
+});
+
+/** 确认卡字段 → 表单卡逐键输入行（label＝键名·现值预填·clamp 域 hint；max_total_tokens
+ *  空值＝必填拦空兜底）。A1：与回归断言单源。 */
+export const configFormFieldsOf = (fields: ConfigConfirmField[], gpuCount: number | null) =>
+  fields.map((field) => {
+    const hint = domainHintOf(field.key, gpuCount);
+    return {
+      key: field.key,
+      label: field.key,
+      value: field.value,
+      ...(hint !== undefined ? { hint } : {}),
+      ...(field.key === "max_total_tokens" && field.value.trim() === ""
+        ? { required: true, placeholder: "必填（token 上限缺省已退役——填正整数，单源参考 65536）" }
+        : {}),
+    };
+  });
 
 /** 表单卡答案 → 结构化 edits（selected 逐条 `key=value`——首个 = 拆分；结构化解析，
  *  非自由文本正则——批㊶-W F5 文字解析链退役后的唯一回传面）。 */
@@ -492,18 +534,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       for (;;) {
         // 批㊶-W 真机修正：typert lossless JSON 拒绝嵌套 undefined（对象键值 undefined
         // 即「not lossless JSON data」）——可选键一律条件 spread，禁显式 undefined 值。
-        const formFields = fields.map((field) => {
-          const hint = domainHintOf(field.key, gpuCount);
-          return {
-            key: field.key,
-            label: field.key,
-            value: field.value,
-            ...(hint !== undefined ? { hint } : {}),
-            ...(field.key === "max_total_tokens" && field.value.trim() === ""
-              ? { required: true, placeholder: "必填（token 上限缺省已退役——填正整数，单源参考 65536）" }
-              : {}),
-          };
-        });
+        const formFields = configFormFieldsOf(fields, gpuCount);
         const formDetail = [
           "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。",
           ...(amendNote !== undefined ? [amendNote] : []),
@@ -512,21 +543,24 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         let answers: { answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string> }> };
         try {
           answers = await userQuestions.ask({
-            questions: [{
+            questions: [formAskQuestion({
               id: `config-confirm-${args.run_id}`,
               question: `九要素训练配置确认 — ${args.run_id}`,
               header: "训练配置",
               detail: formDetail,
-              intent: { kind: "form", fields: formFields, submitLabel: "确认并继续" },
-            }],
+              fields: formFields,
+              submitLabel: "确认并继续",
+            })],
             agent: exec.agent,
             signal: exec.signal,
           });
         } catch (cause) {
+          // A1 伴生缺陷收口：卡通道失败不再零日志——诊断落 run 目录（路径随 note 可定位）
+          const diagRel = appendAskFailureDiagnostic(runDir, "atf_config_confirm", `config-confirm-${args.run_id}`, cause);
           if ((cause as { code?: string }).code === "ASK_CANCELLED") {
             return approvalDeniedResult("atf_config_confirm", "cancelled");
           }
-          return asToolValue({ ok: false, run_id: args.run_id, error: "form_ask_failed", note: `表单卡应答失败：${String(cause).slice(0, 200)}` });
+          return asToolValue({ ok: false, run_id: args.run_id, error: "form_ask_failed", note: `表单卡应答失败：${String(cause).slice(0, 200)}（通道诊断已落 run 目录 ${diagRel}）` });
         }
         // 结构化 edits（selected key=value——协议零改动的结构化回传面）
         const submitted = editsFromFormAnswers(answers);
