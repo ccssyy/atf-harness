@@ -109,8 +109,8 @@ describe("批㊶-W F4——pipeline register 段真命令触发（非 mock_pipel
     writeFileSync(fakePipeline, `import sys\nopen(${JSON.stringify(marker)}, "w").write(" ".join(sys.argv))\nprint("{}")\n`);
     const { buildPipelineTool } = await import("../../packages/extensions/atf-tools/src/pipelineFace.js");
     const ctx = { get: (s: string) => (s === "approval" ? { request: async () => "allowed-once" } : undefined) };
-    const tool = buildPipelineTool(ctx, `python3 ${fakePipeline}`, 30_000) as { execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> };
-    const result = await tool.execute({ stage: "register" }, { agent: undefined, callId: "w4", signal: undefined });
+    const tool = buildPipelineTool(ctx, `python3 ${fakePipeline}`, 30_000, root) as { execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> };
+    const result = await tool.execute({ stage: "register", run_id: "r1" }, { agent: undefined, callId: "w4", signal: undefined });
     expect(result.ok).toBe(true);
     expect(existsSync(marker)).toBe(true);
     const argv = readFileSync(marker, "utf8");

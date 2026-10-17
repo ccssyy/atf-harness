@@ -5,6 +5,8 @@ export declare const KPI_KEYS: readonly string[];
 export interface AtfRunScan {
   run_id: string;
   state?: string;
+  /** A2 案 a：工作区标注来源（bucket＝runsRoot 分桶缺省；registry＝注册表前缀/实验树）。 */
+  workspace_source?: "bucket" | "registry";
   segments?: Record<string, boolean | string>;
   training?: { active?: boolean; loss?: unknown; pending_confirm?: unknown };
   report?: { files?: string[] };
@@ -50,6 +52,8 @@ export interface AtfMonitorSnapshot {
   runs: Array<{
     run_id: string;
     state: string;
+    /** A2 案 a：工作区标注来源（additive 投影键——两键闭集）。 */
+    workspace_source: "bucket" | "registry";
     segments: Array<{ key: string; label: string; status: "done" | "active" | "failed" | "pending" }>;
     viewers: string[];
     launch: unknown;

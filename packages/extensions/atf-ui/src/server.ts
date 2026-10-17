@@ -8,10 +8,10 @@
  * 目录枚举是 workspace-scoped（DSH 文档口径），故枚举在服务端做、client 只读成品文件。
  * 纯函数（buildMonitorSnapshot/buildArtifactsSnapshot）在 ./snapshot.js，本仓 vitest 直测。
  */
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { execFile, execFileSync } from "node:child_process";
 import * as net from "node:net";
-import { dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { buildArtifactsSnapshot, buildMonitorSnapshot } from "./snapshot.js";
@@ -113,8 +113,12 @@ export const bridgeBadgeSurface = (env: Readonly<Record<string, string | undefin
 
 export interface RunScan {
   run_id: string;
-  /** 批㊶Q增补三 段3：工作区桶名（分桶形态＝桶名；平铺存量/系统级＝null——additive）。 */
+  /** 批㊶Q增补三 段3：工作区桶名（分桶形态＝桶名；平铺存量/系统级＝null——additive）。
+   *  A2 案 a：注册实验树 run＝注册记录 title；平铺 run 命中注册表前缀＝记录 title。 */
   workspace: string | null;
+  /** A2 案 a：工作区标注来源（bucket＝runsRoot 分桶（现形态缺省）；registry＝注册表
+   *  前缀/实验树枚举）。additive 投影键（adapter 白名单同批）。 */
+  workspace_source: "bucket" | "registry";
   state: string;
   artifacts: string[];
   segments: Record<string, boolean | string>;
@@ -487,9 +491,15 @@ const trainingActiveLive = (dir: string, runId: string, liveness: ScanLiveness |
 };
 
 /** 单 run 目录扫描（root＋runId 双形态兼容：分桶调用方传 dirname(runDir) 作 root 或以
- *  workspace 段拼接——dir 单点推导于此）。workspace 为投影标注（批㊶Q增补三 段3 additive）。 */
-export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness, workspace: string | null = null): RunScan {
+ *  workspace 段拼接——dir 单点推导于此）。workspace 为投影标注（批㊶Q增补三 段3 additive）。
+ *  A2 案 a：workspaceSource 标注来源（bucket 缺省/registry 枚举），additive 返回。 */
+export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness, workspace: string | null = null, workspaceSource: "bucket" | "registry" = "bucket"): RunScan {
   const dir = workspace !== null ? join(root, workspace, runId) : join(root, runId);
+  return scanRunDirAt(dir, runId, liveness, workspace, workspaceSource);
+}
+
+/** A2 案 a：绝对目录扫描变体（注册工作区实验树 run——runsRoot 之外，dir 由枚举面给定）。 */
+export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness, workspace: string | null = null, workspaceSource: "bucket" | "registry" = "bucket"): RunScan {
   const has = (rel: string): boolean => existsSync(join(dir, rel));
   // 批㊶-M M-3：段事实轨优先（webui/segments.json 有记录的段直接 done），启发式锚降级兜底
   const segmentDone = (segment: string, heuristicFallback: boolean): boolean =>
@@ -557,6 +567,8 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness,
     run_id: runId,
     // 批㊶Q增补三 段3：工作区归属标注（additive——分桶＝桶名，平铺/系统级＝null）
     workspace,
+    // A2 案 a：标注来源（additive——bucket＝现形态缺省；registry＝注册表前缀/实验树枚举）
+    workspace_source: workspaceSource,
     state: has("webui/config-snapshot.json")
       ? "config_confirmed"
       : has("launch/train.sh")
@@ -763,38 +775,130 @@ export { RUN_MARKER_RELS };
 export const looksLikeRun = (dir: string): boolean =>
   RUN_MARKER_RELS.some((rel) => existsSync(join(dir, rel)));
 
-/** 同步器周期内 run_id 清单（目录枚举一次——取证映射的目标集；特征过滤后。
- *  批㊶Q增补三 段3：平铺＋分桶双形态并集，run_id 恒为裸名；平铺 run 自身子目录
- *  不作桶降层（launch/eval 等内部结构不产幻影 run——真机 24 条污染实证后修正）。 */
-const resolvedRunIds = (runsRoot: string): string[] => {
-  const ids: string[] = [];
+/** A2 案 a：注册工作区枚举输入（registry records 的只读投影——path/title 两键；
+ *  调用方自 listRegistryRecords(resolveDshHome()) 过滤 exists===true 后映射）。 */
+export interface RegistryWorkspaceSeed {
+  path: string;
+  title: string;
+}
+
+/** 注册工作区根的 realpath（目录缺失/权限失败/非目录＝null——fail-open 静默跳过，不报错弹条）。 */
+const registryWorkspaceRealRoot = (ws: RegistryWorkspaceSeed): string | null => {
+  try {
+    if (!statSync(ws.path).isDirectory()) return null;
+    return realpathSync(ws.path);
+  } catch {
+    return null;
+  }
+};
+
+/** 注册工作区实验树 run 目录清单（<root>/experiments/<x>/runs/<id>——两级有界枚举，
+ *  不做全树递归；一级缺席/异常＝空清单）。 */
+const registryExperimentRunDirs = (wsReal: string): string[] => {
+  const out: string[] = [];
+  let experiments: string[];
+  try {
+    experiments = readdirSync(join(wsReal, "experiments"), { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .map((e) => e.name);
+  } catch {
+    return out;
+  }
+  for (const experiment of experiments) {
+    let runNames: string[];
+    try {
+      runNames = readdirSync(join(wsReal, "experiments", experiment, "runs"), { withFileTypes: true })
+        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+        .map((e) => e.name);
+    } catch {
+      continue;
+    }
+    for (const runId of runNames) out.push(join(wsReal, "experiments", experiment, "runs", runId));
+  }
+  return out;
+};
+
+/** A2 案 a：run 条目枚举单源（runsRoot 平铺＋分桶 ∪ 注册工作区实验树）。
+ *  只读：零写入零建目录；目录缺失/权限失败静默跳过（fail-open）。去重按 realpath——
+ *  同一 run 与 runsRoot 分桶重叠时只出现一次且分桶来源优先（bucket 标注不改写）。
+ *  平铺 run 的注册表前缀归属：registry 记录 path 为 run 目录祖先即标该记录 title
+ *  （workspace_source=registry；分桶优先——分桶条目不受前缀改写）。 */
+export interface RunDirEntry {
+  runId: string;
+  dir: string;
+  workspace: string | null;
+  workspaceSource: "bucket" | "registry";
+}
+
+export const enumerateRunEntries = (runsRoot: string, registryWorkspaces?: ReadonlyArray<RegistryWorkspaceSeed>): RunDirEntry[] => {
+  const entries: RunDirEntry[] = [];
+  const seenReal = new Set<string>();
+  const claim = (dir: string): boolean => {
+    try {
+      const real = realpathSync(dir);
+      if (seenReal.has(real)) return false;
+      seenReal.add(real);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const flatRuns = new Set(flatRunDirNames(runsRoot).filter((name) => name !== OUT_DIR && looksLikeRun(join(runsRoot, name))));
-  for (const name of flatRuns) ids.push(name);
+  for (const name of flatRuns) {
+    const dir = join(runsRoot, name);
+    if (!claim(dir)) continue;
+    // 注册表前缀归属（平铺存量——records[].path 为 run 目录祖先即归属，标注＝记录 title）
+    const wsHit = (registryWorkspaces ?? []).find((ws) => {
+      const wsReal = registryWorkspaceRealRoot(ws);
+      if (wsReal === null) return false;
+      try {
+        const real = realpathSync(dir);
+        return real === wsReal || real.startsWith(wsReal + sep);
+      } catch {
+        return false;
+      }
+    });
+    entries.push({ runId: name, dir, workspace: wsHit?.title ?? null, workspaceSource: wsHit !== undefined ? "registry" : "bucket" });
+  }
   for (const entry of bucketedRunEntries(runsRoot)) {
     if (flatRuns.has(entry.workspace) || entry.workspace === OUT_DIR || entry.runId === OUT_DIR) continue;
-    if (looksLikeRun(entry.dir)) ids.push(entry.runId);
+    if (!looksLikeRun(entry.dir)) continue;
+    if (!claim(entry.dir)) continue;
+    entries.push({ runId: entry.runId, dir: entry.dir, workspace: entry.workspace, workspaceSource: "bucket" });
   }
-  return ids;
+  for (const ws of registryWorkspaces ?? []) {
+    const wsReal = registryWorkspaceRealRoot(ws);
+    if (wsReal === null) continue;
+    for (const dir of registryExperimentRunDirs(wsReal)) {
+      if (!looksLikeRun(dir)) continue;
+      if (!claim(dir)) continue;
+      entries.push({ runId: basename(dir), dir, workspace: ws.title, workspaceSource: "registry" });
+    }
+  }
+  return entries;
 };
+
+/** 同步器周期内 run_id 清单（目录枚举一次——取证映射的目标集；特征过滤后。
+ *  批㊶Q增补三 段3：平铺＋分桶双形态并集，run_id 恒为裸名；平铺 run 自身子目录
+ *  不作桶降层（launch/eval 等内部结构不产幻影 run——真机 24 条污染实证后修正）。
+ *  A2 案 a：注册实验树 run id 一并进取证映射键集（tmux cmdline 取证按 runId 命中）。 */
+const resolvedRunIds = (runsRoot: string, registryWorkspaces?: ReadonlyArray<RegistryWorkspaceSeed>): string[] =>
+  enumerateRunEntries(runsRoot, registryWorkspaces).map((entry) => entry.runId);
 
 /** 批㊶Q增补三 段3：runsRoot 双层扫描（平铺存量原地保留＋分桶新形态并存——向后兼容）。
  *  桶降层只对非 run 的一级目录进行（平铺 run 的 launch/eval/l1 等子目录是 run 内部
- *  结构不是工作区桶——否则幻影 run 污染全量视图）。 */
+ *  结构不是工作区桶——否则幻影 run 污染全量视图）。
+ *  A2 案 a：扫描面＝runsRoot（现形态不变）∪ 注册工作区实验树（records[].path＋
+ *  /experiments/<x>/runs/<id>——exists===true 记录、只读、realpath 去重分桶优先、标注＝title）。
+ *  @param entries - 预算好的枚举（同步器单次枚举复用——runs[i] 与 entries[i] 一一对应，
+ *  供调用方按序取 run 真实目录；缺省自行枚举）。 */
 /** 导出供 vitest 直测（真机 24 条幻影污染实证后的防回潮锚）。 */
-export function scanRuns(runsRoot: string, liveness?: ScanLiveness): RunScan[] {
+export function scanRuns(runsRoot: string, liveness?: ScanLiveness, registryWorkspaces?: ReadonlyArray<RegistryWorkspaceSeed>, entries?: ReadonlyArray<RunDirEntry>): RunScan[] {
   const root = join(runsRoot);
   if (!existsSync(root)) return [];
-  const runs: RunScan[] = [];
-  const flatRuns = new Set(flatRunDirNames(root).filter((name) => name !== OUT_DIR && looksLikeRun(join(root, name))));
-  for (const name of flatRuns) {
-    runs.push(scanRunDir(root, name, liveness, null));
-  }
-  for (const entry of bucketedRunEntries(root)) {
-    if (flatRuns.has(entry.workspace) || entry.workspace === OUT_DIR || entry.runId === OUT_DIR) continue;
-    if (!looksLikeRun(entry.dir)) continue;
-    runs.push(scanRunDir(root, entry.runId, liveness, entry.workspace));
-  }
-  return runs;
+  const list = entries ?? enumerateRunEntries(runsRoot, registryWorkspaces);
+  // 全部走绝对目录变体（entry.dir 与 scanRunDir 的 root 拼接逐字同源——runsRoot 内外同路）
+  return list.map((entry) => scanRunDirAt(entry.dir, entry.runId, liveness, entry.workspace, entry.workspaceSource));
 }
 
 /**
@@ -878,11 +982,18 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     }
     // 批㊶-O O-1：绑 run 取证（per-run 独立）。批㊶-P1 S1：两判据——作用域会话名尾段
     // 精确归属（sessionIsScopedFor，`r1` 不误命中 `cr_r1`）＋存量 cmdline 含 run_id。
+    // A2 案 a：注册工作区清单（每周期一次——exists===true 记录；实验树枚举＋run 真实
+    // 目录取用的单源；目录缺失/权限失败由枚举面静默跳过）。注册表是内存权威（写侧实例
+    // 重启进视野）——本处只读消费，零写入。
+    const registryWorkspaces = listRegistryRecords(resolveDshHome())
+      .filter((record) => record.exists)
+      .map((record) => ({ path: record.path, title: record.title }));
+    const runEntries = enumerateRunEntries(resolved.runsRoot, registryWorkspaces);
     const trainingEvidence: Record<string, boolean> = {};
     try {
       const cmdlines = listTrainingSessionCmdlines();
       for (const entry of cmdlines) {
-        for (const runId of resolvedRunIds(resolved.runsRoot)) {
+        for (const runId of runEntries.map((e) => e.runId)) {
           if (entry.cmdline.includes(runId) || sessionIsScopedFor(entry.session, runId)) trainingEvidence[runId] = true;
         }
       }
@@ -894,7 +1005,7 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
       trainingEvidence,
       trainingLogsFresh: trainingLogsFreshAt(resolved.runsRoot, resolveTrainActiveWindowMs(process.env)),
       freshWindowMs: resolveTrainActiveWindowMs(process.env),
-    });
+    }, registryWorkspaces, runEntries);
     // 批㊶Q增补三 段4.2：pending-confirm 存量清理扫描（确认/放行完成即删，含存量——
     // 完成证据判据 fail-open；等待中的卡不动。cr_r2 09:36 确认后残留 8h＋实证）
     try {
@@ -902,10 +1013,13 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     } catch { /* 清理扫描异常不阻断同步器 */ }
     // 批㊶-P P-2：训练探针（per-run——active run 才判定；告警落 alerts.json＋monitor probe 面见 snapshot 组装）
     try {
-      for (const run of runs) {
+      for (let runIdx = 0; runIdx < runs.length; runIdx += 1) {
+        const run = runs[runIdx]!;
         if (!run.training.active) continue;
-        // 批㊶Q增补三 段3：run 实际目录（分桶/平铺按 scan 标注推导）
-        const runDir = run.workspace !== null ? join(resolved.runsRoot, run.workspace, run.run_id) : join(resolved.runsRoot, run.run_id);
+        // 批㊶Q增补三 段3：run 实际目录（runs[i]↔entries[i] 一一对应——注册实验树 run
+        // 取枚举面真实目录，禁从 runsRoot 拼接第二套路径）
+        const runDir = runEntries[runIdx]?.dir
+          ?? (run.workspace !== null ? join(resolved.runsRoot, run.workspace, run.run_id) : join(resolved.runsRoot, run.run_id));
         // 批㊶-TRAIN-OBS T1/T3：训练观测环（同步器 5s 环 per-run 驱动）——trainer_log 末行→
         // progress.json（5s 颗粒＋eta_s）＋tmux capture-pane→trainlog.tail.json；fail-closed：
         // 坏行跳过／12 轮停更转 stale 停环／percentage≥100 终态写一次停环／防双开（trainObsSync 内状态表）。

@@ -56,6 +56,9 @@ export function buildMonitorSnapshot(runs, gpu, gpuAll) {
       // 批㊶Q增补三 段3：工作区桶标注（additive——分桶＝桶名，平铺存量/系统级＝null；
       // client 作用域过滤［本会话绑定 ∪ 同工作区桶］的数据源之一）
       workspace: run.workspace ?? null,
+      // A2 案 a：标注来源（additive——bucket＝runsRoot 分桶现形态缺省；registry＝注册表
+      // 前缀/实验树枚举。枚举值两键闭集，无路径面——摘要化纪律：注册表绝对路径不入快照）
+      workspace_source: run.workspace_source === "registry" ? "registry" : "bucket",
       state: run.state ?? "unknown",
       segments: SEGMENTS.map(({ key, label }) => ({ key, label, status: segmentStatus(run, key) })),
       // 批㉛段1：badcase viewer 产物发现（scanRunDir 两形态兼容推导，空数组＝无挂载面）
