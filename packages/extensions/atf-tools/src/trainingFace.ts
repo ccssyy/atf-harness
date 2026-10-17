@@ -31,7 +31,7 @@ import { editsFromFormAnswers, formAskQuestion, type FormAskService } from "./co
 import { appendAskFailureDiagnostic } from "./askDiagnostics.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
-import { appendBinding, writeProgress } from "../../../../src/core/workspace/runFacts.js";
+import { appendBinding, readNumTrainEpochs, writeProgress } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
 import { appendLedgerAuditComment, ledgerEnvPrefixForShell } from "../../../../src/core/workspace/approvalLedger.js";
 import { dualStageNote } from "./confirmFace.js";
@@ -740,6 +740,12 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         });
       }
       startLossIngest(logPath, join(runDir, "training", "loss-series.json"));
+      // A3：启动放行后 progress 初帧（round=0）——无 loss-series 的启动早期，训练活跃
+      // 判定（trainingActiveLive）有确定性信号源（progress fresh 窗口）；total_rounds 仅在
+      // num_train_epochs 确定性可得时写（iteration-config 单源——缺源不造数）。既有的
+      // status 写方仍是唯一进度推进源，初帧只占启动态（不引入第二状态源）。
+      const startEpochs = readNumTrainEpochs(runDir);
+      writeProgress(runDir, { round: 0, ...(startEpochs !== null ? { total_rounds: startEpochs } : {}), updated_at: new Date().toISOString() });
       // 批㊶-M M-3 段事实轨：训练启动确认后登记（training 段——探活 dead 不登记）
       appendSegmentFact(runDir, "training", "atf_run_training");
       // 批㊶-N N-5：会话绑定

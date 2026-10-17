@@ -1,15 +1,19 @@
 /**
  * A2/A3 测试锚——atf_pipeline_stage 段事实与会话绑定（run 归属写入＋段推进事件驱动）。
  *
- * 指令件验收面（A2）：atf_pipeline_stage 成功路径 appendBinding(runDir, sessionId)
- * （sessionId 取 exec.agent.session.id，取不到如实跳过）；runDir 解析单源（resolveRunDir
- * ——平铺在场＞桶内在场＞新建入桶，禁第二套推导）。
+ * 指令件验收面：
+ * - A2：atf_pipeline_stage 成功路径 appendBinding(runDir, sessionId)（sessionId 取
+ *   exec.agent.session.id，取不到如实跳过）；runDir 解析单源（resolveRunDir——平铺在场＞
+ *   桶内在场＞新建入桶，禁第二套推导）。
+ * - A3：每段 exit_code===0 后 appendSegmentFact(runDir, stage, "atf_pipeline_stage")；
+ *   非零退出不写（不造完成事实）。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildPipelineTool } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
+import { readSegmentFacts } from "../../src/core/workspace/segmentFacts.js";
 import { readBindings } from "../../src/core/workspace/runFacts.js";
 
 const tempRoots: string[] = [];
@@ -40,7 +44,7 @@ const writeScript = (root: string, name: string, body: string): string => {
   return path;
 };
 
-describe("A2——atf_pipeline_stage 会话绑定", () => {
+describe("A2/A3——atf_pipeline_stage 段事实＋会话绑定", () => {
   it("成功段：exit 0 → 段事实（source=atf_pipeline_stage）＋binding 双落盘；返回面带两布尔", async () => {
     const root = tempRoot();
     const script = writeScript(root, "ok_pipeline.mjs", 'process.stdout.write("{}")\n');
@@ -48,7 +52,10 @@ describe("A2——atf_pipeline_stage 会话绑定", () => {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "register", run_id: "run-a" }, execWithSession("sess-9"));
-    expect(result).toMatchObject({ stage: "register", run_id: "run-a", ok: true, exit_code: 0, session_bound: true });
+    expect(result).toMatchObject({ stage: "register", run_id: "run-a", ok: true, exit_code: 0, segment_fact_recorded: true, session_bound: true });
+    const facts = readSegmentFacts(join(root, "run-a"));
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toMatchObject({ segment: "register", source: "atf_pipeline_stage" });
     const bindings = readBindings(join(root, "run-a"));
     expect(bindings.map((b) => b.session_id)).toEqual(["sess-9"]);
   });
@@ -60,8 +67,9 @@ describe("A2——atf_pipeline_stage 会话绑定", () => {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "split", run_id: "run-b" }, execWithSession("sess-9"));
-    expect(result).toMatchObject({ ok: false, exit_code: 3, session_bound: false });
+    expect(result).toMatchObject({ ok: false, exit_code: 3, segment_fact_recorded: false, session_bound: false });
     expect(String(result["stderr_tail"])).toContain("boom-end");
+    expect(existsSync(join(root, "run-b", "webui", "segments.json"))).toBe(false);
     expect(existsSync(join(root, "run-b", "webui", "binding.json"))).toBe(false);
   });
 
@@ -72,7 +80,7 @@ describe("A2——atf_pipeline_stage 会话绑定", () => {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "candidate", run_id: "run-c" }, { agent: undefined, callId: "c", signal: undefined });
-    expect(result).toMatchObject({ ok: true, session_bound: false });
+    expect(result).toMatchObject({ ok: true, segment_fact_recorded: true, session_bound: false });
     expect(existsSync(join(root, "run-c", "webui", "binding.json"))).toBe(false);
   });
 
@@ -87,7 +95,9 @@ describe("A2——atf_pipeline_stage 会话绑定", () => {
     };
     const exec = execWithSession("sess-7", "/data/other-ws");
     await tool.execute({ stage: "register", run_id: "run-flat" }, exec);
+    await tool.execute({ stage: "register", run_id: "run-flat" }, exec);
     expect(existsSync(join(root, "other-ws", "run-flat"))).toBe(false);
+    expect(readSegmentFacts(flat)).toHaveLength(1);
     expect(readBindings(flat).map((b) => b.session_id)).toEqual(["sess-7"]);
   });
 
@@ -98,6 +108,6 @@ describe("A2——atf_pipeline_stage 会话绑定", () => {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     await tool.execute({ stage: "publish", run_id: "run-d" }, execWithSession("sess-5", "/data/ws-dirname"));
-    expect(readBindings(join(root, "ws-dirname", "run-d")).map((b) => b.session_id)).toEqual(["sess-5"]);
+    expect(readSegmentFacts(join(root, "ws-dirname", "run-d"))).toHaveLength(1);
   });
 });

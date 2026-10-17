@@ -481,13 +481,20 @@ const evalRoundAnchored = (runDir: string): boolean => {
 };
 
 /** 训练活跃终判（批㊶-O O-1 修正）：绑 run tmux 取证优先；无匹配回落 mtime 新鲜窗口
- *  （N-2 既有窗口判据）；泛匹配会族布尔不再参与（假阳性根除）。run_dir 保留签名兼容。 */
+ *  （N-2 既有窗口判据）；泛匹配会族布尔不再参与（假阳性根除）。run_dir 保留签名兼容。
+ *  A3：progress fresh（启动初帧 round=0 起）同为活跃信号——无 loss-series 的启动早期
+ *  有确定性活跃源（初帧由 atf_run_training 启动放行后写，status 写方仍是唯一推进源）。 */
 const trainingActiveLive = (dir: string, runId: string, liveness: ScanLiveness | undefined): boolean => {
+  const progressActive = progressFresh(
+    readProgress(dir),
+    liveness?.nowMs ?? Date.now(),
+    liveness?.freshWindowMs ?? resolveTrainActiveWindowMs(process.env),
+  );
   if (liveness?.trainingEvidence !== undefined) {
     if (liveness.trainingEvidence[runId] === true) return true;
-    return lossSeriesFresh(dir, liveness);
+    return lossSeriesFresh(dir, liveness) || progressActive;
   }
-  return lossSeriesFresh(dir, liveness);
+  return lossSeriesFresh(dir, liveness) || progressActive;
 };
 
 /** 单 run 目录扫描（root＋runId 双形态兼容：分桶调用方传 dirname(runDir) 作 root 或以
@@ -540,6 +547,11 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
   // 不入前缀——训练段回落边界显示 ●，evaluate 回落 pending。显示 done＝前缀闭包（末位证据
   // 截断）：历史 run 前段锚缺口由后段证据反蕴含补齐（登记→体检→…必然已发生），不再出现
   // ✓○✓○ 间隔态；「评估✓训练○」倒挂形态同时被前缀语义自然排除。
+  // A3：progress 活跃信号（启动初帧 round=0 即 fresh——训练段 active/failed 判定共用）。
+  // 读序提前（原 N-3 位读 progressRaw——现 hoist 至训练活跃判定前，单次读取双用）。
+  const progressRaw = readProgress(dir);
+  const nowMs = liveness?.nowMs ?? Date.now();
+  const progressActiveNow = progressFresh(progressRaw, nowMs, liveness?.freshWindowMs ?? resolveTrainActiveWindowMs(process.env));
   const trainingActiveNow = rawDone.training === true && trainingActiveLive(dir, runId, liveness);
   const evidence: Record<string, boolean> = { ...rawDone };
   evidence["training"] = rawDone.training === true && !trainingActiveNow;
@@ -552,9 +564,15 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
   SEGMENT_ORDER_KEYS.forEach((key, idx) => {
     doneMap[key] = maxEvidenceIdx >= idx;
   });
-  // 批㊶-N N-3：段内进度（progress.json 镜像＋fresh 布尔；过期/缺失置 null——additive）
-  const progressRaw = readProgress(dir);
-  const nowMs = liveness?.nowMs ?? Date.now();
+  // A3 训练段不悬空判定：启动证据（train.sh/初帧）在场 ∧ 完成锚缺席 ∧ tmux 取证面在
+  // （trainingEvidence 已定义）且本 run 无命中 ∧ 无活跃信号（progress/loss-series 皆 stale）
+  // ＝进程确定性消失 → failed。取证面缺席（liveness 无 trainingEvidence——vitest 直扫等）
+  // ＝信号源不在场，不猜（pending）。
+  const trainingLaunchEvidence = has("launch/train.sh") || has("training/train.sh") || progressRaw !== null;
+  const trainingFailedNow =
+    trainingLaunchEvidence && rawDone.training !== true &&
+    liveness?.trainingEvidence !== undefined && liveness.trainingEvidence[runId] !== true &&
+    !trainingActiveLive(dir, runId, liveness);  // 批㊶-N N-3：段内进度（progress.json 镜像＋fresh 布尔；过期/缺失置 null——additive）
   const progress: RunProgress | null = progressRaw !== null && progressFresh(progressRaw, nowMs, liveness?.freshWindowMs ?? resolveTrainActiveWindowMs(process.env))
     ? progressRaw
     : null;
@@ -602,14 +620,23 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
       candidate: has("contract-candidate.json"),
       publish: doneMap["publish"] === true,
       admission: doneMap["admission"] === true,
-      training: doneMap["training"] === true,
+      // A3 训练段三态：done＝前缀闭包（S3 语义不动）；failed＝启动证据在场 ∧ 无完成锚 ∧
+      // tmux 取证面在且本 run 无命中 ∧ 无活跃信号（progress 初帧 stale/loss-series stale——
+      // 进程消失判据是确定性取证面，缺席不猜，显 pending）。active 态由 adapter 以
+      // training.active 呈现（segmentStatus 训练段活跃优先——scanRunDir 不重复表达）。
+      training: doneMap["training"] === true
+        ? true
+        : trainingFailedNow
+          ? "failed"
+          : false,
       evaluate: doneMap["evaluate"] === true,
     },
     training: {
       // 批㊶-L L-1＋批㊶-N N-2：终结判定——active＝训练产物锚在场（loss-series／
       // adapter_model.safetensors／all_results.json 三选一）&&（tmux 在场 || 会族前缀
       // atf-* 任一会话 || training-logs mtime 新鲜 || loss-series mtime 新鲜；窗口 env 可配）。
-      active: trainingAnchorPresent(dir) && trainingActiveLive(dir, runId, liveness),
+      // A3：启动初帧（progress fresh）同为锚等价——启动早期无 loss-series 也有确定性活跃。
+      active: (trainingAnchorPresent(dir) || progressActiveNow) && trainingActiveLive(dir, runId, liveness),
       // 批㉛段3.1：live loss-series 缺席 → 最新 checkpoint trainer_state.json 历史回退
       loss: has("training/loss-series.json") ? readJson(join("training", "loss-series.json")) : trainerHistoryLoss(dir),
       pending_confirm: readJson(join("webui", "pending-confirm.json")),

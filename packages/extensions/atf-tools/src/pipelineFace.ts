@@ -7,15 +7,18 @@
  * （缺省 mock 对端——tests/fixtures/mock_pipeline.mjs；真内核走 env/Config 指向
  * python3 tools/walkthrough_pipeline.py）。非零退出/坏 JSON 如实回报，不造数。
  *
- * A2（2026-10-17 修复批）：run 目录单源解析（resolveRunDir＋会话工作区桶——与
- * confirmFace 同一解析面，不自建第二套推导）。段 exit_code===0 才落会话绑定
- * appendBinding(runDir, sessionId)（sessionId 取 exec.agent.session.id，取不到如实
- * 跳过——fail-open 沿既有语义）；run 目录本地文件，不进 bridge 契约面。
+ * A2/A3（2026-10-17 修复批）：run 目录单源解析（resolveRunDir＋会话工作区桶——与
+ * confirmFace 同一解析面，不自建第二套推导）。段 exit_code===0 才落两件——
+ * ① 段事实 appendSegmentFact(runDir, stage, "atf_pipeline_stage")（非零退出不写，
+ *   不造完成事实）；② 会话绑定 appendBinding(runDir, sessionId)（sessionId 取
+ *   exec.agent.session.id，取不到如实跳过——fail-open 沿既有语义）。二者均 run 目录
+ *   本地文件，不进 bridge 契约面。
  */
 import { execFile } from "node:child_process";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
+import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
 
@@ -52,7 +55,7 @@ export const buildPipelineTool = (
 ): unknown =>
   defineTool({
     name: "atf_pipeline_stage",
-    description: `按段驱动 walkthrough_pipeline 管线（审批必经）：单段触发 ${PIPELINE_STAGES.join("/")} 之一。段完成返回该段结构化摘要；非零退出/缺料如实回报。段成功退出（exit 0）即在 run 目录落会话绑定（run 归属——胶囊渲染数据源之一）；非零退出不落任何事实。审批面板放行后才会执行。`,
+    description: `按段驱动 walkthrough_pipeline 管线（审批必经）：单段触发 ${PIPELINE_STAGES.join("/")} 之一。段完成返回该段结构化摘要；非零退出/缺料如实回报。段成功退出（exit 0）即在 run 目录落段事实与会话绑定（胶囊卡逐段点亮数据源）；非零退出不落任何事实。审批面板放行后才会执行。`,
     parameters: {
       stage: { type: "string", required: true, enum: [...PIPELINE_STAGES], description: "要触发的管线段（单段）" },
       run_id: { type: "string", required: true, description: "run 标识（段事实与会话绑定的落点 run 目录）" },
@@ -77,9 +80,14 @@ export const buildPipelineTool = (
           summary = null;
         }
       }
-      // 成功路径：会话绑定（A2——run 归属写入）；非零退出零写入。
+      // 成功路径两件（A2/A3）：段事实（胶囊逐段点亮）＋会话绑定；非零退出零写入。
+      let segment_fact_recorded = false;
       let session_bound = false;
       if (result.code === 0) {
+        try {
+          appendSegmentFact(runDir, args.stage, "atf_pipeline_stage");
+          segment_fact_recorded = true;
+        } catch { /* fail-open（事实轨写失败不阻塞段回报） */ }
         const sessionId = sessionIdOfExec(exec);
         if (sessionId !== undefined) {
           appendBinding(runDir, sessionId);
@@ -91,6 +99,7 @@ export const buildPipelineTool = (
         run_id: args.run_id,
         ok: result.code === 0,
         exit_code: result.code,
+        segment_fact_recorded,
         session_bound,
         ...(summary !== null ? { summary } : {}),
         ...(result.code !== 0 ? { stderr_tail: result.stderr.slice(-2000) } : {}),

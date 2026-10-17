@@ -6,13 +6,17 @@
  * 只读（零写入零建目录）；目录缺失/权限失败静默跳过；去重按 realpath（分桶来源优先，
  * workspace_source=bucket 不因注册表命中改写）；标注＝注册记录 title；additive
  * workspace_source 两键闭集投影（adapter 白名单同批）。
+ * A3：训练段两态——progress 初帧 fresh＝启动早期确定性活跃信号（training.active）；
+ * 进程确定性消失（tmux 取证面在且本 run 无命中）∧ 无完成锚 → 段显式 failed；
+ * 取证面缺席不猜（pending）。S3 前缀闭包语义不动（done 恒为前缀）。
  */
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { enumerateRunEntries, scanRuns, scanRunDir, scanRunDirAt } from "../../packages/extensions/atf-ui/src/server.js";
+import { enumerateRunEntries, scanRuns, scanRunDir, scanRunDirAt, type ScanLiveness } from "../../packages/extensions/atf-ui/src/server.js";
 import { buildMonitorSnapshot } from "../../packages/extensions/atf-ui/src/snapshot.js";
+import { writeProgress } from "../../src/core/workspace/runFacts.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -119,6 +123,61 @@ describe("A2 案 a——扫描面视野枚举", () => {
       expect(scans[i]?.run_id).toBe(entry.runId);
       expect(scans[i]?.workspace).toBe(entry.workspace);
     });
+  });
+});
+
+describe("A3——训练段两态（初帧活跃＋进程消失不悬空）", () => {
+  const livenessWith = (trainingEvidence: Record<string, boolean>, freshWindowMs = 120_000, nowMs = Date.now()): ScanLiveness => ({
+    trainingEvidence,
+    freshWindowMs,
+    nowMs,
+  });
+
+  it("启动早期：progress 初帧 fresh（round=0）→ training.active=true（无 loss-series 也有确定性信号）", () => {
+    const root = tempRoot();
+    seedRun(join(root, "run-t"));
+    writeProgress(join(root, "run-t"), { round: 0, total_rounds: 3, updated_at: new Date().toISOString() });
+    const scan = scanRunDir(root, "run-t", livenessWith({ "run-t": false }));
+    expect(scan.training.active).toBe(true);
+    expect(scan.training.progress?.round).toBe(0);
+  });
+
+  it("进程消失：启动证据在场 ∧ 取证面无命中 ∧ 初帧 stale ∧ 无完成锚 → 训练段 failed", () => {
+    const root = tempRoot();
+    seedRun(join(root, "run-f"), ["launch/train.sh"]);
+    writeProgress(join(root, "run-f"), { round: 0, updated_at: new Date(Date.now() - 3_600_000).toISOString() });
+    const scan = scanRunDir(root, "run-f", livenessWith({ "run-f": false }));
+    expect(scan.training.active).toBe(false);
+    expect(scan.segments.training).toBe("failed");
+  });
+
+  it("取证面缺席不猜：同 stale 形态但 liveness 无 trainingEvidence → 段 pending（不造 failed）", () => {
+    const root = tempRoot();
+    seedRun(join(root, "run-p"), ["launch/train.sh"]);
+    writeProgress(join(root, "run-p"), { round: 0, updated_at: new Date(Date.now() - 3_600_000).toISOString() });
+    const scan = scanRunDir(root, "run-p", undefined);
+    expect(scan.segments.training).toBe(false);
+  });
+
+  it("完成锚在场仍 done（failed 不越序）；训练活跃期证据不入前缀（S3 语义不动）", () => {
+    const root = tempRoot();
+    seedRun(join(root, "run-done"), ["launch/train.sh", "training/all_results.json"]);
+    const doneScan = scanRunDir(root, "run-done", livenessWith({ "run-done": false }));
+    expect(doneScan.segments.training).toBe(true);
+    // 活跃重跑：完成锚＋progress fresh → active 显示（adapter 训练段活跃优先）＋段事实 done 不冻结
+    writeProgress(join(root, "run-done"), { round: 2, updated_at: new Date().toISOString() });
+    const activeScan = scanRunDir(root, "run-done", livenessWith({}));
+    expect(activeScan.training.active).toBe(true);
+    const monitor = buildMonitorSnapshot([activeScan], { offline: true });
+    const training = (monitor.runs[0]?.segments ?? []).find((s) => s.key === "training");
+    expect(training?.status).toBe("active");
+  });
+
+  it("scanRunDirAt：绝对目录变体（注册树形态）与 scanRunDir 同构返回", () => {
+    const root = tempRoot();
+    seedRun(join(root, "run-a"));
+    const direct = scanRunDirAt(join(root, "run-a"), "run-a", undefined, "注册甲", "registry");
+    expect(direct).toMatchObject({ run_id: "run-a", workspace: "注册甲", workspace_source: "registry" });
   });
 });
 
