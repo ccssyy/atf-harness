@@ -18,10 +18,13 @@
  * 白名单根＝派生集（fileRoots.ts 配置声明面镜像）＋env 附加集（ATF_V1_FILE_TOOL_ROOTS）；
  * 产品资产零具体目录（增补裁定——分层原则）。
  */
+import { watchFile, unwatchFile } from "node:fs";
 import { isAbsolute, join, resolve, sep } from "node:path";
 import { toFileAgentTool, FILE_TOOL_DEFINITIONS, type FileToolHost } from "../../../../src/agent/fileTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { resolveSessionRunWorkspace } from "../../../../src/core/workspace/runFacts.js";
+import { registryPathOf, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
+import { deriveFileToolRoots, type DeriveFileRootsInput } from "../../../../src/agent/fileRoots.js";
 import { translateParameters, asToolValue, looseObjectOutput } from "./schemaTranslate.js";
 
 /** pre-execute 守卫的 vendor 工具名闭集。 */
@@ -221,3 +224,41 @@ export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: stri
       },
     });
   });
+
+/** A4——白名单根热加载（注册表感知）：装配点为一次性派生（apply() boot 期），守卫每次
+ *  调用即时读 host.roots——注册表文件（resolveDshHome()/storages/workspace.json）变更
+ *  即重派生并**原地替换同一数组**（引用不变），UI 建工作区免重启即可读写。轮询侦听
+ *  （watchFile 2s——注册表被原子写替换 inode 的形态安全；文件缺席也轮询，出现即触发）；
+ *  重派生异常保留现集（fail-open 不缩窄——派生面自身已 fail-open，此处兜底）。
+ *  @returns 句柄（close 停轮询；测试用）。 */
+export const startFileRootsHotReload = (
+  roots: string[],
+  input: DeriveFileRootsInput,
+  opts?: { log?: (line: string) => void },
+): { close(): void } => {
+  const log = opts?.log ?? ((line: string) => console.log(line));
+  const registryPath = registryPathOf(resolveDshHome(input.env));
+  let lastSignature = roots.join("\u0000");
+  const reload = (): void => {
+    try {
+      const derived = deriveFileToolRoots(input);
+      const signature = derived.roots.join("\u0000");
+      if (signature === lastSignature) return;
+      roots.length = 0;
+      roots.push(...derived.roots);
+      lastSignature = signature;
+      log(`[atf-tools] 白名单根热加载：${String(derived.roots.length)} 个（注册表感知——UI 建工作区免重启生效）`);
+    } catch (cause) {
+      // 保留现集（不缩窄——白名单只增不减语义）
+      log(`[atf-tools] 白名单根热加载失败（保留现集 ${String(roots.length)} 个）：${String(cause).slice(0, 200)}`);
+    }
+  };
+  watchFile(registryPath, { interval: 2_000 }, (curr, prev) => {
+    if (curr.mtimeMs !== prev.mtimeMs) reload();
+  });
+  return {
+    close(): void {
+      unwatchFile(registryPath);
+    },
+  };
+};

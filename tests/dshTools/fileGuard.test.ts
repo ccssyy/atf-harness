@@ -7,6 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { deriveFileToolRoots, rootsFromEnvProfileText } from "../../src/agent/fileRoots.js";
+import { startFileRootsHotReload } from "../../packages/extensions/atf-tools/src/fileGuardFace.js";
+import { registryPathOf } from "../../src/core/workspace/workspaceRegistry.js";
 import {
   absolutePathTokensFromCommand,
   bashCommandGuard,
@@ -28,7 +30,7 @@ afterEach(() => {
 });
 
 describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试②）", () => {
-  it("派生集逐项等于声明面：config.workspace_root／env-profiles venv／五个 env 名镜像＋追加集，多一分不算", () => {
+  it("派生集逐项等于声明面：config.workspace_root／env-profiles venv／五个 env 名镜像＋追加集＋注册工作区⑦，多一分不算", () => {
     const home = tempRoot();
     mkdirSync(join(home, ".atf", "env-profiles"), { recursive: true });
     const ws = join(home, "ws");
@@ -41,6 +43,7 @@ describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试�
     const execHome = join(home, "exec");
     const logs = join(home, "logs");
     const extra = join(home, "extra-declared");
+    const regWs = join(home, "ui-created-workspace");
     const derived = deriveFileToolRoots({
       env: {
         HOME: home,
@@ -50,6 +53,7 @@ describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试�
         ATF_DSH_LOG_DIR: logs,
         ATF_V1_FILE_TOOL_ROOTS: `${extra}:${venv}`,
       },
+      listRegistryWorkspaces: () => [{ path: regWs }],
       readFile: (path) => {
         try {
           return require("node:fs").readFileSync(path, "utf8") as string;
@@ -65,7 +69,7 @@ describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试�
         }
       },
     });
-    expect(derived.roots).toEqual([runs, ws, venv, kernel, execHome, logs, extra]);
+    expect(derived.roots).toEqual([runs, ws, venv, kernel, execHome, logs, extra, regWs]);
     expect(derived.sources).toEqual([
       "env:ATF_DSH_RUNS_ROOT",
       "config:workspace_root",
@@ -74,7 +78,45 @@ describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试�
       "env:ATF_DSH_EXEC_HOME",
       "env:ATF_DSH_LOG_DIR",
       "env:ATF_V1_FILE_TOOL_ROOTS",
+      "registry:workspace",
     ]);
+  });
+
+  it("⑦ 注册表感知：默认实读链 exists=true 入集／exists=false 不入（DSH_HOME 指向 fixture——端到端）", () => {
+    const home = tempRoot();
+    mkdirSync(join(home, "storages"), { recursive: true });
+    const existsWs = join(home, "ws-exists");
+    const goneWs = join(home, "ws-gone");
+    mkdirSync(existsWs, { recursive: true });
+    // gone 不建目录（exists=false）
+    const registry = {
+      unit: { name: "workspace", version: 2 },
+      global: { initialized: true, workspaceIds: ["w1", "w2"], archivedSessionIds: [], pinnedSessionIds: [] },
+      tables: {
+        workspaces: {
+          w1: { path: existsWs, title: "在位工作区", sessionIds: [], createdAt: "", updatedAt: "" },
+          w2: { path: goneWs, title: "丢失工作区", sessionIds: [], createdAt: "", updatedAt: "" },
+        },
+      },
+    };
+    writeFileSync(join(home, "storages", "workspace.json"), JSON.stringify(registry, null, 2) + "\n");
+    const runs = join(home, "runs");
+    const derived = deriveFileToolRoots({ env: { DSH_HOME: home, ATF_DSH_RUNS_ROOT: runs } });
+    expect(derived.roots).toContain(existsWs);
+    expect(derived.roots).not.toContain(goneWs);
+    expect(derived.sources.filter((s) => s === "registry:workspace")).toEqual(["registry:workspace"]);
+  });
+
+  it("⑦ fail-open：注册表读失败（listRegistryWorkspaces 抛错）→ 空集不入、其余派生面不受累", () => {
+    const runs = tempRoot();
+    const derived = deriveFileToolRoots({
+      env: { ATF_DSH_RUNS_ROOT: runs },
+      listRegistryWorkspaces: () => {
+        throw new Error("registry unreadable");
+      },
+    });
+    expect(derived.roots).toEqual([runs]);
+    expect(derived.sources).toEqual(["env:ATF_DSH_RUNS_ROOT"]);
   });
 
   it("声明缺席不猜：无 HOME／配置不可解析 → 仅 env 名镜像入集；train_env=system 不入派生", () => {
@@ -189,5 +231,49 @@ describe("批㊶-H/I A7 四件 DSH 挂载（buildFileGuardTools）＋产品资�
       ...scan(join(repo, "deploy"), repo),
     ];
     expect(hits).toEqual([]);
+  });
+});
+
+describe("A4——白名单根热加载（注册表感知：UI 建工作区免重启生效）", () => {
+  it("注册表文件重写 → host.roots 原地替换（同一数组引用），新工作区根入集；无变化不抖动", async () => {
+    const home = tempRoot();
+    mkdirSync(join(home, "storages"), { recursive: true });
+    const runs = join(home, "runs");
+    const ws1 = join(home, "ws-1");
+    const ws2 = join(home, "ws-2");
+    mkdirSync(ws1, { recursive: true });
+    mkdirSync(ws2, { recursive: true });
+    const writeRegistry = (records: Record<string, unknown>): void => {
+      writeFileSync(
+        registryPathOf(home),
+        JSON.stringify({
+          unit: { name: "workspace", version: 2 },
+          global: { initialized: true, workspaceIds: Object.keys(records), archivedSessionIds: [], pinnedSessionIds: [] },
+          tables: { workspaces: records },
+        }, null, 2) + "\n",
+      );
+    };
+    writeRegistry({ w1: { path: ws1, title: "一", sessionIds: [], createdAt: "", updatedAt: "" } });
+    const initial = deriveFileToolRoots({ env: { DSH_HOME: home, ATF_DSH_RUNS_ROOT: runs } });
+    const host: { roots: string[] } = { roots: [...initial.roots] };
+    const logs: string[] = [];
+    const handle = startFileRootsHotReload(host.roots, { env: { DSH_HOME: home, ATF_DSH_RUNS_ROOT: runs } }, { log: (line) => logs.push(line) });
+    try {
+      await new Promise((r) => setTimeout(r, 120));
+      writeRegistry({
+        w1: { path: ws1, title: "一", sessionIds: [], createdAt: "", updatedAt: "" },
+        w2: { path: ws2, title: "二", sessionIds: [], createdAt: "", updatedAt: "" },
+      });
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline && !host.roots.includes(ws2)) {
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      expect(host.roots).toContain(ws2);
+      expect(host.roots).toContain(ws1);
+      expect(host.roots).toContain(runs);
+      expect(logs.join("\n")).toContain("白名单根热加载");
+    } finally {
+      handle.close();
+    }
   });
 });

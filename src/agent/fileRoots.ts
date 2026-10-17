@@ -9,12 +9,15 @@
  *   ⑤ ATF_DSH_EXEC_HOME / ATF_DSH_LOG_DIR → exec 家目录／日志写入位
  *   ⑥ ATF_V1_FILE_TOOL_ROOTS      → 实例附加集（追加语义——非派生覆盖的目录全部走这里，
  *      由 per-instance overlay 登记声明；产品资产零具体路径）
+ *   ⑦ 注册工作区（A4——D2 收口）：注册表 records[].path（exists===true 记录；缺失/
+ *      不可解析/读失败一律空集 fail-open 不猜不回退）——UI 建工作区免重启即可读写。
  *
  * 本文件（及一切产品资产）不得出现具体绝对路径（守护测试 staticNoHardcodedPaths 钉死）；
  * 换环境/换机器＝改实例配置，白名单随声明面自动重建。
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { listRegistryRecords, resolveDshHome } from "../core/workspace/workspaceRegistry.js";
 
 /** 白名单根派生输入（env 必传——纯函数可注入 fs 读取做守卫测试）。 */
 export interface DeriveFileRootsInput {
@@ -23,6 +26,8 @@ export interface DeriveFileRootsInput {
   readFile?: (path: string) => string | null;
   /** 目录枚举（缺省 node:fs；守卫测试注入桩）。 */
   readDir?: (path: string) => string[];
+  /** 注册工作区清单（缺省＝注册表实读——registry:workspace 派生面；守卫测试注入桩）。 */
+  listRegistryWorkspaces?: () => ReadonlyArray<{ path: string }>;
 }
 
 export interface DerivedFileRoots {
@@ -46,6 +51,18 @@ const defaultReadFile = (path: string): string | null => {
 const defaultReadDir = (path: string): string[] => {
   try {
     return readdirSync(path);
+  } catch {
+    return [];
+  }
+};
+
+/** ⑦ 注册工作区实读（缺省实现）：exists===true 记录的 path；注册表缺席/不可解析/读失败
+ *  一律空集（fail-open——不猜不回退，沿 listRegistryRecords 既有语义外再兜一层）。 */
+const defaultRegistryWorkspaces = (env: NodeJS.ProcessEnv): (() => ReadonlyArray<{ path: string }>) => () => {
+  try {
+    return listRegistryRecords(resolveDshHome(env))
+      .filter((record) => record.exists)
+      .map((record) => ({ path: record.path }));
   } catch {
     return [];
   }
@@ -118,6 +135,15 @@ export const deriveFileToolRoots = (input: DeriveFileRootsInput): DerivedFileRoo
   // ⑥ 实例附加集（追加在尾——overlay 声明面）
   for (const part of (env["ATF_V1_FILE_TOOL_ROOTS"] ?? "").split(":")) {
     push(part, "env:ATF_V1_FILE_TOOL_ROOTS");
+  }
+  // ⑦ 注册工作区（A4——UI 建工作区免重启可读写；热加载见 fileGuardFace.startFileRootsHotReload）。
+  // 清单获取失败（注入桩抛错/实读异常）＝空集 fail-open——派生面永不因注册表不可读而失败。
+  try {
+    for (const entry of (input.listRegistryWorkspaces ?? defaultRegistryWorkspaces(env))()) {
+      push(entry.path, "registry:workspace");
+    }
+  } catch {
+    // fail-open：该声明面缺席（不猜不回退——其余派生面不受累）
   }
   return { roots, sources };
 };

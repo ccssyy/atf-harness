@@ -24,7 +24,7 @@ import { runBootPreflight, formatPreflightFatal, BOOT_PREFLIGHT_PIPELINE_ENV, BO
 import { resolveInstanceKernelDir, resolveInstancePinRoot } from "../../../../src/core/workspace/instancePin.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { registerApprovalExempt } from "./approvalExempt.js";
-import { buildFileGuardTools, registerPathGuard } from "./fileGuardFace.js";
+import { buildFileGuardTools, registerPathGuard, startFileRootsHotReload } from "./fileGuardFace.js";
 import { deriveFileToolRoots } from "../../../../src/agent/fileRoots.js";
 import type { FileToolHost } from "../../../../src/agent/fileTools.js";
 import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
@@ -143,7 +143,13 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // 批㊶-H/I：文件工具路径守卫＋A7 治理四件挂载（案 甲单轨）——白名单根＝派生集
   // （配置声明面镜像，fileRoots.ts）＋env 附加集；产品资产零具体目录（增补裁定）。
   const fileRoots = deriveFileToolRoots({ env: process.env });
-  const fileHost: FileToolHost = { roots: fileRoots.roots, env: process.env };
+  // A4：持可变数组实例（FileToolHost.roots 为 readonly 视图——热加载原地替换同一实例，
+  // 守卫每次调用读到的即最新派生集）。
+  const fileHostRoots: string[] = fileRoots.roots;
+  const fileHost: FileToolHost = { roots: fileHostRoots, env: process.env };
+  // A4：注册表感知热加载——UI 建工作区（注册表变更）免重启进白名单（守卫每次调用读
+  // host.roots，原地替换同一数组；轮询侦听 2s，重派生异常保留现集不缩窄）。
+  startFileRootsHotReload(fileHostRoots, { env: process.env });
   // 批㊶-W W1：atf_bash 围栏取值链＝会话绑定反查（runsRoot 直传 deps）＞ env 过渡态
   for (const tool of buildFileGuardTools(fileHost, { runsRoot: config.runsRoot })) ctx.tools.register(tool);
   if (registerPathGuard(ctx, fileHost)) {
