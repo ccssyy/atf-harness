@@ -763,8 +763,8 @@ atf_cli:
 # （mock 已回 2）"的表述作废】，真实对端以内核批次二实现为准。
 # ---------------------------------------------------------------------
 atf_upstream:
-  tag: v0.7.5b1
-  commit_sha: 496657493ec8e75a8708826503fae655be69167a
-  pinned_at: "2026-10-11"
-  baseline: 内核方法面 14／harness 工具面 9（含 label_qc 两工具，R-3 接线已合入）＋丙线本地治理面 4（A7 atf_read/edit/write/bash，批 P 续作 v2 已合入）；v0.7.5b1 批㊶R前置 内核补丁（4966574：模型路径生成面/报告面双防线——base_model 本地校验 base_model_path_not_local＋本机清单回流 ATF_MODEL_ROOT，报告面渲染前同码复核不产报告；卡数一致性 nproc×visible_devices 透传校验 _count_visible_devices/_validate_gpu_count_linkage；_skills_pack 镜像同步；纯增量，**零契约面变更**——无新 Gate/reason code/Schema 版本，会话协议轴 1／桥接契约轴 2 零 diff）；re-pin 2026-10-11（批㊶R前置 门 2 已过 9ae9f123，worktree 27e4f77→4966574 前移 15 commits 不丢内容）；pin＝tag v0.7.5b1 commit 4966574（HEAD==tag==main 四点同指）
+  tag: v0.7.18b0
+  commit_sha: 72411b0b120bcd2cd5f59d3057408294f4995d76
+  pinned_at: "2026-10-18"
+  baseline: 内核方法面 14／harness 工具面 9＋管线段模式入口（v0.7.18b0＝72411b0：--stage 单段执行＋盘上只读再水合，特性批 39e4632；段模式命令面 --workspace/--run-id/--stage/--source-root，落点唯一 <workspace>/runs/<run-id>，退出码 0 贯通/2 拒绝/3 环境错误；owner 侧核验 4 新锚＋18 既有回归绿、越序负例 exit 2 盘面零新增、契约零 diff、_prereq 未改）；re-pin 2026-10-18（修复批A2.2b，worktree 83defb9→72411b0 前移不丢内容）；pin＝tag v0.7.18b0 commit 72411b0（禁追新）
   contract_version: 1

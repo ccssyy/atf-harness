@@ -162,9 +162,9 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/- facts_log_tail_corrupt/);
   });
 
-  it("atf_upstream pin 升至 v0.7.5b1（re-pin 2026-10-11 批㊶R前置；pin＝tag commit 4966574，模型路径双防线＋卡数一致性）", () => {
-    expect(contract).toMatch(/  tag: v0\.7\.5b1/);
-    expect(contract).toMatch(/  commit_sha: 496657493ec8e75a8708826503fae655be69167a/);
+  it("atf_upstream pin 升至 v0.7.18b0（re-pin 2026-10-18 修复批A2.2b；pin＝tag commit 72411b0，管线段模式入口）", () => {
+    expect(contract).toMatch(/  tag: v0\.7\.18b0/);
+    expect(contract).toMatch(/  commit_sha: 72411b0b120bcd2cd5f59d3057408294f4995d76/);
     // 会话协议版本轴不随 re-pin 变动（内核方法面补登不 bump）；桥接契约版本轴恒 2（另轴）
     expect(contract).toMatch(/  contract_version: 1/);
   });

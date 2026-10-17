@@ -15,8 +15,8 @@ import { err, ok, type Result } from "./result.js";
 // 同码复核；卡数一致性 nproc×visible_devices 透传校验——纯增量
 // 零契约面变更，会话协议轴 1／桥接契约轴 2 零 diff——HEAD==tag==main 四点同指 4966574；
 // 门 2 已过（9ae9f123），worktree 自 27e4f77 前移 15 commits 不丢内容）。
-export const ATF_UPSTREAM_TAG = "v0.7.5b1";
-export const ATF_UPSTREAM_COMMIT_SHA = "496657493ec8e75a8708826503fae655be69167a";
+export const ATF_UPSTREAM_TAG = "v0.7.18b0";
+export const ATF_UPSTREAM_COMMIT_SHA = "72411b0b120bcd2cd5f59d3057408294f4995d76";
 
 export interface AtfCliInvocation {
   command: string;

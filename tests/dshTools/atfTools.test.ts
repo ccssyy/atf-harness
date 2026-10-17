@@ -76,7 +76,7 @@ describe("atf-tools 注册面（11 工具清单＝指令要求）", () => {
     const registered = [
       ...toolNames(buildBridgeTools(ctx, manager)),
       ...toolNames(buildFileTools(tempRoot())),
-      ...toolNames([buildPipelineTool(ctx, `node ${mockPipelinePath}`, 30_000, tempRoot())]),
+      ...toolNames([buildPipelineTool(ctx, `node ${mockPipelinePath}`, 30_000)]),
     ];
     for (const name of [...BRIDGE_TOOL_NAMES, "atf_run_list", "atf_report_read", "atf_metrics_compare", "atf_gpu_status", "atf_pipeline_stage"]) {
       expect(registered).toContain(name);
@@ -276,24 +276,24 @@ describe("atf-tools 文件面（临时 runs 目录）", () => {
 
 describe("atf_pipeline_stage 集成（mock pipeline）＋审批 seam", () => {
   it("单段触发成功：审批放行 → spawn mock → 段摘要结构化返回", async () => {
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${mockPipelinePath}`, 30_000, tempRoot());
-    const result = (await (tool as DshToolLike).execute({ stage: "register", run_id: "r1" }, fakeExec)) as Record<string, unknown>;
+    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${mockPipelinePath}`, 30_000);
+    const result = (await (tool as DshToolLike).execute({ stage: "register", run_id: "r1", workspace_path: tempRoot(), source_root: tempRoot() }, fakeExec)) as Record<string, unknown>;
     expect(result).toMatchObject({ stage: "register", ok: true, exit_code: 0 });
     expect(JSON.stringify(result["summary"])).toContain("mock 单段触发");
   });
 
   it("未知段：DSH defineTool 参数校验前置拒绝（enum 挡在 execute 之前——协议适配价值）", async () => {
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${mockPipelinePath}`, 30_000, tempRoot());
+    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${mockPipelinePath}`, 30_000);
     await expect((tool as DshToolLike).execute({ stage: "nonexistent", run_id: "r1" }, fakeExec)).rejects.toThrow(/must be one of/);
   });
 
   it("审批三态：rejected／unavailable 均 fail-closed 且不 spawn；段名清单与 walkthrough 段一致", async () => {
     for (const outcome of ["rejected", "unavailable"]) {
-      const tool = buildPipelineTool(approvalCtx(outcome), `node ${mockPipelinePath}`, 30_000, tempRoot());
-      const result = (await (tool as DshToolLike).execute({ stage: "label_qc", run_id: "r1" }, fakeExec)) as Record<string, unknown>;
+      const tool = buildPipelineTool(approvalCtx(outcome), `node ${mockPipelinePath}`, 30_000);
+      const result = (await (tool as DshToolLike).execute({ stage: "label_qc", run_id: "r1", workspace_path: tempRoot() }, fakeExec)) as Record<string, unknown>;
       expect(result).toMatchObject({ error: "approval_denied", outcome });
     }
-    expect(PIPELINE_STAGES).toEqual(["register", "split", "label_qc", "candidate", "publish", "training_prep"]);
+    expect(PIPELINE_STAGES).toEqual(["register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep"]);
   });
 });
 

@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { AtfBridgeConnection } from "../../src/bridge/connection.js";
+import { ATF_UPSTREAM_TAG } from "../../src/bridge/atfCommand.js";
 import {
   buildEvidenceEvent,
   captureFactRef,
@@ -68,7 +69,8 @@ describe("门 1b TEM 镜像（EvidenceEvent）", () => {
     expect(event.result_summary).toContain('"status":"blocked"');
     expect(event.gate).toBe("G1");
     expect(event.ts).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(event.env_fingerprint).toEqual({ model: "faux-spike", kernel_pin: "v0.7.5b1" });
+    // kernel_pin 随 atf_upstream re-pin 走（A2.2b 起引用常量，禁字面量钉 tag）
+    expect(event.env_fingerprint).toEqual({ model: "faux-spike", kernel_pin: ATF_UPSTREAM_TAG });
     expect(Number.isNaN(Date.parse(event.ts))).toBe(false);
   });
 

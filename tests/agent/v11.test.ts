@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { ATF_UPSTREAM_TAG } from "../../src/bridge/atfCommand.js";
 import { AtfBridgeConnection } from "../../src/bridge/connection.js";
 import { createFactTrackTelemetrySink, aiTelemetrySpanNames } from "../../src/agent/telemetryFace.js";
 import { planRunBoundary, planReconcile } from "../../src/agent/driveFace.js";
@@ -58,7 +59,7 @@ describe("丙 v1.1 · B7 telemetry（pi span 层级→事实轨）", () => {
     for (const fact of sink.facts) {
       expect(fact.kind).toBe("telemetry_span");
       expect(fact.run_id).toBe("run-v11");
-      expect(fact.env_fingerprint.kernel_pin).toBe("v0.7.5b1");
+      expect(fact.env_fingerprint.kernel_pin).toBe(ATF_UPSTREAM_TAG);
       expect(Number.isNaN(Date.parse(fact.ts))).toBe(false);
     }
     expect((sink.facts[1] as unknown as { attributes: { tool: string } }).attributes.tool).toBe("atf_fact_scan");
