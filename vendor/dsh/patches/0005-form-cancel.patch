@@ -1,0 +1,95 @@
+# vendor/dsh patch 0005 —— 修复批A1.1：form 卡显式取消入口（2026-10-17）
+# 内容：PendingQuestion.cancel()（waterfall.reject('ASK_CANCELLED')——与 dismiss 的 hide 语义
+#   分离：hide＝收起请示继续，cancel＝终止本次请示）；FormPanel footer 增 outline 取消钮
+#   （busy 禁用；成功 close 卡、失败落 status 面不静默；不调用 dismiss）；locales 两键
+#   form.cancel（zh 取消／en Cancel）；.actions justify-content 固化右对齐容纳两钮。
+# 触及文件：packages/client/ui-user-questions/src/client/{contract/slots.ts,FormPanel.tsx,
+#   FormPanel.module.css,locales.ts}
+# 红线：dismiss() 语义零改动；取消≠拒绝授权；不加 Esc；form 校验分支不放宽。
+--- a/packages/client/ui-user-questions/src/client/contract/slots.ts
++++ b/packages/client/ui-user-questions/src/client/contract/slots.ts
+@@ -582,6 +582,25 @@
+   }
+ 
+   /**
++   * Cancel the whole request explicitly: settle the live waterfall with
++   * `ASK_CANCELLED`, so the asking tool stops waiting (vendor patch 0005,
++   * 修复批A1.1). Unlike `dismiss` — which only hides a tool-call-keyed card
++   * while the request stands and its countdown keeps running here — cancel
++   * ends the request itself, the same settlement the unnamed-card dismiss
++   * path produces. Canceling a form question rejects the *question*; any
++   * authorization the asker layers behind it stays on its own approval
++   * surface (审批≠请示).
++   */
++  cancel(): Promise<void> {
++    const waterfall = this.#waterfall
++    if (waterfall === undefined) {
++      return Promise.reject(new Error('no channel accepts a cancellation yet'))
++    }
++    this.#waterfall = undefined
++    return settlePendingComposer(() => { waterfall.reject('ASK_CANCELLED') }, 'pending question cancellation failed')
++  }
++
++  /**
+    * Close the panel. A tool-call-keyed card only leaves the composer seat: the
+    * request stands, the countdown keeps running here, and the tool call row
+    * reopens it. A card the Host never named ends its request instead, because
+--- a/packages/client/ui-user-questions/src/client/FormPanel.tsx
++++ b/packages/client/ui-user-questions/src/client/FormPanel.tsx
+@@ -60,6 +60,21 @@
+         setError(cause instanceof Error ? cause.message : String(cause))
+       })
+   }
++  // Vendor patch 0005 (修复批A1.1): explicit cancel — settles the live
++  // waterfall with ASK_CANCELLED (the tool's structured cancel), then closes
++  // the card. Failures surface on the existing status line; dismiss() is not
++  // involved (its tool-call-keyed semantics only hide the panel).
++  const cancelFlow = (): void => {
++    if (busy) return
++    setBusy(true)
++    setError(null)
++    void pending.cancel()
++      .then(() => { pending.close() })
++      .catch((cause: unknown) => {
++        setBusy(false)
++        setError(cause instanceof Error ? cause.message : String(cause))
++      })
++  }
+   return (
+     <div className={css.frame} data-form-key={pending.key}>
+       <section className={css.card} aria-label={form.question} aria-busy={busy}>
+@@ -105,6 +120,9 @@
+         <div className={css.footer}>
+           <div className={css.feedback} role="status">{error}</div>
+           <div className={css.actions}>
++            <Button variant="outline" disabled={busy} onClick={cancelFlow}>
++              {t('form.cancel')}
++            </Button>
+             <Button variant="primary" disabled={busy} onClick={submit}>
+               {form.submitLabel ?? t('form.submit')}
+             </Button>
+--- a/packages/client/ui-user-questions/src/client/FormPanel.module.css
++++ b/packages/client/ui-user-questions/src/client/FormPanel.module.css
+@@ -117,5 +117,6 @@
+ .actions {
+   display: flex;
+   align-items: center;
++  justify-content: flex-end;
+   gap: 8px;
+ }
+--- a/packages/client/ui-user-questions/src/client/locales.ts
++++ b/packages/client/ui-user-questions/src/client/locales.ts
+@@ -36,6 +36,7 @@
+   'form.header': '参数确认表单',
+   'form.submit': '提交',
+   'form.required': '必填项未填',
++  'form.cancel': '取消',
+ } satisfies Record<string, string>
+ 
+ /** The question namespace key union. */
+@@ -77,4 +78,5 @@
+   'form.header': 'Parameter form',
+   'form.submit': 'Submit',
+   'form.required': 'Required fields left empty',
++  'form.cancel': 'Cancel',
+ } satisfies Record<QuestionKey, string>
