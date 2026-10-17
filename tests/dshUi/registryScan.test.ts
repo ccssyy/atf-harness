@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { enumerateRunEntries, scanRuns, scanRunDir, scanRunDirAt, type ScanLiveness } from "../../packages/extensions/atf-ui/src/server.js";
 import { buildMonitorSnapshot } from "../../packages/extensions/atf-ui/src/snapshot.js";
 import { writeProgress } from "../../src/core/workspace/runFacts.js";
+import { appendSegmentFact } from "../../src/core/workspace/segmentFacts.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -148,6 +149,29 @@ describe("A3——训练段两态（初帧活跃＋进程消失不悬空）", ()
     writeProgress(join(root, "run-f"), { round: 0, updated_at: new Date(Date.now() - 3_600_000).toISOString() });
     const scan = scanRunDir(root, "run-f", livenessWith({ "run-f": false }));
     expect(scan.training.active).toBe(false);
+    expect(scan.segments.training).toBe("failed");
+  });
+
+  it("A3.1 负例：仅 launch/train.sh（备料未启动）+ 取证面无命中 → 训练段 pending（不得 failed）", () => {
+    const root = tempRoot();
+    seedRun(join(root, "run-ready"), ["launch/train.sh"]);
+    const scan = scanRunDir(root, "run-ready", livenessWith({ "run-ready": false }));
+    expect(scan.segments.training).toBe(false);
+    expect(scan.training.active).toBe(false);
+  });
+
+  it("A3.1 曾启动②：launch/train.sh＋段事实 training（未写 progress，stale 形态）→ failed", () => {
+    const root = tempRoot();
+    seedRun(join(root, "run-fact"), ["launch/train.sh"]);
+    appendSegmentFact(join(root, "run-fact"), "training", "atf_run_training");
+    const scan = scanRunDir(root, "run-fact", livenessWith({ "run-fact": false }));
+    expect(scan.segments.training).toBe("failed");
+  });
+
+  it("A3.1 曾启动③：launch/train.sh＋trainer_state.json（无 progress 无段事实）→ failed", () => {
+    const root = tempRoot();
+    seedRun(join(root, "run-tstate"), ["launch/train.sh", "training/trainer_state.json"]);
+    const scan = scanRunDir(root, "run-tstate", livenessWith({ "run-tstate": false }));
     expect(scan.segments.training).toBe("failed");
   });
 

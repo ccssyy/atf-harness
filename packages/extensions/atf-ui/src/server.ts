@@ -564,13 +564,16 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
   SEGMENT_ORDER_KEYS.forEach((key, idx) => {
     doneMap[key] = maxEvidenceIdx >= idx;
   });
-  // A3 训练段不悬空判定：启动证据（train.sh/初帧）在场 ∧ 完成锚缺席 ∧ tmux 取证面在
-  // （trainingEvidence 已定义）且本 run 无命中 ∧ 无活跃信号（progress/loss-series 皆 stale）
-  // ＝进程确定性消失 → failed。取证面缺席（liveness 无 trainingEvidence——vitest 直扫等）
-  // ＝信号源不在场，不猜（pending）。
-  const trainingLaunchEvidence = has("launch/train.sh") || has("training/train.sh") || progressRaw !== null;
+  // A3 训练段不悬空判定（A3.1 收紧）：「曾启动」证据闭集（三支 OR——train.sh 文件在场只
+  // 证明已备料不证明曾启动，waiting_for_start/launch_ready 形态不得假 failed）：
+  //   ① progressRaw !== null（曾写即曾启动，不受 fresh 限制）；② hasSegmentFact("training")
+  //   （atf_run_training 启动放行写入——最硬）；③ training/trainer_state.json（真实训练副产物）。
+  // 其余判据逐字不动：完成锚缺席 ∧ tmux 取证面已定义且本 run 无命中 ∧ 无活跃信号 → failed；
+  // 取证面缺席（liveness 无 trainingEvidence——vitest 直扫等）＝信号源不在场，不猜（pending）。
+  const trainingLaunchedEvidence =
+    progressRaw !== null || hasSegmentFact(dir, "training") || has("training/trainer_state.json");
   const trainingFailedNow =
-    trainingLaunchEvidence && rawDone.training !== true &&
+    trainingLaunchedEvidence && rawDone.training !== true &&
     liveness?.trainingEvidence !== undefined && liveness.trainingEvidence[runId] !== true &&
     !trainingActiveLive(dir, runId, liveness);  // 批㊶-N N-3：段内进度（progress.json 镜像＋fresh 布尔；过期/缺失置 null——additive）
   const progress: RunProgress | null = progressRaw !== null && progressFresh(progressRaw, nowMs, liveness?.freshWindowMs ?? resolveTrainActiveWindowMs(process.env))
