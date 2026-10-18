@@ -211,6 +211,8 @@ print("{}")`);
     action: "start", run_id: "run-fix2", adapter_path: f.ckpt,
     eval_assets_dir: f.assets, field_config: join(root, "field-config.json"),
     service_config: f.serviceConfig, env_profile: "a800-local", deploy: join(root, "deploy.local.yaml"),
+    // 批C2 E6：资产绑定通道在位（夹具资产＝run 外路径——owner 级确认走外部显式通道）
+    assets_external_confirm: true,
   });
 
   it("start 全链成功 → bindRun 恰一次且 run_id 实参", async () => {
