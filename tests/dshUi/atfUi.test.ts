@@ -88,6 +88,30 @@ describe("快照构造纯函数（八段四态推导＋loss 曲线＋KPI＋空�
     utimesSync(join(older, "viewer.html"), old, old);
     expect(discoverViewerDirs(runDir)).toEqual(["analysis-b29", "analysis"]);
   });
+  it("批C2 E9 多形态发现：eval 域直挂＋评估轮深挂（相对路径入列）；无 viewer.html 落选；全形态 mtime 排序", async () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-e9");
+    const shallow = seedViewerTree(runDir, "analysis", { "viewer.html": "<html>浅</html>" });            // 形态①
+    const direct = seedViewerTree(join(runDir, "eval_r2"), "analysis", { "viewer.html": "<html>直挂</html>" }); // 形态②
+    const deep = seedViewerTree(join(runDir, "eval", "2-20261018"), "analysis", { "viewer.html": "<html>深挂</html>" }); // 形态③
+    seedViewerTree(join(runDir, "eval", "2-20261018"), "analysis-noviewer", { "other.txt": "x" });        // 有 analysis 无 viewer.html
+    seedViewerTree(join(runDir, "eval", "not-a-round"), "analysis", { "viewer.html": "<html>非轮</html>" }); // 轮名不合规→不入列
+    seedViewerTree(runDir, "unrelated", { "viewer.html": "<html>无关</html>" });                          // 非 analysis 前缀
+    const out = discoverViewerDirs(runDir);
+    expect(out).toContain("analysis");
+    expect(out).toContain("eval_r2/analysis");
+    expect(out).toContain("eval/2-20261018/analysis");
+    expect(out).not.toContain("eval/2-20261018/analysis-noviewer");
+    expect(out).not.toContain("eval/not-a-round/analysis");
+    expect(out).not.toContain("unrelated");
+    expect(out).toHaveLength(3);
+    // mtime 排序：最新（deep）在前，最旧（shallow）在后
+    const t0 = new Date(Date.now() - 120_000);
+    utimesSync(join(shallow, "viewer.html"), t0, t0);
+    utimesSync(join(direct, "viewer.html"), new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    utimesSync(join(deep, "viewer.html"), new Date(), new Date());
+    expect(discoverViewerDirs(runDir)).toEqual(["eval/2-20261018/analysis", "eval_r2/analysis", "analysis"]);
+  });
   it("批㉛段1 discoverViewerDirs：无 viewer 目录 → 空数组；run 目录缺失不抛", () => {
     const root = tempRoot();
     mkdirSync(join(root, "run-empty"), { recursive: true });
@@ -422,6 +446,21 @@ describe("批㉛段1 viewer 静态路由（resolveViewerRequest fail-closed＋ha
     expect(resolveViewerRequest(root, `${P}/run-x/viewer.html`, viewers)).toBeNull();
     expect(resolveViewerRequest(root, `${P}/run-v/analysis-b29/viewer.html`, viewers)?.abs).toBe(join(root, "run-v", "analysis-b29", "viewer", "viewer.html"));
     expect(resolveViewerRequest(root, `${P}/run-v/images/abc.png`, viewers)?.type).toBe("image/png");
+  });
+  it("批C2 E9 路由多段形态：eval 域深挂 viewer 相对路径前缀命中（含子资源）；未命中回落首条缺省", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-deep");
+    seedViewerTree(runDir, "analysis", { "viewer.html": "<html>浅</html>" });
+    seedViewerTree(join(runDir, "eval", "3-20261018"), "analysis", { "viewer.html": "<html>深</html>", "data.json": "{}" });
+    const viewers = ["analysis", "eval/3-20261018/analysis"];
+    expect(resolveViewerRequest(root, `${P}/run-deep/eval/3-20261018/analysis/viewer.html`, viewers)?.abs)
+      .toBe(join(runDir, "eval", "3-20261018", "analysis", "viewer", "viewer.html"));
+    expect(resolveViewerRequest(root, `${P}/run-deep/eval/3-20261018/analysis/data.json`, viewers)?.type).toContain("application/json");
+    // 深挂为唯一条目时：裸 run URL 回落首条缺省
+    expect(resolveViewerRequest(root, `${P}/run-deep/`, ["eval/3-20261018/analysis"])?.abs)
+      .toBe(join(runDir, "eval", "3-20261018", "analysis", "viewer", "viewer.html"));
+    // 越界仍拒：清单外多段路径不可达
+    expect(resolveViewerRequest(root, `${P}/run-deep/eval/9-20260101/analysis/viewer.html`, viewers)).toBeNull();
   });
   it("resolveViewerRequest：fail-closed（未知 run／analysis 不在清单／.. 越界／不可服务扩展名）", () => {
     const { root, viewers } = seed();

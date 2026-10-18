@@ -780,30 +780,56 @@ const hasConfigSnapshotFile = (path: string): boolean => {
 };
 
 /**
- * badcase viewer 产物发现（批㉛段1）：run 下以 `analysis` 开头的目录里的
- * `viewer/viewer.html`，两形态兼容（批㉕B 两步链 `analysis/` ＋ 批㉙ 命名变体
- * `analysis-b29/`）。`.bak` 备份目录不入列（历史备份不是现役产物，也不得经 URL
- * 服务）；`analysis-input` 无 viewer 子目录自然落选。
- * 排序＝viewer.html mtime 新者在前（A 重评后重建的 viewer 即首选），mtime 同值按名升序。
+ * badcase viewer 产物发现（批㉛段1；批C2 E9 多形态）：analysis 目录三形态——
+ * ①run 一级 analysis 前缀目录（批㉕B 两步链 analysis＋批㉙ 命名变体 analysis-b29）；
+ * ②eval 前缀域直挂 analysis（uat awb_r1 实形）；③eval 前缀域内轮目录（N-日期）深挂
+ * analysis（内核链产物真实形态；E9 台账更正：写者在深、读者在浅的四跳断链修复）。
+ * `.bak` 备份目录不入列（历史备份不是现役产物，也不得经 URL 服务）；无 viewer 子目录
+ * （含 viewer.html）的 analysis 自然落选。
+ * 排序＝viewer.html mtime 新者在前（A 重评后重建的 viewer 即首选），mtime 同值按路径升序。
  */
 export function discoverViewerDirs(runDir: string): string[] {
-  let entries: string[];
+  const candidates: string[] = [];
+  // ①一级 analysis*
   try {
-    entries = readdirSync(runDir, { withFileTypes: true })
-      .filter((e) => e.isDirectory() && e.name.startsWith("analysis") && !e.name.includes(".bak"))
-      .map((e) => e.name);
+    for (const entry of readdirSync(runDir, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name.startsWith("analysis") && !entry.name.includes(".bak")) candidates.push(entry.name);
+    }
   } catch {
-    return [];
+    // runDir 缺席＝无浅层候选
   }
-  const stamp = (name: string): number => {
+  // ②③eval* 域：直挂 analysis*＋轮目录 <N>-<日期>/analysis* 深挂
+  try {
+    for (const evalDir of readdirSync(runDir, { withFileTypes: true })) {
+      if (!evalDir.isDirectory() || !evalDir.name.startsWith("eval") || evalDir.name.includes(".bak")) continue;
+      const evalRel = evalDir.name;
+      const evalAbs = join(runDir, evalRel);
+      for (const entry of readdirSync(evalAbs, { withFileTypes: true })) {
+        if (entry.isDirectory() && entry.name.startsWith("analysis") && !entry.name.includes(".bak")) candidates.push(`${evalRel}/${entry.name}`);
+        if (entry.isDirectory() && /^\d+-\d{8}/.test(entry.name) && !entry.name.includes(".bak")) {
+          const roundRel = `${evalRel}/${entry.name}`;
+          try {
+            for (const deep of readdirSync(join(runDir, roundRel), { withFileTypes: true })) {
+              if (deep.isDirectory() && deep.name.startsWith("analysis") && !deep.name.includes(".bak")) candidates.push(`${roundRel}/${deep.name}`);
+            }
+          } catch {
+            // 轮目录不可读＝该轮零候选
+          }
+        }
+      }
+    }
+  } catch {
+    // 无 eval* 域＝零深挂候选
+  }
+  const stamp = (rel: string): number => {
     try {
-      return statSync(join(runDir, name, "viewer", "viewer.html")).mtimeMs;
+      return statSync(join(runDir, rel, "viewer", "viewer.html")).mtimeMs;
     } catch {
       return -1;
     }
   };
-  return entries
-    .filter((name) => stamp(name) >= 0)
+  return candidates
+    .filter((rel) => stamp(rel) >= 0)
     .sort((a, b) => (stamp(b) - stamp(a)) || (a < b ? -1 : a > b ? 1 : 0));
 }
 
@@ -1277,12 +1303,20 @@ export const resolveViewerRequest = (
   if (parts.length === 0 || !SEG_RE.test(parts[0]!)) return null;
   const runId = parts[0]!;
   if (viewers.length === 0) return null;
-  let analysis: string;
-  let sub: string[];
-  if (parts.length >= 2 && viewers.includes(parts[1]!)) {
-    analysis = parts[1]!;
-    sub = parts.slice(2);
-  } else {
+  // 批C2 E9：viewers 条目＝analysis 目录相对路径（单段 `analysis*` 或多段
+  // `eval*/[<N>-<日期>/]analysis*`）——按 parts 前缀最长匹配定位；未显式命中回落首条（缺省打开）
+  let analysis: string | null = null;
+  let sub: string[] = [];
+  const maxTake = Math.min(parts.length - 1, 4);
+  for (let take = maxTake; take >= 1; take -= 1) {
+    const candidate = parts.slice(1, 1 + take).join("/");
+    if (viewers.includes(candidate)) {
+      analysis = candidate;
+      sub = parts.slice(1 + take);
+      break;
+    }
+  }
+  if (analysis === null) {
     analysis = viewers[0]!;
     sub = parts.slice(1);
   }
