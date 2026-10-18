@@ -31,6 +31,7 @@ import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTransl
 import { BridgeManager, buildBridgeTools } from "./bridgeFace.js";
 import { buildFileTools } from "./fileFace.js";
 import { buildPipelineTool } from "./pipelineFace.js";
+import { buildQuantizeTool } from "./quantizeFace.js";
 import { buildConfirmTools } from "./confirmFace.js";
 import { buildRunTrainingTool, buildEvalTools, buildPublishModelTool, type TrainingToolsConfig } from "./trainingFace.js";
 import { buildRecordsQueryTool } from "./recordsFace.js";
@@ -72,6 +73,7 @@ export const Config = z.object({
     .string()
     .default(process.env["ATF_DSH_PIPELINE_COMMAND"] ?? `node ${join(repoRoot, "tests", "fixtures", "mock_pipeline.mjs")}`),
   pipelineTimeoutMs: z.number().default(120_000),
+  quantizeTimeoutMs: z.number().default(120_000),
   logDir: z
     .string()
     .default(process.env["ATF_DSH_LOG_DIR"] ?? join(repoRoot, "tmp", "atf-logs")),
@@ -161,6 +163,9 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   for (const tool of buildBridgeTools(ctx, manager, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, execHome: config.execHome })) ctx.tools.register(tool);
   for (const tool of buildFileTools(config.runsRoot)) ctx.tools.register(tool);
   ctx.tools.register(buildPipelineTool(ctx, pipelineCommand, config.pipelineTimeoutMs));
+  // E1b：坐标量化工具面——内核 CLI 单源（<kernelDir>/tools/quantize_annotations.py，pin 随
+  // kernelDir 消费链；白名单根＝A4 同一可变数组实例 fileHostRoots，热加载同步生效）。
+  ctx.tools.register(buildQuantizeTool(ctx, { roots: fileHostRoots, command: `python3 ${join(config.kernelDir, "tools", "quantize_annotations.py")}`, timeoutMs: config.quantizeTimeoutMs }));
   for (const tool of buildConfirmTools({ runsRoot: config.runsRoot, ctx })) ctx.tools.register(tool);
   const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx, models: { root: modelInventory.root, names: modelInventory.models }, bindRun: (runId) => manager.bindRun(runId) };
   ctx.tools.register(buildRunTrainingTool(ctx, trainCfg));
@@ -230,7 +235,7 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
       async execute() {
         // 批㊶R前置 状态面 additive：本机模型清单（启动扫描结果随装配闭包携带）
         return {
-          greeting: "atf-tools 已挂载", package: "@atf/dsh-atf-tools@0.1.0", tools: 11,
+          greeting: "atf-tools 已挂载", package: "@atf/dsh-atf-tools@0.1.0", tools: 12,
           local_models: { root: modelInventory.root, count: modelInventory.models.length, models: modelInventory.models, ...(modelInventory.error !== undefined ? { error: modelInventory.error } : {}) },
         };
       },
