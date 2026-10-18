@@ -81,7 +81,7 @@ describe("批C1-2 B2 promptWithOverflowRetry（强制压缩一次＋自动重试
     const out = await promptWithOverflowRetry(agent, "x", { forceBox: { current: false }, contextWindowTokens: null });
     expect(out.kind).toBe("overflow_final");
     expect(OVERFLOW_FINAL_NOTICE_TEXT).not.toContain(CONTEXT_WINDOW_EXCEEDED_CODE);
-    expect(OVERFLOW_FINAL_NOTICE_TEXT).toContain("已自动压缩");
+    expect(OVERFLOW_FINAL_NOTICE_TEXT).toContain("已尝试压缩");
   });
 
   it("非溢出异常原样上抛（kind=error 不吞既有错误面）；无溢出直过＝单次 prompt", async () => {

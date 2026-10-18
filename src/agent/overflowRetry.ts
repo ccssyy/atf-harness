@@ -41,7 +41,7 @@ export const isOverflowAssistantMessage = (message: unknown, contextWindowTokens
 
 /** 溢出兜底可读文案（两次都超限才出——原始码/红条不得直出）。 */
 export const OVERFLOW_FINAL_NOTICE_TEXT =
-  "本轮上下文过长，已自动压缩后重试仍超限——请新建会话（或缩小本轮输入/附件）后再试。";
+  "本轮上下文过长，已尝试压缩并重试仍超限——请新建会话（或缩小本轮输入/附件）后再试。";
 
 /** 重试轮摘要的结构面（Agent 最小面——结构化类型，不引库泛型）。 */
 interface PromptAgent {
