@@ -51,7 +51,7 @@ import {
   type CreateExperimentOutcome,
   type RebindOutcome,
 } from "../workspace/workspaceRegistry.js";
-import { candidateDigestFromText, collectConfirmReport, type ConfirmRequestBody } from "../confirmRequest.js";
+import { candidateDigestFromText, collectConfirmReport, unproducedFieldsFromCandidateText, type ConfirmRequestBody } from "../confirmRequest.js";
 import { type SchemaNode } from "./canonical.js";
 import { type ToolDefinition } from "./toolDefinition.js";
 
@@ -388,6 +388,12 @@ const askUserHandler: LocalToolHandler = async (rawParams, host) => {
   if (candidateDigest === null) {
     return rejected("invalid_input", { message: `候选文件不是合法 JSON（摘要复算失败）: ${candidateRef}` });
   }
+  // E15b：无生产者字段呈现——候选文件单源（复用已读 candidateText，不新增 inline 参数）；
+  // 缺省/空数组 → 不传（卡面零该节）；形态非法 → invalid_input 拒绝（不渲染半真卡面）。
+  const unproduced = unproducedFieldsFromCandidateText(candidateText);
+  if (!unproduced.ok) {
+    return rejected("invalid_input", { message: unproduced.message });
+  }
   const reportRef = stringParam(rawParams, "report_ref");
   let reportFile: unknown = undefined;
   if (reportRef !== undefined) {
@@ -406,6 +412,8 @@ const askUserHandler: LocalToolHandler = async (rawParams, host) => {
         "确认报告三要素缺失（Prompt 实文／字段序／坐标策略）——以 inline 字段或 report_ref（build_contract_confirmation_report.py 产物）补齐后再请示；不渲染空心卡面",
     });
   }
+  // E15b：声明随 report 下发（仅非空——handler 单源回填，params 面零新增）
+  if (unproduced.fields !== undefined) report.unproduced_fields = unproduced.fields;
   return {
     kind: "executed",
     result: {

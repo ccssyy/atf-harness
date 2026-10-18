@@ -17,6 +17,14 @@
  */
 import { canonicalDigestHex } from "./canonicalDigest.js";
 
+/** 无生产者字段声明（E15b 卡面消费形态；候选单源＝field_projection.unproduced_targets，
+ *  内核四键 {field_id,reason,declared_by,declared_at}——卡面只取三键，declared_at 留内核）。 */
+export interface UnproducedField {
+  field_id: string;
+  reason: string;
+  declared_by: string;
+}
+
 /** 确认报告投影（build_contract_confirmation_report.py 输出的 harness 消费形态；
  *  深形态归内核——harness 只取卡面渲染所需字段，不做第二权威）。 */
 export interface ContractConfirmationReport {
@@ -30,6 +38,9 @@ export interface ContractConfirmationReport {
   field_groups?: string[];
   /** 坐标策略声明（如 pixel——与 label_semantics 对账归内核） */
   coordinate_policy: string;
+  /** 无生产者字段（E15b——业务要、数据零页的显式声明；仅非空时卡面出现该节。
+   *  单源＝候选契约 field_projection.unproduced_targets，缺省不传＝卡面零该节） */
+  unproduced_fields?: UnproducedField[];
   /** 报告文件引用（workspace 相对路径；inline 形态可缺省） */
   report_ref?: string;
 }
@@ -45,10 +56,20 @@ export interface ConfirmRequestBody {
   field_ids?: string[];
   field_groups?: string[];
   coordinate_policy?: string;
+  /** E15b：本键不收 inline 值（单源＝候选文件 field_projection.unproduced_targets，
+   *  handler 解析后回填 report——params 面零新增，避免两个权威）；类型在位仅为
+   *  report 投影复用同形。 */
+  unproduced_fields?: UnproducedField[];
 }
 
 /** 卡面渲染的行内截断上限（超长 prompt 实文截断留痕——卡面是人读面，全文在报告文件）。 */
 export const CONFIRM_CARD_PROMPT_CAP_CHARS = 400;
+
+/** 无生产者字段卡面条目上限（E15b——超限截断并注明共 N 项；截断只影响卡面，数据不丢）。 */
+export const CONFIRM_CARD_UNPRODUCED_CAP = 20;
+
+/** 无生产者字段节标题（E15b 指令逐字——业务要求、数据零页；本轮未训练输出为空属预期）。 */
+export const UNPRODUCED_FIELDS_SECTION_TITLE = "无生产者字段（业务要求、数据零页；本轮未训练，输出为空属预期）";
 
 const PLAIN_OBJECT = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -57,6 +78,41 @@ const truncate = (text: string): string =>
   text.length > CONFIRM_CARD_PROMPT_CAP_CHARS
     ? `${text.slice(0, CONFIRM_CARD_PROMPT_CAP_CHARS)}…(截断，全文 ${String(text.length)} 字符见报告文件)`
     : text;
+
+/** 候选文本 → 无生产者字段声明（E15b 单源解析：field_projection.unproduced_targets）。
+ *  缺省/空数组 → ok 且 fields 缺省（卡面零该节）；形态非法（非数组/元素缺任一必填键）
+ *  → ok:false 带指路消息（调用方 invalid_input 拒绝，不渲染半真卡面）。 */
+export const unproducedFieldsFromCandidateText = (
+  candidateText: string,
+): { ok: true; fields?: UnproducedField[] } | { ok: false; message: string } => {
+  const GUIDANCE = "候选契约 field_projection.unproduced_targets 须为 [{field_id,reason,declared_by}]";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(candidateText);
+  } catch {
+    return { ok: false, message: `${GUIDANCE}（候选文件不是合法 JSON）` };
+  }
+  const projection = PLAIN_OBJECT(parsed) ? parsed["field_projection"] : undefined;
+  if (projection === undefined) return { ok: true };
+  if (!PLAIN_OBJECT(projection)) return { ok: false, message: `${GUIDANCE}（field_projection 须为对象）` };
+  const raw = projection["unproduced_targets"];
+  if (raw === undefined) return { ok: true };
+  if (!Array.isArray(raw)) return { ok: false, message: `${GUIDANCE}（得非数组）` };
+  if (raw.length === 0) return { ok: true };
+  const fields: UnproducedField[] = [];
+  for (let i = 0; i < raw.length; i += 1) {
+    const item = raw[i];
+    if (!PLAIN_OBJECT(item)) return { ok: false, message: `${GUIDANCE}（第 ${String(i + 1)} 项须为对象）` };
+    const fieldId = item["field_id"];
+    const reason = item["reason"];
+    const declaredBy = item["declared_by"];
+    if (typeof fieldId !== "string" || fieldId === "" || typeof reason !== "string" || reason === "" || typeof declaredBy !== "string" || declaredBy === "") {
+      return { ok: false, message: `${GUIDANCE}（第 ${String(i + 1)} 项缺 field_id/reason/declared_by 任一必填键）` };
+    }
+    fields.push({ field_id: fieldId, reason, declared_by: declaredBy });
+  }
+  return { ok: true, fields };
+};
 
 /** 确认报告收集（handler 侧）：inline 字段与报告文件二选一并集——inline 优先（模型显式
  *  给出的即其提请确认的对象），缺项由报告文件补齐；三要素（prompt_texts/field_ids/
@@ -93,6 +149,17 @@ export const renderConfirmRequestLines = (report: ContractConfirmationReport, ca
   lines.push(`│ 字段序（${String(report.field_ids.length)} 项）：${report.field_ids.join("、")}`);
   if (report.field_groups !== undefined && report.field_groups.length > 0) {
     lines.push(`│ 字段分组：${report.field_groups.join("、")}`);
+  }
+  // E15b：无生产者字段节（仅非空出现——缺省/空数组卡面零该节；超限截断注明共 N 项，
+  // 截断只影响卡面、声明数据不丢）。
+  if (report.unproduced_fields !== undefined && report.unproduced_fields.length > 0) {
+    lines.push(`│ ${UNPRODUCED_FIELDS_SECTION_TITLE}——${String(report.unproduced_fields.length)} 项：`);
+    for (const field of report.unproduced_fields.slice(0, CONFIRM_CARD_UNPRODUCED_CAP)) {
+      lines.push(`│ - ${field.field_id}：${field.reason}（声明人 ${field.declared_by}）`);
+    }
+    if (report.unproduced_fields.length > CONFIRM_CARD_UNPRODUCED_CAP) {
+      lines.push(`│ …共 ${String(report.unproduced_fields.length)} 项`);
+    }
   }
   lines.push(`│ 坐标策略：${report.coordinate_policy}`);
   lines.push(`│ Prompt 实文（${String(report.prompt_texts.length)} 份）：`);

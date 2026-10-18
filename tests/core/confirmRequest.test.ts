@@ -10,7 +10,10 @@ import {
   collectConfirmReport,
   renderConfirmRequestLines,
   synthesizeUserConfirmation,
+  UNPRODUCED_FIELDS_SECTION_TITLE,
+  unproducedFieldsFromCandidateText,
   type ConfirmRequestBody,
+  type ContractConfirmationReport,
 } from "../../src/core/confirmRequest.js";
 import { canonicalDigestHex } from "../../src/core/canonicalDigest.js";
 
@@ -120,5 +123,91 @@ describe("F5 4.1 synthesizeUserConfirmation——凭据合成（改动一 1.1/1.
       candidate_digest: "deadbeef",
       approval_ref: "aps-3",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// E15b——无生产者字段呈现（指令件 afd30333）：单源解析／卡面节仅非空出现／超限截断
+// ---------------------------------------------------------------------------
+
+describe("E15b unproducedFieldsFromCandidateText——候选单源解析（形态非法拒绝指路）", () => {
+  const candidateWith = (projection: unknown): string => JSON.stringify({ field_projection: projection });
+
+  it("缺省（无 field_projection/unproduced_targets）→ ok 且无 fields（卡面零该节）", () => {
+    expect(unproducedFieldsFromCandidateText('{"fields":[]}')).toEqual({ ok: true });
+    expect(unproducedFieldsFromCandidateText(candidateWith({ target_fields: ["a"] }))).toEqual({ ok: true });
+  });
+
+  it("空数组 → ok 且无 fields（缺省/空数组不传）", () => {
+    expect(unproducedFieldsFromCandidateText(candidateWith({ unproduced_targets: [] }))).toEqual({ ok: true });
+  });
+
+  it("两条声明 → 三键映射（declared_at 留内核不上卡）", () => {
+    const parsed = unproducedFieldsFromCandidateText(candidateWith({
+      unproduced_targets: [
+        { field_id: "hs_code", reason: "业务要、数据零页", declared_by: "owner", declared_at: "2026-10-18T00:00:00Z" },
+        { field_id: "currency", reason: "本轮未训练", declared_by: "agent" },
+      ],
+    }));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error("unreachable");
+    expect(parsed.fields).toEqual([
+      { field_id: "hs_code", reason: "业务要、数据零页", declared_by: "owner" },
+      { field_id: "currency", reason: "本轮未训练", declared_by: "agent" },
+    ]);
+  });
+
+  it.each([
+    ["非数组", candidateWith({ unproduced_targets: "hs_code" }), "得非数组"],
+    ["元素非对象", candidateWith({ unproduced_targets: ["hs_code"] }), "须为对象"],
+    ["缺 field_id", candidateWith({ unproduced_targets: [{ reason: "r", declared_by: "d" }] }), "缺 field_id/reason/declared_by"],
+    ["缺 declared_by", candidateWith({ unproduced_targets: [{ field_id: "f", reason: "r" }] }), "缺 field_id/reason/declared_by"],
+    ["field_projection 非对象", JSON.stringify({ field_projection: 3 }), "须为对象"],
+  ])("形态非法：%s → ok:false 带指路", (_label, text, part) => {
+    const parsed = unproducedFieldsFromCandidateText(text);
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) throw new Error("unreachable");
+    expect(parsed.message).toContain("候选契约 field_projection.unproduced_targets 须为 [{field_id,reason,declared_by}]");
+    expect(parsed.message).toContain(part);
+  });
+});
+
+describe("E15b renderConfirmRequestLines——无生产者字段节（仅非空出现／超限截断）", () => {
+  const reportWith = (fields: ContractConfirmationReport["unproduced_fields"]): ContractConfirmationReport => ({
+    prompt_texts: ["p"],
+    field_ids: ["a", "b"],
+    coordinate_policy: "pixel",
+    ...(fields !== undefined ? { unproduced_fields: fields } : {}),
+  });
+
+  it("两条声明 → 标题节逐字＋两行（字段：原因（声明人 x））", () => {
+    const lines = renderConfirmRequestLines(
+      reportWith([
+        { field_id: "hs_code", reason: "业务要、数据零页", declared_by: "owner" },
+        { field_id: "currency", reason: "本轮未训练", declared_by: "agent" },
+      ]),
+      "abcd1234ef56",
+    );
+    const text = lines.join("\n");
+    expect(text).toContain(UNPRODUCED_FIELDS_SECTION_TITLE);
+    expect(text).toContain("本轮未训练，输出为空属预期");
+    expect(text).toContain("- hs_code：业务要、数据零页（声明人 owner）");
+    expect(text).toContain("- currency：本轮未训练（声明人 agent）");
+  });
+
+  it("无声明 → 卡面零该节（回归：三要素仍过）", () => {
+    const lines = renderConfirmRequestLines(reportWith(undefined), "abcd1234ef56");
+    const text = lines.join("\n");
+    expect(text).not.toContain("无生产者字段");
+    expect(text).toContain("字段序（2 项）：a、b");
+    expect(text).toContain("坐标策略：pixel");
+  });
+
+  it("超 20 项 → 截断前 20 行＋注明共 N 项（数据不丢语义）", () => {
+    const fields = Array.from({ length: 25 }, (_, i) => ({ field_id: `f${String(i)}`, reason: "业务要、数据零页", declared_by: "owner" }));
+    const lines = renderConfirmRequestLines(reportWith(fields), "abcd1234ef56");
+    const itemLines = lines.filter((line) => line.includes("（声明人 owner）"));
+    expect(itemLines).toHaveLength(20);
+    expect(lines.join("\n")).toContain("…共 25 项");
   });
 });

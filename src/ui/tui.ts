@@ -36,7 +36,7 @@ import { loadLlmProviderConfig, createLlmProviderFromConfig, type ResolvedLlmPro
 import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
 import { ToolRegistry, WORKSPACE_TOOL_HANDLERS, buildSkillsSystemSuffix, type LocalToolHost } from "../core/tools/index.js";
 import { safeScratchPath } from "../core/workspace/index.js";
-import { candidateDigestFromText, collectConfirmReport, renderConfirmRequestLines } from "../core/confirmRequest.js";
+import { candidateDigestFromText, collectConfirmReport, renderConfirmRequestLines, unproducedFieldsFromCandidateText } from "../core/confirmRequest.js";
 import {
   buildLabelQcResolveParams,
   labelQcCardKey,
@@ -372,19 +372,29 @@ const main = async (): Promise<void> => {
             if (input.tool === "ask_user_for_input" && params !== null && typeof params === "object" && params["kind"] === "confirm") {
               const report = collectConfirmReport(params as never, undefined);
               let digest: string | null = null;
+              // E15b：卡面「无生产者字段」节与 handler 同一纯函数单源（候选文件已为摘要复算
+              // 读取——同文本复用）；形态非法时不渲染卡面（handler 侧 invalid_input 拒绝，
+              // 不给用户看半真卡面）。
+              let unproduced: ReturnType<typeof unproducedFieldsFromCandidateText> | null = null;
               const candidateRef = params["candidate_ref"];
               if (typeof candidateRef === "string" && localHost !== null && localHost.scratchDir !== "") {
                 const guard = safeScratchPath(localHost.scratchDir, candidateRef);
                 if (guard.ok) {
                   try {
-                    digest = candidateDigestFromText(await readFileAsync(guard.value.resolved, "utf8"));
+                    const candidateText = await readFileAsync(guard.value.resolved, "utf8");
+                    digest = candidateDigestFromText(candidateText);
+                    unproduced = unproducedFieldsFromCandidateText(candidateText);
                   } catch {
                     digest = null;
                   }
                 }
               }
-              if (report !== null) {
-                for (const line of renderConfirmRequestLines(report, digest ?? "(摘要待复算)")) renderer.appendLine(line);
+              if (report !== null && (unproduced === null || unproduced.ok)) {
+                const reportView =
+                  unproduced !== null && unproduced.ok && unproduced.fields !== undefined
+                    ? { ...report, unproduced_fields: unproduced.fields }
+                    : report;
+                for (const line of renderConfirmRequestLines(reportView, digest ?? "(摘要待复算)")) renderer.appendLine(line);
               }
             }
             return await askApproval({

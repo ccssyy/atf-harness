@@ -242,8 +242,92 @@ describe("F5 4.1：confirm 型请示全链（问答轨落账 → 确认凭据随
   });
 });
 
-describe("F5 4.2（批㊶-F2 后）：scratch_exec 免审——同 argv 两次调用零审批请求直执行", () => {
-  it("atf_scratch_exec 两次调用零 approval/request（提案键管线随免审退场；键派生单测留 approvalContentKey）", { timeout: 60_000 }, async () => {
+// ---------------------------------------------------------------------------
+// E15b——无生产者字段呈现（指令件 afd30333）：runner 级——候选单源解析随 result 下发、
+// 形态非法 invalid_input 拒绝、凭据合成不变。
+// ---------------------------------------------------------------------------
+
+describe("E15b：候选声明随 confirm result 下发（卡面材料；凭据合成不变）", () => {
+  /** runF5 同构（candidate.json 预写 + granted 应答）。 */
+  const runE15b = async (env: Env, candidateText: string, params: Record<string, unknown>): Promise<BranchRunReport> => {
+    const runId = `e15b-${randomUUID()}`;
+    env.host.scratchDir = join(env.runsRoot, runId, "scratch");
+    mkdirSync(env.host.scratchDir, { recursive: true });
+    writeFileSync(join(env.host.scratchDir, "candidate.json"), candidateText);
+    return await runF5(
+      env,
+      runId,
+      [{ decision: { type: "tool_call", tool: "ask_user_for_input", params } }],
+      async () => ({ verdict: "granted", actor: "tui-operator" }),
+    );
+  };
+
+  it("两条声明 → result report.unproduced_fields 携三键映射（declared_at 留内核）；凭据照常合成", async () => {
+    const env = makeEnv();
+    try {
+      const candidateText = JSON.stringify({
+        field_projection: {
+          target_fields: ["invoice_number", "hs_code", "currency"],
+          unproduced_targets: [
+            { field_id: "hs_code", reason: "业务要、数据零页", declared_by: "owner", declared_at: "2026-10-18T00:00:00Z" },
+            { field_id: "currency", reason: "本轮未训练", declared_by: "agent" },
+          ],
+        },
+      });
+      const report = await runE15b(env, candidateText, CONFIRM_PARAMS);
+      expect(report.outcome.kind).toBe("completed");
+      const results = resultsOf(report, "ask_user_for_input");
+      expect(results).toHaveLength(1);
+      if (!results[0]?.ok) throw new Error("expected executed result");
+      const result = results[0].result as Record<string, unknown>;
+      const confirmation = result["user_confirmation"] as Record<string, unknown>;
+      expect(confirmation).toMatchObject({ by: "tui-operator", channel: "harness-confirm-card" }); // 凭据合成不变
+      const reportOut = result["report"] as Record<string, unknown>;
+      expect(reportOut["unproduced_fields"]).toEqual([
+        { field_id: "hs_code", reason: "业务要、数据零页", declared_by: "owner" },
+        { field_id: "currency", reason: "本轮未训练", declared_by: "agent" },
+      ]);
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it("无声明 → result report 零 unproduced_fields 键（卡面零该节；三要素照常过）", async () => {
+    const env = makeEnv();
+    try {
+      const report = await runE15b(env, '{"fields":["invoice_number"],"coordinate_policy":"pixel"}', CONFIRM_PARAMS);
+      expect(report.outcome.kind).toBe("completed");
+      const results = resultsOf(report, "ask_user_for_input");
+      if (!results[0]?.ok) throw new Error("expected executed result");
+      const reportOut = (results[0].result as Record<string, unknown>)["report"] as Record<string, unknown>;
+      expect(reportOut["unproduced_fields"]).toBeUndefined();
+      expect(reportOut["field_ids"]).toEqual(["invoice_number", "total"]);
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it.each([
+    ["非数组", '{"field_projection":{"unproduced_targets":"hs_code"}}'],
+    ["元素缺 field_id", '{"field_projection":{"unproduced_targets":[{"reason":"r","declared_by":"d"}]}}'],
+  ])("形态非法（%s）→ invalid_input 拒绝带指路（不渲染半真卡面）", async (_label, candidateText) => {
+    const env = makeEnv();
+    try {
+      const report = await runE15b(env, candidateText, CONFIRM_PARAMS);
+      const confirmResults = resultsOf(report, "ask_user_for_input");
+      expect(confirmResults).toHaveLength(1);
+      expect(confirmResults[0]?.ok).toBe(false);
+      if (confirmResults[0]?.ok === false) {
+        expect(confirmResults[0].reason).toBe("invalid_input");
+        expect(JSON.stringify(confirmResults[0].detail)).toContain("候选契约 field_projection.unproduced_targets 须为 [{field_id,reason,declared_by}]");
+      }
+    } finally {
+      env.cleanup();
+    }
+  });
+});
+
+describe("F5 4.2（批㊶-F2 后）：scratch_exec 免审——同 argv 两次调用零审批请求直执行", () => {  it("atf_scratch_exec 两次调用零 approval/request（提案键管线随免审退场；键派生单测留 approvalContentKey）", { timeout: 60_000 }, async () => {
     const env = makeEnv();
     try {
       const runId = `f5-key-${randomUUID()}`;
