@@ -304,6 +304,40 @@ describe("批 P 增补 B3/B4/B5：compaction、hook 注册面 8 名、skills sec
     await expect(fauxSummarizer([])).resolves.toContain("faux");
   });
 
+  it("批C1-2 B2 强制压缩缝：forceBox 置位→低于阈值也折叠（尾部保留降地板）＋一次性复位；summarize 注入面收 dropped", async () => {
+    const messages: AgentMessage[] = [
+      userText("早期指令 A"),
+      { role: "assistant", content: [{ type: "text", text: "早期回复".repeat(2000) }], timestamp: 1 } as AgentMessage,
+      userText("中期指令"),
+      { role: "assistant", content: [{ type: "text", text: "中期回复".repeat(2000) }], timestamp: 1 } as AgentMessage,
+      userText("最新指令"),
+    ];
+    const droppedTo: number[] = [];
+    const summarize = async (dropped: readonly AgentMessage[]): Promise<string> => {
+      droppedTo.push(dropped.length);
+      return `真摘要：覆盖 ${String(dropped.length)} 条早期消息`;
+    };
+    const forceBox = { current: true };
+    const transform = createCompactionTransform({ contextTokenLimit: 1_000_000, keepRecentTokens: 8_000, summarize, forceBox });
+    // 阈值远高于总量（1M）——仅 force 置位才折叠；保留地板 2K est tokens（≈尾部两条）
+    const compacted = await transform(messages);
+    expect(droppedTo).toHaveLength(1);
+    expect(droppedTo[0]).toBeGreaterThanOrEqual(2); // 中期及更早全入摘要
+    expect((compacted[0] as { role: string; content: string }).content).toContain("真摘要");
+    expect((compacted.at(-1) as { content: string }).content).toBe("最新指令");
+    expect(forceBox.current).toBe(false); // 一次性：变换即复位
+    // 复位后同转录再过＝不再折叠（水位阈值内）
+    const again = await transform(messages);
+    expect(again).toEqual(messages);
+    expect(droppedTo).toHaveLength(1);
+    // 总量＜保留地板：强制轮无可折叠段＝不改写（不插空摘要头）
+    const tiny = [userText("只有一条")];
+    const tinyBox = { current: true };
+    const tinyOut = await createCompactionTransform({ contextTokenLimit: 1_000_000, keepRecentTokens: 8_000, summarize, forceBox: tinyBox })(tiny);
+    expect(tinyOut).toEqual(tiny);
+    expect(tinyBox.current).toBe(false);
+  });
+
   it("B4 hook 注册面：8 名全注册（缺省观测体）＋before_run 实调（registerHooks 缝）", async () => {
     const cap = capturing([fauxFinalAnswer("完")]);
     const s = await assemble({ streamFn: cap.fn });

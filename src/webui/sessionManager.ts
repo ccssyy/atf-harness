@@ -26,7 +26,9 @@ import { AtfBridgeConnection } from "../bridge/index.js";
 import type { AtfAgentToolDeps } from "../agent/atfAgentTools.js";
 import type { FileToolHost } from "../agent/fileTools.js";
 import { assembleV1Agent, type AssembledV1Agent } from "../agent/cli.js";
-import { createProviderStreamFn } from "../agent/providerStreamFn.js";
+import { assembleProviderModel, createProviderStreamFn } from "../agent/providerStreamFn.js";
+import { createRealSummarizer } from "../agent/realSummarizer.js";
+import { OVERFLOW_FINAL_NOTICE_TEXT, promptWithOverflowRetry } from "../agent/overflowRetry.js";
 import type { ApprovalRequestInfo, ApprovalSurface, ApprovalSurfaceVerdict } from "../agent/approvalSurface.js";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { createFauxStreamFn, fauxAssistantMessage } from "../agent/fauxStream.js";
@@ -106,6 +108,8 @@ interface Session {
   bridge: AtfBridgeConnection | null;
   modelCalls: number;
   parseFailures: number;
+  /** 批C1-2 B2：溢出强制压缩盒（与 agent 同生命周期——overflowRetry 配对消费）。 */
+  compactionForceBox: { current: boolean };
   subscribers: Array<(event: ChatEvent) => void>;
 }
 
@@ -206,6 +210,7 @@ export class WebUiSessionManager {
       bridge: null,
       modelCalls: 0,
       parseFailures: 0,
+      compactionForceBox: { current: false },
       subscribers: [],
     };
     this.sessions.set(id, session);
@@ -515,10 +520,42 @@ export class WebUiSessionManager {
     };
     // 装配 fail-closed（pi-ai 目录无模型等）收束为 Result.err——错误以 system_notice 进事件流，
     // 不经消息入口的 void 调用点逃逸为 unhandled rejection（startupRace 退出码定性修复）。
-    const assembledProviderStreamFn =
-      this.deps.streamFn === undefined && this.deps.providerConfig !== undefined
-        ? this.tryAssembleProviderStreamFn(this.deps.providerConfig)
-        : undefined;
+    // 批C1-2 B2：真 provider 链同时装配真摘要器（同 provider/model——压缩摘要不再是占位文本；
+    // 失败/超时回落 faux＋system_notice 通报，零静默）。
+    let realSummarizer: ((dropped: readonly import("@earendil-works/pi-agent-core").AgentMessage[]) => Promise<string>) | undefined;
+    let assembledProviderStreamFn:
+      | ReturnType<typeof createProviderStreamFn>["streamFn"]
+      | string
+      | undefined;
+    if (this.deps.streamFn === undefined && this.deps.providerConfig !== undefined) {
+      assembledProviderStreamFn = this.tryAssembleProviderStreamFn(this.deps.providerConfig);
+      if (typeof assembledProviderStreamFn !== "string") {
+        try {
+          const { models, model } = assembleProviderModel(this.deps.providerConfig);
+          realSummarizer = createRealSummarizer({
+            models,
+            model,
+            apiKey: this.deps.providerConfig.api_key,
+            contextWindowTokens: this.deps.providerConfig.context_window ?? null,
+            inputTokenBudget: compactionTriggerTokens(),
+            onDegrade: (reason) => {
+              this.emit(session, {
+                kind: "system_notice",
+                level: "warn",
+                text: `本轮压缩为降级摘要（模型摘要不可用：${reason}）——已用占位摘要续跑`,
+                at: new Date().toISOString(),
+              });
+            },
+            // B2 验收/审计日志面（进程日志——不进用户面）：摘要首 200 字＋输入 token 估计对照
+            onSummary: (info) => {
+              console.log(`[B2] 真摘要产出：dropped=${String(info.dropped)} 条，输入≈${String(info.inputTokens)} est tokens；首 200 字：${info.summaryHead}`);
+            },
+          });
+        } catch {
+          realSummarizer = undefined; // 摘要器装配失败＝回落 faux（主链不受影响）
+        }
+      }
+    }
     if (typeof assembledProviderStreamFn === "string") return err(assembledProviderStreamFn);
     const rawStreamFn =
       this.deps.streamFn !== undefined
@@ -544,6 +581,9 @@ export class WebUiSessionManager {
       followUpMode: "all",
       contextTokens: compactionTriggerTokens(),
       keepRecentTokens: 8_000,
+      // 批C1-2 B2：真摘要器＋溢出强制压缩缝（真 provider 链在位；faux 链保持原行为）
+      ...(realSummarizer !== undefined ? { summarize: realSummarizer } : {}),
+      ...(this.deps.providerConfig !== undefined ? { compactionForceBox: session.compactionForceBox } : {}),
       // 批㊵（D-LLM-1 R3）：推理档位消费链接通——初始档取会话当前 override（若有），
       // 运行时源每请求读取（/model X effort Y 切档 → 后续请求即时生效，历史不回改）。
       ...(effortToThinkingLevel(session.providerOverride?.effort) !== undefined
@@ -751,7 +791,18 @@ export class WebUiSessionManager {
       at: new Date().toISOString(),
     });
     try {
-      await agent.prompt(instruction);
+      // 批C1-2 B2：溢出兜底——捕获溢出（抛错/错误 assistant）→ 强制压缩一次并自动重试该轮；
+      // 重试成功用户无感；两次都溢出＝可读文案（原始错误码/红条不直出）。
+      const outcome = await promptWithOverflowRetry(agent, instruction, {
+        forceBox: session.compactionForceBox,
+        contextWindowTokens: this.deps.providerConfig?.context_window ?? null,
+      });
+      if (outcome.kind === "overflow_final") {
+        this.emit(session, { kind: "system_notice", level: "error", text: OVERFLOW_FINAL_NOTICE_TEXT, at: new Date().toISOString() });
+        session.state = "idle";
+        return;
+      }
+      if (outcome.kind === "error") throw new Error(outcome.error);
       session.state = "completed";
       const lastAssistant = (agent.state.messages as unknown as Array<{ role?: string; content?: Array<{ type: string; text?: string }> }>)
         .filter((message) => message.role === "assistant")

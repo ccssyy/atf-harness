@@ -38,7 +38,7 @@ import { createApprovalBeforeToolCall, type ApprovalAuditEntry } from "./approva
 import { createSessionApprovalAuditStream } from "./approvalAudit.js";
 import { createInteractiveApprovalSurface, type ApprovalSurface } from "./approvalSurface.js";
 import { createBudgetFinishTurn, maxTurnsFromEnv, resolveV1ExitCode, type V1RunOutcome } from "./budget.js";
-import { createProviderStreamFn } from "./providerStreamFn.js";
+import { assembleProviderModel, createProviderStreamFn } from "./providerStreamFn.js";
 import { createScriptedStreamFn, loadFauxScript } from "./fauxScript.js";
 import { createHookRegistry, prepareRequestViaHook, wireEventHooks, V1_HOOK_NAMES, type V1HookRegistry } from "./hooks.js";
 import { createJsonlSessionRepo, setLaneModelFace, type SessionLike } from "./sessionMirror.js";
@@ -47,6 +47,8 @@ import { createTemAfterToolMirror, createTemTransformContext } from "./tem/retri
 import { envFingerprint, scanEvidenceEvents } from "./tem/evidence.js";
 import { ensureTemBranch, writeExperienceCase } from "./tem/store.js";
 import { buildSkillsSystemSuffix, createCompactionTransform } from "./agentCapabilities.js";
+import { createRealSummarizer } from "./realSummarizer.js";
+import { OVERFLOW_FINAL_NOTICE_TEXT, promptWithOverflowRetry } from "./overflowRetry.js";
 import { createDispatchParallelTrainingSubtaskTool, createDispatchTrainingSubtaskTool, createChildInstructionRunner, type SubagentDeps } from "./subagent.js";
 import { buildFileAgentTools } from "./fileTools.js";
 import { createGateLock } from "./approvalHook.js";
@@ -311,6 +313,20 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
       skillsDir: args.skillsDir,
       contextTokens: args.contextTokens,
       keepRecentTokens: args.keepRecentTokens,
+      // 批C1-2 B2：真摘要器（会话同 provider/model——resolvedConfig 装配；非真实链不注入＝faux 原行为）
+      ...(resolvedConfig !== undefined
+        ? {
+            summarize: createRealSummarizer({
+              ...assembleProviderModel(resolvedConfig),
+              apiKey: resolvedConfig.api_key,
+              contextWindowTokens: resolvedConfig.context_window,
+              inputTokenBudget: args.contextTokens,
+              timeoutMs: resolvedConfig.timeout_ms,
+              onDegrade: (reason) => err(`[v1] 本轮压缩为降级摘要（模型摘要不可用：${reason}）——已用占位摘要续跑`),
+            }),
+            overflowContextWindowTokens: resolvedConfig.context_window,
+          }
+        : {}),
       subagent: args.subagent,
       fileToolRoots: fsRootsExtra,
       out,
@@ -357,6 +373,10 @@ export interface AssembleV1Deps {
   systemSuffix?: string;
   contextTokens: number;
   keepRecentTokens: number;
+  /** 批C1-2 B2：真摘要器注入（缺省 faux——provider 不可用链保持原行为）。 */
+  summarize?: (dropped: readonly AgentMessage[]) => Promise<string>;
+  /** 批C1-2 B2：溢出强制压缩缝（调用方持盒；overflowRetry 配对使用）。 */
+  compactionForceBox?: { current: boolean };
 }
 
 export interface AssembledV1Agent {
@@ -419,6 +439,9 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
     contextTokenLimit: deps.contextTokens,
     keepRecentTokens: deps.keepRecentTokens,
     registry,
+    // 批C1-2 B2：真摘要器＋溢出强制压缩缝（缺省 faux/无盒——原行为逐字节不变）
+    ...(deps.summarize !== undefined ? { summarize: deps.summarize } : {}),
+    ...(deps.compactionForceBox !== undefined ? { forceBox: deps.compactionForceBox } : {}),
   });
   const temTransform = createTemTransformContext({ session: deps.session });
   const transformContext = async (messages: AgentMessage[]): Promise<AgentMessage[]> => {
@@ -521,6 +544,10 @@ export interface V1HeadlessDeps {
   fileToolRoots?: readonly string[];
   /** 装配后、prompt 前的注册缝（测试/扩展注册 hook；B4 面）。 */
   registerHooks?: (registry: V1HookRegistry) => void;
+  /** 批C1-2 B2：真摘要器（会话同 provider；缺省 faux）。 */
+  summarize?: (dropped: readonly AgentMessage[]) => Promise<string>;
+  /** 批C1-2 B2：溢出判定窗口（设置面 context_window；null＝仅消息模式判定）。 */
+  overflowContextWindowTokens?: number | null;
   out: (line: string) => void;
   err: (line: string) => void;
 }
@@ -544,6 +571,8 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
         : createProviderStreamFn(deps.providerConfig as { provider_id: string; model: string; base_url: string; api_key: string }).streamFn;
 
   const systemSuffix = deps.skillsDir !== undefined ? await buildSkillsSystemSuffix(deps.skillsDir) : undefined;
+  // 批C1-2 B2：溢出强制压缩盒（真实 provider 链在位；faux/scripted 链无需——不装配）
+  const compactionForceBox: { current: boolean } = { current: false };
   const assembled = assembleV1Agent({
     ...(deps.subagent === true
       ? {
@@ -571,16 +600,26 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
     ...(systemSuffix !== undefined ? { systemSuffix } : {}),
     contextTokens: deps.contextTokens,
     keepRecentTokens: deps.keepRecentTokens,
+    // 批C1-2 B2：真摘要器＋溢出强制压缩缝（同 provider 摘要；溢出重试配对）
+    ...(deps.summarize !== undefined ? { summarize: deps.summarize } : {}),
+    ...(deps.providerConfig !== undefined ? { compactionForceBox } : {}),
   });
   const { agent, audit, outcomeBox, scopeRefBox, registry } = assembled;
   deps.registerHooks?.(registry);
 
   await registry.invoke("before_run", { instruction: deps.instruction });
   let failure: string | undefined;
-  try {
-    await agent.prompt(deps.instruction);
-  } catch (cause) {
-    failure = cause instanceof Error ? cause.message : String(cause);
+  // 批C1-2 B2：溢出兜底——捕获溢出（抛错/错误 assistant）→ 强制压缩一次并自动重试该轮；
+  // 重试成功用户无感；两次都溢出＝可读文案（原始码不直出）。
+  const overflowOutcome = await promptWithOverflowRetry(agent, deps.instruction, {
+    forceBox: compactionForceBox,
+    contextWindowTokens: deps.overflowContextWindowTokens ?? null,
+  });
+  if (overflowOutcome.kind === "overflow_final") {
+    failure = OVERFLOW_FINAL_NOTICE_TEXT;
+    deps.err(`[v1] ${OVERFLOW_FINAL_NOTICE_TEXT}`);
+  } else if (overflowOutcome.kind === "error") {
+    failure = overflowOutcome.error;
   }
 
   // ---- v2 收口边界（B9 planRunBoundary 对接）：伴生子任务未收口 → 有界轮询续跑轮次 ----

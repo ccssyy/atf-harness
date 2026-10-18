@@ -36,7 +36,13 @@ export interface V1CompactionOptions {
   summarize?: (dropped: readonly AgentMessage[]) => Promise<string>;
   /** before_compaction hook 闸（B4 注册面）。 */
   registry?: V1HookRegistry;
+  /** 批C1-2 B2：溢出强制压缩缝（调用方持有盒；true＝无视水位阈值强制折叠一轮，
+   *  尾部保留降为 keepRecentTokens 与强制地板的较小值；变换即复位——一次性）。 */
+  forceBox?: { current: boolean };
 }
+
+/** 批C1-2 B2：强制压缩轮的尾部保留地板（est tokens——只保最近对话，其余全入摘要）。 */
+export const FORCED_COMPACTION_KEEP_FLOOR_TOKENS = 2_000;
 
 /** faux 摘要器（B 档 faux 即可——指令 §三.1；不调用任何模型）。 */
 export const fauxSummarizer = async (dropped: readonly AgentMessage[]): Promise<string> =>
@@ -54,19 +60,24 @@ const alignCut = (messages: readonly AgentMessage[], cut: number): number => {
 export const createCompactionTransform = (opts: V1CompactionOptions) => {
   const summarize = opts.summarize ?? fauxSummarizer;
   return async (messages: AgentMessage[]): Promise<AgentMessage[]> => {
+    const forced = opts.forceBox?.current === true;
+    if (forced) opts.forceBox!.current = false; // 一次性：本轮变换即复位（重试轮专用）
     const total = messages.reduce((sum, message) => sum + estimateTokens(message), 0);
-    if (total <= opts.contextTokenLimit) return messages;
-    // 尾部保留：从尾累计 tokens 至 keepRecentTokens，cut 对齐 turn 起点（不切 toolResult 半边）
+    if (!forced && total <= opts.contextTokenLimit) return messages;
+    // 尾部保留：从尾累计 tokens 至 keepRecentTokens（强制轮取地板较小值——尽可能多折叠），
+    // cut 对齐 turn 起点（不切 toolResult 半边）
+    const keepTarget = forced ? Math.min(opts.keepRecentTokens, FORCED_COMPACTION_KEEP_FLOOR_TOKENS) : opts.keepRecentTokens;
     let kept = 0;
     let cut = messages.length;
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       kept += estimateTokens(messages[index] as never);
       cut = index;
-      if (kept >= opts.keepRecentTokens) break;
+      if (kept >= keepTarget) break;
     }
     const alignedCut = alignCut(messages, cut);
     if (alignedCut >= messages.length) return messages; // 全保留（尾部已超预算——不折叠空段）
     const dropped = messages.slice(0, alignedCut);
+    if (dropped.length === 0) return messages; // 无可折叠段（总量＜保留目标——含强制轮）：不改写
     await opts.registry?.invoke("before_compaction", { tokens_before: total, dropped: dropped.length });
     const summary = await summarize(dropped);
     const head: AgentMessage = { role: "system", content: summary, timestamp: Date.now() } as AgentMessage;

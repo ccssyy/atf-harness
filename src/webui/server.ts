@@ -106,7 +106,15 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
   } else if (env["ATF_LLM_CONFIG"] !== undefined && env["ATF_LLM_CONFIG"] !== "") {
     const resolved = await loadLlmProviderConfig(env);
     if (resolved.ok) {
-      providerConfig = { provider_id: resolved.value.provider_id, model: resolved.value.model, base_url: resolved.value.base_url, api_key: resolved.value.api_key };
+      providerConfig = {
+        provider_id: resolved.value.provider_id,
+        model: resolved.value.model,
+        base_url: resolved.value.base_url,
+        api_key: resolved.value.api_key,
+        // 批C1-2 B2 补 B1 遗缝：ATF_LLM_CONFIG 已解析的 context_window 透传（null 不携带
+        // ——manager 侧 ?? null 回退 24K 水位；单源语义与设置面同构）
+        ...(resolved.value.context_window !== null ? { context_window: resolved.value.context_window } : {}),
+      };
       providerState = { status: "ready", provider_id: resolved.value.provider_id, model: resolved.value.model };
       console.log(`LLM provider 已加载: ${resolved.value.provider_id}/${resolved.value.model} (来源: ATF_LLM_CONFIG)`);
     } else {
