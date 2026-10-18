@@ -2120,10 +2120,25 @@ window.__ModuleLoader__.load({
           atfFix2Schedule()
         }
 
+        // 批C2 D10.1 list 槽注册缺字段守护：宿主对缺 order 的 list 条目静默丢弃（C1-1 live
+        // 实证——注册成功但 render 永不触发；vendor 静态三处均可容缺，丢弃点在更深层组装）。
+        // 守卫＝fail-loud 告警（console.error 点名槽与缺失字段）——不阻断注册与其他面，
+        // 消灭「控件消失无任何信号」的静默形态。原生先例（ui-chat stats order:0／QueueDock
+        // order:20）一律带 order——本面 list 注册视为必填事实字段。
+        function listSlotOptions(opts) {
+          if (typeof opts.id !== 'string' || opts.id === '') {
+            console.error('[atf-ui] D10.1 守卫：list 槽注册缺 id（宿主必拒）——' + String(opts.name))
+          }
+          if (typeof opts.order !== 'number') {
+            console.error('[atf-ui] D10.1 守卫：list 槽注册缺 order（宿主组装静默丢弃——实证契约）——' + String(opts.name) + '/' + String(opts.id))
+          }
+          return opts
+        }
+
         // GPU 卡显隐开关（session-scoped：inject 工厂收 sessionId——批⑳实证通道；
         // 本处同时是 sessionId 进 store 的唯一捕获点）＋右栏监控开关（批㉛段3.1）
         ctx.slots.inject('conversation.session.header.utilities', function() {
-          return ctx.slots.register({
+          return ctx.slots.register(listSlotOptions({
             name: 'conversation.session.header.utilities',
             id: 'atf-gpu-toggle',
             order: 900,
@@ -2131,7 +2146,7 @@ window.__ModuleLoader__.load({
               store.sessionId = sessionId
               return { toggle: function() { store.setOpen(!store.getOpen()) } }
             },
-          }, function(injected) {
+          }), function(injected) {
             return React.createElement('div', { style: { display: 'flex', gap: 6 } },
               React.createElement('button', {
                 className: 'atf-pill', title: 'GPU 状态卡显隐',
@@ -2195,7 +2210,7 @@ window.__ModuleLoader__.load({
         ctx.slots.inject('conversation.composer.dock', function() {
           // 批C1-1 live 实证修复：list 槽条目缺 order 被宿主组装静默丢弃（静态探针 div 亦
           // 不上 DOM——非组件崩溃；补 order 即渲染，与 ui-chat stats(order:0) 共存同槽）。
-          return ctx.slots.register({ name: 'conversation.composer.dock', id: 'atf-dock-row', order: 100 }, function() {
+          return ctx.slots.register(listSlotOptions({ name: 'conversation.composer.dock', id: 'atf-dock-row', order: 100 }), function() {
             return React.createElement('div', null,
               React.createElement(FloatingTaskCard),
               React.createElement(FloatingTaskCardExpanded),
@@ -2242,7 +2257,7 @@ window.__ModuleLoader__.load({
           var models = scope.modelDirectories
           var sessions = scope.sessions
           scope.slots.inject('conversation.input.right', function() {
-            return scope.slots.register({
+            return scope.slots.register(listSlotOptions({
               name: 'conversation.input.right',
               id: 'atf-effort-select',
               order: 100,
@@ -2264,7 +2279,7 @@ window.__ModuleLoader__.load({
                   return {}
                 }
               },
-            }, function(injected) {
+            }), function(injected) {
               if (injected === null) return null
               return React.createElement(EffortSelect, injected)
             })

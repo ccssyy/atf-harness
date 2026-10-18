@@ -1264,6 +1264,21 @@ describe("批㊶-S3 S-B1——通知面投影（monitor.json additive 键三同�
     // 2026-10-18 live 3080 实锚：无 order 整行不渲染，补即恢复）
     expect(clientSource).toContain("{ name: 'conversation.composer.dock', id: 'atf-dock-row', order: 100 }");
   });
+  it("批C2 D10.1 钉子：list 槽注册缺字段守护（listSlotOptions）＋三处 list 注册全带 id/order", () => {
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    // 守卫在位：缺 id/order 的 list 注册 fail-loud 告警（消灭静默消失形态）
+    expect(clientSource).toContain("function listSlotOptions(opts)");
+    expect(clientSource).toContain("D10.1 守卫：list 槽注册缺 order");
+    // 三处 list 注册全部经守卫包裹（header.utilities／composer.dock／input.right）
+    expect(clientSource.match(/slots\.register\(listSlotOptions\(/g)?.length).toBe(3);
+    // 逐处字段完备：id＋order 成对在位（宿主实证契约——order 缺＝条目被静默丢弃）
+    for (const id of ["atf-gpu-toggle", "atf-dock-row", "atf-effort-select"]) {
+      const at = clientSource.indexOf(`id: '${id}'`);
+      expect(at).toBeGreaterThan(0);
+      const window = clientSource.slice(Math.max(0, at - 200), at + 200);
+      expect(window.match(/order: \d+/) !== null, `${id} 注册须带 order`).toBe(true);
+    }
+  });
   it("client.js 步进百分比上卡钉子：segDetail 两副本都带 percentage 位；failed 态判定串修正", () => {
     const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
     expect(clientSource.match(/typeof progress\.percentage === 'number'\) bits\.push/g)?.length).toBe(2);
