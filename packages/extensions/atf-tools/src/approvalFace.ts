@@ -43,11 +43,22 @@ export const requestApproval = async (
   return outcome === "allowed-once" ? { ok: true } : { ok: false, outcome };
 };
 
-/** 审批不过 → 结构化工具结果（模型可读、审计可查；收口同 asToolValue——JSON 安全面）。 */
-export const approvalDeniedResult = (toolName: string, outcome: string): Record<string, never> =>
-  ({
+/** 审批不过 → 结构化工具结果（模型可读、审计可查；收口同 asToolValue——JSON 安全面）。
+ *  note 按 outcome 分支（A1.2）：取消≠拒绝授权，二态共用通用文案会把「用户主动取消」
+ *  误转述为「审批面板拦截」——三态各自给行为指引，error/tool/outcome 逐字不动（审计链）。 */
+export const approvalDeniedResult = (toolName: string, outcome: string): Record<string, never> => {
+  const NOTE_BY_OUTCOME: Record<string, string> = {
+    cancelled: "用户已取消本次确认（取消≠拒绝授权）——如实停止本轮，勿绕道重试，也不要用其它工具代偿同一动作。",
+    unavailable: "本环境未挂审批服务（fail-closed 未放行）——向用户说明通道不可用，勿绕行。",
+  };
+  const note =
+    NOTE_BY_OUTCOME[outcome] ??
+    // rejected／其它未知 outcome：保留通用文案（"用户未批准"语义＋行为指引不变）
+    "该动作需要用户审批（DSH 审批面板）；本次未获放行——不要绕行，向用户说明后停止或改用只读路径。";
+  return {
     error: "approval_denied",
     tool: toolName,
     outcome,
-    note: "该动作需要用户审批（DSH 审批面板）；本次未获放行——不要绕行，向用户说明后停止或改用只读路径。",
-  }) as unknown as Record<string, never>;
+    note,
+  } as unknown as Record<string, never>;
+};
