@@ -8,14 +8,15 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 2026-10-18：v0.7.18b0 → v0.7.19b0，唯一真相源 = bridge.contract.yaml
+// 当前 pin（re-pin 2026-10-19：v0.7.19b0 → v0.7.20b0，唯一真相源 = bridge.contract.yaml
 // atf_upstream，本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.19b0（修复批A-C3b 窗·A-E14b 前置：K-C3a KB 摘除与并发贯通＋
-// K-E14a base 模型语义拆分——--base-model 本地路径无缺省／--base-model-family 渲染缺省
-// qwen3_vl＋段模式盘上只读再水合〔e4630ac〕；HEAD==tag==main 三点同指 077f548，
-// 会话协议轴 1／桥接契约轴 2 零 diff；实例 env 补 ATF_SKILLS_AUTO_INSTALL=0）。
-export const ATF_UPSTREAM_TAG = "v0.7.19b0";
-export const ATF_UPSTREAM_COMMIT_SHA = "077f54837bca94dab8b6ca6a1fe4a2591f2b5e4b";
+// 本轮 pin 取值＝tag v0.7.20b0（E1/E15b 窗三件头：坐标量化工具线——E15a 无生产者字段
+// 显式声明与闸门〔a007961：field_projection.unproduced_targets＋结构性排除〕＋E1a 坐标
+// 量化工具本体〔d505ba5：tools/quantize_annotations.py，退出码 0/2/3〕；HEAD==tag==main
+// 三点同指 09ae99c，会话协议轴 1／桥接契约轴 2 零 diff；实例 env ATF_SKILLS_AUTO_INSTALL=0
+// 既有在位）。
+export const ATF_UPSTREAM_TAG = "v0.7.20b0";
+export const ATF_UPSTREAM_COMMIT_SHA = "09ae99c4b8b746d4b65d67ad2fc400550891cd46";
 
 export interface AtfCliInvocation {
   command: string;
