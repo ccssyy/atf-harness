@@ -926,6 +926,8 @@ window.__ModuleLoader__.load({
     var PHASE_COLOR = {
       launching: 'var(--dsw-static-amber-500)', initializing: 'var(--dsw-static-amber-500)',
       ready: 'var(--dsw-static-green-500)', failed: 'var(--dsw-static-red-500)', trainable: 'var(--dsw-static-green-500)',
+      // 批C1-1 D5：训练终态通知（复用同一通知卡同一已读键——终态配色 done 绿/failed 红）
+      training_done: 'var(--dsw-static-green-500)', training_failed: 'var(--dsw-static-red-500)',
     }
     function noticeSeenMap() {
       try { var raw = window.localStorage.getItem(NOTICE_SEEN_KEY); return raw === null ? {} : (JSON.parse(raw) || {}) } catch (e) { return {} }
@@ -944,12 +946,35 @@ window.__ModuleLoader__.load({
     }
     function noticeText(n) {
       if (n && n.kind === 'trainable') return '训练收尾完成，可发起评估（atf_evaluate）'
+      // 批C1-1 D5：训练终态文案取服务端 text 单源（缺省兜底同串——文案只说事实，零内部叙事）
+      if (n && (n.kind === 'training_done' || n.kind === 'training_failed')) {
+        return typeof n.text === 'string' && n.text !== ''
+          ? n.text
+          : (n.kind === 'training_done' ? '训练已结束' : '训练未完成退出，可查看训练日志或报告')
+      }
       var phase = n && typeof n.phase === 'string' ? n.phase : ''
       var text = PHASE_TEXT[phase] || phase
       var bits = []
       if (typeof n.detail === 'string' && n.detail !== '') bits.push(n.detail)
       if (typeof n.elapsed_s === 'number') bits.push('已等待 ' + n.elapsed_s + 's')
       return bits.length > 0 ? text + ' · ' + bits.join(' · ') : text
+    }
+    /** 批C1-1 D6：评估段实时行（eval_progress 逐轮 phase＋服务健康——不造百分比；health 缺席
+     *  只显 phase；eval_progress 缺席回退 eval_rounds 末轮名（原形态零回归））。 */
+    function evalSegmentDetail(run) {
+      var ep = run && run.eval_progress
+      if (ep && typeof ep.phase === 'string' && ep.phase !== '') {
+        var bits = [PHASE_TEXT[ep.phase] || ep.phase]
+        if (ep.health && typeof ep.health.alive === 'boolean') {
+          bits.push(ep.health.alive ? '服务运行中' : '服务未运行')
+        }
+        return bits.join(' · ')
+      }
+      if (Array.isArray(run.eval_rounds) && run.eval_rounds.length > 0) {
+        var lastRound = run.eval_rounds[run.eval_rounds.length - 1]
+        return lastRound && lastRound.round ? String(lastRound.round) : ''
+      }
+      return ''
     }
     function EvalNoticeStack() {
       var mon = useMonitor()
@@ -963,7 +988,8 @@ window.__ModuleLoader__.load({
       var pool = scopedRuns(mon, sid)
       for (var i = 0; i < pool.length; i++) {
         var run = pool[i]
-        var notices = Array.isArray(run.eval_notices) ? run.eval_notices : []
+        // 批C1-1 D5：train_notices 并入同一卡栈（同一渲染器同一已读键空间——零新组件零新键）
+        var notices = (Array.isArray(run.eval_notices) ? run.eval_notices : []).concat(Array.isArray(run.train_notices) ? run.train_notices : [])
         for (var j = 0; j < notices.length; j++) {
           var n = notices[j]
           if (n === null || typeof n !== 'object' || typeof n.id !== 'string') continue
@@ -977,7 +1003,8 @@ window.__ModuleLoader__.load({
       return React.createElement('div', { style: { position: 'fixed', right: 'calc(16px + var(--atf-pane-offset, 0px))', top: (topBarOffset() + 56), display: 'flex', flexDirection: 'column', gap: 8, zIndex: 799, maxWidth: 320 } },
         cards.slice(-4).map(function(card) {
           var n = card.n
-          var color = PHASE_COLOR[n.kind === 'trainable' ? 'trainable' : (typeof n.phase === 'string' ? n.phase : '')] || 'var(--dsw-static-neutral-500)'
+          var colorKey = (n.kind && PHASE_COLOR[n.kind]) ? n.kind : (typeof n.phase === 'string' ? n.phase : '')
+          var color = PHASE_COLOR[colorKey] || 'var(--dsw-static-neutral-500)'
           return React.createElement('div', {
             key: n.id,
             className: 'atf-notice-card',
@@ -1051,10 +1078,7 @@ window.__ModuleLoader__.load({
           if (lastCkpt !== null) return String(lastCkpt)
           return ''
         }
-        if (seg.key === 'evaluate' && Array.isArray(run.eval_rounds) && run.eval_rounds.length > 0) {
-          var lastRound = run.eval_rounds[run.eval_rounds.length - 1]
-          return lastRound && lastRound.round ? String(lastRound.round) : ''
-        }
+        if (seg.key === 'evaluate') return evalSegmentDetail(run)
         return ''
       }
       var pulseStyle = pulseTick !== null && pulseTick !== undefined
@@ -1194,10 +1218,7 @@ window.__ModuleLoader__.load({
           }
           return Array.isArray(run.ckpts) && run.ckpts.length > 0 ? String(run.ckpts[run.ckpts.length - 1]) : ''
         }
-        if (seg.key === 'evaluate' && Array.isArray(run.eval_rounds) && run.eval_rounds.length > 0) {
-          var lastRound = run.eval_rounds[run.eval_rounds.length - 1]
-          return lastRound && lastRound.round ? String(lastRound.round) : ''
-        }
+        if (seg.key === 'evaluate') return evalSegmentDetail(run)
         return ''
       }
       return React.createElement('div', {
@@ -2172,7 +2193,9 @@ window.__ModuleLoader__.load({
 
         // 通道 C：composer.dock（list 槽）——GPU 一行卡＋快捷指令胶囊＋viewer 浮层（输入框上方，会话内常显）
         ctx.slots.inject('conversation.composer.dock', function() {
-          return ctx.slots.register({ name: 'conversation.composer.dock', id: 'atf-dock-row' }, function() {
+          // 批C1-1 live 实证修复：list 槽条目缺 order 被宿主组装静默丢弃（静态探针 div 亦
+          // 不上 DOM——非组件崩溃；补 order 即渲染，与 ui-chat stats(order:0) 共存同槽）。
+          return ctx.slots.register({ name: 'conversation.composer.dock', id: 'atf-dock-row', order: 100 }, function() {
             return React.createElement('div', null,
               React.createElement(FloatingTaskCard),
               React.createElement(FloatingTaskCardExpanded),

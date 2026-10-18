@@ -27,6 +27,11 @@ import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/wo
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { buildEvalNoticeFaces, type EvalNoticeFace, type EvalProgressFace } from "../../../../src/core/workspace/evalProgressTrack.js";
+import {
+  applyTrainNoticeTransitions, readTrainNoticeState, trainObservedStateOf,
+  TRAIN_NOTICE_STATE_FILENAME, writeTrainNoticeState, type TrainTerminalNoticeFace,
+} from "../../../../src/core/workspace/trainNoticeTrack.js";
+import { probeEvalServiceHealth, type EvalServiceHealthFace } from "../../../../src/core/workspace/evalServiceHealth.js";
 import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readNumTrainEpochs, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
 import { trainObsTick, readTrainlogTail, resetTrainObsForTest, type TrainlogTailFace } from "../../../../src/core/workspace/trainObsSync.js";
 import { bucketedRunEntries, flatRunDirNames, resolveRunDir, RUN_MARKER_RELS, sweepAnsweredPendings } from "../../../../src/core/workspace/runLayout.js";
@@ -136,6 +141,9 @@ export interface RunScan {
   eval_progress: EvalProgressFace | null;
   /** 批㊶-S3 S-B1：阶段流转＋训练完成可评估通知（读账播报零造值——additive，上限 8 条）。 */
   eval_notices: EvalNoticeFace[];
+  /** 批C1-1 D5：训练终态跃迁通知（活跃/未启动→done/failed 一跳——持久 last-state 判跃迁，
+   *  additive，上限 8 条；client 复用同一通知卡与已读集）。 */
+  train_notices: TrainTerminalNoticeFace[];
   /** 批㊶-TRAIN-OBS T3：训练日志尾部投影（capture-pane→trainlog.tail.json 读盘；null＝缺席）。 */
   trainlog_tail: TrainlogTailFace | null;
   /** 批㉝H：绑卡声明（train.sh/manifest——null＝读不到，client 仅显示全卡聚合）。 */
@@ -662,6 +670,8 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
       const faces = buildEvalNoticeFaces(dir);
       return { eval_progress: faces.progress, eval_notices: faces.notices.slice(-8) };
     })(),
+    // 批C1-1 D5：训练终态通知缺省空（跃迁状态机在 tickOnce——纯读面无上下文；同步器回填）
+    train_notices: [],
     // 批㊶-TRAIN-OBS T3：日志尾部投影（两键闭集 captured_at/lines——摘要化：行已 200 字符截断）
     trainlog_tail: readTrainlogTail(dir),
   };
@@ -1036,6 +1046,42 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
       trainingLogsFresh: trainingLogsFreshAt(resolved.runsRoot, resolveTrainActiveWindowMs(process.env)),
       freshWindowMs: resolveTrainActiveWindowMs(process.env),
     }, registryWorkspaces, runEntries);
+    // 批C1-1 D5：训练终态跃迁通知（持久 last-state 状态机——活跃/未启动→done/failed 一跳产
+    // additive train_notices；首见即终态/终态间互跳不产，重启不重报）。状态文件与 monitor.json
+    // 同目录同单写者；monitor 携带 per-run 近期通知账（client 已读集＋24h 窗去重渲染）。
+    try {
+      const statePath = join(outDir, TRAIN_NOTICE_STATE_FILENAME);
+      const prior = readTrainNoticeState(statePath);
+      const tickAt = new Date().toISOString();
+      const applied = applyTrainNoticeTransitions(
+        prior.states,
+        runs.map((run) => ({ run_id: run.run_id, state: trainObservedStateOf(run) })),
+        tickAt,
+      );
+      const nextNotices: Record<string, TrainTerminalNoticeFace[]> = { ...prior.notices };
+      for (const notice of applied.notices) {
+        const list = [...(nextNotices[notice.run_id] ?? []), notice];
+        nextNotices[notice.run_id] = list.slice(-8);
+      }
+      for (const run of runs) {
+        run.train_notices = nextNotices[run.run_id] ?? [];
+      }
+      writeTrainNoticeState(statePath, { states: applied.next, notices: nextNotices });
+    } catch (cause) {
+      console.error("[atf-ui] 训练终态通知轨异常（下周期重试）:", cause instanceof Error ? cause.message : String(cause));
+    }
+    // 批C1-1 D6：评估服务健康（复用内核 eval_service_probe 只读探测——端口取 run 的
+    // eval/services.jsonl 末行；缺账/无内核目录/探测失败＝null 不造假）。仅 eval_progress
+    // 在场的 run 探测（有评估账才有健康面）；停服务后下一周期即 false（interval 5s ≪ 一轮）。
+    const kernelDirForHealth = resolveInstanceKernelDir(process.env, repoRoot);
+    for (let runIdx = 0; runIdx < runs.length; runIdx += 1) {
+      const run = runs[runIdx]!;
+      if (run.eval_progress === null) continue;
+      const runDir = runEntries[runIdx]?.dir
+        ?? (run.workspace !== null ? join(resolved.runsRoot, run.workspace, run.run_id) : join(resolved.runsRoot, run.run_id));
+      const health: EvalServiceHealthFace | null = await probeEvalServiceHealth({ runDir, kernelDir: kernelDirForHealth });
+      run.eval_progress = { ...run.eval_progress, health };
+    }
     // 批㊶Q增补三 段4.2：pending-confirm 存量清理扫描（确认/放行完成即删，含存量——
     // 完成证据判据 fail-open；等待中的卡不动。cr_r2 09:36 确认后残留 8h＋实证）
     try {

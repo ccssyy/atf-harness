@@ -11,6 +11,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { readSegmentFacts, type SegmentFact } from "./segmentFacts.js";
+import type { EvalServiceHealthFace } from "./evalServiceHealth.js";
 
 /** 账行（progress.jsonl 一行一 JSON：ts/phase/detail/elapsed_s——键面闭集）。 */
 export interface EvalProgressRow {
@@ -166,4 +167,6 @@ export interface EvalProgressFace {
   detail: string;
   elapsed_s: number;
   updated_at: string;
+  /** 批C1-1 D6：服务健康（additive——同步器探测后回填；缺省/取不到＝null 无假健康）。 */
+  health?: EvalServiceHealthFace | null;
 }

@@ -44,6 +44,20 @@ describe("快照构造纯函数（八段四态推导＋loss 曲线＋KPI＋空�
     expect(snap.runs[0]?.segments.map((s) => s.key)).toEqual(SEGMENTS.map((s) => s.key));
     expect(snap.runs[0]?.segments.filter((s) => s.status === "done").map((s) => s.key)).toEqual(["register", "split"]);
   });
+  it("批C1-1 快照投影：train_notices 透传（缺省空数组）；eval_progress.health 原样直通", () => {
+    const notice = { id: "train:training_done:r1:t", kind: "training_done", run_id: "r1", at: "t", text: "训练已结束" };
+    // 交叉类型断言（snapshot.js 推断面无 additive 键——与 progress 投影用例同款手法）
+    type RunWithNotices = typeof sampleRun & { train_notices: unknown[]; eval_progress: unknown };
+    const withNotices = buildMonitorSnapshot([
+      { ...sampleRun, train_notices: [notice], eval_progress: { round: "1-20261018", phase: "ready", detail: "", elapsed_s: 3, updated_at: "t", health: { alive: false, port: 8100, checked_at: "t" } } } as RunWithNotices,
+    ]);
+    expect((withNotices.runs[0] as { train_notices?: unknown[] }).train_notices).toEqual([notice]);
+    expect((withNotices.runs[0] as { eval_progress?: { phase?: string; health?: { alive?: boolean; port?: number } } }).eval_progress).toMatchObject({ phase: "ready", health: { alive: false, port: 8100 } });
+    // 双缺省：train_notices 空数组（不炸）；eval_progress 缺省 null
+    const bare = buildMonitorSnapshot([sampleRun]);
+    expect((bare.runs[0] as { train_notices?: unknown[] }).train_notices).toEqual([]);
+    expect((bare.runs[0] as { eval_progress?: unknown }).eval_progress).toBeNull();
+  });
   it("批㊶Q增补二2 progress 投影键位：training.progress 回退兼容（scanRunDir 实挂 training 子键——浮卡 N-3 数据源断点修正）", () => {
     const withTrainingProgress = buildMonitorSnapshot([
       { ...sampleRun, training: { ...sampleRun.training, progress: { round: 5, total_rounds: 6, step_remaining: 44, loss: 0.0623, percentage: 76.34, updated_at: "2026-10-11T01:46:21Z" } } },
@@ -133,6 +147,110 @@ describe("atf-ui 同步器落盘（scan→monitor/artifacts/panel）", () => {
     expect(panelHtml).toContain("AtfMonitor/v1");
     expect(panelHtml).toContain("排队中");
     for (const d of effects) d();
+  });
+});
+
+describe("批C1-1 D5 训练终态跃迁通知（tickOnce 状态机——跨 tick 跃迁产 train_notices）", () => {
+  it("活跃→done：二跳出卡一次；三跳不重复；pending→failed 同理；首见即终态不出", async () => {
+    const root = tempRoot();
+    const mkRun = (runId: string): string => {
+      const runDir = join(root, runId);
+      mkdirSync(join(runDir, "training"), { recursive: true });
+      writeFileSync(join(runDir, "registration.json"), "{}");
+      writeFileSync(join(runDir, "session.jsonl"), "{}\n");
+      writeFileSync(join(runDir, "training", "loss-series.json"), JSON.stringify([{ train_loss: 0.4 }]));
+      return runDir;
+    };
+    const doneRun = mkRun("run-d5-done");
+    const failRun = mkRun("run-d5-fail");
+    mkRun("run-d5-seen-done");
+    // 首见即终态夹具：无活跃历史（撤 loss）＋直接给完成锚
+    rmSync(join(root, "run-d5-seen-done", "training", "loss-series.json"));
+    writeFileSync(join(root, "run-d5-seen-done", "training", "all_results.json"), "{}");
+    const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
+    const readMonitor = (): Array<{ run_id: string; train_notices: Array<{ id: string; kind: string; text: string }> }> =>
+      (JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as { runs: Array<{ run_id: string; train_notices: Array<{ id: string; kind: string; text: string }> }> }).runs;
+    // tick1：done-run 活跃（loss 新鲜）；fail-run 活跃；seen-done 首见即终态（不产）
+    await tickOnce({ runsRoot: root, intervalMs: 60_000 });
+    const t1 = readMonitor();
+    expect(t1.find((r) => r.run_id === "run-d5-done")?.train_notices).toEqual([]);
+    expect(t1.find((r) => r.run_id === "run-d5-seen-done")?.train_notices).toEqual([]);
+    // tick2：done-run 落完成锚＋loss 陈旧化 → done 跃迁；fail-run 撤 loss＋记启动证据 → failed 跃迁
+    writeFileSync(join(doneRun, "training", "all_results.json"), "{}");
+    const stale = new Date(Date.now() - 48 * 3600 * 1000);
+    utimesSync(join(doneRun, "training", "loss-series.json"), stale, stale);
+    rmSync(join(failRun, "training", "loss-series.json"));
+    writeFileSync(join(failRun, "training", "trainer_state.json"), "{}");
+    await tickOnce({ runsRoot: root, intervalMs: 60_000 });
+    const t2 = readMonitor();
+    const doneNotice = t2.find((r) => r.run_id === "run-d5-done")?.train_notices ?? [];
+    const failNotice = t2.find((r) => r.run_id === "run-d5-fail")?.train_notices ?? [];
+    expect(doneNotice).toHaveLength(1);
+    expect(doneNotice[0]).toMatchObject({ kind: "training_done", run_id: "run-d5-done", text: "训练已结束" });
+    expect(typeof doneNotice[0]?.id).toBe("string");
+    expect(failNotice).toHaveLength(1);
+    expect(failNotice[0]).toMatchObject({ kind: "training_failed", run_id: "run-d5-fail" });
+    expect(failNotice[0]?.text).toContain("训练未完成退出");
+    // tick3：无新跃迁——通知账不增（已读集外层去重的服务端幂等面）
+    await tickOnce({ runsRoot: root, intervalMs: 60_000 });
+    const t3 = readMonitor();
+    expect(t3.find((r) => r.run_id === "run-d5-done")?.train_notices).toHaveLength(1);
+    // 持久化在位：状态文件与 monitor.json 同目录
+    const stateFile = JSON.parse(readFileSync(join(root, "atf-ui", "train-notice-state.json"), "utf8")) as {
+      states: Record<string, string>;
+      notices: Record<string, Array<{ id: string }>>;
+    };
+    expect(stateFile.states["run-d5-done"]).toBe("done");
+    expect(stateFile.notices["run-d5-done"]).toHaveLength(1);
+    expect(stateFile.states["run-d5-seen-done"]).toBe("done");
+    expect(stateFile.notices["run-d5-seen-done"]).toBeUndefined();
+  });
+});
+
+describe("批C1-1 D6 评估服务健康（tickOnce——内核探针只读调用；缺面 null 不造假）", () => {
+  it("eval_progress 在场＋服务登记在位 → health 三键回填；无登记 → null", async () => {
+    const root = tempRoot();
+    const mkEvalRun = (runId: string, withService: boolean): void => {
+      const runDir = join(root, runId);
+      mkdirSync(join(runDir, "eval", "1-20261018", "orch"), { recursive: true });
+      writeFileSync(join(runDir, "registration.json"), "{}");
+      writeFileSync(join(runDir, "session.jsonl"), "{}\n");
+      writeFileSync(join(runDir, "eval", "1-20261018", "orch", "progress.jsonl"),
+        JSON.stringify({ ts: "2026-10-18T02:00:00+0800", phase: "ready", detail: "health 探测通过", elapsed_s: 30 }) + "\n");
+      if (withService) {
+        writeFileSync(join(runDir, "eval", "services.jsonl"), JSON.stringify({ ts: "t", port: 8100, base_url: "http://127.0.0.1:8100/v1" }) + "\n");
+      }
+    };
+    mkEvalRun("run-health", true);
+    mkEvalRun("run-nohealth", false);
+    // 假内核目录（探针脚本桩——确定性 alive:true；env 显式注入，单测零真机依赖）
+    const kernel = tempRoot();
+    const scripts = join(kernel, "skills", "atf-evaluate-checkpoints", "scripts");
+    mkdirSync(scripts, { recursive: true });
+    writeFileSync(join(scripts, "eval_service_probe.py"), [
+      "def utc_now_iso():",
+      "    return '2026-10-18T03:00:00+00:00'",
+      "def probe_local_vllm_process(port, ps_runner=None):",
+      "    return {'found': True, 'pid': 1, 'cmdline_summary': '', 'matched_by': 'port_flag', 'parsed': None, 'candidates': 1}",
+      "",
+    ].join("\n"), "utf8");
+    const prevKernel = process.env["ATF_DSH_KERNEL_DIR"];
+    process.env["ATF_DSH_KERNEL_DIR"] = kernel;
+    try {
+      const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
+      await tickOnce({ runsRoot: root, intervalMs: 60_000 });
+    } finally {
+      if (prevKernel === undefined) delete process.env["ATF_DSH_KERNEL_DIR"];
+      else process.env["ATF_DSH_KERNEL_DIR"] = prevKernel;
+    }
+    const monitor = JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as {
+      runs: Array<{ run_id: string; eval_progress: { round: string; phase: string; health: { alive: boolean; port: number; checked_at: string } | null } | null }>;
+    };
+    const withHealth = monitor.runs.find((r) => r.run_id === "run-health")?.eval_progress;
+    expect(withHealth).toMatchObject({ round: "1-20261018", phase: "ready", health: { alive: true, port: 8100, checked_at: "2026-10-18T03:00:00+00:00" } });
+    const noHealth = monitor.runs.find((r) => r.run_id === "run-nohealth")?.eval_progress;
+    expect(noHealth?.phase).toBe("ready");
+    expect(noHealth?.health).toBeNull();
   });
 });
 
@@ -1088,6 +1206,24 @@ describe("批㊶-S3 S-B1——通知面投影（monitor.json additive 键三同�
     expect(clientSource).toContain("EVAL_NOTICE_MAX_AGE_MS");
     // 挂载在 dock 行（浮卡展开态之后）
     expect(clientSource).toContain("React.createElement(EvalNoticeStack)");
+  });
+  it("批C1-1 client.js 钉子：train_notices 并入同一卡栈同一已读键＋终态文案/配色＋评估段实时行", () => {
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    // D5：并入同一卡栈（零新组件零新已读键空间）
+    expect(clientSource).toContain("(Array.isArray(run.eval_notices) ? run.eval_notices : []).concat(Array.isArray(run.train_notices) ? run.train_notices : [])");
+    expect(clientSource.match(/var NOTICE_SEEN_KEY = 'atf_seen_notices'/g)?.length).toBe(1);
+    // D5：终态文案（服务端 text 单源＋缺省兜底）与配色
+    expect(clientSource).toContain("n.kind === 'training_done' || n.kind === 'training_failed'");
+    expect(clientSource).toContain("'训练已结束'");
+    expect(clientSource).toContain("'训练未完成退出，可查看训练日志或报告'");
+    expect(clientSource).toContain("training_done: 'var(--dsw-static-green-500)', training_failed: 'var(--dsw-static-red-500)'");
+    // D6：评估段实时行（phase＋health；health 缺席不显；回退末轮名）
+    expect(clientSource).toContain("function evalSegmentDetail(run)");
+    expect(clientSource).toContain("ep.health.alive ? '服务运行中' : '服务未运行'");
+    expect(clientSource.match(/if \(seg\.key === 'evaluate'\) return evalSegmentDetail\(run\)/g)?.length).toBe(2);
+    // 批C1-1 live 实证修复钉子：dock 条目必须带 order（缺＝宿主列表槽组装静默丢弃——
+    // 2026-10-18 live 3080 实锚：无 order 整行不渲染，补即恢复）
+    expect(clientSource).toContain("{ name: 'conversation.composer.dock', id: 'atf-dock-row', order: 100 }");
   });
   it("client.js 步进百分比上卡钉子：segDetail 两副本都带 percentage 位；failed 态判定串修正", () => {
     const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");

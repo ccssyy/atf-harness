@@ -82,10 +82,14 @@ export function buildMonitorSnapshot(runs, gpu, gpuAll) {
       // 两键闭集 captured_at/lines，行已 200 字符截断——白名单同源，缺＝null）
       trainlog_tail: run.trainlog_tail ?? null,
       // 批㊶-S3 S-B1 通知面（additive——读账播报零造值；键面白名单构造于 evalProgressTrack：
-      // eval_progress 五键闭集 round/phase/detail/elapsed_s/updated_at；eval_notices 元素
+      // eval_progress 五键闭集 round/phase/detail/elapsed_s/updated_at（批C1-1 D6 增 health 三键
+      // 闭集 alive/port/checked_at——取不到 null）；eval_notices 元素
       // {id,round?,phase?,detail?,elapsed_s?,at}∪{id,kind,at}，kind=eval_phase|trainable）
       eval_progress: run.eval_progress ?? null,
       eval_notices: Array.isArray(run.eval_notices) ? run.eval_notices : [],
+      // 批C1-1 D5：训练终态跃迁通知（additive——元素 {id,kind,run_id,at,text}，
+      // kind=training_done|training_failed；空数组＝无跃迁账）
+      train_notices: Array.isArray(run.train_notices) ? run.train_notices : [],
       // 批㊶-P P-2：训练探针（additive——{level,reason,since}，无告警 null；schema v2 续）
       probe: run.probe ?? null,
       training: {
