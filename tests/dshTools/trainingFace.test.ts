@@ -464,6 +464,23 @@ print("{}")`);
     action: "start", run_id: "run-regress-formal-02", adapter_path: f.ckpt,
     eval_assets_dir: f.assets, field_config: join(root, "field-config.json"),
     service_config: f.serviceConfig, env_profile: "a800-local", deploy: join(root, "deploy.local.yaml"),
+    // 批C2 E6：资产绑定通道在位（夹具资产＝run 外路径——owner 级确认走外部显式通道）
+    assets_external_confirm: true,
+  });
+
+  it("批C2 E6：资产未绑定（无 split-manifest/外部确认）→ 卡前快败＋指路（不进审批不放行）", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPin(pin);
+    let calls = 0;
+    const ctx = { get: (s: string) => (s === "approval" ? { request: async () => { calls += 1; return "allowed-once"; } } : undefined) };
+    const args = { ...startArgs(root, writeFixtureInputs(root), pin) } as Record<string, unknown>;
+    delete args["assets_external_confirm"];
+    const result = await evalOf(root, pin, ctx).execute(args, fakeExec) as Record<string, unknown>;
+    expect(result["error"]).toBe("eval_assets_binding_missing");
+    expect(String(result["note"])).toContain("assets_split_manifest");
+    expect(String(result["note"])).toContain("assets_external_confirm");
+    expect(calls).toBe(0); // 卡前快败——审批面板未被触达（放行不再被浪费）
   });
 
   it("start：pin 脚本缺失 → skill_script_missing（不进审批）", async () => {

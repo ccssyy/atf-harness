@@ -1116,6 +1116,9 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       service_config: { type: "string", required: true, description: "EvalServiceConfig/v1 JSON 路径（按 SKILL.md 作者声明：port/TP/gpu_memory_utilization/max_model_len/mm 像素对/adapters 挂载表——adapters[].path 即本次 staging 的 adapter 源）" },
       env_profile: { type: "string", required: true, description: "环境档案名（评估环境配置层——确认报告九必报项⑤端口/连接的数据源）" },
       deploy: { type: "string", description: "可选 deploy.local.yaml 路径（显式机器事实，优先于环境档案）" },
+      // 批C2 E6 卡点修复：评估资产绑定通道（内核编排契约——外部资产须绑定分区清单或 owner 级显式确认）
+      assets_split_manifest: { type: "string", description: "评估资产分区清单路径（split-manifest；跨 run/发布区资产须绑定——绑定后评估输入必须全部来自该 test 分区，内核逐页校验）" },
+      assets_external_confirm: { type: "boolean", description: "外部资产 owner 级确认（无分区清单时的显式通道——确认评估输入确属预期来源；与 assets_split_manifest 二选一）" },
     },
     output: {
       schema: { type: "object", additionalProperties: true },
@@ -1124,7 +1127,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     presentCall: function(args: { action: string; run_id: string }) {
       return { card: "generic" as const, title: `评估 — ${args.run_id}`, kind: "other" as const }
     },
-    async execute(args: { action: string; run_id: string; adapter_path: string; eval_assets_dir: string; field_config: string; service_config: string; env_profile: string; deploy?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+    async execute(args: { action: string; run_id: string; adapter_path: string; eval_assets_dir: string; field_config: string; service_config: string; env_profile: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       const skill = (name: string, script: string): string => join(cfg.kernelDir, "skills", name, "scripts", script);
       const genService = skill("atf-evaluate-checkpoints", "generate_eval_service.py");
       const prelaunch = skill("atf-evaluate-checkpoints", "build_service_prelaunch_report.py");
@@ -1138,6 +1141,17 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // —— start：固定编号 adapter 校验 → 生成服务件 → 确认报告 → EVAL_RELEASE 确认卡 → 账本登记 → 编排（tmux 后台） ——
       const adapterCheck = validateFixedCheckpoint(args.adapter_path);
       if (!adapterCheck.ok) return asToolValue({ started: false, error: adapterCheck.reason, adapter_path: args.adapter_path, note: "SKILL.md 环节④：固定编号显式声明——latest/符号链接/最大编号推断一律拒绝" });
+      // 批C2 E6 卡点修复①：评估资产绑定卡前快败（内核编排契约——显式资产未绑定分区清单即
+      // 外部通道，须 owner 级确认；此前缺检＝用户先过确认卡才在编排计划步失败——放行被浪费）
+      if (args.assets_split_manifest === undefined && args.assets_external_confirm !== true) {
+        return asToolValue({
+          started: false, error: "eval_assets_binding_missing", eval_assets_dir: args.eval_assets_dir,
+          note: "评估资产须显式绑定：跨 run/发布区资产传 assets_split_manifest（分区清单——内核逐页校验 ⊆ test 分区），或经 owner 级确认传 assets_external_confirm=true（外部显式通道）；补参后重试",
+        });
+      }
+      if (args.assets_split_manifest !== undefined && !existsSync(args.assets_split_manifest)) {
+        return asToolValue({ started: false, error: "assets_split_manifest_missing", path: args.assets_split_manifest, note: "分区清单路径不存在——核对后重试" });
+      }
       // 批㊶Q增补三 段3：双形态解析（新 run 按发起会话工作区入桶——创建形态带归属）
       const runDir = resolveRunDir(cfg.runsRoot, args.run_id, { workspace: sessionWorkspaceSlug(exec) });
       if (!existsSync(args.service_config)) return asToolValue({ started: false, error: "service_config_missing", path: args.service_config });
@@ -1209,14 +1223,22 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         return asToolValue({ started: false, error: "checkpoint_plan_failed", eval_round: roundDir, stderr_tail: planned.stderr.slice(-800) });
       }
       // ⑤ 编排件（base_url 显式取自 service manifest 端口——G11 收口：编排/runner 端口缺省分歧在产品路径不生效）
+      // 批C2 E6 卡点修复②：资产绑定两参透传（split-manifest 绑定 test 分区／owner 级外部确认）
       const port = Number((manifest["request_defaults"] as Record<string, unknown> | undefined)?.["port"] ?? (JSON.parse(readFileSync(args.service_config, "utf8")) as Record<string, unknown>)["port"]);
       const orchDir = join(roundDir, "orch");
       const orchArgs = [orchestration, "--service", serviceDir, "--ckpt", ckptPlanDir, "--out", orchDir,
         "--eval-runner", runner, "--assets", args.eval_assets_dir, "--field-config", args.field_config,
-        "--base-url", `http://127.0.0.1:${port}/v1`, "--env-profile", args.env_profile];
+        "--base-url", `http://127.0.0.1:${port}/v1`, "--env-profile", args.env_profile,
+        ...(args.assets_split_manifest !== undefined ? ["--split-manifest", args.assets_split_manifest] : []),
+        ...(args.assets_external_confirm === true ? ["--assets-external-confirm"] : [])];
       const orchPlanned = await runCapture("python3", orchArgs, 120_000);
       if (orchPlanned.code !== 0) {
-        return asToolValue({ started: false, error: "orchestration_plan_failed", eval_round: roundDir, stderr_tail: orchPlanned.stderr.slice(-800) });
+        return asToolValue({
+          started: false, error: "orchestration_plan_failed", eval_round: roundDir, stderr_tail: orchPlanned.stderr.slice(-800),
+          ...(orchPlanned.stderr.includes("external_assets_confirmation_missing")
+            ? { note: "评估资产绑定缺失（内核编排契约）：传 assets_split_manifest（分区清单）或 assets_external_confirm=true 后重试" }
+            : {}),
+        });
       }
       // ⑥ tmux 后台执行编排（服务自启→健康等待→staging→runner→回灌）；runner 附加参数经 $@ 透传
       mkdirForce(cfg.logDir);
