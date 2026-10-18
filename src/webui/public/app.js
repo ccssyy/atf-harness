@@ -286,7 +286,7 @@ for (const item of document.querySelectorAll(".intent-item")) {
 
 
 // ---- 批⑭：选择器行 / 设置页五区 / 档位徽标 ----
-const settingsState = { providers: [], defaultProvider: "", policy: null, profile: null, contextWindow: 200000, sessionModels: [] };
+const settingsState = { providers: [], defaultProvider: "", policy: null, profile: null, contextWindow: null, sessionModels: [] };
 
 async function refreshSelector() {
   const data = await api("/api/settings/providers");
@@ -296,7 +296,8 @@ async function refreshSelector() {
   const select = $("#model-select");
   if (provider === undefined || select === null) return;
   settingsState.sessionModels = provider.models.map((m) => m.id);
-  settingsState.contextWindow = (provider.models.find((m) => m.id === provider.default_model) ?? provider.models[0])?.context_window ?? 200000;
+  // B1 单源：窗口只来自设置面文档（未知模型＝null，呈现「未知窗口」——禁字面量兜底）
+  settingsState.contextWindow = (provider.models.find((m) => m.id === provider.default_model) ?? provider.models[0])?.context_window ?? null;
   select.innerHTML = "";
   for (const model of provider.models) {
     const option = document.createElement("option");
@@ -313,6 +314,10 @@ async function refreshContext() {
   const usage = await api(`/api/sessions/${state.current}/context`);
   const meter = $("#context-meter");
   if (meter === null || usage.used_tokens === undefined) return;
+  if (usage.context_window === null || usage.context_window === undefined) {
+    meter.textContent = "上下文: 未知窗口";
+    return;
+  }
   const remainK = Math.round(usage.remaining_tokens / 1000);
   meter.textContent = `上下文: 剩余 ${String(remainK)}k`;
   $("#selector-row").classList.toggle("low", usage.low === true);

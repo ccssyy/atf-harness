@@ -20,6 +20,7 @@
  * 79=aborted（人中止）；1=预算耗尽/故障。
  */
 import { execFile } from "node:child_process";
+import { compactionTriggerTokens } from "../core/session/constantsBudget.js";
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -88,7 +89,7 @@ export const parseCliArgs = (argv: readonly string[]): CliArgs | { error: string
   let steeringMode: QueueMode = "all";
   let followUpMode: QueueMode = "all";
   let skillsDir: string | undefined;
-  let contextTokens = 24_000;
+  let contextTokens = compactionTriggerTokens();
   let keepRecentTokens = 8_000;
   let subagent = false;
   const fsRoots: string[] = [];

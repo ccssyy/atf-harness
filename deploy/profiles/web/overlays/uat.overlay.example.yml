@@ -20,4 +20,6 @@
 #         baseURL: <实例端点>
 #         models:
 #           - id: <实例模型>
+#             contextWindow: 1048576   # B1：窗口随行重述（glm 系官方 1M=1048576；漏声明即落 pi-ai 缺省 262144）
+#             maxTokens: 131072        # 官方最大输出 128K（glm 系）
 #             reasoningEfforts: …（照模板同模型闭集；不造档位）

@@ -100,8 +100,8 @@ export const PROVIDER_PRESETS: ReadonlyArray<{ id: string; name: string; base_ur
     base_url: "https://open.bigmodel.cn/api/paas/v4",
     api_key_env: "ATF_LLM_KEY_GLM",
     models: [
-      { id: "glm-5.3-flash", context_window: 200_000, effort_supported: true },
-      { id: "glm-5.3", context_window: 200_000, effort_supported: true },
+      { id: "glm-5.3-flash", context_window: 1_048_576, effort_supported: true },
+      { id: "glm-5.3", context_window: 1_048_576, effort_supported: true },
     ],
   },
   {
@@ -149,6 +149,35 @@ export const parseEffortDefaults = (raw: unknown): Record<string, string> => {
   return out;
 };
 
+/** B1 已知 id 的旧窗口值 → 官方值归一表（未知 id 原样保留——不猜）。 */
+const CONTEXT_WINDOW_NORMALIZE: Record<string, Set<number>> = {
+  "glm-5.3-flash": new Set([200_000]),
+  "glm-5.3": new Set([200_000, 1_000_000]),
+};
+const CONTEXT_WINDOW_OFFICIAL = 1_048_576;
+let contextWindowNormalizeLogged = false;
+
+/** 加载时对已知 id 做一次性窗口归一（内存归一——不静默改用户文件；单行日志留痕一次）。 */
+const normalizeContextWindows = (providers: ProviderEntry[]): ProviderEntry[] => {
+  let hit = false;
+  const out = providers.map((provider) => ({
+    ...provider,
+    models: provider.models.map((model) => {
+      const legacy = CONTEXT_WINDOW_NORMALIZE[model.id];
+      if (legacy !== undefined && legacy.has(model.context_window)) {
+        hit = true;
+        return { ...model, context_window: CONTEXT_WINDOW_OFFICIAL };
+      }
+      return model;
+    }),
+  }));
+  if (hit && !contextWindowNormalizeLogged) {
+    contextWindowNormalizeLogged = true;
+    console.log("[webui-settings] context_window 归一化：glm-5.3(-flash) 旧值 → 1048576（官方值，内存生效；写盘随下次保存）");
+  }
+  return out;
+};
+
 const loadDoc = (settingsPath: string): SettingsDoc => {
   if (!existsSync(settingsPath)) return DEFAULT_SETTINGS();
   try {
@@ -156,7 +185,7 @@ const loadDoc = (settingsPath: string): SettingsDoc => {
     const fallback = DEFAULT_SETTINGS();
     return {
       schema_version: "WebUiSettings/v1",
-      providers: Array.isArray(parsed.providers) && parsed.providers.length > 0 ? (parsed.providers as ProviderEntry[]) : fallback.providers,
+      providers: normalizeContextWindows(Array.isArray(parsed.providers) && parsed.providers.length > 0 ? (parsed.providers as ProviderEntry[]) : fallback.providers),
       default_provider: typeof parsed.default_provider === "string" ? parsed.default_provider : fallback.default_provider,
       approval_policy: parsed.approval_policy ?? fallback.approval_policy,
       env_profile: { ...fallback.env_profile, ...(typeof parsed.env_profile === "object" && parsed.env_profile !== null ? parsed.env_profile : {}) },

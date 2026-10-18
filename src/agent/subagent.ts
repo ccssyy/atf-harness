@@ -18,6 +18,7 @@
  * 期追加（deps.subagent 显式开启）。
  */
 import { mkdtemp } from "node:fs/promises";
+import { compactionTriggerTokens } from "../core/session/constantsBudget.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
@@ -73,7 +74,7 @@ export const runChildSubtask = async (deps: SubagentDeps, instruction: string, l
     approval: deps.surface !== undefined ? { kind: "surface", surface: deps.surface } : { kind: "headless" },
     steeringMode: "all",
     followUpMode: "all",
-    contextTokens: deps.contextTokens ?? 24_000,
+    contextTokens: deps.contextTokens ?? compactionTriggerTokens(),
     keepRecentTokens: deps.keepRecentTokens ?? 8_000,
     ...(deps.gateLock !== undefined ? { gateLock: deps.gateLock } : {}),
   });  // 审批继承：子 Agent 共享主线 scope_ref box（同一账本定位域）

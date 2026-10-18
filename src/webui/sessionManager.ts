@@ -38,6 +38,7 @@ import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, hasConfigSnapshot, loadC
 import { GpuQueueOrchestrator, queueHitText, formatWaited } from "./gpuQueue.js";
 import { computeContextUsage, type ApprovalPolicy, type ContextUsage, type ScenarioProfileId, type SettingsStore } from "./settings.js";
 import { buildReadOnlyAgentTools } from "./readOnlyTools.js";
+import { compactionTriggerTokens, setCompactionContextWindow } from "../core/session/constantsBudget.js";
 
 /** 分布式 Omit（union 收窄安全）。 */
 export type ChatEventInput = ChatEvent extends infer T ? (T extends { seq: number } ? Omit<T, "seq"> : never) : never;
@@ -119,8 +120,9 @@ export interface SessionManagerDeps {
   /** 桥接 spawn（mock/real 由调用方定——与 cli.ts 同参形态）；批甲-BUILD T2 起 server 工厂
    *  生产无显式桥配置时缺省不传（mock 缺省移除）——直构调用方既有显式传参零变化。 */
   bridgeCommand?: { argv: readonly string[]; cwd?: string; env?: Record<string, string> };
-  /** providerConfig（GLM 宿主走 ATF_LLM_CONFIG 解析产物；测试注入 streamFn 时可省）。 */
-  providerConfig?: { provider_id: string; model: string; base_url: string; api_key: string };
+  /** providerConfig（GLM 宿主走 ATF_LLM_CONFIG 解析产物；测试注入 streamFn 时可省）。
+   *  context_window（B1）：设置面该模型项的窗口——runAgentTurn 前注入 compaction 水位单源。 */
+  providerConfig?: { provider_id: string; model: string; base_url: string; api_key: string; context_window?: number };
   /** 测试注入 streamFn（优先于 providerConfig）。 */
   streamFn?: (model: never, context: never, options?: never) => unknown;
   kernelDir?: string;
@@ -469,6 +471,8 @@ export class WebUiSessionManager {
     const mirrored = await repo.create({ cwd: this.deps.sessionsRoot }, BACKGROUND_CONTEXT);
     await ensureTemBranch(mirrored);
     setLaneModelFace({ provider: this.deps.providerConfig?.provider_id ?? "webui", modelId: this.deps.providerConfig?.model ?? "webui" });
+    // B1：窗口单源——设置面该模型项 context_window 注入 compaction 水位（未配置＝null，逐字节回退 24K 下限）
+    setCompactionContextWindow(this.deps.providerConfig?.context_window ?? null);
     const atfToolDeps: AtfAgentToolDeps = { bridge, scopeRefBox: { current: undefined } };
     const fileHost: FileToolHost = { env: process.env, roots: [scratchDir] };
     const surface: ApprovalSurface = {
@@ -538,7 +542,7 @@ export class WebUiSessionManager {
       approval: { kind: "surface", surface },
       steeringMode: "all",
       followUpMode: "all",
-      contextTokens: 24_000,
+      contextTokens: compactionTriggerTokens(),
       keepRecentTokens: 8_000,
       // 批㊵（D-LLM-1 R3）：推理档位消费链接通——初始档取会话当前 override（若有），
       // 运行时源每请求读取（/model X effort Y 切档 → 后续请求即时生效，历史不回改）。

@@ -428,13 +428,20 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
     if (contextMatch !== null && req.method === "GET") {
       const doc = settings.get();
       const provider = doc.providers.find((entry) => entry.id === doc.default_provider);
-      const model = provider?.models.find((entry) => entry.id === provider.default_model) ?? provider?.models[0];
-      const usage = manager.contextUsage(contextMatch[1] ?? "", model?.context_window ?? 200_000);
+      // B1：未知默认模型＝取不到 → null（不回退首模型猜窗口）
+      const model = provider?.models.find((entry) => entry.id === provider.default_model);
+      // B1：窗口单源＝设置面该模型项；未知模型 → context_window null（呈现「未知窗口」，不填猜测数）
+      const windowTokens = model?.context_window ?? null;
+      if (windowTokens === null) {
+        json(res, 200, { used_tokens: null, remaining_tokens: null, context_window: null, remaining_ratio: null, low: false, window_known: false });
+        return;
+      }
+      const usage = manager.contextUsage(contextMatch[1] ?? "", windowTokens);
       if (usage === null) {
         json(res, 404, { error: "会话不存在" });
         return;
       }
-      json(res, 200, { used_tokens: usage.usedTokens, remaining_tokens: usage.remainingTokens, context_window: usage.contextWindow, remaining_ratio: usage.remainingRatio, low: usage.low });
+      json(res, 200, { used_tokens: usage.usedTokens, remaining_tokens: usage.remainingTokens, context_window: usage.contextWindow, remaining_ratio: usage.remainingRatio, low: usage.low, window_known: true });
       return;
     }
     // ---- 批⑯ 增量 B：监控数据面 ----
