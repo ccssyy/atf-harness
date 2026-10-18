@@ -52,6 +52,11 @@ export const createProviderStreamFn = (config: ProviderStreamFnConfig): { stream
     models.streamSimple(requestedModel ?? model, context, {
       ...(config.api_key !== "" ? { apiKey: config.api_key } : {}),
       ...options,
+      // 修复批 D9.1（D9 第二层）：库 Agent 循环在未配置 getApiKey 时显式携带
+      // apiKey:undefined（agent-loop streamFunction 调用形），后置展开会以 undefined
+      // 覆盖装配凭据 → applyAuth 落 env 解析链 → "Provider is not configured" 假错。
+      // 凭据以装配面为准：仅当调用方未带有效 key 时回填（调用方有效 key 仍优先）。
+      ...(options?.apiKey == null && config.api_key !== "" ? { apiKey: config.api_key } : {}),
     });
   return { streamFn, model };
 };

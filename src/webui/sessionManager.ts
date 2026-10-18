@@ -72,6 +72,15 @@ export const effortToThinkingLevel = (effort: string | undefined): ThinkingLevel
   return (EFFORT_THINKING_LEVELS as readonly string[]).includes(effort) ? (effort as ThinkingLevel) : undefined;
 };
 
+/** 修复批 D9.1（零静默）：模型面 errorMessage → 用户可读因由（截 80 字、压空白；已知
+ *  装配类错误转人话——不出包名/provider 内部标识等开发叙事）。 */
+export const summarizeModelError = (errorMessage: string | undefined): string => {
+  const raw = (errorMessage ?? "").replace(/\s+/g, " ").trim();
+  if (raw === "") return "原因未上报";
+  if (/^unknown provider/i.test(raw)) return "模型提供方装配异常（未知 provider）";
+  return raw.slice(0, 80);
+};
+
 export interface SessionSummary {
   id: string;
   title: string;
@@ -523,13 +532,14 @@ export class WebUiSessionManager {
     // 批C1-2 B2：真 provider 链同时装配真摘要器（同 provider/model——压缩摘要不再是占位文本；
     // 失败/超时回落 faux＋system_notice 通报，零静默）。
     let realSummarizer: ((dropped: readonly import("@earendil-works/pi-agent-core").AgentMessage[]) => Promise<string>) | undefined;
-    let assembledProviderStreamFn:
-      | ReturnType<typeof createProviderStreamFn>["streamFn"]
+    // 修复批 D9.1：装配产物改为 {streamFn, model} 二元（model 进 initialState——D9 根因修复）
+    let assembledProvider:
+      | ReturnType<typeof createProviderStreamFn>
       | string
       | undefined;
     if (this.deps.streamFn === undefined && this.deps.providerConfig !== undefined) {
-      assembledProviderStreamFn = this.tryAssembleProviderStreamFn(this.deps.providerConfig);
-      if (typeof assembledProviderStreamFn !== "string") {
+      assembledProvider = this.tryAssembleProviderStreamFn(this.deps.providerConfig);
+      if (typeof assembledProvider !== "string") {
         try {
           const { models, model } = assembleProviderModel(this.deps.providerConfig);
           realSummarizer = createRealSummarizer({
@@ -556,12 +566,12 @@ export class WebUiSessionManager {
         }
       }
     }
-    if (typeof assembledProviderStreamFn === "string") return err(assembledProviderStreamFn);
+    if (typeof assembledProvider === "string") return err(assembledProvider);
     const rawStreamFn =
       this.deps.streamFn !== undefined
         ? this.deps.streamFn
-        : assembledProviderStreamFn !== undefined
-          ? assembledProviderStreamFn
+        : assembledProvider !== undefined
+          ? assembledProvider.streamFn
           : (_model: never, _context: never, _options?: never): unknown =>
               // 无 GLM 配置（ATF_LLM_CONFIG 未设）：结构化降级响应（fail-closed 不装配真 provider）
               createFauxStreamFn([
@@ -576,6 +586,8 @@ export class WebUiSessionManager {
       maxTurns: 64,
       streamFn: this.guardStreamFn(session, rawStreamFn) as never,
       modelTag: this.deps.providerConfig?.model ?? "webui",
+      // 修复批 D9.1：真 provider 链携带模型描述符（faux/注入链不携带＝零语义变化）
+      ...(assembledProvider !== undefined ? { model: assembledProvider.model } : {}),
       approval: { kind: "surface", surface },
       steeringMode: "all",
       followUpMode: "all",
@@ -742,12 +754,14 @@ export class WebUiSessionManager {
   /** streamFn 包装（运维面护栏·对话预算）：超限直接终止并人话呈现（"任务已终止并记录原因"，
    *  禁技术字样直出对话流）；解析护栏在 turn 结束面统计（见 runAgentTurn）——事件流是库内
    *  队列，push 拦截点晚于入队，不可靠。 */
-  /** provider streamFn 装配（fail-closed 收束：目录无模型等装配错误以文案返回，调用点转 err）。 */
+  /** provider streamFn 装配（fail-closed 收束：目录无模型等装配错误以文案返回，调用点转 err）。
+   *  修复批 D9.1：返回 {streamFn, model} 二元——model 进 Agent initialState（D9 根因：
+   *  缺省时 DEFAULT_MODEL{provider:"unknown"} 作 streamFn 首参 → "Unknown provider" 空回复）。 */
   private tryAssembleProviderStreamFn(
     config: NonNullable<SessionManagerDeps["providerConfig"]>,
-  ): ReturnType<typeof createProviderStreamFn>["streamFn"] | string {
+  ): ReturnType<typeof createProviderStreamFn> | string {
     try {
-      return createProviderStreamFn(config).streamFn;
+      return createProviderStreamFn(config);
     } catch (error) {
       return `provider streamFn 装配失败（fail-closed）: ${(error as Error).message}`;
     }
@@ -818,7 +832,25 @@ export class WebUiSessionManager {
       if (text !== "") {
         this.emit(session, { kind: "agent_text", text, at: new Date().toISOString() });
         session.resultSummary = text.slice(0, 40);
+      } else if ((lastAssistant as { stopReason?: string } | undefined)?.stopReason === "error") {
+        // 修复批 D9.1（零静默，D9 验收锚③）：模型面失败（error 收尾零正文）——结构化通报可读
+        // 因由，不以 completed 静默收尾；不计入 parseFailures（解析无关，属模型面故障）。
+        this.emit(session, {
+          kind: "system_notice",
+          level: "error",
+          text: `模型面连接失败：本轮未获得模型回复（${summarizeModelError((lastAssistant as { errorMessage?: string } | undefined)?.errorMessage)}）——请检查模型配置与凭据后重试。`,
+          at: new Date().toISOString(),
+        });
+        session.state = "idle";
       } else {
+        // 修复批 D9.1（零静默，D9 验收锚③）：空 stop（模型正常收尾但零正文）——同样不得静默：
+        // 即时 warn 通报＋沿用解析预算护栏（连续空 → 结构化索取信息，见下）。
+        this.emit(session, {
+          kind: "system_notice",
+          level: "warn",
+          text: "模型本轮未返回内容（空回复）——上下文已保留，可重发或调整表述后再试。",
+          at: new Date().toISOString(),
+        });
         // F7 同口径（批⑬ WebUI 运维面）：空 assistant 文本＝解析不可用——连续达预算 →
         // 放弃解析、以结构化问题向用户索取信息（优雅降级，人话呈现）。
         session.parseFailures += 1;

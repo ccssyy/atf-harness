@@ -27,7 +27,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { Agent, BACKGROUND_CONTEXT, type AgentEvent, type AgentMessage, type QueueMode, type ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, TranscriptContext, SimpleStreamOptions } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Model, TranscriptContext, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { AtfBridgeConnection } from "../bridge/connection.js";
 import { deriveAtfCommand } from "../bridge/atfCommand.js";
 import { resolveInstanceKernelDir } from "../core/workspace/instancePin.js";
@@ -367,6 +367,11 @@ export interface AssembleV1Deps {
   thinkingLevelSource?: () => ThinkingLevel | undefined;
   streamFn: (model: never, context: TranscriptContext, options?: SimpleStreamOptions) => unknown;
   modelTag: string;
+  /** 修复批 D9.1（登记 558e0ac8，取证 a7f6a212）：模型描述符——进 Agent initialState。
+   *  缺省不携带＝库默认 DEFAULT_MODEL{provider:"unknown"}（faux/scripted 链丢首参无感，
+   *  真 provider 链则 streamFn 首参渗漏 DEFAULT_MODEL → "Unknown provider" 空回复——
+   *  D9 根因）。真 provider 装配必须携带。 */
+  model?: Model<"openai-completions">;
   approval: { kind: "headless" } | { kind: "interactive"; timeoutMs: number } | { kind: "surface"; surface: ApprovalSurface };
   steeringMode: QueueMode;
   followUpMode: QueueMode;
@@ -455,6 +460,7 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
     initialState: {
       systemPrompt: deps.systemSuffix !== undefined ? `${HARNESS_SYSTEM_PROMPT}\n${deps.systemSuffix}` : HARNESS_SYSTEM_PROMPT,
       tools,
+      ...(deps.model !== undefined ? { model: deps.model } : {}),
       // 批㊵：初始档位（缺省不携带＝库默认 off；loop 把 initialState.thinkingLevel 折算进
       // config.reasoning，经 streamFn options.reasoning 透传 pi-ai——丙线 streamFn 已 spread
       // options，链路零新增装配件）。
@@ -563,12 +569,27 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
   const session = await repo.create({ cwd: deps.sessionsRoot }, BACKGROUND_CONTEXT);
   await ensureTemBranch(session);
 
+  // 修复批 D9.1：真 provider 链装配模型描述符（model 进 Agent initialState——D9 根因修复）。
+  // 注入面（streamFn/scripted）在场时装配仅作 model 描述符来源、best-effort：注入流自持
+  // 模型面，目录未含的测试 provider 不因装配 fail-closed 破坏既有注入语义（零行为变化）。
+  let providerAssembled: ReturnType<typeof createProviderStreamFn> | undefined;
+  if (deps.providerConfig !== undefined) {
+    if (deps.streamFn === undefined && deps.scripted === undefined) {
+      providerAssembled = createProviderStreamFn(deps.providerConfig);
+    } else {
+      try {
+        providerAssembled = createProviderStreamFn(deps.providerConfig);
+      } catch {
+        providerAssembled = undefined;
+      }
+    }
+  }
   const streamFn =
     deps.streamFn !== undefined
       ? deps.streamFn
       : deps.scripted !== undefined
         ? createScriptedStreamFn(deps.scripted)
-        : createProviderStreamFn(deps.providerConfig as { provider_id: string; model: string; base_url: string; api_key: string }).streamFn;
+        : (providerAssembled ?? createProviderStreamFn(deps.providerConfig as { provider_id: string; model: string; base_url: string; api_key: string })).streamFn;
 
   const systemSuffix = deps.skillsDir !== undefined ? await buildSkillsSystemSuffix(deps.skillsDir) : undefined;
   // 批C1-2 B2：溢出强制压缩盒（真实 provider 链在位；faux/scripted 链无需——不装配）
@@ -581,6 +602,7 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
             sessionsRoot: deps.sessionsRoot,
             surface: deps.approval.kind === "surface" ? deps.approval.surface : deps.approval.kind === "interactive" ? createInteractiveApprovalSurface({ timeoutMs: deps.approval.timeoutMs }) : undefined,
             childStreamFn: deps.childStreamFn !== undefined ? deps.childStreamFn : () => streamFn as never,
+            ...(providerAssembled !== undefined ? { childModel: providerAssembled.model } : {}),
             modelTag,
             contextTokens: deps.contextTokens,
             keepRecentTokens: deps.keepRecentTokens,
@@ -594,6 +616,9 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
     maxTurns: deps.maxTurns,
     streamFn,
     modelTag,
+    // 修复批 D9.1：模型描述符进 initialState（D9 根因——缺省时 Agent 用 DEFAULT_MODEL
+    // {provider:"unknown"} 作 streamFn 首参，真 provider 链必炸"Unknown provider"空回复）
+    ...(providerAssembled !== undefined ? { model: providerAssembled.model } : {}),
     approval: deps.approval,
     steeringMode: deps.steeringMode,
     followUpMode: deps.followUpMode,

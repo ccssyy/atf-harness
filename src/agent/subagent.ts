@@ -22,7 +22,7 @@ import { compactionTriggerTokens } from "../core/session/constantsBudget.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Model } from "@earendil-works/pi-ai";
 import { assembleV1Agent } from "./cli.js";
 import { createJsonlSessionRepo } from "./sessionMirror.js";
 import type { SpikeBridgeTransport } from "./atfAgentTools.js";
@@ -43,6 +43,9 @@ export interface SubagentDeps {
   gateLock?: GateLock;
   /** 子 Agent 模型面（装配 factory——tests 注 faux；真实＝providerStreamFn 单点）。 */
   childStreamFn: () => (model: never, context: never, options?: never) => unknown;
+  /** 修复批 D9.1：子链模型描述符（进子 Agent initialState——与主链同一 D9 根因修复面；
+   *  真 provider 链必传，faux 链缺省不携带＝零语义变化）。 */
+  childModel?: Model<"openai-completions">;
   modelTag: string;
   childMaxTurns?: number;
   /** 子任务上下文 token 参数（继承主链装配口径的缺省）。 */
@@ -71,6 +74,9 @@ export const runChildSubtask = async (deps: SubagentDeps, instruction: string, l
     maxTurns: deps.childMaxTurns ?? 8,
     streamFn: deps.childStreamFn() as never,
     modelTag: deps.modelTag,
+    // 修复批 D9.1：子链模型描述符（同主链 D9 根因修复——真 provider 子链不传则
+    // DEFAULT_MODEL 渗漏首参，"Unknown provider" 空回复）
+    ...(deps.childModel !== undefined ? { model: deps.childModel } : {}),
     approval: deps.surface !== undefined ? { kind: "surface", surface: deps.surface } : { kind: "headless" },
     steeringMode: "all",
     followUpMode: "all",
