@@ -107,7 +107,8 @@ describe("批㊶R前置 VERIFY3 工具面真机重演（确认卡拦截＋卡数
     expect(nprocRow?.value).toBe("8"); // 实件 1 → 拦截回退拉满（真机 8 卡）
     const notification = String(result.notification ?? "");
     expect(notification).toContain("卡数护栏");
-    expect(notification).toContain("ZeRO-3"); // 反模式说明可读
+    expect(notification).toContain("静默死亡"); // A-C3b E11 文案单源：内核 runtime_linkage_conflict 因由
+    expect(notification).toContain("已按可用卡数回退为 8"); // 实件 1 → 拦截回退拉满（真机 8 卡）
     // 快照已按回退后值落盘（生效配置不含反模式组合）
     const snapshot = JSON.parse(readFileSync(join(replayRun, "webui", "config-snapshot.json"), "utf8")) as { confirmed?: Record<string, string> };
     expect(snapshot.confirmed?.["nproc_per_node"]).toBe("8");

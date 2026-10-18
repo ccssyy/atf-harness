@@ -221,6 +221,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const { ctx } = deps;
   // 批㊶R前置②：可用卡数机器事实（建卡期一次探测；null＝缺失→建卡时按 machine-facts 停下问）
   const gpuCount = detectAvailableGpuCount(process.env, deps.gpuProbe);
+  // A-C3b E11：QLoRA 形态单源＝FIXED_SMART_DEFAULTS（quantization_bit=4 × method=bnb——
+  // 确认卡链 L1 固定缺省，卡面无量化键、形态不经卡改）；仅作护栏判据输入，阈值与拒绝面留在内核。
+  const qloraActive = FIXED_SMART_DEFAULTS["quantization_bit"] === "4" && FIXED_SMART_DEFAULTS["quantization_method"] === "bnb";
 
   const configTool = defineTool({
     name: "atf_config_confirm",
@@ -444,13 +447,18 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         }
       }
       // 批㊶R前置④：反模式拦截（确定性——建卡时；本 fields 即生效配置输入，拦截先于卡面/快照）
-      //   A. 单卡×z3_offload → 回退可用卡数＋note；B. 超机器事实上限/非用户显式低配 → 回退拉满
-      //   （need_confirm＝用户显式降档放行）；回退后 accum 随卡数重派生（整除校验不过即停点）。
-      const guardResult = guardNprocAntiPatterns(fields, { gpuCount, baselineNproc: settingsBaseline });
+      //   A（A-C3b E11）：单卡×任意 deepspeed×bnb_4bit → 非用户显式回退可用卡数＋note；
+      //   用户显式（need_confirm）不回退不改值，conflicts 冲突原文标注上卡面/回执，内核拒；
+      //   B. 超机器事实上限/非用户显式低配 → 回退拉满（need_confirm＝用户显式降档放行）；
+      //   回退后 accum 随卡数重派生（整除校验不过即停点）。
+      const guardResult = guardNprocAntiPatterns(fields, { gpuCount, baselineNproc: settingsBaseline, qlora: qloraActive });
       if ("error" in guardResult) {
         return asToolValue({ ok: false, run_id: args.run_id, error: "nproc_anti_pattern_blocked", note: guardResult.error });
       }
       const guardNotes: string[] = [];
+      // A-C3b E11：用户显式冲突标注（不回退）——与回退 note 同走 guardNotes 呈现面
+      //（卡面 note/pending 卡/表单卡 detail/审批回执/自动档通报），值保持用户显式原样交内核。
+      for (const conflict of guardResult.conflicts) guardNotes.push(conflict.note);
       for (const hit of guardResult.hits) {
         if (hit.key !== "nproc_per_node") continue;
         const nprocField = fields.find((f) => f.key === "nproc_per_node");

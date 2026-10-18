@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { collectEvalReadiness, checkModelPublishPrereq, buildPublishModelTool, derivePublishRoot } from "../../packages/extensions/atf-tools/src/trainingFace.js";
+import { collectEvalReadiness, checkModelPublishPrereq, buildPublishModelTool, derivePublishRoot, evalStatus } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 import { workspaceFenceRoots, workspaceFenceGuard, WORKSPACE_PATH_OUTSIDE_ALLOWLIST } from "../../packages/extensions/atf-tools/src/fileGuardFace.js";
 import { buildRecordsQueryTool, resolveTaskDir, grantExemption, readExemptions } from "../../packages/extensions/atf-tools/src/recordsFace.js";
 import { mergePublishedModels } from "../../src/core/workspace/modelInventory.js";
@@ -61,6 +61,19 @@ describe("批㊶-S1 段 1——闭环推荐层事实核对（next_steps）", () 
     if (!check.ok) expect(check.reason).toBe("four_set_missing");
     const ok = checkModelPublishPrereq(seedCompleteRun(root, "run-ok"));
     expect(ok.ok).toBe(true);
+  });
+  it("A-C3b E9 收口提示：四件套在位 → status 返回 analyze_guidance 指引行；不在位 → 无该行（不预告）", async () => {
+    const root = tempRoot();
+    seedCompleteRun(root, "run-e9");
+    const ready = await evalStatus("run-e9", { runsRoot: root, kernelDir: root }) as { next_steps?: Record<string, unknown> };
+    expect(ready.next_steps?.four_set_ready).toBe(true);
+    expect(String(ready.next_steps?.analyze_guidance)).toContain("atf_analyze_badcases");
+    expect(String(ready.next_steps?.analyze_guidance)).toContain("badcase viewer");
+    // 负例：评估轮目录在但四件套缺 → 指引行不得出现
+    mkdirSync(join(root, "run-e9-none", "eval", "1-20261018", "orch", "eval"), { recursive: true });
+    const notReady = await evalStatus("run-e9-none", { runsRoot: root, kernelDir: root }) as { next_steps?: Record<string, unknown> };
+    expect(notReady.next_steps?.four_set_ready).toBe(false);
+    expect(notReady.next_steps?.analyze_guidance).toBeUndefined();
   });
 });
 

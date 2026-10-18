@@ -150,37 +150,74 @@ export interface NprocGuardHit {
   note: string;
 }
 
+/** A-C3b E11：运行形态联动冲突标注（用户显式态不回退——只标注，内核 fail-closed 单源）。 */
+export interface NprocLinkageConflict {
+  key: "nproc_per_node" | "deepspeed";
+  note: string;
+}
+
+// ── A-C3b E11 文案单源：内核 skills/atf-admit-training-data/scripts/build_experiment_setup.py
+//    _validate_runtime_linkage 的 runtime_linkage_conflict 因由/补救表述逐字引用——harness 只
+//    呈现不另写风险描述，阈值与拒绝面均留在内核（不复制成第二份实现）。 ──
+export const KERNEL_RUNTIME_LINKAGE_CONFLICT_TEXT =
+  "单卡 QLoRA 挂 ZeRO 有静默死亡风险(无 traceback 训练中断,uat 实测 ×2)";
+export const KERNEL_RUNTIME_LINKAGE_REMEDY_TEXT =
+  "重跑以 --deepspeed off,或改多卡 bf16 后 z2/z3 可用";
+
 /**
- * 反模式拦截（确定性，建卡/生效配置时——批㊶R前置 指令件第 4 项；批㊶-S5 门2修正回退参照）：
- *   A. nproc_per_node=1 × deepspeed 含 z3_offload → 拦截回退＋note（ZeRO-3 需多卡分片）；
+ * 反模式拦截（确定性，建卡/生效配置时——批㊶R前置 指令件第 4 项；批㊶-S5 门2修正回退参照；
+ * A-C3b E11 拆来源＋判据对齐内核）：
+ *   A. nproc_per_node=1 × 任意 deepspeed(≠off) × bnb_4bit(QLoRA)——判据单源对齐内核
+ *      _validate_runtime_linkage（内核＝拒绝面；harness 只判"是否冲突并呈现"，不复刻阈值）：
+ *      非用户显式（default_used/from_registry/agent_recommend）→ 维持回退可用卡数＋note
+ *      （注明内核同规则会拒绝）；用户显式（need_confirm）→ **不回退不改值**，conflicts 标注
+ *      冲突原文（内核文案单源）交内核 fail-closed（runtime_linkage_conflict）。
+ *      qlora 缺省＝按 QLoRA 判定（确认卡链 L1 固定缺省 quantization_bit=4×method=bnb 单源
+ *      形态，卡面无量化键）；非 QLoRA 链（如 bf16）调用方显式传 false——不误报。
  *   B. nproc 与可用卡数不一致 → 拦截：超上限（物理事实）任何来源都回退；低于上限仅在
  *      非用户显式形态（default_used/from_registry/agent_recommend）回退——**回退参照＝
  *      设置面训练卡数基线（baselineNproc，拉满偏置承载点）?? 探测可用卡数**；与参照相等
  *      不回退（设置基线＝操作者显式配置，非静默低配）。降档仅用户明确要求
- *      （need_confirm＝用户显式，放行不改）。
+ *      （need_confirm＝用户显式，放行不改）。B 支判据与文案逐字不动。
  * 可用卡数机器事实缺失时：触发 A/B 需回退即返回 error（machine-facts 停下问），不设默认值。
  */
 export const guardNprocAntiPatterns = (
   fields: ReadonlyArray<NprocGuardField>,
-  ctx: { gpuCount: number | null; baselineNproc?: string | null },
-): { hits: NprocGuardHit[] } | { error: string } => {
+  ctx: { gpuCount: number | null; baselineNproc?: string | null; qlora?: boolean },
+): { hits: NprocGuardHit[]; conflicts: NprocLinkageConflict[] } | { error: string } => {
   const nprocField = fields.find((f) => f.key === "nproc_per_node");
   const deepspeedField = fields.find((f) => f.key === "deepspeed");
-  if (nprocField === undefined) return { hits: [] };
+  if (nprocField === undefined) return { hits: [], conflicts: [] };
   const nproc = Number.parseInt(nprocField.value, 10);
   if (!Number.isFinite(nproc) || nproc <= 0) return { error: `nproc_per_node 非法（${nprocField.value}）——须为正整数，不猜测` };
   const hits: NprocGuardHit[] = [];
+  const conflicts: NprocLinkageConflict[] = [];
   const gpuCount = ctx.gpuCount;
   const deepspeed = deepspeedField?.value ?? "";
-  // A：单卡 × z3_offload（确定性反模式——与来源无关）
-  if (nproc === 1 && /z3_offload/i.test(deepspeed)) {
+  // A：单卡 × 任意 deepspeed(≠off) × QLoRA（判据对齐内核 runtime_linkage_conflict——与值来源
+  //    无关地识别冲突，按来源决定呈现方式：非用户显式回退，用户显式只标注）
+  const deepspeedActive = deepspeed.trim() !== "" && deepspeed.trim().toLowerCase() !== "off";
+  const qlora = ctx.qlora !== false;
+  if (nproc === 1 && deepspeedActive && qlora) {
+    const cause = `nproc_per_node=1 × deepspeed=${deepspeed} × bnb_4bit(QLoRA)——${KERNEL_RUNTIME_LINKAGE_CONFLICT_TEXT}`;
+    if (nprocField.tag === "need_confirm") {
+      return {
+        hits,
+        conflicts: [{
+          key: "nproc_per_node",
+          note: `运行形态联动冲突：${cause}；内核同规则将拒绝（runtime_linkage_conflict）——本卡不改用户显式值，请先处置：${KERNEL_RUNTIME_LINKAGE_REMEDY_TEXT}`,
+        }],
+      };
+    }
     if (gpuCount === null) return { error: "反模式拦截需回退但可用卡数机器事实缺失（CUDA_VISIBLE_DEVICES/nvidia-smi 皆不可得）——停下问用户，不设默认值" };
-    hits.push({
-      key: "nproc_per_node",
-      revertedTo: String(gpuCount),
-      note: `反模式拦截：训练卡数=1 × deepspeed=${deepspeed}（ZeRO-3 需多卡分片，单卡无收益且易崩）——已回退为可用卡数 ${gpuCount}；如需单卡请同时换非 z3 deepspeed 配置`,
-    });
-    return { hits };
+    return {
+      hits: [{
+        key: "nproc_per_node",
+        revertedTo: String(gpuCount),
+        note: `反模式拦截：${cause}；内核同规则会拒绝（runtime_linkage_conflict）——已按可用卡数回退为 ${gpuCount}（如需单卡：--deepspeed off）`,
+      }],
+      conflicts,
+    };
   }
   if (gpuCount !== null) {
     if (nproc > gpuCount) {
@@ -189,7 +226,7 @@ export const guardNprocAntiPatterns = (
         revertedTo: String(gpuCount),
         note: `反模式拦截：训练卡数 ${nproc} 超过本机可用卡数 ${gpuCount}（机器事实物理上限）——已回退为 ${gpuCount}`,
       });
-      return { hits };
+      return { hits, conflicts };
     }
     const reference = ctx.baselineNproc !== undefined && ctx.baselineNproc !== null && ctx.baselineNproc.trim() !== ""
       ? Number.parseInt(ctx.baselineNproc, 10)
@@ -203,7 +240,7 @@ export const guardNprocAntiPatterns = (
       });
     }
   }
-  return { hits };
+  return { hits, conflicts };
 };
 
 /** L2 派生：grad_accum = 256/(bs×nproc)；除不尽/矛盾组合返回问题串（禁止静默取整）。 */

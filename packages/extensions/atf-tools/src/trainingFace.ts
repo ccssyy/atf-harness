@@ -971,6 +971,11 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
       note: readiness.four_set_ready
         ? "四件套齐——坏例分析（atf_analyze_badcases）与模型发布（atf_publish_model）前置事实在位"
         : "四件套未齐——分析/发布前置事实未满足",
+      // A-C3b E9 收口提示：仅四件套在位时出现（不预告未发生的事）——会话 agent 下一步可跑
+      // badcase 分析（工具返回面指引，非用户可见卡片文案）
+      ...(readiness.four_set_ready
+        ? { analyze_guidance: "评估已完成——可调 atf_analyze_badcases 生成 badcase viewer（产物可经任务卡 viewer 面板打开）" }
+        : {}),
     },
   });
 }

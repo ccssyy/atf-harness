@@ -115,16 +115,47 @@ describe("批㊶R前置——卡数机器事实与反模式拦截", () => {
     { key: "deepspeed", value: deepspeed, tag },
     { key: "gradient_accumulation_steps", value: "16", tag },
   ];
-  it("拦截 A：单卡×z3_offload → 回退可用卡数＋note 可读；机器事实缺失 → error 停下问", () => {
-    const hit = guardNprocAntiPatterns(fields("1", "ds_z3_offload_config.json"), { gpuCount: 8 });
-    expect("hits" in hit).toBe(true);
-    if ("hits" in hit) {
-      expect(hit.hits).toHaveLength(1);
-      expect(hit.hits[0]?.revertedTo).toBe("8");
-      expect(hit.hits[0]?.note).toContain("ZeRO-3");
+  it("拦截 A·非用户显式回退（A-C3b E11）：default_used/from_registry/agent_recommend 单卡×任意 deepspeed×QLoRA → 回退＋内核同规则 note；机器事实缺失 → error 停下问", () => {
+    for (const tag of ["default_used", "from_registry", "agent_recommend"] as const) {
+      const hit = guardNprocAntiPatterns(fields("1", "ds_z3_offload_config.json", tag), { gpuCount: 8 });
+      expect("hits" in hit).toBe(true);
+      if ("hits" in hit) {
+        expect(hit.hits).toHaveLength(1);
+        expect(hit.hits[0]?.revertedTo).toBe("8");
+        expect(hit.hits[0]?.note).toContain("静默死亡"); // 文案单源：内核 runtime_linkage_conflict 因由
+        expect(hit.hits[0]?.note).toContain("runtime_linkage_conflict");
+        expect(hit.hits[0]?.note).toContain("已按可用卡数回退");
+      }
     }
+    // 判据对齐内核：任意 deepspeed（非 z3_offload 家族同样触发——z2 也拦）
+    const z2 = guardNprocAntiPatterns(fields("1", "ds_z2_config.json", "default_used"), { gpuCount: 8 });
+    expect("hits" in z2 && z2.hits.length === 1).toBe(true);
     const blocked = guardNprocAntiPatterns(fields("1", "ds_z3_offload_config.json"), { gpuCount: null });
     expect("error" in blocked).toBe(true);
+  });
+  it("拦截 A·用户显式不回退（A-C3b E11）：need_confirm 单卡×deepspeed×QLoRA → 不回退，只标注冲突原文交内核拒", () => {
+    const explicit = guardNprocAntiPatterns(fields("1", "ds_z3_offload_config.json", "need_confirm"), { gpuCount: 8 });
+    expect("hits" in explicit).toBe(true);
+    if ("hits" in explicit) {
+      expect(explicit.hits).toHaveLength(0); // 不回退——用户显式值原样保留
+      expect(explicit.conflicts).toHaveLength(1);
+      expect(explicit.conflicts[0]?.note).toContain("静默死亡");
+      expect(explicit.conflicts[0]?.note).toContain("runtime_linkage_conflict");
+      expect(explicit.conflicts[0]?.note).toContain("不改用户显式值");
+      expect(explicit.conflicts[0]?.note).toContain("--deepspeed off");
+    }
+    // 机器事实缺失时用户显式态仍只标注（无需回退→不 error）
+    const noFacts = guardNprocAntiPatterns(fields("1", "ds_z2_config.json", "need_confirm"), { gpuCount: null });
+    expect("hits" in noFacts && noFacts.conflicts.length === 1).toBe(true);
+  });
+  it("判据不误报（A-C3b E11）：单卡×bf16（非 QLoRA）×deepspeed 不触发；deepspeed=off 不触发；多卡不触发", () => {
+    // bf16 形态取用户显式（need_confirm）以隔离 A 支判据——非用户显式单卡低配另受 B 支回退（既有语义）
+    const bf16 = guardNprocAntiPatterns(fields("1", "ds_z3_offload_config.json", "need_confirm"), { gpuCount: 8, qlora: false });
+    expect("hits" in bf16 && bf16.hits.length === 0 && bf16.conflicts.length === 0).toBe(true);
+    const off = guardNprocAntiPatterns(fields("1", "off", "need_confirm"), { gpuCount: 8 });
+    expect("hits" in off && off.hits.length === 0 && off.conflicts.length === 0).toBe(true);
+    const multi = guardNprocAntiPatterns(fields("8", "ds_z3_offload_config.json", "need_confirm"), { gpuCount: 8 });
+    expect("hits" in multi && multi.hits.length === 0 && multi.conflicts.length === 0).toBe(true);
   });
   it("拦截 B：超上限任何来源回退；非用户显式低配回退拉满；need_confirm＝用户显式降档放行", () => {
     const overflow = guardNprocAntiPatterns(fields("16", "ds_z2_config.json", "need_confirm"), { gpuCount: 8 });
