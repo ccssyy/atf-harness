@@ -763,8 +763,8 @@ atf_cli:
 # （mock 已回 2）"的表述作废】，真实对端以内核批次二实现为准。
 # ---------------------------------------------------------------------
 atf_upstream:
-  tag: v0.7.18b0
-  commit_sha: 72411b0b120bcd2cd5f59d3057408294f4995d76
+  tag: v0.7.19b0
+  commit_sha: 077f54837bca94dab8b6ca6a1fe4a2591f2b5e4b
   pinned_at: "2026-10-18"
-  baseline: 内核方法面 14／harness 工具面 9＋管线段模式入口（v0.7.18b0＝72411b0：--stage 单段执行＋盘上只读再水合，特性批 39e4632；段模式命令面 --workspace/--run-id/--stage/--source-root，落点唯一 <workspace>/runs/<run-id>，退出码 0 贯通/2 拒绝/3 环境错误；owner 侧核验 4 新锚＋18 既有回归绿、越序负例 exit 2 盘面零新增、契约零 diff、_prereq 未改）；re-pin 2026-10-18（修复批A2.2b，worktree 83defb9→72411b0 前移不丢内容）；pin＝tag v0.7.18b0 commit 72411b0（禁追新）
+  baseline: 内核方法面 14／harness 工具面 9＋管线段模式入口（v0.7.19b0＝077f548：K-C3a KB 摘除与并发贯通〔E12 f64991f／E7 20908ee／E13 撤单 4c8d0ec／E8 78af3b3〕＋K-E14a base 模型语义拆分〔e4630ac：--base-model 本地路径无缺省／--base-model-family 渲染缺省 qwen3_vl＋段模式盘上只读再水合，恢复不能 fail-closed training_prep_base_model_path_missing 附 ATF_MODEL_ROOT 清单指路〕）；re-pin 2026-10-18（修复批A-C3b 窗·A-E14b 前置，worktree 72411b0→077f548 前移不丢内容；实例 env 补 ATF_SKILLS_AUTO_INSTALL=0——内核 serve/main 入口技能自举测试期关闭）；pin＝tag v0.7.19b0 commit 077f548（禁追新）
   contract_version: 1
