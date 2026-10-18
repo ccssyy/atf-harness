@@ -7,8 +7,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 
 import { join, dirname } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
-import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
-import { dualStageNote } from "./confirmFace.js";
+import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 
 /** 豁免登记落点（run 工作区 webui/records-exemptions.json——append 留痕可回看）。 */
 export const exemptionsPathOf = (runWorkspace: string): string => join(runWorkspace, "webui", "records-exemptions.json");
@@ -92,9 +91,15 @@ export function buildRecordsQueryTool(ctx: { get(service: string): unknown }, cf
       const exemptions = currentWs !== null ? readExemptions(currentWs) : [];
       const exempt = exemptions.some((e) => e.task_id === args.task_run);
       if (crossWorkspace && !exempt) {
-        // U 双段式问题卡：人话确认（卡面无路径裸串——只有任务标识与目的）
+        // U 双段式问题卡：人话确认（卡面无路径裸串——只有任务标识与目的）；E5 模板四行单源
         const verdict = await requestApproval(ctx, exec, "atf_records_query",
-          dualStageNote("跨任务记录读取确认", { extra: `要参考训练任务「${args.task_run}」的记录吗？${args.note !== undefined ? `（目的：${args.note}）` : ""}允许＝本次读取并登记豁免（同会话后续免打扰）；拒绝＝不读取。` }));
+          buildApprovalReason({
+            action: "跨任务读取训练记录",
+            target: `（任务 ${args.task_run}${args.note !== undefined ? `；目的：${args.note}` : ""}）`,
+            effect: "只读读取该任务记录，并写一条同会话豁免登记",
+            reversible: "可逆（读取不改动原记录；豁免条目可删）",
+            cost: "无额外代价（本地读取）",
+          }) + "\n允许＝本次读取并登记豁免（同会话后续免打扰）；拒绝＝不读取。");
         if (!verdict.ok) return approvalDeniedResult("atf_records_query", verdict.outcome);
         if (currentWs !== null) grantExemption(currentWs, args.task_run, `atf_records_query${args.note !== undefined ? `（${args.note}）` : ""}`);
       }

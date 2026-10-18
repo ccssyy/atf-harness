@@ -19,7 +19,7 @@ import { buildConfigConfirmFields, saveConfigSnapshot } from "../../../../src/we
  *  仅全自动档采纳 agent 参数推荐时由本文件后处理标注，buildConfigConfirmFields 不产出该态）。
  *  A1 导出：configFormFieldsOf／回归断言共用。 */
 export type ConfigConfirmField = { key: string; value: string; tag: "need_confirm" | "from_registry" | "default_used" | "agent_recommend" };
-import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
+import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { appendAskFailureDiagnostic } from "./askDiagnostics.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
@@ -601,8 +601,15 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         if (clampedKeys.length > 0 || loopNote !== "") {
           amendNote = `本轮改参：${Object.keys(changedEdits).join(", ") || "（按现值确认）"}${clampedKeys.length > 0 ? `；越界拦截回退（域边界）：${clampedKeys.join("、")}` : ""}${loopNote}`;
         }
-        // 第二段＝审批卡（授权唯一落点——Reject 回表单卡循环）
-        const verdict = await requestApproval(ctx, exec, "atf_config_confirm", `${title}\n${renderFields(fields)}\n${note}${amendNote !== undefined ? `\n${amendNote}` : ""}`);
+        // 第二段＝审批卡（授权唯一落点——Reject 回表单卡循环）；E5 模板四行＋字段表续行
+        const verdict = await requestApproval(ctx, exec, "atf_config_confirm",
+          buildApprovalReason({
+            action: "确认训练配置并落快照",
+            target: `（${title}）`,
+            effect: "写 run 配置快照（确认值十五键）",
+            reversible: "可逆（可改参后重新确认）",
+            cost: "按任务卡",
+          }) + `\n${renderFields(fields)}\n${note}${amendNote !== undefined ? `\n${amendNote}` : ""}`);
         if (verdict.ok) break;
         if (verdict.outcome === "rejected") {
           // Reject → 回表单卡（带上次值——fields 已就地更新）
@@ -667,7 +674,15 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       // 批㊶-U §五：凭据卡退化形式——无可调参数不虚构；卡面 note＝统一说明＋复核通道（聊天重呈）
       const body = `  artifact: contract-candidate.json\n  digest: ${candidateDigest}\n  ${dualStageNote("契约凭据卡", { amendable: false })}`;
       writePending(runDir, { kind: "publish_confirm", run_id: args.run_id, title, digest: candidateDigest, at: new Date().toISOString() });
-      const verdict = await requestApproval(ctx, exec, "atf_publish_confirm", `${title}\n${body}\n确认发布请点 Allow once。`);
+      // E5 模板四行（凭据摘要续行；点按指引由审批卡自身承载）
+      const verdict = await requestApproval(ctx, exec, "atf_publish_confirm",
+        buildApprovalReason({
+          action: "确认契约发布",
+          target: `（run ${args.run_id}）`,
+          effect: "登记发布段事实（写 run 段记录）",
+          reversible: "可逆（可重新走确认）",
+          cost: "按任务卡",
+        }) + `\n${title}\n${body}`);
       if (!verdict.ok) return approvalDeniedResult("atf_publish_confirm", verdict.outcome);
       // 批㊶Q增补二3：放行完成即清 pending 卡（同确认卡语义）
       clearPending(runDir);

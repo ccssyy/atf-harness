@@ -171,10 +171,12 @@ describe("批㊶-U §五范围升级——共用双段式 helper 四卡统一（
     expect(cred).toContain("复核通道");
     expect(cred).not.toContain("改参在表单卡改值提交");
   });
-  it("live 链三卡锚：九要素 note/评估卡/凭据卡均投 helper（禁每卡手搓）", async () => {
+  it("live 链三卡锚：问题卡 note/凭据卡 body 仍投 helper；审批卡 reason 一律走 E5 模板（禁每卡手搓）", async () => {
     const confirm = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-tools/src/confirmFace.ts"), "utf8");
     const training = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-tools/src/trainingFace.ts"), "utf8");
-    expect((confirm.match(/dualStageNote\(/g) ?? []).length).toBeGreaterThanOrEqual(2); // 定义＋九要素调用（凭据卡走 body 拼接同 helper）
-    expect(training).toContain("dualStageNote(\"评估服务 EVAL_RELEASE 确认");
+    expect((confirm.match(/dualStageNote\(/g) ?? []).length).toBeGreaterThanOrEqual(2); // 定义＋九要素表单卡 note（凭据卡走 body 拼接同 helper）
+    // 批C2 E5：评估审批卡 reason 由 buildApprovalReason 模板构造（dualStageNote 退问题卡域）
+    expect(training).toContain("buildApprovalReason({");
+    expect(training).not.toContain("dualStageNote(\"评估服务 EVAL_RELEASE 确认");
   });
 });

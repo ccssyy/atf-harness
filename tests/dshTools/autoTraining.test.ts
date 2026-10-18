@@ -497,7 +497,7 @@ describe("批㊶Q增补一 danger 卡任何档位阻塞（owner 裁定 1 乙—�
     )) as Record<string, unknown>;
     // danger 卡任何档位阻塞：审批调用恰一次；拒绝即不开训
     expect(recorded.approvals).toHaveLength(1);
-    expect(recorded.approvals[0]).toContain("真实 GPU 训练启动确认");
+    expect(recorded.approvals[0]).toContain("将要执行：启动真实 GPU 训练");
     expect(result).toMatchObject({ error: "approval_denied", outcome: "rejected" });
     // 不再转通报（train_auto 通报块已随裁定 1 乙移除）
     expect(existsSync(join(root, "run-q", "webui", "alerts.json"))).toBe(false);
@@ -513,7 +513,7 @@ describe("批㊶Q增补一 danger 卡任何档位阻塞（owner 裁定 1 乙—�
       sessionExec,
     )) as Record<string, unknown>;
     expect(recorded.approvals).toHaveLength(1);
-    expect(recorded.approvals[0]).toContain("真实 GPU 训练启动确认");
+    expect(recorded.approvals[0]).toContain("将要执行：启动真实 GPU 训练");
     expect(result).toMatchObject({ error: "approval_denied", outcome: "rejected" });
   });
 

@@ -20,12 +20,12 @@ import { basename, dirname, join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
 import { scanRunDir } from "../../atf-ui/src/server.js";
-import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
+import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { isAutoTrainingTier } from "./autoTrainingTier.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { probeSession, resolveLaunchSessionName, tmuxCommand, tmuxTrainingEvidenceFor, evalOrchSessionBase, trainingSessionBase, type SessionProbe } from "../../../../src/core/workspace/tmuxLiveness.js";
-import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText, TRAINING_RESIDUE_PATTERN } from "./gpuQueueFace.js";
+import { awaitGpuWindow, formatCardTable, gpuQueuePollMsFromEnv, TRAINING_RESIDUE_PATTERN } from "./gpuQueueFace.js";
 import { reconcileConfirmedWithTrainSh, formatReconcileDiff } from "./trainShReconcile.js";
 import { editsFromFormAnswers, formAskQuestion, type FormAskService } from "./confirmFace.js";
 import { appendAskFailureDiagnostic } from "./askDiagnostics.js";
@@ -587,7 +587,14 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // 人工确认，产品纪律）；ADR-07 内核侧账本闸门不变（train.sh 内放行记录校验原样保留，
       // 无记录 exit 78）。手动档审批链零变化。
       const autoTierStart = isAutoTrainingTier(ctx, exec);
-      const verdict = await requestApproval(ctx, exec, "atf_run_training", `真实 GPU 训练启动确认（GPU/时长代价以九要素确认卡与 train.sh 为准）：train.sh=${args.train_sh}${conflictNote}`);
+      const verdict = await requestApproval(ctx, exec, "atf_run_training",
+        buildApprovalReason({
+          action: "启动真实 GPU 训练",
+          target: `（train.sh=${args.train_sh}）`,
+          effect: "占用 GPU 与写训练产物",
+          reversible: "不可自动回滚（产物可人工清理）",
+          cost: "按任务卡（GPU/时长以九要素确认卡与 train.sh 为准）",
+        }) + conflictNote);
       if (!verdict.ok) return approvalDeniedResult("atf_run_training", verdict.outcome);
       // 批㊶-W F7：九要素确认值 → train.sh 生成面逐键透传对账（start 面即拒——awb_r1
       // 首跑 nproc 确认 8 生成 1 被静默丢弃的回归锚）。对账基线＝config-snapshot.confirmed
@@ -665,7 +672,14 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         if (windowState.kind === "aborted") return approvalDeniedResult("atf_run_training", "cancelled");
         // 批㊶-Q：全自动档免琥珀再确认（通报已覆盖放行事实；窗口命中即启动）
         if (!autoTierStart) {
-          const amber = await requestApproval(ctx, exec, "atf_run_training", `${queueHitText(windowState.snapshot.gpuIndexes, windowState.snapshot.table)}（已等待 ${windowState.snapshot.waitedText}）——GPU 窗口命中，确认启动训练（train.sh=${args.train_sh}）`);
+          const amber = await requestApproval(ctx, exec, "atf_run_training",
+            buildApprovalReason({
+              action: "GPU 窗口命中，启动训练",
+              target: `（GPU ${windowState.snapshot.gpuIndexes.join("、")}，已等待 ${windowState.snapshot.waitedText}；train.sh=${args.train_sh}）`,
+              effect: "占用 GPU 与写训练产物",
+              reversible: "不可自动回滚（产物可人工清理）",
+              cost: "按任务卡",
+            }) + `\n${formatCardTable(windowState.snapshot.table)}`);
           if (!amber.ok) return approvalDeniedResult("atf_run_training", amber.outcome);
         }
       }
@@ -999,11 +1013,15 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
         return asToolValue({ ok: false, error: "publish_root_unset", note: "发布库位未派生：ATF_ATF_ROOT/ATF_DSH_RUNS_ROOT 皆未提供统一根——publish_root 显式传入或配置后重试" });
       }
       const destDir = join(publishRoot, args.run_id, args.checkpoint);
-      // U 双段式确认卡（danger 级 Allow once 落审批账本）
+      // U 双段式确认卡（danger 级 Allow once 落审批账本）；E5 模板四行＋发布明细续行
       const verdict = await requestApproval(ctx, exec, "atf_publish_model",
-        dualStageNote(`模型发布确认 — ${args.run_id}/${args.checkpoint}`, {
-          extra: `发布动作：归档复制 ${ckptDir} → ${destDir}（SHA256 清单）＋manifest＋发布报告${args.note !== undefined ? `｜说明：${args.note}` : ""}。如需改参（publish_root/checkpoint），直接回复；确认请 Allow once（danger 级）。`,
-        }));
+        buildApprovalReason({
+          action: "归档复制发布模型",
+          target: `（run ${args.run_id}／checkpoint ${args.checkpoint}）`,
+          effect: "写发布库（归档复制＋SHA256 清单＋manifest＋发布报告）",
+          reversible: "可逆（发布库条目可人工删除）",
+          cost: "按任务卡",
+        }) + `\n发布明细：归档复制 ${ckptDir} → ${destDir}（SHA256 清单）＋manifest＋发布报告${args.note !== undefined ? `｜说明：${args.note}` : ""}\n如需改参（publish_root/checkpoint），直接回复。`);
       if (!verdict.ok) return approvalDeniedResult("atf_publish_model", verdict.outcome);
       // 确定性归档复制（SHA256 清单）——零内核触碰（node fs 实现）
       const { mkdirSync, readdirSync: rd, copyFileSync } = await import("node:fs");
@@ -1156,17 +1174,21 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // Allow once＝确认并落放行账本
       const reportText = readFileSync(reportPath, "utf8");
       const summary = summarizeEvalPrelaunchReport(reportText);
-      // 批㊶-U §五：评估卡接双段式 helper（EVAL_RELEASE 账本语义不动——问题卡收改参，
-      // 审批卡落账本；可调参数＝adapter 编号/评估集绑定/service_config 各项，改参经聊天回复）
+      // 批㊶-U §五：评估卡改参收集走聊天回复、审批卡落账本（EVAL_RELEASE 账本语义不动）；
+      // E5 模板四行＋确认摘要续行（可调参数＝adapter 编号/评估集绑定/service_config 各项）
       const verdict = await requestApproval(ctx, exec, "atf_evaluate",
-        dualStageNote("评估服务 EVAL_RELEASE 确认（放行＝审批账本登记 config sha256，编排按其过闸）", {
-          extra: [
-            `确认摘要：${summary.headline}`,
-            ...summary.metrics,
-            `完整报告：${reportPath}`,
-            "可调参数：adapter_path／eval_assets_dir／service_config 各项——如需改参，直接回复要改的项（如 adapter_path=<新路径>）；不改直接回复「按现值确认」",
-          ].join("\n"),
-        }));
+        buildApprovalReason({
+          action: "放行评估服务编排",
+          target: `（run ${args.run_id}）`,
+          effect: "登记放行账本（config sha256）并启动评估编排",
+          reversible: "不可自动回滚（评估产物可人工清理）",
+          cost: "按任务卡",
+        }) + "\n" + [
+          `确认摘要：${summary.headline}`,
+          ...summary.metrics,
+          `完整报告：${reportPath}`,
+          "可调参数：adapter_path／eval_assets_dir／service_config 各项——如需改参，直接回复要改的项（如 adapter_path=<新路径>）；不改直接回复「按现值确认」",
+        ].join("\n"));
       if (!verdict.ok) return approvalDeniedResult("atf_evaluate", verdict.outcome);
       const recorded = await runCapture("python3", [genService, "--record-eval-release", "--config", args.service_config, "--service-dir", serviceDir, "--note", "atf_evaluate 确认卡放行（九必报项报告已确认）"], 60_000);
       if (recorded.code !== 0) {

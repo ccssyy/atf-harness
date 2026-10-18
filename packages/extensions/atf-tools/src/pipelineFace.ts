@@ -23,7 +23,7 @@ import { execFile } from "node:child_process";
 import { isAbsolute } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
-import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
+import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { join } from "node:path";
@@ -116,7 +116,14 @@ export const buildPipelineTool = (
       if (args.stage === "register" && (args.source_root === undefined || args.source_root.trim() === "")) {
         return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "source_root_missing", note: "register 段必填 source_root（源文档根绝对路径）——其余段可省略该参数" });
       }
-      const verdict = await requestApproval(ctx, exec, "atf_pipeline_stage", `触发 walkthrough_pipeline 管线段「${args.stage}」（workspace ${workspacePath}，run ${args.run_id}）`);
+      const verdict = await requestApproval(ctx, exec, "atf_pipeline_stage",
+        buildApprovalReason({
+          action: "触发管线段",
+          target: `「${args.stage}」（run ${args.run_id}）`,
+          effect: "在 run 目录内写该段产物（register 段另读源文档根）",
+          reversible: "段产物可人工清理；已写数据面不自动回滚",
+          cost: "按任务卡",
+        }));
       if (!verdict.ok) return approvalDeniedResult("atf_pipeline_stage", verdict.outcome);
       // 落点单源（A2.2b）：与内核同一决定者 <workspace_path>/runs/<run_id>；resolveRunDir 本工具内退役。
       const runDir = join(workspacePath, "runs", args.run_id);

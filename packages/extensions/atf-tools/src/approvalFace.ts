@@ -21,6 +21,33 @@ export interface ApprovalFace {
 
 export type ApprovalVerdict = { ok: true } | { ok: false; outcome: string };
 
+/** E5 审批卡面结构化模板入参（单源——全部 requestApproval 调用点的 reason 唯一构造面）。 */
+export interface ApprovalReasonParts {
+  /** 动作（动词短语，如「启动真实 GPU 训练」）。 */
+  action: string;
+  /** 对象（run/工具/checkpoint 等任务标识；不携绝对路径裸串）。 */
+  target: string;
+  /** 影响面（写盘/占卡/动账平面——具体描述）。 */
+  effect: string;
+  /** 可逆性（可逆/不可自动回滚＋人工善后面）。 */
+  reversible: string;
+  /** 预计代价；缺省「按任务卡」。 */
+  cost?: string;
+}
+
+/**
+ * 审批卡四行固定模板（批C2 E5）：调用点禁再传自由文案——reason 一律经本函数构造，
+ * 补充上下文（字段表/GPU 卡表/摘要行）以换行续在模板之后，不得替代或前置模板四行。
+ * 文案纪律：中文；零批次号/指令件名/内部工程代号/自拟黑话。
+ */
+export const buildApprovalReason = (parts: ApprovalReasonParts): string =>
+  [
+    `将要执行：${parts.action}${parts.target}`,
+    `影响范围：${parts.effect}`,
+    `可逆性：${parts.reversible}`,
+    `预计代价：${parts.cost ?? "按任务卡"}`,
+  ].join("\n");
+
 /** 向 DSH 审批面板请求一次性放行；无审批服务 → unavailable（fail-closed）。 */
 export const requestApproval = async (
   ctx: { get(service: string): unknown },

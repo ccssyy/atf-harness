@@ -18,11 +18,11 @@ import {
 } from "../../../../src/core/tools/index.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
 import { resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
-import { awaitGpuWindow, gpuQueuePollMsFromEnv, queueHitText } from "./gpuQueueFace.js";
+import { awaitGpuWindow, formatCardTable, gpuQueuePollMsFromEnv } from "./gpuQueueFace.js";
 import { toAtfAgentTool } from "../../../../src/agent/atfAgentTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { translateParameters, looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
-import { approvalDeniedResult, requestApproval } from "./approvalFace.js";
+import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
@@ -211,7 +211,14 @@ export const createLaunchGpuQueueFace = (
     });
     if (windowState.kind === "aborted") return { verdict: "aborted" };
     // 命中琥珀卡（放行守门——编排启动的工具审批此前已放行；此处为等待后的二次人工确认）
-    const amber = await requestApproval(ctx, exec ?? {}, "atf_launch_execute", `${queueHitText(windowState.snapshot.gpuIndexes, windowState.snapshot.table)}（已等待 ${windowState.snapshot.waitedText}）——GPU 窗口命中，确认启动编排（launch.sh=${input.launchShRel}）`);
+    const amber = await requestApproval(ctx, exec ?? {}, "atf_launch_execute",
+      buildApprovalReason({
+        action: "启动训练编排",
+        target: `（GPU ${windowState.snapshot.gpuIndexes.join("、")} 空闲命中，已等待 ${windowState.snapshot.waitedText}；launch.sh=${input.launchShRel}）`,
+        effect: "占用 GPU 与写训练编排产物",
+        reversible: "不可自动回滚（产物可人工清理）",
+        cost: "按任务卡",
+      }) + `\n${formatCardTable(windowState.snapshot.table)}`);
     if (!amber.ok) return { verdict: "denied", outcome: amber.outcome };
     return { verdict: "proceed", queued: true, waited_text: windowState.snapshot.waitedText, amber: "approved" };
   },
@@ -235,9 +242,16 @@ export const buildBridgeTools = (
           render: renderAsJsonText,
         },
         async execute(args: Record<string, unknown>, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
-          // 审批前置（指令要求 2）：手搓 requiresApprovalFor 语义为唯一判定源
+          // 审批前置（指令要求 2）：requiresApprovalFor 语义为唯一判定源；E5 模板四行（零黑话）
           if (requiresApprovalFor(definition, args)) {
-            const verdict = await requestApproval(ctx, exec, definition.name, `执行 ${definition.name}（手搓版同款审批语义）`);
+            const verdict = await requestApproval(ctx, exec, definition.name,
+              buildApprovalReason({
+                action: "执行训练内核工具",
+                target: `（${definition.name}）`,
+                effect: "按该工具语义执行（写面以实际参数为准）",
+                reversible: "按工具语义（写盘产物可人工清理）",
+                cost: "按任务卡",
+              }));
             if (!verdict.ok) return approvalDeniedResult(definition.name, verdict.outcome);
           }
           // 执行径分派（复用面与手搓一致）：工作区治理面（scratch_exec/skill_read）走
