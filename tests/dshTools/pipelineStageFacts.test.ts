@@ -195,7 +195,9 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
     const cb = await tool.execute({ stage: "candidate_build", run_id: "run-cb", workspace_path: ws }, execWithSession("s1"));
     expect(cb).toMatchObject({ ok: true, fact_segment: "candidate", segment_fact_recorded: true });
     expect(readSegmentFacts(join(ws, "runs", "run-cb")).map((f) => f.segment)).toEqual(["candidate"]);
-    const tp = await tool.execute({ stage: "training_prep", run_id: "run-tp", workspace_path: ws }, execWithSession("s1"));
+    // A-E14b：training_prep 段 base_model_path 必填（夹具按新契约补显式绝对路径——
+    // 缺参即卡前快败 base_model_path_missing，专锚见 batchE14b.test.ts）
+    const tp = await tool.execute({ stage: "training_prep", run_id: "run-tp", workspace_path: ws, base_model_path: join(ws, "model") }, execWithSession("s1"));
     expect(tp).toMatchObject({ ok: true, fact_segment: "training_prep", segment_fact_recorded: true });
     expect(readSegmentFacts(join(ws, "runs", "run-tp")).map((f) => f.segment)).toEqual(["training_prep"]);
   });
