@@ -54,6 +54,8 @@ export interface AtfToolsConfig {
   bridgeCommand: string;
   pipelineCommand: string;
   pipelineTimeoutMs: number;
+  /** E1b：量化 CLI 超时（Config z.object 缺省 120s——测试面构造字面量可缺省不携带）。 */
+  quantizeTimeoutMs?: number;
 }
 
 export const Config = z.object({
