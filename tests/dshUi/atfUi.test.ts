@@ -1260,24 +1260,40 @@ describe("批㊶-S3 S-B1——通知面投影（monitor.json additive 键三同�
     expect(clientSource).toContain("function evalSegmentDetail(run)");
     expect(clientSource).toContain("ep.health.alive ? '服务运行中' : '服务未运行'");
     expect(clientSource.match(/if \(seg\.key === 'evaluate'\) return evalSegmentDetail\(run\)/g)?.length).toBe(2);
-    // 批C1-1 live 实证修复钉子：dock 条目必须带 order（缺＝宿主列表槽组装静默丢弃——
-    // 2026-10-18 live 3080 实锚：无 order 整行不渲染，补即恢复）
+    // C1-1 live 修复钉子：dock 条目 id/order 显式成对在位（D10.3 按 D10.2 归因更正——id 为
+    // cell 键是丢弃变量，order 只影响排序；注册实际值零变）
     expect(clientSource).toContain("{ name: 'conversation.composer.dock', id: 'atf-dock-row', order: 100 }");
   });
-  it("批C2 D10.1 钉子：list 槽注册缺字段守护（listSlotOptions）＋三处 list 注册全带 id/order", () => {
+  it("批C2 D10.1/D10.3 钉子：list 槽缺 id 守卫（listSlotOptions）＋三处 list 注册全带 id/order", () => {
     const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
-    // 守卫在位：缺 id/order 的 list 注册 fail-loud 告警（消灭静默消失形态）
+    // 守卫在位：缺 id 的 list 注册 fail-loud 告警（与 vendor register throw 同向——D10.2 归因：
+    // id 为 cell 键，缺 id 共享 undefined cell 被选举静默丢；order 只排序，order 守卫已删）
     expect(clientSource).toContain("function listSlotOptions(opts)");
-    expect(clientSource).toContain("D10.1 守卫：list 槽注册缺 order");
+    expect(clientSource).toContain("list 槽注册缺 id（宿主 register 必拒）");
+    expect(clientSource).not.toContain("缺 order");
     // 三处 list 注册全部经守卫包裹（header.utilities／composer.dock／input.right）
     expect(clientSource.match(/slots\.register\(listSlotOptions\(/g)?.length).toBe(3);
-    // 逐处字段完备：id＋order 成对在位（宿主实证契约——order 缺＝条目被静默丢弃）
+    // 逐处字段完备：id＋order 成对在位（显式注册事实字段——现状仍全带）
     for (const id of ["atf-gpu-toggle", "atf-dock-row", "atf-effort-select"]) {
       const at = clientSource.indexOf(`id: '${id}'`);
       expect(at).toBeGreaterThan(0);
       const window = clientSource.slice(Math.max(0, at - 200), at + 200);
       expect(window.match(/order: \d+/) !== null, `${id} 注册须带 order`).toBe(true);
     }
+  });
+  it("批D10.3 反向：缺 id 注册仍触发「缺 id」告警且透传不阻断（守卫存活）", () => {
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    const m = clientSource.match(/function listSlotOptions\(opts\) \{[\s\S]*?return opts[\s\S]*?\}/);
+    expect(m).not.toBeNull();
+    const errors: string[] = [];
+    // eslint-disable-next-line no-new-func -- 测试内提取 client.js 守卫函数源码直调（vm 隔离同款）
+    const listSlotOptions = new Function("console", `${m![0]}; return listSlotOptions;`)({
+      error: (msg: unknown) => errors.push(String(msg)),
+    }) as (opts: Record<string, unknown>) => Record<string, unknown>;
+    const opts = listSlotOptions({ name: "conversation.composer.dock" });
+    expect(errors.some((e) => e.includes("缺 id"))).toBe(true);
+    expect(errors.some((e) => e.includes("缺 order"))).toBe(false);
+    expect(opts["name"]).toBe("conversation.composer.dock"); // 透传不阻断注册
   });
   it("client.js 步进百分比上卡钉子：segDetail 两副本都带 percentage 位；failed 态判定串修正", () => {
     const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");

@@ -2120,17 +2120,12 @@ window.__ModuleLoader__.load({
           atfFix2Schedule()
         }
 
-        // 批C2 D10.1 list 槽注册缺字段守护：宿主对缺 order 的 list 条目静默丢弃（C1-1 live
-        // 实证——注册成功但 render 永不触发；vendor 静态三处均可容缺，丢弃点在更深层组装）。
-        // 守卫＝fail-loud 告警（console.error 点名槽与缺失字段）——不阻断注册与其他面，
-        // 消灭「控件消失无任何信号」的静默形态。原生先例（ui-chat stats order:0／QueueDock
-        // order:20）一律带 order——本面 list 注册视为必填事实字段。
+        // D10.3 按 D10.2 归因更正：list 槽以 id 为 cell 键——缺 id 会共享 undefined cell 被选举
+        // 静默丢；order 只影响排序。现行 vendor 对缺 id register 直接 throw。守卫＝fail-loud
+        // 告警（console.error 点名槽与缺失字段）——不阻断注册与其他面。
         function listSlotOptions(opts) {
           if (typeof opts.id !== 'string' || opts.id === '') {
-            console.error('[atf-ui] D10.1 守卫：list 槽注册缺 id（宿主必拒）——' + String(opts.name))
-          }
-          if (typeof opts.order !== 'number') {
-            console.error('[atf-ui] D10.1 守卫：list 槽注册缺 order（宿主组装静默丢弃——实证契约）——' + String(opts.name) + '/' + String(opts.id))
+            console.error('[atf-ui] D10.1 守卫：list 槽注册缺 id（宿主 register 必拒）——' + String(opts.name))
           }
           return opts
         }
@@ -2208,8 +2203,8 @@ window.__ModuleLoader__.load({
 
         // 通道 C：composer.dock（list 槽）——GPU 一行卡＋快捷指令胶囊＋viewer 浮层（输入框上方，会话内常显）
         ctx.slots.inject('conversation.composer.dock', function() {
-          // 批C1-1 live 实证修复：list 槽条目缺 order 被宿主组装静默丢弃（静态探针 div 亦
-          // 不上 DOM——非组件崩溃；补 order 即渲染，与 ui-chat stats(order:0) 共存同槽）。
+          // C1-1 live 修复留痕（D10.3 按 D10.2 归因更正）：id 为 cell 键必须显式带——order
+          // 只影响排序非丢弃变量；id/order 两字段仍一并显式在位（注册实际值零变）。
           return ctx.slots.register(listSlotOptions({ name: 'conversation.composer.dock', id: 'atf-dock-row', order: 100 }), function() {
             return React.createElement('div', null,
               React.createElement(FloatingTaskCard),
