@@ -15,7 +15,7 @@
 import { spawn, execFile, execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import * as net from "node:net";
-import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync, mkdirSync, appendFileSync, renameSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync, mkdirSync, appendFileSync, renameSync, statSync, copyFileSync as copyFileSyncBuiltin } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
@@ -982,6 +982,116 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
 
 
 /** 批㊶-S1 段 3：模型产物发布（语义 C＝归档＋登记＋并入模型清单；U 双段式确认卡）。 */
+
+/** E4——发布拷贝逐文件结果（manifest 与返回面共形）。 */
+export interface PublishCopyFile {
+  file: string;
+  sha256: string;
+  bytes: number;
+  status: "copied" | "reused";
+}
+
+/** E4——发布拷贝断点续传结果（成功＝文件集＋计数；失败＝中断/校验码＋已拷进度）。 */
+export type PublishCopyOutcome =
+  | {
+      ok: true;
+      files: PublishCopyFile[];
+      total: number;
+      copied: number;
+      reused: number;
+      bytes_copied: number;
+      bytes_total: number;
+      /** 目标在场但 sha 不等（源变更/目标损坏）而重拷的计数——如实通报不静默。 */
+      changed_re_copied: number;
+    }
+  | {
+      ok: false;
+      error: "publish_copy_interrupted" | "publish_copy_verify_failed";
+      file?: string;
+      copied: number;
+      reused: number;
+      total: number;
+      reason?: string;
+    };
+
+/** E4——发布拷贝断点续传（纯函数可注入）：先全量枚举源文件，再逐文件
+ *  sha256 比对——目标存在且 sha 相等→reused（跳过拷贝）；缺失/不等→copyFileSync
+ *  ＋复算目标 sha 校验（不等＝publish_copy_verify_failed，半截清单不得为权威）。
+ *  中断（IO 异常）＝publish_copy_interrupted：已拷文件保留（下次续传按 sha 复用），
+ *  manifest 由调用方在 ok 后才写。零外部依赖（无 rsync）。 */
+export const publishCopyWithResume = (
+  ckptDir: string,
+  destDir: string,
+  deps: {
+    shaOf?: (file: string) => string;
+    copyFile?: (src: string, dest: string) => void;
+  } = {},
+): PublishCopyOutcome => {
+  const shaOf = deps.shaOf ?? ((file: string): string => createHash("sha256").update(readFileSync(file)).digest("hex"));
+  const copyFile = deps.copyFile ?? ((src: string, dest: string): void => {
+    mkdirSync(dirname(dest), { recursive: true });
+    copyFileSyncBuiltin(src, dest);
+  });
+  const tryShaOf = (file: string): string | null => {
+    try {
+      return shaOf(file);
+    } catch {
+      return null;
+    }
+  };
+  const sources: Array<{ file: string; src: string; bytes: number }> = [];
+  const walk = (dir: string, relBase: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const src = join(dir, entry.name);
+      const rel = relBase === "" ? entry.name : `${relBase}/${entry.name}`;
+      if (entry.isDirectory()) walk(src, rel);
+      else sources.push({ file: rel, src, bytes: statSync(src).size });
+    }
+  };
+  try {
+    walk(ckptDir, "");
+  } catch (cause) {
+    return { ok: false, error: "publish_copy_interrupted", copied: 0, reused: 0, total: 0, reason: cause instanceof Error ? cause.message : String(cause) };
+  }
+  const files: PublishCopyFile[] = [];
+  let copied = 0;
+  let reused = 0;
+  let bytesCopied = 0;
+  let bytesTotal = 0;
+  let changedReCopied = 0;
+  for (const item of sources) {
+    const dest = join(destDir, item.file);
+    bytesTotal += item.bytes;
+    let srcSha: string;
+    try {
+      srcSha = shaOf(item.src);
+    } catch (cause) {
+      return { ok: false, error: "publish_copy_interrupted", file: item.file, copied, reused, total: sources.length, reason: cause instanceof Error ? cause.message : String(cause) };
+    }
+    const destSha = tryShaOf(dest);
+    if (destSha === srcSha) {
+      reused += 1;
+      files.push({ file: item.file, sha256: srcSha, bytes: item.bytes, status: "reused" });
+      continue;
+    }
+    if (destSha !== null) changedReCopied += 1;
+    try {
+      copyFile(item.src, dest);
+    } catch (cause) {
+      return { ok: false, error: "publish_copy_interrupted", file: item.file, copied, reused, total: sources.length, reason: cause instanceof Error ? cause.message : String(cause) };
+    }
+    if (tryShaOf(dest) !== srcSha) {
+      return { ok: false, error: "publish_copy_verify_failed", file: item.file, copied, reused, total: sources.length, reason: "拷贝后校验失败（目标 sha 与源不符）" };
+    }
+    copied += 1;
+    bytesCopied += item.bytes;
+    files.push({ file: item.file, sha256: srcSha, bytes: item.bytes, status: "copied" });
+  }
+  return { ok: true, files, total: sources.length, copied, reused, bytes_copied: bytesCopied, bytes_total: bytesTotal, changed_re_copied: changedReCopied };
+};
+
+/** copyFileSync 内置实现（publishCopyWithResume 缺省注入面单源——顶部 fs import 别名）。 */
+
 export function buildPublishModelTool(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; modelRoot?: string }): unknown {
   return defineTool({
     name: "atf_publish_model",
@@ -1028,20 +1138,28 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
           cost: "按任务卡",
         }) + `\n发布明细：归档复制 ${ckptDir} → ${destDir}（SHA256 清单）＋manifest＋发布报告${args.note !== undefined ? `｜说明：${args.note}` : ""}\n如需改参（publish_root/checkpoint），直接回复。`);
       if (!verdict.ok) return approvalDeniedResult("atf_publish_model", verdict.outcome);
-      // 确定性归档复制（SHA256 清单）——零内核触碰（node fs 实现）
-      const { mkdirSync, readdirSync: rd, copyFileSync } = await import("node:fs");
+      // 确定性归档复制（SHA256 清单）——零内核触碰（node fs 实现）；E4 断点续传：
+      // 逐文件 sha 比对（等→reused；缺/变→copied＋复算校验）；中断/校验失败保留已拷
+      // 且 manifest 不写（半截清单不得被当权威）——重跑按 sha 自动续传。
       mkdirSync(destDir, { recursive: true });
-      const shaOf = (file: string): string => createHash("sha256").update(readFileSync(file)).digest("hex");
-      const files: Array<{ file: string; sha256: string; bytes: number }> = [];
-      const walk = (dir: string, relBase: string): void => {
-        for (const entry of rd(dir, { withFileTypes: true })) {
-          const src = join(dir, entry.name);
-          const rel = relBase === "" ? entry.name : `${relBase}/${entry.name}`;
-          if (entry.isDirectory()) walk(src, rel);
-          else { copyFileSync(src, join(destDir, rel)); files.push({ file: rel, sha256: shaOf(src), bytes: statSync(src).size }); }
-        }
-      };
-      walk(ckptDir, "");
+      const copyOutcome = publishCopyWithResume(ckptDir, destDir);
+      if (!copyOutcome.ok) {
+        return asToolValue({
+          ok: false,
+          error: copyOutcome.error,
+          ...(copyOutcome.file !== undefined ? { file: copyOutcome.file } : {}),
+          copied: copyOutcome.copied,
+          reused: copyOutcome.reused,
+          total: copyOutcome.total,
+          ...(copyOutcome.reason !== undefined ? { reason: copyOutcome.reason } : {}),
+          dest_dir: destDir,
+          note:
+            copyOutcome.error === "publish_copy_verify_failed"
+              ? "发布拷贝后校验失败——已拷文件保留，修复后重跑续传（sha 相等文件自动复用）"
+              : "发布拷贝中断——已拷文件保留，重跑按 sha 比对续传（相等即复用，无需全量重拷）",
+        });
+      }
+      const files = copyOutcome.files;
       const manifest = {
         schema_version: "ModelPublish/v1",
         run_id: args.run_id,
@@ -1049,6 +1167,8 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
         published_at: new Date().toISOString(),
         source_dir: ckptDir,
         dest_dir: destDir,
+        // E4：续传标记（reused>0＝本次有文件按 sha 复用未重拷）；每文件 status 如实分流
+        resumed: copyOutcome.reused > 0,
         files: files.sort((a, b) => a.file.localeCompare(b.file)),
         ...(args.note !== undefined ? { note: args.note } : {}),
       };
@@ -1059,7 +1179,7 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
         `- 发布时间：${manifest.published_at}`,
         `- 源：${ckptDir}`,
         `- 归档：${destDir}`,
-        `- 文件数：${files.length}（SHA256 清单见 publish-manifest.json）`,
+        `- 文件数：${files.length}（新拷 ${copyOutcome.copied} · 复用 ${copyOutcome.reused}——SHA256 清单见 publish-manifest.json）`,
         ...(args.note !== undefined ? [`- 说明：${args.note}`] : []),
       ].join("\n");
       mkdirSync(join(runDir, "publish"), { recursive: true });
@@ -1070,6 +1190,15 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
         checkpoint: args.checkpoint,
         dest_dir: destDir,
         file_count: files.length,
+        // E4：续传计数（卡片明细可读——total/copy/reused/字节双轴）
+        copy_stats: {
+          total: copyOutcome.total,
+          copied: copyOutcome.copied,
+          reused: copyOutcome.reused,
+          bytes_copied: copyOutcome.bytes_copied,
+          bytes_total: copyOutcome.bytes_total,
+        },
+        ...(copyOutcome.changed_re_copied > 0 ? { changed_re_copied: copyOutcome.changed_re_copied } : {}),
         manifest: "publish-manifest.json",
         report: `publish/${args.checkpoint}.md`,
         note: "已发布——并入模型清单状态面（发布库位源；ATF_MODEL_ROOT＋发布库位两源合并、来源标注区分）",
