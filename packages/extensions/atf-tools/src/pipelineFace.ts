@@ -3,10 +3,13 @@
  * --stage 单段执行面，修复批A2.2b 落点单源改造；tag v0.7.19b0 起 K-E14a base 模型语义
  * 拆分——本工具 A-E14b 增 training_prep 段 base_model_path 显式下传；内核 main E10a
  * （2eed2c2，未发版，pin 不动）起 family_split 段 --auto-style-cluster 三态——本工具
- * E10b 增 auto_style_cluster 透传）。
+ * E10b 增 auto_style_cluster 透传；内核 main E10e/E10f 拒绝带 user_message 业务文案＋
+ * --allow-small-cluster-test——本工具 E10d 拒绝面业务化：user_message 原样透传
+ * （未带按业务语言兜底并标注来源）、note 改「原样告知 user_message」指引、增
+ * allow_small_cluster_test 透传。
  *
  * 接口契约（引自内核件 K-A2.2a §二，双件同步；A-E14b 增补 K-E14a 命令面；E10b 增补
- * E10a 命令面）：
+ * E10a 命令面；E10d 增补 E10f 命令面）：
  *   段名闭集（权威＝内核 STAGE_ORDER，八项，禁增删改序）＝register／label_qc／
  *   experiment_setup／candidate_build／publish／family_split／admission／training_prep。
  *   命令面（段模式）：--workspace 必填／--stage 八段之一／--run-id 建议显式／
@@ -126,31 +129,45 @@ export const styleClusterStateOf = (
   return undefined;
 };
 
-/** 聚类状态拒绝码识别（rejections 数组或单对象两形态都认——内核数组、mock 对象）。 */
-export const styleClusterRejectionOf = (
-  rejections: unknown,
-): "style_cluster_state_not_clustered" | "style_cluster_state_ambiguous" | undefined => {
+/** 聚类状态拒绝码识别（rejections 数组或单对象两形态都认——内核数组、mock 对象）。
+ *  闭集＝三态拒绝三码（E10a 两码＋E10e-1 off 矛盾新码——同属「版式分组状态确认」
+ *  决策面，note／user_message 兜底同触发；E10d 扩面登记）。 */
+export const styleClusterRejectionOf = (rejections: unknown): boolean => {
   const items = Array.isArray(rejections) ? rejections : [rejections];
+  const CLUSTER_CODES: readonly string[] = [
+    "style_cluster_state_not_clustered",
+    "style_cluster_state_ambiguous",
+    "style_cluster_declared_but_absent",
+  ];
   for (const item of items) {
     const codes = (item as Record<string, unknown> | null)?.["reason_codes"];
     if (!Array.isArray(codes)) continue;
-    if (codes.includes("style_cluster_state_not_clustered")) return "style_cluster_state_not_clustered";
-    if (codes.includes("style_cluster_state_ambiguous")) return "style_cluster_state_ambiguous";
+    if (codes.some((code) => CLUSTER_CODES.includes(code as string))) return true;
   }
-  return undefined;
+  return false;
 };
 
-/** 两条聚类拒绝码的回流指引（agent 面产品口径）：先问用户、确认后再二选一重跑、
- *  禁止自行猜值——与 description 行动指引同向。 */
-export const STYLE_CLUSTER_REJECTION_NOTE: Record<"style_cluster_state_not_clustered" | "style_cluster_state_ambiguous", string> = {
-  style_cluster_state_not_clustered:
-    "版式聚类未确认（检测为未聚类）——必须先问用户「这批数据做过版式聚类吗？」；" +
-    "确认未聚类后传 auto_style_cluster=\"on\" 重跑（内核自动补簇并产出 StyleClusterManifest/v1，按簇分层）；" +
-    "确认已聚类则核查 split 证据目录是否指对。禁止不问用户自行猜值重跑",
-  style_cluster_state_ambiguous:
-    "版式聚类状态不明（部分页带簇或证据不可读）——必须先问用户「这批数据做过版式聚类吗？」；" +
-    "确认后传 auto_style_cluster=\"on\"（未聚类，自动补簇）或 \"off\"（已聚类，不再聚）重跑。" +
-    "禁止不问用户自行猜值重跑",
+/** 聚类拒绝回流指引（E10d 改版——agent 面产品口径）：内核 user_message 原样告知用户，
+ *  用户回答后按其选择重试；不向用户展示内部选项名。 */
+export const STYLE_CLUSTER_REJECTION_NOTE =
+  "把 user_message 原样告知用户；用户回答后按其选择重试（已分组→直接分层；未分组→先分组再分层）。" +
+  "不要向用户展示 auto/on/off 等内部选项名。";
+
+/** user_message 业务兜底（内核未携带时——旧版本/异常；E10d）：业务语言，零内部词。 */
+export const STYLE_CLUSTER_USER_MESSAGE_FALLBACK =
+  "这批数据的版式分组状态无法确认，请确认数据是否已按版式分组后再试。";
+
+/** user_message 提取：内核拒绝在 raw_response.user_message 携带业务文案（E10e 起，
+ *  与 reason_code 并列随段记录）——原样取出，不加工不拼接；无串/形态非法＝undefined。 */
+export const userMessageOf = (summary: unknown): string | undefined => {
+  const results = (summary as Record<string, unknown> | null)?.["results"];
+  if (!Array.isArray(results)) return undefined;
+  for (const entry of results) {
+    const raw = (entry as Record<string, unknown> | null)?.["raw_response"];
+    const message = (raw as Record<string, unknown> | null)?.["user_message"];
+    if (typeof message === "string" && message !== "") return message;
+  }
+  return undefined;
 };
 
 const runPipeline = (command: string, args: readonly string[], timeoutMs: number): Promise<{ code: number | null; stdout: string; stderr: string }> =>
@@ -184,7 +201,8 @@ export const buildPipelineTool = (
       `缺参/非绝对路径在审批卡前快败，指路 ATF_MODEL_ROOT 可用模型清单；其它段忽略该参）。` +
       `family_split 段另支持 auto_style_cluster 三态（缺省 auto，其它段忽略该参）：` +
       `auto＝先检测——已聚类则不复聚；未聚类/状态不明会拒绝并指路。` +
-      `收到 style_cluster_state_not_clustered／style_cluster_state_ambiguous 拒绝时，必须先问用户「这批数据做过版式聚类吗？」，` +
+      `收到版式聚类状态类拒绝（style_cluster_state_not_clustered／style_cluster_state_ambiguous／` +
+      `style_cluster_declared_but_absent）时，必须先问用户「这批数据做过版式聚类吗？」，` +
       `确认后再传 on（未聚类——内核自动补簇并产出 StyleClusterManifest/v1，按簇分层）或 off（已聚类——不再聚）重跑；` +
       `禁止在 auto 被拒后自行猜一个值重跑。` +
       `越序段会被内核拒绝（blocked，exit 2）——按段序逐段触发。段成功退出（exit 0）即在落点 run 目录落段事实与会话绑定` +
@@ -202,8 +220,16 @@ export const buildPipelineTool = (
         description:
           "版式聚类三态（仅 family_split 段有意义，其它段忽略该参）：auto＝先检测（缺省）——已聚类则不复聚；" +
           "未聚类/状态不明会拒绝并指路。on＝显式开启内核自动补簇（问明未聚类后用）。off＝不再聚（问明已聚类后用）。" +
-          "收到 style_cluster_state_not_clustered／style_cluster_state_ambiguous 拒绝时，必须先问用户「这批数据做过版式聚类吗？」，" +
-          "确认后再传 on 或 off 重跑；禁止在 auto 被拒后自行猜一个值重跑",
+          "收到版式聚类状态类拒绝（style_cluster_state_not_clustered／style_cluster_state_ambiguous／" +
+          "style_cluster_declared_but_absent）时，必须先问用户「这批数据做过版式聚类吗？」，" +
+          "确认后再传 on 或 off 重跑；禁止在 auto 被拒后自行猜一个值重跑。" +
+          "对用户表述用业务语言：问「这批数据是否已经按版式分好组」，不要念枚举值",
+      },
+      allow_small_cluster_test: {
+        type: "boolean",
+        description:
+          "当所有版式分组都太小、无法留出测试集时，用户坚持要测试集才用；每个小类只留 1 页，测试样本很少" +
+          "（仅 family_split 段有意义，其它段忽略；缺省不开，不由系统自动推断）",
       },
     },
     output: {
@@ -211,7 +237,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -251,11 +277,13 @@ export const buildPipelineTool = (
       const runDir = join(workspacePath, "runs", args.run_id);
       // argv 只传内核声明参数（register 时含 --source-root；training_prep 时含 --base-model
       // ——A-E14b，其它段不追加；family_split 时含 --auto-style-cluster——E10b，缺省 auto
-      // 也显式上线解析值，其它段不追加不报错）；禁拼第二套路径。
+      // 也显式上线解析值；E10d：allow_small_cluster_test 仅 family_split 且 true 才追加
+      // 开关，缺省不出现在 argv，其它段不追加不报错）；禁拼第二套路径。
       const argv: string[] = ["--workspace", workspacePath, "--run-id", args.run_id, "--stage", args.stage];
       if (args.stage === "register") argv.push("--source-root", (args.source_root as string).trim());
       if (needsBaseModel) argv.push("--base-model", baseModelPath);
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
+      if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");
       const result = await runPipeline(pipelineCommand, argv, pipelineTimeoutMs);
       let summary: unknown = null;
       const trimmed = result.stdout.trim();
@@ -313,13 +341,17 @@ export const buildPipelineTool = (
         ...(baseModelSourceOf(needsBaseModel, summary) !== undefined ? { base_model_source: baseModelSourceOf(needsBaseModel, summary) } : {}),
         // E10b：聚类证据三键透传（内核摘要携带时）——「为什么没开/为什么开」的解释面
         ...(styleClusterStateOf(summary) !== undefined ? { style_cluster_state: styleClusterStateOf(summary) } : {}),
+        // E10d：内核拒绝的 user_message 原样透传（不加工不拼接）；聚类状态拒绝未携带时
+        // 按业务语言兜底并标注来源 fallback
+        ...(userMessageOf(summary) !== undefined ? { user_message: userMessageOf(summary) } : {}),
+        ...(userMessageOf(summary) === undefined && styleClusterRejectionOf(rejections)
+          ? { user_message: STYLE_CLUSTER_USER_MESSAGE_FALLBACK, user_message_source: "fallback" }
+          : {}),
         ...(summary !== null ? { summary } : {}),
         ...(result.code === 2 && rejections !== null ? { rejections } : {}),
         ...(result.code === 2 && rejections === null ? { note: "内核拒绝（blocked）——零写入；摘要未含 rejections 原文" } : {}),
-        // E10b：两条聚类状态拒绝码的回流指引（先问用户再二选一，禁止自行猜值）
-        ...(result.code === 2 && styleClusterRejectionOf(rejections) !== undefined
-          ? { note: STYLE_CLUSTER_REJECTION_NOTE[styleClusterRejectionOf(rejections) as "style_cluster_state_not_clustered" | "style_cluster_state_ambiguous"] }
-          : {}),
+        // E10d：聚类状态拒绝的回流指引（把 user_message 原样告知用户，不展示内部选项名）
+        ...(result.code === 2 && styleClusterRejectionOf(rejections) ? { note: STYLE_CLUSTER_REJECTION_NOTE } : {}),
         ...(result.code === 3 || result.code === null
           ? { stderr_tail: result.stderr.slice(-2000), note: "环境错误（exit 3）——零写入；核管线环境（python 依赖/数据在位）后重试" }
           : {}),

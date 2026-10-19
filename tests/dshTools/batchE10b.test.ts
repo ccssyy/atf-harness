@@ -1,18 +1,20 @@
 /**
- * E10b 测试锚——atf_pipeline_stage 增 auto_style_cluster（family_split 段版式聚类
- * 三态透传，内核 main E10a 命令面；指令件 §二）。
+ * E10b/E10d 测试锚——atf_pipeline_stage 版式聚类三态透传＋拒绝面业务化（内核 main
+ * E10a/E10e/E10f 命令面；指令件 E10b 7a0dcece／E10d e9e7464f）。
  *
- * 覆盖：
+ * E10b 覆盖（§二）：
  *   参数面——缺省 auto／三值枚举逐值透传／非法值框架层拒（ToolArgsError，审批零触达）；
- *   argv 断言——`--auto-style-cluster` 仅 family_split 出现（缺省也显式上线解析值；
- *   其它段给参不下传不报错）；
- *   拒绝回流——style_cluster_state_not_clustered／style_cluster_state_ambiguous 两码
- *   可识别且带「先问用户」指引；off 在未聚类目录保持内核既有 split_recompute_cluster_required
- *   阻断（语义不变，无聚类问询 note）；
+ *   argv 断言——`--auto-style-cluster` 仅 family_split 出现（缺省也显式上线解析值）；
  *   证据透传——summary 携带 results[].raw_response.style_cluster_state 时回传
- *   {state,pages_total,pages_with_cluster} 三键（不携带/形态非法＝undefined 不造默认）；
- *   八段闭集零回归（PIPELINE_STAGES 既有闭集不回退）。
- * 真实环境验收（真内核 main E10a × 未聚类证据三跳）随批执行报告，不入本锚。
+ *   {state,pages_total,pages_with_cluster} 三键；八段闭集零回归；落盘摘要回读（双对账）。
+ * E10d 覆盖（§二）：
+ *   user_message 逐字透传（不加工不拼接）；内核未带 → 业务兜底文案＋user_message_source=
+ *   "fallback"；note 文案＝「原样告知用户」版（不含面向用户的枚举指令）；allow_small_cluster_
+ *   test 缺省不出现在 argv、true 时仅 family_split 追加；description 业务语言句在位；
+ *   E10e/E10f 语义翻新——off×未聚类＝style_cluster_declared_but_absent（矛盾拒绝），
+ *   on×全小簇×strict＝split_partition_empty:test＋user_message（note/fallback 不触发，
+ *   user_message 照常透传）。
+ * 真实环境验收随批执行报告/取证，不入本锚。
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,7 +26,9 @@ import {
   AUTO_STYLE_CLUSTER_VALUES,
   styleClusterStateOf,
   styleClusterRejectionOf,
+  userMessageOf,
   STYLE_CLUSTER_REJECTION_NOTE,
+  STYLE_CLUSTER_USER_MESSAGE_FALLBACK,
 } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
 
 interface DshToolLike {
@@ -123,8 +127,8 @@ describe("E10b——argv 仅 family_split 出现（其它段忽略不报错不�
   });
 });
 
-describe("E10b——两条聚类拒绝码的回流指引（先问用户，禁止自行猜值）", () => {
-  it("auto × 未聚类 → exit 2 style_cluster_state_not_clustered；note 含「先问用户」与 on 指路；证据三键透传；零写入", async () => {
+describe("E10b/E10d——聚类状态拒绝回流（E10f 形态：user_message＋「原样告知」note）", () => {
+  it("auto × 未聚类 → exit 2＋内核 user_message 逐字透传（无 source 标注）＋note=原样告知版；零写入", async () => {
     const approvals: string[] = [];
     const result = (await toolOf(approvalCtx(approvals), { MOCK_CLUSTER_STATE: "not_clustered" }).execute(
       { stage: "family_split", run_id: "e10b-nc", workspace_path: tempRoot() },
@@ -133,34 +137,125 @@ describe("E10b——两条聚类拒绝码的回流指引（先问用户，禁止
     expect(result["ok"]).toBe(false);
     expect(result["exit_code"]).toBe(2);
     expect(result["segment_fact_recorded"]).toBe(false);
+    // E10d §二.1：user_message 逐字一致（不加工不拼接）；内核带 → 无 fallback 标注
+    expect(result["user_message"]).toBe(
+      "这批数据没有找到版式分组信息（共 6 页，0 页带分组），因此没有继续切分。" +
+      "如果数据确实分过组：请提供带分组信息的数据文件；如果没分过组：可以改为先分组、再切分。",
+    );
+    expect(result["user_message_source"]).toBeUndefined();
+    // E10d §二.3：note＝「原样告知」版——不含面向用户的枚举指令
     const note = String(result["note"]);
-    expect(note).toContain("这批数据做过版式聚类吗");
-    expect(note).toContain("on");
-    expect(note).toContain("禁止不问用户自行猜值重跑");
+    expect(note).toContain("原样告知用户");
+    expect(note).toContain("已分组→直接分层；未分组→先分组再分层");
+    expect(note).toContain("不要向用户展示 auto/on/off 等内部选项名");
+    expect(note).not.toContain("重跑");
     expect(result["style_cluster_state"]).toEqual({ state: "not_clustered", pages_total: 6, pages_with_cluster: 0 });
     expect(approvals).toHaveLength(1);
   });
-  it("auto × 状态不明 → exit 2 style_cluster_state_ambiguous；note 含「先问用户」与 on/off 二选一指路", async () => {
+  it("auto × 状态不明 → exit 2 style_cluster_state_ambiguous＋user_message 逐字＋note 原样告知版", async () => {
     const result = (await toolOf(approvalCtx([]), { MOCK_CLUSTER_STATE: "ambiguous" }).execute(
       { stage: "family_split", run_id: "e10b-am", workspace_path: tempRoot() },
       fakeExec,
     )) as Record<string, unknown>;
     expect(result["exit_code"]).toBe(2);
-    const note = String(result["note"]);
-    expect(note).toContain("这批数据做过版式聚类吗");
-    expect(note).toContain("\"on\"");
-    expect(note).toContain("\"off\"");
+    expect(result["user_message"]).toBe(
+      "这批数据里只有部分页带版式分组（6 页中 3 页），无法判断是否已分好组。" +
+      "请确认后重试：已分好组请提供完整分组；未分过组可先分组再切分。",
+    );
+    expect(String(result["note"])).toContain("原样告知用户");
     expect(result["style_cluster_state"]).toEqual({ state: "ambiguous", pages_total: 6, pages_with_cluster: 3 });
   });
-  it("负例：off × 未聚类 → 保持内核既有 split_recompute_cluster_required 阻断（无聚类问询 note）", async () => {
+  it("off × 未聚类（E10e 矛盾拒绝）→ exit 2 style_cluster_declared_but_absent＋user_message 逐字＋note 原样告知版", async () => {
     const result = (await toolOf(approvalCtx([]), { MOCK_CLUSTER_STATE: "not_clustered" }).execute(
       { stage: "family_split", run_id: "e10b-off", workspace_path: tempRoot(), auto_style_cluster: "off" },
       fakeExec,
     )) as Record<string, unknown>;
     expect(result["ok"]).toBe(false);
     expect(result["exit_code"]).toBe(2);
-    expect(JSON.stringify(result["rejections"])).toContain("split_recompute_cluster_required");
-    expect(result["note"]).toBeUndefined(); // 既有闸语义——不加聚类问询
+    expect(JSON.stringify(result["rejections"])).toContain("style_cluster_declared_but_absent");
+    expect(result["user_message"]).toBe(
+      "这批数据没有找到版式分组信息（共 6 页，0 页带分组），与“已分组”的选择不一致。" +
+      "请确认：如果分过组，请提供带分组信息的数据；如果没有，可以改为先分组再切分。",
+    );
+    expect(String(result["note"])).toContain("原样告知用户");
+  });
+});
+
+describe("E10d——user_message 兜底与小簇拒绝面", () => {
+  it("内核未带 user_message → 业务兜底文案＋user_message_source=fallback（not_clustered 与 off 矛盾两形态）", async () => {
+    for (const extra of [{}, { auto_style_cluster: "off" }]) {
+      const result = (await toolOf(approvalCtx([]), { MOCK_CLUSTER_STATE: "not_clustered", MOCK_NO_USER_MESSAGE: "1" }).execute(
+        { stage: "family_split", run_id: "e10b-fb", workspace_path: tempRoot(), ...extra },
+        fakeExec,
+      )) as Record<string, unknown>;
+      expect(result["user_message"]).toBe(STYLE_CLUSTER_USER_MESSAGE_FALLBACK);
+      expect(result["user_message"]).toBe("这批数据的版式分组状态无法确认，请确认数据是否已按版式分组后再试。");
+      expect(result["user_message_source"]).toBe("fallback");
+      expect(String(result["note"])).toContain("原样告知用户");
+    }
+  });
+  it("on × 全小簇 × strict（E10f D3）→ exit 2 split_partition_empty:test＋user_message 逐字；note/fallback 标注不触发", async () => {
+    const result = (await toolOf(approvalCtx([]), { MOCK_CLUSTER_STATE: "not_clustered", MOCK_SMALL_CLUSTER: "1" }).execute(
+      { stage: "family_split", run_id: "e10b-sc", workspace_path: tempRoot(), auto_style_cluster: "on" },
+      fakeExec,
+    )) as Record<string, unknown>;
+    expect(result["ok"]).toBe(false);
+    expect(result["exit_code"]).toBe(2);
+    expect(JSON.stringify(result["rejections"])).toContain("split_partition_empty:test");
+    expect(result["user_message"]).toBe(
+      "这批数据的版式分组都太小（每类不足 5 页），无法留出测试集。" +
+      "可以把相近的小类合并后再试，或声明全部用于训练，" +
+      "也可以选择让每个小类各留 1 页做测试（测试样本会很少）。",
+    );
+    expect(result["user_message_source"]).toBeUndefined(); // 内核带 → 无兜底标注
+    expect(result["note"]).toBeUndefined(); // 小簇码不在聚类状态 note 闭集
+  });
+  it("on × 全小簇 × allow 开关 → exit 0＋警告行＋Manifest 行（E10f 锚⑤形态）", async () => {
+    const result = (await toolOf(approvalCtx([]), { MOCK_CLUSTER_STATE: "not_clustered", MOCK_SMALL_CLUSTER: "1" }).execute(
+      { stage: "family_split", run_id: "e10b-sc2", workspace_path: tempRoot(), auto_style_cluster: "on", allow_small_cluster_test: true },
+      fakeExec,
+    )) as Record<string, unknown>;
+    expect(result["ok"]).toBe(true);
+    expect(JSON.stringify(summaryOf(result)["results"])).toContain("小类测试仅 1 页，指标参考性有限");
+    expect(JSON.stringify(summaryOf(result)["results"])).toContain("StyleClusterManifest/v1");
+  });
+});
+
+describe("E10d——allow_small_cluster_test 参数面与 argv 断言", () => {
+  it("缺省 → argv 不含 --allow-small-cluster-test；true 且 family_split → 追加开关", async () => {
+    const approvals: string[] = [];
+    const def = await toolOf(approvalCtx(approvals), { MOCK_CLUSTER_STATE: "already_clustered" }).execute(
+      { stage: "family_split", run_id: "e10d-def", workspace_path: tempRoot() },
+      fakeExec,
+    );
+    expect(summaryArgv(def)).not.toContain("--allow-small-cluster-test");
+    const on = await toolOf(approvalCtx([]), { MOCK_CLUSTER_STATE: "already_clustered" }).execute(
+      { stage: "family_split", run_id: "e10d-on", workspace_path: tempRoot(), allow_small_cluster_test: true },
+      fakeExec,
+    );
+    expect(summaryArgv(on)).toContain("--allow-small-cluster-test");
+    expect(summaryArgv(on).filter((a) => a === "--allow-small-cluster-test")).toHaveLength(1);
+  });
+  it("true 且非 family_split → 其它段忽略（argv 不出现，不报错）", async () => {
+    const result = await toolOf(approvalCtx([])).execute(
+      { stage: "label_qc", run_id: "e10d-lq", workspace_path: tempRoot(), allow_small_cluster_test: true },
+      fakeExec,
+    );
+    expect((result as Record<string, unknown>)["ok"]).toBe(true);
+    expect(summaryArgv(result)).not.toContain("--allow-small-cluster-test");
+  });
+  it("description：参数说明保留枚举并增业务语言句（不要念枚举值）；allow 用业务语言不带内部键名", () => {
+    const tool = toolOf(approvalCtx([]));
+    const schema = tool.parameters as { properties?: Record<string, { description?: string }> };
+    const autoDesc = String(schema.properties?.["auto_style_cluster"]?.description);
+    expect(autoDesc).toContain("auto");
+    expect(autoDesc).toContain("不要念枚举值");
+    expect(autoDesc).toContain("这批数据是否已经按版式分好组");
+    const allowDesc = String(schema.properties?.["allow_small_cluster_test"]?.description);
+    expect(allowDesc).toContain("版式分组都太小");
+    expect(allowDesc).toContain("每个小类只留 1 页，测试样本很少");
+    expect(allowDesc).not.toContain("small_cluster_policy");
+    expect(allowDesc).not.toContain("split_partition_empty");
   });
 });
 
@@ -175,14 +270,16 @@ describe("E10b——证据透传与 description 三态指引", () => {
     expect(result["segment_fact_recorded"]).toBe(true);
     expect(result["style_cluster_state"]).toEqual({ state: "already_clustered", pages_total: 6, pages_with_cluster: 6 });
     expect(String((summaryOf(result)["results"] as { missing: string[] }[])?.[0]?.missing?.[0])).toContain("生效 auto_style_cluster=False");
+    expect(result["user_message"]).toBeUndefined(); // 成功面无拒绝文案
   });
-  it("description 写清三态与行动指引（先问用户／on-off 语义／禁止猜值）", () => {
+  it("工具 description 三态指引（含 E10e 新码；用户表述业务语言句在位）", () => {
     const tool = toolOf(approvalCtx([]));
     const text = tool.description;
     expect(text).toContain("auto_style_cluster");
     expect(text).toContain("先检测");
     expect(text).toContain("style_cluster_state_not_clustered");
     expect(text).toContain("style_cluster_state_ambiguous");
+    expect(text).toContain("style_cluster_declared_but_absent");
     expect(text).toContain("这批数据做过版式聚类吗");
     expect(text).toContain("禁止在 auto 被拒后自行猜一个值重跑");
   });
@@ -214,7 +311,7 @@ describe("E10b——落盘摘要回读（真内核段模式摘要不落 stdout�
     results: [{ stage: "family_split", status: "blocked", reason_codes: ["style_cluster_state_not_clustered"], missing: [], raw_response: { style_cluster_state: { state: "not_clustered", pages_total: 5, pages_with_cluster: 0, manifest_present: false, requested_auto_style_cluster: "auto", effective_auto_style_cluster: null } } }],
   });
 
-  it("stdout 无 JSON → 回读内核缺省落盘摘要：rejections＋聚类证据透传＋问询 note 在位", async () => {
+  it("stdout 无 JSON → 回读内核缺省落盘摘要：rejections＋证据＋兜底文案（落盘件未带 user_message）", async () => {
     const approvals: string[] = [];
     const ws = tempRoot();
     writeDiskSummary(ws, "run-disk", diskBody("run-disk"));
@@ -225,7 +322,9 @@ describe("E10b——落盘摘要回读（真内核段模式摘要不落 stdout�
     expect(result["exit_code"]).toBe(2);
     expect(JSON.stringify(result["rejections"])).toContain("style_cluster_state_not_clustered");
     expect(result["style_cluster_state"]).toEqual({ state: "not_clustered", pages_total: 5, pages_with_cluster: 0 });
-    expect(String(result["note"])).toContain("这批数据做过版式聚类吗");
+    expect(result["user_message"]).toBe(STYLE_CLUSTER_USER_MESSAGE_FALLBACK);
+    expect(result["user_message_source"]).toBe("fallback");
+    expect(String(result["note"])).toContain("原样告知用户");
   });
   it("落盘件 run_id 不匹配（陈旧/他 run 件）→ 不采纳：summary null＋generic note", async () => {
     const approvals: string[] = [];
@@ -238,11 +337,12 @@ describe("E10b——落盘摘要回读（真内核段模式摘要不落 stdout�
     expect(result["exit_code"]).toBe(2);
     expect(result["summary"]).toBeUndefined();
     expect(result["style_cluster_state"]).toBeUndefined();
+    expect(result["user_message"]).toBeUndefined();
     expect(String(result["note"])).toContain("摘要未含 rejections 原文");
   });
 });
 
-describe("E10b——纯函数直测（summary 缺失/畸形一律 undefined，不猜值）", () => {
+describe("E10b/E10d——纯函数直测（summary 缺失/畸形一律 undefined，不猜值）", () => {
   it("styleClusterStateOf：正常三键提取；results 缺失/非数组/证据形态非法 → undefined", () => {
     const summary = { results: [{ raw_response: { style_cluster_state: { state: "not_clustered", pages_total: 6, pages_with_cluster: 0, manifest_present: false, requested_auto_style_cluster: "auto", effective_auto_style_cluster: null } } }] };
     expect(styleClusterStateOf(summary)).toEqual({ state: "not_clustered", pages_total: 6, pages_with_cluster: 0 });
@@ -252,22 +352,29 @@ describe("E10b——纯函数直测（summary 缺失/畸形一律 undefined，�
     expect(styleClusterStateOf({ results: [{ raw_response: {} }] })).toBeUndefined();
     expect(styleClusterStateOf({ results: [{ raw_response: { style_cluster_state: { state: 3, pages_total: "x", pages_with_cluster: null } } }] })).toBeUndefined();
   });
-  it("styleClusterRejectionOf：数组与单对象两形态都认；无码/无关码 → undefined", () => {
-    expect(styleClusterRejectionOf([{ stage: "family_split", reason_codes: ["style_cluster_state_not_clustered"] }])).toBe("style_cluster_state_not_clustered");
-    expect(styleClusterRejectionOf([{ stage: "family_split", reason_codes: ["walkthrough_upstream_not_ok"] }, { reason_codes: ["style_cluster_state_ambiguous"] }])).toBe("style_cluster_state_ambiguous");
-    expect(styleClusterRejectionOf({ reason_codes: ["style_cluster_state_ambiguous"] })).toBe("style_cluster_state_ambiguous");
-    expect(styleClusterRejectionOf(null)).toBeUndefined();
-    expect(styleClusterRejectionOf([{ reason_codes: ["split_recompute_cluster_required"] }])).toBeUndefined();
-    expect(styleClusterRejectionOf([{ missing: ["no codes"] }])).toBeUndefined();
+  it("userMessageOf：首条拒绝的 user_message 原样取出；缺失/非串 → undefined", () => {
+    const summary = { results: [{ raw_response: { user_message: "业务文案原文" } }, { raw_response: { user_message: "第二条不取" } }] };
+    expect(userMessageOf(summary)).toBe("业务文案原文");
+    expect(userMessageOf(null)).toBeUndefined();
+    expect(userMessageOf({})).toBeUndefined();
+    expect(userMessageOf({ results: [{ raw_response: { user_message: 3 } }] })).toBeUndefined();
+    expect(userMessageOf({ results: [{ raw_response: { user_message: "" } }] })).toBeUndefined();
   });
-  it("两条回流 note 闭集：都含「先问用户」与禁止猜值；not_clustered 指 on、ambiguous 指 on/off", () => {
-    expect(STYLE_CLUSTER_REJECTION_NOTE.style_cluster_state_not_clustered).toContain("这批数据做过版式聚类吗");
-    expect(STYLE_CLUSTER_REJECTION_NOTE.style_cluster_state_not_clustered).toContain("\"on\"");
-    expect(STYLE_CLUSTER_REJECTION_NOTE.style_cluster_state_not_clustered).not.toContain("\"off\"");
-    expect(STYLE_CLUSTER_REJECTION_NOTE.style_cluster_state_ambiguous).toContain("\"on\"");
-    expect(STYLE_CLUSTER_REJECTION_NOTE.style_cluster_state_ambiguous).toContain("\"off\"");
-    for (const note of Object.values(STYLE_CLUSTER_REJECTION_NOTE)) {
-      expect(note).toContain("禁止不问用户自行猜值重跑");
-    }
+  it("styleClusterRejectionOf：聚类状态三码命中（含 E10e 矛盾码）；数组/单对象两形态；无关码 false", () => {
+    expect(styleClusterRejectionOf([{ stage: "family_split", reason_codes: ["style_cluster_state_not_clustered"] }])).toBe(true);
+    expect(styleClusterRejectionOf([{ reason_codes: ["style_cluster_state_ambiguous"] }])).toBe(true);
+    expect(styleClusterRejectionOf({ reason_codes: ["style_cluster_declared_but_absent"] })).toBe(true);
+    expect(styleClusterRejectionOf([{ reason_codes: ["walkthrough_upstream_not_ok"] }, { reason_codes: ["style_cluster_state_ambiguous"] }])).toBe(true);
+    expect(styleClusterRejectionOf(null)).toBe(false);
+    expect(styleClusterRejectionOf([{ reason_codes: ["split_partition_empty:test"] }])).toBe(false);
+    expect(styleClusterRejectionOf([{ reason_codes: ["split_recompute_cluster_required"] }])).toBe(false);
+    expect(styleClusterRejectionOf([{ missing: ["no codes"] }])).toBe(false);
+  });
+  it("E10d 回流 note 与兜底文案闭集：含「原样告知用户」与内部选项名禁令；不含面向用户的枚举重跑指令", () => {
+    expect(STYLE_CLUSTER_REJECTION_NOTE).toContain("原样告知用户");
+    expect(STYLE_CLUSTER_REJECTION_NOTE).toContain("已分组→直接分层；未分组→先分组再分层");
+    expect(STYLE_CLUSTER_REJECTION_NOTE).toContain("不要向用户展示 auto/on/off 等内部选项名");
+    expect(STYLE_CLUSTER_REJECTION_NOTE).not.toContain("重跑");
+    expect(STYLE_CLUSTER_USER_MESSAGE_FALLBACK).toBe("这批数据的版式分组状态无法确认，请确认数据是否已按版式分组后再试。");
   });
 });
