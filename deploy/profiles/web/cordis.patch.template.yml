@@ -23,12 +23,12 @@
 # Models 设置页 API Key 栏会被禁用、UI 粘贴被遮蔽；env 注入只留给 CI 类显式意图）。
 # 推理档位声明（compat.thinkingFormat=zai）激活 dsh 原生模型选择器推理子菜单；
 # reasoningEfforts 照 pi-ai 目录原文（不造档位）；contextWindow/maxTokens＝目录值；
-# 模型 name＝市面表述（GLM-5.3 / GLM-5.3-Flash / GLM-5.3-FlashX，端点 /models 实证在架）。
+# 模型 name＝市面表述（GLM-5.3 / GLM-5.3-Flash，端点 /models 实证在架）。
 # 批甲-FIX T1（2026-10-15，owner 三裁）：per-model 能力闭集——智谱开放文档（docs.bigmodel.cn
 # 对话补全，2026-10-15 摘录）："reasoning_effort 仅 GLM-5.2+ 支持；GLM-5.3 与 GLM-5.3-FLASH
-# 仅支持 low / high / max 档位；thinking 开启时生效、不传默认 max；GLM-5.3-FlashX 同架构同
-# 三档且 thinking 不可关闭（无 off 档）"。故 glm-5.3 四值（off 可关——off 声明留空值＝
-# 不送思考参数的 zai 语义位），flash 系三值（无 off——thinking 不可关，不造档位）。
+# 仅支持 low / high / max 档位；thinking 开启时生效、不传默认 max"。故 glm-5.3 四值（off 可关
+# ——off 声明留空值＝不送思考参数的 zai 语义位），flash 系三值（无 off——thinking 不可关，
+# 不造档位）。
 - id: llm-pi-ai
   config:
     providers:
@@ -51,14 +51,6 @@
               max: max
           - id: glm-5.3-flash
             name: GLM-5.3-Flash
-            contextWindow: 1048576
-            maxTokens: 131072
-            reasoningEfforts:
-              low: low
-              high: high
-              max: max
-          - id: glm-5.3-flashx
-            name: GLM-5.3-FlashX
             contextWindow: 1048576
             maxTokens: 131072
             reasoningEfforts:

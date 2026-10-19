@@ -88,17 +88,19 @@ describe("批甲-FIX T1——模型目录 per-model 思考档位闭集（智谱�
   const effortsOf = (model: Record<string, unknown> | undefined): string[] =>
     Object.keys(((model?.["reasoningEfforts"] as Record<string, unknown>) ?? {}));
 
-  it("三模型闭集对账：glm-5.3＝off/low/high/max（thinking 可关）；flash／flashx＝low/high/max（无 off——智谱开放文档 2026-10-15：GLM-5.3 与 GLM-5.3-FLASH 仅支持 low/high/max，FlashX thinking 不可关闭）", () => {
+  it("两模型闭集对账（批移除flashx 2026-10-19 owner 裁：coding plan 不提供 FlashX，下架必然 429 的入口）：glm-5.3＝off/low/high/max（thinking 可关）；flash＝low/high/max（无 off——智谱开放文档 2026-10-15：GLM-5.3 与 GLM-5.3-FLASH 仅支持 low/high/max，thinking 不可关）", () => {
     const rows = templateRows();
     const models = new Map(glmModels(rows).map((model) => [model["id"] as string, model]));
-    expect(models.size).toBe(3);
+    expect(models.size).toBe(2);
     expect(effortsOf(models.get("glm-5.3"))).toEqual(["off", "low", "high", "max"]);
     expect(effortsOf(models.get("glm-5.3-flash"))).toEqual(["low", "high", "max"]);
-    expect(effortsOf(models.get("glm-5.3-flashx"))).toEqual(["low", "high", "max"]);
+    // 批移除flashx 防回潮锚：模板与 poc 交付副本零 flashx 声明
+    expect(readFileSync(TEMPLATE, "utf8").toLowerCase()).not.toContain("flashx");
+    expect(readFileSync(join(repo, "poc", "web-profile-cordis-patch.yml"), "utf8").toLowerCase()).not.toContain("flashx");
     // 出处注释在场（声明出处写进配置——「不造档位」审计面）
     const text = readFileSync(TEMPLATE, "utf8");
     expect(text).toContain("docs.bigmodel.cn");
-    expect(text).toContain("thinking 不可关闭");
+    expect(text).toContain("thinking 不可关");
   });
 
   it("poc 交付副本与 uat overlay 示例同步：flash 系闭集随行（实例覆写整行时漏声明即无档位控件）", () => {
