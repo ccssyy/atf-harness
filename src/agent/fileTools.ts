@@ -21,10 +21,12 @@
  */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { err, ok, type Result } from "../bridge/index.js";
 import { checkSchema, validateCanonicalOutput, type SchemaNode, type ToolDefinition } from "../core/tools/index.js";
+import { LEDGER_ENV, homeLedgerPathOf } from "../core/workspace/approvalLedger.js";
 import { findBash, runScratchCommand, SCRATCH_EXEC_STDERR_TAIL_BYTES, SCRATCH_WRITE_MAX_BYTES } from "../core/workspace/scratchExec.js";
 
 /** A7 四工具名（atf_ 前缀＝治理包装面，与全工具面命名一致；指令件记名 read/edit/write/bash）。 */
@@ -115,6 +117,44 @@ export const resolveWhitelistedPath = async (
   }
   return ok({ abs });
 };
+
+// ---------------------------------------------------------------- A6：受保护产物 denylist（写保护第二道）
+
+/** A6 拒绝码：命中受保护产物 denylist——审计产物（段事实/段摘要/事实轨/审批账本）由对应工具链
+ *  写入，直接改写会让审计链失真；白名单判定之后第二道，命中即拒。 */
+export const PROTECTED_ARTIFACT_WRITE = "protected_artifact_write";
+
+/** 受保护产物形态闭集（runs 下审计面；权威＝本表单源，消费面禁复制规则）。
+ *  段事实 webui/segments.json／段摘要 stage-*.summary.{json,md}／事实轨 facts/*.jsonl。 */
+export const PROTECTED_ARTIFACT_RES: readonly RegExp[] = [
+  /(^|\/)runs\/[^/]+\/webui\/segments\.json$/,
+  /(^|\/)runs\/[^/]+\/stage-[^/]+\.summary\.(?:json|md)$/,
+  /(^|\/)runs\/[^/]+\/facts\/[^/]+\.jsonl$/,
+];
+
+/** 审批账本路径单源（实例 env 显式＞HOME 推导缺省——与放行账本启动校验同源消费同一 env）。 */
+export const protectedArtifactLedgerPathOf = (env: Readonly<Record<string, string | undefined>>): string => {
+  const explicit = env[LEDGER_ENV]?.trim() ?? "";
+  return explicit !== "" ? explicit : homeLedgerPathOf(env["HOME"] ?? "");
+};
+
+/** 受保护产物判定：realpath 实锚防符号链接绕过（目标已存在取实锚；不存在按字面判定——
+ *  不因不存在放行）；账本文件即使落在白名单内也拒（审计面零直写）。 */
+export const isProtectedArtifactPath = (absPath: string, ledgerPath?: string): boolean => {
+  let probe = absPath;
+  try {
+    probe = realpathSync(absPath);
+  } catch {
+    // 目标不存在 → 按字面判定（realpath 仅对已存在目标做符号链接实锚）
+  }
+  const normalized = resolve(probe);
+  if (ledgerPath !== undefined && ledgerPath.trim() !== "" && normalized === resolve(ledgerPath)) return true;
+  return PROTECTED_ARTIFACT_RES.some((pattern) => pattern.test(normalized));
+};
+
+/** A6 指路文案（产品口径，零内部代号）。 */
+export const PROTECTED_ARTIFACT_NOTE =
+  "该文件由对应工具写入（段事实由管线/工具链登记；段摘要由管线生成；事实轨由训练链写入）——请勿直接改写";
 
 // ---------------------------------------------------------------- bash 命令分类（审批判定单源）
 
@@ -389,6 +429,10 @@ const writeHandler = async (params: Record<string, unknown>, host: FileToolHost)
   }
   const guard = await resolveWhitelistedPath(host, path);
   if (!guard.ok) return err(guard.error);
+  // A6：受保护产物 denylist（白名单之后的第二道——审计产物零直写；realpath 防符号链接绕过）
+  if (isProtectedArtifactPath(guard.value.abs, protectedArtifactLedgerPathOf(host.env ?? {}))) {
+    return rejected(PROTECTED_ARTIFACT_WRITE, `受保护产物不可直接改写: ${path}。${PROTECTED_ARTIFACT_NOTE}`);
+  }
   const existing = await stat(guard.value.abs).catch(() => undefined);
   if (existing !== undefined && !existing.isFile()) return rejected("not_a_file", `目标已存在且非普通文件: ${path}`);
   try {
@@ -420,6 +464,11 @@ const editHandler = async (params: Record<string, unknown>, host: FileToolHost):
   const replaceAll = params["replace_all"] === true;
   const guard = await resolveWhitelistedPath(host, path);
   if (!guard.ok) return err(guard.error);
+  // A6：受保护产物 denylist 与 atf_write 同源同闸（edit 直改既有文件——绕过 write 面即绕过保护，
+  // 故同判定闭合；read 面零此闸，只读放行）
+  if (isProtectedArtifactPath(guard.value.abs, protectedArtifactLedgerPathOf(host.env ?? {}))) {
+    return rejected(PROTECTED_ARTIFACT_WRITE, `受保护产物不可直接改写: ${path}。${PROTECTED_ARTIFACT_NOTE}`);
+  }
   let text: string;
   try {
     text = await readFile(guard.value.abs, "utf8");
