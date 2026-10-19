@@ -65,6 +65,12 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
     expect(byId.get("tool-fs-search")?.["config"]).toMatchObject({ sampleOverCapGlobResults: false });
   });
 
+  it("批默认flash＋档位max（owner 2026-10-19 裁）：模板 agent-default-model＝glm-atf/glm-5.3-flash＋reasoningEffort max——防回潮锚", () => {
+    const rows = templateRows();
+    const model = rowById(rows, "agent-default-model") as { config?: Record<string, unknown> };
+    expect(model?.config).toEqual({ provider: "glm-atf", model: "glm-5.3-flash", reasoningEffort: "max" });
+  });
+
   it("generate.py：模板＋overlay 覆写语义（同 id 整行覆盖）＋输出即 drift check 通过物", () => {
     const overlay = join(tempRoot(), "uat.overlay.yml");
     execFileSync("python3.10", ["-c", "import yaml,sys; yaml.safe_dump([{'id':'agent-default-model','config':{'provider':'zai-coding-cn','model':'glm-5.3-flash'}}], open(sys.argv[1],'w',encoding='utf8'), allow_unicode=True)", overlay]);

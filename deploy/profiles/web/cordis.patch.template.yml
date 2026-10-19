@@ -65,7 +65,8 @@
 - id: agent-default-model
   config:
     provider: glm-atf
-    model: glm-5.3
+    model: glm-5.3-flash
+    reasoningEffort: max
 
 # —— atf_* 工具投影插件（治理面：桥接 17 方法＋只读四件＋A7 治理四件＋路径守卫
 #   ＋bash/write 免审 answerer——全部由插件装配，此处仅 insert 行）————————————
