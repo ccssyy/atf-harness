@@ -766,15 +766,23 @@ describe("批㉛段3.1 右栏监控面（Loss 历史回退＋评估 KPI＋环境
 });
 
 describe("批㉝H GPU 多卡聚合（gpu_all 采集解析＋绑卡声明两态＋快照下发）", () => {
-  it("parseNvidiaSmiAll：逐行 index,util,used,total → 逐卡列表；空/坏输出 → null（不猜测）", async () => {
+  it("parseNvidiaSmiAll：逐行 index,util,used,total → 逐卡列表；空/坏输出 → null（不猜测）；D11-2 温度/功耗纯增（[N/A]/缺席 → null）", async () => {
     const { parseNvidiaSmiAll } = await import("../../src/webui/readOnlyTools.js");
+    // 旧四列输出（无温度/功耗列）→ 新键 null 化（向后兼容，不猜）
     const cards = parseNvidiaSmiAll("0, 0, 0, 81920\n1, 12, 8429, 81920\n");
     expect(cards).toEqual([
-      { index: "0", utilization: "0%", memoryUsed: "0MiB", memoryTotal: "81920MiB" },
-      { index: "1", utilization: "12%", memoryUsed: "8429MiB", memoryTotal: "81920MiB" },
+      { index: "0", utilization: "0%", memoryUsed: "0MiB", memoryTotal: "81920MiB", temperature: null, powerDraw: null },
+      { index: "1", utilization: "12%", memoryUsed: "8429MiB", memoryTotal: "81920MiB", temperature: null, powerDraw: null },
     ]);
     expect(parseNvidiaSmiAll("")).toBeNull();
     expect(parseNvidiaSmiAll("not,enough,cells")).toBeNull();
+    // D11-2 六列：数值直通；[N/A]/空/非数值 → null（不填 0）；旧四字段零改
+    const six = parseNvidiaSmiAll("0, 82, 48128, 81920, 71, 310.5\n1, 0, 8192, 81920, [N/A], [N/A]\n2, 3, 4, 81920, , watts\n");
+    expect(six).toEqual([
+      { index: "0", utilization: "82%", memoryUsed: "48128MiB", memoryTotal: "81920MiB", temperature: 71, powerDraw: 310.5 },
+      { index: "1", utilization: "0%", memoryUsed: "8192MiB", memoryTotal: "81920MiB", temperature: null, powerDraw: null },
+      { index: "2", utilization: "3%", memoryUsed: "4MiB", memoryTotal: "81920MiB", temperature: null, powerDraw: null },
+    ]);
   });
   it("formatGpuAll：全卡聚合显示串（GPU0 0%/0MiB · GPU1 12%/8429MiB）；空列表 → null（client 回退单卡面）", () => {
     expect(formatGpuAll([{ index: "0", utilization: "0%", memoryUsed: "0MiB", memoryTotal: "81920MiB" }, { index: "1", utilization: "12%", memoryUsed: "8429MiB", memoryTotal: "81920MiB" }]))
@@ -838,15 +846,17 @@ describe("批㉝H GPU 多卡聚合（gpu_all 采集解析＋绑卡声明两态�
     }
     expect(monitor.runs.find((r) => r.run_id === "run-h")?.gpu_binding).toEqual({ devices: "3", source: "train_sh" });
   });
-  it("client.js 双份同语义钉子：聚合/绑卡副本两处都在（裸服务不打包——改动同步）", () => {
+  it("D11-2 去重钉：client 本地 GPU 格式副本退役（聚合/绑卡语义单源 snapshot.js）＋新面板绑卡 raw 面", () => {
     const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
-    // 批㊶-M M-5＋批㊶-N N-4：GPU 组徽章撤销（GPU 摘要移监控面板头部详情行）——钉子随语义更新
-    for (const phrase of ["formatGpuAllLocal", "formatGpuBindingLocal", "train.sh CUDA_VISIBLE_DEVICES", "deploy_effective.visible_devices", "无训练进行中"]) {
-      expect(clientSource).toContain(phrase);
+    // D11-2 面板重写后 client 不再显示聚合串/绑卡注记——本地副本（formatGpuAllLocal/
+    // formatGpuBindingLocal）退役＝单源反转（语义只存 snapshot.js，vitest 直测那份）；
+    // dock GPU 一行卡与环境卡 GPU 行随去重删除（「无训练进行中」/「GPU：」渲染面清零）
+    for (const gone of ["formatGpuAllLocal", "formatGpuBindingLocal", "无训练进行中", "'GPU：' + gpuRow"]) {
+      expect(clientSource).not.toContain(gone);
     }
-    // 渲染面两处都在：GPU 状态条（dock）＋监控面板环境卡 GPU 行
+    // 绑卡 raw 面仍在上（GPU 区头「绑 <卡号>」——gpu_binding.devices 直显）
     expect(clientSource).toContain("gpu_binding");
-    expect(clientSource).toContain("'GPU：' + gpuRow");
+    expect(clientSource).toContain("绑 ' + bindingDevices");
   });
 });
 
@@ -1311,8 +1321,9 @@ describe("批㊶-S3 S-B1——通知面投影（monitor.json additive 键三同�
   });
   it("批㊶-TRAIN-OBS-FIX2 钉子：TrainlogTailSection 组件边界（含 useState 须 createElement 挂载——直调条件挂载即 React #310 整槽崩溃）", () => {
     const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
-    // 三调用点（MonitorBody pane＋浮卡自展开＋浮卡 store 展开）全走组件边界
-    expect(clientSource.match(/React\.createElement\(TrainlogTailSection, \{ run: run \}\)/g)?.length).toBe(3);
+    // 两调用点（浮卡自展开＋浮卡 store 展开）全走组件边界——D11-2 面板重写后监控面板内联
+    // 日志区（atf-m-logs）替代该组件第三调用点
+    expect(clientSource.match(/React\.createElement\(TrainlogTailSection, \{ run: run \}\)/g)?.length).toBe(2);
     // 直调形态清零（防回归）
     expect(clientSource).not.toMatch(/[^']TrainlogTailSection\(run\)/);
     expect(clientSource).toContain("function TrainlogTailSection(props)");

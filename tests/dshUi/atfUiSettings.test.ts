@@ -177,13 +177,14 @@ describe("D11-1 训练配置页迁原生 settings.section（client.js 真加载�
     expect(React.isValidElement(el)).toBe(true);
   });
 
-  it("②header 无「设置」按钮（DOM 断言）：GPU／监控仍在，设置入口零残留", async () => {
+  it("②header 无「设置」按钮（DOM 断言）；D11-2 演进：GPU 按钮亦删，顶栏只留监控", async () => {
     const regs = captured["conversation.session.header.utilities"];
     expect(regs?.length).toBe(1);
     const injected = regs![0]!.options.inject("sess-1");
     await renderEl(regs![0]!.content!(injected));
     const texts = Array.from(container.querySelectorAll("button")).map((b) => b.textContent);
-    expect(texts).toContain("GPU");
+    // D11-1：设置删；D11-2：GPU 删（并入监控面板区块）——顶栏唯一按钮＝监控
+    expect(texts).not.toContain("GPU");
     expect(texts.some((t) => (t ?? "").indexOf("监控") >= 0)).toBe(true);
     expect(texts).not.toContain("设置");
     expect(container.textContent).not.toContain("设置（根目录");

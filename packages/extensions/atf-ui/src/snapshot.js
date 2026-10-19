@@ -66,6 +66,8 @@ export function buildMonitorSnapshot(runs, gpu, gpuAll) {
       segments: SEGMENTS.map(({ key, label }) => ({ key, label, status: segmentStatus(run, key) })),
       // 批㉛段1：badcase viewer 产物发现（scanRunDir 两形态兼容推导，空数组＝无挂载面）
       viewers: Array.isArray(run.viewers) ? run.viewers : [],
+      // D11-2：产物区 checkpoint 名单（additive——新→旧最多 5 条，缺席＝空数组）
+      ckpts: Array.isArray(run.ckpts) ? run.ckpts : [],
       // 批㉛段2：Web 发起训练面（train.sh/快照/IterationConfig/prelaunch/摘要四件套）
       launch: run.launch ?? null,
       // 批㉛段3.1：右栏监控面（评估轮 KPI＋环境卡）

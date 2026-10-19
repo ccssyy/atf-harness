@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { buildArtifactsSnapshot, buildMonitorSnapshot } from "./snapshot.js";
 import { PANEL_HTML } from "./panel.js";
-import { queryNvidiaSmi, queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
+import { queryNvidiaSmi, queryNvidiaSmiAll, queryGpuComputeApps, gpuProcTopByIndex } from "../../../../src/webui/readOnlyTools.js";
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
 import { resolveInstanceKernelDir } from "../../../../src/core/workspace/instancePin.js";
@@ -136,6 +136,8 @@ export interface RunScan {
   probe?: { level: "error" | "warn" | "info"; reason: string; since: string; kind?: string } | null;
   report: { files: string[] };
   viewers: string[];
+  /** D11-2：产物区 checkpoint 名单（additive——新→旧最多 5 条）。 */
+  ckpts: string[];
   launch: LaunchSurface;
   metrics: EvalMetricsSurface | null;
   env: EnvSurface;
@@ -381,6 +383,22 @@ export const trainerHistoryLoss = (runDir: string): Array<Record<string, number>
     if (points.length > 0) return points;
   }
   return [];
+};
+
+/** 最新 checkpoint 名单（D11-2 产物区数据源；training/ 下 checkpoint-N 目录按 N 降序取前 max 条。
+ *  命名发现与 trainerHistoryLoss 同域单源（同一 readdir 形态），非第二套扫描器。 */
+export const latestCheckpoints = (runDir: string, max = 5): string[] => {
+  const ckpts: Array<{ name: string; n: number }> = [];
+  try {
+    for (const entry of readdirSync(join(runDir, "training"), { withFileTypes: true })) {
+      const m = /^checkpoint-(\d+)$/.exec(entry.name);
+      if (entry.isDirectory() && m !== null) ckpts.push({ name: entry.name, n: Number(m[1]) });
+    }
+  } catch {
+    return [];
+  }
+  ckpts.sort((a, b) => b.n - a.n);
+  return ckpts.slice(0, max).map((c) => c.name);
 };
 
 /** 环境卡面构造（IterationConfig 同源；缺席字段如实 —）。 */
@@ -687,6 +705,8 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
     probe,
     report: { files: reportFiles },
     viewers: discoverViewerDirs(dir),
+    // D11-2：产物区 checkpoint 名单（additive——新→旧最多 5 条；缺席＝空数组）
+    ckpts: latestCheckpoints(dir),
     launch: buildLaunchSurface(dir),
     metrics: latestEvalMetrics(dir),
     env: buildEnvSurface(readJsonFile(iterationConfigPathOf(dir)) as Record<string, unknown> | null, runId),
@@ -1258,6 +1278,13 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     // 批㉝H：gpu_all 全卡面并采（首行单卡面保留——atf_gpu_status 工具与旧 client 回退共用）。
     const gpu = await queryNvidiaSmi();
     const gpuAll = await queryNvidiaSmiAll();
+    // D11-2：进程归属一次采集全卡共用（复用钉——readOnlyTools.parseComputeAppsWithIndex
+    // 唯一解析面，本调用方只做归约 gpuProcTopByIndex；禁止每卡一次 shell）。
+    const computeApps = await queryGpuComputeApps();
+    const procTopMap = gpuProcTopByIndex(Array.isArray(computeApps) ? computeApps : []);
+    // D11-2：GPU 历史随同一同步拍追加（写失败不阻断——appendGpuHistory 自吞错节流 stderr）
+    const historyRow = buildGpuHistoryRow(new Date(), gpuAll ?? [], procTopMap);
+    if (historyRow !== null) appendGpuHistory(resolved.runsRoot, historyRow);
     const monitor = buildMonitorSnapshot(runs, gpu === null ? { offline: true } : { offline: false, ...gpu }, gpuAll ?? undefined);
     const artifacts = buildArtifactsSnapshot(runs);
     writeFileSync(join(outDir, "monitor.json"), `${JSON.stringify(monitor, null, 1)}\n`, "utf8");
@@ -1270,6 +1297,182 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     console.error("[atf-ui] 同步失败（下周期重试）:", cause instanceof Error ? cause.message : String(cause));
   }
 }
+
+// ── D11-2：GPU 历史面（每同步拍追加一行 jsonl；按天文件即轮转；每天首写清理 7 天前）─────
+
+/** 历史行逐卡条目（键闭集——gpu-history jsonl 唯一形态；util 百分数、显存 MiB 数值，缺 → null）。 */
+export interface GpuHistoryCard {
+  index: number;
+  util: number | null;
+  memUsed: number | null;
+  memTotal: number | null;
+  temp: number | null;
+  power: number | null;
+  procTop: { pid: string; name: string; memMiB: number } | null;
+}
+export interface GpuHistoryRow {
+  ts: string;
+  gpus: GpuHistoryCard[];
+}
+
+/** 按天文件名（gpu-history-YYYYMMDD.jsonl——文件名即轮转）。 */
+export const gpuHistoryFileName = (d: Date): string => {
+  const p2 = (n: number): string => String(n).padStart(2, "0");
+  return `gpu-history-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}.jsonl`;
+};
+
+/** gpu_all 字符串字段数值化（"82%"/"48MiB" → 82/48；坏值 → null 不猜）。 */
+const gpuNumericField = (raw: string): number | null => {
+  const n = Number(raw.replace(/%\s*$|MiB\s*$/i, "").trim());
+  return Number.isFinite(n) ? n : null;
+};
+
+/** 历史行构造（纯函数）：gpu_all（D11-2 扩展后含 temp/power）＋procTop 归约 → 一行。
+ *  gpu_all 缺席/空（采集不可用）→ null——不写空拍（缺失时段如实断流，不造平线）。 */
+export const buildGpuHistoryRow = (
+  now: Date,
+  gpuAll: ReadonlyArray<{ index: string; utilization: string; memoryUsed: string; memoryTotal: string; temperature?: number | null; powerDraw?: number | null }>,
+  procTop: ReadonlyMap<string, { pid: string; name: string; memMiB: number }>,
+): GpuHistoryRow | null => {
+  if (!Array.isArray(gpuAll) || gpuAll.length === 0) return null;
+  return {
+    ts: now.toISOString(),
+    gpus: gpuAll.map((c) => ({
+      index: Number(c.index),
+      util: gpuNumericField(c.utilization),
+      memUsed: gpuNumericField(c.memoryUsed),
+      memTotal: gpuNumericField(c.memoryTotal),
+      temp: typeof c.temperature === "number" ? c.temperature : null,
+      power: typeof c.powerDraw === "number" ? c.powerDraw : null,
+      procTop: procTop.get(String(c.index)) ?? null,
+    })),
+  };
+};
+
+const GPU_HISTORY_KEEP_DAYS = 7;
+
+/** 清理 7 天前的历史文件（每天首次写入时调用；unlink 失败逐个忽略）。返回删除数。 */
+export const cleanupOldGpuHistory = (runsRoot: string, now = new Date(), keepDays = GPU_HISTORY_KEEP_DAYS): number => {
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(join(runsRoot, "atf-ui")).filter((f) => /^gpu-history-\d{8}\.jsonl$/.test(f));
+  } catch {
+    return 0;
+  }
+  const cutoff = now.getTime() - keepDays * 86_400_000;
+  let removed = 0;
+  for (const f of entries) {
+    const m = /^gpu-history-(\d{4})(\d{2})(\d{2})\.jsonl$/.exec(f);
+    if (m === null) continue;
+    const dayTs = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
+    if (dayTs < cutoff) {
+      try {
+        unlinkSync(join(runsRoot, "atf-ui", f));
+        removed += 1;
+      } catch {
+        /* 单文件删除失败忽略（下一天再试） */
+      }
+    }
+  }
+  return removed;
+};
+
+let gpuHistoryCleanupDay = "";
+let gpuHistoryLastStderrAt = 0;
+
+/** 追加一行（appendFileSync；任何失败不抛不阻断同步器——stderr 节流 60s）。 */
+export const appendGpuHistory = (runsRoot: string, row: GpuHistoryRow): void => {
+  try {
+    const dir = join(runsRoot, "atf-ui");
+    mkdirSync(dir, { recursive: true });
+    const today = gpuHistoryFileName(new Date());
+    if (gpuHistoryCleanupDay !== today) {
+      gpuHistoryCleanupDay = today;
+      cleanupOldGpuHistory(runsRoot);
+    }
+    appendFileSync(join(dir, today), `${JSON.stringify(row)}\n`, "utf8");
+  } catch (cause) {
+    const at = Date.now();
+    if (at - gpuHistoryLastStderrAt > 60_000) {
+      gpuHistoryLastStderrAt = at;
+      console.error("[atf-ui] GPU 历史写入失败（不阻断同步器）:", cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+};
+
+/** 读单天历史（尾部最多 2000 行；文件缺失/坏行跳过——不造点不抛）。 */
+export const readGpuHistoryDay = (runsRoot: string, day: Date, tail = 2000): GpuHistoryRow[] => {
+  let text = "";
+  try {
+    text = readFileSync(join(runsRoot, "atf-ui", gpuHistoryFileName(day)), "utf8");
+  } catch {
+    return [];
+  }
+  const rows: GpuHistoryRow[] = [];
+  for (const line of text.split("\n").slice(-tail)) {
+    if (line.trim() === "") continue;
+    try {
+      const row = JSON.parse(line) as unknown;
+      if (row !== null && typeof row === "object" && typeof (row as GpuHistoryRow).ts === "string" && Array.isArray((row as GpuHistoryRow).gpus)) {
+        rows.push(row as GpuHistoryRow);
+      }
+    } catch {
+      /* 坏行跳过 */
+    }
+  }
+  return rows;
+};
+
+/** 等间隔降采样（纯函数）：≤maxPoints 原样；超限抽 maxPoints 点、首末点恒在。 */
+export const downsamplePoints = <T>(points: T[], maxPoints: number): T[] => {
+  if (points.length <= maxPoints) return points;
+  const last = points.length - 1;
+  const out: T[] = [];
+  for (let i = 0; i < maxPoints - 1; i++) {
+    out.push(points[Math.floor((i * last) / (maxPoints - 1))!]!);
+  }
+  out.push(points[last]!);
+  return out;
+};
+
+/** 窗口过滤＋降采样（纯函数）：取 [now-minutes, now] 尾窗、按 ts 升序、降采样 ≤maxPoints。 */
+export const windowDownsampleGpuHistory = (rows: GpuHistoryRow[], now: Date, minutes: number, maxPoints: number): GpuHistoryRow[] => {
+  const cutoff = now.getTime() - minutes * 60_000;
+  const inWindow = rows
+    .filter((r) => {
+      const t = Date.parse(r.ts);
+      return Number.isFinite(t) && t >= cutoff && t <= now.getTime() + 60_000;
+    })
+    .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+  return downsamplePoints(inWindow, maxPoints);
+};
+
+/** 读今天＋（跨零点）昨天的历史并取窗（路由数据面——文件缺失/全坏 → 空数组由调用方 200）。 */
+export const readGpuHistoryWindow = (runsRoot: string, now: Date, minutes: number, maxPoints: number): GpuHistoryRow[] => {
+  const yesterday = new Date(now.getTime() - 86_400_000);
+  const rows = [...readGpuHistoryDay(runsRoot, yesterday), ...readGpuHistoryDay(runsRoot, now)];
+  return windowDownsampleGpuHistory(rows, now, minutes, maxPoints);
+};
+
+/** gpu-history 查询串解析（纯函数）：minutes 必为 1–60 整数（缺省 5）；maxPoints 缺省 60（1–2000）。
+ *  非法 → null（路由 400）。 */
+export const parseGpuHistoryQuery = (url: string): { minutes: number; maxPoints: number } | null => {
+  let q: URLSearchParams;
+  try {
+    q = new URL(url, "http://localhost").searchParams;
+  } catch {
+    return null;
+  }
+  const minutes = Number(q.get("minutes") ?? "5");
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 60) return null;
+  const rawMax = q.get("maxPoints");
+  let maxPoints = 60;
+  if (rawMax !== null && rawMax !== "") {
+    maxPoints = Number(rawMax);
+    if (!Number.isInteger(maxPoints) || maxPoints < 1 || maxPoints > 2000) return null;
+  }
+  return { minutes, maxPoints };
+};
 
 /** 批㊶-S5 B2：只读信息区块组装（灰底无编辑——§二.4；账本路径/凭据值/pin/桥命令锁死只读）。
  *  key_status 只显「已配置/未配置」，不回任何凭据值（env_key 纪律沿用）。 */
@@ -1310,6 +1513,23 @@ export const VIEWER_ROUTE_PREFIX = "/atf-ui/viewer";
 
 /** 路径段合法形态：字母数字开头，仅 字母数字._-；`..` 与分隔符天然被拒。 */
 const SEG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/** run-file 相对路径校验（D11-2 纯函数）：禁 `..`（任意位置）、禁绝对/反斜杠路径、逐段 SEG_RE、
+ *  末段扩展名白名单（json/jsonl/md/txt/csv/log/yaml/yml/html；`.env` 类点开头文件＝无扩展名拒）。
+ *  合法 → 归一化 rel（去空段）；非法 → null（路由一律 404，不回显绝对路径）。 */
+export const RUN_FILE_EXTENSIONS: ReadonlySet<string> = new Set(["json", "jsonl", "md", "txt", "csv", "log", "yaml", "yml", "html"]);
+export const sanitizeRunFileRel = (rel: string): string | null => {
+  if (rel === "" || rel.startsWith("/") || rel.includes("\\") || rel.includes("..")) return null;
+  const parts = rel.split("/").filter((p) => p !== "");
+  if (parts.length === 0) return null;
+  for (const p of parts) {
+    if (!SEG_RE.test(p)) return null;
+  }
+  const base = parts[parts.length - 1]!;
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0) return null;
+  return RUN_FILE_EXTENSIONS.has(base.slice(dot + 1).toLowerCase()) ? parts.join("/") : null;
+};
 
 const VIEWER_MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -1905,6 +2125,104 @@ export function apply(
     });
     ctx.effect(() => disposeSettings, "atf-ui: 设置面路由");
     console.log("[atf-ui] 设置面路由已注册（/atf-ui/settings——四区块，实例隔离 store）");
+
+    // ── D11-2：GPU 历史路由（鉴权同 settings；minutes 非法 400；文件缺失/全坏 → 200 空数组不 500）──
+    const gpuHistoryHandler: (req: IncomingMessage, res: ServerResponse) => void = (req, res) => {
+      const rejection = ctx.connection?.requestRejection(req);
+      if (rejection !== undefined) {
+        res.writeHead(rejection, { "content-type": "text/plain; charset=utf-8" });
+        res.end("dsh web authentication required\n");
+        return;
+      }
+      const q = parseGpuHistoryQuery(req.url ?? "/");
+      if (q === null) {
+        res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ error: "minutes 须为 1–60 整数；maxPoints 须为 1–2000 整数" }));
+        return;
+      }
+      const points = readGpuHistoryWindow(resolved.runsRoot, new Date(), q.minutes, q.maxPoints);
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ generated_at: new Date().toISOString(), window_minutes: q.minutes, points }));
+    };
+    const disposeGpuHistory = webServer.register({ kind: "exact", path: "/atf-ui/gpu-history", handler: gpuHistoryHandler });
+    ctx.effect(() => disposeGpuHistory, "atf-ui: GPU 历史路由");
+    console.log("[atf-ui] GPU 历史路由已注册（/atf-ui/gpu-history——按天 jsonl 尾窗读取）");
+
+    // ── D11-2：run 产物只读路由（runId 段级白名单＋rel 校验＋realpath 越界拒；越界/非法一律
+    // 404 且不回显绝对路径；鉴权同 settings）。checkpoint 目录不可服务——面板侧落 trainer_state.json。
+    const notFound = (res: ServerResponse): void => {
+      res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      res.end("not found\n");
+    };
+    const RUN_FILE_MIME: Record<string, string> = {
+      json: "application/json; charset=utf-8",
+      jsonl: "application/json; charset=utf-8",
+      md: "text/markdown; charset=utf-8",
+      txt: "text/plain; charset=utf-8",
+      csv: "text/csv; charset=utf-8",
+      log: "text/plain; charset=utf-8",
+      yaml: "text/yaml; charset=utf-8",
+      yml: "text/yaml; charset=utf-8",
+      html: "text/html; charset=utf-8",
+    };
+    const runFileHandler: (req: IncomingMessage, res: ServerResponse) => void = (req, res) => {
+      const rejection = ctx.connection?.requestRejection(req);
+      if (rejection !== undefined) {
+        res.writeHead(rejection, { "content-type": "text/plain; charset=utf-8" });
+        res.end("dsh web authentication required\n");
+        return;
+      }
+      const q = new URL(req.url ?? "/", "http://localhost").searchParams;
+      const runId = q.get("runId") ?? "";
+      if (!SEG_RE.test(runId)) {
+        notFound(res);
+        return;
+      }
+      const rel = sanitizeRunFileRel(q.get("rel") ?? "");
+      if (rel === null) {
+        notFound(res);
+        return;
+      }
+      // run 目录双形态解析（分桶/平铺——viewer 路由 runDirOf 同源 resolveRunDir，不直拼 runsRoot/runId）
+      let baseDir = resolve(resolveRunDir(resolved.runsRoot, runId));
+      // runsRoot 本身可能经符号链接落盘（dev 实锚：runs → datasets/.../runs）——containment
+      // 基准必须取 realpath 归一后的 run 目录，否则合法文件恒被判越界。
+      try {
+        baseDir = realpathSync(baseDir);
+      } catch {
+        notFound(res);
+        return;
+      }
+      let target = resolve(baseDir, rel);
+      // 符号链接逃逸拒：realpath 归一后必须仍在该 run 目录内（不可解析＝404 不猜）。
+      try {
+        target = realpathSync(target);
+      } catch {
+        notFound(res);
+        return;
+      }
+      if (!target.startsWith(baseDir + sep)) {
+        notFound(res);
+        return;
+      }
+      let data: Buffer;
+      try {
+        if (!statSync(target).isFile()) {
+          notFound(res);
+          return;
+        }
+        data = readFileSync(target);
+      } catch {
+        notFound(res);
+        return;
+      }
+      const ext = (target.split(".").pop() ?? "").toLowerCase();
+      res.writeHead(200, { "content-type": RUN_FILE_MIME[ext] ?? "application/octet-stream", "cache-control": "no-store" });
+      res.end(data);
+    };
+    const disposeRunFile = webServer.register({ kind: "exact", path: "/atf-ui/run-file", handler: runFileHandler });
+    ctx.effect(() => disposeRunFile, "atf-ui: run 产物只读路由");
+    console.log("[atf-ui] run 产物只读路由已注册（/atf-ui/run-file——白名单扩展＋runsRoot 越界拒）");
   }
   void tickOnce(resolved);
   const timer: NodeJS.Timeout = setInterval(() => void tickOnce(resolved), resolved.intervalMs);

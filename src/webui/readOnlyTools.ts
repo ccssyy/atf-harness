@@ -153,35 +153,56 @@ export interface GpuStatus {
   topProcesses: string[];
 }
 
-/** 单卡状态（批㉝H 多卡聚合面——monitor.json gpu_all 逐卡条目）。 */
+/** 单卡状态（批㉝H 多卡聚合面——monitor.json gpu_all 逐卡条目）。
+ *  D11-2：纯增可选温度/功耗（[N/A]/空/非数值 → null，不填 0 不猜——旧四字段零改）。 */
 export interface GpuCardStatus {
   index: string;
   utilization: string;
   memoryUsed: string;
   memoryTotal: string;
+  temperature?: number | null;
+  powerDraw?: number | null;
 }
 
-/** nvidia-smi 全卡输出解析（纯函数，vitest 直测）：`index,util,used,total` 逐行 → 逐卡列表；
- *  无有效行 → null（调用方如实报离线不猜测）。 */
+/** 数值化单元格（D11-2）：[N/A]/空/非有限数值 → null（不猜）；「42.」类尾点由 Number 判定。 */
+const numericCell = (raw: string | undefined): number | null => {
+  if (raw === undefined) return null;
+  const token = raw.trim();
+  if (token === "" || token.toUpperCase() === "[N/A]" || token === "N/A") return null;
+  const n = Number(token);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** nvidia-smi 全卡输出解析（纯函数，vitest 直测）：`index,util,used,total[,temp[,power]]` 逐行
+ *  → 逐卡列表；无有效行 → null（调用方如实报离线不猜测）。温度/功耗列缺席（旧输出）＝
+ *  undefined → null，向后兼容。 */
 export const parseNvidiaSmiAll = (stdout: string): GpuCardStatus[] | null => {
   const cards: GpuCardStatus[] = [];
   for (const line of stdout.trim().split("\n")) {
     if (line === "") continue;
     const cell = line.split(",").map((c) => c.trim());
     if (cell.length < 4) continue;
-    cards.push({ index: cell[0]!, utilization: `${cell[1]!}%`, memoryUsed: `${cell[2]!}MiB`, memoryTotal: `${cell[3]!}MiB` });
+    cards.push({
+      index: cell[0]!,
+      utilization: `${cell[1]!}%`,
+      memoryUsed: `${cell[2]!}MiB`,
+      memoryTotal: `${cell[3]!}MiB`,
+      temperature: numericCell(cell[4]),
+      powerDraw: numericCell(cell[5]),
+    });
   }
   return cards.length > 0 ? cards : null;
 };
 
 /** nvidia-smi 全卡查询（逐卡列表；不可用/非零退出 → null，调用方如实报离线不猜测）。
- *  与 queryNvidiaSmi（首行单卡面，atf_gpu_status 工具面保持零变化）分立采集。 */
+ *  与 queryNvidiaSmi（首行单卡面，atf_gpu_status 工具面保持零变化）分立采集。
+ *  D11-2：查询串纯增 temperature.gpu,power.draw（[N/A] 原样回 → 解析层 null 化）。 */
 export const queryNvidiaSmiAll = async (): Promise<GpuCardStatus[] | null> => {
   try {
     const stdout = await new Promise<string>((resolve, reject) => {
       execFile(
         "nvidia-smi",
-        ["--query-gpu=index,utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"],
+        ["--query-gpu=index,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw", "--format=csv,noheader,nounits"],
         { timeout: 5_000 },
         (error, stdoutText) => (error === null ? resolve(stdoutText) : reject(error)),
       );
@@ -242,6 +263,26 @@ export const queryGpuComputeApps = async (): Promise<GpuComputeApp[] | null> => 
   } catch {
     return null;
   }
+};
+
+/** 每卡进程 top1（D11-2 纯函数）：parseComputeAppsWithIndex 产物 → gpuIndex → 显存最大进程
+ *  { pid, name, memMiB }（usedMemory MiB 数值化，非数值行不参与）；无归属/空列表 → 空 Map
+ *  （调用方如实「—」不猜）。复用钉：进程解析只有 parseComputeAppsWithIndex 一处，本函数
+ *  只做归约不碰 nvidia-smi 输出形态。 */
+export const gpuProcTopByIndex = (
+  apps: GpuComputeApp[],
+): Map<string, { pid: string; name: string; memMiB: number }> => {
+  const top = new Map<string, { pid: string; name: string; memMiB: number }>();
+  for (const app of apps) {
+    if (app.gpuIndex === null) continue;
+    const mem = Number(app.usedMemory.trim());
+    if (!Number.isFinite(mem)) continue;
+    const cur = top.get(app.gpuIndex);
+    if (cur === undefined || mem > cur.memMiB) {
+      top.set(app.gpuIndex, { pid: app.pid, name: app.processName, memMiB: mem });
+    }
+  }
+  return top;
 };
 
 /** nvidia-smi 查询（不可用/非零退出 → null，调用方如实报离线）。 */

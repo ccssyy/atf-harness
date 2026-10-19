@@ -21,6 +21,8 @@ export interface AtfRunScan {
   env?: unknown;
   /** 批㉝H：绑卡声明（train_sh＝CUDA_VISIBLE_DEVICES／deploy_effective＝visible_devices；null＝读不到）。 */
   gpu_binding?: { devices: string; source: "train_sh" | "deploy_effective" } | null;
+  /** D11-2：产物区 checkpoint 名单（新→旧最多 5 条；缺席＝空数组）。 */
+  ckpts?: string[];
   /** 批㉞H：逐 eval 轮对比面（scanEvalRounds 产物；空数组＝无轮产物）。 */
   eval_rounds?: unknown[];
   /** 批㊶-S3 S-B1：评估就绪进度投影（orch/progress.jsonl 读账；null＝无账）。 */
@@ -36,12 +38,15 @@ export interface AtfGpuStatus {
   memoryUsed?: string;
   memoryTotal?: string;
 }
-/** 批㉝H：全卡面逐卡条目（queryNvidiaSmiAll 采集——index/utilization/memoryUsed/memoryTotal）。 */
+/** 批㉝H：全卡面逐卡条目（queryNvidiaSmiAll 采集——index/utilization/memoryUsed/memoryTotal；
+ *  D11-2 纯增可选温度/功耗：[N/A]/空/非数值 → null，旧四字段零改）。 */
 export interface AtfGpuCardStatus {
   index: string;
   utilization: string;
   memoryUsed: string;
   memoryTotal: string;
+  temperature?: number | null;
+  powerDraw?: number | null;
 }
 export interface AtfMonitorSnapshot {
   schema: string;
@@ -60,6 +65,8 @@ export interface AtfMonitorSnapshot {
     metrics: unknown;
     env: unknown;
     gpu_binding: { devices: string; source: "train_sh" | "deploy_effective" } | null;
+    /** D11-2：产物区 checkpoint 名单（additive——新→旧最多 5 条；缺席＝空数组）。 */
+    ckpts: string[];
     /** 批㉞H：逐 eval 轮对比面（两轮对比视图数据源；空数组＝无轮产物）。 */
     eval_rounds: unknown[];
     /** 批㊶-S3 S-B1：评估就绪进度投影（键面白名单五键；null＝无账）。 */
