@@ -15,7 +15,7 @@
  * 本文件（及一切产品资产）不得出现具体绝对路径（守护测试 staticNoHardcodedPaths 钉死）；
  * 换环境/换机器＝改实例配置，白名单随声明面自动重建。
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { listRegistryRecords, resolveDshHome } from "../core/workspace/workspaceRegistry.js";
 
@@ -28,6 +28,8 @@ export interface DeriveFileRootsInput {
   readDir?: (path: string) => string[];
   /** 注册工作区清单（缺省＝注册表实读——registry:workspace 派生面；守卫测试注入桩）。 */
   listRegistryWorkspaces?: () => ReadonlyArray<{ path: string }>;
+  /** realpath 归一（缺省 node:fs；解析失败＝null 按字面去重——D2 realpath 去重测试桩面）。 */
+  realpath?: (path: string) => string | null;
 }
 
 export interface DerivedFileRoots {
@@ -57,13 +59,17 @@ const defaultReadDir = (path: string): string[] => {
 };
 
 /** ⑦ 注册工作区实读（缺省实现）：exists===true 记录的 path；注册表缺席/不可解析/读失败
- *  一律空集（fail-open——不猜不回退，沿 listRegistryRecords 既有语义外再兜一层）。 */
+ *  一律空集（fail-open——不猜不回退，沿 listRegistryRecords 既有语义外再兜一层）。
+ *  D2 收口：跳过时留一条可诊断日志（坏 JSON/形态非法可从 boot 日志定位——不阻断启动）。 */
 const defaultRegistryWorkspaces = (env: NodeJS.ProcessEnv): (() => ReadonlyArray<{ path: string }>) => () => {
   try {
     return listRegistryRecords(resolveDshHome(env))
       .filter((record) => record.exists)
       .map((record) => ({ path: record.path }));
-  } catch {
+  } catch (cause) {
+    console.warn(
+      `[file-roots] 注册表读取失败，⑦注册工作区派生面跳过（其余派生面不受累）: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
     return [];
   }
 };
@@ -95,13 +101,25 @@ export const rootsFromEnvProfileText = (text: string): string[] => {
 export const deriveFileToolRoots = (input: DeriveFileRootsInput): DerivedFileRoots => {
   const readFile = input.readFile ?? defaultReadFile;
   const readDir = input.readDir ?? defaultReadDir;
+  const realpath = input.realpath ?? ((path: string): string | null => {
+    try {
+      return realpathSync(path);
+    } catch {
+      return null;
+    }
+  });
   const env = input.env;
   const roots: string[] = [];
   const sources: string[] = [];
+  // D2：去重按 realpath 归一（与既有各项归一后比对——⑥env 附加集与⑦注册表同树异写法
+  // 只留首见字面；realpath 不可解析＝按字面自等去重，不猜）。存储面仍为首见字面（声明序）。
+  const seenReal = new Map<string, true>();
   const push = (raw: string | undefined, source: string): void => {
     const value = typeof raw === "string" ? raw.trim() : "";
     if (value === "") return;
-    if (roots.includes(value)) return;
+    const identity = realpath(value) ?? value;
+    if (seenReal.has(identity)) return;
+    seenReal.set(identity, true);
     roots.push(value);
     sources.push(source);
   };

@@ -2,10 +2,10 @@
  * 批㊶-H/I 测试锚——文件工具路径守卫（白名单派生＝配置声明面镜像＋pre-execute 守卫
  * ＋A7 DSH 挂载＋命令串扫描）＋产品资产零具体目录静态守护（增补裁定两条）。
  */
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { deriveFileToolRoots, rootsFromEnvProfileText } from "../../src/agent/fileRoots.js";
 import { startFileRootsHotReload } from "../../packages/extensions/atf-tools/src/fileGuardFace.js";
 import { registryPathOf } from "../../src/core/workspace/workspaceRegistry.js";
@@ -117,6 +117,50 @@ describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试�
     });
     expect(derived.roots).toEqual([runs]);
     expect(derived.sources).toEqual(["env:ATF_DSH_RUNS_ROOT"]);
+  });
+
+  it("D2 坏 JSON：注册表文件字面损坏（真读链 JSON.parse 失败）→ ⑦跳过不崩＋诊断日志，其余派生面不受累", () => {
+    const home = tempRoot();
+    mkdirSync(join(home, "storages"), { recursive: true });
+    writeFileSync(join(home, "storages", "workspace.json"), "{ 这不是 JSON +++", "utf8");
+    const runs = tempRoot();
+    const warns: string[] = [];
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation((line) => {
+      warns.push(String(line));
+    });
+    try {
+      const derived = deriveFileToolRoots({ env: { DSH_HOME: home, ATF_DSH_RUNS_ROOT: runs } });
+      expect(derived.roots).toEqual([runs]); // ⑦ 空集——坏 JSON 不入任何根
+      expect(derived.sources).toEqual(["env:ATF_DSH_RUNS_ROOT"]);
+      expect(warns.some((line) => line.includes("[file-roots]") && line.includes("注册表读取失败"))).toBe(true);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("D2 realpath 去重：⑥env 附加集符号链接写法与⑦注册表真身同树 → 只留首见字面（⑥在前）", () => {
+    const home = tempRoot();
+    mkdirSync(join(home, "storages"), { recursive: true });
+    const realWs = tempRoot();
+    const linkWs = join(home, "ws-alias");
+    symlinkSync(realWs, linkWs);
+    const registry = {
+      unit: { name: "workspace", version: 2 },
+      global: { initialized: true, workspaceIds: ["w1"], archivedSessionIds: [], pinnedSessionIds: [] },
+      tables: { workspaces: { w1: { path: realWs, title: "真身", sessionIds: [], createdAt: "", updatedAt: "" } } },
+    };
+    writeFileSync(join(home, "storages", "workspace.json"), JSON.stringify(registry, null, 2) + "\n");
+    const runs = tempRoot();
+    // ⑥ 附加集持符号链接写法，⑦ 注册表持 realpath 真身——同一棵树
+    const derived = deriveFileToolRoots({
+      env: { DSH_HOME: home, ATF_DSH_RUNS_ROOT: runs, ATF_V1_FILE_TOOL_ROOTS: linkWs },
+    });
+    expect(derived.roots).toEqual([runs, linkWs]); // ⑦ 真身被 ⑥ 首见归一吸收
+    expect(derived.sources).toEqual(["env:ATF_DSH_RUNS_ROOT", "env:ATF_V1_FILE_TOOL_ROOTS"]);
+    // 反序（⑦ 在前）同样收敛为一根——注册表真身保留
+    const derivedR = deriveFileToolRoots({ env: { DSH_HOME: home, ATF_DSH_RUNS_ROOT: runs } });
+    expect(derivedR.roots).toContain(realWs);
+    expect(derivedR.roots).not.toContain(linkWs);
   });
 
   it("声明缺席不猜：无 HOME／配置不可解析 → 仅 env 名镜像入集；train_env=system 不入派生", () => {
