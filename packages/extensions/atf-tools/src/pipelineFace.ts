@@ -38,7 +38,7 @@ import { isAbsolute } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
-import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
+import { appendSegmentFact, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { join } from "node:path";
@@ -55,19 +55,9 @@ export const PIPELINE_STAGES: readonly string[] = [
   "training_prep",
 ];
 
-/** kernel stage → UI segment 映射表（A2.2b 落常量）。null＝只落事实轨不点灯
- *  （training_prep 按内核原文名落事实；candidate_build 落 candidate——两键均不在
- *  SEGMENT_ORDER_KEYS 前缀闭包读面，闭包语义不动）。 */
-export const SEGMENT_FACT_BY_KERNEL_STAGE: Readonly<Record<string, string | null>> = {
-  register: "register",
-  label_qc: "label_qc",
-  experiment_setup: "experiment_config",
-  candidate_build: "candidate",
-  publish: "publish",
-  family_split: "split",
-  admission: "admission",
-  training_prep: null,
-};
+/** kernel stage → UI segment 映射表（A2.2b 落常量；D3/D4 起单源迁 src/core/workspace/
+ *  segmentFacts.ts——import＋re-export 同一常量，atf-ui 兜底源同表消费，禁第二套）。 */
+export { SEGMENT_FACT_BY_KERNEL_STAGE };
 
 /** 会话身份提取（exec.agent.session.id；取不到＝undefined 如实跳过——confirmFace 同款）。 */
 const sessionIdOfExec = (exec: unknown): string | undefined => {

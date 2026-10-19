@@ -109,6 +109,10 @@ export const RUN_MARKER_RELS: readonly string[] = [
   "training",
   "webui",
   "eval",
+  // D3/D4：内核段模式 run 顶层首段摘要——段模式链必写（含 blocked 拒绝态也落盘），
+  // 且该形态无 launch/prep/training/webui/eval（admission 段模式只查四闸不产 launch）。
+  // 非工具路径 run 的唯一收录锚——缺它即「run 归属断链」（枚举面不可见，段事实无从点亮）。
+  "stage-register.summary.json",
 ];
 
 /** run 目录特征判定（任一特征在位＝是 run）。 */

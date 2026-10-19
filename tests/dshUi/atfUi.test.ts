@@ -1005,7 +1005,7 @@ describe("批㊶-M2 段 2 scanRuns 特征过滤（布局规范＋防御）", () 
       writeFileSync(join(runDir, rel), "{}");
       expect(looksLikeRun(runDir), rel).toBe(true);
     }
-    expect(RUN_MARKER_RELS.length).toBe(6); // 批㊶-O 补：launch/launch_manifest.json 路径锚
+    expect(RUN_MARKER_RELS.length).toBe(7); // 批㊶-O 补：launch/launch_manifest.json 路径锚；D3/D4：stage-register.summary.json 收录锚
   });
   it("无特征忽略：atf-ui 输出面（monitor.json/artifacts.json/panel.html）与空目录不收录", () => {
     const root = tempRoot();

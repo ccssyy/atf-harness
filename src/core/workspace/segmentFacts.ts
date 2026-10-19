@@ -23,6 +23,21 @@ export interface SegmentFact {
   source: string;
 }
 
+/** 内核段名 → UI 段键映射表（A2.2b 落常量；D3/D4 自 atf-tools pipelineFace 迁入本叶——
+ *  单源禁第二套：pipelineFace re-export 同一常量，atf-ui 兜底源同表消费）。
+ *  null＝只落事实轨不点灯（training_prep 按内核原文名落事实；candidate_build 落
+ *  candidate——两键均不在段序闭包读面，闭包语义不动）。 */
+export const SEGMENT_FACT_BY_KERNEL_STAGE: Readonly<Record<string, string | null>> = {
+  register: "register",
+  label_qc: "label_qc",
+  experiment_setup: "experiment_config",
+  candidate_build: "candidate",
+  publish: "publish",
+  family_split: "split",
+  admission: "admission",
+  training_prep: null,
+};
+
 /** 段事实文件路径（run 目录 webui/segments.json）。 */
 export const segmentsFactPathOf = (runDir: string): string => join(runDir, "webui", "segments.json");
 
@@ -57,4 +72,28 @@ export const appendSegmentFact = (runDir: string, segment: string, source: strin
   const dir = join(runDir, "webui");
   mkdirSync(dir, { recursive: true });
   writeFileSync(segmentsFactPathOf(runDir), `${JSON.stringify(facts, null, 1)}\n`, "utf8");
+};
+
+/** D3/D4——段兜底源②：内核段摘要扫描（`stage-<内核段>.summary.json`，内核直跑 CLI/
+ *  walkthrough 的完成事实落点——非工具路径不写 webui/segments.json，摘要即唯一在盘事实）。
+ *  采纳判据（沿 E10b 双对账）：顶层 `run_id`＝本 run ∧ `stage`＝文件名段名 ∧ `exit_code`=0；
+ *  陈旧件/他 run 件/坏 JSON/拒绝态一律不采纳。映射经 SEGMENT_FACT_BY_KERNEL_STAGE 单源，
+ *  null（不点灯）与非段序键（training_prep/candidate）如实分流。 */
+export const stageSummarySegmentFacts = (runDir: string, runId: string): Set<string> => {
+  const out = new Set<string>();
+  for (const kernelStage of Object.keys(SEGMENT_FACT_BY_KERNEL_STAGE)) {
+    let doc: unknown;
+    try {
+      doc = JSON.parse(readFileSync(join(runDir, `stage-${kernelStage}.summary.json`), "utf8")) as unknown;
+    } catch {
+      continue; // 摘要缺席/坏 JSON＝该段无此源（不猜）
+    }
+    if (doc === null || typeof doc !== "object") continue;
+    const row = doc as Record<string, unknown>;
+    if (row["run_id"] !== runId || row["stage"] !== kernelStage) continue;
+    if (row["exit_code"] !== 0) continue;
+    const mapped = SEGMENT_FACT_BY_KERNEL_STAGE[kernelStage];
+    if (typeof mapped === "string" && mapped !== "") out.add(mapped);
+  }
+  return out;
 };

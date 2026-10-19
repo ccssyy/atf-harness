@@ -10,13 +10,13 @@
  * 进程确定性消失（tmux 取证面在且本 run 无命中）∧ 无完成锚 → 段显式 failed；
  * 取证面缺席不猜（pending）。S3 前缀闭包语义不动（done 恒为前缀）。
  */
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync, existsSync, readdirSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { enumerateRunEntries, scanRuns, scanRunDir, scanRunDirAt, type ScanLiveness } from "../../packages/extensions/atf-ui/src/server.js";
 import { buildMonitorSnapshot } from "../../packages/extensions/atf-ui/src/snapshot.js";
-import { writeProgress } from "../../src/core/workspace/runFacts.js";
+import { writeProgress, appendBinding } from "../../src/core/workspace/runFacts.js";
 import { appendSegmentFact } from "../../src/core/workspace/segmentFacts.js";
 
 const tempRoots: string[] = [];
@@ -228,5 +228,120 @@ describe("A2 投影面——adapter 白名单＋摘要化", () => {
     const monitor = buildMonitorSnapshot(scanRuns(root, undefined, [{ path: regws, title: "注册甲" }]), { offline: true });
     expect(JSON.stringify(monitor.runs)).not.toContain("reg-ws-root-7f3a");
     expect(JSON.stringify(monitor.runs)).toContain("注册甲");
+  });
+});
+
+/** D3/D4——内核段摘要种子（顶层 run_id/stage/exit_code 三键；对账字段可覆写）。 */
+const seedStageSummary = (
+  dir: string,
+  runId: string,
+  stage: string,
+  exitCode: number,
+  opts?: { runIdOverride?: string; stageOverride?: string },
+): void => {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, `stage-${stage}.summary.json`),
+    `${JSON.stringify({ run_id: opts?.runIdOverride ?? runId, stage: opts?.stageOverride ?? stage, exit_code: exitCode, mode: "stage" })}\n`,
+    "utf8",
+  );
+};
+
+describe("D3/D4——状态面以盘上事实为准（段摘要兜底源＋workspace 归属＋trainer_log 活跃＋state_reason）", () => {
+  it("①只有 stage summary 无 segments → 段 done（exit 0 映射单源；family_split→split／experiment_setup→experiment_config；training/evaluate 无映射不点灯）", () => {
+    const root = tempRoot();
+    const dir = join(root, "k-direct");
+    // 内核直跑形态：七段 summary 在 run 顶层，无 webui/（无 segments.json/binding.json）
+    for (const stage of ["register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission"]) {
+      seedStageSummary(dir, "k-direct", stage, 0);
+    }
+    const scan = scanRunDirAt(dir, "k-direct");
+    expect(scan.segments.register).toBe(true);
+    expect(scan.segments.label_qc).toBe(true);
+    expect(scan.segments.experiment_config).toBe(true);
+    expect(scan.segments.publish).toBe(true);
+    expect(scan.segments.split).toBe(true);
+    expect(scan.segments.admission).toBe(true);
+    expect(scan.segments.candidate).toBe(true); // candidate_build→candidate 键（非段序闭包面）
+    expect(scan.segments.training).toBe(false); // 无内核段映射至 training/evaluate——完成语义不动
+    expect(scan.segments.evaluate).toBe(false);
+  });
+
+  it("②只有 segments.json → done（事实轨源独立成立；无 summary 无锚）", () => {
+    const root = tempRoot();
+    const dir = join(root, "tool-path");
+    seedRun(dir, ["prep/placeholder"]); // 收录标记非段锚
+    appendSegmentFact(dir, "register", "atf_admit_data");
+    const scan = scanRunDirAt(dir, "tool-path");
+    expect(scan.segments.register).toBe(true);
+  });
+
+  it("③陈旧 summary 不采纳：run_id 不符／exit≠0／stage 键对账不符三态", () => {
+    const root = tempRoot();
+    const dir = join(root, "k-stale");
+    seedStageSummary(dir, "k-stale", "register", 0, { runIdOverride: "OTHER-RUN" });
+    seedStageSummary(dir, "k-stale", "label_qc", 2);
+    seedStageSummary(dir, "k-stale", "publish", 0, { stageOverride: "family_split" });
+    const scan = scanRunDirAt(dir, "k-stale");
+    expect(scan.segments.register).toBe(false);
+    expect(scan.segments.label_qc).toBe(false);
+    expect(scan.segments.publish).toBe(false);
+  });
+
+  it("④桶形态 workspace 正确（桶名直取；source=bucket）", () => {
+    const root = tempRoot();
+    seedRun(join(root, "ws-d3", "run-b1"));
+    const runs = scanRuns(root);
+    expect(runs[0]?.workspace).toBe("ws-d3");
+    expect(runs[0]?.workspace_source).toBe("bucket");
+  });
+
+  it("⑤平铺无 binding → workspace null 但渲染可见；有 binding → 注册表 sessionIds 反查归属", () => {
+    const root = tempRoot();
+    seedRun(join(root, "plain-no-bind"));
+    const regws = tempRoot();
+    seedRun(join(root, "flat-bound"));
+    appendBinding(join(root, "flat-bound"), "session-d3-xyz");
+    const scans = scanRuns(root, undefined, [{ path: regws, title: "ws-by-session", sessionIds: ["session-d3-xyz"] }]);
+    const byId = new Map(scans.map((r) => [r.run_id, r]));
+    expect(byId.get("plain-no-bind")?.workspace).toBeNull();
+    expect(byId.get("flat-bound")?.workspace).toBe("ws-by-session");
+    expect(byId.get("flat-bound")?.workspace_source).toBe("registry");
+    // 渲染侧兜底：workspace null 的 run 仍在 monitor 快照内可见（不依赖 bound_sessions）
+    const monitor = buildMonitorSnapshot(scans, { offline: true });
+    expect(monitor.runs.some((r) => r.run_id === "plain-no-bind")).toBe(true);
+  });
+
+  it("⑥trainer_log 活跃证据 → training.active=true（段不入前缀）；过窗转 false", () => {
+    const root = tempRoot();
+    const dir = join(root, "t-live");
+    seedRun(dir, ["launch/launch_manifest.json"]);
+    mkdirSync(join(dir, "training"), { recursive: true });
+    writeFileSync(join(dir, "training", "trainer_log.jsonl"), `${JSON.stringify({ current_steps: 3, total_steps: 100, percentage: 3 })}\n`, "utf8");
+    const live = scanRunDirAt(dir, "t-live", undefined);
+    expect(live.training.active).toBe(true);
+    expect(live.segments.training).toBe(false); // 活跃期证据不入前缀（S3）
+    const stale = new Date(Date.now() - 3_600_000);
+    utimesSync(join(dir, "training", "trainer_log.jsonl"), stale, stale);
+    const dead = scanRunDirAt(dir, "t-live", undefined);
+    expect(dead.training.active).toBe(false);
+  });
+
+  it("state 面：裸 run（无生命周期锚）→ pending＋state_reason=no_on_disk_evidence；级联命中 → 原值＋reason null；快照 additive 透传", () => {
+    const root = tempRoot();
+    const bare = join(root, "bare-run");
+    seedRun(bare, ["prep/placeholder"]);
+    const bareScan = scanRunDirAt(bare, "bare-run");
+    expect(bareScan.state).toBe("pending");
+    expect(bareScan.state_reason).toBe("no_on_disk_evidence");
+    const reg = join(root, "reg-run");
+    seedRun(reg, ["registration.json"]);
+    const regScan = scanRunDirAt(reg, "reg-run");
+    expect(regScan.state).toBe("registered");
+    expect(regScan.state_reason).toBeNull();
+    const monitor = buildMonitorSnapshot([bareScan, regScan], { offline: true });
+    const byId = new Map(monitor.runs.map((r) => [r.run_id, r]));
+    expect(byId.get("bare-run")).toMatchObject({ state: "pending", state_reason: "no_on_disk_evidence" });
+    expect(byId.get("reg-run")).toMatchObject({ state: "registered", state_reason: null });
   });
 });

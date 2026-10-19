@@ -40,7 +40,7 @@ const deriveRunEntry = (runDir: string, runId: string, workspace: string | null)
         ? "candidate_built"
         : has("registration.json") || has("dataset")
           ? "registered"
-          : "unknown";
+          : "pending";
   const artifacts = ["session.jsonl", "contract-candidate.json", "launch/train.sh", "webui/config-snapshot.json"].filter((rel) => has(rel));
   return { run_id: runId, workspace, state, artifacts };
 };

@@ -25,7 +25,7 @@ import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
 import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/workspace/oomFallback.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
-import { hasSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
+import { hasSegmentFact, stageSummarySegmentFacts } from "../../../../src/core/workspace/segmentFacts.js";
 import { buildEvalNoticeFaces, type EvalNoticeFace, type EvalProgressFace } from "../../../../src/core/workspace/evalProgressTrack.js";
 import {
   applyTrainNoticeTransitions, readTrainNoticeState, trainObservedStateOf,
@@ -125,6 +125,8 @@ export interface RunScan {
    *  前缀/实验树枚举）。additive 投影键（adapter 白名单同批）。 */
   workspace_source: "bucket" | "registry";
   state: string;
+  /** D3/D4：pending 态指因（additive——单码白名单 no_on_disk_evidence；级联命中＝null）。 */
+  state_reason: string | null;
   artifacts: string[];
   segments: Record<string, boolean | string>;
   training: { active: boolean; loss: unknown; pending_confirm: unknown; progress?: RunProgress | null };
@@ -471,6 +473,19 @@ const lossSeriesFresh = (dir: string, liveness: ScanLiveness | undefined): boole
   }
 };
 
+/** D3/D4：trainer_log mtime 新鲜（步进写入活性——trainProbe 假死判据同源证据；
+ *  stat 失败按不新鲜。内核直跑训练无 loss-series/progress（atf-ui 工具面产物），
+ *  trainer_log 是其唯一在盘活性面）。 */
+const trainerLogFresh = (dir: string, liveness: ScanLiveness | undefined): boolean => {
+  try {
+    const windowMs = liveness?.freshWindowMs ?? TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
+    const now = liveness?.nowMs ?? Date.now();
+    return now - statSync(join(dir, "training", "trainer_log.jsonl")).mtimeMs <= windowMs;
+  } catch {
+    return false;
+  }
+};
+
 /** 批㊶-M 锚兼容：逐轮目录 eval/<round>/metrics_summary.json 扫描（任一轮在场即 true）。
  *  批㊶-S3 S-B2 锚布局补全：产品现役轮产物在 eval/<round>/orch/eval/metrics_summary.json
  *  （scanEvalRounds/evalStatus 同位）——旧锚只认轮根位，真实布局轮的评估段被误判 pending。 */
@@ -500,9 +515,9 @@ const trainingActiveLive = (dir: string, runId: string, liveness: ScanLiveness |
   );
   if (liveness?.trainingEvidence !== undefined) {
     if (liveness.trainingEvidence[runId] === true) return true;
-    return lossSeriesFresh(dir, liveness) || progressActive;
+    return lossSeriesFresh(dir, liveness) || progressActive || trainerLogFresh(dir, liveness);
   }
-  return lossSeriesFresh(dir, liveness) || progressActive;
+  return lossSeriesFresh(dir, liveness) || progressActive || trainerLogFresh(dir, liveness);
 };
 
 /** 单 run 目录扫描（root＋runId 双形态兼容：分桶调用方传 dirname(runDir) 作 root 或以
@@ -516,9 +531,12 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness,
 /** A2 案 a：绝对目录扫描变体（注册工作区实验树 run——runsRoot 之外，dir 由枚举面给定）。 */
 export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness, workspace: string | null = null, workspaceSource: "bucket" | "registry" = "bucket"): RunScan {
   const has = (rel: string): boolean => existsSync(join(dir, rel));
-  // 批㊶-M M-3：段事实轨优先（webui/segments.json 有记录的段直接 done），启发式锚降级兜底
+  // 批㊶-M M-3＋D3/D4：段完成事实三源——①webui/segments.json（工具路径写）→
+  // ②stage-<内核段>.summary.json exit 0（内核直跑落盘——run_id/stage 双对账，E10b 同款）
+  // → ③启发式文件锚（降级兜底）。三源 OR；映射 SEGMENT_FACT_BY_KERNEL_STAGE 单源。
+  const summaryFacts = stageSummarySegmentFacts(dir, runId);
   const segmentDone = (segment: string, heuristicFallback: boolean): boolean =>
-    hasSegmentFact(dir, segment) || heuristicFallback;
+    hasSegmentFact(dir, segment) || summaryFacts.has(segment) || heuristicFallback;
   const readJson = (rel: string): unknown => {
     try {
       return JSON.parse(readFileSync(join(dir, rel), "utf8")) as unknown;
@@ -542,11 +560,12 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
     evaluate: has("eval/metrics_summary.json") || evalRoundAnchored(dir),
   };
   // 事实轨并入证据图（M-3 契约「有记录的段直接 done」——experiment_config/publish 等段
-  // 的 rawDone 表达式原本只读锚，事实在位而锚布局不符的历史 run 会丢证据）；training 段
-  // 事实语义＝start 放行（非完成）、evaluate 段事实＝编排启动（非完成），两段不入事实。
+  // 的 rawDone 表达式原本只读锚，事实在位而锚布局不符的历史 run 会丢证据）；D3/D4：段
+  // 摘要兜底源同门并入（三源 OR）。training 段事实语义＝start 放行（非完成）、evaluate
+  // 段事实＝编排启动（非完成），两段不入事实（摘要面同守——无内核段映射至两键）。
   for (const key of SEGMENT_ORDER_KEYS) {
     if (key === "training" || key === "evaluate") continue;
-    if (hasSegmentFact(dir, key)) rawDone[key] = true;
+    if (hasSegmentFact(dir, key) || summaryFacts.has(key)) rawDone[key] = true;
   }
   // 批㊶-S3 S-B2 根因修复②（owner 裁定：段显示态必须保序——done 恒为前缀，后段完成蕴含
   // 前段发生；间隔完成/后成前未成是不合逻辑状态，不得显示）。证据图＝事实轨（segments.json
@@ -598,6 +617,9 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
     workspace,
     // A2 案 a：标注来源（additive——bucket＝现形态缺省；registry＝注册表前缀/实验树枚举）
     workspace_source: workspaceSource,
+    // D3/D4：状态面禁 unknown 静默——生命周期级联命中＝既有语义（config_confirmed/
+    // launch_ready/candidate_built/registered）；全不中＝pending＋state_reason 单码
+    // 白名单（no_on_disk_evidence——盘上无任何可识别生命周期证据，如实指因不猜）。
     state: has("webui/config-snapshot.json")
       ? "config_confirmed"
       : has("launch/train.sh")
@@ -606,7 +628,11 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
           ? "candidate_built"
           : has("registration.json") || has("dataset")
             ? "registered"
-            : "unknown",
+            : "pending",
+    state_reason:
+      has("webui/config-snapshot.json") || has("launch/train.sh") || has("contract-candidate.json") || has("registration.json") || has("dataset")
+        ? null
+        : "no_on_disk_evidence",
     artifacts: [
       "session.jsonl",
       "contract-candidate.json",
@@ -628,7 +654,7 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
         : has("webui/pending-confirm.json")
           ? "active"
           : false,
-      candidate: has("contract-candidate.json"),
+      candidate: has("contract-candidate.json") || summaryFacts.has("candidate"),
       publish: doneMap["publish"] === true,
       admission: doneMap["admission"] === true,
       // A3 训练段三态：done＝前缀闭包（S3 语义不动）；failed＝启动证据在场 ∧ 无完成锚 ∧
@@ -647,7 +673,8 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
       // adapter_model.safetensors／all_results.json 三选一）&&（tmux 在场 || 会族前缀
       // atf-* 任一会话 || training-logs mtime 新鲜 || loss-series mtime 新鲜；窗口 env 可配）。
       // A3：启动初帧（progress fresh）同为锚等价——启动早期无 loss-series 也有确定性活跃。
-      active: (trainingAnchorPresent(dir) || progressActiveNow) && trainingActiveLive(dir, runId, liveness),
+      // D3/D4：trainer_log 在场且新鲜＝锚等价＋活跃证据（内核直跑训练的唯一在盘活性面）。
+      active: (trainingAnchorPresent(dir) || progressActiveNow || trainerLogFresh(dir, liveness)) && trainingActiveLive(dir, runId, liveness),
       // 批㉛段3.1：live loss-series 缺席 → 最新 checkpoint trainer_state.json 历史回退
       loss: has("training/loss-series.json") ? readJson(join("training", "loss-series.json")) : trainerHistoryLoss(dir),
       pending_confirm: readJson(join("webui", "pending-confirm.json")),
@@ -842,10 +869,13 @@ export const looksLikeRun = (dir: string): boolean =>
   RUN_MARKER_RELS.some((rel) => existsSync(join(dir, rel)));
 
 /** A2 案 a：注册工作区枚举输入（registry records 的只读投影——path/title 两键；
- *  调用方自 listRegistryRecords(resolveDshHome()) 过滤 exists===true 后映射）。 */
+ *  调用方自 listRegistryRecords(resolveDshHome()) 过滤 exists===true 后映射）。
+ *  D3/D4：sessionIds 可选键——平铺 run 的 binding.json 反查归属输入。 */
 export interface RegistryWorkspaceSeed {
   path: string;
   title: string;
+  /** 该工作区会话集（records[].sessionIds 直通；缺席＝调用方不供反查面）。 */
+  sessionIds?: readonly string[];
 }
 
 /** 注册工作区根的 realpath（目录缺失/权限失败/非目录＝null——fail-open 静默跳过，不报错弹条）。 */
@@ -924,7 +954,24 @@ export const enumerateRunEntries = (runsRoot: string, registryWorkspaces?: Reado
         return false;
       }
     });
-    entries.push({ runId: name, dir, workspace: wsHit?.title ?? null, workspaceSource: wsHit !== undefined ? "registry" : "bucket" });
+    // D3/D4：前缀未命中 → binding.json 反查（注册表工作区 sessionIds ∩ run 绑定会话——
+    //  会话是工作区成员，run 由该会话操作即归属该工作区；都无 → null（渲染侧同树可见，
+    //  不依赖 bound_sessions）。首个命中记录定归属（注册表序确定——不猜多数派）。
+    let workspace: string | null = wsHit?.title ?? null;
+    let workspaceSource: "bucket" | "registry" = wsHit !== undefined ? "registry" : "bucket";
+    if (workspace === null) {
+      const boundSessions = readBindings(dir).map((binding) => binding.session_id);
+      if (boundSessions.length > 0) {
+        const bySession = (registryWorkspaces ?? []).find((ws) =>
+          (ws.sessionIds ?? []).some((id) => boundSessions.includes(id)),
+        );
+        if (bySession !== undefined) {
+          workspace = bySession.title;
+          workspaceSource = "registry";
+        }
+      }
+    }
+    entries.push({ runId: name, dir, workspace, workspaceSource });
   }
   for (const entry of bucketedRunEntries(runsRoot)) {
     if (flatRuns.has(entry.workspace) || entry.workspace === OUT_DIR || entry.runId === OUT_DIR) continue;
@@ -1053,7 +1100,7 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     // 重启进视野）——本处只读消费，零写入。
     const registryWorkspaces = listRegistryRecords(resolveDshHome())
       .filter((record) => record.exists)
-      .map((record) => ({ path: record.path, title: record.title }));
+      .map((record) => ({ path: record.path, title: record.title, sessionIds: record.sessionIds }));
     const runEntries = enumerateRunEntries(resolved.runsRoot, registryWorkspaces);
     const trainingEvidence: Record<string, boolean> = {};
     try {
