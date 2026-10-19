@@ -763,8 +763,8 @@ atf_cli:
 # （mock 已回 2）"的表述作废】，真实对端以内核批次二实现为准。
 # ---------------------------------------------------------------------
 atf_upstream:
-  tag: v0.7.20b0
-  commit_sha: 09ae99c4b8b746d4b65d67ad2fc400550891cd46
+  tag: v0.7.21b0
+  commit_sha: d9c3295d93718f8d73aa06a0d37cdffa0e8f1c23
   pinned_at: "2026-10-19"
-  baseline: 内核方法面 14／harness 工具面 9＋管线段模式入口（v0.7.20b0＝09ae99c：坐标量化工具线〔E15a a007961：无生产者字段显式声明与闸门——field_projection.unproduced_targets {field_id,reason,declared_by,declared_at}＋field_projection_unproduced_target(_unknown) 两码＋结构性排除；E1a d505ba5：坐标量化工具本体 tools/quantize_annotations.py——--annotations/--out/--mode round|floor|ceil／--allow-degenerate／--dry-run／--out-json，退出码 0／2／3，QuantizeSummary/v1〕）；re-pin 2026-10-19（E1/E15b 窗三件头，worktree 077f548→09ae99c 前移不丢内容；实例 env ATF_SKILLS_AUTO_INSTALL=0 既有在位——量化 CLI 子进程 env 再钉）；pin＝tag v0.7.20b0 commit 09ae99c（禁追新）
+  baseline: 内核方法面 14／harness 工具面 9＋管线段模式入口（v0.7.21b0＝d9c3295：E10 版式聚类生效线〔E10a 2eed2c2：--auto-style-cluster{auto,on,off}三态检测与策略接线＋style_cluster_state 纯函数＋style_cluster_state_not_clustered/ambiguous 两码＋证据五键；E10e-1 a313f8c：顺序恒定决策矩阵＋off 矛盾拒绝新码 style_cluster_declared_but_absent＋三态拒绝 user_message 业务文案；E10e-2 efdfac2：按簇真分层＋no-feature 双桶＋split_authority 权威切换＋register 不预写 split 列；E10f 7be646c：排除页泄漏口径/守恒分母收口＋全小簇 split_partition_empty:test 转 user_message＋--allow-small-cluster-test 显式留测通道（small_cluster_policy=allow_test）〕）；re-pin 2026-10-19（E10 生效窗，worktree 09ae99c→d9c3295 前移不丢内容；实例 env ATF_SKILLS_AUTO_INSTALL=0 既有在位）；pin＝tag v0.7.21b0 commit d9c3295（禁追新）
   contract_version: 1
