@@ -1215,11 +1215,16 @@ export interface EvalReportSummary {
   metrics: string[];
 }
 
-export const summarizeEvalPrelaunchReport = (reportText: string): EvalReportSummary => {
+export const summarizeEvalPrelaunchReport = (reportText: string, runId?: string): EvalReportSummary => {
   const lines = reportText.split("\n");
-  const headline = (lines.find((l) => l.startsWith("# ")) ?? "推理服务接入确认报告").replace(/^#\s+/, "");
-  // metrics：生效服务参数表的键值行（| 参数 | 值 | 来源 | 表——取关键键，值原样不截断）
-  const metricKeys = ["eval_env", "绑卡", "端口/TP", "adapters", "max_model_len", "request_defaults", "环境来源"];
+  // D14：卡面 headline 固定「评估放行 — <run_id>」（报告自身 H1 不再上卡）；runId 缺席＝纯函数旧形态
+  const headline = runId !== undefined
+    ? `评估放行 — ${runId}`
+    : (lines.find((l) => l.startsWith("# ")) ?? "推理服务接入确认报告").replace(/^#\s+/, "");
+  // metrics：生效服务参数表的键值行（| 参数 | 值 | 来源 | 表——取关键键，值原样不截断）。
+  // D14 修复：精确键匹配（键前缀匹配曾把「绑卡差异」一并算成「绑卡」→卡面两行重复）；
+  // 键闭集＝pin 生成面 build_service_prelaunch_report 实际产出的整键（端口/TP/gpu_mem_util 等含全段）
+  const metricKeys = ["环境来源", "eval_env", "绑卡", "端口/TP/gpu_mem_util", "max_model_len/max_num_seqs/batched_tokens", "adapters", "request_defaults"];
   const metrics: string[] = [];
   let inParams = false;
   for (const line of lines) {
@@ -1229,10 +1234,189 @@ export const summarizeEvalPrelaunchReport = (reportText: string): EvalReportSumm
     if (cells.length < 2) continue;
     const key = cells[0] ?? "";
     if (key === "") continue;
-    const hit = metricKeys.find((k) => key.startsWith(k));
+    const hit = metricKeys.find((k) => key === k);
     if (hit !== undefined) metrics.push(`${key}＝${cells[1] ?? ""}`);
   }
   return { headline, metrics };
+};
+
+// ── 批D14：评测参数继承（field_config 缺省自动继承训练＋prompt_mode 继承＋评测口径投影）──
+
+/** iteration-config 双形态候选（与 checkStartModelPath 同面——prep/ 平铺与目录两形态）。 */
+export const iterationConfigCandidates = (runDir: string): string[] => [
+  join(runDir, "prep", "iteration-config.json"),
+  join(runDir, "prep", "iteration-config", "iteration-config.json"),
+];
+
+/** run 记录的字段配置指纹（dataset.digest_provenance.field_config_sha256；可读候选首个权威；
+ *  无声明/损坏/缺席一律 null——不可核对即 unverified 语义，不猜）。 */
+export const recordedFieldConfigSha = (runDir: string): string | null => {
+  for (const candidate of iterationConfigCandidates(runDir)) {
+    try {
+      if (!existsSync(candidate)) continue;
+      const iter = JSON.parse(readFileSync(candidate, "utf8")) as { dataset?: { digest_provenance?: { field_config_sha256?: unknown } } };
+      const sha = iter.dataset?.digest_provenance?.field_config_sha256;
+      return typeof sha === "string" && /^[0-9a-f]{64}$/.test(sha) ? sha : null;
+    } catch {
+      return null; // 损坏＝无指纹（fail-closed：不可核对）
+    }
+  }
+  return null;
+};
+
+/** D14——field_config 解析结果（成功＝路径＋来源＋指纹；失败＝三码之一＋下一步指引）。 */
+export type EvalFieldConfigResolution =
+  | {
+      ok: true;
+      path: string;
+      source: "explicit" | "run_recorded";
+      sha256: string;
+      /** 显式传入且与训练指纹不一致——只告警不阻断（用户显式覆盖，产品裁定）。 */
+      warning?: "field_config_explicit_drift";
+      recorded_sha256?: string;
+    }
+  | {
+      ok: false;
+      error: "eval_field_config_unresolved" | "eval_field_config_drift" | "eval_field_config_unverified";
+      path: string;
+      note: string;
+    };
+
+/** D14——field_config 解析（纯函数）：显式传入→直接用（漂移仅告警）；缺省→
+ *  <runDir>/experiment-setup/field-config.json；一律与 iteration-config 的训练指纹比对。
+ *  失败 fail-closed：文件缺失→unresolved；指纹不一致→drift；run 无指纹→unverified（缺省路径时）。 */
+export const resolveEvalFieldConfig = (runDir: string, explicit?: string): EvalFieldConfigResolution => {
+  const isExplicit = explicit !== undefined && explicit.trim() !== "";
+  const path = isExplicit ? (explicit as string) : join(runDir, "experiment-setup", "field-config.json");
+  if (!existsSync(path)) {
+    return {
+      ok: false, error: "eval_field_config_unresolved", path,
+      note: isExplicit
+        ? "显式传入的 field_config 路径不存在——核对路径后重推"
+        : "缺省解析失败：run 目录无 experiment-setup/field-config.json——显式传 field_config（PromptFieldConfig/v1 路径）后重推",
+    };
+  }
+  let sha256: string;
+  try {
+    sha256 = createHash("sha256").update(readFileSync(path)).digest("hex");
+  } catch {
+    return { ok: false, error: "eval_field_config_unresolved", path, note: "field_config 文件不可读——核对权限/完整性后重推（或显式传入有效路径）" };
+  }
+  const recorded = recordedFieldConfigSha(runDir);
+  if (recorded === null) {
+    if (isExplicit) return { ok: true, path, source: "explicit", sha256 }; // 无指纹可核对——显式即权威
+    return {
+      ok: false, error: "eval_field_config_unverified", path,
+      note: "run 未记录字段配置指纹（iteration-config 无 dataset.digest_provenance.field_config_sha256）——显式传 field_config 后重推",
+    };
+  }
+  if (recorded !== sha256) {
+    if (isExplicit) return { ok: true, path, source: "explicit", sha256, warning: "field_config_explicit_drift", recorded_sha256: recorded };
+    return {
+      ok: false, error: "eval_field_config_drift", path,
+      note: "字段配置指纹与训练记录不一致（experiment-setup/field-config.json 可能被改动）——先确认训练配置是否被改过；确认要用当前文件则显式传入 field_config 覆盖后重推",
+    };
+  }
+  return { ok: true, path, source: isExplicit ? "explicit" : "run_recorded", sha256 };
+};
+
+/** D14——prompt_mode 解析结果（mode＋来源：显式/训练声明/训练缺省兜底）。 */
+export interface EvalPromptModeResolution {
+  mode: "mode0" | "mode1";
+  source: "explicit" | "training_declared" | "training_default";
+}
+
+/** D14——prompt_mode 解析（纯函数）：显式传入→explicit；缺省继承训练声明
+ *  （iteration-config 的 dataset.prompt_mode＞顶层 prompt_mode；非 mode0/mode1 值视同无声明）；
+ *  无声明→mode0（training_default）。 */
+export const resolveEvalPromptMode = (runDir: string, explicit?: string): EvalPromptModeResolution => {
+  if (explicit === "mode0" || explicit === "mode1") return { mode: explicit, source: "explicit" };
+  for (const candidate of iterationConfigCandidates(runDir)) {
+    try {
+      if (!existsSync(candidate)) continue;
+      const iter = JSON.parse(readFileSync(candidate, "utf8")) as Record<string, unknown>;
+      const dataset = iter["dataset"] as Record<string, unknown> | undefined;
+      for (const declared of [dataset?.["prompt_mode"], iter["prompt_mode"]]) {
+        if (declared === "mode0" || declared === "mode1") return { mode: declared, source: "training_declared" };
+      }
+      return { mode: "mode0", source: "training_default" }; // 可读配置无声明——兜底 mode0（该 run 配置即权威）
+    } catch {
+      continue; // 损坏——试第二候选；皆不可读＝无声明兜底
+    }
+  }
+  return { mode: "mode0", source: "training_default" };
+};
+
+/** D14——评测口径（卡面信息行＋返回体报告面共形）。null＝该面不可得（显示行不阻断，不造数）。 */
+export interface EvalCaliber {
+  prompt_mode: "mode0" | "mode1";
+  prompt_mode_source: EvalPromptModeResolution["source"];
+  /** 参与评分的训练字段数（field_config.fields − training_excluded_fields——与内核 E16 计分口径同源）。 */
+  training_fields: number | null;
+  /** GT 覆盖：评估标注中出现且属训练字段集的字段数。 */
+  gt_covered_fields: number | null;
+  /** GT 外字段（评估标注有、训练没要——只进返回体报告面，不上卡）。 */
+  gt_fields_out_of_scope: string[];
+}
+
+/** D14——评测口径计算（纯函数）：field_config（训练字段集）＋eval_labels.jsonl（GT 字段面）。 */
+export const computeEvalCaliber = (fieldConfigPath: string, evalAssetsDir: string, promptMode: EvalPromptModeResolution): EvalCaliber => {
+  let score: Set<string> | null = null;
+  try {
+    const fc = JSON.parse(readFileSync(fieldConfigPath, "utf8")) as { fields?: unknown; training_excluded_fields?: unknown };
+    const fieldIds = Array.isArray(fc.fields)
+      ? fc.fields.map((f) => (f !== null && typeof f === "object" && typeof (f as Record<string, unknown>)["field_id"] === "string" ? (f as Record<string, string>)["field_id"] : null)).filter((v): v is string => v !== null)
+      : [];
+    const excluded = Array.isArray(fc.training_excluded_fields) ? fc.training_excluded_fields.filter((v): v is string => typeof v === "string") : [];
+    score = new Set(fieldIds.filter((f) => !excluded.includes(f)));
+  } catch { /* field_config 不可解析＝无口径数字（显示行不阻断——runner 侧自有 fail-closed） */ }
+  let gt: Set<string> | null = null;
+  try {
+    gt = new Set<string>();
+    for (const line of readFileSync(join(evalAssetsDir, "eval_labels.jsonl"), "utf8").split("\n")) {
+      if (line.trim() === "") continue;
+      try {
+        const labels = (JSON.parse(line) as { labels?: unknown }).labels;
+        if (labels !== null && typeof labels === "object") for (const key of Object.keys(labels as Record<string, unknown>)) gt.add(key);
+      } catch { /* 坏行跳过（显示行不阻断——runner 对行完整性自有 fail-closed） */ }
+    }
+  } catch { /* 缺/不可读＝无 GT 面（在场性已由前置检查保证，此处为显示行的容错面） */ }
+  return {
+    prompt_mode: promptMode.mode,
+    prompt_mode_source: promptMode.source,
+    training_fields: score === null ? null : score.size,
+    gt_covered_fields: score !== null && gt !== null ? [...gt].filter((f) => score.has(f)).length : null,
+    gt_fields_out_of_scope: score !== null && gt !== null ? [...gt].filter((f) => !score.has(f)).sort() : [],
+  };
+};
+
+/** D14——口径行文案（卡面信息行，非确认项）：「评测口径：抽取 mode0（继承训练）· 训练字段 25 · GT 覆盖 8」。
+ *  training_fields 不可得＝null（整行不上卡，不造数）。 */
+export const formatEvalCaliberLine = (caliber: EvalCaliber): string | null => {
+  if (caliber.training_fields === null) return null;
+  const head = `抽取 ${caliber.prompt_mode}（${caliber.prompt_mode_source === "explicit" ? "显式指定" : "继承训练"}）· 训练字段 ${String(caliber.training_fields)}`;
+  return caliber.gt_covered_fields === null
+    ? `评测口径：${head}`
+    : `评测口径：${head} · GT 覆盖 ${String(caliber.gt_covered_fields)}`;
+};
+
+/** D14——cost 行占卡文案（TP 单源：service_config.tensor_parallel_size＞manifest argv
+ *  --tensor-parallel-size；两处皆不可得＝不带卡数，不猜）。 */
+export const evalGpuCostText = (serviceConfigPath: string, manifest: Record<string, unknown>): string => {
+  let tp: number | null = null;
+  try {
+    const parsed = JSON.parse(readFileSync(serviceConfigPath, "utf8")) as Record<string, unknown>;
+    const value = parsed["tensor_parallel_size"] ?? parsed["tensor-parallel-size"];
+    if (typeof value === "number" && Number.isInteger(value) && value > 0) tp = value;
+  } catch { /* service_config 已过在场检查——不可读时走 argv 面 */ }
+  if (tp === null && Array.isArray(manifest["argv"])) {
+    const argv = manifest["argv"] as unknown[];
+    const idx = argv.indexOf("--tensor-parallel-size");
+    const raw = idx >= 0 ? argv[idx + 1] : undefined;
+    const n = typeof raw === "string" ? Number(raw) : Number.NaN;
+    if (Number.isInteger(n) && n > 0) tp = n;
+  }
+  return tp === null ? "占用 GPU，直到服务停止" : `占用 ${String(tp)} 张 GPU，直到服务停止`;
 };
 
 /** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
@@ -1246,7 +1430,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       run_id: { type: "string", required: true, description: "run 标识" },
       adapter_path: { type: "string", required: true, description: "adapter checkpoint 目录绝对路径——固定编号（checkpoint-<数字>），拒 latest/符号链接/缺省猜测（SKILL.md 环节④条款）" },
       eval_assets_dir: { type: "string", required: true, description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl）" },
-      field_config: { type: "string", required: true, description: "PromptFieldConfig/v1 JSON 路径（评估 prompt 与训练同渲染器）" },
+      field_config: { type: "string", description: "PromptFieldConfig/v1 JSON 路径（可选——缺省自动继承 <runDir>/experiment-setup/field-config.json 并与训练记录指纹核对；显式传入即覆盖，漂移仅告警不阻断）" },
+      prompt_mode: { type: "string", enum: ["mode0", "mode1"], description: "抽取方式（可选——缺省继承训练声明，无声明即 mode0）：mode0＝每页一次、全字段抽取；mode1＝按字段分组、每页×每组，适合字段多/相互干扰时。默认跟训练一致，不要自行切换" },
       service_config: { type: "string", required: true, description: "EvalServiceConfig/v1 JSON 路径（按 SKILL.md 作者声明：port/TP/gpu_memory_utilization/max_model_len/mm 像素对/adapters 挂载表——adapters[].path 即本次 staging 的 adapter 源）" },
       env_profile: { type: "string", required: true, description: "环境档案名（评估环境配置层——确认报告九必报项⑤端口/连接的数据源）" },
       deploy: { type: "string", description: "可选 deploy.local.yaml 路径（显式机器事实，优先于环境档案）" },
@@ -1261,7 +1446,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     presentCall: function(args: { action: string; run_id: string }) {
       return { card: "generic" as const, title: `评估 — ${args.run_id}`, kind: "other" as const }
     },
-    async execute(args: { action: string; run_id: string; adapter_path: string; eval_assets_dir: string; field_config: string; service_config: string; env_profile: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+    async execute(args: { action: string; run_id: string; adapter_path: string; eval_assets_dir: string; field_config?: string; prompt_mode?: string; service_config: string; env_profile: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       const skill = (name: string, script: string): string => join(cfg.kernelDir, "skills", name, "scripts", script);
       const genService = skill("atf-evaluate-checkpoints", "generate_eval_service.py");
       const prelaunch = skill("atf-evaluate-checkpoints", "build_service_prelaunch_report.py");
@@ -1292,6 +1477,19 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       if (!existsSync(join(args.eval_assets_dir, "eval_labels.jsonl")) || !existsSync(join(args.eval_assets_dir, "test_images.json"))) {
         return asToolValue({ started: false, error: "eval_assets_missing", eval_assets_dir: args.eval_assets_dir, note: "test_images.json+eval_labels.jsonl 必备" });
       }
+      // —— D14：评测参数继承（先于一切产物生成——解析失败零编排启动零落盘）——
+      // field_config 缺省自动继承训练（显式传入→覆盖，漂移仅告警）；prompt_mode 缺省继承训练声明。
+      const fieldConfigResolved = resolveEvalFieldConfig(runDir, args.field_config);
+      if (!fieldConfigResolved.ok) {
+        return asToolValue({
+          started: false, error: fieldConfigResolved.error, run_id: args.run_id,
+          ...(fieldConfigResolved.error === "eval_field_config_unresolved" ? { field_config_expected: fieldConfigResolved.path } : {}),
+          note: fieldConfigResolved.note,
+        });
+      }
+      const promptMode = resolveEvalPromptMode(runDir, args.prompt_mode);
+      const caliber = computeEvalCaliber(fieldConfigResolved.path, args.eval_assets_dir, promptMode);
+      const caliberLine = formatEvalCaliberLine(caliber);
       const roundDir = deriveEvalRoundDir(runDir);
       const serviceDir = join(roundDir, "service");
       const deployArgs = args.deploy !== undefined ? ["--deploy", args.deploy] : [];
@@ -1313,7 +1511,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // ② 确认报告（九必报项，产物反生成自 service_manifest）
       const reportPath = join(serviceDir, "service-prelaunch-report.md");
       const reported = await runCapture("python3", [prelaunch, "--service-dir", serviceDir, "--env-profile", args.env_profile, "--out", reportPath,
-        "--field-config", args.field_config, "--prompt-renderer", skill("atf-admit-training-data", "render_prompt.py")], 120_000);
+        "--field-config", fieldConfigResolved.path, "--prompt-renderer", skill("atf-admit-training-data", "render_prompt.py")], 120_000);
       if (reported.code !== 0 || !existsSync(reportPath)) {
         return asToolValue({ started: false, error: "prelaunch_report_failed", eval_round: roundDir, stderr_tail: reported.stderr.slice(-800), note: "确认报告未产出＝EVAL_RELEASE 准入未闭合（SKILL.md 确认制）" });
       }
@@ -1321,21 +1519,24 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 不弱化：九必报项全文落盘可达（路径行），卡面只上 headline/metrics 摘要），
       // Allow once＝确认并落放行账本
       const reportText = readFileSync(reportPath, "utf8");
-      const summary = summarizeEvalPrelaunchReport(reportText);
+      const summary = summarizeEvalPrelaunchReport(reportText, args.run_id);
       // 批㊶-U §五：评估卡改参收集走聊天回复、审批卡落账本（EVAL_RELEASE 账本语义不动）；
-      // E5 模板四行＋确认摘要续行（可调参数＝adapter 编号/评估集绑定/service_config 各项）
+      // E5 模板四行＋确认摘要续行。D14 卡面修复：headline＝评估放行、无参数名/绝对路径、
+      // cost＝占卡实况；新增口径行与字段配置来源行（信息行，不新增确认项）
       const verdict = await requestApproval(ctx, exec, "atf_evaluate",
         buildApprovalReason({
           action: "放行评估服务编排",
           target: `（run ${args.run_id}）`,
           effect: "登记放行账本（config sha256）并启动评估编排",
           reversible: "不可自动回滚（评估产物可人工清理）",
-          cost: "按任务卡",
+          cost: evalGpuCostText(args.service_config, manifest),
         }) + "\n" + [
           `确认摘要：${summary.headline}`,
           ...summary.metrics,
-          `完整报告：${reportPath}`,
-          "可调参数：adapter_path／eval_assets_dir／service_config 各项——如需改参，直接回复要改的项（如 adapter_path=<新路径>）；不改直接回复「按现值确认」",
+          ...(caliberLine !== null ? [caliberLine] : []),
+          `字段配置：${fieldConfigResolved.source === "run_recorded" ? "继承训练记录（run_recorded）" : "显式传入（explicit）"}${fieldConfigResolved.warning !== undefined ? "——与训练记录指纹不一致，按显式覆盖执行" : ""}`,
+          "详细报告已生成（评估轮目录内）",
+          "如需调整评估数据、adapter 或服务参数，直接回复要改的项；不改直接回复「按现值确认」",
         ].join("\n"));
       if (!verdict.ok) return approvalDeniedResult("atf_evaluate", verdict.outcome);
       const recorded = await runCapture("python3", [genService, "--record-eval-release", "--config", args.service_config, "--service-dir", serviceDir, "--note", "atf_evaluate 确认卡放行（九必报项报告已确认）"], 60_000);
@@ -1361,7 +1562,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const port = Number((manifest["request_defaults"] as Record<string, unknown> | undefined)?.["port"] ?? (JSON.parse(readFileSync(args.service_config, "utf8")) as Record<string, unknown>)["port"]);
       const orchDir = join(roundDir, "orch");
       const orchArgs = [orchestration, "--service", serviceDir, "--ckpt", ckptPlanDir, "--out", orchDir,
-        "--eval-runner", runner, "--assets", args.eval_assets_dir, "--field-config", args.field_config,
+        "--eval-runner", runner, "--assets", args.eval_assets_dir, "--field-config", fieldConfigResolved.path,
         "--base-url", `http://127.0.0.1:${port}/v1`, "--env-profile", args.env_profile,
         ...(args.assets_split_manifest !== undefined ? ["--split-manifest", args.assets_split_manifest] : []),
         ...(args.assets_external_confirm === true ? ["--assets-external-confirm"] : [])];
@@ -1379,9 +1580,10 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const { execSync } = await import("node:child_process");
       // 批㊶-ISO E1：编排会话同入命名域（launch 域——pre-kill/new-session 同目标名）；命令走 tmuxCommand
       // 批㊶-P1 S1：编排基名作用域化（run_id 入名——并发 run 各占各的编排会话）
+      // D14：--prompt-mode 单源传解析值（继承训练/显式——不再硬编码 mode0；eval_orchestration.sh 经 "$@" 转发 runner）
       const orchSessionName = resolveLaunchSessionName(evalOrchSessionBase(args.run_id));
       try { execSync(tmuxCommand(`kill-session -t ${orchSessionName} 2>/dev/null`)); } catch { /* 无旧 */ }
-      execSync(tmuxCommand(`new-session -d -s ${orchSessionName} "bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode mode0 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`));
+      execSync(tmuxCommand(`new-session -d -s ${orchSessionName} "bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode ${promptMode.mode} 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`));
       // 批㊶-M M-3 段事实轨：评估编排启动成功即登记（evaluate 段）
       appendSegmentFact(runDir, "evaluate", "atf_evaluate");
       // 批㊶-N N-5：会话绑定
@@ -1394,6 +1596,15 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         started: true, eval_round: roundDir, tmux: orchSessionName,
         serving_models: expectedModels, service_manifest: join(serviceDir, "service_manifest.json"),
         prelaunch_report: reportPath, release: "eval-release 账本已登记（config sha256）",
+        // D14：评测参数继承落账（报告面——解析来源/指纹/口径；GT 外字段只在此报告面，不上卡）
+        field_config: fieldConfigResolved.path,
+        field_config_source: fieldConfigResolved.source,
+        field_config_sha256: fieldConfigResolved.sha256,
+        field_config_sha256_prefix12: fieldConfigResolved.sha256.slice(0, 12),
+        ...(fieldConfigResolved.warning !== undefined ? { field_config_warning: fieldConfigResolved.warning } : {}),
+        prompt_mode: promptMode.mode,
+        prompt_mode_source: promptMode.source,
+        eval_caliber: caliber,
         note: "编排后台执行中（服务自启→staging→run_formal_eval→回灌，runner --model 取 manifest 期望名）——status 查询 receipt/四件套/model 标签",
       });
     },

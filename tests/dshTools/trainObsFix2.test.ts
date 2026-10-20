@@ -205,6 +205,12 @@ print("{}")`);
     const ckpt = join(root, "training", "checkpoint-141");
     mkdirSync(ckpt, { recursive: true });
     writeFileSync(join(ckpt, "adapter_model.safetensors"), "x");
+    // D14：field_config 显式传入路径须真实存在（解析 fail-closed 后缺失即拒）
+    writeFileSync(join(root, "field-config.json"), JSON.stringify({
+      schema_version: "PromptFieldConfig/v1", document_type: "pl", document_zh: "装箱单",
+      fields: [{ field_id: "doc_identifier", group: "doc_identifier", zh: "单据标识", definition: "d", locators: [] }],
+      training_excluded_fields: [],
+    }));
     return { assets, serviceConfig, ckpt };
   };
   const startArgs = (root: string, f: { assets: string; serviceConfig: string; ckpt: string }) => ({

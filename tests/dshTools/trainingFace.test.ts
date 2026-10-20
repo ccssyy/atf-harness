@@ -455,6 +455,12 @@ print("{}")`);
     writeFileSync(join(assets, "test_images.json"), "{}");
     const serviceConfig = join(root, "EvalServiceConfig.v1.json");
     writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", run_id: "run-regress-formal-02", port: 5021 }));
+    // D14：field_config 显式传入路径须真实存在（缺省解析 fail-closed 后显式缺失同样拒）
+    writeFileSync(join(root, "field-config.json"), JSON.stringify({
+      schema_version: "PromptFieldConfig/v1", document_type: "pl", document_zh: "装箱单",
+      fields: [{ field_id: "doc_identifier", group: "doc_identifier", zh: "单据标识", definition: "d", locators: [] }],
+      training_excluded_fields: [],
+    }));
     const ckpt = join(root, "training", "checkpoint-141");
     mkdirSync(ckpt, { recursive: true });
     writeFileSync(join(ckpt, "adapter_model.safetensors"), "x");
@@ -546,8 +552,10 @@ print("{}")`);
     expect(result.tmux).toBe(evalOrchName("run-regress-formal-02")); // 批㊶-ISO E1：编排会话同入命名域
     expect(String(result.eval_round)).toMatch(/1-\d{8}$/); // 首轮
     expect(String(result.release)).toContain("eval-release");
-    // 确认卡带九必报项报告内容
-    expect(seen[0]).toContain("九必报项");
+    // D14 翻新：确认卡 headline＝评估放行（报告 H1 不再上卡）；卡面无参数名/绝对路径
+    expect(seen[0]).toContain("评估放行 — run-regress-formal-02");
+    expect(seen[0]).not.toContain("完整报告：");
+    expect(seen[0]).not.toContain("adapter_path");
     tmuxTestOk(`kill-session -t ${evalOrchName("run-regress-formal-02")}`);
   });
 
