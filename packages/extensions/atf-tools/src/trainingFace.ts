@@ -1344,20 +1344,75 @@ export const summarizeEvalPrelaunchReport = (reportText: string, runId?: string)
   // metrics：生效服务参数表的键值行（| 参数 | 值 | 来源 | 表——取关键键，值原样不截断）。
   // D14 修复：精确键匹配（键前缀匹配曾把「绑卡差异」一并算成「绑卡」→卡面两行重复）；
   // 键闭集＝pin 生成面 build_service_prelaunch_report 实际产出的整键（端口/TP/gpu_mem_util 等含全段）
-  const metricKeys = ["环境来源", "eval_env", "绑卡", "端口/TP/gpu_mem_util", "max_model_len/max_num_seqs/batched_tokens", "adapters", "request_defaults"];
+  const metricKeys = ["环境来源", "eval_env", "绑卡", "端口/TP/gpu_mem_util", "max_model_len/max_num_seqs/batched_tokens", "adapters", "request_defaults", "并发"];
   const metrics: string[] = [];
   let inParams = false;
+  let inRecon = false;
   for (const line of lines) {
-    if (line.startsWith("## ")) { inParams = line.includes("生效服务参数"); continue; }
-    if (!inParams || !line.startsWith("|")) continue;
+    if (line.startsWith("## ")) { inParams = line.includes("生效服务参数"); inRecon = line.includes("参数对账"); continue; }
+    if ((!inParams && !inRecon) || !line.startsWith("|")) continue;
     const cells = line.split("|").map((c) => c.trim()).filter((c) => c !== "");
     if (cells.length < 2) continue;
     const key = cells[0] ?? "";
     if (key === "") continue;
     const hit = metricKeys.find((k) => key === k);
-    if (hit !== undefined) metrics.push(`${key}＝${cells[1] ?? ""}`);
+    if (hit === undefined) continue;
+    // 批D17：并发行卡面紧凑投影（行在「参数对账」节——实锚 1-20261019 报告 :32；值列/容量列
+    // 分属两格，kernel 全文落盘可达，卡面只上数字面）。对账节其余行维持不上卡（键闭集同源）。
+    if (hit === "并发") { metrics.push(projectConcurrencyMetricLine(cells[1] ?? "", cells[2] ?? "")); continue; }
+    if (inRecon) continue;
+    metrics.push(`${key}＝${cells[1] ?? ""}`);
   }
   return { headline, metrics };
+};
+
+// ── 批D17：评估并发参数（参数门＋卡面并发行投影）──
+
+/** D17——并发参数门解析结果（成功＝生效并发值；失败＝容量门快败面）。 */
+export type EvalConcurrencyResolution =
+  | { ok: true; concurrency: number }
+  | {
+      ok: false;
+      error: "concurrency_invalid" | "concurrency_exceeds_capacity";
+      concurrency: number;
+      max_num_seqs?: number;
+      suggested_concurrency?: number;
+      note: string;
+    };
+
+/** D17——并发参数门（纯函数）：缺省 1 恒过；显式值须 ≥1 整数；容量单源＝service_config
+ *  的 max_num_seqs（可读且为正整数时核对，超容量 fail-closed 附容量与建议值）。容量不可读
+ *  不猜——交 prelaunch 既有机械核对（harness 只做参数门，不设第二套校验）。 */
+export const resolveEvalConcurrency = (serviceConfigText: string, explicit?: number): EvalConcurrencyResolution => {
+  const requested = explicit ?? 1;
+  if (!Number.isInteger(requested) || requested < 1) {
+    return { ok: false, error: "concurrency_invalid", concurrency: requested, note: "并发须为 ≥1 的整数（缺省 1＝串行；上限＝服务 max_num_seqs）" };
+  }
+  let maxNumSeqs: number | null = null;
+  try {
+    const raw = (JSON.parse(serviceConfigText) as Record<string, unknown>)["max_num_seqs"];
+    if (typeof raw === "number" && Number.isInteger(raw) && raw >= 1) maxNumSeqs = raw;
+  } catch { /* 配置不可读＝容量未知——存在性已前置校验，容量核对交 prelaunch，此处不猜 */ }
+  if (maxNumSeqs !== null && requested > maxNumSeqs) {
+    return {
+      ok: false, error: "concurrency_exceeds_capacity", concurrency: requested, max_num_seqs: maxNumSeqs, suggested_concurrency: maxNumSeqs,
+      note: `并发 ${requested} 超服务容量 max_num_seqs=${maxNumSeqs}——按容量收紧后重推（图像类任务建议从中等并发起步，不要默认拉满）`,
+    };
+  }
+  return { ok: true, concurrency: requested };
+};
+
+/** D17——卡面「并发」行紧凑投影：值列（kernel 形态「runner 实际=N(缺省 1 保守底);agent 推荐
+ *  =M(…);推荐理由:…」）＋来源列（「服务 max_num_seqs=C」）→「并发＝N/M（容量 C）」；
+ *  缺推荐（串行缺省）降「N（容量 C）」、缺容量降「N/M」；实际值不可解析＝值原样上卡
+ *  （kernel 文案变动时兜底，不丢事实）。纯函数，单测直测。 */
+export const projectConcurrencyMetricLine = (value: string, source: string): string => {
+  const actual = /runner 实际=(\d+)/.exec(value)?.[1] ?? null;
+  if (actual === null) return `并发＝${value}`;
+  const recommended = /agent 推荐=(\d+)/.exec(value)?.[1] ?? null;
+  const capacity = /max_num_seqs=(\d+)/.exec(source)?.[1] ?? null;
+  const head = recommended === null ? actual : `${actual}/${recommended}`;
+  return capacity === null ? `并发＝${head}` : `并发＝${head}（容量 ${capacity}）`;
 };
 
 // ── 批D14：评测参数继承（field_config 缺省自动继承训练＋prompt_mode 继承＋评测口径投影）──
@@ -1558,6 +1613,10 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 批C2 E6 卡点修复：评估资产绑定通道（内核编排契约——外部资产须绑定分区清单或 owner 级显式确认）
       assets_split_manifest: { type: "string", description: "评估资产分区清单路径（split-manifest；跨 run/发布区资产须绑定——绑定后评估输入必须全部来自该 test 分区，内核逐页校验）" },
       assets_external_confirm: { type: "boolean", description: "外部资产 owner 级确认（无分区清单时的显式通道——确认评估输入确属预期来源；与 assets_split_manifest 二选一）" },
+      // 批D17：并发参数（透传 prelaunch --concurrency/--concurrency-recommended/--concurrency-reason
+      // 与编排 --concurrency；容量门＝service_config.max_num_seqs，超容量零落盘零审批快败）
+      concurrency: { type: "integer", description: "评估推理并发（可选，默认 1；省略＝串行。上限＝服务 max_num_seqs；图像类任务建议从中等并发起步，不要默认拉满）" },
+      concurrency_reason: { type: "string", description: "并发取值理由（可选——传 concurrency 时一并给；随确认报告落盘，缺理由＝报告不完备）" },
     },
     output: {
       schema: { type: "object", additionalProperties: true },
@@ -1566,7 +1625,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     presentCall: function(args: { action: string; run_id?: string }) {
       return { card: "generic" as const, title: `评估 — ${args.run_id ?? "会话绑定实验"}`, kind: "other" as const }
     },
-    async execute(args: { action: string; run_id?: string; adapter_path: string; eval_assets_dir: string; field_config?: string; prompt_mode?: string; service_config: string; env_profile: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+    async execute(args: { action: string; run_id?: string; adapter_path: string; eval_assets_dir: string; field_config?: string; prompt_mode?: string; service_config: string; env_profile: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean; concurrency?: number; concurrency_reason?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选——先于一切检查）
       const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id);
       if (!runResolution.ok) return asToolValue(runResolution.payload);
@@ -1601,6 +1660,18 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       if (!existsSync(join(args.eval_assets_dir, "eval_labels.jsonl")) || !existsSync(join(args.eval_assets_dir, "test_images.json"))) {
         return asToolValue({ started: false, error: "eval_assets_missing", eval_assets_dir: args.eval_assets_dir, note: "test_images.json+eval_labels.jsonl 必备" });
       }
+      // —— 批D17：并发参数门（先于一切产物生成——超容量零落盘零审批；容量单源＝
+      // service_config.max_num_seqs。prelaunch 既有推荐值≤容量校验不在此重复——本处只做
+      // 参数门快败；容量不可读不猜，交 prelaunch 机械核对）——
+      const concurrencyGate = resolveEvalConcurrency(readFileSync(args.service_config, "utf8"), args.concurrency);
+      if (!concurrencyGate.ok) {
+        return asToolValue({
+          started: false, error: concurrencyGate.error, concurrency: concurrencyGate.concurrency,
+          ...(concurrencyGate.max_num_seqs !== undefined ? { max_num_seqs: concurrencyGate.max_num_seqs, suggested_concurrency: concurrencyGate.suggested_concurrency } : {}),
+          note: concurrencyGate.note,
+        });
+      }
+      const concurrency = concurrencyGate.concurrency;
       // —— D14：评测参数继承（先于一切产物生成——解析失败零编排启动零落盘）——
       // field_config 缺省自动继承训练（显式传入→覆盖，漂移仅告警）；prompt_mode 缺省继承训练声明。
       const fieldConfigResolved = resolveEvalFieldConfig(runDir, args.field_config);
@@ -1633,9 +1704,14 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const leaking = expectedModels.filter((m) => modelLabelLooksDefault(m));
       if (leaking.length > 0) return asToolValue({ started: false, error: "serving_model_label_default_leak", models: leaking, note: "service manifest 期望模型名含 OpenAI 风格缺省名——gpt-*/claude-* 前缀拒收（防线）" });
       // ② 确认报告（九必报项，产物反生成自 service_manifest）
+      // 批D17：并发三参透传——实际值恒传（缺省 1）；推荐值/理由仅显式传参时给（推荐＝agent
+      // 主动推理域，串行缺省无推荐；内核校验推荐值 ≤ max_num_seqs——harness 不设第二套）
       const reportPath = join(serviceDir, "service-prelaunch-report.md");
       const reported = await runCapture("python3", [prelaunch, "--service-dir", serviceDir, "--env-profile", args.env_profile, "--out", reportPath,
-        "--field-config", fieldConfigResolved.path, "--prompt-renderer", skill("atf-admit-training-data", "render_prompt.py")], 120_000);
+        "--field-config", fieldConfigResolved.path, "--prompt-renderer", skill("atf-admit-training-data", "render_prompt.py"),
+        "--concurrency", String(concurrency),
+        ...(args.concurrency !== undefined ? ["--concurrency-recommended", String(concurrency)] : []),
+        ...(args.concurrency_reason !== undefined && args.concurrency_reason.trim() !== "" ? ["--concurrency-reason", args.concurrency_reason.trim()] : [])], 120_000);
       if (reported.code !== 0 || !existsSync(reportPath)) {
         return asToolValue({ started: false, error: "prelaunch_report_failed", eval_round: roundDir, stderr_tail: reported.stderr.slice(-800), note: "确认报告未产出＝EVAL_RELEASE 准入未闭合（SKILL.md 确认制）" });
       }
@@ -1688,6 +1764,9 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const orchArgs = [orchestration, "--service", serviceDir, "--ckpt", ckptPlanDir, "--out", orchDir,
         "--eval-runner", runner, "--assets", args.eval_assets_dir, "--field-config", fieldConfigResolved.path,
         "--base-url", `http://127.0.0.1:${port}/v1`, "--env-profile", args.env_profile,
+        // 批D17：并发贯通编排（恒传，缺省 1——generator 内嵌进 runner 调用与 plan 口径披露；
+        // 值来源＝prelaunch 确认值，容量校验由 prelaunch 承载，此处不设第二套）
+        "--concurrency", String(concurrency),
         ...(args.assets_split_manifest !== undefined ? ["--split-manifest", args.assets_split_manifest] : []),
         ...(args.assets_external_confirm === true ? ["--assets-external-confirm"] : [])];
       const orchPlanned = await runCapture("python3", orchArgs, 120_000);
@@ -1732,6 +1811,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         prompt_mode: promptMode.mode,
         prompt_mode_source: promptMode.source,
         eval_caliber: caliber,
+        concurrency,
+        ...(args.concurrency_reason !== undefined ? { concurrency_reason: args.concurrency_reason } : {}),
         ...rebound,
         note: "编排后台执行中（服务自启→staging→run_formal_eval→回灌，runner --model 取 manifest 期望名）——status 查询 receipt/四件套/model 标签",
       });

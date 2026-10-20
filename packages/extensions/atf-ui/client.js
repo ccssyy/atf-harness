@@ -2870,7 +2870,9 @@ window.__ModuleLoader__.load({
             '.atf-lost-ws-path{font-family:monospace;color:var(--dsw-alias-state-warning-label,#92400e);word-break:break-all;}',
             '.atf-lost-ws-meta{color:var(--dsw-alias-label-tertiary,#64748b);}',
             // ── D11-2 运行监控面板（UI 稿 v2——色板走 DSH token 退化链，非硬编码主题）──
-            '.atf-m-root{display:flex;flex-direction:column;padding:10px 12px 14px;gap:8px;}',
+            // D17§C：root 撑满 pane 高度并自滚（height:100%+min-height:0 破 flex 收缩死锁；
+            // overscroll-behavior:contain 防滚动链穿透宿主页）——布局与区块顺序零改。
+            '.atf-m-root{display:flex;flex-direction:column;padding:10px 12px 14px;gap:8px;height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;}',
             '.atf-m-skel{background:rgba(128,128,128,.12);border-radius:8px;animation:atf-skel 1.2s ease-in-out infinite;}',
             '@keyframes atf-skel{0%,100%{opacity:.55}50%{opacity:1}}',
             '.atf-m-skel-title{height:20px;width:40%;margin:6px 0 10px;}',
