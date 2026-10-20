@@ -83,6 +83,8 @@ export function buildMonitorSnapshot(runs, gpu, gpuAll) {
       progress: run.progress ?? run.training?.progress ?? null,
       // 批㊶-N N-5：会话绑定集（additive——可空数组）
       bound_sessions: Array.isArray(run.bound_sessions) ? run.bound_sessions : [],
+      // 批B1：run 显示名（additive——用户改名优先；读失败 null 不造名，client 回退 run_id）
+      display: run.display ?? null,
       // 批㊶-TRAIN-OBS T3（additive——日志尾部投影：capture-pane→trainlog.tail.json 读盘；
       // 两键闭集 captured_at/lines，行已 200 字符截断——白名单同源，缺＝null）
       trainlog_tail: run.trainlog_tail ?? null,

@@ -461,7 +461,8 @@ print("{}")`);
       fields: [{ field_id: "doc_identifier", group: "doc_identifier", zh: "单据标识", definition: "d", locators: [] }],
       training_excluded_fields: [],
     }));
-    const ckpt = join(root, "training", "checkpoint-141");
+    // B1：run 目录须真实在位（显式 run_id 存在性前置——ckpt 入 run 目录即真实布局种子）
+    const ckpt = join(root, "run-regress-formal-02", "training", "checkpoint-141");
     mkdirSync(ckpt, { recursive: true });
     writeFileSync(join(ckpt, "adapter_model.safetensors"), "x");
     return { assets, serviceConfig, ckpt };
@@ -685,10 +686,14 @@ print(json.dumps({"argv": args}))`}`);
   it("pin 脚本缺失／四件套不齐／资产缺失 → 各自结构化报缺（不猜测）", async () => {
     const root = tempRoot();
     const emptyPin = tempRoot();
+    // B1：显式 run_id 存在性前置——run 目录在位（无产物态）才是本用例本意
+    mkdirSync(join(root, "r1"), { recursive: true });
     const noScript = await analyzeOf(root, emptyPin).execute({ run_id: "r1" }, fakeExec);
     expect(noScript.error).toBe("skill_script_missing");
     const pin = tempRoot();
     writeMockPinScripts(pin);
+    // B1：run 在位而评估产物缺——eval_products_missing 语义（r-missing 目录在位）
+    mkdirSync(join(root, "r-missing"), { recursive: true });
     const noEval = await analyzeOf(root, pin).execute({ run_id: "r-missing" }, fakeExec);
     expect(noEval.error).toBe("eval_products_missing");
     const { assets } = writeEvalFixtures(root);

@@ -12,7 +12,7 @@
  * 均 runsRoot 本地文件面操作，不进 bridge 契约面；列目录失败如实降级（fail-open）。
  */
 import { existsSync, readdirSync, readFileSync, renameSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, isAbsolute, join, relative, sep } from "node:path";
 import { hasSegmentFact } from "./segmentFacts.js";
 
 /** 桶名/run_id 合法形态（字母数字开头，仅 字母数字._-；`..` 与分隔符天然被拒）。 */
@@ -39,6 +39,17 @@ export const sessionWorkspaceSlug = (exec: unknown): string | null => {
 };
 
 export const isValidRunId = (runId: string): boolean => RUN_NAME_RE.test(runId) && !runId.includes("..");
+
+/**
+ * 批B1——run 目录 → 工作区桶名（绑定居面：分桶＝一级桶名；平铺/越界＝null）。
+ * 与 resolveRunDir 的建向解析互为镜像（绑定写入方用本函数标注 workspace）。
+ */
+export const workspaceOfRunDir = (runsRoot: string, runDir: string): string | null => {
+  const rel = relative(runsRoot, runDir);
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return null;
+  const parts = rel.split(sep).filter((p) => p !== "");
+  return parts.length >= 2 ? (parts[0] as string) : null;
+};
 
 /** 桶内在场搜索（优先指定桶；逐桶一级扫描——runsRoot 规模小，stat 面可忽略）。 */
 const findBucketed = (runsRoot: string, runId: string, prefer?: string | null): string | null => {

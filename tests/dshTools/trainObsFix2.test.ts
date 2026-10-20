@@ -202,7 +202,8 @@ print("{}")`);
     writeFileSync(join(assets, "test_images.json"), "{}");
     const serviceConfig = join(root, "EvalServiceConfig.v1.json");
     writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", run_id: "run-fix2", port: 5041 }));
-    const ckpt = join(root, "training", "checkpoint-141");
+    // B1：run 目录须真实在位（显式 run_id 存在性前置——ckpt 入 run 目录即真实布局种子）
+    const ckpt = join(root, "run-fix2", "training", "checkpoint-141");
     mkdirSync(ckpt, { recursive: true });
     writeFileSync(join(ckpt, "adapter_model.safetensors"), "x");
     // D14：field_config 显式传入路径须真实存在（解析 fail-closed 后缺失即拒）

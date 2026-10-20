@@ -32,7 +32,9 @@ import { appendAskFailureDiagnostic } from "./askDiagnostics.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
 import { appendBinding, readNumTrainEpochs, writeProgress } from "../../../../src/core/workspace/runFacts.js";
-import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+import { resolveRunDir, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
+import { bindSessionRun, readSessionBinding, resolveActiveRun, resolveBindingsHome } from "../../../../src/core/workspace/sessionBindings.js";
+import { buildRunCandidates } from "../../../../src/core/workspace/runDisplay.js";
 import { appendLedgerAuditComment, ledgerEnvPrefixForShell } from "../../../../src/core/workspace/approvalLedger.js";
 import { dualStageNote } from "./confirmFace.js";
 import { deriveAtfRoot } from "../../../../src/webui/storageSettings.js";
@@ -149,6 +151,68 @@ export async function probeTrainingStartup(input: {
 const sessionIdOf = (exec: unknown): string | undefined => {
   const id = (exec as { agent?: { session?: { id?: unknown } } }).agent?.session?.id;
   return typeof id === "string" && id !== "" ? id : undefined;
+};
+
+// ── 批B1：会话绑定账本接入（run_id 缺省解析＋成功后绑定）──
+// 红线（指令 B1 §十）：run_id 省略时必须能解析绑定；无绑定必须报 run_binding_required＋候选，
+// 绝不回退「列表第一个」；绑定写失败 fail-open（账本函数内 stderr 一条），不阻塞工具主流程。
+
+/** run_binding_required 业务话术（用户可见面用「实验」——指令 §十）。 */
+export const RUN_BINDING_REQUIRED_MESSAGE = "本会话还没有选择实验";
+
+/** 业务候选面（≤5，本工作区优先）：{run_id, workspace, title}——run_binding_required 随附。 */
+export const bindingCandidatesForTool = (runsRoot: string, preferWorkspace: string | null | undefined): Array<{ run_id: string; workspace: string | null; title: string }> =>
+  buildRunCandidates(runsRoot, preferWorkspace, 5).map((candidate) => ({ run_id: candidate.run_id, workspace: candidate.workspace, title: candidate.title }));
+
+export type ToolRunResolution =
+  | { ok: true; runId: string; runDir: string; workspace: string | null }
+  | { ok: false; payload: Record<string, unknown> };
+
+/** 工具 run_id 解析单源（atf_evaluate／atf_analyze_badcases／atf_publish_model 共用）：
+ *  显式传入（须存在——不存在 run_not_found，不猜）＞ 会话绑定 resolveActiveRun（stale＝不改账本）；
+ *  无绑定/会话身份不可得＝run_binding_required＋候选。 */
+export const resolveToolRun = (runsRoot: string, exec: unknown, explicitRunId?: string): ToolRunResolution => {
+  if (explicitRunId !== undefined && explicitRunId.trim() !== "") {
+    const runId = explicitRunId.trim();
+    const runDir = resolveRunDir(runsRoot, runId);
+    if (!existsSync(runDir)) {
+      return { ok: false, payload: { error: "run_not_found", run_id: runId, message: `实验不存在：${runId}——核对后重推，或省略 run_id 使用本会话绑定的实验` } };
+    }
+    return { ok: true, runId, runDir, workspace: workspaceOfRunDir(runsRoot, runDir) };
+  }
+  const sessionId = sessionIdOf(exec);
+  const resolution = sessionId === undefined
+    ? { run: null, runId: null, workspace: null, reason: "new" as const }
+    : resolveActiveRun(resolveBindingsHome(process.env), runsRoot, sessionId);
+  if (resolution.run === null || resolution.runId === null) {
+    return {
+      ok: false,
+      payload: {
+        error: "run_binding_required",
+        message: RUN_BINDING_REQUIRED_MESSAGE,
+        candidates: bindingCandidatesForTool(runsRoot, resolution.workspace),
+        ...(sessionId === undefined ? {} : { unbound_reason: resolution.reason === "bound" ? null : resolution.reason }),
+      },
+    };
+  }
+  return { ok: true, runId: resolution.runId, runDir: resolution.run, workspace: resolution.workspace };
+};
+
+/** 工具成功后的账本绑定（auto_tool＝对既有 run；created＝新建实验）。显式 run_id 与当前绑定
+ *  不同 → 返回体带 rebound_from（旧绑定值；无旧绑定＝null——如实覆盖事实）。写失败 fail-open。
+ *  缺省解析自绑定的成功（run_id 省略且账本已指向该 run）＝零写——保 source 溯源（user_pick 不被 auto_tool 冲掉）。 */
+export const bindToolRunSuccess = (exec: unknown, runId: string, workspace: string | null, source: "auto_tool" | "created", explicitRunId?: string): { rebound_from?: string | null } => {
+  const sessionId = sessionIdOf(exec);
+  if (sessionId === undefined) return {};
+  if (source === "auto_tool" && (explicitRunId === undefined || explicitRunId.trim() === "")) return {};
+  const home = resolveBindingsHome(process.env);
+  let rebound: string | null | undefined;
+  if (source === "auto_tool" && explicitRunId !== undefined && explicitRunId.trim() !== "") {
+    const prior = readSessionBinding(home, sessionId);
+    if (prior === null || prior.active_run_id !== runId) rebound = prior?.active_run_id ?? null;
+  }
+  bindSessionRun(home, sessionId, { runId, workspace, source });
+  return rebound !== undefined ? { rebound_from: rebound } : {};
 };
 
 /** 批㊶-P1 S3：同 run_id 双启请示闸（防御纵深）——作用域会话在场＝同 run 已有训练会话，
@@ -455,7 +519,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
     parameters: {
       action: { type: "string", required: true, enum: ["start", "status"], description: "start=放行后启动训练；status=查询状态与 ckpt" },
       train_sh: { type: "string", required: true, description: "train.sh 绝对路径（须已通过 DRY_RUN 校验）" },
-      run_id: { type: "string", required: true, description: "run 标识（监控数据/ckpt 归属）" },
+      run_id: { type: "string", required: true, description: "新实验标识；创建成功后自动绑定本会话（监控数据/ckpt 归属）" },
       prelaunch_report: { type: "string", description: "build_prelaunch_report.py 产物路径（缺省自动扫 train.sh 同目录 prelaunch*——两处皆无即拒绝启动）" },
     },
     output: {
@@ -765,6 +829,14 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // 批㊶-N N-5：会话绑定
       const sessionIdStart = sessionIdOf(exec);
       if (sessionIdStart !== undefined) appendBinding(runDir, sessionIdStart);
+      // 批B1：会话账本绑定（source=created——新建实验即绑定，无需二次选择；fail-open）
+      if (sessionIdStart !== undefined) {
+        bindSessionRun(resolveBindingsHome(process.env), sessionIdStart, {
+          runId: args.run_id,
+          workspace: workspaceOfRunDir(cfg.runsRoot, runDir),
+          source: "created",
+        });
+      }
       // 批㊶-TRAIN-OBS-FIX2 T1：内核侧会话绑定（run 产生成功路径——宿主链对齐
       // runner.ts:391-395 形态；fail-open 沿 appendBinding 语义——闭包内已兜底，
       // 消费点再兜一道，任何注入形态都不阻塞启动主流程）
@@ -1098,17 +1170,21 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
     description:
       "模型产物发布（语义 C：归档＋登记＋并入模型清单）：对评估完成的 checkpoint 收口——四件套齐即可发布（指标门槛不硬编码，发布与否由用户在确认卡定）；发布动作＝确定性归档复制（SHA256 清单）到 <发布库位>/<run_id>/<ckpt>/＋manifest＋发布报告。确认卡＝U 双段式（dualStageNote），danger 级 Allow once 落审批账本。已发布模型并入模型清单状态面（训练确认卡基模型可选历史发布作 base——迁移学习；ATF_MODEL_ROOT＋发布库位两源合并、来源标注区分）。发布前置缺四件套即拒（不猜测）。",
     parameters: {
-      run_id: { type: "string", required: true, description: "run 标识" },
+      run_id: { type: "string", description: "可选；省略时使用本会话当前绑定的实验。无绑定会返回 run_binding_required 与候选（含实验名与工作区），不要自行猜一个 id" },
       checkpoint: { type: "string", required: true, description: "checkpoint 目录名（checkpoint-<数字>；拒 latest/符号链接）" },
       publish_root: { type: "string", description: "发布库位根（缺省＝统一根 models 子目录——ATF_ATF_ROOT/ATF_DSH_RUNS_ROOT 父目录派生；实例分桶自动）" },
       note: { type: "string", description: "发布说明（入发布报告）" },
     },
     output: { schema: { type: "object", additionalProperties: true }, render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }] },
-    presentCall: function(args: { run_id: string; checkpoint?: string }) {
-      return { card: "generic" as const, title: `模型发布 — ${args.run_id}${args.checkpoint !== undefined ? `/${args.checkpoint}` : ""}`, kind: "other" as const };
+    presentCall: function(args: { run_id?: string; checkpoint?: string }) {
+      return { card: "generic" as const, title: `模型发布 — ${args.run_id ?? "会话绑定实验"}${args.checkpoint !== undefined ? `/${args.checkpoint}` : ""}`, kind: "other" as const };
     },
-    async execute(args: { run_id: string; checkpoint: string; publish_root?: string; note?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
-      const runDir = resolveRunDir(cfg.runsRoot, args.run_id);
+    async execute(args: { run_id?: string; checkpoint: string; publish_root?: string; note?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+      // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选）
+      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id);
+      if (!runResolution.ok) return asToolValue(runResolution.payload);
+      const runId = runResolution.runId;
+      const runDir = runResolution.runDir;
       if (!/^checkpoint-\d+$/.test(args.checkpoint)) {
         return asToolValue({ ok: false, error: "checkpoint_name_invalid", note: "checkpoint 须为 checkpoint-<数字> 形态（拒 latest/符号链接/缺省猜测）" });
       }
@@ -1127,12 +1203,12 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
       if (publishRoot === null) {
         return asToolValue({ ok: false, error: "publish_root_unset", note: "发布库位未派生：ATF_ATF_ROOT/ATF_DSH_RUNS_ROOT 皆未提供统一根——publish_root 显式传入或配置后重试" });
       }
-      const destDir = join(publishRoot, args.run_id, args.checkpoint);
+      const destDir = join(publishRoot, runId, args.checkpoint);
       // U 双段式确认卡（danger 级 Allow once 落审批账本）；E5 模板四行＋发布明细续行
       const verdict = await requestApproval(ctx, exec, "atf_publish_model",
         buildApprovalReason({
           action: "归档复制发布模型",
-          target: `（run ${args.run_id}／checkpoint ${args.checkpoint}）`,
+          target: `（run ${runId}／checkpoint ${args.checkpoint}）`,
           effect: "写发布库（归档复制＋SHA256 清单＋manifest＋发布报告）",
           reversible: "可逆（发布库条目可人工删除）",
           cost: "按任务卡",
@@ -1162,7 +1238,7 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
       const files = copyOutcome.files;
       const manifest = {
         schema_version: "ModelPublish/v1",
-        run_id: args.run_id,
+        run_id: runId,
         checkpoint: args.checkpoint,
         published_at: new Date().toISOString(),
         source_dir: ckptDir,
@@ -1174,7 +1250,7 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
       };
       writeFileSync(join(destDir, "publish-manifest.json"), `${JSON.stringify(manifest, null, 1)}\n`, "utf8");
       const report = [
-        `# 模型发布报告 — ${args.run_id}/${args.checkpoint}`,
+        `# 模型发布报告 — ${runId}/${args.checkpoint}`,
         "",
         `- 发布时间：${manifest.published_at}`,
         `- 源：${ckptDir}`,
@@ -1184,9 +1260,11 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
       ].join("\n");
       mkdirSync(join(runDir, "publish"), { recursive: true });
       writeFileSync(join(runDir, "publish", `${args.checkpoint}.md`), `${report}\n`, "utf8");
+      // 批B1：会话账本绑定（auto_tool——成功动作才绑定，显式传入与绑定不同带 rebound_from）
+      const rebound = bindToolRunSuccess(exec, runId, runResolution.workspace, "auto_tool", args.run_id);
       return asToolValue({
         ok: true,
-        run_id: args.run_id,
+        run_id: runId,
         checkpoint: args.checkpoint,
         dest_dir: destDir,
         file_count: files.length,
@@ -1201,6 +1279,7 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
         ...(copyOutcome.changed_re_copied > 0 ? { changed_re_copied: copyOutcome.changed_re_copied } : {}),
         manifest: "publish-manifest.json",
         report: `publish/${args.checkpoint}.md`,
+        ...rebound,
         note: "已发布——并入模型清单状态面（发布库位源；ATF_MODEL_ROOT＋发布库位两源合并、来源标注区分）",
       });
     },
@@ -1427,7 +1506,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       "评估触发（正道链——确认制＋EVAL_RELEASE 审批账本，绕行 llamafactory api 形态已删除）：action=start 编排 pin 内正道链 generate_eval_service（vllm serve＋AWQ base）→build_service_prelaunch_report（九必报项确认报告）→用户确认（确认卡＝EVAL_RELEASE 放行，--record-eval-release 落账本）→generate_eval_orchestration（tmux 后台：服务自启→staging→run_formal_eval→回灌）；action=status 查询服务 receipt/编排状态/四件套与 model 标签。双段式：确认卡前先以问题卡呈九必报项值清单＋改参指引（可调＝adapter_path/eval_assets_dir/service_config 各项；改参回复聊天，重推 start 重走链）；机器事实三件（eval_env/awq_base/cuda_visible_devices）一律来自 deploy/env-profile，缺即 MissingFactsBlock 停下问用户。评估轮目录＝runs/<run_id>/eval/<N>-<日期>/{service,ckpt-plan,orch}（ADR-0007）。",
     parameters: {
       action: { type: "string", required: true, enum: ["start", "status"], description: "start=确认并启动正道链（后台编排）；status=查询进度与四件套" },
-      run_id: { type: "string", required: true, description: "run 标识" },
+      run_id: { type: "string", description: "可选；省略时使用本会话当前绑定的实验。无绑定会返回 run_binding_required 与候选（含实验名与工作区），不要自行猜一个 id" },
       adapter_path: { type: "string", required: true, description: "adapter checkpoint 目录绝对路径——固定编号（checkpoint-<数字>），拒 latest/符号链接/缺省猜测（SKILL.md 环节④条款）" },
       eval_assets_dir: { type: "string", required: true, description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl）" },
       field_config: { type: "string", description: "PromptFieldConfig/v1 JSON 路径（可选——缺省自动继承 <runDir>/experiment-setup/field-config.json 并与训练记录指纹核对；显式传入即覆盖，漂移仅告警不阻断）" },
@@ -1443,17 +1522,22 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       schema: { type: "object", additionalProperties: true },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
-    presentCall: function(args: { action: string; run_id: string }) {
-      return { card: "generic" as const, title: `评估 — ${args.run_id}`, kind: "other" as const }
+    presentCall: function(args: { action: string; run_id?: string }) {
+      return { card: "generic" as const, title: `评估 — ${args.run_id ?? "会话绑定实验"}`, kind: "other" as const }
     },
-    async execute(args: { action: string; run_id: string; adapter_path: string; eval_assets_dir: string; field_config?: string; prompt_mode?: string; service_config: string; env_profile: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+    async execute(args: { action: string; run_id?: string; adapter_path: string; eval_assets_dir: string; field_config?: string; prompt_mode?: string; service_config: string; env_profile: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+      // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选——先于一切检查）
+      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id);
+      if (!runResolution.ok) return asToolValue(runResolution.payload);
+      const runId = runResolution.runId;
+      const runDir = runResolution.runDir;
       const skill = (name: string, script: string): string => join(cfg.kernelDir, "skills", name, "scripts", script);
       const genService = skill("atf-evaluate-checkpoints", "generate_eval_service.py");
       const prelaunch = skill("atf-evaluate-checkpoints", "build_service_prelaunch_report.py");
       const ckptPlanGen = skill("atf-evaluate-checkpoints", "generate_checkpoint_plan.py");
       const orchestration = skill("atf-evaluate-checkpoints", "generate_eval_orchestration.py");
       const runner = skill("atf-evaluate-checkpoints", "run_formal_eval.py");
-      if (args.action === "status") return evalStatus(args.run_id, cfg);
+      if (args.action === "status") return evalStatus(runId, cfg);
       for (const script of [genService, prelaunch, ckptPlanGen, orchestration, runner]) {
         if (!existsSync(script)) return asToolValue({ started: false, error: "skill_script_missing", script, note: "pin 内技能脚本缺失——核 kernelDir 装配" });
       }
@@ -1471,8 +1555,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       if (args.assets_split_manifest !== undefined && !existsSync(args.assets_split_manifest)) {
         return asToolValue({ started: false, error: "assets_split_manifest_missing", path: args.assets_split_manifest, note: "分区清单路径不存在——核对后重试" });
       }
-      // 批㊶Q增补三 段3：双形态解析（新 run 按发起会话工作区入桶——创建形态带归属）
-      const runDir = resolveRunDir(cfg.runsRoot, args.run_id, { workspace: sessionWorkspaceSlug(exec) });
+      // 批㊶Q增补三 段3：run 目录已由 resolveToolRun 双形态解析（显式/绑定 run 均须已存在）
       if (!existsSync(args.service_config)) return asToolValue({ started: false, error: "service_config_missing", path: args.service_config });
       if (!existsSync(join(args.eval_assets_dir, "eval_labels.jsonl")) || !existsSync(join(args.eval_assets_dir, "test_images.json"))) {
         return asToolValue({ started: false, error: "eval_assets_missing", eval_assets_dir: args.eval_assets_dir, note: "test_images.json+eval_labels.jsonl 必备" });
@@ -1482,7 +1565,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const fieldConfigResolved = resolveEvalFieldConfig(runDir, args.field_config);
       if (!fieldConfigResolved.ok) {
         return asToolValue({
-          started: false, error: fieldConfigResolved.error, run_id: args.run_id,
+          started: false, error: fieldConfigResolved.error, run_id: runId,
           ...(fieldConfigResolved.error === "eval_field_config_unresolved" ? { field_config_expected: fieldConfigResolved.path } : {}),
           note: fieldConfigResolved.note,
         });
@@ -1519,14 +1602,14 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 不弱化：九必报项全文落盘可达（路径行），卡面只上 headline/metrics 摘要），
       // Allow once＝确认并落放行账本
       const reportText = readFileSync(reportPath, "utf8");
-      const summary = summarizeEvalPrelaunchReport(reportText, args.run_id);
+      const summary = summarizeEvalPrelaunchReport(reportText, runId);
       // 批㊶-U §五：评估卡改参收集走聊天回复、审批卡落账本（EVAL_RELEASE 账本语义不动）；
       // E5 模板四行＋确认摘要续行。D14 卡面修复：headline＝评估放行、无参数名/绝对路径、
       // cost＝占卡实况；新增口径行与字段配置来源行（信息行，不新增确认项）
       const verdict = await requestApproval(ctx, exec, "atf_evaluate",
         buildApprovalReason({
           action: "放行评估服务编排",
-          target: `（run ${args.run_id}）`,
+          target: `（run ${runId}）`,
           effect: "登记放行账本（config sha256）并启动评估编排",
           reversible: "不可自动回滚（评估产物可人工清理）",
           cost: evalGpuCostText(args.service_config, manifest),
@@ -1549,9 +1632,9 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const ckptPlanPath = join(ckptPlanDir, "CheckpointPlan.v1.json");
       writeFileSync(ckptPlanPath, JSON.stringify({
         schema_version: "CheckpointPlan/v1",
-        run_id: args.run_id,
+        run_id: runId,
         staging_root: join(roundDir, "staging"),
-        selections: [{ lane: "goods", checkpoint_dir: args.adapter_path, staged_name: `${args.run_id}_eval` }],
+        selections: [{ lane: "goods", checkpoint_dir: args.adapter_path, staged_name: `${runId}_eval` }],
       }, null, 1) + "\n", "utf8");
       const planned = await runCapture("python3", [ckptPlanGen, "--config", ckptPlanPath, "--out", ckptPlanDir], 120_000);
       if (planned.code !== 0) {
@@ -1581,7 +1664,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 批㊶-ISO E1：编排会话同入命名域（launch 域——pre-kill/new-session 同目标名）；命令走 tmuxCommand
       // 批㊶-P1 S1：编排基名作用域化（run_id 入名——并发 run 各占各的编排会话）
       // D14：--prompt-mode 单源传解析值（继承训练/显式——不再硬编码 mode0；eval_orchestration.sh 经 "$@" 转发 runner）
-      const orchSessionName = resolveLaunchSessionName(evalOrchSessionBase(args.run_id));
+      const orchSessionName = resolveLaunchSessionName(evalOrchSessionBase(runId));
       try { execSync(tmuxCommand(`kill-session -t ${orchSessionName} 2>/dev/null`)); } catch { /* 无旧 */ }
       execSync(tmuxCommand(`new-session -d -s ${orchSessionName} "bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode ${promptMode.mode} 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`));
       // 批㊶-M M-3 段事实轨：评估编排启动成功即登记（evaluate 段）
@@ -1589,11 +1672,14 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 批㊶-N N-5：会话绑定
       const sessionIdEval = sessionIdOf(exec);
       if (sessionIdEval !== undefined) appendBinding(runDir, sessionIdEval);
+      // 批B1：会话账本绑定（auto_tool——显式传入与当前绑定不同时返回体带 rebound_from；fail-open）
+      const rebound = bindToolRunSuccess(exec, runId, runResolution.workspace, "auto_tool", args.run_id);
       // 批㊶-TRAIN-OBS-FIX2 T1：内核侧会话绑定（评估接管成功路径——评估类一并覆盖；
       // fail-open 沿 appendBinding 语义——消费点兜底，不阻塞编排启动主流程）
-      try { if (cfg.bindRun !== undefined) await cfg.bindRun(args.run_id); } catch { /* fail-open */ }
+      try { if (cfg.bindRun !== undefined) await cfg.bindRun(runId); } catch { /* fail-open */ }
       return asToolValue({
         started: true, eval_round: roundDir, tmux: orchSessionName,
+        run_id: runId,
         serving_models: expectedModels, service_manifest: join(serviceDir, "service_manifest.json"),
         prelaunch_report: reportPath, release: "eval-release 账本已登记（config sha256）",
         // D14：评测参数继承落账（报告面——解析来源/指纹/口径；GT 外字段只在此报告面，不上卡）
@@ -1605,6 +1691,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         prompt_mode: promptMode.mode,
         prompt_mode_source: promptMode.source,
         eval_caliber: caliber,
+        ...rebound,
         note: "编排后台执行中（服务自启→staging→run_formal_eval→回灌，runner --model 取 manifest 期望名）——status 查询 receipt/四件套/model 标签",
       });
     },
@@ -1615,7 +1702,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     description:
       "badcase 两步链（轻量，正道化）：①build_raw_badcase_input.py 冻结账本（评估四件套＋L1 eval 资产→RawBadcaseAnalysis/v1，落 analysis/ledger/）②run_analysis_chain.py --raw-mainline <冻结账本> 一键链→viewer.html（GT/预测叠图）与 report/。脚本一律取 <kernelDir>/skills/（pin 单源，禁源工作树绝对路径）。无训练数据/无审阅时链按合同显式声明跳过。",
     parameters: {
-      run_id: { type: "string", required: true, description: "run 标识（实验目录＝runs/<run_id>）" },
+      run_id: { type: "string", description: "可选；省略时使用本会话当前绑定的实验。无绑定会返回 run_binding_required 与候选（含实验名与工作区），不要自行猜一个 id" },
       eval_assets_dir: { type: "string", description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl；缺省 runs/<run_id>/l1/eval）" },
       lane: { type: "string", description: "评估 lane（缺省 goods，与冻结账本/链一致）" },
       doc_type: { type: "string", description: "单据类型名（如 装箱单；缺省沿脚本中性缺省「单据」）" },
@@ -1627,11 +1714,15 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       schema: { type: "object", additionalProperties: true },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
-    presentCall: function(args: { run_id: string }) {
-      return { card: "generic" as const, title: `badcase 分析 — ${args.run_id}`, kind: "other" as const }
+    presentCall: function(args: { run_id?: string }) {
+      return { card: "generic" as const, title: `badcase 分析 — ${args.run_id ?? "会话绑定实验"}`, kind: "other" as const }
     },
-    async execute(args: { run_id: string; eval_assets_dir?: string; lane?: string; doc_type?: string; style_cluster_manifest?: string; coordinate_space?: string; gt_coordinate_space?: string }) {
-      const runDir = resolveRunDir(cfg.runsRoot, args.run_id);
+    async execute(args: { run_id?: string; eval_assets_dir?: string; lane?: string; doc_type?: string; style_cluster_manifest?: string; coordinate_space?: string; gt_coordinate_space?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+      // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选）
+      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id);
+      if (!runResolution.ok) return asToolValue(runResolution.payload);
+      const runId = runResolution.runId;
+      const runDir = runResolution.runDir;
       // pin 单源脚本面（批㉕B 段1：禁 ATF 源工作树绝对路径）
       const freezeScript = join(cfg.kernelDir, "skills", "atf-evaluate-checkpoints", "scripts", "build_raw_badcase_input.py");
       const chainScript = join(cfg.kernelDir, "skills", "atf-analyze-badcases", "scripts", "run_analysis_chain.py");
@@ -1682,14 +1773,18 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       if (chained.code !== 0) {
         return asToolValue({ ok: false, step: "chain", exit_code: chained.code, ledger: ledgerPath, stderr_tail: chained.stderr.slice(-800), note: "一键链失败——冻结账本已落 ledger/ 可续查" });
       }
+      // 批B1：会话账本绑定（auto_tool——成功动作才绑定，显式传入与绑定不同带 rebound_from）
+      const rebound = bindToolRunSuccess(exec, runId, runResolution.workspace, "auto_tool", args.run_id);
       return asToolValue({
         ok: true,
+        run_id: runId,
         ledger: ledgerPath,
         viewer_html: viewerPath,
         report_md: reportMd,
         report_html: reportHtml,
         viewer_ready: existsSync(viewerPath),
         report_ready: existsSync(reportMd),
+        ...rebound,
       });
     },
   });

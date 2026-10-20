@@ -31,6 +31,8 @@ export interface AtfRunScan {
   eval_notices?: unknown[];
   /** 批㊶-TRAIN-OBS T3：训练日志尾部投影（两键闭集；null＝缺席）。 */
   trainlog_tail?: unknown;
+  /** 批B1：run 显示名（用户改名优先，否则自动名；title 不含 workspace；null＝读失败不造名）。 */
+  display?: { title: string } | null;
 }
 export interface AtfGpuStatus {
   offline: boolean;
@@ -75,6 +77,8 @@ export interface AtfMonitorSnapshot {
     eval_notices: unknown[];
     /** 批㊶-TRAIN-OBS T3：训练日志尾部（capture-pane 采集面；null＝缺席）。 */
     trainlog_tail: unknown;
+    /** 批B1：run 显示名（additive 可选——缺席＝旧装配面，client 回退 run_id）。 */
+    display?: { title: string } | null;
     training: { active: boolean; points: Array<Record<string, unknown>>; pending_confirm: unknown };
   }>;
 }

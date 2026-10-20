@@ -34,7 +34,12 @@ import {
 import { probeEvalServiceHealth, type EvalServiceHealthFace } from "../../../../src/core/workspace/evalServiceHealth.js";
 import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readNumTrainEpochs, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
 import { trainObsTick, readTrainlogTail, resetTrainObsForTest, type TrainlogTailFace } from "../../../../src/core/workspace/trainObsSync.js";
-import { bucketedRunEntries, flatRunDirNames, resolveRunDir, RUN_MARKER_RELS, sweepAnsweredPendings } from "../../../../src/core/workspace/runLayout.js";
+import { bucketedRunEntries, flatRunDirNames, resolveRunDir, RUN_MARKER_RELS, sweepAnsweredPendings, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
+import { displayOf, buildRunCandidates, writeDisplay } from "../../../../src/core/workspace/runDisplay.js";
+import {
+  bindSessionRun, migrateFromRunBindings, readSessionBinding, resolveActiveRun, resolveBindingsHome, unbindSession,
+  type SessionRunBindingRecord, type UnboundReason,
+} from "../../../../src/core/workspace/sessionBindings.js";
 import { checkApprovalLedgerStartup, ledgerEnvPrefixForShell, homeLedgerPathOf } from "../../../../src/core/workspace/approvalLedger.js";
 import { EFFORT_CLOSED_IDS, openSettingsStore, type SettingsDoc, type SettingsStore } from "../../../../src/webui/settings.js";
 import {
@@ -150,6 +155,8 @@ export interface RunScan {
   train_notices: TrainTerminalNoticeFace[];
   /** 批㊶-TRAIN-OBS T3：训练日志尾部投影（capture-pane→trainlog.tail.json 读盘；null＝缺席）。 */
   trainlog_tail: TrainlogTailFace | null;
+  /** 批B1：run 显示名（用户改名优先，否则自动名；title 不含 workspace——additive 单键）。 */
+  display: { title: string } | null;
   /** 批㉝H：绑卡声明（train.sh/manifest——null＝读不到，client 仅显示全卡聚合）。 */
   gpu_binding: GpuBinding | null;
   /** 批㉞H：逐 eval 轮对比面（两轮对比视图数据源——空数组＝无轮产物）。 */
@@ -719,6 +726,15 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
     })(),
     // 批C1-1 D5：训练终态通知缺省空（跃迁状态机在 tickOnce——纯读面无上下文；同步器回填）
     train_notices: [],
+    // 批B1：run 显示名（读盘面——用户改名 webui/display.json 优先，否则按产物自动名；
+    // 读失败＝null 不造名，client 回退 run_id）
+    display: (() => {
+      try {
+        return { title: displayOf(dir, runId, workspace) };
+      } catch {
+        return null;
+      }
+    })(),
     // 批㊶-TRAIN-OBS T3：日志尾部投影（两键闭集 captured_at/lines——摘要化：行已 200 字符截断）
     trainlog_tail: readTrainlogTail(dir),
   };
@@ -1859,6 +1875,161 @@ export const eventsRouteHandler = (deps: {
 const sseCapturePane = (session: string): Promise<string[] | null> =>
   import("../../../../src/core/workspace/trainObsSync.js").then((m) => m.captureTrainlogPane(session));
 
+// ===== 批B1：会话↔Run 绑定端点（GET/POST /atf-ui/session-binding——鉴权同 settings）=====
+
+/** GET 响应体形态（binding/active/unbound_reason/recent/candidates——指令 B1 §三）。 */
+export interface SessionBindingPayload {
+  binding: SessionRunBindingRecord | null;
+  active: { run_id: string; workspace: string | null; title: string } | null;
+  unbound_reason: UnboundReason | "new" | null;
+  /** runsRoot 按 mtime 倒序前 3（空白会话空态——不带工作区偏好）。 */
+  recent: ReturnType<typeof buildRunCandidates>;
+  /** 本工作区优先、mtime 倒序、≤5。 */
+  candidates: ReturnType<typeof buildRunCandidates>;
+}
+
+/** GET 载荷组装（纯函数——vitest 直测；stale 不改账本：active:null＋reason:stale，持久化留给用户）。 */
+export const sessionBindingPayloadOf = (home: string, runsRoot: string, sessionId: string): SessionBindingPayload => {
+  const record = readSessionBinding(home, sessionId);
+  const preferWorkspace = record?.workspace ?? null;
+  let active: SessionBindingPayload["active"] = null;
+  let unboundReason: SessionBindingPayload["unbound_reason"] = null;
+  if (record === null) {
+    unboundReason = "new";
+  } else if (record.active_run_id === null || record.active_run_id === "") {
+    unboundReason = record.unbound_reason;
+  } else {
+    const resolution = resolveActiveRun(home, runsRoot, sessionId);
+    if (resolution.run !== null && resolution.runId !== null) {
+      active = {
+        run_id: resolution.runId,
+        workspace: resolution.workspace,
+        title: displayOf(resolution.run, resolution.runId, resolution.workspace),
+      };
+    } else {
+      unboundReason = "stale";
+    }
+  }
+  return {
+    binding: record,
+    active,
+    unbound_reason: unboundReason,
+    recent: buildRunCandidates(runsRoot, null, 3),
+    candidates: buildRunCandidates(runsRoot, preferWorkspace, 5),
+  };
+};
+
+/** 会话绑定端点 handler 工厂（viewerRouteHandler/eventsRouteHandler 同款形态——apply 注册，
+ *  home/runsRoot 注入 vitest 直测）。GET ?sessionId=… 查询；POST {sessionId, runId|null, rename?}。
+ *  错误码：缺 sessionId 400；run 不存在 404；title 非空且 ≤80 字否则 400。响应 JSON＋no-store。 */
+export const sessionBindingRouteHandler = (deps: {
+  home: string;
+  runsRoot: string;
+  reject?: (req: IncomingMessage) => 401 | 403 | undefined;
+}) =>
+(req: IncomingMessage, res: ServerResponse): void => {
+  const respondJson = (status: number, payload: Record<string, unknown>): void => {
+    res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+    res.end(JSON.stringify(payload));
+  };
+  const rejection = deps.reject?.(req);
+  if (rejection !== undefined) {
+    res.writeHead(rejection, { "content-type": "text/plain; charset=utf-8" });
+    res.end("dsh web authentication required\n");
+    return;
+  }
+  if (req.method === "GET") {
+    const sessionId = new URL(req.url ?? "/", "http://localhost").searchParams.get("sessionId") ?? "";
+    if (sessionId.trim() === "") {
+      respondJson(400, { error: "sessionId_required", message: "缺 sessionId" });
+      return;
+    }
+    respondJson(200, { ...sessionBindingPayloadOf(deps.home, deps.runsRoot, sessionId.trim()) });
+    return;
+  }
+  if (req.method !== "POST") {
+    res.writeHead(405, { allow: "GET, POST" });
+    res.end();
+    return;
+  }
+  let body = "";
+  req.on("data", (chunk: Buffer) => { body += String(chunk); });
+  req.on("end", () => {
+    let incoming: Record<string, unknown> = {};
+    try {
+      incoming = JSON.parse(body === "" ? "{}" : body) as Record<string, unknown>;
+    } catch {
+      respondJson(400, { error: "invalid_json", message: "请求体须为 JSON" });
+      return;
+    }
+    const sessionId = typeof incoming["sessionId"] === "string" ? (incoming["sessionId"] as string).trim() : "";
+    if (sessionId === "") {
+      respondJson(400, { error: "sessionId_required", message: "缺 sessionId" });
+      return;
+    }
+    const hasRunId = Object.prototype.hasOwnProperty.call(incoming, "runId");
+    const rename = incoming["rename"];
+    if (!hasRunId && rename === undefined) {
+      respondJson(400, { error: "runId_or_rename_required", message: "缺 runId（string|null）与 rename" });
+      return;
+    }
+    // 校验全集先行（fail-before-write：任一非法即整体拒绝，零落盘）
+    const renameRaw = incoming["rename"];
+    const renameParsed: { runId: string; title: string } | null = (() => {
+      if (renameRaw === undefined) return null;
+      if (renameRaw === null || typeof renameRaw !== "object") return null;
+      const raw = renameRaw as Record<string, unknown>;
+      return {
+        runId: typeof raw["runId"] === "string" ? (raw["runId"] as string).trim() : "",
+        title: typeof raw["title"] === "string" ? (raw["title"] as string).trim() : "",
+      };
+    })();
+    const renameInvalid =
+      (renameRaw !== undefined && (renameRaw === null || typeof renameRaw !== "object")) ||
+      (renameParsed !== null && (renameParsed.runId === "" || renameParsed.title === "" || renameParsed.title.length > 80));
+    if (renameInvalid) {
+      respondJson(400, { error: "rename_invalid", message: "rename 须为 {runId, title}——title 非空且 ≤80 字" });
+      return;
+    }
+    let bindDir: string | null = null;
+    if (hasRunId) {
+      const raw = incoming["runId"];
+      if (raw !== null && (typeof raw !== "string" || raw.trim() === "")) {
+        respondJson(400, { error: "runId_invalid", message: "runId 须为字符串或 null" });
+        return;
+      }
+      if (raw !== null) {
+        bindDir = resolveRunDir(deps.runsRoot, (raw as string).trim());
+        if (!existsSync(bindDir)) {
+          respondJson(404, { error: "run_not_found", message: `实验不存在：${(raw as string).trim()}` });
+          return;
+        }
+      }
+    }
+    if (renameParsed !== null) {
+      const renameDir = resolveRunDir(deps.runsRoot, renameParsed.runId);
+      if (!existsSync(renameDir)) {
+        respondJson(404, { error: "run_not_found", message: `实验不存在：${renameParsed.runId}` });
+        return;
+      }
+      if (!writeDisplay(renameDir, renameParsed.title)) {
+        respondJson(500, { error: "display_write_failed", message: "改名写入失败——run 目录不可写" });
+        return;
+      }
+    }
+    if (bindDir !== null) {
+      bindSessionRun(deps.home, sessionId, {
+        runId: (incoming["runId"] as string).trim(),
+        workspace: workspaceOfRunDir(deps.runsRoot, bindDir),
+        source: "user_pick",
+      });
+    } else if (hasRunId) {
+      unbindSession(deps.home, sessionId, "cleared");
+    }
+    respondJson(200, { saved: true, ...sessionBindingPayloadOf(deps.home, deps.runsRoot, sessionId) });
+  });
+};
+
 export function apply(
   ctx: {
     effect(run: () => () => void, label: string): void;
@@ -1881,6 +2052,16 @@ export function apply(
     console.warn(`[atf-ui] ⚠ ${ledgerCheck.message}`);
   } else {
     console.log(`[atf-ui] ${ledgerCheck.message}`);
+  }
+  // 批B1：会话绑定账本首次启动迁移（仅账本文件不存在时执行——run 侧 binding.json 聚合；
+  // 幂等；迁移数入 boot 日志。失败 fail-open 不阻断同步器）。
+  try {
+    const migratedSessions = migrateFromRunBindings(resolveBindingsHome(process.env), resolved.runsRoot);
+    if (migratedSessions > 0) {
+      console.log(`[atf-ui] 会话绑定账本迁移：${String(migratedSessions)} 个会话自 run 侧 binding.json 聚合（source=migrated）`);
+    }
+  } catch (cause) {
+    console.error(`[atf-ui] 会话绑定账本迁移失败（fail-open）: ${cause instanceof Error ? cause.message : String(cause)}`);
   }
   // 批㊶-E-H 项 2.3：桥徽标注入面（与 atf-tools 装配单源同 env 推导；boot 日志一行桥类型）
   const bridge = bridgeBadgeSurface(process.env, repoRoot);
@@ -2223,6 +2404,19 @@ export function apply(
     const disposeRunFile = webServer.register({ kind: "exact", path: "/atf-ui/run-file", handler: runFileHandler });
     ctx.effect(() => disposeRunFile, "atf-ui: run 产物只读路由");
     console.log("[atf-ui] run 产物只读路由已注册（/atf-ui/run-file——白名单扩展＋runsRoot 越界拒）");
+
+    // ── 批B1：会话↔Run 绑定端点（GET 查询绑定＋候选；POST 绑定/解除/改名；鉴权同 settings）──
+    const disposeSessionBinding = webServer.register({
+      kind: "exact",
+      path: "/atf-ui/session-binding",
+      handler: sessionBindingRouteHandler({
+        home: resolveBindingsHome(process.env),
+        runsRoot: resolved.runsRoot,
+        reject: (req) => ctx.connection?.requestRejection(req),
+      }),
+    });
+    ctx.effect(() => disposeSessionBinding, "atf-ui: 会话绑定端点");
+    console.log("[atf-ui] 会话绑定端点已注册（/atf-ui/session-binding——SessionRunBinding/v1 账本）");
   }
   void tickOnce(resolved);
   const timer: NodeJS.Timeout = setInterval(() => void tickOnce(resolved), resolved.intervalMs);
