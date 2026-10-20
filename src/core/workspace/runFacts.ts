@@ -110,6 +110,8 @@ export interface RunProgress {
   /** 批㊶-TRAIN-OBS additive：记账本连续 12 轮（≈1 分钟）停更标记（停环前末次写入——不猜原因）。 */
   stale?: boolean;
   updated_at: string;
+  /** D16：源 trainer_log mtime ISO（源新鲜度门 stale 快照回写源时间——updated_at 不得 now）。 */
+  source_updated_at?: string;
 }
 
 export const progressPathOf = (runDir: string): string => join(runDir, "webui", "progress.json");
@@ -168,9 +170,12 @@ export const formatEta = (etaS: number | undefined): string | null => {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 };
 
-/** fresh 判定：updated_at 在新鲜窗口内（解析失败/过期＝false）。 */
+/** fresh 判定：updated_at 在新鲜窗口内（解析失败/过期＝false）。
+ *  D16：`stale === true` 恒 false（源停更快照——无论 updated_at 新旧，防假活续命）；
+ *  旧文件无 stale 字段 → 行为不变（兼容）。 */
 export const progressFresh = (progress: RunProgress | null, nowMs: number, windowMs: number): boolean => {
   if (progress === null) return false;
+  if (progress.stale === true) return false;
   const at = Date.parse(progress.updated_at);
   if (Number.isFinite(at) === false) return false;
   return nowMs - at <= windowMs;

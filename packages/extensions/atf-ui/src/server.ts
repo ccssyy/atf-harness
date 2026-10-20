@@ -423,18 +423,11 @@ export const buildEnvSurface = (iter: Record<string, unknown> | null, runId: str
 };
 
 /** 单 run 目录标记推导（任务卡 chat 卡面与同步器同源——trainingFace status 复用本出口）。 */
-/** 批㊶-L L-1：训练活跃新鲜窗口缺省（毫秒）——env `ATF_TRAIN_ACTIVE_WINDOW_MS` 可配。 */
-export const TRAIN_ACTIVE_WINDOW_MS_DEFAULT = 180_000;
-export const TRAIN_ACTIVE_WINDOW_MS_ENV = "ATF_TRAIN_ACTIVE_WINDOW_MS";
-
-/** 新鲜窗口解析（gpuQueuePollMsFromEnv 同风格）：非法/≤0 回落缺省。 */
-export const resolveTrainActiveWindowMs = (env: NodeJS.ProcessEnv): number => {
-  const raw = env[TRAIN_ACTIVE_WINDOW_MS_ENV];
-  if (raw === undefined || raw.trim() === "") return TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) return TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
-  return parsed;
-};
+/** 单 run 目录标记推导（任务卡 chat 卡面与同步器同源——trainingFace status 复用本出口）。 */
+/** 批㊶-L L-1／D16 单源迁移：训练活跃新鲜窗口常量/解析迁 core trainObsSync.ts
+ *  （源新鲜度门同源消费——core 不得反向依赖 extensions）；此处 re-export 兼容既有引用面。 */
+export { TRAIN_ACTIVE_WINDOW_MS_DEFAULT, TRAIN_ACTIVE_WINDOW_MS_ENV, resolveTrainActiveWindowMs } from "../../../../src/core/workspace/trainObsSync.js";
+import { resolveTrainActiveWindowMs, TRAIN_ACTIVE_WINDOW_MS_DEFAULT } from "../../../../src/core/workspace/trainObsSync.js";
 
 /** 训练活跃注入面（调用方——同步器循环每周期探测一次 tmux，不逐 run）。 */
 export interface ScanLiveness {

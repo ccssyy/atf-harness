@@ -15,7 +15,7 @@
  * 原子写＝tmp＋rename（读侧永不见半截文件）。
  */
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmuxCommand } from "./tmuxLiveness.js";
 import {
@@ -32,6 +32,28 @@ export const TRAIN_OBS_STALE_ROUNDS = 12;
 export const TRAINLOG_TAIL_MAX_LINES = 40;
 /** 单行字符截断。 */
 export const TRAINLOG_TAIL_MAX_LINE_CHARS = 200;
+
+/** 批㊶-L L-1／D16 单源迁移：训练活跃新鲜窗口缺省（毫秒）——env `ATF_TRAIN_ACTIVE_WINDOW_MS`
+ *  可配（非法/≤0 回落缺省 180s）。常量自 atf-ui server.ts 迁入 core（trainObsSync 源新鲜度门
+ *  同源消费——core 不得反向依赖 extensions；server.ts re-export 兼容既有引用面）。 */
+export const TRAIN_ACTIVE_WINDOW_MS_DEFAULT = 180_000;
+export const TRAIN_ACTIVE_WINDOW_MS_ENV = "ATF_TRAIN_ACTIVE_WINDOW_MS";
+export const resolveTrainActiveWindowMs = (env: NodeJS.ProcessEnv): number => {
+  const raw = env[TRAIN_ACTIVE_WINDOW_MS_ENV];
+  if (raw === undefined || raw.trim() === "") return TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
+  return parsed;
+};
+
+/** 源 trainer_log mtime（stat 失败＝null——文件消失/不可读，走 stale 分支）。 */
+const sourceLogMtimeMs = (runDir: string): number | null => {
+  try {
+    return statSync(join(runDir, "training", "trainer_log.jsonl")).mtimeMs;
+  } catch {
+    return null;
+  }
+};
 
 /** per-run 观测态（进程内——syncer 重启即复位，progress.json 落盘态不受影响）。
  *  批㊶-TRAIN-OBS-FIX R1-b 语义修正：
@@ -134,6 +156,10 @@ export interface TrainObsDeps {
   capture?: (session: string) => Promise<string[] | null>;
   sessionName?: (runId: string) => string | null;
   now?: () => Date;
+  /** D16：源 trainer_log mtime（缺省真 statSync；stat 失败返回 null＝走 stale 分支）。 */
+  sourceMtime?: (runDir: string) => number | null;
+  /** D16：新鲜窗口 env（缺省 process.env——resolveTrainActiveWindowMs 单源）。 */
+  env?: NodeJS.ProcessEnv;
 }
 
 /** 单轮观测（同步器每 5s 对活跃训练 run 调一次）。返回该轮处置（留证/测试断言用）。 */
@@ -148,6 +174,7 @@ export const trainObsTick = async (
   const readTail = deps.readTail ?? readTrainerLogTail;
   const lastProgress = deps.lastProgress ?? readProgress;
   const writeProg = deps.writeProg ?? writeProgress;
+  const sourceMtime = deps.sourceMtime ?? sourceLogMtimeMs;
   const now = deps.now ?? (() => new Date());
   let state = obsStates.get(runId);
   if (state === undefined) {
@@ -161,16 +188,37 @@ export const trainObsTick = async (
   const tail = readTail(runDir);
 
   if (tail !== null) {
-    // 有效行：复活（清 stale/misses）→写 progress→终态判定
+    // 有效行：复活（清 stale/misses）→源新鲜度门→写 progress→终态判定
     state.seenValid = true;
     state.misses = 0;
-    state.staleWritten = false;
-    writeProg(runDir, buildProgressFromTrainerLog(tail, numEpochs, nowIso));
-    if (tail.percentage >= 100) {
-      state.stopped = true; // percentage ≥100＝终态——写一次后停环（防复活）
-      result = "finished-stopped";
+    // D16 源新鲜度门：trainer_log mtime 超窗（源停更）→ 写一次 stale 快照后停写。
+    // updated_at/source_updated_at 回写源 mtime（不得 now——假活根因即 now 每 5s 续命）；
+    // 复活须过本门：文件 mtime 变新（新行落盘）→ staleWritten 清零自然恢复写。
+    // stat 失败（文件消失）同走 stale 分支（源时刻不可得＝沿用 last.updated_at，无则 now）。
+    const windowMs = resolveTrainActiveWindowMs(deps.env ?? process.env);
+    const srcMtimeMs = sourceMtime(runDir);
+    const ageMs = srcMtimeMs !== null ? now().getTime() - srcMtimeMs : Number.POSITIVE_INFINITY;
+    if (ageMs > windowMs) {
+      if (!state.staleWritten) {
+        const last = lastProgress(runDir);
+        const srcIso = srcMtimeMs !== null
+          ? new Date(srcMtimeMs).toISOString()
+          : (last !== null && typeof last.updated_at === "string" ? last.updated_at : nowIso);
+        writeProg(runDir, { ...(last ?? {}), stale: true, updated_at: srcIso, source_updated_at: srcIso });
+        state.staleWritten = true;
+        result = "stale-stopped"; // 停写——mtime 变新即复活（过本门）
+      } else {
+        result = "already-stopped"; // stale 快照已在盘——不再续写
+      }
     } else {
-      result = "written";
+      state.staleWritten = false;
+      writeProg(runDir, buildProgressFromTrainerLog(tail, numEpochs, nowIso));
+      if (tail.percentage >= 100) {
+        state.stopped = true; // percentage ≥100＝终态——写一次后停环（防复活）
+        result = "finished-stopped";
+      } else {
+        result = "written";
+      }
     }
   } else if (!state.seenValid) {
     // R1-b：模型加载窗（首条有效行前）——不计 miss 不判 stale（加载可远超 60s）
