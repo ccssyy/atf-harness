@@ -958,7 +958,12 @@ export function deriveEvalRoundDir(runDir: string): string {
 interface EvalStatusValue {
   action: string;
   run_id: string;
-  eval_round?: string;
+  /** D15：完成轮（orch/eval/metrics_summary.json 在场）；无完成轮＝null（note 指因）。 */
+  eval_round?: string | null;
+  /** D15：名称最新轮（含部分/进行中——照实展示）；与 eval_round 同值时也返回。 */
+  latest_round?: string | null;
+  /** D15：latest_round ≠ eval_round（最新轮未完成）→ true。 */
+  latest_round_incomplete?: boolean;
   service?: Record<string, unknown>;
   orchestration?: Record<string, unknown>;
   files?: string[];
@@ -971,27 +976,49 @@ interface EvalStatusValue {
   tmux_probe?: { ok: false; reason: string; guidance: string } | null;
 }
 
-/** atf_evaluate status：最新评估轮的服务 receipt/编排状态/四件套与 model 标签复核。 */
+/** atf_evaluate status：最新**完成**评估轮的服务 receipt/编排状态/四件套与 model 标签复核。
+ *  D15 选轮双值：latest_round＝名称最新（含部分/进行中轮——照实展示「有一轮在走」）；
+ *  eval_round＝最新一个 `orch/eval/metrics_summary.json` 在场的轮（service/orchestration/
+ *  files/summary 全取完成轮——部分轮天然不算 completed，不做 dry-run 标记）。
+ *  两值不同 → 返回体附 latest_round_incomplete:true。不删除任何轮目录。 */
 export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelDir: string }): Promise<ReturnType<typeof asToolValue>> {
   const evalRoot = join(resolveRunDir(cfg.runsRoot, runId), "eval");
-  let latest: string | null = null;
+  let roundNames: string[] = [];
   try {
-    const rounds = readdirSync(evalRoot, { withFileTypes: true })
+    roundNames = readdirSync(evalRoot, { withFileTypes: true })
       .filter((e) => e.isDirectory() && /^\d+-\d{8}$/.test(e.name)).map((e) => e.name).sort();
-    latest = rounds.length > 0 ? join(evalRoot, rounds[rounds.length - 1] ?? "") : null;
   } catch { /* 无评估轮 */ }
+  const latestName = roundNames.length > 0 ? roundNames[roundNames.length - 1] ?? null : null;
+  let completedName: string | null = null;
+  for (let i = roundNames.length - 1; i >= 0; i -= 1) {
+    if (existsSync(join(evalRoot, roundNames[i] as string, "orch", "eval", "metrics_summary.json"))) {
+      completedName = roundNames[i] as string;
+      break;
+    }
+  }
+  const latest = completedName !== null ? join(evalRoot, completedName) : null;
   const { execSync } = await import("node:child_process");
   // 批㊶-ISO E1：探测走命名域单源（前缀未设＝false fail-closed；refused 随 payload 回流）
   // 批㊶-P1 S1：编排基名作用域化——按 run_id 取名（同实例并发 run 评估编排互不踩）
   const orchBase = evalOrchSessionBase(runId);
   const orchProbe = probeSession(orchBase);
   let running = orchProbe.present;
-  if (latest === null) {
+  if (latestName === null) {
     return asToolValue({
       action: "status", run_id: runId, running,
       tmux: resolveLaunchSessionName(orchBase),
       ...(orchProbe.refused !== null ? { tmux_probe: orchProbe.refused } : {}),
       note: "无评估轮目录——先 start",
+    });
+  }
+  if (latest === null) {
+    // 有轮目录但无完成轮：eval_round=null＋note；latest_round 照实返回
+    return asToolValue({
+      action: "status", run_id: runId, eval_round: null,
+      latest_round: latestName, latest_round_incomplete: true, running,
+      tmux: resolveLaunchSessionName(orchBase),
+      ...(orchProbe.refused !== null ? { tmux_probe: orchProbe.refused } : {}),
+      note: "尚无完成的评估轮",
     });
   }
   const serviceReceiptPath = join(latest, "service", "service", "service_receipt.json");
@@ -1024,6 +1051,7 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
   const readiness = collectEvalReadiness(runDirEval);
   const value: EvalStatusValue = {
     action: "status", run_id: runId, eval_round: latest, running,
+    ...(completedName !== latestName ? { latest_round: latestName, latest_round_incomplete: true } : { latest_round: completedName }),
     tmux: resolveLaunchSessionName(orchBase),
     ...(orchProbe.refused !== null ? { tmux_probe: orchProbe.refused } : {}),
     ...(service !== null ? { service } : {}),
