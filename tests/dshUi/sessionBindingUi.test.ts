@@ -435,4 +435,79 @@ describe("B2 绑定 UI（client.js 真加载·jsdom）", () => {
     expect(paneEl.querySelector(".atf-gpu-grid")).toBeNull(); // 不渲染 GPU 细卡
     expect(paneEl.querySelectorAll(".atf-m-empty-row").length).toBe(3); // 最近 3 条
   });
+
+  // ── 批B2a：选择面板跨组去重（只改展示——active/last/recent 进 shown，最近与本工作区
+  // 其他互斥，全部组保持全量，空组不渲染标题）─────────────────────────────────────
+  function groupRows(text: string): Element[] {
+    const group = Array.from(panelEl().querySelectorAll(".atf-bp-group")).find(
+      (g) => (g.querySelector(".atf-bp-gh")?.textContent ?? "") === text,
+    );
+    return group === undefined ? [] : Array.from(group.querySelectorAll("button.atf-bp-main"));
+  }
+  function groupNames(): Array<string | null> {
+    return Array.from(panelEl().querySelectorAll(".atf-bp-gh")).map((g) => g.textContent);
+  }
+
+  it("B2a①active 同时出现在 recent → 最近实验组不重复当前绑定", async () => {
+    bindingPayload = {
+      ...boundPayload(),
+      recent: [
+        { run_id: "run-a", workspace: WS_A, title: "装箱单 4类", mtime: "m3" },
+        { run_id: "run-b", workspace: null, title: "冒烟验证", mtime: "m2" },
+        { run_id: "run-c", workspace: "ws-c", title: "4类联合", mtime: "m1" },
+      ],
+    };
+    await renderHeader("sess-1");
+    await act(async () => { chipButton().click(); });
+    await flush();
+    const rows = groupRows("最近实验");
+    expect(rows.length).toBe(2); // run-a 已在「本会话」组——跳过
+    expect(rows.map((r) => r.textContent).join("")).not.toContain("run-a");
+  });
+
+  it("B2a②recent 与 candidates 重叠 → 本工作区其他不重复（互斥）", async () => {
+    bindingPayload = {
+      ...boundPayload(),
+      candidates: [
+        { run_id: "run-b", workspace: WS_A, title: "冒烟验证", mtime: "m2" }, // 已在 recent
+        { run_id: "run-f", workspace: WS_A, title: "同区候选一", mtime: "m1" },
+      ],
+    };
+    await renderHeader("sess-1");
+    await act(async () => { chipButton().click(); });
+    await flush();
+    const rows = groupRows("本工作区其他");
+    expect(rows.length).toBe(1); // run-b 已在最近实验——跳过
+    expect(rows[0]!.textContent).toContain("run-f");
+    expect(rows.map((r) => r.textContent).join("")).not.toContain("run-b");
+  });
+
+  it("B2a③去重后组为空 → 不渲染组标题", async () => {
+    bindingPayload = {
+      ...boundPayload(),
+      recent: [{ run_id: "run-a", workspace: WS_A, title: "装箱单 4类", mtime: "m1" }], // 唯一条＝active
+      candidates: [{ run_id: "run-f", workspace: WS_A, title: "同区候选一", mtime: "m0" }],
+    };
+    await renderHeader("sess-1");
+    await act(async () => { chipButton().click(); });
+    await flush();
+    const names = groupNames();
+    expect(names).not.toContain("最近实验"); // 全被 shown 去重 → 组整组缺席
+    expect(names).toEqual(["本会话", "本工作区其他", "全部实例（只读）"]);
+  });
+
+  it("B2a④「全部」组保持全量（含 active/去重组内 run）", async () => {
+    bindingPayload = {
+      ...boundPayload(),
+      recent: [{ run_id: "run-a", workspace: WS_A, title: "装箱单 4类", mtime: "m1" }],
+    };
+    await renderHeader("sess-1");
+    await act(async () => { chipButton().click(); });
+    await flush();
+    const allRows = groupRows("全部实例（只读）");
+    const allText = allRows.map((r) => r.textContent).join("");
+    expect(allText).toContain("run-a"); // 目录不去重——active 仍在列
+    expect(allText).toContain("run-e");
+    expect(allText).toContain("run-b");
+  });
 });

@@ -2054,7 +2054,12 @@ window.__ModuleLoader__.load({
             React.createElement('button', { className: 'atf-bp-act', onClick: function() { setRename(null) } }, '取消'))
         : null
 
-      // 分组装配（§三顺序；未绑定时无「本会话」与「本工作区其他」——候选并入空态）
+      // 批B2a：跨组去重——shown 集按渲染序累积（active→继续上次→最近实验→本工作区其他），
+      // 同 run 不在两组同屏重复；「全部实例（只读）」是目录，保持全量不去重；组去重为空时
+      // groupEl 返回 null（不渲染组标题）。只改展示，不改绑定/候选语义（红线）。
+      var shown = {}
+      if (bound && b.active.run_id) shown[b.active.run_id] = true
+      if (!bound && lastInfo !== null) shown[lastInfo.runId] = true
       var groups = []
       if (bound) {
         groups.push(groupEl('本会话', [
@@ -2087,15 +2092,21 @@ window.__ModuleLoader__.load({
             lastSt !== null ? React.createElement('span', { className: 'atf-bp-st' + lastSt.cls }, lastSt.label) : null))
         groups.push(groupEl('继续上次', [lastRow]))
       }
-      var recentRows = (b.recent || []).map(function(item, ri) {
+      var recentRows = (b.recent || []).filter(function(item) {
+        return item && shown[item.run_id] !== true
+      }).map(function(item, ri) {
+        shown[item.run_id] = true
         return rowEl({ runId: item.run_id, workspace: item.workspace, title: item.title, key: 'r' + ri })
       })
       groups.push(groupEl('最近实验', recentRows))
       if (bound) {
         var others = (b.candidates || []).filter(function(c) {
-          return c.run_id !== b.active.run_id && (b.active.workspace === null || b.active.workspace === undefined || c.workspace === b.active.workspace)
+          return c && shown[c.run_id] !== true
+            && c.run_id !== b.active.run_id
+            && (b.active.workspace === null || b.active.workspace === undefined || c.workspace === b.active.workspace)
         }).slice(0, 5)
         groups.push(groupEl('本工作区其他', others.map(function(c, ci) {
+          shown[c.run_id] = true
           return rowEl({ runId: c.run_id, workspace: c.workspace, title: c.title, key: 'o' + ci })
         })))
       }
