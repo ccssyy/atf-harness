@@ -607,13 +607,26 @@ window.__ModuleLoader__.load({
     }
 
     /** sparkline（宽随卡片高 22px；点 <2 不画——无历史不画平线）。 */
+    /** 迷你趋势线：可选固定域 props.domain=[min,max]（D11-2a——util/VRAM 共享 0–100 域，
+     *  恒值/不同尺度序列两线可分）；未给维持序列自身 min/max 现状。y clamp [2,20]。 */
     function Sparkline(props) {
       var values = props.values
       if (!Array.isArray(values) || values.length < 2) return null
-      var min = Math.min.apply(null, values), max = Math.max.apply(null, values)
+      var min, max
+      if (Array.isArray(props.domain) && props.domain.length === 2
+        && typeof props.domain[0] === 'number' && typeof props.domain[1] === 'number') {
+        min = props.domain[0]
+        max = props.domain[1]
+      } else {
+        min = Math.min.apply(null, values)
+        max = Math.max.apply(null, values)
+      }
       var range = max - min || 1
       var pts = values.map(function(v, i) {
-        return ((i / (values.length - 1)) * 100).toFixed(1) + ',' + (20 - ((v - min) / range) * 18).toFixed(1)
+        var y = 20 - ((v - min) / range) * 18
+        if (y < 2) y = 2
+        if (y > 20) y = 20
+        return ((i / (values.length - 1)) * 100).toFixed(1) + ',' + y.toFixed(1)
       }).join(' ')
       return React.createElement('svg', { className: 'atf-spark-svg', viewBox: '0 0 100 22', preserveAspectRatio: 'none' },
         React.createElement('polyline', { points: pts, fill: 'none', stroke: props.color, strokeWidth: 1.4 }))
@@ -629,7 +642,11 @@ window.__ModuleLoader__.load({
       var busy = util !== null && util > 0
       var series = props.series || null
       var utilVals = series === null ? null : series.map(function(g) { return (g && typeof g.util === 'number') ? g.util : null }).filter(function(v) { return v !== null })
-      var memVals = series === null ? null : series.map(function(g) { return (g && typeof g.memUsed === 'number') ? g.memUsed : null }).filter(function(v) { return v !== null })
+      // D11-2a：VRAM 转百分比序列（memUsed/memTotal*100；total≤0 的采样点丢弃不画）——与 util 共享 0–100 域
+      var memPctVals = series === null ? null : series.map(function(g) {
+        if (!g || typeof g.memUsed !== 'number' || typeof g.memTotal !== 'number' || g.memTotal <= 0) return null
+        return Math.min(100, (g.memUsed / g.memTotal) * 100)
+      }).filter(function(v) { return v !== null })
       var proc = series !== null && series.length > 0 ? (series[series.length - 1].procTop || null) : (props.procTop || null)
       return React.createElement('div', { className: 'atf-gpu-tile' + (busy ? ' busy' : '') },
         React.createElement('div', { className: 'atf-gpu-h' },
@@ -642,10 +659,10 @@ window.__ModuleLoader__.load({
           React.createElement('span', null, (typeof card.temperature === 'number' ? Math.round(card.temperature) + '°' : '—') + ' ' + (typeof card.powerDraw === 'number' ? Math.round(card.powerDraw) + 'W' : '—'))),
         props.expanded ? React.createElement('div', { className: 'atf-gpu-spark' },
           utilVals !== null && utilVals.length >= 2
-            ? React.createElement(Sparkline, { values: utilVals, color: 'var(--atf-spark-util)' })
+            ? React.createElement(Sparkline, { values: utilVals, domain: [0, 100], color: 'var(--atf-spark-util)' })
             : React.createElement('div', { className: 'atf-gpu-nohist' }, '暂无历史'),
-          memVals !== null && memVals.length >= 2
-            ? React.createElement(Sparkline, { values: memVals, color: 'var(--atf-spark-mem)' })
+          memPctVals !== null && memPctVals.length >= 2
+            ? React.createElement(Sparkline, { values: memPctVals, domain: [0, 100], color: 'var(--atf-spark-mem)' })
             : null,
           React.createElement('div', { className: 'atf-gpu-proc' },
             '进程：', proc !== null ? proc.name + ' · ' + (mibToG(proc.memMiB) || '—') + ' · pid ' + proc.pid : '—')) : null)
@@ -997,6 +1014,33 @@ window.__ModuleLoader__.load({
             React.createElement('div', { className: 'atf-m-v' }, kpiF1 === null ? '—' : kpiF1)),
           React.createElement('div', { className: 'atf-m-kpi' }, React.createElement('div', { className: 'atf-m-k' }, '显存'),
             React.createElement('div', { className: 'atf-m-v' }, kpiVram === null ? '—' : kpiVram))),
+        // ③.5 运行环境（D11-2a 恢复——UI 稿 v3.1：2×2 紧凑网格，当前选中 run 的 env 面；
+        // 四项全 —/空 → 整块不渲染；部分缺失逐项 —；长值单行 ellipsis＋title 全文；
+        // 标签禁键名。右上 hint＝部署默认权限档位（server 注入面 label||key）。）
+        (function() {
+          var env = run && run.env
+          var cells = [
+            { k: '基模型', v: env && typeof env.base_model === 'string' ? env.base_model : '' },
+            { k: '数据集', v: env && typeof env.dataset_keys === 'string' ? env.dataset_keys : '' },
+            { k: '并行', v: env && typeof env.deepspeed === 'string' ? env.deepspeed : '' },
+            { k: '通道', v: env && typeof env.lane === 'string' ? env.lane : '' },
+          ]
+          var visible = cells.some(function(c) { return c.v !== '' && c.v !== '—' })
+          if (!visible) return null
+          var preset = (typeof window !== 'undefined' && window.__ATF_UI_CONFIG__ && window.__ATF_UI_CONFIG__.permissionPreset) || null
+          var permText = preset ? String(preset.label || preset.key || '') : ''
+          return React.createElement('div', { className: 'atf-m-sec' },
+            React.createElement('div', { className: 'atf-m-sec-h' },
+              React.createElement('span', { className: 'atf-sec-t' }, '运行环境'),
+              permText !== '' ? React.createElement('span', { className: 'atf-sec-hint' }, '权限档位：' + permText) : null),
+            React.createElement('div', { className: 'atf-env-grid' },
+              cells.map(function(c, ei) {
+                var v = c.v === '' ? '—' : c.v
+                return React.createElement('div', { key: c.k, className: 'atf-env-cell' },
+                  React.createElement('div', { className: 'atf-env-k' }, c.k),
+                  React.createElement('div', { className: 'atf-env-v', title: v }, v))
+              })))
+        })(),
         // ④ Loss 曲线
         React.createElement(LossChart, { run: run }),
         // ⑤ GPU 区（默认 4 列紧凑；展开 2 列＋双 sparkline＋进程 top1）
@@ -2866,6 +2910,12 @@ window.__ModuleLoader__.load({
             '.atf-m-seg.done .atf-m-seg-lbl,.atf-m-seg.active .atf-m-seg-lbl{color:var(--dsw-alias-label-secondary,#64748b);}',
             '.atf-m-seg.failed .atf-m-seg-lbl{color:var(--dsw-static-red-500);}',
             '.atf-m-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:8px 0 0;}',
+            // D11-2a：运行环境块（2×2 紧凑——基模型/数据集/并行/通道；长值 ellipsis＋title 全文）
+            '.atf-env-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 10px;}',
+            '.atf-env-cell{border:1px solid rgba(128,128,128,.18);border-radius:7px;padding:4px 7px;min-width:0;}',
+            '.atf-env-k{font-size:10px;color:var(--dsw-alias-label-tertiary,#64748b);margin-bottom:1px;}',
+            '.atf-env-v{font-size:11px;font-weight:600;color:var(--dsw-alias-label-primary,#1e293b);',
+            '  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
             '.atf-m-narrow .atf-m-kpis{grid-template-columns:repeat(2,1fr);}',
             '.atf-m-kpi{border:1px solid rgba(128,128,128,.18);border-radius:9px;padding:6px 8px;background:rgba(128,128,128,.04);}',
             '.atf-m-k{font-size:10.5px;color:var(--dsw-alias-label-tertiary,#64748b);margin-bottom:2px;}',
@@ -3059,7 +3109,7 @@ window.__ModuleLoader__.load({
         ctx.slots.inject('conversation.session.header.utilities', function() {
           return ctx.slots.register(listSlotOptions({
             name: 'conversation.session.header.utilities',
-            id: 'atf-gpu-toggle',
+            id: 'atf-monitor-pill',
             order: 900,
             inject: function(sessionId) {
               store.sessionId = sessionId

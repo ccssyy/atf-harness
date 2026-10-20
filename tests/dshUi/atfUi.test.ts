@@ -1285,7 +1285,7 @@ describe("批㊶-S3 S-B1——通知面投影（monitor.json additive 键三同�
     // ——D11-1 新增第四处：训练配置页 settings.section 注册）
     expect(clientSource.match(/slots\.register\(listSlotOptions\(/g)?.length).toBe(4);
     // 逐处字段完备：id＋order 成对在位（显式注册事实字段——现状仍全带）
-    for (const id of ["atf-gpu-toggle", "atf-dock-row", "atf-effort-select", "atf-training-config"]) {
+    for (const id of ["atf-monitor-pill", "atf-dock-row", "atf-effort-select", "atf-training-config"]) {
       const at = clientSource.indexOf(`id: '${id}'`);
       expect(at).toBeGreaterThan(0);
       const window = clientSource.slice(Math.max(0, at - 200), at + 200);
