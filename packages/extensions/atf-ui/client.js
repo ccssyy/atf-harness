@@ -109,13 +109,200 @@ window.__ModuleLoader__.load({
       // 批㉛段3.1：右栏训练监控抽屉（默认收起——chat 不受挡；打开后选 run 联动）
       monitorOpen: false,
       monitorRunId: null,
+      // 批B2 §四：全部模式（只读浏览）与绑定选择面板开合——升 store 单源（面板/空态/胶囊
+      // 都要驱动，MonitorPanel 本地态升格；语义不变）
+      monitorShowAll: false,
+      bindingPanel: false,
       taskCardOpen: false,
       listeners: new Set(),
       subscribe: function(fn) { var s = this; s.listeners.add(fn); return function() { s.listeners.delete(fn) } },
       setViewer: function(v) { this.viewer = v; this.listeners.forEach(function(fn) { fn() }) },
       setTrain: function(v) { this.train = v; this.listeners.forEach(function(fn) { fn() }) },
       setMonitor: function(open, runId) { this.monitorOpen = open; if (runId !== undefined) this.monitorRunId = runId; this.listeners.forEach(function(fn) { fn() }) },
+      setMonitorShowAll: function(v) { this.monitorShowAll = v === true; this.listeners.forEach(function(fn) { fn() }) },
+      setBindingPanel: function(open) { this.bindingPanel = open === true; this.listeners.forEach(function(fn) { fn() }) },
       setTaskCard: function(v) { this.taskCardOpen = v; this.listeners.forEach(function(fn) { fn() }) },
+    }
+
+    // ── 批B2 §一：会话↔Run 绑定 store（单源——B1 端点 /atf-ui/session-binding 为唯一真相，
+    // 前端不推断绑定）。首屏/切会话 GET；bind/unbind/rename POST 成功后重拉；不新增轮询
+    // （run 状态仍由 monitor 5s 拍/SSE 刷新）。迟到响应双保险丢弃：请求序号＋归属 sessionId
+    // 任一不符＝切会话串台，不写状态不 emit。 ──
+    var binding = {
+      status: 'loading',      // loading | ready | error（loading 时 chip 显骨架不显旧值）
+      sessionId: undefined,   // 当前归属会话（丢弃校验锚）
+      seq: 0,                 // 请求序号（迟到响应丢弃）
+      active: null,           // {run_id, workspace, title} | null
+      unbound_reason: null,   // 'new'|'cleared'|'stale'|null
+      recent: [],             // ≤3 {run_id, workspace, title, mtime}
+      candidates: [],         // ≤5（本工作区优先）
+      binding: null,          // 完整记录（撤销解除取 history 上一条）
+      version: 0,
+      listeners: new Set(),
+      subscribe: function(fn) { var s = this; s.listeners.add(fn); return function() { s.listeners.delete(fn) } },
+      emit: function() {
+        this.version++
+        this.listeners.forEach(function(fn) { try { fn() } catch (e) { /* 单订阅方异常不连坐 */ } })
+      },
+      /** 切会话/首屏：先清空到 loading（chip 显骨架不显旧会话值），再按新会话拉取。 */
+      resetFor: function(sessionId) {
+        this.sessionId = sessionId
+        this.status = 'loading'
+        this.active = null
+        this.unbound_reason = null
+        this.recent = []
+        this.candidates = []
+        this.binding = null
+        this.emit()
+      },
+      load: function(sessionId) {
+        var self = this
+        if (typeof sessionId !== 'string' || sessionId === '') return Promise.resolve()
+        var seq = ++this.seq
+        return fetch('/atf-ui/session-binding?sessionId=' + encodeURIComponent(sessionId), { credentials: 'same-origin', cache: 'no-store' })
+          .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)) })
+          .then(function(d) {
+            // 迟到响应丢弃（§一红线：防切会话串台——序号或会话任一不符即弃）
+            if (seq !== self.seq || self.sessionId !== sessionId) return
+            self.status = 'ready'
+            self.active = (d && d.active) || null
+            self.unbound_reason = (d && d.unbound_reason) || null
+            self.recent = (d && Array.isArray(d.recent)) ? d.recent : []
+            self.candidates = (d && Array.isArray(d.candidates)) ? d.candidates : []
+            self.binding = (d && d.binding) || null
+            self.emit()
+          })
+          .catch(function() {
+            if (seq !== self.seq || self.sessionId !== sessionId) return
+            self.status = 'error'
+            self.emit()
+          })
+      },
+      /** POST 通道：成功（saved）后重拉——chip/监控/胶囊经同一 store 同步刷新。 */
+      post: function(body) {
+        var self = this
+        return fetch('/atf-ui/session-binding', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+          .then(function(r) { return r.json().then(function(b) { return { status: r.status, body: b } }) })
+          .catch(function() { return { status: 0, body: null } })
+          .then(function(out) {
+            if (out.status === 200 && out.body && out.body.saved) return self.load(self.sessionId).then(function() { return out })
+            return out
+          })
+      },
+      bindRun: function(runId) { return this.post({ sessionId: this.sessionId, runId: runId }) },
+      unbindRun: function() { return this.post({ sessionId: this.sessionId, runId: null }) },
+      renameRun: function(runId, title) { return this.post({ sessionId: this.sessionId, rename: { runId: runId, title: title } }) },
+      /** 撤销解除（cleared 空态）：history 上一条 run（最新在前取首个）。 */
+      undoUnbind: function() {
+        var h = (this.binding && Array.isArray(this.binding.history)) ? this.binding.history : []
+        var prev = h.length > 0 ? h[0].run_id : null
+        return prev ? this.bindRun(prev) : Promise.resolve(null)
+      },
+    }
+    /** 绑定 store 订阅 hook（返回 store 本体——字段直读；version 变更驱动重渲）。
+     *  subscribe 须以方法调用形态包一层（裸引用传 React 会丢 this——listeners undefined）。 */
+    function useBinding() {
+      React.useSyncExternalStore(
+        function(fn) { return binding.subscribe(fn) },
+        function() { return binding.version },
+      )
+      return binding
+    }
+
+    /** 批B2 §四.5：run 状态/进度单源（顶栏 chip 与监控头共用同一推导——禁两套）。
+     *  run＝monitor.json runs[] 项；返回状态文案/色类/进度百分数/ETA/训练中布尔。 */
+    function runStatusOf(run) {
+      var progress = (run && run.progress) || (run && run.training && run.training.progress) || null
+      var failed = !!(run && (run.segments || []).some(function(s) { return s.status === 'failed' }))
+      var trainingNow = !!(run && run.training && run.training.active === true)
+      var pct = trainingNow && progress && typeof progress.percentage === 'number' ? Math.round(progress.percentage) : null
+      var eta = trainingNow && progress ? fmtEta(progress.eta_s) : null
+      return {
+        text: trainingNow ? '训练中' : failed ? '异常' : '空闲',
+        cls: trainingNow ? ' atf-status-active' : failed ? ' atf-status-fail' : ' atf-status-idle',
+        pct: pct,
+        eta: eta,
+        progress: progress,
+        trainingNow: trainingNow,
+        failed: failed,
+        /** chip 单行形态：训练中 62% ／ 异常 ／ 空闲 */
+        label: trainingNow ? ('训练中' + (pct !== null ? ' ' + pct + '%' : '')) : failed ? '异常' : '空闲',
+      }
+    }
+
+    // ── 批B2：用户可见名（title＋工作区）——chip/选择面板/任务卡/通知共用；title 缺席
+    // 降级「实验 <末6位>」（B1 同款降级），用户可见面不裸跑 run_id 为主标识。 ──
+    function displayTitleOf(run) {
+      if (!run) return ''
+      var t = run.display && typeof run.display.title === 'string' && run.display.title !== '' ? run.display.title : null
+      return t !== null ? t : ('实验 ' + String(run.run_id || '').slice(-6))
+    }
+    /** 通知/任务卡形态：title（workspace）——工作区缺席只 title。 */
+    function displayLabelOf(run) {
+      if (!run) return ''
+      var ws = typeof run.workspace === 'string' && run.workspace !== '' ? run.workspace : null
+      return displayTitleOf(run) + (ws !== null ? '（' + ws + '）' : '')
+    }
+    function findRunById(mon, runId) {
+      var runs = (mon && mon.runs) || []
+      for (var i = 0; i < runs.length; i++) if (runs[i] && runs[i].run_id === runId) return runs[i]
+      return null
+    }
+    /** 同名跨工作区判定（§三：同名跨区主行加 [workspace] 前缀）——title 在 ≥2 个不同
+     *  工作区出现的集合（无工作区标注项不参与——无跨区同名概念）。 */
+    function dupTitleSet(lists) {
+      var seen = {}
+      var dup = {}
+      for (var li = 0; li < lists.length; li++) {
+        var list = lists[li] || []
+        for (var i = 0; i < list.length; i++) {
+          var item = list[i]
+          if (!item) continue
+          var title = item.title !== undefined && item.title !== null ? String(item.title) : displayTitleOf(item)
+          var ws = typeof item.workspace === 'string' && item.workspace !== '' ? item.workspace : ''
+          if (ws === '' || title === '') continue
+          var byWs = seen[title] = seen[title] || {}
+          if (byWs[ws]) continue
+          byWs[ws] = true
+          if (Object.keys(byWs).length >= 2) dup[title] = true
+        }
+      }
+      return dup
+    }
+    /** 工作区徽标短名（af- 前缀与尾部日期段剥除＋截断；title 属性给全名——§二）。 */
+    function wsShortOf(ws) {
+      if (typeof ws !== 'string' || ws === '') return ''
+      return ws.replace(/^af-/, '').replace(/-\d{8}$/, '').slice(0, 14)
+    }
+    /** 批B2：「继续上次」目标（跨会话语义——设计要点 §5.1：空白新会话的「继续上次」＝
+     *  全局上一个 run）。解析序：本会话 history 首条 ＞ 全局最近（端点 recent[0]，server 侧
+     *  runsRoot mtime 倒序）；title/workspace 优先 monitor 实锚，缺席用端点载荷，再缺实验<末6位>。 */
+    function lastRunInfo(b, mon) {
+      if (b.binding && Array.isArray(b.binding.history) && b.binding.history.length > 0) {
+        var e = b.binding.history[0]
+        var r = findRunById(mon, e.run_id)
+        return {
+          runId: e.run_id,
+          title: r !== null ? displayTitleOf(r) : null,
+          ws: r !== null && r.workspace ? r.workspace : null,
+          monRun: r,
+        }
+      }
+      if (Array.isArray(b.recent) && b.recent.length > 0) {
+        var item = b.recent[0]
+        var r2 = findRunById(mon, item.run_id)
+        return {
+          runId: item.run_id,
+          title: typeof item.title === 'string' && item.title !== '' ? item.title : (r2 !== null ? displayTitleOf(r2) : null),
+          ws: item.workspace || null,
+          monRun: r2,
+        }
+      }
+      return null
     }
 
     // ── 批㊶-SSE S5：真 SSE 事件流订阅（传输层升级——事件到达即更新，渲染同一份数据）。
@@ -485,11 +672,18 @@ window.__ModuleLoader__.load({
       var cmpA = cmpAState[0], setCmpA = cmpAState[1]
       var cmpBState = React.useState(null)
       var cmpB = cmpBState[0], setCmpB = cmpBState[1]
-      // 批㊶-N N-5 作用域沿用：缺省本会话绑定 ∪ 同工作区桶，「全部」显式切换＝全量
-      var showAllState = React.useState(false)
-      var showAll = showAllState[0], setShowAll = showAllState[1]
+      // 批㊶-N N-5 作用域沿用：缺省本会话绑定 ∪ 同工作区桶，「全部」显式切换＝全量。
+      // 批B2 §四：showAll 升 store 单源（面板「查看全部」/空态「查看全部实验」同源驱动）。
+      var showAll = React.useSyncExternalStore(
+        function(fn) { return store.subscribe(fn) },
+        function() { return store.monitorShowAll },
+      )
+      // 批B2 §一：绑定 store（监控默认跟随绑定——active 即选中，不再取 runs[0]）
+      var b = useBinding()
       var narrowState = React.useState(false)
       var narrow = narrowState[0], setNarrow = narrowState[1]
+      var roMsgState = React.useState(null)
+      var roMsg = roMsgState[0], setRoMsg = roMsgState[1]
       var rootRef = React.useRef(null)
       var logRef = React.useRef(null)
       var logPausedRef = React.useRef(false)
@@ -522,8 +716,21 @@ window.__ModuleLoader__.load({
       }
       var allRuns = (mon.runs) || []
       var runs = showAll ? allRuns : scopedRuns(mon, store.sessionId)
-      var runId = selRunId && runs.some(function(r) { return r.run_id === selRunId }) ? selRunId : (runs[0] ? runs[0].run_id : null)
-      var run = runId ? runs.find(function(r) { return r.run_id === runId }) : null
+      // 批B2 §四.1：默认跟随绑定——active 在场即选中（不再取 runs[0]）；用户显式预览
+      // （选择器/全部组）优先。绑定 store 未就绪（loading/error）或端点无未绑定指因
+      // （active=null 且 reason=null——非明确未绑定态）时保留旧回退（存量浏览语义不断）。
+      var previewId = selRunId && allRuns.some(function(r) { return r.run_id === selRunId }) ? selRunId : null
+      var followId = (b.status === 'ready' && b.active !== null && b.active.run_id) ? b.active.run_id : null
+      var followVisible = followId !== null && allRuns.some(function(r) { return r.run_id === followId })
+      var unboundState = b.status === 'ready' && b.active === null
+        && (b.unbound_reason === 'new' || b.unbound_reason === 'cleared' || b.unbound_reason === 'stale')
+      var runId
+      if (previewId !== null) runId = previewId
+      else if (followVisible) runId = followId
+      else if (unboundState) runId = null
+      else if (b.status === 'ready' && followId !== null && !followVisible) runId = null // 绑定 run 监控缺席——实验不可见态
+      else runId = (runs[0] ? runs[0].run_id : null) // 绑定面未就绪（loading/error/无指因）——旧回退
+      var run = runId ? allRuns.find(function(r) { return r.run_id === runId }) || null : null
       // 数据陈旧角标（generated_at 超 30s；保留最后快照不清屏）
       var staleSec = null
       var genTs = Date.parse(mon.generated_at)
@@ -531,14 +738,16 @@ window.__ModuleLoader__.load({
         var ageSec = Math.floor((Date.now() - genTs) / 1000)
         if (ageSec > 30) staleSec = ageSec
       }
-      // 顶部条状态（训练中/空闲/异常＋进度＋ETA）
-      var progress = (run && run.progress) || (run && run.training && run.training.progress) || null
-      var segFailed = !!(run && (run.segments || []).some(function(s) { return s.status === 'failed' }))
-      var trainingNow = !!(run && run.training && run.training.active === true)
-      var statusText = trainingNow ? '训练中' : segFailed ? '异常' : '空闲'
-      var statusClass = trainingNow ? ' atf-status-active' : segFailed ? ' atf-status-fail' : ' atf-status-idle'
-      var pct = trainingNow && progress && typeof progress.percentage === 'number' ? Math.round(progress.percentage) : null
-      var eta = trainingNow && progress ? fmtEta(progress.eta_s) : null
+      // 顶部条状态（训练中/空闲/异常＋进度＋ETA）——批B2 §四.5：runStatusOf 单源（与顶栏
+      // chip 同一推导，禁两套；progress/trainingNow 供 KPI/产物区复用）
+      var st = runStatusOf(run)
+      var progress = st.progress
+      var segFailed = st.failed
+      var trainingNow = st.trainingNow
+      var statusText = st.text
+      var statusClass = st.cls
+      var pct = st.pct
+      var eta = st.eta
       // KPI 面（步进/Loss/指标 F1/显存；缺失 —，不造数）
       var pts = (run && run.training && run.training.points) || []
       var lastLoss = null
@@ -625,35 +834,121 @@ window.__ModuleLoader__.load({
       if (sumTotal > 0) gpuHeadBits.push((mibToG(sumUsed) || '—') + '/' + (mibToG(sumTotal) || '—'))
       if (bindingDevices !== null) gpuHeadBits.push('绑 ' + bindingDevices)
       var bridge = (typeof window !== 'undefined' && window.__ATF_UI_CONFIG__ && window.__ATF_UI_CONFIG__.bridge) || null
+      // 批B2 §四.4：未绑定空态装载（unbound_reason ∈ new|cleared|stale——不渲染 KPI/Loss/
+      // GPU 细卡/产物/日志假数据，只显示空态＋机器 GPU 一行只读）。
+      var lastInfo = lastRunInfo(b, mon)
+      var emptyHeadline = b.unbound_reason === 'stale' ? '原实验已不可见（可能归档/删除）'
+        : b.unbound_reason === 'cleared' ? '已解除绑定'
+        : '未选择实验'
+      var emptyBind = function(runId) {
+        return function() { void binding.bindRun(runId).then(function(out) { if (!(out && out.status === 200)) setRoMsg('绑定失败——请稍后重试') }) }
+      }
+      var emptyState = React.createElement('div', { className: 'atf-m-empty' },
+        React.createElement('div', { className: 'atf-m-empty-t' }, emptyHeadline),
+        lastInfo !== null
+          ? React.createElement('div', { className: 'atf-m-empty-last' },
+              React.createElement('button', {
+                className: 'atf-pill', title: '绑定上次使用的实验（跨会话）',
+                onClick: emptyBind(lastInfo.runId),
+              }, '继续上次：' + (lastInfo.title !== null ? lastInfo.title + (lastInfo.ws ? '（' + lastInfo.ws + '）' : '') : '实验 ' + String(lastInfo.runId).slice(-6))),
+              b.unbound_reason === 'cleared' && b.binding && Array.isArray(b.binding.history) && b.binding.history.length > 0
+                ? React.createElement('button', {
+                    className: 'atf-pill', title: '撤销解除——回到上一个实验',
+                    onClick: function() { void binding.undoUnbind().then(function(out) { if (!(out && out.status === 200)) setRoMsg('撤销失败——请稍后重试') }) },
+                  }, '撤销解除')
+                : null)
+          : null,
+        (b.recent || []).length > 0
+          ? React.createElement('div', { className: 'atf-m-empty-sec' },
+              React.createElement('div', { className: 'atf-m-empty-h' }, '最近实验'),
+              b.recent.map(function(item, ri) {
+                var mrun = findRunById(mon, item.run_id)
+                var rst = mrun !== null ? runStatusOf(mrun) : null
+                return React.createElement('button', {
+                  key: item.run_id + '/' + ri, className: 'atf-m-empty-row', 'data-bp-row': '1',
+                  title: '绑定该实验',
+                  onClick: function() { void binding.bindRun(item.run_id).then(function(out) { if (!(out && out.status === 200)) setRoMsg('绑定失败——请稍后重试') }) },
+                },
+                  React.createElement('span', { className: 'atf-m-empty-tt' }, item.title || displayTitleOf({ run_id: item.run_id })),
+                  React.createElement('span', { className: 'atf-m-empty-ws' }, item.workspace || ''),
+                  rst !== null ? React.createElement('span', { className: 'atf-m-empty-st' + rst.cls }, rst.label) : null)
+              }))
+          : null,
+        React.createElement('div', { className: 'atf-m-empty-actions' },
+          React.createElement('button', {
+            className: 'atf-pill', onClick: function() { store.setTrain({ runId: null, mode: 'dry_run' }) },
+          }, '新建实验'),
+          React.createElement('button', {
+            className: 'atf-pill', title: '只读浏览全部实验（不改变绑定）',
+            onClick: function() { store.setMonitorShowAll(true); store.setMonitor(true, null) },
+          }, '查看全部实验（只读）')),
+        React.createElement('div', { className: 'atf-m-empty-gpu' },
+          gpuAll.length > 0
+            ? '机器 GPU：' + gpuAll.length + ' 卡 · 忙 ' + busyCount + '（只读，机器级）'
+            : '机器 GPU：状态不可用（只读，机器级）'),
+        roMsg !== null ? React.createElement('div', { className: 'atf-m-empty-msg' }, roMsg) : null)
       return React.createElement('div', { className: 'atf-monitor-panel atf-m-root' + (narrow ? ' atf-m-narrow' : ''), ref: rootRef },
         // ① 顶部条
         React.createElement('div', { className: 'atf-m-head' },
           React.createElement('div', null,
             React.createElement('div', { className: 'atf-m-title' }, '运行监控'),
+            run !== null
+              ? React.createElement('div', { className: 'atf-m-run', title: (run.workspace ? run.workspace + ' · ' : '') + run.run_id },
+                  displayTitleOf(run),
+                  React.createElement('span', { className: 'atf-m-runmeta' }, (run.workspace ? run.workspace + ' · ' : '') + run.run_id))
+              : null,
             React.createElement('div', { className: 'atf-m-status' + statusClass },
               React.createElement('span', { className: 'atf-m-dot' }),
               React.createElement('span', null, run === null ? '未关联训练' : statusText + (pct !== null ? ' · ' + pct + '%' : '')),
               eta !== null ? React.createElement('span', { className: 'atf-m-eta' }, ' · 剩 ' + eta) : null,
               staleSec !== null ? React.createElement('span', { className: 'atf-m-stale', title: '数据更新暂停——保留最后快照' }, '数据陈旧 ' + staleSec + 's') : null)),
           React.createElement('div', { className: 'atf-m-runbox' },
-            React.createElement('select', {
-              className: 'atf-viewer-select', value: runId || '', title: '选择 run',
-              onChange: function(e) { store.setMonitor(true, e.target.value) },
-            },
-              runs.length === 0
-                ? React.createElement('option', { value: '' }, '（无 run）')
-                : runs.map(function(r) { return React.createElement('option', { key: r.run_id, value: r.run_id }, r.run_id) })),
+            // 批B2 §四.2：紧凑入口（显示 title＋状态，开共用选择面板）；原生 select 作窄宽降级
+            narrow
+              ? React.createElement('select', {
+                  className: 'atf-viewer-select', value: runId || '', title: '选择 run',
+                  onChange: function(e) { store.setMonitor(true, e.target.value) },
+                },
+                  runs.length === 0
+                    ? React.createElement('option', { value: '' }, '（无 run）')
+                    : runs.map(function(r) { return React.createElement('option', { key: r.run_id, value: r.run_id }, r.run_id) }))
+              : React.createElement('button', {
+                  className: 'atf-effort-trigger', title: '选择实验（与顶栏同一个面板）',
+                  onClick: function() { store.setBindingPanel(true) },
+                },
+                  run !== null ? displayTitleOf(run) + ' · ' + statusText : '选择实验',
+                  React.createElement('span', { className: 'atf-effort-caret' }, ' ▾')),
             React.createElement('button', {
               className: 'atf-pill' + (showAll ? ' atf-pill-on' : ''),
               style: showAll ? { borderColor: 'var(--dsw-alias-brand-primary,#1d4ed8)', color: 'var(--dsw-alias-brand-primary,#1d4ed8)', fontWeight: 600 } : undefined,
               title: showAll ? '全部实例（开——显示全量 run）' : '全部实例（关——只列本会话绑定 run）',
-              onClick: function() { setShowAll(!showAll) },
+              onClick: function() { store.setMonitorShowAll(!showAll) },
             }, '全部'))),
+        // 批B2 §四.3：全部模式横幅（只读视图——选择只改预览，设为当前才 POST）
+        showAll
+          ? React.createElement('div', { className: 'atf-m-ro' },
+              React.createElement('span', { className: 'atf-m-ro-text' }, '全部实例（只读视图）——点选只预览，不改变本会话绑定'),
+              previewId !== null
+                ? React.createElement('button', {
+                    className: 'atf-pill atf-m-ro-bind', title: '把预览中的实验设为本会话当前绑定',
+                    onClick: function() {
+                      void binding.bindRun(previewId).then(function(out) {
+                        if (out && out.status === 200) { store.setMonitor(true, null); setRoMsg(null) } else { setRoMsg('绑定失败——请稍后重试') }
+                      })
+                    },
+                  }, '设为当前')
+                : null,
+              roMsg !== null ? React.createElement('span', { className: 'atf-m-empty-msg' }, roMsg) : null)
+          : null,
         run === null
-          ? React.createElement('div', { className: 'atf-m-guide' },
-              '本视图暂无关联训练 run——在上方选择 run，或先发起一次训练。',
-              React.createElement('div', { className: 'atf-m-guide-meta' },
-                (gpuAll.length > 0 ? 'GPU ' + gpuAll.length + ' 卡在册 · ' : 'GPU 状态不可用 · ') + (bridge ? (bridge.mode === 'real' ? '内核 real' + (bridge.version ? '·' + bridge.version : '') : '内核 mock') : '')))
+          ? (unboundState
+              ? emptyState
+              : React.createElement('div', { className: 'atf-m-guide' },
+                  b.status === 'ready' && followId !== null && !followVisible
+                    ? '原实验已不可见（可能归档/删除）——可从选择面板改选其他实验或解除绑定。'
+                    : '本视图暂无关联训练 run——在上方选择 run，或先发起一次训练。',
+                  React.createElement('div', { className: 'atf-m-guide-meta' },
+                    (gpuAll.length > 0 ? 'GPU ' + gpuAll.length + ' 卡在册 · ' : 'GPU 状态不可用 · ') + (bridge ? (bridge.mode === 'real' ? '内核 real' + (bridge.version ? '·' + bridge.version : '') : '内核 mock') : ''))))
           : React.createElement('div', null,
         // 探针通报行（批㊶-P P-2 保留：error 红/warn 琥珀＋重新发起预填；自动链通报无按钮）
         (function() {
@@ -1175,6 +1470,9 @@ window.__ModuleLoader__.load({
           var n = card.n
           var colorKey = (n.kind && PHASE_COLOR[n.kind]) ? n.kind : (typeof n.phase === 'string' ? n.phase : '')
           var color = PHASE_COLOR[colorKey] || 'var(--dsw-static-neutral-500)'
+          // 批B2 §五：通知 run 行显 title（workspace）——不显示裸 run_id（title 属性留全名）
+          var nrun = findRunById(mon, card.runId)
+          var nlabel = nrun !== null ? displayLabelOf(nrun) : '实验 ' + String(card.runId).slice(-6)
           return React.createElement('div', {
             key: n.id,
             className: 'atf-notice-card',
@@ -1184,12 +1482,12 @@ window.__ModuleLoader__.load({
               display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer', fontSize: 12,
             },
             onClick: function() { markNoticeSeen(n.id); force(function(v) { return v + 1 }) },
-            title: '点击关闭（run ' + card.runId + '）',
+            title: '点击关闭（' + nlabel + '）',
           },
             React.createElement('span', { style: { width: 8, height: 8, borderRadius: 4, background: color, flex: 'none', marginTop: 4 } }),
             React.createElement('div', { style: { flex: 1, minWidth: 0 } },
               React.createElement('div', { style: { fontWeight: 600, color: 'var(--dsw-alias-label-primary)' } }, noticeText(n)),
-              React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, card.runId)),
+              React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, nlabel)),
             React.createElement('span', { style: { color: 'var(--dsw-alias-label-tertiary)', flex: 'none', padding: '0 2px' } }, '×'))
         }))
     }
@@ -1318,8 +1616,12 @@ window.__ModuleLoader__.load({
             },
               React.createElement('span', { style: { width: 7, height: 7, borderRadius: 4, background: color, display: 'inline-block', ...(state === 'active' ? { animation: 'atf-card-pulse 1.2s ease-in-out infinite' } : {}) } }),
               STATE_TEXT[state])),
-          React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
-            run.run_id)),
+          // 批B2 §五：任务卡 run 行显 title（workspace）——不显示裸 run_id（全名 title 属性可复制）
+          React.createElement('div', {
+            style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+            title: (run.workspace ? run.workspace + ' · ' : '') + run.run_id,
+          },
+            displayLabelOf(run))),
         // ③ 八段清单区
         React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
           (run.segments || []).map(function(seg, idx) {
@@ -1416,8 +1718,12 @@ window.__ModuleLoader__.load({
             },
               React.createElement('span', { style: { width: 7, height: 7, borderRadius: 4, background: color, display: 'inline-block', ...(trainingNow ? { animation: 'atf-card-pulse 1.2s ease-in-out infinite' } : {}) } }),
               STATE_TEXT[state])),
-          React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
-            run.run_id)),
+          // 批B2 §五：展开态 run 行同显 title（workspace）——title 属性给全名可复制
+          React.createElement('div', {
+            style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', fontFamily: 'monospace', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+            title: (run.workspace ? run.workspace + ' · ' : '') + run.run_id,
+          },
+            displayLabelOf(run))),
         React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
           (run.segments || []).map(function(seg, idx) {
             var detail = segDetail(seg)
@@ -1610,12 +1916,323 @@ window.__ModuleLoader__.load({
             : null))
     }
 
+    // ── 批B2 §三：共用选择面板（chip 与监控紧凑入口同一个组件——二处复用）。 ──
+    // 分组序：本会话 → 继续上次（仅未绑定）→ 最近实验 → 本工作区其他（≤5）→ 全部实例（只读）。
+    // 行主文 title、次行 workspace · run_id（等宽小字可复制）；同名跨区主行 [workspace] 前缀；
+    // 「全部」组行点击＝仅预览（同步监控选择器，**不 POST**——红线：浏览不得改绑定），行另给
+    // 「设为当前」；改名铅笔 ≤80 字 → POST rename；POST 失败 toast 行不改本地态（连续 2 次
+    // 提示稍后重试）；Esc 关闭、↑↓ 焦点移动（行＝原生 button，Enter 天然选中）。
+    function BindingPanel(props) {
+      var b = useBinding()
+      var mon = useMonitor()
+      var msgState = React.useState(null)
+      var msg = msgState[0], setMsg = msgState[1]
+      var failState = React.useState(0)
+      var fails = failState[0], setFails = failState[1]
+      var renameState = React.useState(null)
+      var rename = renameState[0], setRename = renameState[1]
+      var rootRef = React.useRef(null)
+      var close = props && typeof props.onClose === 'function' ? props.onClose : function() {}
+      React.useEffect(function() {
+        var onKey = function(e) {
+          if (e.key === 'Escape') { close(); return }
+          if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+          var root = rootRef.current
+          if (!root) return
+          var rows = root.querySelectorAll('[data-bp-row]')
+          if (rows.length === 0) return
+          var idx = Array.prototype.indexOf.call(rows, document.activeElement)
+          var next = e.key === 'ArrowDown' ? Math.min(rows.length - 1, idx + 1) : Math.max(0, idx <= 0 ? 0 : idx - 1)
+          var el = rows[next]
+          if (el && typeof el.focus === 'function') { e.preventDefault(); el.focus() }
+        }
+        var onDown = function(e) {
+          if (rootRef.current && rootRef.current.contains(e.target)) return
+          close()
+        }
+        document.addEventListener('keydown', onKey)
+        document.addEventListener('mousedown', onDown, true)
+        return function() {
+          document.removeEventListener('keydown', onKey)
+          document.removeEventListener('mousedown', onDown, true)
+        }
+      }, [close])
+      // 挂载条件由唯一宿主（BindingChip：panelOpen＝store.bindingPanel）控制——本组件不再
+      // 复判 store（避免 chip 本地态/store 态双轨）。
+
+      var allRuns = (mon && mon.runs) || []
+      var bound = b.status === 'ready' && b.active !== null
+      var activeRun = bound ? findRunById(mon, b.active.run_id) : null
+      var lastInfo = lastRunInfo(b, mon)
+      var dupTitles = dupTitleSet([allRuns, b.recent, b.candidates])
+      var toast = function(out) {
+        if (out && out.status === 200 && out.body && out.body.saved) { setFails(0); setMsg(null); return }
+        var text = out && out.body && out.body.message ? String(out.body.message)
+          : out && out.status === 404 ? '实验不存在——核对后重试'
+          : out && out.status === 0 ? '网络异常——操作未生效'
+          : '操作失败（HTTP ' + String(out && out.status !== undefined ? out.status : '?') + '）'
+        var n = fails + 1
+        setFails(n)
+        setMsg({ kind: 'err', text: n >= 2 ? '稍后重试——' + text : text })
+      }
+      var doBind = function(runId) { return binding.bindRun(runId).then(toast) }
+      var doUnbind = function() { return binding.unbindRun().then(toast) }
+      var doUndo = function() { return binding.undoUnbind().then(toast) }
+      var doRename = function(runId, title) {
+        return binding.renameRun(runId, title).then(function(out) {
+          if (out && out.status === 200 && out.body && out.body.saved) { setFails(0); setMsg({ kind: 'ok', text: '已改名' }); setRename(null); return }
+          toast(out)
+        })
+      }
+      /** 全部组预览（只读）：同步监控选择器并打开右栏——**零 POST**（红线）。 */
+      var previewOnly = function(runId) {
+        store.setMonitorShowAll(true)
+        store.setMonitor(true, runId)
+        if (sidebarFace && typeof sidebarFace.openResource === 'function') {
+          try { sidebarFace.openResource('dsh-resource://atf-training-monitor/monitor') } catch (e) { /* fail-open */ }
+        }
+        close()
+      }
+      var mainTitle = function(item) {
+        var title = item && item.title !== undefined && item.title !== null && String(item.title) !== '' ? String(item.title) : displayTitleOf(item)
+        return dupTitles[title] === true && item.workspace ? '[' + item.workspace + '] ' + title : title
+      }
+      var groupEl = function(name, rows) {
+        if (!rows || rows.length === 0) return null
+        return React.createElement('div', { className: 'atf-bp-group', key: name },
+          React.createElement('div', { className: 'atf-bp-gh' }, name),
+          rows)
+      }
+      /** 行构造：main 主行（title＋状态）、sub 次行（workspace · run_id 等宽可复制）、右侧动作。 */
+      var rowEl = function(o) {
+        var monRun = o.monRun !== undefined ? o.monRun : findRunById(mon, o.runId)
+        var st = monRun !== null ? runStatusOf(monRun) : null
+        var sub = (o.workspace ? o.workspace + ' · ' : '') + o.runId
+        var isAll = o.previewOnly === true
+        return React.createElement('div', { className: 'atf-bp-row', key: o.key || o.runId },
+          React.createElement('button', {
+            className: 'atf-bp-main', 'data-bp-row': '1',
+            disabled: o.current === true || undefined,
+            title: isAll ? '只读预览——不改变本会话绑定' : o.current === true ? '当前绑定的实验' : '绑定该实验',
+            onClick: function() {
+              if (o.current === true) return
+              if (isAll) { previewOnly(o.runId); return }
+              doBind(o.runId).then(function() { if (o.afterBind) o.afterBind() })
+            },
+          },
+            React.createElement('span', { className: 'atf-bp-ico' }, o.current === true ? '●' : isAll ? '○' : '○'),
+            React.createElement('span', { className: 'atf-bp-tcol' },
+              React.createElement('span', { className: 'atf-bp-title' }, mainTitle({ title: o.title, workspace: o.workspace, run_id: o.runId })),
+              React.createElement('span', { className: 'atf-bp-sub' }, sub)),
+            st !== null ? React.createElement('span', { className: 'atf-bp-st' + st.cls }, st.label + (st.pct !== null ? ' ' + st.pct + '%' : '')) : null),
+          o.current === true && o.runId !== null
+            ? React.createElement('button', {
+                className: 'atf-bp-act', title: '改名（≤80 字）',
+                onClick: function() { setRename(rename && rename.runId === o.runId ? null : { runId: o.runId, value: o.title || '' }) },
+              }, '✎') : null,
+          isAll
+            ? React.createElement('button', {
+                className: 'atf-bp-act', title: '设为当前实验（显式绑定动作）',
+                onClick: function() { doBind(o.runId) },
+              }, '设为当前') : null)
+      }
+      var renameEl = rename !== null
+        ? React.createElement('div', { className: 'atf-bp-rename' },
+            React.createElement('input', {
+              className: 'atf-bp-rename-in', value: rename.value, maxLength: 80,
+              placeholder: '实验名（≤80 字）', autoFocus: true,
+              onChange: function(e) { setRename({ runId: rename.runId, value: e.target.value }) },
+              onKeyDown: function(e) {
+                if (e.key === 'Enter' && rename.value.trim() !== '') doRename(rename.runId, rename.value.trim())
+                if (e.key === 'Escape') setRename(null)
+              },
+            }),
+            React.createElement('button', {
+              className: 'atf-bp-act', disabled: rename.value.trim() === '' || undefined,
+              onClick: function() { doRename(rename.runId, rename.value.trim()) },
+            }, '确定'),
+            React.createElement('button', { className: 'atf-bp-act', onClick: function() { setRename(null) } }, '取消'))
+        : null
+
+      // 分组装配（§三顺序；未绑定时无「本会话」与「本工作区其他」——候选并入空态）
+      var groups = []
+      if (bound) {
+        groups.push(groupEl('本会话', [
+          rowEl({
+            runId: b.active.run_id, workspace: b.active.workspace, title: b.active.title,
+            monRun: activeRun, current: true, key: 'cur',
+          }),
+          renameEl,
+          activeRun === null
+            ? React.createElement('div', { className: 'atf-bp-warn', key: 'gone' },
+                '原实验已不可见（可能归档/删除）——可选择其他实验或解除绑定')
+            : null,
+        ]))
+      } else if (b.unbound_reason === 'stale') {
+        groups.push(React.createElement('div', { className: 'atf-bp-warn', key: 'stale' }, '原实验已不可见（可能归档/删除）——请选择其他实验'))
+      }
+      if (!bound && lastInfo !== null) {
+        var lastSt = lastInfo.monRun !== null ? runStatusOf(lastInfo.monRun) : null
+        var lastRow = React.createElement('div', { className: 'atf-bp-row', key: 'last' },
+          React.createElement('button', {
+            className: 'atf-bp-main', 'data-bp-row': '1', title: '绑定上次使用的实验（跨会话）',
+            onClick: function() { doBind(lastInfo.runId) },
+          },
+            React.createElement('span', { className: 'atf-bp-ico' }, '↺'),
+            React.createElement('span', { className: 'atf-bp-tcol' },
+              React.createElement('span', { className: 'atf-bp-title' },
+                '上次：' + (lastInfo.title !== null ? lastInfo.title : '实验 ' + String(lastInfo.runId).slice(-6))),
+              React.createElement('span', { className: 'atf-bp-sub' },
+                (lastInfo.ws ? lastInfo.ws + ' · ' : '') + lastInfo.runId)),
+            lastSt !== null ? React.createElement('span', { className: 'atf-bp-st' + lastSt.cls }, lastSt.label) : null))
+        groups.push(groupEl('继续上次', [lastRow]))
+      }
+      var recentRows = (b.recent || []).map(function(item, ri) {
+        return rowEl({ runId: item.run_id, workspace: item.workspace, title: item.title, key: 'r' + ri })
+      })
+      groups.push(groupEl('最近实验', recentRows))
+      if (bound) {
+        var others = (b.candidates || []).filter(function(c) {
+          return c.run_id !== b.active.run_id && (b.active.workspace === null || b.active.workspace === undefined || c.workspace === b.active.workspace)
+        }).slice(0, 5)
+        groups.push(groupEl('本工作区其他', others.map(function(c, ci) {
+          return rowEl({ runId: c.run_id, workspace: c.workspace, title: c.title, key: 'o' + ci })
+        })))
+      }
+      var allRows = allRuns.map(function(r, ai) {
+        return rowEl({
+          runId: r.run_id, workspace: r.workspace, title: displayTitleOf(r),
+          monRun: r, previewOnly: true, key: 'a' + ai,
+        })
+      })
+      groups.push(groupEl('全部实例（只读）', allRows))
+
+      return ReactDOM.createPortal(
+        React.createElement('div', {
+          className: 'atf-bp', ref: rootRef, role: 'dialog', 'aria-label': '选择实验',
+          style: { position: 'fixed', top: (topBarOffset() + 6), right: 8, zIndex: 905 },
+          onKeyDown: function(e) { if (e.key === 'Escape') { e.stopPropagation(); close() } },
+        },
+          React.createElement('div', { className: 'atf-bp-h' },
+            React.createElement('b', null, bound ? '当前实验' : '选择实验'),
+            React.createElement('button', { className: 'atf-bp-act', title: '关闭', onClick: close }, '×')),
+          b.status === 'loading' ? React.createElement('div', { className: 'atf-bp-hint' }, '读取中…') : null,
+          groups,
+          !bound
+            ? React.createElement('div', { className: 'atf-bp-actions' },
+                React.createElement('button', {
+                  className: 'atf-bp-act', onClick: function() { store.setTrain({ runId: null, mode: 'dry_run' }); close() },
+                }, '新建实验'),
+                React.createElement('button', {
+                  className: 'atf-bp-act', onClick: function() { previewOnly(null) },
+                }, '查看全部实验（只读）'))
+            : React.createElement('div', { className: 'atf-bp-actions' },
+                React.createElement('button', {
+                  className: 'atf-bp-act atf-bp-unbind', title: '解除本会话与实验的绑定（回到未选择状态）',
+                  onClick: function() { doUnbind() },
+                }, '解除绑定')),
+          msg !== null
+            ? React.createElement('div', { className: 'atf-bp-msg', role: 'status', style: msg.kind === 'err' ? { color: 'var(--dsw-alias-state-danger-label,#b91c1c)' } : undefined }, msg.text)
+            : null),
+        document.body)
+    }
+
+    // ── 批B2 §二：顶栏绑定 chip（conversation.session.header.utilities）──
+    // 已绑定 [● title · 训练中 62% ▾][工作区徽标]；未绑定 [选择实验 ▾]；读取失败 [绑定读取失败 · 重试]
+    // （点击重 GET）；绑定 run 在 monitor 缺席 → [实验不可见 ▾]（面板给「选择其他实验/解除」）。
+    // loading＝骨架不显旧值。点击开共用选择面板（BindingPanel——与监控同一个组件）。
+    function BindingChip() {
+      var b = useBinding()
+      var mon = useMonitor()
+      var panelOpen = React.useSyncExternalStore(
+        function(fn) { return store.subscribe(fn) },
+        function() { return store.bindingPanel },
+      )
+      var close = function() { store.setBindingPanel(false) }
+      var bound = b.status === 'ready' && b.active !== null
+      var activeRun = bound ? findRunById(mon, b.active.run_id) : null
+      var st = runStatusOf(activeRun)
+      var visible = bound && activeRun !== null
+      var label
+      if (b.status === 'loading') label = null
+      else if (b.status === 'error') label = '绑定读取失败 · 重试'
+      else if (bound && !visible) label = '实验不可见'
+      else if (bound) label = b.active.title + ' · ' + st.label
+      else label = '选择实验'
+      return React.createElement('div', { className: 'atf-bchip-root', style: { position: 'relative', display: 'inline-flex' } },
+        React.createElement('button', {
+          className: 'atf-effort-trigger atf-bchip' + (b.status === 'loading' ? ' atf-bchip-loading' : ''),
+          'aria-busy': b.status === 'loading' ? 'true' : undefined,
+          title: b.status === 'error' ? '绑定读取失败——点击重试'
+            : visible ? (b.active.title + '（' + (b.active.workspace || '无工作区标注') + '）——点击切换')
+            : bound ? '原实验在监控中不可见——点击处理'
+            : '选择本会话要处理的实验',
+          onClick: function() {
+            if (b.status === 'error') { void binding.load(store.sessionId); return }
+            if (panelOpen) { close(); return }
+            store.setBindingPanel(true)
+          },
+        },
+          b.status === 'loading'
+            ? React.createElement('span', { className: 'atf-bchip-skel' }, '░░░░')
+            : React.createElement('span', null,
+                visible ? React.createElement('span', { className: 'atf-bchip-state' + st.cls },
+                  React.createElement('span', { className: 'atf-m-dot' }),
+                  ' ') : null,
+                label,
+                React.createElement('span', { className: 'atf-effort-caret' }, ' ▾')),
+          bound && b.active.workspace ? React.createElement('span', {
+            className: 'atf-bchip-ws', title: b.active.workspace,
+          }, wsShortOf(b.active.workspace)) : null),
+        panelOpen ? React.createElement(BindingPanel, { onClose: close }) : null)
+    }
+
+    // 批B2 §五：快捷胶囊按绑定状态启用——run 相关（查状态/继续上次/对比两轮）未绑定时
+    // disabled＋「先选择实验」，点击弹选择面板（不发工具调用）；「新建实验/发起训练/badcase
+    // 可视化」始终可用。已绑定：继续上次胶囊文案带 title（「继续训练：装箱单 4类」——取
+    // title 首段短名，防止超长）。
     var PILLS = [
       { label: '新建训练', msg: '我想启动一个新的训练任务' },
-      { label: '查状态', msg: '查看当前训练任务状态' },
-      { label: '继续上次', msg: '继续上次的训练任务' },
-      { label: '对比两轮', msg: '对比最近两轮训练的指标' },
+      { label: '查状态', msg: '查看当前训练任务状态', runRelated: true },
+      { label: '继续上次', msg: '继续上次的训练任务', runRelated: true, continueLabel: true },
+      { label: '对比两轮', msg: '对比最近两轮训练的指标', runRelated: true },
     ]
+    function DockPillsRow() {
+      var b = useBinding()
+      var bound = b.status === 'ready' && b.active !== null
+      var shortTitle = bound && typeof b.active.title === 'string' ? b.active.title.split(' · ')[0] : null
+      return React.createElement('div', { className: 'atf-pill-row' },
+        PILLS.map(function(pill) {
+          var disabled = pill.runRelated === true && !bound
+          var label = pill.continueLabel === true && bound ? '继续训练：' + (shortTitle || '当前实验') : pill.label
+          // 批B2：禁用态用 aria-disabled＋降透明类（真 disabled 收不到点击——「点击弹面板」
+          // 语义要求可点；不发起任何工具调用，仅开共用选择面板）。
+          return React.createElement('button', {
+            key: pill.label, className: 'atf-pill' + (disabled ? ' atf-pill-dis' : ''),
+            'aria-disabled': disabled ? 'true' : undefined,
+            title: disabled ? '先选择实验' : undefined,
+            'data-run-related': pill.runRelated === true ? '1' : undefined,
+            onClick: function() {
+              // 未绑定点击 run 相关胶囊＝弹选择面板（§五——不发起工具调用）
+              if (pill.runRelated === true && !bound) { store.setBindingPanel(true); return }
+              // 输入面＝contenteditable 富输入（DSH 壳无 textarea）——execCommand 插入保 React 状态同步
+              var input = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]')
+              if (input) {
+                input.focus()
+                document.execCommand('insertText', false, pill.msg)
+              }
+            },
+          }, label)
+        }),
+        React.createElement('button', {
+          className: 'atf-pill', title: '内嵌打开 badcase 可视化',
+          onClick: function() { store.setViewer({ runId: null }) },
+        }, 'badcase 可视化'),
+        React.createElement('button', {
+          className: 'atf-pill', title: '发起训练（IterationConfig 摘要→确认卡→正道链）',
+          onClick: function() { store.setTrain({ runId: null, mode: 'dry_run' }) },
+        }, '发起训练'))
+    }
 
     // 批㊳ M3-2：ATF 品牌位组件（文字标——owner 终验可调；mark 位收宿主 {size} 呈现请求，
     // hero 位另传 className 一并透传，宿主样式不丢）
@@ -2086,6 +2703,7 @@ window.__ModuleLoader__.load({
             '.atf-gpu-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}',
             '.atf-pill-row{display:flex;gap:8px;flex-wrap:wrap;padding:2px 0;}',
             '.atf-pill{border:0;background:rgba(128,128,128,.1);border-radius:8px;padding:4px 12px;cursor:pointer;font-size:13px;}',
+            '.atf-pill-dis{opacity:.5;cursor:not-allowed;}',
             // 批㉛段1：viewer 直达入口＋浮层
             '.atf-viewer-link{border:0;background:transparent;color:var(--dsw-alias-brand-primary,#1d4ed8);cursor:pointer;',
             '  font-size:12px;padding:0;text-decoration:underline;text-underline-offset:2px;}',
@@ -2291,6 +2909,73 @@ window.__ModuleLoader__.load({
             '.atf-m-logs{height:96px;overflow:auto;background:rgba(128,128,128,.07);color:var(--dsw-alias-label-secondary,#334155);',
             '  font-family:"SFMono-Regular",Consolas,Menlo,monospace;font-size:10px;line-height:1.55;padding:7px 10px;white-space:pre-wrap;word-break:break-all;}',
             '.atf-m-foot{font-size:10px;color:var(--dsw-alias-label-tertiary,#64748b);padding:2px 2px 0;}',
+            // ── 批B2：绑定 chip＋共用选择面板＋监控头部 run 行/全部横幅/未绑定空态 ──
+            '.atf-bchip-state{display:inline-flex;align-items:center;}',
+            '.atf-bchip-skel{letter-spacing:2px;color:var(--dsw-alias-label-tertiary,#64748b);animation:atf-skel 1.2s ease-in-out infinite;}',
+            '.atf-bchip-ws{margin-left:6px;font-size:10px;line-height:16px;padding:0 6px;border-radius:7px;flex:none;',
+            '  border:1px solid rgba(128,128,128,.35);color:var(--dsw-alias-label-secondary,#64748b);font-weight:600;}',
+            '.atf-bp{width:min(420px,94vw);max-height:72vh;overflow:auto;display:flex;flex-direction:column;gap:6px;',
+            '  background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid rgba(128,128,128,.3);border-radius:12px;',
+            '  box-shadow:0 14px 44px rgba(0,0,0,.22);padding:8px;font-size:12px;}',
+            '.atf-bp-h{display:flex;align-items:center;justify-content:space-between;padding:2px 4px;}',
+            '.atf-bp-hint{color:var(--dsw-alias-label-tertiary,#64748b);padding:0 4px;}',
+            '.atf-bp-group{display:flex;flex-direction:column;}',
+            '.atf-bp-gh{font-size:10.5px;font-weight:600;color:var(--dsw-alias-label-tertiary,#64748b);padding:5px 4px 2px;}',
+            '.atf-bp-row{display:flex;align-items:center;gap:4px;}',
+            '.atf-bp-main{flex:1;min-width:0;display:flex;align-items:center;gap:8px;border:0;background:transparent;',
+            '  color:inherit;text-align:left;padding:6px 6px;border-radius:8px;cursor:pointer;font-size:12px;}',
+            '.atf-bp-main:hover:not(:disabled){background:rgba(128,128,128,.1);}',
+            '.atf-bp-main:disabled{cursor:default;opacity:.9;}',
+            '.atf-bp-ico{flex:none;width:14px;text-align:center;color:var(--dsw-alias-label-tertiary,#64748b);}',
+            '.atf-bp-tcol{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}',
+            '.atf-bp-title{color:var(--dsw-alias-label-primary,#1e293b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}',
+            '.atf-bp-sub{color:var(--dsw-alias-label-tertiary,#64748b);font-family:monospace;font-size:10.5px;',
+            '  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+            '.atf-bp-st{flex:none;font-size:10.5px;color:var(--dsw-alias-label-secondary,#64748b);}',
+            '.atf-bp-act{flex:none;border:1px solid rgba(128,128,128,.3);background:transparent;color:inherit;',
+            '  border-radius:7px;padding:2px 8px;font-size:11px;cursor:pointer;white-space:nowrap;}',
+            '.atf-bp-act:disabled{opacity:.5;cursor:default;}',
+            '.atf-bp-act:hover:not(:disabled){background:rgba(128,128,128,.1);}',
+            '.atf-bp-warn{border:1px solid var(--dsw-static-amber-500);color:var(--dsw-alias-state-warning-label,#92400e);',
+            '  border-radius:8px;padding:6px 8px;font-size:11.5px;margin:2px 4px;}',
+            '.atf-bp-rename{display:flex;gap:6px;padding:2px 4px 6px;}',
+            '.atf-bp-rename-in{flex:1;min-width:0;font-size:12px;padding:3px 8px;border-radius:7px;',
+            '  border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit;}',
+            '.atf-bp-actions{display:flex;gap:8px;justify-content:flex-end;border-top:1px dashed rgba(128,128,128,.2);padding:6px 4px 2px;}',
+            '.atf-bp-unbind{color:var(--dsw-alias-state-danger-label,#b91c1c);}',
+            '.atf-bp-msg{padding:2px 4px;font-size:11.5px;}',
+            // 监控头部 run 行（title 主行＋workspace·run_id 次行等宽——次行 title 属性可复制）
+            '.atf-m-run{display:flex;align-items:baseline;gap:8px;margin-top:3px;font-size:13px;font-weight:600;',
+            '  color:var(--dsw-alias-label-primary,#1e293b);overflow:hidden;}',
+            '.atf-m-runmeta{font-size:10.5px;font-weight:400;color:var(--dsw-alias-label-tertiary,#64748b);',
+            '  font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+            // 全部模式只读横幅
+            '.atf-m-ro{display:flex;align-items:center;gap:8px;border:1px dashed rgba(128,128,128,.35);',
+            '  border-radius:8px;padding:5px 10px;font-size:11.5px;color:var(--dsw-alias-label-secondary,#64748b);}',
+            '.atf-m-ro-text{flex:1;min-width:0;}',
+            '.atf-m-ro-bind{flex:none;border:1px solid var(--dsw-alias-brand-primary,#1d4ed8);',
+            '  color:var(--dsw-alias-brand-primary,#1d4ed8);font-weight:600;background:transparent;}',
+            // 未绑定空态（不渲染假 KPI/进度——只空态＋机器 GPU 一行）
+            '.atf-m-empty{border:1px dashed rgba(128,128,128,.3);border-radius:10px;padding:14px 12px;',
+            '  display:flex;flex-direction:column;gap:10px;}',
+            '.atf-m-empty-t{font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary,#1e293b);}',
+            '.atf-m-empty-last{display:flex;gap:8px;flex-wrap:wrap;}',
+            '.atf-m-empty-sec{display:flex;flex-direction:column;gap:2px;}',
+            '.atf-m-empty-h{font-size:10.5px;font-weight:600;color:var(--dsw-alias-label-tertiary,#64748b);padding:2px 0;}',
+            '.atf-m-empty-row{display:flex;align-items:center;gap:8px;border:0;background:transparent;color:inherit;',
+            '  text-align:left;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:12px;}',
+            '.atf-m-empty-row:hover{background:rgba(128,128,128,.08);}',
+            '.atf-m-empty-tt{font-weight:600;color:var(--dsw-alias-label-primary,#1e293b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+            '.atf-m-empty-ws{font-size:10.5px;color:var(--dsw-alias-label-tertiary,#64748b);flex:none;}',
+            '.atf-m-empty-st{margin-left:auto;font-size:10.5px;color:var(--dsw-alias-label-secondary,#64748b);flex:none;}',
+            '.atf-m-empty-actions{display:flex;gap:8px;flex-wrap:wrap;}',
+            '.atf-m-empty-gpu{font-size:11px;color:var(--dsw-alias-label-tertiary,#64748b);',
+            '  border-top:1px dashed rgba(128,128,128,.2);padding-top:8px;}',
+            '.atf-m-empty-msg{font-size:11.5px;color:var(--dsw-alias-state-danger-label,#b91c1c);}',
+            '.atf-m-empty .atf-m-empty-st.atf-status-active{color:var(--dsw-static-green-500,#16a34a);}',
+            '.atf-m-empty .atf-m-empty-st.atf-status-fail{color:var(--dsw-static-red-500);}',
+            '.atf-bp-st.atf-status-active,.atf-bp .atf-bp-st.atf-status-active{color:var(--dsw-static-green-500,#16a34a);}',
+            '.atf-bp .atf-bp-st.atf-status-fail{color:var(--dsw-static-red-500);}',
           ].join('')
           document.head.append(style)
         }
@@ -2358,6 +3043,8 @@ window.__ModuleLoader__.load({
         // 「监控」开关（session-scoped：inject 工厂收 sessionId——批⑳实证通道；
         // 本处同时是 sessionId 进 store 的唯一捕获点）。D11-2：顶栏「GPU」按钮随 dock
         // 一行卡退役删除——GPU 并入监控面板区块（信息架构去重，设计件 §3）；顶栏只留「监控」。
+        // 批B2：顶栏增绑定 chip（§二）——同一 inject 工厂捕获切会话：binding 先清空到
+        // loading（chip 骨架不显旧会话值）再按新 sessionId 拉取（迟到响应按会话丢弃防串台）。
         ctx.slots.inject('conversation.session.header.utilities', function() {
           return ctx.slots.register(listSlotOptions({
             name: 'conversation.session.header.utilities',
@@ -2365,10 +3052,15 @@ window.__ModuleLoader__.load({
             order: 900,
             inject: function(sessionId) {
               store.sessionId = sessionId
+              if (binding.sessionId !== sessionId) {
+                binding.resetFor(sessionId)
+                void binding.load(sessionId)
+              }
               return {}
             },
           }), function() {
             return React.createElement('div', { style: { display: 'flex', gap: 6 } },
+              React.createElement(BindingChip),
               React.createElement(MonitorTogglePill))
               // D11-1：顶栏「设置」按钮随浮层退役删除——训练配置入口＝原生设置页
           })
@@ -2430,28 +3122,8 @@ window.__ModuleLoader__.load({
               React.createElement(FloatingTaskCardExpanded),
               React.createElement(EvalNoticeStack),
               React.createElement(LostWorkspacesBanner),
-              React.createElement('div', { className: 'atf-pill-row' },
-                PILLS.map(function(pill) {
-                  return React.createElement('button', {
-                    key: pill.label, className: 'atf-pill',
-                    onClick: function() {
-                      // 输入面＝contenteditable 富输入（DSH 壳无 textarea）——execCommand 插入保 React 状态同步
-                      var input = document.querySelector('textarea') || document.querySelector('[contenteditable=\"true\"]')
-                      if (input) {
-                        input.focus()
-                        document.execCommand('insertText', false, pill.msg)
-                      }
-                    },
-                  }, pill.label)
-                }),
-                React.createElement('button', {
-                  className: 'atf-pill', title: '内嵌打开 badcase 可视化',
-                  onClick: function() { store.setViewer({ runId: null }) },
-                }, 'badcase 可视化'),
-                React.createElement('button', {
-                  className: 'atf-pill', title: '发起训练（IterationConfig 摘要→确认卡→正道链）',
-                  onClick: function() { store.setTrain({ runId: null, mode: 'dry_run' }) },
-                }, '发起训练')),
+              // 批B2 §五：胶囊行组件化（DockPillsRow——绑定状态驱动禁用/文案）
+              React.createElement(DockPillsRow),
               React.createElement(ViewerOverlay),
               React.createElement(TrainDialog))
               // 批㊶Q增补一：MonitorPanel 卸离 dock——pane body（MonitorBody）唯一挂载；
