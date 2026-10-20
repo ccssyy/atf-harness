@@ -1012,13 +1012,26 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
     });
   }
   if (latest === null) {
-    // 有轮目录但无完成轮：eval_round=null＋note；latest_round 照实返回
+    // 有轮目录但无完成轮：eval_round=null＋note；latest_round 照实返回。
+    // D15 补全：next_steps 事实面保留（readiness 扫全轮——四件套缺＝false、指引行不预告），
+    // 旧消费面（E9 收口提示锚）零翻新。
+    const runDirNone = resolveRunDir(cfg.runsRoot, runId);
+    const readinessNone = collectEvalReadiness(runDirNone);
     return asToolValue({
       action: "status", run_id: runId, eval_round: null,
       latest_round: latestName, latest_round_incomplete: true, running,
       tmux: resolveLaunchSessionName(orchBase),
       ...(orchProbe.refused !== null ? { tmux_probe: orchProbe.refused } : {}),
       note: "尚无完成的评估轮",
+      next_steps: {
+        four_set_ready: readinessNone.four_set_ready,
+        badcases_ready: readinessNone.badcases_ready,
+        latest_checkpoint: readinessNone.latest_checkpoint,
+        publish_prereq_met: checkModelPublishPrereq(runDirNone).ok,
+        note: readinessNone.four_set_ready
+          ? "四件套齐——坏例分析（atf_analyze_badcases）与模型发布（atf_publish_model）前置事实在位"
+          : "四件套未齐——分析/发布前置事实未满足",
+      },
     });
   }
   const serviceReceiptPath = join(latest, "service", "service", "service_receipt.json");
