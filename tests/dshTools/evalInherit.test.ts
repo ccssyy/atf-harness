@@ -9,7 +9,7 @@ import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildEvalTools,
   computeEvalCaliber,
@@ -35,8 +35,11 @@ type Tool = { name: string; execute: (args: unknown, exec: unknown) => Promise<R
 const RUN_ID = "run-d14";
 
 /** mock pin：服务件/确认报告（含真实键面的生效服务参数表——绑卡＋绑卡差异两行齐）/编排件
- *  （"$@" 落盘 argv-capture.txt＋sleep 2 保活——pane_start_command 可断言）。 */
-const writeMockPin = (pin: string): void => {
+ *  （"$@" 落盘 argv-capture.txt＋sleep 2 保活——pane_start_command 可断言）。
+ *  D20h：--record-eval-release 分支落 argv 快照（pin 根 record-argv.json）＋
+ *  recordStdout＝print 的 python 表达式（缺省 {"recorded": true}；测试注入 approval_id/坏 JSON）。 */
+const writeMockPin = (pin: string, opts: { recordStdout?: string } = {}): void => {
+  const recordExpr = opts.recordStdout ?? 'json.dumps({"recorded": True})';
   const dir = join(pin, "skills", "atf-evaluate-checkpoints", "scripts");
   mkdirSync(dir, { recursive: true });
   mkdirSync(join(pin, "skills", "atf-admit-training-data", "scripts"), { recursive: true });
@@ -45,7 +48,9 @@ const writeMockPin = (pin: string): void => {
 import json, os, sys
 args = sys.argv[1:]
 if "--record-eval-release" in args:
-    print(json.dumps({"recorded": True})); sys.exit(0)
+    cap = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "record-argv.json")
+    open(cap, "w").write(json.dumps(args))
+    print(${recordExpr}); sys.exit(0)
 out = args[args.index("--out") + 1]
 os.makedirs(out, exist_ok=True)
 open(os.path.join(out, "service_manifest.json"), "w").write(json.dumps({
@@ -349,6 +354,87 @@ describe("批D14——评测参数继承（field_config/prompt_mode 缺省继承
     expect(cardText).toContain("预计代价：占用 4 张 GPU，直到服务停止");
     // headline：评估放行 — <run_id>
     expect(cardText).toContain(`确认摘要：评估放行 — ${RUN_ID}`);
+    expect(tmuxTestOk(`kill-session -t ${orchName()}`)).toBe(true);
+  });
+});
+
+describe("批D20h——审批 actor/mode 接入（放行 argv 三参＋approval_id 回传＋卡面 owner 行）", () => {
+  const evalOf = (runsRoot: string, kernelDir: string, ctx: { get: (s: string) => unknown }): Tool =>
+    (buildEvalTools(ctx, { runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
+  const recordArgv = (pin: string): string[] => JSON.parse(readFileSync(join(pin, "record-argv.json"), "utf8")) as string[];
+  const flagValue = (argv: string[], flag: string): string => argv[argv.indexOf(flag) + 1] as string;
+  const latestRoundDir = (root: string): string => {
+    const rounds = readdirSync(join(root, RUN_ID, "eval")).sort();
+    return join(root, RUN_ID, "eval", rounds[rounds.length - 1] as string);
+  };
+  const ctxWithCard = (card: { text: string }): { get: (s: string) => unknown } => ({
+    get: (s: string) => (s === "approval" ? { request: async (req: { reason: string }) => { card.text = req.reason; return "allowed-once"; } } : undefined),
+  });
+
+  it("argv 三参：--actor <sessionId>＋--approval-mode ui＋--round-dir <roundDir>", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPin(pin);
+    const f = seedRun(root);
+    const result = await evalOf(root, pin, ctxWithCard({ text: "" })).execute(baseArgs(root, f), { callId: "t", agent: { session: { id: "sess-d20h" } } });
+    expect(result.started).toBe(true);
+    const argv = recordArgv(pin);
+    expect(flagValue(argv, "--actor")).toBe("sess-d20h");
+    expect(flagValue(argv, "--approval-mode")).toBe("ui");
+    expect(flagValue(argv, "--round-dir")).toBe(latestRoundDir(root));
+    expect(tmuxTestOk(`kill-session -t ${orchName()}`)).toBe(true);
+  });
+
+  it("session 缺失 → --actor unattributed（不伪造 owner）", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPin(pin);
+    const f = seedRun(root);
+    const result = await evalOf(root, pin, ctxWithCard({ text: "" })).execute(baseArgs(root, f), fakeExec);
+    expect(result.started).toBe(true);
+    const argv = recordArgv(pin);
+    expect(flagValue(argv, "--actor")).toBe("unattributed");
+    expect(argv).not.toContain("owner"); // 红线：不伪造 owner 字面量
+    expect(tmuxTestOk(`kill-session -t ${orchName()}`)).toBe(true);
+  });
+
+  it("账本 approval_id 回传：stdout 带 approval_id → 返回体 approval_entry_id", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPin(pin, { recordStdout: 'json.dumps({"recorded": True, "approval_id": "appr-20h-uuid"})' });
+    const f = seedRun(root);
+    const result = await evalOf(root, pin, ctxWithCard({ text: "" })).execute(baseArgs(root, f), fakeExec);
+    expect(result.started).toBe(true);
+    expect(result.approval_entry_id).toBe("appr-20h-uuid");
+    expect(tmuxTestOk(`kill-session -t ${orchName()}`)).toBe(true);
+  });
+
+  it("stdout 非 JSON → 不阻断（started=true）＋返回体无 approval_entry_id＋stderr 记一条", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPin(pin, { recordStdout: "'{not-json'" });
+    const f = seedRun(root);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const result = await evalOf(root, pin, ctxWithCard({ text: "" })).execute(baseArgs(root, f), fakeExec);
+      expect(result.started).toBe(true);
+      expect("approval_entry_id" in result).toBe(false);
+      expect(errSpy.mock.calls.some((c) => String(c[0]).includes("approval_entry_id"))).toBe(true);
+    } finally {
+      errSpy.mockRestore();
+    }
+    expect(tmuxTestOk(`kill-session -t ${orchName()}`)).toBe(true);
+  });
+
+  it("卡面 reason 含「仅 owner 可点；执行方不得代点」", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPin(pin);
+    const f = seedRun(root);
+    const card = { text: "" };
+    const result = await evalOf(root, pin, ctxWithCard(card)).execute(baseArgs(root, f), fakeExec);
+    expect(result.started).toBe(true);
+    expect(card.text).toContain("仅 owner 可点；执行方不得代点");
     expect(tmuxTestOk(`kill-session -t ${orchName()}`)).toBe(true);
   });
 });

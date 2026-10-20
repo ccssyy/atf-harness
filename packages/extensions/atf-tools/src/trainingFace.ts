@@ -1737,12 +1737,18 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
           `字段配置：${fieldConfigResolved.source === "run_recorded" ? "继承训练记录（run_recorded）" : "显式传入（explicit）"}${fieldConfigResolved.warning !== undefined ? "——与训练记录指纹不一致，按显式覆盖执行" : ""}`,
           "详细报告已生成（评估轮目录内）",
           "如需调整评估数据、adapter 或服务参数，直接回复要改的项；不改直接回复「按现值确认」",
+          "仅 owner 可点；执行方不得代点",
         ].join("\n"));
       if (!verdict.ok) return approvalDeniedResult("atf_evaluate", verdict.outcome);
-      const recorded = await runCapture("python3", [genService, "--record-eval-release", "--config", args.service_config, "--service-dir", serviceDir, "--note", "atf_evaluate 确认卡放行（九必报项报告已确认）"], 60_000);
+      // D20h：放行登记带会话身份与 ui 模式（actor＝会话 id，缺失＝unattributed——不伪造 owner）；
+      // 账本 approval_id 回传返回体（解析失败省略键不阻断——stderr 记一条）
+      const recorded = await runCapture("python3", [genService, "--record-eval-release", "--config", args.service_config, "--service-dir", serviceDir, "--note", "atf_evaluate 确认卡放行（九必报项报告已确认）",
+        "--actor", sessionIdOf(exec) ?? "unattributed", "--approval-mode", "ui", "--round-dir", roundDir], 60_000);
       if (recorded.code !== 0) {
         return asToolValue({ started: false, error: "eval_release_record_failed", stderr_tail: recorded.stderr.slice(-800), note: "放行登记失败——不启动编排，账本唯一真相不造假" });
       }
+      let approvalEntryId: string | undefined;
+      try { approvalEntryId = JSON.parse(recorded.stdout)["approval_id"]; } catch { console.error("[atf-evaluate] 放行账本 stdout 非 JSON——返回体省略 approval_entry_id（不阻断评估启动）"); }
       // ④ checkpoint staging 计划（selections 由已确认的 adapter_path 编译，非猜测）
       const ckptPlanDir = join(roundDir, "ckpt-plan");
       mkdirSync(ckptPlanDir, { recursive: true });
@@ -1802,6 +1808,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         run_id: runId,
         serving_models: expectedModels, service_manifest: join(serviceDir, "service_manifest.json"),
         prelaunch_report: reportPath, release: "eval-release 账本已登记（config sha256）",
+        ...(approvalEntryId !== undefined ? { approval_entry_id: approvalEntryId } : {}),
         // D14：评测参数继承落账（报告面——解析来源/指纹/口径；GT 外字段只在此报告面，不上卡）
         field_config: fieldConfigResolved.path,
         field_config_source: fieldConfigResolved.source,
