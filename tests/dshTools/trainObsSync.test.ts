@@ -10,6 +10,8 @@ import {
   parseRemainingTimeSeconds,
   parseTrainerLogLine,
   readProgress,
+  readTrainerLogTail,
+  trainerLogPathOf,
   writeProgress,
 } from "../../src/core/workspace/runFacts.js";
 import {
@@ -226,5 +228,48 @@ describe("批㊶-TRAIN-OBS 投影三同步（trainlog_tail：adapter 白名单�
     const bare = scanRunDir(root, "run-bare");
     expect(bare.trainlog_tail).toBeNull();
     expect(buildMonitorSnapshot([bare], { offline: true }).runs[0]?.trainlog_tail).toBeNull();
+  });
+});
+
+describe("D27——trainer_log 双拓扑发现（training/ ＞ prep/iteration-config/）", () => {
+  const seedPrepRun = (root: string, runId: string, logLines: string[]): string => {
+    const runDir = join(root, runId);
+    mkdirSync(join(runDir, "prep", "iteration-config"), { recursive: true });
+    writeFileSync(join(runDir, "prep", "iteration-config", "trainer_log.jsonl"), logLines.join("\n") + "\n", "utf8");
+    return runDir;
+  };
+
+  it("trainerLogPathOf：两路俱缺＝null；training/ 在场优先；仅 prep 拓扑兜底发现", () => {
+    const root = tempRoot();
+    const bare = join(root, "run-bare");
+    mkdirSync(bare, { recursive: true });
+    expect(trainerLogPathOf(bare)).toBeNull();
+    const dual = seedRun(root, "run-dual", [REAL_LINE]);
+    seedPrepRun(root, "run-dual", ['{"current_steps": 5, "total_steps": 10, "percentage": 50.0}']);
+    expect(trainerLogPathOf(dual)).toBe(join(dual, "training", "trainer_log.jsonl"));
+    const prepOnly = seedPrepRun(root, "run-prep-only", [REAL_LINE]);
+    expect(trainerLogPathOf(prepOnly)).toBe(join(prepOnly, "prep", "iteration-config", "trainer_log.jsonl"));
+  });
+
+  it("walkthrough prep 拓扑 progress 有数：仅 prep/iteration-config/trainer_log → written＋percentage/eta_s", async () => {
+    const root = tempRoot();
+    const runDir = seedPrepRun(root, "run-prep", ['{"current_steps": 4, "total_steps": 10, "loss": 0.71, "epoch": 0.4, "percentage": 40.0, "elapsed_time": "0:01:00", "remaining_time": "0:02:00"}']);
+    const result = await trainObsTick("run-prep", runDir, null);
+    expect(result).toBe("written");
+    const progress = readProgress(runDir);
+    expect(progress).not.toBeNull();
+    expect(progress?.percentage).toBe(40);
+    expect(progress?.eta_s).toBe(120);
+    expect(readTrainerLogTail(runDir)?.percentage).toBe(40);
+  });
+
+  it("双拓扑并存：training/ 在场优先（读训练段日志，prep 旧值不串）", async () => {
+    const root = tempRoot();
+    const runDir = seedRun(root, "run-both", [REAL_LINE]); // percentage 1.42
+    mkdirSync(join(runDir, "prep", "iteration-config"), { recursive: true });
+    writeFileSync(join(runDir, "prep", "iteration-config", "trainer_log.jsonl"), '{"current_steps": 9, "total_steps": 10, "percentage": 90.0}\n', "utf8");
+    const result = await trainObsTick("run-both", runDir, null);
+    expect(result).toBe("written");
+    expect(readProgress(runDir)?.percentage).toBe(1.42);
   });
 });

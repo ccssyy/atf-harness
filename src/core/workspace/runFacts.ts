@@ -219,10 +219,25 @@ export const parseTrainerLogLine = (line: string): TrainerLogTail | null => {
   }
 };
 
-/** trainer_log.jsonl 末行读取（文件缺席/空/末行损坏＝null；末行取最后一条非空行）。 */
+/** D27：trainer_log 双拓扑解析序（单源）——training/（训练段主形态）＞
+ *  prep/iteration-config/（walkthrough prep 段拓扑——readNumTrainEpochs 同款双路）；
+ *  两路俱缺席＝null。消费面：readTrainerLogTail／trainObsSync 源新鲜度门／atf-ui
+ *  trainer_log 活性面（同一份源解析，禁第二套路径表）。 */
+export const TRAINER_LOG_RELS: readonly string[] = ["training/trainer_log.jsonl", "prep/iteration-config/trainer_log.jsonl"];
+
+export const trainerLogPathOf = (runDir: string): string | null => {
+  for (const rel of TRAINER_LOG_RELS) {
+    const path = join(runDir, rel);
+    if (existsSync(path)) return path;
+  }
+  return null;
+};
+
+/** trainer_log.jsonl 末行读取（文件缺席/空/末行损坏＝null；末行取最后一条非空行；
+ *  D27：双拓扑按 TRAINER_LOG_RELS 序发现——training/ 在场优先，prep 拓扑兜底）。 */
 export const readTrainerLogTail = (runDir: string): TrainerLogTail | null => {
-  const path = join(runDir, "training", "trainer_log.jsonl");
-  if (!existsSync(path)) return null;
+  const path = trainerLogPathOf(runDir);
+  if (path === null) return null;
   try {
     const lines = readFileSync(path, "utf8").split("\n").filter((l) => l.trim() !== "");
     for (let i = lines.length - 1; i >= 0; i -= 1) {

@@ -409,3 +409,75 @@ describe("D23——破坏性命令确认闸（rm 递归删 → owner 审批卡�
     expect(existsSync(file)).toBe(false);
   });
 });
+
+describe("D21——围栏读注册面（WebUI 注册工作区免 env 手改/重启入可读集）", () => {
+  const writeRegistry = (home: string, wsPath: string): void => {
+    mkdirSync(join(home, "storages"), { recursive: true });
+    writeFileSync(
+      join(home, "storages", "workspace.json"),
+      JSON.stringify(
+        {
+          unit: { name: "workspace", version: 2 },
+          global: { initialized: true, workspaceIds: ["w1"], archivedSessionIds: [], pinnedSessionIds: [] },
+          tables: { workspaces: { w1: { path: wsPath, title: "注册工作区", sessionIds: [], createdAt: "", updatedAt: "" } } },
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+  };
+  const withDshHome = async (home: string, run: () => Promise<void>): Promise<void> => {
+    const saved = process.env["DSH_HOME"];
+    process.env["DSH_HOME"] = home;
+    try {
+      await run();
+    } finally {
+      if (saved === undefined) delete process.env["DSH_HOME"];
+      else process.env["DSH_HOME"] = saved;
+    }
+  };
+
+  it("注册工作区（盘上存在）→ 命令可读直通（零 env 手改零重启）；未注册同层目录仍拒", async () => {
+    const root = tempRoot();
+    const home = tempRoot();
+    const runsRoot = join(root, "runs");
+    const regWs = join(root, "reg-ws");
+    mkdirSync(join(regWs, "data"), { recursive: true });
+    writeFileSync(join(regWs, "data", "notes.txt"), "注册面内容");
+    const otherWs = join(root, "other-ws");
+    mkdirSync(otherWs, { recursive: true });
+    writeFileSync(join(otherWs, "secret.txt"), "未注册");
+    writeRegistry(home, regWs);
+    await withDshHome(home, async () => {
+      const tools = buildFileGuardTools({ roots: [root], env: {} }, { runsRoot }) as Array<{ name: string; execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+      const bash = tools.find((tool) => tool.name === "atf_bash")!;
+      const read = await bash.execute({ command: `cat ${join(regWs, "data", "notes.txt")}` }, { callId: "t", agent: undefined });
+      expect(JSON.stringify(read)).toContain("注册面内容");
+      const denied = await bash.execute({ command: `cat ${join(otherWs, "secret.txt")}` }, { callId: "t", agent: undefined });
+      expect(String(denied["error"] ?? "")).toContain("workspace_path_outside_allowlist");
+    });
+  });
+
+  it("可写域不扩：会话绑定 run 下写注册工作区 → 只读围栏内拒绝（可写仍＝当前 run 工作区）；写自己 run 放行", async () => {
+    const root = tempRoot();
+    const home = tempRoot();
+    const runsRoot = join(root, "runs");
+    const runDir = join(runsRoot, "wsA", "run-a");
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    writeFileSync(join(runDir, "webui", "binding.json"), `${JSON.stringify([{ session_id: "sess-d21", bound_at: "2026-10-21T10:00:00Z" }], null, 1)}\n`);
+    const regWs = join(root, "reg-ws");
+    mkdirSync(regWs, { recursive: true });
+    writeRegistry(home, regWs);
+    await withDshHome(home, async () => {
+      const tools = buildFileGuardTools({ roots: [root], env: {} }, { runsRoot }) as Array<{ name: string; execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+      const bash = tools.find((tool) => tool.name === "atf_bash")!;
+      const exec = { callId: "t", agent: { session: { id: "sess-d21" } } };
+      const cross = await bash.execute({ command: `echo hi > ${join(regWs, "out.txt")}` }, exec);
+      expect(String(cross["error"] ?? "")).toContain("workspace_path_outside_allowlist");
+      expect(String(cross["message"] ?? "")).toContain("只读围栏内");
+      expect(existsSync(join(regWs, "out.txt"))).toBe(false);
+      const own = await bash.execute({ command: `echo hi > ${join(runDir, "out.txt")}` }, exec);
+      expect(JSON.stringify(own)).not.toContain("workspace_path_outside_allowlist");
+    });
+  });
+});

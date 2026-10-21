@@ -32,7 +32,7 @@ import {
   TRAIN_NOTICE_STATE_FILENAME, writeTrainNoticeState, type TrainTerminalNoticeFace,
 } from "../../../../src/core/workspace/trainNoticeTrack.js";
 import { probeEvalServiceHealth, type EvalServiceHealthFace } from "../../../../src/core/workspace/evalServiceHealth.js";
-import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readNumTrainEpochs, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
+import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readNumTrainEpochs, trainerLogPathOf, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
 import { trainObsTick, readTrainlogTail, resetTrainObsForTest, type TrainlogTailFace } from "../../../../src/core/workspace/trainObsSync.js";
 import { bucketedRunEntries, flatRunDirNames, resolveRunDir, RUN_MARKER_RELS, sweepAnsweredPendings, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
 import { displayOf, buildRunCandidates, writeDisplay } from "../../../../src/core/workspace/runDisplay.js";
@@ -498,24 +498,29 @@ const lossSeriesFresh = (dir: string, liveness: ScanLiveness | undefined): boole
 
 /** D3/D4：trainer_log mtime 新鲜（步进写入活性——trainProbe 假死判据同源证据；
  *  stat 失败按不新鲜。内核直跑训练无 loss-series/progress（atf-ui 工具面产物），
- *  trainer_log 是其唯一在盘活性面）。 */
+ *  trainer_log 是其唯一在盘活性面）。D27：双拓扑经 trainerLogPathOf 单源发现。 */
 const trainerLogFresh = (dir: string, liveness: ScanLiveness | undefined): boolean => {
   try {
     const windowMs = liveness?.freshWindowMs ?? TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
     const now = liveness?.nowMs ?? Date.now();
-    return now - statSync(join(dir, "training", "trainer_log.jsonl")).mtimeMs <= windowMs;
+    const path = trainerLogPathOf(dir);
+    if (path === null) return false;
+    return now - statSync(path).mtimeMs <= windowMs;
   } catch {
     return false;
   }
 };
 
 /** D28：trainer_log 在场且 mtime 超窗（源停更 definitive 负证据——文件缺席/不可读＝false
- *  不猜，启动加载窗无此文件不触发）。活跃训练步进写入恒在窗内——「不误杀」由同门保证。 */
+ *  不猜，启动加载窗无此文件不触发）。活跃训练步进写入恒在窗内——「不误杀」由同门保证。
+ *  D27：双拓扑经 trainerLogPathOf 单源发现。 */
 const trainerLogOverWindow = (dir: string, liveness: ScanLiveness | undefined): boolean => {
   try {
     const windowMs = liveness?.freshWindowMs ?? TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
     const now = liveness?.nowMs ?? Date.now();
-    return now - statSync(join(dir, "training", "trainer_log.jsonl")).mtimeMs > windowMs;
+    const path = trainerLogPathOf(dir);
+    if (path === null) return false;
+    return now - statSync(path).mtimeMs > windowMs;
   } catch {
     return false;
   }
@@ -1237,10 +1242,11 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
           } catch { /* 日志不可读＝OOM 特征不可判 */ }
         }
         // 批㊶Q增补二2：trainer_log.jsonl mtime（步进写入活性——探针活跃证据源之一）
+        // D27：双拓扑经 trainerLogPathOf 单源发现
         let trainerLogMtimeMs: number | null = null;
         try {
-          const trainerLogPath = join(runDir, "training", "trainer_log.jsonl");
-          if (existsSync(trainerLogPath)) trainerLogMtimeMs = statSync(trainerLogPath).mtimeMs;
+          const trainerLogPath = trainerLogPathOf(runDir);
+          if (trainerLogPath !== null) trainerLogMtimeMs = statSync(trainerLogPath).mtimeMs;
         } catch { /* 不可读＝null（判据按无此证据处理） */ }
         const alert = probeAndRecord(runDir, {
           trainingActive: true,

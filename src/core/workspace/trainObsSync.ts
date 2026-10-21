@@ -22,6 +22,7 @@ import {
   buildProgressFromTrainerLog,
   readProgress,
   readTrainerLogTail,
+  trainerLogPathOf,
   writeProgress,
   type RunProgress,
 } from "./runFacts.js";
@@ -46,10 +47,12 @@ export const resolveTrainActiveWindowMs = (env: NodeJS.ProcessEnv): number => {
   return parsed;
 };
 
-/** 源 trainer_log mtime（stat 失败＝null——文件消失/不可读，走 stale 分支）。 */
+/** 源 trainer_log mtime（D27 双拓扑：trainerLogPathOf 单源发现——stat 失败/两路俱缺席
+ *  ＝null，走 stale 分支）。 */
 const sourceLogMtimeMs = (runDir: string): number | null => {
   try {
-    return statSync(join(runDir, "training", "trainer_log.jsonl")).mtimeMs;
+    const path = trainerLogPathOf(runDir);
+    return path !== null ? statSync(path).mtimeMs : null;
   } catch {
     return null;
   }

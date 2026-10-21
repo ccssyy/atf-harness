@@ -501,3 +501,40 @@ describe("批D14——纯函数锚（prompt_mode 解析链/口径计算/卡面�
     expect(summarize(report).headline).toBe("推理服务接入确认报告");
   });
 });
+
+describe("D32——status 只按 run/轮次查询（start 四参降 optional，退出 status schema）", () => {
+  const evalOfD32 = (runsRoot: string, kernelDir: string): Tool =>
+    (buildEvalTools({ get: () => undefined }, { runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
+
+  it("status 不传 start 参数可查：无评估轮 → status 面（note 先 start），零 *_missing 零审批", async () => {
+    const root = tempRoot();
+    mkdirSync(join(root, "run-d32"), { recursive: true });
+    const result = await evalOfD32(root, tempRoot()).execute({ action: "status", run_id: "run-d32" }, fakeExec);
+    expect(result["action"]).toBe("status");
+    expect(result["started"]).toBeUndefined();
+    expect(String(result["note"])).toContain("先 start");
+  });
+
+  it("start 缺 start 参数 → 结构化 *_missing（先于脚本存在性检查——kernelDir 空目录即验）", async () => {
+    const root = tempRoot();
+    mkdirSync(join(root, "run-d32b"), { recursive: true });
+    const tool = evalOfD32(root, tempRoot());
+    const noAdapter = await tool.execute({ action: "start", run_id: "run-d32b" }, fakeExec);
+    expect(noAdapter).toMatchObject({ started: false, error: "adapter_path_missing" });
+    const noAssets = await tool.execute({ action: "start", run_id: "run-d32b", adapter_path: "/tmp/ckpt" }, fakeExec);
+    expect(noAssets).toMatchObject({ started: false, error: "eval_assets_dir_missing" });
+    const noService = await tool.execute({ action: "start", run_id: "run-d32b", adapter_path: "/tmp/ckpt", eval_assets_dir: "/tmp/assets" }, fakeExec);
+    expect(noService).toMatchObject({ started: false, error: "service_config_missing" });
+    const noProfile = await tool.execute({ action: "start", run_id: "run-d32b", adapter_path: "/tmp/ckpt", eval_assets_dir: "/tmp/assets", service_config: "/tmp/sc.json" }, fakeExec);
+    expect(noProfile).toMatchObject({ started: false, error: "env_profile_missing" });
+  });
+
+  it("参数 schema：adapter_path/eval_assets_dir/service_config/env_profile 四键退出 required（status schema 退出；action 仍必填）", () => {
+    const params = (evalOfD32(tempRoot(), tempRoot()) as unknown as { parameters: { required?: string[] } }).parameters;
+    const required = params.required ?? [];
+    for (const key of ["adapter_path", "eval_assets_dir", "service_config", "env_profile"]) {
+      expect(required).not.toContain(key);
+    }
+    expect(required).toContain("action");
+  });
+});

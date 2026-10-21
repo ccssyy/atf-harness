@@ -1603,12 +1603,14 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     parameters: {
       action: { type: "string", required: true, enum: ["start", "status"], description: "start=确认并启动正道链（后台编排）；status=查询进度与四件套" },
       run_id: { type: "string", description: "可选；省略时使用本会话当前绑定的实验。无绑定会返回 run_binding_required 与候选（含实验名与工作区），不要自行猜一个 id" },
-      adapter_path: { type: "string", required: true, description: "adapter checkpoint 目录绝对路径——固定编号（checkpoint-<数字>），拒 latest/符号链接/缺省猜测（SKILL.md 环节④条款）" },
-      eval_assets_dir: { type: "string", required: true, description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl）" },
+      // D32：start 四参降 optional——status 只按 run/轮次查询（不传 start 参数可查）；
+      // start 路径 execute 内逐参验证（缺即结构化 *_missing，先于一切产物生成）
+      adapter_path: { type: "string", description: "adapter checkpoint 目录绝对路径（仅 action=start 必填；status 省略）——固定编号（checkpoint-<数字>），拒 latest/符号链接/缺省猜测（SKILL.md 环节④条款）" },
+      eval_assets_dir: { type: "string", description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl）（仅 action=start 必填；status 省略）" },
       field_config: { type: "string", description: "PromptFieldConfig/v1 JSON 路径（可选——缺省自动继承 <runDir>/experiment-setup/field-config.json 并与训练记录指纹核对；显式传入即覆盖，漂移仅告警不阻断）" },
       prompt_mode: { type: "string", enum: ["mode0", "mode1"], description: "抽取方式（可选——缺省继承训练声明，无声明即 mode0）：mode0＝每页一次、全字段抽取；mode1＝按字段分组、每页×每组，适合字段多/相互干扰时。默认跟训练一致，不要自行切换" },
-      service_config: { type: "string", required: true, description: "EvalServiceConfig/v1 JSON 路径（按 SKILL.md 作者声明：port/TP/gpu_memory_utilization/max_model_len/mm 像素对/adapters 挂载表——adapters[].path 即本次 staging 的 adapter 源）" },
-      env_profile: { type: "string", required: true, description: "环境档案名（评估环境配置层——确认报告九必报项⑤端口/连接的数据源）" },
+      service_config: { type: "string", description: "EvalServiceConfig/v1 JSON 路径（仅 action=start 必填；status 省略。按 SKILL.md 作者声明：port/TP/gpu_memory_utilization/max_model_len/mm 像素对/adapters 挂载表——adapters[].path 即本次 staging 的 adapter 源）" },
+      env_profile: { type: "string", description: "环境档案名（仅 action=start 必填；status 省略——评估环境配置层，确认报告九必报项⑤端口/连接的数据源）" },
       deploy: { type: "string", description: "可选 deploy.local.yaml 路径（显式机器事实，优先于环境档案）" },
       // 批C2 E6 卡点修复：评估资产绑定通道（内核编排契约——外部资产须绑定分区清单或 owner 级显式确认）
       assets_split_manifest: { type: "string", description: "评估资产分区清单路径（split-manifest；跨 run/发布区资产须绑定——绑定后评估输入必须全部来自该 test 分区，内核逐页校验）" },
@@ -1625,7 +1627,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     presentCall: function(args: { action: string; run_id?: string }) {
       return { card: "generic" as const, title: `评估 — ${args.run_id ?? "会话绑定实验"}`, kind: "other" as const }
     },
-    async execute(args: { action: string; run_id?: string; adapter_path: string; eval_assets_dir: string; field_config?: string; prompt_mode?: string; service_config: string; env_profile: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean; concurrency?: number; concurrency_reason?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+    async execute(args: { action: string; run_id?: string; adapter_path?: string; eval_assets_dir?: string; field_config?: string; prompt_mode?: string; service_config?: string; env_profile?: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean; concurrency?: number; concurrency_reason?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选——先于一切检查）
       const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id);
       if (!runResolution.ok) return asToolValue(runResolution.payload);
@@ -1638,6 +1640,20 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const orchestration = skill("atf-evaluate-checkpoints", "generate_eval_orchestration.py");
       const runner = skill("atf-evaluate-checkpoints", "run_formal_eval.py");
       if (args.action === "status") return evalStatus(runId, cfg);
+      // D32：status 只按 run/轮次查询（start 四参降 optional）；start 路径逐参验证
+      // （缺即结构化 *_missing——先于一切产物生成与审批，零消耗放行）
+      if (typeof args.adapter_path !== "string" || args.adapter_path.trim() === "") {
+        return asToolValue({ started: false, error: "adapter_path_missing", note: "action=start 必填 adapter_path（status 查询只按 run/轮次——无需 start 参数）" });
+      }
+      if (typeof args.eval_assets_dir !== "string" || args.eval_assets_dir.trim() === "") {
+        return asToolValue({ started: false, error: "eval_assets_dir_missing", note: "action=start 必填 eval_assets_dir（status 查询只按 run/轮次——无需 start 参数）" });
+      }
+      if (typeof args.service_config !== "string" || args.service_config.trim() === "") {
+        return asToolValue({ started: false, error: "service_config_missing", note: "action=start 必填 service_config（status 查询只按 run/轮次——无需 start 参数）" });
+      }
+      if (typeof args.env_profile !== "string" || args.env_profile.trim() === "") {
+        return asToolValue({ started: false, error: "env_profile_missing", note: "action=start 必填 env_profile（status 查询只按 run/轮次——无需 start 参数）" });
+      }
       for (const script of [genService, prelaunch, ckptPlanGen, orchestration, runner]) {
         if (!existsSync(script)) return asToolValue({ started: false, error: "skill_script_missing", script, note: "pin 内技能脚本缺失——核 kernelDir 装配" });
       }

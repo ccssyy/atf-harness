@@ -23,7 +23,7 @@ import { isAbsolute, join, resolve, sep } from "node:path";
 import { toFileAgentTool, FILE_TOOL_DEFINITIONS, type FileToolHost } from "../../../../src/agent/fileTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { resolveSessionRunWorkspace } from "../../../../src/core/workspace/runFacts.js";
-import { registryPathOf, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
+import { listRegistryRecords, registryPathOf, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { deriveFileToolRoots, type DeriveFileRootsInput } from "../../../../src/agent/fileRoots.js";
 import { translateParameters, asToolValue, looseObjectOutput } from "./schemaTranslate.js";
 import { buildApprovalReason, requestApproval } from "./approvalFace.js";
@@ -264,9 +264,15 @@ export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: stri
           const runWorkspaceEnv = process.env["ATF_BASH_RUN_WORKSPACE"];
           const runsRootFence = deps?.runsRoot ?? process.env["ATF_DSH_RUNS_ROOT"] ?? "";
           const runWorkspace = sessionRunDir ?? (runWorkspaceEnv !== undefined && runWorkspaceEnv.trim() !== "" ? runWorkspaceEnv.trim() : "");
+          // D21：围栏读注册面——注册工作区（WebUI 注册成功＝exists）逐调用并入可读集，
+          // 免 ATF_WORKSPACE_ALLOWLIST env 手改/实例重启（注册表变更即时生效）；
+          // 可写域不变（仍＝当前 run 工作区）。
+          const registryDirs = listRegistryRecords(resolveDshHome(process.env))
+            .filter((record) => record.exists)
+            .map((record) => record.path);
           const fenceRoots = runWorkspace !== ""
-            ? workspaceFenceRoots({ runWorkspace, runsRoot: runsRootFence, allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "" })
-            : { writable: "", readable: runsRootFence !== "" ? [runsRootFence, ...workspaceFenceRoots({ runWorkspace: runsRootFence, runsRoot: runsRootFence, allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "" }).readable.filter((r) => r !== runsRootFence)] : [] };
+            ? workspaceFenceRoots({ runWorkspace, runsRoot: runsRootFence, allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "", registryDirs })
+            : { writable: "", readable: runsRootFence !== "" ? [runsRootFence, ...workspaceFenceRoots({ runWorkspace: runsRootFence, runsRoot: runsRootFence, allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "", registryDirs }).readable.filter((r) => r !== runsRootFence)] : [] };
           const fence = workspaceFenceGuard(String(args["command"] ?? ""), fenceRoots);
           if (!fence.ok) {
             return asToolValue({ ok: false, error: fence.code, tool: definition.name, message: fence.message });
