@@ -530,9 +530,11 @@ export const buildJointTrainTool = (ctx: { get(service: string): unknown }, cfg:
     parameters: {
       // schema 全可选（必填语义由 description 携带）——卡前快败结构化码在 execute 内
       // 单源产出（quantize/D32 先例：schema 硬校验会抢走结构化错误面）。
+      // field_specs/oversample 用 object+additionalProperties（vendor 类型词典 json＝作者侧专用，
+      // 模型传参会被剥 null——门2 幕4 实测）；模型传参面类型必填语义仍由 description 携带。
       datasets: { type: "array", description: "必填：[{run_id, doc_type}] 数组（≥1 类；每类一个已完成 prep 的实验与它的单据类型键）" },
-      field_specs: { type: "json", description: "必填：按类型的字段规格对象（键＝doc_type）——值为 FieldSpec/v1 对象（{document_zh, fields:[{field_id, zh, group, definition}]}）或现成字段规格 JSON 文件绝对路径" },
-      oversample: { type: "json", description: "可选：按类型倍率对象（如 {\"pl\":1,\"swb\":2}）；省略＝全部 1 倍。倍率须为 ≥1 整数且键集与 datasets 一致" },
+      field_specs: { type: "object", additionalProperties: true, description: "必填：按类型的字段规格对象（键＝doc_type）——值为 FieldSpec/v1 对象（{document_zh, fields:[{field_id, zh, group, definition}]}）或现成字段规格 JSON 文件绝对路径" },
+      oversample: { type: "object", additionalProperties: true, description: "可选：按类型倍率对象（如 {\"pl\":1,\"swb\":2}）；省略＝全部 1 倍。倍率须为 ≥1 整数且键集与 datasets 一致" },
       seed: { type: "integer", description: "可选：随机种子（记录进合并账，缺省 0）" },
       base_model_family: { type: "string", description: "可选：基座模型族（记录进 plan 并决定渲染坐标制式，缺省 qwen3_vl）" },
       target_run_id: { type: "string", description: "必填：联合训练落点实验（联合数据集写到它的 prep/joint/，构建后直接启动该实验训练）" },
