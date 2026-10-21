@@ -133,6 +133,51 @@ describe("D11-2 数据面——GPU 历史追加/轮转/读取（真 fs tmpdir）
   });
 });
 
+describe("D33 GPU 排队横幅生命周期清零（scanRunDir probe 呈现面——alerts.json 落盘零动）", () => {
+  let root = "";
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "atf-gpuqueue-"));
+  });
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("排队中（训练未启动）＝gpu_queue 通知照常透传；训练有启动证据＝呈现清零（不残留旧计时）", async () => {
+    const { scanRunDir } = await import("../../packages/extensions/atf-ui/src/server.js");
+    const runDir = join(root, "run-q");
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    const queueAlert = { level: "warn", kind: "gpu_queue", reason: "GPU 排队：需 8 卡、现空闲 0（已等待 32 秒）——空闲不足", since: "2026-10-21T00:00:12.000Z" };
+    writeFileSync(join(runDir, "webui", "alerts.json"), JSON.stringify([queueAlert]));
+    // 排队进行中（训练未启动——无任何启动证据）：横幅正常显示
+    expect(scanRunDir(root, "run-q").probe).toMatchObject({ kind: "gpu_queue" });
+    // 训练有启动证据（A3 闭集任一——此处 trainer_state.json）：排队事实被取代，probe 呈现清零
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "trainer_state.json"), "{}\n");
+    expect(scanRunDir(root, "run-q").probe).toBeNull();
+    // alerts.json 落盘零动（历史账保留——清零只在 monitor 呈现面）
+    expect(JSON.parse(readFileSync(join(runDir, "webui", "alerts.json"), "utf8"))).toEqual([queueAlert]);
+  });
+
+  it("清零只作用于 gpu_queue：config_auto/oom_fallback 通报不受训练启动影响；非末条 gpu_queue 不连坐", async () => {
+    const { scanRunDir } = await import("../../packages/extensions/atf-ui/src/server.js");
+    const runDir = join(root, "run-q");
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "trainer_state.json"), "{}\n");
+    // 末条 config_auto（训练已启动）＝照常透传
+    writeFileSync(join(runDir, "webui", "alerts.json"), JSON.stringify([
+      { level: "info", kind: "config_auto", reason: "全自动训练档·配置自动确认", since: "2026-10-21T00:00:00.000Z" },
+    ]));
+    expect(scanRunDir(root, "run-q").probe).toMatchObject({ kind: "config_auto" });
+    // 末条 probe 告警（训练已启动）＝照常透传
+    writeFileSync(join(runDir, "webui", "alerts.json"), JSON.stringify([
+      { level: "warn", kind: "gpu_queue", reason: "GPU 排队：需 8 卡（已等待 12 秒）", since: "2026-10-21T00:00:00.000Z" },
+      { level: "error", kind: "probe", reason: "训练疑似停滞", since: "2026-10-21T00:05:00.000Z" },
+    ]));
+    expect(scanRunDir(root, "run-q").probe).toMatchObject({ kind: "probe", level: "error" });
+  });
+});
+
 describe("D11-2 数据面——run-file 相对路径校验（纯函数）＋两新路由（handler 直调）", () => {
   let root = "";
   let handlers: Record<string, (req: unknown, res: unknown) => void>;

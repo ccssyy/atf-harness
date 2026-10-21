@@ -53,6 +53,14 @@ svg.chart { width:100%; height:90px; border:1px dashed var(--border); border-rad
     <button class="atf-quick" data-msg="查看当前训练任务状态">查状态</button>
     <button class="atf-quick" data-msg="继续上次的训练任务">继续上次</button>
     <button class="atf-quick" data-msg="对比最近两轮训练的指标">对比两轮</button>
+    <!-- D34：决策闭环默认指令（snapshot.js CLOSURE_MESSAGE 同语义——面板页与 chat 胶囊
+         同步维护；封存步＝事实日志与锚点快照落盘，闭环默认含封存不依赖用户点名） -->
+    <button class="atf-quick" data-msg="把本轮实验走完决策闭环：
+①把本轮评估结论记成决策；
+②证据归档（逐项 sha256 清单）；
+③发布件按「可用模型归档」处理，支持则晋升为基线；
+④留痕封存——把本轮事实日志与锚点快照落盘存档（闭环默认步骤，勿跳过；完成后回报文件清单）；
+⑤给下一轮计划预览，然后本轮收口。该我确认的环节就出卡。">走完闭环</button>
   </div></div>
   <div id="layout">
   <div>

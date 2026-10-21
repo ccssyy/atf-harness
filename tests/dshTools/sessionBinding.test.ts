@@ -298,7 +298,7 @@ describe("GET/POST /atf-ui/session-binding", () => {
     expect(sessionBindingPayloadOf(home, root, "s-b").unbound_reason).toBe("cleared");
   });
 
-  it("HTTP 面：401 鉴权／400 缺 sessionId／400 非法 title／404 run 不存在／200 bind·unbind·rename", async () => {
+  it("HTTP 面：401 鉴权／200 缺 sessionId 草稿载荷（B2c）／400 非法 title／404 run 不存在／200 bind·unbind·rename", async () => {
     const root = tempRoot();
     const home = tempRoot();
     seedRun(root, "run-http", { workspace: "ws-h" });
@@ -325,8 +325,14 @@ describe("GET/POST /atf-ui/session-binding", () => {
         if (body !== undefined) req.write(JSON.stringify(body));
         req.end();
       });
-    // GET 缺 sessionId → 400
-    expect((await callAuth("/atf-ui/session-binding", "GET")).status).toBe(400);
+    // GET 缺 sessionId → 200 草稿态载荷（B2c——机器级最近实验，只读；draft:true＋零账本读写）
+    const draft = await callAuth("/atf-ui/session-binding", "GET");
+    expect(draft.status).toBe(200);
+    expect(draft.json.draft).toBe(true);
+    expect(draft.json.active).toBeNull();
+    expect(Array.isArray(draft.json.recent)).toBe(true);
+    expect((draft.json.recent as Array<Record<string, unknown>>).some((r) => r.run_id === "run-http")).toBe(true);
+    expect(draft.json.candidates).toEqual([]);
     // GET 200：cache-control no-store（JSON 面）
     const got = await callAuth("/atf-ui/session-binding?sessionId=s1", "GET");
     expect(got.status).toBe(200);

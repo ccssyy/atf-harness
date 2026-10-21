@@ -632,6 +632,16 @@ print(json.dumps({"argv": args}))`}`);
   const analyzeOf = (runsRoot: string, kernelDir: string): Tool =>
     (buildEvalTools(noApproval, { runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_analyze_badcases") as Tool);
 
+  it("D35 引用值逐字一致指引：description 要求引用字段值原样拷贝源串（禁止千分位/小数点重排转写）", () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    const tool = analyzeOf(root, pin) as unknown as { description: string };
+    expect(tool.description).toContain("必须与源记录逐字一致");
+    expect(tool.description).toContain("禁止重排版");
+    expect(tool.description).toContain("千分位逗号");
+    expect(tool.description).toContain("不要凭记忆转写数值");
+  });
+
   it("两步链：冻结账本落 analysis/ledger/，一键链收 --raw-mainline，产物路径对齐 <out>/viewer＋<out>/report", async () => {
     const root = tempRoot();
     const pin = tempRoot();

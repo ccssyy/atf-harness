@@ -109,8 +109,14 @@ describe("A1——form intent 入参经 UserQuestionService 校验不抛", () =>
     const tokenRow = rows.find((row) => row.key === "max_total_tokens");
     expect(tokenRow?.required).toBe(true);
     expect(tokenRow?.placeholder).toContain("必填");
+    // D36：建议值前置（口径引 TRAINING_PIN_CONSTANTS 单源——参考值在首提前可见，不被拦回后才知）
+    expect(tokenRow?.placeholder).toContain("建议直接填 65536");
+    expect(tokenRow?.placeholder).toContain("超长单据在数据构造期截断/拒绝");
     const hintRow = rows.find((row) => row.key === "learning_rate");
     expect(hintRow?.hint).toBe(domainHintOf("learning_rate", 8));
+    // D36：hint 同口径强化（正整数＋建议值）
+    expect(domainHintOf("max_total_tokens", 8)).toContain("建议 65536");
+    expect(domainHintOf("max_total_tokens", 8)).toContain("正整数");
   });
 });
 

@@ -202,6 +202,64 @@ window.__ModuleLoader__.load({
         var prev = h.length > 0 ? h[0].run_id : null
         return prev ? this.bindRun(prev) : Promise.resolve(null)
       },
+      // ── B2c：草稿态「回到上次实验」——pending 绑定意图（客户端单份，零服务端态）。
+      // 草稿态（无 sessionId）点击卡只存 pending 不 POST（没有 sessionId 可绑）；
+      // 首条消息发出、sessionId 出现时消费一次（且仅一次——消费即清）POST 绑定→落账本
+      // （B1 端点语义零改）。 ──
+      pending: null,          // {runId, title, workspace} | null（草稿待绑定意图）
+      draft: { status: 'idle', recent: [] }, // 草稿态最近实验（GET 无 sessionId 载荷）
+      loadDraft: function() {
+        var self = this
+        self.draft.status = 'loading'
+        self.emit()
+        return fetch('/atf-ui/session-binding', { credentials: 'same-origin', cache: 'no-store' })
+          .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)) })
+          .then(function(d) {
+            self.draft.status = 'ready'
+            self.draft.recent = (d && Array.isArray(d.recent)) ? d.recent : []
+            self.emit()
+          })
+          .catch(function() {
+            self.draft.status = 'error'
+            self.emit()
+          })
+      },
+      /** 点卡存意图（幂等——pending 在场同 run 不重复入队；换 run 则替换为最新意图）。 */
+      stagePending: function(item) {
+        if (this.pending !== null && this.pending.runId === item.run_id) return
+        this.pending = { runId: item.run_id, title: item.title || '', workspace: item.workspace || null }
+        this.emit()
+      },
+      clearPending: function() { this.pending = null; this.emit() },
+      // B2c：一次性业务通报（消费失败等——5s 自消失；null＝无）
+      toast: null,
+      toastTimer: null,
+      setToast: function(text) {
+        var self = this
+        self.toast = text
+        self.emit()
+        if (self.toastTimer !== null) { clearTimeout(self.toastTimer); self.toastTimer = null }
+        self.toastTimer = setTimeout(function() { self.toast = null; self.toastTimer = null; self.emit() }, 5000)
+      },
+      /** B2c：pending 消费（sessionId 出现时恰一次）——POST 绑定→落账本（B1 语义零改）。
+       *  成功：清 pending（不复燃）；失败：清 pending＋业务通报（不静默丢、不自动重试——
+       *  「恰一次 POST」红线；可在监控/顶栏手动重绑）。 */
+      consumePending: function(sessionId) {
+        var self = this
+        var p = self.pending
+        if (p === null || p === undefined) return
+        self.clearPending()
+        self.post({ sessionId: sessionId, runId: p.runId })
+          .then(function(out) {
+            if (!(out && out.status === 200 && out.body && out.body.saved)) {
+              var reason = out && out.body && typeof out.body.message === 'string' && out.body.message !== '' ? out.body.message : '服务暂不可用'
+              self.setToast('自动绑定上次实验失败（' + reason + '）——可在顶栏「选择实验」手动绑定')
+            }
+          })
+          .catch(function() {
+            self.setToast('自动绑定上次实验失败（网络异常）——可在顶栏「选择实验」手动绑定')
+          })
+      },
     }
     /** 绑定 store 订阅 hook（返回 store 本体——字段直读；version 变更驱动重渲）。
      *  subscribe 须以方法调用形态包一层（裸引用传 React 会丢 this——listeners undefined）。 */
@@ -2192,6 +2250,68 @@ window.__ModuleLoader__.load({
         document.body)
     }
 
+    // ── B2c：草稿态「回到上次实验」卡（shell.overlay——root 域 list 槽，草稿态也渲染；
+    // additive 零遮蔽——vendor 槽契约：conversation 域 list 槽全为 session 域（无 sessionId
+    // 不渲染＝B2c 缺口根因），hero/composer 的 session-maybe 槽全为 single 替换槽（占用即
+    // 遮蔽 shipped UI），故渲染挂点选 shell.overlay 全帧浮层位，草稿态浮层卡形态）。
+    // 渲染条件自守卫：仅草稿态（无 sessionId）＋有最近实验；已绑定/有会话不出卡。
+    // 点击存 pending（零 POST）；待绑定有可见反馈；pending 在场重复点击不重复入队。 ──
+    function DraftResumeCard() {
+      var b = useBinding()
+      var sid = store.sessionId
+      var draft = b.draft
+      // 草稿态拉取（进草稿态拉一次；离开草稿态不拉不渲染）
+      React.useEffect(function() {
+        if (sid === undefined && draft.status === 'idle') void binding.loadDraft()
+      }, [sid, draft.status])
+      if (sid !== undefined) return null // 有会话/已绑定＝不出卡（B2c 验收锚）
+      if (draft.status !== 'ready' || draft.recent.length === 0) return null
+      var last = draft.recent[0]
+      var pendingNow = b.pending !== null
+      var label = typeof last.title === 'string' && last.title !== '' ? last.title : '实验 ' + String(last.run_id || '').slice(-6)
+      var ws = typeof last.workspace === 'string' && last.workspace !== '' ? last.workspace : null
+      return React.createElement('div', {
+        className: 'atf-draft-card',
+        style: {
+          position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 96, zIndex: 798,
+          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', maxWidth: 'min(520px, 90vw)',
+          borderRadius: 12, border: '1px solid var(--dsw-alias-border-l3)',
+          background: 'var(--dsw-alias-bg-layer-2)', boxShadow: '0 6px 24px rgba(0,0,0,.14)', fontSize: 12,
+          pointerEvents: 'auto',
+        },
+        'data-draft-resume': '1',
+      },
+        React.createElement('span', { style: { color: 'var(--dsw-alias-label-tertiary)', flex: 'none' } }, '↩'),
+        React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+          React.createElement('div', { style: { fontWeight: 600, color: 'var(--dsw-alias-label-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+            '回到上次实验：' + label),
+          React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+            pendingNow
+              ? '已选中——发送首条消息后自动绑定「' + b.pending.title + '」'
+              : (ws !== null ? ws : '上次实验') + ' · 点击选用，发送首条消息时自动绑定')),
+        React.createElement('button', {
+          className: 'atf-pill', 'data-draft-resume-go': '1',
+          title: pendingNow ? '已记录——发送首条消息后自动绑定（重复点击不重复入队）' : '把「' + label + '」设为下一个会话的绑定实验',
+          onClick: function() { binding.stagePending(last) },
+        }, pendingNow ? '已选 ✓' : '继续这次实验'))
+    }
+
+    // B2c：轻量通报条（草稿 pending 消费失败等一次性业务文案——5s 自消失，不静默丢）。
+    function DraftToast() {
+      var b = useBinding()
+      if (b.toast === null || b.toast === undefined || b.toast === '') return null
+      return React.createElement('div', {
+        className: 'atf-draft-toast', role: 'status',
+        style: {
+          position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 56, zIndex: 801,
+          padding: '7px 14px', borderRadius: 10, fontSize: 12, maxWidth: 'min(520px, 90vw)',
+          border: '1px solid var(--dsw-static-amber-500)', color: 'var(--dsw-alias-state-warning-label,#92400e)',
+          background: 'var(--dsw-alias-bg-layer-2)', boxShadow: '0 4px 16px rgba(0,0,0,.12)',
+          pointerEvents: 'auto',
+        },
+      }, b.toast)
+    }
+
     // ── 批B2 §二：顶栏绑定 chip（conversation.session.header.utilities）──
     // 已绑定 [● title · 训练中 62% ▾][工作区徽标]；未绑定 [选择实验 ▾]；读取失败 [绑定读取失败 · 重试]
     // （点击重 GET）；绑定 run 在 monitor 缺席 → [实验不可见 ▾]（面板给「选择其他实验/解除」）。
@@ -2246,11 +2366,23 @@ window.__ModuleLoader__.load({
     // disabled＋「先选择实验」，点击弹选择面板（不发工具调用）；「新建实验/发起训练/badcase
     // 可视化」始终可用。已绑定：继续上次胶囊文案带 title（「继续训练：装箱单 4类」——取
     // title 首段短名，防止超长）。
+    // D34：「走完闭环」胶囊——决策闭环默认指令（与 snapshot.js CLOSURE_MESSAGE 同语义
+    // 双份——client 半裸服务不打包无法 require，trainLaunchMessage 先例；atfUi.test.ts 双钉）。
+    // 封存步（事实日志＋锚点快照落盘）在默认步骤集内——闭环默认含封存，不再依赖用户点名。
+    var CLOSURE_MESSAGE = [
+      '把本轮实验走完决策闭环：',
+      '①把本轮评估结论记成决策；',
+      '②证据归档（逐项 sha256 清单）；',
+      '③发布件按「可用模型归档」处理，支持则晋升为基线；',
+      '④留痕封存——把本轮事实日志与锚点快照落盘存档（闭环默认步骤，勿跳过；完成后回报文件清单）；',
+      '⑤给下一轮计划预览，然后本轮收口。该我确认的环节就出卡。',
+    ].join('\n')
     var PILLS = [
       { label: '新建训练', msg: '我想启动一个新的训练任务' },
       { label: '查状态', msg: '查看当前训练任务状态', runRelated: true },
       { label: '继续上次', msg: '继续上次的训练任务', runRelated: true, continueLabel: true },
       { label: '对比两轮', msg: '对比最近两轮训练的指标', runRelated: true },
+      { label: '走完闭环', msg: CLOSURE_MESSAGE },
     ]
     function DockPillsRow() {
       var b = useBinding()
@@ -3119,6 +3251,9 @@ window.__ModuleLoader__.load({
                 binding.resetFor(sessionId)
                 void binding.load(sessionId)
               }
+              // B2c：会话建立（首条消息发出、sessionId 出现）＝消费草稿 pending 恰一次——
+              // POST 绑定→落账本（B1 语义零改）。pending 空＝零 POST（消费即清，不复燃）。
+              if (sessionId !== undefined && binding.pending !== null) binding.consumePending(sessionId)
               return {}
             },
           }), function() {
@@ -3281,6 +3416,19 @@ window.__ModuleLoader__.load({
         // 空态 hero 鱼标位（顺手——EmptyHero renderSlot({size:34,className})）
         ctx.slots.inject('conversation.hero.brand.mark', function() {
           return ctx.slots.register({ name: 'conversation.hero.brand.mark' }, AtfBrandMark)
+        })
+
+        // B2c：草稿态「回到上次实验」卡＋业务通报条（shell.overlay——root 域 list 槽，
+        // 全帧浮层位 additive 零遮蔽；选型理由见 DraftResumeCard 注）。组件自守卫：
+        // 有会话＝全 null（零渲染），不影响会话态任何画面。
+        ctx.slots.inject('shell.overlay', function() {
+          return ctx.slots.register(listSlotOptions({
+            name: 'shell.overlay', id: 'atf-draft-resume', order: 900,
+          }), function() {
+            return React.createElement('div', null,
+              React.createElement(DraftResumeCard),
+              React.createElement(DraftToast))
+          })
         })
       },
     }

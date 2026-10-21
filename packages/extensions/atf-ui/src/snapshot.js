@@ -232,6 +232,19 @@ export function buildTrainLaunchMessage(plan) {
   return lines.join("\n");
 }
 
+// ── D34：决策闭环默认指令（PILLS『走完闭环』胶囊单源文案——client.js 半裸服务不打包，
+// 双份同语义＋atfUi.test.ts 双钉，trainLaunchMessage 先例）。此前闭环由用户自由文本驱动、
+// 留痕封存步常被跳过（需点名才补）；本胶囊把封存步置入默认步骤集——闭环默认含封存。
+// 业务语言（用户可见面零内部码/零批次号——P7 禁词纪律），封存语义＝事实日志与锚点快照落盘。 ──
+export const CLOSURE_MESSAGE = [
+  "把本轮实验走完决策闭环：",
+  "①把本轮评估结论记成决策；",
+  "②证据归档（逐项 sha256 清单）；",
+  "③发布件按「可用模型归档」处理，支持则晋升为基线；",
+  "④留痕封存——把本轮事实日志与锚点快照落盘存档（闭环默认步骤，勿跳过；完成后回报文件清单）；",
+  "⑤给下一轮计划预览，然后本轮收口。该我确认的环节就出卡。",
+].join("\n");
+
 /** SVG polyline points 串（0..w 归一；points 不足 2 → null 不画）。 */
 export function lossSvgPath(points, key, w = 300, h = 80) {
   const values = points.map((point) => point[key]).filter((v) => typeof v === "number");
