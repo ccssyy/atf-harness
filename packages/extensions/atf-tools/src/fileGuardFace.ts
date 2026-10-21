@@ -175,29 +175,95 @@ export const workspaceFenceGuard = (command: string, fence: { writable: string; 
 /** 破坏性命令结构化拒绝码（owner 确认后放行——审批卡是唯一放行通道）。 */
 export const DESTRUCTIVE_COMMAND_REQUIRES_CONFIRMATION = "destructive_command_requires_confirmation";
 
-/** 破坏性命令识别（纯函数——vitest 直测）：命令串含 rm 递归删（组合旗标含 r/R 或
- *  --recursive）即命中——`rm -rf`／清空工作区／删 run 目录三形态俱在此闭集内；
- *  非递归 rm（普通单文件删）不误伤。引号/通配不解析（应用层 best-effort——与既有
- *  bash 守卫同语义如实声明非 OS 边界）。paths＝rm 操作数（非旗标记号，保序去重）。 */
+/** 破坏性命令识别（纯函数——vitest 直测）：命令按 shell 操作符（&& || ; | 换行）切分
+ *  （D52：操作符不是路径——`rm -rf A && ls B` 目标仅 A；切分引号感知），逐段只解析该段
+ *  rm 的操作数（引号内空格保留——`rm -rf "A B"`＝一个目标）；段内含 rm 递归删（组合
+ *  旗标含 r/R 或 --recursive）即命中——`rm -rf`／清空工作区／删 run 目录三形态俱在
+ *  闭集内；非递归 rm（普通单文件删）不误伤。引号/转义为应用层 best-effort（与既有
+ *  bash 守卫同语义如实声明非 OS 边界）。paths＝各段 rm 操作数并集（非旗标记号，保序
+ *  去重）。 */
 export const destructiveCommandScan = (command: string): { destructive: boolean; paths: string[] } => {
-  const tokens = command.split(/\s+/).filter((token) => token !== "");
-  const rmIdx = tokens.findIndex((token) => token === "rm" || token.endsWith("/rm"));
-  if (rmIdx < 0) return { destructive: false, paths: [] };
+  // 引号感知切分：先按 shell 操作符（&& || ; | 与换行）切段（引号内的操作符不切），
+  // 再段内引号感知分词（引号内空格不拆——值保留内空格，引号本身剥离）。
+  const segments = splitShellSegments(command);
   let recursive = false;
   const paths: string[] = [];
-  for (const token of tokens.slice(rmIdx + 1)) {
-    if (token === "--") continue;
-    if (token.startsWith("--")) {
-      if (token === "--recursive") recursive = true;
-      continue;
+  for (const segment of segments) {
+    const tokens = tokenizeQuoted(segment);
+    const rmIdx = tokens.findIndex((token) => token.text === "rm" || token.text.endsWith("/rm"));
+    if (rmIdx < 0) continue;
+    for (const token of tokens.slice(rmIdx + 1)) {
+      if (token.text === "--") continue;
+      if (token.text.startsWith("--")) {
+        if (token.text === "--recursive") recursive = true;
+        continue;
+      }
+      if (token.text.startsWith("-") && token.text.length > 1) {
+        if (/[^-]*[rR]/.test(token.text)) recursive = true; // -r/-R 及组合旗标（-rf/-fr/-Rf）
+        continue;
+      }
+      if (token.text !== "") paths.push(token.text);
     }
-    if (token.startsWith("-") && token.length > 1) {
-      if (/[^-]*[rR]/.test(token)) recursive = true; // -r/-R 及组合旗标（-rf/-fr/-Rf）
-      continue;
-    }
-    paths.push(token);
   }
   return { destructive: recursive, paths: [...new Set(paths)] };
+};
+
+/** D52：引号感知段切分（&& || ; | 与换行——引号内不切；空段滤除）。 */
+const splitShellSegments = (command: string): string[] => {
+  const segments: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | null = null;
+  for (const ch of command) {
+    if (quote !== null) {
+      current += ch;
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+    if (ch === "&" || ch === "|" || ch === ";" || ch === "\n") {
+      if (current.trim() !== "") segments.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim() !== "") segments.push(current);
+  return segments;
+};
+
+/** D52：段内引号感知分词（空白拆词；引号内空白保留——值＝去引号原文；转义 best-effort
+ *  保留原字符对）。token.quoted 标记含引号拼接（通配未展开面沿守卫文案如实声明）。 */
+const tokenizeQuoted = (segment: string): Array<{ text: string; quoted: boolean }> => {
+  const tokens: Array<{ text: string; quoted: boolean }> = [];
+  let text = "";
+  let quoted = false;
+  let hasToken = false;
+  let quote: '"' | "'" | null = null;
+  const flush = (): void => {
+    if (hasToken && text !== "") tokens.push({ text, quoted });
+    text = "";
+    quoted = false;
+    hasToken = false;
+  };
+  for (const ch of segment) {
+    if (quote !== null) {
+      if (ch === quote) { quote = null; continue; }
+      text += ch;
+      quoted = true;
+      hasToken = true;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { quote = ch; quoted = true; hasToken = true; continue; }
+    if (/\s/.test(ch)) { flush(); continue; }
+    text += ch;
+    hasToken = true;
+  }
+  flush();
+  return tokens;
 };
 
 /** D23 破坏性命令闸（纯函数）：命中递归删 → 结构化确认要求＋受影响路径（放行本身

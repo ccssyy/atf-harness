@@ -344,6 +344,27 @@ describe("D23——破坏性命令确认闸（rm 递归删 → owner 审批卡�
     expect(destructiveCommandScan("ls -rf").destructive).toBe(false);
   });
 
+  it("D52 shell-aware：操作符不是路径——rm -rf A && ls B 目标仅 A（||/;/|/换行同守卫）；引号内空格保留", () => {
+    // 门2 实锚形态：清残留复合命令（曾把 && 与 ls 当目标列上卡面）
+    expect(destructiveCommandScan("rm -rf /data/ws/eval/6-20261021 && ls /data/ws/eval/")).toEqual({
+      destructive: true, paths: ["/data/ws/eval/6-20261021"],
+    });
+    expect(destructiveCommandScan("ls /data/ws/eval/ || rm -rf /data/ws/legacy")).toEqual({
+      destructive: true, paths: ["/data/ws/legacy"],
+    });
+    expect(destructiveCommandScan("echo start; rm -rf a | tee log")).toEqual({ destructive: true, paths: ["a"] });
+    expect(destructiveCommandScan("cd /ws\nrm -rf deep")).toEqual({ destructive: true, paths: ["deep"] });
+    // 引号内空格保留：一个目标
+    expect(destructiveCommandScan('rm -rf "A B"')).toEqual({ destructive: true, paths: ["A B"] });
+    expect(destructiveCommandScan("rm -rf 'my run dir'")).toEqual({ destructive: true, paths: ["my run dir"] });
+    // 引号内的操作符不切段（路径含 && 字面——引号感知）
+    expect(destructiveCommandScan('rm -rf "a && b"')).toEqual({ destructive: true, paths: ["a && b"] });
+    // 多段 rm 并集（保序去重）
+    expect(destructiveCommandScan("rm -rf a && rm -rf a b").paths).toEqual(["a", "b"]);
+    // 非 rm 段不产目标；rm 后旗标不误入
+    expect(destructiveCommandScan("cat x && ls -rf")).toEqual({ destructive: false, paths: [] });
+  });
+
   it("rm -rf 拒：结构化 destructive_command_requires_confirmation＋影响路径；目标零执行（审批 ctx 缺席同拒）", async () => {
     const root = tempRoot();
     const runsRoot = join(root, "runs");
