@@ -1204,6 +1204,12 @@ export const enumerateRunEntries = (runsRoot: string, registryWorkspaces?: Reado
   return entries;
 };
 
+/** H5（atf_joint_train）：run_id → 枚举条目单源解析——enumerateRunEntries 同源消费
+ *  （registry/canonical 先占、flat/bucket 后到的全部语义零复制；工具面禁自建第二套
+ *  路径表）。找不到＝null（调用方结构化报缺，不猜不平铺拼接）。 */
+export const resolveRunEntry = (runsRoot: string, runId: string, registryWorkspaces?: ReadonlyArray<RegistryWorkspaceSeed>): RunDirEntry | null =>
+  enumerateRunEntries(runsRoot, registryWorkspaces).find((entry) => entry.runId === runId) ?? null;
+
 /** 同步器周期内 run_id 清单（目录枚举一次——取证映射的目标集；特征过滤后。
  *  批㊶Q增补三 段3：平铺＋分桶双形态并集，run_id 恒为裸名；平铺 run 自身子目录
  *  不作桶降层（launch/eval 等内部结构不产幻影 run——真机 24 条污染实证后修正）。

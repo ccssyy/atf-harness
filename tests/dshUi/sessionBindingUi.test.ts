@@ -381,7 +381,7 @@ describe("B2 绑定 UI（client.js 真加载·jsdom）", () => {
     await renderHeader("sess-1");
     await renderDock();
     const pills = Array.from(paneEl.querySelectorAll("[data-run-related]")) as HTMLButtonElement[];
-    expect(pills.length).toBe(3); // 查状态/继续上次/对比两轮
+    expect(pills.length).toBe(4); // 查状态/继续上次/对比两轮/联合训练（H5 新入口——同 B2 纪律）
     for (const p of pills) {
       expect(p.getAttribute("aria-disabled")).toBe("true");
       expect(p.getAttribute("title")).toBe("先选择实验");
