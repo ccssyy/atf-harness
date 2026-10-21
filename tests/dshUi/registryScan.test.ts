@@ -5,11 +5,15 @@
  * （records[].path＋/experiments/<x>/runs/<id>）。硬约束：仅 exists===true 记录入列；
  * 只读（零写入零建目录）；目录缺失/权限失败静默跳过；标注＝注册记录 title；additive
  * workspace_source 两键闭集投影（adapter 白名单同批）。
- * H2.1 rev2（D37+D38）语义翻转：枚举序 registry 三档候选根（canonical 优先）→ flat →
+ * H2.1 rev2（D37+D38）语义：枚举序 registry 三档候选根（canonical 优先）→ flat →
  * bucket；去重双键 realpath＋claimKey (workspace,runId)——registry/canonical 先 claim，
  * flat/bucket 同键后到跳过（旧「分桶来源优先」由 rev2 canonical 优先取代）；runs 根
  * 一级条目先过四类预检分类（valid/legacy/bucket 照常、unregistered_entry 与
  * artifact_outside_layout 隔离＋结构化告警）。
+ * 桶判定 owner 裁决收紧（rev2 第二批）：合格 run 子目录＝run.json ∨ webui/segments.json
+ * ∨ stage-register.summary.json ∨ ≥2 个 RUN_MARKER_RELS 命中；孤立 launch_manifest.json
+ * 单命中不合格（cr_r2/launch 假阳性根源）——幻影防回潮锚与 H21 夹具双保全，单源谓词
+ * isQualifyingRunChild（hasRunChildDirs 与四向分类规则 2 共用）。
  * A3：训练段两态——progress 初帧 fresh＝启动早期确定性活跃信号（training.active）；
  * 进程确定性消失（tmux 取证面在且本 run 无命中）∧ 无完成锚 → 段显式 failed；
  * 取证面缺席不猜（pending）。S3 前缀闭包语义不动（done 恒为前缀）。
@@ -18,7 +22,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync, existsSync,
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { classifyRunRootEntries, enumerateRunEntries, hasRunChildDirs, scanRuns, scanRunDir, scanRunDirAt, type ScanLiveness } from "../../packages/extensions/atf-ui/src/server.js";
+import { classifyRunRootEntries, enumerateRunEntries, hasRunChildDirs, isQualifyingRunChild, scanRuns, scanRunDir, scanRunDirAt, type ScanLiveness } from "../../packages/extensions/atf-ui/src/server.js";
 import { buildMonitorSnapshot } from "../../packages/extensions/atf-ui/src/snapshot.js";
 import { writeProgress, appendBinding } from "../../src/core/workspace/runFacts.js";
 import { appendSegmentFact } from "../../src/core/workspace/segmentFacts.js";
@@ -99,8 +103,10 @@ describe("A2 案 a——扫描面视野枚举", () => {
     const outer = tempRoot();
     const root = join(outer, "runs");
     mkdirSync(root, { recursive: true });
-    seedRun(join(root, "flat-run"));
-    seedRun(join(root, "ws-a", "run-bucketed"));
+    // 夹具充实（裁决授权）：真实 run 形态（身份锚/多标记）——孤立 launch_manifest.json
+    // 形态在收紧判据下不再是合格 run 子目录证据，且会触发 unregistered 告警噪音
+    seedRun(join(root, "flat-run"), ["stage-register.summary.json"]);
+    seedRun(join(root, "ws-a", "run-bucketed"), ["webui/segments.json", "prep/iteration-config.json"]);
     const scans = scanRuns(root, undefined, [{ path: outer, title: "外层工作区" }]);
     const byId = new Map(scans.map((s) => [s.run_id, s]));
     expect(byId.get("flat-run")).toMatchObject({ workspace: "外层工作区", workspace_source: "registry" });
@@ -299,7 +305,9 @@ describe("D3/D4——状态面以盘上事实为准（段摘要兜底源＋works
 
   it("④桶形态 workspace 正确（桶名直取；source=bucket）", () => {
     const root = tempRoot();
-    seedRun(join(root, "ws-d3", "run-b1"));
+    // 夹具充实（裁决授权）：run-b1 补身份锚——孤立 launch_manifest.json 单标记在收紧
+    // 判据下不再是合格 run 子目录证据（ws-d3 会被误分 unregistered_entry 产生告警噪音）
+    seedRun(join(root, "ws-d3", "run-b1"), ["webui/segments.json"]);
     const runs = scanRuns(root);
     expect(runs[0]?.workspace).toBe("ws-d3");
     expect(runs[0]?.workspace_source).toBe("bucket");
@@ -407,9 +415,12 @@ describe("H2.1 rev2（D37+D38）——runs 根四类身份分类与注册工作�
       `${JSON.stringify({ current_steps: 1, total_steps: 10, percentage: 10 })}\n`,
       "utf8",
     );
-    // 别名树：runsRoot 下同名桶 run-x（eval 标记、无 trainer_log）——两棵树不同 inode
+    // 别名树：runsRoot 下同名桶 run-x（prep+eval 双标记——对偶真实 qc-02 别名树形态；
+    // 收紧判据下单标记 eval 不再是合格 run 子目录证据，alias-ws 会被误分 unregistered）
     mkdirSync(join(root, "alias-ws", "run-x", "eval", "1-20261021"), { recursive: true });
     writeFileSync(join(root, "alias-ws", "run-x", "eval", "1-20261021", "metrics_summary.json"), "{}\n", "utf8");
+    mkdirSync(join(root, "alias-ws", "run-x", "prep", "variants"), { recursive: true });
+    writeFileSync(join(root, "alias-ws", "run-x", "prep", "variants", "variants_report.json"), "{}\n", "utf8");
     const registryWorkspaces = [{ path: regws, title: "alias-ws" }]; // title 与别名桶目录名同串
     const entries = enumerateRunEntries(root, registryWorkspaces);
     const hits = entries.filter((e) => e.runId === "run-x");
@@ -494,6 +505,23 @@ describe("H2.1 rev2（D37+D38）——runs 根四类身份分类与注册工作�
     const hits = entries.filter((e) => e.runId === "flat-run");
     expect(hits).toHaveLength(1);
     expect(hits[0]).toMatchObject({ dir: join(root, "flat-run"), workspace: "注册甲", workspaceSource: "registry" });
+  });
+
+  it("桶判定收紧负锚：孤立 launch_manifest.json 单命中不是合格 run 子目录（cr_r2/launch 假阳性不复活）", () => {
+    const root = tempRoot();
+    // 宿主 run：launch/launch_manifest.json（父 run 标记落在 launch/ 内）＋顶层身份锚
+    const host = join(root, "run-host");
+    seedRun(host, ["launch/launch_manifest.json", "webui/config-snapshot.json"]);
+    // 子目录 launch 仅命中孤立 manifest（1 个标记）——不合格 → 宿主保持 legacy，不判桶
+    const byName = new Map(classifyRunRootEntries(root).map((c) => [c.name, c]));
+    expect(byName.get("run-host")).toMatchObject({ kind: "legacy_run", artifactOutsideLayout: false, reason: null });
+    expect(hasRunChildDirs(host)).toBe(false);
+    expect(isQualifyingRunChild(join(host, "launch"))).toBe(false);
+    // 对照：同形态补段事实身份锚 → 合格（锚 2）
+    mkdirSync(join(host, "launch", "webui"), { recursive: true });
+    writeFileSync(join(host, "launch", "webui", "segments.json"), "{}\n", "utf8");
+    expect(isQualifyingRunChild(join(host, "launch"))).toBe(true);
+    expect(hasRunChildDirs(host)).toBe(true);
   });
 
   it("纯函数面：classifyRunRootEntries 四类判定＋hasRunChildDirs（不按目录名特判——prep 只是标记实例）", () => {    const root = tempRoot();

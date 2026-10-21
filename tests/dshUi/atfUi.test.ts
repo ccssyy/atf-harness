@@ -1131,9 +1131,13 @@ describe("批㊶Q增补三 段3——scanRuns 双层扫描（幻影 run 防回�
     writeFileSync(join(flat, "launch", "train.sh"), "#!/bin/bash\n");
     writeFileSync(join(flat, "launch", "webui", "pending-confirm.json"), "{}\n");
     writeFileSync(join(flat, "webui", "config-snapshot.json"), "{}\n");
-    // 真桶：ci_smoke 工作区内的分桶 run
+    // 真桶：ci_smoke 工作区内的分桶 run（rev2 裁决授权夹具充实：补段事实身份锚
+    // webui/segments.json——孤立 launch_manifest.json 单标记在收紧判据下不再是
+    // 合格 run 子目录证据，ci_smoke 容器会被误分 unregistered_entry）
     const bucketed = join(root, "ci_smoke", "cr_r3", "launch");
     mkdirSync(bucketed, { recursive: true });
+    mkdirSync(join(root, "ci_smoke", "cr_r3", "webui"), { recursive: true });
+    writeFileSync(join(root, "ci_smoke", "cr_r3", "webui", "segments.json"), "{}\n");
     writeFileSync(join(bucketed, "train.sh"), "#!/bin/bash\n");
     writeFileSync(join(root, "ci_smoke", "cr_r3", "launch", "launch_manifest.json"), "{}\n");
     const runs = scanRuns(root);

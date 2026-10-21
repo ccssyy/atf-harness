@@ -924,14 +924,32 @@ export { RUN_MARKER_RELS };
 export const looksLikeRun = (dir: string): boolean =>
   RUN_MARKER_RELS.some((rel) => existsSync(join(dir, rel)));
 
-/** H2.1 rev2（D37）——桶容器判定：目录含任一 looksLikeRun 的直接子目录＝桶
- *  （runs/<工作区桶>/prep 污染形态：容器根被测试侧 prep/variants 命中标记，但其下
- *  是真 run 子目录——桶优先，容器不得当平铺 run 收录）。异常 fail-closed 返回 false
- *  （不可读＝不判桶，调用方既有 looksLikeRun 通道自决）。 */
+/** 合格 run 子目录判据（H2.1 rev2 owner 裁决收紧——桶判定**单源**谓词）。
+ *  子目录满足任一即合格：
+ *  ①含 run.json（有效 run 身份）；②含 webui/segments.json（段事实身份锚）；
+ *  ③含 stage-register.summary.json（段模式身份锚）；④命中 ≥2 个不同的 RUN_MARKER_RELS 条目。
+ *  显式排除：子目录顶层**孤立的 launch_manifest.json 单命中不合格**——该文件正是父 run
+ *  标记 launch/launch_manifest.json 落在子目录内的形态（cr_r2/launch 假阳性根源；真机
+ *  run-regress-formal-01/launch 同形态），单命中过不了 ≥2 门。
+ *  按标记结构收紧，非目录名特判（无任何 if name===...）；对 H21 指令「含有效/legacy
+ *  run 子目录」的结构化解释——真 run 子目录恒有身份锚或 run.json，多标记形态由 ≥2 门兜住
+ *  （atf-prodtest-20261021 子 run prep+training+webui+eval ≥4 命中；H21 夹具 run-x 走锚 ②）。 */
+export const isQualifyingRunChild = (child: string): boolean => {
+  if (existsSync(join(child, "run.json"))) return true;
+  if (existsSync(join(child, "webui", "segments.json"))) return true;
+  if (existsSync(join(child, "stage-register.summary.json"))) return true;
+  return RUN_MARKER_RELS.filter((rel) => existsSync(join(child, rel))).length >= 2;
+};
+
+/** H2.1 rev2（D37）——桶容器判定：目录含任一**合格 run 子目录**＝桶
+ *  （owner 裁决：本函数与四向分类规则 2 必须共用 isQualifyingRunChild 单源——禁两套）。
+ *  桶优先：runs/<工作区桶>/prep 污染形态（容器根被测试侧 prep/variants 命中标记，其下
+ *  是真 run 子目录）不得当平铺 run 收录。异常 fail-closed 返回 false（不可读＝不判桶，
+ *  调用方既有 looksLikeRun 通道自决）。 */
 export const hasRunChildDirs = (dir: string): boolean => {
   try {
     return readdirSync(dir, { withFileTypes: true }).some(
-      (e) => e.isDirectory() && !e.name.startsWith(".") && looksLikeRun(join(dir, e.name)),
+      (e) => e.isDirectory() && !e.name.startsWith(".") && isQualifyingRunChild(join(dir, e.name)),
     );
   } catch {
     return false;
@@ -940,8 +958,9 @@ export const hasRunChildDirs = (dir: string): boolean => {
 
 // ── H2.1 rev2 预检——runs 根一级条目四类身份分类（RunLayout/v1 枚举规则 2.3）────
 // 判定序（不按目录名特判——prep 只是 RUN_MARKER_RELS 的一个实例，禁 `if name==="prep"`）：
-//   ①有 run.json 且校验通过 → valid_run；②无（有效）run.json 但含有效/legacy run 子目录
-//   → bucket；③无 run.json、无 run 子目录、有 legacy 标记（RUN_MARKER_RELS）→ legacy_run
+//   ①有 run.json 且校验通过 → valid_run；②无（有效）run.json 但含**合格 run 子目录**
+//   （isQualifyingRunChild——身份锚或 ≥2 标记，孤立 launch_manifest.json 不合格）→ bucket；
+//   ③无 run.json、无合格 run 子目录、有 legacy 标记（RUN_MARKER_RELS）→ legacy_run
 //   （只读兼容）；④其余 → unregistered_entry（告警并隔离，不进 run 列表）。
 // 校验＝最小实现：run.json 可解析为对象即过（workspace_id/run_id 等身份字段缺席不拒——
 // 内核 RunLayout/v1 尚未发版，本面为休眠面，不发明第二套 schema）。
@@ -968,20 +987,6 @@ const readRunManifestObject = (dir: string): Record<string, unknown> | null => {
       : null;
   } catch {
     return null;
-  }
-};
-
-/** 子目录中存在 run 形态（legacy＝RUN_MARKER_RELS 任一；valid＝合法 run.json）→ 桶证据。
- *  D37 hasRunChildDirs 的超集（多认 run.json 身份面——legacy 子目录判定同 sketch）。 */
-const hasRunShapedChildDirs = (dir: string): boolean => {
-  try {
-    return readdirSync(dir, { withFileTypes: true }).some((e) => {
-      if (!e.isDirectory() || e.name.startsWith(".")) return false;
-      const child = join(dir, e.name);
-      return looksLikeRun(child) || readRunManifestObject(child) !== null;
-    });
-  } catch {
-    return false;
   }
 };
 
@@ -1013,7 +1018,7 @@ export const classifyRunRootEntry = (dir: string, name: string): RunRootEntryCla
       reason: violations.length > 0 ? `artifact_outside_layout: ${violations.join(",")}` : null,
     };
   }
-  if (hasRunShapedChildDirs(dir)) {
+  if (hasRunChildDirs(dir)) {
     return { name, dir, kind: "bucket", artifactOutsideLayout: false, reason: null };
   }
   if (looksLikeRun(dir)) {
@@ -1207,10 +1212,11 @@ const resolvedRunIds = (runsRoot: string, registryWorkspaces?: ReadonlyArray<Reg
  *  结构不是工作区桶——否则幻影 run 污染全量视图）。
  *  A2 案 a：扫描面＝runsRoot（现形态不变）∪ 注册工作区 run 根（records[].path＋
  *  三档候选根——exists===true 记录、只读、realpath＋claimKey 双键去重 canonical 优先、标注＝title）。
- *  H2.1 rev2 注意：桶降层范围已按 D37 收窄为「含 run 子目录的容器」（桶优先）——
- *  平铺 run 的 launch/eval/l1 等内部子目录若恰好命中 RUN_MARKER_RELS（launch/webui、
- *  publish-ws-* 下的 eval 嵌套形态），其宿主 run 会被桶化、内部子目录作桶内条目收录；
- *  该语义与「真机 24 条幻影污染」防回潮锚的冲突待 owner 裁决（见 registryScan 测试头注）。
+ *  H2.1 rev2 裁决落地：桶判定收紧为「含合格 run 子目录」（isQualifyingRunChild——身份锚
+ *  或 ≥2 标记，孤立 launch_manifest.json 不合格）——平铺 run 的 launch/publish-ws-xxx
+ *  与 l1 等内部子目录不再使宿主被桶化（真机 24 条幻影污染防回潮锚保持；dev 存量
+ *  run-regress-formal 系等 10 run 保持 legacy 可见），atf-prodtest-20261021 污染容器
+ *  仍按桶优先出子 run。
  *  @param entries - 预算好的枚举（同步器单次枚举复用——runs[i] 与 entries[i] 一一对应，
  *  供调用方按序取 run 真实目录；缺省自行枚举）。 */
 /** 导出供 vitest 直测（真机 24 条幻影污染实证后的防回潮锚）。 */
