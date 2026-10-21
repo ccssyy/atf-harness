@@ -106,6 +106,8 @@ window.__ModuleLoader__.load({
       viewer: null,
       // 批㉛段2：发起训练对话框状态（null=关；{runId, mode}）
       train: null,
+      // H5：联合训练字段编辑对话框状态（null=关；{}=开着——编辑态在组件本地 draft）
+      joint: null,
       // 批㉛段3.1：右栏训练监控抽屉（默认收起——chat 不受挡；打开后选 run 联动）
       monitorOpen: false,
       monitorRunId: null,
@@ -118,6 +120,7 @@ window.__ModuleLoader__.load({
       subscribe: function(fn) { var s = this; s.listeners.add(fn); return function() { s.listeners.delete(fn) } },
       setViewer: function(v) { this.viewer = v; this.listeners.forEach(function(fn) { fn() }) },
       setTrain: function(v) { this.train = v; this.listeners.forEach(function(fn) { fn() }) },
+      setJoint: function(v) { this.joint = v; this.listeners.forEach(function(fn) { fn() }) },
       setMonitor: function(open, runId) { this.monitorOpen = open; if (runId !== undefined) this.monitorRunId = runId; this.listeners.forEach(function(fn) { fn() }) },
       setMonitorShowAll: function(v) { this.monitorShowAll = v === true; this.listeners.forEach(function(fn) { fn() }) },
       setBindingPanel: function(open) { this.bindingPanel = open === true; this.listeners.forEach(function(fn) { fn() }) },
@@ -509,6 +512,389 @@ window.__ModuleLoader__.load({
         ? '⑤ 放行执行：atf_launch_execute（launch_sh=scratch 内 launch.sh，config=同一 IterationConfig，note 注明 owner 书面授权）——唯一编排执行点，manifest sha 对拍 fail-closed；'
         : '⑤ 到此止：不执行 atf_launch_execute、不启动 tmux、不占 GPU——本轮仅 DRY_RUN 验收，真实训练候我单独书面点头。')
       return lines.join('\n')
+    }
+
+    // ── H5-JOINT-PURE-START（vitest 抽取锚——纯函数区，禁闭包依赖）──
+    // H5 联合训练字段卡前校验——与 packages/extensions/atf-ui/src/jointTrainState.ts
+    // jointSpecIssues 同语义双份（client 半裸服务不打包无法 require；双侧测试同夹具
+    // 同判定——jointTrain.test.ts×jointTrainUi.test.ts 双钉，CLOSURE_MESSAGE 先例）。
+    // 判定闭集（D25 设计 §4.2「字段必须带说明；同一类内 id 唯一」＋内核 builder spec
+    // 校验前置镜像）：类清单非空／doc_type 非空且不重复／run_id 非空／document_zh 非空／
+    // 每类选中字段非空／field_id 非空且类内唯一／zh 与 definition 非空。
+    function jointSpecIssues(classes) {
+      var issues = []
+      if (!Array.isArray(classes) || classes.length === 0) {
+        return [{ code: 'joint_datasets_empty', message: '还没有选择任何单据类型——联合训练至少要有一个类型' }]
+      }
+      var seen = {}
+      for (var i = 0; i < classes.length; i++) {
+        var item = classes[i] || {}
+        var docType = typeof item.doc_type === 'string' ? item.doc_type.trim() : ''
+        if (docType === '') {
+          issues.push({ code: 'joint_doc_type_duplicate', message: '有类型没有填单据类型名——每个类型都要写类型名' })
+          continue
+        }
+        if (seen[docType]) {
+          issues.push({ code: 'joint_doc_type_duplicate', doc_type: docType, message: '单据类型「' + docType + '」重复——同一类型只能出现一次' })
+          continue
+        }
+        seen[docType] = true
+        var runId = typeof item.run_id === 'string' ? item.run_id.trim() : ''
+        if (runId === '') issues.push({ code: 'joint_run_id_missing', doc_type: docType, message: '「' + docType + '」还没有选择实验——每个类型都要指到它数据所在的实验' })
+        var documentZh = typeof item.document_zh === 'string' ? item.document_zh.trim() : ''
+        if (documentZh === '') issues.push({ code: 'joint_document_zh_missing', doc_type: docType, message: '「' + docType + '」缺单据中文名——prompt 渲染必需' })
+        var fields = Array.isArray(item.fields) ? item.fields : []
+        var selected = []
+        for (var j = 0; j < fields.length; j++) {
+          if (fields[j] && fields[j].selected !== false) selected.push(fields[j])
+        }
+        if (selected.length === 0) {
+          issues.push({ code: 'joint_field_missing', doc_type: docType, message: '「' + docType + '」一个字段都没选——至少要为每个类型勾选 1 个字段' })
+          continue
+        }
+        var seenIds = {}
+        for (var k = 0; k < selected.length; k++) {
+          var f = selected[k]
+          var fieldId = f && typeof f.field_id === 'string' ? f.field_id.trim() : ''
+          if (fieldId === '') {
+            issues.push({ code: 'joint_field_id_invalid', doc_type: docType, message: '「' + docType + '」有字段没填字段名——字段名必填' })
+            continue
+          }
+          if (seenIds[fieldId]) {
+            issues.push({ code: 'joint_field_id_invalid', doc_type: docType, field_id: fieldId, message: '「' + docType + '」字段名「' + fieldId + '」重复——同一类型内字段名不能重名' })
+            continue
+          }
+          seenIds[fieldId] = true
+          var zh = f && typeof f.zh === 'string' ? f.zh.trim() : ''
+          var def = f && typeof f.definition === 'string' ? f.definition.trim() : ''
+          if (zh === '' || def === '') {
+            issues.push({ code: 'joint_field_desc_missing', doc_type: docType, field_id: fieldId, message: '「' + docType + '」字段「' + fieldId + '」缺中文名或字段说明——没有说明就无法写进提取要求' })
+          }
+        }
+      }
+      return issues
+    }
+
+    // H5 FieldSpec/v1 归一（UI 生成消息用——与 jointTrainState.normalizeJointFieldSpec 同构：
+    // group 缺席按 goods；locators 缺省 []；选中字段才进 spec）。
+    function jointNormalizeSpec(docType, documentZh, fields) {
+      var picked = []
+      for (var i = 0; i < fields.length; i++) {
+        var f = fields[i]
+        if (!f || f.selected === false) continue
+        picked.push({
+          field_id: String(f.field_id == null ? '' : f.field_id).trim(),
+          zh: String(f.zh == null ? '' : f.zh).trim(),
+          group: f.group === 'non_goods' ? 'non_goods' : 'goods',
+          definition: String(f.definition == null ? '' : f.definition).trim(),
+          locators: Array.isArray(f.locators) ? f.locators : (Array.isArray(f.locator_keywords) ? f.locator_keywords : []),
+        })
+      }
+      return { schema_version: 'FieldSpec/v1', doc_type: docType, document_zh: documentZh, fields: picked }
+    }
+
+    // H5 行数千分位（卡面/消息「预计 3,410 行」口径——与 jointTrainState.formatRowCount 同构）。
+    function jointFormatRowCount(count) {
+      return String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    }
+
+    // H5 联合训练发起消息（业务语言——与 jointTrainState.buildJointTrainMessage 同语义双份；
+    // trainLaunchMessage 先例。一个入口完成构建＋训练：不出现单类 A/B 两入口）。
+    function buildJointTrainMessage(plan) {
+      var typeList = plan.classes.map(function(c) { return c.doc_type }).join('、')
+      var fieldCounts = plan.classes.map(function(c) { return c.doc_type + ' ' + String(c.field_count) }).join(' · ')
+      var lines = [
+        '发起联合训练（' + String(plan.classes.length) + ' 类：' + typeList + ' → run ' + plan.target_run_id + '）：',
+        '请用 atf_joint_train 工具一次完成联合数据构建与训练启动（一个入口，不要拆成单类两步）：',
+        'datasets：' + JSON.stringify(plan.classes.map(function(c) { return { run_id: c.run_id, doc_type: c.doc_type } })),
+        'field_specs：' + JSON.stringify(plan.field_specs),
+      ]
+      if (plan.oversample && Object.keys(plan.oversample).length > 0) lines.push('oversample：' + JSON.stringify(plan.oversample))
+      else lines.push('oversample：省略（全部类型 1 倍）')
+      if (typeof plan.seed === 'number') lines.push('seed：' + String(plan.seed))
+      lines.push('字段数核对：' + fieldCounts + (typeof plan.estimated_rows === 'number' ? '；预计 ' + jointFormatRowCount(plan.estimated_rows) + ' 行' : '') + '。')
+      lines.push('我会在确认卡上核对类型／各类字段数／预计行数／合并倍率后放行。')
+      return lines.join('\n')
+    }
+    // ── H5-JOINT-PURE-END ──
+
+    // ── H5：联合训练字段编辑/导入对话框（D25 设计 §4.2/§七 Harness 2）──
+    // 按类 tab（每个 doc_type 一张），类内 goods/non_goods 两组分区；字段行＝勾选＋id＋
+    // 中文＋说明＋分组；全选/反选/加字段；导入＝粘贴 FieldSpec/field-config JSON 或本地
+    // 文件（FileReader——浏览器面无任意路径读取）。卡前快败：生成消息前按 jointSpecIssues
+    // （与工具面同判定）校验——缺则红字指明类/字段，不生成消息不进 chat 正道链。
+    function JointTrainDialog() {
+      var joint = React.useSyncExternalStore(
+        function(fn) { return store.subscribe(fn) },
+        function() { return store.joint })
+      var mon = useMonitor()
+      var runs = ((mon && mon.runs) || [])
+      var st = React.useState(null)
+      var draft = st[0], setDraft = st[1]
+      var open = joint !== null
+      React.useEffect(function() {
+        if (open && draft === null) {
+          setDraft({ targetRunId: '', seed: '', oversampleText: '', classes: [], activeTab: 0, importText: '', error: null })
+        }
+        if (!open && draft !== null) setDraft(null)
+      }, [open, draft])
+      if (!open || draft === null) return null
+      var patch = function(next) { setDraft(Object.assign({}, draft, next)) }
+      var active = draft.classes[draft.activeTab] || null
+      var patchClass = function(idx, next) {
+        var classes = draft.classes.slice()
+        classes[idx] = Object.assign({}, classes[idx], next)
+        setDraft(Object.assign({}, draft, { classes: classes }))
+      }
+      var addClass = function() {
+        var classes = draft.classes.concat([{ doc_type: '', run_id: '', document_zh: '', fields: [] }])
+        setDraft(Object.assign({}, draft, { classes: classes, activeTab: classes.length - 1, error: null }))
+      }
+      var removeClass = function(idx) {
+        var classes = draft.classes.slice()
+        classes.splice(idx, 1)
+        setDraft(Object.assign({}, draft, {
+          classes: classes,
+          activeTab: Math.max(0, Math.min(draft.activeTab, classes.length - 1)),
+          error: null,
+        }))
+      }
+      var addField = function(group) {
+        if (active === null) return
+        var fields = active.fields.concat([{ field_id: '', zh: '', group: group || 'goods', definition: '', locators: [], selected: true }])
+        patchClass(draft.activeTab, { fields: fields })
+      }
+      var patchField = function(fi, key, value) {
+        if (active === null) return
+        var fields = active.fields.slice()
+        fields[fi] = Object.assign({}, fields[fi])
+        fields[fi][key] = value
+        patchClass(draft.activeTab, { fields: fields })
+      }
+      var removeField = function(fi) {
+        if (active === null) return
+        var fields = active.fields.slice()
+        fields.splice(fi, 1)
+        patchClass(draft.activeTab, { fields: fields })
+      }
+      var selectAll = function(value) {
+        if (active === null) return
+        var fields = active.fields.map(function(f) { return Object.assign({}, f, { selected: value }) })
+        patchClass(draft.activeTab, { fields: fields })
+      }
+      var invertSelection = function() {
+        if (active === null) return
+        var fields = active.fields.map(function(f) { return Object.assign({}, f, { selected: f.selected === false }) })
+        patchClass(draft.activeTab, { fields: fields })
+      }
+      var doImport = function(textOverride) {
+        if (active === null) return
+        var text = (typeof textOverride === 'string' ? textOverride : draft.importText).trim()
+        if (text === '') {
+          patch({ error: { fatal: '导入内容为空——粘贴字段规格 JSON，或选择本地字段规格文件' } })
+          return
+        }
+        var parsed
+        try { parsed = JSON.parse(text) } catch (e) {
+          patch({ error: { fatal: '导入失败：不是合法 JSON——' + String(e && e.message ? e.message : e) } })
+          return
+        }
+        var fields = parsed !== null && typeof parsed === 'object' && Array.isArray(parsed.fields) ? parsed.fields : null
+        if (fields === null) {
+          patch({ error: { fatal: '导入失败：JSON 里没有 fields 数组（须为 FieldSpec/field-config 形态）' } })
+          return
+        }
+        var rows = fields.map(function(f) {
+          f = f || {}
+          return {
+            field_id: typeof f.field_id === 'string' ? f.field_id : '',
+            zh: typeof f.zh === 'string' ? f.zh : '',
+            group: f.group === 'non_goods' ? 'non_goods' : 'goods',
+            definition: typeof f.definition === 'string' ? f.definition : '',
+            locators: Array.isArray(f.locators) ? f.locators : (Array.isArray(f.locator_keywords) ? f.locator_keywords : []),
+            selected: true,
+          }
+        })
+        var classes = draft.classes.slice()
+        classes[draft.activeTab] = Object.assign({}, active, {
+          fields: rows,
+          document_zh: active.document_zh !== '' ? active.document_zh : (parsed && typeof parsed.document_zh === 'string' ? parsed.document_zh : ''),
+        })
+        setDraft(Object.assign({}, draft, { classes: classes, importText: '', error: null }))
+      }
+      var onFile = function(ev) {
+        var file = ev.target.files && ev.target.files[0]
+        if (!file) return
+        var reader = new FileReader()
+        reader.onload = function() { doImport(String(reader.result || '')) }
+        reader.readAsText(file)
+      }
+      var generate = function() {
+        // 卡前快败（与工具面同判定单源）：字段/说明缺失、类型重复、run 未选——红字指明
+        // 类/字段，不生成消息（不进 chat 正道链，就不会出确认卡）。
+        var issues = jointSpecIssues(draft.classes)
+        if (issues.length > 0) { patch({ error: { issues: issues } }); return }
+        if (draft.targetRunId === '') {
+          patch({ error: { fatal: '还没有选择联合训练落点实验——联合数据集写到落点实验的 prep/joint/ 并在那里启动训练' } })
+          return
+        }
+        var oversample = null
+        var oversampleText = draft.oversampleText.trim()
+        if (oversampleText !== '') {
+          try { oversample = JSON.parse(oversampleText) } catch (e) { oversample = undefined }
+          var oversampleBad = !oversample || typeof oversample !== 'object' || Array.isArray(oversample)
+          if (!oversampleBad) {
+            var keys = Object.keys(oversample).sort()
+            var want = draft.classes.map(function(c) { return c.doc_type }).sort()
+            if (keys.join('\u0000') !== want.join('\u0000')) oversampleBad = 'keyset'
+            else {
+              for (var ratioKey in oversample) {
+                var v = oversample[ratioKey]
+                if (typeof v !== 'number' || Math.floor(v) !== v || v < 1) { oversampleBad = 'value'; break }
+              }
+            }
+          }
+          if (oversampleBad) {
+            patch({ error: { fatal: oversampleBad === 'keyset'
+              ? '合并倍率键集与类型不一致——每个类型都要给倍率，或整体省略（＝全部 1 倍）'
+              : '合并倍率非法——倍率须为 ≥1 的整数（如 {"pl":1,"swb":2}）；省略＝全部 1 倍' } })
+            return
+          }
+        }
+        var seed = null
+        if (draft.seed.trim() !== '') {
+          seed = Number(draft.seed.trim())
+          if (!isFinite(seed) || Math.floor(seed) !== seed || seed < 0) {
+            patch({ error: { fatal: 'seed 须为 ≥0 的整数（缺省 0）' } })
+            return
+          }
+        }
+        var fieldSpecs = {}
+        var msgClasses = draft.classes.map(function(c) {
+          var picked = c.fields.filter(function(f) { return f.selected !== false })
+          fieldSpecs[c.doc_type] = jointNormalizeSpec(c.doc_type, c.document_zh, c.fields)
+          return { doc_type: c.doc_type, run_id: c.run_id, field_count: picked.length }
+        })
+        var msg = buildJointTrainMessage({
+          target_run_id: draft.targetRunId,
+          classes: msgClasses,
+          field_specs: fieldSpecs,
+          oversample: oversample === null ? undefined : oversample,
+          seed: seed === null ? undefined : seed,
+        })
+        var input = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]')
+        if (input) {
+          input.focus()
+          document.execCommand('insertText', false, msg)
+        }
+        store.setJoint(null)
+        setDraft(null)
+      }
+      var runsOptions = runs.map(function(r) {
+        return React.createElement('option', { key: r.run_id, value: r.run_id }, r.run_id)
+      })
+      var tabs = draft.classes.map(function(c, i) {
+        return React.createElement('button', {
+          key: 'joint-tab-' + String(i),
+          className: 'atf-pill' + (i === draft.activeTab ? ' atf-joint-tab-active' : ''),
+          'data-joint-tab': c.doc_type !== '' ? c.doc_type : String(i),
+          onClick: function() { patch({ activeTab: i, error: null }) },
+        }, c.doc_type !== '' ? c.doc_type : '类型' + String(i + 1))
+      })
+      var fieldRow = function(f, i) {
+        return React.createElement('div', { key: 'joint-f-' + String(i), className: 'atf-joint-field' },
+          React.createElement('input', {
+            type: 'checkbox', 'aria-label': '选用字段 ' + (f.field_id !== '' ? f.field_id : String(i + 1)),
+            checked: f.selected !== false,
+            onChange: function(ev) { patchField(i, 'selected', ev.target.checked) },
+          }),
+          React.createElement('input', { className: 'atf-joint-fid', placeholder: '字段名', value: f.field_id, onChange: function(ev) { patchField(i, 'field_id', ev.target.value) } }),
+          React.createElement('input', { className: 'atf-joint-fzh', placeholder: '中文', value: f.zh, onChange: function(ev) { patchField(i, 'zh', ev.target.value) } }),
+          React.createElement('input', { className: 'atf-joint-fdef', placeholder: '说明（必填）', value: f.definition, onChange: function(ev) { patchField(i, 'definition', ev.target.value) } }),
+          React.createElement('select', { value: f.group === 'non_goods' ? 'non_goods' : 'goods', 'aria-label': '分组', onChange: function(ev) { patchField(i, 'group', ev.target.value) } },
+            React.createElement('option', { value: 'goods' }, '货描'),
+            React.createElement('option', { value: 'non_goods' }, '非货描')),
+          React.createElement('button', { className: 'atf-pill', title: '移除该字段', onClick: function() { removeField(i) } }, '×'))
+      }
+      var groupSection = function(group, label) {
+        var rows = []
+        if (active !== null) {
+          for (var gi = 0; gi < active.fields.length; gi++) {
+            if ((active.fields[gi].group || 'goods') === group) rows.push(fieldRow(active.fields[gi], gi))
+          }
+        }
+        return React.createElement('div', { key: group, className: 'atf-joint-group', 'data-joint-group': group },
+          React.createElement('div', { className: 'atf-joint-group-head' },
+            React.createElement('b', null, label),
+            React.createElement('span', { className: 'atf-viewer-empty' }, String(rows.length) + ' 个字段')),
+          rows.length > 0 ? rows : React.createElement('div', { className: 'atf-viewer-empty' }, '（本组暂无字段——＋加字段或导入）'))
+      }
+      var errView = null
+      if (draft.error !== null && draft.error !== undefined) {
+        var errLines = []
+        if (draft.error.fatal) errLines.push(draft.error.fatal)
+        if (draft.error.issues) {
+          for (var ei = 0; ei < draft.error.issues.length; ei++) errLines.push(draft.error.issues[ei].message)
+        }
+        errView = React.createElement('div', {
+          className: 'atf-joint-err', role: 'alert',
+          style: { color: 'var(--dsw-static-red-500)', marginTop: 8, whiteSpace: 'pre-wrap' },
+        }, errLines.join('\n'))
+      }
+      return React.createElement('div', {
+        className: 'atf-viewer-overlay',
+        onClick: function(e) { if (e.target === e.currentTarget) { store.setJoint(null); setDraft(null) } },
+      },
+        React.createElement('div', { className: 'atf-viewer-frame atf-train-frame atf-joint-frame' },
+          React.createElement('div', { className: 'atf-viewer-head' },
+            React.createElement('b', null, '联合训练（多类字段选择）'),
+            React.createElement('span', { className: 'atf-viewer-empty' }, '每类字段独立——不做跨类字段并集'),
+            React.createElement('button', { className: 'atf-pill', title: '关闭', onClick: function() { store.setJoint(null); setDraft(null) } }, '×')),
+          React.createElement('div', { className: 'atf-train-body' },
+            React.createElement('div', { className: 'atf-joint-target' },
+              React.createElement('label', null, '落点实验：',
+                React.createElement('select', { 'data-joint-target': '1', value: draft.targetRunId, onChange: function(e) { patch({ targetRunId: e.target.value }) } },
+                  React.createElement('option', { value: '' }, '（选择落点实验）'),
+                  runsOptions)),
+              React.createElement('label', null, 'seed：',
+                React.createElement('input', { style: { width: 72 }, value: draft.seed, placeholder: '0', onChange: function(e) { patch({ seed: e.target.value }) } })),
+              React.createElement('label', null, '倍率（可选）：',
+                React.createElement('input', { style: { width: 170 }, value: draft.oversampleText, placeholder: '{"pl":1,"swb":2}——省略全 1', onChange: function(e) { patch({ oversampleText: e.target.value }) } }))),
+            React.createElement('div', { className: 'atf-joint-tabs' },
+              tabs,
+              React.createElement('button', { className: 'atf-pill', 'data-joint-add-class': '1', onClick: addClass }, '＋加一类'),
+              draft.classes.length > 0
+                ? React.createElement('button', { className: 'atf-pill', title: '移除当前类', onClick: function() { removeClass(draft.activeTab) } }, '－移除本类')
+                : null),
+            active !== null
+              ? React.createElement('div', { className: 'atf-joint-class' },
+                  React.createElement('div', { className: 'atf-joint-class-head' },
+                    React.createElement('input', { 'data-joint-doctype': '1', placeholder: '单据类型（如 pl）', value: active.doc_type, onChange: function(e) { patchClass(draft.activeTab, { doc_type: e.target.value }) } }),
+                    React.createElement('select', { 'data-joint-runid': '1', value: active.run_id, onChange: function(e) { patchClass(draft.activeTab, { run_id: e.target.value }) } },
+                      React.createElement('option', { value: '' }, '（选择该类数据所在实验）'),
+                      runsOptions),
+                    React.createElement('input', { 'data-joint-doczh': '1', placeholder: '单据中文名（如 装箱单）', value: active.document_zh, onChange: function(e) { patchClass(draft.activeTab, { document_zh: e.target.value }) } }),
+                    React.createElement('button', { className: 'atf-pill', 'data-joint-select-all': '1', onClick: function() { selectAll(true) } }, '全选'),
+                    React.createElement('button', { className: 'atf-pill', 'data-joint-invert': '1', onClick: invertSelection }, '反选'),
+                    React.createElement('button', { className: 'atf-pill', 'data-joint-add-field': '1', onClick: function() { addField('goods') } }, '＋加字段')),
+                  groupSection('goods', '货描字段（goods）'),
+                  groupSection('non_goods', '非货描字段（non_goods）'),
+                  React.createElement('div', { className: 'atf-joint-import' },
+                    React.createElement('div', { className: 'atf-viewer-empty' }, '导入字段规格（当前类）——粘贴 FieldSpec/field-config JSON，或选择本地文件'),
+                    React.createElement('textarea', {
+                      className: 'atf-joint-import-text', rows: 3,
+                      placeholder: '{"schema_version":"FieldSpec/v1","document_zh":"装箱单","fields":[{"field_id":"goods_description","zh":"货描","group":"goods","definition":"..."}]}',
+                      value: draft.importText,
+                      onChange: function(e) { patch({ importText: e.target.value }) },
+                    }),
+                    React.createElement('div', { className: 'atf-joint-import-actions' },
+                      React.createElement('button', { className: 'atf-pill', 'data-joint-import': '1', onClick: function() { doImport() } }, '导入'),
+                      React.createElement('input', { type: 'file', accept: '.json,application/json', 'data-joint-import-file': '1', onChange: onFile }))))
+              : React.createElement('div', { className: 'atf-viewer-empty' }, '还没有类型——先「＋加一类」'),
+            errView,
+            React.createElement('div', { className: 'atf-train-actions' },
+              React.createElement('button', { className: 'atf-pill atf-train-send', 'data-joint-generate': '1', onClick: generate }, '生成发起消息（进 chat 正道链→确认卡）'),
+              React.createElement('span', { className: 'atf-viewer-empty' }, '字段缺失或说明缺失会在这里红字拦下——不会出确认卡')))))
     }
 
     // ── D11-2 运行监控面板（原生右栏 tab body——按 UI 稿 v2 逐区块，区块序不得调整）──
@@ -2383,6 +2769,9 @@ window.__ModuleLoader__.load({
       { label: '继续上次', msg: '继续上次的训练任务', runRelated: true, continueLabel: true },
       { label: '对比两轮', msg: '对比最近两轮训练的指标', runRelated: true },
       { label: '走完闭环', msg: CLOSURE_MESSAGE },
+      // H5：联合训练入口——绑定态开字段选择对话框（JointTrainDialog）；未绑定沿 B2 胶囊
+      // 纪律弹选择面板（runRelated 语义复用，不发工具调用）。
+      { label: '联合训练', runRelated: true, joint: true },
     ]
     function DockPillsRow() {
       var b = useBinding()
@@ -2402,6 +2791,8 @@ window.__ModuleLoader__.load({
             onClick: function() {
               // 未绑定点击 run 相关胶囊＝弹选择面板（§五——不发起工具调用）
               if (pill.runRelated === true && !bound) { store.setBindingPanel(true); return }
+              // H5：联合训练胶囊＝开字段选择对话框（绑定态；不发起工具调用——消息由对话框生成）
+              if (pill.joint === true) { store.setJoint({ openedAt: Date.now() }); return }
               // 输入面＝contenteditable 富输入（DSH 壳无 textarea）——execCommand 插入保 React 状态同步
               var input = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]')
               if (input) {
@@ -2919,6 +3310,22 @@ window.__ModuleLoader__.load({
             '.atf-train-src-warn{color:var(--dsw-alias-state-warn-label,#b45309);}',
             '.atf-train-mean{color:var(--dsh-text-secondary,#64748b);font-size:11px;}',
             '.atf-train-actions{display:flex;gap:10px;align-items:center;}',
+            // H5：联合训练字段编辑对话框（按类 tab＋goods/non_goods 分组＋导入区）
+            '.atf-joint-frame{width:min(920px,96vw);}',
+            '.atf-joint-target{display:flex;gap:14px;flex-wrap:wrap;align-items:center;}',
+            '.atf-joint-target label{display:flex;gap:6px;align-items:center;}',
+            '.atf-joint-tabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}',
+            '.atf-joint-tab-active{outline:2px solid var(--dsw-alias-brand-primary,#1d4ed8);}',
+            '.atf-joint-class{display:flex;flex-direction:column;gap:6px;border:1px solid rgba(128,128,128,.2);border-radius:8px;padding:8px;}',
+            '.atf-joint-class-head{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}',
+            '.atf-joint-class-head input,.atf-joint-class-head select{font-size:12px;padding:2px 6px;}',
+            '.atf-joint-group{display:flex;flex-direction:column;gap:4px;}',
+            '.atf-joint-group-head{display:flex;gap:8px;align-items:baseline;}',
+            '.atf-joint-field{display:grid;grid-template-columns:auto minmax(110px,auto) minmax(70px,auto) 1fr auto auto;gap:6px;align-items:center;padding:2px 0;border-bottom:1px dashed rgba(128,128,128,.12);}',
+            '.atf-joint-field input[type="text"],.atf-joint-field input:not([type]),.atf-joint-field select{font-size:12px;padding:2px 4px;}',
+            '.atf-joint-import{display:flex;flex-direction:column;gap:4px;border-top:1px dashed rgba(128,128,128,.2);padding-top:6px;}',
+            '.atf-joint-import-actions{display:flex;gap:10px;align-items:center;}',
+            '.atf-joint-err{color:var(--dsw-static-red-500);}',
             // 批㊶-M M-4：段状态跃迁呼吸（一次性动画——animation 属性由内联 pulseStyle 触发一次）
             '@keyframes atf-card-pulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}',
             '.atf-train-send{background:var(--dsw-alias-brand-primary,#1d4ed8);color:#fff;}',
@@ -3323,7 +3730,9 @@ window.__ModuleLoader__.load({
               // 批B2 §五：胶囊行组件化（DockPillsRow——绑定状态驱动禁用/文案）
               React.createElement(DockPillsRow),
               React.createElement(ViewerOverlay),
-              React.createElement(TrainDialog))
+              React.createElement(TrainDialog),
+              // H5：联合训练字段编辑/导入对话框（与 TrainDialog 同槽并存——互斥由各自 store 键保证）
+              React.createElement(JointTrainDialog))
               // 批㊶Q增补一：MonitorPanel 卸离 dock——pane body（MonitorBody）唯一挂载；
               // dock 遗留挂载曾是 fixed 全高条假 pane 的载体（遮挡根因，见 MonitorBody 注）
               // D11-1：SettingsPanel 卸离 dock——训练配置迁原生设置页（settings.section）
