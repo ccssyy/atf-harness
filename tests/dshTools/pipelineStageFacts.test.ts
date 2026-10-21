@@ -11,11 +11,15 @@
  *   取不到如实跳过）。
  * - A3：每段 exit_code===0 后 appendSegmentFact(runDir, 映射键, "atf_pipeline_stage")；
  *   非零退出不写（不造完成事实）。
+ * - D24h：段放行调用追加账本身份三参（--actor sessionIdOf(exec)??unattributed／
+ *   --approval-mode ui／--round-dir runDir）；内核 stdout approval_id → 返回体
+ *   approval_entry_id（解析失败省略键不阻断＋stderr 一条）；卡面含「仅 owner 可点；
+ *   执行方不得代点」。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildPipelineTool, PIPELINE_STAGES, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
 import { readSegmentFacts } from "../../src/core/workspace/segmentFacts.js";
 import { readBindings } from "../../src/core/workspace/runFacts.js";
@@ -135,7 +139,11 @@ describe("A2.2b——argv 面单源（只传内核声明四参）", () => {
     };
     const result = await tool.execute({ stage: "register", run_id: "run-a", workspace_path: ws, source_root: join(root, "src") }, execWithSession("s1"));
     expect(result).toMatchObject({ ok: true, workspace_path: ws, run_dir: join(ws, "runs", "run-a") });
-    expect(JSON.parse(readArgv(marker))).toEqual(["--workspace", ws, "--run-id", "run-a", "--stage", "register", "--source-root", join(root, "src")]);
+    // D24h：放行三参随段下传（会话 actor／ui 模式／round-dir＝落点 run 目录）
+    expect(JSON.parse(readArgv(marker))).toEqual([
+      "--workspace", ws, "--run-id", "run-a", "--stage", "register", "--source-root", join(root, "src"),
+      "--actor", "s1", "--approval-mode", "ui", "--round-dir", join(ws, "runs", "run-a"),
+    ]);
   });
 
   it("非 register：argv 不含 --source-root", async () => {
@@ -154,7 +162,7 @@ describe("A2.2b——argv 面单源（只传内核声明四参）", () => {
     const result = await tool.execute({ stage: "publish", run_id: "run-b", workspace_path: ws }, execWithSession("s1"));
     expect(result).toMatchObject({ ok: true });
     const argv = JSON.parse(readArgv(marker)) as string[];
-    expect(argv).toEqual(["--workspace", ws, "--run-id", "run-b", "--stage", "publish"]);
+    expect(argv).toEqual(["--workspace", ws, "--run-id", "run-b", "--stage", "publish", "--actor", "s1", "--approval-mode", "ui", "--round-dir", join(ws, "runs", "run-b")]);
     expect(argv.some((a) => a === "--source-root")).toBe(false);
   });
 });
@@ -252,5 +260,101 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
     const result = await tool.execute({ stage: "register", run_id: "run-r", workspace_path: ws, source_root: join(root, "src") }, execWithSession("s1"));
     expect(result).toMatchObject({ error: "approval_denied", outcome: "rejected" });
     expect(existsSync(join(ws, "runs"))).toBe(false);
+  });
+});
+
+/** D24h 审批 ctx：放行并捕获卡面 reason（权属行锚用）。 */
+const approvalCaptureCtx = (captured: { reason?: string }): { get: (service: string) => unknown } => ({
+  get: (service: string) =>
+    service === "approval"
+      ? { request: async (req: { reason: string }) => { captured.reason = req.reason; return "allowed-once"; } }
+      : undefined,
+});
+
+describe("D24h——阶段放行 actor/mode 与 approval_id 回传", () => {
+  it("带会话 exec：argv 三参逐值（actor=会话 id／approval-mode=ui／round-dir=落点 run 目录）", async () => {
+    const root = tempRoot();
+    const ws = join(root, "ws");
+    mkdirSync(ws, { recursive: true });
+    const marker = join(root, "argv-d24h.json");
+    const script = writeScript(
+      root,
+      "argv-d24h.mjs",
+      `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, JSON.stringify(process.argv.slice(2)));process.stdout.write("{}")\n`,
+    );
+    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
+      execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
+    };
+    const result = await tool.execute({ stage: "label_qc", run_id: "run-d24h", workspace_path: ws }, execWithSession("sess-d24h"));
+    expect(result).toMatchObject({ ok: true });
+    expect(JSON.parse(readArgv(marker))).toEqual([
+      "--workspace", ws, "--run-id", "run-d24h", "--stage", "label_qc",
+      "--actor", "sess-d24h", "--approval-mode", "ui", "--round-dir", join(ws, "runs", "run-d24h"),
+    ]);
+  });
+
+  it("session 缺失：actor=unattributed（argv 无 owner 字面量——不伪造）", async () => {
+    const root = tempRoot();
+    const ws = join(root, "ws");
+    mkdirSync(ws, { recursive: true });
+    const marker = join(root, "argv-nosess.json");
+    const script = writeScript(
+      root,
+      "argv-nosess.mjs",
+      `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, JSON.stringify(process.argv.slice(2)));process.stdout.write("{}")\n`,
+    );
+    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
+      execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
+    };
+    const result = await tool.execute({ stage: "label_qc", run_id: "run-ns", workspace_path: ws }, { agent: undefined, callId: "c", signal: undefined });
+    expect(result).toMatchObject({ ok: true });
+    const argv = JSON.parse(readArgv(marker)) as string[];
+    const actorAt = argv.indexOf("--actor");
+    expect(argv[actorAt + 1]).toBe("unattributed");
+    expect(argv.every((a) => !a.includes("owner"))).toBe(true);
+  });
+
+  it("内核 stdout 带 approval_id → 返回体 approval_entry_id", async () => {
+    const root = tempRoot();
+    const ws = join(root, "ws");
+    mkdirSync(ws, { recursive: true });
+    const script = writeScript(root, "ledger.mjs", 'process.stdout.write(JSON.stringify({approval_id:"al-d24h-001"}))\n');
+    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
+      execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
+    };
+    const result = await tool.execute({ stage: "label_qc", run_id: "run-led", workspace_path: ws }, execWithSession("s1"));
+    expect(result).toMatchObject({ ok: true, approval_entry_id: "al-d24h-001" });
+  });
+
+  it("stdout 非 JSON：不阻断段回报（ok=true）＋返回体无该键＋console.error 一条", async () => {
+    const root = tempRoot();
+    const ws = join(root, "ws");
+    mkdirSync(ws, { recursive: true });
+    const script = writeScript(root, "badjson.mjs", 'process.stdout.write(\'{"approval_id":"x"\')\n');
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
+        execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
+      };
+      const result = await tool.execute({ stage: "label_qc", run_id: "run-bj", workspace_path: ws }, execWithSession("s1"));
+      expect(result).toMatchObject({ ok: true, exit_code: 0 });
+      expect("approval_entry_id" in result).toBe(false);
+      expect(errSpy).toHaveBeenCalledTimes(1);
+      expect(String(errSpy.mock.calls[0]?.[0])).toContain("approval_entry_id");
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+
+  it("卡面 reason 含放行权属行「仅 owner 可点；执行方不得代点」", async () => {
+    const root = tempRoot();
+    const ws = join(root, "ws");
+    mkdirSync(ws, { recursive: true });
+    const captured: { reason?: string } = {};
+    const tool = buildPipelineTool(approvalCaptureCtx(captured), `node ${OK_SCRIPT(root)}`, 30_000) as {
+      execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
+    };
+    await tool.execute({ stage: "label_qc", run_id: "run-card", workspace_path: ws }, execWithSession("s1"));
+    expect(captured.reason).toContain("仅 owner 可点；执行方不得代点");
   });
 });

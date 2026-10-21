@@ -31,6 +31,12 @@
  *   candidate_build→candidate、family_split→split、training_prep→null（只落事实轨
  *   不点灯——null 即按内核原文名落事实，该名不在前缀闭包读面）；candidate 键亦不在
  *   前缀闭包内（闭包语义不动）。
+ *
+ * D24h：段放行调用追加账本身份三参——--actor sessionIdOf(exec)??unattributed（会话缺失
+ * 如实 unattributed，不伪造 owner 字面量）／--approval-mode ui／--round-dir runDir（本段
+ * 落点 run 目录，内核账本 round_dir 字段面）；内核 stdout 携 approval_id 时回传返回体
+ * approval_entry_id（解析失败省略键不阻断段回报，stderr 记一条）；卡面追加放行权属行
+ * 「仅 owner 可点；执行方不得代点」。
  */
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -261,7 +267,8 @@ export const buildPipelineTool = (
           effect: "在 run 目录内写该段产物（register 段另读源文档根）",
           reversible: "段产物可人工清理；已写数据面不自动回滚",
           cost: "按任务卡",
-        }));
+          // D24h：卡面追加放行权属行（与评估 EVAL_RELEASE 卡同款——点卡权属只在 owner）
+        }) + "\n仅 owner 可点；执行方不得代点");
       if (!verdict.ok) return approvalDeniedResult("atf_pipeline_stage", verdict.outcome);
       // 落点单源（A2.2b）：与内核同一决定者 <workspace_path>/runs/<run_id>；resolveRunDir 本工具内退役。
       const runDir = join(workspacePath, "runs", args.run_id);
@@ -274,6 +281,9 @@ export const buildPipelineTool = (
       if (needsBaseModel) argv.push("--base-model", baseModelPath);
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");
+      // D24h：放行登记带会话身份与 ui 模式（actor＝会话 id，缺失＝unattributed——不伪造 owner）；
+      // round_dir＝本段落点 run 目录（内核账本 round_dir 字段面，与评估 D20 同构）
+      argv.push("--actor", sessionIdOfExec(exec) ?? "unattributed", "--approval-mode", "ui", "--round-dir", runDir);
       const result = await runPipeline(pipelineCommand, argv, pipelineTimeoutMs);
       let summary: unknown = null;
       const trimmed = result.stdout.trim();
@@ -294,6 +304,13 @@ export const buildPipelineTool = (
           const disk = JSON.parse(readFileSync(join(runDir, `stage-${args.stage}.summary.json`), "utf8")) as Record<string, unknown>;
           if (disk["run_id"] === args.run_id && disk["stage"] === args.stage) summary = disk;
         } catch { /* 落盘摘要不在场＝如实 null */ }
+      }
+      // D24h：内核 stdout 账本 approval_id 回传返回体（只认 stdout——落盘摘要回读面不承担
+      // 账本回传；解析失败省略键不阻断段回报——stderr 记一条）
+      let approvalEntryId: unknown;
+      if (jsonStart >= 0) {
+        try { approvalEntryId = (JSON.parse(trimmed.slice(jsonStart)) as Record<string, unknown>)["approval_id"]; }
+        catch { console.error("[atf-pipeline-stage] 内核 stdout 非 JSON——返回体省略 approval_entry_id（不阻断段回报）"); }
       }
       // 失败语义：exit 2（blocked——越序等拒绝）／exit 3（环境错误）一律零写入；
       // exit 0 → 段事实（映射键）＋会话绑定。
@@ -327,6 +344,8 @@ export const buildPipelineTool = (
         segment_fact_recorded,
         session_bound,
         ...(fact_segment !== null ? { fact_segment } : {}),
+        // D24h：账本 approval_id 回传（解析失败/缺席省略键——typert lossless 拒 undefined 键）
+        ...(approvalEntryId !== undefined ? { approval_entry_id: approvalEntryId } : {}),
         // A-E14b：base_model 对账值（explicit＝显式下传优先；对端摘要携带 source 时透传）
         ...(baseModelSourceOf(needsBaseModel, summary) !== undefined ? { base_model_source: baseModelSourceOf(needsBaseModel, summary) } : {}),
         // E10b：聚类证据三键透传（内核摘要携带时）——「为什么没开/为什么开」的解释面

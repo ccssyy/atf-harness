@@ -77,7 +77,11 @@ describe("E10b——参数面（缺省 auto／三值枚举／非法值拒）", (
       { stage: "family_split", run_id: "e10b-a", workspace_path: tempRoot() },
       fakeExec,
     );
-    expect(summaryArgv(result)).toEqual(["--workspace", expect.any(String), "--run-id", "e10b-a", "--stage", "family_split", "--auto-style-cluster", "auto"]);
+    // D24h 翻锚：放行三参随段下传（session 缺失→actor=unattributed）
+    expect(summaryArgv(result)).toEqual([
+      "--workspace", expect.any(String), "--run-id", "e10b-a", "--stage", "family_split", "--auto-style-cluster", "auto",
+      "--actor", "unattributed", "--approval-mode", "ui", "--round-dir", expect.any(String),
+    ]);
     const schema = tool.parameters as { properties?: Record<string, { enum?: string[] }> };
     expect(schema.properties?.["auto_style_cluster"]?.enum).toEqual(["auto", "on", "off"]);
     expect(AUTO_STYLE_CLUSTER_VALUES).toEqual(["auto", "on", "off"]);
