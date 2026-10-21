@@ -155,7 +155,9 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // host.roots，原地替换同一数组；轮询侦听 2s，重派生异常保留现集不缩窄）。
   startFileRootsHotReload(fileHostRoots, { env: process.env });
   // 批㊶-W W1：atf_bash 围栏取值链＝会话绑定反查（runsRoot 直传 deps）＞ env 过渡态
-  for (const tool of buildFileGuardTools(fileHost, { runsRoot: config.runsRoot })) ctx.tools.register(tool);
+  // D23：审批 ctx 直传（atf_bash 破坏性命令确认闸——owner 审批卡放行唯一通道；
+  // atf_* 契约工具不进 bash/write 豁免类，卡面恒达人工面板）
+  for (const tool of buildFileGuardTools(fileHost, { runsRoot: config.runsRoot, approvalCtx: ctx })) ctx.tools.register(tool);
   if (registerPathGuard(ctx, fileHost)) {
     console.log(
       `[atf-tools] 文件路径守卫已挂（tools/pre-execute prepend；守卫 glob/grep/read_image，封闭 vendor read/edit/write 改道 A7；A7 四件挂载）白名单根 ${String(fileRoots.roots.length)} 个（派生集＝配置声明面镜像＋env 附加集）`,

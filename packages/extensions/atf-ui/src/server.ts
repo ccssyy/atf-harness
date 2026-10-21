@@ -20,7 +20,7 @@ import { queryNvidiaSmi, queryNvidiaSmiAll, queryGpuComputeApps, gpuProcTopByInd
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
 import { resolveInstanceKernelDir } from "../../../../src/core/workspace/instancePin.js";
-import { sessionDomainRefusal, sessionIsScopedFor, listTrainingSessionCmdlines, resolveSessionName, trainingSessionBase } from "../../../../src/core/workspace/tmuxLiveness.js";
+import { sessionDomainRefusal, listTrainingSessionCmdlines, probeTrainingEvidence, resolveSessionName, trainingSessionBase } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
 import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/workspace/oomFallback.js";
@@ -437,6 +437,11 @@ export interface ScanLiveness {
    *  在场时 training.active＝本 run 映射值；未命中回落 mtime 新鲜窗口单判据。
    *  （批㊶-N N-2 会族泛匹配 trainingTmuxFamilyPresent 自本批起不再参与 active 判定。） */
   trainingEvidence?: Record<string, boolean>;
+  /** D28：tmux 取证探测可用性（命名域已设且枚举命令成功执行——probeTrainingEvidence）。
+   *  true 且 trainingEvidence 本 run 无命中＝训练 tmux 退出 definitive 负证据——
+   *  trainingActiveLive 立即翻 false（mtime/progress 过期缓存不再兜底）；false/缺席＝
+   *  面缺席（探测异常/命名域未设），回落 mtime 窗口判据（既有 fail-closed 语义不动）。 */
+  tmuxProbeUsable?: boolean;
   /** 批㊶-N N-2：training-logs 目录 mtime 新鲜（编排日志写入活性）。 */
   trainingLogsFresh?: boolean;
   freshWindowMs?: number;
@@ -504,6 +509,18 @@ const trainerLogFresh = (dir: string, liveness: ScanLiveness | undefined): boole
   }
 };
 
+/** D28：trainer_log 在场且 mtime 超窗（源停更 definitive 负证据——文件缺席/不可读＝false
+ *  不猜，启动加载窗无此文件不触发）。活跃训练步进写入恒在窗内——「不误杀」由同门保证。 */
+const trainerLogOverWindow = (dir: string, liveness: ScanLiveness | undefined): boolean => {
+  try {
+    const windowMs = liveness?.freshWindowMs ?? TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
+    const now = liveness?.nowMs ?? Date.now();
+    return now - statSync(join(dir, "training", "trainer_log.jsonl")).mtimeMs > windowMs;
+  } catch {
+    return false;
+  }
+};
+
 /** 批㊶-M 锚兼容：逐轮目录 eval/<round>/metrics_summary.json 扫描（任一轮在场即 true）。
  *  批㊶-S3 S-B2 锚布局补全：产品现役轮产物在 eval/<round>/orch/eval/metrics_summary.json
  *  （scanEvalRounds/evalStatus 同位）——旧锚只认轮根位，真实布局轮的评估段被误判 pending。 */
@@ -521,20 +538,25 @@ const evalRoundAnchored = (runDir: string): boolean => {
   return false;
 };
 
-/** 训练活跃终判（批㊶-O O-1 修正）：绑 run tmux 取证优先；无匹配回落 mtime 新鲜窗口
- *  （N-2 既有窗口判据）；泛匹配会族布尔不再参与（假阳性根除）。run_dir 保留签名兼容。
- *  A3：progress fresh（启动初帧 round=0 起）同为活跃信号——无 loss-series 的启动早期
- *  有确定性活跃源（初帧由 atf_run_training 启动放行后写，status 写方仍是唯一推进源）。 */
+/** 训练活跃终判（批㊶-O O-1 修正；D28 判定序重排——definitive 证据优先，过期缓存不再兜底）：
+ *  ① tmux 正证据（绑 run 会话进程链在场）＝活跃终判——checkpoint 长停顿/重启加载窗不误杀
+ *  （进程活着即活跃；停更面由 D16 progress stale 表达，不在此翻面）；
+ *  ② 探测可用（tmuxProbeUsable）且取证面明确无本 run 会话＝训练 tmux 退出 → 立即 false——
+ *  loss-series/progress/trainer_log 的 mtime 新鲜是已过去的写历史（过期 liveness 缓存），
+ *  不得再兜底出「结束 10 分钟内训练中」；
+ *  ③ trainer_log 在场且 mtime 超窗 → 立即 false（源停更 definitive 负证据——活跃训练步进
+ *  写入恒窗内；内核直跑无 tmux 面者靠同款窗口活判，超窗即翻面）；
+ *  ④ 面缺席（探测异常/命名域未设/vitest 直扫）回落窗口判据——既有 fail-closed 语义不动。
+ *  run_dir 保留签名兼容。A3：progress fresh 同为活跃信号（仅 ④ 路径参与）。 */
 const trainingActiveLive = (dir: string, runId: string, liveness: ScanLiveness | undefined): boolean => {
+  if (liveness?.trainingEvidence?.[runId] === true) return true;
+  if (liveness?.tmuxProbeUsable === true && liveness.trainingEvidence !== undefined) return false;
+  if (trainerLogOverWindow(dir, liveness)) return false;
   const progressActive = progressFresh(
     readProgress(dir),
     liveness?.nowMs ?? Date.now(),
     liveness?.freshWindowMs ?? resolveTrainActiveWindowMs(process.env),
   );
-  if (liveness?.trainingEvidence !== undefined) {
-    if (liveness.trainingEvidence[runId] === true) return true;
-    return lossSeriesFresh(dir, liveness) || progressActive || trainerLogFresh(dir, liveness);
-  }
   return lossSeriesFresh(dir, liveness) || progressActive || trainerLogFresh(dir, liveness);
 };
 
@@ -1124,6 +1146,9 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     }
     // 批㊶-O O-1：绑 run 取证（per-run 独立）。批㊶-P1 S1：两判据——作用域会话名尾段
     // 精确归属（sessionIsScopedFor，`r1` 不误命中 `cr_r1`）＋存量 cmdline 含 run_id。
+    // D28：取证改走 probeTrainingEvidence 批量单源（判据同源）并取探测可用性——
+    // usable=true 且本 run 无命中＝训练 tmux 退出 definitive 负证据（trainingActiveLive
+    // 立即翻面）；usable=false（命名域未设/枚举异常）＝面缺席，回落 mtime 窗口判据。
     // A2 案 a：注册工作区清单（每周期一次——exists===true 记录；实验树枚举＋run 真实
     // 目录取用的单源；目录缺失/权限失败由枚举面静默跳过）。注册表是内存权威（写侧实例
     // 重启进视野）——本处只读消费，零写入。
@@ -1131,20 +1156,11 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
       .filter((record) => record.exists)
       .map((record) => ({ path: record.path, title: record.title, sessionIds: record.sessionIds }));
     const runEntries = enumerateRunEntries(resolved.runsRoot, registryWorkspaces);
-    const trainingEvidence: Record<string, boolean> = {};
-    try {
-      const cmdlines = listTrainingSessionCmdlines();
-      for (const entry of cmdlines) {
-        for (const runId of runEntries.map((e) => e.runId)) {
-          if (entry.cmdline.includes(runId) || sessionIsScopedFor(entry.session, runId)) trainingEvidence[runId] = true;
-        }
-      }
-    } catch {
-      // 取证异常＝空映射（回落 mtime 窗口）
-    }
+    const evidenceProbe = probeTrainingEvidence(runEntries.map((entry) => entry.runId));
     const runs = scanRuns(resolved.runsRoot, {
       trainingTmuxPresent,
-      trainingEvidence,
+      trainingEvidence: evidenceProbe.evidence,
+      tmuxProbeUsable: evidenceProbe.usable,
       trainingLogsFresh: trainingLogsFreshAt(resolved.runsRoot, resolveTrainActiveWindowMs(process.env)),
       freshWindowMs: resolveTrainActiveWindowMs(process.env),
     }, registryWorkspaces, runEntries);
@@ -1228,7 +1244,7 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
         } catch { /* 不可读＝null（判据按无此证据处理） */ }
         const alert = probeAndRecord(runDir, {
           trainingActive: true,
-          tmuxEvidence: trainingEvidence[run.run_id] === true,
+          tmuxEvidence: evidenceProbe.evidence[run.run_id] === true,
           lossSeriesFresh: existsSync(join(runDir, "training", "loss-series.json")),
           trainingDone: run.segments.training === true,
           lossPoints: Array.isArray(run.training.loss) ? (run.training.loss as Array<Record<string, unknown>>) : [],

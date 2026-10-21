@@ -18,7 +18,7 @@ import {
   writeProgress,
 } from "../../src/core/workspace/runFacts.js";
 import { scanRunDir, trainingLogsFreshAt } from "../../packages/extensions/atf-ui/src/server.js";
-import { tmuxTrainingFamilyPresent } from "../../src/core/workspace/tmuxLiveness.js";
+import { probeTrainingEvidence, tmuxTrainingFamilyPresent, TMUX_SESSION_PREFIX_ENV } from "../../src/core/workspace/tmuxLiveness.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -233,6 +233,83 @@ describe("批㊶-O O-1 绑 run 取证（trainingEvidence 映射）", () => {
     const liveness = { trainingEvidence: {}, nowMs: Date.now(), freshWindowMs: 180_000 };
     for (const runId of ["run-regress-formal-01", "run-regress-formal-02", "run-regress-large-pl"]) {
       expect(scanRunDir(root, runId, liveness).training.active).toBe(false);
+    }
+  });
+});
+
+describe("D28——training.active 不吃过期 liveness 缓存（definitive 负证据立即翻面）", () => {
+  /** 完整锚夹具＋trainer_log/progress 任意 mtime 置位。 */
+  const seedAnchored = (root: string, runId: string): string => {
+    const runDir = join(root, runId);
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "loss-series.json"), "[]");
+    for (const [dir, file] of [["", "registration.json"], ["webui", "config-snapshot.json"], ["launch", "train.sh"]] as Array<[string, string]>) {
+      mkdirSync(join(runDir, dir), { recursive: true });
+      writeFileSync(join(runDir, dir, file), "{}");
+    }
+    return runDir;
+  };
+  const touch = (path: string, at: Date): void => utimesSync(path, at, at);
+
+  it("tmux 退出（探测可用＋取证无本 run）→ 立即 false——新鲜的 loss-series/progress/trainer_log 缓存不得兜底", () => {
+    const root = tempRoot();
+    const runDir = seedAnchored(root, "run-d28-end");
+    // 结束瞬间形态：全部在盘活性面仍是新鲜的（写历史缓存）
+    const now = new Date();
+    touch(join(runDir, "training", "loss-series.json"), now);
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    writeFileSync(join(runDir, "webui", "progress.json"), JSON.stringify({ percentage: 64, updated_at: now.toISOString() }));
+    const ended = scanRunDir(root, "run-d28-end", {
+      trainingEvidence: {}, tmuxProbeUsable: true, nowMs: Date.now(), freshWindowMs: 180_000,
+    });
+    expect(ended.training.active).toBe(false);
+  });
+
+  it("活跃训练不误杀：tmux 正证据优先于 trainer_log 超窗（checkpoint 长停顿场景 active 保持 true）", () => {
+    const root = tempRoot();
+    const runDir = seedAnchored(root, "run-d28-live");
+    touch(join(runDir, "training", "loss-series.json"), new Date(Date.now() - 600_000));
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "trainer_log.jsonl"), '{"loss":1.2}\n');
+    touch(join(runDir, "training", "trainer_log.jsonl"), new Date(Date.now() - 600_000));
+    const live = scanRunDir(root, "run-d28-live", {
+      trainingEvidence: { "run-d28-live": true }, tmuxProbeUsable: true, nowMs: Date.now(), freshWindowMs: 180_000,
+    });
+    expect(live.training.active).toBe(true);
+  });
+
+  it("trainer_log 超窗（源停更）→ 立即 false——探测面缺席时新鲜 loss-series 缓存同样不得兜底", () => {
+    const root = tempRoot();
+    const runDir = seedAnchored(root, "run-d28-stale");
+    touch(join(runDir, "training", "loss-series.json"), new Date());
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "trainer_log.jsonl"), '{"loss":1.2}\n');
+    touch(join(runDir, "training", "trainer_log.jsonl"), new Date(Date.now() - 600_000));
+    const stale = scanRunDir(root, "run-d28-stale", {
+      trainingEvidence: {}, tmuxProbeUsable: false, nowMs: Date.now(), freshWindowMs: 180_000,
+    });
+    expect(stale.training.active).toBe(false);
+  });
+
+  it("面缺席回落（既有 fail-closed 回归）：探测不可用＋无 trainer_log＋新鲜 loss-series → true", () => {
+    const root = tempRoot();
+    const runDir = seedAnchored(root, "run-d28-fallback");
+    touch(join(runDir, "training", "loss-series.json"), new Date());
+    const fallback = scanRunDir(root, "run-d28-fallback", {
+      trainingEvidence: {}, tmuxProbeUsable: false, nowMs: Date.now(), freshWindowMs: 180_000,
+    });
+    expect(fallback.training.active).toBe(true);
+  });
+
+  it("probeTrainingEvidence：命名域未设＝usable:false（面缺席——与零会话可区分）", () => {
+    const prior = process.env[TMUX_SESSION_PREFIX_ENV];
+    delete process.env[TMUX_SESSION_PREFIX_ENV];
+    try {
+      const probe = probeTrainingEvidence(["run-x"]);
+      expect(probe.usable).toBe(false);
+      expect(probe.evidence).toEqual({});
+    } finally {
+      if (prior !== undefined) process.env[TMUX_SESSION_PREFIX_ENV] = prior;
     }
   });
 });

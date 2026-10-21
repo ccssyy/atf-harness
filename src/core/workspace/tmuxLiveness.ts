@@ -133,9 +133,14 @@ export const tmuxTrainingFamilyPresent = (): boolean => {
 
 /** 批㊶-O O-1：枚举本命名域内 `${前缀}atf-*` 会话及其 pane 进程 cmdline（含子进程）。
  *  前缀未设＝空数组（枚举 fail-closed）；tmux 不可用＝空数组。跨域会话（他前缀/裸名）不可见。 */
-export const listTrainingSessionCmdlines = (): Array<{ session: string; cmdline: string }> => {
+export const listTrainingSessionCmdlines = (): Array<{ session: string; cmdline: string }> =>
+  listDomainSessionCmdlinesOrNull() ?? [];
+
+/** D28：域内会话枚举原始面——命名域未设/tmux 不可用＝null（面缺席），与「探测健康但
+ *  域内零会话」可区分（listTrainingSessionCmdlines 既有空数组语义不变，包装本面）。 */
+const listDomainSessionCmdlinesOrNull = (): Array<{ session: string; cmdline: string }> | null => {
   const prefix = prefixFromEnv();
-  if (prefix === "") return [];
+  if (prefix === "") return null;
   try {
     const out = execSync(tmuxCommand("list-panes -a -F '#{session_name} #{pane_pid}' 2>/dev/null"), { encoding: "utf8" });
     const result: Array<{ session: string; cmdline: string }> = [];
@@ -167,8 +172,27 @@ export const listTrainingSessionCmdlines = (): Array<{ session: string; cmdline:
     }
     return result;
   } catch {
-    return [];
+    return null;
   }
+};
+
+/** D28：绑 run 取证（批量）＋探测可用性——usable=true 仅当命名域已设且 tmux 枚举命令
+ *  成功执行（域内零会话≠面缺席）；evidence 判据与 tmuxTrainingEvidenceFor 同源
+ *  （进程链 cmdline 含 run_id／作用域会话名尾段精确）。调用方（atf-ui tickOnce）以
+ *  usable=true 且本 run 无命中＝训练 tmux 退出 definitive 负证据（trainingActiveLive
+ *  立即翻 false，mtime 过期缓存不再兜底）；usable=false＝面缺席，回落 mtime 窗口判据。 */
+export const probeTrainingEvidence = (
+  runIds: readonly string[],
+): { usable: boolean; evidence: Record<string, boolean> } => {
+  const evidence: Record<string, boolean> = {};
+  const entries = listDomainSessionCmdlinesOrNull();
+  if (entries === null) return { usable: false, evidence };
+  for (const entry of entries) {
+    for (const runId of runIds) {
+      if (entry.cmdline.includes(runId) || sessionIsScopedFor(entry.session, runId)) evidence[runId] = true;
+    }
+  }
+  return { usable: true, evidence };
 };
 
 /** 批㊶-O O-1：绑 run 取证——本命名域任一会话判定本 run 在场（批㊶-P1 S1 扩充两判据：

@@ -26,6 +26,7 @@ import { resolveSessionRunWorkspace } from "../../../../src/core/workspace/runFa
 import { registryPathOf, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { deriveFileToolRoots, type DeriveFileRootsInput } from "../../../../src/agent/fileRoots.js";
 import { translateParameters, asToolValue, looseObjectOutput } from "./schemaTranslate.js";
+import { buildApprovalReason, requestApproval } from "./approvalFace.js";
 
 /** pre-execute 守卫的 vendor 工具名闭集。 */
 export const PRE_EXECUTE_GUARDED_TOOLS: ReadonlySet<string> = new Set(["glob", "grep", "read_image"]);
@@ -148,8 +149,7 @@ export const workspaceFenceRoots = (input: {
 };
 
 /** 越界预检（包装层拒绝不弹卡——结构化指路回流；bash 字符串预检定位「防漫游」非防对抗）。 */
-export const workspaceFenceGuard = (command: string, fence: { writable: string; readable: readonly string[] }): { ok: true } | { ok: false; code: string; message: string } => {
-  if (typeof command !== "string" || command === "") return { ok: true };
+export const workspaceFenceGuard = (command: string, fence: { writable: string; readable: readonly string[] }): { ok: true } | { ok: false; code: string; message: string } => {  if (typeof command !== "string" || command === "") return { ok: true };
   for (const token of absolutePathTokensFromCommand(command)) {
     if (pathOutsideRoots(token, fence.readable)) {
       return {
@@ -170,6 +170,54 @@ export const workspaceFenceGuard = (command: string, fence: { writable: string; 
   return { ok: true };
 };
 
+// ── D23：破坏性命令闸（rm 递归删 → owner 确认制）──
+
+/** 破坏性命令结构化拒绝码（owner 确认后放行——审批卡是唯一放行通道）。 */
+export const DESTRUCTIVE_COMMAND_REQUIRES_CONFIRMATION = "destructive_command_requires_confirmation";
+
+/** 破坏性命令识别（纯函数——vitest 直测）：命令串含 rm 递归删（组合旗标含 r/R 或
+ *  --recursive）即命中——`rm -rf`／清空工作区／删 run 目录三形态俱在此闭集内；
+ *  非递归 rm（普通单文件删）不误伤。引号/通配不解析（应用层 best-effort——与既有
+ *  bash 守卫同语义如实声明非 OS 边界）。paths＝rm 操作数（非旗标记号，保序去重）。 */
+export const destructiveCommandScan = (command: string): { destructive: boolean; paths: string[] } => {
+  const tokens = command.split(/\s+/).filter((token) => token !== "");
+  const rmIdx = tokens.findIndex((token) => token === "rm" || token.endsWith("/rm"));
+  if (rmIdx < 0) return { destructive: false, paths: [] };
+  let recursive = false;
+  const paths: string[] = [];
+  for (const token of tokens.slice(rmIdx + 1)) {
+    if (token === "--") continue;
+    if (token.startsWith("--")) {
+      if (token === "--recursive") recursive = true;
+      continue;
+    }
+    if (token.startsWith("-") && token.length > 1) {
+      if (/[^-]*[rR]/.test(token)) recursive = true; // -r/-R 及组合旗标（-rf/-fr/-Rf）
+      continue;
+    }
+    paths.push(token);
+  }
+  return { destructive: recursive, paths: [...new Set(paths)] };
+};
+
+/** D23 破坏性命令闸（纯函数）：命中递归删 → 结构化确认要求＋受影响路径（放行本身
+ *  不在此发生——调用方持 owner 审批卡判定后决定执行或回本拒绝面）。 */
+export const destructiveCommandGuard = (
+  command: string,
+): { ok: true } | { ok: false; code: string; paths: string[]; message: string } => {
+  const scan = destructiveCommandScan(command);
+  if (!scan.destructive) return { ok: true };
+  const shown = scan.paths.length > 0 ? scan.paths.join("、") : "通配/引号目标（未解析——按全量递归删除对待）";
+  return {
+    ok: false,
+    code: DESTRUCTIVE_COMMAND_REQUIRES_CONFIRMATION,
+    paths: scan.paths,
+    message:
+      `${DESTRUCTIVE_COMMAND_REQUIRES_CONFIRMATION}: 命令含递归删除（覆盖 rm -rf、清空工作区、删 run 目录形态）` +
+      `——受影响路径：${shown}。须用户在审批面板确认放行后才执行；普通单文件删除（rm file）不受本闸影响`,
+  };
+};
+
 /**
  * A7 四件 DSH 挂载（atf_read/atf_edit/atf_write/atf_bash）：toFileAgentTool 执行径
  * 零重写；atf_bash 先过命令串扫描。审批语义＝白名单守卫承担边界（无弹卡——F-H 分级
@@ -179,8 +227,13 @@ export const workspaceFenceGuard = (command: string, fence: { writable: string; 
  * （resolveSessionRunWorkspace，并发会话各回各 run）＞ ATF_BASH_RUN_WORKSPACE env
  * （过渡态回退——批㊶-S1 注入链保留；进程级 last-write-wins 并发互踩局限就此消除）。
  * deps.runsRoot 缺席（裸装配/旧测试）＝纯 env 链（行为同批㊶-S1）。
+ *
+ * D23：atf_bash 破坏性命令确认闸——rm 递归删（rm -rf／清空工作区／删 run 目录形态）
+ * 命中即须 owner 审批卡放行（allowed-once 才执行；rejected/cancelled 结构化回
+ * destructive_command_requires_confirmation＋受影响路径）；审批服务缺失 fail-closed
+ * 拒绝。deps.approvalCtx 缺席（裸装配/旧测试）＝同 unavailable 拒绝面（不静默放行）。
  */
-export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: string }): unknown[] =>
+export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: string; approvalCtx?: { get(service: string): unknown } }): unknown[] =>
   FILE_TOOL_DEFINITIONS.map((definition) => {
     const agentTool = toFileAgentTool(definition, host);
     return defineTool({
@@ -217,6 +270,35 @@ export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: stri
           const fence = workspaceFenceGuard(String(args["command"] ?? ""), fenceRoots);
           if (!fence.ok) {
             return asToolValue({ ok: false, error: fence.code, tool: definition.name, message: fence.message });
+          }
+          // D23：破坏性命令确认闸（先过白名单/围栏确定性拒绝——坏命令不消耗放行；
+          // 命中递归删 → owner 审批卡 allowed-once 才执行，缺失/未放行 fail-closed 回结构化拒绝）
+          const destructive = destructiveCommandGuard(String(args["command"] ?? ""));
+          if (!destructive.ok) {
+            const targets = destructive.paths.length > 0 ? destructive.paths.join("、") : "通配/引号目标（未解析）";
+            const verdict = deps?.approvalCtx === undefined
+              ? ({ ok: false as const, outcome: "unavailable" })
+              : await requestApproval(deps.approvalCtx, exec, "atf_bash",
+                  buildApprovalReason({
+                    action: "执行递归删除命令",
+                    target: `（${String(destructive.paths.length)} 个目标）`,
+                    effect: `不可逆删除：${targets}`,
+                    reversible: "不可逆——删除后无自动恢复",
+                    cost: "无算力代价；数据面不可恢复",
+                  }) + "\n仅 owner 可点；执行方不得代点");
+            if (!verdict.ok) {
+              const why = verdict.outcome === "unavailable"
+                ? "（本环境未挂审批服务——fail-closed 拒绝，不静默放行）"
+                : "（owner 未放行——不要绕行重试）";
+              return asToolValue({
+                ok: false,
+                error: DESTRUCTIVE_COMMAND_REQUIRES_CONFIRMATION,
+                tool: definition.name,
+                outcome: verdict.outcome,
+                paths: destructive.paths,
+                message: `${destructive.message}${why}`,
+              });
+            }
           }
         }
         const result = await agentTool.execute(`dsh-${exec.callId ?? "call"}`, args);

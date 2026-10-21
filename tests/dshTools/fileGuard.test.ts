@@ -2,7 +2,7 @@
  * 批㊶-H/I 测试锚——文件工具路径守卫（白名单派生＝配置声明面镜像＋pre-execute 守卫
  * ＋A7 DSH 挂载＋命令串扫描）＋产品资产零具体目录静态守护（增补裁定两条）。
  */
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, existsSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +13,8 @@ import {
   absolutePathTokensFromCommand,
   bashCommandGuard,
   buildFileGuardTools,
+  DESTRUCTIVE_COMMAND_REQUIRES_CONFIRMATION,
+  destructiveCommandScan,
   FILE_PATH_OUTSIDE_ALLOWLIST,
   pathsFromPreExecuteArgs,
   pathOutsideRoots,
@@ -319,5 +321,91 @@ describe("A4——白名单根热加载（注册表感知：UI 建工作区免�
     } finally {
       handle.close();
     }
+  });
+});
+
+describe("D23——破坏性命令确认闸（rm 递归删 → owner 审批卡放行）", () => {
+  const approvalCtxOf = (outcome: string, captured?: { reason?: string }): { get: (service: string) => unknown } => ({
+    get: (service: string) =>
+      service === "approval"
+        ? { request: async (req: { reason: string }) => { if (captured !== undefined) captured.reason = req.reason; return outcome; } }
+        : undefined,
+  });
+
+  it("destructiveCommandScan 纯函数：rm 递归删各形态命中（-rf/-fr/-R/--recursive/绝对 rm）；普通 rm 与 rm -f 不误伤", () => {
+    expect(destructiveCommandScan("rm -rf /data/ws/runs/r1")).toEqual({ destructive: true, paths: ["/data/ws/runs/r1"] });
+    expect(destructiveCommandScan("rm -fr a b")).toEqual({ destructive: true, paths: ["a", "b"] });
+    expect(destructiveCommandScan("rm -R x")).toEqual({ destructive: true, paths: ["x"] });
+    expect(destructiveCommandScan("rm --recursive -f /x/y")).toEqual({ destructive: true, paths: ["/x/y"] });
+    expect(destructiveCommandScan("/bin/rm -rf x")).toEqual({ destructive: true, paths: ["x"] });
+    expect(destructiveCommandScan("rm -rf -- a b").paths).toEqual(["a", "b"]);
+    expect(destructiveCommandScan("rm file.txt").destructive).toBe(false);
+    expect(destructiveCommandScan("rm -f file.txt").destructive).toBe(false);
+    expect(destructiveCommandScan("ls -rf").destructive).toBe(false);
+  });
+
+  it("rm -rf 拒：结构化 destructive_command_requires_confirmation＋影响路径；目标零执行（审批 ctx 缺席同拒）", async () => {
+    const root = tempRoot();
+    const runsRoot = join(root, "runs");
+    const target = join(runsRoot, "r1");
+    mkdirSync(target, { recursive: true });
+    writeFileSync(join(target, "ckpt.bin"), "x");
+    const tools = buildFileGuardTools({ roots: [root], env: {} }, { runsRoot }) as Array<{ name: string; execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const bash = tools.find((tool) => tool.name === "atf_bash")!;
+    const refused = await bash.execute({ command: `rm -rf ${target}` }, { callId: "t", agent: undefined });
+    expect(refused["ok"]).toBe(false);
+    expect(refused["error"]).toBe(DESTRUCTIVE_COMMAND_REQUIRES_CONFIRMATION);
+    expect(refused["outcome"]).toBe("unavailable");
+    expect(refused["paths"]).toEqual([target]);
+    expect(String(refused["message"])).toContain(DESTRUCTIVE_COMMAND_REQUIRES_CONFIRMATION);
+    // 零执行：目标仍在盘
+    expect(existsSync(join(target, "ckpt.bin"))).toBe(true);
+  });
+
+  it("owner 确认放行：审批卡 allowed-once → 命令真实执行（目标删除；卡面含影响路径与权属行）", async () => {
+    const root = tempRoot();
+    const runsRoot = join(root, "runs");
+    const target = join(runsRoot, "r1");
+    mkdirSync(target, { recursive: true });
+    writeFileSync(join(target, "ckpt.bin"), "x");
+    const captured: { reason?: string } = {};
+    const tools = buildFileGuardTools({ roots: [root], env: {} }, { runsRoot, approvalCtx: approvalCtxOf("allowed-once", captured) }) as Array<{ name: string; execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const bash = tools.find((tool) => tool.name === "atf_bash")!;
+    const released = await bash.execute({ command: `rm -rf ${target}` }, { callId: "t", agent: undefined });
+    expect(released["ok"]).toBe(true);
+    expect(existsSync(target)).toBe(false);
+    expect(String(captured.reason)).toContain("递归删除");
+    expect(String(captured.reason)).toContain(target);
+    expect(String(captured.reason)).toContain("仅 owner 可点；执行方不得代点");
+  });
+
+  it("owner 拒绝：rejected → 结构化拒绝（outcome=rejected＋未放行文案）；目标零执行", async () => {
+    const root = tempRoot();
+    const runsRoot = join(root, "runs");
+    const target = join(runsRoot, "r2");
+    mkdirSync(target, { recursive: true });
+    const tools = buildFileGuardTools({ roots: [root], env: {} }, { runsRoot, approvalCtx: approvalCtxOf("rejected") }) as Array<{ name: string; execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const bash = tools.find((tool) => tool.name === "atf_bash")!;
+    const refused = await bash.execute({ command: `rm -rf ${target}` }, { callId: "t", agent: undefined });
+    expect(refused["error"]).toBe(DESTRUCTIVE_COMMAND_REQUIRES_CONFIRMATION);
+    expect(refused["outcome"]).toBe("rejected");
+    expect(String(refused["message"])).toContain("owner 未放行");
+    expect(existsSync(target)).toBe(true);
+  });
+
+  it("普通 rm file 不误伤：非递归删除直通执行（审批 ctx 在场也不弹卡）", async () => {
+    const root = tempRoot();
+    const runsRoot = join(root, "runs");
+    mkdirSync(runsRoot, { recursive: true });
+    const file = join(runsRoot, "scratch.txt");
+    writeFileSync(file, "临时文件");
+    const tools = buildFileGuardTools({ roots: [root], env: {} }, {
+      runsRoot,
+      approvalCtx: { get: () => { throw new Error("普通 rm 不应弹审批卡"); } },
+    }) as Array<{ name: string; execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const bash = tools.find((tool) => tool.name === "atf_bash")!;
+    const removed = await bash.execute({ command: `rm ${file}` }, { callId: "t", agent: undefined });
+    expect(removed["ok"]).toBe(true);
+    expect(existsSync(file)).toBe(false);
   });
 });
