@@ -790,6 +790,8 @@ export const buildJointTrainTool = (ctx: { get(service: string): unknown }, cfg:
           ctx: innerCtx,
           ...(cfg.models !== undefined ? { models: cfg.models } : {}),
           ...(cfg.bindRun !== undefined ? { bindRun: cfg.bindRun } : {}),
+          // D49：canonical 解析种子透传（registryWorkspaces 同源 path——联合训练腿同 canonical 优先）
+          canonicalRoots: registryWorkspaces.map((ws) => ws.path),
         };
         const innerTraining = buildRunTrainingTool(innerCtx, trainCfg) as {
           execute: (args: Record<string, unknown>, exec: unknown) => Promise<Record<string, unknown>>;

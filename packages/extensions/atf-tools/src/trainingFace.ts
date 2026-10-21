@@ -33,6 +33,7 @@ import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.j
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
 import { appendBinding, readNumTrainEpochs, writeProgress } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
+import { listRegistryRecords, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { bindSessionRun, readSessionBinding, resolveActiveRun, resolveBindingsHome } from "../../../../src/core/workspace/sessionBindings.js";
 import { buildRunCandidates } from "../../../../src/core/workspace/runDisplay.js";
 import { appendLedgerAuditComment, ledgerEnvPrefixForShell } from "../../../../src/core/workspace/approvalLedger.js";
@@ -168,13 +169,24 @@ export type ToolRunResolution =
   | { ok: true; runId: string; runDir: string; workspace: string | null }
   | { ok: false; payload: Record<string, unknown> };
 
+/** D49：注册工作区根清单（canonical 解析种子——listRegistryRecords 派生，exists 记录）。
+ *  cfg.canonicalRoots 测试注入优先（jointTrainFace registryWorkspaces 同款纪律）。 */
+export const canonicalRunRootsOf = (cfg?: { canonicalRoots?: readonly string[] }, env: NodeJS.ProcessEnv = process.env): readonly string[] =>
+  cfg?.canonicalRoots ??
+  listRegistryRecords(resolveDshHome(env))
+    .filter((record) => record.exists)
+    .map((record) => record.path);
+
 /** 工具 run_id 解析单源（atf_evaluate／atf_analyze_badcases／atf_publish_model 共用）：
  *  显式传入（须存在——不存在 run_not_found，不猜）＞ 会话绑定 resolveActiveRun（stale＝不改账本）；
- *  无绑定/会话身份不可得＝run_binding_required＋候选。 */
-export const resolveToolRun = (runsRoot: string, exec: unknown, explicitRunId?: string): ToolRunResolution => {
+ *  无绑定/会话身份不可得＝run_binding_required＋候选。
+ *  D49：显式 run_id 的目录解析 canonical 优先（注册工作区 run.json 合法即 canonical）——
+ *  training/evaluate 写面全经 runDir 拼接，解析档 canonical＝写面 canonical 落点
+ *  （legacy 树零新增）。 */
+export const resolveToolRun = (runsRoot: string, exec: unknown, explicitRunId?: string, canonicalRoots: readonly string[] = canonicalRunRootsOf()): ToolRunResolution => {
   if (explicitRunId !== undefined && explicitRunId.trim() !== "") {
     const runId = explicitRunId.trim();
-    const runDir = resolveRunDir(runsRoot, runId);
+    const runDir = resolveRunDir(runsRoot, runId, { canonicalRoots });
     if (!existsSync(runDir)) {
       return { ok: false, payload: { error: "run_not_found", run_id: runId, message: `实验不存在：${runId}——核对后重推，或省略 run_id 使用本会话绑定的实验` } };
     }
@@ -467,6 +479,8 @@ export interface TrainingToolsConfig {
   /** 批㊶-TRAIN-OBS-FIX2 T1：内核侧会话绑定闭包（BridgeManager.bindRun——装配点注入；
    *  缺省＝不绑（测试/无桥装配形态）。fail-open 语义在闭包内，工具主流程不感知）。 */
   bindRun?: (runId: string) => Promise<void>;
+  /** D49：canonical 解析种子（注册工作区根清单——测试注入面；缺省 listRegistryRecords 实例态）。 */
+  canonicalRoots?: readonly string[];
 }
 
 /** status 结果形状（任务卡卡面输入）。 */
@@ -540,7 +554,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
     },
     async execute(args: { action: string; train_sh: string; run_id: string; prelaunch_report?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批㊶Q增补三 段3：run 目录双形态解析（存量平铺＋新桶 runs/<工作区>/<run_id>——单源 resolveRunDir）
-      const runDir = resolveRunDir(cfg.runsRoot, args.run_id);
+      const runDir = resolveRunDir(cfg.runsRoot, args.run_id, { canonicalRoots: canonicalRunRootsOf(cfg) });
       if (args.action === "status") {
         // 批㊶-ISO E1：探测走命名域单源（前缀未设＝refused fail-closed——guidance 随 payload 回流）
         // 批㊶-P1 S1：基名作用域化——按 run_id 取名，同实例并发 run 各探各的会话
@@ -580,7 +594,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         const sessionId = sessionIdOf(exec);
         if (sessionId !== undefined) appendBinding(runDir, sessionId);
         // 批㊶-S1 段 1/2：闭环推荐层事实核对块（确定性事实；推荐语 agent 指引面承载）
-        const readiness = collectEvalReadiness(resolveRunDir(cfg.runsRoot, args.run_id));
+        const readiness = collectEvalReadiness(resolveRunDir(cfg.runsRoot, args.run_id, { canonicalRoots: canonicalRunRootsOf(cfg) }));
         return asToolValue({
           action: "status", running, run_id: args.run_id, segments, ckpts, loss_points: points,
           tmux: sessionName,
@@ -623,7 +637,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // 批㊶R前置 防线③（start 面复核——纵深防御：内核旧版 skills 残留于某实例时仍拦截）：
       // 读 iteration-config 的 base_model.path 本地复核；失败秒拒＋本机可用模型清单回流
       // （payload 纯增量＝补登不 bump；不进审批、不进 tmux、不产任何训练进程）
-      const startRunDir = resolveRunDir(cfg.runsRoot, args.run_id);
+      const startRunDir = resolveRunDir(cfg.runsRoot, args.run_id, { canonicalRoots: canonicalRunRootsOf(cfg) });
       const modelCheck = checkStartModelPath(startRunDir, process.env);
       if (!modelCheck.ok) {
         return asToolValue({
@@ -665,7 +679,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // ＞iteration-config training 段；两处皆缺＝无对账对象（存量 run 重跑兼容——账本
       // 闸门仍在 train.sh 内），跳过对账并在结果如实标注 reconcile: "skipped_no_baseline"。
       const confirmedBaseline: Record<string, string> | null = (() => {
-        const snapDir = resolveRunDir(cfg.runsRoot, args.run_id);
+        const snapDir = resolveRunDir(cfg.runsRoot, args.run_id, { canonicalRoots: canonicalRunRootsOf(cfg) });
         const snapPath = join(snapDir, "webui", "config-snapshot.json");
         try {
           if (existsSync(snapPath)) {
@@ -981,8 +995,8 @@ interface EvalStatusValue {
  *  eval_round＝最新一个 `orch/eval/metrics_summary.json` 在场的轮（service/orchestration/
  *  files/summary 全取完成轮——部分轮天然不算 completed，不做 dry-run 标记）。
  *  两值不同 → 返回体附 latest_round_incomplete:true。不删除任何轮目录。 */
-export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelDir: string }): Promise<ReturnType<typeof asToolValue>> {
-  const evalRoot = join(resolveRunDir(cfg.runsRoot, runId), "eval");
+export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelDir: string; canonicalRoots?: readonly string[] }): Promise<ReturnType<typeof asToolValue>> {
+  const evalRoot = join(resolveRunDir(cfg.runsRoot, runId, { canonicalRoots: canonicalRunRootsOf(cfg) }), "eval");
   let roundNames: string[] = [];
   try {
     roundNames = readdirSync(evalRoot, { withFileTypes: true })
@@ -1015,7 +1029,7 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
     // 有轮目录但无完成轮：eval_round=null＋note；latest_round 照实返回。
     // D15 补全：next_steps 事实面保留（readiness 扫全轮——四件套缺＝false、指引行不预告），
     // 旧消费面（E9 收口提示锚）零翻新。
-    const runDirNone = resolveRunDir(cfg.runsRoot, runId);
+    const runDirNone = resolveRunDir(cfg.runsRoot, runId, { canonicalRoots: canonicalRunRootsOf(cfg) });
     const readinessNone = collectEvalReadiness(runDirNone);
     return asToolValue({
       action: "status", run_id: runId, eval_round: null,
@@ -1060,7 +1074,7 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
     modelMatchesManifest = expected.includes(String((summary as Record<string, unknown>)["model"]));
   }
   // 批㊶-S1 段 1：四件套齐→可分析/可发布信号（确定性事实核对）
-  const runDirEval = resolveRunDir(cfg.runsRoot, runId);
+  const runDirEval = resolveRunDir(cfg.runsRoot, runId, { canonicalRoots: canonicalRunRootsOf(cfg) });
   const readiness = collectEvalReadiness(runDirEval);
   const value: EvalStatusValue = {
     action: "status", run_id: runId, eval_round: latest, running,
@@ -1222,7 +1236,7 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
     },
     async execute(args: { run_id?: string; checkpoint: string; publish_root?: string; note?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选）
-      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id);
+      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id, canonicalRunRootsOf(cfg));
       if (!runResolution.ok) return asToolValue(runResolution.payload);
       const runId = runResolution.runId;
       const runDir = runResolution.runDir;
@@ -1629,7 +1643,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     },
     async execute(args: { action: string; run_id?: string; adapter_path?: string; eval_assets_dir?: string; field_config?: string; prompt_mode?: string; service_config?: string; env_profile?: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean; concurrency?: number; concurrency_reason?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选——先于一切检查）
-      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id);
+      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id, canonicalRunRootsOf(cfg));
       if (!runResolution.ok) return asToolValue(runResolution.payload);
       const runId = runResolution.runId;
       const runDir = runResolution.runDir;
@@ -1865,7 +1879,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     },
     async execute(args: { run_id?: string; eval_assets_dir?: string; lane?: string; doc_type?: string; style_cluster_manifest?: string; coordinate_space?: string; gt_coordinate_space?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选）
-      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id);
+      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id, canonicalRunRootsOf(cfg));
       if (!runResolution.ok) return asToolValue(runResolution.payload);
       const runId = runResolution.runId;
       const runDir = runResolution.runDir;

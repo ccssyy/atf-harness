@@ -77,12 +77,19 @@ const findBucketed = (runsRoot: string, runId: string, prefer?: string | null): 
 
 /**
  * run_id → 实际 run 目录（双形态兼容单源）：
+ *   ⓪ canonical 优先（D49）：注册工作区根下 `<ws>/workspace/runs/<runId>/run.json` 合法
+ *      （在场且可解析为对象——RunLayout/v1 身份锚）→ 返回 canonical 目录；
  *   ① 平铺在场（存量，含全部既有 run）→ 平铺；
  *   ② 桶内在场（新形态，指定桶优先）→ 桶；
  *   ③ 两缺（新建）：有工作区归属且非系统级 → runs/<桶>/<run_id>；否则平铺。
  * 非法 runId 原样平铺拼接（行为兼容——不扫描、不助穿越：调用方既有校验面不变）。
+ * canonicalRoots＝注册工作区根清单（listRegistryRecords 派生——工具面调用方注入；
+ * 缺省不查 canonical＝既有行为零变化）。canonical 无 run.json（legacy run）不命中
+ * 本档——回落平铺/桶（canonical 无 run.json → legacy，D49 验收锚）。
  */
-export const resolveRunDir = (runsRoot: string, runId: string, opts?: { workspace?: string | null }): string => {
+export const resolveRunDir = (runsRoot: string, runId: string, opts?: { workspace?: string | null; canonicalRoots?: readonly string[] }): string => {
+  const canonical = canonicalRunDirOf(opts?.canonicalRoots ?? [], runId);
+  if (canonical !== null) return canonical;
   if (!isValidRunId(runId)) return join(runsRoot, runId);
   const flat = join(runsRoot, runId);
   if (existsSync(flat)) return flat;
@@ -93,6 +100,27 @@ export const resolveRunDir = (runsRoot: string, runId: string, opts?: { workspac
     return join(runsRoot, workspace, runId);
   }
   return flat;
+};
+
+/** D49：canonical run 目录解析（注册工作区根清单 → `<ws>/workspace/runs/<runId>`）。
+ *  合法判据＝run.json 在场且可解析为 JSON 对象（RunLayout/v1 身份锚——与 atf-ui
+ *  classifyRunRootEntries 的 valid_run 判据同口径；更深的 dirs 校验属内核面不复制）。
+ *  任一根命中即返回；全缺/全不合法＝null（调用方回落平铺/桶）。只读探测零写盘。 */
+export const canonicalRunDirOf = (canonicalRoots: readonly string[], runId: string): string | null => {
+  if (!isValidRunId(runId)) return null;
+  for (const root of canonicalRoots) {
+    if (typeof root !== "string" || root === "") continue;
+    const dir = join(root, "workspace", "runs", runId);
+    const manifest = join(dir, "run.json");
+    try {
+      if (!existsSync(manifest)) continue;
+      const parsed: unknown = JSON.parse(readFileSync(manifest, "utf8"));
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) return dir;
+    } catch {
+      // 坏 run.json＝该根不合法，下一根
+    }
+  }
+  return null;
 };
 
 /** 平铺层 run 目录名清单（一级，含非 run 目录——looksLikeRun 过滤归调用方）。 */

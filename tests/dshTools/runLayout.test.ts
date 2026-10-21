@@ -249,3 +249,70 @@ describe("批㊶Q增补三 段1②——atf-tools apply 启动面（fail-fast �
     }
   });
 });
+
+// ─────────────────────────────────────────────── D49：run 解析 canonical 优先
+
+describe("D49——resolveRunDir canonical 优先（注册工作区 run.json 合法 → canonical；无 run.json → legacy）", () => {
+  it("两树同 run → canonical（run.json 在场合法即命中，先于平铺）", () => {
+    const root = tempRoot();
+    const runsRoot = join(root, "runs");
+    const ws = join(root, "ws-a");
+    mkdirSync(join(runsRoot, "r1"), { recursive: true }); // 平铺（legacy 镜像）
+    const canonical = join(ws, "workspace", "runs", "r1");
+    mkdirSync(canonical, { recursive: true });
+    writeFileSync(join(canonical, "run.json"), JSON.stringify({ layout_version: "RunLayout/v1" }), "utf8");
+    expect(resolveRunDir(runsRoot, "r1", { canonicalRoots: [ws] })).toBe(canonical);
+  });
+  it("canonical 无 run.json → legacy（回落平铺在场面）", () => {
+    const root = tempRoot();
+    const runsRoot = join(root, "runs");
+    const ws = join(root, "ws-a");
+    const flat = join(runsRoot, "r1");
+    mkdirSync(flat, { recursive: true });
+    mkdirSync(join(ws, "workspace", "runs", "r1"), { recursive: true }); // 目录在但无 run.json
+    expect(resolveRunDir(runsRoot, "r1", { canonicalRoots: [ws] })).toBe(flat);
+  });
+  it("canonical run.json 坏 JSON → 不命中（fail-closed 回落平铺）", () => {
+    const root = tempRoot();
+    const runsRoot = join(root, "runs");
+    const ws = join(root, "ws-a");
+    const flat = join(runsRoot, "r1");
+    mkdirSync(flat, { recursive: true });
+    const canonical = join(ws, "workspace", "runs", "r1");
+    mkdirSync(canonical, { recursive: true });
+    writeFileSync(join(canonical, "run.json"), "{not json", "utf8");
+    expect(resolveRunDir(runsRoot, "r1", { canonicalRoots: [ws] })).toBe(flat);
+  });
+  it("多注册根逐根查（第一根缺、第二根命中）；canonicalRoots 缺省＝既有行为零变化", () => {
+    const root = tempRoot();
+    const runsRoot = join(root, "runs");
+    const wsA = join(root, "ws-a");
+    const wsB = join(root, "ws-b");
+    const flat = join(runsRoot, "r1");
+    mkdirSync(flat, { recursive: true });
+    const canonical = join(wsB, "workspace", "runs", "r1");
+    mkdirSync(canonical, { recursive: true });
+    writeFileSync(join(canonical, "run.json"), "{}", "utf8");
+    expect(resolveRunDir(runsRoot, "r1", { canonicalRoots: [wsA, wsB] })).toBe(canonical);
+    expect(resolveRunDir(runsRoot, "r1")).toBe(flat); // 无种子＝不查 canonical
+  });
+  it("training/evaluate 写面单源：resolveToolRun 显式 run_id → canonical 目录（join 写面随之落 canonical——legacy 零新增）", async () => {
+    const root = tempRoot();
+    const runsRoot = join(root, "runs");
+    const ws = join(root, "ws-a");
+    const flat = join(runsRoot, "r1");
+    mkdirSync(flat, { recursive: true });
+    const canonical = join(ws, "workspace", "runs", "r1");
+    mkdirSync(canonical, { recursive: true });
+    writeFileSync(join(canonical, "run.json"), "{}", "utf8");
+    const { resolveToolRun } = await import("../../packages/extensions/atf-tools/src/trainingFace.js");
+    const resolution = resolveToolRun(runsRoot, {}, "r1", [ws]);
+    expect(resolution.ok).toBe(true);
+    if (resolution.ok) {
+      expect(resolution.runDir).toBe(canonical);
+      // 写面拼接（training/eval 段落点）随 runDir 单源——canonical 在场即全落 canonical
+      expect(join(resolution.runDir, "training")).toBe(join(canonical, "training"));
+      expect(existsSync(join(flat, "training"))).toBe(false); // legacy 树零新增
+    }
+  });
+});
