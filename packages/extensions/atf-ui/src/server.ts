@@ -924,6 +924,117 @@ export { RUN_MARKER_RELS };
 export const looksLikeRun = (dir: string): boolean =>
   RUN_MARKER_RELS.some((rel) => existsSync(join(dir, rel)));
 
+/** H2.1 rev2（D37）——桶容器判定：目录含任一 looksLikeRun 的直接子目录＝桶
+ *  （runs/<工作区桶>/prep 污染形态：容器根被测试侧 prep/variants 命中标记，但其下
+ *  是真 run 子目录——桶优先，容器不得当平铺 run 收录）。异常 fail-closed 返回 false
+ *  （不可读＝不判桶，调用方既有 looksLikeRun 通道自决）。 */
+export const hasRunChildDirs = (dir: string): boolean => {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).some(
+      (e) => e.isDirectory() && !e.name.startsWith(".") && looksLikeRun(join(dir, e.name)),
+    );
+  } catch {
+    return false;
+  }
+};
+
+// ── H2.1 rev2 预检——runs 根一级条目四类身份分类（RunLayout/v1 枚举规则 2.3）────
+// 判定序（不按目录名特判——prep 只是 RUN_MARKER_RELS 的一个实例，禁 `if name==="prep"`）：
+//   ①有 run.json 且校验通过 → valid_run；②无（有效）run.json 但含有效/legacy run 子目录
+//   → bucket；③无 run.json、无 run 子目录、有 legacy 标记（RUN_MARKER_RELS）→ legacy_run
+//   （只读兼容）；④其余 → unregistered_entry（告警并隔离，不进 run 列表）。
+// 校验＝最小实现：run.json 可解析为对象即过（workspace_id/run_id 等身份字段缺席不拒——
+// 内核 RunLayout/v1 尚未发版，本面为休眠面，不发明第二套 schema）。
+
+/** runs 根一级条目四类身份。 */
+export type RunRootEntryKind = "valid_run" | "bucket" | "legacy_run" | "unregistered_entry";
+
+export interface RunRootEntryClassification {
+  name: string;
+  dir: string;
+  kind: RunRootEntryKind;
+  /** valid run 且存在 run.json.dirs 清单外顶层目录 → true（隔离，不进列表）。 */
+  artifactOutsideLayout: boolean;
+  /** 隔离/异常原因（隔离条目非空——随告警行携出；正常条目 null）。 */
+  reason: string | null;
+}
+
+/** run.json 最小校验：可解析为普通对象即返回之；缺席/损坏/非对象 → null（不抛）。 */
+const readRunManifestObject = (dir: string): Record<string, unknown> | null => {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(join(dir, "run.json"), "utf8"));
+    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+/** 子目录中存在 run 形态（legacy＝RUN_MARKER_RELS 任一；valid＝合法 run.json）→ 桶证据。
+ *  D37 hasRunChildDirs 的超集（多认 run.json 身份面——legacy 子目录判定同 sketch）。 */
+const hasRunShapedChildDirs = (dir: string): boolean => {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).some((e) => {
+      if (!e.isDirectory() || e.name.startsWith(".")) return false;
+      const child = join(dir, e.name);
+      return looksLikeRun(child) || readRunManifestObject(child) !== null;
+    });
+  } catch {
+    return false;
+  }
+};
+
+/** run.json.dirs 清单违规（顶层**目录**不在声明集——顶层文件不查：stage 摘要/契约候选等
+ *  顶层文件是现役合法形态且 dirs schema 未发版，字面全查会误隔离现役 run）。 */
+const layoutViolationsOf = (dir: string, manifest: Record<string, unknown>): string[] => {
+  const dirs = manifest["dirs"];
+  if (!Array.isArray(dirs)) return [];
+  const declared = new Set(dirs.filter((d): d is string => typeof d === "string"));
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith(".") && !declared.has(e.name))
+      .map((e) => e.name);
+  } catch {
+    return []; // 不可读＝无法证明违规，不猜
+  }
+};
+
+/** 单条目四类分类（纯函数零副作用——告警由枚举接线面输出）。 */
+export const classifyRunRootEntry = (dir: string, name: string): RunRootEntryClassification => {
+  const manifest = readRunManifestObject(dir);
+  if (manifest !== null) {
+    const violations = layoutViolationsOf(dir, manifest);
+    return {
+      name,
+      dir,
+      kind: "valid_run",
+      artifactOutsideLayout: violations.length > 0,
+      reason: violations.length > 0 ? `artifact_outside_layout: ${violations.join(",")}` : null,
+    };
+  }
+  if (hasRunShapedChildDirs(dir)) {
+    return { name, dir, kind: "bucket", artifactOutsideLayout: false, reason: null };
+  }
+  if (looksLikeRun(dir)) {
+    return { name, dir, kind: "legacy_run", artifactOutsideLayout: false, reason: null };
+  }
+  return {
+    name,
+    dir,
+    kind: "unregistered_entry",
+    artifactOutsideLayout: false,
+    reason: "no run.json / no run-shaped child dir / no legacy marker",
+  };
+};
+
+/** runs 根一级条目全量分类（OUT_DIR＝harness 自有输出面豁免——非 run 身份判据）。
+ *  异常 fail-open：根不可读＝空清单（枚举面既有语义不变）。 */
+export const classifyRunRootEntries = (runsRoot: string): RunRootEntryClassification[] =>
+  flatRunDirNames(runsRoot)
+    .filter((name) => name !== OUT_DIR)
+    .map((name) => classifyRunRootEntry(join(runsRoot, name), name));
+
 /** A2 案 a：注册工作区枚举输入（registry records 的只读投影——path/title 两键；
  *  调用方自 listRegistryRecords(resolveDshHome()) 过滤 exists===true 后映射）。
  *  D3/D4：sessionIds 可选键——平铺 run 的 binding.json 反查归属输入。 */
@@ -944,10 +1055,32 @@ const registryWorkspaceRealRoot = (ws: RegistryWorkspaceSeed): string | null => 
   }
 };
 
-/** 注册工作区实验树 run 目录清单（<root>/experiments/<x>/runs/<id>——两级有界枚举，
- *  不做全树递归；一级缺席/异常＝空清单）。 */
+/** 注册工作区 run 目录清单（H2.1 rev2 D38——三档候选根、按优先级）：
+ *  ①<root>/workspace/runs（当前内核布局＝canonical）②<root>/runs（旧布局，只读兼容）
+ *  ③<root>/experiments/<x>/runs（历史实验树）。各根直接子目录收录候选（looksLikeRun
+ *  过滤归枚举调用方）；同一目录不跨档重复收录（path 去重——symlink 别名形态由下游
+ *  claim 的 realpath 键兜底）；一级缺席/异常＝该档空，不阻断后续档。 */
 const registryExperimentRunDirs = (wsReal: string): string[] => {
   const out: string[] = [];
+  const seen = new Set<string>();
+  const pushRoot = (root: string): void => {
+    let names: string[];
+    try {
+      names = readdirSync(root, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+        .map((e) => e.name);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      const dir = join(root, name);
+      if (seen.has(dir)) continue;
+      seen.add(dir);
+      out.push(dir);
+    }
+  };
+  pushRoot(join(wsReal, "workspace", "runs")); // ①canonical
+  pushRoot(join(wsReal, "runs")); // ②旧布局
   let experiments: string[];
   try {
     experiments = readdirSync(join(wsReal, "experiments"), { withFileTypes: true })
@@ -956,25 +1089,21 @@ const registryExperimentRunDirs = (wsReal: string): string[] => {
   } catch {
     return out;
   }
-  for (const experiment of experiments) {
-    let runNames: string[];
-    try {
-      runNames = readdirSync(join(wsReal, "experiments", experiment, "runs"), { withFileTypes: true })
-        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
-        .map((e) => e.name);
-    } catch {
-      continue;
-    }
-    for (const runId of runNames) out.push(join(wsReal, "experiments", experiment, "runs", runId));
-  }
+  for (const experiment of experiments) pushRoot(join(wsReal, "experiments", experiment, "runs")); // ③历史实验树
   return out;
 };
 
-/** A2 案 a：run 条目枚举单源（runsRoot 平铺＋分桶 ∪ 注册工作区实验树）。
- *  只读：零写入零建目录；目录缺失/权限失败静默跳过（fail-open）。去重按 realpath——
- *  同一 run 与 runsRoot 分桶重叠时只出现一次且分桶来源优先（bucket 标注不改写）。
- *  平铺 run 的注册表前缀归属：registry 记录 path 为 run 目录祖先即标该记录 title
- *  （workspace_source=registry；分桶优先——分桶条目不受前缀改写）。 */
+/** A2 案 a：run 条目枚举单源（runsRoot 平铺＋分桶 ∪ 注册工作区 run 根）。
+ *  H2.1 rev2（D38）枚举序翻转——registry 三档候选根（<ws>/workspace/runs canonical ＞
+ *  <ws>/runs 旧布局 ＞ <ws>/experiments/<x>/runs 历史实验树）**先登记**，flat/bucket 后到。
+ *  去重双键：realpath（同 inode 只出一次）＋claimKey `${workspace}\u0000${runId}`
+ *  （(workspace,runId) 身份去重——registry/canonical 先 claim，flat/bucket 同键后到跳过；
+ *  两棵树同 runId 只留 canonical，不合并不复制）。runs 根一级条目先过四类预检分类
+ *  （classifyRunRootEntries——valid/legacy 照常进枚举面；bucket 只作容器不进 flat，
+ *  其子 run 由分桶通道收录＝D37 桶优先；unregistered_entry 与 artifact_outside_layout
+ *  隔离不进列表，结构化告警一行）。只读：零写入零建目录；目录缺失/权限失败静默跳过
+ *  （fail-open）。平铺 run 的注册表前缀归属沿用：registry 记录 path 为 run 目录祖先
+ *  即标该记录 title（workspace_source=registry）；分桶条目标签＝桶目录名，不受前缀改写。 */
 export interface RunDirEntry {
   runId: string;
   dir: string;
@@ -985,20 +1114,46 @@ export interface RunDirEntry {
 export const enumerateRunEntries = (runsRoot: string, registryWorkspaces?: ReadonlyArray<RegistryWorkspaceSeed>): RunDirEntry[] => {
   const entries: RunDirEntry[] = [];
   const seenReal = new Set<string>();
-  const claim = (dir: string): boolean => {
+  const claimedKeys = new Set<string>();
+  // 双键占位（rev2）：realpath（同 inode）与 claimKey（(workspace,runId) 身份）任一已占＝跳过；
+  // 两键同过才占位（部分占位不落——避免 symlink 镜像与同名 run 交错时半占死锁）。
+  const claim = (dir: string, key: string): boolean => {
+    let real: string;
     try {
-      const real = realpathSync(dir);
-      if (seenReal.has(real)) return false;
-      seenReal.add(real);
-      return true;
+      real = realpathSync(dir);
     } catch {
       return false;
     }
+    if (seenReal.has(real) || claimedKeys.has(key)) return false;
+    seenReal.add(real);
+    claimedKeys.add(key);
+    return true;
   };
-  const flatRuns = new Set(flatRunDirNames(runsRoot).filter((name) => name !== OUT_DIR && looksLikeRun(join(runsRoot, name))));
+  // ①registry 三档候选根（canonical 优先——先登记先占键）
+  for (const ws of registryWorkspaces ?? []) {
+    const wsReal = registryWorkspaceRealRoot(ws);
+    if (wsReal === null) continue;
+    for (const dir of registryExperimentRunDirs(wsReal)) {
+      if (!looksLikeRun(dir)) continue;
+      const runId = basename(dir);
+      if (!claim(dir, `${ws.title}\u0000${runId}`)) continue;
+      entries.push({ runId, dir, workspace: ws.title, workspaceSource: "registry" });
+    }
+  }
+  // ②runs 根平铺层——四类预检分类接线
+  const classifications = classifyRunRootEntries(runsRoot);
+  for (const c of classifications) {
+    if (c.kind === "unregistered_entry" || c.artifactOutsideLayout) {
+      console.warn(`[atf-ui] runs-root entry quarantined ${JSON.stringify({ path: c.dir, kind: c.kind, reason: c.reason })}`);
+    }
+  }
+  const flatRuns = new Set(
+    classifications
+      .filter((c) => (c.kind === "valid_run" || c.kind === "legacy_run") && !c.artifactOutsideLayout)
+      .map((c) => c.name),
+  );
   for (const name of flatRuns) {
     const dir = join(runsRoot, name);
-    if (!claim(dir)) continue;
     // 注册表前缀归属（平铺存量——records[].path 为 run 目录祖先即归属，标注＝记录 title）
     const wsHit = (registryWorkspaces ?? []).find((ws) => {
       const wsReal = registryWorkspaceRealRoot(ws);
@@ -1027,22 +1182,15 @@ export const enumerateRunEntries = (runsRoot: string, registryWorkspaces?: Reado
         }
       }
     }
+    if (!claim(dir, `${workspace ?? ""}\u0000${name}`)) continue;
     entries.push({ runId: name, dir, workspace, workspaceSource });
   }
+  // ③分桶层（D37 桶优先：容器含 run 子目录不再进 flatRuns——其子 run 由本通道正常收录）
   for (const entry of bucketedRunEntries(runsRoot)) {
     if (flatRuns.has(entry.workspace) || entry.workspace === OUT_DIR || entry.runId === OUT_DIR) continue;
     if (!looksLikeRun(entry.dir)) continue;
-    if (!claim(entry.dir)) continue;
+    if (!claim(entry.dir, `${entry.workspace}\u0000${entry.runId}`)) continue;
     entries.push({ runId: entry.runId, dir: entry.dir, workspace: entry.workspace, workspaceSource: "bucket" });
-  }
-  for (const ws of registryWorkspaces ?? []) {
-    const wsReal = registryWorkspaceRealRoot(ws);
-    if (wsReal === null) continue;
-    for (const dir of registryExperimentRunDirs(wsReal)) {
-      if (!looksLikeRun(dir)) continue;
-      if (!claim(dir)) continue;
-      entries.push({ runId: basename(dir), dir, workspace: ws.title, workspaceSource: "registry" });
-    }
   }
   return entries;
 };
@@ -1050,15 +1198,19 @@ export const enumerateRunEntries = (runsRoot: string, registryWorkspaces?: Reado
 /** 同步器周期内 run_id 清单（目录枚举一次——取证映射的目标集；特征过滤后。
  *  批㊶Q增补三 段3：平铺＋分桶双形态并集，run_id 恒为裸名；平铺 run 自身子目录
  *  不作桶降层（launch/eval 等内部结构不产幻影 run——真机 24 条污染实证后修正）。
- *  A2 案 a：注册实验树 run id 一并进取证映射键集（tmux cmdline 取证按 runId 命中）。 */
+ *  A2 案 a：注册工作区 run 根（rev2 三档候选根）run id 一并进取证映射键集（tmux cmdline 取证按 runId 命中）。 */
 const resolvedRunIds = (runsRoot: string, registryWorkspaces?: ReadonlyArray<RegistryWorkspaceSeed>): string[] =>
   enumerateRunEntries(runsRoot, registryWorkspaces).map((entry) => entry.runId);
 
 /** 批㊶Q增补三 段3：runsRoot 双层扫描（平铺存量原地保留＋分桶新形态并存——向后兼容）。
  *  桶降层只对非 run 的一级目录进行（平铺 run 的 launch/eval/l1 等子目录是 run 内部
  *  结构不是工作区桶——否则幻影 run 污染全量视图）。
- *  A2 案 a：扫描面＝runsRoot（现形态不变）∪ 注册工作区实验树（records[].path＋
- *  /experiments/<x>/runs/<id>——exists===true 记录、只读、realpath 去重分桶优先、标注＝title）。
+ *  A2 案 a：扫描面＝runsRoot（现形态不变）∪ 注册工作区 run 根（records[].path＋
+ *  三档候选根——exists===true 记录、只读、realpath＋claimKey 双键去重 canonical 优先、标注＝title）。
+ *  H2.1 rev2 注意：桶降层范围已按 D37 收窄为「含 run 子目录的容器」（桶优先）——
+ *  平铺 run 的 launch/eval/l1 等内部子目录若恰好命中 RUN_MARKER_RELS（launch/webui、
+ *  publish-ws-* 下的 eval 嵌套形态），其宿主 run 会被桶化、内部子目录作桶内条目收录；
+ *  该语义与「真机 24 条幻影污染」防回潮锚的冲突待 owner 裁决（见 registryScan 测试头注）。
  *  @param entries - 预算好的枚举（同步器单次枚举复用——runs[i] 与 entries[i] 一一对应，
  *  供调用方按序取 run 真实目录；缺省自行枚举）。 */
 /** 导出供 vitest 直测（真机 24 条幻影污染实证后的防回潮锚）。 */

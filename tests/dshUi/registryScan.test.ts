@@ -3,9 +3,13 @@
  *
  * 案 a（owner 2026-10-17 19:05 裁定）：扫描面＝runsRoot（现形态不变）∪ 注册工作区实验树
  * （records[].path＋/experiments/<x>/runs/<id>）。硬约束：仅 exists===true 记录入列；
- * 只读（零写入零建目录）；目录缺失/权限失败静默跳过；去重按 realpath（分桶来源优先，
- * workspace_source=bucket 不因注册表命中改写）；标注＝注册记录 title；additive
+ * 只读（零写入零建目录）；目录缺失/权限失败静默跳过；标注＝注册记录 title；additive
  * workspace_source 两键闭集投影（adapter 白名单同批）。
+ * H2.1 rev2（D37+D38）语义翻转：枚举序 registry 三档候选根（canonical 优先）→ flat →
+ * bucket；去重双键 realpath＋claimKey (workspace,runId)——registry/canonical 先 claim，
+ * flat/bucket 同键后到跳过（旧「分桶来源优先」由 rev2 canonical 优先取代）；runs 根
+ * 一级条目先过四类预检分类（valid/legacy/bucket 照常、unregistered_entry 与
+ * artifact_outside_layout 隔离＋结构化告警）。
  * A3：训练段两态——progress 初帧 fresh＝启动早期确定性活跃信号（training.active）；
  * 进程确定性消失（tmux 取证面在且本 run 无命中）∧ 无完成锚 → 段显式 failed；
  * 取证面缺席不猜（pending）。S3 前缀闭包语义不动（done 恒为前缀）。
@@ -13,8 +17,8 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync, existsSync, readdirSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { enumerateRunEntries, scanRuns, scanRunDir, scanRunDirAt, type ScanLiveness } from "../../packages/extensions/atf-ui/src/server.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { classifyRunRootEntries, enumerateRunEntries, hasRunChildDirs, scanRuns, scanRunDir, scanRunDirAt, type ScanLiveness } from "../../packages/extensions/atf-ui/src/server.js";
 import { buildMonitorSnapshot } from "../../packages/extensions/atf-ui/src/snapshot.js";
 import { writeProgress, appendBinding } from "../../src/core/workspace/runFacts.js";
 import { appendSegmentFact } from "../../src/core/workspace/segmentFacts.js";
@@ -40,8 +44,10 @@ const seedRun = (dir: string, rels: ReadonlyArray<string> = ["launch/launch_mani
 describe("A2 案 a——扫描面视野枚举", () => {
   it("注册实验树 run 入视野（标注＝记录 title，workspace_source=registry）；runsRoot 分桶/平铺照旧", () => {
     const root = tempRoot();
-    seedRun(join(root, "flat-run"));
-    seedRun(join(root, "ws-a", "run-bucketed"));
+    // 平铺夹具用顶层文件标记（stage-register.summary.json）——launch/launch_manifest.json
+    // 形态的 launch/ 子目录会命中裸 launch_manifest.json 标记而被 rev2 D37 判桶（见 rev2 组头注）
+    seedRun(join(root, "flat-run"), ["stage-register.summary.json"]);
+    seedRun(join(root, "ws-a", "run-bucketed"), ["stage-register.summary.json"]);
     const regws = tempRoot();
     seedRun(join(regws, "experiments", "exp1", "runs", "reg-run"));
     const registryWorkspaces = [{ path: regws, title: "注册甲" }];
@@ -71,17 +77,19 @@ describe("A2 案 a——扫描面视野枚举", () => {
     expect(scans.every((s) => s.run_id !== "no-such-ws")).toBe(true);
   });
 
-  it("重叠去重按 realpath：分桶来源优先（同一 run 两侧在场只出现一次，bucket 标注不改写）", () => {
+  it("重叠去重：symlink 镜像不作 run 根（Dirent.isDirectory 不跟随——规范 2.2-5 同向），桶侧 run 正常收录一次", () => {
     const root = tempRoot();
-    seedRun(join(root, "ws-a", "run-bucketed"));
+    // 夹具用顶层文件标记——launch/launch_manifest.json 形态会被 rev2 D37 判桶（见 rev2 组头注）
+    seedRun(join(root, "ws-a", "run-bucketed"), ["stage-register.summary.json"]);
     const regws = tempRoot();
     seedRun(join(regws, "experiments", "exp1", "runs", "reg-run"));
-    // 注册树侧符号链接指向分桶 run（realpath 同源）——桶通道先枚举先占位，registry 通道跳过
+    // 注册树侧符号链接指向分桶 run——symlink 不进候选清单（Dirent 不跟随），
+    // 镜像名不出现第二次；桶侧真身正常收录（rev2 语义下同 realpath 双通道去重
+    // 由 rev2 组「同 realpath 双通道」锚承担）
     mkdirSync(join(regws, "experiments", "exp2", "runs"), { recursive: true });
     symlinkSync(join(root, "ws-a", "run-bucketed"), join(regws, "experiments", "exp2", "runs", "mirrored-run"), "dir");
     const scans = scanRuns(root, undefined, [{ path: regws, title: "注册甲" }]);
     expect(scans.filter((s) => s.run_id === "run-bucketed")).toHaveLength(1);
-    // 镜像名＝同一 realpath（分桶已占位）——registry 通道跳过，不出现第二次也不改写标注
     expect(scans.filter((s) => s.run_id === "mirrored-run")).toHaveLength(0);
     const bucketed = scans.filter((s) => s.run_id === "run-bucketed");
     expect(bucketed[0]).toMatchObject({ workspace: "ws-a", workspace_source: "bucket" });
@@ -208,7 +216,8 @@ describe("A3——训练段两态（初帧活跃＋进程消失不悬空）", ()
 describe("A2 投影面——adapter 白名单＋摘要化", () => {
   it("buildMonitorSnapshot：workspace_source additive 投影（registry/bucket 两键闭集）", () => {
     const root = tempRoot();
-    seedRun(join(root, "ws-a", "run-bucketed"));
+    // 夹具用顶层文件标记——launch/launch_manifest.json 形态会被 rev2 D37 判桶（见 rev2 组头注）
+    seedRun(join(root, "ws-a", "run-bucketed"), ["stage-register.summary.json"]);
     const regws = tempRoot();
     seedRun(join(regws, "experiments", "exp1", "runs", "reg-run"));
     const scans = scanRuns(root, undefined, [{ path: regws, title: "注册甲" }]);
@@ -298,9 +307,10 @@ describe("D3/D4——状态面以盘上事实为准（段摘要兜底源＋works
 
   it("⑤平铺无 binding → workspace null 但渲染可见；有 binding → 注册表 sessionIds 反查归属", () => {
     const root = tempRoot();
-    seedRun(join(root, "plain-no-bind"));
+    // 夹具用顶层文件标记——launch/launch_manifest.json 形态会被 rev2 D37 判桶（见 rev2 组头注）
+    seedRun(join(root, "plain-no-bind"), ["stage-register.summary.json"]);
     const regws = tempRoot();
-    seedRun(join(root, "flat-bound"));
+    seedRun(join(root, "flat-bound"), ["stage-register.summary.json"]);
     appendBinding(join(root, "flat-bound"), "session-d3-xyz");
     const scans = scanRuns(root, undefined, [{ path: regws, title: "ws-by-session", sessionIds: ["session-d3-xyz"] }]);
     const byId = new Map(scans.map((r) => [r.run_id, r]));
@@ -343,5 +353,169 @@ describe("D3/D4——状态面以盘上事实为准（段摘要兜底源＋works
     const byId = new Map(monitor.runs.map((r) => [r.run_id, r]));
     expect(byId.get("bare-run")).toMatchObject({ state: "pending", state_reason: "no_on_disk_evidence" });
     expect(byId.get("reg-run")).toMatchObject({ state: "registered", state_reason: null });
+  });
+});
+
+/** H2.1 rev2（D37+D38）夹具——runs 根条目身份形态种子。 */
+const seedVariantPollution = (dir: string): void => {
+  // 测试侧污染形态：prep/variants/variants_report.json（RUN_MARKER_RELS 命中 "prep"）
+  mkdirSync(join(dir, "prep", "variants"), { recursive: true });
+  writeFileSync(join(dir, "prep", "variants", "variants_report.json"), "{}\n", "utf8");
+};
+
+describe("H2.1 rev2（D37+D38）——runs 根四类身份分类与注册工作区 run 根", () => {
+  it("D37 桶容器：prep 污染不使容器成 run，也不妨碍桶识别（只枚举 run-x，容器不进列表）", () => {
+    const root = tempRoot();
+    seedVariantPollution(join(root, "bucket"));
+    seedRun(join(root, "bucket", "run-x"), ["webui/segments.json"]);
+    const entries = enumerateRunEntries(root);
+    const ids = entries.map((e) => e.runId);
+    expect(ids).toContain("run-x");
+    expect(ids).not.toContain("bucket");
+    expect(ids).not.toContain("prep");
+    expect(entries.find((e) => e.runId === "run-x")).toMatchObject({
+      dir: join(root, "bucket", "run-x"),
+      workspace: "bucket",
+      workspaceSource: "bucket",
+    });
+    expect(hasRunChildDirs(join(root, "bucket"))).toBe(true);
+  });
+
+  it("unregistered_entry：无 run.json、无 run 子目录、无标记 → 隔离不进列表＋结构化告警（路径＋原因）", () => {
+    const root = tempRoot();
+    mkdirSync(join(root, "solo", "foo"), { recursive: true }); // bucket/foo 形态：无任何标记
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const entries = enumerateRunEntries(root);
+      expect(entries.map((e) => e.runId)).not.toContain("solo");
+      const lines = warnSpy.mock.calls.map((c) => c.map(String).join(" ")).filter((l) => l.includes("solo"));
+      expect(lines.length).toBeGreaterThan(0);
+      expect(lines[0]).toContain("unregistered_entry");
+      expect(lines[0]).toContain(join(root, "solo"));
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("D38 canonical 优先：注册工作区 workspace/runs 与 runsRoot 别名树同名 run 只出一条且指向 canonical", () => {
+    const root = tempRoot();
+    const regws = tempRoot();
+    // canonical：<ws>/workspace/runs/run-x（prep/iteration-config/trainer_log.jsonl）
+    mkdirSync(join(regws, "workspace", "runs", "run-x", "prep", "iteration-config"), { recursive: true });
+    writeFileSync(
+      join(regws, "workspace", "runs", "run-x", "prep", "iteration-config", "trainer_log.jsonl"),
+      `${JSON.stringify({ current_steps: 1, total_steps: 10, percentage: 10 })}\n`,
+      "utf8",
+    );
+    // 别名树：runsRoot 下同名桶 run-x（eval 标记、无 trainer_log）——两棵树不同 inode
+    mkdirSync(join(root, "alias-ws", "run-x", "eval", "1-20261021"), { recursive: true });
+    writeFileSync(join(root, "alias-ws", "run-x", "eval", "1-20261021", "metrics_summary.json"), "{}\n", "utf8");
+    const registryWorkspaces = [{ path: regws, title: "alias-ws" }]; // title 与别名桶目录名同串
+    const entries = enumerateRunEntries(root, registryWorkspaces);
+    const hits = entries.filter((e) => e.runId === "run-x");
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({
+      dir: join(regws, "workspace", "runs", "run-x"), // canonical 胜出
+      workspace: "alias-ws",
+      workspaceSource: "registry",
+    });
+    expect(scanRuns(root, undefined, registryWorkspaces).filter((s) => s.run_id === "run-x")).toHaveLength(1);
+  });
+
+  it("D38 三档候选根：旧布局 <ws>/runs 与历史实验树可枚举；同 runId 跨档 canonical 优先不重复", () => {
+    const root = tempRoot();
+    const ws1 = tempRoot();
+    seedRun(join(ws1, "runs", "run-y")); // ②旧布局
+    const ws2 = tempRoot();
+    seedRun(join(ws2, "workspace", "runs", "run-z")); // ①canonical
+    seedRun(join(ws2, "experiments", "e1", "runs", "run-z")); // ③历史实验树（同名同工作区）
+    const entries = enumerateRunEntries(root, [
+      { path: ws1, title: "旧布局工作区" },
+      { path: ws2, title: "实验树工作区" },
+    ]);
+    const y = entries.filter((e) => e.runId === "run-y");
+    expect(y).toHaveLength(1);
+    expect(y[0]).toMatchObject({ dir: join(ws1, "runs", "run-y"), workspace: "旧布局工作区", workspaceSource: "registry" });
+    const z = entries.filter((e) => e.runId === "run-z");
+    expect(z).toHaveLength(1); // 同 (workspace,runId) 跨档去重
+    expect(z[0]?.dir).toBe(join(ws2, "workspace", "runs", "run-z")); // canonical 档先 claim 胜出
+  });
+
+  it("legacy run（qc-02 形态：RUN_MARKER_RELS 标记、无 run.json）可见", () => {
+    const root = tempRoot();
+    const dir = join(root, "run-qc02-legacy");
+    mkdirSync(join(dir, "eval", "1-20261021"), { recursive: true });
+    writeFileSync(join(dir, "eval", "1-20261021", "metrics_summary.json"), "{}\n", "utf8");
+    mkdirSync(join(dir, "prep", "variants"), { recursive: true });
+    writeFileSync(join(dir, "prep", "variants", "variants_report.json"), "{}\n", "utf8");
+    const entries = enumerateRunEntries(root);
+    const hit = entries.find((e) => e.runId === "run-qc02-legacy");
+    expect(hit).toBeDefined();
+    expect(hit).toMatchObject({ dir, workspace: null, workspaceSource: "bucket" });
+  });
+
+  it("artifact_outside_layout：run.json.dirs 清单外顶层目录 → 不进列表＋告警；合规 valid run 不误伤", () => {
+    const root = tempRoot();
+    // 合规 valid run：dirs 声明与顶层目录一致 → 进列表
+    mkdirSync(join(root, "run-clean", "webui"), { recursive: true });
+    mkdirSync(join(root, "run-clean", "prep"), { recursive: true });
+    writeFileSync(
+      join(root, "run-clean", "run.json"),
+      `${JSON.stringify({ workspace_id: "w", run_id: "run-clean", layout_version: "RunLayout/v1", dirs: ["webui", "prep"] })}\n`,
+      "utf8",
+    );
+    // 违规 valid run：顶层 rogue/ 不在 dirs 声明 → 隔离＋告警
+    mkdirSync(join(root, "run-dirty", "webui"), { recursive: true });
+    mkdirSync(join(root, "run-dirty", "rogue"), { recursive: true });
+    writeFileSync(
+      join(root, "run-dirty", "run.json"),
+      `${JSON.stringify({ workspace_id: "w", run_id: "run-dirty", layout_version: "RunLayout/v1", dirs: ["webui"] })}\n`,
+      "utf8",
+    );
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const entries = enumerateRunEntries(root);
+      const ids = entries.map((e) => e.runId);
+      expect(ids).toContain("run-clean");
+      expect(ids).not.toContain("run-dirty");
+      const lines = warnSpy.mock.calls.map((c) => c.map(String).join(" ")).filter((l) => l.includes("run-dirty"));
+      expect(lines.some((l) => l.includes("artifact_outside_layout"))).toBe(true);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("同 realpath 双通道去重：注册工作区旧布局档与 runsRoot 平铺同一目录只出一次（registry 先登记）", () => {
+    const outer = tempRoot();
+    const root = join(outer, "runs");
+    mkdirSync(root, { recursive: true });
+    seedRun(join(root, "flat-run"), ["stage-register.summary.json"]); // 同一目录：registry 档② 与 flat 通道同 realpath
+    const entries = enumerateRunEntries(root, [{ path: outer, title: "注册甲" }]);
+    const hits = entries.filter((e) => e.runId === "flat-run");
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ dir: join(root, "flat-run"), workspace: "注册甲", workspaceSource: "registry" });
+  });
+
+  it("纯函数面：classifyRunRootEntries 四类判定＋hasRunChildDirs（不按目录名特判——prep 只是标记实例）", () => {    const root = tempRoot();
+    seedVariantPollution(join(root, "bkt")); // 容器仅 prep 污染
+    seedRun(join(root, "bkt", "run-x"), ["webui/segments.json"]); // ＋真 run 子目录
+    mkdirSync(join(root, "lone", "foo"), { recursive: true }); // 无任何标记
+    // 顶层文件标记（launch/launch_manifest.json 形态的 launch/ 子目录会命中裸标记被判桶）
+    seedRun(join(root, "legacy-run"), ["stage-register.summary.json"]); // 旧 run：标记、无 run.json
+    mkdirSync(join(root, "vr", "webui"), { recursive: true });
+    writeFileSync(
+      join(root, "vr", "run.json"),
+      `${JSON.stringify({ workspace_id: "w", run_id: "vr", layout_version: "RunLayout/v1", dirs: ["webui"] })}\n`,
+      "utf8",
+    );
+    const byName = new Map(classifyRunRootEntries(root).map((c) => [c.name, c]));
+    expect(byName.get("bkt")).toMatchObject({ kind: "bucket", artifactOutsideLayout: false, reason: null });
+    expect(byName.get("lone")?.kind).toBe("unregistered_entry");
+    expect(byName.get("lone")?.reason).toContain("no run.json");
+    expect(byName.get("legacy-run")).toMatchObject({ kind: "legacy_run", artifactOutsideLayout: false, reason: null });
+    expect(byName.get("vr")).toMatchObject({ kind: "valid_run", artifactOutsideLayout: false, reason: null });
+    expect(hasRunChildDirs(join(root, "bkt"))).toBe(true);
+    expect(hasRunChildDirs(join(root, "legacy-run"))).toBe(false);
+    expect(hasRunChildDirs(join(root, "lone"))).toBe(false);
   });
 });
