@@ -8,8 +8,9 @@
  *
  * 挂点核实结论（段↔工具，本批实装）：register←atf_admit_data；label_qc←atf_label_qc_inspect；
  * experiment_config←atf_config_confirm；publish←atf_publish_confirm；training←atf_run_training
- * （start 放行成功即记「训练完成前置」的事实轨不适用——training 段完成语义沿 loss-series
- * 在场，启动事实以 source 区分）；evaluate←atf_evaluate（编排启动即记，轮产物锚仍兜底）。
+ * （启动确认即记「训练已放行启动」事实（完成语义另由 D50 training/completion.json 承载——
+ * status ok 时本轨幂等复核登记，status failed 不登记不伪装完成））；evaluate←atf_evaluate
+ * （编排启动即记，轮产物锚仍兜底）。
  * 缺口如实登记（本批不造挂点）：split（切分发生在走查管线/别 workspace，run 内无锚无工具）
  * 与 admission（train.sh DRY_RUN 过＝生成期自检，无独立工具挂点）——两段沿锚兼容兜底。
  */

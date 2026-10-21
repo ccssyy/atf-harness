@@ -30,6 +30,9 @@ import { reconcileConfirmedWithTrainSh, formatReconcileDiff } from "./trainShRec
 import { editsFromFormAnswers, formAskQuestion, type FormAskService } from "./confirmFace.js";
 import { appendAskFailureDiagnostic } from "./askDiagnostics.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
+import {
+  latestCheckpointOf, readTrainingExitCode, readTrainingStartedAt, writeTrainingCompletion, writeTrainingStartedAt,
+} from "../../../../src/core/workspace/trainingCompletion.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
 import { appendBinding, readNumTrainEpochs, writeProgress } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
@@ -804,7 +807,12 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         }
       }
       try { execSync(tmuxCommand(`kill-session -t ${sessionName} 2>/dev/null`)); } catch { /* 无旧会话 */ }
-      execSync(tmuxCommand(`new-session -d -s ${sessionName} "${ledgerPrefix}bash ${args.train_sh} 2>&1 | tee -a ${logPath}"`));
+      // D50：spawn 面两件——started.at（completion.started 数据源）＋tmux 尾声真退出码捕获
+      // （tee 管道下 $?＝tee 的；PIPESTATUS[0] 才是 train.sh 的）→ training/exit.code
+      // （同步环 completion.json 的权威 exit_code 源；`\$` 经外层 sh 转义直达 tmux 内层 bash）。
+      writeTrainingStartedAt(runDir);
+      const exitCodeFile = join(runDir, "training", "exit.code").replaceAll("'", "'\\''");
+      execSync(tmuxCommand(`new-session -d -s ${sessionName} "${ledgerPrefix}bash ${args.train_sh} 2>&1 | tee -a ${logPath}; ec=\\\$\\\{PIPESTATUS[0]\\\}; printf %s \\\$ec > '${exitCodeFile}'"`));
       // 批㊶Q增补三 段2：启动探活（窗口内 tail train-stdout——终止特征/进程退出 → started:false
       // ＋exit＋stderr 摘要；SHA/ADMISSION 进料确认＋进程存活 → started:true；窗口耗尽仍存活
       // → started:true 但 note 如实标注未见进料。终结 started:true 假成功——cr_r2 三连败实锚）。
@@ -818,6 +826,15 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         },
       });
       if (probe.outcome === "dead") {
+        // D50：启动失败也落训练完成事实（status=failed——不伪装完成；exit.code 尾声件
+        // 优先（放行闸 78 等真实退出码），缺席回落探活面推断值；首写者胜/重训覆写同语义）
+        writeTrainingCompletion(runDir, {
+          status: "failed",
+          exit_code: readTrainingExitCode(runDir) ?? probe.exitCode ?? null,
+          checkpoint: latestCheckpointOf(runDir),
+          started: readTrainingStartedAt(runDir),
+          finished: new Date().toISOString(),
+        });
         return asToolValue({
           started: false,
           error: "startup_failed",

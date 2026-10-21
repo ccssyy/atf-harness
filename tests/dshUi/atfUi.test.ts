@@ -7,7 +7,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage, CLOSURE_MESSAGE } from "../../packages/extensions/atf-ui/src/snapshot.js";
 import { PANEL_HTML } from "../../packages/extensions/atf-ui/src/panel.js";
-import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveTrainActiveWindowMs, resolveViewerRequest, scanEvalRounds, scanRunDir, scanRuns, looksLikeRun, RUN_MARKER_RELS, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
+import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveTrainActiveWindowMs, resolveViewerRequest, scanEvalRounds, scanRunDir, scanRunDirAt, scanRuns, looksLikeRun, RUN_MARKER_RELS, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
 import { tmuxHasSession, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
 import { progressFresh } from "../../src/core/workspace/runFacts.js";
 import { appendSegmentFact } from "../../src/core/workspace/segmentFacts.js";
@@ -1478,5 +1478,50 @@ describe("批甲-FIX2——档位入口单一化（产品层覆写 vendor 座位
     expect(src).toContain("new MutationObserver(atfFix2Schedule).observe(document.documentElement");
     expect(src).toContain("批甲-FIX2（档位入口单一化）：vendor 座位/菜单 effort 面 JS 覆写（vendor 源码零写入）");
     expect(src).toContain("档位唯一入口＝「思考」控件；FIX 既有交付");
+  });
+});
+
+// ─────────────────────────────────────────────── D50：completion.json 完成锚消费（UI 链收口）
+
+describe("D50——scanRunDir 消费 training/completion.json（ok＝训练段完成锚／failed＝确定性失败——不再依赖 tmux 缺席启发）", () => {
+  it("completion ok（无既有完成锚）→ segments.training===true（UI 段链训练绿——真完成事实落盘即收口）", () => {
+    const root = tempRoot();
+    const runDir = join(root, "r1");
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    // 前置段齐（前缀闭包不拦训练绿）：登记/体检/配置/契约/切分/准入
+    appendSegmentFact(runDir, "register", "atf_admit_data");
+    appendSegmentFact(runDir, "label_qc", "atf_label_qc_inspect");
+    appendSegmentFact(runDir, "experiment_config", "atf_config_confirm");
+    appendSegmentFact(runDir, "publish", "atf_publish_confirm");
+    appendSegmentFact(runDir, "split", "atf_pipeline");
+    appendSegmentFact(runDir, "admission", "atf_pipeline");
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(join(runDir, "training", "completion.json"), JSON.stringify({
+      status: "ok", exit_code: 0, checkpoint: "checkpoint-6",
+      started: "2026-10-22T01:08:57.000Z", finished: "2026-10-22T01:24:00.000Z",
+    }), "utf8");
+    const run = scanRunDirAt(runDir, "r1");
+    expect(run.segments.training).toBe(true);
+  });
+  it("completion failed → segments.training==\"failed\"（确定性失败锚——progress 初帧/启动证据在场也不再走 pending/启发摇摆）", () => {
+    const root = tempRoot();
+    const runDir = join(root, "r1");
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    // 曾启动证据（progress 在场＝trainingLaunchedEvidence 闭集）＋启动段事实
+    writeFileSync(join(runDir, "webui", "progress.json"), JSON.stringify({ round: 0, total_rounds: 3, updated_at: new Date().toISOString() }), "utf8");
+    appendSegmentFact(runDir, "training", "atf_run_training");
+    writeFileSync(join(runDir, "training", "completion.json"), JSON.stringify({
+      status: "failed", exit_code: 78, checkpoint: null, started: null, finished: "2026-10-22T02:00:00.000Z",
+    }), "utf8");
+    const run = scanRunDirAt(runDir, "r1");
+    expect(run.segments.training).toBe("failed");
+  });
+  it("completion 缺席 → 既有行为零变化（training 锚沿 trainingAnchorPresent 启发，不因 D50 改判）", () => {
+    const root = tempRoot();
+    const runDir = join(root, "r1");
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    const run = scanRunDirAt(runDir, "r1");
+    expect(run.segments.training).toBe(false);
   });
 });

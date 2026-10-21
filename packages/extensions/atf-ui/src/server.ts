@@ -26,6 +26,7 @@ import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
 import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/workspace/oomFallback.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { hasSegmentFact, stageSummarySegmentFacts } from "../../../../src/core/workspace/segmentFacts.js";
+import { completionFromExitCodeFile, readTrainingCompletion, writeTrainingCompletion } from "../../../../src/core/workspace/trainingCompletion.js";
 import { buildEvalNoticeFaces, type EvalNoticeFace, type EvalProgressFace } from "../../../../src/core/workspace/evalProgressTrack.js";
 import {
   applyTrainNoticeTransitions, readTrainNoticeState, trainObservedStateOf,
@@ -601,7 +602,9 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
     publish: (has("report") && reportFiles.some((f) => f.startsWith("segment-"))) || has("contract-candidate.json"),
     split: has("split") || has("dataset/split"),
     admission: has("launch/train.sh") || has("admission.json") || has("training/train.sh"),
-    training: trainingAnchorPresent(dir),
+    // D50：completion.json（status ok）＝训练段确定性完成锚（与既有锚 OR——真完成事实
+    // 落盘后段链即收口，不再依赖 tmux 缺席启发判 failed）
+    training: trainingAnchorPresent(dir) || readTrainingCompletion(dir)?.status === "ok",
     evaluate: has("eval/metrics_summary.json") || evalRoundAnchored(dir),
   };
   // 事实轨并入证据图（M-3 契约「有记录的段直接 done」——experiment_config/publish 等段
@@ -645,9 +648,13 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
   const trainingLaunchedEvidence =
     progressRaw !== null || hasSegmentFact(dir, "training") || has("training/trainer_state.json");
   const trainingFailedNow =
-    trainingLaunchedEvidence && rawDone.training !== true &&
-    liveness?.trainingEvidence !== undefined && liveness.trainingEvidence[runId] !== true &&
-    !trainingActiveLive(dir, runId, liveness);  // 批㊶-N N-3：段内进度（progress.json 镜像＋fresh 布尔；过期/缺失置 null——additive）
+    // D50：completion status failed＝确定性失败（真退出码非 0／启动失败面落盘——先于
+    // 一切启发）；completion ok＝确定性完成（不走 failed 启发）
+    readTrainingCompletion(dir)?.status === "failed"
+    || (readTrainingCompletion(dir) === null
+      && trainingLaunchedEvidence && rawDone.training !== true &&
+      liveness?.trainingEvidence !== undefined && liveness.trainingEvidence[runId] !== true &&
+      !trainingActiveLive(dir, runId, liveness));  // 批㊶-N N-3：段内进度（progress.json 镜像＋fresh 布尔；过期/缺失置 null——additive）
   const progress: RunProgress | null = progressRaw !== null && progressFresh(progressRaw, nowMs, liveness?.freshWindowMs ?? resolveTrainActiveWindowMs(process.env))
     ? progressRaw
     : null;
@@ -1337,6 +1344,14 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
       trainingLogsFresh: trainingLogsFreshAt(resolved.runsRoot, resolveTrainActiveWindowMs(process.env)),
       freshWindowMs: resolveTrainActiveWindowMs(process.env),
     }, registryWorkspaces, runEntries);
+    // D50：完成锚同步写者（exit.code 尾声件在场＝train.sh 已退出——真退出码权威）：
+    // completion.json 缺席（或重训新尝试收尾）即组装落盘（首写者胜/重训覆写在写方单源）。
+    // 先于通知轨/段链观测执行——同周期内完成锚即可见（training done → training_done 通知
+    // 与 UI 段链绿同拍落地）。fail-open：写失败下一周期重试。
+    for (const entry of runEntries) {
+      const completion = completionFromExitCodeFile(entry.dir);
+      if (completion !== null) writeTrainingCompletion(entry.dir, completion);
+    }
     // 批C1-1 D5：训练终态跃迁通知（持久 last-state 状态机——活跃/未启动→done/failed 一跳产
     // additive train_notices；首见即终态/终态间互跳不产，重启不重报）。状态文件与 monitor.json
     // 同目录同单写者；monitor 携带 per-run 近期通知账（client 已读集＋24h 窗去重渲染）。
