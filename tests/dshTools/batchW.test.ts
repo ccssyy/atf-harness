@@ -211,6 +211,49 @@ describe("批㊶-W F7——九要素确认值 → train.sh 逐键透传对账", 
     expect(gb.ok).toBe(false);
     expect(gb.globalBatch).toMatchObject({ confirmed: 128, generated: 64, ok: false });
   });
+  it("真实生成器续行形态（行尾 ` \\` 逐 token 一行——awb_r1/qc-02 真机实锚）逐键可提取且对账通过（2026-10-22 门2 幕4 修复锚）", () => {
+    // 节选自 /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/launch/train.sh
+    // （generate_train_launch.py 渲染 " \\\n  ".join——b0 与 b3 同构；修复前正则零提取＝
+    // joint/run_training start 面对真实 train.sh 必拒的结构性缺陷）。
+    const trainShReal = [
+      "#!/usr/bin/env bash",
+      "export NPROC_PER_NODE=8",
+      "TRAIN_CMD=(",
+      "  'llamafactory-cli' \\",
+      "  'train' \\",
+      "  '--model_name_or_path' \\",
+      "  '/data/LLM_model/Qwen3-VL-32B-Instruct' \\",
+      "  '--learning_rate' \\",
+      "  '2e-4' \\",
+      "  '--num_train_epochs' \\",
+      "  '3.0' \\",
+      "  '--per_device_train_batch_size' \\",
+      "  '2' \\",
+      "  '--gradient_accumulation_steps' \\",
+      "  '8' \\",
+      "  '--lora_rank' \\",
+      "  '32' \\",
+      "  '--lora_alpha' \\",
+      "  '64' \\",
+      "  '--cutoff_len' \\",
+      "  '9000' \\",
+      "  '--image_min_pixels' \\",
+      "  '65536' \\",
+      "  '--image_max_pixels' \\",
+      "  '802816' \\",
+      ")",
+    ].join("\n");
+    const extracted = extractTrainShValues(trainShReal);
+    expect(extracted["nproc_per_node"]).toBe("8");
+    expect(extracted["learning_rate"]).toBe("2e-4");
+    expect(extracted["image_max_pixels"]).toBe("802816");
+    expect(reconcileConfirmedWithTrainSh(confirmedOk, trainShReal).ok).toBe(true);
+    // 续行形态下静默丢弃仍必须拒（修复不放松 fail-closed）
+    const droppedLr = trainShReal.replace("  '--learning_rate' \\", "  '--learning_rate_x' \\");
+    const bad = reconcileConfirmedWithTrainSh(confirmedOk, droppedLr);
+    expect(bad.ok).toBe(false);
+    expect(bad.mismatches.some((m) => m.key === "learning_rate" && m.generated === null)).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------- F8 产物落点

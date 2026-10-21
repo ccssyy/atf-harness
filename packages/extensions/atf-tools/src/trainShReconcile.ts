@@ -48,13 +48,15 @@ const valueEquals = (a: string, b: string): boolean => {
 };
 
 /** train.sh 文本 → 生成面键值提取（纯函数）：`--key` `'value'` 对＋export NPROC_PER_NODE。
- *  键值形态（awb_r1 实锚）：TRAIN_CMD 数组元素 ' --key' \n 'value'——正则逐对扫描；
+ *  键值形态（真机实锚 awb_r1/qc-02 生成器输出，2026-10-22 门2 幕4 实证）：TRAIN_CMD 数组
+ *  元素逐 token 一行、行尾 ` \` 续行（generate_train_launch.py 渲染 " \\\n  ".join——
+ *  b0 与 b3 同构）——正则容 `\`？；同线对（旧夹具形态）继续可解析；
  *  nproc 专项＝/export NPROC_PER_NODE=(\d+)/。同键多次出现取首现（生成器不重键）。 */
 export const extractTrainShValues = (trainShText: string): Record<string, string> => {
   const extracted: Record<string, string> = {};
   const nproc = /export\s+NPROC_PER_NODE=(\d+)/.exec(trainShText);
   if (nproc !== null) extracted["nproc_per_node"] = nproc[1] as string;
-  const pair = /'--([A-Za-z_][A-Za-z0-9_]*)'\s*,?\s*\n?\s*'([^']*)'/g;
+  const pair = /'--([A-Za-z_][A-Za-z0-9_]*)'\s*,?\s*\\?\s*\n?\s*'([^']*)'/g;
   for (const match of trainShText.matchAll(pair)) {
     const key = match[1] as string;
     const value = match[2] as string;
