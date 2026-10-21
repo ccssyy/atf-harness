@@ -763,8 +763,8 @@ atf_cli:
 # （mock 已回 2）"的表述作废】，真实对端以内核批次二实现为准。
 # ---------------------------------------------------------------------
 atf_upstream:
-  tag: v0.7.21b0
-  commit_sha: d9c3295d93718f8d73aa06a0d37cdffa0e8f1c23
-  pinned_at: "2026-10-19"
-  baseline: 内核方法面 14／harness 工具面 9＋管线段模式入口（v0.7.21b0＝d9c3295：E10 版式聚类生效线〔E10a 2eed2c2：--auto-style-cluster{auto,on,off}三态检测与策略接线＋style_cluster_state 纯函数＋style_cluster_state_not_clustered/ambiguous 两码＋证据五键；E10e-1 a313f8c：顺序恒定决策矩阵＋off 矛盾拒绝新码 style_cluster_declared_but_absent＋三态拒绝 user_message 业务文案；E10e-2 efdfac2：按簇真分层＋no-feature 双桶＋split_authority 权威切换＋register 不预写 split 列；E10f 7be646c：排除页泄漏口径/守恒分母收口＋全小簇 split_partition_empty:test 转 user_message＋--allow-small-cluster-test 显式留测通道（small_cluster_policy=allow_test）〕）；re-pin 2026-10-19（E10 生效窗，worktree 09ae99c→d9c3295 前移不丢内容；实例 env ATF_SKILLS_AUTO_INSTALL=0 既有在位）；pin＝tag v0.7.21b0 commit d9c3295（禁追新）
+  tag: v0.7.23b3
+  commit_sha: 6834d1bcdaaac75cafd47f180ade970edfe0b0bd
+  pinned_at: "2026-10-22"
+  baseline: 内核方法面 14／harness 工具面 9＋管线段模式入口（v0.7.23b3＝6834d1b：D48 train_launch 缺省落 canonical 收口线〔b 系沿程：E2 4148e98 环境探针 DeployProfile/v1；E16 52483be 评估单一计分口径（只评训练字段）＋data_diagnostics＋--reuse-raw；D20 0229494 审批放行账本 ApprovalRecord/v2 可审计（append-only＋approval_id 回传）；D24 78eb81b 段放行 approval_id stdout 回传；K1-K4 39429b3（D31 缺事实硬阻断/D30 launch 生成器三缺陷/D29 评估 TP 缺省 4）；D25a f4b0540 联合数据集构建器＋D40+D42 0c9d766 RunLayout/v1 确定性 run 布局；D43-D45 da2584d（D43 单源 run 目录/D44 joint train.meta.jsonl/D45 legacy 只读）；D46+D47 33f454f（D46 publish 确认闸识别 canonical/D47 旧 runs 桶零创建）；D48 4c36107 train_launch 缺省落 canonical〕；历史括注：v0.7.21b0＝d9c3295〔E10 版式聚类生效线：E10a 2eed2c2：--auto-style-cluster{auto,on,off}三态检测与策略接线＋style_cluster_state 纯函数＋style_cluster_state_not_clustered/ambiguous 两码＋证据五键；E10e-1 a313f8c：顺序恒定决策矩阵＋off 矛盾拒绝新码 style_cluster_declared_but_absent＋三态拒绝 user_message 业务文案；E10e-2 efdfac2：按簇真分层＋no-feature 双桶＋split_authority 权威切换＋register 不预写 split 列；E10f 7be646c：排除页泄漏口径/守恒分母收口＋全小簇 split_partition_empty:test 转 user_message＋--allow-small-cluster-test 显式留测通道（small_cluster_policy=allow_test）〕〕）；re-pin 2026-10-19（E10 生效窗，worktree 09ae99c→d9c3295 前移不丢内容；实例 env ATF_SKILLS_AUTO_INSTALL=0 既有在位）；re-pin 2026-10-22（门 2 前生效窗——dev 实例 pin 根 /data/atf/dev/pinned 先行对齐 6834d1b；内核 b 系 0.7.22b0→0.7.23b3 七次发版沿程如上；会话协议轴 1／桥接契约轴 2 零 diff）；pin＝tag v0.7.23b3 commit 6834d1b（禁追新）
   contract_version: 1

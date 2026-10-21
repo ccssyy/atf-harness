@@ -8,15 +8,15 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 2026-10-19：v0.7.20b0 → v0.7.21b0，唯一真相源 = bridge.contract.yaml
+// 当前 pin（re-pin 2026-10-22：v0.7.21b0 → v0.7.23b3，唯一真相源 = bridge.contract.yaml
 // atf_upstream，本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.21b0（E10 生效窗：E10 版式聚类线——E10a 三态检测与策略接线
-// 〔2eed2c2〕＋E10e-1 顺序恒定/off 矛盾拒绝/user_message〔a313f8c〕＋E10e-2 按簇真分层
-// 〔efdfac2〕＋E10f 排除页/守恒收口＋--allow-small-cluster-test〔7be646c〕；HEAD==tag==main
-// 三点同指 d9c3295，会话协议轴 1／桥接契约轴 2 零 diff；实例 env ATF_SKILLS_AUTO_INSTALL=0
-// 既有在位）。
-export const ATF_UPSTREAM_TAG = "v0.7.21b0";
-export const ATF_UPSTREAM_COMMIT_SHA = "d9c3295d93718f8d73aa06a0d37cdffa0e8f1c23";
+// 本轮 pin 取值＝tag v0.7.23b3（D48 train_launch 缺省落 canonical 收口线；b 系沿程
+// E2 探针/E16 评估单一计分口径/D20 审批放行账本 v2/K1-K4/D25a 联合构建器＋RunLayout/v1/
+// D43-D45 单源 run 目录/D46-D47 publish 确认闸识别 canonical＋旧桶零创建——详见
+// bridge.contract.yaml atf_upstream.baseline；tag==commit 6834d1b，会话协议轴 1／
+// 桥接契约轴 2 零 diff；实例 env ATF_SKILLS_AUTO_INSTALL=0 既有在位）。
+export const ATF_UPSTREAM_TAG = "v0.7.23b3";
+export const ATF_UPSTREAM_COMMIT_SHA = "6834d1bcdaaac75cafd47f180ade970edfe0b0bd";
 
 export interface AtfCliInvocation {
   command: string;
