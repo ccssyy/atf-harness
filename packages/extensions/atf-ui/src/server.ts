@@ -653,9 +653,13 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
     : null;
   // 批㊶-N N-5：会话绑定集（binding.json append 轨镜像；可空）
   const boundSessions = readBindings(dir).map((binding) => binding.session_id);
-  // 批㊶-P P-2：探针告警面（alerts.json 末条；同步器另行驱动判定与落盘）
+  // 批㊶-P P-2：探针告警面（alerts.json 末条；同步器另行驱动判定与落盘）。
+  // D33 排队横幅生命周期清零：gpu_queue 是过程性通知（排队等待计时），训练一旦有启动
+  // 证据（progress 曾写/启动放行事实/trainer_state——A3 闭集），排队事实即被取代——呈现
+  // 清零，不残留旧计时（alerts.json 落盘零动，历史账保留；排队进行中＝训练未启动，正常显示）。
   const probeAlerts = readAlerts(dir);
-  const probe = probeAlerts.length > 0 ? probeAlerts[probeAlerts.length - 1]! : null;
+  const probeLast = probeAlerts.length > 0 ? probeAlerts[probeAlerts.length - 1]! : null;
+  const probe = probeLast !== null && probeLast.kind === "gpu_queue" && trainingLaunchedEvidence ? null : probeLast;
   return {
     run_id: runId,
     // 批㊶Q增补三 段3：工作区归属标注（additive——分桶＝桶名，平铺/系统级＝null）
@@ -2093,8 +2097,9 @@ export const sessionBindingPayloadOf = (home: string, runsRoot: string, sessionI
 };
 
 /** 会话绑定端点 handler 工厂（viewerRouteHandler/eventsRouteHandler 同款形态——apply 注册，
- *  home/runsRoot 注入 vitest 直测）。GET ?sessionId=… 查询；POST {sessionId, runId|null, rename?}。
- *  错误码：缺 sessionId 400；run 不存在 404；title 非空且 ≤80 字否则 400。响应 JSON＋no-store。 */
+ *  home/runsRoot 注入 vitest 直测）。GET ?sessionId=… 查询；GET 缺 sessionId＝草稿态载荷
+ *  （B2c——机器级最近实验，只读）；POST {sessionId, runId|null, rename?}。
+ *  错误码：run 不存在 404；title 非空且 ≤80 字否则 400。响应 JSON＋no-store。 */
 export const sessionBindingRouteHandler = (deps: {
   home: string;
   runsRoot: string;
@@ -2114,7 +2119,15 @@ export const sessionBindingRouteHandler = (deps: {
   if (req.method === "GET") {
     const sessionId = new URL(req.url ?? "/", "http://localhost").searchParams.get("sessionId") ?? "";
     if (sessionId.trim() === "") {
-      respondJson(400, { error: "sessionId_required", message: "缺 sessionId" });
+      // B2c 草稿态（新会话未发首条消息、无 sessionId）：返回机器级最近实验（只读查询，
+      // 「回到上次实验」卡数据源）。既有带 sessionId 查询/POST/账本语义零改。
+      respondJson(200, {
+        draft: true,
+        active: null,
+        unbound_reason: null,
+        recent: buildRunCandidates(deps.runsRoot, null, 3),
+        candidates: [],
+      });
       return;
     }
     respondJson(200, { ...sessionBindingPayloadOf(deps.home, deps.runsRoot, sessionId.trim()) });

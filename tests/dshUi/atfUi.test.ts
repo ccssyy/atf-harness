@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage } from "../../packages/extensions/atf-ui/src/snapshot.js";
+import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage, CLOSURE_MESSAGE } from "../../packages/extensions/atf-ui/src/snapshot.js";
 import { PANEL_HTML } from "../../packages/extensions/atf-ui/src/panel.js";
 import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveTrainActiveWindowMs, resolveViewerRequest, scanEvalRounds, scanRunDir, scanRuns, looksLikeRun, RUN_MARKER_RELS, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
 import { tmuxHasSession, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
@@ -664,6 +664,24 @@ describe("批㉛段2 发起训练面（IterationConfig 四件套摘要＋launch 
       expect(clientSource).toContain(phrase);
     }
   });
+  it("D34 决策闭环默认指令：CLOSURE_MESSAGE 含封存步（事实日志＋锚点快照落盘）；胶囊与面板页双钉同步", () => {
+    // 单源文案（snapshot.js）：封存步在默认步骤集内——闭环默认含封存，不依赖用户点名
+    expect(CLOSURE_MESSAGE).toContain("留痕封存");
+    expect(CLOSURE_MESSAGE).toContain("事实日志与锚点快照落盘存档");
+    expect(CLOSURE_MESSAGE).toContain("闭环默认步骤，勿跳过");
+    expect(CLOSURE_MESSAGE).toContain("决策");
+    // 用户可见面零内部码（P7 禁词纪律——K2/K4 等批次内部编号不上文案）
+    expect(CLOSURE_MESSAGE).not.toContain("K2");
+    expect(CLOSURE_MESSAGE).not.toContain("K4");
+    // 双钉①：client.js 胶囊（D34 PILLS）——「走完闭环」胶囊在场且同语义双份（改动同步）
+    const clientSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    expect(clientSource).toContain("label: '走完闭环'");
+    expect(clientSource).toContain("留痕封存——把本轮事实日志与锚点快照落盘存档（闭环默认步骤，勿跳过；完成后回报文件清单）");
+    // 双钉②：panel.ts 面板页 hero 快捷钮同款（两承载面同步维护）
+    const panelSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/src/panel.ts"), "utf8");
+    expect(panelSource).toContain("走完闭环");
+    expect(panelSource).toContain("留痕封存——把本轮事实日志与锚点快照落盘存档（闭环默认步骤，勿跳过；完成后回报文件清单）");
+  });
 });
 
 describe("批㉛段3.1 右栏监控面（Loss 历史回退＋评估 KPI＋环境卡）", () => {
@@ -1285,11 +1303,11 @@ describe("批㊶-S3 S-B1——通知面投影（monitor.json additive 键三同�
     expect(clientSource).toContain("function listSlotOptions(opts)");
     expect(clientSource).toContain("list 槽注册缺 id（宿主 register 必拒）");
     expect(clientSource).not.toContain("缺 order");
-    // 四处 list 注册全部经守卫包裹（header.utilities／composer.dock／input.right／settings.section
-    // ——D11-1 新增第四处：训练配置页 settings.section 注册）
-    expect(clientSource.match(/slots\.register\(listSlotOptions\(/g)?.length).toBe(4);
+    // 五处 list 注册全部经守卫包裹（header.utilities／composer.dock／input.right／settings.section
+    // ——D11-1 新增第四处：训练配置页 settings.section 注册；B2c 新增第五处：草稿卡 shell.overlay）
+    expect(clientSource.match(/slots\.register\(listSlotOptions\(/g)?.length).toBe(5);
     // 逐处字段完备：id＋order 成对在位（显式注册事实字段——现状仍全带）
-    for (const id of ["atf-monitor-pill", "atf-dock-row", "atf-effort-select", "atf-training-config"]) {
+    for (const id of ["atf-monitor-pill", "atf-dock-row", "atf-effort-select", "atf-training-config", "atf-draft-resume"]) {
       const at = clientSource.indexOf(`id: '${id}'`);
       expect(at).toBeGreaterThan(0);
       const window = clientSource.slice(Math.max(0, at - 200), at + 200);

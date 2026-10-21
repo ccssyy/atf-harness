@@ -1845,7 +1845,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
   const analyze = defineTool({
     name: "atf_analyze_badcases",
     description:
-      "badcase 两步链（轻量，正道化）：①build_raw_badcase_input.py 冻结账本（评估四件套＋L1 eval 资产→RawBadcaseAnalysis/v1，落 analysis/ledger/）②run_analysis_chain.py --raw-mainline <冻结账本> 一键链→viewer.html（GT/预测叠图）与 report/。脚本一律取 <kernelDir>/skills/（pin 单源，禁源工作树绝对路径）。无训练数据/无审阅时链按合同显式声明跳过。",
+      "badcase 两步链（轻量，正道化）：①build_raw_badcase_input.py 冻结账本（评估四件套＋L1 eval 资产→RawBadcaseAnalysis/v1，落 analysis/ledger/）②run_analysis_chain.py --raw-mainline <冻结账本> 一键链→viewer.html（GT/预测叠图）与 report/。脚本一律取 <kernelDir>/skills/（pin 单源，禁源工作树绝对路径）。无训练数据/无审阅时链按合同显式声明跳过。" +
+      "引用字段值（写分析、报告或向用户举例）必须与源记录逐字一致——从冻结账本/预测原文原样拷贝字符串，禁止重排版（千分位逗号、小数点、空格、全半角均不得改动）；拿不准就整段引用原文，不要凭记忆转写数值。",
     parameters: {
       run_id: { type: "string", description: "可选；省略时使用本会话当前绑定的实验。无绑定会返回 run_binding_required 与候选（含实验名与工作区），不要自行猜一个 id" },
       eval_assets_dir: { type: "string", description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl；缺省 runs/<run_id>/l1/eval）" },

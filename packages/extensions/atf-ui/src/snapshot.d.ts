@@ -98,6 +98,8 @@ export declare function parseLossSeries(text: string): Array<Record<string, unkn
 export declare function lossSvgPath(points: Array<Record<string, unknown>>, key: string, w?: number, h?: number): string | null;
 export declare function deriveKpis(points: Array<Record<string, unknown>>): Record<string, string>;
 export declare function deriveTrainingState(points: Array<Record<string, unknown>>): "idle" | "training";
+/** D34：决策闭环默认指令（PILLS『走完闭环』胶囊单源文案——含留痕封存步）。 */
+export declare const CLOSURE_MESSAGE: string;
 export declare function buildTrainLaunchMessage(plan: {
   run_id: string;
   mode: "dry_run" | "real";

@@ -100,7 +100,9 @@ export const formAskQuestion = (q: {
 });
 
 /** 确认卡字段 → 表单卡逐键输入行（label＝键名·现值预填·clamp 域 hint；max_total_tokens
- *  空值＝必填拦空兜底）。A1：与回归断言单源。 */
+ *  空值＝必填拦空兜底＋建议值前置（D36——参考值口径引 TRAINING_PIN_CONSTANTS 单源，
+ *  缺省语义仍退役、必填拦空不变——owner 批㊶-W F1 裁定不动，只强化首提前的占位指引））。
+ *  A1：与回归断言单源。 */
 export const configFormFieldsOf = (fields: ConfigConfirmField[], gpuCount: number | null) =>
   fields.map((field) => {
     const hint = domainHintOf(field.key, gpuCount);
@@ -110,7 +112,10 @@ export const configFormFieldsOf = (fields: ConfigConfirmField[], gpuCount: numbe
       value: field.value,
       ...(hint !== undefined ? { hint } : {}),
       ...(field.key === "max_total_tokens" && field.value.trim() === ""
-        ? { required: true, placeholder: "必填（token 上限缺省已退役——填正整数，单源参考 65536）" }
+        ? {
+            required: true,
+            placeholder: `必填——建议直接填 ${TRAINING_PIN_CONSTANTS.max_total_tokens}（单样本 token 上限，超长单据在数据构造期截断/拒绝；确认卡已核可再改）`,
+          }
         : {}),
     };
   });
@@ -148,7 +153,7 @@ export const domainHintOf = (key: string, gpuCount: number | null): string | und
     case "nproc_per_node":
       return gpuCount !== null ? `[1, 可用卡数 ${gpuCount}]` : "须为本机可用卡数内（机器事实）";
     case "max_total_tokens":
-      return `正整数（单源参考 ${TRAINING_PIN_CONSTANTS.max_total_tokens}）`;
+      return `正整数；建议 ${TRAINING_PIN_CONSTANTS.max_total_tokens}（单样本 token 上限，超长单据构造期截断/拒绝）`;
     default:
       return undefined;
   }
