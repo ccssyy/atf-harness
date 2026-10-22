@@ -31,6 +31,13 @@
 6. **低依赖＋锁版本＋审计（R2a，2026-09-23 修订态）**：`dependencies` 保持低依赖且一律锁版本（当前＝pi-ai 底座 `@earendil-works/pi-ai`／`@earendil-works/pi-agent-core` 双包锁 0.87.1）；devDependencies 仅允许构建测试工具（typescript / vitest 类）。借鉴 Pi 的设计（分层纪律、Result 类型、双上下文管道）。
 7. **脱敏**：本仓任何文件不得出现 A800 地址端口、业务单据内容、内部同事信息；ATF 路径一律经环境变量（`ATF_CLI_PATH`）注入。
 
+### 3.8 产品验证纪律（浏览器实操）
+
+- 产品使用测试一律用 Playwright MCP 驱动真实浏览器：UI/交互/验收不得脚本直调内部 API、不得注入桩、不得读内部状态代替页面观察；MCP 会话需跨步骤保持。
+- 视口不小于 1920×1080；小于该尺寸的截图不作验收依据，证据需注明视口。
+- 关键结论必须有页面级证据：网络 POST 计数、DOM 节点断言（data-*）、渲染区域截图；仅组件测试通过不算产品通过。
+- 「组件绿、页面不可见」一律判 FAIL（不是 PARTIAL），登记并给页面级复现。
+
 ## 4. 契约与 pin 管理
 
 - 仓内 `bridge.contract.yaml` 是 harness 对 ATF 认知的**唯一真相源**：JSONL 帧格式 + atf 子命令签名 + canonical output schema + `atf_upstream` pin（commit + contract_version）。
