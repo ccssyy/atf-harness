@@ -8,15 +8,16 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 2026-10-22：v0.7.21b0 → v0.7.23b3，唯一真相源 = bridge.contract.yaml
+// 当前 pin（re-pin 2026-10-22 二次：v0.7.23b3 → v0.7.24b0，唯一真相源 = bridge.contract.yaml
 // atf_upstream，本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.23b3（D48 train_launch 缺省落 canonical 收口线；b 系沿程
-// E2 探针/E16 评估单一计分口径/D20 审批放行账本 v2/K1-K4/D25a 联合构建器＋RunLayout/v1/
-// D43-D45 单源 run 目录/D46-D47 publish 确认闸识别 canonical＋旧桶零创建——详见
-// bridge.contract.yaml atf_upstream.baseline；tag==commit 6834d1b，会话协议轴 1／
-// 桥接契约轴 2 零 diff；实例 env ATF_SKILLS_AUTO_INSTALL=0 既有在位）。
-export const ATF_UPSTREAM_TAG = "v0.7.23b3";
-export const ATF_UPSTREAM_COMMIT_SHA = "6834d1bcdaaac75cafd47f180ade970edfe0b0bd";
+// 本轮 pin 取值＝tag v0.7.24b0（批次R TokenBudget/env 档案生效线：K1 TokenBudget 数据训练面
+// （契约单源/token gate 强制制/cutoff 单源化/TrainingRecipe 去默认）、K2 env 档案 resolver 单源
+// （env_profile.py/eval_env 拒 system/--prompt-renderer）、K3 评估服务（TP 校验/max_model_len 读
+// 预算/两文件档案接 env_profile）＋walkthrough 管线接预算——详见 bridge.contract.yaml
+// atf_upstream.baseline；tag==commit a039693（bump commit），方法面零增（cli.py 零 diff），
+// 会话协议轴 1／桥接契约轴 2 零 diff；dev 实例已握手 0.7.24b0）。
+export const ATF_UPSTREAM_TAG = "v0.7.24b0";
+export const ATF_UPSTREAM_COMMIT_SHA = "a039693394e5cd630fca095e76a8abca165ad091";
 
 export interface AtfCliInvocation {
   command: string;
