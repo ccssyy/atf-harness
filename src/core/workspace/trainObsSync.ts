@@ -26,6 +26,9 @@ import {
   writeProgress,
   type RunProgress,
 } from "./runFacts.js";
+import {
+  latestCheckpointOf, readTrainingExitCode, readTrainingStartedAt, writeTrainingCompletion,
+} from "./trainingCompletion.js";
 
 /** 记账本停更阈值：连续 12 轮读不到有效行（同步器 5s 环 ≈1 分钟）。 */
 export const TRAIN_OBS_STALE_ROUNDS = 12;
@@ -218,6 +221,17 @@ export const trainObsTick = async (
       writeProg(runDir, buildProgressFromTrainerLog(tail, numEpochs, nowIso));
       if (tail.percentage >= 100) {
         state.stopped = true; // percentage ≥100＝终态——写一次后停环（防复活）
+        // D50 补：观测环终态即写 completion.json（status ok）——launch 执行链
+        // （atf_launch_execute——launch.sh 无 harness 尾声，training/exit.code 缺席）
+        // 与 atf_run_training 双路径通吃的完成锚写者；exit.code 尾声件在场则回填真值，
+        // 缺席＝null 如实（首写者胜/重训覆写在写方单源）。
+        writeTrainingCompletion(runDir, {
+          status: "ok",
+          exit_code: readTrainingExitCode(runDir),
+          checkpoint: latestCheckpointOf(runDir),
+          started: readTrainingStartedAt(runDir),
+          finished: nowIso,
+        });
         result = "finished-stopped";
       } else {
         result = "written";

@@ -171,6 +171,22 @@ describe("批㊶-TRAIN-OBS T1 状态机（fail-closed 三锚＋12 轮 stale＋�
     expect(p?.eta_s).toBe(0);
     expect(await trainObsTick("run-fin", runDir, null, { capture: async () => null, sessionName: () => null })).toBe("already-stopped");
   });
+  it("D50 补：终态 tick 同点落 completion.json（status ok＋training 段事实——launch 链无 exit.code 尾声也收口）", async () => {
+    const root = tempRoot();
+    const runDir = seedRun(root, "run-d50", [REAL_LINE, REAL_TERMINAL_LINE]);
+    mkdirSync(join(runDir, "prep", "iteration-config", "checkpoint-2"), { recursive: true }); // walkthrough 布局 checkpoint
+    const r = await trainObsTick("run-d50", runDir, null, { capture: async () => null, sessionName: () => null });
+    expect(r).toBe("finished-stopped");
+    const { readTrainingCompletion } = await import("../../src/core/workspace/trainingCompletion.js");
+    const { readSegmentFacts } = await import("../../src/core/workspace/segmentFacts.js");
+    const completion = readTrainingCompletion(runDir);
+    expect(completion?.status).toBe("ok");
+    expect(completion?.exit_code).toBeNull(); // 无尾声件＝如实 null（launch 链形态）
+    expect(completion?.checkpoint).toBe("checkpoint-2");
+    expect(readSegmentFacts(runDir).some((f) => f.segment === "training" && f.source === "atf_run_training")).toBe(true);
+    // 幂等：终态后复 tick（already-stopped）不重复写
+    expect(await trainObsTick("run-d50", runDir, null, { capture: async () => null, sessionName: () => null })).toBe("already-stopped");
+  });
 });
 
 describe("批㊶-TRAIN-OBS T3 日志尾部（capture 截断边界＋原子投影写）", () => {
