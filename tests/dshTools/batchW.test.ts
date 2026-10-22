@@ -153,8 +153,10 @@ describe("批㊶-W F5——form intent 结构（vendor 源锚＋结构化 edits 
   it("domainHintOf：clamp 域提示单源派生（像素/负样本/rank/lr 可读）", () => {
     expect(domainHintOf("learning_rate", null)).toContain("5e-5");
     expect(domainHintOf("learning_rate", null)).toContain("5e-4");
-    expect(domainHintOf("image_max_pixels", null)).toContain("802816");
-    expect(domainHintOf("image_max_pixels", null)).toContain("1605632");
+    // b5 像素对：hint 千分位两档＋变更影响提示（指令 b5 §三）
+    expect(domainHintOf("image_max_pixels", null)).toContain("802,816");
+    expect(domainHintOf("image_max_pixels", null)).toContain("1,605,632");
+    expect(domainHintOf("image_max_pixels", null)).toContain("将影响坐标换算与 token");
     expect(domainHintOf("negative_ratio_target", null)).toContain("0.02");
     expect(domainHintOf("lora_rank", null)).toContain("128");
     expect(domainHintOf("nproc_per_node", 8)).toContain("8");

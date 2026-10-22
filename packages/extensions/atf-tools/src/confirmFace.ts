@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows } from "../../../../src/webui/configConfirm.js";
+import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows, pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 
 /** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型；批㊶-Q 增第四态 agent_recommend，
  *  仅全自动档采纳 agent 参数推荐时由本文件后处理标注，buildConfigConfirmFields 不产出该态）。
@@ -100,21 +100,31 @@ export const formAskQuestion = (q: {
   intent: { kind: "form", fields: q.fields, submitLabel: q.submitLabel },
 });
 
+/** b5 像素对复用补丁：像素对两键卡面中文名（用户面零内部键名——指令 b5 §三；表单卡
+ *  输入框 key 与结构化回传面不变，仅呈现名替换）。其余键维持键名既有形态。 */
+const PIXEL_PAIR_LABELS: Record<string, string> = {
+  image_min_pixels: "最小像素",
+  image_max_pixels: "最大像素",
+};
+
 /** 确认卡字段 → 表单卡逐键输入行（label＝键名·现值预填·clamp 域 hint；max_total_tokens
  *  空值＝必填拦空兜底＋建议值前置（D36——参考值口径引 TRAINING_PIN_CONSTANTS 单源，
  *  批次 R H1-2 改值后建议值＝9000 惯例基线；必填拦空兜底保留——用户清空提交仍拦）。
  *  批次 R H1-1：max_model_len 只读——不生成输入框（值恒单源惯例基线，卡面三要素区只读呈现，
- *  独立取值禁 cutoff 推导）。A1：与回归断言单源。 */
+ *  独立取值禁 cutoff 推导）。A1：与回归断言单源。b5 像素对：两键呈现名中文化＋hint 尾
+ *  来源标注（默认/用户——指令 b5 §三）。 */
 export const configFormFieldsOf = (fields: ConfigConfirmField[], gpuCount: number | null) =>
   fields
     .filter((field) => field.key !== "max_model_len")
     .map((field) => {
     const hint = domainHintOf(field.key, gpuCount);
+    const pixelPair = PIXEL_PAIR_LABELS[field.key] !== undefined;
+    const sourceNote = pixelPair ? `（来源：${field.tag === "need_confirm" ? "用户" : "默认"}）` : "";
     return {
       key: field.key,
-      label: field.key,
+      label: PIXEL_PAIR_LABELS[field.key] ?? field.key,
       value: field.value,
-      ...(hint !== undefined ? { hint } : {}),
+      ...(hint !== undefined || sourceNote !== "" ? { hint: `${hint ?? ""}${sourceNote}` } : {}),
       ...(field.key === "max_total_tokens" && field.value.trim() === ""
         ? {
             required: true,
@@ -154,8 +164,12 @@ export const domainHintOf = (key: string, gpuCount: number | null): string | und
       return `≤ ${CLAMP_DOMAINS.cutoff_len.max}；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）`;
     case "max_model_len":
       return `只读＝${TRAINING_PIN_CONSTANTS.max_model_len}（推理窗口，独立取值——禁由 cutoff 推导）`;
+    case "image_min_pixels":
+      // b5 像素对复用补丁：下限域提示（默认单源 TRAINING_PIN_CONSTANTS——不新写域）。
+      return `正整数，默认 ${TRAINING_PIN_CONSTANTS.image_min_pixels.toLocaleString("en-US")}（256²）——构造/训练/推理同一对值`;
     case "image_max_pixels":
-      return `两档 {${(CLAMP_DOMAINS.image_max_pixels as number[]).join(", ")}}`;
+      // b5 像素对复用补丁：两档闭集沿用＋变更影响提示（指令 b5 §三——提示不阻塞）。
+      return `两档 {${(CLAMP_DOMAINS.image_max_pixels as number[]).map((v) => v.toLocaleString("en-US")).join(", ")}}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）`;
     case "negative_ratio_target":
       return `构造带 [${CLAMP_DOMAINS.negative_ratio.min}, ${CLAMP_DOMAINS.negative_ratio.max}]`;
     case "nproc_per_node":
@@ -193,6 +207,24 @@ export const tokenBudgetFaceText = (
   ...renderTokenBudgetRows(fields),
   ...(violations.length > 0 ? violations.map((v) => `⚠ ${v}`) : []),
 ].join("\n");
+
+/** b5 像素对复用补丁：max 变更提示（不阻塞——指令 b5 §三；基线缺省＝惯例档位首值，
+ *  与 CONFIG_CONFIRM_KEYS default 同源）。 */
+export const pixelPairChangeNoteOf = (
+  fields: ReadonlyArray<ConfigConfirmField>,
+  baseline: Record<string, string>,
+): string | undefined => {
+  const maxField = fields.find((f) => f.key === "image_max_pixels");
+  if (maxField === undefined) return undefined;
+  const before = baseline["image_max_pixels"] ?? String(TRAINING_PIN_CONSTANTS.image_max_pixels[0]);
+  return before === maxField.value ? undefined : "最大像素已变更——将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）";
+};
+
+/** b5 像素对复用补丁：min<max 关系警示（判据单源 configConfirm pixelPairViolationOf——只提示不阻塞）。 */
+export const pixelPairViolationNoteOf = (fields: ReadonlyArray<ConfigConfirmField>): string | undefined => {
+  const violation = pixelPairViolationOf(fields.map((f) => ({ key: f.key, value: f.value })));
+  return violation === null ? undefined : `⚠ ${violation}`;
+};
 
 /** 三态标记（卡面文本化：⚠ 已用缺省／◆ 来自登记／? 需确认——与手搓批⑮三态标签同源语义）。
  *  批㊶-Q 增第四态：◇ agent 推荐（全自动档采纳的 agent 参数推荐——来源标注进 sources/通报）。 */
@@ -543,7 +575,10 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           : recommendReport.length > 0
             ? `；agent 推荐：${recommendReport.map((v) => `${v.key}=${v.terminal}${v.accepted ? "✓" : "✗"}`).join(" ")}${reason !== undefined && reason.trim() !== "" ? `（理由：${reason.replace(/\s+/g, " ").slice(0, 80)}）` : ""}`
             : "；agent 推荐缺失——全键回退固定建议";
-        const notification = `全自动训练档·配置自动确认（免审批，run ${args.run_id}）——${fields.map((f) => `${f.key}=${f.value}[${sources[f.key]}]`).join(" ")}${recommendSummary}${rejectedNotes.length > 0 ? `；拦截：${rejectedNotes.join("；")}` : ""}${guardNotes.length > 0 ? `；卡数护栏：${guardNotes.join("；")}` : ""}`;
+        // b5 像素对复用补丁：变更提示＋关系警示进通报（只提示不阻塞——指令 b5 §三）。
+        const pixelChangeAuto = pixelPairChangeNoteOf(fields, baseline);
+        const pixelViolationAuto = pixelPairViolationNoteOf(fields);
+        const notification = `全自动训练档·配置自动确认（免审批，run ${args.run_id}）——${fields.map((f) => `${f.key}=${f.value}[${sources[f.key]}]`).join(" ")}${recommendSummary}${rejectedNotes.length > 0 ? `；拦截：${rejectedNotes.join("；")}` : ""}${guardNotes.length > 0 ? `；卡数护栏：${guardNotes.join("；")}` : ""}${pixelChangeAuto !== undefined ? `；${pixelChangeAuto}` : ""}${pixelViolationAuto !== undefined ? `；${pixelViolationAuto}` : ""}`;
         // 不写 pending 卡（无卡可应答——卡面内容转为通报）；改参走 amend 纯文字（同样免阻塞）
         appendNotification(runDir, { level: "info", kind: "config_auto", reason: notification, since: new Date().toISOString() });
         saveConfigSnapshot(runDir, confirmed, { auto: true, tier: AUTO_TRAINING_PRESET, sources });
@@ -587,7 +622,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       }
       // 批次 R H1-1：进卡初始校验态（基线惯例值 9000/9000/12800 恒通过；登记值异常进卡即红字）。
       const initialBudgetViolations = tokenBudgetCheckOf(fields, "").violations;
-      writePending(runDir, { kind: "config_confirm", run_id: args.run_id, title, fields, note: `${note}\n${tokenBudgetFaceText(fields, initialBudgetViolations)}`, at: new Date().toISOString() });
+      // b5 像素对复用补丁：进卡关系警示（min<max——只提示不阻塞）。
+      const initialPixelViolation = pixelPairViolationNoteOf(fields);
+      writePending(runDir, { kind: "config_confirm", run_id: args.run_id, title, fields, note: `${note}\n${tokenBudgetFaceText(fields, initialBudgetViolations)}${initialPixelViolation !== undefined ? `\n${initialPixelViolation}` : ""}`, at: new Date().toISOString() });
       // TokenBudget 关系校验态（跨轮呈现——violations 非空时表单卡红字重呈，
       // 不进审批卡＝禁用确认；清零后恢复授权链）。
       let budgetViolations: string[] = initialBudgetViolations;
@@ -605,6 +642,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           ...(amendNote !== undefined ? [amendNote] : []),
           ...(guardNotes.length > 0 ? [`卡数护栏：${guardNotes.join("；")}`] : []),
           tokenBudgetFaceText(fields, budgetViolations),
+          // b5 像素对复用补丁：像素对关系警示（每轮现算——只提示不阻塞确认链）。
+          ...(pixelPairViolationNoteOf(fields) !== undefined ? [pixelPairViolationNoteOf(fields)!] : []),
         ].join("\n");
         let answers: { answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string> }> };
         try {
@@ -667,6 +706,11 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         if (clampedKeys.length > 0 || loopNote !== "") {
           amendNote = `本轮改参：${Object.keys(changedEdits).join(", ") || "（按现值确认）"}${clampedKeys.length > 0 ? `；越界拦截回退（域边界）：${clampedKeys.join("、")}` : ""}${loopNote}`;
         }
+        // b5 像素对复用补丁：max 变更提示（不阻塞——随 amendNote 下一轮 detail/审批卡可见）。
+        const pixelChangeNote = pixelPairChangeNoteOf(fields, baseline);
+        if (pixelChangeNote !== undefined) {
+          amendNote = amendNote !== undefined ? `${amendNote}；${pixelChangeNote}` : pixelChangeNote;
+        }
         // 批次 R H1-1：TokenBudget 关系校验（服务端闸——与表单卡 detail 红字同源单源函数）。
         // violations 非空＝禁用确认：不进审批卡，红字重呈表单卡；预算与 cutoff 不等时
         // 同步是用户动作（cutoff_len 框直接填预算值）不自动，不同步须填理由（空即拦）。
@@ -682,7 +726,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
             effect: "写 run 配置快照（确认值全部键＋TokenBudget 三要素）",
             reversible: "可逆（可改参后重新确认）",
             cost: "按任务卡",
-          }) + `\n${renderFields(fields)}\n${tokenBudgetFaceText(fields, [])}\n${note}${amendNote !== undefined ? `\n${amendNote}` : ""}`);
+          }) + `\n${renderFields(fields)}\n${tokenBudgetFaceText(fields, [])}\n${note}${amendNote !== undefined ? `\n${amendNote}` : ""}${pixelPairViolationNoteOf(fields) !== undefined ? `\n${pixelPairViolationNoteOf(fields)}` : ""}`);
         if (verdict.ok) break;
         if (verdict.outcome === "rejected") {
           // Reject → 回表单卡（带上次值——fields 已就地更新）

@@ -17,12 +17,14 @@ import { TRAINING_PIN_CONSTANTS, checkTokenBudget } from "../../src/core/workspa
 import {
   CONFIG_CONFIRM_KEYS,
   buildConfigConfirmFields,
+  renderPixelPairRows,
   renderTokenBudgetRows,
+  thousandsOf,
   tokenBudgetSourceNoteOf,
   TOKEN_BUDGET_KEYS,
 } from "../../src/webui/configConfirm.js";
 import { evalAgentRecommend } from "../../src/core/workspace/agentRecommend.js";
-import { configFormFieldsOf, tokenBudgetCheckOf, tokenBudgetFaceText, type ConfigConfirmField } from "../../packages/extensions/atf-tools/src/confirmFace.js";
+import { configFormFieldsOf, domainHintOf, pixelPairChangeNoteOf, pixelPairViolationNoteOf, tokenBudgetCheckOf, tokenBudgetFaceText, type ConfigConfirmField } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 import { buildLaunchSurface } from "../../packages/extensions/atf-ui/src/server.js";
 import { humanizeKernelError, scanKernelErrorFace, KERNEL_ERROR_FACE_CODES } from "../../src/core/workspace/kernelErrorFace.js";
@@ -435,4 +437,254 @@ describe("批次 R H1-3——kernelErrorFace 四码人话映射（提前接线�
     expect(plain["kernel_error"]).toBeUndefined();
     expect(String(plain["stderr_tail"])).toContain("boom");
   }, 30_000);
+});
+
+// ---------------------------------------------------------------- b5 像素对复用补丁（2026-10-22）
+
+describe("b5 像素对——renderPixelPairRows 单源渲染（web 摘要与确认卡面共用）", () => {
+  const baseRows = [
+    { key: "image_min_pixels", value: "65536" },
+    { key: "image_max_pixels", value: "802816" },
+  ];
+  it("默认态：两行千分位＋[默认]＋候选档；无推荐行；无警示；用户面零内部键名", () => {
+    const face = renderPixelPairRows(baseRows);
+    expect(face.rows).toHaveLength(2);
+    expect(face.rows[0]).toContain("最小像素");
+    expect(face.rows[0]).toContain("65,536");
+    expect(face.rows[0]).toContain("[默认]");
+    expect(face.rows[1]).toContain("最大像素");
+    expect(face.rows[1]).toContain("802,816");
+    expect(face.rows[1]).toContain("候选 1,605,632");
+    expect(face.rows.join("\n")).not.toContain("image_min_pixels");
+    expect(face.rows.join("\n")).not.toContain("image_max_pixels");
+    expect(face.rows.some((line) => line.startsWith("Agent 推荐"))).toBe(false);
+    expect(face.violations).toEqual([]);
+  });
+  it("用户改值态：来源标注[用户]（need_confirm），未改侧保持[默认]", () => {
+    const face = renderPixelPairRows([
+      { key: "image_min_pixels", value: "65536" },
+      { key: "image_max_pixels", value: "1605632", tag: "need_confirm" },
+    ]);
+    expect(face.rows[1]).toContain("1,605,632");
+    expect(face.rows[1]).toContain("[用户]");
+    expect(face.rows[0]).toContain("[默认]");
+  });
+  it("agent 推荐态：推荐行＝值＋理由（值与理由来自快照 sources 单源，渲染层不生成不硬编码）", () => {
+    const face = renderPixelPairRows(baseRows, { recommend: { value: "1605632", brief: "p95长边3240量子4.4px" } });
+    expect(face.rows).toHaveLength(3);
+    expect(face.rows[2]).toContain("Agent 推荐：1,605,632 —— p95长边3240量子4.4px");
+  });
+  it("min ≥ max → 关系警示（只提示不阻塞——独立于 token_budget.violations 禁确认语义）", () => {
+    const face = renderPixelPairRows([
+      { key: "image_min_pixels", value: "1605632" },
+      { key: "image_max_pixels", value: "802816" },
+    ]);
+    expect(face.violations).toHaveLength(1);
+    expect(face.violations[0]).toContain("最小像素须小于最大像素");
+  });
+  it("值非纯数字原样（千分位跳过）；键缺席＝空面（不渲染）", () => {
+    expect(thousandsOf("abc")).toBe("abc");
+    expect(renderPixelPairRows([{ key: "learning_rate", value: "2e-4" }]).rows).toEqual([]);
+  });
+});
+
+describe("b5 像素对——buildLaunchSurface token_budget.pixel_pair（additive 键，既有三行零回归）", () => {
+  const seedWithSnapshot = (opts: { confirmed?: Record<string, string>; sources?: Record<string, string> } = {}): string => {
+    const root = tempRoot();
+    const runDir = join(root, "run-w");
+    mkdirSync(join(runDir, "prep", "iteration-config"), { recursive: true });
+    writeFileSync(join(runDir, "prep", "iteration-config", "iteration-config.json"), JSON.stringify({ training: { cutoff_len: 9000 } }));
+    if (opts.confirmed !== undefined) {
+      mkdirSync(join(runDir, "webui"), { recursive: true });
+      writeFileSync(join(runDir, "webui", "config-snapshot.json"), JSON.stringify({
+        schema_version: "WebUiConfigSnapshot/v1",
+        confirmed: opts.confirmed,
+        ...(opts.sources !== undefined ? { sources: opts.sources } : {}),
+      }));
+    }
+    return root;
+  };
+  it("无快照＝默认态：两行[默认]无推荐行；既有 token_budget.rows 仍三行", () => {
+    const surface = buildLaunchSurface(join(seedWithSnapshot(), "run-w"));
+    expect(surface.token_budget.rows).toHaveLength(3);
+    expect(surface.token_budget.pixel_pair.rows.some((line) => line.startsWith("Agent 推荐"))).toBe(false);
+    expect(surface.token_budget.pixel_pair.rows[0]).toContain("[默认]");
+    expect(surface.token_budget.pixel_pair.violations).toEqual([]);
+  });
+  it("快照 sources 带 agent-recommend → Agent 推荐行（值取 confirmed，理由取来源标注简据）", () => {
+    const surface = buildLaunchSurface(join(seedWithSnapshot({
+      confirmed: { image_max_pixels: "1605632" },
+      sources: { image_max_pixels: "default:agent-recommend:p95长边3240" },
+    }), "run-w"));
+    expect(surface.token_budget.pixel_pair.rows.some((line) => line.includes("Agent 推荐：1,605,632 —— p95长边3240"))).toBe(true);
+    expect(surface.token_budget.pixel_pair.rows[1]).toContain("[用户]"); // 快照确认值＝用户面确认
+  });
+  it("快照 sources 非 agent-recommend（user-specified）→ 无推荐行", () => {
+    const surface = buildLaunchSurface(join(seedWithSnapshot({
+      confirmed: { image_max_pixels: "1605632" },
+      sources: { image_max_pixels: "user-specified" },
+    }), "run-w"));
+    expect(surface.token_budget.pixel_pair.rows.some((line) => line.startsWith("Agent 推荐"))).toBe(false);
+  });
+  it("登记值 min ≥ max → pixel_pair.violations 警示（不进 budget.violations——不阻塞）", () => {
+    const surface = buildLaunchSurface(join(seedWithSnapshot({
+      confirmed: { image_min_pixels: "1605632", image_max_pixels: "802816" },
+    }), "run-w"));
+    expect(surface.token_budget.pixel_pair.violations[0]).toContain("最小像素须小于最大像素");
+    expect(surface.token_budget.violations).toEqual([]);
+  });
+});
+
+describe("b5 像素对——表单卡呈现（中文呈现名＋来源标注＋max 变更提示＋min<max 警示不阻塞）", () => {
+  it("configFormFieldsOf：像素对两键呈现名中文（零内部键名）＋域提示＋来源标注", () => {
+    const fields = buildConfigConfirmFields({}, {}) as ConfigConfirmField[];
+    const rows = configFormFieldsOf(fields, null);
+    const minRow = rows.find((row) => row.key === "image_min_pixels");
+    const maxRow = rows.find((row) => row.key === "image_max_pixels");
+    expect(minRow?.label).toBe("最小像素");
+    expect(maxRow?.label).toBe("最大像素");
+    expect(minRow?.hint).toContain("65,536");
+    expect(minRow?.hint).toContain("（来源：默认）");
+    expect(maxRow?.hint).toContain("802,816");
+    expect(maxRow?.hint).toContain("1,605,632");
+    expect(maxRow?.hint).toContain("（来源：默认）");
+    // 结构化回传面不变：key 仍是内部键（协议零改动）
+    expect(minRow?.key).toBe("image_min_pixels");
+  });
+  it("domainHintOf：min 域提示（同一对值）；max 含两档与变更影响提示（指令 b5 §三）", () => {
+    expect(domainHintOf("image_min_pixels", null)).toContain("同一对值");
+    expect(domainHintOf("image_max_pixels", null)).toContain("802,816");
+    expect(domainHintOf("image_max_pixels", null)).toContain("将影响坐标换算与 token");
+  });
+  it("pixelPairChangeNoteOf：值与基线不同才提示；基线缺省＝惯例档位首值", () => {
+    const fields = buildConfigConfirmFields({ image_max_pixels: "1605632" }, {}) as ConfigConfirmField[];
+    expect(pixelPairChangeNoteOf(fields, {})).toContain("将影响坐标换算与 token");
+    const untouched = buildConfigConfirmFields({}, {}) as ConfigConfirmField[];
+    expect(pixelPairChangeNoteOf(untouched, {})).toBeUndefined();
+    expect(pixelPairChangeNoteOf(untouched, { image_max_pixels: "802816" })).toBeUndefined();
+  });
+  it("pixelPairViolationNoteOf：min ≥ max 警示；关系成立 undefined", () => {
+    const bad = buildConfigConfirmFields({ image_min_pixels: "999999999" }, {}) as ConfigConfirmField[];
+    expect(pixelPairViolationNoteOf(bad)).toContain("最小像素须小于最大像素");
+    const good = buildConfigConfirmFields({}, {}) as ConfigConfirmField[];
+    expect(pixelPairViolationNoteOf(good)).toBeUndefined();
+  });
+});
+
+describe("b5 像素对——confirmFace 手动档链（变更提示上卡面；min<max 只提示不阻塞）", () => {
+  const formCtx = (scripted: string[][]) => {
+    const asks: Array<{ detail?: string; fields?: Array<{ key: string; label?: string; hint?: string }> }> = [];
+    const approvals: string[] = [];
+    let calls = 0;
+    return {
+      asks,
+      approvals,
+      ctx: {
+        get: (service: string) => {
+          if (service === "approval") return { request: async (_req: { reason?: string }) => { approvals.push(_req?.reason ?? ""); return "allowed-once"; } };
+          if (service === "userQuestions") {
+            return {
+              ask: async (req: { questions?: Array<{ intent?: { fields?: Array<{ key: string; label?: string; hint?: string }> }; detail?: string }> }) => {
+                calls += 1;
+                const question = req.questions?.[0];
+                asks.push({ detail: question?.detail, fields: question?.intent?.fields });
+                if (calls > scripted.length) throw Object.assign(new Error("cancelled by user"), { code: "ASK_CANCELLED" });
+                return { answers: [{ id: "config-confirm-x", selected: scripted[calls - 1] ?? [] }] };
+              },
+            };
+          }
+          return undefined;
+        },
+      },
+    };
+  };
+  const execTool = async (ctx: { get: (s: string) => unknown }, args: Record<string, unknown>) => {
+    const root = tempRoot();
+    const tools = buildConfirmTools({ runsRoot: root, ctx, gpuProbe: () => 8 }) as Array<{ name: string; execute: (a: unknown, e: unknown) => Promise<unknown> }>;
+    const tool = tools.find((t) => t.name === "atf_config_confirm")!;
+    const result = (await tool.execute(args, { agent: undefined, callId: "b5-c1", signal: undefined })) as Record<string, unknown>;
+    return { root, result };
+  };
+  it("进卡：像素对两键呈现名中文＋来源标注默认（卡面零内部键名）", async () => {
+    const face = formCtx([[]]);
+    await execTool(face.ctx, { action: "present", run_id: "run-tb" });
+    const minRow = face.asks[0]?.fields?.find((row) => row.key === "image_min_pixels");
+    expect(minRow?.label).toBe("最小像素");
+    expect(minRow?.hint).toContain("（来源：默认）");
+  });
+  it("改 max 提交：变更提示上审批卡（不重呈不阻塞——快照照落）", async () => {
+    const face = formCtx([["image_max_pixels=1605632"]]);
+    const { root, result } = await execTool(face.ctx, { action: "present", run_id: "run-tb" });
+    expect(result).toMatchObject({ ok: true, confirmed: true }); // 不阻塞：变更提示后仍走完审批落快照
+    expect(face.asks).toHaveLength(1); // 不重呈（无 violations）——提示在审批卡面
+    expect(face.approvals[0]).toContain("将影响坐标换算与 token");
+    const snap = JSON.parse(readFileSync(join(root, "run-tb", "webui", "config-snapshot.json"), "utf8")) as { confirmed: Record<string, string> };
+    expect(snap.confirmed["image_max_pixels"]).toBe("1605632");
+  });
+  it("改 max 后审批 Reject → 回表单卡：变更提示在 detail 可见（带上次值）", async () => {
+    const face = formCtx([["image_max_pixels=1605632"], []]);
+    const verdicts = ["rejected", "allowed-once"];
+    let n = 0;
+    const { result } = await execTool({
+      get: (service: string) => {
+        if (service === "approval") return { request: async (req: { reason?: string }) => { face.approvals.push(req?.reason ?? ""); return verdicts[n++] ?? "allowed-once"; } };
+        return face.ctx.get(service);
+      },
+    }, { action: "present", run_id: "run-tb" });
+    expect(result).toMatchObject({ ok: true, confirmed: true });
+    expect(face.asks[1]?.detail ?? "").toContain("将影响坐标换算与 token");
+    expect(face.asks[1]?.fields?.find((row) => row.key === "image_max_pixels")?.value).toBe("1605632");
+  });
+  it("min ≥ max 提交：警示上审批卡但不停链；Reject 回卡后警示在 detail（不阻塞语义）", async () => {
+    const face = formCtx([["image_min_pixels=999999999"], []]);
+    const verdicts = ["rejected", "allowed-once"];
+    let n = 0;
+    const { root, result } = await execTool({
+      get: (service: string) => {
+        if (service === "approval") return { request: async (req: { reason?: string }) => { face.approvals.push(req?.reason ?? ""); return verdicts[n++] ?? "allowed-once"; } };
+        return face.ctx.get(service);
+      },
+    }, { action: "present", run_id: "run-tb" });
+    expect(result).toMatchObject({ ok: true, confirmed: true });
+    expect(face.approvals[0]).toContain("最小像素须小于最大像素"); // 首轮提交即警示（不阻塞、不重呈）
+    expect(face.asks[1]?.detail ?? "").toContain("最小像素须小于最大像素"); // Reject 回卡后警示在卡面
+    const snap = JSON.parse(readFileSync(join(root, "run-tb", "webui", "config-snapshot.json"), "utf8")) as { confirmed: Record<string, string> };
+    expect(snap.confirmed["image_min_pixels"]).toBe("999999999");
+  });
+});
+
+describe("b5 像素对——confirmFace 全自动档（recommend 采纳＋通报变更提示）", () => {
+  const autoCtx = (service: string): unknown => {
+    if (service === "permissionPresets") return { current: () => "auto_training" };
+    return undefined;
+  };
+  const execAuto = async (args: Record<string, unknown>) => {
+    const root = tempRoot();
+    const tools = buildConfirmTools({ runsRoot: root, ctx: { get: autoCtx }, gpuProbe: () => 8 }) as Array<{ name: string; execute: (a: unknown, e: unknown) => Promise<unknown> }>;
+    const tool = tools.find((t) => t.name === "atf_config_confirm")!;
+    const result = (await tool.execute(
+      { action: "present", run_id: "run-tb", ...args },
+      { agent: { session: { id: "sess-auto" } }, callId: "b5-c2", signal: undefined },
+    )) as Record<string, unknown>;
+    return { root, result };
+  };
+  it("recommend 像素两档带理由 → 采纳落快照 sources=default:agent-recommend:*；notification 含变更提示", async () => {
+    const { root, result } = await execAuto({ recommend: { image_max_pixels: 1605632, reason: "p95长边3240量子4.4px" } });
+    expect(result).toMatchObject({ ok: true, auto: true });
+    const snap = JSON.parse(readFileSync(join(root, "run-tb", "webui", "config-snapshot.json"), "utf8")) as { confirmed: Record<string, string>; sources?: Record<string, string> };
+    expect(snap.confirmed["image_max_pixels"]).toBe("1605632");
+    expect(snap.sources?.["image_max_pixels"] ?? "").toContain("default:agent-recommend:");
+    expect(snap.sources?.["image_max_pixels"] ?? "").toContain("p95长边3240量子4.4px".replace(/\s+/g, "").slice(0, 24));
+    expect(String(result.notification)).toContain("将影响坐标换算与 token");
+  });
+});
+
+describe("b5 像素对——client.js 渲染锚（页面区块与样式类在位）", () => {
+  it("client.js：视觉像素对区块渲染＋violations 红字样式＋additive 键读取", () => {
+    const source = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/client.js"), "utf8");
+    expect(source).toContain("budget.pixel_pair");
+    expect(source).toContain("视觉像素对");
+    expect(source).toContain("atf-train-pixels");
+    expect(source).toContain("pixel-viol-");
+  });
 });

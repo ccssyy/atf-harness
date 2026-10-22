@@ -81,6 +81,53 @@ export const renderTokenBudgetRows = (rows: ReadonlyArray<TokenBudgetRow>): stri
   ];
 };
 
+// ── b5 像素对复用补丁（2026-10-22）：视觉像素对区（卡面 TokenBudget 三行之后）──
+// 只加呈现，不改链：值域两档/默认值单源 TRAINING_PIN_CONSTANTS，clamp 沿既有
+// clampImageMaxPixels（confirmFace），改值通道沿既有 chat 别名（像素上限改 1605632）。
+
+/** 像素对来源标注（两态口径，指令 b5 §三：用户显式改值＝用户；其余——缺省/登记确认值＝默认）。 */
+export const pixelPairSourceNoteOf = (tag: string | undefined): string =>
+  tag === "need_confirm" ? "用户" : "默认";
+
+/** 千分位呈现（纯整数；非纯数字原样——用户面可读口径，指令卡面示例 65,536）。 */
+export const thousandsOf = (value: string): string =>
+  /^\d+$/.test(value.trim()) ? Number(value.trim()).toLocaleString("en-US") : value;
+
+/** 像素对关系警示（单源判据：两侧均可解析为数值且 min ≥ max；数值不可解析不判——交给既有 clamp 链）。
+ *  返回 null＝关系成立/不判。只提示不阻塞（指令 b5 §三）。 */
+export const pixelPairViolationOf = (
+  rows: ReadonlyArray<{ key: string; value: string }>,
+): string | null => {
+  const byKey = new Map(rows.map((row) => [row.key, row.value]));
+  const min = Number(byKey.get("image_min_pixels") ?? "");
+  const max = Number(byKey.get("image_max_pixels") ?? "");
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min < max) return null;
+  return `最小像素须小于最大像素——当前 ${thousandsOf(String(min))} ≥ ${thousandsOf(String(max))}，请修正或恢复默认（${thousandsOf(String(TRAINING_PIN_CONSTANTS.image_min_pixels))} / ${thousandsOf(String(TRAINING_PIN_CONSTANTS.image_max_pixels[0]))}）`;
+};
+
+/** 视觉像素对区渲染（单源，web 摘要与确认卡面共用）：最小/最大两行＋来源标注＋
+ *  agent 推荐行（仅推荐在场）＋关系警示。用户面零内部键名、零错误码（指令 b5 §三）；
+ *  推荐值与理由来自 agent（快照 sources 单源），此处不生成、不硬编码推荐。 */
+export const renderPixelPairRows = (
+  rows: ReadonlyArray<{ key: string; value: string; tag?: string }>,
+  options: { recommend?: { value: string; brief: string } | null } = {},
+): { rows: string[]; violations: string[] } => {
+  const byKey = new Map(rows.map((row) => [row.key, row]));
+  const minRow = byKey.get("image_min_pixels");
+  const maxRow = byKey.get("image_max_pixels");
+  if (minRow === undefined && maxRow === undefined) return { rows: [], violations: [] };
+  const [primary, alternate] = [TRAINING_PIN_CONSTANTS.image_max_pixels[0], TRAINING_PIN_CONSTANTS.image_max_pixels[1]];
+  const faceRows = [
+    `最小像素  可编辑  ${thousandsOf(minRow?.value ?? "")}  [${pixelPairSourceNoteOf(minRow?.tag)}]`,
+    `最大像素  可编辑  ${thousandsOf(maxRow?.value ?? "")}  [${pixelPairSourceNoteOf(maxRow?.tag)}]（候选 ${thousandsOf(String(alternate ?? primary))}）`,
+    ...(options.recommend !== undefined && options.recommend !== null && options.recommend.value !== "" && options.recommend.brief !== ""
+      ? [`Agent 推荐：${thousandsOf(options.recommend.value)} —— ${options.recommend.brief}`]
+      : []),
+  ];
+  const violation = pixelPairViolationOf(rows);
+  return { rows: faceRows, violations: violation !== null ? [violation] : [] };
+};
+
 /** 卡面字段构造：值来源三态（显式覆盖 from_registry/用户值 need_confirm/缺省 default_used）。 */
 export const buildConfigConfirmFields = (
   overrides: Record<string, string>,

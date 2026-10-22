@@ -628,7 +628,12 @@ describe("批㊶-W F5——表单卡链（结构化 edits＋form intent ask＋Re
     const lrField = intent?.fields.find((f) => f.key === "learning_rate");
     expect(lrField?.value).toBe("2e-4"); // 现值预填
     expect(lrField?.hint).toContain("5e-5"); // clamp 域提示可读
-    expect(intent?.fields.find((f) => f.key === "image_max_pixels")?.hint).toContain("802816");
+    // b5 像素对：max hint 千分位两档＋变更影响提示＋来源标注（指令 b5 §三）
+    const maxHint = intent?.fields.find((f) => f.key === "image_max_pixels")?.hint ?? "";
+    expect(maxHint).toContain("802,816");
+    expect(maxHint).toContain("1,605,632");
+    expect(maxHint).toContain("将影响坐标换算与 token");
+    expect(maxHint).toContain("（来源：默认）");
     // 批次 R H1-2 锚：max_total_tokens 预填惯例基线 9000（非空——required 只在清空兜底时出现；
     // 空值必填锚由 askFormIntent.test.ts SAMPLE_FIELDS 承载）；理由行在位
     expect(intent?.fields.find((f) => f.key === "max_total_tokens")?.value).toBe("9000");

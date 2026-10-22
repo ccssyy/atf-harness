@@ -1855,7 +1855,21 @@ window.__ModuleLoader__.load({
                     }),
                     budget.violations.map(function(v, i) {
                       return React.createElement('div', { key: 'budget-viol-' + i, className: 'atf-train-budget-viol' }, '⚠ ' + v)
-                    }))
+                    }),
+                    // b5 像素对复用补丁：视觉像素对区（TokenBudget 三行之后——两行＋来源标注＋
+                    // agent 推荐行；服务端 renderPixelPairRows 单源组行，violations＝min<max
+                    // 关系警示只提示不阻塞；改值走 chat「像素上限改 1605632」既有别名通道）。
+                    budget.pixel_pair && budget.pixel_pair.rows.length > 0 ? React.createElement('div', { className: 'atf-train-pixels' },
+                      React.createElement('div', { className: 'atf-train-sum-head' },
+                        React.createElement('span', null, '视觉像素对（最小/最大像素可改——构造/训练/推理同一对值）')),
+                      budget.pixel_pair.rows.map(function(line, i) {
+                        return React.createElement('div', { key: 'pixel-' + i, className: 'atf-train-row' },
+                          React.createElement('span', { className: 'atf-train-mean' }, line))
+                      }),
+                      budget.pixel_pair.violations.map(function(v, i) {
+                        return React.createElement('div', { key: 'pixel-viol-' + i, className: 'atf-train-budget-viol' }, '⚠ ' + v)
+                      }))
+                      : null)
                     : null),
                 React.createElement('div', { className: 'atf-train-actions' },
                   React.createElement('button', { className: 'atf-pill atf-train-send', onClick: sendMsg }, '生成发起消息（进 chat 正道链）'),
@@ -3351,6 +3365,9 @@ window.__ModuleLoader__.load({
             '.atf-train-budget{margin-top:8px;padding-top:6px;border-top:1px solid rgba(128,128,128,.25);}',
             '.atf-train-budget .atf-train-row{grid-template-columns:1fr;}',
             '.atf-train-budget-viol{color:var(--dsw-static-red-500,#dc2626);font-size:12px;font-weight:600;padding:2px 0;}',
+            // b5 像素对复用补丁：视觉像素对区（TokenBudget 区内——单列行同三要素，虚线上边分区）
+            '.atf-train-pixels{margin-top:6px;padding-top:6px;border-top:1px dashed rgba(128,128,128,.2);}',
+            '.atf-train-pixels .atf-train-row{grid-template-columns:1fr;}',
             '.atf-train-actions{display:flex;gap:10px;align-items:center;}',
             // H5：联合训练字段编辑对话框（按类 tab＋goods/non_goods 分组＋导入区）
             '.atf-joint-frame{width:min(920px,96vw);}',

@@ -17,7 +17,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { buildArtifactsSnapshot, buildMonitorSnapshot } from "./snapshot.js";
 import { PANEL_HTML } from "./panel.js";
 import { queryNvidiaSmi, queryNvidiaSmiAll, queryGpuComputeApps, gpuProcTopByIndex } from "../../../../src/webui/readOnlyTools.js";
-import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS, renderTokenBudgetRows } from "../../../../src/webui/configConfirm.js";
+import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS, renderPixelPairRows, renderTokenBudgetRows } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
 import { resolveInstanceKernelDir } from "../../../../src/core/workspace/instancePin.js";
 import { sessionDomainRefusal, listTrainingSessionCmdlines, probeTrainingEvidence, resolveSessionName, trainingSessionBase } from "../../../../src/core/workspace/tmuxLiveness.js";
@@ -173,7 +173,13 @@ export interface LaunchSurface {
   summary: IterationSummaryRow[];
   /** 批次 R H1-1：TokenBudget 三要素区（三行单源渲染＋两条不变式校验态——前端红字呈现；
    *  rows/violations 与确认卡面（confirmFace tokenBudgetFaceText）同一渲染/校验单源）。 */
-  token_budget: { rows: string[]; violations: string[] };
+  token_budget: {
+    rows: string[];
+    violations: string[];
+    /** b5 像素对复用补丁：视觉像素对区（TokenBudget 三行之后——两行＋来源标注＋agent 推荐行；
+     *  violations＝min<max 关系警示，只提示不阻塞）。 */
+    pixel_pair: { rows: string[]; violations: string[] };
+  };
 }
 
 export interface IterationSummaryRow {
@@ -851,7 +857,9 @@ const readJsonFile = (abs: string): unknown => {
 export const buildLaunchSurface = (dir: string): LaunchSurface => {
   const trainSh = existsSync(join(dir, "launch", "train.sh"));
   const snapshotPath = join(dir, "webui", "config-snapshot.json");
-  const snapshot = hasConfigSnapshotFile(snapshotPath) ? (readJsonFile(snapshotPath) as { confirmed?: Record<string, string> } | null) : null;
+  const snapshot = hasConfigSnapshotFile(snapshotPath)
+    ? (readJsonFile(snapshotPath) as { confirmed?: Record<string, string>; sources?: Record<string, string> } | null)
+    : null;
   const iterPath = iterationConfigPathOf(dir);
   const iter = existsSync(iterPath) ? (readJsonFile(iterPath) as Record<string, unknown> | null) : null;
   const reportDir = join(dir, "launch");
@@ -873,13 +881,25 @@ export const buildLaunchSurface = (dir: string): LaunchSurface => {
     cutoffLen: byKey.get("cutoff_len"),
     maxModelLen: byKey.get("max_model_len"),
   }).violations;
+  // b5 像素对复用补丁：视觉像素对区（TokenBudget 三行之后）。agent 推荐行数据源＝快照
+  // sources 的 agent-recommend 来源标注（全自动档确认链落盘——单源，此处不生成推荐）；
+  // 手动档/无快照＝无推荐行（呈现「默认」态）。violations＝min<max 关系警示（不阻塞）。
+  const recommendSource = snapshot?.sources?.["image_max_pixels"] ?? "";
+  const pixelRecommend =
+    snapshot?.confirmed?.["image_max_pixels"] !== undefined && recommendSource.startsWith("default:agent-recommend:")
+      ? { value: snapshot.confirmed["image_max_pixels"]!, brief: recommendSource.slice("default:agent-recommend:".length) }
+      : null;
+  const pixelPair = renderPixelPairRows(
+    summary.map((row) => ({ key: row.key, value: row.value, tag: rowToTag(row) })),
+    { recommend: pixelRecommend },
+  );
   return {
     train_sh: trainSh,
     config_snapshot: existsSync(snapshotPath),
     iteration_config: iter !== null ? "prep/iteration-config/iteration-config.json" : null,
     prelaunch_report: prelaunch,
     summary,
-    token_budget: { rows: budgetRows, violations: budgetViolations },
+    token_budget: { rows: budgetRows, violations: budgetViolations, pixel_pair: pixelPair },
   };
 };
 
