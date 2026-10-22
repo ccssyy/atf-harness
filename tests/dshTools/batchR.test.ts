@@ -196,10 +196,10 @@ describe("批㊶R前置——agentRecommend nproc clamp（扩键五同步③）"
 });
 
 describe("批㊶R前置——扩键投影三态（白名单/摘要/卡面用例）", () => {
-  it("① 键表白名单：nproc_per_node 在位（label 训练卡数）且键数 15（批㊶-S5 §九 增 base_model_path）", () => {
+  it("① 键表白名单：nproc_per_node 在位（label 训练卡数）且键数 16（批㊶-S5 §九 增 base_model_path；批次 R H1-1 增 max_model_len）", () => {
     const entry = CONFIG_CONFIRM_KEYS.find((e) => e.key === "nproc_per_node");
     expect(entry?.label).toContain("训练卡数");
-    expect(CONFIG_CONFIRM_KEYS.length).toBe(15);
+    expect(CONFIG_CONFIRM_KEYS.length).toBe(16);
   });
   it("② 摘要化路径：buildIterationSummary 出 nproc 行（iteration_config 来源优先）", () => {
     const rows = buildIterationSummary({ nproc_per_node: 4 }, null);

@@ -114,11 +114,11 @@ describe("config_confirm：九要素卡与纯文字应答", () => {
     expect(byKey["deepspeed"]).toEqual({ key: "deepspeed", value: "ds_z3_offload_config.json", tag: "from_registry" });
     expect(byKey["cutoff_len"]).toEqual({ key: "cutoff_len", value: "9000", tag: "default_used" });
     // 批㉚ 段1:九要素＋KB 门禁四项（token 上限/像素对/负样本带——原则二投影面）；
-    // 批㊶R前置 扩键五同步①：卡数显性卡入键表（13→14）
-    expect(fields.length).toBe(15);
+    // 批㊶R前置 扩键五同步①：卡数显性卡入键表（13→14）；批次 R H1-1 增 max_model_len（15→16）
+    expect(fields.length).toBe(16);
   });
 
-  it("批㊶-W F1/F2/§三：KB 全链排除——label 无 KB 标注、缺省改单源、4096 必填空、别名可改", () => {
+  it("批㊶-W F1/F2/§三：KB 全链排除——label 无 KB 标注、缺省改单源、批次 R 惯例基线预填、别名可改", () => {
     const fields = buildConfigConfirmFields({}, {});
     const byKey = Object.fromEntries(fields.map((field) => [field.key, field]));
     const keyMeta = Object.fromEntries(CONFIG_CONFIRM_KEYS.map((entry) => [entry.key, entry]));
@@ -126,11 +126,12 @@ describe("config_confirm：九要素卡与纯文字应答", () => {
     expect(keyMeta["max_total_tokens"]?.label).not.toContain("KB");
     expect(keyMeta["negative_ratio_target"]?.label).not.toContain("KB");
     expect(keyMeta["image_min_pixels"]?.label).toContain("训练/评估必须同一对值");
-    // F1：4096 缺省删除（必填空）；像素缺省改单源 65536/802816
-    expect(keyMeta["max_total_tokens"]?.default).toBe("");
+    // 批次 R H1-1/H1-2：max_total_tokens 缺省改惯例基线 9000（owner 2026-10-22——65536 退役）；
+    // 像素缺省单源 65536/802816 不变
+    expect(keyMeta["max_total_tokens"]?.default).toBe("9000");
     expect(keyMeta["image_min_pixels"]?.default).toBe("65536");
     expect(keyMeta["image_max_pixels"]?.default).toBe("802816");
-    expect(byKey["max_total_tokens"]?.value).toBe("");
+    expect(byKey["max_total_tokens"]?.value).toBe("9000");
     expect(byKey["image_max_pixels"]?.value).toBe("802816");
     // F2：负样本构造带缺省＝2%-5%（R1 终裁）
     expect(keyMeta["negative_ratio_target"]?.default).toBe("0.02,0.05");
@@ -288,7 +289,7 @@ describe("会话语义（spawn mock pipeline）", () => {
     );
     // 卡面：缺省标已用缺省⚠、九要素齐全
     const cardEvent = manager.getSession(sessionId)?.events.find((event) => event.kind === "confirm_card");
-    expect(cardEvent !== undefined && cardEvent.kind === "confirm_card" && cardEvent.fields.length === 15).toBe(true); // 批㊶R前置 13→14＋批㊶-S5 §九 14→15
+    expect(cardEvent !== undefined && cardEvent.kind === "confirm_card" && cardEvent.fields.length === 16).toBe(true); // 批㊶R前置 13→14＋批㊶-S5 §九 14→15＋批次 R H1-1 15→16（max_model_len）
     // 纯文字改参 → 重呈卡（lr 更新）
     await manager.postUserMessage(sessionId, "lr 改 2e-4 其他 ok");
     await waitFor(() => {
@@ -621,13 +622,18 @@ describe("批㊶-W F5——表单卡链（结构化 edits＋form intent ask＋Re
     const request = calls[0] as { questions: Array<{ intent: { kind: string; fields: Array<{ key: string; value: string; hint?: string; required?: boolean }> }; question: string }> };
     const intent = request.questions[0]?.intent;
     expect(intent?.kind).toBe("form");
-    expect(intent?.fields.length).toBe(15);
+    // 批次 R H1-1：16＝15 配置键输入框（16 键滤 max_model_len 只读）＋1 理由行
+    //（token_budget_sync_reason——预算与 cutoff 不等时的不同步理由入口）。
+    expect(intent?.fields.length).toBe(16);
     const lrField = intent?.fields.find((f) => f.key === "learning_rate");
     expect(lrField?.value).toBe("2e-4"); // 现值预填
     expect(lrField?.hint).toContain("5e-5"); // clamp 域提示可读
     expect(intent?.fields.find((f) => f.key === "image_max_pixels")?.hint).toContain("802816");
-    // required 锚：max_total_tokens 空值必填（F1 缺省退役）
-    expect(intent?.fields.find((f) => f.key === "max_total_tokens")?.required).toBe(true);
+    // 批次 R H1-2 锚：max_total_tokens 预填惯例基线 9000（非空——required 只在清空兜底时出现；
+    // 空值必填锚由 askFormIntent.test.ts SAMPLE_FIELDS 承载）；理由行在位
+    expect(intent?.fields.find((f) => f.key === "max_total_tokens")?.value).toBe("9000");
+    expect(intent?.fields.find((f) => f.key === "max_total_tokens")?.required).toBeUndefined();
+    expect(intent?.fields.find((f) => f.key === "token_budget_sync_reason")).toBeDefined();
   });
   it("Reject 回表单卡（带上次值）：审批卡拒一次→第二轮回卡→放行；表单卡 ask 恰两次", async () => {
     const root = tempRoot();

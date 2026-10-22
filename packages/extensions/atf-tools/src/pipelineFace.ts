@@ -47,6 +47,7 @@ import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./ap
 import { appendSegmentFact, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
+import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
 import { join } from "node:path";
 
 /** 段名闭集（权威＝内核 STAGE_ORDER 八项——禁增删改序；旧六段名别名不保留）。 */
@@ -334,6 +335,9 @@ export const buildPipelineTool = (
           session_bound = true;
         }
       }
+      // 批次 R H1-3：失败输出扫描内核错误码（token_budget_* / token_gate_not_configured——
+      // 提前接线：内核 v0.7.24b0 未发版，当前无真实来源；发版后经 stdout/stderr 流回即人话）。
+      const kernelFace = result.code !== 0 ? scanKernelErrorFace([result.stdout, result.stderr]) : null;
       return asToolValue({
         stage: args.stage,
         run_id: args.run_id,
@@ -365,6 +369,10 @@ export const buildPipelineTool = (
           ? { stderr_tail: result.stderr.slice(-2000), note: "环境错误（exit 3）——零写入；核管线环境（python 依赖/数据在位）后重试" }
           : {}),
         ...(summary === null && result.code === 0 ? { note: "段命令成功退出但无 JSON 摘要输出", stdout_head: trimmed.slice(0, 2000) } : {}),
+        // 批次 R H1-3：内核错误码人话回流（提前接线——token_budget_missing /
+        // token_budget_inconsistent:<detail> / token_gate_not_configured 构造期码命中即转
+        // 人话 note（覆盖上方笼统 note——更具体的用户文案优先）；未命中＝既有 note 不变。
+        ...(kernelFace !== null ? { kernel_error: kernelFace.code, note: kernelFace.note } : {}),
       });
     },
   });

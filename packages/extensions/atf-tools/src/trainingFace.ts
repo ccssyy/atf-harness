@@ -49,6 +49,8 @@ export const derivePublishRoot = (env: Readonly<Record<string, string | undefine
   return root === null ? null : join(root, "models");
 };
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
+import { humanizeKernelError, scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
+import { queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
 
 // ── 批㊶Q增补三 段2：start 探活（终结 started:true 假成功）──
 
@@ -472,6 +474,19 @@ const runCapture = (cmd: string, args: readonly string[], timeoutMs: number): Pr
     });
   });
 
+/** 批次 R H1-3：每卡 free 行（nvidia-smi 机器事实——gpu_capacity_insufficient 人话回流附表；
+ *  不可用＝undefined（如实缺表不猜）；free＝total−used 派生，非 nvidia-smi 直报。 */
+const gpuFreeRowsForErrorFace = async (): Promise<string[] | undefined> => {
+  const cards = await queryNvidiaSmiAll();
+  if (cards === null) return undefined;
+  return cards.map((card) => {
+    const used = Number(String(card.memoryUsed).replace(/[^0-9]/g, ""));
+    const total = Number(String(card.memoryTotal).replace(/[^0-9]/g, ""));
+    const free = Number.isFinite(used) && Number.isFinite(total) ? total - used : null;
+    return `GPU ${card.index}: util ${card.utilization}, mem ${card.memoryUsed}/${card.memoryTotal}, free ${free !== null ? `${free} MiB` : "（不可得）"}`;
+  });
+};
+
 export interface TrainingToolsConfig {
   runsRoot: string;
   /** 训练日志落点目录（tail 进料源与 tee 目标同路径）。 */
@@ -835,6 +850,19 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
           started: readTrainingStartedAt(runDir),
           finished: new Date().toISOString(),
         });
+        // 批次 R H1-3：内核错误码人话回流（提前接线——内核 v0.7.24b0 未发版，当前无真实
+        // 来源；发版后日志尾命中即转人话）。gpu_capacity_insufficient 附每卡 free 表
+        //（nvidia-smi 机器事实）；建议但不自动降档（降档是用户决策）。未命中＝既有 note。
+        let startupNote = probe.exitCode === 78
+          ? "启动探活：放行记录闸失败（exit 78——账本无本 config 的放行记录）——先经 --record-training-release 登记（或核 ATF_APPROVAL_LEDGER 双轴）后重推"
+          : "启动探活发现终止特征——训练未启动成功；按 log_tail 摘要处理后重推";
+        let kernelErrorFace: string | undefined;
+        const kernelFaceHit = scanKernelErrorFace([probe.tail]);
+        if (kernelFaceHit !== null) {
+          const gpuRows = kernelFaceHit.code.startsWith("gpu_capacity_insufficient") ? await gpuFreeRowsForErrorFace() : undefined;
+          startupNote = humanizeKernelError(kernelFaceHit.code, { gpuFreeRows: gpuRows }) ?? startupNote;
+          kernelErrorFace = kernelFaceHit.code;
+        }
         return asToolValue({
           started: false,
           error: "startup_failed",
@@ -843,9 +871,8 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
           run_id: args.run_id,
           train_sh: args.train_sh,
           log_tail: probe.tail.slice(-800),
-          note: probe.exitCode === 78
-            ? "启动探活：放行记录闸失败（exit 78——账本无本 config 的放行记录）——先经 --record-training-release 登记（或核 ATF_APPROVAL_LEDGER 双轴）后重推"
-            : "启动探活发现终止特征——训练未启动成功；按 log_tail 摘要处理后重推",
+          ...(kernelErrorFace !== undefined ? { kernel_error: kernelErrorFace } : {}),
+          note: startupNote,
         });
       }
       startLossIngest(logPath, join(runDir, "training", "loss-series.json"));

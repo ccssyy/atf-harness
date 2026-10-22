@@ -19,18 +19,25 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
 // ── 批㊶-W F1：训练 pin 单源常量（三面一致：内核种子/护栏闭集/确认卡缺省引用同一组值）──
-/** 单源值（内核 PIN_DEFAULTS 同轴——批㊶-W F1：种子 token 65536、像素两档 802816/1605632、
- *  负样本构造带 [0.02,0.05]。历史 KB 缺省值组全链退役（字面值不再见于任何配置面——
+/** 单源值（内核 PIN_DEFAULTS 同轴——批㊶-W F1：像素两档 802816/1605632、负样本构造带
+ *  [0.02,0.05]。历史 KB 缺省值组全链退役（字面值不再见于任何配置面——
  *  grep 锚 tests/dshTools/batchW.test.ts）。 */
 export const TRAINING_PIN_CONSTANTS = {
-  /** max_total_tokens 单源值（缺省已退役——确认卡必填；本值仅作域参考与文档锚）。 */
-  max_total_tokens: 65_536,
-  /** 像素下限（固定）。 */
+  /** max_total_tokens 单源值（惯例基线（owner 2026-10-22），非缺省填充值——批次 R H1-2 改值）。
+   *  卡面建议口径同源；确认落盘仍须显式（禁「没写就是 9000」隐含行为——TokenBudget v1 §六）。 */
+  max_total_tokens: 9000,
+  /** 像素下限（固定，像素值与 token 无关）。 */
   image_min_pixels: 65_536,
   /** 像素上限两档（闭集）。 */
   image_max_pixels: [802_816, 1_605_632] as number[],
   /** 负样本构造配额带（F2 R1 终裁 2%-5%——空对象构造，非空页自然来源）。 */
   negative_ratio: { min: 0.02, max: 0.05 },
+  /** cutoff_len 单源值（惯例基线 owner 2026-10-22）——训练截断。与 max_model_len 分属
+   *  训练/推理两个栈（TokenBudget v1 §五）：独立取值，禁互相推导、禁共用常量。 */
+  cutoff_len: 9000,
+  /** max_model_len 单源值（惯例基线 owner 2026-10-22）——推理窗口。与 cutoff_len 分属
+   *  推理/训练两个栈（TokenBudget v1 §五）：独立取值，禁互相推导、禁共用常量。 */
+  max_model_len: 12800,
 } as const;
 
 // ── L1 固定智能缺省（附录 A 第一层）──
@@ -74,6 +81,48 @@ export const CLAMP_DOMAINS = {
   image_max_pixels: TRAINING_PIN_CONSTANTS.image_max_pixels,
   // 批㊶-W F2：负样本构造带（Agent 建议区间——域内任意值可建议，域外拦截回退）。
   negative_ratio: TRAINING_PIN_CONSTANTS.negative_ratio,
+};
+
+// ── 批次 R H1-1：TokenBudget 三要素关系校验（服务端单源——confirmFace 确认闸与
+//    atf-ui web 面双处消费同一函数，禁两套实现）。设计依据 ATF_设计_TokenBudget_v1 §五：──
+//    约束一（训练侧）max_total_tokens ≤ cutoff_len——闸门放行的最大样本训练时必须装得下；
+//    约束二（推理侧）max_total_tokens ≤ max_model_len——prompt 装得下，余量给生成；
+//    cutoff_len 与 max_model_len 之间无约束（两个栈，禁互相推导）。
+
+/** TokenBudget 关系校验结果：violations 空＝可确认；needsSync＝预算与 cutoff 不等
+ *  （提示是否同步——同步是用户动作，不自动；不同步须填理由）。 */
+export interface TokenBudgetCheck {
+  violations: string[];
+  needsSync: boolean;
+}
+
+/** TokenBudget 两条不变式＋同步理由校验（纯函数，值形态宽松——卡面字符串/数值皆收）。
+ *  值缺失/非正整数＝violation（fail-closed，不猜）；预算与 cutoff 不等且未填理由＝
+ *  violation（理由空则禁确认）。 */
+export const checkTokenBudget = (
+  triple: { maxTotalTokens: unknown; cutoffLen: unknown; maxModelLen: unknown },
+  opts: { syncReason?: string } = {},
+): TokenBudgetCheck => {
+  const violations: string[] = [];
+  const parse = (raw: unknown, label: string): number | null => {
+    const num = typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw.trim()) : NaN;
+    if (!Number.isFinite(num) || !Number.isInteger(num) || num <= 0) {
+      violations.push(`${label} 须为正整数（得 ${String(raw)}）——不猜测`);
+      return null;
+    }
+    return num;
+  };
+  const mtt = parse(triple.maxTotalTokens, "max_total_tokens");
+  const cutoff = parse(triple.cutoffLen, "cutoff_len");
+  const mml = parse(triple.maxModelLen, "max_model_len");
+  if (mtt === null || cutoff === null || mml === null) return { violations, needsSync: false };
+  if (mtt > cutoff) violations.push(`预算超过训练截断，训练会截断样本（max_total_tokens ${mtt} > cutoff_len ${cutoff}）`);
+  if (mtt > mml) violations.push(`预算超过推理窗口（max_total_tokens ${mtt} > max_model_len ${mml}）`);
+  const needsSync = mtt !== cutoff;
+  if (needsSync && (opts.syncReason ?? "").trim() === "") {
+    violations.push(`预算与训练截断不等（max_total_tokens ${mtt} ≠ cutoff_len ${cutoff}）——同步 cutoff_len（用户动作，不自动）或填写不同步理由`);
+  }
+  return { violations, needsSync };
 };
 
 // ── 批㊶-S5 §九：默认基模型锚点（owner 10-12 裁定——确认卡基线默认，卡上可改；非全局锁定）──
