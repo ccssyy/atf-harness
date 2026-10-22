@@ -70,10 +70,16 @@ describe("D11-2 数据面——GPU 历史追加/轮转/读取（真 fs tmpdir）
 
   it("appendGpuHistory：一行一周期追加；写失败（atf-ui 为普通文件）不抛不阻断；7 天前文件清理", async () => {
     const mod = await import("../../packages/extensions/atf-ui/src/server.js");
+    // D65：appendGpuHistory 按真实运行日取文件名（产品语义），fixture 日期随之按运行日生成
+    // （此前写死 2026-10-19——仅 10-19 当天可过，任意日期复跑必挂；改测试不改产品）。
+    // 基准取当天 12:00（非 now）：now 近午夜时 dayIso(+5s) 会跨天、追加行落进次日文件。
+    const dayTs = new Date();
+    dayTs.setHours(12, 0, 0, 0);
+    const dayIso = (deltaS: number) => new Date(dayTs.getTime() + deltaS * 1000).toISOString();
     // 追加两拍 → 两行
-    mod.appendGpuHistory(root, { ts: "2026-10-19T12:00:00.000Z", gpus: [{ index: 0, util: 1, memUsed: 2, memTotal: 3, temp: null, power: null, procTop: null }] });
-    mod.appendGpuHistory(root, { ts: "2026-10-19T12:00:05.000Z", gpus: [{ index: 0, util: 5, memUsed: 6, memTotal: 7, temp: null, power: null, procTop: null }] });
-    const day = mod.gpuHistoryFileName(new Date("2026-10-19T12:00:00.000Z"));
+    mod.appendGpuHistory(root, { ts: dayIso(0), gpus: [{ index: 0, util: 1, memUsed: 2, memTotal: 3, temp: null, power: null, procTop: null }] });
+    mod.appendGpuHistory(root, { ts: dayIso(5), gpus: [{ index: 0, util: 5, memUsed: 6, memTotal: 7, temp: null, power: null, procTop: null }] });
+    const day = mod.gpuHistoryFileName(dayTs);
     const lines = readFileSync(join(root, "atf-ui", day), "utf8").trim().split("\n");
     expect(lines).toHaveLength(2);
     expect(JSON.parse(lines[1]!).gpus[0].util).toBe(5);
