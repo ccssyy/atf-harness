@@ -24,20 +24,62 @@ export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; de
   { key: "num_train_epochs", label: "训练轮数 epochs", default: "3" },
   { key: "per_device_train_batch_size", label: "单卡 batch", default: "1" },
   { key: "gradient_accumulation_steps", label: "梯度累积", default: "8" },
-  { key: "cutoff_len", label: "cutoff_len", default: "9000" },
+  // 批次 R H1-1：TokenBudget 三要素——cutoff_len/max_model_len 缺省改单源惯例基线
+  //（owner 2026-10-22；两值独立取值、禁互相推导、禁共用常量——TokenBudget v1 §五）。
+  { key: "cutoff_len", label: "训练截断 cutoff_len", default: String(TRAINING_PIN_CONSTANTS.cutoff_len) },
   { key: "deepspeed", label: "deepspeed 配置", default: "ds_z2_config.json" },
   { key: "lora_rank", label: "lora_rank", default: "32" },
   { key: "lora_alpha", label: "lora_alpha", default: "64" },
   { key: "dataset_keys", label: "数据集键", default: "（由登记面推导）" },
-  // 批㊶-W F1：max_total_tokens 4096 缺省删除（必填——表单卡 required 拦空）；像素缺省
-  // 改引 TRAINING_PIN_CONSTANTS 单源（历史 KB 像素缺省对全链退役，字面值不再见于本文件）。
-  // 批㊶-W §三（owner 终裁）：KB 全链排除——label 不再携带来源标注
-  // （不做参考不做提示；引用零残留——grep 锚 tests/dshTools/batchW.test.ts）。
-  { key: "max_total_tokens", label: "token 上限（必填｜含义:单样本最大 token 量,超长单据截断/拒绝构造）", default: "" },
+  // 批次 R H1-1/H1-2：max_total_tokens 预填惯例基线 9000（owner 2026-10-22 裁定——缺省来源
+  // 从「必填空」改为 owner 惯例并标来源；确认落盘仍显式。清空提交仍被必填拦空兜底拦截
+  //（confirmFace configFormFieldsOf）。65536 域参考值退役（不显示、不预填）。
+  { key: "max_total_tokens", label: "单样本 token 预算 max_total_tokens（惯例基线预填,可改;超长单据构造期拒绝）", default: String(TRAINING_PIN_CONSTANTS.max_total_tokens) },
+  // 批次 R H1-1：推理窗口入卡（只读——卡面不提供自由编辑；独立取值非 cutoff 推导）。
+  { key: "max_model_len", label: "推理窗口 max_model_len（只读）", default: String(TRAINING_PIN_CONSTANTS.max_model_len) },
   { key: "image_min_pixels", label: "像素下限（原则一:训练/评估必须同一对值,评估服务只引用训练确认值）", default: String(TRAINING_PIN_CONSTANTS.image_min_pixels) },
   { key: "image_max_pixels", label: "像素上限（与像素下限成对确认;两档闭集）", default: String(TRAINING_PIN_CONSTANTS.image_max_pixels[0]) },
   { key: "negative_ratio_target", label: "负样本构造带（配额 2%-5%,空对象构造;空自然页可作构造输入之一非配额来源）", default: `${TRAINING_PIN_CONSTANTS.negative_ratio.min},${TRAINING_PIN_CONSTANTS.negative_ratio.max}` },
 ];
+
+// ── 批次 R H1-1：TokenBudget 三要素区（卡面与 web 摘要共用单源渲染）──
+
+/** TokenBudget 三要素键（同屏呈现：预算可编辑，cutoff/max_model_len 只读参照）。 */
+export const TOKEN_BUDGET_KEYS: ReadonlyArray<"max_total_tokens" | "cutoff_len" | "max_model_len"> = [
+  "max_total_tokens",
+  "cutoff_len",
+  "max_model_len",
+];
+
+/** 三要素来源标注：用户显式改值＝用户指定；agent 推荐＝agent 推荐；其余（缺省/登记值）
+ *  ＝惯例基线（owner 2026-10-22）——TokenBudget v1 §六来源口径。 */
+export const tokenBudgetSourceNoteOf = (tag: string | undefined): string =>
+  tag === "need_confirm" ? "用户指定" : tag === "agent_recommend" ? "agent 推荐" : "惯例基线（owner 2026-10-22）";
+
+/** 三要素区单行输入形态（confirmFace 字段与 atf-ui 摘要行共用宽松形态）。 */
+export interface TokenBudgetRow {
+  key: string;
+  value: string;
+  tag?: string;
+}
+
+/** TokenBudget 三要素区三行渲染（单源）：预算可编辑；cutoff 只读参照（与预算不等须同步
+ *  或填理由——同步是用户动作不自动）；max_model_len 只读独立取值（禁 cutoff 推导）。 */
+export const renderTokenBudgetRows = (rows: ReadonlyArray<TokenBudgetRow>): string[] => {
+  const byKey = new Map(rows.map((row) => [row.key, row]));
+  const mtt = byKey.get("max_total_tokens");
+  const cutoff = byKey.get("cutoff_len");
+  const mml = byKey.get("max_model_len");
+  const cutoffNote =
+    mtt !== undefined && cutoff !== undefined && mtt.value.trim() === cutoff.value.trim()
+      ? "= 预算"
+      : "≠ 预算（须同步 cutoff 或填理由）";
+  return [
+    `单样本 token 预算  max_total_tokens  可编辑  ${mtt?.value ?? "（缺失）"}  [${tokenBudgetSourceNoteOf(mtt?.tag)}]`,
+    `训练截断 cutoff    cutoff_len        只读    ${cutoff?.value ?? "（缺失）"}  [${cutoffNote}]`,
+    `推理窗口           max_model_len     只读    ${mml?.value ?? "（缺失）"}  [独立取值]`,
+  ];
+};
 
 /** 卡面字段构造：值来源三态（显式覆盖 from_registry/用户值 need_confirm/缺省 default_used）。 */
 export const buildConfigConfirmFields = (

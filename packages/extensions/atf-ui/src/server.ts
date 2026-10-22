@@ -17,7 +17,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { buildArtifactsSnapshot, buildMonitorSnapshot } from "./snapshot.js";
 import { PANEL_HTML } from "./panel.js";
 import { queryNvidiaSmi, queryNvidiaSmiAll, queryGpuComputeApps, gpuProcTopByIndex } from "../../../../src/webui/readOnlyTools.js";
-import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
+import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS, renderTokenBudgetRows } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
 import { resolveInstanceKernelDir } from "../../../../src/core/workspace/instancePin.js";
 import { sessionDomainRefusal, listTrainingSessionCmdlines, probeTrainingEvidence, resolveSessionName, trainingSessionBase } from "../../../../src/core/workspace/tmuxLiveness.js";
@@ -51,7 +51,7 @@ import {
   validateGpuBaseline,
   ensureConventionSubdirs,
 } from "../../../../src/webui/storageSettings.js";
-import { detectAvailableGpuCount } from "../../../../src/core/workspace/smartDefaults.js";
+import { detectAvailableGpuCount, checkTokenBudget } from "../../../../src/core/workspace/smartDefaults.js";
 import { listRegistryRecords, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { readAlerts } from "../../../../src/core/workspace/trainProbe.js";
 
@@ -171,6 +171,9 @@ export interface LaunchSurface {
   iteration_config: string | null;
   prelaunch_report: string | null;
   summary: IterationSummaryRow[];
+  /** 批次 R H1-1：TokenBudget 三要素区（三行单源渲染＋两条不变式校验态——前端红字呈现；
+   *  rows/violations 与确认卡面（confirmFace tokenBudgetFaceText）同一渲染/校验单源）。 */
+  token_budget: { rows: string[]; violations: string[] };
 }
 
 export interface IterationSummaryRow {
@@ -790,19 +793,22 @@ export const ITERATION_MEANINGS: Record<string, string> = {
   num_train_epochs: "训练轮数（全量数据过几遍）",
   per_device_train_batch_size: "单卡 batch（每次前向的样本数）",
   gradient_accumulation_steps: "梯度累积（累积几步做一次更新；等效 batch＝单卡 batch×累积）",
-  cutoff_len: "样本截断长度（训练序列最大 token 数）",
+  cutoff_len: "训练截断（训练序列最大 token 数——只在训练时生效且会截断，禁当数据筛选阈值；与预算 max_total_tokens 同步或填理由）",
   deepspeed: "DeepSpeed 分布式配置（显存/卸载策略）",
   lora_rank: "LoRA 秩（容量/参数量）",
   lora_alpha: "LoRA alpha（缩放系数，与 rank 成对）",
   dataset_keys: "数据集键（登记面推导的 variants 条目）",
-  max_total_tokens: "构造准入闸门：单样本超限在数据构造期截断/拒绝——不作用于评估推理长度（推理截断由服务端 completion 参数决定）",
+  max_total_tokens: "单样本 token 预算（数据构造期准入闸门——超限样本构造期拒绝而非截断；须 ≤ cutoff_len 且 ≤ max_model_len）",
+  max_model_len: "推理窗口（vLLM 部署上下文配置，独立取值非 cutoff 推导——预算须 ≤ 本值，余量给生成）",
   image_min_pixels: "像素下限（训练/评估必须同一对值，评估服务只引用训练确认值）",
   image_max_pixels: "像素上限（与像素下限成对确认）",
   negative_ratio_target: "负样本目标带（构造期配比目标）",
 };
 
-/** KB 四项（批㉚ 段1 入卡来源——未经确认不进生效配置，卡面/摘要均如实标注未校准）。 */
-const KB_KEYS = new Set(["max_total_tokens", "image_min_pixels", "image_max_pixels", "negative_ratio_target"]);
+/** KB 三项（批㉚ 段1 入卡来源——未经确认不进生效配置，卡面/摘要均如实标注未校准）。
+ *  批次 R H1-1：max_total_tokens 移出（缺省改惯例基线 owner 2026-10-22——不再是「KB 建议·未校准」，
+ *  TokenBudget 三要素区来源单源标注）。 */
+const KB_KEYS = new Set(["image_min_pixels", "image_max_pixels", "negative_ratio_target"]);
 
 export const buildIterationSummary = (
   iterValues: Record<string, unknown> | null,
@@ -856,12 +862,24 @@ export const buildLaunchSurface = (dir: string): LaunchSurface => {
   } catch {
     prelaunch = null;
   }
+  const summary = buildIterationSummary(iter?.["training"] !== undefined && iter?.["training"] !== null && typeof iter["training"] === "object" ? (iter["training"] as Record<string, unknown>) : iter, snapshot?.confirmed ?? null);
+  // 批次 R H1-1：TokenBudget 三要素区（web 面前端校验——与确认卡服务端闸同一校验/渲染单源；
+  // 来源标注口径：config_snapshot＝用户确认值→用户指定；iteration_config/default→惯例基线）。
+  const rowToTag = (row: IterationSummaryRow): string | undefined => (row.source === "config_snapshot" ? "need_confirm" : undefined);
+  const budgetRows = renderTokenBudgetRows(summary.map((row) => ({ key: row.key, value: row.value, tag: rowToTag(row) })));
+  const byKey = new Map(summary.map((row) => [row.key, row.value]));
+  const budgetViolations = checkTokenBudget({
+    maxTotalTokens: byKey.get("max_total_tokens"),
+    cutoffLen: byKey.get("cutoff_len"),
+    maxModelLen: byKey.get("max_model_len"),
+  }).violations;
   return {
     train_sh: trainSh,
     config_snapshot: existsSync(snapshotPath),
     iteration_config: iter !== null ? "prep/iteration-config/iteration-config.json" : null,
     prelaunch_report: prelaunch,
-    summary: buildIterationSummary(iter?.["training"] !== undefined && iter?.["training"] !== null && typeof iter["training"] === "object" ? (iter["training"] as Record<string, unknown>) : iter, snapshot?.confirmed ?? null),
+    summary,
+    token_budget: { rows: budgetRows, violations: budgetViolations },
   };
 };
 

@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { buildConfigConfirmFields, saveConfigSnapshot } from "../../../../src/webui/configConfirm.js";
+import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows } from "../../../../src/webui/configConfirm.js";
 
 /** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型；批㊶-Q 增第四态 agent_recommend，
  *  仅全自动档采纳 agent 参数推荐时由本文件后处理标注，buildConfigConfirmFields 不产出该态）。
@@ -37,6 +37,7 @@ import {
   clampCutoffLen,
   clampImageMaxPixels,
   clampNegativeRatio,
+  checkTokenBudget,
   SMART_DEEPSPEED_DEFAULT,
   applyConfirmedToIterationConfig,
   detectAvailableGpuCount,
@@ -101,10 +102,13 @@ export const formAskQuestion = (q: {
 
 /** 确认卡字段 → 表单卡逐键输入行（label＝键名·现值预填·clamp 域 hint；max_total_tokens
  *  空值＝必填拦空兜底＋建议值前置（D36——参考值口径引 TRAINING_PIN_CONSTANTS 单源，
- *  缺省语义仍退役、必填拦空不变——owner 批㊶-W F1 裁定不动，只强化首提前的占位指引））。
- *  A1：与回归断言单源。 */
+ *  批次 R H1-2 改值后建议值＝9000 惯例基线；必填拦空兜底保留——用户清空提交仍拦）。
+ *  批次 R H1-1：max_model_len 只读——不生成输入框（值恒单源惯例基线，卡面三要素区只读呈现，
+ *  独立取值禁 cutoff 推导）。A1：与回归断言单源。 */
 export const configFormFieldsOf = (fields: ConfigConfirmField[], gpuCount: number | null) =>
-  fields.map((field) => {
+  fields
+    .filter((field) => field.key !== "max_model_len")
+    .map((field) => {
     const hint = domainHintOf(field.key, gpuCount);
     return {
       key: field.key,
@@ -145,7 +149,11 @@ export const domainHintOf = (key: string, gpuCount: number | null): string | und
     case "lora_rank":
       return `档位 {${CLAMP_DOMAINS.lora_rank.join(", ")}}（alpha=2×rank 联动）`;
     case "cutoff_len":
-      return `≤ ${CLAMP_DOMAINS.cutoff_len.max}`;
+      // 批次 R H1-1：TokenBudget 口径——cutoff 只在训练时生效且会截断（禁当数据筛选阈值）；
+      // 变更须与预算同步（等值）或填不同步理由（预算 ≤ cutoff 不变式由 checkTokenBudget 拦）。
+      return `≤ ${CLAMP_DOMAINS.cutoff_len.max}；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）`;
+    case "max_model_len":
+      return `只读＝${TRAINING_PIN_CONSTANTS.max_model_len}（推理窗口，独立取值——禁由 cutoff 推导）`;
     case "image_max_pixels":
       return `两档 {${(CLAMP_DOMAINS.image_max_pixels as number[]).join(", ")}}`;
     case "negative_ratio_target":
@@ -153,11 +161,38 @@ export const domainHintOf = (key: string, gpuCount: number | null): string | und
     case "nproc_per_node":
       return gpuCount !== null ? `[1, 可用卡数 ${gpuCount}]` : "须为本机可用卡数内（机器事实）";
     case "max_total_tokens":
-      return `正整数；建议 ${TRAINING_PIN_CONSTANTS.max_total_tokens}（单样本 token 上限，超长单据构造期截断/拒绝）`;
+      // 批次 R H1-2：建议值单源 9000（惯例基线 owner 2026-10-22——65536 域参考值退役）。
+      return `正整数；建议 ${TRAINING_PIN_CONSTANTS.max_total_tokens}（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）`;
     default:
       return undefined;
   }
 };
+
+/** 批次 R H1-1：fields → TokenBudget 三值校验（服务端闸单源入口——手动档表单卡循环与
+ *  自动档落快照前共用；violations 非空＝禁确认）。 */
+export const tokenBudgetCheckOf = (
+  fields: ReadonlyArray<ConfigConfirmField>,
+  syncReason: string,
+): { violations: string[]; needsSync: boolean } =>
+  checkTokenBudget(
+    {
+      maxTotalTokens: fields.find((f) => f.key === "max_total_tokens")?.value,
+      cutoffLen: fields.find((f) => f.key === "cutoff_len")?.value,
+      maxModelLen: fields.find((f) => f.key === "max_model_len")?.value,
+    },
+    { syncReason },
+  );
+
+/** TokenBudget 三要素区文本（表单卡 detail / pending 卡 / 审批卡 reason 共用单源——
+ *  三行呈现＋violations 红字行）。 */
+export const tokenBudgetFaceText = (
+  fields: ReadonlyArray<ConfigConfirmField>,
+  violations: readonly string[],
+): string => [
+  "TokenBudget（三要素）:",
+  ...renderTokenBudgetRows(fields),
+  ...(violations.length > 0 ? violations.map((v) => `⚠ ${v}`) : []),
+].join("\n");
 
 /** 三态标记（卡面文本化：⚠ 已用缺省／◆ 来自登记／? 需确认——与手搓批⑮三态标签同源语义）。
  *  批㊶-Q 增第四态：◇ agent 推荐（全自动档采纳的 agent 参数推荐——来源标注进 sources/通报）。 */
@@ -233,7 +268,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const configTool = defineTool({
     name: "atf_config_confirm",
     description:
-      "九要素训练配置确认卡：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 应用结构化改参（edits 传键值对象）后重呈。合并版双段式编排（present/amend 同链）：第一段改参收集——工具内部直接以 DSH 原生问题卡 form intent 表单卡向用户呈十五键逐键输入框（现值预填＋clamp 域提示），用户改值/直接提交即回结构化 key=value；第二段授权——有改动走确定性 clamp（越界回退域边界＋可读说明），最终授权一律走审批卡 Allow once（账本留痕不变）；审批卡 Reject → 回表单卡（带上次值）循环，用户关闭表单卡＝取消（结构化拒绝）。问题卡只收集改参、不承载授权（审批≠请示，闸门语义不迁移）；用户在聊天里的改参话术由 agent 语义理解后转 edits 结构化参数（自由文本永不直达生成面）。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——登记源，卡面与 Web 摘要同源）＞缺省。手动档（权限档）：审批面板 Allow once 确认后 config-snapshot 落盘。全自动训练档（会话档位=auto_training，经界面人工切换）：present 免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend（同样免阻塞）。" +
+      "九要素训练配置确认卡：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 应用结构化改参（edits 传键值对象）后重呈。合并版双段式编排（present/amend 同链）：第一段改参收集——工具内部直接以 DSH 原生问题卡 form intent 表单卡向用户呈确认键逐键输入框（现值预填＋clamp 域提示；max_model_len 只读不入输入框——批次 R H1-1 三要素区只读呈现），卡面附 TokenBudget 三要素区（预算/训练截断/推理窗口三行＋两条不变式校验：预算超 cutoff 或超 max_model_len 即红字禁确认；预算与 cutoff 不等须同步（用户动作不自动）或填不同步理由），用户改值/直接提交即回结构化 key=value；第二段授权——有改动走确定性 clamp（越界回退域边界＋可读说明），最终授权一律走审批卡 Allow once（账本留痕不变）；审批卡 Reject → 回表单卡（带上次值）循环，用户关闭表单卡＝取消（结构化拒绝）。问题卡只收集改参、不承载授权（审批≠请示，闸门语义不迁移）；用户在聊天里的改参话术由 agent 语义理解后转 edits 结构化参数（自由文本永不直达生成面）。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——登记源，卡面与 Web 摘要同源）＞缺省。手动档（权限档）：审批面板 Allow once 确认后 config-snapshot 落盘。全自动训练档（会话档位=auto_training，经界面人工切换）：present 免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend（同样免阻塞）。" +
       "全自动档 agent 参数推荐（recommend 参数，本档专属）：训练提交前基于任务描述＋数据集统计（样本数/长度分布/模态）＋经验锚点给出 epochs/lr/rank/cutoff/负样本带推荐值并附 reason（理由）。经验锚点（owner 手工训练经验，参考知识非硬规则）：样本 2万–3万 → 3 epochs；4万以上 → 2 epochs；小样本（<1万）宜多轮并防过拟合（配早停观察）。护栏：epochs∈[1,10] 整数、lr∈[5e-5,5e-4]、lora_rank∈{16,32,64,128}（alpha=2×rank 联动）、cutoff≤12800、像素两档∈{802816,1605632}（单源）、负样本构造带∈[0.02,0.05]（F2 R1 终裁——空对象构造配额）、bs 正整数、nproc∈[1,可用卡数]——越界推荐被拦截并回退固定建议（不静默修正），拦截事实进通报；推荐缺失同样回退。lora_alpha 不单独推荐（随 rank 联动）。" +
       "基模型锚点（owner 裁定 2026-10-12 §九）：确认卡基模型字段默认值＝模型库位置下的 Qwen3-VL-32B-Instruct（owner 偏置锚点，非查表推导；卡上可改，改动经防线①本地复核）。评估侧继续锚定 -AWQ 变体（现状不变）。" +
       "卡数偏置（owner 裁定 2026-10-11）：训练卡数默认拉满本机可用卡（nproc_per_node=机器事实可用卡数），训练时长优先；代价（显存/时长）如实呈现给用户，不作降档依据；降档仅在用户任务上下文明确要求时采纳。卡数维度无成文锚点——不编造「数据规模→卡数」映射、不查表推荐，卡数只来自机器事实与用户显式要求；自动档默认低于可用卡的 nproc 推荐会被护栏回退拉满。",
@@ -484,6 +519,13 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const note = guardNotes.length > 0 ? `${baseNote}\n${guardNotes.join("\n")}` : baseNote;
       if (autoTier) {
         // —— 全自动档：免阻塞落快照＋通报呈现（无静默：每键取值＋来源标注可回看） ——
+        // 批次 R H1-1：落快照前 TokenBudget 关系终检（fail-closed——两条不变式不成立/不等无理由
+        // 即拒，不静默落盘；agent 推荐理由 reason 或 amend 的 token_budget_sync_reason 兼作
+        // 不同步理由——推荐改预算与 cutoff 不等须附理由，无理由即拦）。
+        const autoBudgetCheck = tokenBudgetCheckOf(fields, String(amended?.["token_budget_sync_reason"] ?? reason ?? ""));
+        if (autoBudgetCheck.violations.length > 0) {
+          return asToolValue({ ok: false, run_id: args.run_id, error: "token_budget_invariant_violated", note: `${autoBudgetCheck.violations.join("；")}——快照未落盘；同步 cutoff_len 或补理由后重推` });
+        }
         const sources: Record<string, string> = {};
         for (const field of fields) {
           sources[field.key] =
@@ -543,15 +585,26 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       if (userQuestions === undefined || typeof userQuestions.ask !== "function") {
         return asToolValue({ ok: false, run_id: args.run_id, error: "user_questions_unavailable", note: "DSH user-questions 服务未挂载——表单卡通道不可用（fail-closed；不退纯文字链）" });
       }
-      writePending(runDir, { kind: "config_confirm", run_id: args.run_id, title, fields, note, at: new Date().toISOString() });
+      // 批次 R H1-1：进卡初始校验态（基线惯例值 9000/9000/12800 恒通过；登记值异常进卡即红字）。
+      const initialBudgetViolations = tokenBudgetCheckOf(fields, "").violations;
+      writePending(runDir, { kind: "config_confirm", run_id: args.run_id, title, fields, note: `${note}\n${tokenBudgetFaceText(fields, initialBudgetViolations)}`, at: new Date().toISOString() });
+      // TokenBudget 关系校验态（跨轮呈现——violations 非空时表单卡红字重呈，
+      // 不进审批卡＝禁用确认；清零后恢复授权链）。
+      let budgetViolations: string[] = initialBudgetViolations;
       for (;;) {
         // 批㊶-W 真机修正：typert lossless JSON 拒绝嵌套 undefined（对象键值 undefined
         // 即「not lossless JSON data」）——可选键一律条件 spread，禁显式 undefined 值。
-        const formFields = configFormFieldsOf(fields, gpuCount);
+        const formFields = [
+          ...configFormFieldsOf(fields, gpuCount),
+          // 批次 R H1-1：不同步理由输入行（预算与 cutoff 不等时必填——空即拦确认；
+          // 相等时留空。理由是用户输入，不自动生成；不落配置（非配置键）。
+          { key: "token_budget_sync_reason", label: "token_budget_sync_reason", value: "", placeholder: "预算与 cutoff 不等时的不同步理由（不等必填；相等留空）——同步请在 cutoff_len 框直接填预算值（用户动作）" },
+        ];
         const formDetail = [
           "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。",
           ...(amendNote !== undefined ? [amendNote] : []),
           ...(guardNotes.length > 0 ? [`卡数护栏：${guardNotes.join("；")}`] : []),
+          tokenBudgetFaceText(fields, budgetViolations),
         ].join("\n");
         let answers: { answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string> }> };
         try {
@@ -614,15 +667,22 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         if (clampedKeys.length > 0 || loopNote !== "") {
           amendNote = `本轮改参：${Object.keys(changedEdits).join(", ") || "（按现值确认）"}${clampedKeys.length > 0 ? `；越界拦截回退（域边界）：${clampedKeys.join("、")}` : ""}${loopNote}`;
         }
+        // 批次 R H1-1：TokenBudget 关系校验（服务端闸——与表单卡 detail 红字同源单源函数）。
+        // violations 非空＝禁用确认：不进审批卡，红字重呈表单卡；预算与 cutoff 不等时
+        // 同步是用户动作（cutoff_len 框直接填预算值）不自动，不同步须填理由（空即拦）。
+        const syncReason = changedEdits["token_budget_sync_reason"] ?? "";
+        delete changedEdits["token_budget_sync_reason"];
+        budgetViolations = tokenBudgetCheckOf(fields, syncReason).violations;
+        if (budgetViolations.length > 0) continue;
         // 第二段＝审批卡（授权唯一落点——Reject 回表单卡循环）；E5 模板四行＋字段表续行
         const verdict = await requestApproval(ctx, exec, "atf_config_confirm",
           buildApprovalReason({
             action: "确认训练配置并落快照",
             target: `（${title}）`,
-            effect: "写 run 配置快照（确认值十五键）",
+            effect: "写 run 配置快照（确认值全部键＋TokenBudget 三要素）",
             reversible: "可逆（可改参后重新确认）",
             cost: "按任务卡",
-          }) + `\n${renderFields(fields)}\n${note}${amendNote !== undefined ? `\n${amendNote}` : ""}`);
+          }) + `\n${renderFields(fields)}\n${tokenBudgetFaceText(fields, [])}\n${note}${amendNote !== undefined ? `\n${amendNote}` : ""}`);
         if (verdict.ok) break;
         if (verdict.outcome === "rejected") {
           // Reject → 回表单卡（带上次值——fields 已就地更新）

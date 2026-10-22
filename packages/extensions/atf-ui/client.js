@@ -1777,6 +1777,8 @@ window.__ModuleLoader__.load({
       var mode = train && train.mode === 'real' ? 'real' : 'dry_run'
       if (train === null) return null
       var summary = (run && run.launch && run.launch.summary) || []
+      // 批次 R H1-1：TokenBudget 三要素区数据（monitor.json launch.token_budget；旧快照缺席＝null 不渲染）
+      var budget = (run && run.launch && run.launch.token_budget) || null
       var sendMsg = function() {
         var iterCount = summary.filter(function(row) { return row.source === 'iteration_config' }).length
         var msg = trainLaunchMessage({ run_id: runId, mode: mode, summaryCount: iterCount })
@@ -1834,7 +1836,21 @@ window.__ModuleLoader__.load({
                         className: 'atf-train-src' + (row.source === 'default' ? ' atf-train-src-warn' : ''),
                       }, row.source === 'iteration_config' ? '来自 IterationConfig' : row.source === 'config_snapshot' ? '来自登记快照' : '缺省/KB 未校准 ⚠'),
                       React.createElement('span', { className: 'atf-train-mean', title: row.meaning }, row.meaning.split('｜')[0]))
-                  })),
+                  }),
+                  // 批次 R H1-1：TokenBudget 三要素区（同屏三行＋关系校验红字——与确认卡面
+                  // 同一渲染/校验单源（server buildLaunchSurface token_budget）；violations 非空
+                  // 即关系不成立（确认卡侧禁确认），此处只读呈现供发起前核对。
+                  budget ? React.createElement('div', { className: 'atf-train-budget' },
+                    React.createElement('div', { className: 'atf-train-sum-head' },
+                      React.createElement('span', null, 'TokenBudget 三要素（预算可编辑；cutoff/推理窗口只读——预算须 ≤ 两者，训练/推理两栈独立取值）')),
+                    budget.rows.map(function(line, i) {
+                      return React.createElement('div', { key: 'budget-' + i, className: 'atf-train-row' },
+                        React.createElement('span', { className: 'atf-train-mean' }, line))
+                    }),
+                    budget.violations.map(function(v, i) {
+                      return React.createElement('div', { key: 'budget-viol-' + i, className: 'atf-train-budget-viol' }, '⚠ ' + v)
+                    }))
+                    : null),
                 React.createElement('div', { className: 'atf-train-actions' },
                   React.createElement('button', { className: 'atf-pill atf-train-send', onClick: sendMsg }, '生成发起消息（进 chat 正道链）'),
                   React.createElement('span', { className: 'atf-viewer-empty' }, '消息进 chat 后走确认卡批准/驳回（M2 内嵌通道）；批准≠放行真训——真训另有闸。')))
@@ -3309,6 +3325,10 @@ window.__ModuleLoader__.load({
             '.atf-train-src{color:var(--dsw-alias-brand-primary,#1d4ed8);font-size:11px;}',
             '.atf-train-src-warn{color:var(--dsw-alias-state-warn-label,#b45309);}',
             '.atf-train-mean{color:var(--dsh-text-secondary,#64748b);font-size:11px;}',
+            // 批次 R H1-1：TokenBudget 三要素区（relation violations 红字——DSH 静态红 token，亮暗主题同源）
+            '.atf-train-budget{margin-top:8px;padding-top:6px;border-top:1px solid rgba(128,128,128,.25);}',
+            '.atf-train-budget .atf-train-row{grid-template-columns:1fr;}',
+            '.atf-train-budget-viol{color:var(--dsw-static-red-500,#dc2626);font-size:12px;font-weight:600;padding:2px 0;}',
             '.atf-train-actions{display:flex;gap:10px;align-items:center;}',
             // H5：联合训练字段编辑对话框（按类 tab＋goods/non_goods 分组＋导入区）
             '.atf-joint-frame{width:min(920px,96vw);}',
