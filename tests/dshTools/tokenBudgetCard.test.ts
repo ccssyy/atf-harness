@@ -27,6 +27,7 @@ import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confi
 import { buildLaunchSurface } from "../../packages/extensions/atf-ui/src/server.js";
 import { humanizeKernelError, scanKernelErrorFace, KERNEL_ERROR_FACE_CODES } from "../../src/core/workspace/kernelErrorFace.js";
 import { buildPipelineTool } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
+import { buildEvalTools } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -387,5 +388,51 @@ describe("批次 R H1-3——kernelErrorFace 四码人话映射（提前接线�
     const plain = (await plainTool.execute({ stage: "register", run_id: "r1", workspace_path: root, source_root: join(root, "src") }, { agent: undefined, callId: "h1-c4", signal: undefined })) as Record<string, unknown>;
     expect(plain["kernel_error"]).toBeUndefined();
     expect(String(plain["note"])).not.toContain("token 审计");
+  }, 30_000);
+  it("eval 面接线（R-H 实锚）：缺预算 run 的服务件生成失败 → note 人话＋无 stderr_tail（未命中保持 machine_facts_missing）", async () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-h1e");
+    // 夹具 run：缺 prep/token_budget.json；adapter 固定编号＋safetensors 在场；eval 资产三件
+    mkdirSync(join(runDir, "models", "checkpoint-100"), { recursive: true });
+    writeFileSync(join(runDir, "models", "checkpoint-100", "adapter_model.safetensors"), "");
+    mkdirSync(join(runDir, "eval-assets"), { recursive: true });
+    writeFileSync(join(runDir, "eval-assets", "eval_labels.jsonl"), '{"labels": {"f1": "x"}}\n');
+    writeFileSync(join(runDir, "eval-assets", "test_images.json"), '{"images": []}\n');
+    const serviceConfig = join(runDir, "eval-assets", "service-config.json");
+    writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", run_id: "run-h1e", port: 8210, tensor_parallel_size: 1, max_num_seqs: 8, adapters: [{ name: "ckpt100", path: join(runDir, "models", "checkpoint-100") }] }));
+    const fieldConfig = join(runDir, "eval-assets", "field-config.json");
+    writeFileSync(fieldConfig, JSON.stringify({ fields: [{ field_id: "f1" }] }));
+    // mock pin：generate_eval_service 输出 token_budget_missing traceback 后退出 1；其余四脚本占位
+    const scripts = join(root, "pin", "skills", "atf-evaluate-checkpoints", "scripts");
+    mkdirSync(scripts, { recursive: true });
+    writeFileSync(join(scripts, "generate_eval_service.py"), [
+      "import sys",
+      `sys.stderr.write('Traceback (most recent call last):\\nValueError: token_budget_missing:${runDir}/prep/token_budget.json(预算文件缺;旧 run 只读兼容不回填)\\n')`,
+      "sys.exit(1)",
+      "",
+    ].join("\n"));
+    for (const name of ["build_service_prelaunch_report.py", "generate_checkpoint_plan.py", "generate_eval_orchestration.py", "run_formal_eval.py"]) {
+      writeFileSync(join(scripts, name), "# placeholder\n");
+    }
+    const tools = buildEvalTools({ get: () => undefined }, { runsRoot: root, logDir: root, kernelDir: join(root, "pin") });
+    const evaluate = tools.find((t) => (t as { name: string }).name === "atf_evaluate") as { execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> };
+    const args = {
+      action: "start", run_id: "run-h1e", adapter_path: join(runDir, "models", "checkpoint-100"),
+      eval_assets_dir: join(runDir, "eval-assets"), service_config: serviceConfig,
+      env_profile: "a800-local", field_config: fieldConfig, assets_external_confirm: true,
+    };
+    const result = await evaluate.execute(args, { agent: undefined, callId: "h1-e1", signal: undefined });
+    expect(result["started"]).toBe(false);
+    expect(result["error"]).toBe("token_budget_missing"); // base 码（不带路径 detail）
+    expect(String(result["kernel_error"])).toContain("token_budget_missing:");
+    expect(String(result["note"])).toContain("预算文件缺失，先确认实验配置");
+    expect(String(result["note"])).toContain("下一步");
+    expect(result["stderr_tail"]).toBeUndefined(); // traceback 原文不回流
+    // 未命中面：普通失败保持既有 machine_facts_missing 形态（含 stderr_tail——不回归）
+    writeFileSync(join(scripts, "generate_eval_service.py"), "import sys\nsys.stderr.write('boom')\nsys.exit(2)\n");
+    const plain = await evaluate.execute(args, { agent: undefined, callId: "h1-e2", signal: undefined });
+    expect(plain["error"]).toBe("machine_facts_missing");
+    expect(plain["kernel_error"]).toBeUndefined();
+    expect(String(plain["stderr_tail"])).toContain("boom");
   }, 30_000);
 });

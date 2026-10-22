@@ -1680,7 +1680,13 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     },
     output: {
       schema: { type: "object", additionalProperties: true },
-      render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
+      render: (_args, value) => {
+        // 批次R H1-3 补面（R-H）：内核四码命中时用户面只呈人话 note——kernel_error 属
+        // 机器对账键，码原文/traceback 不进页面（产品语言纪律：错误回流全业务语）。
+        const faced = value as Record<string, unknown>;
+        if (faced["kernel_error"] !== undefined) return [{ type: "text", text: String(faced["note"] ?? "") }];
+        return [{ type: "text", text: JSON.stringify(value, null, 1) }];
+      },
     },
     presentCall: function(args: { action: string; run_id?: string }) {
       return { card: "generic" as const, title: `评估 — ${args.run_id ?? "会话绑定实验"}`, kind: "other" as const }
@@ -1766,6 +1772,16 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const generated = await runCapture("python3", [genService, "--config", args.service_config, "--env-profile", args.env_profile, ...deployArgs, "--out", serviceDir], 120_000);
       const blockPath = join(serviceDir, "machine-facts-block.json");
       if (generated.code !== 0) {
+        // 批次R H1-3 补面（R-H 实锚）：eval 服务件生成失败输出先扫内核四码
+        // （token_budget_missing 等——预算缺失的 run 在服务件生成期即 fail，GPU 前零写入）。
+        // 命中即 note 人话回流；未命中保持既有机器事实缺形态（machine_facts_missing）。
+        const kernelFace = scanKernelErrorFace([generated.stderr, generated.stdout]);
+        if (kernelFace !== null) {
+          return asToolValue({
+            started: false, error: kernelFace.code.split(":")[0], eval_round: roundDir,
+            kernel_error: kernelFace.code, note: kernelFace.note,
+          });
+        }
         const block = existsSync(blockPath) ? JSON.parse(readFileSync(blockPath, "utf8")) as Record<string, unknown> : null;
         return asToolValue({
           started: false, error: "machine_facts_missing", eval_round: roundDir,
