@@ -193,17 +193,25 @@
 
 ---
 
-## 复验结果登记表（复验会话填写）
+## 复验结果登记表（2026-10-22 门 R0 · 复验会话已填写）
+
+**boot 锚**：握手 `0.7.24b0`（日志实载＋UI 右栏「内核 real · v0.7.24b0」）；atf-tools 激活（桥接 9 件）；白名单根 **13**（上次 boot 12——差 1＝两次 boot 间工作区注册表新增 `ws-pl-walkthrough`/`ws-pl-walkthrough-r1`（G2 复验注册），环境演进非批次 R 引入：fileRoots 声明面与 instance env 零改动佐证）。
 
 | 项 | 结果（PASS/FAIL/BLOCKED） | 证据文件 | 备注 |
 |---|---|---|---|
-| A | | | |
-| B | | | |
-| C | | | |
-| D | | | |
-| E | | | |
-| F | | | |
-| G | | | |
-| H | | | |
-| I | | | |
-| J | | | |
+| A | PASS | R-A-panel-groups-01.png、R-D-idle-01.png、R-B-explicit-bind-02.png | chip 已绑定态＋面板三分组（本会话/最近实验/全部实例只读）＋切换后 chip 跟随（实验 ugh-r1→实验 efault 实证）；sessionBindingUi 14/14 |
+| B | PASS | R-B-explicit-bind-02.png、R-B-session-bindings.json.txt | 「全部实例（只读）」组头明示「点选只预览，不改变本会话绑定」且点行**零 POST**（458 请求零绑定）；显式点击恰一次 POST（#459）；账本 user_pick＋active_run_id 与 chip 逐字一致（复原操作 07:03:23 再次实证） |
+| C | PASS | R-C-monitor-01.png（滚到底）、R-C-monitor-02-top.png（顶部） | 面板非空；GPU 段（忙 0/8·8G/640G·绑 0-7）＋训练产物清单＋训练日志区（该 run 无 trainer_log 数据＝数据面事实，区块在场）＋评估对比段 |
+| D | PASS | R-D-idle-01.png、R-D-monitor.json.txt | chip「空闲」＋「训练已结束」卡同屏；monitor.json 73 runs `training.active` 唯一值集合＝{False} |
+| E | BLOCKED | —（progress.json 不存在） | 无活跃训练可驱动 progress；真实训练启动需 owner 显式授权（不在本会话范围） |
+| F | PASS | R-F-eval-state-01.png、R-F-eval-state-02-qa.png | 问「当前评估状态如何」→ 回复业务语（评估已完成收尾/无进程在跑/静态产物态＋产物交付物表）；无 port/kernelDir/registry 字段名/脚本路径 |
+| G | PASS | R-G-budget-card-01.png、R-G-budget-card-02-violations.png、R-G-budget-card-03-dual-gate.png | 三行同屏（9000[惯例基线 owner 2026-10-22]／9000[=预算]／12800[独立取值]）；改 20000→三 ⚠（超训练截断/超推理窗口/不同步须理由）＋提交被拦不出审批卡＋来源切 [用户指定]；`token_budget_sync_reason` 理由行在场（不等必填）；无 65536 预填；`git grep max_model_token` 源码面 0 命中；tokenBudgetCard 25/25 |
+| H | BLOCKED（组件面 PASS） | tests/llm/providerConfig.test.ts 28/28 | 受控缺失场景构造方式按清单预设留 owner 复验指令指定（未发明构造）；四错误码映射组件面绿 |
+| I | PARTIAL（组件面 PASS） | R-I-draft-page-01.png、draftResumeCard 5/5 | 组件五锚全绿（title＋workspace/点击 pending 零 POST/sessionId 后恰一次 POST/已绑定不出卡）；**UI 面**：新会话草稿页（新版 Start 页布局）未渲染「回到上次实验」overlay 卡——呈现条件未满足，是否属新版布局行为变化待 owner 判定 |
+| J | PASS（D34 执行面 N/A） | R-D-idle-01.png（走完闭环按钮）、R-G-budget-card-01.png（D35 数值/D36 建议）、组件锚四件 | D33：清零态在场（UI 无横幅＋alerts.json 缺席＋GPU 全闲）＋生命周期组件锚绿；D34：「走完闭环」按钮在场＋CLOSURE_MESSAGE 双钉锚绿，完整闭环执行 N/A（无新完成实验可闭环）；D35：trainingFace 逐字一致锚绿＋卡面数值行；D36：askFormIntent 建议值前置锚绿＋UI 空值提交被拒实证（服务端按权威值回流，空值未生效） |
+
+**已知基线缺陷（非本批引入，登记待 owner 裁定）**：`tests/dshUi/gpuPanelD11.test.ts` 的 `appendGpuHistory` 用例失败——实现按 `new Date()`（真实当日 10-22）生成历史文件名，测试读固定日期 `gpu-history-20261019.jsonl` → ENOENT；**仅 2026-10-19 当日可通过**。证据：批次 R 对该测试与 server.ts gpu-history 段零改动（diff 0 行）；基线 f1c12927 版本即含此固定日期断言与 `new Date()` 实现（git show 逐字核实）；memory「B1 会话绑定批测试坑」有同款先例记录。
+
+**组件锚汇总**：tokenBudgetCard 25/25｜providerConfig 28/28｜draftResumeCard 5/5｜sessionBindingUi 14/14｜trainingFace、askFormIntent、atfUi 于合并后子集回归（200 passed）全绿｜gpuPanelD11 14/15（1 项＝上述基线缺陷）。
+
+**现场复原**：载体会话绑定经显式操作切回原 run `pl-walkthrough-r1`（账本 07:03:23 user_pick）；G 流程表单卡已 Cancel、审批卡已 Reject（配置未放行、训练未启动）。
