@@ -116,9 +116,15 @@ window.__ModuleLoader__.load({
       monitorShowAll: false,
       bindingPanel: false,
       taskCardOpen: false,
+      // D64（B2c 页面挂载根因修复）：草稿态信号——EmptyHero（conversation.hero.brand.mark 槽）
+      // 仅草稿态渲染，其组件挂载/卸载双向维护本键；替代 store.sessionId 守卫（session 域
+      // utilities 工厂仅有会话时跑、无清零写点——会话→New session 切草稿后残留旧 id，
+      // DraftResumeCard 误判"有会话"不出卡＝门R0 FAIL「组件绿、页面不可见」的真实断点）。
+      heroMounted: false,
       listeners: new Set(),
       subscribe: function(fn) { var s = this; s.listeners.add(fn); return function() { s.listeners.delete(fn) } },
       setViewer: function(v) { this.viewer = v; this.listeners.forEach(function(fn) { fn() }) },
+      setHero: function(v) { if (this.heroMounted === v) return; this.heroMounted = v; this.listeners.forEach(function(fn) { fn() }) },
       setTrain: function(v) { this.train = v; this.listeners.forEach(function(fn) { fn() }) },
       setJoint: function(v) { this.joint = v; this.listeners.forEach(function(fn) { fn() }) },
       setMonitor: function(open, runId) { this.monitorOpen = open; if (runId !== undefined) this.monitorRunId = runId; this.listeners.forEach(function(fn) { fn() }) },
@@ -2660,15 +2666,21 @@ window.__ModuleLoader__.load({
     // 点击存 pending（零 POST）；待绑定有可见反馈；pending 在场重复点击不重复入队。 ──
     function DraftResumeCard() {
       var b = useBinding()
-      var sid = store.sessionId
-      var draft = b.draft
+      // D64：草稿判据＝heroMounted（EmptyHero 生命周期双向维护）；store.sessionId 不可用作
+      // 守卫（session 域工厂无清零写点，切草稿残留旧 id——门R0 FAIL 根因）。
+      var draft = React.useSyncExternalStore(
+        function(fn) { return store.subscribe(fn) },
+        function() { return store.heroMounted },
+      )
+      var heroMounted = draft
+      var draftState = b.draft
       // 草稿态拉取（进草稿态拉一次；离开草稿态不拉不渲染）
       React.useEffect(function() {
-        if (sid === undefined && draft.status === 'idle') void binding.loadDraft()
-      }, [sid, draft.status])
-      if (sid !== undefined) return null // 有会话/已绑定＝不出卡（B2c 验收锚）
-      if (draft.status !== 'ready' || draft.recent.length === 0) return null
-      var last = draft.recent[0]
+        if (heroMounted && draftState.status === 'idle') void binding.loadDraft()
+      }, [heroMounted, draftState.status])
+      if (!heroMounted) return null // 有会话/已绑定＝不出卡（B2c 验收锚）
+      if (draftState.status !== 'ready' || draftState.recent.length === 0) return null
+      var last = draftState.recent[0]
       var pendingNow = b.pending !== null
       var label = typeof last.title === 'string' && last.title !== '' ? last.title : '实验 ' + String(last.run_id || '').slice(-6)
       var ws = typeof last.workspace === 'string' && last.workspace !== '' ? last.workspace : null
@@ -2848,6 +2860,16 @@ window.__ModuleLoader__.load({
       return React.createElement('span', {
         style: { fontWeight: 600, fontSize: 14, fontFamily: 'system-ui,-apple-system,sans-serif' },
       }, 'ATF 训练 Agent')
+    }
+
+    // D64：草稿态信号组件（仅 conversation.hero.brand.mark 槽用——EmptyHero 只在草稿态渲染；
+    // 侧栏 brand 实例恒挂载不得复用本组件）。挂载＝进入草稿、卸载＝离开（双向，无毒化残留）。
+    function HeroBrandMarkSignal(props) {
+      React.useEffect(function() {
+        store.setHero(true)
+        return function() { store.setHero(false) }
+      }, [])
+      return React.createElement(AtfBrandMark, props)
     }
 
     // ── 批甲-BUILD T1：思考档位快切（conversation.input.right 槽·输入框右下角与模型选择并排） ──
@@ -3842,9 +3864,10 @@ window.__ModuleLoader__.load({
           })
         })
 
-        // 空态 hero 鱼标位（顺手——EmptyHero renderSlot({size:34,className})）
+        // 空态 hero 鱼标位（顺手——EmptyHero renderSlot({size:34,className})）；
+        // D64：经 HeroBrandMarkSignal 维护 store.heroMounted（草稿态双向信号）
         ctx.slots.inject('conversation.hero.brand.mark', function() {
-          return ctx.slots.register({ name: 'conversation.hero.brand.mark' }, AtfBrandMark)
+          return ctx.slots.register({ name: 'conversation.hero.brand.mark' }, HeroBrandMarkSignal)
         })
 
         // B2c：草稿态「回到上次实验」卡＋业务通报条（shell.overlay——root 域 list 槽，

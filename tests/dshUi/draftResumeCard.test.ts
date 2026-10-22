@@ -6,6 +6,9 @@
 // （session-binding GET 无 sessionId＝草稿载荷·带 sessionId＝绑定载荷·POST 可控成败）。
 // 渲染挂点＝shell.overlay（root 域 list 槽——conversation 域 list 槽全为 session 域不渲染
 // 草稿态，hero/composer session-maybe 槽全为 single 替换槽；选型取证见实现注）。
+// D64 修订：草稿判据＝store.heroMounted（conversation.hero.brand.mark 槽组件
+// HeroBrandMarkSignal 挂载/卸载双向维护——store.sessionId 无清零写点会残留旧 id 毒化，
+// 门R0 FAIL「组件绿、页面不可见」根因）；草稿场景须先挂 hero 信号组件（renderHero）。
 /// <reference lib="dom" />
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -67,7 +70,9 @@ type Registration = { options: any; content?: (injected?: any) => any };
 
 describe("B2c 草稿态回到上次实验卡（client.js 真加载·jsdom）", () => {
   let overlayEl: HTMLElement;
+  let heroEl: HTMLElement;
   let oroot: Awaited<ReturnType<typeof createRoot>> | null = null;
+  let hroot: Awaited<ReturnType<typeof createRoot>> | null = null;
   let captured: Record<string, Registration[]>;
   const fetchCalls: FetchCall[] = [];
   let postStatus = 200;
@@ -127,6 +132,15 @@ describe("B2c 草稿态回到上次实验卡（client.js 真加载·jsdom）", (
     headerInject = (sessionId: string | undefined) => headerRegs![0]!.options.inject(sessionId);
   }
 
+  /** 草稿态信号：挂 hero.brand.mark 槽组件（HeroBrandMarkSignal effect → store.setHero(true)）。 */
+  async function renderHero(): Promise<void> {
+    const regs = captured["conversation.hero.brand.mark"];
+    heroEl.innerHTML = "";
+    hroot = createRoot(heroEl);
+    await act(async () => { hroot!.render(React.createElement(regs![0]!.content as never)); });
+    await flush();
+  }
+
   async function renderOverlay(): Promise<void> {
     const regs = captured["shell.overlay"];
     if (oroot === null) oroot = createRoot(overlayEl);
@@ -154,13 +168,19 @@ describe("B2c 草稿态回到上次实验卡（client.js 真加载·jsdom）", (
     return fetchCalls.filter((c) => c.method === "POST");
   }
 
-  beforeEach(() => { boot(); });
+  beforeEach(() => {
+    boot();
+    heroEl = dom.window.document.getElementById("atf-h");
+  });
   afterEach(async () => {
     if (oroot !== null) await act(async () => { oroot!.unmount(); });
     oroot = null;
+    if (hroot !== null) await act(async () => { hroot!.unmount(); });
+    hroot = null;
   });
 
   it("①草稿卡渲染：title＋workspace 在卡上（回到上次实验：装箱单 4类）", async () => {
+    await renderHero();
     await renderOverlay();
     const card = draftCard();
     expect(card.textContent).toContain("回到上次实验：装箱单 4类");
@@ -169,6 +189,7 @@ describe("B2c 草稿态回到上次实验卡（client.js 真加载·jsdom）", (
   });
 
   it("②点击→存 pending 且零 POST（草稿态无 sessionId 可绑）；重复点击不重复入队", async () => {
+    await renderHero();
     await renderOverlay();
     await act(async () => { goButton().click(); });
     await flush();
@@ -184,6 +205,7 @@ describe("B2c 草稿态回到上次实验卡（client.js 真加载·jsdom）", (
   });
 
   it("③sessionId 出现→恰一次 POST 正确 runId（落账本走 B1 端点）；pending 消费后不复燃", async () => {
+    await renderHero();
     await renderOverlay();
     await act(async () => { goButton().click(); });
     await flush();
@@ -203,16 +225,26 @@ describe("B2c 草稿态回到上次实验卡（client.js 真加载·jsdom）", (
     expect(posts().length).toBe(1);
   });
 
-  it("④有会话态不出卡（草稿卡自守卫）；草稿拉取只在草稿态发生", async () => {
+  it("④有会话态不出卡（草稿卡自守卫）；草稿拉取只在草稿态发生；hero 卸载即收卡（D64 毒化根因锚）", async () => {
     await act(async () => { headerInject!("sess-1"); });
     await renderOverlay();
     expect(document.querySelector("[data-draft-resume]")).toBeNull();
     // 有会话态零草稿 GET（loadDraft 仅草稿态触发）
     const draftGets = fetchCalls.filter((c) => c.method === undefined && c.url.indexOf("/atf-ui/session-binding") === 0 && c.url.indexOf("sessionId=") < 0);
     expect(draftGets.length).toBe(0);
+    // D64：会话→New session 切草稿——sessionId 残留旧值（无清零写点），卡仍须出现；
+    // 再离开草稿（hero 卸载）→ 收卡。heroMounted 双向信号免疫 sessionId 毒化。
+    await renderHero();
+    await flush();
+    expect(document.querySelector("[data-draft-resume]")).not.toBeNull();
+    await act(async () => { hroot!.unmount(); });
+    hroot = null;
+    await flush();
+    expect(document.querySelector("[data-draft-resume]")).toBeNull();
   });
 
   it("⑤消费失败：清 pending＋toast 业务文案（不静默丢、不自动重试）", async () => {
+    await renderHero();
     await renderOverlay();
     await act(async () => { goButton().click(); });
     await flush();
