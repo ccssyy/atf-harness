@@ -1263,7 +1263,7 @@ export const publishCopyWithResume = (
 
 /** copyFileSync 内置实现（publishCopyWithResume 缺省注入面单源——顶部 fs import 别名）。 */
 
-export function buildPublishModelTool(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; modelRoot?: string }): unknown {
+export function buildPublishModelTool(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; modelRoot?: string; /** D49：canonical 解析种子（与 TrainingToolsConfig 同键——canonicalRunRootsOf(cfg) 注入面；缺省注册表实例态）。 */ canonicalRoots?: readonly string[] }): unknown {
   return defineTool({
     name: "atf_publish_model",
     description:
@@ -1653,7 +1653,7 @@ export const evalGpuCostText = (serviceConfigPath: string, manifest: Record<stri
 };
 
 /** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
-export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string; bindRun?: (runId: string) => Promise<void> }): unknown[] {
+export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string; bindRun?: (runId: string) => Promise<void>; /** D49：canonical 解析种子（与 TrainingToolsConfig 同键——canonicalRunRootsOf(cfg) 注入面；缺省注册表实例态）。 */ canonicalRoots?: readonly string[] }): unknown[] {
   const evaluate = defineTool({
     name: "atf_evaluate",
     description:

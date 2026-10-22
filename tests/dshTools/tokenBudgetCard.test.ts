@@ -573,7 +573,8 @@ describe("b5 像素对——表单卡呈现（中文呈现名＋来源标注＋m
 
 describe("b5 像素对——confirmFace 手动档链（变更提示上卡面；min<max 只提示不阻塞）", () => {
   const formCtx = (scripted: string[][]) => {
-    const asks: Array<{ detail?: string; fields?: Array<{ key: string; label?: string; hint?: string }> }> = [];
+    // fields 元素类型与生产 FormAskService 字段面对齐（confirmFace formAskQuestion——value 预填在位）
+    const asks: Array<{ detail?: string; fields?: Array<{ key: string; label?: string; value?: string; hint?: string }> }> = [];
     const approvals: string[] = [];
     let calls = 0;
     return {
@@ -584,7 +585,7 @@ describe("b5 像素对——confirmFace 手动档链（变更提示上卡面；m
           if (service === "approval") return { request: async (_req: { reason?: string }) => { approvals.push(_req?.reason ?? ""); return "allowed-once"; } };
           if (service === "userQuestions") {
             return {
-              ask: async (req: { questions?: Array<{ intent?: { fields?: Array<{ key: string; label?: string; hint?: string }> }; detail?: string }> }) => {
+              ask: async (req: { questions?: Array<{ intent?: { fields?: Array<{ key: string; label?: string; value?: string; hint?: string }> }; detail?: string }> }) => {
                 calls += 1;
                 const question = req.questions?.[0];
                 asks.push({ detail: question?.detail, fields: question?.intent?.fields });

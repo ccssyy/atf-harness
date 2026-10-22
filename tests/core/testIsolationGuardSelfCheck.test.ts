@@ -33,7 +33,12 @@ import {
 const TMP_PREFIX = "zz-h2-isolation-selfcheck-";
 
 // guard setupFiles 首位已在同 worker 打过 ② 补丁——CJS 模块缓存共享，此处拿到同一对象
-const fsCjs = createRequire(import.meta.url)("node:fs") as Record<string, (...args: unknown[]) => unknown>;
+// 具名键交叉收窄：noUncheckedIndexedAccess 下 Record 索引访问为 | undefined，
+// 本文件触达的 CJS 写族键经具体键声明消除调用误报——类型面收窄，调用与断言零改。
+const fsCjs = createRequire(import.meta.url)("node:fs") as Record<string, (...args: unknown[]) => unknown> & {
+  appendFileSync: (...args: unknown[]) => unknown;
+  writeFileSync: (...args: unknown[]) => unknown;
+};
 
 const tempRoots: string[] = [];
 const newTempRoot = (): string => {

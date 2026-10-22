@@ -2,13 +2,28 @@
 export declare const SEGMENTS: ReadonlyArray<{ key: string; label: string }>;
 export declare const QUEUE_IDLE_TEXT: string;
 export declare const KPI_KEYS: readonly string[];
+/** 段内进度面（与 src/core/workspace/runFacts.ts RunProgress 同构——atf-ui 包内独立声明，
+ *  零跨包 import；D3/D4 浮卡进度行数据源）。 */
+export interface AtfRunProgress {
+  round?: number;
+  total_rounds?: number;
+  step_remaining?: number;
+  eta_s?: number;
+  loss?: number;
+  percentage?: number;
+  stale?: boolean;
+  updated_at: string;
+  source_updated_at?: string;
+}
 export interface AtfRunScan {
   run_id: string;
   state?: string;
   /** A2 案 a：工作区标注来源（bucket＝runsRoot 分桶缺省；registry＝注册表前缀/实验树）。 */
   workspace_source?: "bucket" | "registry";
   segments?: Record<string, boolean | string>;
-  training?: { active?: boolean; loss?: unknown; pending_confirm?: unknown };
+  /** 批㊶Q增补二2：progress 输入两形态（顶层直通＋training 子键回退——scanRunDir 实挂后者）。 */
+  progress?: AtfRunProgress | null;
+  training?: { active?: boolean; loss?: unknown; pending_confirm?: unknown; progress?: AtfRunProgress | null };
   report?: { files?: string[] };
   artifacts?: string[];
   /** 批㉛段1：badcase viewer 发现清单（scanRunDir 两形态推导；缺省空数组＝无挂载面）。 */
@@ -80,6 +95,9 @@ export interface AtfMonitorSnapshot {
     /** 批B1：run 显示名（additive 可选——缺席＝旧装配面，client 回退 run_id）。 */
     display?: { title: string } | null;
     training: { active: boolean; points: Array<Record<string, unknown>>; pending_confirm: unknown };
+    /** 批㊶-N N-3／批㊶Q增补二2：段内进度（恒输出——顶层直通＞training 子键回退＞null；
+     *  浮卡进度行数据源）。 */
+    progress: AtfRunProgress | null;
   }>;
 }
 export interface AtfArtifactsSnapshot {

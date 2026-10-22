@@ -27,7 +27,14 @@ afterEach(() => {
 
 describe("D51——测试隔离 guard", () => {
   it("CJS 写族补丁：live 根目标即抛 test_isolation_violation（写之前——零落盘）＋/tmp 畅通", () => {
-    const fsCjs = createRequire(import.meta.url)("node:fs") as Record<string, (...args: unknown[]) => unknown>;
+    // 具名键交叉收窄：noUncheckedIndexedAccess 下 Record 索引访问为 | undefined，
+    // 本用例触达的 CJS 写族键经具体键声明消除调用误报——类型面收窄，调用与断言零改。
+    const fsCjs = createRequire(import.meta.url)("node:fs") as Record<string, (...args: unknown[]) => unknown> & {
+      mkdirSync: (...args: unknown[]) => unknown;
+      renameSync: (...args: unknown[]) => unknown;
+      rmSync: (...args: unknown[]) => unknown;
+      writeFileSync: (...args: unknown[]) => unknown;
+    };
     const target = "/data/atf/prodtest/zz-d51-guard-probe/guard-probe.json";
     expect(() => fsCjs.writeFileSync(target, "x", "utf8")).toThrow(/test_isolation_violation: .*writeFileSync/);
     expect(() => fsCjs.mkdirSync("/data/atf/dev/runs/zz-d51-guard-probe", { recursive: true })).toThrow(/test_isolation_violation: .*mkdirSync/);
