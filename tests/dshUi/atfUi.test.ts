@@ -601,13 +601,17 @@ describe("批㉛段2 发起训练面（IterationConfig 四件套摘要＋launch 
     // 四件套＝含义＋值＋来源标注＋可改（meaning 承载含义与来源；label 沿批㉚ 卡面）
     expect(rows.every((r) => r.key && r.label && r.value !== undefined && r.meaning.length > 0)).toBe(true);
   });
-  it("token_gate 语义修正（批㉛段2）：max_total_tokens＝构造准入闸门，不引用「评估截断根因」错误归因", () => {
+  it("token 预算语义（批次 R H1-1 更新口径）：max_total_tokens＝单样本预算/构造期准入闸门（拒绝而非截断）", () => {
     const rows = buildIterationSummary(null, null);
     const tokenRow = rows.find((r) => r.key === "max_total_tokens");
-    expect(tokenRow?.meaning).toContain("构造准入闸门");
-    expect(tokenRow?.meaning).toContain("不作用于评估推理长度");
+    expect(tokenRow?.meaning).toContain("单样本 token 预算");
+    expect(tokenRow?.meaning).toContain("构造期准入闸门");
+    expect(tokenRow?.meaning).toContain("拒绝而非截断");
     expect(tokenRow?.meaning).not.toContain("截断根因");
-    expect(tokenRow?.meaning).not.toContain("评估推理截断由 token_gate");
+    // 推理窗口入卡（只读、独立取值）
+    const mmlRow = rows.find((r) => r.key === "max_model_len");
+    expect(mmlRow?.value).toBe("12800");
+    expect(mmlRow?.meaning).toContain("独立取值");
   });
   it("buildLaunchSurface：train.sh/快照/IterationConfig/prelaunch 四件扫描＋training 子对象值映射", () => {
     const root = tempRoot();

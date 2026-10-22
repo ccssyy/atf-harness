@@ -37,19 +37,26 @@ afterEach(() => {
 // ---------------------------------------------------------------- F1 单源常量
 
 describe("批㊶-W F1——训练 pin 单源常量三面一致＋缺省残留 grep 锚", () => {
-  it("TRAINING_PIN_CONSTANTS 单源值：65536/802816/1605632/负样本 0.02-0.05；clamp 域与确认卡缺省同源引用", () => {
-    expect(TRAINING_PIN_CONSTANTS.max_total_tokens).toBe(65_536);
+  it("TRAINING_PIN_CONSTANTS 单源值：max_total_tokens 9000（批次 R H1-2 惯例基线）/802816/1605632/负样本 0.02-0.05/cutoff 9000/max_model_len 12800；clamp 域与确认卡缺省同源引用", () => {
+    // 批次 R H1-2（owner 2026-10-22）：max_total_tokens 65536→9000（惯例基线，非缺省填充值）；
+    // cutoff_len/max_model_len 同轴扩展（两值独立取值——禁互相推导、禁共用常量，TokenBudget v1 §五）。
+    expect(TRAINING_PIN_CONSTANTS.max_total_tokens).toBe(9000);
+    expect(TRAINING_PIN_CONSTANTS.cutoff_len).toBe(9000);
+    expect(TRAINING_PIN_CONSTANTS.max_model_len).toBe(12800);
     expect(TRAINING_PIN_CONSTANTS.image_min_pixels).toBe(65_536);
     expect(TRAINING_PIN_CONSTANTS.image_max_pixels).toEqual([802_816, 1_605_632]);
     expect(TRAINING_PIN_CONSTANTS.negative_ratio).toEqual({ min: 0.02, max: 0.05 });
     // 护栏闭集（smartDefaults CLAMP_DOMAINS）＝单源引用（同一数组引用——改一处三面同步）
     expect(CLAMP_DOMAINS.image_max_pixels).toBe(TRAINING_PIN_CONSTANTS.image_max_pixels);
     expect(CLAMP_DOMAINS.negative_ratio).toBe(TRAINING_PIN_CONSTANTS.negative_ratio);
-    // 确认卡缺省面＝单源值
+    // 确认卡缺省面＝单源值（批次 R H1-1：max_total_tokens 预填惯例基线 9000——65536 退役；
+    // cutoff/max_model_len 缺省同源单源）
     const keyMeta = Object.fromEntries(CONFIG_CONFIRM_KEYS.map((entry) => [entry.key, entry]));
     expect(keyMeta["image_min_pixels"]?.default).toBe("65536");
     expect(keyMeta["image_max_pixels"]?.default).toBe("802816");
-    expect(keyMeta["max_total_tokens"]?.default).toBe(""); // 4096 缺省删除（必填）
+    expect(keyMeta["max_total_tokens"]?.default).toBe(String(TRAINING_PIN_CONSTANTS.max_total_tokens));
+    expect(keyMeta["cutoff_len"]?.default).toBe(String(TRAINING_PIN_CONSTANTS.cutoff_len));
+    expect(keyMeta["max_model_len"]?.default).toBe(String(TRAINING_PIN_CONSTANTS.max_model_len));
   });
   it("缺省残留 grep 锚：任一配置面无 4194304/16384000/800000/1600000 残留；4096 仅存于注释锚", () => {
     const faces = [

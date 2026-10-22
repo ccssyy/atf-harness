@@ -104,18 +104,20 @@ describe("A1——form intent 入参经 UserQuestionService 校验不抛", () =>
     })).rejects.toThrow("fields are empty or malformed");
   });
 
-  it("configFormFieldsOf：max_total_tokens 空值＝required＋placeholder（必填拦空兜底单源）", () => {
+  it("configFormFieldsOf：max_total_tokens 空值＝required＋placeholder（必填拦空兜底单源）；max_model_len 只读无输入框", () => {
     const rows = configFormFieldsOf(SAMPLE_FIELDS, 8);
     const tokenRow = rows.find((row) => row.key === "max_total_tokens");
     expect(tokenRow?.required).toBe(true);
     expect(tokenRow?.placeholder).toContain("必填");
-    // D36：建议值前置（口径引 TRAINING_PIN_CONSTANTS 单源——参考值在首提前可见，不被拦回后才知）
-    expect(tokenRow?.placeholder).toContain("建议直接填 65536");
+    // D36：建议值前置（口径引 TRAINING_PIN_CONSTANTS 单源——批次 R H1-2 改值后＝9000 惯例基线）
+    expect(tokenRow?.placeholder).toContain("建议直接填 9000");
     expect(tokenRow?.placeholder).toContain("超长单据在数据构造期截断/拒绝");
+    // 批次 R H1-1：max_model_len 只读——不生成输入框（三要素区只读呈现）
+    expect(rows.some((row) => row.key === "max_model_len")).toBe(false);
     const hintRow = rows.find((row) => row.key === "learning_rate");
     expect(hintRow?.hint).toBe(domainHintOf("learning_rate", 8));
-    // D36：hint 同口径强化（正整数＋建议值）
-    expect(domainHintOf("max_total_tokens", 8)).toContain("建议 65536");
+    // D36：hint 同口径强化（正整数＋建议值——批次 R 后建议 9000）
+    expect(domainHintOf("max_total_tokens", 8)).toContain("建议 9000");
     expect(domainHintOf("max_total_tokens", 8)).toContain("正整数");
   });
 });
