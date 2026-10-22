@@ -405,10 +405,15 @@ export const runLaunchScript = (input: {
     }
     let child;
     try {
+      // 门 2 收口批：detached＋自立进程组——launch 链（launch.sh→train.sh→torchrun）不随
+      // 宿主（web 实例重启的 tmux C-c／进程组 SIGINT）陪葬（2026-10-22 fresh run 实锚：
+      // 未 detached 时实例重启沿进程组传导 SIGINT，训练在 NCCL 集合通信中挂起 27 分钟后
+      // KeyboardInterrupt 死亡——「未退出不杀」语义自此在信号面也成立）。
       child = spawn(input.bashPath, [input.launchShAbs], {
         cwd: input.cwd,
         env: input.env,
         stdio: ["ignore", logFd, logFd],
+        detached: true,
       });
     } catch (cause) {
       closeSync(logFd);
