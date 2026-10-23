@@ -206,6 +206,9 @@ print("{}")`);
     const ckpt = join(root, "run-fix2", "training", "checkpoint-141");
     mkdirSync(ckpt, { recursive: true });
     writeFileSync(join(ckpt, "adapter_model.safetensors"), "x");
+    // D91：lane 任务事实在位（恰一 lane——evaluate start 链不传 lane 走 task_fact 判定）
+    mkdirSync(join(root, "run-fix2", "l1"), { recursive: true });
+    writeFileSync(join(root, "run-fix2", "l1", "training-data-manifest.json"), `${JSON.stringify({ schema_version: "TrainingDataArtifact/v1", lanes: { goods: {} } })}\n`);
     // D14：field_config 显式传入路径须真实存在（解析 fail-closed 后缺失即拒）
     writeFileSync(join(root, "field-config.json"), JSON.stringify({
       schema_version: "PromptFieldConfig/v1", document_type: "pl", document_zh: "装箱单",

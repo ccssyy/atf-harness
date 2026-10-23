@@ -86,6 +86,9 @@ const seedRun = (
       base_model: { path: opts.modelPath },
     })}\n`);
   }
+  // D91：lane 任务事实在位（恰一 lane——evaluate/analyze 链不传 lane 走 task_fact 判定）
+  mkdirSync(join(dir, "l1"), { recursive: true });
+  writeFileSync(join(dir, "l1", "training-data-manifest.json"), `${JSON.stringify({ schema_version: "TrainingDataArtifact/v1", lanes: { goods: {} } })}\n`);
   if (opts.mtimeMs !== undefined) utimesSync(dir, new Date(opts.mtimeMs), new Date(opts.mtimeMs));
   return dir;
 };

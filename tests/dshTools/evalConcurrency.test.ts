@@ -130,6 +130,9 @@ const fieldConfig25 = (): string => `${JSON.stringify({
 /** run 夹具：service_config 带 max_num_seqs=8（容量门数据源；opts.maxNumSeqs=false 验缺省容忍面）。 */
 const seedRun = (root: string, opts: { maxNumSeqs?: boolean } = {}): { assets: string; serviceConfig: string; ckpt: string } => {
   const runDir = join(root, RUN_ID);
+  // D91：lane 任务事实在位（恰一 lane——不传 lane 走 task_fact 判定，不再缺省 goods）
+  mkdirSync(join(runDir, "l1"), { recursive: true });
+  writeFileSync(join(runDir, "l1", "training-data-manifest.json"), `${JSON.stringify({ schema_version: "TrainingDataArtifact/v1", lanes: { goods: {} } })}\n`);
   mkdirSync(join(runDir, "experiment-setup"), { recursive: true });
   const fcText = fieldConfig25();
   writeFileSync(join(runDir, "experiment-setup", "field-config.json"), fcText);

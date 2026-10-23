@@ -333,16 +333,18 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     const tool = buildRunTrainingTool(noApproval, { runsRoot: root, logDir: root, ctx: noApproval }) as unknown as Tool & { output: { render: (args: unknown, value: unknown) => Array<{ type: string; text: string }> } };
     const result = await tool.execute({ action: "status", train_sh: join(root, "x.sh"), run_id: "r-task" }, fakeExec);
     const segments = result.segments as Array<{ key: string; status: string }>;
+    // D96：八灯＝内核 STAGE_ORDER 八段（training 键不在灯面——训练态由独立卡数据源承载）
+    expect(segments).toHaveLength(8);
     expect(segments.find((s) => s.key === "register")?.status).toBe("done");
-    // 段语义（批㊶-S3 S-B2 改版）：loss-series fresh＝训练进行中→active（修复前 done 与
-    // 训练全程假✓同根——active 优先于 done）；进程态 running 单列
-    expect(segments.find((s) => s.key === "training")?.status).toBe("active");
+    expect(segments.find((s) => s.key === "training")).toBeUndefined();
+    expect(segments.find((s) => s.key === "training_prep")?.status).toBe("pending");
     const blocks = tool.output.render({}, result);
     const text = blocks[0]?.text ?? "";
     expect(text).toContain("训练任务卡 — run r-task");
     expect(text).toContain("✓ 数据登记");
-    expect(text).toContain("● 训练执行");
-    expect(text).toContain("进度 6/8"); // 训练段 active 不计入 done（前 6 段 done＋训练进行中）
+    expect(text).toContain("✓ 准入检查");
+    expect(text).toContain("○ 训练准备");
+    expect(text).toContain("进度 7/8"); // 前缀闭包＝锚面七段 done（登记→…→准入），训练准备无锚 pending
     expect(text).toMatch(/运行中|未运行/); // tmux 在场与否二态均如实
     expect(text).toContain("loss 点数：1");
     // start 结果不走任务卡（保持 JSON 卡面）
