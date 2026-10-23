@@ -15,7 +15,7 @@
  *   模型可如实转述——failed 会终局 run，不用于可转述的环境缺口）。
  */
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   buildScratchExecEnv,
@@ -44,6 +44,11 @@ import {
   type SkillSummary,
 } from "../workspace/skillCatalog.js";
 import { safeScratchPath } from "../workspace/runWorkspace.js";
+import {
+  KERNEL_ERROR_FACE_CODES,
+  kernelErrorEnvelopeCode,
+  replaceKernelErrorFace,
+} from "../workspace/kernelErrorFace.js";
 import {
   createExperimentInWorkspace,
   rebindWorkspaceToPath,
@@ -184,6 +189,8 @@ const SCRATCH_EXEC_CANONICAL: SchemaNode = {
     stderr_tail: { type: "string" },
     duration_ms: { type: "integer" },
     launch_ready: { type: "object", optional: true, strict: false },
+    kernel_error: { type: "string", optional: true, description: "D71：命中的内核错误码原文（code:detail；结构化对账面——用户可见散文是人话 note）" },
+    note: { type: "string", optional: true, description: "D71：命中码的人话文案（含业务描述与下一步；散文零内部码）" },
   },
 };
 
@@ -518,6 +525,32 @@ const scratchWriteHandler: LocalToolHandler = async (rawParams, host) => {
   };
 };
 
+/** D71 scratch 通道内核错误码观测账（scratch 内点目录——G5 扫描跳点、晋升面之外）。
+ *  append-only JSONL：已知码命中记 kind=known_code（code+原文），未知码记 kind=unknown_code
+ *  （code 位+原文）——码与原文的唯一落账面（model-facing 只留人话）。fail-open：账写失败
+ *  不阻塞执行返回（与 appendSegmentFact 同款），返回体如实携带替换结果。 */
+const KERNEL_ERROR_FACE_LOG_DIR = ".harness";
+const KERNEL_ERROR_FACE_LOG_REL = ".harness/kernel-error-face.jsonl";
+
+const appendKernelErrorFaceLog = async (scratchDir: string, entry: {
+  kind: "known_code" | "unknown_code";
+  key: "stdout" | "stderr_tail";
+  code: string;
+  raw: string;
+}): Promise<boolean> => {
+  try {
+    await mkdir(join(scratchDir, KERNEL_ERROR_FACE_LOG_DIR), { recursive: true });
+    await appendFile(
+      join(scratchDir, KERNEL_ERROR_FACE_LOG_REL),
+      `${JSON.stringify({ ts: new Date().toISOString(), tool: "atf_scratch_exec", ...entry })}\n`,
+      "utf8",
+    );
+    return true;
+  } catch {
+    return false; // 观测账写失败不阻塞执行返回
+  }
+};
+
 const scratchExecHandler: LocalToolHandler = async (rawParams, host) => {
   if (!isPlainObject(rawParams)) return rejected("invalid_input", { message: "参数须为 JSON 对象" });
   const rawArgv = rawParams["argv"];
@@ -551,17 +584,39 @@ const scratchExecHandler: LocalToolHandler = async (rawParams, host) => {
   if (outcome.exit_code === 0) {
     launchReady = await scanLaunchReady(host.scratchDir);
   }
+  // D71 封口：scratch 直调通道的 model-facing 文本键（stdout/stderr_tail）已知码 → 人话
+  // （复用 kernelErrorFace 闭集单源；扫描不看 exit_code——code==0 但文本含码同样处理）。
+  // 原文只进 scratch 观测账；未知码（内核错误信封 code 位不属闭集）不替换不猜，落观测。
+  const stdoutFace = replaceKernelErrorFace(outcome.stdout);
+  const stderrFace = replaceKernelErrorFace(outcome.stderr_tail);
+  const kernelFaceHit = stdoutFace?.hits[0] ?? stderrFace?.hits[0] ?? null;
+  for (const [key, text, face] of [
+    ["stdout", outcome.stdout, stdoutFace],
+    ["stderr_tail", outcome.stderr_tail, stderrFace],
+  ] as const) {
+    if (face !== null) {
+      await appendKernelErrorFaceLog(host.scratchDir, { kind: "known_code", key, code: face.hits[0]?.code ?? "", raw: text });
+      continue;
+    }
+    const envelope = kernelErrorEnvelopeCode(text);
+    if (envelope !== null && !KERNEL_ERROR_FACE_CODES.has(envelope.base)) {
+      await appendKernelErrorFaceLog(host.scratchDir, { kind: "unknown_code", key, code: envelope.base, raw: text });
+    }
+  }
   return {
     kind: "executed",
     result: {
       ok: true,
       ...(outcome.exit_code !== null ? { exit_code: outcome.exit_code } : {}),
       timed_out: outcome.timed_out,
-      stdout: outcome.stdout,
+      stdout: stdoutFace !== null ? stdoutFace.text : outcome.stdout,
       stdout_truncated: outcome.stdout_truncated,
-      stderr_tail: outcome.stderr_tail,
+      stderr_tail: stderrFace !== null ? stderrFace.text : outcome.stderr_tail,
       duration_ms: outcome.duration_ms,
       ...(launchReady !== null ? { launch_ready: launchReady } : {}),
+      // D71：内核错误码人话回流（与 pipelineFace/trainingFace 接线同形态——note 人话、
+      // kernel_error 结构化带码；散文零码，码与原文在 scratch 观测账可查）
+      ...(kernelFaceHit !== null ? { kernel_error: kernelFaceHit.code, note: kernelFaceHit.note } : {}),
     },
   };
 };

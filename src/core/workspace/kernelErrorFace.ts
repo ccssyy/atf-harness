@@ -4,7 +4,8 @@
  * 四码来自内核 v0.7.24b0（K1–K4，TokenBudget/构造闸/GPU 容量——**未发版**，当前无真实
  * 来源）：harness 先行接线展示层，测试以构造的错误对象驱动；内核发版后错误经既有通道
  * （atf CLI stdout/stderr、train.sh 日志）流回时命中即转人话。接线面＝pipelineFace
- * （构造段失败）与 trainingFace（启动失败）——工具返回 note 即聊天/卡面提示面。
+ * （构造段失败）、trainingFace（启动失败）与 workspaceTools scratchExecHandler（D71 补做：
+ * scratch 直调通道——stdout/stderr_tail 已知码片段替换为人话，原文落 scratch 观测账）。
  * 未知码一律返回 null（不猜不编造——原样走既有 note，不覆盖）。
  */
 
@@ -62,4 +63,36 @@ export const scanKernelErrorFace = (texts: ReadonlyArray<string>): { code: strin
     }
   }
   return null;
+};
+
+/** D71 scratch 通道封口——model-facing 文本中已知码片段 → 人话替换（返回替换后全文与
+ *  逐码命中账）。无命中＝null（调用方文本零改动）。匹配片段与 scanKernelErrorFace 同
+ *  正则同闭集（单源），命中片段整体替换为 humanizeKernelError 人话——散文零码、业务
+ *  描述完整（文案自带下一步指引），不做事后关键词洗白。 */
+export const replaceKernelErrorFace = (
+  text: string,
+): { text: string; hits: ReadonlyArray<{ code: string; note: string }> } | null => {
+  if (typeof text !== "string" || text === "") return null;
+  let replaced = text;
+  const hits: Array<{ code: string; note: string }> = [];
+  for (const code of KERNEL_ERROR_FACE_CODES) {
+    replaced = replaced.replace(new RegExp(`${code}(:[^"'{}\\[\\]\\n]*)?`, "g"), (matched) => {
+      const note = humanizeKernelError(matched);
+      if (note === null) return matched;
+      hits.push({ code: matched, note });
+      return note;
+    });
+  }
+  return hits.length > 0 ? { text: replaced, hits } : null;
+};
+
+/** D71 未知码观测——内核失败信封 code 位识别（stdout/stderr 尾的 ``"error": "<code>[:<detail>]"``
+ *  形态，内核 CLI 捕获 ValueError 后的统一打印面）。非信封形态＝null（不猜正文）。
+ *  code 捕获组交调用方对 KERNEL_ERROR_FACE_CODES 闭集核对：不在闭集即未知码，原样保留
+ *  并落观测（工具/键/原文），不替换不猜改。 */
+export const kernelErrorEnvelopeCode = (text: string): { base: string } | null => {
+  if (typeof text !== "string" || text === "") return null;
+  const hit = /"error"\s*:\s*"([a-z][a-z0-9_]*)/.exec(text);
+  if (hit === null) return null;
+  return { base: hit[1] as string };
 };
