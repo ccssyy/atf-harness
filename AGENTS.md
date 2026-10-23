@@ -38,6 +38,11 @@
 - 关键结论必须有页面级证据：网络 POST 计数、DOM 节点断言（data-*）、渲染区域截图；仅组件测试通过不算产品通过。
 - 「组件绿、页面不可见」一律判 FAIL（不是 PARTIAL），登记并给页面级复现。
 
+### 3.9 测试分层（硬规则）
+
+- 硬规则见 `~/.zcode/AGENTS.md`「测试分层（硬规则）」；操作清单见 `~/.zcode/sop/test-acceptance.md`。
+- 项目判据与案例单源：`/data/sam/AgenticTrainingFlow/docs/_owner/ATF_纪律_验收脚本判据面_20261023.md`（sha 2075328c340f）。
+
 ## 4. 契约与 pin 管理
 
 - 仓内 `bridge.contract.yaml` 是 harness 对 ATF 认知的**唯一真相源**：JSONL 帧格式 + atf 子命令签名 + canonical output schema + `atf_upstream` pin（commit + contract_version）。
