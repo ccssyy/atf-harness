@@ -401,6 +401,9 @@ describe("批次 R H1-3——kernelErrorFace 四码人话映射（提前接线�
     mkdirSync(join(runDir, "eval-assets"), { recursive: true });
     writeFileSync(join(runDir, "eval-assets", "eval_labels.jsonl"), '{"labels": {"f1": "x"}}\n');
     writeFileSync(join(runDir, "eval-assets", "test_images.json"), '{"images": []}\n');
+    // D91：lane 任务事实在位（恰一 lane——不传 lane 走 task_fact 判定，不再缺省 goods）
+    mkdirSync(join(runDir, "l1"), { recursive: true });
+    writeFileSync(join(runDir, "l1", "training-data-manifest.json"), JSON.stringify({ schema_version: "TrainingDataArtifact/v1", lanes: { goods: {} } }));
     const serviceConfig = join(runDir, "eval-assets", "service-config.json");
     writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", run_id: "run-h1e", port: 8210, tensor_parallel_size: 1, max_num_seqs: 8, adapters: [{ name: "ckpt100", path: join(runDir, "models", "checkpoint-100") }] }));
     const fieldConfig = join(runDir, "eval-assets", "field-config.json");

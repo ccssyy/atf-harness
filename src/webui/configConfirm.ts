@@ -35,7 +35,10 @@ export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; de
   { key: "deepspeed", label: "deepspeed 配置", default: "ds_z2_config.json" },
   { key: "lora_rank", label: "lora_rank", default: "32" },
   { key: "lora_alpha", label: "lora_alpha", default: "64" },
-  { key: "dataset_keys", label: "数据集键", default: "（由登记面推导）" },
+  // D92：dataset_keys 改只读展示（内核实算——generate_iteration_config 的
+  // dataset_keys: sorted(dataset_info)，单源落盘 IterationConfig dataset 段；卡上可编辑值
+  // 内核实算不读＝「可编辑不消费」禁——占位文案「（由登记面推导）」退役，default 留空串）
+  { key: "dataset_keys", label: "数据集键（只读·内核实算）", default: "" },
   // 批次 R H1-1/H1-2：max_total_tokens 预填惯例基线 9000（owner 2026-10-22 裁定——缺省来源
   // 从「必填空」改为 owner 惯例并标来源；确认落盘仍显式。清空提交仍被必填拦空兜底拦截
   //（confirmFace configFormFieldsOf）。65536 域参考值退役（不显示、不预填）。
@@ -46,6 +49,14 @@ export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; de
   { key: "image_max_pixels", label: "像素上限（与像素下限成对确认;两档闭集）", default: String(TRAINING_PIN_CONSTANTS.image_max_pixels[0]) },
   { key: "negative_ratio_target", label: "负样本构造带（配额 2%-5%,空对象构造;空自然页可作构造输入之一非配额来源）", default: `${TRAINING_PIN_CONSTANTS.negative_ratio.min},${TRAINING_PIN_CONSTANTS.negative_ratio.max}` },
 ];
+
+// ── D92：只读键单源（指令《ATF_指令_参数面增补_harness_20261023》）──
+
+/** 卡面只读键（确认卡不生成输入框——「可编辑不消费」禁）：max_model_len＝惯例基线独立取值
+ *  （批次 R H1-1 只读）；dataset_keys＝内核实算（generate_iteration_config 的
+ *  dataset_keys: sorted(dataset_info)，单源 IterationConfig dataset 段），卡上可编辑值内核
+ *  实算不读。只读呈现单源——confirmFace 表单过滤与卡面只读行共用本集。 */
+export const READONLY_CONFIG_KEYS: ReadonlySet<string> = new Set(["max_model_len", "dataset_keys"]);
 
 // ── 批次 R H1-1：TokenBudget 三要素区（卡面与 web 摘要共用单源渲染）──
 

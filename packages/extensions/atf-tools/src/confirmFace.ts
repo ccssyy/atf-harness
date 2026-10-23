@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows, pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
+import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows, pixelPairViolationOf, READONLY_CONFIG_KEYS } from "../../../../src/webui/configConfirm.js";
 
 /** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型；批㊶-Q 增第四态 agent_recommend，
  *  仅全自动档采纳 agent 参数推荐时由本文件后处理标注，buildConfigConfirmFields 不产出该态）。
@@ -113,9 +113,18 @@ const PIXEL_PAIR_LABELS: Record<string, string> = {
  *  批次 R H1-1：max_model_len 只读——不生成输入框（值恒单源惯例基线，卡面三要素区只读呈现，
  *  独立取值禁 cutoff 推导）。A1：与回归断言单源。b5 像素对：两键呈现名中文化＋hint 尾
  *  来源标注（默认/用户——指令 b5 §三）。 */
+/** 卡面只读行（D92 单源）：dataset_keys 不入表单输入框（READONLY_CONFIG_KEYS 过滤），
+ *  实算值经只读行如实呈现——值在＝「数据集键（实算，只读）：<值>」；值缺（IterationConfig
+ *  缺席/未实算）＝如实「实算值未产出」，不造占位数。 */
+export const datasetKeysFaceLineOf = (fields: ReadonlyArray<{ key: string; value: string }>): string => {
+  const value = (fields.find((field) => field.key === "dataset_keys")?.value ?? "").trim();
+  return value === "" ? "数据集键（实算，只读）：实算值未产出（IterationConfig 缺席）" : `数据集键（实算，只读）：${value}`;
+};
+
 export const configFormFieldsOf = (fields: ConfigConfirmField[], gpuCount: number | null) =>
   fields
-    .filter((field) => field.key !== "max_model_len")
+    // D92：只读键单源过滤（max_model_len 惯例基线＋dataset_keys 内核实算——卡上可编辑值不消费）
+    .filter((field) => !READONLY_CONFIG_KEYS.has(field.key))
     .map((field) => {
     const hint = domainHintOf(field.key, gpuCount);
     const pixelPair = PIXEL_PAIR_LABELS[field.key] !== undefined;
@@ -396,11 +405,17 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       let iterTraining: Record<string, string> = {};
       if (existsSync(iterPath)) {
         try {
-          const iter = JSON.parse(readFileSync(iterPath, "utf8")) as { training?: Record<string, unknown> };
+          const iter = JSON.parse(readFileSync(iterPath, "utf8")) as { training?: Record<string, unknown>; dataset?: Record<string, unknown> };
           if (iter.training !== undefined && iter.training !== null && typeof iter.training === "object") {
             for (const [key, value] of Object.entries(iter.training)) {
               if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") iterTraining[key] = String(value);
             }
+          }
+          // D92：dataset_keys 内核实算值随 training 段一并展平入 baseline（单源＝IterationConfig
+          // dataset 段——baseline→from_registry 通道把实算值带上卡面只读行；占位推导文案退役）
+          const datasetKeys = iter.dataset?.["dataset_keys"];
+          if (Array.isArray(datasetKeys) && datasetKeys.every((key) => typeof key === "string")) {
+            iterTraining["dataset_keys"] = (datasetKeys as string[]).join("、");
           }
         } catch {
           iterTraining = {};
@@ -699,6 +714,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         ];
         const formDetail = [
           "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。",
+          // D92：dataset_keys 只读行（输入框已滤——实算值/缺席均如实呈现，不造占位数）
+          datasetKeysFaceLineOf(fields),
           ...(amendNote !== undefined ? [amendNote] : []),
           ...(guardNotes.length > 0 ? [`卡数护栏：${guardNotes.join("；")}`] : []),
           tokenBudgetFaceText(fields, budgetViolations),

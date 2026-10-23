@@ -875,7 +875,16 @@ export const buildLaunchSurface = (dir: string): LaunchSurface => {
   } catch {
     prelaunch = null;
   }
-  const summary = buildIterationSummary(iter?.["training"] !== undefined && iter?.["training"] !== null && typeof iter["training"] === "object" ? (iter["training"] as Record<string, unknown>) : iter, snapshot?.confirmed ?? null);
+  // D92：Web 摘要 dataset_keys 顶层展平（单源＝IterationConfig dataset 段内核实算——training
+  // 段不含该键，原样传恒显占位）。在既有「training 段 ?: iter」结果上叠一个 dataset_keys 键，
+  // learning_rate 等既有取值路径不变；本文件其余部分（SEGMENTS/段灯等）不动。
+  const trainingView = iter?.["training"] !== undefined && iter?.["training"] !== null && typeof iter["training"] === "object" ? (iter["training"] as Record<string, unknown>) : iter;
+  const datasetSection = iter !== null && typeof iter === "object" ? iter["dataset"] : undefined;
+  const datasetKeysRaw = datasetSection !== null && typeof datasetSection === "object" && !Array.isArray(datasetSection) ? (datasetSection as Record<string, unknown>)["dataset_keys"] : undefined;
+  const summary = buildIterationSummary({
+    ...trainingView,
+    ...(Array.isArray(datasetKeysRaw) && datasetKeysRaw.every((key) => typeof key === "string") ? { dataset_keys: (datasetKeysRaw as string[]).join(",") } : {}),
+  }, snapshot?.confirmed ?? null);
   // 批次 R H1-1：TokenBudget 三要素区（web 面前端校验——与确认卡服务端闸同一校验/渲染单源；
   // 来源标注口径：config_snapshot＝用户确认值→用户指定；iteration_config/default→惯例基线）。
   const rowToTag = (row: IterationSummaryRow): string | undefined => (row.source === "config_snapshot" ? "need_confirm" : undefined);
