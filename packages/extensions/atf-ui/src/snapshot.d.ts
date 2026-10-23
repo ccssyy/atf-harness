@@ -76,6 +76,7 @@ export interface AtfMonitorSnapshot {
     state: string;
     /** A2 案 a：工作区标注来源（additive 投影键——两键闭集）。 */
     workspace_source: "bucket" | "registry";
+    /** D96：段灯＝内核 STAGE_ORDER 八段（键名逐键一致；训练执行/评估不占灯——独立卡）。 */
     segments: Array<{ key: string; label: string; status: "done" | "active" | "failed" | "pending" }>;
     viewers: string[];
     launch: unknown;

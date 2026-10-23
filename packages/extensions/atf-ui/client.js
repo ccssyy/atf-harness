@@ -481,8 +481,9 @@ window.__ModuleLoader__.load({
       for (var i = 0; i < runs.length; i++) {
         var segs = runs[i].segments || []
         var done = segs.filter(function(s) { return s.status === 'done' }).length
-        var trainingActive = segs.some(function(s) { return s.key === 'training' && s.status === 'active' })
-        var waiting = segs.some(function(s) { return s.key === 'experiment_config' && s.status === 'active' })
+        // D96：训练执行不占段灯——活跃态直接读训练独立卡数据源（run.training.active）
+        var trainingActive = !!(runs[i].training && runs[i].training.active === true)
+        var waiting = segs.some(function(s) { return s.key === 'experiment_setup' && s.status === 'active' })
         if (done > 0 || trainingActive || waiting) return { run: runs[i], done: done, total: segs.length, trainingActive: trainingActive, waiting: waiting }
       }
       return null
@@ -1262,7 +1263,7 @@ window.__ModuleLoader__.load({
         for (var ki = 0; ki < ckpts.length && ki < 5; ki++) {
           artRows.push({ ico: 'CK', name: ckpts[ki], meta: '检查点元数据', rel: 'training/' + ckpts[ki] + '/trainer_state.json' })
         }
-        var splitDone = (run.segments || []).some(function(s) { return s.key === 'split' && s.status === 'done' })
+        var splitDone = (run.segments || []).some(function(s) { return s.key === 'family_split' && s.status === 'done' })
         if (splitDone) artRows.push({ ico: 'SP', name: 'split-manifest.json', meta: '数据切分', rel: 'dataset/split-manifest.json' })
         if (progress !== null || trainingNow) artRows.push({ ico: 'TR', name: 'trainer_log.jsonl', meta: '训练日志（全量）', rel: 'training/trainer_log.jsonl' })
         if (metrics && metrics.round !== undefined && metrics.f1 !== null && metrics.f1 !== undefined) {
@@ -2050,6 +2051,8 @@ window.__ModuleLoader__.load({
       }
       var lastCkpt = Array.isArray(run.ckpts) && run.ckpts.length > 0 ? run.ckpts[run.ckpts.length - 1] : null
       var segDetail = function(seg) {
+        // D96：训练执行/评估不占段灯（独立卡/区块）——以下两分支在八段键面下不再触发，
+        // 保留作旧快照缓存渲染防御（训练进度由独立进度行承载）。
         if (seg.key === 'training') {
           // 批㊶-N N-3：段内进度优先（"第 6/8 轮 · 剩余 17 步 · loss 0.0589"——无回退 loss/ckpt）
           if (progress) {
@@ -2197,6 +2200,8 @@ window.__ModuleLoader__.load({
       var color = STATE_COLORS[state]
       var progress = trainingNow ? (run.progress || null) : null
       var segDetail = function(seg) {
+        // D96：训练执行/评估不占段灯（独立卡/区块）——以下两分支在八段键面下不再触发，
+        // 保留作旧快照缓存渲染防御（训练进度由独立进度行承载）。
         if (seg.key === 'training') {
           if (progress) {
             var bits = []
@@ -2306,7 +2311,7 @@ window.__ModuleLoader__.load({
         const segs = run.segments || []
         const done = segs.filter(function(s) { return s.status === 'done' }).length
         const trainingActive = run.training && run.training.active === true
-        const waiting = segs.some(function(s) { return s.key === 'experiment_config' && s.status === 'active' })
+        const waiting = segs.some(function(s) { return s.key === 'experiment_setup' && s.status === 'active' })
         // 批㊶-N：绑定 run 恒为候选（段全 pending 也进——绑定语义＝本会话正在推进的 run）
         if (pool.length > 0) {
           const progress = trainingNowFresh(run) ? run.progress : null

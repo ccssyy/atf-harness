@@ -34,17 +34,19 @@ afterEach(() => {
 
 describe("批㊶-N N-1 段序守卫（orderGuarded）", () => {
   it("evaluate 锚在场但 training 未 done → 抑制为 false（陈旧轮倒挂场景）；training done → 放行", () => {
-    const doneMap = { register: true, label_qc: true, experiment_config: true, publish: true, split: true, admission: true, training: false, evaluate: false };
-    expect(orderGuarded("evaluate", true, doneMap)).toBe(false);
-    const doneMap2 = { ...doneMap, training: true };
-    expect(orderGuarded("evaluate", true, doneMap2)).toBe(true);
+    // D96：段序八键＝内核段名（training/evaluate 不入段序——训练完成放行抑制场景随键面退役，
+    // 独立卡态不再由 orderGuarded 承载）；末段 training_prep 的前缀抑制锚同构保留（中段断链即抑制）
+    const doneMap = { register: true, label_qc: true, experiment_setup: true, candidate_build: true, publish: true, family_split: false, admission: true, training_prep: true };
+    expect(orderGuarded("training_prep", true, doneMap)).toBe(false);
+    const doneMap2 = { ...doneMap, family_split: true };
+    expect(orderGuarded("training_prep", true, doneMap2)).toBe(true);
   });
 
   it("中段未 done 同样抑制（register 缺 → label_qc 抑制）；首段无前序直达；锚缺省 false 恒 false", () => {
     expect(orderGuarded("label_qc", true, { register: false })).toBe(false);
     expect(orderGuarded("label_qc", true, { register: true })).toBe(true);
     expect(orderGuarded("register", true, {})).toBe(true);
-    expect(orderGuarded("evaluate", false, { training: true })).toBe(false);
+    expect(orderGuarded("training_prep", false, { admission: true })).toBe(false);
   });
 
   it("scanRunDir 集成：旧 eval 轮在场而训练锚缺 → evaluate 抑制（formal-01 倒挂场景）", () => {
@@ -77,15 +79,12 @@ describe("批㊶-N N-1 段序守卫（orderGuarded）", () => {
     mkdirSync(join(runDir, "eval", "2-20261002"), { recursive: true });
     writeFileSync(join(runDir, "eval", "2-20261002", "metrics_summary.json"), "{}");
     const scan = scanRunDir(root, "run-chain", { trainingTmuxPresent: true });
+    // D96：训练/评估不占段灯——两键态独立如实 done（「出现即事实」豁免语义随键面移入独立卡）
     expect(scan.segments.training).toBe(true);
     expect(scan.segments.evaluate).toBe(true);
-    // owner 裁定（段显示态保序）：done 恒为前缀——收尾段证据反蕴含前段发生（登记必然已发生），
-    // register/admission 随前缀点亮，不再出现 ✓○✓○ 间隔态
-    expect(scan.segments.register).toBe(true);
-    expect(scan.segments.admission).toBe(true);
-    // 无 metrics 产物：evaluate 如实 pending（frontier），训练锚已 done
-    const scanNoEval = scanRunDir(root, "run-chain", { trainingTmuxPresent: true });
-    void scanNoEval;
+    // D96：八段灯只按内核八段证据——无锚即 pending（旧「收尾段反蕴含前段」语义随段序键面退役）
+    expect(scan.segments.register).toBe(false);
+    expect(scan.segments.admission).toBe(false);
   });
 });
 

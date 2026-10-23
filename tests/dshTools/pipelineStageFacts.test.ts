@@ -69,16 +69,16 @@ describe("A2.2b——段模式闭集与映射表", () => {
     expect(PIPELINE_STAGES).not.toContain("candidate");
   });
 
-  it("映射表落常量：八项全覆——experiment_setup→experiment_config／candidate_build→candidate／family_split→split／training_prep→null", () => {
+  it("映射表落常量（D96 恒等化）：八项全覆——内核段名＝UI 段键（experiment_setup→experiment_setup／candidate_build→candidate_build／family_split→family_split／training_prep→training_prep）", () => {
     expect(SEGMENT_FACT_BY_KERNEL_STAGE).toEqual({
       register: "register",
       label_qc: "label_qc",
-      experiment_setup: "experiment_config",
-      candidate_build: "candidate",
+      experiment_setup: "experiment_setup",
+      candidate_build: "candidate_build",
       publish: "publish",
-      family_split: "split",
+      family_split: "family_split",
       admission: "admission",
-      training_prep: null,
+      training_prep: "training_prep",
     });
   });
 });
@@ -173,7 +173,7 @@ function readArgv(marker: string): string {
 }
 
 describe("A2/A3——exit 三态事实轨与绑定语义", () => {
-  it("exit 0：段事实按映射键落盘（experiment_setup→experiment_config）＋binding；返回面带双布尔与落点", async () => {
+  it("exit 0：段事实按映射键落盘（D96 恒等——experiment_setup→experiment_setup）＋binding；返回面带双布尔与落点", async () => {
     const root = tempRoot();
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
@@ -184,16 +184,16 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
     expect(result).toMatchObject({
       stage: "experiment_setup", run_id: "run-a", ok: true, exit_code: 0,
       segment_fact_recorded: true, session_bound: true,
-      workspace_path: ws, run_dir: join(ws, "runs", "run-a"), fact_segment: "experiment_config",
+      workspace_path: ws, run_dir: join(ws, "runs", "run-a"), fact_segment: "experiment_setup",
     });
     const runDir = join(ws, "runs", "run-a");
     const facts = readSegmentFacts(runDir);
     expect(facts).toHaveLength(1);
-    expect(facts[0]).toMatchObject({ segment: "experiment_config", source: "atf_pipeline_stage" });
+    expect(facts[0]).toMatchObject({ segment: "experiment_setup", source: "atf_pipeline_stage" });
     expect(readBindings(runDir).map((b) => b.session_id)).toEqual(["sess-9"]);
   });
 
-  it("candidate_build → fact_segment=candidate（只落事实不点灯——键不在前缀闭包读面）；training_prep → fact_segment=training_prep", async () => {
+  it("candidate_build → fact_segment=candidate_build（D96 恒等键，段灯第八序前）；training_prep → fact_segment=training_prep（入灯）", async () => {
     const root = tempRoot();
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
@@ -201,8 +201,8 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const cb = await tool.execute({ stage: "candidate_build", run_id: "run-cb", workspace_path: ws }, execWithSession("s1"));
-    expect(cb).toMatchObject({ ok: true, fact_segment: "candidate", segment_fact_recorded: true });
-    expect(readSegmentFacts(join(ws, "runs", "run-cb")).map((f) => f.segment)).toEqual(["candidate"]);
+    expect(cb).toMatchObject({ ok: true, fact_segment: "candidate_build", segment_fact_recorded: true });
+    expect(readSegmentFacts(join(ws, "runs", "run-cb")).map((f) => f.segment)).toEqual(["candidate_build"]);
     // A-E14b：training_prep 段 base_model_path 必填（夹具按新契约补显式绝对路径——
     // 缺参即卡前快败 base_model_path_missing，专锚见 batchE14b.test.ts）
     const tp = await tool.execute({ stage: "training_prep", run_id: "run-tp", workspace_path: ws, base_model_path: join(ws, "model") }, execWithSession("s1"));

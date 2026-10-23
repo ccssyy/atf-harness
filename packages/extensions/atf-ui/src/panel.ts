@@ -75,7 +75,9 @@ svg.chart { width:100%; height:90px; border:1px dashed var(--border); border-rad
 </div>
 <script>
 const QUEUE_IDLE_TEXT = '等待训练启动 · DRY_RUN 已过 · 排队中';
-const SEGMENTS = [['register','登记卡'],['split','切分卡'],['label_qc','体检卡'],['candidate','候选'],['publish','发布']];
+<!-- D96：段键与内核 STAGE_ORDER 逐键一致（显示名与 snapshot SEGMENTS 同源；本面板
+     段灯直接渲染快照 runs[].segments 数组，此常量为同构参照副本）。 -->
+const SEGMENTS = [['register','数据登记'],['label_qc','标注体检'],['experiment_setup','实验配置'],['candidate_build','候选构造'],['publish','契约发布'],['family_split','数据切分'],['admission','准入检查'],['training_prep','训练准备']];
 const COLORS = { train_loss:'#1d4ed8', eval_loss:'#94a3b8', grad_norm:'#16a34a' };
 const DASH = { train_loss:'', eval_loss:'4 3', grad_norm:'' };
 let activeRun = '';
