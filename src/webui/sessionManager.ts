@@ -739,7 +739,13 @@ export class WebUiSessionManager {
             details: { confirmed: false },
           };
         }
-        const confirmedConfig = { ...currentValues };
+        // D76：卡位留空＝全部可见卡——空值不落快照（禁空串覆盖 deploy 缺省；与 confirmFace
+        // confirmedSnapshotOf 同语义）。
+        const confirmedConfig: Record<string, string> = {};
+        for (const [key, value] of Object.entries(currentValues)) {
+          if (key === "visible_devices" && value.trim() === "") continue;
+          confirmedConfig[key] = value;
+        }
         if (session.boundRunId !== undefined) saveConfigSnapshot(runDir, confirmedConfig);
         const credential = { by: "webui-operator", at: new Date().toISOString(), channel: "harness-confirm-card" as const, via: answer.via };
         return {

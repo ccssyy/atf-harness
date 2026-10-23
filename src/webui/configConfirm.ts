@@ -18,6 +18,11 @@ export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; de
   // 静态缺省留空＝机器事实未探测位（confirmFace 以 detectAvailableGpuCount 注入基线——
   // owner 裁定：训练默认拉满可用卡；visible_devices 缺失＝machine-facts 停下问，不设默认值）
   { key: "nproc_per_node", label: "训练卡数 nproc_per_node", default: "" },
+  // D76 卡位入卡（指令《ATF_指令_D76_卡位入卡_20261023》§二 harness 1）：键名/语义与内核侧
+  // generate_iteration_config 的 visible_devices 逐字一致——逗号分隔整数或 a-b 段、元素 0–7、
+  // 不重复、个数须等于 nproc_per_node。缺省必须保持「回退 deploy」（generate_train_launch 读
+  // train.visible_devices 覆盖缺省）——静态不给默认值，确认落盘空值不写快照（禁空串覆盖 deploy）。
+  { key: "visible_devices", label: "卡位 visible_devices（留空＝全部可见卡）", default: "" },
   // 批㊶-S5 §九：基模型路径入卡（默认＝模型库位置下 Qwen3-VL-32B-Instruct——owner 偏置锚点，
   // confirmFace 以 defaultBaseModelPath 注入基线；卡上可改；写回 iteration-config base_model.path）
   { key: "base_model_path", label: "基模型路径 base_model_path", default: "" },

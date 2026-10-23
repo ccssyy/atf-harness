@@ -174,6 +174,9 @@ export const domainHintOf = (key: string, gpuCount: number | null): string | und
       return `构造带 [${CLAMP_DOMAINS.negative_ratio.min}, ${CLAMP_DOMAINS.negative_ratio.max}]`;
     case "nproc_per_node":
       return gpuCount !== null ? `[1, 可用卡数 ${gpuCount}]` : "须为本机可用卡数内（机器事实）";
+    case "visible_devices":
+      // D76 卡位入卡：域提示与内核侧键语义逐字一致（逗号/a-b 段、0–7、个数=nproc；留空回退 deploy）。
+      return "逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）";
     case "max_total_tokens":
       // 批次 R H1-2：建议值单源 9000（惯例基线 owner 2026-10-22——65536 域参考值退役）。
       return `正整数；建议 ${TRAINING_PIN_CONSTANTS.max_total_tokens}（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）`;
@@ -196,6 +199,55 @@ export const tokenBudgetCheckOf = (
     },
     { syncReason },
   );
+
+// ── D76 卡位入卡（指令《ATF_指令_D76_卡位入卡_20261023》§二 harness 1/2）──
+// 键名/校验语义与内核侧 generate_iteration_config 的 visible_devices 逐字一致
+// （逗号分隔整数或 a-b 段、元素 0–7、不重复、个数须等于 nproc_per_node）；
+// 卡前拒绝一律业务语言红字，不得出现 visible_devices_nproc_mismatch 等码原文（§四红线）。
+
+/** 卡位卡前校验（卡前红字单源——手动档表单卡循环与自动档落快照前共用）。
+ *  留空＝全部可见卡（回退 deploy 缺省，不校验）。返回红字行（业务语言）；空数组＝通过。 */
+export const visibleDevicesViolationsOf = (
+  fields: ReadonlyArray<{ key: string; value: string }>,
+): string[] => {
+  const raw = (fields.find((f) => f.key === "visible_devices")?.value ?? "").trim();
+  if (raw === "") return [];
+  const shapeNote = "卡位形态不对——应为逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7），每张卡最多出现一次";
+  const ids: number[] = [];
+  for (const token of raw.split(",").map((t) => t.trim()).filter((t) => t !== "")) {
+    const range = /^(\d+)-(\d+)$/.exec(token);
+    if (range !== null) {
+      const lo = Number(range[1]);
+      const hi = Number(range[2]);
+      if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi < lo) return [shapeNote];
+      for (let i = lo; i <= hi; i++) ids.push(i);
+      continue;
+    }
+    if (!/^\d+$/.test(token)) return [shapeNote];
+    ids.push(Number(token));
+  }
+  const outOfRange = [...new Set(ids.filter((id) => id < 0 || id > 7))];
+  if (outOfRange.length > 0) return [`卡位含本机不存在的卡号 ${outOfRange.join("、")}——可用卡号为 0–7`];
+  const duplicated = [...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))];
+  if (duplicated.length > 0) return [`卡位有重复卡号 ${duplicated.join("、")}——每张卡只能出现一次`];
+  const nprocRaw = (fields.find((f) => f.key === "nproc_per_node")?.value ?? "").trim();
+  const nprocNum = Number(nprocRaw);
+  if (nprocRaw !== "" && Number.isFinite(nprocNum) && nprocNum > 0 && ids.length !== nprocNum) {
+    return [`卡位个数（${String(ids.length)} 张：${raw}）与训练卡数 nproc_per_node（${String(nprocNum)}）不一致——两者须相等，请改齐后提交`];
+  }
+  return [];
+};
+
+/** 确认字段 → 快照 confirmed（D76：卡位留空＝全部可见卡，空值不落快照——禁空串覆盖
+ *  deploy 的 cuda_visible_devices 缺省；手动档/自动档落盘共用单源）。 */
+export const confirmedSnapshotOf = (fields: ReadonlyArray<ConfigConfirmField>): Record<string, string> => {
+  const confirmed: Record<string, string> = {};
+  for (const field of fields) {
+    if (field.key === "visible_devices" && field.value.trim() === "") continue;
+    confirmed[field.key] = field.value;
+  }
+  return confirmed;
+};
 
 /** TokenBudget 三要素区文本（表单卡 detail / pending 卡 / 审批卡 reason 共用单源——
  *  三行呈现＋violations 红字行）。 */
@@ -558,6 +610,11 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         if (autoBudgetCheck.violations.length > 0) {
           return asToolValue({ ok: false, run_id: args.run_id, error: "token_budget_invariant_violated", note: `${autoBudgetCheck.violations.join("；")}——快照未落盘；同步 cutoff_len 或补理由后重推` });
         }
+        // D76：卡位卡前校验（自动档免卡面——落快照前同样 fail-closed，红字业务语言回传）。
+        const autoDeviceViolations = visibleDevicesViolationsOf(fields);
+        if (autoDeviceViolations.length > 0) {
+          return asToolValue({ ok: false, run_id: args.run_id, error: "visible_devices_invalid", note: `${autoDeviceViolations.join("；")}——快照未落盘；请修正卡位或留空（留空＝全部可见卡，走 deploy 缺省）后重推` });
+        }
         const sources: Record<string, string> = {};
         for (const field of fields) {
           sources[field.key] =
@@ -567,8 +624,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
                 ? "user-specified"
                 : "default:harness-smart-defaults";
         }
-        const confirmed: Record<string, string> = {};
-        for (const field of fields) confirmed[field.key] = field.value;
+        const confirmed = confirmedSnapshotOf(fields);
         const rejectedNotes = recommendReport.filter((v) => !v.accepted).map((v) => v.note);
         const recommendSummary = args.action === "amend"
           ? `；改参：${Object.keys(amended ?? {}).join(", ") || "（纯确认）"}`
@@ -622,12 +678,16 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       }
       // 批次 R H1-1：进卡初始校验态（基线惯例值 9000/9000/12800 恒通过；登记值异常进卡即红字）。
       const initialBudgetViolations = tokenBudgetCheckOf(fields, "").violations;
+      // D76：卡位卡前校验态（缺省空恒通过；amend 携 visible_devices 异常值进卡即红字）。
+      const initialDeviceViolations = visibleDevicesViolationsOf(fields);
       // b5 像素对复用补丁：进卡关系警示（min<max——只提示不阻塞）。
       const initialPixelViolation = pixelPairViolationNoteOf(fields);
-      writePending(runDir, { kind: "config_confirm", run_id: args.run_id, title, fields, note: `${note}\n${tokenBudgetFaceText(fields, initialBudgetViolations)}${initialPixelViolation !== undefined ? `\n${initialPixelViolation}` : ""}`, at: new Date().toISOString() });
+      writePending(runDir, { kind: "config_confirm", run_id: args.run_id, title, fields, note: `${note}\n${tokenBudgetFaceText(fields, initialBudgetViolations)}${initialDeviceViolations.length > 0 ? `\n${initialDeviceViolations.join("\n")}` : ""}${initialPixelViolation !== undefined ? `\n${initialPixelViolation}` : ""}`, at: new Date().toISOString() });
       // TokenBudget 关系校验态（跨轮呈现——violations 非空时表单卡红字重呈，
-      // 不进审批卡＝禁用确认；清零后恢复授权链）。
+      // 不进审批卡＝禁用确认；清零后恢复授权链）。卡位校验同机制（D76——红字重呈，
+      // 0–7 子集＋个数＝nproc 须成立才放行授权）。
       let budgetViolations: string[] = initialBudgetViolations;
+      let deviceViolations: string[] = initialDeviceViolations;
       for (;;) {
         // 批㊶-W 真机修正：typert lossless JSON 拒绝嵌套 undefined（对象键值 undefined
         // 即「not lossless JSON data」）——可选键一律条件 spread，禁显式 undefined 值。
@@ -642,6 +702,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           ...(amendNote !== undefined ? [amendNote] : []),
           ...(guardNotes.length > 0 ? [`卡数护栏：${guardNotes.join("；")}`] : []),
           tokenBudgetFaceText(fields, budgetViolations),
+          // D76：卡位红字行（0–7 子集/不重复/个数＝nproc——业务语言，零内部码）。
+          ...(deviceViolations.length > 0 ? deviceViolations : []),
           // b5 像素对复用补丁：像素对关系警示（每轮现算——只提示不阻塞确认链）。
           ...(pixelPairViolationNoteOf(fields) !== undefined ? [pixelPairViolationNoteOf(fields)!] : []),
         ].join("\n");
@@ -717,7 +779,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         const syncReason = changedEdits["token_budget_sync_reason"] ?? "";
         delete changedEdits["token_budget_sync_reason"];
         budgetViolations = tokenBudgetCheckOf(fields, syncReason).violations;
-        if (budgetViolations.length > 0) continue;
+        // D76：卡位卡前校验（每轮现算——违规红字重呈表单卡，不进审批卡＝禁用确认）。
+        deviceViolations = visibleDevicesViolationsOf(fields);
+        if (budgetViolations.length > 0 || deviceViolations.length > 0) continue;
         // 第二段＝审批卡（授权唯一落点——Reject 回表单卡循环）；E5 模板四行＋字段表续行
         const verdict = await requestApproval(ctx, exec, "atf_config_confirm",
           buildApprovalReason({
@@ -734,9 +798,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         }
         return approvalDeniedResult("atf_config_confirm", verdict.outcome);
       }
-      // 确认：全字段按现值落快照（手搓 saveConfigSnapshot 复用）
-      const confirmed: Record<string, string> = {};
-      for (const field of fields) confirmed[field.key] = field.value;
+      // 确认：全字段按现值落快照（confirmedSnapshotOf 单源——卡位空值不落，D76）
+      const confirmed = confirmedSnapshotOf(fields);
       saveConfigSnapshot(runDir, confirmed);
       // 批㊶Q增补二3：确认完成即清 pending 卡（备份改名 .answered——残留则 UI 持续渲染待确认态）
       clearPending(runDir);

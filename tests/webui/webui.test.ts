@@ -114,8 +114,9 @@ describe("config_confirm：九要素卡与纯文字应答", () => {
     expect(byKey["deepspeed"]).toEqual({ key: "deepspeed", value: "ds_z3_offload_config.json", tag: "from_registry" });
     expect(byKey["cutoff_len"]).toEqual({ key: "cutoff_len", value: "9000", tag: "default_used" });
     // 批㉚ 段1:九要素＋KB 门禁四项（token 上限/像素对/负样本带——原则二投影面）；
-    // 批㊶R前置 扩键五同步①：卡数显性卡入键表（13→14）；批次 R H1-1 增 max_model_len（15→16）
-    expect(fields.length).toBe(16);
+    // 批㊶R前置 扩键五同步①：卡数显性卡入键表（13→14）；批次 R H1-1 增 max_model_len（15→16）；
+    // D76 卡位入卡增 visible_devices（16→17）
+    expect(fields.length).toBe(17);
   });
 
   it("批㊶-W F1/F2/§三：KB 全链排除——label 无 KB 标注、缺省改单源、批次 R 惯例基线预填、别名可改", () => {
@@ -289,7 +290,7 @@ describe("会话语义（spawn mock pipeline）", () => {
     );
     // 卡面：缺省标已用缺省⚠、九要素齐全
     const cardEvent = manager.getSession(sessionId)?.events.find((event) => event.kind === "confirm_card");
-    expect(cardEvent !== undefined && cardEvent.kind === "confirm_card" && cardEvent.fields.length === 16).toBe(true); // 批㊶R前置 13→14＋批㊶-S5 §九 14→15＋批次 R H1-1 15→16（max_model_len）
+    expect(cardEvent !== undefined && cardEvent.kind === "confirm_card" && cardEvent.fields.length === 17).toBe(true); // 批㊶R前置 13→14＋批㊶-S5 §九 14→15＋批次 R H1-1 15→16＋D76 16→17（visible_devices）
     // 纯文字改参 → 重呈卡（lr 更新）
     await manager.postUserMessage(sessionId, "lr 改 2e-4 其他 ok");
     await waitFor(() => {
@@ -624,7 +625,8 @@ describe("批㊶-W F5——表单卡链（结构化 edits＋form intent ask＋Re
     expect(intent?.kind).toBe("form");
     // 批次 R H1-1：16＝15 配置键输入框（16 键滤 max_model_len 只读）＋1 理由行
     //（token_budget_sync_reason——预算与 cutoff 不等时的不同步理由入口）。
-    expect(intent?.fields.length).toBe(16);
+    // D76 卡位入卡：17＝16 配置键输入框（17 键滤 max_model_len 只读）＋1 理由行。
+    expect(intent?.fields.length).toBe(17);
     const lrField = intent?.fields.find((f) => f.key === "learning_rate");
     expect(lrField?.value).toBe("2e-4"); // 现值预填
     expect(lrField?.hint).toContain("5e-5"); // clamp 域提示可读
