@@ -459,9 +459,11 @@ export interface ScanLiveness {
   nowMs?: number;
 }
 
-/** 批㊶-N N-1：八段有序键（snapshot SEGMENTS 同源序）。 */
-const SEGMENT_ORDER_KEYS: readonly string[] = [
-  "register", "label_qc", "experiment_config", "publish", "split", "admission", "training", "evaluate",
+/** D96：八段有序键（唯一权威＝内核 STAGE_ORDER，snapshot SEGMENTS 同源序逐键相等；
+ *  训练执行/评估移出段灯——独立卡/区块，态在 scanRunDir segments 返回面独立承载）。
+ *  导出供段对齐锚测试逐键断言（D96 映射表单源断言面）。 */
+export const SEGMENT_ORDER_KEYS: readonly string[] = [
+  "register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep",
 ];
 
 /** 批㊶-N N-2：training-logs 目录活性（目录树内任一文件 mtime 在窗口内即 fresh；
@@ -607,36 +609,41 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
   const reportDir = join(dir, "report");
   const reportFiles = existsSync(reportDir) ? readdirSync(reportDir).filter((f) => f.endsWith(".md") || f.endsWith(".json")) : [];
 
-  // 批㊶-N N-1：段序守卫两段装配——先按锚/事实轨算全段原始 done 图，再逐段经 orderGuarded
+  // 批㊶-N N-1：段序守卫两段装配——先按锚/事实轨算全段原始 done 图，再逐段经前缀闭包
   // 抑制（后段 done 前提＝前段 done 成立；评估先于训练的陈旧倒挂场景在此天然覆盖）。
+  // D96：八段键＝内核段名（SEGMENT_ORDER_KEYS＝内核 STAGE_ORDER 唯一权威）；训练执行
+  // （training）与评估（evaluate）不占段灯——独立卡/区块态，同函数内独立计算（不入前缀）。
   const rawDone: Record<string, boolean> = {
     register: segmentDone("register", has("registration.json") || has("dataset")),
     label_qc: segmentDone("label_qc", has("label_qc") || has("qc")),
-    experiment_config: has("webui/config-snapshot.json"),
+    experiment_setup: has("webui/config-snapshot.json"),
+    candidate_build: has("contract-candidate.json"),
     publish: (has("report") && reportFiles.some((f) => f.startsWith("segment-"))) || has("contract-candidate.json"),
-    split: has("split") || has("dataset/split"),
+    family_split: has("split") || has("dataset/split"),
     admission: has("launch/train.sh") || has("admission.json") || has("training/train.sh"),
-    // D50：completion.json（status ok）＝训练段确定性完成锚（与既有锚 OR——真完成事实
-    // 落盘后段链即收口，不再依赖 tmux 缺席启发判 failed）
+    // D96：training_prep 段灯＝内核训练准备段产物锚（迭代配置两形态——prep/iteration-config
+    // 平铺与目录双形态，与 trainingFace 读面同源）＋事实轨（段触发成功）。train.sh 在场归
+    // admission 段灯（既有判据不动，不复制第二套）。
+    training_prep: has("prep/iteration-config.json") || has("prep/iteration-config"),
+    // D96 独立卡态（不占段灯）：D50 completion.json（status ok）＝训练确定性完成锚；
+    // evaluate 评估轮产物锚。
     training: trainingAnchorPresent(dir) || readTrainingCompletion(dir)?.status === "ok",
     evaluate: has("eval/metrics_summary.json") || evalRoundAnchored(dir),
   };
-  // 事实轨并入证据图（M-3 契约「有记录的段直接 done」——experiment_config/publish 等段
+  // 事实轨并入证据图（M-3 契约「有记录的段直接 done」——experiment_setup/publish 等段
   // 的 rawDone 表达式原本只读锚，事实在位而锚布局不符的历史 run 会丢证据）；D3/D4：段
-  // 摘要兜底源同门并入（三源 OR）。training 段事实语义＝start 放行（非完成）、evaluate
-  // 段事实＝编排启动（非完成），两段不入事实（摘要面同守——无内核段映射至两键）。
+  // 摘要兜底源同门并入（三源 OR）。training/evaluate 不占段灯（D96），不入本循环——两键
+  // 事实独立承载在 segments 返回面（摘要面同守——无内核段映射至两键）。
   for (const key of SEGMENT_ORDER_KEYS) {
-    if (key === "training" || key === "evaluate") continue;
     if (hasSegmentFact(dir, key) || summaryFacts.has(key)) rawDone[key] = true;
   }
   // 批㊶-S3 S-B2 根因修复②（owner 裁定：段显示态必须保序——done 恒为前缀，后段完成蕴含
   // 前段发生；间隔完成/后成前未成是不合逻辑状态，不得显示）。证据图＝事实轨（segments.json
-  // 工具执行成功记录）∥ 在盘锚；training/evaluate 收尾段完成锚（adapter/all_results/metrics
-  // 轮产物——出现即事实，历史 run 重评形态由此不再冻结 0/8）。训练活跃期（本轮重跑）证据
-  // 不入前缀——训练段回落边界显示 ●，evaluate 回落 pending。显示 done＝前缀闭包（末位证据
-  // 截断）：历史 run 前段锚缺口由后段证据反蕴含补齐（登记→体检→…必然已发生），不再出现
-  // ✓○✓○ 间隔态；「评估✓训练○」倒挂形态同时被前缀语义自然排除。
-  // A3：progress 活跃信号（启动初帧 round=0 即 fresh——训练段 active/failed 判定共用）。
+  // 工具执行成功记录）∥ 在盘锚。D96：训练执行/评估不占段灯——两键态在 evidence 独立承载
+  // （活跃期证据不入 done：训练活跃期 training/evaluate 不假✓，独立卡呈现 ●/failed），
+  // 前缀闭包只在八段键上装配；显示 done＝前缀闭包（末位证据截断）：历史 run 前段锚缺口由
+  // 后段证据反蕴含补齐（登记→体检→…必然已发生），不再出现 ✓○✓○ 间隔态。
+  // A3：progress 活跃信号（启动初帧 round=0 即 fresh——训练 active/failed 判定共用）。
   // 读序提前（原 N-3 位读 progressRaw——现 hoist 至训练活跃判定前，单次读取双用）。
   const progressRaw = readProgress(dir);
   const nowMs = liveness?.nowMs ?? Date.now();
@@ -716,27 +723,27 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
     ].filter(has),
     segments: {
       register: doneMap["register"] === true,
-      split: doneMap["split"] === true,
       label_qc: doneMap["label_qc"] === true,
       // 实验配置段：done（守卫后）＝config-snapshot 已确认；pending-confirm 在场=active（等待四卡应答）
-      experiment_config: doneMap["experiment_config"] === true
+      experiment_setup: doneMap["experiment_setup"] === true
         ? true
         : has("webui/pending-confirm.json")
           ? "active"
           : false,
-      candidate: has("contract-candidate.json") || summaryFacts.has("candidate"),
+      candidate_build: doneMap["candidate_build"] === true,
       publish: doneMap["publish"] === true,
+      family_split: doneMap["family_split"] === true,
       admission: doneMap["admission"] === true,
-      // A3 训练段三态：done＝前缀闭包（S3 语义不动）；failed＝启动证据在场 ∧ 无完成锚 ∧
-      // tmux 取证面在且本 run 无命中 ∧ 无活跃信号（progress 初帧 stale/loss-series stale——
-      // 进程消失判据是确定性取证面，缺席不猜，显 pending）。active 态由 adapter 以
-      // training.active 呈现（segmentStatus 训练段活跃优先——scanRunDir 不重复表达）。
-      training: doneMap["training"] === true
+      training_prep: doneMap["training_prep"] === true,
+      // D96：训练执行/评估不占段灯（独立卡/区块）——态独立承载，不入前缀闭包：done＝完成
+      // 锚且非活跃期；failed 沿 A3 语义（启动证据在场 ∧ 无完成锚 ∧ 取证面无命中 ∧ 无活跃）。
+      // snapshot 段灯数组（八键）不读这两键；server 内 trainingDone 判据等独立消费照旧。
+      training: evidence["training"] === true
         ? true
         : trainingFailedNow
           ? "failed"
           : false,
-      evaluate: doneMap["evaluate"] === true,
+      evaluate: evidence["evaluate"] === true,
     },
     training: {
       // 批㊶-L L-1＋批㊶-N N-2：终结判定——active＝训练产物锚在场（loss-series／

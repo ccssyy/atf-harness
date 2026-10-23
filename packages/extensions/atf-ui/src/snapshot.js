@@ -1,18 +1,21 @@
 /**
  * atf-ui 快照构造纯函数（本仓 vitest 直测；服务端同步器与 client 渲染共享口径）。
- * 单源纪律：段语义沿批⑮定稿；空态文案单源导出（client 直引）。
+ * 单源纪律：段语义 D96 起＝内核 STAGE_ORDER 唯一权威（键名逐键一致，显示名中文）；
+ * 空态文案单源导出（client 直引）。
  */
 
-/** 管线八段（批⑳ 打回修正：八段全渲染——登记/体检/实验配置/发布/切分/admission/训练/评估）。 */
+/** 管线八段（D96 owner 裁定：与内核 STAGE_ORDER 逐键相等——register/label_qc/
+ *  experiment_setup/candidate_build/publish/family_split/admission/training_prep；
+ *  训练执行/评估与可视化不占段灯，作为独立卡/区块呈现）。 */
 export const SEGMENTS = [
   { key: "register", label: "数据登记" },
   { key: "label_qc", label: "标注体检" },
-  { key: "experiment_config", label: "实验配置" },
+  { key: "experiment_setup", label: "实验配置" },
+  { key: "candidate_build", label: "候选构造" },
   { key: "publish", label: "契约发布" },
-  { key: "split", label: "数据切分" },
+  { key: "family_split", label: "数据切分" },
   { key: "admission", label: "准入检查" },
-  { key: "training", label: "训练执行" },
-  { key: "evaluate", label: "评估与可视化" },
+  { key: "training_prep", label: "训练准备" },
 ];
 
 /** 空态文案（GPU 排队语义——文案单源，client 直引不另写）。 */
@@ -24,13 +27,11 @@ export const KPI_KEYS = ["train_loss", "eval_loss", "learning_rate", "gpu_mem"];
 /** 段四态：done 完成 / active 进行中 / failed 失败 / pending 待办。 */
 function segmentStatus(run, key) {
   const seg = run.segments?.[key];
-  // 批㊶-S3 S-B2（owner 裁定：段显示态保序）：训练段活跃即 ●（活跃期证据不入前缀——
-  // scanRunDir 同规则，重跑/降档重发期间训练段不再假✓）；
-  // 完成锚已入前缀的段 done 优先（陈旧 pending-confirm 不越序置 ●——frontier 纪律）；
-  // 实验配置段 pending 确认卡在边界（未 done）时显示 active（等待用户四卡应答）。
-  if (key === "training" && run.training?.active === true) return "active";
+  // D96：训练执行/评估移出段灯——训练活跃/失败在独立训练卡呈现（run.training.active 等），
+  // 段灯只承载内核八段；完成锚已入前缀的段 done 优先（frontier 纪律不变）；
+  // 实验配置段 pending 确认卡在边界（未 done）时显示 active（等待用户应答）。
   if (seg === true) return "done";
-  if (key === "experiment_config" && run.training?.pending_confirm) return "active";
+  if (key === "experiment_setup" && run.training?.pending_confirm) return "active";
   if (seg === "failed") return "failed";
   if (seg === "active") return "active";
   return "pending";

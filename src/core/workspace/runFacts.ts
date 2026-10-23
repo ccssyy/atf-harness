@@ -319,9 +319,10 @@ export const formatProgressBadge = (progress: RunProgress | null): string | null
 
 // ── 段序守卫 ──
 
-/** 八段管线顺序（与 snapshot SEGMENTS 键同源序）。 */
+/** 八段管线顺序（D96：与内核 STAGE_ORDER 逐键一致＝snapshot SEGMENTS 键同源序；
+ *  训练执行/评估不占段灯——独立卡/区块，不入本序）。 */
 export const SEGMENT_ORDER: readonly string[] = [
-  "register", "label_qc", "experiment_config", "publish", "split", "admission", "training", "evaluate",
+  "register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep",
 ];
 
 /** 段序守卫：后段 done 的成立前提＝前段 done 已成立（逐前序段检查；任一未 done 即抑制）。

@@ -661,7 +661,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           const patched = applyConfirmedToIterationConfig(candidate, confirmed, "default:harness-smart-defaults", sources);
           void patched;
         }
-        appendSegmentFact(runDir, "experiment_config", "atf_config_confirm");
+        appendSegmentFact(runDir, "experiment_setup", "atf_config_confirm"); // D96：段事实键对齐内核段名（原 experiment_config 老键退役）
         const sessionIdAuto = sessionIdOfExec(exec);
         if (sessionIdAuto !== undefined) appendBinding(runDir, sessionIdAuto);
         injectBashRunWorkspace(runDir); // 批㊶-S1 门2修复：围栏可写根随 run 切换更新
@@ -829,8 +829,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         const patched = applyConfirmedToIterationConfig(candidate, confirmed);
         void patched;
       }
-      // 批㊶-M M-3 段事实轨：实验配置确认成功即登记（experiment_config 段）
-      appendSegmentFact(runDir, "experiment_config", "atf_config_confirm");
+      // 批㊶-M M-3 段事实轨：实验配置确认成功即登记（experiment_setup 段——D96 键名对齐内核）
+      appendSegmentFact(runDir, "experiment_setup", "atf_config_confirm"); // D96：段事实键对齐内核段名（原 experiment_config 老键退役）
       // 批㊶-N N-5：会话绑定
       const sessionIdCfg = sessionIdOfExec(exec);
       if (sessionIdCfg !== undefined) appendBinding(runDir, sessionIdCfg);

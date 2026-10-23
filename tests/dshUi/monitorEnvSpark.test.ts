@@ -57,9 +57,9 @@ const MONITOR = (): unknown => ({
       run_id: "run-a", workspace: WS_A, workspace_source: "bucket", state: "registered", state_reason: null,
       segments: [
         seg("register", "数据登记", "done"), seg("label_qc", "标注体检", "pending"),
-        seg("experiment_config", "实验配置", "pending"), seg("publish", "契约发布", "pending"),
-        seg("split", "数据切分", "pending"), seg("admission", "准入检查", "pending"),
-        seg("training", "训练执行", "pending"), seg("evaluate", "评估与可视化", "pending"),
+        seg("experiment_setup", "实验配置", "pending"), seg("candidate_build", "候选构造", "pending"),
+        seg("publish", "契约发布", "pending"), seg("family_split", "数据切分", "pending"),
+        seg("admission", "准入检查", "pending"), seg("training_prep", "训练准备", "pending"),
       ],
       display: { title: "装箱单 4类" },
       training: { active: false, points: [], pending_confirm: null },

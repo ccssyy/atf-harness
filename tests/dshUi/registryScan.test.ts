@@ -197,18 +197,19 @@ describe("A3——训练段两态（初帧活跃＋进程消失不悬空）", ()
     expect(scan.segments.training).toBe(false);
   });
 
-  it("完成锚在场仍 done（failed 不越序）；训练活跃期证据不入前缀（S3 语义不动）", () => {
+  it("完成锚在场仍 done（failed 不越序）；训练活跃在独立卡数据源呈现（D96：不占段灯）", () => {
     const root = tempRoot();
     seedRun(join(root, "run-done"), ["launch/train.sh", "training/all_results.json"]);
     const doneScan = scanRunDir(root, "run-done", livenessWith({ "run-done": false }));
     expect(doneScan.segments.training).toBe(true);
-    // 活跃重跑：完成锚＋progress fresh → active 显示（adapter 训练段活跃优先）＋段事实 done 不冻结
+    // 活跃重跑：完成锚＋progress fresh → training.active（独立训练卡数据源，原 adapter 活跃优先语义保留）
     writeProgress(join(root, "run-done"), { round: 2, updated_at: new Date().toISOString() });
     const activeScan = scanRunDir(root, "run-done", livenessWith({}));
     expect(activeScan.training.active).toBe(true);
     const monitor = buildMonitorSnapshot([activeScan], { offline: true });
-    const training = (monitor.runs[0]?.segments ?? []).find((s) => s.key === "training");
-    expect(training?.status).toBe("active");
+    // D96：training 键不在段灯面（八灯＝内核八段），活跃由 run.training.active 承载
+    expect((monitor.runs[0]?.segments ?? []).find((s) => s.key === "training")).toBeUndefined();
+    expect(monitor.runs[0]?.training.active).toBe(true);
   });
 
   it("scanRunDirAt：绝对目录变体（注册树形态）与 scanRunDir 同构返回", () => {
@@ -263,7 +264,7 @@ const seedStageSummary = (
 };
 
 describe("D3/D4——状态面以盘上事实为准（段摘要兜底源＋workspace 归属＋trainer_log 活跃＋state_reason）", () => {
-  it("①只有 stage summary 无 segments → 段 done（exit 0 映射单源；family_split→split／experiment_setup→experiment_config；training/evaluate 无映射不点灯）", () => {
+  it("①只有 stage summary 无 segments → 段 done（exit 0 映射单源；D96 恒等键——family_split→family_split／experiment_setup→experiment_setup；training/evaluate 无映射不点灯）", () => {
     const root = tempRoot();
     const dir = join(root, "k-direct");
     // 内核直跑形态：七段 summary 在 run 顶层，无 webui/（无 segments.json/binding.json）
@@ -273,11 +274,11 @@ describe("D3/D4——状态面以盘上事实为准（段摘要兜底源＋works
     const scan = scanRunDirAt(dir, "k-direct");
     expect(scan.segments.register).toBe(true);
     expect(scan.segments.label_qc).toBe(true);
-    expect(scan.segments.experiment_config).toBe(true);
+    expect(scan.segments.experiment_setup).toBe(true);
     expect(scan.segments.publish).toBe(true);
-    expect(scan.segments.split).toBe(true);
+    expect(scan.segments.family_split).toBe(true);
     expect(scan.segments.admission).toBe(true);
-    expect(scan.segments.candidate).toBe(true); // candidate_build→candidate 键（非段序闭包面）
+    expect(scan.segments.candidate_build).toBe(true); // D96 恒等键入段序闭包（candidate 老键退役）
     expect(scan.segments.training).toBe(false); // 无内核段映射至 training/evaluate——完成语义不动
     expect(scan.segments.evaluate).toBe(false);
   });

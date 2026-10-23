@@ -23,7 +23,7 @@ afterEach(() => { for (const r of tempRoots.splice(0)) rmSync(r, { recursive: tr
 const sampleRun = {
   run_id: "run-x",
   state: "registered",
-  segments: { register: true, split: true, label_qc: false, candidate: false, publish: false },
+  segments: { register: true, family_split: true, label_qc: false, candidate_build: false, publish: false },
   training: { active: true, loss: [{ train_loss: 0.5, eval_loss: 0.6, grad_norm: 1.2, learning_rate: 1e-4 }, { train_loss: 0.3, eval_loss: 0.55, grad_norm: 0.9, learning_rate: 1e-4 }], pending_confirm: null },
   report: { files: ["report.md", "segment-1.md"] },
   artifacts: ["session.jsonl", "contract-candidate.json", "launch/train.sh"],
@@ -42,7 +42,7 @@ describe("快照构造纯函数（八段四态推导＋loss 曲线＋KPI＋空�
   it("buildMonitorSnapshot：八段逐卡 status 推导", () => {
     const snap = buildMonitorSnapshot([sampleRun]);
     expect(snap.runs[0]?.segments.map((s) => s.key)).toEqual(SEGMENTS.map((s) => s.key));
-    expect(snap.runs[0]?.segments.filter((s) => s.status === "done").map((s) => s.key)).toEqual(["register", "split"]);
+    expect(snap.runs[0]?.segments.filter((s) => s.status === "done").map((s) => s.key)).toEqual(["register", "family_split"]);
   });
   it("批C1-1 快照投影：train_notices 透传（缺省空数组）；eval_progress.health 原样直通", () => {
     const notice = { id: "train:training_done:r1:t", kind: "training_done", run_id: "r1", at: "t", text: "训练已结束" };
@@ -136,14 +136,18 @@ describe("快照构造纯函数（八段四态推导＋loss 曲线＋KPI＋空�
     const live = buildMonitorSnapshot([sampleRun], { offline: false, utilization: "12%", memoryUsed: "3497 MiB", memoryTotal: "81920 MiB" });
     expect(live.gpu).toMatchObject({ offline: false, utilization: "12%" });
   });
-  it("formatTaskCard：八段 checklist 四态标记＋进度行（chat 任务卡单源）", () => {
+  it("formatTaskCard：八段 checklist 四态标记＋进度行（chat 任务卡单源；D96 训练不占灯——八灯为内核八段）", () => {
     const snap = buildMonitorSnapshot([sampleRun]);
     const card = formatTaskCard(snap.runs[0]!);
     expect(card).toContain("✓ 数据登记");
     expect(card).toContain("✓ 数据切分");
-    expect(card).toContain("● 训练执行");
+    expect(card).toContain("○ 训练准备");
     expect(card).toContain("○ 标注体检");
+    expect(card).toContain("○ 候选构造");
     expect(card).toContain("进度 2/8");
+    // D96：训练执行/评估不再入 checklist（独立卡承载）
+    expect(card).not.toContain("训练执行");
+    expect(card).not.toContain("评估");
   });
 });
 
@@ -1254,25 +1258,25 @@ describe("批㊶Q增补三 段3——scanRuns 双层扫描（幻影 run 防回�
 });
 
 describe("批㊶-S3 S-B2——八段卡判据链修复（lit 硬伤/级联抑制/percentage 出口/fresh 边界）", () => {
-  it("段序守卫豁免：事实轨段（experiment_config/publish）不因 register/label_qc 锚缺席被级联抹除（真机 done=0/8 根因）", () => {
+  it("段序守卫豁免：事实轨段（experiment_setup/publish）不因 register/label_qc 锚缺席被级联抹除（真机 done=0/8 根因；D96 键名对齐内核）", () => {
     const root = tempRoot();
     const runDir = join(root, "run-guard");
     mkdirSync(join(runDir, "webui"), { recursive: true });
     writeFileSync(join(runDir, "webui", "config-snapshot.json"), "{}\n");
     // 事实轨：atf_config_confirm/atf_publish_confirm 执行成功记录（真机 awb_r1 同形态）
-    appendSegmentFact(runDir, "experiment_config", "atf_config_confirm");
+    appendSegmentFact(runDir, "experiment_setup", "atf_config_confirm");
     appendSegmentFact(runDir, "publish", "atf_publish_confirm");
     const scan = scanRunDir(root, "run-guard");
-    expect(scan.segments.experiment_config).toBe(true);
+    expect(scan.segments.experiment_setup).toBe(true);
     expect(scan.segments.publish).toBe(true);
     // owner 裁定（段显示态保序）：publish 事实反蕴含前段——register/label_qc 随前缀点亮，
     // 不再出现 ✓○✓○ 间隔态；split/admission/training/evaluate 无证据如实 pending（frontier 后）
     expect(scan.segments.register).toBe(true);
     expect(scan.segments.label_qc).toBe(true);
-    expect(scan.segments.split).toBe(false);
+    expect(scan.segments.family_split).toBe(false);
     expect(scan.segments.training).toBe(false);
   });
-  it("收尾段完成锚入前缀：training/evaluate 证据使全段 8/8 保序点亮（间隔完成态消除）", () => {
+  it("D96：训练/评估证据不占段灯——独立卡态 done（true），八段灯只按内核八段证据（无锚即 pending）", () => {
     const root = tempRoot();
     const runDir = join(root, "run-tail");
     mkdirSync(join(runDir, "training"), { recursive: true });
@@ -1283,23 +1287,18 @@ describe("批㊶-S3 S-B2——八段卡判据链修复（lit 硬伤/级联抑制
     const scan = scanRunDir(root, "run-tail");
     expect(scan.segments.training).toBe(true);
     expect(scan.segments.evaluate).toBe(true);
-    // 前缀闭包：收尾段证据反蕴含——全段 8/8（后段完成蕴含前段发生，无间隔态）
-    expect(scan.segments.register).toBe(true);
-    expect(scan.segments.admission).toBe(true);
+    // D96：八段灯不再由训练/评估证据反蕴含（段序闭包只含内核八段；训练/评估独立卡呈现）
+    expect(scan.segments.register).toBe(false);
+    expect(scan.segments.admission).toBe(false);
   });
-  it("snapshot segmentStatus：训练进行中（anchor 在场＋active）→ active 优先于 done（训练全程不再假✓）", () => {
+  it("snapshot segmentStatus（D96）：训练活跃不再置段灯——训练键不在灯面，活跃在独立训练卡数据源（run.training.active）", () => {
     const snap = buildMonitorSnapshot([{
       ...sampleRun,
-      segments: { register: true, training: true },
+      segments: { register: true, family_split: true },
       training: { active: true, loss: [], pending_confirm: null },
     }], { offline: true });
-    expect(snap.runs[0]?.segments.find((s) => s.key === "training")?.status).toBe("active");
-    const snapDone = buildMonitorSnapshot([{
-      ...sampleRun,
-      segments: { register: true, training: true },
-      training: { active: false, loss: [], pending_confirm: null },
-    }], { offline: true });
-    expect(snapDone.runs[0]?.segments.find((s) => s.key === "training")?.status).toBe("done");
+    expect(snap.runs[0]?.segments.find((s) => s.key === "training")).toBeUndefined();
+    expect(snap.runs[0]?.segments.find((s) => s.key === "family_split")?.status).toBe("done");
   });
   it("panel.html 渲染回归：八段卡读四态 status（lit 硬伤退役）＋updated 空引用已删", () => {
     const panel = PANEL_HTML;
@@ -1578,9 +1577,9 @@ describe("D50——scanRunDir 消费 training/completion.json（ok＝训练段�
     // 前置段齐（前缀闭包不拦训练绿）：登记/体检/配置/契约/切分/准入
     appendSegmentFact(runDir, "register", "atf_admit_data");
     appendSegmentFact(runDir, "label_qc", "atf_label_qc_inspect");
-    appendSegmentFact(runDir, "experiment_config", "atf_config_confirm");
+    appendSegmentFact(runDir, "experiment_setup", "atf_config_confirm");
     appendSegmentFact(runDir, "publish", "atf_publish_confirm");
-    appendSegmentFact(runDir, "split", "atf_pipeline");
+    appendSegmentFact(runDir, "family_split", "atf_pipeline");
     appendSegmentFact(runDir, "admission", "atf_pipeline");
     mkdirSync(join(runDir, "training"), { recursive: true });
     writeFileSync(join(runDir, "training", "completion.json"), JSON.stringify({
