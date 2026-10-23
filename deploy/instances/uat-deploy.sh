@@ -202,10 +202,13 @@ log "patch 重放段通过（patch 集全部已应用）"
 # ---------- 步骤 2：停旧＋启动 ----------
 log "停旧 dsh（组杀＋端口释放等待）…"
 remote_stop_dsh || die "端口 ${UAT_PORT} 释放失败——人工介入"
+remote "rm -f '${UAT_LOG}.deploy-stamp'" 2>/dev/null
 log "整串 canonical 启动（容器内 nohup 形态）…"
 remote_boot || die "boot 命令下发失败（SSH/远端 shell）"
 remote_port_wait || { log "FAIL: ${UAT_PORT} 未监听（${DEPLOY_TIMEOUT_S}s）"; ROLLBACK=1; }
-remote "echo '[deploy] uat now at commit=${TARGET_SHORT}' >> '${UAT_LOG}'" 2>/dev/null
+# W1023B 窗口实测：主日志被容器内进程周期性截尾（独立文件对照 probe 60s 内消失、
+# boot 头保留——发版两次同因失败自动回滚），deploy 行改写独立 stamp（`>` 覆盖写）。
+remote "echo '[deploy] uat now at commit=${TARGET_SHORT}' > '${UAT_LOG}.deploy-stamp'" 2>/dev/null
 
 # ---------- 步骤 3：boot 四项验证（容器内取证：注册行/runsRoot/commit 行/真 token 探针） ----------
 ROLLBACK="${ROLLBACK:-0}"
@@ -217,7 +220,7 @@ sleep 5
 V1=$(grep -c "^\[atf-tools\]" "$LOG" 2>/dev/null || echo 0)
 V2=$(grep -c "^\[atf-ui\]" "$LOG" 2>/dev/null || echo 0)
 V3=$(grep -c "runsRoot=/data/atf/uat/runs" "$LOG" 2>/dev/null || echo 0)
-DEPLOY_LINE=$(grep -c "^\[deploy\] uat now at commit=${SHORT}$" "$LOG" 2>/dev/null || echo 0)
+DEPLOY_LINE=$(grep -c "^\[deploy\] uat now at commit=${SHORT}$" "${LOG}.deploy-stamp" 2>/dev/null || echo 0)
 TOK=$(grep -o "token=[A-Za-z0-9_-]*" "$LOG" 2>/dev/null | tail -1 | cut -d= -f2)
 BARE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "http://127.0.0.1:${PORT}/" 2>/dev/null || echo 000)
 if [ -n "$TOK" ]; then
@@ -257,7 +260,7 @@ if [[ "${ROLLBACK}" == "1" || -n "$FAIL_REASONS" ]]; then
     remote_stop_dsh || true
     remote_boot || die "回滚 boot 下发失败——实例已停，人工介入"
     remote_port_wait || true
-    remote "echo '[deploy] uat ROLLED BACK to commit=\$(git -C ${UAT_REPO} rev-parse --short HEAD)' >> '${UAT_LOG}'" 2>/dev/null
+    remote "echo '[deploy] uat ROLLED BACK to commit=\$(git -C ${UAT_REPO} rev-parse --short HEAD)' > '${UAT_LOG}.deploy-stamp'" 2>/dev/null
     die "已回滚——失败原因：${FAIL_REASONS:-监听失败}（详见容器内 ${UAT_LOG}）"
   else
     remote_stop_dsh || true
