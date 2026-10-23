@@ -304,6 +304,89 @@ describe("批㊶Q增补二1 progress 持续写链（tickOnce 同步器——trai
   });
 });
 
+describe("D73 观测环端到端（launch/setsid 形态——tmux 域零会话不再一票否决）", () => {
+  /** launch 形态夹具＋独立测试 socket 上的哑 server（枚举成功＝usable:true、域内零 atf 会话
+   *  ＝evidence:{}——setsid 无 tmux 会话的确定性模拟；hold 会话名不带前缀不入取证，
+   *  kill-server 收尾——全程不触碰默认 socket 生产会话）。 */
+  const seedLaunchRun = (root: string, runId: string): string => {
+    const runDir = join(root, runId);
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(
+      join(runDir, "training", "trainer_log.jsonl"),
+      '{"current_steps": 158, "total_steps": 186, "loss": 0.31, "epoch": 2.55, "percentage": 84.95, "remaining_time": "0:12:00"}\n',
+    );
+    for (const [dir, file] of [["", "registration.json"], ["launch", "train.sh"]] as Array<[string, string]>) {
+      mkdirSync(join(runDir, dir), { recursive: true });
+      writeFileSync(join(runDir, dir, file), "{}");
+    }
+    return runDir;
+  };
+  const withDomain = async (fn: () => Promise<void>): Promise<void> => {
+    const { execSync } = await import("node:child_process");
+    const prevPrefix = process.env["ATF_TMUX_SESSION_PREFIX"];
+    const prevSock = process.env["ATF_TMUX_TEST_SOCKET"];
+    process.env["ATF_TMUX_SESSION_PREFIX"] = "d73t-";
+    process.env["ATF_TMUX_TEST_SOCKET"] = "atf-test-d73";
+    execSync("tmux -L atf-test-d73 kill-server 2>/dev/null || true");
+    execSync("tmux -L atf-test-d73 new-session -d -s hold 'sleep 120'");
+    try {
+      await fn();
+    } finally {
+      execSync("tmux -L atf-test-d73 kill-server 2>/dev/null || true");
+      if (prevPrefix === undefined) delete process.env["ATF_TMUX_SESSION_PREFIX"];
+      else process.env["ATF_TMUX_SESSION_PREFIX"] = prevPrefix;
+      if (prevSock === undefined) delete process.env["ATF_TMUX_TEST_SOCKET"];
+      else process.env["ATF_TMUX_TEST_SOCKET"] = prevSock;
+    }
+  };
+
+  it("域零会话＋trainer_log 窗内新鲜 → active=true 且两轮后 progress.json/monitor 一致（percentage/eta_s 有值）", async () => {
+    await withDomain(async () => {
+      const root = tempRoot();
+      const runDir = seedLaunchRun(root, "run-d73-e2e");
+      const { resetTrainObsForTest } = await import("../../src/core/workspace/trainObsSync.js");
+      const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
+      resetTrainObsForTest();
+      await tickOnce({ runsRoot: root, intervalMs: 60_000 }); // 首轮：观测环写出 progress.json
+      await tickOnce({ runsRoot: root, intervalMs: 60_000 }); // 次轮：monitor 投影 progress 面
+      // 盘面：progress.json 出现且 percentage/eta_s 有值
+      const progress = JSON.parse(readFileSync(join(runDir, "webui", "progress.json"), "utf8")) as Record<string, unknown>;
+      expect(progress.percentage).toBe(84.95);
+      expect(progress.eta_s).toBe(720); // remaining_time 0:12:00
+      expect(progress.stale).toBeUndefined();
+      // monitor 面：training.active=true 与盘面同值（一致性判据）
+      const monitor = JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as {
+        runs: Array<{ run_id: string; training: { active: boolean }; progress: Record<string, unknown> | null }>;
+      };
+      const run = monitor.runs.find((r) => r.run_id === "run-d73-e2e");
+      expect(run?.training.active).toBe(true);
+      expect(run?.progress).toMatchObject({ percentage: 84.95, eta_s: 720 });
+    });
+  });
+
+  it("trainer_log 停更超窗 → active=false 且观测环停写（progress.json 不续命——D16 不回归）", async () => {
+    await withDomain(async () => {
+      const root = tempRoot();
+      const runDir = seedLaunchRun(root, "run-d73-stale-e2e");
+      const trainerLog = join(runDir, "training", "trainer_log.jsonl");
+      const { resetTrainObsForTest } = await import("../../src/core/workspace/trainObsSync.js");
+      const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
+      resetTrainObsForTest();
+      await tickOnce({ runsRoot: root, intervalMs: 60_000 }); // 新鲜态：写出 progress.json v1
+      const v1 = readFileSync(join(runDir, "webui", "progress.json"), "utf8");
+      // 源停更超窗：翻面（active=false）→ 观测环不再 tick → progress.json 冻结不续命
+      const staleAt = new Date(Date.now() - 600_000);
+      utimesSync(trainerLog, staleAt, staleAt);
+      await tickOnce({ runsRoot: root, intervalMs: 60_000 });
+      const monitor = JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as {
+        runs: Array<{ run_id: string; training: { active: boolean } }>;
+      };
+      expect(monitor.runs.find((r) => r.run_id === "run-d73-stale-e2e")?.training.active).toBe(false);
+      expect(readFileSync(join(runDir, "webui", "progress.json"), "utf8")).toBe(v1); // 停写
+    });
+  });
+});
+
 describe("批㉘ monitor 路径注入（tapIndex → window.__ATF_UI_CONFIG__.monitorPath）", () => {
   const DEFAULT_TAIL = join("tmp", "webui-runs", "atf-ui", "monitor.json");
   /** 带 webServer 假身的 ctx：捕获 tapIndex 变换并收集 effect disposer。 */

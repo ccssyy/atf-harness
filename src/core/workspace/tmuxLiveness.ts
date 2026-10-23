@@ -179,8 +179,8 @@ const listDomainSessionCmdlinesOrNull = (): Array<{ session: string; cmdline: st
 /** D28：绑 run 取证（批量）＋探测可用性——usable=true 仅当命名域已设且 tmux 枚举命令
  *  成功执行（域内零会话≠面缺席）；evidence 判据与 tmuxTrainingEvidenceFor 同源
  *  （进程链 cmdline 含 run_id／作用域会话名尾段精确）。调用方（atf-ui tickOnce）以
- *  usable=true 且本 run 无命中＝训练 tmux 退出 definitive 负证据（trainingActiveLive
- *  立即翻 false，mtime 过期缓存不再兜底）；usable=false＝面缺席，回落 mtime 窗口判据。 */
+ *  usable=true 且本 run 无命中＝无 tmux 面（launch/setsid 既定形态，D73）——活跃由
+ *  trainer_log 源新鲜窗口单判（超窗即翻面）；usable=false＝面缺席，回落窗口判据。 */
 export const probeTrainingEvidence = (
   runIds: readonly string[],
 ): { usable: boolean; evidence: Record<string, boolean> } => {

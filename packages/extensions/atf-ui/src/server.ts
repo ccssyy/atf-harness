@@ -448,9 +448,10 @@ export interface ScanLiveness {
    *  （批㊶-N N-2 会族泛匹配 trainingTmuxFamilyPresent 自本批起不再参与 active 判定。） */
   trainingEvidence?: Record<string, boolean>;
   /** D28：tmux 取证探测可用性（命名域已设且枚举命令成功执行——probeTrainingEvidence）。
-   *  true 且 trainingEvidence 本 run 无命中＝训练 tmux 退出 definitive 负证据——
-   *  trainingActiveLive 立即翻 false（mtime/progress 过期缓存不再兜底）；false/缺席＝
-   *  面缺席（探测异常/命名域未设），回落 mtime 窗口判据（既有 fail-closed 语义不动）。 */
+   *  true 且 trainingEvidence 本 run 无命中：D73 修正——launch/setsid 无 tmux 会话是既定
+   *  形态，不再一票否决；trainer_log 源 mtime 在活跃窗口内 → 活跃，停更超窗/缺席 → false
+   *  （D16 stale 语义不动）。false/缺席＝面缺席（探测异常/命名域未设），回落窗口判据
+   *  （既有 fail-closed 语义不动）。 */
   tmuxProbeUsable?: boolean;
   /** 批㊶-N N-2：training-logs 目录 mtime 新鲜（编排日志写入活性）。 */
   trainingLogsFresh?: boolean;
@@ -553,19 +554,23 @@ const evalRoundAnchored = (runDir: string): boolean => {
   return false;
 };
 
-/** 训练活跃终判（批㊶-O O-1 修正；D28 判定序重排——definitive 证据优先，过期缓存不再兜底）：
+/** 训练活跃终判（批㊶-O O-1 修正；D28 判定序重排；D73 修正——tmux 负证据不再一票否决）：
  *  ① tmux 正证据（绑 run 会话进程链在场）＝活跃终判——checkpoint 长停顿/重启加载窗不误杀
  *  （进程活着即活跃；停更面由 D16 progress stale 表达，不在此翻面）；
- *  ② 探测可用（tmuxProbeUsable）且取证面明确无本 run 会话＝训练 tmux 退出 → 立即 false——
- *  loss-series/progress/trainer_log 的 mtime 新鲜是已过去的写历史（过期 liveness 缓存），
- *  不得再兜底出「结束 10 分钟内训练中」；
+ *  ② 探测可用（tmuxProbeUsable）且取证面明确无本 run 会话——launch 路径 setsid（无 tmux
+ *  会话）是既定形态不是异常（D73）：trainer_log 源 mtime 在活跃窗口内（真实步进写入活性）
+ *  → 活跃；停更超窗/缺席 → false（D16 stale 语义不动——超窗判定与 trainerLogFresh 同门
+ *  互补，翻面即停观测环）。loss-series/progress 的 mtime 新鲜仍是已过去的写历史，不得兜底
+ *  出「结束 10 分钟内训练中」；
  *  ③ trainer_log 在场且 mtime 超窗 → 立即 false（源停更 definitive 负证据——活跃训练步进
  *  写入恒窗内；内核直跑无 tmux 面者靠同款窗口活判，超窗即翻面）；
  *  ④ 面缺席（探测异常/命名域未设/vitest 直扫）回落窗口判据——既有 fail-closed 语义不动。
  *  run_dir 保留签名兼容。A3：progress fresh 同为活跃信号（仅 ④ 路径参与）。 */
 const trainingActiveLive = (dir: string, runId: string, liveness: ScanLiveness | undefined): boolean => {
   if (liveness?.trainingEvidence?.[runId] === true) return true;
-  if (liveness?.tmuxProbeUsable === true && liveness.trainingEvidence !== undefined) return false;
+  if (liveness?.tmuxProbeUsable === true && liveness.trainingEvidence !== undefined) {
+    return trainerLogFresh(dir, liveness); // D73：launch/setsid 无 tmux 会话既定——trainer_log 窗内新鲜即活跃
+  }
   if (trainerLogOverWindow(dir, liveness)) return false;
   const progressActive = progressFresh(
     readProgress(dir),
@@ -1365,8 +1370,9 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
     // 批㊶-O O-1：绑 run 取证（per-run 独立）。批㊶-P1 S1：两判据——作用域会话名尾段
     // 精确归属（sessionIsScopedFor，`r1` 不误命中 `cr_r1`）＋存量 cmdline 含 run_id。
     // D28：取证改走 probeTrainingEvidence 批量单源（判据同源）并取探测可用性——
-    // usable=true 且本 run 无命中＝训练 tmux 退出 definitive 负证据（trainingActiveLive
-    // 立即翻面）；usable=false（命名域未设/枚举异常）＝面缺席，回落 mtime 窗口判据。
+    // usable=true 且本 run 无命中：D73 修正后由 trainer_log 源新鲜窗口单判（launch/setsid
+    // 既定形态不再一票否决，超窗即翻面）；usable=false（命名域未设/枚举异常）＝面缺席，
+    // 回落窗口判据。
     // A2 案 a：注册工作区清单（每周期一次——exists===true 记录；实验树枚举＋run 真实
     // 目录取用的单源；目录缺失/权限失败由枚举面静默跳过）。注册表是内存权威（写侧实例
     // 重启进视野）——本处只读消费，零写入。

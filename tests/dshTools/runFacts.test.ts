@@ -16,9 +16,11 @@ import {
   readProgress,
   SEGMENT_ORDER,
   writeProgress,
+  type RunProgress,
 } from "../../src/core/workspace/runFacts.js";
 import { scanRunDir, trainingLogsFreshAt } from "../../packages/extensions/atf-ui/src/server.js";
 import { probeTrainingEvidence, tmuxTrainingFamilyPresent, TMUX_SESSION_PREFIX_ENV } from "../../src/core/workspace/tmuxLiveness.js";
+import { resetTrainObsForTest, trainObsTick } from "../../src/core/workspace/trainObsSync.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -311,6 +313,75 @@ describe("D28——training.active 不吃过期 liveness 缓存（definitive 负
     } finally {
       if (prior !== undefined) process.env[TMUX_SESSION_PREFIX_ENV] = prior;
     }
+  });
+});
+
+describe("D73——launch 路径 setsid 无 tmux 会话不再一票否决（trainer_log 窗内新鲜即活跃）", () => {
+  /** launch 形态夹具：launch/train.sh（admission 锚）＋trainer_log（mtime 调用方置位）；
+   *  loss-series 陈旧——证 trainer_log 单证据足活（tmux 负证据降分后不依赖 loss-series）。 */
+  const seedLaunch = (root: string, runId: string): string => {
+    const runDir = join(root, runId);
+    mkdirSync(join(runDir, "training"), { recursive: true });
+    writeFileSync(
+      join(runDir, "training", "trainer_log.jsonl"),
+      '{"current_steps": 158, "total_steps": 186, "loss": 0.31, "epoch": 2.55, "percentage": 84.95, "remaining_time": "0:12:00"}\n',
+    );
+    writeFileSync(join(runDir, "training", "loss-series.json"), "[]");
+    const staleAt = new Date(Date.now() - 600_000);
+    utimesSync(join(runDir, "training", "loss-series.json"), staleAt, staleAt);
+    for (const [dir, file] of [["", "registration.json"], ["launch", "train.sh"]] as Array<[string, string]>) {
+      mkdirSync(join(runDir, dir), { recursive: true });
+      writeFileSync(join(runDir, dir, file), "{}");
+    }
+    return runDir;
+  };
+  const touch = (path: string, at: Date): void => utimesSync(path, at, at);
+
+  it("①探测可用＋域内零会话（launch/setsid 既定形态）＋trainer_log 窗内新鲜 → active=true", () => {
+    const root = tempRoot();
+    const runDir = seedLaunch(root, "run-d73-launch");
+    touch(join(runDir, "training", "trainer_log.jsonl"), new Date());
+    const scan = scanRunDir(root, "run-d73-launch", {
+      trainingEvidence: {}, tmuxProbeUsable: true, nowMs: Date.now(), freshWindowMs: 180_000,
+    });
+    expect(scan.training.active).toBe(true);
+  });
+
+  it("②trainer_log 停更超窗 → active=false（D16 不回归——翻面即停观测环）；写侧同门：stale 快照一次后停写", async () => {
+    const root = tempRoot();
+    const runDir = seedLaunch(root, "run-d73-stale");
+    touch(join(runDir, "training", "trainer_log.jsonl"), new Date(Date.now() - 600_000));
+    const scan = scanRunDir(root, "run-d73-stale", {
+      trainingEvidence: {}, tmuxProbeUsable: true, nowMs: Date.now(), freshWindowMs: 180_000,
+    });
+    expect(scan.training.active).toBe(false);
+    // 同一源新鲜度门在观测环写侧：源超窗 → 写一次 stale 快照（stale:true）后停写
+    // （trainObsTick 直测——D16 stale-stopped 语义在 launch 形态下原样）
+    const rec: { writes: RunProgress[] } = { writes: [] };
+    resetTrainObsForTest();
+    const deps = {
+      readTail: () => ({ current_steps: 158, total_steps: 186, loss: 0.31, epoch: 2.55, percentage: 84.95, remaining_time: "0:12:00" }),
+      sourceMtime: () => Date.now() - 600_000,
+      env: { ATF_TRAIN_ACTIVE_WINDOW_MS: "180000" },
+      writeProg: (_dir: string, p: RunProgress): void => { rec.writes.push(p); },
+    };
+    const r1 = await trainObsTick("run-d73-stale", runDir, null, deps);
+    expect(r1).toBe("stale-stopped");
+    expect(rec.writes).toHaveLength(1);
+    expect(rec.writes[0]?.stale).toBe(true);
+    const r2 = await trainObsTick("run-d73-stale", runDir, null, deps);
+    expect(r2).toBe("already-stopped"); // 停写——不续命
+    expect(rec.writes).toHaveLength(1);
+  });
+
+  it("③有 tmux 会话（atf_run_training 形态）→ 判定序①正证据终判行为不变（trainer_log 缺席也 true）", () => {
+    const root = tempRoot();
+    const runDir = seedLaunch(root, "run-d73-live");
+    rmSync(join(runDir, "training", "trainer_log.jsonl"));
+    const scan = scanRunDir(root, "run-d73-live", {
+      trainingEvidence: { "run-d73-live": true }, tmuxProbeUsable: true, nowMs: Date.now(), freshWindowMs: 180_000,
+    });
+    expect(scan.training.active).toBe(true);
   });
 });
 
