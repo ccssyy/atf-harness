@@ -18,8 +18,8 @@
  * 白名单根＝派生集（fileRoots.ts 配置声明面镜像）＋env 附加集（ATF_V1_FILE_TOOL_ROOTS）；
  * 产品资产零具体目录（增补裁定——分层原则）。
  */
-import { watchFile, unwatchFile } from "node:fs";
-import { isAbsolute, join, resolve, sep } from "node:path";
+import { existsSync, statSync, watchFile, unwatchFile } from "node:fs";
+import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { toFileAgentTool, FILE_TOOL_DEFINITIONS, type FileToolHost } from "../../../../src/agent/fileTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { resolveSessionRunWorkspace } from "../../../../src/core/workspace/runFacts.js";
@@ -284,6 +284,116 @@ export const destructiveCommandGuard = (
   };
 };
 
+// ── D83：递归删除硬 deny 收口（workspace/runs 根直接拒绝——无审批通道 fail-closed）──
+// 依据《ATF_指令_D83_删除循环收口_20261023》§一.1/§一.2（harness 侧）：rm 递归删目标
+// 命中不可删除根集（workspace 根＋三桶根／全局 runs 根＋其下工作区目录）→ 直接 deny、
+// 不进审批流——审批放行也救不回数据，故此类无审批通道；run 内部产物（runs/<id>/ 内
+// 非根路径）删除仍走既有 D23 审批。数据集来源目录不在判定面——识别事实不足（内核登记
+// refs.source_root 的 schema 不在 bridge 契约面且落点双轨），授权件明示此类停报不硬造。
+
+/** D83 硬 deny 结构化拒绝码（与 DESTRUCTIVE_COMMAND_REQUIRES_CONFIRMATION 并列）。 */
+export const DESTRUCTIVE_COMMAND_HARD_DENY = "destructive_command_hard_deny";
+
+/** workspace 三桶目录名闭集（内核 walkthrough register 段创建的骨架桶——
+ *  datasets/splits/runs；与 workspace 身份根同为整删硬 deny 对象）。 */
+const WORKSPACE_BUCKET_NAMES: ReadonlySet<string> = new Set(["runs", "datasets", "splits"]);
+
+/** 硬 deny 归类键 → 回流中文（结构化拒绝面可读性）。 */
+const HARD_DENY_KIND_LABEL: Readonly<Record<string, string>> = {
+  global_runs_root: "全局 runs 根",
+  runs_workspace_dir: "全局 runs 根下工作区目录",
+  workspace_root: "workspace 根",
+  workspace_bucket_root: "workspace 数据桶根（runs/datasets/splits）",
+};
+
+/** 硬 deny 判定的 fs 事实面（注入便于 vitest 直测；缺省＝真实 fs——路径判定需真实
+ *  事实：.atf/workspace.json 存在性等，与既有守卫同语义如实声明应用层非 OS 边界）。 */
+export interface HardDenyFacts {
+  /** 目录含 .atf/workspace.json（workspace 身份根判定锚）。 */
+  isWorkspaceRoot(dir: string): boolean;
+  /** 路径在盘且为目录（「工作区目录」语义锚——runs 根下散文件不在此列）。 */
+  isDirectory(path: string): boolean;
+  /** 目录含 webui/binding.json（平铺 run 目录特征——runs 根下直接子层的桶/run 区分，
+   *  判定事实与 resolveSessionRunWorkspace 双拓扑扫描同源）。 */
+  hasRunBinding(dir: string): boolean;
+}
+
+const hardDenyFactsIO = (): HardDenyFacts => ({
+  isWorkspaceRoot: (dir) => existsSync(join(dir, ".atf", "workspace.json")),
+  isDirectory: (path) => {
+    try {
+      return statSync(path).isDirectory();
+    } catch {
+      return false;
+    }
+  },
+  hasRunBinding: (dir) => existsSync(join(dir, "webui", "binding.json")),
+});
+
+/** 单目标硬 deny 归类（纯函数——fs 事实注入）：target 须为已 resolve 绝对路径。
+ *  命中返回归类键，未命中 null。判定面＝目标**就是**根（不含"目标子树包含根"的
+ *  扫盘扩展——该形态仍走既有审批卡，卡面有路径全文把关）：
+ *  ① 全局 runs 根本身；
+ *  ② 全局 runs 根下直接子层目录（工作区分桶）——平铺 run 目录（webui/binding.json
+ *     在场）除外（run 整删走既有审批，D23 三形态语义不动）；
+ *  ③ 注册工作区路径（DSH 登记面事实——listRegistryRecords 消费同款）；
+ *  ④ 含 .atf/workspace.json 的目录＝workspace 根；
+ *  ⑤ workspace 根下三桶（runs/datasets/splits）根。 */
+export const hardDenyKindFor = (
+  target: string,
+  facts: HardDenyFacts,
+  roots: { runsRoot: string | null; registryWorkspaces: readonly string[] },
+): string | null => {
+  if (roots.runsRoot !== null) {
+    if (target === roots.runsRoot) return "global_runs_root";
+    if (dirname(target) === roots.runsRoot && facts.isDirectory(target) && !facts.hasRunBinding(target)) {
+      return "runs_workspace_dir";
+    }
+  }
+  if (roots.registryWorkspaces.some((workspace) => workspace === target)) return "workspace_root";
+  if (facts.isWorkspaceRoot(target)) return "workspace_root";
+  if (WORKSPACE_BUCKET_NAMES.has(basename(target)) && facts.isWorkspaceRoot(dirname(target))) {
+    return "workspace_bucket_root";
+  }
+  return null;
+};
+
+export interface HardDenyGuardInput {
+  /** 全局 runs 根（ATF_DSH_RUNS_ROOT 已 resolve；null＝env 缺席——判定面收窄不报错）。 */
+  runsRoot: string | null;
+  /** 注册工作区路径（已 resolve——登记面事实，逐调用即时读）。 */
+  registryWorkspaces: readonly string[];
+  /** 相对目标解析基准（args.cwd 白名单解析值；缺省＝主根——与 bashHandler cwd 语义同源）。 */
+  cwd: string;
+}
+
+/** D83 硬 deny 守卫（纯函数——fs 事实注入）：对递归删目标并集逐个判定，任一命中即
+ *  返回结构化拒绝（fail-closed 快速拒绝——不带 paths 逐个放行）。通配目标（* ? [）
+ *  静态不可展开——不在判定面（交既有审批卡，卡面显示目标全文由 owner 把关）；相对
+ *  目标按 input.cwd 解析后同判。 */
+export const destructiveHardDenyGuard = (
+  rawPaths: readonly string[],
+  input: HardDenyGuardInput,
+  facts: HardDenyFacts = hardDenyFactsIO(),
+): { kind: string; target: string; message: string } | null => {
+  for (const raw of rawPaths) {
+    if (/[*?[]/.test(raw)) continue;
+    const target = isAbsolute(raw) ? resolve(raw) : resolve(join(input.cwd, raw));
+    const kind = hardDenyKindFor(target, facts, input);
+    if (kind === null) continue;
+    const label = HARD_DENY_KIND_LABEL[kind] ?? kind;
+    return {
+      kind,
+      target,
+      message:
+        `${DESTRUCTIVE_COMMAND_HARD_DENY}: 递归删除目标命中不可删除根（${label}：${target}）` +
+        `——本类删除直接拒绝、无审批通道（删除不可恢复，审批不提供放行）。替代路径：` +
+        `起新 run-id（--run-id <new>）或对既有 run 显式 --rerun`,
+    };
+  }
+  return null;
+};
+
 /**
  * A7 四件 DSH 挂载（atf_read/atf_edit/atf_write/atf_bash）：toFileAgentTool 执行径
  * 零重写；atf_bash 先过命令串扫描。审批语义＝白名单守卫承担边界（无弹卡——F-H 分级
@@ -345,8 +455,31 @@ export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: stri
           }
           // D23：破坏性命令确认闸（先过白名单/围栏确定性拒绝——坏命令不消耗放行；
           // 命中递归删 → owner 审批卡 allowed-once 才执行，缺失/未放行 fail-closed 回结构化拒绝）
+          // D83：硬 deny 先于审批——任一目标命中不可删根集即直接拒绝（无审批通道 fail-closed；
+          // runs 根取值链＝ATF_DSH_RUNS_ROOT env——指令字面；注册工作区＝DSH 登记面逐调用
+          // 即时读，D21 围栏同款；相对目标按 args.cwd（缺省主根，与 bashHandler cwd 语义同源）解析）。
           const destructive = destructiveCommandGuard(String(args["command"] ?? ""));
           if (!destructive.ok) {
+            const cwdRaw = typeof args["cwd"] === "string" ? args["cwd"].trim() : "";
+            const primaryRoot = host.roots.length > 0 ? resolve(host.roots[0] as string) : process.cwd();
+            const runsRootEnv = process.env["ATF_DSH_RUNS_ROOT"];
+            const hardDeny = destructiveHardDenyGuard(destructive.paths, {
+              runsRoot: runsRootEnv !== undefined && runsRootEnv.trim() !== "" ? resolve(runsRootEnv.trim()) : null,
+              registryWorkspaces: listRegistryRecords(resolveDshHome(process.env))
+                .filter((record) => record.exists)
+                .map((record) => resolve(record.path)),
+              cwd: cwdRaw !== "" ? (isAbsolute(cwdRaw) ? resolve(cwdRaw) : resolve(join(primaryRoot, cwdRaw))) : primaryRoot,
+            });
+            if (hardDeny !== null) {
+              return asToolValue({
+                ok: false,
+                error: DESTRUCTIVE_COMMAND_HARD_DENY,
+                tool: definition.name,
+                kind: hardDeny.kind,
+                paths: destructive.paths,
+                message: hardDeny.message,
+              });
+            }
             const targets = destructive.paths.length > 0 ? destructive.paths.join("、") : "通配/引号目标（未解析）";
             const verdict = deps?.approvalCtx === undefined
               ? ({ ok: false as const, outcome: "unavailable" })
