@@ -40,8 +40,8 @@
 
 ### 3.9 测试分层（硬规则）
 
-- 硬规则见 `~/.zcode/AGENTS.md`「测试分层（硬规则）」；操作清单见 `~/.zcode/sop/test-acceptance.md`。
-- 项目判据与案例单源：`/data/sam/AgenticTrainingFlow/docs/_owner/ATF_纪律_验收脚本判据面_20261023.md`（sha 2075328c340f）。
+- 本仓细则：`docs/测试分层与验收判据面.md`（判据面白名单、出件前三问、证据两栏、缺陷分流、本仓落地锚）。
+- 硬规则同源：`~/.zcode/AGENTS.md`「测试分层（硬规则）」；操作清单：`~/.zcode/sop/test-acceptance.md`。
 
 ## 4. 契约与 pin 管理
 
