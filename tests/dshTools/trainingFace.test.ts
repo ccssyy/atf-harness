@@ -465,6 +465,9 @@ print("{}")`);
     const ckpt = join(root, "run-regress-formal-02", "training", "checkpoint-141");
     mkdirSync(ckpt, { recursive: true });
     writeFileSync(join(ckpt, "adapter_model.safetensors"), "x");
+    // D91：评估 lane 任务事实在位（恰一 lane——不传 lane 走 task_fact 判定，不再缺省 goods）
+    mkdirSync(join(root, "run-regress-formal-02", "l1"), { recursive: true });
+    writeFileSync(join(root, "run-regress-formal-02", "l1", "training-data-manifest.json"), `${JSON.stringify({ schema_version: "TrainingDataArtifact/v1", lanes: { goods: {} } })}\n`);
     return { assets, serviceConfig, ckpt };
   };
   const startArgs = (root: string, f: { assets: string; serviceConfig: string; ckpt: string }, pin: string) => ({
@@ -627,6 +630,10 @@ print(json.dumps({"argv": args}))`}`);
     mkdirSync(assets, { recursive: true });
     writeFileSync(join(root, "l1", "images", "p1.png"), "png");
     writeFileSync(join(assets, "eval_labels.jsonl"), JSON.stringify({ page_id: "p1", image: "images/p1.png" }) + "\n");
+    // D91：lane 任务事实在位（恰一 lane——manifest 按 runDir 布局落 r1/l1/；
+    // 不传 lane 走 task_fact 判定，不再缺省 goods）
+    mkdirSync(join(root, "r1", "l1"), { recursive: true });
+    writeFileSync(join(root, "r1", "l1", "training-data-manifest.json"), `${JSON.stringify({ schema_version: "TrainingDataArtifact/v1", lanes: { goods: {} } })}\n`);
     return { evalDir, assets };
   };
   const analyzeOf = (runsRoot: string, kernelDir: string): Tool =>

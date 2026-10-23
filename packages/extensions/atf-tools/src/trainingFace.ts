@@ -1650,6 +1650,50 @@ export const evalGpuCostText = (serviceConfigPath: string, manifest: Record<stri
   return tp === null ? "占用 GPU，直到服务停止" : `占用 ${String(tp)} 张 GPU，直到服务停止`;
 };
 
+// ── D91：评估 lane 从任务事实取值（指令《ATF_指令_参数面增补_harness_20261023》）──
+// 内核事实：评估 lane 闭集＝goods/non_goods（verify-history.py choices）；任务事实权威源＝
+// run 内 <runDir>/l1/training-data-manifest.json（TrainingDataArtifact/v1），顶层 lanes 是
+// 对象且键即训练 lane 原文名，恰一个键＝唯一 lane。iteration-config 的 lane 字段不可靠
+//（walkthrough 链恒写内核缺省 pl_goods，不能区分任务）——selections/冻结账本两处硬编码
+// goods 全部退役，判定不了 fail-closed 停下问（禁缺省 goods）。
+
+/** 判定失败业务文案单源（evaluate/analyze 两链共用——零内部码；多 lane 场景列出键名供确认）。 */
+export const EVAL_LANE_UNRESOLVED_NOTE_OF = (lanesSeen?: string[]): string =>
+  lanesSeen !== undefined && lanesSeen.length > 0
+    ? `无法从任务事实判定这批数据的评估 lane（任务事实记录到多个训练数据 lane：${lanesSeen.join("、")}）——请确认后显式指定 lane 再试`
+    : `无法从任务事实判定这批数据的评估 lane（训练数据 lane 记录缺席）——请确认后显式指定 lane 再试`;
+
+/** 评估 lane 判定（evaluate/analyze 共用单源）：① 显式 lane trim 非空即采纳（用户指路语义）；
+ *  ② 读 run 内训练数据 manifest 的 lanes 键集——恰一非空键＝唯一 lane；显式空串＝explicit_empty
+ *  （显式给了空值不静默忽略）；文件缺失/坏 JSON＝task_fact_missing；lanes 键缺失/非对象＝
+ *  lanes_field_invalid；零键＝lanes_empty；多键＝lanes_ambiguous（两态均带 lanesSeen）。 */
+export const resolveEvalLaneFrom = (
+  runDir: string,
+  explicitLane: string | undefined,
+): { ok: true; lane: string; source: "explicit" | "task_fact" } | { ok: false; reason: "explicit_empty" | "task_fact_missing" | "lanes_field_invalid" | "lanes_empty" | "lanes_ambiguous"; lanesSeen?: string[] } => {
+  if (explicitLane !== undefined) {
+    const trimmed = explicitLane.trim();
+    if (trimmed === "") return { ok: false, reason: "explicit_empty" };
+    return { ok: true, lane: trimmed, source: "explicit" };
+  }
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(readFileSync(join(runDir, "l1", "training-data-manifest.json"), "utf8"));
+  } catch {
+    return { ok: false, reason: "task_fact_missing" };
+  }
+  const lanes = manifest !== null && typeof manifest === "object" && !Array.isArray(manifest)
+    ? (manifest as Record<string, unknown>)["lanes"]
+    : undefined;
+  if (lanes === null || typeof lanes !== "object" || Array.isArray(lanes)) {
+    return { ok: false, reason: "lanes_field_invalid" };
+  }
+  const lanesSeen = Object.keys(lanes as Record<string, unknown>).filter((key) => key.trim() !== "");
+  if (lanesSeen.length === 1) return { ok: true, lane: lanesSeen[0] as string, source: "task_fact" };
+  if (lanesSeen.length === 0) return { ok: false, reason: "lanes_empty", lanesSeen };
+  return { ok: false, reason: "lanes_ambiguous", lanesSeen };
+};
+
 /** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
 export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string; bindRun?: (runId: string) => Promise<void>; /** D49：canonical 解析种子（与 TrainingToolsConfig 同键——canonicalRunRootsOf(cfg) 注入面；缺省注册表实例态）。 */ canonicalRoots?: readonly string[] }): unknown[] {
   const evaluate = defineTool({
@@ -1662,6 +1706,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // D32：start 四参降 optional——status 只按 run/轮次查询（不传 start 参数可查）；
       // start 路径 execute 内逐参验证（缺即结构化 *_missing，先于一切产物生成）
       adapter_path: { type: "string", description: "adapter checkpoint 目录绝对路径（仅 action=start 必填；status 省略）——固定编号（checkpoint-<数字>），拒 latest/符号链接/缺省猜测（SKILL.md 环节④条款）" },
+      // D91：评估 lane 判定失败停下问时的显式覆盖通道（缺省从任务事实取——不设缺省 goods）
+      lane: { type: "string", description: "评估 lane（可选——缺省从任务事实取 run 内训练数据 lane 记录；判定不了会停下来问；显式给值可覆盖）" },
       eval_assets_dir: { type: "string", description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl）（仅 action=start 必填；status 省略）" },
       field_config: { type: "string", description: "PromptFieldConfig/v1 JSON 路径（可选——缺省自动继承 <runDir>/experiment-setup/field-config.json 并与训练记录指纹核对；显式传入即覆盖，漂移仅告警不阻断）" },
       prompt_mode: { type: "string", enum: ["mode0", "mode1"], description: "抽取方式（可选——缺省继承训练声明，无声明即 mode0）：mode0＝每页一次、全字段抽取；mode1＝按字段分组、每页×每组，适合字段多/相互干扰时。默认跟训练一致，不要自行切换" },
@@ -1689,7 +1735,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     presentCall: function(args: { action: string; run_id?: string }) {
       return { card: "generic" as const, title: `评估 — ${args.run_id ?? "会话绑定实验"}`, kind: "other" as const }
     },
-    async execute(args: { action: string; run_id?: string; adapter_path?: string; eval_assets_dir?: string; field_config?: string; prompt_mode?: string; service_config?: string; env_profile?: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean; concurrency?: number; concurrency_reason?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+    async execute(args: { action: string; run_id?: string; adapter_path?: string; eval_assets_dir?: string; lane?: string; field_config?: string; prompt_mode?: string; service_config?: string; env_profile?: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean; concurrency?: number; concurrency_reason?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选——先于一切检查）
       const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id, canonicalRunRootsOf(cfg));
       if (!runResolution.ok) return asToolValue(runResolution.payload);
@@ -1761,6 +1807,18 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         });
       }
       const promptMode = resolveEvalPromptMode(runDir, args.prompt_mode);
+      // D91：评估 lane 判定提前到审批卡之前（fail-closed——坏条件不消耗放行，卡前快败先例同
+      // pipelineFace A-E14b）：显式 lane ＞ 任务事实（run 内 training-data-manifest lanes 键集
+      // 恰一 lane）；判定不了即停——禁缺省 goods。checkpoint staging selections 用判定值。
+      const evalLaneResolved = resolveEvalLaneFrom(runDir, args.lane);
+      if (!evalLaneResolved.ok) {
+        return asToolValue({
+          started: false, error: "eval_lane_unresolved", run_id: runId,
+          ...(evalLaneResolved.lanesSeen !== undefined ? { lanes_seen: evalLaneResolved.lanesSeen } : {}),
+          note: EVAL_LANE_UNRESOLVED_NOTE_OF(evalLaneResolved.lanesSeen),
+        });
+      }
+      const evalLane = evalLaneResolved.lane;
       const caliber = computeEvalCaliber(fieldConfigResolved.path, args.eval_assets_dir, promptMode);
       const caliberLine = formatEvalCaliberLine(caliber);
       const roundDir = deriveEvalRoundDir(runDir);
@@ -1846,7 +1904,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         schema_version: "CheckpointPlan/v1",
         run_id: runId,
         staging_root: join(roundDir, "staging"),
-        selections: [{ lane: "goods", checkpoint_dir: args.adapter_path, staged_name: `${runId}_eval` }],
+        selections: [{ lane: evalLane, checkpoint_dir: args.adapter_path, staged_name: `${runId}_eval` }],
       }, null, 1) + "\n", "utf8");
       const planned = await runCapture("python3", [ckptPlanGen, "--config", ckptPlanPath, "--out", ckptPlanDir], 120_000);
       if (planned.code !== 0) {
@@ -1923,7 +1981,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     parameters: {
       run_id: { type: "string", description: "可选；省略时使用本会话当前绑定的实验。无绑定会返回 run_binding_required 与候选（含实验名与工作区），不要自行猜一个 id" },
       eval_assets_dir: { type: "string", description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl；缺省 runs/<run_id>/l1/eval）" },
-      lane: { type: "string", description: "评估 lane（缺省 goods，与冻结账本/链一致）" },
+      lane: { type: "string", description: "评估 lane（缺省从任务事实取——run 内训练数据 lane 记录；判定不了会停下来问你；显式给值可覆盖）" },
       doc_type: { type: "string", description: "单据类型名（缺省沿脚本中性缺省「单据」）" },
       style_cluster_manifest: { type: "string", description: "StyleClusterManifest 路径（实验门②产出——缺省沿 L1 产物位 runs/<run_id>/l1/style-cluster-manifest.json）" },
       coordinate_space: { type: "string", description: "预测坐标空间声明（qwen_axis_1000|original_pixel；SKILL.md 条款：无法从 ExperimentConfig 派生时必传，链侧 fail-closed 拒绝静默缺省）" },
@@ -1959,7 +2017,17 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       if (!existsSync(labelsPath)) {
         return asToolValue({ ok: false, error: "eval_assets_missing", eval_assets_dir: assetsDir, note: "eval_labels.jsonl 缺失——传 eval_assets_dir 指向 L1 EvaluationAssets/v1 目录" });
       }
-      const lane = args.lane ?? "goods";
+      // D91：lane 判定 fail-closed（显式 ＞ 任务事实恰一 lane——禁缺省 goods；判定不了
+      // 返回 eval_lane_unresolved＋业务文案，不猜 lane 进冻结账本）
+      const laneResolved = resolveEvalLaneFrom(runDir, args.lane);
+      if (!laneResolved.ok) {
+        return asToolValue({
+          ok: false, error: "eval_lane_unresolved",
+          ...(laneResolved.lanesSeen !== undefined ? { lanes_seen: laneResolved.lanesSeen } : {}),
+          note: EVAL_LANE_UNRESOLVED_NOTE_OF(laneResolved.lanesSeen),
+        });
+      }
+      const lane = laneResolved.lane;
       // 图片根确定性解析（eval_labels 的 image 相对路径基准）：优先 assets 上级，退 assets 本身；都不中即结构化报缺
       const imagesDir = resolveImagesRoot(assetsDir);
       if (imagesDir === null) {

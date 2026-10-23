@@ -129,6 +129,9 @@ const seedRun = (root: string, opts: { fieldConfigText?: string; dropFingerprint
     run_id: RUN_ID,
     dataset: opts.dropFingerprint === true ? { modes: [] } : { modes: [], digest_provenance: { field_config_sha256: sha } },
   }, null, 1)}\n`);
+  // D91：lane 任务事实在位（恰一 lane——不传 lane 走 task_fact 判定，不再缺省 goods）
+  mkdirSync(join(runDir, "l1"), { recursive: true });
+  writeFileSync(join(runDir, "l1", "training-data-manifest.json"), `${JSON.stringify({ schema_version: "TrainingDataArtifact/v1", lanes: { goods: {} } })}\n`);
   const assets = join(root, "assets");
   mkdirSync(assets, { recursive: true });
   writeFileSync(join(assets, "eval_labels.jsonl"), evalLabelsFixture());
