@@ -202,6 +202,9 @@ export const buildPipelineTool = (
       `style_cluster_declared_but_absent）时，必须先问用户「这批数据做过版式聚类吗？」，` +
       `确认后再传 on（未聚类——内核自动补簇并产出 StyleClusterManifest/v1，按簇分层）或 off（已聚类——不再聚）重跑；` +
       `禁止在 auto 被拒后自行猜一个值重跑。` +
+      `doc_type／lane_suffix／field_config 三件可缺省（缺省不上送，各段均有效）：` +
+      `不传 doc_type 时内核按数据/登记面推断单据类型，无法确定即 blocked（会带业务文案指路）——` +
+      `需显式指定或补登记面后重跑；field_config 须为字段配置文件显式路径。` +
       `越序段会被内核拒绝（blocked，exit 2）——按段序逐段触发。段成功退出（exit 0）即在落点 run 目录落段事实与会话绑定` +
       `（胶囊数据源；experiment_setup/candidate_build/training_prep 按映射口径落事实，点灯以内核段序闭包为准）；` +
       `exit 2（blocked）／exit 3（环境错误）一律零写入。审批面板放行后才会执行。`,
@@ -228,13 +231,16 @@ export const buildPipelineTool = (
           "当所有版式分组都太小、无法留出测试集时，用户坚持要测试集才用；每个小类只留 1 页，测试样本很少" +
           "（仅 family_split 段有意义，其它段忽略；缺省不开，不由系统自动推断）",
       },
+      doc_type: { type: "string", description: "单据类型（可缺省——缺省不上送，内核按数据/登记面推断，无法确定即 blocked；给了则显式指定）" },
+      lane_suffix: { type: "string", description: "lane 后缀（可缺省——缺省不上送，内核自行推断）" },
+      field_config: { type: "string", description: "字段配置文件显式路径（可缺省——缺省不上送，内核走 run 内/登记面既有来源）" },
     },
     output: {
       schema: looseObjectOutput,
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; doc_type?: string; lane_suffix?: string; field_config?: string },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -282,6 +288,14 @@ export const buildPipelineTool = (
       if (needsBaseModel) argv.push("--base-model", baseModelPath);
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");
+      // D82：单据类型三件透传（给才追加、trim 后非空才上线，缺省不上送——内核自行推断，
+      // doc_type 推断不出即 blocked；各段均有效）。与上方段特定追加逻辑并存，零触碰其语义。
+      const docType = typeof args.doc_type === "string" ? args.doc_type.trim() : "";
+      if (docType !== "") argv.push("--doc-type", docType);
+      const laneSuffix = typeof args.lane_suffix === "string" ? args.lane_suffix.trim() : "";
+      if (laneSuffix !== "") argv.push("--lane-suffix", laneSuffix);
+      const fieldConfig = typeof args.field_config === "string" ? args.field_config.trim() : "";
+      if (fieldConfig !== "") argv.push("--field-config", fieldConfig);
       // D24h：放行登记带会话身份与 ui 模式（actor＝会话 id，缺失＝unattributed——不伪造 owner）；
       // round_dir＝本段落点 run 目录（内核账本 round_dir 字段面，与评估 D20 同构）
       argv.push("--actor", sessionIdOfExec(exec) ?? "unattributed", "--approval-mode", "ui", "--round-dir", runDir);

@@ -1924,7 +1924,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       run_id: { type: "string", description: "可选；省略时使用本会话当前绑定的实验。无绑定会返回 run_binding_required 与候选（含实验名与工作区），不要自行猜一个 id" },
       eval_assets_dir: { type: "string", description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl；缺省 runs/<run_id>/l1/eval）" },
       lane: { type: "string", description: "评估 lane（缺省 goods，与冻结账本/链一致）" },
-      doc_type: { type: "string", description: "单据类型名（如 装箱单；缺省沿脚本中性缺省「单据」）" },
+      doc_type: { type: "string", description: "单据类型名（缺省沿脚本中性缺省「单据」）" },
       style_cluster_manifest: { type: "string", description: "StyleClusterManifest 路径（实验门②产出——缺省沿 L1 产物位 runs/<run_id>/l1/style-cluster-manifest.json）" },
       coordinate_space: { type: "string", description: "预测坐标空间声明（qwen_axis_1000|original_pixel；SKILL.md 条款：无法从 ExperimentConfig 派生时必传，链侧 fail-closed 拒绝静默缺省）" },
       gt_coordinate_space: { type: "string", description: "GT 标签坐标空间声明（闭集同上；GT 与预测可分属不同空间）" },
