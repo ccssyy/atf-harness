@@ -36,7 +36,17 @@ set -euo pipefail
 
 MAIN_REPO="/data/sam/ATF-Harness"
 VENDOR_DIR="${MAIN_REPO}/vendor/dsh/deepseek-harness"
-KEY_ENV="${ATF_INSTANCE_KEY_ENV:-/root/.atf-harness/.env}"
+# D87 键解析 fail-closed（dev 侧 KEY_ENV；uat 侧密钥 env 属容器内独立文件，不走此解析序）：
+# ① ATF_INSTANCE_KEY_ENV 显式指定 → 用之（启动前活体探针不过即 die 并指名该文件路径）；
+# ② 否则取 /root/.atf-harness/.env-keyfix-* 中 mtime 最新（键修复件存在即优先）；
+# ③ 否则回退 /root/.atf-harness/.env（历史死键兜底——启动前活体探针会拦，
+#    禁到首条指令才暴露 AUTH）。
+if [[ -n "${ATF_INSTANCE_KEY_ENV:-}" ]]; then
+  KEY_ENV="$ATF_INSTANCE_KEY_ENV"
+else
+  KEY_ENV="$(ls -1t /root/.atf-harness/.env-keyfix-* 2>/dev/null | head -1 || true)"
+  [[ -n "$KEY_ENV" ]] || KEY_ENV="/root/.atf-harness/.env"
+fi
 
 usage_die() { echo "用法: instance-restart.sh <dev|uat>|--env-cmd <dev|uat>|--env-dump <dev|uat>" >&2; exit 2; }
 
@@ -65,6 +75,9 @@ fi
 # checkout vendor/pid 文件。dev 常量（3080/tmux atf-dsh）一字未动（红线）。
 UAT_SSH_KEY="/root/.ssh/id_ed25519_a800_uat"
 UAT_SSH_TARGET="root@172.18.0.20"
+# D87 口径注记：UAT 密钥 env＝atf-uat 容器内独立 .env（容器内路径——当前活键；不参与
+# dev 侧 KEY_ENV 解析序与活体探针，键在容器语境、本机探针无意义；boot 前容器内 [ -f ]
+# fail-closed 校验维持原样）。文件与值一字不动。
 UAT_KEY_ENV="/root/.atf-harness/.env"
 UAT_REPO="/data/sam/ATF-Harness-uat"
 UAT_VENDOR="${UAT_REPO}/vendor/dsh/deepseek-harness"
@@ -100,6 +113,25 @@ fi
 
 # 单引号安全包装（内嵌引号/空白路径安全——'"'"' 标准转义）
 sq() { printf "'%s'" "${1//\'/\'\"\'\"\'}"; }
+
+# D87 键活体探针（仅 dev restart 路径调用；--env-cmd/--env-dump 不启动、不探针）：
+# 子 shell 内 source 所选密钥 env（禁污染当前 shell；键值零打印零落盘，输出仅 HTTP
+# 状态码，短超时）。判定口径：401/403（认证拒绝）/000（不可达或超时）＝探针败；
+# MISSKEY＝env 缺 ATF_LLM_KEY_GLM；其余（空 body 400＝认证已过、参数未过）＝键活。
+# base 取 env 内 ATF_LLM_BASE_GLM（可选覆盖），缺省＝仓内 coding 端点常量
+# （poc/web-profile-cordis-patch.yml 同源：https://open.bigmodel.cn/api/coding/paas/v4）。
+KEY_PROBE_BASE_DEFAULT="https://open.bigmodel.cn/api/coding/paas/v4"
+key_env_probe() {
+  bash -c '
+    set -a; source "$1"; set +a
+    if [[ -z "${ATF_LLM_KEY_GLM:-}" ]]; then echo MISSKEY; exit 0; fi
+    base="${ATF_LLM_BASE_GLM:-$2}"
+    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 -X POST "${base%/}" \
+      -H "Authorization: Bearer ${ATF_LLM_KEY_GLM}" \
+      -H "Content-Type: application/json" -d "{}" 2>/dev/null) || code=000
+    echo "${code:-000}"
+  ' _ "$1" "$2"
+}
 
 # 净室 prologue：白名单外全裸 → source 密钥 env → source 实例 env（均 set -a 导出）
 PROLOGUE="set -a; source $(sq "$KEY_ENV"); set +a; source $(sq "$ENV_FILE"); set +a"
@@ -197,6 +229,19 @@ STOP_EOF
   fi
 else
   # —— dev 分支（行为零变更——tmux 会话内停旧 → 净室重放，原样保留）——
+  # D87 启动前键活体探针（fail-closed：死键禁触发任何 stop/start 动作——探针在
+  # tmux C-c 停旧之前，失败即 die 并指名文件，dev 实例零触碰）：
+  echo "[instance-restart] ${INSTANCE}: 键活体探针（coding 端点——env: ${KEY_ENV}）…"
+  PROBE=$(key_env_probe "$KEY_ENV" "$KEY_PROBE_BASE_DEFAULT")
+  case "$PROBE" in
+    MISSKEY|000|401|403)
+      echo "[instance-restart] FAIL: 键活体探针失败（${PROBE}）——密钥 env: ${KEY_ENV}（fail-closed：启动前拦截，dev 实例未被触碰；修键后重跑，或以 ATF_INSTANCE_KEY_ENV 显式指认活键文件）" >&2
+      exit 2
+      ;;
+    *)
+      echo "[instance-restart] ${INSTANCE}: 键活体探针通过（HTTP ${PROBE}）——env: ${KEY_ENV}"
+      ;;
+  esac
   if ! tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
     echo "[instance-restart] FAIL: tmux 会话不在: $TMUX_SESSION" >&2
     exit 2

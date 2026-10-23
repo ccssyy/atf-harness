@@ -189,6 +189,16 @@ if [[ "$BIN_OK" != "1" || "$(remote "[ -f '${DIST_HTML}' ] && echo ok || echo mi
 fi
 log "依赖引导完成（bin 链可解析·dist/index.html 在场）"
 
+# ---------- 步骤 1c：vendor patch 重放（D84——submodule update 每次重置 pristine，
+# patch 集不随发版走——重放段补口；apply-patches.sh 幂等：已应用 skip、有新应用才
+# 重建；失败即 die＝fail-closed，禁静默带病继续发版。插在停旧/boot 之前——重放失败
+# 时实例仍在跑旧版，无需回滚；既有回滚段与回滚点记录不动） ----------
+log "vendor patch 重放（apply-patches.sh——幂等；失败即 die）…"
+if ! remote "cd '${UAT_VENDOR}' && bash '${UAT_REPO}/vendor/dsh/apply-patches.sh'" 2>&1 | tail -3; then
+  die "vendor patch 重放失败（fail-closed——禁静默继续发版；上游冲突须人工评估更新 patch，修复后重跑发版）"
+fi
+log "patch 重放段通过（patch 集全部已应用）"
+
 # ---------- 步骤 2：停旧＋启动 ----------
 log "停旧 dsh（组杀＋端口释放等待）…"
 remote_stop_dsh || die "端口 ${UAT_PORT} 释放失败——人工介入"
