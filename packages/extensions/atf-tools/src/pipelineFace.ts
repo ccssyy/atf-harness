@@ -8,10 +8,12 @@
  * （未带按业务语言兜底并标注来源）、note 改「原样告知 user_message」指引、增
  * allow_small_cluster_test 透传；D89 增 experiment_setup 段 grouping_preset 透传
  * （内核 argparse --grouping-preset A/B，缺省 B——「缺省不静默」：未给按内核缺省处理
- * 并在返回体标注分组来源，审批卡呈现分组方案）。
+ * 并在返回体标注分组来源，审批卡呈现分组方案）；D93 增三参透传（train_all／
+ * assignment_source／reuse_experiment_setup——内核全局 argparse 参数，只透传不新增语义）。
  *
  * 接口契约（引自内核件 K-A2.2a §二，双件同步；A-E14b 增补 K-E14a 命令面；E10b 增补
- * E10a 命令面；E10d 增补 E10f 命令面；D89 增补 --grouping-preset 命令面）：
+ * E10a 命令面；E10d 增补 E10f 命令面；D89 增补 --grouping-preset 命令面；D93 增补
+ * 全局三参命令面）：
  *   段名闭集（权威＝内核 STAGE_ORDER，八项，禁增删改序）＝register／label_qc／
  *   experiment_setup／candidate_build／publish／family_split／admission／training_prep。
  *   命令面（段模式）：--workspace 必填／--stage 八段之一／--run-id 建议显式／
@@ -19,7 +21,9 @@
  *   绝对路径；K-E14a 拆分后渲染位吃 --base-model-family，内核段模式另有盘上只读再水合，
  *   harness 案 a＝必填显式值卡前快败）／--auto-style-cluster 仅 family_split（三态
  *   auto|on|off，缺省 auto；其它段不下传不报错）／--grouping-preset 仅 experiment_setup
- *   （A|B，缺省 B；未给不下传——按内核缺省处理，D89）。本工具下传 argv 只含上述参数，禁传内核未声明
+ *   （A|B，缺省 B；未给不下传——按内核缺省处理，D89）／--train-all／--assignment-source／
+ *   --reuse-experiment-setup 全局三参（内核 argparse 已声明、多段读取；给才下传，D93）。
+ *   本工具下传 argv 只含上述参数，禁传内核未声明
  *   参数、禁拼第二套路径。
  *   落点（唯一）＝<workspace_path>/runs/<run_id>——本工具内 resolveRunDir 退役
  *   （内核与 harness 同一决定者，其余工具不受影响）。
@@ -232,6 +236,8 @@ export const buildPipelineTool = (
       `doc_type／lane_suffix／field_config 三件可缺省（缺省不上送，各段均有效）：` +
       `不传 doc_type 时内核按数据/登记面推断单据类型，无法确定即 blocked（会带业务文案指路）——` +
       `需显式指定或补登记面后重跑；field_config 须为字段配置文件显式路径。` +
+      `train_all／assignment_source／reuse_experiment_setup 三件为全局参数（各段均有效，给才下传，缺省不开）：` +
+      `train_all 与 assignment_source 互斥——二选一，同时给会被内核拒绝（harness 不复制该校验）。` +
       `越序段会被内核拒绝（blocked，exit 2）——按段序逐段触发。段成功退出（exit 0）即在落点 run 目录落段事实与会话绑定` +
       `（胶囊数据源；experiment_setup/candidate_build/training_prep 按映射口径落事实，点灯以内核段序闭包为准）；` +
       `exit 2（blocked）／exit 3（环境错误）一律零写入。审批面板放行后才会执行。`,
@@ -269,13 +275,28 @@ export const buildPipelineTool = (
       doc_type: { type: "string", description: "单据类型（可缺省——缺省不上送，内核按数据/登记面推断，无法确定即 blocked；给了则显式指定）" },
       lane_suffix: { type: "string", description: "lane 后缀（可缺省——缺省不上送，内核自行推断）" },
       field_config: { type: "string", description: "字段配置文件显式路径（可缺省——缺省不上送，内核走 run 内/登记面既有来源）" },
+      train_all: {
+        type: "boolean",
+        description:
+          "全部样本入训（后置全量置 train 分区；缺省不开。与 assignment_source 互斥——二选一，同时给会被内核拒绝）",
+      },
+      assignment_source: {
+        type: "string",
+        description:
+          "外部划分清单目录绝对路径（含 train.txt 与 test.txt 两份页名清单——高级用法，仅显式给定才生效；与 train_all 互斥）",
+      },
+      reuse_experiment_setup: {
+        type: "boolean",
+        description:
+          "复用 run 内已有用户确认态实验配置、跳过实验门重生成（配置不在场时内核拒绝；缺省不开）",
+      },
     },
     output: {
       schema: looseObjectOutput,
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; doc_type?: string; lane_suffix?: string; field_config?: string },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -341,6 +362,13 @@ export const buildPipelineTool = (
       // D89：分组方案透传（仅 experiment_setup 段；显式给且 trim 非空才追加——未给不追加，
       // 内核缺省 B 生效；其它段忽略该参不下传不报错）。与上方段特定/全局追加逻辑并存。
       if (args.stage === "experiment_setup" && groupingPreset !== "") argv.push("--grouping-preset", groupingPreset);
+      // D93：三参透传（内核全局 argparse 参数、多段读取——不按段 gate；train_all 与
+      // assignment_source 的互斥校验在内核每次进程 __init__，harness 不复制；开关 false/
+      // 路径空白＝「按未给处理」不追加，只传内核已声明参数、零新增语义）。
+      if (args.train_all === true) argv.push("--train-all");
+      const assignmentSource = typeof args.assignment_source === "string" ? args.assignment_source.trim() : "";
+      if (assignmentSource !== "") argv.push("--assignment-source", assignmentSource);
+      if (args.reuse_experiment_setup === true) argv.push("--reuse-experiment-setup");
       // D24h：放行登记带会话身份与 ui 模式（actor＝会话 id，缺失＝unattributed——不伪造 owner）；
       // round_dir＝本段落点 run 目录（内核账本 round_dir 字段面，与评估 D20 同构）
       argv.push("--actor", sessionIdOfExec(exec) ?? "unattributed", "--approval-mode", "ui", "--round-dir", runDir);
