@@ -29,8 +29,9 @@ const textResult = (details: Record<string, unknown>): { content: Array<{ type: 
 });
 const ensure_plain_replacer = (_key: string, value: unknown): unknown => value;
 
-/** run 条目状态/产物推导（run 目录特征，不猜——平铺/桶内同码）。 */
-const deriveRunEntry = (runDir: string, runId: string, workspace: string | null): Record<string, unknown> => {
+/** run 条目状态/产物推导（run 目录特征，不猜——平铺/桶内同码）。
+ *  D81-B：导出为 run 面读具状态推导单源（scopeFace 会话作用域枚举同码复用，防双份漂移）。 */
+export const deriveRunEntry = (runDir: string, runId: string, workspace: string | null): Record<string, unknown> => {
   const has = (rel: string): boolean => existsSync(join(runDir, rel));
   const state = has("webui/config-snapshot.json")
     ? "config_confirmed"

@@ -223,38 +223,46 @@ describe("批㊶-P1 S2——exec home 会话子目录化（bridgeFace localHostF
 // ---------------------------------------------------------------- 文件面（4 工具逐个）
 
 describe("atf-tools 文件面（临时 runs 目录）", () => {
-  const setup = (): { root: string; tools: unknown[] } => {
+  // D81-B 会话作用域隔离：run 面读具缺省只看当前会话归属工作区（.atf/workspace.json 向上
+  // 发现）——fixture 改为工作区形态（canonical workspace/runs 布局）＋exec 携会话 cwd。
+  const setup = (): { root: string; ws: string; tools: unknown[]; scopedExec: unknown } => {
     const root = tempRoot();
-    mkdirSync(join(root, "run-a", "report"), { recursive: true });
-    writeFileSync(join(root, "run-a", "report", "report.md"), "# run-a 报告\n正文");
-    writeFileSync(join(root, "run-a", "report", "metrics_summary.json"), JSON.stringify({ eval_f1: 0.87, loss: 0.21 }));
-    mkdirSync(join(root, "run-b", "report"), { recursive: true });
-    writeFileSync(join(root, "run-b", "report", "metrics_summary.json"), JSON.stringify({ eval_f1: 0.91, loss: 0.18 }));
-    return { root, tools: buildFileTools(root) };
+    const ws = join(root, "ws-a");
+    mkdirSync(join(ws, ".atf"), { recursive: true });
+    writeFileSync(join(ws, ".atf", "workspace.json"), JSON.stringify({ id: "ws-a-uuid", name: "ws-a", experiments: [], createdAt: "2026-10-23T00:00:00Z" }));
+    mkdirSync(join(ws, "workspace", "runs", "run-a", "report"), { recursive: true });
+    writeFileSync(join(ws, "workspace", "runs", "run-a", "run.json"), JSON.stringify({ run_id: "run-a" }));
+    writeFileSync(join(ws, "workspace", "runs", "run-a", "report", "report.md"), "# run-a 报告\n正文");
+    writeFileSync(join(ws, "workspace", "runs", "run-a", "report", "metrics_summary.json"), JSON.stringify({ eval_f1: 0.87, loss: 0.21 }));
+    mkdirSync(join(ws, "workspace", "runs", "run-b", "report"), { recursive: true });
+    writeFileSync(join(ws, "workspace", "runs", "run-b", "run.json"), JSON.stringify({ run_id: "run-b" }));
+    writeFileSync(join(ws, "workspace", "runs", "run-b", "report", "metrics_summary.json"), JSON.stringify({ eval_f1: 0.91, loss: 0.18 }));
+    const scopedExec = { agent: { session: { header: { cwd: ws } } }, callId: "test-call-1", signal: undefined };
+    return { root, ws, tools: buildFileTools(root, { dshHome: join(root, "dsh-home") }), scopedExec };
   };
 
   it("atf_run_list：枚举＋状态推导序列化", async () => {
-    const { root, tools } = setup();
-    const result = (await findTool(tools, "atf_run_list").execute({}, fakeExec)) as { runs: Array<{ run_id: string }>; count: number };
+    const { tools, scopedExec } = setup();
+    const result = (await findTool(tools, "atf_run_list").execute({}, scopedExec)) as { runs: Array<{ run_id: string }>; count: number };
     expect(result.count).toBe(2);
     expect(result.runs.map((run) => run.run_id).sort()).toEqual(["run-a", "run-b"]);
   });
 
   it("atf_report_read：存在读全文／缺失如实报", async () => {
-    const { tools } = setup();
-    const hit = (await findTool(tools, "atf_report_read").execute({ run_id: "run-a" }, fakeExec)) as { exists: boolean; text: string };
+    const { tools, scopedExec } = setup();
+    const hit = (await findTool(tools, "atf_report_read").execute({ run_id: "run-a" }, scopedExec)) as { exists: boolean; text: string };
     expect(hit.exists).toBe(true);
     expect(hit.text).toContain("# run-a 报告");
-    const miss = (await findTool(tools, "atf_report_read").execute({ run_id: "run-x" }, fakeExec)) as { exists: boolean };
+    const miss = (await findTool(tools, "atf_report_read").execute({ run_id: "run-x" }, scopedExec)) as { exists: boolean };
     expect(miss.exists).toBe(false);
   });
 
   it("atf_metrics_compare：可比 diff／缺料如实报『无可比轮次』", async () => {
-    const { tools } = setup();
-    const hit = (await findTool(tools, "atf_metrics_compare").execute({ run_a: "run-a", run_b: "run-b" }, fakeExec)) as { comparable: boolean; diff: Record<string, { a: unknown; b: unknown }> };
+    const { tools, scopedExec } = setup();
+    const hit = (await findTool(tools, "atf_metrics_compare").execute({ run_a: "run-a", run_b: "run-b" }, scopedExec)) as { comparable: boolean; diff: Record<string, { a: unknown; b: unknown }> };
     expect(hit.comparable).toBe(true);
     expect(hit.diff["eval_f1"]).toEqual({ a: 0.87, b: 0.91 });
-    const miss = (await findTool(tools, "atf_metrics_compare").execute({ run_a: "run-a", run_b: "run-x" }, fakeExec)) as { comparable: boolean; note: string };
+    const miss = (await findTool(tools, "atf_metrics_compare").execute({ run_a: "run-a", run_b: "run-x" }, scopedExec)) as { comparable: boolean; note: string };
     expect(miss.comparable).toBe(false);
     expect(miss.note).toContain("无可比轮次");
   });

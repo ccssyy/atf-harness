@@ -26,6 +26,7 @@ import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./ap
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+import { SCOPE_UNRESOLVED_NOTE, resolveSessionWorkspace, sessionCwdOfExec } from "./scopeFace.js";
 
 /** 批㊶-N N-5：会话身份提取（exec.agent.session.id；取不到＝undefined 如实跳过）。 */
 const sessionIdOfExec = (exec: unknown): string | undefined => {
@@ -274,6 +275,19 @@ export const buildBridgeTools = (
           const result = await agentTool.execute(`dsh-${exec.callId ?? "call"}`, args);
           // 批㊶-M M-3 段事实轨：桥接面工具成功即登记（register/label_qc——run 归属取参数）
           const details = result.details as Record<string, unknown> | undefined;
+          // D81-B（指令 §二.4）：状态面附加当前会话归属工作区身份（atf_workspace_status 显示
+          // 当前 workspace_id）。附加在内核返回体之上（canonical root strict:false 放行附加
+          // 字段——bridge.contract.yaml 零 diff）；归属缺失如实给指引 note，状态面核心事实
+          // （run_id/admitted_count/scope_ref）不被遮蔽。
+          if (definition.name === "atf_workspace_status" && details !== undefined && details !== null && !("error" in details)) {
+            const sessionScope = resolveSessionWorkspace(sessionCwdOfExec(exec));
+            if (sessionScope !== null) {
+              details["workspace_id"] = sessionScope.workspaceId;
+              details["workspace_path"] = sessionScope.root;
+            } else {
+              details["workspace_scope_note"] = SCOPE_UNRESOLVED_NOTE;
+            }
+          }
           if (details !== undefined && details !== null && typeof details === "object" && !("error" in details)) {
             const segmentByTool: Record<string, string> = { atf_admit_data: "register", atf_label_qc_inspect: "label_qc" };
             const segment = segmentByTool[definition.name];

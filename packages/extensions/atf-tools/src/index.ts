@@ -166,7 +166,9 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   }
 
   for (const tool of buildBridgeTools(ctx, manager, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, execHome: config.execHome })) ctx.tools.register(tool);
-  for (const tool of buildFileTools(config.runsRoot)) ctx.tools.register(tool);
+  // D81-B 会话作用域隔离：run 面读具缺省只看当前会话归属工作区；跨任务 scope 走审批
+  // （approvalFace 既有 seam——ctx 注入是审批服务唯一可达路径）。
+  for (const tool of buildFileTools(config.runsRoot, { ctx })) ctx.tools.register(tool);
   ctx.tools.register(buildPipelineTool(ctx, pipelineCommand, config.pipelineTimeoutMs));
   // E1b：坐标量化工具面——内核 CLI 单源（<kernelDir>/tools/quantize_annotations.py，pin 随
   // kernelDir 消费链；白名单根＝A4 同一可变数组实例 fileHostRoots，热加载同步生效）。
