@@ -626,7 +626,8 @@ describe("批㊶-W F5——表单卡链（结构化 edits＋form intent ask＋Re
     // 批次 R H1-1：16＝15 配置键输入框（16 键滤 max_model_len 只读）＋1 理由行
     //（token_budget_sync_reason——预算与 cutoff 不等时的不同步理由入口）。
     // D76 卡位入卡：17＝16 配置键输入框（17 键滤 max_model_len 只读）＋1 理由行。
-    expect(intent?.fields.length).toBe(17);
+    // D92 只读键单源：16＝15 配置键输入框（17 键滤只读双键 max_model_len/dataset_keys）＋1 理由行。
+    expect(intent?.fields.length).toBe(16);
     const lrField = intent?.fields.find((f) => f.key === "learning_rate");
     expect(lrField?.value).toBe("2e-4"); // 现值预填
     expect(lrField?.hint).toContain("5e-5"); // clamp 域提示可读

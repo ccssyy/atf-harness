@@ -6,6 +6,11 @@
  * atf_analyze_badcases 链级（non_goods 任务不传 lane → 冻结账本 argv 收 --lane non_goods）＋
  * atf_evaluate 卡前快败代码锚（坏条件不消耗放行——判定先于 requestApproval）。
  * mock pin 形态沿 trainingFace.test.ts（真 python3 子进程面）。
+ *
+ * D92——dataset_keys 改只读展示：只读键单源（READONLY_CONFIG_KEYS 双键全滤输入框）＋
+ * CONFIG_CONFIRM_KEYS 新 label/空 default＋confirmFace baseline 注入内核实算值
+ * （IterationConfig dataset 段）＋卡面只读行（值在＝实算值；值缺＝如实未产出）＋
+ * Web 摘要 buildLaunchSurface dataset_keys 顶层展平（learning_rate 等既有路径不变）。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,6 +21,12 @@ import {
   resolveEvalLaneFrom,
   buildEvalTools,
 } from "../../packages/extensions/atf-tools/src/trainingFace.js";
+import {
+  CONFIG_CONFIRM_KEYS,
+  READONLY_CONFIG_KEYS,
+  buildConfigConfirmFields,
+} from "../../src/webui/configConfirm.js";
+import { configFormFieldsOf } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -191,5 +202,95 @@ describe("D91——atf_evaluate 锚（卡前快败代码锚＋selections 判定�
     expect(source).not.toContain('lane: "goods"'); // 硬编码 goods 退役
     // 参数面：evaluate/analyze 双工具描述均不再宣称缺省 goods
     expect(source).not.toContain("缺省 goods，与冻结账本/链一致");
+  });
+});
+
+// ── D92——dataset_keys 改只读展示（内核实算单源 IterationConfig；禁可编辑不消费）──
+
+describe("D92——只读键单源与卡面字段构造", () => {
+  it("READONLY_CONFIG_KEYS 恰双键；CONFIG_CONFIRM_KEYS dataset_keys 条目 default 空串、label 含只读", () => {
+    expect([...READONLY_CONFIG_KEYS].sort()).toEqual(["dataset_keys", "max_model_len"]);
+    const entry = CONFIG_CONFIRM_KEYS.find((e) => e.key === "dataset_keys");
+    expect(entry?.default).toBe("");
+    expect(entry?.label).toContain("只读");
+    expect(entry?.label).toContain("内核实算");
+  });
+  it("configFormFieldsOf 不生成只读双键输入框（dataset_keys 与 max_model_len 都滤）", () => {
+    const fields = buildConfigConfirmFields({}, {});
+    const rows = configFormFieldsOf(fields, 4);
+    expect(rows.some((row) => row.key === "dataset_keys")).toBe(false);
+    expect(rows.some((row) => row.key === "max_model_len")).toBe(false);
+    // 其余键输入框不受牵连（learning_rate 仍在）
+    expect(rows.some((row) => row.key === "learning_rate")).toBe(true);
+  });
+  it("buildConfigConfirmFields 带 fromRegistry.dataset_keys 时值＝实算值（from_registry 通道）", () => {
+    const fields = buildConfigConfirmFields({}, { fromRegistry: { dataset_keys: "pl_goods、non_goods" } });
+    const row = fields.find((f) => f.key === "dataset_keys");
+    expect(row?.value).toBe("pl_goods、non_goods");
+    expect(row?.tag).toBe("from_registry");
+    // 缺省态（无实算值）：default 空串——占位文案「（由登记面推导）」退役
+    const bare = buildConfigConfirmFields({}, {}).find((f) => f.key === "dataset_keys");
+    expect(bare).toEqual({ key: "dataset_keys", value: "", tag: "default_used" });
+  });
+});
+
+describe("D92——confirmFace 链级（baseline 注入实算值＋卡面只读行）", () => {
+  /** 表单卡 ask 假件（捕获请求；空 selected＝零改动提交直达审批卡）。 */
+  const makeCtx = (calls: unknown[]): { get: (s: string) => unknown } => ({
+    get: (s: string) =>
+      s === "permissionPresets"
+        ? { current: () => "default", defaultPreset: "default" }
+        : s === "approval"
+          ? { request: async () => "allowed-once" }
+          : s === "userQuestions"
+            ? { ask: async (req: { questions: ReadonlyArray<{ id: string }> }) => { calls.push(req); return { answers: [{ id: req.questions[0]?.id ?? "q", selected: [] }] }; } }
+            : undefined,
+  });
+  type AskRequest = { detail?: string; intent: { fields: Array<{ key: string }> } };
+  const runConfirm = async (root: string, runId: string): Promise<AskRequest> => {
+    const calls: unknown[] = [];
+    const { buildConfirmTools } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
+    const tools = buildConfirmTools({ runsRoot: root, ctx: makeCtx(calls) }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const result = await tools[0]!.execute({ action: "present", run_id: runId }, { callId: "d92", agent: { session: { id: "d92", header: { cwd: "/w" } } } });
+    expect(result.ok).toBe(true);
+    // ask 入参形态＝{ questions: [formAskQuestion(...)], agent, signal }——问题对象在 questions[0]
+    return (calls[0] as { questions: AskRequest[] }).questions[0] as AskRequest;
+  };
+  const seedIter = (root: string, runId: string, iter: Record<string, unknown>): void => {
+    const dir = join(root, runId, "prep", "iteration-config");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "iteration-config.json"), JSON.stringify(iter));
+  };
+
+  it("IterationConfig dataset 段实算值 → baseline 入卡＋只读行显值；输入框不再生成", async () => {
+    const root = tempRoot();
+    seedIter(root, "run-d92a", { training: { learning_rate: "2e-4" }, dataset: { dataset_keys: ["pl_goods", "non_goods"] } });
+    const request = await runConfirm(root, "run-d92a");
+    expect(request.intent.fields.some((f) => f.key === "dataset_keys")).toBe(false); // 只读滤
+    expect(request.detail).toContain("数据集键（实算，只读）：pl_goods、non_goods");
+  });
+  it("IterationConfig 缺席/无 dataset 段 → 只读行如实「实算值未产出」（不造占位数）", async () => {
+    const root = tempRoot();
+    const request = await runConfirm(root, "run-d92b");
+    expect(request.detail).toContain("数据集键（实算，只读）：实算值未产出（IterationConfig 缺席）");
+  });
+});
+
+describe("D92——Web 摘要（buildLaunchSurface dataset_keys 顶层展平）", () => {
+  it("IterationConfig dataset 段实算值进摘要行（iteration_config 来源）；learning_rate 等既有路径不变", async () => {
+    const { buildLaunchSurface } = await import("../../packages/extensions/atf-ui/src/server.js");
+    const root = tempRoot();
+    const dir = join(root, "run-d92c");
+    const iterDir = join(dir, "prep", "iteration-config");
+    mkdirSync(iterDir, { recursive: true });
+    writeFileSync(join(iterDir, "iteration-config.json"), JSON.stringify({
+      training: { learning_rate: "2e-4", num_train_epochs: 3 },
+      dataset: { dataset_keys: ["pl_goods", "non_goods"] },
+    }));
+    const surface = buildLaunchSurface(dir);
+    const byKey = new Map(surface.summary.map((row) => [row.key, row]));
+    expect(byKey.get("dataset_keys")).toMatchObject({ value: "pl_goods,non_goods", source: "iteration_config" });
+    expect(byKey.get("learning_rate")).toMatchObject({ value: "2e-4", source: "iteration_config" });
+    expect(byKey.get("num_train_epochs")).toMatchObject({ value: "3", source: "iteration_config" });
   });
 });
