@@ -1,0 +1,20 @@
+diff --git a/packages/client/ui-settings/src/client/index.ts b/packages/client/ui-settings/src/client/index.ts
+index 151a94d..373aee0 100644
+--- a/packages/client/ui-settings/src/client/index.ts
++++ b/packages/client/ui-settings/src/client/index.ts
+@@ -36,7 +36,14 @@ export const inject = ['remote', 'remote.settings']
+ export function apply(ctx: Context): void {
+   const schema = new SettingsSchemaService(ctx)
+   // Every form uses the persistence mode resolved from the connected Host.
+-  const persistence = ctx.remote.$host.isLoopback ? 'host' : 'memory'
++  // 0006: keep 'host' persistence on non-loopback pages too. The upstream
++  // downgrade to 'memory' made every served page outside loopback (UAT over a
++  // public port) permanently report "settings are unavailable" because the
++  // mirror never issues `settings.describe`. Accepted risk, recorded in the
++  // carrying patch file: the UAT deployment is an internal trial, so exposing
++  // the settings write surface over the public port is acceptable (owner
++  // sign-off, ATF 指令 D75 2026-10-23).
++  const persistence: 'host' | 'memory' = 'host'
+   const mirror = new SettingsDescribeMirror(ctx, persistence)
+   ctx.effect(() => {
+     const disposers = [
