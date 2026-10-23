@@ -10,6 +10,10 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     environment: "node",
     testTimeout: 30_000,
+    // 测试提速 T2（指令 edaebcb148f7 §三.3）：transform 持久缓存——全量实测 Transform
+    // 每次重做占 28%（308s），fsModuleCache 跨 run/跨进程复用转译产物；缓存落
+    // node_modules/.vitest-cache（依赖重装自然失效）。收口批全量复测对比数字。
+    fsModuleCache: true,
     // 批㊶-ISO D2①：tmux 测试 socket 全局 fixture（逐测试文件建 atf-test-<runid> socket
     // ＋命名域前缀 env，用毕 kill-server——含 tmux 操作的测试对默认 socket 零触碰）
     setupFiles: ["tests/fixtures/testIsolationGuard.ts", "tests/fixtures/tmuxTestSocket.ts"],
