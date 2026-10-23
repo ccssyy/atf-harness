@@ -4,11 +4,13 @@
  *
  * 判据面（产品测试黑盒：只断言 atf_scratch_exec 工具返回体与 scratch 观测账落盘事实，
  * 不引 handler 内部符号）：
- * - T1 码在 stderr 且带路径括号 → stderr_tail 人话 + note 人话 + kernel_error 带码
+ * - T1 码在 stderr 且带路径括号 → stderr_tail 人话 + note 人话
  * - T2 码只在 stdout（D71 实测向量：内核失败 JSON 信封）→ stdout 散文零码
  * - T3 exit_code==0 但 stdout 含码 → 同样换人话（扫描不看退出码）
  * - T4 未知码（信封 code 位不属闭集）→ 原样保留 + 观测账 unknown_code 一行
  * 全形态通用：码与原文落 <scratch>/.harness/kernel-error-face.jsonl（账面可查，行号可贴）。
+ * D77（裁定《ATF_裁定_H判不通过_D77模型面对账面_20261023》）：完整码从模型可见返回体
+ * 移出——T1/T2 断言返回体**序列化后不含** token_budget_missing；账本仍写 known_code 一行。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -84,7 +86,7 @@ describe("D71 封口：替换单源（kernelErrorFace 纯函数）", () => {
 });
 
 describe("D71 封口：atf_scratch_exec 四形态（scratch 通道）", () => {
-  it("T1 码在 stderr 且带路径括号 → stderr_tail 人话 + note 人话 + kernel_error 带码", { timeout: 60_000 }, async () => {
+  it("T1 码在 stderr 且带路径括号 → stderr_tail 人话 + note 人话（返回体零码）", { timeout: 60_000 }, async () => {
     const scratch = makeTemp("t1");
     const home = makeTemp("t1home");
     const kernelDir = makeTemp("t1kernel");
@@ -101,7 +103,9 @@ describe("D71 封口：atf_scratch_exec 四形态（scratch 通道）", () => {
       expect(String(payload["stderr_tail"])).not.toContain("token_budget_missing");
       expect(String(payload["stderr_tail"])).toContain("预算文件缺失");
       expect(String(payload["note"])).toContain("预算文件缺失");
-      expect(String(payload["kernel_error"]).startsWith("token_budget_missing")).toBe(true);
+      // D77：完整码不进模型可见返回体（序列化面断言）；对账面＝观测账
+      expect("kernel_error" in payload).toBe(false);
+      expect(JSON.stringify(payload)).not.toContain("token_budget_missing");
       // stdout 无码 → 原样空串；观测账一行（stderr 键、原文可查）
       expect(payload["stdout"]).toBe("");
       const log = readObservationLog(scratch);
@@ -117,7 +121,7 @@ describe("D71 封口：atf_scratch_exec 四形态（scratch 通道）", () => {
     }
   });
 
-  it("T2 码只在 stdout（D71 实测向量：内核失败 JSON 信封）→ stdout 散文零码 + 观测账原文", { timeout: 60_000 }, async () => {
+  it("T2 码只在 stdout（D71 实测向量：内核失败 JSON 信封）→ stdout 散文零码 + 观测账原文（返回体零码）", { timeout: 60_000 }, async () => {
     const scratch = makeTemp("t2");
     const home = makeTemp("t2home");
     const kernelDir = makeTemp("t2kernel");
@@ -135,7 +139,10 @@ describe("D71 封口：atf_scratch_exec 四形态（scratch 通道）", () => {
       expect(stdout).not.toContain("token_budget_missing");
       expect(stdout).toContain("预算文件缺失");
       expect(String(payload["note"])).toContain("预算文件缺失");
-      expect(String(payload["kernel_error"]).startsWith("token_budget_missing")).toBe(true);
+      // D77：完整码不进模型可见返回体（序列化面断言——H 复跑泄漏面即模型照抄返回体键）；
+      // 对账面＝观测账（known_code 一行仍落，原文可查）
+      expect("kernel_error" in payload).toBe(false);
+      expect(JSON.stringify(payload)).not.toContain("token_budget_missing");
       const log = readObservationLog(scratch);
       expect(log).toHaveLength(1);
       expect(log[0]?.["kind"]).toBe("known_code");
@@ -167,7 +174,10 @@ describe("D71 封口：atf_scratch_exec 四形态（scratch 通道）", () => {
       expect(stdout).toContain("预算文件缺失，先确认实验配置");
       // 上游前缀散文保留（业务描述完整，不做整体吞换）
       expect(stdout).toContain("上游提示:");
-      expect(String(payload["kernel_error"]).startsWith("token_budget_missing")).toBe(true);
+      // D77：返回体序列化零码（码唯一落观测账）
+      expect("kernel_error" in payload).toBe(false);
+      expect(JSON.stringify(payload)).not.toContain("token_budget_missing");
+      expect(readObservationLog(scratch)).toHaveLength(1);
     } finally {
       rmSync(scratch, { recursive: true, force: true });
       rmSync(home, { recursive: true, force: true });

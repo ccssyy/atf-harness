@@ -856,12 +856,11 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         let startupNote = probe.exitCode === 78
           ? "启动探活：放行记录闸失败（exit 78——账本无本 config 的放行记录）——先经 --record-training-release 登记（或核 ATF_APPROVAL_LEDGER 双轴）后重推"
           : "启动探活发现终止特征——训练未启动成功；按 log_tail 摘要处理后重推";
-        let kernelErrorFace: string | undefined;
+        // D77：内核四码命中只转人话 note——完整码不进模型可见返回体（对账面＝观测账）。
         const kernelFaceHit = scanKernelErrorFace([probe.tail]);
         if (kernelFaceHit !== null) {
           const gpuRows = kernelFaceHit.code.startsWith("gpu_capacity_insufficient") ? await gpuFreeRowsForErrorFace() : undefined;
           startupNote = humanizeKernelError(kernelFaceHit.code, { gpuFreeRows: gpuRows }) ?? startupNote;
-          kernelErrorFace = kernelFaceHit.code;
         }
         return asToolValue({
           started: false,
@@ -871,7 +870,6 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
           run_id: args.run_id,
           train_sh: args.train_sh,
           log_tail: probe.tail.slice(-800),
-          ...(kernelErrorFace !== undefined ? { kernel_error: kernelErrorFace } : {}),
           note: startupNote,
         });
       }
@@ -1775,11 +1773,12 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         // 批次R H1-3 补面（R-H 实锚）：eval 服务件生成失败输出先扫内核四码
         // （token_budget_missing 等——预算缺失的 run 在服务件生成期即 fail，GPU 前零写入）。
         // 命中即 note 人话回流；未命中保持既有机器事实缺形态（machine_facts_missing）。
+        // D77：完整码不进模型可见返回体——对账面＝scratch 观测账。
         const kernelFace = scanKernelErrorFace([generated.stderr, generated.stdout]);
         if (kernelFace !== null) {
           return asToolValue({
             started: false, error: kernelFace.code.split(":")[0], eval_round: roundDir,
-            kernel_error: kernelFace.code, note: kernelFace.note,
+            note: kernelFace.note,
           });
         }
         const block = existsSync(blockPath) ? JSON.parse(readFileSync(blockPath, "utf8")) as Record<string, unknown> : null;

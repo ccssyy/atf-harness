@@ -368,7 +368,7 @@ describe("批次 R H1-3——kernelErrorFace 四码人话映射（提前接线�
     expect(scanKernelErrorFace(["Traceback (most recent call last): boom"])).toBeNull();
     expect(scanKernelErrorFace([])).toBeNull();
   });
-  it("pipelineFace 接线：构造段失败输出含已知码 → note 人话＋kernel_error 回流（未命中 note 不变）", async () => {
+  it("pipelineFace 接线：构造段失败输出含已知码 → note 人话＋返回体零码（D77；未命中 note 不变）", async () => {
     const root = tempRoot();
     const fakeKernel = join(root, "fake_kernel.py");
     writeFileSync(fakeKernel, [
@@ -381,7 +381,8 @@ describe("批次 R H1-3——kernelErrorFace 四码人话映射（提前接线�
     const tool = buildPipelineTool(ctx, `python3 ${fakeKernel}`, 30_000) as { execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> };
     const result = (await tool.execute({ stage: "register", run_id: "r1", workspace_path: root, source_root: join(root, "src") }, { agent: undefined, callId: "h1-c3", signal: undefined })) as Record<string, unknown>;
     expect(result["ok"]).toBe(false);
-    expect(result["kernel_error"]).toBe("token_gate_not_configured");
+    // D77：完整码不进模型可见返回体（键移除；码原文不随返回体回流）
+    expect("kernel_error" in result).toBe(false);
     expect(String(result["note"])).toContain("数据构造未配置 token 审计，已拒绝构造");
     // 未命中面：普通失败 note 保持既有形态（不覆盖）
     const fakePlain = join(root, "fake_plain.py");
@@ -425,8 +426,9 @@ describe("批次 R H1-3——kernelErrorFace 四码人话映射（提前接线�
     };
     const result = await evaluate.execute(args, { agent: undefined, callId: "h1-e1", signal: undefined });
     expect(result["started"]).toBe(false);
-    expect(result["error"]).toBe("token_budget_missing"); // base 码（不带路径 detail）
-    expect(String(result["kernel_error"])).toContain("token_budget_missing:");
+    expect(result["error"]).toBe("token_budget_missing"); // base 码（不带路径 detail——既有错误分类键）
+    // D77：完整码（code:detail）不进模型可见返回体
+    expect("kernel_error" in result).toBe(false);
     expect(String(result["note"])).toContain("预算文件缺失，先确认实验配置");
     expect(String(result["note"])).toContain("下一步");
     expect(result["stderr_tail"]).toBeUndefined(); // traceback 原文不回流

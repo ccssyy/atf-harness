@@ -7,6 +7,8 @@
  * （构造段失败）、trainingFace（启动失败）与 workspaceTools scratchExecHandler（D71 补做：
  * scratch 直调通道——stdout/stderr_tail 已知码片段替换为人话，原文落 scratch 观测账）。
  * 未知码一律返回 null（不猜不编造——原样走既有 note，不覆盖）。
+ * D77（模型面对账面裁定）：scratch 通道返回体只带 note 人话，完整码（code:detail）不进
+ * 模型可见面——模型照抄进散文即用户可见；对账面＝<scratch>/.harness/kernel-error-face.jsonl。
  */
 
 /** 已知内核错误码闭集（token_budget_missing / token_budget_inconsistent:<detail> /

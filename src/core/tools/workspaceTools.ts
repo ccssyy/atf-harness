@@ -189,8 +189,7 @@ const SCRATCH_EXEC_CANONICAL: SchemaNode = {
     stderr_tail: { type: "string" },
     duration_ms: { type: "integer" },
     launch_ready: { type: "object", optional: true, strict: false },
-    kernel_error: { type: "string", optional: true, description: "D71：命中的内核错误码原文（code:detail；结构化对账面——用户可见散文是人话 note）" },
-    note: { type: "string", optional: true, description: "D71：命中码的人话文案（含业务描述与下一步；散文零内部码）" },
+    note: { type: "string", optional: true, description: "D71：命中码的人话文案（含业务描述与下一步；散文零内部码）。D77：完整码不再进返回体——对账面＝scratch 观测账（known_code 行），不是模型可见返回体" },
   },
 };
 
@@ -614,9 +613,10 @@ const scratchExecHandler: LocalToolHandler = async (rawParams, host) => {
       stderr_tail: stderrFace !== null ? stderrFace.text : outcome.stderr_tail,
       duration_ms: outcome.duration_ms,
       ...(launchReady !== null ? { launch_ready: launchReady } : {}),
-      // D71：内核错误码人话回流（与 pipelineFace/trainingFace 接线同形态——note 人话、
-      // kernel_error 结构化带码；散文零码，码与原文在 scratch 观测账可查）
-      ...(kernelFaceHit !== null ? { kernel_error: kernelFaceHit.code, note: kernelFaceHit.note } : {}),
+      // D71：内核错误码人话回流（与 pipelineFace/trainingFace 接线同形态——note 人话；
+      // 散文零码）。D77：完整码（code:detail）从模型可见返回体移出——模型照抄进散文即
+      // 用户可见（H 复跑实测），对账面＝scratch 观测账（known_code 行 code+raw），非返回体。
+      ...(kernelFaceHit !== null ? { note: kernelFaceHit.note } : {}),
     },
   };
 };

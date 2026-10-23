@@ -372,7 +372,8 @@ export const buildPipelineTool = (
         // 批次 R H1-3：内核错误码人话回流（提前接线——token_budget_missing /
         // token_budget_inconsistent:<detail> / token_gate_not_configured 构造期码命中即转
         // 人话 note（覆盖上方笼统 note——更具体的用户文案优先）；未命中＝既有 note 不变。
-        ...(kernelFace !== null ? { kernel_error: kernelFace.code, note: kernelFace.note } : {}),
+        // D77：完整码不进模型可见返回体——模型照抄进散文即用户可见；对账面＝scratch 观测账。
+        ...(kernelFace !== null ? { note: kernelFace.note } : {}),
       });
     },
   });
