@@ -763,7 +763,7 @@ window.__ModuleLoader__.load({
           if (oversampleBad) {
             patch({ error: { fatal: oversampleBad === 'keyset'
               ? '合并倍率键集与类型不一致——每个类型都要给倍率，或整体省略（＝全部 1 倍）'
-              : '合并倍率非法——倍率须为 ≥1 的整数（如 {"pl":1,"swb":2}）；省略＝全部 1 倍' } })
+              : '合并倍率非法——倍率须为 ≥1 的整数（如 {"单据A":1,"单据B":2}）；省略＝全部 1 倍' } })
             return
           }
         }
@@ -865,7 +865,7 @@ window.__ModuleLoader__.load({
               React.createElement('label', null, 'seed：',
                 React.createElement('input', { style: { width: 72 }, value: draft.seed, placeholder: '0', onChange: function(e) { patch({ seed: e.target.value }) } })),
               React.createElement('label', null, '倍率（可选）：',
-                React.createElement('input', { style: { width: 170 }, value: draft.oversampleText, placeholder: '{"pl":1,"swb":2}——省略全 1', onChange: function(e) { patch({ oversampleText: e.target.value }) } }))),
+                React.createElement('input', { style: { width: 170 }, value: draft.oversampleText, placeholder: '{"单据A":1,"单据B":2}——省略全 1', onChange: function(e) { patch({ oversampleText: e.target.value }) } }))),
             React.createElement('div', { className: 'atf-joint-tabs' },
               tabs,
               React.createElement('button', { className: 'atf-pill', 'data-joint-add-class': '1', onClick: addClass }, '＋加一类'),
@@ -875,11 +875,11 @@ window.__ModuleLoader__.load({
             active !== null
               ? React.createElement('div', { className: 'atf-joint-class' },
                   React.createElement('div', { className: 'atf-joint-class-head' },
-                    React.createElement('input', { 'data-joint-doctype': '1', placeholder: '单据类型（如 pl）', value: active.doc_type, onChange: function(e) { patchClass(draft.activeTab, { doc_type: e.target.value }) } }),
+                    React.createElement('input', { 'data-joint-doctype': '1', placeholder: '单据类型', value: active.doc_type, onChange: function(e) { patchClass(draft.activeTab, { doc_type: e.target.value }) } }),
                     React.createElement('select', { 'data-joint-runid': '1', value: active.run_id, onChange: function(e) { patchClass(draft.activeTab, { run_id: e.target.value }) } },
                       React.createElement('option', { value: '' }, '（选择该类数据所在实验）'),
                       runsOptions),
-                    React.createElement('input', { 'data-joint-doczh': '1', placeholder: '单据中文名（如 装箱单）', value: active.document_zh, onChange: function(e) { patchClass(draft.activeTab, { document_zh: e.target.value }) } }),
+                    React.createElement('input', { 'data-joint-doczh': '1', placeholder: '单据中文名', value: active.document_zh, onChange: function(e) { patchClass(draft.activeTab, { document_zh: e.target.value }) } }),
                     React.createElement('button', { className: 'atf-pill', 'data-joint-select-all': '1', onClick: function() { selectAll(true) } }, '全选'),
                     React.createElement('button', { className: 'atf-pill', 'data-joint-invert': '1', onClick: invertSelection }, '反选'),
                     React.createElement('button', { className: 'atf-pill', 'data-joint-add-field': '1', onClick: function() { addField('goods') } }, '＋加字段')),
@@ -889,7 +889,7 @@ window.__ModuleLoader__.load({
                     React.createElement('div', { className: 'atf-viewer-empty' }, '导入字段规格（当前类）——粘贴 FieldSpec/field-config JSON，或选择本地文件'),
                     React.createElement('textarea', {
                       className: 'atf-joint-import-text', rows: 3,
-                      placeholder: '{"schema_version":"FieldSpec/v1","document_zh":"装箱单","fields":[{"field_id":"goods_description","zh":"货描","group":"goods","definition":"..."}]}',
+                      placeholder: '{"schema_version":"FieldSpec/v1","document_zh":"单据A","fields":[{"field_id":"goods_description","zh":"货描","group":"goods","definition":"..."}]}',
                       value: draft.importText,
                       onChange: function(e) { patch({ importText: e.target.value }) },
                     }),
@@ -2792,7 +2792,7 @@ window.__ModuleLoader__.load({
 
     // 批B2 §五：快捷胶囊按绑定状态启用——run 相关（查状态/继续上次/对比两轮）未绑定时
     // disabled＋「先选择实验」，点击弹选择面板（不发工具调用）；「新建实验/发起训练/badcase
-    // 可视化」始终可用。已绑定：继续上次胶囊文案带 title（「继续训练：装箱单 4类」——取
+    // 可视化」始终可用。已绑定：继续上次胶囊文案带 title（「继续训练：<单据短名> N类」——取
     // title 首段短名，防止超长）。
     // D34：「走完闭环」胶囊——决策闭环默认指令（与 snapshot.js CLOSURE_MESSAGE 同语义
     // 双份——client 半裸服务不打包无法 require，trainLaunchMessage 先例；atfUi.test.ts 双钉）。
