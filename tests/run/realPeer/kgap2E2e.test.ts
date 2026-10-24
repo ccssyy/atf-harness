@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,6 +23,18 @@ import { createRealPeerFixture, realPeerCliPath, type RealPeerFixture } from "./
 
 const cli = realPeerCliPath();
 const describeIfPinned = cli.ok ? describe : describe.skip;
+
+/** D100 锚随动：pin 单源＝bridge.contract.yaml 的 atf_upstream.commit_sha（re-pin 后
+ *  本锚自动随动——字面量锚 v0.7.5b1 时代退役）。同时落实 AGENTS.md §4 运行前提纪律：
+ *  ATF_CLI_PATH 副本 HEAD 必须 checkout 在契约 pin 上，不一致即 fail。 */
+const contractPinSha = (): string => {
+  const text = readFileSync(join(import.meta.dirname, "../../../bridge.contract.yaml"), "utf8");
+  const hit = /^ {2}commit_sha: ([0-9a-f]{40})$/m.exec(text);
+  if (hit === null || hit[1] === undefined) {
+    throw new Error("bridge.contract.yaml 缺 atf_upstream.commit_sha——pin 单源不可解析");
+  }
+  return hit[1];
+};
 
 const openFixtures: RealPeerFixture[] = [];
 const tempRoots: string[] = [];
@@ -106,13 +119,16 @@ describeIfPinned("K-Gap-2 接线批真内核 e2e——propose→（缺料时）e
     "全链：登记→propose(聚类确认)→execute 落料→propose(划分确认)→request 携确认态→completed；env 含 ATF_SKILLS_AUTO_INSTALL=0（K2 回滚门 ATF_LABEL_QC_REQUIRED=0——本链定位 K-Gap-2，体检必经归重跑②专验）",
     { timeout: 240_000 },
     async () => {
-      // pin 实测锚：当前 checkout HEAD == v0.7.5b1（4966574——批㊶R前置 re-pin 2026-10-11）
+      // D100 锚随动：副本 HEAD == 契约 pin commit（bridge.contract.yaml atf_upstream
+      // 单源——re-pin 后自动随动，禁回字面量锚）
       const headSha = await new Promise<string>((resolve, reject) => {
         execFile("git", ["-C", cli.ok ? (cli as { ok: true; path: string }).path : "", "rev-parse", "HEAD"], (error, stdout) =>
           error === null ? resolve(stdout.trim()) : reject(error),
         );
       });
-      expect(headSha).toBe("496657493ec8e75a8708826503fae655be69167a");
+      expect(headSha, "ATF_CLI_PATH 副本 HEAD 须 checkout 在契约 pin commit 上（bridge.contract.yaml 单源）").toBe(
+        contractPinSha(),
+      );
 
       // K2 体检必经回滚门（re-pin 2026-09-23）：本用例定位 K-Gap-2 料门链路；
       // 体检必经链路归重跑②专验——此处显式回滚旧语义，进程 env 经 fixture baseEnv 透传。

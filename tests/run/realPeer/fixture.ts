@@ -11,7 +11,7 @@ import { atfCliPathFromEnv, deriveAtfCommand } from "../../../src/bridge/atfComm
  *
  * 三层隔离根（全部 mkdtemp，路径前缀 /tmp/atf-r2-*——真实写授权边界，越界即违规）：
  *   <home>   子进程 HOME（~/.atf 配置根、技能目录的隔离兜底）
- *   <wsRoot> workspace root（真实 `atf init` 装机；runs/、datasets/）
+ *   <wsRoot> workspace root（真实 `atf init` 装机；workspace/runs canonical 桶、datasets/）
  *   pin 副本  cwd（ATF_CLI_PATH，只读；全程 git status 零改动断言由调用方/冒烟承担）
  *
  * 合成数据纪律：run_id/数据集/操作者等一律 `r2-fixture-*` 标识，零真实业务内容。
@@ -21,19 +21,32 @@ import { atfCliPathFromEnv, deriveAtfCommand } from "../../../src/bridge/atfComm
  * 与 derive_command 同源注入（PYTHONPATH/PYTHONDONTWRITEBYTECODE/ATF_SKILLS_AUTO_INSTALL）。
  */
 
-/** 内核 run 十目录骨架（RUN_SKELETON 常量的 TS 镜像；漂移由 bind_run 断言报警）。 */
-export const RUN_SKELETON = [
-  "experiment-setup",
-  "l1",
-  "variants",
+/** RunLayout/v1 canonical run 声明目录闭集（内核 RUN_LAYOUT_V1 ∪ RUN_EXTRA_DIRS_V1 的
+ *  TS 镜像——D100 对齐 b 系：旧十目录骨架语义已废止（ADR-0005），legacy 布局只读不迁移
+ *  不写锚；夹具改落 canonical `<ws>/workspace/runs/<id>`，写锚链路才能 fail-closed 通过）。 */
+export const RUN_LAYOUT_DIRS = [
+  "webui",
+  "prep",
+  "prep/iteration-config",
+  "prep/variants",
   "launch",
   "training",
-  "models",
   "eval",
-  "journal",
-  "verification",
-  "decisions",
+  "analysis",
+  "publish",
+  "analysis/decisions",
+  "analysis/journal",
+  "analysis/verification",
+  "bootstrap",
+  "experiment-setup",
+  "loop",
+  "prep/l1",
+  "prep/risk-signals",
+  "publish/models",
 ] as const;
+
+/** run.json 布局契约版本标识（内核 RUN_LAYOUT_VERSION 同源）。 */
+export const RUN_JSON_LAYOUT_VERSION = "RunLayout/v1";
 
 /** G1–G4 对应的四组准入 GateId（内核 ADMISSION_GATE_IDS 固定顺序）。 */
 export const ADMISSION_GATE_IDS = [
@@ -112,9 +125,28 @@ export const createRealPeerFixture = async (runId = `r2-fixture-run-1`): Promise
     const ran = await execFileP(init.command, init.args, { cwd: init.cwd, env: baseEnv() });
     if (ran.exitCode !== 0) throw new Error(`atf init 失败(exit=${String(ran.exitCode)}): ${ran.stderr.slice(0, 200)}`);
     if (!ran.stdout.includes(wsRoot)) throw new Error(`atf init 输出未确认 workspace_root: ${ran.stdout.slice(0, 200)}`);
-    for (const sub of RUN_SKELETON) {
-      await mkdir(join(wsRoot, "runs", runId, sub), { recursive: true });
+    // D100 对齐 b 系（RunLayout/v1）：canonical run 一次成型——声明目录骨架＋run.json
+    // 五键身份（与内核 create_run(extra_dirs=LEGACY_EXTRA_DIRS) 同口径；旧十目录手建
+    // 即 legacy 在场，写锚 fail-closed 拒绝——G 系 advance 首调必炸的根因）。
+    const runRoot = join(wsRoot, "workspace", "runs", runId);
+    for (const sub of RUN_LAYOUT_DIRS) {
+      await mkdir(join(runRoot, sub), { recursive: true });
     }
+    await writeFile(
+      join(runRoot, "run.json"),
+      `${JSON.stringify(
+        {
+          layout_version: RUN_JSON_LAYOUT_VERSION,
+          workspace_id: "r2-fixture-ws",
+          run_id: runId,
+          created_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+          dirs: [...RUN_LAYOUT_DIRS],
+        },
+        null,
+        1,
+      )}\n`,
+      "utf8",
+    );
   } catch (cause) {
     await cleanup();
     throw cause;
@@ -128,7 +160,11 @@ export const createRealPeerFixture = async (runId = `r2-fixture-run-1`): Promise
       const invocation = deriveAtfCommand(pinPath, ["serve"]);
       // K-Gap-2 接线批（2026-09-21）：serve 需知工作区根（TUI descriptor 同款）——
       // 相对形态的 source_root/split_root 依此解析；缺失时登记面相对路径不可解析。
-      return { argv: [invocation.command, ...invocation.args], cwd: invocation.cwd, env: { ...baseEnv(), ATF_WORKSPACE_ROOT: wsRoot } };
+      // D100 对齐 b 系（批㊶-G-K 工作区白名单）：serve 侧 allowlist 由配置派生集 ∪
+      // ATF_WORKSPACE_ALLOWLIST 构成，方法面路径入参越根即拒——夹具合成数据根（源对/
+      // 划分根）在用例内 mkdtemp 落 /tmp，附加根给 /tmp（夹具真实写授权边界即 /tmp，
+      // 合成数据纪律不变）。
+      return { argv: [invocation.command, ...invocation.args], cwd: invocation.cwd, env: { ...baseEnv(), ATF_WORKSPACE_ROOT: wsRoot, ATF_WORKSPACE_ALLOWLIST: "/tmp" } };
     },
     injectedServeSpawn: () => {
       const invocation = deriveAtfCommand(pinPath, []);
@@ -145,6 +181,8 @@ export const createRealPeerFixture = async (runId = `r2-fixture-run-1`): Promise
 /**
  * journal 追加（内核 journal_append 行格式：canonical JSON，键序 ts/action/out/refs）。
  * 仅供夹具制样；真实产线 journal 由内核生成件自写。
+ * D100：落点随 RunLayout/v1——canonical 的 analysis/journal/journal.jsonl（内核
+ * fact_scan 单源解析优先位；旧布局 journal/journal.jsonl 兼容回退已不归属本夹具）。
  */
 export const appendJournalEvent = async (
   wsRoot: string,
@@ -157,14 +195,14 @@ export const appendJournalEvent = async (
     out: event.out ?? null,
     refs: event.refs ?? {},
   });
-  const dir = join(wsRoot, "runs", runId, "journal");
+  const dir = join(wsRoot, "workspace", "runs", runId, "analysis", "journal");
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, "journal.jsonl"), `${line}\n`, { encoding: "utf8", flag: "a" });
 };
 
 /** 向 journal 追加任意坏行（internal_error 反例制样）。 */
 export const appendJournalBadLine = async (wsRoot: string, runId: string): Promise<void> => {
-  const dir = join(wsRoot, "runs", runId, "journal");
+  const dir = join(wsRoot, "workspace", "runs", runId, "analysis", "journal");
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, "journal.jsonl"), "这不是合法JSON行\n", { encoding: "utf8", flag: "a" });
 };
@@ -188,7 +226,7 @@ export const writeAdmissionSummary = async (
     if (codes !== undefined && codes.length > 0) entry.reason_codes = [...codes];
     return entry;
   });
-  const dir = join(wsRoot, "runs", runId, "l1", lane);
+  const dir = join(wsRoot, "workspace", "runs", runId, "l1", lane);
   await mkdir(dir, { recursive: true });
   const path = join(dir, `${lane}-source-backed-admission-summary.json`);
   await writeFile(path, `${JSON.stringify({ gates }, null, 1)}\n`, "utf8");

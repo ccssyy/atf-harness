@@ -126,10 +126,18 @@ describeIfPinned("R2 真实对端——端到端主链（含真实写落盘证�
       }
 
       // 7) G 系 advance（写 = 会话内存登记；边界标注：以同会话 query 反读为证，非持久化）
+      // D100 对齐 b 系语义：advance 登记后回显 evidence＝聚合读取的准入 summary 相对
+      // 路径（RunLayout/v1 canonical 落点）；写锚随推进落 canonical run 根（legacy 布局
+      // 只读不写锚——旧十目录夹具时代 advance 首调即 fail-closed 的根因，已随夹具退役）。
       const g1Advance = await request(connection, "atf_gate", { gate: "G1", action: "advance" });
-      expect(g1Advance.ok).toBe(true);
+      expect(g1Advance.ok, g1Advance.ok ? undefined : JSON.stringify(g1Advance.error)).toBe(true);
       if (g1Advance.ok) {
         expect(g1Advance.value).toMatchObject({ ok: true, gate: "G1", status: "pass" });
+        const evidence = (g1Advance.value as { evidence?: unknown }).evidence;
+        expect(Array.isArray(evidence), "b 系 advance 须回显 evidence（聚合 summary 相对路径）").toBe(true);
+        expect(
+          (evidence as string[]).some((path) => path.endsWith("lane-a-source-backed-admission-summary.json")),
+        ).toBe(true);
       }
       const g1Replay = await request(connection, "atf_gate", { gate: "G1", action: "query" });
       expect(g1Replay.ok).toBe(true);
@@ -174,9 +182,13 @@ describeIfPinned("R2 真实对端——端到端主链（含真实写落盘证�
         expect(g2.value).toMatchObject({ ok: true, gate: "G2", status: "warn", reason_codes: ["split_checksum_stale"] });
       }
       const g2Advance = await request(connection, "atf_gate", { gate: "G2", action: "advance", evidence_refs: [] });
-      expect(g2Advance.ok).toBe(true);
+      expect(g2Advance.ok, g2Advance.ok ? undefined : JSON.stringify(g2Advance.error)).toBe(true);
       if (g2Advance.ok) {
         expect(g2Advance.value).toMatchObject({ ok: true, gate: "G2", status: "warn" });
+        // D100 对齐 b 系：warn 聚合 advance 同样回显 evidence（两 lane summary 并集读取面）
+        const evidence = (g2Advance.value as { evidence?: unknown }).evidence;
+        expect(Array.isArray(evidence)).toBe(true);
+        expect((evidence as string[]).length).toBe(2);
       }
 
       const closed = await connection.close();
