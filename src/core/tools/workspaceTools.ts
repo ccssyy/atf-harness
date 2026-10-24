@@ -16,7 +16,8 @@
  */
 import { createHash } from "node:crypto";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
   buildScratchExecEnv,
   ensureExecDirs,
@@ -29,6 +30,7 @@ import {
   runLaunchScript,
   runScratchCommand,
   scanLaunchReady,
+  scanRunTreeLaunchReady,
   SCRATCH_EXEC_STDOUT_CAP_BYTES,
   SCRATCH_EXEC_TIMEOUT_MS_DEFAULT,
   SCRATCH_WRITE_MAX_BYTES,
@@ -88,6 +90,9 @@ export interface LaunchGpuQueueFace {
 export interface LocalToolHost {
   /** 当前 run 的 scratch 绝对路径（T0 区；一切写与执行的落点） */
   scratchDir: string;
+  /** D115：当前 run 目录绝对路径（run 树启动件解析与就绪检测的根；缺席＝仅 scratch 形态
+   *  （TUI/resume 既有装配），run 树形态入口如实拒绝并指路） */
+  runDir?: string;
   /** pin 内核 checkout 根（PYTHONPATH=<kernelDir>/src；skills 白名单根） */
   kernelDir: string;
   /** 执行 env HOME（对端隔离 home 同源——内核配置根/放行账本落点） */
@@ -579,10 +584,13 @@ const scratchExecHandler: LocalToolHandler = async (rawParams, host) => {
   const ran = await runScratchCommand({ argv: guard.spawnArgv, cwd: host.scratchDir, env, timeoutMs });
   if (!ran.ok) return rejected(ran.error.reason, { message: ran.error.message });
   const outcome = ran.value;
-  // G5 就绪检测（确定性；仅成功退出后扫——失败执行可能留半成品）
+  // G5 就绪检测（确定性；仅成功退出后扫——失败执行可能留半成品）。
+  // D115：台账按 run 刷新——run 树正道落点（<runDir>/launch/launch.sh）优先，scratch
+  // 旧条目不再遮蔽新件（B7 §5.4「生成位置→执行台账」断裂收口；禁滞留旧条目）
   let launchReady: LaunchReady | null = null;
   if (outcome.exit_code === 0) {
-    launchReady = await scanLaunchReady(host.scratchDir);
+    const fromRunTree = host.runDir !== undefined ? await scanRunTreeLaunchReady(host.runDir) : null;
+    launchReady = fromRunTree ?? (await scanLaunchReady(host.scratchDir));
   }
   // D71 封口：scratch 直调通道的 model-facing 文本键（stdout/stderr_tail）已知码 → 人话
   // （复用 kernelErrorFace 闭集单源；扫描不看 exit_code——code==0 但文本含码同样处理）。
@@ -655,6 +663,66 @@ const skillReadHandler: LocalToolHandler = async (rawParams, host) => {
   };
 };
 
+/** D115：launch_sh 三形态解析——绝对路径＝runDir 树内守卫（越界拒）；相对路径＝runDir 树内
+ *  优先（launch/ 布局正道落点，禁滞留旧条目——新件在 run 树时不被旧 scratch 条目遮蔽），
+ *  scratch 回落存量语义（run 树无该相对路径时）。 */
+const resolveLaunchShPath = (
+  host: LocalToolHost,
+  launchSh: string,
+): { ok: true; abs: string } | { ok: false; reason: string; message: string } => {
+  const runDir = host.runDir;
+  if (isAbsolute(launchSh)) {
+    if (runDir === undefined) {
+      return { ok: false, reason: "run_tree_form_disabled", message: "绝对路径启动件须 runDir 装配在场（当前装配面缺席——用 scratch 相对路径形态）" };
+    }
+    const abs = resolve(launchSh);
+    const rel = relative(runDir, abs);
+    if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
+      return { ok: false, reason: "run_tree_escape", message: `绝对路径启动件须位于本 run 目录内（${runDir}），越界拒绝: ${launchSh}` };
+    }
+    return { ok: true, abs };
+  }
+  if (runDir !== undefined) {
+    const runTreeAbs = resolve(runDir, launchSh);
+    const rel = relative(runDir, runTreeAbs);
+    if (rel !== "" && !rel.startsWith("..") && !isAbsolute(rel) && existsSync(runTreeAbs)) {
+      return { ok: true, abs: runTreeAbs };
+    }
+  }
+  const guard = safeScratchPath(host.scratchDir, launchSh);
+  if (!guard.ok) return { ok: false, reason: "path_escape", message: guard.error.message };
+  return { ok: true, abs: guard.value.resolved };
+};
+
+/** D115：config（IterationConfig）同款三形态解析（run 树内优先——prep/ 布局；scratch 回落）。 */
+const resolveConfigPath = (
+  host: LocalToolHost,
+  configPath: string,
+): { ok: true; abs: string } | { ok: false; reason: string; message: string } => {
+  const runDir = host.runDir;
+  if (isAbsolute(configPath)) {
+    if (runDir === undefined) {
+      return { ok: false, reason: "run_tree_form_disabled", message: "绝对路径配置须 runDir 装配在场（当前装配面缺席——用 scratch 相对路径形态）" };
+    }
+    const abs = resolve(configPath);
+    const rel = relative(runDir, abs);
+    if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
+      return { ok: false, reason: "run_tree_escape", message: `绝对路径配置须位于本 run 目录内（${runDir}），越界拒绝: ${configPath}` };
+    }
+    return { ok: true, abs };
+  }
+  if (runDir !== undefined) {
+    const runTreeAbs = resolve(runDir, configPath);
+    const rel = relative(runDir, runTreeAbs);
+    if (rel !== "" && !rel.startsWith("..") && !isAbsolute(rel) && existsSync(runTreeAbs)) {
+      return { ok: true, abs: runTreeAbs };
+    }
+  }
+  const guard = safeScratchPath(host.scratchDir, configPath);
+  if (!guard.ok) return { ok: false, reason: "path_escape", message: guard.error.message };
+  return { ok: true, abs: guard.value.resolved };
+};
+
 const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
   if (!isPlainObject(rawParams)) return rejected("invalid_input", { message: "参数须为 JSON 对象" });
   const launchShRel = stringParam(rawParams, "launch_sh");
@@ -669,12 +737,13 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
     pythonPath,
   });
 
-  // ① 定位 launch.sh（守卫在 scratch 内）+ 从脚本文本解析 TRAIN_DIR → launch_manifest.json
-  const guard = safeScratchPath(host.scratchDir, launchShRel);
-  if (!guard.ok) return rejected("path_escape", { message: guard.error.message });
+  // ① 定位 launch.sh（D115 三形态：绝对＝runDir 树内守卫；相对＝run 树优先→scratch 回落）
+  // + 从脚本文本解析 TRAIN_DIR → launch_manifest.json
+  const launchGuard = resolveLaunchShPath(host, launchShRel);
+  if (!launchGuard.ok) return rejected(launchGuard.reason, { message: launchGuard.message });
   let launchShText: string;
   try {
-    launchShText = await readFile(guard.value.resolved, "utf8");
+    launchShText = await readFile(launchGuard.abs, "utf8");
   } catch (cause) {
     return rejected("launch_sh_missing", { message: `launch.sh 不可读: ${String(cause)}` });
   }
@@ -696,11 +765,11 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
   let releaseRecorded = false;
   let releaseResult = "skipped_no_config";
   if (configRel !== undefined) {
-    const configGuard = safeScratchPath(host.scratchDir, configRel);
-    if (!configGuard.ok) return rejected("path_escape", { message: configGuard.error.message });
+    const configGuard = resolveConfigPath(host, configRel);
+    if (!configGuard.ok) return rejected(configGuard.reason, { message: configGuard.message });
     let configBytes: Buffer;
     try {
-      configBytes = await readFile(configGuard.value.resolved);
+      configBytes = await readFile(configGuard.abs);
     } catch (cause) {
       return rejected("launch_config_missing", { message: `IterationConfig 不可读: ${String(cause)}` });
     }
@@ -716,7 +785,7 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
     const dirs = await ensureExecDirs(host.scratchDir);
     if (!dirs.ok) return rejected(dirs.error.reason, { message: dirs.error.message });
     const recorded = await runScratchCommand({
-      argv: [pythonPath, recordScript, "--record-training-release", "--config", configGuard.value.resolved, "--note", note],
+      argv: [pythonPath, recordScript, "--record-training-release", "--config", configGuard.abs, "--note", note],
       cwd: host.scratchDir,
       env,
       timeoutMs: 60_000,
@@ -742,7 +811,7 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
   if (host.gpuQueueFace !== undefined) {
     const gate = await host.gpuQueueFace.gateLaunch({
       requiredCards: parseLaunchRequiredCards(launchShText, manifestRecord),
-      runDir: dirname(host.scratchDir),
+      runDir: host.runDir ?? dirname(host.scratchDir),
       launchShRel,
     });
     if (gate.verdict === "aborted") return rejected("gpu_queue_aborted", { message: "GPU 排队等待被中止——launch.sh 未启动" });
@@ -758,7 +827,7 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
   }
 
   // ③ 执行 launch.sh（cwd=launch.sh 所在目录；stdout/stderr 落 harness 日志；未退出不杀）
-  const launchShAbs = guard.value.resolved;
+  const launchShAbs = launchGuard.abs;
   const logPath = join(dirname(launchShAbs), "launch", `harness-launch-${new Date().toISOString().replace(/[:.]/g, "-")}.log`);
   const launched = await runLaunchScript({
     launchShAbs,
@@ -772,7 +841,8 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
   const state = await readLaunchState(launchShAbs);
   // 批㊶-K 项 4：登记放行后同挂曲线进料（harness-launch-*.log 此前全仓零消费＝曲线进料断根因面；
   // 共享 lossIngest 单源——run 目录由 scratch 约定上溯：runs/<run_id>/scratch → runs/<run_id>/training）
-  const runDir = dirname(host.scratchDir);
+  // D115：run 目录单源——host.runDir（run 树形态同值）优先；scratch 上溯为既有装配回退
+  const runDir = host.runDir ?? dirname(host.scratchDir);
   const lossSeriesPath = join(runDir, "training", "loss-series.json");
   // F1（首跑体验批）：首次放行时间戳（launch-kpi.json first_launch_at——首写固定，
   // time-to-launch 统计口径；写失败静默 fail-open，不阻塞放行主流程）
