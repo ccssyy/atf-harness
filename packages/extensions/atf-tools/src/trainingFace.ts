@@ -1663,35 +1663,70 @@ export const EVAL_LANE_UNRESOLVED_NOTE_OF = (lanesSeen?: string[]): string =>
     ? `无法从任务事实判定这批数据的评估 lane（任务事实记录到多个训练数据 lane：${lanesSeen.join("、")}）——请确认后显式指定 lane 再试`
     : `无法从任务事实判定这批数据的评估 lane（训练数据 lane 记录缺席）——请确认后显式指定 lane 再试`;
 
+/** D113：任务事实多源清单——① <runDir>/l1/training-data-manifest.json（既有单源）＋
+ *  ② <runDir>/publish-* 目录下的 training-data-manifest.json（walkthrough 发布区实锚
+ *  形态 publish-ws-<slug>——B7 缺陷⑫：walkthrough run 的 manifest 落发布区，只认 l1/ 即
+ *  eval_lane_unresolved。目录序确定性（按名排序），源不敏感场景取值一致）。 */
+const listLaneManifestSources = (runDir: string): string[] => {
+  const sources: string[] = [];
+  const l1 = join(runDir, "l1", "training-data-manifest.json");
+  if (existsSync(l1)) sources.push(l1);
+  try {
+    const publishDirs = readdirSync(runDir)
+      .filter((name) => name.startsWith("publish-"))
+      .sort()
+      .map((name) => join(runDir, name, "training-data-manifest.json"))
+      .filter((path) => existsSync(path));
+    sources.push(...publishDirs);
+  } catch {
+    // run 目录不可读＝仅 l1 源（下方解析按缺席处理）
+  }
+  return sources;
+};
+
 /** 评估 lane 判定（evaluate/analyze 共用单源）：① 显式 lane trim 非空即采纳（用户指路语义）；
- *  ② 读 run 内训练数据 manifest 的 lanes 键集——恰一非空键＝唯一 lane；显式空串＝explicit_empty
- *  （显式给了空值不静默忽略）；文件缺失/坏 JSON＝task_fact_missing；lanes 键缺失/非对象＝
- *  lanes_field_invalid；零键＝lanes_empty；多键＝lanes_ambiguous（两态均带 lanesSeen）。 */
+ *  ② 任务事实多源解析（D113——l1/ 与 publish-* 双源）：读全部在场源的 training-data-manifest
+ *  lanes 键集——恰一非空键＝唯一 lane（多源须同值）；显式空串＝explicit_empty（显式给了空值
+ *  不静默忽略）；全源缺失＝task_fact_missing；lanes 键缺失/非对象＝lanes_field_invalid；
+ *  零键＝lanes_empty；单源多键＝lanes_ambiguous（两态均带 lanesSeen）；多源键集不一致＝
+ *  lanes_conflict_across_sources（fail-closed 报两值——不猜先来后到，显式 lane 覆盖可解）。 */
 export const resolveEvalLaneFrom = (
   runDir: string,
   explicitLane: string | undefined,
-): { ok: true; lane: string; source: "explicit" | "task_fact" } | { ok: false; reason: "explicit_empty" | "task_fact_missing" | "lanes_field_invalid" | "lanes_empty" | "lanes_ambiguous"; lanesSeen?: string[] } => {
+): { ok: true; lane: string; source: "explicit" | "task_fact" } | { ok: false; reason: "explicit_empty" | "task_fact_missing" | "lanes_field_invalid" | "lanes_empty" | "lanes_ambiguous" | "lanes_conflict_across_sources"; lanesSeen?: string[]; conflict?: Array<{ source: string; lanes: string[] }> } => {
   if (explicitLane !== undefined) {
     const trimmed = explicitLane.trim();
     if (trimmed === "") return { ok: false, reason: "explicit_empty" };
     return { ok: true, lane: trimmed, source: "explicit" };
   }
-  let manifest: unknown;
-  try {
-    manifest = JSON.parse(readFileSync(join(runDir, "l1", "training-data-manifest.json"), "utf8"));
-  } catch {
-    return { ok: false, reason: "task_fact_missing" };
+  const sources = listLaneManifestSources(runDir);
+  if (sources.length === 0) return { ok: false, reason: "task_fact_missing" };
+  const lanesBySource: Array<{ source: string; lanes: string[] }> = [];
+  for (const source of sources) {
+    let manifest: unknown;
+    try {
+      manifest = JSON.parse(readFileSync(source, "utf8"));
+    } catch {
+      return { ok: false, reason: "task_fact_missing" };
+    }
+    const lanes = manifest !== null && typeof manifest === "object" && !Array.isArray(manifest)
+      ? (manifest as Record<string, unknown>)["lanes"]
+      : undefined;
+    if (lanes === null || typeof lanes !== "object" || Array.isArray(lanes)) {
+      return { ok: false, reason: "lanes_field_invalid" };
+    }
+    lanesBySource.push({ source, lanes: Object.keys(lanes as Record<string, unknown>).filter((key) => key.trim() !== "") });
   }
-  const lanes = manifest !== null && typeof manifest === "object" && !Array.isArray(manifest)
-    ? (manifest as Record<string, unknown>)["lanes"]
-    : undefined;
-  if (lanes === null || typeof lanes !== "object" || Array.isArray(lanes)) {
-    return { ok: false, reason: "lanes_field_invalid" };
+  const first = lanesBySource[0]?.lanes ?? [];
+  if (first.length === 0) return { ok: false, reason: "lanes_empty", lanesSeen: first };
+  if (first.length > 1) return { ok: false, reason: "lanes_ambiguous", lanesSeen: first };
+  // 多源一致性（D113 fail-closed：任一源键集与首个不同即冲突，报两值）
+  for (const entry of lanesBySource.slice(1)) {
+    if (entry.lanes.length !== 1 || entry.lanes[0] !== first[0]) {
+      return { ok: false, reason: "lanes_conflict_across_sources", conflict: lanesBySource };
+    }
   }
-  const lanesSeen = Object.keys(lanes as Record<string, unknown>).filter((key) => key.trim() !== "");
-  if (lanesSeen.length === 1) return { ok: true, lane: lanesSeen[0] as string, source: "task_fact" };
-  if (lanesSeen.length === 0) return { ok: false, reason: "lanes_empty", lanesSeen };
-  return { ok: false, reason: "lanes_ambiguous", lanesSeen };
+  return { ok: true, lane: first[0] as string, source: "task_fact" };
 };
 
 /** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
@@ -1815,6 +1850,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         return asToolValue({
           started: false, error: "eval_lane_unresolved", run_id: runId,
           ...(evalLaneResolved.lanesSeen !== undefined ? { lanes_seen: evalLaneResolved.lanesSeen } : {}),
+          // D113：多源键集冲突 fail-closed 报两值（源路径形态相对 run 目录，供确认后显式指路）
+          ...(evalLaneResolved.conflict !== undefined ? { lanes_conflict: evalLaneResolved.conflict } : {}),
           note: EVAL_LANE_UNRESOLVED_NOTE_OF(evalLaneResolved.lanesSeen),
         });
       }
@@ -2024,6 +2061,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         return asToolValue({
           ok: false, error: "eval_lane_unresolved",
           ...(laneResolved.lanesSeen !== undefined ? { lanes_seen: laneResolved.lanesSeen } : {}),
+          ...(laneResolved.conflict !== undefined ? { lanes_conflict: laneResolved.conflict } : {}),
           note: EVAL_LANE_UNRESOLVED_NOTE_OF(laneResolved.lanesSeen),
         });
       }
