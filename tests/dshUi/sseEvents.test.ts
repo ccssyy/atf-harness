@@ -1,21 +1,25 @@
 // 批㊶-SSE S6——真 SSE 事件流测试（鉴权／头三件套／全键 diff／心跳／事件日志滚动上限／
 // Last-Event-ID 定位回放与越界回退／连接上限与 close 清理／客户端回退钉子）。
 // e2e 形态：eventsRouteHandler 工厂挂真 http server，node:http 客户端收流断言（非注入路径）。
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   appendEventLog,
   diffMonitorKeys,
   eventsRouteHandler,
+  healEventlogOnBoot,
+  injectMonitorGlobal,
   resetSseStreamStateForTest,
   MONITOR_EVENT_KEYS,
   publishMonitorEvents,
   readEventsAfter,
   sseEventlogDirOf,
+  sseEventlogStatus,
   SSE_EVENTLOG_MAX_LINES,
+  sseNextEventId,
   sseFrame,
 } from "../../packages/extensions/atf-ui/src/server.js";
 
@@ -59,6 +63,7 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env["ATF_SSE_HEARTBEAT_MS"];
   delete process.env["ATF_SSE_MAX_CONNECTIONS"];
+  delete process.env["ATF_SSE_EVENTLOG_MAX_BYTES"]; // E1 用例内自设的加速阈值——兜底清防泄漏
   resetSseStreamStateForTest();
   for (const r of tempRoots.splice(0)) rmSync(r, { recursive: true, force: true });
   for (const s of servers.splice(0)) s.close();
@@ -361,5 +366,179 @@ describe("批㊶-SSE 数据面零改动锚", () => {
     // diff 只在 monitor 顶层语义键上发生——payload 即 monitor.json 对应键值原形（同源纪律）
     expect(diffMonitorKeys(null, baseMonitor(1, 1)).every((k) => ["gpu", "gpu_all", "runs"].includes(k))).toBe(true);
     void appendFileSync; void writeFileSync; void existsSync;
+  });
+});
+
+// ===== 微批E1——事件日志上限三缺陷修复（字节判据轮转／单事件 64KB 摘要化／启动自愈／
+// 尾部 256KB 限界读／降级状态面）。「不读全文」无法直测 513MB 级越界值（V8 单字符串上限
+// 0x1fffffe8≈512MB，测试构造代价不可接受）——按任务书放宽为逻辑断言：字节判据在行数远未
+// 达兜底阈值时先行触发＋大文件（5MB 级）追加路径健壮。 =====
+describe("微批E1①——字节判据轮转（statSync O(1)，行数兜底保留）", () => {
+  it("现役字节超 ATF_SSE_EVENTLOG_MAX_BYTES → 轮转（行数远未到 2000——证字节判据先行）", () => {
+    process.env["ATF_SSE_EVENTLOG_MAX_BYTES"] = "4096";
+    const root = tempRoot();
+    const dir = sseEventlogDirOf(root);
+    // 批 1（3 行 × ~1.5KB ≈ 4.6KB）：写入前现役不在场不轮转，落盘后现役即超 4096
+    const fat = "x".repeat(1500);
+    expect(appendEventLog(root, [
+      { id: 1, event: "gpu", data: { blob: fat } },
+      { id: 2, event: "gpu", data: { blob: fat } },
+      { id: 3, event: "gpu", data: { blob: fat } },
+    ])).toBe(true);
+    expect(existsSync(join(dir, "events.1.jsonl"))).toBe(false); // 首 append 无现役可转
+    // 批 2（1 行）：现役 4.6KB＋新批 > 4096 → 轮转（此时行数 3+1=4，远未到 2000 行兜底）
+    expect(appendEventLog(root, [{ id: 4, event: "gpu", data: { blob: fat } }])).toBe(true);
+    expect(existsSync(join(dir, "events.1.jsonl"))).toBe(true);  // 归档在场＝轮转已发生
+    const archiveLines = readFileSync(join(dir, "events.1.jsonl"), "utf8").trim().split("\n");
+    expect(archiveLines).toHaveLength(3); // 归档=首代全量（id 1-3）
+    const currentLines = readFileSync(join(dir, "events.jsonl"), "utf8").trim().split("\n");
+    expect(currentLines).toHaveLength(1); // 现役重开=次批
+    expect((JSON.parse(currentLines[0] ?? "{}") as { id: number }).id).toBe(4);
+    // 总量受控：两档合计仍在阈值带内（现役 1 行，后续 append 达阈值即再轮转）
+    expect(statSync(join(dir, "events.jsonl")).size).toBeLessThanOrEqual(4096);
+  });
+
+  it("大文件（5MB 级）追加不再读全量——append 路径健壮（放宽为逻辑断言，见 describe 注）", () => {
+    const root = tempRoot();
+    const dir = sseEventlogDirOf(root);
+    mkdirSync(dir, { recursive: true });
+    // 预置 5MB 现役（2600 行 × ~2KB；阈值缺省 8MB 不触发轮转——单测 append 路径自身）
+    const line = JSON.stringify({ id: 1, event: "gpu", data: { pad: "p".repeat(2000) } });
+    writeFileSync(join(dir, "events.jsonl"), Array.from({ length: 2600 }, () => line).join("\n") + "\n");
+    const before = statSync(join(dir, "events.jsonl")).size;
+    expect(appendEventLog(root, [{ id: 2, event: "gpu", data: { n: 1 } }])).toBe(true);
+    expect(statSync(join(dir, "events.jsonl")).size).toBeGreaterThan(before); // 追加成功、未轮转（未超 8MB）
+  });
+});
+
+describe("微批E1②——单事件体积上限（64KB 摘要化，不丢事件不改 id 序）", () => {
+  it("data 体积超 64KB → 落盘行 ≤64KB、event 名带 .truncated、顶层键保留、超长值摘要化", () => {
+    const root = tempRoot();
+    const big = "y".repeat(100_000);
+    expect(appendEventLog(root, [
+      { id: 1, event: "gpu", data: { keep: 7, blob: big } }, // 纯对象：保键降级
+      { id: 2, event: "runs", data: big },                    // 非对象：整体替换为同构摘要
+    ])).toBe(true);
+    const lines = readFileSync(join(sseEventlogDirOf(root), "events.jsonl"), "utf8").trim().split("\n");
+    expect(lines).toHaveLength(2); // 不丢事件、id 序不变
+    for (const line of lines) expect(Buffer.byteLength(line, "utf8")).toBeLessThanOrEqual(64 * 1024);
+    const e1 = JSON.parse(lines[0] ?? "{}") as { id: number; event: string; data: Record<string, any> };
+    expect(e1.id).toBe(1);
+    expect(e1.event).toBe("gpu.truncated");
+    expect(e1.data["keep"]).toBe(7);                       // 顶层键保留
+    const blob = e1.data["blob"] as Record<string, unknown>;
+    expect(blob["truncated"]).toBe(true);
+    expect(blob["bytes"]).toBeGreaterThan(64 * 1024);      // N=原值序列化字节数
+    expect((blob["preview"] as string)).toHaveLength(2048); // preview=原 JSON 串前 2048 字符
+    const e2 = JSON.parse(lines[1] ?? "{}") as { id: number; event: string; data: Record<string, unknown> };
+    expect(e2.id).toBe(2);
+    expect(e2.event).toBe("runs.truncated");
+    expect(e2.data["truncated"]).toBe(true);               // 非对象 data 整体摘要
+    expect(typeof e2.data["preview"]).toBe("string");
+  });
+
+  it("小事件原样落盘（无 .truncated 后缀——摘要化只作用于超限事件）", () => {
+    const root = tempRoot();
+    appendEventLog(root, [{ id: 1, event: "gpu", data: { offline: false } }]);
+    const line = readFileSync(join(sseEventlogDirOf(root), "events.jsonl"), "utf8").trim();
+    expect(line).not.toContain(".truncated");
+  });
+});
+
+describe("微批E1③——读路径尾部限界（现役/归档各 256KB，首截半行丢弃）", () => {
+  it("日志 >256KB：readEventsAfter 尾窗回放正确、越界 null 回退、sseNextEventId 从尾行恢复", () => {
+    const root = tempRoot();
+    const dir = sseEventlogDirOf(root);
+    mkdirSync(dir, { recursive: true });
+    // 预置 300 行 × ~1KB ≈ 300KB > 256KB 尾读窗——起点落在行中段，首行必为截半行
+    const pad = "z".repeat(1000);
+    const lines = Array.from({ length: 300 }, (_, i) => JSON.stringify({ id: i + 1, event: "gpu", data: { pad } }));
+    writeFileSync(join(dir, "events.jsonl"), lines.join("\n") + "\n");
+    // 尾窗内回放正确（截半首行被丢弃，不炸、不漏完整行）
+    expect(readEventsAfter(root, 295)?.map((e) => e.id)).toEqual([296, 297, 298, 299, 300]);
+    // 更早 lastId（早于窗内可见最旧行）→ null 回退快照（越界语义不变——fail-closed）
+    expect(readEventsAfter(root, 0)).toBeNull();
+    // 序号恢复：从尾部行 id=300 → 下一 id 301（尾读不整文件入串）
+    expect(sseNextEventId(root)).toBe(301);
+  });
+
+  it("归档＋现役两档各按尾窗读：拼接回放保序（跨档无缝判定不变）", () => {
+    const root = tempRoot();
+    const dir = sseEventlogDirOf(root);
+    mkdirSync(dir, { recursive: true });
+    // 归档小（10 行全量可见）＋现役超窗（300 行只尾部可见）
+    const pad = "z".repeat(1000);
+    const archiveLines = Array.from({ length: 10 }, (_, i) => JSON.stringify({ id: i + 1, event: "gpu", data: { pad: "a" } }));
+    writeFileSync(join(dir, "events.1.jsonl"), archiveLines.join("\n") + "\n");
+    const currentLines = Array.from({ length: 300 }, (_, i) => JSON.stringify({ id: 11 + i, event: "runs", data: { pad } }));
+    writeFileSync(join(dir, "events.jsonl"), currentLines.join("\n") + "\n");
+    const replay = readEventsAfter(root, 5); // lastId=5 落在归档可见段内——非越界
+    expect(replay).not.toBeNull();
+    const ids = replay?.map((e) => e.id) ?? [];
+    // 归档段 6-10 全量＋现役尾窗段（窗外早段不可见＝无缝不可保证段之外按序拼接）
+    expect(ids.slice(0, 5)).toEqual([6, 7, 8, 9, 10]);
+    expect(ids.length).toBeGreaterThan(5);      // 现役尾窗段在
+    expect(ids[ids.length - 1]).toBe(310);      // 尾行直达
+    for (let i = 1; i < ids.length; i += 1) expect(ids[i]).toBeGreaterThan(ids[i - 1] ?? 0); // 保序
+  });
+});
+
+describe("微批E1④——启动自愈（boot 存量超限→立即轮转）", () => {
+  it("超阈值现役 → healEventlogOnBoot 轮转到归档、新现役重新开始；未超限/已自愈 → false", () => {
+    process.env["ATF_SSE_EVENTLOG_MAX_BYTES"] = "4096";
+    const root = tempRoot();
+    const dir = sseEventlogDirOf(root);
+    expect(healEventlogOnBoot(root)).toBe(false); // 无日志＝无事可做
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "events.1.jsonl"), "旧归档将被超代删除\n"); // 旧档在场——自愈轮转替换它
+    writeFileSync(join(dir, "events.jsonl"), `${"w".repeat(8192)}\n`);  // 超阈值现役（8KB > 4096）
+    expect(healEventlogOnBoot(root)).toBe(true);
+    expect(readFileSync(join(dir, "events.1.jsonl"), "utf8")).toContain("w"); // 现役已转归档（旧档被替换）
+    expect(existsSync(join(dir, "events.jsonl"))).toBe(false);               // 新现役未再写＝不在场
+    // 自愈后再 append：新现役重新开始（只含新事件）
+    expect(appendEventLog(root, [{ id: 1, event: "gpu", data: 1 }])).toBe(true);
+    expect(readFileSync(join(dir, "events.jsonl"), "utf8").trim().split("\n")).toHaveLength(1);
+    expect(healEventlogOnBoot(root)).toBe(false); // 幂等：已自愈不再轮转
+  });
+});
+
+describe("微批E1⑤——降级不静默（状态面 reason/since＋回落＋透出面）", () => {
+  it("eventlog 路径不可写 → append false＋degraded=true（since 首次固定）；恢复可写 → 回落", () => {
+    const root = tempRoot();
+    const dir = sseEventlogDirOf(root);
+    // 测试进程为 root，chmod 0555 不构成不可写——用路径占位文件法：eventlog 路径被普通文件
+    // 占位 → mkdirSync 必抛（ENOTDIR/EEXIST），对任意权限恒成立
+    mkdirSync(dirname(dir), { recursive: true });
+    writeFileSync(dir, "占位——eventlog 路径不可为目录");
+    expect(appendEventLog(root, [{ id: 1, event: "gpu", data: 1 }])).toBe(false);
+    const degraded = sseEventlogStatus();
+    expect(degraded.degraded).toBe(true);
+    expect(typeof degraded.reason).toBe("string");
+    expect(typeof degraded.since).toBe("string");
+    // since 首次进入降级固定——后续失败不刷新
+    const sinceFirst = degraded.since;
+    expect(appendEventLog(root, [{ id: 2, event: "gpu", data: 2 }])).toBe(false);
+    expect(sseEventlogStatus().since).toBe(sinceFirst);
+    // 恢复可写（占位让位）→ append 成功 → 降级回落
+    rmSync(dir);
+    expect(appendEventLog(root, [{ id: 3, event: "gpu", data: 3 }])).toBe(true);
+    expect(sseEventlogStatus().degraded).toBe(false);
+  });
+
+  it("注入面：降级入参 → 提示条（data-atf-eventlog-degraded＋固定文案）与 config eventlog 键；正常零注入", () => {
+    const html = "<html><head><title>t</title></head><body>x</body></html>";
+    const degradedHtml = injectMonitorGlobal(html, "/m.json", undefined, undefined, undefined,
+      { degraded: true, reason: "ENOTDIR", since: "2026-10-24T00:00:00.000Z" });
+    expect(degradedHtml).toContain("data-atf-eventlog-degraded");
+    expect(degradedHtml).toContain("事件历史不可用（已降级）");
+    expect(degradedHtml).toContain('"eventlog"');
+    expect(injectMonitorGlobal(html, "/m.json", undefined, undefined, undefined, { degraded: false }))
+      .not.toContain("data-atf-eventlog-degraded");
+    expect(injectMonitorGlobal(html, "/m.json")).not.toContain("data-atf-eventlog-degraded"); // 旧签名零变化
+  });
+
+  it("快照端点携带 eventlog 键（源码形态锚——生产 disposeSnapshot 在 apply 内注册，e2e 由主会话统一批覆盖）", () => {
+    const source = readFileSync(join(__dirname, "../../packages/extensions/atf-ui/src/server.ts"), "utf8");
+    expect(source).toContain("eventlog: sseEventlogStatus()");
   });
 });

@@ -8,7 +8,7 @@
  * 目录枚举是 workspace-scoped（DSH 文档口径），故枚举在服务端做、client 只读成品文件。
  * 纯函数（buildMonitorSnapshot/buildArtifactsSnapshot）在 ./snapshot.js，本仓 vitest 直测。
  */
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { execFile, execFileSync } from "node:child_process";
 import * as net from "node:net";
 import { basename, dirname, join, resolve, sep } from "node:path";
@@ -96,14 +96,29 @@ export interface BridgeBadgeSurface {
   version: string | null;
 }
 
-export const injectMonitorGlobal = (html: string, monitorPath: string, bridge?: BridgeBadgeSurface, permissionPreset?: { key: string; label: string }, permissionPresets?: Array<{ key: string; label: string }>): string => {
+/** 事件日志状态面（注入/快照端点同形——降级可见性单源）。 */
+export interface SseEventlogStatusFace { degraded: boolean; reason?: string; since?: string }
+
+/** 降级提示条脚本：data 属性锚（data-atf-eventlog-degraded）＋固定文案——head 内同步执行
+ *  时 body 可能未就绪，readyState=loading 走 DOMContentLoaded 兜底插入。纯注入面静态呈现，
+ *  运行中降级/恢复的动态感知由快照端点 eventlog 键轮询携带（tapIndex 只变换 index HTML，
+ *  不持有连接生命周期——注入面边界如实如此）。 */
+const EVENTLOG_DEGRADED_BANNER = `<script>(function(){var b=document.createElement('div');b.setAttribute('data-atf-eventlog-degraded','');b.style.cssText='position:sticky;top:0;z-index:9999;background:#b45309;color:#fff;padding:6px 12px;font-size:13px;font-family:sans-serif;';b.textContent='事件历史不可用（已降级）';var add=function(){if(!document.body||document.body.contains(b))return;document.body.firstChild?document.body.insertBefore(b,document.body.firstChild):document.body.appendChild(b);};if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',add);}else{add();}})();</script>`;
+
+export const injectMonitorGlobal = (html: string, monitorPath: string, bridge?: BridgeBadgeSurface, permissionPreset?: { key: string; label: string }, permissionPresets?: Array<{ key: string; label: string }>, eventlog?: SseEventlogStatusFace): string => {
   const config: Record<string, unknown> = { monitorPath };
   if (bridge !== undefined) config["bridge"] = bridge;
   if (permissionPreset !== undefined) config["permissionPreset"] = permissionPreset;
   // 批㊶-Q 段1 additive：档位目录投影（key+label 两键白名单同形态——auto_training 等新档随
   // catalog 自然流入；徽章/切换 UI 由原生选择器承载，本面为目录数据源）
   if (permissionPresets !== undefined) config["permissionPresets"] = permissionPresets;
-  const snippet = `<script>window.__ATF_UI_CONFIG__=Object.assign({},window.__ATF_UI_CONFIG__,${JSON.stringify(config)});</script>`;
+  // E1：boot 时已降级 → 状态入 config（与快照端点 eventlog 键同形）＋提示条注入
+  //（运行中变化见 EVENTLOG_DEGRADED_BANNER 注——注入面静态、快照端点动态）
+  if (eventlog?.degraded === true) {
+    config["eventlog"] = eventlog;
+  }
+  let snippet = `<script>window.__ATF_UI_CONFIG__=Object.assign({},window.__ATF_UI_CONFIG__,${JSON.stringify(config)});</script>`;
+  if (eventlog?.degraded === true) snippet += EVENTLOG_DEGRADED_BANNER;
   const at = html.toLowerCase().indexOf("</head>");
   return at === -1 ? snippet + html : html.slice(0, at) + snippet + html.slice(at);
 };
@@ -1898,8 +1913,35 @@ export const diffMonitorKeys = (prev: Record<string, unknown> | null, next: Reco
     return JSON.stringify(prev[key]) !== JSON.stringify(next[key]);
   });
 
-/** 事件日志滚动阈值（实现侧定，硬约束防无限增长）：单文件 2000 行；滚动保留现役＋1 代归档
- *  （events.jsonl ↔ events.1.jsonl）——总量硬上限 ≈ 2×2000 行。 */
+/** 事件日志滚动阈值（实现侧定，硬约束防无限增长）：现役文件字节上限＋行数兜底；滚动保留
+ *  现役＋1 代归档（events.jsonl ↔ events.1.jsonl）。
+ *  字节上限为主防线：旧实现只按行数限（2000 行）不看字节——单事件 data 是 monitor 键原值
+ *  （runs 数组可达数百 KB），2000 行可膨胀至数百 MB；且旧判据每次 append 全量读文件数行，
+ *  文件超 V8 单字符串上限 0x1fffffe8 字符（约 512MB）即抛错进 catch 永久降级不再轮转
+ *  （现网事故实锚 events.jsonl 513MB / events.1.jsonl 477MB）。8MB 缺省远低于 V8 上限，
+ *  判定走 statSync.size＋本批将写字节（O(1)，禁读全文统计）。 */
+export const SSE_EVENTLOG_MAX_BYTES_DEFAULT = 8 * 1024 * 1024;
+export const SSE_EVENTLOG_MAX_BYTES_ENV = "ATF_SSE_EVENTLOG_MAX_BYTES";
+
+/** 单事件体积上限（64KB）：按 monitor 键单值体量实测定档（runs 数组单值可达数百 KB）——
+ *  超限事件摘要化落盘（event 名加 .truncated、超长值降级为 truncated 摘要对象），
+ *  不丢事件、不改 id 序；线上 fan-out 仍推原事件（截断只关乎落盘体积）。 */
+export const SSE_EVENT_MAX_BYTES = 64 * 1024;
+/** 保键降级时的单值阈值：64KB 行限下多个顶层值共存仍留余量（8KB×若干键＋外壳 < 64KB）。 */
+export const SSE_EVENT_VALUE_MAX_BYTES = 8 * 1024;
+/** 摘要对象 preview 长度（字符）：原值 JSON 串前 2048 字符——足以人读定位，不再放大体积。 */
+export const SSE_EVENT_PREVIEW_CHARS = 2_048;
+
+/** 尾读窗常量：序号恢复/回放只读现役与归档各尾部 256KB——「最后若干事件的回放窗足够覆盖
+ *  重连场景」（64KB 单事件上限下 ≥4 事件）与读放大控制的折中；也根治读路径全量读（旧实现在
+ *  现役超限时 readFileSync 同样炸）。更早日志落在窗外＝无缝回放不可保证 → 调用方回退快照
+ *  （fail-closed，语义与滚动截断一致）。 */
+export const SSE_EVENTLOG_TAIL_READ_BYTES = 256 * 1024;
+
+/** 行数上限兜底（保守近似）：字节判据为主防线，行兜底防「海量小事件」把行数推高
+ *  （每行 append/轮转仍计数）。计数由模块级计数器维护（append 累加、轮转清零），
+ *  进程重启后从 0 起算——重启后需重新积累满额才可能触发，近似偏保守不影响安全
+ *  （字节判据每次 append 实查 statSync，不受计数器失真影响）。 */
 export const SSE_EVENTLOG_MAX_LINES = 2_000;
 export const SSE_EVENTLOG_KEEP_ARCHIVES = 1;
 export const SSE_EVENTLOG_DIR = "eventlog";
@@ -1919,6 +1961,9 @@ export const sseMaxConnections = (env: NodeJS.ProcessEnv = process.env): number 
   sseIntEnv(env[SSE_MAX_CONNECTIONS_ENV], SSE_MAX_CONNECTIONS_DEFAULT);
 export const sseHeartbeatMs = (env: NodeJS.ProcessEnv = process.env): number =>
   sseIntEnv(env[SSE_HEARTBEAT_MS_ENV], SSE_HEARTBEAT_MS_DEFAULT);
+/** 现役事件日志字节上限（env 可配——测试/调参，形态同 sseMaxConnections）。 */
+export const sseEventlogMaxBytes = (env: NodeJS.ProcessEnv = process.env): number =>
+  sseIntEnv(env[SSE_EVENTLOG_MAX_BYTES_ENV], SSE_EVENTLOG_MAX_BYTES_DEFAULT);
 
 /** SSE 事件（传输面形态）：id 单调递增（日志尾恢复——跨重启单调）；event＝monitor 键名或
  *  snapshot；data＝该键 monitor.json 值原形（白名单同源）。 */
@@ -1945,22 +1990,66 @@ let sseHeartbeatTimer: NodeJS.Timeout | null = null;
 let sseLastMonitor: Record<string, unknown> | null = null;
 let sseNextId: number | null = null;
 
+/** 事件日志降级状态面：append 写失败即置位（since＝首次进入降级时间，后续失败只更新
+ *  reason 不刷新 since——呈现「降级持续多久」）；写成功回落清空。经快照端点 eventlog 键
+ *  与 index 注入面透出（降级不静默——旧实现只有 console.warn，用户面不可见）。 */
+interface SseEventlogDegraded { reason: string; since: string }
+let sseEventlogDegraded: SseEventlogDegraded | null = null;
+
+/** 降级状态读取单源（快照端点/注入面/测试共用）。正常 {degraded:false}；
+ *  降级 {degraded:true, reason, since}（reason/since 同形透出，不新造字段面）。 */
+export const sseEventlogStatus = (): { degraded: boolean; reason?: string; since?: string } =>
+  sseEventlogDegraded === null ? { degraded: false } : { degraded: true, reason: sseEventlogDegraded.reason, since: sseEventlogDegraded.since };
+
+/** 行数兜底计数（dir → 现役已写行数）：append 累加、轮转清零；按 dir 键控（多 runsRoot
+ *  并存互不串扰）。进程重启后从 0 起算——保守近似，见 SSE_EVENTLOG_MAX_LINES 注。 */
+const sseEventlogLines = new Map<string, number>();
+
 /** 测试钩子：清空连接表/缓存/序号（连接本身由调用方 res 销毁）。 */
 export const resetSseStreamStateForTest = (): void => {
   sseConnections.clear();
   if (sseHeartbeatTimer !== null) { clearInterval(sseHeartbeatTimer); sseHeartbeatTimer = null; }
   sseLastMonitor = null;
   sseNextId = null;
+  sseEventlogDegraded = null;
+  sseEventlogLines.clear();
 };
 
-/** 日志尾恢复序号（跨重启单调）：读现役尾行 id，+1 起算；日志缺席＝1 起算。 */
-const sseNextEventId = (runsRoot: string): number => {
+/** 尾读单源：从 max(0, size-尾读窗) 处读片段（openSync+readSync 定长读，不整文件入串）。
+ *  起点非 0 ⇒ 首行是被截断的半行（UTF-8 多字节也可能从中腰断）——丢弃至首个换行后；
+ *  整窗无换行＝单行超窗（防御形态）——全丢，上层按空窗处理（越界判定兜底）。 */
+const readEventlogTail = (file: string): string => {
+  const size = statSync(file).size;
+  const start = Math.max(0, size - SSE_EVENTLOG_TAIL_READ_BYTES);
+  const length = size - start;
+  const fd = openSync(file, "r");
+  try {
+    const buf = Buffer.alloc(length);
+    for (let done = 0; done < length; ) {
+      const n = readSync(fd, buf, done, length - done, start + done);
+      if (n <= 0) break; // 常规文件读不满仅防御形态——已读部分照用
+      done += n;
+    }
+    let text = buf.toString("utf8");
+    if (start > 0) {
+      const nl = text.indexOf("\n");
+      text = nl === -1 ? "" : text.slice(nl + 1);
+    }
+    return text;
+  } finally {
+    closeSync(fd);
+  }
+};
+
+/** 日志尾恢复序号（跨重启单调）：读现役尾部（尾读窗，不整文件入串）尾行 id，+1 起算；
+ *  日志缺席＝1 起算。 */
+export const sseNextEventId = (runsRoot: string): number => {
   if (sseNextId !== null) return sseNextId;
   let last = 0;
   try {
     const current = join(sseEventlogDirOf(runsRoot), "events.jsonl");
     if (existsSync(current)) {
-      const lines = readFileSync(current, "utf8").split("\n").filter((l) => l.trim() !== "");
+      const lines = readEventlogTail(current).split("\n").filter((l) => l.trim() !== "");
       const tail = lines[lines.length - 1];
       if (tail !== undefined) {
         const parsed = JSON.parse(tail) as { id?: number };
@@ -1972,33 +2061,121 @@ const sseNextEventId = (runsRoot: string): number => {
   return sseNextId;
 };
 
-/** 事件日志 append（滚动：现役超限→改档归档、归档超代→删除最旧）。写失败降级内存流：
- *  console.warn 如实留痕，不阻断推送（指令 S3）。返回是否落盘成功。 */
+/** 轮转单源（append 轮转与启动自愈共用）：现役改档为 events.1.jsonl、归档超代删除
+ *  （只保留 SSE_EVENTLOG_KEEP_ARCHIVES 代——旧档在本次轮转中删除，含超大旧档）。 */
+const rotateEventlog = (dir: string): void => {
+  const current = join(dir, "events.jsonl");
+  const archive = join(dir, "events.1.jsonl");
+  if (existsSync(archive)) unlinkSync(archive);
+  renameSync(current, archive);
+};
+
+/** 单事件摘要对象（同构固定形态：truncated/bytes/preview——bytes＝原值序列化字节数，
+ *  preview＝原值 JSON 串前 SSE_EVENT_PREVIEW_CHARS 字符）。 */
+const truncatedSummary = (value: unknown): { truncated: boolean; bytes: number; preview: string } => {
+  const raw = JSON.stringify(value) ?? "null"; // JSON.stringify 仅 undefined/symbol 返 undefined
+  return { truncated: true, bytes: Buffer.byteLength(raw, "utf8"), preview: raw.slice(0, SSE_EVENT_PREVIEW_CHARS) };
+};
+
+/** 单事件体积封顶：整事件序列化 ≤64KB 原样；超限摘要化——event 名加 .truncated 后缀、
+ *  data 保键降级（纯对象顶层键全保留，仅超 SSE_EVENT_VALUE_MAX_BYTES 的值替换为摘要对象；
+ *  非对象 data——超长字符串/数组等——整体替换为同构摘要）。极端嵌套下保键降级仍超限
+ *  → 逐轮对半截短已摘要的 preview（有界循环）直至入限。不丢事件、不改 id 序——摘要化
+ *  只作用于落盘，内存/线上 fan-out 推原事件（截断只关乎落盘体积）。 */
+const capSseEvent = (event: SseEvent): SseEvent => {
+  if (Buffer.byteLength(JSON.stringify(event) ?? "null", "utf8") <= SSE_EVENT_MAX_BYTES) return event;
+  let data: unknown;
+  if (event.data !== null && typeof event.data === "object" && !Array.isArray(event.data)) {
+    const next: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(event.data as Record<string, unknown>)) {
+      next[k] = Buffer.byteLength(JSON.stringify(v) ?? "null", "utf8") > SSE_EVENT_VALUE_MAX_BYTES ? truncatedSummary(v) : v;
+    }
+    data = next;
+  } else {
+    data = truncatedSummary(event.data);
+  }
+  let capped: SseEvent = { id: event.id, event: `${event.event}.truncated`, data };
+  // 再截兜底：仅对已是摘要对象的 preview 对半截短（其余结构不动），无 preview 可截即止
+  const shrinkPreviews = (value: unknown): unknown => {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+    const record = value as Record<string, unknown>;
+    if (record["truncated"] === true && typeof record["preview"] === "string" && (record["preview"] as string).length > 0) {
+      const preview = record["preview"] as string;
+      return { ...record, preview: preview.slice(0, Math.ceil(preview.length / 2)) };
+    }
+    return value;
+  };
+  for (let round = 0; round < 16 && Buffer.byteLength(JSON.stringify(capped) ?? "null", "utf8") > SSE_EVENT_MAX_BYTES; round += 1) {
+    const prev = JSON.stringify(capped);
+    if (capped.data !== null && typeof capped.data === "object" && !Array.isArray(capped.data)) {
+      const record = capped.data as Record<string, unknown>;
+      const nextData = record["truncated"] === true
+        ? shrinkPreviews(record)
+        : Object.fromEntries(Object.entries(record).map(([k, v]) => [k, shrinkPreviews(v)]));
+      capped = { ...capped, data: nextData };
+    } else {
+      break; // data 无摘要结构可截（理论不可达——摘要化后 data 恒含 preview）
+    }
+    if (JSON.stringify(capped) === prev) break;
+  }
+  return capped;
+};
+
+/** 事件日志 append（滚动：现役超字节阈值或行数兜底→改档归档、归档超代→删除最旧）。
+ *  轮转主防线＝字节判据（statSync.size＋本批将写字节 > 阈值，O(1) 禁读全文统计——旧实现
+ *  每次 readFileSync 数行数，文件超 V8 单字符串上限即抛错进 catch 永久降级不再轮转，
+ *  现网实锚 513MB）。写失败降级内存流：console.warn 留痕＋置降级状态面（不静默，快照
+ *  端点/注入面透出）；成功回落清空。返回是否落盘成功。 */
 export const appendEventLog = (runsRoot: string, events: SseEvent[]): boolean => {
   if (events.length === 0) return true;
   const dir = sseEventlogDirOf(runsRoot);
   try {
     mkdirSync(dir, { recursive: true });
     const current = join(dir, "events.jsonl");
-    let lines = 0;
-    if (existsSync(current)) lines = readFileSync(current, "utf8").split("\n").filter((l) => l.trim() !== "").length;
-    if (lines + events.length > SSE_EVENTLOG_MAX_LINES) {
-      const archive = join(dir, "events.1.jsonl");
-      if (existsSync(archive)) unlinkSync(archive); // 只保留 1 代归档（SSE_EVENTLOG_KEEP_ARCHIVES）
-      renameSync(current, archive);
-      lines = 0;
+    const payload = events.map((e) => JSON.stringify(capSseEvent(e))).join("\n") + "\n";
+    const payloadBytes = Buffer.byteLength(payload, "utf8");
+    let base = sseEventlogLines.get(dir) ?? 0;
+    const rotate = existsSync(current) &&
+      (statSync(current).size + payloadBytes > sseEventlogMaxBytes() || base + events.length > SSE_EVENTLOG_MAX_LINES);
+    if (rotate) {
+      rotateEventlog(dir);
+      base = 0;
     }
-    appendFileSync(current, events.map((e) => JSON.stringify(e)).join("\n") + "\n", "utf8");
+    appendFileSync(current, payload, "utf8");
+    sseEventlogLines.set(dir, base + events.length);
+    sseEventlogDegraded = null; // 写成功＝降级回落（自此恢复落盘）
     return true;
   } catch (cause) {
-    console.warn("[atf-ui] SSE 事件日志写失败，降级纯内存流:", cause instanceof Error ? cause.message : String(cause));
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    // since 只在首次进入降级时固定——后续失败只刷新 reason（「已降级多久」不被冲掉）
+    sseEventlogDegraded = { reason, since: sseEventlogDegraded?.since ?? new Date().toISOString() };
+    console.warn("[atf-ui] SSE 事件日志写失败，降级纯内存流:", reason);
     return false;
+  }
+};
+
+/** 启动自愈：boot 时现役 events.jsonl 已超字节阈值（存量事故形态——旧实现只按行数轮转，
+ *  513MB 现役即这么积累的）→ 立即轮转一次（与 append 内同款归档单源），新现役重新开始。
+ *  返回是否发生轮转。 */
+export const healEventlogOnBoot = (runsRoot: string): boolean => {
+  try {
+    const dir = sseEventlogDirOf(runsRoot);
+    const current = join(dir, "events.jsonl");
+    if (!existsSync(current)) return false;
+    if (statSync(current).size <= sseEventlogMaxBytes()) return false;
+    rotateEventlog(dir);
+    sseEventlogLines.set(dir, 0);
+    return true;
+  } catch {
+    return false; // 自愈自身失败不阻断 boot（append 路径的轮转与降级面仍兜底）
   }
 };
 
 /** 回放读取：Last-Event-ID 定位——现役＋归档按代序拼接，返回 id > lastId 的有序事件；
  *  无缝回放不可保证（lastId 早于最旧保留行＝日志已滚动截断；lastId > 尾行＝客户端来自
- *  失踪日志/重置序号）→ null（调用方回退全量 snapshot，fail-closed 如实）。 */
+ *  失踪日志/重置序号）→ null（调用方回退全量 snapshot，fail-closed 如实）。
+ *  限界读：两档各只读尾部 SSE_EVENTLOG_TAIL_READ_BYTES（旧实现全量读文件，现役超限时
+ *  同样炸）；落在窗外更早行＝lastId 早于窗内最旧可见行 → 同款 null 回退（越界语义不变）。 */
 export const readEventsAfter = (runsRoot: string, lastId: number): SseEvent[] | null => {
   try {
     const dir = sseEventlogDirOf(runsRoot);
@@ -2008,7 +2185,7 @@ export const readEventsAfter = (runsRoot: string, lastId: number): SseEvent[] | 
     let minId = Number.MAX_SAFE_INTEGER;
     let maxId = 0;
     for (const file of files) {
-      for (const line of readFileSync(file, "utf8").split("\n")) {
+      for (const line of readEventlogTail(file).split("\n")) {
         if (line.trim() === "") continue;
         const parsed = JSON.parse(line) as Partial<SseEvent>;
         if (typeof parsed.id !== "number" || typeof parsed.event !== "string") continue;
@@ -2310,6 +2487,11 @@ export function apply(
 ): void {
   const resolved = resolveConfig(config);
   console.log(`[atf-ui] 同步器启动（runsRoot=${resolved.runsRoot}，interval=${String(resolved.intervalMs)}ms）`);
+  // E1 启动自愈：现役事件日志超字节阈值（存量事故形态，dev 实锚 513MB）→ 立即轮转，
+  // 新现役重新开始——否则旧档在新判据下要等下次 append 才轮转、读路径全程拖着超限文件。
+  if (healEventlogOnBoot(resolved.runsRoot)) {
+    console.log(`[atf-ui] 事件日志存量超字节阈值，启动自愈轮转完成（现役重开，旧档转 events.1.jsonl）`);
+  }
   // 批㊶Q增补三 段1②：放行账本启动校验（WebUI 侧告警面——env×$HOME 双路径明示；
   // fail-fast 裁决在 atf-tools 写入侧，本面只告警不阻断监控同步器）
   const ledgerCheck = checkApprovalLedgerStartup(process.env);
@@ -2354,7 +2536,9 @@ export function apply(
   const webServer = ctx.webServer;
   if (webServer !== undefined) {
     const monitorPath = monitorPathOf(resolved.runsRoot);
-    const dispose = webServer.tapIndex((html) => injectMonitorGlobal(html, monitorPath, bridge, permissionPreset, permissionPresetsCatalog));
+    // E1：boot 时刻事件日志降级状态入注入面（运行中变化由快照端点 eventlog 键轮询携带——
+    // 注入面静态边界见 EVENTLOG_DEGRADED_BANNER 注）
+    const dispose = webServer.tapIndex((html) => injectMonitorGlobal(html, monitorPath, bridge, permissionPreset, permissionPresetsCatalog, sseEventlogStatus()));
     ctx.effect(() => dispose, "atf-ui: monitor 路径＋桥徽标 index 注入");
     console.log(`[atf-ui] monitor 路径已注入 index（monitorPath=${monitorPath}）`);
     // 批㉛段1：badcase viewer 静态路由（鉴权沿壳 connection 信任面；connection/register 缺席的
@@ -2394,7 +2578,9 @@ export function apply(
             let artifactsRaw = Buffer.from("{}");
             try { artifactsRaw = readFileSync(join(resolved.runsRoot, OUT_DIR, "artifacts.json")); } catch { /* 未生成＝空形态 */ }
             res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-            res.end(JSON.stringify({ monitor: JSON.parse(monitorRaw.toString("utf8")), artifacts: JSON.parse(artifactsRaw.toString("utf8")) }));
+            // E1：顶层 eventlog 键——降级可见面（正常 {degraded:false}；降级带 reason/since，
+            // since＝首次进入降级时间）。client 半只读 monitor/artifacts 两键，additive 无破坏。
+            res.end(JSON.stringify({ monitor: JSON.parse(monitorRaw.toString("utf8")), artifacts: JSON.parse(artifactsRaw.toString("utf8")), eventlog: sseEventlogStatus() }));
           } catch {
             res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
             res.end("snapshot not ready\n"); // boot 竞态（同步器首 tick 未落盘）——客户端下周期重取
