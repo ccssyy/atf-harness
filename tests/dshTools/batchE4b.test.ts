@@ -66,11 +66,12 @@ const toolOf = (record: string[] = []): DshToolLike =>
 const summaryArgv = (result: unknown): string[] =>
   ((result as { summary?: { argv?: string[] } }).summary?.argv ?? []);
 
-/**  argv 里 --training-overrides 的值（单值形态；缺席＝null）。 */
-const overridesJsonOf = (argv: readonly string[]): Record<string, string> | null => {
-  const index = argv.indexOf("--training-overrides");
-  if (index < 0) return null;
-  return JSON.parse(argv[index + 1] ?? "{}") as Record<string, string>;
+/** 返回体注入面 JSON（training_overrides_json；全 convention／段外＝null）。argv 恒不含
+ *  --training-overrides（E4-乙补·re-pin b9 对齐：flag 属 generate_iteration_config 声明面，
+ *  walkthrough 零接线——注入走 atf_scratch_exec 直调生成器）。 */
+const overridesJsonOf = (result: unknown): Record<string, unknown> | null => {
+  const raw = (result as Record<string, unknown>)["training_overrides_json"];
+  return typeof raw === "string" ? (JSON.parse(raw) as Record<string, unknown>) : null;
 };
 
 /** 落九要素形态确认快照（confirmed 值全字符串面——与 saveConfigSnapshot 落盘形态同源）。 */
@@ -80,20 +81,21 @@ const writeSnapshot = (runDir: string, confirmed: Record<string, string>): void 
 };
 
 describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）", () => {
-  it("显式键透传：argv --training-overrides 只含显式键＋来源 user_confirmed；convention 键呈现不下传；审批卡行含逐键来源", async () => {
+  it("显式键注入面：argv 零下传（walkthrough 无该声明面）；返回体 training_overrides_json 数值形态＋来源 user_confirmed＋next_step 指引；convention 键呈现不注入", async () => {
     const record: string[] = [];
     const ws = tempRoot("e4b-ws-");
     const result = await toolOf(record).execute(
-      { stage: "training_prep", run_id: "e4b-explicit", workspace_path: ws, base_model_path: join(ws, "model"), training_overrides: { learning_rate: "2e-4", lora_rank: 32 } },
+      { stage: "training_prep", run_id: "e4b-explicit", workspace_path: ws, base_model_path: join(ws, "model"), training_overrides: { learning_rate: "2e-4", lora_rank: 32, warmup_ratio: 0.1 } },
       fakeExec,
     );
-    const argv = summaryArgv(result);
-    const passed = overridesJsonOf(argv);
-    expect(passed).toEqual({ learning_rate: "2e-4", lora_rank: "32" });
+    expect(summaryArgv(result)).not.toContain("--training-overrides"); // E4-乙补：argv 恒不下传（直传即内核 exit 2）
+    const passed = overridesJsonOf(result);
+    expect(passed).toEqual({ learning_rate: "2e-4", lora_rank: 32, warmup_ratio: 0.1 }); // 整数/小数键原生数字（内核 parse 契约）
+    expect(String((result as Record<string, unknown>)["training_overrides_next_step"])).toContain("generate_iteration_config");
     const resolution = (result as Record<string, unknown>)["training_overrides_resolution"] as Record<string, { value: string | null; source: string }>;
     expect(resolution["learning_rate"]).toEqual({ value: "2e-4", source: "user_confirmed" });
     // convention 态：bs 无显式无快照 → 内核缺省分档 2（cutoff 缺席按惯例基线 9000 判档）；
-    // deepspeed → ds_z3_offload——只呈现（resolution 在场）不下传（argv JSON 不含）
+    // deepspeed → ds_z3_offload——只呈现（resolution 在场）不注入（JSON 不含）
     expect(resolution["per_device_train_batch_size"]).toEqual({ value: "2", source: "convention" });
     expect(resolution["deepspeed"]).toEqual({ value: "ds_z3_offload", source: "convention" });
     expect(passed).not.toHaveProperty("per_device_train_batch_size");
@@ -105,7 +107,7 @@ describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）"
   });
 
   it("禁入键（像素对/TokenBudget 三键）与白名单外键一律卡前快败——审批未消耗", async () => {
-    for (const bad of [{ image_min_pixels: 65536 }, { max_total_tokens: 9000 }, { cutoff_len: 9000 }, { max_model_len: 12800 }, { brand_new_key: "x" }, { base_model_path: "/m" }, { negative_ratio_target: "0.02,0.05" }]) {
+    for (const bad of [{ image_min_pixels: 65536 }, { max_total_tokens: 9000 }, { cutoff_len: 9000 }, { max_model_len: 12800 }, { brand_new_key: "x" }, { base_model_path: "/m" }, { negative_ratio_target: "0.02,0.05" }, { visible_devices: "0,1,2,3" }]) {
       const record: string[] = [];
       const ws = tempRoot("e4b-ws-");
       const result = await toolOf(record).execute(
@@ -128,23 +130,25 @@ describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）"
     const runDir = join(ws, "runs", "e4b-snap");
     mkdirSync(runDir, { recursive: true });
     const snapshotNine: Record<string, string> = {
-      learning_rate: "1e-4",
-      nproc_per_node: "8",
-      visible_devices: "0,1,2,3,4,5,6,7",
-      num_train_epochs: "3",
       per_device_train_batch_size: "2",
       gradient_accumulation_steps: "16",
-      deepspeed: "ds_z3_offload",
+      nproc_per_node: "8",
+      num_train_epochs: "3",
+      learning_rate: "1e-4",
       lora_rank: "32",
       lora_alpha: "64",
+      deepspeed: "ds_z3_offload",
+      warmup_ratio: "0.1",
     };
     writeSnapshot(runDir, snapshotNine);
     const result = await toolOf([]).execute(
       { stage: "training_prep", run_id: "e4b-snap", workspace_path: ws, base_model_path: join(ws, "model") },
       fakeExec,
     );
-    const passed = overridesJsonOf(summaryArgv(result));
-    expect(passed).toEqual(snapshotNine);
+    const passed = overridesJsonOf(result);
+    // 数值键原生数字（内核 parse 契约）；learning_rate/deepspeed 字符串原样
+    expect(passed).toEqual({ per_device_train_batch_size: 2, gradient_accumulation_steps: 16, nproc_per_node: 8, num_train_epochs: 3, learning_rate: "1e-4", lora_rank: 32, lora_alpha: 64, deepspeed: "ds_z3_offload", warmup_ratio: 0.1 });
+    expect(summaryArgv(result)).not.toContain("--training-overrides");
     const resolution = (result as Record<string, unknown>)["training_overrides_resolution"] as Record<string, { value: string | null; source: string }>;
     for (const key of TRAINING_OVERRIDE_KEYS) {
       expect(resolution[key]?.source).toBe("config_snapshot");
@@ -160,8 +164,8 @@ describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）"
       { stage: "training_prep", run_id: "e4b-derive", workspace_path: ws, base_model_path: join(ws, "model") },
       fakeExec,
     );
-    const passed = overridesJsonOf(summaryArgv(result));
-    expect(passed).toEqual({ nproc_per_node: "8", per_device_train_batch_size: "2", gradient_accumulation_steps: "16" });
+    const passed = overridesJsonOf(result);
+    expect(passed).toEqual({ nproc_per_node: 8, per_device_train_batch_size: 2, gradient_accumulation_steps: 16 });
     const resolution = (result as Record<string, unknown>)["training_overrides_resolution"] as Record<string, { value: string | null; source: string }>;
     expect(resolution["gradient_accumulation_steps"]).toEqual({ value: "16", source: "derived" });
 
@@ -190,14 +194,18 @@ describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）"
     const ws = tempRoot("e4b-ws-");
     const runDir = join(ws, "runs", "e4b-pure");
     mkdirSync(runDir, { recursive: true });
-    const resolved = resolveTrainingOverrides({ training_overrides: { nproc_per_node: 4, deepspeed: "off", lora_rank: 64 } }, runDir);
+    const resolved = resolveTrainingOverrides({ training_overrides: { nproc_per_node: 4, deepspeed: "off", lora_rank: 64, warmup_ratio: "0.1" } }, runDir);
     expect(resolved.ok).toBe(true);
     if (resolved.ok) {
       expect(resolved.values["nproc_per_node"]).toBe("4");
-      expect(resolved.values["lora_rank"]).toBe("64");
+      expect(resolved.values["warmup_ratio"]).toBe("0.1");
       expect(resolved.sources["deepspeed"]).toBe("user_confirmed");
-      expect(resolved.passDown["per_device_train_batch_size"]).toBeUndefined(); // convention 不下传
+      expect(resolved.passDown["nproc_per_node"]).toBe(4); // 整数键原生 number（内核 parse 契约）
+      expect(resolved.passDown["warmup_ratio"]).toBe(0.1); // 小数键 number 原样（禁 round）
+      expect(resolved.passDown["per_device_train_batch_size"]).toBeUndefined(); // convention 不注入
     }
+    const visibleDevices = resolveTrainingOverrides({ training_overrides: { visible_devices: "0,1" } }, runDir);
+    expect(visibleDevices.ok).toBe(false); // 卡位走 deploy/launch——内核白名单明确排除
     const badShape = resolveTrainingOverrides({ training_overrides: [1, 2] }, runDir);
     expect(badShape.ok).toBe(false);
     const badValue = resolveTrainingOverrides({ training_overrides: { learning_rate: { nested: true } } }, runDir);
@@ -217,8 +225,8 @@ describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）"
     );
     const resolution = (result as Record<string, unknown>)["training_overrides_resolution"] as Record<string, { value: string | null; source: string }>;
     expect(resolution["per_device_train_batch_size"]).toEqual({ value: "1", source: "convention" });
-    const passed = overridesJsonOf(summaryArgv(result));
-    expect(passed).toBeNull(); // 全 convention → argv 零追加
+    const passed = overridesJsonOf(result);
+    expect(passed).toBeNull(); // 全 convention → 注入面零键（返回体无 training_overrides_json）
   });
 });
 
@@ -293,8 +301,8 @@ describe("E4b-H2 confirmFace 停回写＋bs convention＋deepspeed 统一", () =
     expect(result["ok"]).toBe(true);
     const confirmed = JSON.parse(readFileSync(join(runsRoot, "e4b-snap2", "webui", "config-snapshot.json"), "utf8"))["confirmed"] as Record<string, string>;
     for (const key of TRAINING_OVERRIDE_KEYS) {
-      if (key === "visible_devices") continue; // 卡位留空不落快照（D76）
-      expect(confirmed[key]).toBeDefined();
+      if (key === "warmup_ratio") continue; // warmup_ratio 不在九要素卡面（内核生成器专参——经 training_overrides 注入面进，非确认卡键）
+      expect(confirmed[key]).toBeDefined(); // 其余八键全落（visible_devices 已不在白名单）
     }
   });
 });
@@ -318,7 +326,7 @@ const prelaunchToolOf = (kernel: string): DshToolLike =>
   buildPrelaunchReportTool({ get: () => undefined }, { kernelDir: kernel, timeoutMs: 30_000 }) as unknown as DshToolLike;
 
 /** 种 run 树（canonical 形态）：launch/launch.sh 在场＋config（live/legacy 形态可选）。 */
-const seedRunTree = (ws: string, runId: string, configForm: "live" | "legacy", paramSources?: Record<string, string>): string => {
+const seedRunTree = (ws: string, runId: string, configForm: "live" | "legacy", paramSources?: Record<string, unknown>): string => {
   const runDir = join(ws, "workspace", "runs", runId);
   mkdirSync(join(runDir, "launch"), { recursive: true });
   writeFileSync(join(runDir, "launch", "launch.sh"), "#!/bin/bash\nexit 0\n");
@@ -349,12 +357,12 @@ describe("E4b-H3 atf_prelaunch_report（只读生成/回读——材料不是闸
 
   it("改动 3 不误拒锚：param_sources 含 user_confirmed(ref=stage:training_overrides)（内核 training_prep 段落账形态）→ 生成成功且来源串原样进报告", async () => {
     const ws = tempRoot("e4b-ws-");
-    const runDir = seedRunTree(ws, "e4b-uc", "legacy", { learning_rate: "user_confirmed(ref=stage:training_overrides)" });
+    const runDir = seedRunTree(ws, "e4b-uc", "legacy", { learning_rate: { source: "user_confirmed", ref: "stage:training_overrides" } });
     const result = (await prelaunchToolOf(mockKernelDir()).execute({ run_id: "e4b-uc", workspace_path: ws }, fakeExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true); // harness 零第二套来源校验——该形态不被工具拒
     expect(result["config_form"]).toBe("legacy");
     const report = readFileSync(join(runDir, "launch", "prelaunch-report.md"), "utf8");
-    expect(report).toContain("user_confirmed(ref=stage:training_overrides)"); // 来源串原样呈现（内核 b9 文法）
+    expect(report).toContain("user_confirmed(stage:training_overrides)"); // 结构化形态投影 source(ref)（内核 b9 K4 渲染同构）
   });
 
   it("来源闸单源在内核：malformed 来源串 → 工具如实回传脚本拒绝（stderr_tail 含 param_source_invalid，不吞不预判）", async () => {

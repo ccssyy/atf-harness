@@ -22,14 +22,21 @@
  * pixelPairViolationOf——先于审批，卡前快败业务文案）。九要素确认值经本通路进
  * 实验门——确认卡（落快照）与本段工具（快照兜底下传）同源成环，替代任何代写。
  * E4-乙（改动 1）增 training_prep 段 training_overrides——九键白名单（训练参数
- * 单源桥）：显式 > 确认快照构造（webui/config-snapshot.json confirmed 九键子集）；
- * accum 缺而 bs×nproc 终值在场时按 global_batch=256 派生（除不尽停点，禁静默取整）；
- * bs 缺按内核缺省分档（cutoff<10000→2）、deepspeed 缺按 ds_z3_offload——convention
- * 态只呈现不下传（缺省单源在内核）。逐键来源 user_confirmed|config_snapshot|
- * derived|convention 双呈现（审批卡与返回体）；像素对与 TokenBudget 三键禁入
- * （分别走 experiment_setup 预算三参与 token 预算链路，双源即红）；其它段收到
- * 该参忽略并记 note。下传 argv --training-overrides <json>（内核 b9 将声明的
- * argparse 面——harness 先行按惯例 flag 名，D94 参数面护栏前瞻豁免，re-pin 对账）。
+ * 单源桥，内核 b9 TRAINING_OVERRIDES_KEYS 逐字同源）：显式 > 确认快照构造
+ * （webui/config-snapshot.json confirmed 九键子集）；accum 缺而 bs×nproc 终值在场
+ * 时按 global_batch=256 派生（除不尽停点，禁静默取整）；bs 缺按内核缺省分档
+ * （cutoff<10000→2）、deepspeed 缺按 ds_z3_offload——convention 态只呈现不注入
+ * （缺省单源在内核）。逐键来源 user_confirmed|config_snapshot|derived|convention
+ * 双呈现（审批卡与返回体）；像素对与 TokenBudget 三键禁入（分别走 experiment_setup
+ * 预算三参与 token 预算链路，双源即红）；其它段收到该参忽略并记 note。注入通路
+ * （E4-乙补·re-pin b9 对齐）：--training-overrides 是内核 generate_iteration_config.py
+ * 的 argparse 面（K1-1「九要素卡确认值显式注入生成器」）——walkthrough 段命令零接线
+ * 且严格 parse_args，本工具 argv 不下传（直传即 exit 2）；构造＋校验＋审批呈现后，
+ * 返回体携带 training_overrides_json（内核 parse 契约数值形态）与 next_step 指引，
+ * 由产品链经 atf_scratch_exec 直调生成器注入——被采纳键内核落 param_sources=
+ * {source:user_confirmed, ref:stage:training_overrides}（取代 confirmFace 直写
+ * iteration-config 的旧通道；D94 参数面护栏豁免长期化——flag 属生成器声明面，
+ * walkthrough 对账锚永不匹配，见 guardFixture PARAM_FACE_WAIVERS）。
  *
  * 接口契约（引自内核件 K-A2.2a §二，双件同步；A-E14b 增补 K-E14a 命令面；E10b 增补
  * E10a 命令面；E10d 增补 E10f 命令面；D89 增补 --grouping-preset 命令面；D93 增补
@@ -361,20 +368,33 @@ export const experimentTokenApprovalLine = (
 // ── E4-乙（改动 1）：training_prep 段 training_overrides——九键白名单训练参数单源桥 ──
 //    （确认卡 → 快照〔唯一出口〕 → 本桥下传；convention 态只呈现不下传——缺省单源在内核）
 
-/** training_overrides 九键白名单（九要素确认卡 training 面子集）：base_model_path 走
- *  training_prep 段 --base-model 专参（A-E14b）、dataset_keys 内核实算只读（D92）、
- *  negative_ratio_target 归 experiment_setup 段（D99），皆不入本桥。 */
+/** training_overrides 九键白名单（内核 b9 generate_iteration_config TRAINING_OVERRIDES_KEYS
+ *  逐字同源——E4-乙补：harness 原第十键 visible_devices 系误列，内核明确排除（执行面走
+ *  deploy/launch）；warmup_ratio 补齐）。base_model_path 走 training_prep 段 --base-model
+ *  专参（A-E14b）、dataset_keys 内核实算只读（D92）、negative_ratio_target 归
+ *  experiment_setup 段（D99）、visible_devices 走 deploy/launch——皆不入本桥。 */
 export const TRAINING_OVERRIDE_KEYS: readonly string[] = [
-  "learning_rate",
-  "nproc_per_node",
-  "visible_devices",
-  "num_train_epochs",
   "per_device_train_batch_size",
   "gradient_accumulation_steps",
-  "deepspeed",
+  "nproc_per_node",
+  "num_train_epochs",
+  "learning_rate",
   "lora_rank",
   "lora_alpha",
+  "deepspeed",
+  "warmup_ratio",
 ];
+
+/** 整数键闭集（内核 parse_training_overrides 的 isinstance(value,int) 面——下传 JSON 须原生
+ *  整数，字符串数字会被 training_overrides_value_invalid 拒；呈现面仍统一字符串）。 */
+export const TRAINING_OVERRIDE_INT_KEYS: ReadonlySet<string> = new Set([
+  "per_device_train_batch_size",
+  "gradient_accumulation_steps",
+  "nproc_per_node",
+  "num_train_epochs",
+  "lora_rank",
+  "lora_alpha",
+]);
 
 /** 禁入键专项闭集（像素对＋TokenBudget 三键——分别走 experiment_setup 预算三参（E3）
  *  与 token 预算链路（内核 K1-2：cutoff 唯一来源 prep/token_budget.json）；混入本桥
@@ -438,8 +458,9 @@ export const resolveTrainingOverrides = (
       ok: true;
       values: Record<string, string>;
       sources: Record<string, TrainingOverrideSource>;
-      /** 下传面（convention 态不含——缺省单源在内核，harness 只呈现）。 */
-      passDown: Record<string, string>;
+      /** 注入面（convention 态不含——缺省单源在内核；数值键已转内核 parse 契约的
+       *  原生 number 形态，learning_rate/deepspeed 保持字符串）。 */
+      passDown: Record<string, string | number>;
     }
   | { ok: false; error: string; note: string } => {
   const raw = args.training_overrides;
@@ -502,9 +523,26 @@ export const resolveTrainingOverrides = (
     values["deepspeed"] = "ds_z3_offload";
     sources["deepspeed"] = "convention";
   }
-  const passDown: Record<string, string> = {};
+  const passDown: Record<string, string | number> = {};
   for (const [key, value] of Object.entries(values)) {
-    if (sources[key] !== "convention") passDown[key] = value;
+    if (sources[key] === "convention") continue;
+    // 内核 parse 契约：整数键原生 number（字符串数字会被拒）；warmup_ratio number；
+    // learning_rate 数值串原样（内核 str(value).strip() 面）；deepspeed 字符串。
+    if (TRAINING_OVERRIDE_INT_KEYS.has(key)) {
+      const num = Number(value);
+      if (Number.isFinite(num)) {
+        passDown[key] = Math.round(num);
+        continue;
+      }
+    }
+    if (key === "warmup_ratio") {
+      const num = Number(value);
+      if (Number.isFinite(num)) {
+        passDown[key] = num;
+        continue;
+      }
+    }
+    passDown[key] = value;
   }
   return { ok: true, values, sources, passDown };
 };
@@ -665,16 +703,18 @@ export const buildPipelineTool = (
           "坐标换算待处理清单重试（训练准备段只重试 pending 清单里的图，成功自动并入 transforms.jsonl 并从清单移除，不重跑全批；清单缺席即无事可做）。缺省不开",
       },
       // E4-乙（改动 1）：training_prep 段训练参数单源桥（九键白名单；显式 > 确认快照构造；
-      // convention 态只呈现不下传；其它段忽略该参并记 note）
+      // 注入面 JSON 随返回体透出——见下传面注记；其它段忽略该参并记 note）
       training_overrides: {
         type: "object",
         additionalProperties: true,
         description:
-          "训练参数覆盖（仅 training_prep 段消费，其它段忽略并记 note）：九键白名单 learning_rate／nproc_per_node／visible_devices／num_train_epochs／per_device_train_batch_size／" +
-          "gradient_accumulation_steps／deepspeed／lora_rank／lora_alpha——像素对（image_min_pixels/image_max_pixels）与 TokenBudget 三键（max_total_tokens/cutoff_len/max_model_len）" +
-          "不得出现（分别走 experiment_setup 段预算三参与 token 预算链路，混入即卡前拒绝）。未显式给时读 run 目录 webui/config-snapshot.json 确认快照构造（九要素确认值通路——" +
-          "快照是训练参数唯一出口，本桥不做任何代写）；accum 缺而 bs×nproc 在场时按 global_batch=256 派生（除不尽停点）；bs 缺按内核缺省（cutoff<10000→2）、deepspeed 缺按 ds_z3_offload——" +
-          "逐键来源 user_confirmed/config_snapshot/derived/convention 在审批卡与返回体呈现（convention 态只呈现不下传，缺省单源在内核）",
+          "训练参数覆盖（仅 training_prep 段消费，其它段忽略并记 note）：九键白名单 per_device_train_batch_size／gradient_accumulation_steps／nproc_per_node／num_train_epochs／learning_rate／" +
+          "lora_rank／lora_alpha／deepspeed／warmup_ratio——像素对（image_min_pixels/image_max_pixels）与 TokenBudget 三键（max_total_tokens/cutoff_len/max_model_len）不得出现（分别走 experiment_setup 段预算三参与" +
+          " token 预算链路，混入即卡前拒绝）；卡位 visible_devices 走 deploy/launch 亦不收。未显式给时读 run 目录 webui/config-snapshot.json 确认快照构造（九要素确认值通路——快照是训练参数唯一出口，" +
+          "本桥不做任何代写）；accum 缺而 bs×nproc 在场时按 global_batch=256 派生（除不尽停点）；bs 缺按内核缺省（cutoff<10000→2）、deepspeed 缺按 ds_z3_offload——逐键来源 user_confirmed/config_snapshot/" +
+          "derived/convention 在审批卡与返回体呈现（convention 态只呈现，缺省单源在内核）。注入通路（E4-乙补·re-pin b9 对齐）：--training-overrides 是内核 generate_iteration_config.py 的声明面" +
+          "（walkthrough 段命令不透传）——本工具返回 training_overrides_json（内核 parse 契约数值形态：整数键原生数字），按返回体 next_step 指引经 atf_scratch_exec 注入生成器，确认键内核落账" +
+          " param_sources user_confirmed(ref=stage:training_overrides)",
       },
     },
     output: {
@@ -766,7 +806,7 @@ export const buildPipelineTool = (
       // 坏值/禁键/派生除不尽一律卡前快败不进审批——不消耗放行）；其它段收到该参忽略并记
       // note（返回体 training_overrides_ignored——非消费段传参不报错）。
       let trainingOverrides:
-        | { values: Record<string, string>; sources: Record<string, TrainingOverrideSource>; passDown: Record<string, string> }
+        | { values: Record<string, string>; sources: Record<string, TrainingOverrideSource>; passDown: Record<string, string | number> }
         | undefined;
       const overridesIgnored = args.training_overrides !== undefined && args.stage !== "training_prep";
       if (args.stage === "training_prep") {
@@ -842,12 +882,13 @@ export const buildPipelineTool = (
       const tokenProvider = typeof args.token_provider === "string" ? args.token_provider.trim() : "";
       if (tokenProvider !== "") argv.push("--token-provider", tokenProvider);
       if (args.retry_coordinate_pending === true) argv.push("--retry-coordinate-pending");
-      // E4-乙（改动 1）：training_overrides 透传（仅 training_prep 段；下传面＝非 convention 终值
-      // ——显式/快照/派生；convention 态缺省单源在内核不下传。内核 b9 argparse 将声明
-      // --training-overrides——harness 先行按惯例 flag 名，re-pin 对账〔D94 前瞻豁免〕）。
-      if (args.stage === "training_prep" && trainingOverrides !== undefined && Object.keys(trainingOverrides.passDown).length > 0) {
-        argv.push("--training-overrides", JSON.stringify(trainingOverrides.passDown));
-      }
+      // E4-乙补（re-pin b9 对齐）：--training-overrides 是内核 generate_iteration_config.py
+      // 的 argparse 面（K1-1「九要素卡确认值显式注入生成器」）——walkthrough 段命令零接线
+      // 且严格 parse_args，本工具 argv 直传即 exit 2。通路改为：本工具构造＋校验＋审批卡
+      // 呈现，返回体携带 training_overrides_json（内核 parse 契约数值形态），由产品链下一
+      // 步（agent 经 atf_scratch_exec 直调生成器）原样注入——被采纳键内核落
+      // param_sources={source:user_confirmed, ref:stage:training_overrides}（取代 confirmFace
+      // 直写 iteration-config 的旧通道，快照仍是确认值唯一出口）。
       // D24h：放行登记带会话身份与 ui 模式（actor＝会话 id，缺失＝unattributed——不伪造 owner）；
       // round_dir＝本段落点 run 目录（内核账本 round_dir 字段面，与评估 D20 同构）
       argv.push("--actor", sessionIdOfExec(exec) ?? "unattributed", "--approval-mode", "ui", "--round-dir", runDir);
@@ -949,7 +990,9 @@ export const buildPipelineTool = (
             }
           : {}),
         // E4-乙（改动 1）：training_overrides 逐键终值与来源（仅 training_prep 段九键恒在场——
-        // 无终值键 value=null＋convention；下传面单独透出可对账）；其它段收到该参＝忽略记 note。
+        // 无终值键 value=null＋convention）；注入面 JSON 单独透出（内核 parse 契约数值形态——
+        // 下一步经 atf_scratch_exec 调 generate_iteration_config.py --training-overrides 原样注入，
+        // 内核落 param_sources={source:user_confirmed, ref:stage:training_overrides}）。
         ...(args.stage === "training_prep" && trainingOverrides !== undefined
           ? {
               training_overrides_resolution: Object.fromEntries(
@@ -961,7 +1004,13 @@ export const buildPipelineTool = (
                   },
                 ]),
               ),
-              training_overrides_passed: Object.keys(trainingOverrides.passDown).length > 0 ? JSON.stringify(trainingOverrides.passDown) : null,
+              ...(Object.keys(trainingOverrides.passDown).length > 0
+                ? {
+                    training_overrides_json: JSON.stringify(trainingOverrides.passDown),
+                    training_overrides_next_step:
+                      "把 training_overrides_json 原样经 atf_scratch_exec 注入生成器：python3 <kernelDir>/skills/atf-prepare-training/scripts/generate_iteration_config.py ... --training-overrides <training_overrides_json>（本段命令自身不透传该参——walkthrough 无此声明面）；随后按 skill 序重跑 generate_train_launch 生成 launch 件",
+                  }
+                : {}),
             }
           : {}),
         ...(overridesIgnored ? { training_overrides_ignored: true, training_overrides_note: "training_overrides 仅 training_prep 段消费——本次忽略（段外传参不报错，argv 零追加）" } : {}),

@@ -77,15 +77,17 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   reuse_experiment_setup: "--reuse-experiment-setup",
   token_provider: "--token-provider",
   retry_coordinate_pending: "--retry-coordinate-pending",
-  // E4-乙（改动 1）：training_prep 段训练参数单源桥（内核 b9 将声明——前瞻豁免见
-  // PARAM_FACE_WAIVERS；re-pin b9 时快照随更＋豁免退役）
+  // E4-乙（改动 1）：training_prep 段训练参数单源桥——flag 属内核 generate_iteration_config.py
+  // 声明面（b9 K1-1；经 atf_scratch_exec 直调生成器注入，非 walkthrough argv 下传）——
+  // 映射保留作文档对账锚（跨脚本 flag），豁免见 PARAM_FACE_WAIVERS
   training_overrides: "--training-overrides",
 };
 
-/** E4-乙前瞻豁免（b9 未发窗）：training_overrides 的映射旗标 --training-overrides 尚不在
- *  b8 快照声明面（内核 b9 将声明；harness 先行——显式/快照/派生终值才下传，行为面
- *  大满贯不触发该旗标）。豁免只免「旗标落声明面」单项对账；re-pin b9 时随快照更新
- *  退役本豁免。护栏纪律「修不了登记豁免；禁 skip／禁放宽断言」内的显式例外登记。 */
+/** E4-乙参数面豁免（长期化）：training_overrides 的映射旗标 --training-overrides 在内核
+ *  b9 argparse 面的 generate_iteration_config.py 条目（非 walkthrough_pipeline.py）——
+ *  guardParamsFace 的对账锚恒为 walkthrough 条目，跨脚本 flag 永不落该面，豁免不免除
+ *  映射完整性与文档对账（FLAG_BY_PARAM 登记＋pipelineFace 文档记载均在位；注入通路
+ *  ＝返回体 training_overrides_json 经 atf_scratch_exec 直调生成器，argv 零下传）。 */
 export const PARAM_FACE_WAIVERS: ReadonlySet<string> = new Set(["training_overrides"]);
 
 /** 九要素键 → 消费点登记表（「可编辑不消费」禁的正向登记；旗标空串＝脚本级组装消费
