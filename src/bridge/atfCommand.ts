@@ -8,16 +8,17 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 契约轴 2026-10-24 窗口 E4-乙：v0.7.25b8 → v0.7.25b9，唯一真相源 = bridge.contract.yaml
+// 当前 pin（re-pin 契约轴 2026-10-25 窗口 E5：v0.7.25b9 → v0.7.25b10，唯一真相源 = bridge.contract.yaml
 // atf_upstream，本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.25b9（E4-乙超参单源内核批生效窗——training-overrides 9键单源通道
-// 〔K1-1 generate_iteration_config --training-overrides：9 键闭集/类型范围校验先于审批/采纳键落
-// param_sources={source:user_confirmed, ref:stage:training_overrides}〕＋K1-2 deepspeed 缺省 ds_z3_offload
-// ＋K1-3 bs/accum 规则化缺省＋K2 D129 像素对透传收口＋K3 D128 计量对齐 HF＋K4 param_sources 结构化来源
-// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit 432c1de，方法面零增（session/ 零 diff），
+// 本轮 pin 取值＝tag v0.7.25b10（E5 链路收口内核批生效窗——D139 training_overrides walkthrough 段直下
+// 〔training_prep 段 --training-overrides stage 参数＋--output-dir 显式改传 <run>/training〕＋D140 落点护栏
+// 〔--output-dir 指向 <run>/prep/ 之下即拒 output_dir_inside_config_dir；缺省仍 <run>/training〕＋D141 留出
+// 判定比例化〔ratios_actual.test round(x,4) 比较删 int() 截断〕＋D142/D143 显式实例根
+// 〔ATF_INSTANCE_ROOT>ATF_HOME 两键同义；均缺抛 InstanceRootMissing fail-closed〕
+// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit c34ab73，方法面零增（session/ 零 diff），
 // 会话协议轴 1／桥接契约轴 2 零 diff）。
-export const ATF_UPSTREAM_TAG = "v0.7.25b9";
-export const ATF_UPSTREAM_COMMIT_SHA = "432c1de64f1e62d625333456a3f89be8efd65aff";
+export const ATF_UPSTREAM_TAG = "v0.7.25b10";
+export const ATF_UPSTREAM_COMMIT_SHA = "c34ab7334333d60c4f0df91b504c8d17a1e543b4";
 
 export interface AtfCliInvocation {
   command: string;

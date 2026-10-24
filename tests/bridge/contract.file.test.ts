@@ -162,12 +162,13 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/- facts_log_tail_corrupt/);
   });
 
-  it("atf_upstream pin 升至 v0.7.25b9（re-pin 窗口 E4-乙 契约轴 2026-10-24；pin＝tag commit 432c1de，E4-乙超参单源内核批生效窗：training-overrides 9键单源通道〔K1-1 generate_iteration_config 声明面＋param_sources user_confirmed 结构化落账〕＋K1-2 deepspeed 缺省 ds_z3_offload＋K1-3 bs/accum 规则化缺省＋K4 param_sources 结构化来源形态——历史括注 v0.7.25b8 E3 线、v0.7.25b7 U1 线、v0.7.25b6 五 bump 线、v0.7.25b1 b5 像素对线、v0.7.24b0 批次R 线、v0.7.23b3 D48 线与 v0.7.21b0 E10 线保留）", () => {
-    expect(contract).toMatch(/  tag: v0\.7\.25b9/);
-    expect(contract).toMatch(/  commit_sha: 432c1de64f1e62d625333456a3f89be8efd65aff/);
+  it("atf_upstream pin 升至 v0.7.25b10（re-pin 窗口 E5 契约轴 2026-10-25；pin＝tag commit c34ab73，E5 链路收口内核批生效窗：D139 training_overrides walkthrough 段直下〔training_prep 段 stage 参数＋--output-dir 显式改传 <run>/training〕＋D140 落点护栏〔--output-dir 指向 <run>/prep/ 之下即拒 output_dir_inside_config_dir；缺省仍 <run>/training〕＋D141 留出判定比例化〔ratios_actual.test round(x,4) 删 int() 截断〕＋D142/D143 显式实例根〔ATF_INSTANCE_ROOT>ATF_HOME 同义；均缺 InstanceRootMissing fail-closed〕——历史括注 v0.7.25b9 E4-乙线、v0.7.25b8 E3 线、v0.7.25b7 U1 线、v0.7.25b6 五 bump 线、v0.7.25b1 b5 像素对线、v0.7.24b0 批次R 线、v0.7.23b3 D48 线与 v0.7.21b0 E10 线保留）", () => {
+    expect(contract).toMatch(/  tag: v0\.7\.25b10/);
+    expect(contract).toMatch(/  commit_sha: c34ab7334333d60c4f0df91b504c8d17a1e543b4/);
     // 会话协议版本轴不随 re-pin 变动（内核方法面补登不 bump）；桥接契约版本轴恒 2（另轴）
     expect(contract).toMatch(/  contract_version: 1/);
     // 历史括注保留（re-pin 指令：baseline 首句同步当前 pin；历史括注保留）
+    expect(contract).toMatch(/历史括注：v0\.7\.25b9＝432c1de/);
     expect(contract).toMatch(/历史括注：v0\.7\.25b8＝ebe0293/);
     expect(contract).toMatch(/历史括注：v0\.7\.25b7＝997db63/);
     expect(contract).toMatch(/历史括注：v0\.7\.25b6＝911f8e7/);
@@ -175,5 +176,6 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/历史括注：v0\.7\.24b0＝a039693/);
     expect(contract).toMatch(/历史括注：v0\.7\.23b3＝6834d1b/);
     expect(contract).toMatch(/v0\.7\.21b0＝d9c3295/);
+    expect(contract).toMatch(/pin＝tag v0\.7\.25b10 commit c34ab73（禁追新）/);
   });
 });
