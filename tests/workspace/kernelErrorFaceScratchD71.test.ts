@@ -19,8 +19,10 @@ import { describe, expect, it } from "vitest";
 import { WORKSPACE_TOOL_HANDLERS, type LocalToolHost } from "../../src/core/tools/index.js";
 import {
   KERNEL_ERROR_FACE_CODES,
+  humanizeKernelError,
   kernelErrorEnvelopeCode,
   replaceKernelErrorFace,
+  scanKernelErrorFace,
 } from "../../src/core/workspace/kernelErrorFace.js";
 
 const makeTemp = (label: string): string => mkdtempSync(join(tmpdir(), `atf-d71-${label}-`));
@@ -75,13 +77,38 @@ describe("D71 封口：替换单源（kernelErrorFace 纯函数）", () => {
     expect(kernelErrorEnvelopeCode('{"other": "x"}')).toBeNull();
   });
 
-  it("闭集纪律：仍是四码，未扩未缩", () => {
+  it("闭集纪律：D98 起五码，未扩未缩", () => {
     expect([...KERNEL_ERROR_FACE_CODES].sort()).toEqual([
       "gpu_capacity_insufficient",
       "token_budget_inconsistent",
       "token_budget_missing",
       "token_gate_not_configured",
+      "walkthrough_run_dir_not_empty",
     ]);
+  });
+
+  it("D98 run 落点非空码：扫描命中即换人话；文案零内部码（内核真实输出形态驱动）", () => {
+    // 内核 D97 非空闸（walkthrough_pipeline.py register 段）经 CLI stdout 流回的
+    // 真实形态——reason code 与业务文案同段出现
+    const raw =
+      'run 落点已存在且非空:/abs/ws/runs/walkthrough-20261024 (walkthrough_run_dir_not_empty) 首选(零删除):同 workspace 起新 run';
+    const hit = replaceKernelErrorFace(raw);
+    expect(hit).not.toBeNull();
+    if (hit !== null) {
+      expect(hit.hits).toHaveLength(1);
+      expect(hit.hits[0]?.code).toBe("walkthrough_run_dir_not_empty");
+      expect(hit.text).toContain("登记被拒");
+      expect(hit.text).toContain("换一个新 run 标识");
+      expect(hit.text).toContain("--rerun");
+      expect(hit.text).toContain("不需要删除工作目录");
+      // B6 验收锚「D98 拒绝文案无内部码」：人话面不出现码本身（D77 纪律延续）
+      expect(hit.text).not.toContain("walkthrough_run_dir_not_empty");
+    }
+    const scanned = scanKernelErrorFace([raw]);
+    expect(scanned?.code).toBe("walkthrough_run_dir_not_empty");
+    expect(scanned?.note).toContain("登记被拒");
+    // detail 形态（code:run_dir）同命中同一文案
+    expect(humanizeKernelError("walkthrough_run_dir_not_empty:/abs/ws/runs/r1")).toContain("登记被拒");
   });
 });
 

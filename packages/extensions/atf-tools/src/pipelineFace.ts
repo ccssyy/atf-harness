@@ -9,7 +9,10 @@
  * allow_small_cluster_test 透传；D89 增 experiment_setup 段 grouping_preset 透传
  * （内核 argparse --grouping-preset A/B，缺省 B——「缺省不静默」：未给按内核缺省处理
  * 并在返回体标注分组来源，审批卡呈现分组方案）；D93 增三参透传（train_all／
- * assignment_source／reuse_experiment_setup——内核全局 argparse 参数，只透传不新增语义）。
+ * assignment_source／reuse_experiment_setup——内核全局 argparse 参数，只透传不新增语义）；
+ * D99 增 experiment_setup 段 negative_ratio_target 透传（内核 argparse
+ * --negative-ratio-target <下限,上限>——D90 用户确认值通路 harness 侧补派：九要素卡
+ * 确认值经本参进实验门；显式给才下传且审批卡/返回体标来源，「缺省不静默」同 D89）。
  *
  * 接口契约（引自内核件 K-A2.2a §二，双件同步；A-E14b 增补 K-E14a 命令面；E10b 增补
  * E10a 命令面；E10d 增补 E10f 命令面；D89 增补 --grouping-preset 命令面；D93 增补
@@ -21,7 +24,9 @@
  *   绝对路径；K-E14a 拆分后渲染位吃 --base-model-family，内核段模式另有盘上只读再水合，
  *   harness 案 a＝必填显式值卡前快败）／--auto-style-cluster 仅 family_split（三态
  *   auto|on|off，缺省 auto；其它段不下传不报错）／--grouping-preset 仅 experiment_setup
- *   （A|B，缺省 B；未给不下传——按内核缺省处理，D89）／--train-all／--assignment-source／
+ *   （A|B，缺省 B；未给不下传——按内核缺省处理，D89）／--negative-ratio-target 仅
+ *   experiment_setup（<下限,上限> 形态如 0.03,0.06；显式给才下传——内核以该值进实验门
+ *   并标 user_specified，缺省按构造器常量带兜底，D99）／--train-all／--assignment-source／
  *   --reuse-experiment-setup 全局三参（内核 argparse 已声明、多段读取；给才下传，D93）。
  *   本工具下传 argv 只含上述参数，禁传内核未声明
  *   参数、禁拼第二套路径。
@@ -195,6 +200,22 @@ export const groupingPresetApprovalLine = (preset: string): string => {
   return `分组方案：未指定——将按内核缺省 B（${GROUPING_PRESET_PROFILE["B"]}）`;
 };
 
+// ── D99：experiment_setup 段负样本目标带（内核 argparse --negative-ratio-target，
+//    D90 用户确认值通路的 harness 侧补派——九要素卡 negative_ratio_target 确认值
+//    经本参进实验门；内核显式才下传实验门脚本，来源标 user_specified）──
+
+/** 负样本构造带缺省形态（内核构造器常量 NEGATIVE_RATIO_CONSTRUCTION_BAND=(0.02,0.05)
+ *  同源——TRAINING_PIN_CONSTANTS.negative_ratio 同值；「缺省不静默」呈现与返回体
+ *  kernel_default 标注共用）。 */
+export const NEGATIVE_RATIO_DEFAULT_BAND = "0.02,0.05";
+
+/** 审批卡负样本带行（仅 experiment_setup 段追加——与分组方案行同款「缺省不静默」：
+ *  显式给标注用户指定；未给明示按构造器内置常量带兜底，不让缺省偷偷生效）。 */
+export const negativeRatioApprovalLine = (band: string): string => {
+  if (band !== "") return `负样本构造带：${band}（用户指定——实验门以该值锁定）`;
+  return `负样本构造带：未指定——将按构造器内置常量带（${NEGATIVE_RATIO_DEFAULT_BAND}）兜底`;
+};
+
 
 const runPipeline = (command: string, args: readonly string[], timeoutMs: number): Promise<{ code: number | null; stdout: string; stderr: string }> =>
   new Promise((resolve) => {
@@ -229,6 +250,8 @@ export const buildPipelineTool = (
       `auto＝先检测——已聚类则不复聚；未聚类/状态不明会拒绝并指路。` +
       `experiment_setup 段另支持 grouping_preset 分组方案（缺省按内核缺省 B 处理，其它段忽略该参；` +
       `返回体如实标注分组来源，审批卡呈现分组方案供确认）。` +
+      `experiment_setup 段另支持 negative_ratio_target 负样本目标带 <下限,上限>（其它段忽略该参）：` +
+      `显式给定时实验门以该值锁定并标注用户指定；不给时按构造器内置常量带兜底（审批卡与返回体均如实标注来源）。` +
       `收到版式聚类状态类拒绝（style_cluster_state_not_clustered／style_cluster_state_ambiguous／` +
       `style_cluster_declared_but_absent）时，必须先问用户「这批数据做过版式聚类吗？」，` +
       `确认后再传 on（未聚类——内核自动补簇并产出 StyleClusterManifest/v1，按簇分层）或 off（已聚类——不再聚）重跑；` +
@@ -272,6 +295,14 @@ export const buildPipelineTool = (
           "（doc_identifier／page_summary／goods_item）；B＝2 组·单据级 vs 条目级（goods_item／doc_level）。" +
           "不给时按内核缺省 B 处理（不静默——返回体如实标注分组来源，审批卡亦明示）",
       },
+      negative_ratio_target: {
+        type: "string",
+        description:
+          "负样本目标带 <下限,上限>（仅 experiment_setup 段有意义，其它段忽略该参）：用户确认的" +
+          "负样本构造配额带（如 0.03,0.06）。显式给定时实验门以该值锁定并标注来源为用户指定；" +
+          "不给时按构造器内置常量带（0.02,0.05）兜底（不静默——审批卡与返回体如实标注来源）。" +
+          "九要素确认卡的 negative_ratio_target 值在本段触发时应原样带入",
+      },
       doc_type: { type: "string", description: "单据类型（可缺省——缺省不上送，内核按数据/登记面推断，无法确定即 blocked；给了则显式指定）" },
       lane_suffix: { type: "string", description: "lane 后缀（可缺省——缺省不上送，内核自行推断）" },
       field_config: { type: "string", description: "字段配置文件显式路径（可缺省——缺省不上送，内核走 run 内/登记面既有来源）" },
@@ -296,7 +327,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -327,6 +358,9 @@ export const buildPipelineTool = (
       // 一律视同未指定，内核缺省 B 生效。harness 不复制枚举外的校验，choices 越界由框架
       // enum 校验与内核 argparse 双闸）。
       const groupingPreset = typeof args.grouping_preset === "string" ? args.grouping_preset.trim() : "";
+      // D99：负样本目标带取值（同 D89 口径——trim 后空串视同未指定；形态合法性由内核
+      // 实验门脚本解析（float 化失败即业务拒绝），harness 不复制格式校验不夹取）。
+      const negativeRatioTarget = typeof args.negative_ratio_target === "string" ? args.negative_ratio_target.trim() : "";
       const verdict = await requestApproval(ctx, exec, "atf_pipeline_stage",
         buildApprovalReason({
           action: "触发管线段",
@@ -338,6 +372,8 @@ export const buildPipelineTool = (
         })
         // D89：分组方案行仅 experiment_setup 段呈现（其它段该参无意义不上卡）
         + (args.stage === "experiment_setup" ? `\n${groupingPresetApprovalLine(groupingPreset)}` : "")
+        // D99：负样本带行仅 experiment_setup 段呈现（与分组方案行同款「缺省不静默」）
+        + (args.stage === "experiment_setup" ? `\n${negativeRatioApprovalLine(negativeRatioTarget)}` : "")
         + "\n仅 owner 可点；执行方不得代点");
       if (!verdict.ok) return approvalDeniedResult("atf_pipeline_stage", verdict.outcome);
       // 落点单源（A2.2b）：与内核同一决定者 <workspace_path>/runs/<run_id>；resolveRunDir 本工具内退役。
@@ -362,6 +398,10 @@ export const buildPipelineTool = (
       // D89：分组方案透传（仅 experiment_setup 段；显式给且 trim 非空才追加——未给不追加，
       // 内核缺省 B 生效；其它段忽略该参不下传不报错）。与上方段特定/全局追加逻辑并存。
       if (args.stage === "experiment_setup" && groupingPreset !== "") argv.push("--grouping-preset", groupingPreset);
+      // D99：负样本目标带透传（仅 experiment_setup 段；显式给且 trim 非空才追加——内核
+      // :1155 显式才下传实验门并标 user_specified；未给不追加，构造器常量带兜底；其它段
+      // 忽略该参不下传不报错）。
+      if (args.stage === "experiment_setup" && negativeRatioTarget !== "") argv.push("--negative-ratio-target", negativeRatioTarget);
       // D93：三参透传（内核全局 argparse 参数、多段读取——不按段 gate；train_all 与
       // assignment_source 的互斥校验在内核每次进程 __init__，harness 不复制；开关 false/
       // 路径空白＝「按未给处理」不追加，只传内核已声明参数、零新增语义）。
@@ -445,6 +485,14 @@ export const buildPipelineTool = (
           ? {
               grouping_preset: groupingPreset !== "" ? groupingPreset : "B",
               grouping_preset_source: groupingPreset !== "" ? "explicit" : "kernel_default",
+            }
+          : {}),
+        // D99：负样本带标注（仅 experiment_setup 段）——「缺省不静默」同 D89：显式给标
+        // explicit，未给按构造器常量带标注 kernel_default（值与来源两侧可对账；其它段不加两键）
+        ...(args.stage === "experiment_setup"
+          ? {
+              negative_ratio_target: negativeRatioTarget !== "" ? negativeRatioTarget : NEGATIVE_RATIO_DEFAULT_BAND,
+              negative_ratio_target_source: negativeRatioTarget !== "" ? "explicit" : "kernel_default",
             }
           : {}),
         // E10b：聚类证据三键透传（内核摘要携带时）——「为什么没开/为什么开」的解释面
