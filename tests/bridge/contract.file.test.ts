@@ -162,12 +162,13 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/- facts_log_tail_corrupt/);
   });
 
-  it("atf_upstream pin 升至 v0.7.25b1（re-pin 2026-10-22 三次 b5 像素对复用补丁生效窗；pin＝tag commit 11ccebc，坐标 D67 像素对接线/预算 S1 门值取值＋provenance 三态/字段配置 D22 单一解析/预计算与重试接像素对——历史括注 v0.7.24b0 批次R 线、v0.7.23b3 D48 线与 v0.7.21b0 E10 线保留）", () => {
-    expect(contract).toMatch(/  tag: v0\.7\.25b1/);
-    expect(contract).toMatch(/  commit_sha: 11ccebc0294d1f89a63ef1f536a870c24c72aac7/);
+  it("atf_upstream pin 升至 v0.7.25b6（re-pin D102 契约轴 2026-10-24；pin＝tag commit 911f8e7，b1→b6 五 bump 沿程〔D72 launch 预检 DRY_RUN 真形态/D76 卡位 visible_devices/D79 卡位区间展开/D82 pl 绑定清除/D90 负样本确认值＋D94 argparse surface 清单〕——历史括注 v0.7.25b1 b5 像素对线、v0.7.24b0 批次R 线、v0.7.23b3 D48 线与 v0.7.21b0 E10 线保留）", () => {
+    expect(contract).toMatch(/  tag: v0\.7\.25b6/);
+    expect(contract).toMatch(/  commit_sha: 911f8e706376c61be4f84872a450e6b3826aa037/);
     // 会话协议版本轴不随 re-pin 变动（内核方法面补登不 bump）；桥接契约版本轴恒 2（另轴）
     expect(contract).toMatch(/  contract_version: 1/);
-    // 历史括注保留（re-pin 指令：baseline 首句同步 v0.7.25b1＝11ccebc；历史括注保留）
+    // 历史括注保留（re-pin 指令：baseline 首句同步当前 pin；历史括注保留）
+    expect(contract).toMatch(/历史括注：v0\.7\.25b1＝11ccebc/);
     expect(contract).toMatch(/历史括注：v0\.7\.24b0＝a039693/);
     expect(contract).toMatch(/历史括注：v0\.7\.23b3＝6834d1b/);
     expect(contract).toMatch(/v0\.7\.21b0＝d9c3295/);
