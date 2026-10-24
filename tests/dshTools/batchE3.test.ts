@@ -33,6 +33,10 @@ import {
   resolveExperimentTokenParams,
 } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
+import { resolvePreflightRunDir as resolvePreflightRunDirForE3 } from "../../packages/extensions/atf-tools/src/preflightFace.js";
+
+/** resolvePreflightRunDir 直测桩（E3 补：wp 显式 canonical 优先口径）。 */
+const plainExecForE3 = (): object => ({ agent: { session: { id: "sess-e3-pf" } }, callId: "e3-pf", signal: undefined });
 
 interface DshToolLike {
   name: string;
@@ -443,6 +447,28 @@ const confirmedOf = (runDir: string): Record<string, string> => {
 };
 
 describe("E3-3 confirmFace 落点三级单源（缺口 D——快照与内核读点同棵树）", () => {
+  it("E3 补·resolvePreflightRunDir wp 显式 canonical 优先：真树在场时不落 legacy 假树（快照/回写与 training_prep 同树）", () => {
+    const ws = tempRoot("e3-ws-");
+    const canonicalRun = join(ws, "workspace", "runs", "e3-wp-canon");
+    mkdirSync(canonicalRun, { recursive: true });
+    // legacy 假树同 run_id 在场（仅 webui 绑定形态——历史上抢先命中的形态）
+    mkdirSync(join(ws, "runs", "e3-wp-canon"), { recursive: true });
+    const resolved = resolvePreflightRunDirForE3({ command: "", timeoutMs: 0, runsRoot: tempRoot("e3-runs-"), ctx: { get: () => undefined } }, { runId: "e3-wp-canon", apply: false, workspacePath: ws }, plainExecForE3());
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.runDir).toBe(canonicalRun);
+    expect(resolved.source).toBe("workspace_path");
+  });
+
+  it("E3 补·resolvePreflightRunDir wp 显式 legacy 零变化：canonical 缺席时仍 legacy 公式（存量/新建形态）", () => {
+    const ws = tempRoot("e3-ws-");
+    mkdirSync(join(ws, "runs", "e3-wp-legacy"), { recursive: true });
+    const resolved = resolvePreflightRunDirForE3({ command: "", timeoutMs: 0, runsRoot: tempRoot("e3-runs-"), ctx: { get: () => undefined } }, { runId: "e3-wp-legacy", apply: false, workspacePath: ws }, plainExecForE3());
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.runDir).toBe(join(ws, "runs", "e3-wp-legacy"));
+  });
+
   it("workspace_path 给定（run 在场）：快照落 <ws>/runs/<id>；返回体 run_dir＋run_dir_source=workspace_path", async () => {
     const ws = tempRoot("e3-ws-");
     mkdirSync(join(ws, "runs", "e3-wp-confirm"), { recursive: true });

@@ -142,11 +142,18 @@ export const resolvePreflightRunDir = (deps: PreflightDeps, args: PreflightFlowA
     if (!isAbsolute(workspacePath)) {
       return { ok: false, error: "workspace_path_not_absolute", note: `workspace_path 须为绝对路径（得 ${workspacePath}）` };
     }
-    const dir = join(workspacePath, "runs", runId);
-    if (!isValidRunId(runId) || !existsSync(dir)) {
-      return { ok: false, error: "run_dir_not_found", note: runDirNotFoundNote([dir]) };
+    // E3 补（与 pipelineFace canonical 修复同族）：显式 wp 下 canonical 布局
+    // <wp>/workspace/runs/<id>（内核 RunLayout v1）在场优先——否则九要素确认卡的
+    // 快照/iteration-config 回写会落到 legacy 假树，与 training_prep 的 canonical
+    // 真树不同树（F7 train_sh 对账必拦）；canonical 缺席回落 legacy 公式
+    // <wp>/runs/<id>（存量/新建形态），两形态都不在场才拒（显式优先不静默改道）。
+    const canonical = join(workspacePath, "workspace", "runs", runId);
+    if (isValidRunId(runId) && existsSync(canonical)) return settle(canonical, "workspace_path", [canonical]);
+    const legacy = join(workspacePath, "runs", runId);
+    if (!isValidRunId(runId) || !existsSync(legacy)) {
+      return { ok: false, error: "run_dir_not_found", note: runDirNotFoundNote([canonical, legacy]) };
     }
-    return settle(dir, "workspace_path", [dir]);
+    return settle(legacy, "workspace_path", [canonical, legacy]);
   }
 
   const probed: string[] = [];
