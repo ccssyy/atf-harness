@@ -21,7 +21,7 @@
  *      <run>/launch/prelaunch-report.md 路径与摘要；不承担审批（材料不是闸）。
  *
  * mock 对端＝tests/fixtures/mock_pipeline_params.mjs（argv 回显）＋
- * mock_prelaunch_report.mjs（E4b 新增——b9 前瞻形态）。
+ * mock_prelaunch_report.py（E4b 新增——b9 前瞻形态）。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -296,5 +296,103 @@ describe("E4b-H2 confirmFace 停回写＋bs convention＋deepspeed 统一", () =
       if (key === "visible_devices") continue; // 卡位留空不落快照（D76）
       expect(confirmed[key]).toBeDefined();
     }
+  });
+});
+
+// ══ 3.（H3＋改动 3）atf_prelaunch_report 只读生成工具 ══
+
+import { buildPrelaunchReportTool } from "../../packages/extensions/atf-tools/src/prelaunchFace.js";
+import { cpSync } from "node:fs";
+
+/** mock 内核树（kernelDir 面）：skills/atf-prepare-training/scripts/build_prelaunch_report.py＝
+ *  mock_prelaunch_report.mjs（b9 前瞻宽松来源文法——user_confirmed(ref=...) 放行）。 */
+const mockKernelDir = (): string => {
+  const kernel = tempRoot("e4b-kernel-");
+  const dir = join(kernel, "skills", "atf-prepare-training", "scripts");
+  mkdirSync(dir, { recursive: true });
+  cpSync(join(import.meta.dirname, "..", "fixtures", "mock_prelaunch_report.py"), join(dir, "build_prelaunch_report.py"));
+  return kernel;
+};
+
+const prelaunchToolOf = (kernel: string): DshToolLike =>
+  buildPrelaunchReportTool({ get: () => undefined }, { kernelDir: kernel, timeoutMs: 30_000 }) as unknown as DshToolLike;
+
+/** 种 run 树（canonical 形态）：launch/launch.sh 在场＋config（live/legacy 形态可选）。 */
+const seedRunTree = (ws: string, runId: string, configForm: "live" | "legacy", paramSources?: Record<string, string>): string => {
+  const runDir = join(ws, "workspace", "runs", runId);
+  mkdirSync(join(runDir, "launch"), { recursive: true });
+  writeFileSync(join(runDir, "launch", "launch.sh"), "#!/bin/bash\nexit 0\n");
+  const config = { schema_version: "IterationConfig/v1", training: { learning_rate: "1e-4", per_device_train_batch_size: 2 }, ...(paramSources !== undefined ? { param_sources: paramSources } : {}) };
+  if (configForm === "live") {
+    mkdirSync(join(runDir, "prep"), { recursive: true });
+    writeFileSync(join(runDir, "prep", "iteration-config.json"), JSON.stringify(config, null, 1));
+  } else {
+    mkdirSync(join(runDir, "prep", "iteration-config"), { recursive: true });
+    writeFileSync(join(runDir, "prep", "iteration-config", "iteration-config.json"), JSON.stringify(config, null, 1));
+  }
+  return runDir;
+};
+
+describe("E4b-H3 atf_prelaunch_report（只读生成/回读——材料不是闸）", () => {
+  it("正常链路：canonical run 树＋live config → 报告落 <run>/launch/prelaunch-report.md＋路径/字节/摘要返回", async () => {
+    const ws = tempRoot("e4b-ws-");
+    const runDir = seedRunTree(ws, "e4b-pl", "live");
+    const result = (await prelaunchToolOf(mockKernelDir()).execute({ run_id: "e4b-pl", workspace_path: ws }, fakeExec)) as Record<string, unknown>;
+    expect(result["ok"]).toBe(true);
+    expect(result["run_dir"]).toBe(runDir);
+    expect(result["run_dir_layout"]).toBe("canonical");
+    expect(result["config_form"]).toBe("live");
+    expect(result["report_path"]).toBe(join(runDir, "launch", "prelaunch-report.md"));
+    expect(result["report_bytes"]).toBeGreaterThan(0);
+    expect(String(result["summary_head"])).toContain("需确认");
+  });
+
+  it("改动 3 不误拒锚：param_sources 含 user_confirmed(ref=stage:training_overrides)（内核 training_prep 段落账形态）→ 生成成功且来源串原样进报告", async () => {
+    const ws = tempRoot("e4b-ws-");
+    const runDir = seedRunTree(ws, "e4b-uc", "legacy", { learning_rate: "user_confirmed(ref=stage:training_overrides)" });
+    const result = (await prelaunchToolOf(mockKernelDir()).execute({ run_id: "e4b-uc", workspace_path: ws }, fakeExec)) as Record<string, unknown>;
+    expect(result["ok"]).toBe(true); // harness 零第二套来源校验——该形态不被工具拒
+    expect(result["config_form"]).toBe("legacy");
+    const report = readFileSync(join(runDir, "launch", "prelaunch-report.md"), "utf8");
+    expect(report).toContain("user_confirmed(ref=stage:training_overrides)"); // 来源串原样呈现（内核 b9 文法）
+  });
+
+  it("来源闸单源在内核：malformed 来源串 → 工具如实回传脚本拒绝（stderr_tail 含 param_source_invalid，不吞不预判）", async () => {
+    const ws = tempRoot("e4b-ws-");
+    seedRunTree(ws, "e4b-bad-src", "live", { learning_rate: "沿用上一轮的值" });
+    const result = (await prelaunchToolOf(mockKernelDir()).execute({ run_id: "e4b-bad-src", workspace_path: ws }, fakeExec)) as Record<string, unknown>;
+    expect(result["ok"]).toBe(false);
+    expect(result["error"]).toBe("prelaunch_report_failed");
+    expect(String(result["stderr_tail"])).toContain("param_source_invalid");
+  });
+
+  it("快败面：run 不存在拒（只读不代建）／无 IterationConfig 拒并指路 training_prep／无 launch.sh 拒并指路 generate_train_launch", async () => {
+    const tool = prelaunchToolOf(mockKernelDir());
+    const absent = (await tool.execute({ run_id: "no-such", workspace_path: tempRoot("e4b-ws-") }, fakeExec)) as Record<string, unknown>;
+    expect(absent["ok"]).toBe(false); // run 不存在：legacy 公式探测不在场即拒（不 mkdir）
+    const ws2 = tempRoot("e4b-ws-");
+    const runDir2 = join(ws2, "workspace", "runs", "e4b-noconfig");
+    mkdirSync(join(runDir2, "launch"), { recursive: true });
+    writeFileSync(join(runDir2, "launch", "launch.sh"), "#!/bin/bash\n");
+    const noConfig = (await tool.execute({ run_id: "e4b-noconfig", workspace_path: ws2 }, fakeExec)) as Record<string, unknown>;
+    expect(noConfig["error"]).toBe("iteration_config_missing");
+    expect(String(noConfig["note"])).toContain("training_prep");
+    const ws3 = tempRoot("e4b-ws-");
+    const runDir3 = join(ws3, "workspace", "runs", "e4b-nolaunch");
+    mkdirSync(join(runDir3, "prep"), { recursive: true });
+    writeFileSync(join(runDir3, "prep", "iteration-config.json"), JSON.stringify({ training: {} }));
+    const noLaunch = (await tool.execute({ run_id: "e4b-nolaunch", workspace_path: ws3 }, fakeExec)) as Record<string, unknown>;
+    expect(noLaunch["error"]).toBe("launch_artifacts_missing");
+    expect(String(noLaunch["note"])).toContain("generate_train_launch");
+  });
+
+  it("免审批锚：全程零 approval 服务消费（ctx.get('approval') 返回 undefined 也不拒）＋幂等重跑", async () => {
+    const ws = tempRoot("e4b-ws-");
+    seedRunTree(ws, "e4b-idem", "live");
+    const tool = prelaunchToolOf(mockKernelDir());
+    const first = (await tool.execute({ run_id: "e4b-idem", workspace_path: ws }, fakeExec)) as Record<string, unknown>;
+    const second = (await tool.execute({ run_id: "e4b-idem", workspace_path: ws }, fakeExec)) as Record<string, unknown>;
+    expect(first["ok"]).toBe(true);
+    expect(second["ok"]).toBe(true); // 幂等覆盖重写
   });
 });
