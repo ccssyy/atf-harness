@@ -103,14 +103,18 @@ export const guardParamsFace = (snapshot: SurfaceSnapshot, facts: HarnessSurface
   }
   const options = optionSetOf(entry);
   const byOption = new Map(entry.args.map((arg) => [arg.option, arg]));
-  // 行为面旗标全部在内核声明面（禁传内核未声明参数）
+  // 豁免键旗标集（前瞻豁免面——E5·H1 D139 豁免已随 re-pin b10 退役，集恒空；
+  // waivedFlags 派生逻辑保留供将来前瞻豁免复用，空集＝行为面/映射面全对账）
+  const waivedFlags = new Set(
+    [...facts.paramFaceWaivers].map((key) => facts.flagByParam[key]).filter((flag) => flag !== undefined),
+  );
+  // 行为面旗标全部在内核声明面（禁传内核未声明参数；豁免旗标除外——集空即全查）
   for (const token of facts.argvTokens) {
-    if (token.startsWith("--") && !options.has(token)) {
+    if (token.startsWith("--") && !options.has(token) && !waivedFlags.has(token)) {
       out.push({ kind: "参数面", detail: `行为面下传旗标 ${token} 不在内核 argparse 声明面（禁传内核未声明参数）` });
     }
   }
-  // 工具参数键 ↔ 旗标映射完整且落清单（E4-乙前瞻豁免键免「旗标落声明面」单项——
-  // 内核 b9 将声明该旗标，re-pin 后豁免退役恢复全对账）
+  // 工具参数键 ↔ 旗标映射完整且落清单（前瞻豁免键免「旗标落声明面」单项——集空即全查）
   for (const key of facts.toolParamKeys) {
     const flag = facts.flagByParam[key];
     if (flag === undefined) {

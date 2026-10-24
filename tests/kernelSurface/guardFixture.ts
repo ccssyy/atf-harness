@@ -77,18 +77,18 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   reuse_experiment_setup: "--reuse-experiment-setup",
   token_provider: "--token-provider",
   retry_coordinate_pending: "--retry-coordinate-pending",
-  // E4-乙（改动 1）：training_prep 段训练参数单源桥——flag 属内核 generate_iteration_config.py
-  // 声明面（b9 K1-1；经 atf_scratch_exec 直调生成器注入，非 walkthrough argv 下传）——
-  // 映射保留作文档对账锚（跨脚本 flag），豁免见 PARAM_FACE_WAIVERS
+  // E4-乙（改动 1）＋E5·H1 D139：training_prep 段训练参数单源桥——flag 属内核
+  // generate_iteration_config.py 声明面（b9 K1-1），b10 起 walkthrough 段命令接线
+  // 并随段 argv 下传（re-pin b10 后快照已含该声明面——豁免同步退役）
   training_overrides: "--training-overrides",
 };
 
-/** E4-乙参数面豁免（长期化）：training_overrides 的映射旗标 --training-overrides 在内核
- *  b9 argparse 面的 generate_iteration_config.py 条目（非 walkthrough_pipeline.py）——
- *  guardParamsFace 的对账锚恒为 walkthrough 条目，跨脚本 flag 永不落该面，豁免不免除
- *  映射完整性与文档对账（FLAG_BY_PARAM 登记＋pipelineFace 文档记载均在位；注入通路
- *  ＝返回体 training_overrides_json 经 atf_scratch_exec 直调生成器，argv 零下传）。 */
-export const PARAM_FACE_WAIVERS: ReadonlySet<string> = new Set(["training_overrides"]);
+/** 参数面前瞻豁免集（E5·H1 D139 已退役——空集）：b9 快照无 walkthrough 声明面的
+ *  下传旗标曾在此登记（行为面＋映射面双跳过）；re-pin b10 随快照补齐声明面后置空
+ *  恢复全对账。集恒空＝无豁免在期（guardParamsFace 的 waivedFlags 派生逻辑保留，
+ *  供将来前瞻豁免复用；「快照缺旗标」场景的阴性锚改构造 b9-like 快照——见
+ *  guard.negative，禁以 waiver 过关）。 */
+export const PARAM_FACE_WAIVERS: ReadonlySet<string> = new Set<string>();
 
 /** 九要素键 → 消费点登记表（「可编辑不消费」禁的正向登记；旗标空串＝脚本级组装消费
  *  ——值经脚本组装进产物文件，非 CLI 参数直收）。新增卡键必须同步在册：消费点参数级
@@ -179,6 +179,9 @@ export const collectArgvTokens = async (): Promise<string[]> => {
       run_id: "d94-prep",
       workspace_path: tempRoot,
       base_model_path: join(tempRoot, "model-dir"),
+      // E5·H1 D139：training_overrides 随段 argv 下传（b10 接线）——行为面覆盖
+      // --training-overrides token（b9 快照前瞻豁免行使面）
+      training_overrides: { lora_rank: 32 },
     },
   ];
   const tokens: string[] = [];
@@ -199,8 +202,8 @@ export const factsOf = (argvTokens: readonly string[]): HarnessSurfaceFacts & { 
     ((buildPipelineTool(approvalCtx(), `node ${MOCK}`, 30_000) as unknown as DshToolLike).parameters as { properties?: Record<string, unknown> }).properties ?? {},
   ),
   flagByParam: FLAG_BY_PARAM,
-  /** E4-乙前瞻豁免集（b9 未发窗——见 PARAM_FACE_WAIVERS；豁免键跳过「旗标落声明面」
-   *  单项对账，映射完整性与文档对账不变）。 */
+  /** 参数面前瞻豁免集（E5·H1 D139 已退役——恒空集；b9 未发窗期曾登记
+   *  training_overrides，re-pin b10 随快照补齐声明面后置空恢复全对账）。 */
   paramFaceWaivers: PARAM_FACE_WAIVERS,
   pipelineStages: SEGMENT_ORDER,
   segmentFactKeys: Object.keys(SEGMENT_FACT_BY_KERNEL_STAGE),

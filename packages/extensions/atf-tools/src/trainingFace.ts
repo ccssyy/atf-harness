@@ -11,10 +11,19 @@
  *    run_analysis_chain.py --raw-mainline 一键链；脚本一律取 <kernelDir>/skills/（pin 单源）。
  * 审批：run_training= danger 必确认（GPU/时长）；evaluate= 确认（资源占用）；analyze= 轻量。
  * 环境纪律沿 M0：GPU/端口/venv 走 env-profile；异常即停即报不静默重试。
+ *
+ * E5·H2（D142/D143）评估链实例根显式传递：atf_evaluate 的内核子步（generate_eval_
+ * service／build_service_prelaunch_report／generate_checkpoint_plan／generate_eval_
+ * orchestration／--record-eval-release）一律显式接收 env（HOME＝实例根单源
+ * resolveEvalInstanceRoot——ATF_HOME ＞ HOME ＞ 系统家〔getpwuid 锚，env -i 下仍稳〕；
+ * 其余 env 原样继承），编排 tmux 会话命令同注入 env 前缀——内核子步与编排脚本内的
+ * Path.home()/${HOME} 解析不再依赖子进程隐式继承（HOME 漂移/tmux 旧服务端分轴下
+ * 账本与状态根稳定）；status 返回体带 instance_root（实际解析根＋来源）供对账。
  */
 import { spawn, execFile, execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import * as net from "node:net";
+import { homedir, userInfo } from "node:os";
 import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync, mkdirSync, appendFileSync, renameSync, statSync, copyFileSync as copyFileSyncBuiltin } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
@@ -39,7 +48,7 @@ import { resolveRunDir, workspaceOfRunDir } from "../../../../src/core/workspace
 import { listRegistryRecords, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { bindSessionRun, readSessionBinding, resolveActiveRun, resolveBindingsHome } from "../../../../src/core/workspace/sessionBindings.js";
 import { buildRunCandidates } from "../../../../src/core/workspace/runDisplay.js";
-import { appendLedgerAuditComment, ledgerEnvPrefixForShell } from "../../../../src/core/workspace/approvalLedger.js";
+import { appendLedgerAuditComment, ledgerEnvPrefixForShell, shellSingleQuoted } from "../../../../src/core/workspace/approvalLedger.js";
 import { dualStageNote } from "./confirmFace.js";
 import { deriveAtfRoot } from "../../../../src/webui/storageSettings.js";
 
@@ -466,11 +475,49 @@ export function modelLabelLooksDefault(model: unknown): boolean {
 /** tmux 面查询统一走 src/core/workspace/tmuxLiveness.ts probeSession（批㊶-ISO E1 单源——
  *  命名域前缀拼装与 fail-closed 拒绝同源，本文件不再自建包装）。 */
 
-const runCapture = (cmd: string, args: readonly string[], timeoutMs: number): Promise<{ code: number | null; stdout: string; stderr: string }> =>
+/** E5·H2（D142/D143）评估链实例根单源：内核子步显式接收的 home 根（禁依赖子进程
+ *  Path.home() 隐式继承——env -i／HOME 漂移／tmux 旧服务端分轴下解析仍稳定）。
+ *  解析序＝ATF_HOME（实例显式键）＞ HOME（实例 env 轴）＞ 系统家（getpwuid 锚——
+ *  userInfo().homedir 不读 env，env -i 下仍是真家；异常回落 homedir()）。
+ *  DSH_HOME 是 <home>/.dsh 派生位非家本身，不入序（当根传会把账本写进 .dsh 子树）。
+ */
+export type EvalInstanceRootSource = "atf_home_env" | "home_env" | "system_home";
+
+export const resolveEvalInstanceRoot = (
+  env: Readonly<Record<string, string | undefined>> = process.env,
+  systemHome: () => string = () => {
+    try { return userInfo().homedir; } catch { return homedir(); }
+  },
+): { root: string; source: EvalInstanceRootSource } => {
+  const atfHome = env["ATF_HOME"]?.trim();
+  if (atfHome !== undefined && atfHome !== "") return { root: atfHome, source: "atf_home_env" };
+  const homeEnv = env["HOME"]?.trim();
+  if (homeEnv !== undefined && homeEnv !== "") return { root: homeEnv, source: "home_env" };
+  return { root: systemHome(), source: "system_home" };
+};
+
+/** 评估子步 env 构造（E5·H2）：实例 env 原样继承＋HOME 显式钉到实例根（子步内
+ *  Path.home() 与 shell ${HOME} 解析单源；ATF_HOME 等实例键随继承面在场）。 */
+const evalChildEnvOf = (env: Readonly<Record<string, string | undefined>> = process.env): NodeJS.ProcessEnv =>
+  ({ ...env, HOME: resolveEvalInstanceRoot(env).root } as NodeJS.ProcessEnv);
+
+/** 评估编排 tmux 命令 env 前缀（E5·H2——训练链 ledgerEnvPrefixForShell 同构扩展）：
+ *  HOME 钉实例根＋ATF_APPROVAL_LEDGER 显式前缀（编排脚本内 ${ATF_APPROVAL_LEDGER:-${HOME}/...}
+ *  运行时解析不随 tmux 旧服务端 env 分轴漂移；未设则只注 HOME）。 */
+const evalTmuxEnvPrefixOf = (env: Readonly<Record<string, string | undefined>> = process.env): string => {
+  const parts = [`HOME=${shellSingleQuoted(resolveEvalInstanceRoot(env).root)}`];
+  const ledger = env["ATF_APPROVAL_LEDGER"]?.trim();
+  if (ledger !== undefined && ledger !== "") parts.push(`ATF_APPROVAL_LEDGER=${shellSingleQuoted(ledger)}`);
+  return `env ${parts.join(" ")} `;
+};
+
+/** 子步捕获封装（E5·H2：env 可选显式传——评估链五子步一律传 evalChildEnvOf()；
+ *  未传＝继承（既有训练链行为不动）。非零退出/超时如实回传，不抛。 */
+const runCapture = (cmd: string, args: readonly string[], timeoutMs: number, env?: NodeJS.ProcessEnv): Promise<{ code: number | null; stdout: string; stderr: string }> =>
   new Promise((resolve) => {
-    execFile(cmd, [...args], { timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => {
-      const raw = error === null ? 0 : (error as NodeJS.ErrnoException & { code?: number | string }).code;
-      resolve({ code: typeof raw === "number" ? raw : null, stdout: String(stdout), stderr: String(stderr) });
+    execFile(cmd, [...args], { timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, ...(env !== undefined ? { env } : {}) }, (error, stdout, stderr) => {
+      const rawCode = error === null ? 0 : (error as NodeJS.ErrnoException & { code?: number | string }).code;
+      resolve({ code: typeof rawCode === "number" ? rawCode : null, stdout: String(stdout), stderr: String(stderr) });
     });
   });
 
@@ -1038,6 +1085,10 @@ interface EvalStatusValue {
  *  files/summary 全取完成轮——部分轮天然不算 completed，不做 dry-run 标记）。
  *  两值不同 → 返回体附 latest_round_incomplete:true。不删除任何轮目录。 */
 export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelDir: string; canonicalRoots?: readonly string[] }): Promise<ReturnType<typeof asToolValue>> {
+  // E5·H2（D142/D143）：status 返回体带实际解析根（实例根单源——env -i/HOME 漂移下
+  // 仍解析稳定；start 链子步 env 即按此根显式传递，此处同源对账）
+  const instanceRoot = resolveEvalInstanceRoot();
+  const instanceRootKeys = { instance_root: instanceRoot.root, instance_root_source: instanceRoot.source };
   const evalRoot = join(resolveRunDir(cfg.runsRoot, runId, { canonicalRoots: canonicalRunRootsOf(cfg) }), "eval");
   let roundNames: string[] = [];
   try {
@@ -1064,6 +1115,7 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
       action: "status", run_id: runId, running,
       tmux: resolveLaunchSessionName(orchBase),
       ...(orchProbe.refused !== null ? { tmux_probe: orchProbe.refused } : {}),
+      ...instanceRootKeys,
       note: "无评估轮目录——先 start",
     });
   }
@@ -1078,6 +1130,7 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
       latest_round: latestName, latest_round_incomplete: true, running,
       tmux: resolveLaunchSessionName(orchBase),
       ...(orchProbe.refused !== null ? { tmux_probe: orchProbe.refused } : {}),
+      ...instanceRootKeys,
       note: "尚无完成的评估轮",
       next_steps: {
         four_set_ready: readinessNone.four_set_ready,
@@ -1123,6 +1176,7 @@ export async function evalStatus(runId: string, cfg: { runsRoot: string; kernelD
     ...(completedName !== latestName ? { latest_round: latestName, latest_round_incomplete: true } : { latest_round: completedName }),
     tmux: resolveLaunchSessionName(orchBase),
     ...(orchProbe.refused !== null ? { tmux_probe: orchProbe.refused } : {}),
+    ...instanceRootKeys,
     ...(service !== null ? { service } : {}),
     orchestration,
     files,
@@ -1897,7 +1951,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const serviceDir = join(roundDir, "service");
       const deployArgs = args.deploy !== undefined ? ["--deploy", args.deploy] : [];
       // ① 生成服务件（机器事实 fail-closed 在脚本内：exit 2＝MissingFactsBlock——停下问用户，不进确认卡）
-      const generated = await runCapture("python3", [genService, "--config", args.service_config, "--env-profile", args.env_profile, ...deployArgs, "--out", serviceDir], 120_000);
+      // E5·H2：env 显式传（HOME＝实例根单源——子步内 Path.home() 解析不随继承面漂移）
+      const generated = await runCapture("python3", [genService, "--config", args.service_config, "--env-profile", args.env_profile, ...deployArgs, "--out", serviceDir], 120_000, evalChildEnvOf());
       const blockPath = join(serviceDir, "machine-facts-block.json");
       if (generated.code !== 0) {
         // 批次R H1-3 补面（R-H 实锚）：eval 服务件生成失败输出先扫内核四码
@@ -1930,7 +1985,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         "--field-config", fieldConfigResolved.path, "--prompt-renderer", skill("atf-admit-training-data", "render_prompt.py"),
         "--concurrency", String(concurrency),
         ...(args.concurrency !== undefined ? ["--concurrency-recommended", String(concurrency)] : []),
-        ...(args.concurrency_reason !== undefined && args.concurrency_reason.trim() !== "" ? ["--concurrency-reason", args.concurrency_reason.trim()] : [])], 120_000);
+        ...(args.concurrency_reason !== undefined && args.concurrency_reason.trim() !== "" ? ["--concurrency-reason", args.concurrency_reason.trim()] : [])], 120_000, evalChildEnvOf());
       if (reported.code !== 0 || !existsSync(reportPath)) {
         return asToolValue({ started: false, error: "prelaunch_report_failed", eval_round: roundDir, stderr_tail: reported.stderr.slice(-800), note: "确认报告未产出＝EVAL_RELEASE 准入未闭合（SKILL.md 确认制）" });
       }
@@ -1966,8 +2021,10 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       if (!verdict.ok) return approvalDeniedResult("atf_evaluate", verdict.outcome);
       // D20h：放行登记带会话身份与 ui 模式（actor＝会话 id，缺失＝unattributed——不伪造 owner）；
       // 账本 approval_id 回传返回体（解析失败省略键不阻断——stderr 记一条）
+      // E5·H2：账本登记子步 env 显式传（HOME＝实例根——record 写 Path.home() 推导位
+      // 的 eval-release.jsonl，落点不随继承面漂移）
       const recorded = await runCapture("python3", [genService, "--record-eval-release", "--config", args.service_config, "--service-dir", serviceDir, "--note", "atf_evaluate 确认卡放行（九必报项报告已确认）",
-        "--actor", sessionIdOf(exec) ?? "unattributed", "--approval-mode", "ui", "--round-dir", roundDir], 60_000);
+        "--actor", sessionIdOf(exec) ?? "unattributed", "--approval-mode", "ui", "--round-dir", roundDir], 60_000, evalChildEnvOf());
       if (recorded.code !== 0) {
         return asToolValue({ started: false, error: "eval_release_record_failed", stderr_tail: recorded.stderr.slice(-800), note: "放行登记失败——不启动编排，账本唯一真相不造假" });
       }
@@ -1983,7 +2040,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         staging_root: join(roundDir, "staging"),
         selections: [{ lane: evalLane, checkpoint_dir: args.adapter_path, staged_name: `${runId}_eval` }],
       }, null, 1) + "\n", "utf8");
-      const planned = await runCapture("python3", [ckptPlanGen, "--config", ckptPlanPath, "--out", ckptPlanDir], 120_000);
+      const planned = await runCapture("python3", [ckptPlanGen, "--config", ckptPlanPath, "--out", ckptPlanDir], 120_000, evalChildEnvOf());
       if (planned.code !== 0) {
         return asToolValue({ started: false, error: "checkpoint_plan_failed", eval_round: roundDir, stderr_tail: planned.stderr.slice(-800) });
       }
@@ -2004,7 +2061,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         "--concurrency", String(concurrency),
         ...(splitManifestResolved !== null ? ["--split-manifest", splitManifestResolved.path] : []),
         ...(args.assets_external_confirm === true ? ["--assets-external-confirm"] : [])];
-      const orchPlanned = await runCapture("python3", orchArgs, 120_000);
+      const orchPlanned = await runCapture("python3", orchArgs, 120_000, evalChildEnvOf());
       if (orchPlanned.code !== 0) {
         return asToolValue({
           started: false, error: "orchestration_plan_failed", eval_round: roundDir, stderr_tail: orchPlanned.stderr.slice(-800),
@@ -2021,7 +2078,10 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // D14：--prompt-mode 单源传解析值（继承训练/显式——不再硬编码 mode0；eval_orchestration.sh 经 "$@" 转发 runner）
       const orchSessionName = resolveLaunchSessionName(evalOrchSessionBase(runId));
       try { execSync(tmuxCommand(`kill-session -t ${orchSessionName} 2>/dev/null`)); } catch { /* 无旧 */ }
-      execSync(tmuxCommand(`new-session -d -s ${orchSessionName} "bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode ${promptMode.mode} 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`));
+      // E5·H2：编排会话命令 env 前缀注入（HOME＝实例根＋ATF_APPROVAL_LEDGER 若设）——
+      // 编排脚本内 ${ATF_APPROVAL_LEDGER:-${HOME}/...} 运行时解析不随 tmux 旧服务端
+      // env 分轴漂移（训练链 ledgerEnvPrefixForShell 同构扩展）
+      execSync(tmuxCommand(`new-session -d -s ${orchSessionName} "${evalTmuxEnvPrefixOf()}bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode ${promptMode.mode} 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`));
       // 批㊶-M M-3 段事实轨：评估编排启动成功即登记（evaluate 段）
       appendSegmentFact(runDir, "evaluate", "atf_evaluate");
       // 批㊶-N N-5：会话绑定

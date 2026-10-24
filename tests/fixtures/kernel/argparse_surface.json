@@ -4937,6 +4937,15 @@
     "required": null
    },
    {
+    "option": "--training-overrides",
+    "dest": "training_overrides",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--allow-token-gate-skip",
     "dest": "allow_token_gate_skip",
     "action": "store_true",
