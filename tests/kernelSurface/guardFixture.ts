@@ -71,6 +71,8 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   train_all: "--train-all",
   assignment_source: "--assignment-source",
   reuse_experiment_setup: "--reuse-experiment-setup",
+  token_provider: "--token-provider",
+  retry_coordinate_pending: "--retry-coordinate-pending",
 };
 
 /** 九要素键 → 消费点登记表（「可编辑不消费」禁的正向登记；旗标空串＝脚本级组装消费

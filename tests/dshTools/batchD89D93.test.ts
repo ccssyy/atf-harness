@@ -278,3 +278,49 @@ describe("D93——三参透传（train_all／assignment_source／reuse_experime
     expect(tool.description).toContain("同时给会被内核拒绝");
   });
 });
+
+describe("D108——token-provider／retry-coordinate-pending 透传（内核全局参数，给才下传）", () => {
+  it("token_provider 给路径 → argv 含 --token-provider <trim 值>；缺省/空白不出现", async () => {
+    const given = (await toolOf().execute(
+      { stage: "experiment_setup", run_id: "d108-tp", workspace_path: tempRoot(), token_provider: "/data/kernel/skills/x/token_provider.py  " },
+      fakeExec,
+    )) as Record<string, unknown>;
+    expect(given["ok"]).toBe(true);
+    const argv = summaryArgv(given);
+    expect(argv[argv.indexOf("--token-provider") + 1]).toBe("/data/kernel/skills/x/token_provider.py");
+    const blank = (await toolOf().execute(
+      { stage: "experiment_setup", run_id: "d108-tp-blank", workspace_path: tempRoot(), token_provider: "   " },
+      fakeExec,
+    )) as Record<string, unknown>;
+    expect(summaryArgv(blank)).not.toContain("--token-provider");
+  });
+  it("retry_coordinate_pending=true → argv 含 --retry-coordinate-pending；缺省/false 不出现", async () => {
+    const on = (await toolOf().execute(
+      { stage: "training_prep", run_id: "d108-rc-on", workspace_path: tempRoot(), base_model_path: "/data/LLM_model/fake-model", retry_coordinate_pending: true },
+      fakeExec,
+    )) as Record<string, unknown>;
+    expect(on["ok"]).toBe(true);
+    expect(summaryArgv(on).filter((a) => a === "--retry-coordinate-pending")).toHaveLength(1);
+    const def = (await toolOf().execute(
+      { stage: "training_prep", run_id: "d108-rc-def", workspace_path: tempRoot(), base_model_path: "/data/LLM_model/fake-model" },
+      fakeExec,
+    )) as Record<string, unknown>;
+    expect(summaryArgv(def)).not.toContain("--retry-coordinate-pending");
+  });
+  it("两参不按段 gate（内核全局参数）：label_qc 段给两件照样下传；参数 schema 两件在位", async () => {
+    const result = (await toolOf().execute(
+      { stage: "label_qc", run_id: "d108-global", workspace_path: tempRoot(), token_provider: "/tmp/tp.py", retry_coordinate_pending: true },
+      fakeExec,
+    )) as Record<string, unknown>;
+    expect(result["ok"]).toBe(true);
+    const argv = summaryArgv(result);
+    expect(argv[argv.indexOf("--token-provider") + 1]).toBe("/tmp/tp.py");
+    expect(argv).toContain("--retry-coordinate-pending");
+    const tool = toolOf();
+    const props = (tool.parameters as { properties?: Record<string, { type?: string; description?: string }> }).properties ?? {};
+    expect(props["token_provider"]?.type).toBe("string");
+    expect(props["retry_coordinate_pending"]?.type).toBe("boolean");
+    expect(String(props["token_provider"]?.description)).toContain("真算");
+    expect(String(props["retry_coordinate_pending"]?.description)).toContain("pending 清单");
+  });
+});
