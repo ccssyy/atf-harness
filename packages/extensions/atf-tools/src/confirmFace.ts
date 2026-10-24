@@ -45,7 +45,10 @@ import {
   defaultBaseModelPath,
 } from "../../../../src/core/workspace/smartDefaults.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
+import { readLaunchKpi } from "../../../../src/core/workspace/trainingPreflight.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+// F1 前置预检共用交互流（循环 import 安全：两侧顶层均零执行对方导出——函数体内引用）
+import { preflightScriptAvailable, runPreflightFlow, type PreflightDeps } from "./preflightFace.js";
 import { openSettingsStore } from "../../../../src/webui/settings.js";
 import { instanceSettingsPath } from "../../../../src/webui/storageSettings.js";
 
@@ -308,6 +311,8 @@ interface ConfirmDeps {
   ctx: { get(service: string): unknown };
   /** 批㊶R前置：可用卡数探测注入（vitest 假件；缺省＝真实机器事实通道 nvidia-smi/CUDA_VISIBLE_DEVICES）。 */
   gpuProbe?: () => number | null;
+  /** F1：前置预检装配（九要素卡前先出预检卡；缺席＝不出预检卡，九要素链现状语义）。 */
+  preflight?: PreflightDeps;
 }
 
 /** pending 卡落盘（刷新重建源：<runDir>/webui/pending-confirm.json——runDir 双形态解析归调用方）。 */
@@ -387,6 +392,29 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
     async execute(args: { action: "present" | "amend"; run_id: string; overrides?: Record<string, unknown>; edits?: Record<string, unknown>; recommend?: Record<string, unknown> }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批㊶Q增补三 段3：run 目录双形态解析（新建带发起会话工作区归属——runs/<工作区>/<run_id>）
       const runDir = resolveRunDir(deps.runsRoot, args.run_id, { workspace: sessionWorkspaceSlug(exec) });
+      // F1（首跑体验批）§二.2：九要素卡之前先出「首跑预检卡」——顺序机制保证：
+      // preflight KPI 事实缺席且预检脚本在场时先跑预检（有问题项才出卡：needs_confirm
+      // 合并一屏收集；derivable 项卡上可勾选 apply_derivables，经审批卡放行后内核
+      // --apply 执行）。全绿只记 KPI 零介入；全自动训练档免阻塞不出卡（清单进返回体）；
+      // 脚本缺席/预检失败＝跳过（九要素链现状零回归——pin 未含脚本过渡态）。预检不
+      // 替代各段校验、不阻塞本卡（用户取消预检卡也继续九要素链）；KPI 首写固定天然
+      // 幂等（amend 重呈不重跑预检）。
+      let preflightNote: string | undefined;
+      if (
+        deps.preflight !== undefined &&
+        readLaunchKpi(runDir)?.preflight === undefined &&
+        preflightScriptAvailable(deps.preflight.command)
+      ) {
+        const outcome = await runPreflightFlow(deps.preflight, { runId: args.run_id, apply: false }, exec, {
+          presentCard: !isAutoTrainingTier(ctx, exec),
+        });
+        if (outcome.ok && outcome.report !== undefined && outcome.report.items.length > 0) {
+          preflightNote = [
+            outcome.checklist ?? "",
+            ...(outcome.decisions !== undefined ? [`预检确认决策（请转后续段参数）：${JSON.stringify(outcome.decisions)}`] : []),
+          ].filter((line) => line !== "").join("\n");
+        }
+      }
       // 现值基线：已确认快照（不重问）→ run 的 IterationConfig 实值（批㉛段2：登记源，确认卡
       // 与 Web 摘要同源——deepspeed 等实值不再落回泛化缺省）→ pending 卡现值 → 缺省
       const snapshotPath = join(runDir, "webui", "config-snapshot.json");
@@ -676,6 +704,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           ...(recommendReport.length > 0 ? { recommend_report: recommendReport } : { recommend: "missing_fallback_defaults" }),
           notification,
           snapshot: "webui/config-snapshot.json",
+          ...(preflightNote !== undefined ? { preflight: preflightNote } : {}),
           ...(amendNote !== undefined ? { amend: amendNote } : {}),
         });
       }
@@ -713,6 +742,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           { key: "token_budget_sync_reason", label: "token_budget_sync_reason", value: "", placeholder: "预算与 cutoff 不等时的不同步理由（不等必填；相等留空）——同步请在 cutoff_len 框直接填预算值（用户动作）" },
         ];
         const formDetail = [
+          // F1：预检清单首行注入（预检卡在前、九要素卡承接呈现——清单随卡可回看）
+          ...(preflightNote !== undefined ? [preflightNote] : []),
           "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。",
           // D92：dataset_keys 只读行（输入框已滤——实算值/缺席均如实呈现，不造占位数）
           datasetKeysFaceLineOf(fields),
@@ -835,7 +866,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const sessionIdCfg = sessionIdOfExec(exec);
       if (sessionIdCfg !== undefined) appendBinding(runDir, sessionIdCfg);
       injectBashRunWorkspace(runDir); // 批㊶-S1 门2修复
-      return asToolValue({ ok: true, run_id: args.run_id, confirmed: true, fields, snapshot: "webui/config-snapshot.json", ...(amendNote !== undefined ? { amend: amendNote } : {}) });
+      return asToolValue({ ok: true, run_id: args.run_id, confirmed: true, fields, snapshot: "webui/config-snapshot.json", ...(preflightNote !== undefined ? { preflight: preflightNote } : {}), ...(amendNote !== undefined ? { amend: amendNote } : {}) });
     },
   });
 

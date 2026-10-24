@@ -31,6 +31,7 @@ import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTransl
 import { BridgeManager, buildBridgeTools } from "./bridgeFace.js";
 import { buildFileTools } from "./fileFace.js";
 import { buildPipelineTool } from "./pipelineFace.js";
+import { buildPreflightTool, type PreflightDeps } from "./preflightFace.js";
 import { buildQuantizeTool } from "./quantizeFace.js";
 import { buildConfirmTools } from "./confirmFace.js";
 import { buildRunTrainingTool, buildEvalTools, buildPublishModelTool, type TrainingToolsConfig } from "./trainingFace.js";
@@ -57,6 +58,8 @@ export interface AtfToolsConfig {
   pipelineTimeoutMs: number;
   /** E1b：量化 CLI 超时（Config z.object 缺省 120s——测试面构造字面量可缺省不携带）。 */
   quantizeTimeoutMs?: number;
+  /** F1：预检脚本 CLI 超时（缺省同管线 120s）。 */
+  preflightTimeoutMs?: number;
 }
 
 export const Config = z.object({
@@ -77,6 +80,7 @@ export const Config = z.object({
     .default(process.env["ATF_DSH_PIPELINE_COMMAND"] ?? `node ${join(repoRoot, "tests", "fixtures", "mock_pipeline.mjs")}`),
   pipelineTimeoutMs: z.number().default(120_000),
   quantizeTimeoutMs: z.number().default(120_000),
+  preflightTimeoutMs: z.number().default(120_000),
   logDir: z
     .string()
     .default(process.env["ATF_DSH_LOG_DIR"] ?? join(repoRoot, "tmp", "atf-logs")),
@@ -170,10 +174,21 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // （approvalFace 既有 seam——ctx 注入是审批服务唯一可达路径）。
   for (const tool of buildFileTools(config.runsRoot, { ctx })) ctx.tools.register(tool);
   ctx.tools.register(buildPipelineTool(ctx, pipelineCommand, config.pipelineTimeoutMs));
+  // F1（首跑体验批）：训练链入口预检——内核 tools/training_preflight.py 单源（kernelDir
+  // 消费链）；pin 未含脚本时工具如实报 preflight_script_missing（不 mock 不猜），env
+  // ATF_DSH_PREFLIGHT_COMMAND 可注入替代命令（测试/过渡态）。前置卡装配同源一份
+  // （confirmTools——九要素卡前先出预检卡）。
+  const preflightDeps: PreflightDeps = {
+    command: process.env["ATF_DSH_PREFLIGHT_COMMAND"] ?? `python3 ${join(config.kernelDir, "tools", "training_preflight.py")}`,
+    timeoutMs: config.preflightTimeoutMs ?? 120_000,
+    runsRoot: config.runsRoot,
+    ctx,
+  };
+  ctx.tools.register(buildPreflightTool(preflightDeps));
   // E1b：坐标量化工具面——内核 CLI 单源（<kernelDir>/tools/quantize_annotations.py，pin 随
   // kernelDir 消费链；白名单根＝A4 同一可变数组实例 fileHostRoots，热加载同步生效）。
   ctx.tools.register(buildQuantizeTool(ctx, { roots: fileHostRoots, command: `python3 ${join(config.kernelDir, "tools", "quantize_annotations.py")}`, timeoutMs: config.quantizeTimeoutMs }));
-  for (const tool of buildConfirmTools({ runsRoot: config.runsRoot, ctx })) ctx.tools.register(tool);
+  for (const tool of buildConfirmTools({ runsRoot: config.runsRoot, ctx, preflight: preflightDeps })) ctx.tools.register(tool);
   const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx, models: { root: modelInventory.root, names: modelInventory.models }, bindRun: (runId) => manager.bindRun(runId) };
   ctx.tools.register(buildRunTrainingTool(ctx, trainCfg));
   // H5：多类联合训练入口（唯一训练入口的多类面——D25；内部训练直调 atf_run_training 执行函数，

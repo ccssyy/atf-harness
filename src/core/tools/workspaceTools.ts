@@ -35,6 +35,7 @@ import {
   type LaunchReady,
 } from "../workspace/scratchExec.js";
 import { startLossIngest } from "../workspace/lossIngest.js";
+import { recordFirstLaunchAt } from "../workspace/trainingPreflight.js";
 import {
   listSkills,
   readSkillBody,
@@ -773,6 +774,9 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
   // 共享 lossIngest 单源——run 目录由 scratch 约定上溯：runs/<run_id>/scratch → runs/<run_id>/training）
   const runDir = dirname(host.scratchDir);
   const lossSeriesPath = join(runDir, "training", "loss-series.json");
+  // F1（首跑体验批）：首次放行时间戳（launch-kpi.json first_launch_at——首写固定，
+  // time-to-launch 统计口径；写失败静默 fail-open，不阻塞放行主流程）
+  recordFirstLaunchAt(runDir, new Date().toISOString());
   startLossIngest(logPath, lossSeriesPath);
   return {
     kind: "executed",
