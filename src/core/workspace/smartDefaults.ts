@@ -370,7 +370,25 @@ export const oomFallbackParams = (nproc: number = NPROC_DEFAULT): { bs: number; 
 // ── 深度学习资产（P-1c）──
 /** 智能缺省 deepspeed 资产名（内核 assets/deepspeed/ds_z3_offload_config.json——BUILD 首验核实在位：
  *  zero3＋optimizer/param 双下 CPU，保守档；别名 ds_z3_offload 经内核 resolve_deepspeed_name 归一）。 */
-export const SMART_DEEPSPEED_DEFAULT = "ds_z3_offload_config.json";
+
+// ── E4-乙（改动 2）：内核 bs 缺省分档单源（cutoff<10000→2，否则 1）──
+/** bs 内核缺省分档阈值（cutoff_len ≥ 10000 的长样本降 bs——内核 b9 缺省面同源）。 */
+export const KERNEL_BS_CUTOFF_THRESHOLD = 10_000;
+
+/** per_device_train_batch_size 内核缺省（cutoff<10000→2，否则 1；cutoff 缺席按惯例基线
+ *  9000 判档）。confirmFace 卡面展示与派生输入兜底（删 `?? 2` 硬编码）、pipelineFace
+ *  training_overrides 桥 convention 兜底三处共用本单源；来源标注 convention（内核惯例）。 */
+export const kernelBsDefaultOf = (cutoffLen: number | undefined): number => {
+  const cutoff =
+    cutoffLen !== undefined && Number.isFinite(cutoffLen) && cutoffLen > 0
+      ? cutoffLen
+      : TRAINING_PIN_CONSTANTS.cutoff_len;
+  return cutoff < KERNEL_BS_CUTOFF_THRESHOLD ? 2 : 1;
+};
+
+// ── E4-乙（改动 2）：deepspeed 智能缺省与内核统一 ds_z3_offload（别名形态；内核 b9
+//    侧 generate_iteration_config 缺省同步切档——harness 先行对齐，re-pin 对账）──
+export const SMART_DEEPSPEED_DEFAULT = "ds_z3_offload";
 
 // ── param_sources 补丁（批㊶-P 1a：确认卡快照确认值回写 iteration-config 来源标注）──
 /** 来源串合法词汇（内核 param_sources.py 闭集）：user-specified／default:<依据>／carried-from:<run_id>。 */

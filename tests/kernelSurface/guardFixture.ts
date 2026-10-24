@@ -77,7 +77,16 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   reuse_experiment_setup: "--reuse-experiment-setup",
   token_provider: "--token-provider",
   retry_coordinate_pending: "--retry-coordinate-pending",
+  // E4-乙（改动 1）：training_prep 段训练参数单源桥（内核 b9 将声明——前瞻豁免见
+  // PARAM_FACE_WAIVERS；re-pin b9 时快照随更＋豁免退役）
+  training_overrides: "--training-overrides",
 };
+
+/** E4-乙前瞻豁免（b9 未发窗）：training_overrides 的映射旗标 --training-overrides 尚不在
+ *  b8 快照声明面（内核 b9 将声明；harness 先行——显式/快照/派生终值才下传，行为面
+ *  大满贯不触发该旗标）。豁免只免「旗标落声明面」单项对账；re-pin b9 时随快照更新
+ *  退役本豁免。护栏纪律「修不了登记豁免；禁 skip／禁放宽断言」内的显式例外登记。 */
+export const PARAM_FACE_WAIVERS: ReadonlySet<string> = new Set(["training_overrides"]);
 
 /** 九要素键 → 消费点登记表（「可编辑不消费」禁的正向登记；旗标空串＝脚本级组装消费
  *  ——值经脚本组装进产物文件，非 CLI 参数直收）。新增卡键必须同步在册：消费点参数级
@@ -188,6 +197,9 @@ export const factsOf = (argvTokens: readonly string[]): HarnessSurfaceFacts & { 
     ((buildPipelineTool(approvalCtx(), `node ${MOCK}`, 30_000) as unknown as DshToolLike).parameters as { properties?: Record<string, unknown> }).properties ?? {},
   ),
   flagByParam: FLAG_BY_PARAM,
+  /** E4-乙前瞻豁免集（b9 未发窗——见 PARAM_FACE_WAIVERS；豁免键跳过「旗标落声明面」
+   *  单项对账，映射完整性与文档对账不变）。 */
+  paramFaceWaivers: PARAM_FACE_WAIVERS,
   pipelineStages: SEGMENT_ORDER,
   segmentFactKeys: Object.keys(SEGMENT_FACT_BY_KERNEL_STAGE),
   groupingPresetValues: GROUPING_PRESET_VALUES,

@@ -21,6 +21,15 @@
  * 呈现终值与来源）；像素对成对校验（min<max，判据单源 configConfirm
  * pixelPairViolationOf——先于审批，卡前快败业务文案）。九要素确认值经本通路进
  * 实验门——确认卡（落快照）与本段工具（快照兜底下传）同源成环，替代任何代写。
+ * E4-乙（改动 1）增 training_prep 段 training_overrides——九键白名单（训练参数
+ * 单源桥）：显式 > 确认快照构造（webui/config-snapshot.json confirmed 九键子集）；
+ * accum 缺而 bs×nproc 终值在场时按 global_batch=256 派生（除不尽停点，禁静默取整）；
+ * bs 缺按内核缺省分档（cutoff<10000→2）、deepspeed 缺按 ds_z3_offload——convention
+ * 态只呈现不下传（缺省单源在内核）。逐键来源 user_confirmed|config_snapshot|
+ * derived|convention 双呈现（审批卡与返回体）；像素对与 TokenBudget 三键禁入
+ * （分别走 experiment_setup 预算三参与 token 预算链路，双源即红）；其它段收到
+ * 该参忽略并记 note。下传 argv --training-overrides <json>（内核 b9 将声明的
+ * argparse 面——harness 先行按惯例 flag 名，D94 参数面护栏前瞻豁免，re-pin 对账）。
  *
  * 接口契约（引自内核件 K-A2.2a §二，双件同步；A-E14b 增补 K-E14a 命令面；E10b 增补
  * E10a 命令面；E10d 增补 E10f 命令面；D89 增补 --grouping-preset 命令面；D93 增补
@@ -70,6 +79,8 @@ import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.j
 import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
 // E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与九要素卡同源）
 import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
+// E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
+import { deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
 import { join } from "node:path";
 
 /** 段名闭集（权威＝内核 STAGE_ORDER 八项——禁增删改序；旧六段名别名不保留）。 */
@@ -347,6 +358,169 @@ export const experimentTokenApprovalLine = (
     return `${key}=${value !== undefined ? String(value) : "未定"}（${TOKEN_PARAM_SOURCE_LABEL[sources[key] ?? "unspecified"]}）`;
   }).join("／")}`;
 
+// ── E4-乙（改动 1）：training_prep 段 training_overrides——九键白名单训练参数单源桥 ──
+//    （确认卡 → 快照〔唯一出口〕 → 本桥下传；convention 态只呈现不下传——缺省单源在内核）
+
+/** training_overrides 九键白名单（九要素确认卡 training 面子集）：base_model_path 走
+ *  training_prep 段 --base-model 专参（A-E14b）、dataset_keys 内核实算只读（D92）、
+ *  negative_ratio_target 归 experiment_setup 段（D99），皆不入本桥。 */
+export const TRAINING_OVERRIDE_KEYS: readonly string[] = [
+  "learning_rate",
+  "nproc_per_node",
+  "visible_devices",
+  "num_train_epochs",
+  "per_device_train_batch_size",
+  "gradient_accumulation_steps",
+  "deepspeed",
+  "lora_rank",
+  "lora_alpha",
+];
+
+/** 禁入键专项闭集（像素对＋TokenBudget 三键——分别走 experiment_setup 预算三参（E3）
+ *  与 token 预算链路（内核 K1-2：cutoff 唯一来源 prep/token_budget.json）；混入本桥
+ *  即双源，卡前快败）。 */
+export const TRAINING_OVERRIDE_FORBIDDEN_KEYS: readonly string[] = [
+  "image_min_pixels",
+  "image_max_pixels",
+  "max_total_tokens",
+  "cutoff_len",
+  "max_model_len",
+];
+
+/** training_overrides 逐键来源四值闭集（审批卡/返回体标注——「缺省不静默」）。 */
+export type TrainingOverrideSource = "user_confirmed" | "config_snapshot" | "derived" | "convention";
+
+/** 来源标注文案（审批卡行单源；user_confirmed＝当次显式确认值、config_snapshot＝九要素
+ *  确认快照、derived＝global_batch=256 派生、convention＝内核惯例缺省〔只呈现不下传〕）。 */
+export const TRAINING_OVERRIDE_SOURCE_LABEL: Readonly<Record<TrainingOverrideSource, string>> = {
+  user_confirmed: "用户确认",
+  config_snapshot: "确认快照",
+  derived: "派生",
+  convention: "内核惯例",
+};
+
+/** run 目录确认快照兜底读取（webui/config-snapshot.json 的 confirmed 子对象——九键
+ *  白名单筛＋bs 分档输入 cutoff_len〔仅判档用，不在白名单、不下传〕；快照缺席/解析
+ *  失败＝空兜底（fail-open：兜底面不阻塞段触发）。 */
+export const snapshotTrainingOverridesOf = (
+  runDir: string,
+): { overrides: Record<string, string>; cutoffLen: number | undefined } => {
+  const out: Record<string, string> = {};
+  let cutoffLen: number | undefined;
+  try {
+    const parsed = JSON.parse(readFileSync(join(runDir, "webui", "config-snapshot.json"), "utf8")) as {
+      confirmed?: Record<string, unknown>;
+    };
+    const confirmed = parsed?.confirmed;
+    if (confirmed === null || typeof confirmed !== "object") return { overrides: out, cutoffLen };
+    for (const key of TRAINING_OVERRIDE_KEYS) {
+      const raw = (confirmed as Record<string, unknown>)[key];
+      if (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") {
+        out[key] = String(raw);
+      }
+    }
+    const rawCutoff = (confirmed as Record<string, unknown>)["cutoff_len"];
+    const cutoffNum = typeof rawCutoff === "number" ? rawCutoff : typeof rawCutoff === "string" ? Number(rawCutoff.trim()) : NaN;
+    if (Number.isFinite(cutoffNum) && cutoffNum > 0) cutoffLen = cutoffNum;
+  } catch { /* 快照缺席/解析失败＝无兜底值 */ }
+  return { overrides: out, cutoffLen };
+};
+
+/** training_overrides 终值解析（仅 training_prep 段调用）：显式参数 > 确认快照 >
+ *  accum 派生（bs×nproc 终值在场时，global_batch=256 整除校验——除不尽停点）>
+ *  convention（bs 内核分档缺省／deepspeed ds_z3_offload——只呈现不下传）。
+ *  白名单外键/禁入键/值形态非法＝卡前快败（先于审批，坏参数不消耗放行）。 */
+export const resolveTrainingOverrides = (
+  args: { training_overrides?: unknown },
+  runDir: string,
+):
+  | {
+      ok: true;
+      values: Record<string, string>;
+      sources: Record<string, TrainingOverrideSource>;
+      /** 下传面（convention 态不含——缺省单源在内核，harness 只呈现）。 */
+      passDown: Record<string, string>;
+    }
+  | { ok: false; error: string; note: string } => {
+  const raw = args.training_overrides;
+  const explicit: Record<string, string> = {};
+  if (raw !== undefined) {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+      return { ok: false, error: "training_overrides_invalid", note: `training_overrides 须为键值对象（得 ${Array.isArray(raw) ? "数组" : typeof raw}）` };
+    }
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (TRAINING_OVERRIDE_FORBIDDEN_KEYS.includes(key)) {
+        return {
+          ok: false,
+          error: "training_overrides_forbidden_key",
+          note: `training_overrides 不收 ${key}——像素对（image_min_pixels/image_max_pixels）与 TokenBudget 三键（max_total_tokens/cutoff_len/max_model_len）分别走 experiment_setup 段预算三参与 token 预算链路，混入即双源`,
+        };
+      }
+      if (!TRAINING_OVERRIDE_KEYS.includes(key)) {
+        return { ok: false, error: "training_overrides_invalid", note: `training_overrides 键 ${key} 不在九键白名单（${TRAINING_OVERRIDE_KEYS.join("/")}）——白名单外参数不收` };
+      }
+      if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+        return { ok: false, error: "training_overrides_invalid", note: `training_overrides[${key}] 须为字符串/数字/布尔（得 ${value === null ? "null" : Array.isArray(value) ? "数组" : typeof value}）` };
+      }
+      explicit[key] = String(value);
+    }
+  }
+  const snapshotBundle = snapshotTrainingOverridesOf(runDir);
+  const snapshot = snapshotBundle.overrides;
+  const values: Record<string, string> = {};
+  const sources: Record<string, TrainingOverrideSource> = {};
+  for (const key of TRAINING_OVERRIDE_KEYS) {
+    if (explicit[key] !== undefined) {
+      values[key] = explicit[key];
+      sources[key] = "user_confirmed";
+    } else if (snapshot[key] !== undefined) {
+      values[key] = snapshot[key];
+      sources[key] = "config_snapshot";
+    }
+  }
+  // derived：accum 无终值而 bs×nproc 终值在场 → global_batch=256 派生（除不尽停点——禁静默取整）
+  if (values["gradient_accumulation_steps"] === undefined) {
+    const bsNum = Number(values["per_device_train_batch_size"]);
+    const nprocNum = Number(values["nproc_per_node"]);
+    if (Number.isFinite(bsNum) && bsNum > 0 && Number.isFinite(nprocNum) && nprocNum > 0) {
+      const derived = deriveGradAccum(Math.round(bsNum), Math.round(nprocNum));
+      if ("error" in derived) {
+        return { ok: false, error: "training_overrides_derive_failed", note: `gradient_accumulation_steps 派生失败（bs=${values["per_device_train_batch_size"]}×nproc=${values["nproc_per_node"]}）：${derived.error}——请调整组合或显式给出 accum` };
+      }
+      values["gradient_accumulation_steps"] = String(derived.accum);
+      sources["gradient_accumulation_steps"] = "derived";
+    }
+  }
+  // convention（只呈现不下传——缺省单源在内核）：bs 按 cutoff 分档（cutoff 取快照确认值
+  // 〔分档输入，仅判档〕，缺席按惯例基线判档）；deepspeed 与内核统一 ds_z3_offload
+  // （E4-乙改动 2 同批）。
+  if (values["per_device_train_batch_size"] === undefined) {
+    values["per_device_train_batch_size"] = String(kernelBsDefaultOf(snapshotBundle.cutoffLen));
+    sources["per_device_train_batch_size"] = "convention";
+  }
+  if (values["deepspeed"] === undefined) {
+    values["deepspeed"] = "ds_z3_offload";
+    sources["deepspeed"] = "convention";
+  }
+  const passDown: Record<string, string> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (sources[key] !== "convention") passDown[key] = value;
+  }
+  return { ok: true, values, sources, passDown };
+};
+
+/** training_overrides 审批卡行（仅 training_prep 段追加——终值与来源逐键上卡；
+ *  convention 态明示「内核惯例（只呈现不下传）」，缺省不静默）。 */
+export const trainingOverridesApprovalLine = (
+  values: Record<string, string>,
+  sources: Record<string, TrainingOverrideSource>,
+): string =>
+  `训练参数覆盖（training_prep）：${
+    TRAINING_OVERRIDE_KEYS.filter((key) => values[key] !== undefined)
+      .map((key) => `${key}=${values[key]}（${TRAINING_OVERRIDE_SOURCE_LABEL[sources[key] ?? "convention"]}${sources[key] === "convention" ? "·只呈现不下传" : ""}）`)
+      .join("／") || "（无终值——全部按内核缺省处理）"
+  }`;
+
 
 /** 子进程封装（execFile——非零退出/超时如实回传，不抛；F1 预检工具同源复用）。 */
 export const runPipeline = (command: string, args: readonly string[], timeoutMs: number): Promise<{ code: number | null; stdout: string; stderr: string }> =>
@@ -490,13 +664,25 @@ export const buildPipelineTool = (
         description:
           "坐标换算待处理清单重试（训练准备段只重试 pending 清单里的图，成功自动并入 transforms.jsonl 并从清单移除，不重跑全批；清单缺席即无事可做）。缺省不开",
       },
+      // E4-乙（改动 1）：training_prep 段训练参数单源桥（九键白名单；显式 > 确认快照构造；
+      // convention 态只呈现不下传；其它段忽略该参并记 note）
+      training_overrides: {
+        type: "object",
+        additionalProperties: true,
+        description:
+          "训练参数覆盖（仅 training_prep 段消费，其它段忽略并记 note）：九键白名单 learning_rate／nproc_per_node／visible_devices／num_train_epochs／per_device_train_batch_size／" +
+          "gradient_accumulation_steps／deepspeed／lora_rank／lora_alpha——像素对（image_min_pixels/image_max_pixels）与 TokenBudget 三键（max_total_tokens/cutoff_len/max_model_len）" +
+          "不得出现（分别走 experiment_setup 段预算三参与 token 预算链路，混入即卡前拒绝）。未显式给时读 run 目录 webui/config-snapshot.json 确认快照构造（九要素确认值通路——" +
+          "快照是训练参数唯一出口，本桥不做任何代写）；accum 缺而 bs×nproc 在场时按 global_batch=256 派生（除不尽停点）；bs 缺按内核缺省（cutoff<10000→2）、deepspeed 缺按 ds_z3_offload——" +
+          "逐键来源 user_confirmed/config_snapshot/derived/convention 在审批卡与返回体呈现（convention 态只呈现不下传，缺省单源在内核）",
+      },
     },
     output: {
       schema: looseObjectOutput,
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; training_overrides?: Record<string, unknown> },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -576,6 +762,20 @@ export const buildPipelineTool = (
         }
         tokenParams = { values: resolvedParams.values, sources: resolvedParams.sources };
       }
+      // E4-乙（改动 1）：training_overrides——仅 training_prep 段解析（九键白名单＋来源四值；
+      // 坏值/禁键/派生除不尽一律卡前快败不进审批——不消耗放行）；其它段收到该参忽略并记
+      // note（返回体 training_overrides_ignored——非消费段传参不报错）。
+      let trainingOverrides:
+        | { values: Record<string, string>; sources: Record<string, TrainingOverrideSource>; passDown: Record<string, string> }
+        | undefined;
+      const overridesIgnored = args.training_overrides !== undefined && args.stage !== "training_prep";
+      if (args.stage === "training_prep") {
+        const resolvedOverrides = resolveTrainingOverrides(args, runDir);
+        if (!resolvedOverrides.ok) {
+          return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: resolvedOverrides.error, note: resolvedOverrides.note });
+        }
+        trainingOverrides = { values: resolvedOverrides.values, sources: resolvedOverrides.sources, passDown: resolvedOverrides.passDown };
+      }
       const verdict = await requestApproval(ctx, exec, "atf_pipeline_stage",
         buildApprovalReason({
           action: "触发管线段",
@@ -591,6 +791,8 @@ export const buildPipelineTool = (
         + (args.stage === "experiment_setup" ? `\n${negativeRatioApprovalLine(negativeRatioTarget)}` : "")
         // E3：预算三参行仅 experiment_setup 段呈现（终值与来源双双上卡）
         + (args.stage === "experiment_setup" && tokenParams !== undefined ? `\n${experimentTokenApprovalLine(tokenParams.values, tokenParams.sources)}` : "")
+        // E4-乙：训练参数覆盖行仅 training_prep 段呈现（终值与来源逐键上卡；convention 明示只呈现不下传）
+        + (args.stage === "training_prep" && trainingOverrides !== undefined ? `\n${trainingOverridesApprovalLine(trainingOverrides.values, trainingOverrides.sources)}` : "")
         + "\n仅 owner 可点；执行方不得代点");
       if (!verdict.ok) return approvalDeniedResult("atf_pipeline_stage", verdict.outcome);
       // 落点单源（A2.2b）：与内核同一决定者 <workspace_path>/runs/<run_id>；resolveRunDir 本工具内退役
@@ -640,6 +842,12 @@ export const buildPipelineTool = (
       const tokenProvider = typeof args.token_provider === "string" ? args.token_provider.trim() : "";
       if (tokenProvider !== "") argv.push("--token-provider", tokenProvider);
       if (args.retry_coordinate_pending === true) argv.push("--retry-coordinate-pending");
+      // E4-乙（改动 1）：training_overrides 透传（仅 training_prep 段；下传面＝非 convention 终值
+      // ——显式/快照/派生；convention 态缺省单源在内核不下传。内核 b9 argparse 将声明
+      // --training-overrides——harness 先行按惯例 flag 名，re-pin 对账〔D94 前瞻豁免〕）。
+      if (args.stage === "training_prep" && trainingOverrides !== undefined && Object.keys(trainingOverrides.passDown).length > 0) {
+        argv.push("--training-overrides", JSON.stringify(trainingOverrides.passDown));
+      }
       // D24h：放行登记带会话身份与 ui 模式（actor＝会话 id，缺失＝unattributed——不伪造 owner）；
       // round_dir＝本段落点 run 目录（内核账本 round_dir 字段面，与评估 D20 同构）
       argv.push("--actor", sessionIdOfExec(exec) ?? "unattributed", "--approval-mode", "ui", "--round-dir", runDir);
@@ -740,6 +948,23 @@ export const buildPipelineTool = (
               image_max_pixels_source: tokenParams.sources["image_max_pixels"] ?? "unspecified",
             }
           : {}),
+        // E4-乙（改动 1）：training_overrides 逐键终值与来源（仅 training_prep 段九键恒在场——
+        // 无终值键 value=null＋convention；下传面单独透出可对账）；其它段收到该参＝忽略记 note。
+        ...(args.stage === "training_prep" && trainingOverrides !== undefined
+          ? {
+              training_overrides_resolution: Object.fromEntries(
+                TRAINING_OVERRIDE_KEYS.map((key) => [
+                  key,
+                  {
+                    value: trainingOverrides.values[key] ?? null,
+                    source: trainingOverrides.sources[key] ?? "convention",
+                  },
+                ]),
+              ),
+              training_overrides_passed: Object.keys(trainingOverrides.passDown).length > 0 ? JSON.stringify(trainingOverrides.passDown) : null,
+            }
+          : {}),
+        ...(overridesIgnored ? { training_overrides_ignored: true, training_overrides_note: "training_overrides 仅 training_prep 段消费——本次忽略（段外传参不报错，argv 零追加）" } : {}),
         // E10b：聚类证据三键透传（内核摘要携带时）——「为什么没开/为什么开」的解释面
         ...(styleClusterStateOf(summary) !== undefined ? { style_cluster_state: styleClusterStateOf(summary) } : {}),
         // E10d：内核拒绝的 user_message 原样透传（不加工不拼接）；聚类状态拒绝未携带时
