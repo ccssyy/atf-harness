@@ -44,7 +44,7 @@ describe("D94 阴性对照——六类护栏故意注入偏差必红", () => {
     expect(violations.some((v) => v.kind === "参数面" && v.detail.includes("--grouping-preset"))).toBe(true);
   });
 
-  it("参数面：E4-乙前瞻豁免边界——豁免集外未声明旗标仍红；豁免退役（空集）后豁免键红", () => {
+  it("参数面：前瞻豁免边界——豁免集外未声明旗标仍红（行为面/映射面）；豁免退役（空集）后豁免键红（行为面＋映射面）", () => {
     const { snapshot, facts } = base();
     // 豁免集外：未声明旗标参数键照红（豁免不是放宽断言——仅登记键免单项）
     const outsideWaiver: HarnessSurfaceFactsWithMock = {
@@ -54,12 +54,15 @@ describe("D94 阴性对照——六类护栏故意注入偏差必红", () => {
     };
     const outsideViolations = guardParamsFace(snapshot, outsideWaiver);
     expect(outsideViolations.some((v) => v.kind === "参数面" && v.detail.includes("unwaived_future_key"))).toBe(true);
-    // 豁免退役（re-pin b9 后空集）：豁免键恢复全对账，b8 快照下必红（退役动作有测试锚）
-    const retired: HarnessSurfaceFactsWithMock = { ...facts, paramFaceWaivers: new Set<string>() };
+    // 豁免退役（re-pin b10 后空集）：豁免键恢复全对账，b9 快照下必红——行为面旗标
+    // 与映射面旗标两项都红（退役动作有测试锚；行为面注入 token 模拟下传在场面）
+    const retired: HarnessSurfaceFactsWithMock = { ...facts, paramFaceWaivers: new Set<string>(), argvTokens: [...facts.argvTokens, "--training-overrides"] };
     const retiredViolations = guardParamsFace(snapshot, retired);
-    expect(retiredViolations.some((v) => v.kind === "参数面" && v.detail.includes("training_overrides"))).toBe(true);
-    // 豁免在位（现状）：豁免键免「旗标落声明面」单项——零参数面违例
-    expect(guardParamsFace(snapshot, facts).some((v) => v.detail.includes("training_overrides"))).toBe(false);
+    expect(retiredViolations.some((v) => v.kind === "参数面" && v.detail.includes("工具参数键 training_overrides"))).toBe(true);
+    expect(retiredViolations.some((v) => v.kind === "参数面" && v.detail.includes("行为面下传旗标 --training-overrides"))).toBe(true);
+    // 豁免在位（现状）：豁免键免「旗标落声明面」单项＋行为面旗标跳过——零参数面违例
+    const withWaivedToken: HarnessSurfaceFactsWithMock = { ...facts, argvTokens: [...facts.argvTokens, "--training-overrides"] };
+    expect(guardParamsFace(snapshot, withWaivedToken).some((v) => v.detail.includes("training_overrides") || v.detail.includes("--training-overrides"))).toBe(false);
   });
 
   it("段清单：--stage choices 表达式漂移 → 必红；mock 段闭集漂移 → 必红", () => {

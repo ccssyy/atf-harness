@@ -77,17 +77,18 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   reuse_experiment_setup: "--reuse-experiment-setup",
   token_provider: "--token-provider",
   retry_coordinate_pending: "--retry-coordinate-pending",
-  // E4-乙（改动 1）：training_prep 段训练参数单源桥——flag 属内核 generate_iteration_config.py
-  // 声明面（b9 K1-1；经 atf_scratch_exec 直调生成器注入，非 walkthrough argv 下传）——
-  // 映射保留作文档对账锚（跨脚本 flag），豁免见 PARAM_FACE_WAIVERS
+  // E4-乙（改动 1）＋E5·H1 D139：training_prep 段训练参数单源桥——flag 属内核
+  // generate_iteration_config.py 声明面（b9 K1-1），b10 起 walkthrough 段命令接线
+  // 并随段 argv 下传（b9 快照无此声明面——PARAM_FACE_WAIVERS 前瞻豁免，
+  // re-pin b10 随快照退役）
   training_overrides: "--training-overrides",
 };
 
-/** E4-乙参数面豁免（长期化）：training_overrides 的映射旗标 --training-overrides 在内核
- *  b9 argparse 面的 generate_iteration_config.py 条目（非 walkthrough_pipeline.py）——
- *  guardParamsFace 的对账锚恒为 walkthrough 条目，跨脚本 flag 永不落该面，豁免不免除
- *  映射完整性与文档对账（FLAG_BY_PARAM 登记＋pipelineFace 文档记载均在位；注入通路
- *  ＝返回体 training_overrides_json 经 atf_scratch_exec 直调生成器，argv 零下传）。 */
+/** E5·H1 D139 参数面前瞻豁免（b10 未发窗）：--training-overrides 自本批起随段命令
+ *  argv 正常下传，而 b9 快照的 walkthrough_pipeline.py 条目尚无该声明面（内核 b10
+ *  接线）——豁免集内键的旗标免「旗标落声明面」与「行为面旗标在声明面」两项对账
+ *  （映射完整性与文档对账不免）；re-pin b10 随快照补齐声明面后退役豁免恢复全对账
+ *  （退役动作有阴性对照锚——guard.negative）。 */
 export const PARAM_FACE_WAIVERS: ReadonlySet<string> = new Set(["training_overrides"]);
 
 /** 九要素键 → 消费点登记表（「可编辑不消费」禁的正向登记；旗标空串＝脚本级组装消费
@@ -179,6 +180,9 @@ export const collectArgvTokens = async (): Promise<string[]> => {
       run_id: "d94-prep",
       workspace_path: tempRoot,
       base_model_path: join(tempRoot, "model-dir"),
+      // E5·H1 D139：training_overrides 随段 argv 下传（b10 接线）——行为面覆盖
+      // --training-overrides token（b9 快照前瞻豁免行使面）
+      training_overrides: { lora_rank: 32 },
     },
   ];
   const tokens: string[] = [];

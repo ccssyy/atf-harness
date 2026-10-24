@@ -8,8 +8,10 @@
  *      在场按 global_batch=256 派生（除不尽停点）；bs 缺按内核缺省分档
  *      （cutoff<10000→2）、deepspeed 缺按 ds_z3_offload——convention 态只呈现不下传
  *      （缺省单源在内核）；逐键来源 user_confirmed|config_snapshot|derived|convention
- *      审批卡与返回体双呈现；argv --training-overrides <json>（内核 b9 将声明——
- *      D94 参数面前瞻豁免，re-pin 对账）。
+ *      审批卡与返回体双呈现；argv --training-overrides <json>（E5·H1 D139 起随段命令
+ *      下传——内核 b10 接线；b9 快照 PARAM_FACE_WAIVERS 前瞻豁免，re-pin 对账。
+ *      E4-乙补的「返回体 json＋next_step 指引 agent 直调生成器」过渡形态已撤销——
+ *      零 scratch 断言见 batchE5.test.ts）。
  *   2.（H2）confirmFace 停止回写 prep/iteration-config（快照是唯一出口——param_sources
  *      由内核 training_prep 段写 user_confirmed(ref=stage:training_overrides)）；删卡面
  *      per_device_train_batch_size 的 ?? 2 硬编码（内核缺省分档单源 kernelBsDefaultOf，
@@ -66,12 +68,13 @@ const toolOf = (record: string[] = []): DshToolLike =>
 const summaryArgv = (result: unknown): string[] =>
   ((result as { summary?: { argv?: string[] } }).summary?.argv ?? []);
 
-/** 返回体注入面 JSON（training_overrides_json；全 convention／段外＝null）。argv 恒不含
- *  --training-overrides（E4-乙补·re-pin b9 对齐：flag 属 generate_iteration_config 声明面，
- *  walkthrough 零接线——注入走 atf_scratch_exec 直调生成器）。 */
+/** 段命令 argv 上的 training_overrides 注入面 JSON（E5·H1 D139：随段命令下传——
+ *  flag 后随 token 即内核 parse 契约 JSON；全 convention／段外＝null）。 */
 const overridesJsonOf = (result: unknown): Record<string, unknown> | null => {
-  const raw = (result as Record<string, unknown>)["training_overrides_json"];
-  return typeof raw === "string" ? (JSON.parse(raw) as Record<string, unknown>) : null;
+  const argv = summaryArgv(result);
+  const index = argv.indexOf("--training-overrides");
+  if (index < 0) return null;
+  try { return JSON.parse(argv[index + 1] ?? "") as Record<string, unknown>; } catch { return null; }
 };
 
 /** 落九要素形态确认快照（confirmed 值全字符串面——与 saveConfigSnapshot 落盘形态同源）。 */
@@ -81,21 +84,21 @@ const writeSnapshot = (runDir: string, confirmed: Record<string, string>): void 
 };
 
 describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）", () => {
-  it("显式键注入面：argv 零下传（walkthrough 无该声明面）；返回体 training_overrides_json 数值形态＋来源 user_confirmed＋next_step 指引；convention 键呈现不注入", async () => {
+  it("显式键注入面：argv --training-overrides <json> 下传（E5·H1 D139 段命令通路）＋返回体 delivery=segment_argv；数值形态＋来源 user_confirmed；convention 键呈现不注入", async () => {
     const record: string[] = [];
     const ws = tempRoot("e4b-ws-");
     const result = await toolOf(record).execute(
       { stage: "training_prep", run_id: "e4b-explicit", workspace_path: ws, base_model_path: join(ws, "model"), training_overrides: { learning_rate: "2e-4", lora_rank: 32, warmup_ratio: 0.1 } },
       fakeExec,
     );
-    expect(summaryArgv(result)).not.toContain("--training-overrides"); // E4-乙补：argv 恒不下传（直传即内核 exit 2）
+    expect(summaryArgv(result)).toContain("--training-overrides"); // E5·H1：随段命令正常下传（b10 接线）
     const passed = overridesJsonOf(result);
     expect(passed).toEqual({ learning_rate: "2e-4", lora_rank: 32, warmup_ratio: 0.1 }); // 整数/小数键原生数字（内核 parse 契约）
-    expect(String((result as Record<string, unknown>)["training_overrides_next_step"])).toContain("generate_iteration_config");
+    expect((result as Record<string, unknown>)["training_overrides_delivery"]).toBe("segment_argv");
     const resolution = (result as Record<string, unknown>)["training_overrides_resolution"] as Record<string, { value: string | null; source: string }>;
     expect(resolution["learning_rate"]).toEqual({ value: "2e-4", source: "user_confirmed" });
     // convention 态：bs 无显式无快照 → 内核缺省分档 2（cutoff 缺席按惯例基线 9000 判档）；
-    // deepspeed → ds_z3_offload——只呈现（resolution 在场）不注入（JSON 不含）
+    // deepspeed → ds_z3_offload——只呈现（resolution 在场）不注入（argv JSON 不含）
     expect(resolution["per_device_train_batch_size"]).toEqual({ value: "2", source: "convention" });
     expect(resolution["deepspeed"]).toEqual({ value: "ds_z3_offload", source: "convention" });
     expect(passed).not.toHaveProperty("per_device_train_batch_size");
@@ -148,7 +151,7 @@ describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）"
     const passed = overridesJsonOf(result);
     // 数值键原生数字（内核 parse 契约）；learning_rate/deepspeed 字符串原样
     expect(passed).toEqual({ per_device_train_batch_size: 2, gradient_accumulation_steps: 16, nproc_per_node: 8, num_train_epochs: 3, learning_rate: "1e-4", lora_rank: 32, lora_alpha: 64, deepspeed: "ds_z3_offload", warmup_ratio: 0.1 });
-    expect(summaryArgv(result)).not.toContain("--training-overrides");
+    expect(summaryArgv(result)).toContain("--training-overrides"); // E5·H1：快照兜底终值同随段命令下传
     const resolution = (result as Record<string, unknown>)["training_overrides_resolution"] as Record<string, { value: string | null; source: string }>;
     for (const key of TRAINING_OVERRIDE_KEYS) {
       expect(resolution[key]?.source).toBe("config_snapshot");
@@ -226,7 +229,8 @@ describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）"
     const resolution = (result as Record<string, unknown>)["training_overrides_resolution"] as Record<string, { value: string | null; source: string }>;
     expect(resolution["per_device_train_batch_size"]).toEqual({ value: "1", source: "convention" });
     const passed = overridesJsonOf(result);
-    expect(passed).toBeNull(); // 全 convention → 注入面零键（返回体无 training_overrides_json）
+    expect(passed).toBeNull(); // 全 convention → 注入面零键（argv 无 --training-overrides＋delivery=none）
+    expect((result as Record<string, unknown>)["training_overrides_delivery"]).toBe("none");
   });
 });
 
