@@ -257,6 +257,58 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     expect(resolved.sources["max_total_tokens"]).toBe("unspecified");
     expect(resolved.sources["image_min_pixels"]).toBe("user_specified");
   });
+
+  it("E3 补·canonical 落点：run 在 <wp>/workspace/runs/<id>（内核 RunLayout v1）→ 快照兜底命中 canonical 树＋run_dir_layout=canonical", async () => {
+    const ws = tempRoot("e3-ws-");
+    // canonical 形态（上次八段实锚布局：workspace 根下 datasets/splits 与 workspace/runs 并存）
+    const canonicalRun = join(ws, "workspace", "runs", "e3-canon");
+    writeSnapshot(canonicalRun, { max_total_tokens: "9000", image_min_pixels: "65536", image_max_pixels: "1605632" });
+    const result = await toolOf().execute(
+      { stage: "experiment_setup", run_id: "e3-canon", workspace_path: ws },
+      fakeExec,
+    );
+    expect((result as Record<string, unknown>)["ok"]).toBe(true);
+    expect((result as Record<string, unknown>)["run_dir"]).toBe(canonicalRun);
+    expect((result as Record<string, unknown>)["run_dir_layout"]).toBe("canonical");
+    // 快照兜底从 canonical 树读到（来源=config_snapshot）
+    expect((result as Record<string, unknown>)["max_total_tokens"]).toBe(9000);
+    expect((result as Record<string, unknown>)["max_total_tokens_source"]).toBe("config_snapshot");
+    expect((result as Record<string, unknown>)["image_max_pixels_source"]).toBe("config_snapshot");
+  });
+
+  it("E3 补·canonical 软链拒：<wp>/workspace/runs/<id> 为软链 → run_dir_symlink_rejected（先于审批）", async () => {
+    const ws = tempRoot("e3-ws-");
+    const realRun = join(ws, "real-run");
+    mkdirSync(realRun, { recursive: true });
+    mkdirSync(join(ws, "workspace", "runs"), { recursive: true });
+    symlinkSync(realRun, join(ws, "workspace", "runs", "e3-canon-link"));
+    const approvals: string[] = [];
+    const result = await toolOf(approvals).execute(
+      { stage: "experiment_setup", run_id: "e3-canon-link", workspace_path: ws },
+      fakeExec,
+    );
+    expect((result as Record<string, unknown>)["ok"]).toBe(false);
+    expect((result as Record<string, unknown>)["error"]).toBe("run_dir_symlink_rejected");
+    expect(approvals).toHaveLength(0);
+  });
+
+  it("E3 补·legacy 零变化：run 不在 canonical 位（含新建 run）→ run_dir 仍 <wp>/runs/<id>＋layout=legacy", async () => {
+    const ws = tempRoot("e3-ws-");
+    writeSnapshot(join(ws, "runs", "e3-legacy"), { max_total_tokens: "9000" });
+    const result = await toolOf().execute(
+      { stage: "experiment_setup", run_id: "e3-legacy", workspace_path: ws },
+      fakeExec,
+    );
+    expect((result as Record<string, unknown>)["run_dir"]).toBe(join(ws, "runs", "e3-legacy"));
+    expect((result as Record<string, unknown>)["run_dir_layout"]).toBe("legacy");
+    expect((result as Record<string, unknown>)["max_total_tokens_source"]).toBe("config_snapshot");
+    const fresh = await toolOf().execute(
+      { stage: "experiment_setup", run_id: "e3-fresh-new", workspace_path: ws },
+      fakeExec,
+    );
+    expect((fresh as Record<string, unknown>)["run_dir"]).toBe(join(ws, "runs", "e3-fresh-new"));
+    expect((fresh as Record<string, unknown>)["max_total_tokens_source"]).toBe("unspecified");
+  });
 });
 
 // ══ 2. 预检 schema 对账放宽（trainingPreflight）══
@@ -378,6 +430,13 @@ const manualCtx = (askLog: string[], approvals: string[], approvalOutcome = "all
 const confirmTools = (runsRoot: string, askLog: string[], approvals: string[]) =>
   buildConfirmTools({ runsRoot, ctx: manualCtx(askLog, approvals) }) as unknown as DshToolLike[];
 
+/** atf_config_confirm 工具定位（tsc 严格面——非空不落解构）。 */
+const configToolOf = (runsRoot: string, askLog: string[], approvals: string[]): DshToolLike => {
+  const tool = confirmTools(runsRoot, askLog, approvals).find((entry) => entry.name === "atf_config_confirm");
+  if (tool === undefined) throw new Error("atf_config_confirm 未注册");
+  return tool;
+};
+
 const confirmedOf = (runDir: string): Record<string, string> => {
   const parsed = JSON.parse(readFileSync(join(runDir, "webui", "config-snapshot.json"), "utf8")) as { confirmed: Record<string, string> };
   return parsed.confirmed;
@@ -389,7 +448,7 @@ describe("E3-3 confirmFace 落点三级单源（缺口 D——快照与内核读
     mkdirSync(join(ws, "runs", "e3-wp-confirm"), { recursive: true });
     const askLog: string[] = [];
     const approvals: string[] = [];
-    const [configConfirm] = confirmTools(tempRoot("e3-runs-"), askLog, approvals);
+    const configConfirm = configToolOf(tempRoot("e3-runs-"), askLog, approvals);
     const result = (await configConfirm.execute({ action: "present", run_id: "e3-wp-confirm", workspace_path: ws }, confirmExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
     expect(result["run_dir"]).toBe(join(ws, "runs", "e3-wp-confirm"));
@@ -403,7 +462,7 @@ describe("E3-3 confirmFace 落点三级单源（缺口 D——快照与内核读
     const ws = tempRoot("e3-ws-");
     const askLog: string[] = [];
     const approvals: string[] = [];
-    const [configConfirm] = confirmTools(tempRoot("e3-runs-"), askLog, approvals);
+    const configConfirm = configToolOf(tempRoot("e3-runs-"), askLog, approvals);
     const result = (await configConfirm.execute({ action: "present", run_id: "e3-wp-new", workspace_path: ws }, confirmExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
     expect(result["run_dir_source"]).toBe("workspace_path");
@@ -417,7 +476,7 @@ describe("E3-3 confirmFace 落点三级单源（缺口 D——快照与内核读
     mkdirSync(runDir, { recursive: true });
     const askLog: string[] = [];
     const approvals: string[] = [];
-    const [configConfirm] = confirmTools(tempRoot("e3-runs-"), askLog, approvals);
+    const configConfirm = configToolOf(tempRoot("e3-runs-"), askLog, approvals);
     const result = (await configConfirm.execute({ action: "present", run_id: "e3-sf-confirm" }, cwdExec(ws))) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
     expect(result["run_dir_source"]).toBe("session_fact");
@@ -429,7 +488,7 @@ describe("E3-3 confirmFace 落点三级单源（缺口 D——快照与内核读
     const runsRoot = tempRoot("e3-runs-");
     const askLog: string[] = [];
     const approvals: string[] = [];
-    const [configConfirm] = confirmTools(runsRoot, askLog, approvals);
+    const configConfirm = configToolOf(runsRoot, askLog, approvals);
     const result = (await configConfirm.execute({ action: "present", run_id: "e3-fresh" }, confirmExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
     expect(result["run_dir_source"]).toBe("instance_runs_root");
@@ -446,7 +505,7 @@ describe("E3-3 confirmFace 落点三级单源（缺口 D——快照与内核读
     symlinkSync(realRunDir, join(linkWs, "runs", "e3-link-confirm"));
     const askLog: string[] = [];
     const approvals: string[] = [];
-    const [configConfirm] = confirmTools(tempRoot("e3-runs-"), askLog, approvals);
+    const configConfirm = configToolOf(tempRoot("e3-runs-"), askLog, approvals);
     const result = (await configConfirm.execute({ action: "present", run_id: "e3-link-confirm", workspace_path: linkWs }, confirmExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(false);
     expect(result["error"]).toBe("run_dir_symlink_rejected");
@@ -458,7 +517,7 @@ describe("E3-3 confirmFace 落点三级单源（缺口 D——快照与内核读
   it("workspace_path 非绝对路径：拒（文案对齐预检/段工具同名错误形态）", async () => {
     const askLog: string[] = [];
     const approvals: string[] = [];
-    const [configConfirm] = confirmTools(tempRoot("e3-runs-"), askLog, approvals);
+    const configConfirm = configToolOf(tempRoot("e3-runs-"), askLog, approvals);
     const result = (await configConfirm.execute({ action: "present", run_id: "e3-rel", workspace_path: "relative/ws" }, confirmExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(false);
     expect(result["error"]).toBe("workspace_path_not_absolute");
@@ -469,7 +528,7 @@ describe("E3-3 confirmFace 落点三级单源（缺口 D——快照与内核读
     const ws = tempRoot("e3-ws-");
     const askLog: string[] = [];
     const approvals: string[] = [];
-    const [configConfirm] = confirmTools(tempRoot("e3-runs-"), askLog, approvals);
+    const configConfirm = configToolOf(tempRoot("e3-runs-"), askLog, approvals);
     const result = (await configConfirm.execute({ action: "present", run_id: "../../etc-e3", workspace_path: ws }, confirmExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(false);
     expect(result["error"]).toBe("run_id_invalid");

@@ -59,7 +59,7 @@
  * 「仅 owner 可点；执行方不得代点」。
  */
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
@@ -226,9 +226,35 @@ export const negativeRatioApprovalLine = (band: string): string => {
   return `负样本构造带：未指定——将按构造器内置常量带（${NEGATIVE_RATIO_DEFAULT_BAND}）兜底`;
 };
 
+// ── E3 补：run 落点解析与内核 canonical RunLayout 对齐 ──
+
+/** E3（缺口 D 执行中发现的落点公式缺口）：内核 run_layout.resolve_run_dir 的 canonical
+ *  形态＝<workspace>/workspace/runs/<run_id>（RunLayout v1——上次八段实锚：workspace=
+ *  my-zito 根、run 树落 <root>/workspace/runs/），legacy <wp>/runs/<id> 仅旧 run 兼容。
+ *  本工具原 runDir 公式恒 <wp>/runs/<id>——在 canonical 树 run 上事实轨/段摘要回读/
+ *  E3 预算三参快照兜底全部读错树。本函数与内核同口径：canonical 在场即用 canonical，
+ *  否则维持 legacy 公式（新建 run 形态不变）；canonical 为软链拒（E2 同纪律——
+ *  不接受镜像/软链自救形态，不可绕过）。 */
+export const resolvePipelineRunDir = (
+  workspacePath: string,
+  runId: string,
+): { runDir: string; layout: "canonical" | "legacy" } | { error: "run_dir_symlink_rejected"; note: string } => {
+  const canonical = join(workspacePath, "workspace", "runs", runId);
+  try {
+    if (existsSync(canonical)) {
+      if (lstatSync(canonical).isSymbolicLink()) {
+        return { error: "run_dir_symlink_rejected", note: "run 目录落点是软链——请使用真实工作区路径（不接受镜像/软链）" };
+      }
+      return { runDir: canonical, layout: "canonical" };
+    }
+  } catch { /* 探测失败按不存在处理——落 legacy 公式 */ }
+  return { runDir: join(workspacePath, "runs", runId), layout: "legacy" };
+};
+
 // ── E3：experiment_setup 段预算三参（max_total_tokens／像素对）——显式 > 确认快照
 //    兜底 > unspecified（不下传）。九要素确认卡的预算三要素经本通路进实验门（缺口 D
 //    产品管道：确认卡落 config-snapshot.json → 本段工具兜底读并下传，全程零代写）。──
+
 
 /** 预算三参来源三值闭集（审批卡/返回体逐参标注——「缺省不静默」）。 */
 export type ExperimentTokenParamSource = "user_specified" | "config_snapshot" | "unspecified";
@@ -504,8 +530,15 @@ export const buildPipelineTool = (
       // D99：负样本目标带取值（同 D89 口径——trim 后空串视同未指定；形态合法性由内核
       // 实验门脚本解析（float 化失败即业务拒绝），harness 不复制格式校验不夹取）。
       const negativeRatioTarget = typeof args.negative_ratio_target === "string" ? args.negative_ratio_target.trim() : "";
-      // E3：落点单源提前到审批前（预算三参快照兜底要读 run 目录——与原审批后计算同值同式）
-      const runDir = join(workspacePath, "runs", args.run_id);
+      // E3：落点单源提前到审批前（预算三参快照兜底要读 run 目录）；canonical 在场优先
+      // （内核 RunLayout v1 同口径——canonical <wp>/workspace/runs/<id>，legacy 公式兜底；
+      // 软链拒）。argv 的 --workspace 仍传用户原值（workspace 根贯通内核——内核自解析
+      // 落点，harness 不代传展开后的路径）。
+      const resolvedRun = resolvePipelineRunDir(workspacePath, args.run_id);
+      if ("error" in resolvedRun) {
+        return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: resolvedRun.error, note: resolvedRun.note });
+      }
+      const runDir = resolvedRun.runDir;
       // E3：预算三参（仅 experiment_setup 段）——终值解析（显式 > 确认快照兜底 >
       // unspecified 不下传）＋像素对成对校验（min<max，判据单源 pixelPairViolationOf）；
       // 坏值一律卡前快败不进审批（不消耗放行）；其它段零进入（不加键不下传）。
@@ -668,6 +701,8 @@ export const buildPipelineTool = (
         run_id: args.run_id,
         workspace_path: workspacePath,
         run_dir: runDir,
+        // E3 补：落点形态对账（canonical＝内核 RunLayout v1 形态；legacy＝<wp>/runs 旧形态）
+        run_dir_layout: resolvedRun.layout,
         ok: result.code === 0,
         exit_code: result.code,
         segment_fact_recorded,
