@@ -698,6 +698,38 @@
   ]
  },
  {
+  "script": "skills/atf-admit-training-data/scripts/token_meter_cpu.py",
+  "args": [
+   {
+    "option": "--token-limit",
+    "dest": "token_limit",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--min-pixels",
+    "dest": "min_pixels",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 65536,
+    "required": null
+   },
+   {
+    "option": "--max-pixels",
+    "dest": "max_pixels",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 802816,
+    "required": null
+   }
+  ]
+ },
+ {
   "script": "skills/atf-analyze-badcases/scripts/aggregate_contract_themes.py",
   "args": [
    {
@@ -4606,6 +4638,65 @@
     "dest": "out_json",
     "action": "store",
     "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "tools/training_preflight.py",
+  "args": [
+   {
+    "option": "--run-dir",
+    "dest": "run_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--source-root",
+    "dest": "source_root",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--field-config",
+    "dest": "field_config",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--token-provider",
+    "dest": "token_provider",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--base-model",
+    "dest": "base_model",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--apply",
+    "dest": "apply",
+    "action": "store_true",
+    "type": null,
     "choices": null,
     "default": null,
     "required": null
