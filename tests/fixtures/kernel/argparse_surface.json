@@ -1,0 +1,4881 @@
+[
+ {
+  "script": "skills/atf-admit-training-data/scripts/append_experience_kb_record.py",
+  "args": [
+   {
+    "option": "--kb",
+    "dest": "kb",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--kind",
+    "dest": "kind",
+    "action": "store",
+    "type": null,
+    "choices": "<expr:sorted(_KIND_TO_SECTION)>",
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--record",
+    "dest": "record",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--confirm",
+    "dest": "confirm",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--note",
+    "dest": "note",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-admit-training-data/scripts/build_experiment_setup.py",
+  "args": [
+   {
+    "option": "--field-config",
+    "dest": "field_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--experience-kb",
+    "dest": "experience_kb",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--annotation-inventory",
+    "dest": "annotation_inventory",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--run-id",
+    "dest": "run_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--lane",
+    "dest": "lane",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "goods",
+     "non_goods",
+     "mixed"
+    ],
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--source-version",
+    "dest": "source_version",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--coordinate",
+    "dest": "coordinate",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "qwen3_vl",
+    "required": null
+   },
+   {
+    "option": "--grouping-preset",
+    "dest": "grouping_preset",
+    "action": "store",
+    "type": null,
+    "choices": "<expr:sorted(GROUPING_PRESETS)>",
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--iteration-intent",
+    "dest": "iteration_intent",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "new_recipe",
+     "reproduce"
+    ],
+    "default": "new_recipe",
+    "required": null
+   },
+   {
+    "option": "--visual-channel",
+    "dest": "visual_channel",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "enabled",
+     "disabled"
+    ],
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--visual-provider",
+    "dest": "visual_provider",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--max-total-tokens",
+    "dest": "max_total_tokens",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--image-min-pixels",
+    "dest": "image_min_pixels",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--image-max-pixels",
+    "dest": "image_max_pixels",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--negative-ratio-target",
+    "dest": "negative_ratio_target",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--confirm-kb-defaults",
+    "dest": "confirm_kb_defaults",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--calibration-stats",
+    "dest": "calibration_stats",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--grouping-confirm",
+    "dest": "grouping_confirm",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--mode5-random",
+    "dest": "mode5_random",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--mode5-advice-stats",
+    "dest": "mode5_advice_stats",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--nproc-per-node",
+    "dest": "nproc_per_node",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--quantization",
+    "dest": "quantization",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "bnb_4bit",
+     "bf16"
+    ],
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--deepspeed",
+    "dest": "deepspeed",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--base-model-family",
+    "dest": "base_model_family",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "qwen3_vl",
+    "required": null
+   },
+   {
+    "option": "--confirmation-channel",
+    "dest": "confirmation_channel",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "user-session",
+    "required": null
+   },
+   {
+    "option": "--prior-decision",
+    "dest": "prior_decision",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--decision-disposition",
+    "dest": "decision_disposition",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out-dir",
+    "dest": "out_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--workspace-root",
+    "dest": "workspace_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-admit-training-data/scripts/build_training_variants.py",
+  "args": [
+   {
+    "option": "--l1-workspace",
+    "dest": "l1_workspace",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--field-config",
+    "dest": "field_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--risk-signals",
+    "dest": "risk_signals",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--experience-kb",
+    "dest": "experience_kb",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--experiment-config",
+    "dest": "experiment_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--lane",
+    "dest": "lane",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--construction-spec",
+    "dest": "construction_spec",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--token-provider",
+    "dest": "token_provider",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--run-dir",
+    "dest": "run_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--debug-skip-token-gate",
+    "dest": "debug_skip_token_gate",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--coordinate",
+    "dest": "coordinate",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "qwen3_vl",
+    "required": null
+   },
+   {
+    "option": "--prompt-source",
+    "dest": "prompt_source",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "contract",
+     "generic"
+    ],
+    "default": "contract",
+    "required": null
+   },
+   {
+    "option": "--seed",
+    "dest": "seed",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 42,
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-admit-training-data/scripts/build_variants_analysis.py",
+  "args": [
+   {
+    "option": "--variants-dir",
+    "dest": "variants_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--l1-jsonl",
+    "dest": "l1_jsonl",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--field-config",
+    "dest": "field_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--risk-signals",
+    "dest": "risk_signals",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--experience-kb",
+    "dest": "experience_kb",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-admit-training-data/scripts/field_risk_signals.py",
+  "args": [
+   {
+    "option": "--source",
+    "dest": "source",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--field-config",
+    "dest": "field_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--experience-kb",
+    "dest": "experience_kb",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--visual-channel",
+    "dest": "visual_channel",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "enabled",
+     "disabled"
+    ],
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--visual-provider",
+    "dest": "visual_provider",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--visual-sample-density",
+    "dest": "visual_sample_density",
+    "action": "store",
+    "type": "<expr:float>",
+    "choices": null,
+    "default": 1.0,
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-admit-training-data/scripts/merge_variants.py",
+  "args": [
+   {
+    "option": "--merge-plan",
+    "dest": "merge_plan",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-admit-training-data/scripts/register_dataset.py",
+  "args": [
+   {
+    "option": "--dataset-id",
+    "dest": "dataset_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--pin",
+    "dest": "pin",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--l1-dir",
+    "dest": "l1_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--workspace-root",
+    "dest": "workspace_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-admit-training-data/scripts/token_audit_provider.py",
+  "args": [
+   {
+    "option": "--processor-path",
+    "dest": "processor_path",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--min-pixels",
+    "dest": "min_pixels",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 65536,
+    "required": null
+   },
+   {
+    "option": "--max-pixels",
+    "dest": "max_pixels",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 802816,
+    "required": null
+   },
+   {
+    "option": "--token-limit",
+    "dest": "token_limit",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/aggregate_contract_themes.py",
+  "args": [
+   {
+    "option": "--routing",
+    "dest": "routing",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--raw",
+    "dest": "raw",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--output",
+    "dest": "output",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--max-examples",
+    "dest": "max_examples",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 5,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_action_plan.py",
+  "args": [
+   {
+    "option": "--ledger",
+    "dest": "ledger",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--output-dir",
+    "dest": "output_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_annotation_review_report.py",
+  "args": [
+   {
+    "option": "--ledger",
+    "dest": "ledger",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--review-results",
+    "dest": "review_results",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--out-dir",
+    "dest": "out_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_badcase_review_check.py",
+  "args": [
+   {
+    "option": "--raw",
+    "dest": "raw",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--reviews",
+    "dest": "reviews",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_badcase_viewer.py",
+  "args": [
+   {
+    "option": "--labels",
+    "dest": "labels",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--predictions",
+    "dest": "predictions",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--badcases",
+    "dest": "badcases",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--images-dir",
+    "dest": "images_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--mode",
+    "dest": "mode",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "mode1",
+    "required": null
+   },
+   {
+    "option": "--ledger",
+    "dest": "ledger",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--style-cluster-manifest",
+    "dest": "style_cluster_manifest",
+    "action": "append",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--review-check",
+    "dest": "review_check",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--doc-type",
+    "dest": "doc_type",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--coordinate-space",
+    "dest": "coordinate_space",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "qwen_axis_1000",
+     "original_pixel"
+    ],
+    "default": "qwen_axis_1000",
+    "required": null
+   },
+   {
+    "option": "--gt-coordinate-space",
+    "dest": "gt_coordinate_space",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "qwen_axis_1000",
+     "original_pixel"
+    ],
+    "default": "original_pixel",
+    "required": null
+   },
+   {
+    "option": "--space-verification",
+    "dest": "space_verification",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--output",
+    "dest": "output",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_bbox_quality.py",
+  "args": [
+   {
+    "option": "--labels",
+    "dest": "labels",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--predictions",
+    "dest": "predictions",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--ledger",
+    "dest": "ledger",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--coordinate-space",
+    "dest": "coordinate_space",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "qwen_axis_1000",
+    "required": null
+   },
+   {
+    "option": "--gt-coordinate-space",
+    "dest": "gt_coordinate_space",
+    "action": "store",
+    "type": null,
+    "choices": "<expr:list(_SPACES)>",
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--space-verification",
+    "dest": "space_verification",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--eval-manifest",
+    "dest": "eval_manifest",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--images-dir",
+    "dest": "images_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--output-dir",
+    "dest": "output_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_counterexample_candidates.py",
+  "args": [
+   {
+    "option": "--raw",
+    "dest": "raw",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--output",
+    "dest": "output",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--top-k",
+    "dest": "top_k",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 3,
+    "required": null
+   },
+   {
+    "option": "--closed-clusters",
+    "dest": "closed_clusters",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--pending-clusters",
+    "dest": "pending_clusters",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--include-clusters",
+    "dest": "include_clusters",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--member-results",
+    "dest": "member_results",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--caliber",
+    "dest": "caliber",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--value-caliber",
+    "dest": "value_caliber",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_decision_from_review.py",
+  "args": [
+   {
+    "option": "--review",
+    "dest": "review",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--run-id",
+    "dest": "run_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--decision-id",
+    "dest": "decision_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--review-check",
+    "dest": "review_check",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_distribution_report.py",
+  "args": [
+   {
+    "option": "--ledger",
+    "dest": "ledger",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--train-jsonl",
+    "dest": "train_jsonl",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--train-source",
+    "dest": "train_source",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "training-jsonl",
+    "required": null
+   },
+   {
+    "option": "--training-manifest",
+    "dest": "training_manifest",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--output-dir",
+    "dest": "output_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_failure_taxonomy.py",
+  "args": [
+   {
+    "option": "--ledger",
+    "dest": "ledger",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--output-dir",
+    "dest": "output_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_readable_report.py",
+  "args": [
+   {
+    "option": "--raw-mainline",
+    "dest": "raw",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "output",
+    "dest": "output",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--output",
+    "dest": "output_kw",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--decision",
+    "dest": "decision",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--supersedes",
+    "dest": "supersedes",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_regression_report.py",
+  "args": [
+   {
+    "option": "--current",
+    "dest": "current",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--prior",
+    "dest": "prior",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--prior-best",
+    "dest": "prior_best",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--training-manifest-current",
+    "dest": "training_manifest_current",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--training-manifest-prior",
+    "dest": "training_manifest_prior",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--output-dir",
+    "dest": "output_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_review_workorders.py",
+  "args": [
+   {
+    "option": "--ledger",
+    "dest": "ledger",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--output-dir",
+    "dest": "output_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--wave-size",
+    "dest": "wave_size",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 6,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_validity_report.py",
+  "args": [
+   {
+    "option": "--metrics",
+    "dest": "metrics",
+    "action": "append",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--ledger",
+    "dest": "ledger",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--output-dir",
+    "dest": "output_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/build_visual_bundle.py",
+  "args": [
+   {
+    "option": "source_image",
+    "dest": "source_image",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "isolated_output",
+    "dest": "isolated_output",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--source-root",
+    "dest": "source_root",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--lane",
+    "dest": "lane",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--unit",
+    "dest": "unit",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--field",
+    "dest": "field",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--request-id",
+    "dest": "request_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--bbox",
+    "dest": "bbox",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--badcase-id",
+    "dest": "badcase_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/inject_cluster_review_conclusions.py",
+  "args": [
+   {
+    "option": "--raw-mainline",
+    "dest": "raw_mainline",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--cluster-reviews",
+    "dest": "cluster_reviews",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--output",
+    "dest": "output",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/merge_cluster_review_shards.py",
+  "args": [
+   {
+    "option": "--shards-dir",
+    "dest": "shards_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--output",
+    "dest": "output",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/run_analysis_chain.py",
+  "args": [
+   {
+    "option": "--run",
+    "dest": "run",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--eval-dir",
+    "dest": "eval_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--labels",
+    "dest": "labels",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--predictions",
+    "dest": "predictions",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--badcases",
+    "dest": "badcases",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--images-dir",
+    "dest": "images_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--raw-mainline",
+    "dest": "raw_mainline",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--mode",
+    "dest": "mode",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--doc-type",
+    "dest": "doc_type",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--experiment-config",
+    "dest": "experiment_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--coordinate-space",
+    "dest": "coordinate_space",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "qwen_axis_1000",
+     "original_pixel"
+    ],
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--gt-coordinate-space",
+    "dest": "gt_coordinate_space",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "qwen_axis_1000",
+     "original_pixel"
+    ],
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--cluster-reviews",
+    "dest": "cluster_reviews",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--review-check",
+    "dest": "review_check",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--decision",
+    "dest": "decision",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--train-jsonl",
+    "dest": "train_jsonl",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--training-manifest",
+    "dest": "training_manifest",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--style-cluster-manifest",
+    "dest": "style_cluster_manifest",
+    "action": "append",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--prior-metrics",
+    "dest": "prior_metrics",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--current-metrics",
+    "dest": "current_metrics",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--metrics",
+    "dest": "metrics",
+    "action": "append",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--train-source",
+    "dest": "train_source",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "training-jsonl",
+    "required": null
+   },
+   {
+    "option": "--output-dir",
+    "dest": "output_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-analyze-badcases/scripts/run_joint_analysis.py",
+  "args": [
+   {
+    "option": "--run",
+    "dest": "run",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--eval-round",
+    "dest": "eval_round",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--train-jsonl",
+    "dest": "train_jsonl",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--output-dir",
+    "dest": "output_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--cluster-reviews",
+    "dest": "cluster_reviews",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--review-check",
+    "dest": "review_check",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--decision",
+    "dest": "decision",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--prior-metrics",
+    "dest": "prior_metrics",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--lane",
+    "dest": "lane",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "goods",
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-audit-run/scripts/audit.py",
+  "args": [
+   {
+    "option": "--owner-snapshot",
+    "dest": "owner_snapshot",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--workspace",
+    "dest": "workspace",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--output-dir",
+    "dest": "output_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-audit-run/scripts/check_run_layout.py",
+  "args": [
+   {
+    "option": "--workspace-root",
+    "dest": "workspace_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--run-id",
+    "dest": "run_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--baseline",
+    "dest": "baseline",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-evaluate-checkpoints/scripts/build_eval_metrics_report.py",
+  "args": [
+   {
+    "option": "--eval-dir",
+    "dest": "eval_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--baseline",
+    "dest": "baseline",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--title",
+    "dest": "title",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "评估指标报告",
+    "required": null
+   },
+   {
+    "option": "--out-dir",
+    "dest": "out_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-evaluate-checkpoints/scripts/build_raw_badcase_input.py",
+  "args": [
+   {
+    "option": "--eval-dir",
+    "dest": "eval_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--assets",
+    "dest": "assets",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--lane",
+    "dest": "lane",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "goods",
+    "required": null
+   },
+   {
+    "option": "--unit",
+    "dest": "unit",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "pl_mixed",
+    "required": null
+   },
+   {
+    "option": "--out-dir",
+    "dest": "out_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--cluster-reviews",
+    "dest": "cluster_reviews",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--review-check",
+    "dest": "review_check",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--experiment-config",
+    "dest": "experiment_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--style-cluster-manifest",
+    "dest": "style_cluster_manifest",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--training-manifest",
+    "dest": "training_manifest",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--doc-type",
+    "dest": "doc_type",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "单据",
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-evaluate-checkpoints/scripts/build_service_prelaunch_report.py",
+  "args": [
+   {
+    "option": "--service-dir",
+    "dest": "service_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--env-profile",
+    "dest": "env_profile",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--iteration-config",
+    "dest": "iteration_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--run-dir",
+    "dest": "run_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--max-model-len",
+    "dest": "max_model_len",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--concurrency",
+    "dest": "concurrency",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 1,
+    "required": null
+   },
+   {
+    "option": "--concurrency-recommended",
+    "dest": "concurrency_recommended",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--concurrency-reason",
+    "dest": "concurrency_reason",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--tp-deviation-reason",
+    "dest": "tp_deviation_reason",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--gpu-usage",
+    "dest": "gpu_usage",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--stop-existing",
+    "dest": "stop_existing",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "no",
+     "yes"
+    ],
+    "default": "no",
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--adapter-local",
+    "dest": "adapter_local",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--adapter-remote",
+    "dest": "adapter_remote",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--adapter-sha",
+    "dest": "adapter_sha",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--staging-dir",
+    "dest": "staging_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--field-config",
+    "dest": "field_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--prompt-renderer",
+    "dest": "prompt_renderer",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--coordinate",
+    "dest": "coordinate",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "qwen3_vl",
+    "required": null
+   },
+   {
+    "option": "--restart-note",
+    "dest": "restart_note",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-evaluate-checkpoints/scripts/generate_checkpoint_plan.py",
+  "args": [
+   {
+    "option": "--config",
+    "dest": "config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-evaluate-checkpoints/scripts/generate_eval_orchestration.py",
+  "args": [
+   {
+    "option": "--service",
+    "dest": "service",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--ckpt",
+    "dest": "ckpt",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--eval-runner",
+    "dest": "eval_runner",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--prompt-renderer",
+    "dest": "prompt_renderer",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--units",
+    "dest": "units",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--base-url",
+    "dest": "base_url",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "http://127.0.0.1:5002/v1",
+    "required": null
+   },
+   {
+    "option": "--assets",
+    "dest": "assets",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--field-config",
+    "dest": "field_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--model",
+    "dest": "model",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--env-profile",
+    "dest": "env_profile",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--split-manifest",
+    "dest": "split_manifest",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--assets-external-confirm",
+    "dest": "assets_external_confirm",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--max-completion-tokens",
+    "dest": "max_completion_tokens",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--concurrency",
+    "dest": "concurrency",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 1,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-evaluate-checkpoints/scripts/generate_eval_service.py",
+  "args": [
+   {
+    "option": "--config",
+    "dest": "config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--iteration-config",
+    "dest": "iteration_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--deploy",
+    "dest": "deploy",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--env-profile",
+    "dest": "env_profile",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--record-eval-release",
+    "dest": "record_eval_release",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--service-dir",
+    "dest": "service_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--note",
+    "dest": "note",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--actor",
+    "dest": "actor",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "unattributed",
+    "required": null
+   },
+   {
+    "option": "--approval-mode",
+    "dest": "approval_mode",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "ui",
+     "stub",
+     "ledger"
+    ],
+    "default": "ui",
+    "required": null
+   },
+   {
+    "option": "--round-dir",
+    "dest": "round_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-evaluate-checkpoints/scripts/run_formal_eval.py",
+  "args": [
+   {
+    "option": "--assets",
+    "dest": "assets",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--field-config",
+    "dest": "field_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--prompt-renderer",
+    "dest": "prompt_renderer",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--base-url",
+    "dest": "base_url",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "http://127.0.0.1:8200/v1",
+    "required": null
+   },
+   {
+    "option": "--model",
+    "dest": "model",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--reuse-raw",
+    "dest": "reuse_raw",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--checkpoint",
+    "dest": "checkpoint",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--pred-space",
+    "dest": "pred_space",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--coordinate",
+    "dest": "coordinate",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "qwen3_vl",
+    "required": null
+   },
+   {
+    "option": "--coordinate-transforms",
+    "dest": "coordinate_transforms",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--limit",
+    "dest": "limit",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 0,
+    "required": null
+   },
+   {
+    "option": "--concurrency",
+    "dest": "concurrency",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 1,
+    "required": null
+   },
+   {
+    "option": "--max-completion-tokens",
+    "dest": "max_completion_tokens",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--only-unit",
+    "dest": "only_unit",
+    "action": "append",
+    "type": null,
+    "choices": null,
+    "default": [],
+    "required": null
+   },
+   {
+    "option": "--model-route",
+    "dest": "model_route",
+    "action": "append",
+    "type": null,
+    "choices": null,
+    "default": [],
+    "required": null
+   },
+   {
+    "option": "--service-log",
+    "dest": "service_log",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--prompt-mode",
+    "dest": "prompt_mode",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "mode0",
+     "mode1"
+    ],
+    "default": "mode0",
+    "required": null
+   },
+   {
+    "option": "--adopt-raw",
+    "dest": "adopt_raw",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--service-manifest",
+    "dest": "service_manifest",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-prepare-training/scripts/build_env_profile.py",
+  "args": [
+   {
+    "option": "--name",
+    "dest": "name",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--name",
+    "dest": "name",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--probe-container",
+    "dest": "probe_container",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--name",
+    "dest": "name",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--ssh-alias",
+    "dest": "ssh_alias",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--local",
+    "dest": "local",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--ssh-host",
+    "dest": "ssh_host",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--ssh-user",
+    "dest": "ssh_user",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--ssh-key-path",
+    "dest": "ssh_key_path",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--ssh-port",
+    "dest": "ssh_port",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--train-container",
+    "dest": "train_container",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--mount",
+    "dest": "mount",
+    "action": "append",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--train-env",
+    "dest": "train_env",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--eval-env",
+    "dest": "eval_env",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--env",
+    "dest": "env",
+    "action": "append",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--nproc",
+    "dest": "nproc",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": 8,
+    "required": null
+   },
+   {
+    "option": "--visible-devices",
+    "dest": "visible_devices",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "0,1,2,3,4,5,6,7",
+    "required": null
+   },
+   {
+    "option": "--eval-service-mode",
+    "dest": "eval_service_mode",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "self",
+     "existing"
+    ],
+    "default": "self",
+    "required": null
+   },
+   {
+    "option": "--eval-base-url",
+    "dest": "eval_base_url",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--master-port",
+    "dest": "master_port",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": 29765,
+    "required": null
+   },
+   {
+    "option": "--probe-container",
+    "dest": "probe_container",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--force",
+    "dest": "force",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-prepare-training/scripts/build_prelaunch_report.py",
+  "args": [
+   {
+    "option": "--config",
+    "dest": "config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--launch-dir",
+    "dest": "launch_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--env-profile",
+    "dest": "env_profile",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-prepare-training/scripts/generate_iteration_config.py",
+  "args": [
+   {
+    "option": "--run-id",
+    "dest": "run_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--lane",
+    "dest": "lane",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "goods",
+     "non_goods",
+     "mixed"
+    ],
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--experiment-config",
+    "dest": "experiment_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--image-min-pixels",
+    "dest": "image_min_pixels",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--image-max-pixels",
+    "dest": "image_max_pixels",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--variants-dir",
+    "dest": "variants_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--field-config",
+    "dest": "field_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--l1-dir",
+    "dest": "l1_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--deploy",
+    "dest": "deploy",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--source-version",
+    "dest": "source_version",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--base-model",
+    "dest": "base_model",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--base-model-family",
+    "dest": "base_model_family",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "qwen3_vl",
+    "required": null
+   },
+   {
+    "option": "--modes",
+    "dest": "modes",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--epochs",
+    "dest": "epochs",
+    "action": "store",
+    "type": "<expr:float>",
+    "choices": null,
+    "default": 3,
+    "required": null
+   },
+   {
+    "option": "--lora-rank",
+    "dest": "lora_rank",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 32,
+    "required": null
+   },
+   {
+    "option": "--lora-alpha",
+    "dest": "lora_alpha",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 64,
+    "required": null
+   },
+   {
+    "option": "--warmup-ratio",
+    "dest": "warmup_ratio",
+    "action": "store",
+    "type": "<expr:float>",
+    "choices": null,
+    "default": 0.1,
+    "required": null
+   },
+   {
+    "option": "--visible-devices",
+    "dest": "visible_devices",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--token-budget",
+    "dest": "token_budget",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--run-dir",
+    "dest": "run_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--output-dir",
+    "dest": "output_dir",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out-dir",
+    "dest": "out_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-prepare-training/scripts/generate_train_launch.py",
+  "args": [
+   {
+    "option": "--config",
+    "dest": "config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--deploy",
+    "dest": "deploy",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--env-profile",
+    "dest": "env_profile",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--convert-legacy",
+    "dest": "convert_legacy",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--record-training-release",
+    "dest": "record_training_release",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--note",
+    "dest": "note",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-prepare-training/scripts/inspect-source.py",
+  "args": [
+   {
+    "option": "--repository-id",
+    "dest": "repository_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--commit-pin",
+    "dest": "commit_pin",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--repository-root",
+    "dest": "repository_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--recipe-package",
+    "dest": "recipe_package",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--data-root",
+    "dest": "data_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--lane",
+    "dest": "lane",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "goods",
+     "non_goods",
+     "mixed"
+    ],
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--training-data-manifest",
+    "dest": "training_data_manifest",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--training-jsonl",
+    "dest": "training_jsonl",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--g4-artifact-id",
+    "dest": "g4_artifact_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--g4-evidence-digest",
+    "dest": "g4_evidence_digest",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--scope-id",
+    "dest": "scope_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-propose-next-iteration/scripts/choose-change.py",
+  "args": [
+   {
+    "option": "--workspace",
+    "dest": "workspace",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--owner-snapshot",
+    "dest": "owner_snapshot",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--derived-workspace",
+    "dest": "derived_workspace",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--command-ref",
+    "dest": "command_ref",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--operator",
+    "dest": "operator",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--action",
+    "dest": "action",
+    "action": "store",
+    "type": null,
+    "choices": "<expr:[item.value for item in NextIterationAction]>",
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--change-group-type",
+    "dest": "change_group_type",
+    "action": "store",
+    "type": null,
+    "choices": "<expr:[item.value for item in ChangeGroupType]>",
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--modification",
+    "dest": "modification",
+    "action": "append",
+    "type": null,
+    "choices": null,
+    "default": [],
+    "required": null
+   },
+   {
+    "option": "--approval-ref",
+    "dest": "approval_ref",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--operation-result-ref",
+    "dest": "operation_result_ref",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--source-pin",
+    "dest": "source_pin",
+    "action": "append",
+    "type": null,
+    "choices": null,
+    "default": [],
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-propose-next-iteration/scripts/generate-preparation-bindings.py",
+  "args": [
+   {
+    "option": "--source-root",
+    "dest": "source_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--split-root",
+    "dest": "split_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--source-repository",
+    "dest": "source_repository",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--current-contract-bundle-ref",
+    "dest": "current_contract_bundle_ref",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--source-pin",
+    "dest": "source_pin",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--scope-project",
+    "dest": "scope_project",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "agentic-training-flow",
+    "required": null
+   },
+   {
+    "option": "--scope-run",
+    "dest": "scope_run",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "run",
+    "required": null
+   },
+   {
+    "option": "--scope-key",
+    "dest": "scope_key",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--source-fact-refs",
+    "dest": "source_fact_refs",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--policy-refs",
+    "dest": "policy_refs",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--adapter-binding-refs",
+    "dest": "adapter_binding_refs",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--gate-evidence-refs",
+    "dest": "gate_evidence_refs",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--capability-status",
+    "dest": "capability_status",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "qualified",
+     "waiting_on_qualification"
+    ],
+    "default": "waiting_on_qualification",
+    "required": null
+   },
+   {
+    "option": "--capability-evidence",
+    "dest": "capability_evidence",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "<expr:f\"--{flag.replace('_', '-')}\">",
+    "dest": "<expr:flag>",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-propose-next-iteration/scripts/inspect-source.py",
+  "args": [
+   {
+    "option": "--case-manifest",
+    "dest": "case_manifest",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--source-root",
+    "dest": "source_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-propose-next-iteration/scripts/prepare-next-round.py",
+  "args": [
+   {
+    "option": "--step",
+    "dest": "step",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "compile",
+     "execute"
+    ],
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--resolved-group",
+    "dest": "resolved_group",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--source-workspace",
+    "dest": "source_workspace",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--derived-workspace",
+    "dest": "derived_workspace",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--scope-project",
+    "dest": "scope_project",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "agentic-training-flow",
+    "required": null
+   },
+   {
+    "option": "--scope-run",
+    "dest": "scope_run",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "run",
+    "required": null
+   },
+   {
+    "option": "--scope-key",
+    "dest": "scope_key",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--decision-ref",
+    "dest": "decision_ref",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--source-fact-refs",
+    "dest": "source_fact_refs",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--policy-refs",
+    "dest": "policy_refs",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--adapter-binding-refs",
+    "dest": "adapter_binding_refs",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--gate-evidence-refs",
+    "dest": "gate_evidence_refs",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--capability-status",
+    "dest": "capability_status",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "qualified",
+     "waiting_on_qualification"
+    ],
+    "default": "waiting_on_qualification",
+    "required": null
+   },
+   {
+    "option": "--capability-evidence",
+    "dest": "capability_evidence",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--confirm-plan-sha",
+    "dest": "confirm_plan_sha",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--bindings",
+    "dest": "bindings",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-propose-next-iteration/scripts/propose.py",
+  "args": [
+   {
+    "option": "--owner-snapshot",
+    "dest": "owner_snapshot",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--workspace",
+    "dest": "workspace",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--wave2-workspace",
+    "dest": "wave2_workspace",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--typed-input",
+    "dest": "typed_input",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--recorded-host-response",
+    "dest": "recorded_host_response",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--output-dir",
+    "dest": "output_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--host-binding-id",
+    "dest": "host_binding_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "host:atf-propose-next-iteration-recorded:v1",
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-publish-label-snapshot/scripts/label_conflict_advice.py",
+  "args": [
+   {
+    "option": "--workspace",
+    "dest": "workspace",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--request-id",
+    "dest": "request_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--workspace",
+    "dest": "workspace",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--result",
+    "dest": "result",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-qwen-vl-iteration-loop/scripts/quick_validate.py",
+  "args": [
+   {
+    "option": "--case",
+    "dest": "case",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--source",
+    "dest": "source",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--wave2-workspace",
+    "dest": "wave2_workspace",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--mode",
+    "dest": "mode",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "plan",
+     "inspect",
+     "run",
+     "dispatch"
+    ],
+    "default": "plan",
+    "required": null
+   },
+   {
+    "option": "--task",
+    "dest": "task",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--training-profile",
+    "dest": "training_profile",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--session-id",
+    "dest": "session_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--host-config",
+    "dest": "host_config",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--host-binding",
+    "dest": "host_binding",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--output",
+    "dest": "output",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-run-training/scripts/build_pipeline_verification.py",
+  "args": [
+   {
+    "option": "--exp-root",
+    "dest": "exp_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--field-config",
+    "dest": "field_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--l1-dir",
+    "dest": "l1_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--iteration-config",
+    "dest": "iteration_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--launch-dir",
+    "dest": "launch_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--ckpt-dir",
+    "dest": "ckpt_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--service-dir",
+    "dest": "service_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--service-config",
+    "dest": "service_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--eval-dir",
+    "dest": "eval_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--experiment-setup",
+    "dest": "experiment_setup",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--prior-decision",
+    "dest": "prior_decision",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-run-training/scripts/build_train_completion_check.py",
+  "args": [
+   {
+    "option": "--run-dir",
+    "dest": "run_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--log",
+    "dest": "log",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--expected-steps",
+    "dest": "expected_steps",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-run-training/scripts/distribute_checkpoint.py",
+  "args": [
+   {
+    "option": "--src",
+    "dest": "src",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--dest",
+    "dest": "dest",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--run-id",
+    "dest": "run_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--name",
+    "dest": "name",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-run-training/scripts/generate_launch_orchestration.py",
+  "args": [
+   {
+    "option": "--train-sh",
+    "dest": "train_sh",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--deploy",
+    "dest": "deploy",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--allow-legacy-dataset",
+    "dest": "allow_legacy_dataset",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-run-training/scripts/verify-history.py",
+  "args": [
+   {
+    "option": "--repository-id",
+    "dest": "repository_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--commit-pin",
+    "dest": "commit_pin",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--repository-root",
+    "dest": "repository_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--lane",
+    "dest": "lane",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "goods",
+     "non_goods",
+     "mixed"
+    ],
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--checkpoint-dir",
+    "dest": "checkpoint_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--evaluation-root",
+    "dest": "evaluation_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--expected-checkpoint-name",
+    "dest": "expected_checkpoint_name",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-validate-extraction-contract/scripts/build_contract_confirmation_report.py",
+  "args": [
+   {
+    "option": "--contract-dir",
+    "dest": "contract_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--candidate",
+    "dest": "candidate",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-validate-extraction-contract/scripts/publish_contract.py",
+  "args": [
+   {
+    "option": "--candidate",
+    "dest": "candidate",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--source-root",
+    "dest": "source_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--split-root",
+    "dest": "split_root",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--workspace",
+    "dest": "workspace",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--require-coordinate-system",
+    "dest": "require_coordinate_system",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--experiment-config",
+    "dest": "experiment_config",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--user-confirmation",
+    "dest": "user_confirmation",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--prompt-surface-set",
+    "dest": "prompt_surface_set",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--label-semantics",
+    "dest": "label_semantics",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "tools/build_joint_dataset.py",
+  "args": [
+   {
+    "option": "--run",
+    "dest": "run",
+    "action": "append",
+    "type": null,
+    "choices": null,
+    "default": [],
+    "required": null
+   },
+   {
+    "option": "--field-spec",
+    "dest": "field_spec",
+    "action": "append",
+    "type": null,
+    "choices": null,
+    "default": [],
+    "required": null
+   },
+   {
+    "option": "--base-model-family",
+    "dest": "base_model_family",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "qwen3_vl",
+    "required": null
+   },
+   {
+    "option": "--prompt-profile",
+    "dest": "prompt_profile",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--coordinate-spec",
+    "dest": "coordinate_spec",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--seed",
+    "dest": "seed",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 0,
+    "required": null
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   }
+  ]
+ },
+ {
+  "script": "tools/generate_argparse_surface.py",
+  "args": [
+   {
+    "option": "--check",
+    "dest": "check",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "tools/probe_runtime_env.py",
+  "args": [
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--require",
+    "dest": "require",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
+    "option": "--model-root",
+    "dest": "model_root",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--model-root-limit",
+    "dest": "model_root_limit",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 20,
+    "required": null
+   },
+   {
+    "option": "--emit-deploy",
+    "dest": "emit_deploy",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "tools/quantize_annotations.py",
+  "args": [
+   {
+    "option": "--annotations",
+    "dest": "annotations",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--mode",
+    "dest": "mode",
+    "action": "store",
+    "type": null,
+    "choices": "<expr:list(_MODES)>",
+    "default": "round",
+    "required": null
+   },
+   {
+    "option": "--allow-degenerate",
+    "dest": "allow_degenerate",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--dry-run",
+    "dest": "dry_run",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out-json",
+    "dest": "out_json",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
+  "script": "tools/walkthrough_pipeline.py",
+  "args": [
+   {
+    "option": "--workspace",
+    "dest": "workspace",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--stage",
+    "dest": "stage",
+    "action": "store",
+    "type": null,
+    "choices": "<expr:list(STAGE_ORDER)>",
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--source-root",
+    "dest": "source_root",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--doc-type",
+    "dest": "doc_type",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--field-config",
+    "dest": "field_config",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--run-id",
+    "dest": "run_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "<expr:f\"walkthrough-{datetime.now().strftime('%Y%m%d')}\">",
+    "required": null
+   },
+   {
+    "option": "--rerun",
+    "dest": "rerun",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--grouping-preset",
+    "dest": "grouping_preset",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "A",
+     "B"
+    ],
+    "default": "B",
+    "required": null
+   },
+   {
+    "option": "--lane-suffix",
+    "dest": "lane_suffix",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "goods",
+     "non_goods",
+     "mixed"
+    ],
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--negative-ratio-target",
+    "dest": "negative_ratio_target",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--allow-small-cluster-test",
+    "dest": "allow_small_cluster_test",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--auto-style-cluster",
+    "dest": "auto_style_cluster",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "auto",
+     "on",
+     "off"
+    ],
+    "default": "auto",
+    "required": null
+   },
+   {
+    "option": "--base-model",
+    "dest": "base_model",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--base-model-family",
+    "dest": "base_model_family",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "qwen3_vl",
+    "required": null
+   },
+   {
+    "option": "--output-mode",
+    "dest": "output_mode",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "grouped",
+     "flat"
+    ],
+    "default": "flat",
+    "required": null
+   },
+   {
+    "option": "--split-id",
+    "dest": "split_id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--train-all",
+    "dest": "train_all",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--assignment-source",
+    "dest": "assignment_source",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--reuse-experiment-setup",
+    "dest": "reuse_experiment_setup",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--token-provider",
+    "dest": "token_provider",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--allow-token-gate-skip",
+    "dest": "allow_token_gate_skip",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--retry-coordinate-pending",
+    "dest": "retry_coordinate_pending",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out-json",
+    "dest": "out_json",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--out-md",
+    "dest": "out_md",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--actor",
+    "dest": "actor",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "unattributed",
+    "required": null
+   },
+   {
+    "option": "--approval-mode",
+    "dest": "approval_mode",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "ui",
+     "stub",
+     "ledger"
+    ],
+    "default": "ui",
+    "required": null
+   },
+   {
+    "option": "--round-dir",
+    "dest": "round_dir",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ }
+]
