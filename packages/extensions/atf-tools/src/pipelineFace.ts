@@ -217,7 +217,8 @@ export const negativeRatioApprovalLine = (band: string): string => {
 };
 
 
-const runPipeline = (command: string, args: readonly string[], timeoutMs: number): Promise<{ code: number | null; stdout: string; stderr: string }> =>
+/** 子进程封装（execFile——非零退出/超时如实回传，不抛；F1 预检工具同源复用）。 */
+export const runPipeline = (command: string, args: readonly string[], timeoutMs: number): Promise<{ code: number | null; stdout: string; stderr: string }> =>
   new Promise((resolve) => {
     const [file, ...rest] = command.split(" ");
     execFile(
