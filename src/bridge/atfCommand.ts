@@ -8,15 +8,16 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 契约轴 2026-10-24 窗口 U：v0.7.25b6 → v0.7.25b7，唯一真相源 = bridge.contract.yaml
+// 当前 pin（re-pin 契约轴 2026-10-24 窗口 E3：v0.7.25b7 → v0.7.25b8，唯一真相源 = bridge.contract.yaml
 // atf_upstream，本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.25b7（U1 内核批生效窗——F1 首跑预检〔D103 预检入口＋D104 内置 CPU
-// 计量〕＋eval 探活环境解耦＋D109 审批账 env 优先级＋D116 quantize 自产件移出＋D108 token
-// 门禁 provider 契约对齐——详见 bridge.contract.yaml atf_upstream.baseline；
-// tag commit 997db63，方法面零增（session/ 零 diff），
+// 本轮 pin 取值＝tag v0.7.25b8（E3 内核批生效窗——experiment_setup 预算三参桥
+// 〔D106 --max-total-tokens／--image-min-pixels／--image-max-pixels argparse 新声明面，
+// setup_argv 严格给了才追加；像素对成对校验 main() 参数形状层——单端 parser.error
+// 业务中文〕＋fbf29ba bump 0.7.25b8——详见 bridge.contract.yaml atf_upstream.baseline；
+// tag commit ebe0293，方法面零增（session/ 零 diff），
 // 会话协议轴 1／桥接契约轴 2 零 diff）。
-export const ATF_UPSTREAM_TAG = "v0.7.25b7";
-export const ATF_UPSTREAM_COMMIT_SHA = "997db6352217d12877355bf9704a6e41d316809a";
+export const ATF_UPSTREAM_TAG = "v0.7.25b8";
+export const ATF_UPSTREAM_COMMIT_SHA = "ebe0293495575377604c7e54dbae47ea72129ff1";
 
 export interface AtfCliInvocation {
   command: string;
