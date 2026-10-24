@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import net from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   buildRunTrainingTool,
   buildEvalTools,
@@ -28,6 +28,9 @@ import {
 } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 import { evalOrchSessionBase, resolveLaunchSessionName, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
 import { tmuxTestOk } from "../fixtures/tmuxTestSocket.js";
+// D112 训练互斥守卫：真训练在跑时本文件杀伤面 describe 逐用例 skip（探测式训练锁，
+// 语义见 tests/fixtures/trainingLock.ts 头注——B7 缺陷⑪收口）
+import { guardTrainingLock } from "../fixtures/trainingLock.js";
 
 const repoRoot = "/data/sam/ATF-Harness";
 // 批㊶-K：GPU 排队编排直启旁路（测试不等待真实 GPU 窗口）
@@ -102,6 +105,7 @@ const holdPort = (port: number): Promise<net.Server> =>
   });
 
 describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚举）", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   it("start：无审批服务 → 结构化拒绝（danger fail-closed，不启动）", async () => {
     const root = tempRoot();
     const trainSh = writeMockTrainSh(root);
@@ -744,6 +748,7 @@ describe("parseTrainerLine 与 loss 进料（监控管道协议）", () => {
 });
 
 describe("批⑳dot3 修复 3——训练启动端口预检（撞前知道）", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   it("extractMasterPort：两形态解析＋缺省回退", () => {
     expect(extractMasterPort("export MASTER_PORT=${MASTER_PORT:-29517}")).toBe(29517);
     expect(extractMasterPort("export MASTER_PORT=29765")).toBe(29765);
@@ -893,6 +898,7 @@ describe("批㊶-E 项 7a（P28）训练日志启动轮转（rotateTrainLog）",
 import { probeTrainingStartup, resolveStartupProbeMs, STARTUP_FEED_RE, STARTUP_TERMINAL_RE } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 
 describe("批㊶Q增补三 段2——启动探活 probeTrainingStartup（注入面直测）", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   // 可注入时钟：sleep 步进假时钟（窗口/settle 全走 now()——真实零等待）
   const clock = (start = 1_000) => {
     let t = start;
@@ -979,6 +985,7 @@ describe("批㊶Q增补三 段2——启动探活 probeTrainingStartup（注入�
 });
 
 describe("批㊶R前置——防线③ start 面复核接线（审批前秒拒＋清单回流）", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   it("qwen3_vl 家族名误填 → started:false＋model_path_missing＋models 清单（不进审批不进 tmux）", async () => {
     const root = tempRoot();
     const trainSh = writeMockTrainSh(root, true);

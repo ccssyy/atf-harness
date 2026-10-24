@@ -12,7 +12,9 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// D112 训练互斥守卫（语义见 tests/fixtures/trainingLock.ts 头注）
+import { guardTrainingLock } from "../fixtures/trainingLock.js";
 import { buildEvalTools, buildRunTrainingTool } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 import { BridgeManager } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
 import { evalOrchSessionBase, resolveLaunchSessionName, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
@@ -88,6 +90,7 @@ describe("批㊶-TRAIN-OBS-FIX2 T1：BridgeManager.bindRun（runner.ts 形态＋
 });
 
 describe("批㊶-TRAIN-OBS-FIX2 T1：atf_run_training 成功路径绑定", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   it("start 成功（探活 feed_ok）→ bindRun 恰一次且 run_id 实参", async () => {
     const root = tempRoot();
     const trainSh = writeLongRunningTrainSh(root);
@@ -154,6 +157,7 @@ describe("批㊶-TRAIN-OBS-FIX2 T1：atf_run_training 成功路径绑定", () =>
 });
 
 describe("批㊶-TRAIN-OBS-FIX2 T1：atf_evaluate 成功路径绑定（评估类一并覆盖）", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   type Tool = { name: string; execute: (args: unknown, exec: unknown) => Promise<Record<string, unknown>> };
   const evalOf = (runsRoot: string, kernelDir: string, ctx: { get: (s: string) => unknown }, bindRun?: (runId: string) => Promise<void>): Tool =>
     (buildEvalTools(ctx, { runsRoot, logDir: runsRoot, kernelDir, bindRun }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
