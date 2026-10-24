@@ -27,12 +27,16 @@ export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; de
   // confirmFace 以 defaultBaseModelPath 注入基线；卡上可改；写回 iteration-config base_model.path）
   { key: "base_model_path", label: "基模型路径 base_model_path", default: "" },
   { key: "num_train_epochs", label: "训练轮数 epochs", default: "3" },
-  { key: "per_device_train_batch_size", label: "单卡 batch", default: "1" },
+  // E4-乙（改动 2）：bs 静态缺省退役为注入位（confirmFace 以内核缺省分档 kernelBsDefaultOf
+  // 注入——cutoff<10000→2 标 convention；静态字面会造成第二套口径）
+  { key: "per_device_train_batch_size", label: "单卡 batch", default: "" },
   { key: "gradient_accumulation_steps", label: "梯度累积", default: "8" },
   // 批次 R H1-1：TokenBudget 三要素——cutoff_len/max_model_len 缺省改单源惯例基线
   //（owner 2026-10-22；两值独立取值、禁互相推导、禁共用常量——TokenBudget v1 §五）。
   { key: "cutoff_len", label: "训练截断 cutoff_len", default: String(TRAINING_PIN_CONSTANTS.cutoff_len) },
-  { key: "deepspeed", label: "deepspeed 配置", default: "ds_z2_config.json" },
+  // E4-乙（改动 2）：deepspeed 缺省与内核统一 ds_z3_offload（别名形态——原 ds_z2_config.json
+  // 静态缺省退役；显式值/登记值优先不变）
+  { key: "deepspeed", label: "deepspeed 配置", default: "ds_z3_offload" },
   { key: "lora_rank", label: "lora_rank", default: "32" },
   { key: "lora_alpha", label: "lora_alpha", default: "64" },
   // D92：dataset_keys 改只读展示（内核实算——generate_iteration_config 的

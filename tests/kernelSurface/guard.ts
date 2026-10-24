@@ -48,6 +48,9 @@ export interface HarnessSurfaceFacts {
   toolParamKeys: readonly string[];
   /** 工具参数键 → 内核旗标单源映射（映射完整性＝参数面护栏断言对象之一）。 */
   flagByParam: Readonly<Record<string, string>>;
+  /** 参数面前瞻豁免集（E4-乙 b9 未发窗——豁免键跳过「旗标落声明面」单项对账；
+   *  映射完整性与必填/choices 对账不变；re-pin b9 时随快照更新退役）。 */
+  paramFaceWaivers: ReadonlySet<string>;
   /** harness 八段序（runFacts SEGMENT_ORDER）。 */
   pipelineStages: readonly string[];
   /** 段事实映射键集（segmentFacts SEGMENT_FACT_BY_KERNEL_STAGE 键）。 */
@@ -106,14 +109,15 @@ export const guardParamsFace = (snapshot: SurfaceSnapshot, facts: HarnessSurface
       out.push({ kind: "参数面", detail: `行为面下传旗标 ${token} 不在内核 argparse 声明面（禁传内核未声明参数）` });
     }
   }
-  // 工具参数键 ↔ 旗标映射完整且落清单
+  // 工具参数键 ↔ 旗标映射完整且落清单（E4-乙前瞻豁免键免「旗标落声明面」单项——
+  // 内核 b9 将声明该旗标，re-pin 后豁免退役恢复全对账）
   for (const key of facts.toolParamKeys) {
     const flag = facts.flagByParam[key];
     if (flag === undefined) {
       out.push({ kind: "参数面", detail: `工具参数键 ${key} 无旗标映射（flagByParam 缺登记——参数面对账断链）` });
       continue;
     }
-    if (!options.has(flag)) {
+    if (!options.has(flag) && !facts.paramFaceWaivers.has(key)) {
       out.push({ kind: "参数面", detail: `工具参数键 ${key} 映射旗标 ${flag} 不在内核声明面` });
     }
   }

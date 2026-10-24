@@ -15,8 +15,8 @@ import {
   clampImageMaxPixels,
   clampNegativeRatio,
   oomFallbackParams,
-  applyConfirmedToIterationConfig,
   SMART_DEEPSPEED_DEFAULT,
+  kernelBsDefaultOf,
 } from "../../src/core/workspace/smartDefaults.js";
 import {
   probeAndRecord,
@@ -83,26 +83,24 @@ describe("批㊶-P P-1b L3 模型建议 clamp", () => {
   });
 });
 
-describe("批㊶-P P-1a/c param_sources 补丁＋deepspeed 缺省", () => {
-  it("确认快照回写 iteration-config training 段＋param_sources=user-specified（VERIFY-1 后处理）", () => {
-    const root = tempRoot();
-    const iterPath = join(root, "prep", "iteration-config.json");
-    mkdirSync(join(root, "prep"), { recursive: true });
-    writeFileSync(iterPath, JSON.stringify({ training: { per_device_train_batch_size: 1, cutoff_len: 9000 }, param_sources: {} }));
-    const result = applyConfirmedToIterationConfig(iterPath, { per_device_train_batch_size: "2", gradient_accumulation_steps: "16", cutoff_len: "9000" });
-    expect("updated" in result).toBe(true);
-    const patched = JSON.parse(readFileSync(iterPath, "utf8"));
-    expect(patched.training.per_device_train_batch_size).toBe("2");
-    expect(patched.param_sources.per_device_train_batch_size).toBe("user-specified");
-    void existsSync;
+describe("批㊶-P P-1a/c param_sources 补丁＋deepspeed 缺省（E4-乙停写改造）", () => {
+  it("E4-乙改动 2：iteration-config 回写面退役——确认值只落快照，内核产物零触碰", () => {
+    // 回写函数 applyConfirmedToIterationConfig 已删（停写红线：快照是训练参数唯一出口——
+    // training 段与 param_sources 由内核 training_prep 段写 user_confirmed(ref=stage:training_overrides)）。
+    // 模块级锚：导出面不再含回写件（import 已摘——typecheck 层断链；此处行为锚归
+    // autoTraining.test「停写断言」与 batchE4b 停写例）。
+    const moduleText = readFileSync(join(import.meta.dirname, "..", "..", "src", "core", "workspace", "smartDefaults.ts"), "utf8");
+    expect(moduleText).not.toContain("export const applyConfirmedToIterationConfig");
+    expect(moduleText).toContain("快照是训练参数唯一出口");
   });
-  it("iteration-config 缺失 → 结构化 error（不猜）", () => {
-    const result = applyConfirmedToIterationConfig(join(tempRoot(), "nope.json"), { a: "1" });
-    expect("error" in result).toBe(true);
-  });
-  it("deepspeed 智能缺省＝ds_z3_offload_config.json（内核 assets 在位——BUILD 首验）", () => {
-    expect(SMART_DEEPSPEED_DEFAULT).toBe("ds_z3_offload_config.json");
+  it("deepspeed 智能缺省＝ds_z3_offload（E4-乙与内核统一别名形态；内核 assets 在位——BUILD 首验）", () => {
+    expect(SMART_DEEPSPEED_DEFAULT).toBe("ds_z3_offload");
     expect(existsSync("/data/sam/ATF-Harness/.atf-pinned/skills/atf-prepare-training/assets/deepspeed/ds_z3_offload_config.json")).toBe(true);
+  });
+  it("E4-乙改动 2：bs 内核缺省分档单源 kernelBsDefaultOf（cutoff<10000→2，≥10000→1；缺席按惯例基线判档）", () => {
+    expect(kernelBsDefaultOf(9000)).toBe(2);
+    expect(kernelBsDefaultOf(12800)).toBe(1);
+    expect(kernelBsDefaultOf(undefined)).toBe(2); // 惯例基线 9000 判档
   });
 });
 
@@ -228,29 +226,5 @@ describe("批㊶-P P-2 训练探针（自适应基线）", () => {
   });
 });
 
-// 批㊶-Q 段2：全自动档逐键来源回写（additive 第四参——手动路径零变化）
-describe("批㊶-Q applyConfirmedToIterationConfig perKeySources（逐键来源覆盖）", () => {
-  it("perKeySources 逐键生效；缺省键落 blanket source；手动两参调用零变化", () => {
-    const runDir = tempRoot();
-    const iterPath = join(runDir, "prep", "iteration-config.json");
-    mkdirSync(join(iterPath, ".."), { recursive: true });
-    writeFileSync(iterPath, JSON.stringify({ schema_version: "IterationConfig/v1", training: { learning_rate: "1e-4", lora_rank: 32 } }));
-    const patched = applyConfirmedToIterationConfig(
-      iterPath,
-      { learning_rate: "2e-4", lora_rank: "64", seed: "42" },
-      "default:harness-smart-defaults",
-      { learning_rate: "default:agent-recommend:2.8万样本→lr2e-4" },
-    );
-    expect(patched).toMatchObject({ updated: ["learning_rate", "lora_rank", "seed"] });
-    const config = JSON.parse(readFileSync(iterPath, "utf8")) as { param_sources: Record<string, string>; training: Record<string, unknown> };
-    expect(config.param_sources["learning_rate"]).toBe("default:agent-recommend:2.8万样本→lr2e-4");
-    expect(config.param_sources["lora_rank"]).toBe("default:harness-smart-defaults");
-    expect(config.param_sources["seed"]).toBe("default:harness-smart-defaults");
-    expect(config.training["learning_rate"]).toBe("2e-4");
-    // 手动两参调用：全键 user-specified（P 批语义零变化）
-    const manual = applyConfirmedToIterationConfig(iterPath, { seed: "42" });
-    expect(manual).toMatchObject({ updated: ["seed"] });
-    const config2 = JSON.parse(readFileSync(iterPath, "utf8")) as { param_sources: Record<string, string> };
-    expect(config2.param_sources["seed"]).toBe("user-specified");
-  });
-});
+// 批㊶-Q 段2：全自动档逐键来源回写——E4-乙（改动 2）回写面整体退役（快照唯一出口），
+// perKeySources 用例随函数删除；来源呈现保留在快照 meta.sources（autoTraining 断言）。

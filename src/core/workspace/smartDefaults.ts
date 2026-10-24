@@ -370,64 +370,29 @@ export const oomFallbackParams = (nproc: number = NPROC_DEFAULT): { bs: number; 
 // ── 深度学习资产（P-1c）──
 /** 智能缺省 deepspeed 资产名（内核 assets/deepspeed/ds_z3_offload_config.json——BUILD 首验核实在位：
  *  zero3＋optimizer/param 双下 CPU，保守档；别名 ds_z3_offload 经内核 resolve_deepspeed_name 归一）。 */
-export const SMART_DEEPSPEED_DEFAULT = "ds_z3_offload_config.json";
 
-// ── param_sources 补丁（批㊶-P 1a：确认卡快照确认值回写 iteration-config 来源标注）──
-/** 来源串合法词汇（内核 param_sources.py 闭集）：user-specified／default:<依据>／carried-from:<run_id>。 */
-export const paramSourceFor = (tag: "need_confirm" | "from_registry" | "default_used"): string => {
-  switch (tag) {
-    case "need_confirm":
-    case "from_registry":
-      return "user-specified";
-    case "default_used":
-    default:
-      return "default:harness-smart-defaults";
-  }
+// ── E4-乙（改动 2）：内核 bs 缺省分档单源（cutoff<10000→2，否则 1）──
+/** bs 内核缺省分档阈值（cutoff_len ≥ 10000 的长样本降 bs——内核 b9 缺省面同源）。 */
+export const KERNEL_BS_CUTOFF_THRESHOLD = 10_000;
+
+/** per_device_train_batch_size 内核缺省（cutoff<10000→2，否则 1；cutoff 缺席按惯例基线
+ *  9000 判档）。confirmFace 卡面展示与派生输入兜底（删 `?? 2` 硬编码）、pipelineFace
+ *  training_overrides 桥 convention 兜底三处共用本单源；来源标注 convention（内核惯例）。 */
+export const kernelBsDefaultOf = (cutoffLen: number | undefined): number => {
+  const cutoff =
+    cutoffLen !== undefined && Number.isFinite(cutoffLen) && cutoffLen > 0
+      ? cutoffLen
+      : TRAINING_PIN_CONSTANTS.cutoff_len;
+  return cutoff < KERNEL_BS_CUTOFF_THRESHOLD ? 2 : 1;
 };
 
-/** 批㊶R前置：确认卡扩键持久化白名单补充（nproc_per_node 属 training 段字段——
- *  旧链 iteration-config 可能缺席该键，确认值须仍能写回，否则内核生成面沿旧值）。 */
-export const CONFIRM_PERSIST_EXTRA_KEYS: ReadonlySet<string> = new Set(["nproc_per_node"]);
+// ── E4-乙（改动 2）：deepspeed 智能缺省与内核统一 ds_z3_offload（别名形态；内核 b9
+//    侧 generate_iteration_config 缺省同步切档——harness 先行对齐，re-pin 对账）──
+export const SMART_DEEPSPEED_DEFAULT = "ds_z3_offload";
 
-/** 把确认快照（confirmed 字段集）回写 iteration-config 的 training 段＋param_sources（harness 侧
- *  生成物后处理——内核 generate_iteration_config 无确认卡通路，实锚；零内核写入）。
- *  批㊶-Q additive：perKeySources 可选——逐键来源覆盖（全自动档：agent 推荐键＝
- *  default:agent-recommend:<简据>、改参键＝user-specified、其余＝default:harness-smart-defaults；
- *  来源串均在内核 param_sources.py 既有文法内（user-specified／default:<依据>），闭集零扩展）。 */
-export const applyConfirmedToIterationConfig = (
-  iterConfigPath: string,
-  confirmed: Record<string, string>,
-  source: string = "user-specified",
-  perKeySources?: Record<string, string>,
-): { updated: string[] } | { error: string } => {
-  if (!existsSync(iterConfigPath)) return { error: `iteration_config_missing:${iterConfigPath}` };
-  try {
-    const config = JSON.parse(readFileSync(iterConfigPath, "utf8")) as Record<string, unknown>;
-    const training = (config["training"] ?? {}) as Record<string, unknown>;
-    const sources = (config["param_sources"] ?? {}) as Record<string, string>;
-    const updated: string[] = [];
-    for (const [key, value] of Object.entries(confirmed)) {
-      if (key === "base_model_path") {
-        // 批㊶-S5 §九：基模型路径＝base_model 段嵌套字段（非 training 段）——确认值写回该位
-        const baseModel = (config["base_model"] ?? {}) as Record<string, unknown>;
-        baseModel["path"] = value;
-        config["base_model"] = baseModel;
-        sources[key] = perKeySources?.[key] ?? source;
-        updated.push(key);
-        continue;
-      }
-      if (key in training || key in FIXED_SMART_DEFAULTS || CONFIRM_PERSIST_EXTRA_KEYS.has(key)) {
-        training[key] = value;
-        sources[key] = perKeySources?.[key] ?? source;
-        updated.push(key);
-      }
-    }
-    config["training"] = training;
-    config["param_sources"] = sources;
-    mkdirSync(join(iterConfigPath, ".."), { recursive: true });
-    writeFileSync(iterConfigPath, `${JSON.stringify(config, null, 1)}\n`, "utf8");
-    return { updated };
-  } catch (cause) {
-    return { error: `iteration_config_patch_failed:${String(cause).slice(0, 120)}` };
-  }
-};
+// ── param_sources 回写面（批㊶-P 1a）——E4-乙（改动 2）整体退役 ──
+// 确认快照不再回写 iteration-config（快照是训练参数唯一出口——红线：停写后 harness
+// 不得再写任何内核产物）；training 段与 param_sources 由内核 training_prep 段写
+// （来源 user_confirmed(ref=stage:training_overrides)，内核 b9 文法——build_prelaunch_report
+// 来源校验接受该形态不误拒）。applyConfirmedToIterationConfig／paramSourceFor／
+// CONFIRM_PERSIST_EXTRA_KEYS 三件随删（调用点 confirmFace 两处已摘）。

@@ -39,7 +39,7 @@ import {
   clampNegativeRatio,
   checkTokenBudget,
   SMART_DEEPSPEED_DEFAULT,
-  applyConfirmedToIterationConfig,
+  kernelBsDefaultOf,
   detectAvailableGpuCount,
   guardNprocAntiPatterns,
   defaultBaseModelPath,
@@ -182,6 +182,10 @@ export const domainHintOf = (key: string, gpuCount: number | null): string | und
     case "image_max_pixels":
       // b5 像素对复用补丁：两档闭集沿用＋变更影响提示（指令 b5 §三——提示不阻塞）。
       return `两档 {${(CLAMP_DOMAINS.image_max_pixels as number[]).map((v) => v.toLocaleString("en-US")).join(", ")}}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）`;
+    case "per_device_train_batch_size":
+      // E4-乙（改动 2）：卡面 bs 缺省＝内核缺省分档（convention——cutoff<10000→2，否则 1；
+      // kernelBsDefaultOf 单源，与 training_overrides 桥同源；删 `?? 2` 硬编码）。
+      return "正整数；默认＝内核缺省（convention：cutoff<10000→2，≥10000→1）";
     case "negative_ratio_target":
       return `构造带 [${CLAMP_DOMAINS.negative_ratio.min}, ${CLAMP_DOMAINS.negative_ratio.max}]`;
     case "nproc_per_node":
@@ -589,13 +593,21 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           baseline["nproc_per_node"] = String(gpuCount);
         }
       }
+      // E4-乙（改动 2）：bs 卡面缺省＝内核缺省分档单源（kernelBsDefaultOf——cutoff<10000→2；
+      // 删 `?? 2` 硬编码，与 training_overrides 桥 convention 同源）；注入态标 convention
+      // （表单卡 hint 与自动档快照 sources 呈现——「缺省不静默」）。
+      const bsConventionInjected = baseline["per_device_train_batch_size"] === undefined;
+      if (bsConventionInjected) {
+        const cutoffRaw = Number(baseline["cutoff_len"]);
+        baseline["per_device_train_batch_size"] = String(kernelBsDefaultOf(Number.isFinite(cutoffRaw) && cutoffRaw > 0 ? cutoffRaw : undefined));
+      }
       // L2 派生（bs×nproc 除尽 256 校验——除不尽/矛盾即停点问题串；nproc 用基线/显式卡数非静态缺省）
-      const bsNum = Number(baseline["per_device_train_batch_size"] ?? 2);
+      const bsNum = Number(baseline["per_device_train_batch_size"]);
       const nprocNum = Number(baseline["nproc_per_node"] ?? explicitNproc);
       if (!Number.isFinite(nprocNum) || nprocNum <= 0) {
         return asToolValue({ ok: false, run_id: args.run_id, error: "nproc_invalid", note: `nproc_per_node 现值（${baseline["nproc_per_node"] ?? explicitNproc}）非正整数——停下核实，不猜测` });
       }
-      const accumDerived = deriveGradAccum(Number.isFinite(bsNum) && bsNum > 0 ? bsNum : 2, nprocNum);
+      const accumDerived = deriveGradAccum(Number.isFinite(bsNum) && bsNum > 0 ? bsNum : kernelBsDefaultOf(undefined), nprocNum);
       if ("error" in accumDerived) {
         return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: accumDerived.error });
       }
@@ -680,8 +692,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         const nprocField = fields.find((f) => f.key === "nproc_per_node");
         if (nprocField !== undefined) nprocField.value = hit.revertedTo;
         const bsField = fields.find((f) => f.key === "per_device_train_batch_size");
-        const bsGuard = Number(bsField?.value ?? "2");
-        const reDerived = deriveGradAccum(Number.isFinite(bsGuard) && bsGuard > 0 ? bsGuard : 2, Number(hit.revertedTo));
+        const bsGuard = Number(bsField?.value ?? String(kernelBsDefaultOf(undefined)));
+        const reDerived = deriveGradAccum(Number.isFinite(bsGuard) && bsGuard > 0 ? bsGuard : kernelBsDefaultOf(undefined), Number(hit.revertedTo));
         if ("error" in reDerived) {
           return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: reDerived.error });
         }
@@ -714,7 +726,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
               ? (recommendReport.find((v) => v.key === field.key && v.accepted)?.source ?? "default:harness-smart-defaults")
               : field.tag === "need_confirm"
                 ? "user-specified"
-                : "default:harness-smart-defaults";
+                : field.key === "per_device_train_batch_size" && bsConventionInjected
+                  ? "convention:kernel-bs-default" // E4-乙：bs 内核缺省注入态标 convention（快照 sources 呈现）
+                  : "default:harness-smart-defaults";
         }
         const confirmed = confirmedSnapshotOf(fields);
         const rejectedNotes = recommendReport.filter((v) => !v.accepted).map((v) => v.note);
@@ -732,12 +746,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         saveConfigSnapshot(runDir, confirmed, { auto: true, tier: AUTO_TRAINING_PRESET, sources });
         // 批㊶Q增补二3：自动档同样确认完成——历史残留 pending 卡（如手动卡后切档）一并清理
         clearPending(runDir);
-        const iterConfigLiveAuto = join(runDir, "prep", "iteration-config.json");
-        const iterConfigLegacyAuto = join(runDir, "prep", "iteration-config", "iteration-config.json");
-        for (const candidate of [iterConfigLiveAuto, iterConfigLegacyAuto]) {
-          const patched = applyConfirmedToIterationConfig(candidate, confirmed, "default:harness-smart-defaults", sources);
-          void patched;
-        }
+        // E4-乙（改动 2）：停写 iteration-config——快照是训练参数唯一出口（param_sources
+        // 与 training 段由内核 training_prep 段写 user_confirmed(ref=stage:training_overrides)；
+        // harness 侧回写面整体退役，applyConfirmedToIterationConfig 随删）。
         appendSegmentFact(runDir, "experiment_setup", "atf_config_confirm"); // D96：段事实键对齐内核段名（原 experiment_config 老键退役）
         const sessionIdAuto = sessionIdOfExec(exec);
         if (sessionIdAuto !== undefined) appendBinding(runDir, sessionIdAuto);
@@ -843,7 +854,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         let loopNote = "";
         if (changedEdits["per_device_train_batch_size"] !== undefined || changedEdits["nproc_per_node"] !== undefined) {
           const nprocRaw = changedEdits["nproc_per_node"] ?? fields.find((f) => f.key === "nproc_per_node")?.value;
-          const bsRaw = changedEdits["per_device_train_batch_size"] ?? fields.find((f) => f.key === "per_device_train_batch_size")?.value ?? "2";
+          const bsRaw = changedEdits["per_device_train_batch_size"] ?? fields.find((f) => f.key === "per_device_train_batch_size")?.value ?? String(kernelBsDefaultOf(undefined));
           const nprocNow = Number(nprocRaw);
           const bsNow = Number(bsRaw);
           if (Number.isFinite(nprocNow) && nprocNow > 0 && Number.isFinite(bsNow) && bsNow > 0) {
@@ -903,15 +914,10 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       saveConfigSnapshot(runDir, confirmed);
       // 批㊶Q增补二3：确认完成即清 pending 卡（备份改名 .answered——残留则 UI 持续渲染待确认态）
       clearPending(runDir);
-      // 批㊶-P P-1a：确认快照回写 iteration-config training 段＋param_sources 标注
-      // （harness 侧生成物后处理——内核 generate_iteration_config 无确认卡通路[实锚]；
-      //  prelaunch 报告"无确认记录"由此消除，链路级修正）。写失败静默（fail-open）。
-      const iterConfigLive = join(runDir, "prep", "iteration-config.json");
-      const iterConfigLegacy = join(runDir, "prep", "iteration-config", "iteration-config.json");
-      for (const candidate of [iterConfigLive, iterConfigLegacy]) {
-        const patched = applyConfirmedToIterationConfig(candidate, confirmed);
-        void patched;
-      }
+      // 批㊶-P P-1a 回写面退役（E4-乙改动 2）：确认快照不再回写 prep/iteration-config——
+      // 快照是训练参数唯一出口（红线：停写后 harness 不得再写任何内核产物）；training 段与
+      // param_sources 由内核 training_prep 段写（来源 user_confirmed(ref=stage:training_overrides)），
+      // prelaunch 报告的「需确认 L1」表由内核侧来源串闭合——harness 侧零代写零后处理。
       // 批㊶-M M-3 段事实轨：实验配置确认成功即登记（experiment_setup 段——D96 键名对齐内核）
       appendSegmentFact(runDir, "experiment_setup", "atf_config_confirm"); // D96：段事实键对齐内核段名（原 experiment_config 老键退役）
       // 批㊶-N N-5：会话绑定
