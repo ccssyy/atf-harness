@@ -8,16 +8,16 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 契约轴 2026-10-24 窗口 E3：v0.7.25b7 → v0.7.25b8，唯一真相源 = bridge.contract.yaml
+// 当前 pin（re-pin 契约轴 2026-10-24 窗口 E4-乙：v0.7.25b8 → v0.7.25b9，唯一真相源 = bridge.contract.yaml
 // atf_upstream，本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.25b8（E3 内核批生效窗——experiment_setup 预算三参桥
-// 〔D106 --max-total-tokens／--image-min-pixels／--image-max-pixels argparse 新声明面，
-// setup_argv 严格给了才追加；像素对成对校验 main() 参数形状层——单端 parser.error
-// 业务中文〕＋fbf29ba bump 0.7.25b8——详见 bridge.contract.yaml atf_upstream.baseline；
-// tag commit ebe0293，方法面零增（session/ 零 diff），
+// 本轮 pin 取值＝tag v0.7.25b9（E4-乙超参单源内核批生效窗——training-overrides 9键单源通道
+// 〔K1-1 generate_iteration_config --training-overrides：9 键闭集/类型范围校验先于审批/采纳键落
+// param_sources={source:user_confirmed, ref:stage:training_overrides}〕＋K1-2 deepspeed 缺省 ds_z3_offload
+// ＋K1-3 bs/accum 规则化缺省＋K2 D129 像素对透传收口＋K3 D128 计量对齐 HF＋K4 param_sources 结构化来源
+// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit 432c1de，方法面零增（session/ 零 diff），
 // 会话协议轴 1／桥接契约轴 2 零 diff）。
-export const ATF_UPSTREAM_TAG = "v0.7.25b8";
-export const ATF_UPSTREAM_COMMIT_SHA = "ebe0293495575377604c7e54dbae47ea72129ff1";
+export const ATF_UPSTREAM_TAG = "v0.7.25b9";
+export const ATF_UPSTREAM_COMMIT_SHA = "432c1de64f1e62d625333456a3f89be8efd65aff";
 
 export interface AtfCliInvocation {
   command: string;

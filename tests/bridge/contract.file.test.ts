@@ -162,12 +162,13 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/- facts_log_tail_corrupt/);
   });
 
-  it("atf_upstream pin 升至 v0.7.25b8（re-pin 窗口 E3 契约轴 2026-10-24；pin＝tag commit ebe0293，E3 内核批生效窗：experiment_setup 预算三参桥〔D106 --max-total-tokens／--image-min-pixels／--image-max-pixels＋像素对成对校验单端拒〕＋bump 0.7.25b8——历史括注 v0.7.25b7 U1 线、v0.7.25b6 五 bump 线、v0.7.25b1 b5 像素对线、v0.7.24b0 批次R 线、v0.7.23b3 D48 线与 v0.7.21b0 E10 线保留）", () => {
-    expect(contract).toMatch(/  tag: v0\.7\.25b8/);
-    expect(contract).toMatch(/  commit_sha: ebe0293495575377604c7e54dbae47ea72129ff1/);
+  it("atf_upstream pin 升至 v0.7.25b9（re-pin 窗口 E4-乙 契约轴 2026-10-24；pin＝tag commit 432c1de，E4-乙超参单源内核批生效窗：training-overrides 9键单源通道〔K1-1 generate_iteration_config 声明面＋param_sources user_confirmed 结构化落账〕＋K1-2 deepspeed 缺省 ds_z3_offload＋K1-3 bs/accum 规则化缺省＋K4 param_sources 结构化来源形态——历史括注 v0.7.25b8 E3 线、v0.7.25b7 U1 线、v0.7.25b6 五 bump 线、v0.7.25b1 b5 像素对线、v0.7.24b0 批次R 线、v0.7.23b3 D48 线与 v0.7.21b0 E10 线保留）", () => {
+    expect(contract).toMatch(/  tag: v0\.7\.25b9/);
+    expect(contract).toMatch(/  commit_sha: 432c1de64f1e62d625333456a3f89be8efd65aff/);
     // 会话协议版本轴不随 re-pin 变动（内核方法面补登不 bump）；桥接契约版本轴恒 2（另轴）
     expect(contract).toMatch(/  contract_version: 1/);
     // 历史括注保留（re-pin 指令：baseline 首句同步当前 pin；历史括注保留）
+    expect(contract).toMatch(/历史括注：v0\.7\.25b8＝ebe0293/);
     expect(contract).toMatch(/历史括注：v0\.7\.25b7＝997db63/);
     expect(contract).toMatch(/历史括注：v0\.7\.25b6＝911f8e7/);
     expect(contract).toMatch(/历史括注：v0\.7\.25b1＝11ccebc/);

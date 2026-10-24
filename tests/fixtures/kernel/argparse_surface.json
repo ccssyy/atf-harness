@@ -3171,6 +3171,15 @@
     "required": null
    },
    {
+    "option": "--training-overrides",
+    "dest": "training_overrides",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--token-budget",
     "dest": "token_budget",
     "action": "store",
