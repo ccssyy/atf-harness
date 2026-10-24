@@ -21,7 +21,7 @@
  */
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, openSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync } from "node:fs";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { err, ok, type Result } from "../../bridge/index.js";
@@ -220,14 +220,16 @@ export const runScratchCommand = (input: {
 
 /** launch 就绪检测产物（deterministic；字段按可得性诚实缺省）。 */
 export interface LaunchReady {
-  /** launch.sh 的 scratch 相对路径 */
+  /** launch.sh 的相对路径（scratch 源＝scratch 相对；run 树源＝run 目录相对） */
   launch_sh: string;
   run_id?: string;
   iteration_config_sha256?: string;
   global_batch?: number;
   nnodes?: number;
-  /** 与 manifest 字节级 sha256 对拍命中的 IterationConfig（scratch 相对路径） */
+  /** 与 manifest 字节级 sha256 对拍命中的 IterationConfig（同源相对路径） */
   config?: string;
+  /** D115：来源标注——run_tree＝run 树 launch/ 布局（正道落点，优先）；scratch＝exec-home scratch（存量） */
+  source?: "run_tree" | "scratch";
 }
 
 interface ScratchFileHit {
@@ -357,6 +359,69 @@ export const scanLaunchReady = async (scratchDir: string): Promise<LaunchReady |
     launch_sh: launchHit.rel,
     ...manifest,
     ...(config !== undefined ? { config } : {}),
+    source: "scratch",
+  };
+};
+
+// ------------------------------------------------- D115：run 树 launch/ 布局检测
+
+/**
+ * D115——run 树启动件检测（walkthrough/生成器正道落点；B7 §5.4「三面断裂」收口）：
+ * run 树内 `<runDir>/launch/launch.sh`＋同目录 launch_manifest.json（TrainLaunchManifest/v1
+ * ——generate_launch_orchestration 定点布局，不做全树扫描）。IterationConfig 对拍定点搜
+ * run 树 launch/ 与 prep/ 内 .json（walkthrough 布局实锚：prep/iteration-config.json）。
+ * launch_sh/config 均为 runDir 相对路径（atf_launch_execute 的 run 树形态入参同源）。
+ */
+export const scanRunTreeLaunchReady = async (runDir: string): Promise<LaunchReady | null> => {
+  const launchDir = join(runDir, "launch");
+  const launchSh = join(launchDir, "launch.sh");
+  let scriptText: string;
+  try {
+    scriptText = await readFile(launchSh, "utf8");
+  } catch {
+    return null; // run 树无启动件＝无就绪事实（非故障）
+  }
+  let manifest: LaunchManifestFacts = {};
+  try {
+    const fromTrainDir = await readManifestFacts(join(launchDir, "launch_manifest.json"));
+    if (fromTrainDir !== null) manifest = fromTrainDir;
+  } catch {
+    // manifest 缺席＝形态异常，仅返回路径事实（与 scratch 源同语义）
+  }
+  let config: string | undefined;
+  if (manifest.iteration_config_sha256 !== undefined) {
+    const candidates = ["launch", "prep"]
+      .flatMap((dir) => {
+        try {
+          return readdirSync(join(runDir, dir)).filter((name) => name.endsWith(".json")).map((name) => join(runDir, dir, name));
+        } catch {
+          return [];
+        }
+      });
+    for (const abs of candidates) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(await readFile(abs, "utf8"));
+      } catch {
+        continue;
+      }
+      if (typeof parsed !== "object" || parsed === null || (parsed as Record<string, unknown>)["schema_version"] !== "IterationConfig/v1") continue;
+      try {
+        const bytes = await readFile(abs);
+        if (createHash("sha256").update(bytes).digest("hex") === manifest.iteration_config_sha256) {
+          config = relative(runDir, abs);
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  return {
+    launch_sh: "launch/launch.sh",
+    ...manifest,
+    ...(config !== undefined ? { config } : {}),
+    source: "run_tree",
   };
 };
 

@@ -5,6 +5,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { buildRunTrainingTool, probePortOccupant } from "/data/sam/ATF-Harness/packages/extensions/atf-tools/src/trainingFace.js";
+// D112 训练互斥守卫：真训练在跑时本冒烟的端口清理链会杀真训练进程——held 即 SKIP
+// （强制跑须显式 ATF_SMOKE_IGNORE_TRAINING_LOCK=1，自担误杀风险）
+import { detectLiveTraining } from "/data/sam/ATF-Harness/tests/fixtures/trainingLock.js";
+
+const lock = detectLiveTraining();
+if (lock.held && process.env["ATF_SMOKE_IGNORE_TRAINING_LOCK"] !== "1") {
+  console.log(`SMOKE SKIP（D112 训练锁 held——真训练在跑：${lock.anchors.slice(0, 3).join("；")}）；强制跑须 ATF_SMOKE_IGNORE_TRAINING_LOCK=1`);
+  process.exit(0);
+}
 
 const PORT = 39_517;
 const root = mkdtempSync(join(tmpdir(), "dot3-smoke-"));

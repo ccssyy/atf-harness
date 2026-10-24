@@ -294,3 +294,46 @@ describe("D92——Web 摘要（buildLaunchSurface dataset_keys 顶层展平）"
     expect(byKey.get("num_train_epochs")).toMatchObject({ value: "3", source: "iteration_config" });
   });
 });
+
+describe("D113——任务事实多源解析（l1/ 与 publish-* 双源；冲突 fail-closed 报两值）", () => {
+  /** 发布区 manifest 写入（walkthrough 实锚形态 publish-ws-<slug>）。 */
+  const writePublishManifest = (runDir: string, publishName: string, lanes: unknown): void => {
+    mkdirSync(join(runDir, publishName), { recursive: true });
+    writeFileSync(join(runDir, publishName, "training-data-manifest.json"), `${JSON.stringify({ schema_version: "TrainingDataArtifact/v1", lanes }, null, 1)}\n`);
+  };
+  it("publish-* 单源命中（l1/ 缺席）→ lane=发布区值（B7 缺陷⑫：walkthrough manifest 落发布区不再 eval_lane_unresolved）", () => {
+    const runDir = tempRoot();
+    writePublishManifest(runDir, "publish-ws-7a34020b", { swb_mixed: {} });
+    expect(resolveEvalLaneFrom(runDir, undefined)).toEqual({ ok: true, lane: "swb_mixed", source: "task_fact" });
+  });
+  it("双源同值 → 取该值（源不敏感）", () => {
+    const runDir = tempRoot();
+    writeManifest(runDir, { swb_mixed: {} });
+    writePublishManifest(runDir, "publish-ws-7a34020b", { swb_mixed: {} });
+    expect(resolveEvalLaneFrom(runDir, undefined)).toEqual({ ok: true, lane: "swb_mixed", source: "task_fact" });
+  });
+  it("双源冲突 → lanes_conflict_across_sources fail-closed 报两值（不猜先来后到；显式 lane 可解）", () => {
+    const runDir = tempRoot();
+    writeManifest(runDir, { goods: {} });
+    writePublishManifest(runDir, "publish-ws-7a34020b", { swb_mixed: {} });
+    const verdict = resolveEvalLaneFrom(runDir, undefined);
+    expect(verdict).toMatchObject({ ok: false, reason: "lanes_conflict_across_sources" });
+    if (!verdict.ok) {
+      expect(verdict.conflict).toEqual([
+        { source: join(runDir, "l1", "training-data-manifest.json"), lanes: ["goods"] },
+        { source: join(runDir, "publish-ws-7a34020b", "training-data-manifest.json"), lanes: ["swb_mixed"] },
+      ]);
+    }
+    // 冲突态显式 lane 覆盖可解
+    expect(resolveEvalLaneFrom(runDir, "goods")).toEqual({ ok: true, lane: "goods", source: "explicit" });
+  });
+  it("多个 publish-* 目录同值 → 取该值；单源内多键仍 lanes_ambiguous（不因多源而放宽）", () => {
+    const runDir = tempRoot();
+    writePublishManifest(runDir, "publish-ws-a", { swb_mixed: {} });
+    writePublishManifest(runDir, "publish-ws-b", { swb_mixed: {} });
+    expect(resolveEvalLaneFrom(runDir, undefined)).toEqual({ ok: true, lane: "swb_mixed", source: "task_fact" });
+    const ambiguous = tempRoot();
+    writePublishManifest(ambiguous, "publish-ws-a", { goods: {}, non_goods: {} });
+    expect(resolveEvalLaneFrom(ambiguous, undefined)).toEqual({ ok: false, reason: "lanes_ambiguous", lanesSeen: ["goods", "non_goods"] });
+  });
+});

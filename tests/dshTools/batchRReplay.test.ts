@@ -9,7 +9,9 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+// D112 训练互斥守卫（语义见 tests/fixtures/trainingLock.ts 头注）
+import { guardTrainingLock } from "../fixtures/trainingLock.js";
 import { buildRunTrainingTool } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 import { checkStartModelPath } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 
@@ -18,6 +20,7 @@ const REPLAY_RUNS = "/data/sam/atf-walkthrough/ws-walkthrough-pipeline/runs";
 const REPLAY_ID = "cr_ci_smoke_r1_replay";
 
 describe("批㊶R前置 VERIFY 工具面真机重演（真件×真根；现场缺席 skip）", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   it("VERIFY1：qwen3_vl 家族名误填 → start 秒拒 model_path_missing＋真实模型清单回流（不进审批不进 tmux）", async () => {
     const trainSh = join(REPLAY_RUNS, REPLAY_ID, "launch", "train.sh");
     if (!existsSync(trainSh) || !existsSync(MODEL_ROOT)) {
@@ -67,6 +70,7 @@ describe("批㊶R前置 VERIFY 工具面真机重演（真件×真根；现场�
 });
 
 describe("批㊶R前置 VERIFY3 工具面真机重演（确认卡拦截＋卡数键呈现——实件配置靶）", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   it("cr_ci_smoke_r1 实件配置（nproc=1×z3_offload）→ 建卡期拦截回退拉满＋note 可读＋卡数键入卡", async () => {
     const replayRun = join(REPLAY_RUNS, REPLAY_ID);
     if (!existsSync(join(replayRun, "prep", "iteration-config", "iteration-config.json"))) {

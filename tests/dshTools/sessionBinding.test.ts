@@ -11,7 +11,9 @@ import { tmpdir } from "node:os";
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+// D112 训练互斥守卫（语义见 tests/fixtures/trainingLock.ts 头注）
+import { guardTrainingLock } from "../fixtures/trainingLock.js";
 import {
   BINDINGS_HISTORY_MAX,
   bindSessionRun,
@@ -368,6 +370,7 @@ describe("GET/POST /atf-ui/session-binding", () => {
 // ── ⑤ 工具接入 ──────────────────────────────────────────────────────────────
 
 describe("工具 run_id 缺省解析与绑定", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   it("增补 §5.1：三条工具 run_id description＝可选＋本会话绑定语义；run_training 必填＋created 语义", () => {
     const ctx = { get: () => undefined };
     const tools = [

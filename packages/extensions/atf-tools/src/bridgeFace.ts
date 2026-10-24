@@ -148,13 +148,16 @@ export class BridgeManager {
  *  （D4①——根目录原地保留不冲突）；清理策略候裁本批不实现。 */
 const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHome: string; dshHome?: string }, args: Record<string, unknown>, exec: unknown): LocalToolHost => {
   const runId = typeof args["run_id"] === "string" && args["run_id"] !== "" ? args["run_id"] : "default";
-  const scratchDir = join(resolveRunDir(localRoots.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) }), "scratch");
+  // D115：run 目录单源（与 scratch 同一解析——run 树启动件/就绪检测的根）
+  const runDir = resolveRunDir(localRoots.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) });
+  const scratchDir = join(runDir, "scratch");
   mkdirSync(scratchDir, { recursive: true });
   const sessionId = sessionIdOfExec(exec);
   const home = join(localRoots.execHome, sessionHomeSlug(sessionId ?? "default"));
   mkdirSync(home, { recursive: true });
   return {
     scratchDir,
+    runDir,
     kernelDir: localRoots.kernelDir,
     home,
     baseEnv: { ATF_SKILLS_AUTO_INSTALL: "0" },

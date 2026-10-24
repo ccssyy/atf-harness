@@ -322,13 +322,26 @@ export const buildPipelineTool = (
         description:
           "复用 run 内已有用户确认态实验配置、跳过实验门重生成（配置不在场时内核拒绝；缺省不开）",
       },
+      // D108 harness 半：token 真算门禁 provider＋坐标 pending 重试两旗标透传（内核全局
+      // argparse 参数，不按段 gate——与 D93 三参同款「给才追加」，段内消费语义归内核单源）
+      token_provider: {
+        type: "string",
+        description:
+          "token 真算门禁 provider 脚本路径（CPU-only；传入即对变体行真算 token，超实验门上限拒绝落账）。" +
+          "显式通道——预检之外需要真算门禁时给；walkthrough 演示链可经内核豁免通道跳过（本参数与豁免互斥，内核裁决）",
+      },
+      retry_coordinate_pending: {
+        type: "boolean",
+        description:
+          "坐标换算待处理清单重试（训练准备段只重试 pending 清单里的图，成功自动并入 transforms.jsonl 并从清单移除，不重跑全批；清单缺席即无事可做）。缺省不开",
+      },
     },
     output: {
       schema: looseObjectOutput,
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -410,6 +423,12 @@ export const buildPipelineTool = (
       const assignmentSource = typeof args.assignment_source === "string" ? args.assignment_source.trim() : "";
       if (assignmentSource !== "") argv.push("--assignment-source", assignmentSource);
       if (args.reuse_experiment_setup === true) argv.push("--reuse-experiment-setup");
+      // D108 harness 半：provider/retry 旗标透传（内核全局参数、不按段 gate——给才追加：
+      // token_provider trim 非空才上线（路径合法性＝内核闸单源，harness 不复制）；
+      // retry_coordinate_pending 开关 true 才追加，缺省不出现在 argv——零新增语义）
+      const tokenProvider = typeof args.token_provider === "string" ? args.token_provider.trim() : "";
+      if (tokenProvider !== "") argv.push("--token-provider", tokenProvider);
+      if (args.retry_coordinate_pending === true) argv.push("--retry-coordinate-pending");
       // D24h：放行登记带会话身份与 ui 模式（actor＝会话 id，缺失＝unattributed——不伪造 owner）；
       // round_dir＝本段落点 run 目录（内核账本 round_dir 字段面，与评估 D20 同构）
       argv.push("--actor", sessionIdOfExec(exec) ?? "unattributed", "--approval-mode", "ui", "--round-dir", runDir);

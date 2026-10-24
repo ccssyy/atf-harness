@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import net from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   buildRunTrainingTool,
   buildEvalTools,
@@ -28,6 +28,9 @@ import {
 } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 import { evalOrchSessionBase, resolveLaunchSessionName, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
 import { tmuxTestOk } from "../fixtures/tmuxTestSocket.js";
+// D112 训练互斥守卫：真训练在跑时本文件杀伤面 describe 逐用例 skip（探测式训练锁，
+// 语义见 tests/fixtures/trainingLock.ts 头注——B7 缺陷⑪收口）
+import { guardTrainingLock } from "../fixtures/trainingLock.js";
 
 const repoRoot = "/data/sam/ATF-Harness";
 // 批㊶-K：GPU 排队编排直启旁路（测试不等待真实 GPU 窗口）
@@ -102,6 +105,7 @@ const holdPort = (port: number): Promise<net.Server> =>
   });
 
 describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚举）", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   it("start：无审批服务 → 结构化拒绝（danger fail-closed，不启动）", async () => {
     const root = tempRoot();
     const trainSh = writeMockTrainSh(root);
@@ -450,6 +454,19 @@ os.makedirs(out, exist_ok=True)
 open(os.path.join(out, "eval_orchestration.sh"), "w").write("#!/bin/bash\\necho '[dry-smoke] no-op orchestration'\\nexit 0\\n")
 print("{}")`);
   };
+  /** D114：编排生成 argv 记录版 pin（generate_eval_orchestration 把 args 落盘 orch-argv.json）。 */
+  const writeMockPinRecordingOrch = (pin: string): void => {
+    writeMockPin(pin);
+    const dir = join(pin, "skills", "atf-evaluate-checkpoints", "scripts");
+    writeFileSync(join(dir, "generate_eval_orchestration.py"), `#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+out = args[args.index("--out") + 1]
+os.makedirs(out, exist_ok=True)
+open(os.path.join(out, "eval_orchestration.sh"), "w").write("#!/bin/bash\\nexit 0\\n")
+open(os.path.join(out, "orch-argv.json"), "w").write(json.dumps(args))
+print("{}")`);
+  };
   const writeFixtureInputs = (root: string) => {
     const assets = join(root, "assets");
     mkdirSync(assets, { recursive: true });
@@ -493,6 +510,53 @@ print("{}")`);
     expect(String(result["note"])).toContain("assets_split_manifest");
     expect(String(result["note"])).toContain("assets_external_confirm");
     expect(calls).toBe(0); // 卡前快败——审批面板未被触达（放行不再被浪费）
+  });
+
+  it("D114：run 树 publish-*/split-manifest.json 自动发现绑定——不传不确认也走正道；编排计划带 --prompt-renderer＋--split-manifest（B7 缺口⑬收口）", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPinRecordingOrch(pin);
+    const f = writeFixtureInputs(root);
+    // walkthrough 发布区布局：publish-<ws>/split-manifest.json（B7 实锚形态）
+    const publishDir = join(root, "run-regress-formal-02", "publish-ws-7a34020b");
+    mkdirSync(publishDir, { recursive: true });
+    writeFileSync(join(publishDir, "split-manifest.json"), JSON.stringify({ assignments: [] }));
+    let approvalReason = "";
+    const ctx = { get: (s: string) => (s === "approval" ? { request: async (req: { reason: string }) => { approvalReason = req.reason; return "allowed-once"; } } : undefined) };
+    const args = { ...startArgs(root, f, pin) } as Record<string, unknown>;
+    delete args["assets_external_confirm"]; // 既不显式绑定也不 owner 确认——自动发现承接
+    const result = await evalOf(root, pin, ctx).execute(args, fakeExec) as Record<string, unknown>;
+    expect(result["started"]).toBe(true);
+    // 卡面分区清单来源行（自动发现不静默）
+    expect(approvalReason).toContain("run 树自动发现");
+    // 编排生成 argv：--prompt-renderer（生成期必填——此前漏传即 B7 缺口⑬）＋--split-manifest（发现值）
+    const roundDir = result["eval_round"] as string;
+    const orchArgv = JSON.parse(readFileSync(join(roundDir, "orch", "orch-argv.json"), "utf8")) as string[];
+    const rendererIdx = orchArgv.indexOf("--prompt-renderer");
+    expect(rendererIdx).toBeGreaterThan(-1);
+    expect(orchArgv[rendererIdx + 1]).toBe(join(pin, "skills", "atf-admit-training-data", "scripts", "render_prompt.py"));
+    const splitIdx = orchArgv.indexOf("--split-manifest");
+    expect(splitIdx).toBeGreaterThan(-1);
+    expect(orchArgv[splitIdx + 1]).toBe(join(publishDir, "split-manifest.json"));
+  });
+
+  it("D114：显式 owner 外部确认优先于自动发现（外部通道不被发现覆盖）", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPinRecordingOrch(pin);
+    const f = writeFixtureInputs(root);
+    const publishDir = join(root, "run-regress-formal-02", "publish-ws-x");
+    mkdirSync(publishDir, { recursive: true });
+    writeFileSync(join(publishDir, "split-manifest.json"), JSON.stringify({ assignments: [] }));
+    let approvalReason = "";
+    const ctx = { get: (s: string) => (s === "approval" ? { request: async (req: { reason: string }) => { approvalReason = req.reason; return "allowed-once"; } } : undefined) };
+    const result = await evalOf(root, pin, ctx).execute(startArgs(root, f, pin), fakeExec) as Record<string, unknown>; // 夹具默认 assets_external_confirm:true
+    expect(result["started"]).toBe(true);
+    expect(approvalReason).toContain("owner 级外部确认通道");
+    const roundDir = result["eval_round"] as string;
+    const orchArgv = JSON.parse(readFileSync(join(roundDir, "orch", "orch-argv.json"), "utf8")) as string[];
+    expect(orchArgv.indexOf("--split-manifest")).toBe(-1); // 外部通道：不传 split-manifest
+    expect(orchArgv.indexOf("--assets-external-confirm")).toBeGreaterThan(-1);
   });
 
   it("start：pin 脚本缺失 → skill_script_missing（不进审批）", async () => {
@@ -744,6 +808,7 @@ describe("parseTrainerLine 与 loss 进料（监控管道协议）", () => {
 });
 
 describe("批⑳dot3 修复 3——训练启动端口预检（撞前知道）", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   it("extractMasterPort：两形态解析＋缺省回退", () => {
     expect(extractMasterPort("export MASTER_PORT=${MASTER_PORT:-29517}")).toBe(29517);
     expect(extractMasterPort("export MASTER_PORT=29765")).toBe(29765);
@@ -893,6 +958,7 @@ describe("批㊶-E 项 7a（P28）训练日志启动轮转（rotateTrainLog）",
 import { probeTrainingStartup, resolveStartupProbeMs, STARTUP_FEED_RE, STARTUP_TERMINAL_RE } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 
 describe("批㊶Q增补三 段2——启动探活 probeTrainingStartup（注入面直测）", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   // 可注入时钟：sleep 步进假时钟（窗口/settle 全走 now()——真实零等待）
   const clock = (start = 1_000) => {
     let t = start;
@@ -979,6 +1045,7 @@ describe("批㊶Q增补三 段2——启动探活 probeTrainingStartup（注入�
 });
 
 describe("批㊶R前置——防线③ start 面复核接线（审批前秒拒＋清单回流）", () => {
+  beforeEach((ctx) => guardTrainingLock(ctx));
   it("qwen3_vl 家族名误填 → started:false＋model_path_missing＋models 清单（不进审批不进 tmux）", async () => {
     const root = tempRoot();
     const trainSh = writeMockTrainSh(root, true);
