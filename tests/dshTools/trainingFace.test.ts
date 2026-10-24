@@ -454,6 +454,19 @@ os.makedirs(out, exist_ok=True)
 open(os.path.join(out, "eval_orchestration.sh"), "w").write("#!/bin/bash\\necho '[dry-smoke] no-op orchestration'\\nexit 0\\n")
 print("{}")`);
   };
+  /** D114：编排生成 argv 记录版 pin（generate_eval_orchestration 把 args 落盘 orch-argv.json）。 */
+  const writeMockPinRecordingOrch = (pin: string): void => {
+    writeMockPin(pin);
+    const dir = join(pin, "skills", "atf-evaluate-checkpoints", "scripts");
+    writeFileSync(join(dir, "generate_eval_orchestration.py"), `#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+out = args[args.index("--out") + 1]
+os.makedirs(out, exist_ok=True)
+open(os.path.join(out, "eval_orchestration.sh"), "w").write("#!/bin/bash\\nexit 0\\n")
+open(os.path.join(out, "orch-argv.json"), "w").write(json.dumps(args))
+print("{}")`);
+  };
   const writeFixtureInputs = (root: string) => {
     const assets = join(root, "assets");
     mkdirSync(assets, { recursive: true });
@@ -497,6 +510,53 @@ print("{}")`);
     expect(String(result["note"])).toContain("assets_split_manifest");
     expect(String(result["note"])).toContain("assets_external_confirm");
     expect(calls).toBe(0); // 卡前快败——审批面板未被触达（放行不再被浪费）
+  });
+
+  it("D114：run 树 publish-*/split-manifest.json 自动发现绑定——不传不确认也走正道；编排计划带 --prompt-renderer＋--split-manifest（B7 缺口⑬收口）", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPinRecordingOrch(pin);
+    const f = writeFixtureInputs(root);
+    // walkthrough 发布区布局：publish-<ws>/split-manifest.json（B7 实锚形态）
+    const publishDir = join(root, "run-regress-formal-02", "publish-ws-7a34020b");
+    mkdirSync(publishDir, { recursive: true });
+    writeFileSync(join(publishDir, "split-manifest.json"), JSON.stringify({ assignments: [] }));
+    let approvalReason = "";
+    const ctx = { get: (s: string) => (s === "approval" ? { request: async (req: { reason: string }) => { approvalReason = req.reason; return "allowed-once"; } } : undefined) };
+    const args = { ...startArgs(root, f, pin) } as Record<string, unknown>;
+    delete args["assets_external_confirm"]; // 既不显式绑定也不 owner 确认——自动发现承接
+    const result = await evalOf(root, pin, ctx).execute(args, fakeExec) as Record<string, unknown>;
+    expect(result["started"]).toBe(true);
+    // 卡面分区清单来源行（自动发现不静默）
+    expect(approvalReason).toContain("run 树自动发现");
+    // 编排生成 argv：--prompt-renderer（生成期必填——此前漏传即 B7 缺口⑬）＋--split-manifest（发现值）
+    const roundDir = result["eval_round"] as string;
+    const orchArgv = JSON.parse(readFileSync(join(roundDir, "orch", "orch-argv.json"), "utf8")) as string[];
+    const rendererIdx = orchArgv.indexOf("--prompt-renderer");
+    expect(rendererIdx).toBeGreaterThan(-1);
+    expect(orchArgv[rendererIdx + 1]).toBe(join(pin, "skills", "atf-admit-training-data", "scripts", "render_prompt.py"));
+    const splitIdx = orchArgv.indexOf("--split-manifest");
+    expect(splitIdx).toBeGreaterThan(-1);
+    expect(orchArgv[splitIdx + 1]).toBe(join(publishDir, "split-manifest.json"));
+  });
+
+  it("D114：显式 owner 外部确认优先于自动发现（外部通道不被发现覆盖）", async () => {
+    const root = tempRoot();
+    const pin = tempRoot();
+    writeMockPinRecordingOrch(pin);
+    const f = writeFixtureInputs(root);
+    const publishDir = join(root, "run-regress-formal-02", "publish-ws-x");
+    mkdirSync(publishDir, { recursive: true });
+    writeFileSync(join(publishDir, "split-manifest.json"), JSON.stringify({ assignments: [] }));
+    let approvalReason = "";
+    const ctx = { get: (s: string) => (s === "approval" ? { request: async (req: { reason: string }) => { approvalReason = req.reason; return "allowed-once"; } } : undefined) };
+    const result = await evalOf(root, pin, ctx).execute(startArgs(root, f, pin), fakeExec) as Record<string, unknown>; // 夹具默认 assets_external_confirm:true
+    expect(result["started"]).toBe(true);
+    expect(approvalReason).toContain("owner 级外部确认通道");
+    const roundDir = result["eval_round"] as string;
+    const orchArgv = JSON.parse(readFileSync(join(roundDir, "orch", "orch-argv.json"), "utf8")) as string[];
+    expect(orchArgv.indexOf("--split-manifest")).toBe(-1); // 外部通道：不传 split-manifest
+    expect(orchArgv.indexOf("--assets-external-confirm")).toBeGreaterThan(-1);
   });
 
   it("start：pin 脚本缺失 → skill_script_missing（不进审批）", async () => {

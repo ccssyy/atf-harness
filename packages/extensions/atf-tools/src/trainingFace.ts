@@ -1729,6 +1729,34 @@ export const resolveEvalLaneFrom = (
   return { ok: true, lane: first[0] as string, source: "task_fact" };
 };
 
+/** D114：评估分区清单解析结果。 */
+export interface SplitManifestResolution {
+  path: string;
+  source: "explicit" | "discovered_l1" | "discovered_publish";
+}
+
+/** D114：split-manifest 解析（编排绑定兼容 walkthrough 布局）：显式 assets_split_manifest ＞
+ *  run 树自动发现（l1/split-manifest.json → publish-* 目录下 split-manifest.json——walkthrough
+ *  发布区实锚，确定性按名排序取首）。发现域仅限本 run 树内（本次训练 run 自己的留出分区
+ *  ——内核逐页校验 ⊆ test 分区不因发现而放宽；外部资产仍须显式绑定或 owner 级确认）。
+ *  未发现＝null（调用方按既有绑定三态裁决）。 */
+export const resolveEvalSplitManifest = (runDir: string, explicit?: string): SplitManifestResolution | null => {
+  if (explicit !== undefined && explicit.trim() !== "") return { path: explicit.trim(), source: "explicit" };
+  const l1 = join(runDir, "l1", "split-manifest.json");
+  if (existsSync(l1)) return { path: l1, source: "discovered_l1" };
+  try {
+    const hit = readdirSync(runDir)
+      .filter((name) => name.startsWith("publish-"))
+      .sort()
+      .map((name) => join(runDir, name, "split-manifest.json"))
+      .find((path) => existsSync(path));
+    if (hit !== undefined) return { path: hit, source: "discovered_publish" };
+  } catch {
+    // run 目录不可读＝无发现（调用方按缺席处理）
+  }
+  return null;
+};
+
 /** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
 export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string; bindRun?: (runId: string) => Promise<void>; /** D49：canonical 解析种子（与 TrainingToolsConfig 同键——canonicalRunRootsOf(cfg) 注入面；缺省注册表实例态）。 */ canonicalRoots?: readonly string[] }): unknown[] {
   const evaluate = defineTool({
@@ -1750,8 +1778,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       env_profile: { type: "string", description: "环境档案名（仅 action=start 必填；status 省略——评估环境配置层，确认报告九必报项⑤端口/连接的数据源）" },
       deploy: { type: "string", description: "可选 deploy.local.yaml 路径（显式机器事实，优先于环境档案）" },
       // 批C2 E6 卡点修复：评估资产绑定通道（内核编排契约——外部资产须绑定分区清单或 owner 级显式确认）
-      assets_split_manifest: { type: "string", description: "评估资产分区清单路径（split-manifest；跨 run/发布区资产须绑定——绑定后评估输入必须全部来自该 test 分区，内核逐页校验）" },
-      assets_external_confirm: { type: "boolean", description: "外部资产 owner 级确认（无分区清单时的显式通道——确认评估输入确属预期来源；与 assets_split_manifest 二选一）" },
+      assets_split_manifest: { type: "string", description: "评估资产分区清单路径（split-manifest；跨 run/发布区资产须绑定——绑定后评估输入必须全部来自该 test 分区，内核逐页校验。缺省自动发现本 run 树内 l1/ 或 publish-* 下的 split-manifest.json——walkthrough 布局无需显式传）" },
+      assets_external_confirm: { type: "boolean", description: "外部资产 owner 级确认（无分区清单时的显式通道——确认评估输入确属预期来源；显式给出时优先于 run 树自动发现）" },
       // 批D17：并发参数（透传 prelaunch --concurrency/--concurrency-recommended/--concurrency-reason
       // 与编排 --concurrency；容量门＝service_config.max_num_seqs，超容量零落盘零审批快败）
       concurrency: { type: "integer", description: "评估推理并发（可选，默认 1；省略＝串行。上限＝服务 max_num_seqs；图像类任务建议从中等并发起步，不要默认拉满）" },
@@ -1803,16 +1831,23 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // —— start：固定编号 adapter 校验 → 生成服务件 → 确认报告 → EVAL_RELEASE 确认卡 → 账本登记 → 编排（tmux 后台） ——
       const adapterCheck = validateFixedCheckpoint(args.adapter_path);
       if (!adapterCheck.ok) return asToolValue({ started: false, error: adapterCheck.reason, adapter_path: args.adapter_path, note: "SKILL.md 环节④：固定编号显式声明——latest/符号链接/最大编号推断一律拒绝" });
-      // 批C2 E6 卡点修复①：评估资产绑定卡前快败（内核编排契约——显式资产未绑定分区清单即
-      // 外部通道，须 owner 级确认；此前缺检＝用户先过确认卡才在编排计划步失败——放行被浪费）
-      if (args.assets_split_manifest === undefined && args.assets_external_confirm !== true) {
+      // 批C2 E6 卡点修复①＋D114：评估资产绑定卡前快败（内核编排契约——显式或 run 树
+      // 自动发现的 split-manifest 均构成绑定；无绑定且无 owner 级确认即外部通道须拒绝。
+      // 自动发现域仅限本 run 树——walkthrough 布局兼容〔split-manifest 落 publish-*/〕，
+      // 内核逐页校验 ⊆ test 分区不因发现而放宽）
+      const splitManifestResolved = args.assets_external_confirm === true
+        ? (args.assets_split_manifest !== undefined && args.assets_split_manifest.trim() !== ""
+          ? { path: args.assets_split_manifest.trim(), source: "explicit" as const }
+          : null) // 显式 owner 外部确认优先于自动发现（发现仅补缺席——不覆盖显式选择的外部通道）
+        : resolveEvalSplitManifest(runDir, args.assets_split_manifest);
+      if (splitManifestResolved === null && args.assets_external_confirm !== true) {
         return asToolValue({
           started: false, error: "eval_assets_binding_missing", eval_assets_dir: args.eval_assets_dir,
-          note: "评估资产须显式绑定：跨 run/发布区资产传 assets_split_manifest（分区清单——内核逐页校验 ⊆ test 分区），或经 owner 级确认传 assets_external_confirm=true（外部显式通道）；补参后重试",
+          note: "评估资产须显式绑定：跨 run/发布区资产传 assets_split_manifest（分区清单——内核逐页校验 ⊆ test 分区），或经 owner 级确认传 assets_external_confirm=true（外部显式通道）；本 run 树内 l1/ 或 publish-* 下的 split-manifest.json 可自动发现绑定，补参或落件后重试",
         });
       }
-      if (args.assets_split_manifest !== undefined && !existsSync(args.assets_split_manifest)) {
-        return asToolValue({ started: false, error: "assets_split_manifest_missing", path: args.assets_split_manifest, note: "分区清单路径不存在——核对后重试" });
+      if (splitManifestResolved !== null && !existsSync(splitManifestResolved.path)) {
+        return asToolValue({ started: false, error: "assets_split_manifest_missing", path: splitManifestResolved.path, note: "分区清单路径不存在——核对后重试" });
       }
       // 批㊶Q增补三 段3：run 目录已由 resolveToolRun 双形态解析（显式/绑定 run 均须已存在）
       if (!existsSync(args.service_config)) return asToolValue({ started: false, error: "service_config_missing", path: args.service_config });
@@ -1919,6 +1954,11 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
           ...summary.metrics,
           ...(caliberLine !== null ? [caliberLine] : []),
           `字段配置：${fieldConfigResolved.source === "run_recorded" ? "继承训练记录（run_recorded）" : "显式传入（explicit）"}${fieldConfigResolved.warning !== undefined ? "——与训练记录指纹不一致，按显式覆盖执行" : ""}`,
+          // D114：分区清单来源行（信息行，不新增确认项——自动发现不静默，run 树 l1/ 与
+          // publish-* 布局如实标注；owner 外部确认通道明示）
+          ...(splitManifestResolved !== null
+            ? [`分区清单：${splitManifestResolved.source === "explicit" ? "显式传入" : "run 树自动发现"}（${splitManifestResolved.source}）`]
+            : ["分区清单：无绑定——owner 级外部确认通道"]),
           "详细报告已生成（评估轮目录内）",
           "如需调整评估数据、adapter 或服务参数，直接回复要改的项；不改直接回复「按现值确认」",
           "仅 owner 可点；执行方不得代点",
@@ -1948,16 +1988,21 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         return asToolValue({ started: false, error: "checkpoint_plan_failed", eval_round: roundDir, stderr_tail: planned.stderr.slice(-800) });
       }
       // ⑤ 编排件（base_url 显式取自 service manifest 端口——G11 收口：编排/runner 端口缺省分歧在产品路径不生效）
-      // 批C2 E6 卡点修复②：资产绑定两参透传（split-manifest 绑定 test 分区／owner 级外部确认）
+      // 批C2 E6 卡点修复②＋D114：资产绑定透传（split-manifest＝显式或 run 树发现值——walkthrough
+      // 布局兼容）＋--prompt-renderer 生成期注入（内核 generate_eval_orchestration 在 --eval-runner
+      // 在场时必填〔D58 生成期即拒〕——此前计划生成漏传、执行链 eval_orchestration.sh 才注入＝
+      // B7 缺口⑬：编排计划生成直接失败。渲染器与执行链同值单源：pin 内 atf-admit-training-data）
       const port = Number((manifest["request_defaults"] as Record<string, unknown> | undefined)?.["port"] ?? (JSON.parse(readFileSync(args.service_config, "utf8")) as Record<string, unknown>)["port"]);
       const orchDir = join(roundDir, "orch");
+      const promptRendererPath = skill("atf-admit-training-data", "render_prompt.py");
       const orchArgs = [orchestration, "--service", serviceDir, "--ckpt", ckptPlanDir, "--out", orchDir,
-        "--eval-runner", runner, "--assets", args.eval_assets_dir, "--field-config", fieldConfigResolved.path,
+        "--eval-runner", runner, "--prompt-renderer", promptRendererPath,
+        "--assets", args.eval_assets_dir, "--field-config", fieldConfigResolved.path,
         "--base-url", `http://127.0.0.1:${port}/v1`, "--env-profile", args.env_profile,
         // 批D17：并发贯通编排（恒传，缺省 1——generator 内嵌进 runner 调用与 plan 口径披露；
         // 值来源＝prelaunch 确认值，容量校验由 prelaunch 承载，此处不设第二套）
         "--concurrency", String(concurrency),
-        ...(args.assets_split_manifest !== undefined ? ["--split-manifest", args.assets_split_manifest] : []),
+        ...(splitManifestResolved !== null ? ["--split-manifest", splitManifestResolved.path] : []),
         ...(args.assets_external_confirm === true ? ["--assets-external-confirm"] : [])];
       const orchPlanned = await runCapture("python3", orchArgs, 120_000);
       if (orchPlanned.code !== 0) {
