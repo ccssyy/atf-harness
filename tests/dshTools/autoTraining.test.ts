@@ -189,10 +189,11 @@ describe("批㊶-Q 段2 atf_config_confirm 全自动分支（免阻塞落快照�
     expect(String(notice?.["reason"])).toContain("2.8万样本");
     // 无 pending 卡（卡面内容转为通报——无审批可应答面）
     expect(existsSync(join(root, "run-q", "webui", "pending-confirm.json"))).toBe(false);
-    // param_sources 逐键回写（内核文法内：default:<依据>）
+    // E4-乙（改动 2）：停写 iteration-config——param_sources/training 段由内核 training_prep 段写
+    // （user_confirmed(ref=stage:training_overrides)）；确认链零触碰内核产物（夹具原值原样）
     const iter = JSON.parse(readFileSync(join(root, "run-q", "prep", "iteration-config", "iteration-config.json"), "utf8")) as { param_sources?: Record<string, string>; training?: Record<string, unknown> };
-    expect(iter.param_sources?.["learning_rate"]).toMatch(/^default:agent-recommend:/);
-    expect(iter.training?.["num_train_epochs"]).toBe("3");
+    expect(iter.param_sources).toBeUndefined(); // 停写锚：确认链不再落 param_sources
+    expect(iter.training?.["num_train_epochs"]).toBe(2); // 夹具预置原值——零改写（回写时代会被改成 "3"）
   });
   it("越界推荐逐键拦截回退：epochs 15 / lr 9e-4 被拒（终值=登记建议），拦截事实进通报；快照仍落盘", async () => {
     const root = seedRun(tempRoot("kQ-clamp-"));

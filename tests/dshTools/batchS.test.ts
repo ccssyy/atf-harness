@@ -16,7 +16,7 @@ import {
   effectiveStorageValues,
 } from "../../src/webui/storageSettings.js";
 import { openSettingsStore, EMPTY_STORAGE_SETTINGS } from "../../src/webui/settings.js";
-import { DEFAULT_BASE_MODEL_NAME, defaultBaseModelPath, applyConfirmedToIterationConfig } from "../../src/core/workspace/smartDefaults.js";
+import { DEFAULT_BASE_MODEL_NAME, defaultBaseModelPath } from "../../src/core/workspace/smartDefaults.js";
 import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields } from "../../src/webui/configConfirm.js";
 import { evalAgentRecommend, RECOMMENDABLE_KEYS } from "../../src/core/workspace/agentRecommend.js";
 import { buildSettingsReadonlyBlock } from "../../packages/extensions/atf-ui/src/server.js";
@@ -124,15 +124,16 @@ describe("批㊶-S5 §九——默认基模型锚点（确认卡基线＋防线�
     expect(bad.accepted).toBe(false);
     expect(bad.note).toContain("不是本地存在的目录");
   });
-  it("iteration-config 嵌套写回：base_model_path 落 base_model.path（非 training 段）", () => {
+  it("E4-乙停写：base_model_path 不再嵌套写回 iteration-config（快照唯一出口——确认值只落 config-snapshot）", () => {
     const root = tempRoot();
     const iterPath = join(root, "iteration-config.json");
-    writeFileSync(iterPath, `${JSON.stringify({ base_model: { family: "qwen3_vl", path: "/old" }, training: { learning_rate: "1e-4" } }, null, 1)}\n`);
-    const result = applyConfirmedToIterationConfig(iterPath, { base_model_path: "/data/LLM_model/Qwen3-VL-32B-Instruct" });
-    expect("updated" in result && result.updated).toContain("base_model_path");
-    const patched = JSON.parse(readFileSync(iterPath, "utf8")) as { base_model: { path: string; family?: string }; training: Record<string, unknown> };
-    expect(patched.base_model.path).toBe("/data/LLM_model/Qwen3-VL-32B-Instruct");
-    expect(patched.base_model.family).toBe("qwen3_vl"); // 其余 base_model 字段不动
+    const before = `${JSON.stringify({ base_model: { family: "qwen3_vl", path: "/old" }, training: { learning_rate: "1e-4" } }, null, 1)}\n`;
+    writeFileSync(iterPath, before);
+    // 回写函数已退役（applyConfirmedToIterationConfig 删）——内核产物零触碰锚：
+    // 确认链不再改写 iteration-config；base_model.path 由内核 training_prep 段按快照落账。
+    const moduleText = readFileSync(join(import.meta.dirname, "..", "..", "src", "core", "workspace", "smartDefaults.ts"), "utf8");
+    expect(moduleText).not.toContain("export const applyConfirmedToIterationConfig");
+    expect(readFileSync(iterPath, "utf8")).toBe(before);
   });
 });
 

@@ -23,7 +23,7 @@
  * mock 对端＝tests/fixtures/mock_pipeline_params.mjs（argv 回显）＋
  * mock_prelaunch_report.mjs（E4b 新增——b9 前瞻形态）。
  */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -33,6 +33,8 @@ import {
   trainingOverridesApprovalLine,
   TRAINING_OVERRIDE_KEYS,
 } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
+import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
+import { domainHintOf } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 
 interface DshToolLike {
   name: string;
@@ -217,5 +219,82 @@ describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）"
     expect(resolution["per_device_train_batch_size"]).toEqual({ value: "1", source: "convention" });
     const passed = overridesJsonOf(summaryArgv(result));
     expect(passed).toBeNull(); // 全 convention → argv 零追加
+  });
+});
+
+// ══ 2.（H2）confirmFace 停写＋bs convention＋deepspeed 统一 ══
+
+const confirmExec = { agent: { session: { id: "sess-e4b-test" } }, callId: "e4b-confirm-1", signal: undefined };
+
+/** ctx 桩：手动档 permissionPresets＋approval（记录 reason）＋userQuestions（提交 max_total_tokens=9000 过预算闸）——batchE3 同款形态。 */
+const manualCtx = (askLog: string[], approvals: string[]) => ({
+  get: (service: string) => {
+    if (service === "permissionPresets") {
+      return {
+        current: () => "danger-full-access",
+        defaultPreset: "danger-full-access",
+        catalog: () => ({ options: [{ value: "danger-full-access", name: "Full access" }], defaultPreset: "danger-full-access" }),
+      };
+    }
+    if (service === "approval") {
+      return { request: async (req: { reason: string }) => { approvals.push(req.reason); return "allowed-once"; } };
+    }
+    if (service === "userQuestions") {
+      return {
+        ask: async (req: { questions: ReadonlyArray<{ id: string }> }): Promise<{ answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string> }> }> => {
+          const question = req.questions[0];
+          if (question === undefined) throw new Error("ask 桩收到空问题集");
+          askLog.push(question.id);
+          return { answers: [{ id: question.id, selected: ["max_total_tokens=9000"] }] };
+        },
+      };
+    }
+    return undefined;
+  },
+});
+
+const configToolOf = (runsRoot: string, askLog: string[], approvals: string[]): DshToolLike => {
+  const tool = (buildConfirmTools({ runsRoot, ctx: manualCtx(askLog, approvals) }) as unknown as DshToolLike[]).find((entry) => entry.name === "atf_config_confirm");
+  if (tool === undefined) throw new Error("atf_config_confirm 未注册");
+  return tool;
+};
+
+describe("E4b-H2 confirmFace 停回写＋bs convention＋deepspeed 统一", () => {
+  it("手动档确认链停写：快照落盘（唯一出口）＋iteration-config 逐字节零改动（param_sources/training 由内核 training_prep 段写）", async () => {
+    const runsRoot = tempRoot("e4b-runs-");
+    const runDir = join(runsRoot, "e4b-stop");
+    mkdirSync(join(runDir, "prep", "iteration-config"), { recursive: true });
+    const iterBefore = `${JSON.stringify({ schema_version: "IterationConfig/v1", training: { learning_rate: "1e-4", num_train_epochs: 2, per_device_train_batch_size: 2, cutoff_len: 9000, lora_rank: 32 } }, null, 1)}\n`;
+    writeFileSync(join(runDir, "prep", "iteration-config", "iteration-config.json"), iterBefore);
+    const askLog: string[] = [];
+    const approvals: string[] = [];
+    const result = (await configToolOf(runsRoot, askLog, approvals).execute({ action: "present", run_id: "e4b-stop" }, confirmExec)) as Record<string, unknown>;
+    expect(result["ok"]).toBe(true);
+    expect(existsSync(join(runDir, "webui", "config-snapshot.json"))).toBe(true); // 快照＝唯一出口
+    expect(readFileSync(join(runDir, "prep", "iteration-config", "iteration-config.json"), "utf8")).toBe(iterBefore); // 停写锚：内核产物逐字节零改动
+    expect(askLog.length).toBeGreaterThan(0); // 表单卡真走（不是免阻塞捷径）
+  });
+
+  it("卡面 bs 缺省＝内核缺省分档注入（convention）：无登记无快照时 fields bs=2（cutoff 9000 判档）＋deepspeed=ds_z3_offload", async () => {
+    const runsRoot = tempRoot("e4b-runs-");
+    const result = (await configToolOf(runsRoot, [], []).execute({ action: "present", run_id: "e4b-bs" }, confirmExec)) as Record<string, unknown>;
+    expect(result["ok"]).toBe(true);
+    const fields = result["fields"] as Array<{ key: string; value: string; tag: string }>;
+    const bs = fields.find((f) => f.key === "per_device_train_batch_size");
+    expect(bs?.value).toBe("2"); // kernelBsDefaultOf(9000)——`?? 2` 硬编码退役为分档单源
+    const deepspeed = fields.find((f) => f.key === "deepspeed");
+    expect(deepspeed?.value).toBe("ds_z3_offload"); // E4-乙：缺省与内核统一（原 ds_z2_config.json）
+    expect(domainHintOf("per_device_train_batch_size", null)).toContain("convention");
+  });
+
+  it("快照确认值链路完整（停写不改快照语义）：confirmed 九键全落＋token 预算键在", async () => {
+    const runsRoot = tempRoot("e4b-runs-");
+    const result = (await configToolOf(runsRoot, [], []).execute({ action: "present", run_id: "e4b-snap2" }, confirmExec)) as Record<string, unknown>;
+    expect(result["ok"]).toBe(true);
+    const confirmed = JSON.parse(readFileSync(join(runsRoot, "e4b-snap2", "webui", "config-snapshot.json"), "utf8"))["confirmed"] as Record<string, string>;
+    for (const key of TRAINING_OVERRIDE_KEYS) {
+      if (key === "visible_devices") continue; // 卡位留空不落快照（D76）
+      expect(confirmed[key]).toBeDefined();
+    }
   });
 });
