@@ -65,6 +65,10 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   allow_small_cluster_test: "--allow-small-cluster-test",
   grouping_preset: "--grouping-preset",
   negative_ratio_target: "--negative-ratio-target",
+  // E3：experiment_setup 预算三参（内核 b8 argparse 新声明面；快照随更 b8 同批）
+  max_total_tokens: "--max-total-tokens",
+  image_min_pixels: "--image-min-pixels",
+  image_max_pixels: "--image-max-pixels",
   doc_type: "--doc-type",
   lane_suffix: "--lane-suffix",
   field_config: "--field-config",
@@ -147,6 +151,9 @@ export const collectArgvTokens = async (): Promise<string[]> => {
       workspace_path: tempRoot,
       grouping_preset: "A",
       negative_ratio_target: "0.03,0.06",
+      max_total_tokens: 9000,
+      image_min_pixels: 65536,
+      image_max_pixels: 1605632,
       train_all: true,
     },
     {

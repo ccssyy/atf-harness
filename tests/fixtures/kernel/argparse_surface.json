@@ -4804,6 +4804,33 @@
     "required": null
    },
    {
+    "option": "--max-total-tokens",
+    "dest": "max_total_tokens",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--image-min-pixels",
+    "dest": "image_min_pixels",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--image-max-pixels",
+    "dest": "image_max_pixels",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--allow-small-cluster-test",
     "dest": "allow_small_cluster_test",
     "action": "store_true",

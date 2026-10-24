@@ -7,6 +7,9 @@
  *   harness 消费）：{generated_at, items:[{id,state,detail,action,depends_on[]}],
  *   order:[id...], summary:{missing,derivable,confirm}}。内核脚本落地前按本 schema
  *   先开发（先对 schema 后集成）；输出不符即结构化拒绝（fail-closed，不猜不修）。
+ *   E3（缺口 C）修订：order 对账放宽为 order ⊇ items.id——内核 order 恒为依赖链
+ *   全量、items 只含问题项（就绪项不进 items，b7 实锚 order 7／items 5）；order 内
+ *   出现闭集（PREFLIGHT_KNOWN_ITEM_IDS）外未知项或重复项仍拒。
  * - 三态（§〇.3）：missing＝环境/用户必须提供；derivable＝可自动执行（给动作与
  *   数量）；needs_confirm＝业务确认（合并一次问）。渲染按依赖链顺序（order），
  *   不按八段顺序暴露；derivable 项的 depends_on 尚有问题项在场时如实标「待依赖」
@@ -23,6 +26,20 @@ import { join } from "node:path";
 
 /** 三态闭集（§〇.3——内核侧同源；第二态文案＝可自动执行给动作与数量）。 */
 export const PREFLIGHT_ITEM_STATES: readonly string[] = ["missing", "derivable", "needs_confirm"];
+
+/** 内核检查项闭集（E3 锚＝内核 b7 tools/training_preflight.py 的 PREFLIGHT_ORDER 七件
+ *  依赖链全序——order 恒为此闭集的全序，items 只含其中问题项、就绪项不进 items）。
+ *  对账用它拒「order 内未知项」（错乱输出不采纳）；内核发版增检查项时随 re-pin
+ *  同步本闭集（单点）。 */
+export const PREFLIGHT_KNOWN_ITEM_IDS: readonly string[] = [
+  "source_pairs",
+  "field_config",
+  "token_provider",
+  "token_budget",
+  "coordinate_pending",
+  "lane_facts",
+  "grouping_preset",
+];
 
 export interface PreflightItem {
   id: string;
@@ -98,10 +115,23 @@ export const parsePreflightReport = (raw: string): PreflightParse => {
     return { ok: false, error: "order 缺失或非字符串数组" };
   }
   const order = root["order"] as string[];
-  // order 与 items 双向对账：长度相等＋order 覆盖全部 item id（无缺项无多余）
+  // E3（缺口 C 修复）：order 与 items 对账放宽为 order ⊇ items.id——内核 b7 实锚
+  // （dev 直跑 u1-accept-swb：exit 1＋stdout 完整 JSON＋stderr 空）order 恒为依赖链
+  // 全量七件，items 只含问题项（就绪项不进 items）→ order 允许比 items 长；渲染按
+  // order 序过滤 items（就绪项零呈现）。仍拒两形态（fail-closed 不猜不修）：
+  //   ① items 含 order 外的项（问题项不在依赖序——渲染序错乱）；
+  //   ② order 出现未知项/重复项（不在内核检查项闭集 PREFLIGHT_KNOWN_ITEM_IDS，
+  //      或同 id 重复——错乱输出不采纳；内核发版增检查项须随 re-pin 同步闭集）。
+  if (new Set(order).size !== order.length) {
+    return { ok: false, error: "order 含重复检查项" };
+  }
+  const unknownInOrder = order.filter((id) => !PREFLIGHT_KNOWN_ITEM_IDS.includes(id));
+  if (unknownInOrder.length > 0) {
+    return { ok: false, error: `order 含未知检查项：${[...new Set(unknownInOrder)].join("、")}` };
+  }
   const ordered = new Set(order);
-  if (order.length !== seen.size || ![...seen].every((id) => ordered.has(id))) {
-    return { ok: false, error: "order 与 items.id 不对账（缺项或多出）" };
+  if (![...seen].every((id) => ordered.has(id))) {
+    return { ok: false, error: "order 与 items.id 不对账（items 含 order 外的项）" };
   }
   const summaryRaw = root["summary"];
   if (summaryRaw === null || typeof summaryRaw !== "object" || Array.isArray(summaryRaw)) {
