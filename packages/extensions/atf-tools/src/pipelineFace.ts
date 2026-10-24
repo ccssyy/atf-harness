@@ -13,6 +13,14 @@
  * D99 增 experiment_setup 段 negative_ratio_target 透传（内核 argparse
  * --negative-ratio-target <下限,上限>——D90 用户确认值通路 harness 侧补派：九要素卡
  * 确认值经本参进实验门；显式给才下传且审批卡/返回体标来源，「缺省不静默」同 D89）。
+ * E3（缺口 D 产品管道半）增 experiment_setup 段预算三参——max_total_tokens／
+ * image_min_pixels／image_max_pixels（内核 b8 argparse --max-total-tokens／
+ * --image-min-pixels／--image-max-pixels，harness 先行按惯例 flag 名，re-pin 对账）：
+ * 显式 > run 目录 webui/config-snapshot.json 确认快照兜底 > unspecified（不下传）；
+ * 来源逐参独立标注 user_specified|config_snapshot|unspecified（审批卡与返回体均
+ * 呈现终值与来源）；像素对成对校验（min<max，判据单源 configConfirm
+ * pixelPairViolationOf——先于审批，卡前快败业务文案）。九要素确认值经本通路进
+ * 实验门——确认卡（落快照）与本段工具（快照兜底下传）同源成环，替代任何代写。
  *
  * 接口契约（引自内核件 K-A2.2a §二，双件同步；A-E14b 增补 K-E14a 命令面；E10b 增补
  * E10a 命令面；E10d 增补 E10f 命令面；D89 增补 --grouping-preset 命令面；D93 增补
@@ -60,6 +68,8 @@ import { appendSegmentFact, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../../../src
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
+// E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与九要素卡同源）
+import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 import { join } from "node:path";
 
 /** 段名闭集（权威＝内核 STAGE_ORDER 八项——禁增删改序；旧六段名别名不保留）。 */
@@ -216,6 +226,101 @@ export const negativeRatioApprovalLine = (band: string): string => {
   return `负样本构造带：未指定——将按构造器内置常量带（${NEGATIVE_RATIO_DEFAULT_BAND}）兜底`;
 };
 
+// ── E3：experiment_setup 段预算三参（max_total_tokens／像素对）——显式 > 确认快照
+//    兜底 > unspecified（不下传）。九要素确认卡的预算三要素经本通路进实验门（缺口 D
+//    产品管道：确认卡落 config-snapshot.json → 本段工具兜底读并下传，全程零代写）。──
+
+/** 预算三参来源三值闭集（审批卡/返回体逐参标注——「缺省不静默」）。 */
+export type ExperimentTokenParamSource = "user_specified" | "config_snapshot" | "unspecified";
+
+/** 三参键闭集（参数名与快照 confirmed 键、九要素卡键同名同义）。 */
+export const EXPERIMENT_TOKEN_PARAM_KEYS: readonly string[] = ["max_total_tokens", "image_min_pixels", "image_max_pixels"];
+
+/** 来源标注文案（审批卡行单源）。 */
+export const TOKEN_PARAM_SOURCE_LABEL: Readonly<Record<ExperimentTokenParamSource, string>> = {
+  user_specified: "用户指定",
+  config_snapshot: "确认快照",
+  unspecified: "未指定——内核按缺省处理",
+};
+
+/** 显式参数取值校验：安全正整数（非此形态卡前快败——fail-closed 不猜不修不夹取）。 */
+export const isSafePositiveInteger = (raw: unknown): raw is number =>
+  typeof raw === "number" && Number.isSafeInteger(raw) && (raw as number) > 0;
+
+/** run 目录确认快照兜底读取（webui/config-snapshot.json 的 confirmed 子对象三键；
+ *  快照缺席/键非安全正整数＝该键无兜底值（如实 unspecified，不造占位）。 */
+export const snapshotTokenParamsOf = (
+  runDir: string,
+): { max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number } => {
+  const out: { max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number } = {};
+  try {
+    const parsed = JSON.parse(readFileSync(join(runDir, "webui", "config-snapshot.json"), "utf8")) as {
+      confirmed?: Record<string, unknown>;
+    };
+    const confirmed = parsed?.confirmed;
+    if (confirmed === null || typeof confirmed !== "object") return out;
+    for (const key of EXPERIMENT_TOKEN_PARAM_KEYS) {
+      const raw = (confirmed as Record<string, unknown>)[key];
+      // 快照键值历史形态为字符串（九要素卡值全字符串面）——数字/纯数字串均认
+      const num = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw.trim()) : NaN;
+      if (isSafePositiveInteger(num)) out[key as "max_total_tokens" | "image_min_pixels" | "image_max_pixels"] = num;
+    }
+  } catch { /* 快照缺席/解析失败＝无兜底值（fail-open：兜底面不阻塞段触发） */ }
+  return out;
+};
+
+/** 预算三参终值解析（仅 experiment_setup 段调用）：显式参数 > 快照兜底，逐参独立
+ *  来源标注；显式值非法形态直接快败（error 不下传不进审批——坏参数不消耗放行）。 */
+export const resolveExperimentTokenParams = (
+  args: { max_total_tokens?: unknown; image_min_pixels?: unknown; image_max_pixels?: unknown },
+  runDir: string,
+):
+  | {
+      ok: true;
+      values: { max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number };
+      sources: Record<string, ExperimentTokenParamSource>;
+    }
+  | { ok: false; error: string; note: string } => {
+  const values: { max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number } = {};
+  const sources: Record<string, ExperimentTokenParamSource> = {};
+  const snapshot = snapshotTokenParamsOf(runDir);
+  const labels: Record<string, string> = {
+    max_total_tokens: "max_total_tokens（单样本 token 上限，正整数）",
+    image_min_pixels: "image_min_pixels（最小像素，正整数）",
+    image_max_pixels: "image_max_pixels（最大像素，正整数）",
+  };
+  for (const key of EXPERIMENT_TOKEN_PARAM_KEYS) {
+    const raw = (args as Record<string, unknown>)[key];
+    if (raw === undefined) {
+      const fallback = snapshot[key as keyof typeof snapshot];
+      if (fallback !== undefined) {
+        values[key as keyof typeof values] = fallback;
+        sources[key] = "config_snapshot";
+      } else {
+        sources[key] = "unspecified";
+      }
+      continue;
+    }
+    if (!isSafePositiveInteger(raw)) {
+      return { ok: false, error: `${key}_invalid`, note: `${labels[key]}——得 ${String(raw)}（非安全正整数即拒，不夹取）` };
+    }
+    values[key as keyof typeof values] = raw;
+    sources[key] = "user_specified";
+  }
+  return { ok: true, values, sources };
+};
+
+/** 审批卡预算三参行（仅 experiment_setup 段追加——终值与来源双双上卡；unspecified
+ *  明示「内核按缺省处理」，缺省不静默）。 */
+export const experimentTokenApprovalLine = (
+  values: { max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number },
+  sources: Record<string, ExperimentTokenParamSource>,
+): string =>
+  `预算三参（实验门）：${EXPERIMENT_TOKEN_PARAM_KEYS.map((key) => {
+    const value = values[key as keyof typeof values];
+    return `${key}=${value !== undefined ? String(value) : "未定"}（${TOKEN_PARAM_SOURCE_LABEL[sources[key] ?? "unspecified"]}）`;
+  }).join("／")}`;
+
 
 /** 子进程封装（execFile——非零退出/超时如实回传，不抛；F1 预检工具同源复用）。 */
 export const runPipeline = (command: string, args: readonly string[], timeoutMs: number): Promise<{ code: number | null; stdout: string; stderr: string }> =>
@@ -253,6 +358,10 @@ export const buildPipelineTool = (
       `返回体如实标注分组来源，审批卡呈现分组方案供确认）。` +
       `experiment_setup 段另支持 negative_ratio_target 负样本目标带 <下限,上限>（其它段忽略该参）：` +
       `显式给定时实验门以该值锁定并标注用户指定；不给时按构造器内置常量带兜底（审批卡与返回体均如实标注来源）。` +
+      `experiment_setup 段另支持预算三参 max_total_tokens／image_min_pixels／image_max_pixels（其它段忽略）：` +
+      `显式给 > run 目录 webui/config-snapshot.json 确认快照兜底 > 皆无则不下传（内核按缺省处理）；` +
+      `审批卡与返回体逐参呈现终值与来源（user_specified／config_snapshot／unspecified）；` +
+      `像素对须成对提供且 min<max（成对校验先于审批——单端或越界即卡前快败）。` +
       `收到版式聚类状态类拒绝（style_cluster_state_not_clustered／style_cluster_state_ambiguous／` +
       `style_cluster_declared_but_absent）时，必须先问用户「这批数据做过版式聚类吗？」，` +
       `确认后再传 on（未聚类——内核自动补簇并产出 StyleClusterManifest/v1，按簇分层）或 off（已聚类——不再聚）重跑；` +
@@ -304,6 +413,26 @@ export const buildPipelineTool = (
           "不给时按构造器内置常量带（0.02,0.05）兜底（不静默——审批卡与返回体如实标注来源）。" +
           "九要素确认卡的 negative_ratio_target 值在本段触发时应原样带入",
       },
+      // E3：预算三参（仅 experiment_setup 段；显式 > 确认快照兜底 > unspecified 不下传）
+      max_total_tokens: {
+        type: "number",
+        description:
+          "单样本 token 上限（仅 experiment_setup 段有意义，其它段忽略该参；安全正整数）：与像素对成组进实验门。" +
+          "未显式给定时读 run 目录 webui/config-snapshot.json 确认快照兜底（九要素确认值通路——原样带入）；" +
+          "两者皆无则不下传（内核按缺省处理，来源如实标注 unspecified）",
+      },
+      image_min_pixels: {
+        type: "number",
+        description:
+          "最小像素（仅 experiment_setup 段有意义，其它段忽略该参；安全正整数）：与 image_max_pixels 成对提供——" +
+          "只给一端会卡前快败（半新半旧的像素对会让坐标换算与 token 预算用两套口径），两端都在场时须 min<max。未显式给定时读确认快照兜底；皆无则不下传",
+      },
+      image_max_pixels: {
+        type: "number",
+        description:
+          "最大像素（仅 experiment_setup 段有意义，其它段忽略该参；安全正整数）：与 image_min_pixels 成对提供（单端即卡前快败）；" +
+          "改值影响坐标换算与 token 预算。未显式给定时读确认快照兜底；皆无则不下传",
+      },
       doc_type: { type: "string", description: "单据类型（可缺省——缺省不上送，内核按数据/登记面推断，无法确定即 blocked；给了则显式指定）" },
       lane_suffix: { type: "string", description: "lane 后缀（可缺省——缺省不上送，内核自行推断）" },
       field_config: { type: "string", description: "字段配置文件显式路径（可缺省——缺省不上送，内核走 run 内/登记面既有来源）" },
@@ -341,7 +470,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -375,6 +504,45 @@ export const buildPipelineTool = (
       // D99：负样本目标带取值（同 D89 口径——trim 后空串视同未指定；形态合法性由内核
       // 实验门脚本解析（float 化失败即业务拒绝），harness 不复制格式校验不夹取）。
       const negativeRatioTarget = typeof args.negative_ratio_target === "string" ? args.negative_ratio_target.trim() : "";
+      // E3：落点单源提前到审批前（预算三参快照兜底要读 run 目录——与原审批后计算同值同式）
+      const runDir = join(workspacePath, "runs", args.run_id);
+      // E3：预算三参（仅 experiment_setup 段）——终值解析（显式 > 确认快照兜底 >
+      // unspecified 不下传）＋像素对成对校验（min<max，判据单源 pixelPairViolationOf）；
+      // 坏值一律卡前快败不进审批（不消耗放行）；其它段零进入（不加键不下传）。
+      let tokenParams:
+        | { values: { max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number }; sources: Record<string, ExperimentTokenParamSource> }
+        | undefined;
+      if (args.stage === "experiment_setup") {
+        const resolvedParams = resolveExperimentTokenParams(args, runDir);
+        if (!resolvedParams.ok) {
+          return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: resolvedParams.error, note: resolvedParams.note });
+        }
+        // E3：像素对成对校验（内核 b8 main() 参数形状层同款口径——单端即拒，业务
+        // 文案对齐；先于审批不消耗放行）＋两端在场时的 min<max 关系校验（判据单源
+        // pixelPairViolationOf——与九要素卡同一文案面）。
+        const minPx = resolvedParams.values.image_min_pixels;
+        const maxPx = resolvedParams.values.image_max_pixels;
+        if ((minPx !== undefined) !== (maxPx !== undefined)) {
+          return asToolValue({
+            ok: false,
+            stage: args.stage,
+            run_id: args.run_id,
+            error: "pixel_pair_half_given",
+            note: "像素对必须成对提供：只给一端会得到半新半旧的像素对（坐标换算与 token 预算会用两套口径）——请把 image_min_pixels 与 image_max_pixels 一起提供，或都不提供（走确认快照或内核缺省）",
+          });
+        }
+        const pixelViolation =
+          minPx !== undefined && maxPx !== undefined
+            ? pixelPairViolationOf([
+                { key: "image_min_pixels", value: String(minPx) },
+                { key: "image_max_pixels", value: String(maxPx) },
+              ])
+            : null;
+        if (pixelViolation !== null) {
+          return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "pixel_pair_violation", note: pixelViolation });
+        }
+        tokenParams = { values: resolvedParams.values, sources: resolvedParams.sources };
+      }
       const verdict = await requestApproval(ctx, exec, "atf_pipeline_stage",
         buildApprovalReason({
           action: "触发管线段",
@@ -388,10 +556,12 @@ export const buildPipelineTool = (
         + (args.stage === "experiment_setup" ? `\n${groupingPresetApprovalLine(groupingPreset)}` : "")
         // D99：负样本带行仅 experiment_setup 段呈现（与分组方案行同款「缺省不静默」）
         + (args.stage === "experiment_setup" ? `\n${negativeRatioApprovalLine(negativeRatioTarget)}` : "")
+        // E3：预算三参行仅 experiment_setup 段呈现（终值与来源双双上卡）
+        + (args.stage === "experiment_setup" && tokenParams !== undefined ? `\n${experimentTokenApprovalLine(tokenParams.values, tokenParams.sources)}` : "")
         + "\n仅 owner 可点；执行方不得代点");
       if (!verdict.ok) return approvalDeniedResult("atf_pipeline_stage", verdict.outcome);
-      // 落点单源（A2.2b）：与内核同一决定者 <workspace_path>/runs/<run_id>；resolveRunDir 本工具内退役。
-      const runDir = join(workspacePath, "runs", args.run_id);
+      // 落点单源（A2.2b）：与内核同一决定者 <workspace_path>/runs/<run_id>；resolveRunDir 本工具内退役
+      // （E3：runDir 已提前到审批前计算——预算三参快照兜底同源落点，此处不复算）。
       // argv 只传内核声明参数（register 时含 --source-root；training_prep 时含 --base-model
       // ——A-E14b，其它段不追加；family_split 时含 --auto-style-cluster——E10b，缺省 auto
       // 也显式上线解析值；E10d：allow_small_cluster_test 仅 family_split 且 true 才追加
@@ -416,6 +586,14 @@ export const buildPipelineTool = (
       // :1155 显式才下传实验门并标 user_specified；未给不追加，构造器常量带兜底；其它段
       // 忽略该参不下传不报错）。
       if (args.stage === "experiment_setup" && negativeRatioTarget !== "") argv.push("--negative-ratio-target", negativeRatioTarget);
+      // E3：预算三参透传（仅 experiment_setup 段；终值在场才追加——显式值与快照兜底值
+      // 同面下传（内核 b8 argparse --max-total-tokens／--image-min-pixels／
+      // --image-max-pixels）；unspecified 不出现在 argv，零新增语义）。
+      if (args.stage === "experiment_setup" && tokenParams !== undefined) {
+        if (tokenParams.values.max_total_tokens !== undefined) argv.push("--max-total-tokens", String(tokenParams.values.max_total_tokens));
+        if (tokenParams.values.image_min_pixels !== undefined) argv.push("--image-min-pixels", String(tokenParams.values.image_min_pixels));
+        if (tokenParams.values.image_max_pixels !== undefined) argv.push("--image-max-pixels", String(tokenParams.values.image_max_pixels));
+      }
       // D93：三参透传（内核全局 argparse 参数、多段读取——不按段 gate；train_all 与
       // assignment_source 的互斥校验在内核每次进程 __init__，harness 不复制；开关 false/
       // 路径空白＝「按未给处理」不追加，只传内核已声明参数、零新增语义）。
@@ -513,6 +691,18 @@ export const buildPipelineTool = (
           ? {
               negative_ratio_target: negativeRatioTarget !== "" ? negativeRatioTarget : NEGATIVE_RATIO_DEFAULT_BAND,
               negative_ratio_target_source: negativeRatioTarget !== "" ? "explicit" : "kernel_default",
+            }
+          : {}),
+        // E3：预算三参终值与来源（仅 experiment_setup 段三键恒在场——「缺省不静默」：
+        // unspecified 如实标注、值未定＝null 呈现不造缺省值；其它段零键）
+        ...(args.stage === "experiment_setup" && tokenParams !== undefined
+          ? {
+              max_total_tokens: tokenParams.values.max_total_tokens ?? null,
+              max_total_tokens_source: tokenParams.sources["max_total_tokens"] ?? "unspecified",
+              image_min_pixels: tokenParams.values.image_min_pixels ?? null,
+              image_min_pixels_source: tokenParams.sources["image_min_pixels"] ?? "unspecified",
+              image_max_pixels: tokenParams.values.image_max_pixels ?? null,
+              image_max_pixels_source: tokenParams.sources["image_max_pixels"] ?? "unspecified",
             }
           : {}),
         // E10b：聚类证据三键透传（内核摘要携带时）——「为什么没开/为什么开」的解释面

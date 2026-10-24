@@ -46,9 +46,9 @@ import {
 } from "../../../../src/core/workspace/smartDefaults.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { readLaunchKpi } from "../../../../src/core/workspace/trainingPreflight.js";
-import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+import { isValidRunId, resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
 // F1 前置预检共用交互流（循环 import 安全：两侧顶层均零执行对方导出——函数体内引用）
-import { preflightScriptAvailable, runPreflightFlow, type PreflightDeps } from "./preflightFace.js";
+import { preflightScriptAvailable, runPreflightFlow, resolvePreflightRunDir, type PreflightDeps, type PreflightRunDirSource } from "./preflightFace.js";
 import { openSettingsStore } from "../../../../src/webui/settings.js";
 import { instanceSettingsPath } from "../../../../src/webui/storageSettings.js";
 
@@ -355,6 +355,47 @@ export const injectBashRunWorkspace = (runDir: string): void => {
   process.env["ATF_BASH_RUN_WORKSPACE"] = runDir;
 };
 
+// ── E3（缺口 D）：confirm 写面 run 落点三级单源（同源复用 preflightFace E2 解析器）──
+
+/** 写面落点解析（config_confirm／publish_confirm 共用）：与只读预检同一三级序
+ *  （workspace_path 显式 > 会话工作区事实 > 实例 runsRoot 兜底——resolvePreflightRunDir
+ *  同一决定者），差别仅在「目录不存在」：预检只读拒之；本面是建卡/确认写面——显式
+ *  workspace_path 给定时在显式落点创建 run 目录（非法 runId 拒——路径穿越不进创建面），
+ *  未给时按现行 resolveRunDir 桶落点新建（writePending/saveConfigSnapshot 落点一致，
+ *  新建 run 现状零破坏）。非绝对路径与 symlink 与预检同拒（红线：确认值永不落镜像位）。
+ *  效果：九要素确认快照/pending/段事实/会话绑定与内核 training_prep 读点同棵树。 */
+export const resolveConfirmRunDir = (
+  deps: ConfirmDeps,
+  runId: string,
+  workspacePath: string | undefined,
+  exec: unknown,
+): { ok: true; runDir: string; source: PreflightRunDirSource } | { ok: false; error: string; note: string } => {
+  const wp = typeof workspacePath === "string" ? workspacePath.trim() : "";
+  const resolved = resolvePreflightRunDir(
+    { command: "", timeoutMs: 0, runsRoot: deps.runsRoot, ctx: deps.ctx },
+    { runId, apply: false, workspacePath: wp !== "" ? wp : undefined },
+    exec,
+  );
+  if (resolved.ok) return { ok: true, runDir: resolved.runDir, source: resolved.source };
+  if (resolved.error === "run_dir_not_found") {
+    if (wp !== "") {
+      if (!isValidRunId(runId)) {
+        return { ok: false, error: "run_id_invalid", note: `run_id 形态非法（${runId}）——拒绝在显式落点创建 run 目录` };
+      }
+      const runDir = join(wp, "runs", runId);
+      try {
+        mkdirSync(runDir, { recursive: true });
+        return { ok: true, runDir, source: "workspace_path" };
+      } catch (cause) {
+        return { ok: false, error: "run_dir_create_failed", note: `显式落点 run 目录创建失败（${runDir}）：${String(cause).slice(0, 200)}` };
+      }
+    }
+    // 新建 run 现状形态：实例 runsRoot 桶落点（writePending 落点 mkdir——零破坏）
+    return { ok: true, runDir: resolveRunDir(deps.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) }), source: "instance_runs_root" };
+  }
+  return { ok: false, error: resolved.error, note: resolved.note };
+};
+
 export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const { ctx } = deps;
   // 批㊶R前置②：可用卡数机器事实（建卡期一次探测；null＝缺失→建卡时按 machine-facts 停下问）
@@ -373,6 +414,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
     parameters: {
       action: { type: "string", required: true, enum: ["present", "amend"], description: "present=构造/重呈卡；amend=应用结构化改参后重呈（edits 键值对象）" },
       run_id: { type: "string", required: true, description: "run 标识（快照与 pending 卡落点）" },
+      workspace_path: { type: "string", description: "workspace 根（绝对路径——与 atf_pipeline_stage 的 workspace_path 同值；落点 <workspace_path>/runs/<run_id>，未传时按会话工作区事实与实例 runs 根顺次解析——快照/段事实与内核读取同棵树）" },
       overrides: { type: "object", additionalProperties: true, description: "显式覆盖值（present 形态：{learning_rate:\"2e-4\",...}）" },
       edits: { type: "object", additionalProperties: true, description: "amend 结构化改参（用户聊天话术经 agent 语义理解后的键值对象，如 {num_train_epochs:\"4\", learning_rate:\"2e-4\"}）——clamp 校验后随表单卡重呈双确认" },
       recommend: { type: "object", additionalProperties: true, description: "全自动档专属 agent 参数推荐：{epochs:3, learning_rate:\"2e-4\", lora_rank:32, cutoff_len:9000, reason:\"2.8万样本→3 epochs 防欠拟合\"}——越界键被拦截回退，手动档不消费" },
@@ -389,9 +431,16 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         kind: "other" as const,
       }
     },
-    async execute(args: { action: "present" | "amend"; run_id: string; overrides?: Record<string, unknown>; edits?: Record<string, unknown>; recommend?: Record<string, unknown> }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
-      // 批㊶Q增补三 段3：run 目录双形态解析（新建带发起会话工作区归属——runs/<工作区>/<run_id>）
-      const runDir = resolveRunDir(deps.runsRoot, args.run_id, { workspace: sessionWorkspaceSlug(exec) });
+    async execute(args: { action: "present" | "amend"; run_id: string; workspace_path?: string; overrides?: Record<string, unknown>; edits?: Record<string, unknown>; recommend?: Record<string, unknown> }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+      // E3（缺口 D）：run 落点三级单源（workspace_path 显式 > 会话工作区事实 > 实例
+      // runsRoot 兜底——preflightFace E2 同一解析器，写面语义见 resolveConfirmRunDir）；
+      // 快照/pending/段事实/会话绑定/KPI 全落同一棵树——九要素确认值经此与内核读点同源。
+      const resolvedRun = resolveConfirmRunDir(deps, args.run_id, args.workspace_path, exec);
+      if (!resolvedRun.ok) {
+        return asToolValue({ ok: false, run_id: args.run_id, error: resolvedRun.error, note: resolvedRun.note });
+      }
+      const runDir = resolvedRun.runDir;
+      const runDirSource = resolvedRun.source;
       // F1（首跑体验批）§二.2：九要素卡之前先出「首跑预检卡」——顺序机制保证：
       // preflight KPI 事实缺席且预检脚本在场时先跑预检（有问题项才出卡：needs_confirm
       // 合并一屏收集；derivable 项卡上可勾选 apply_derivables，经审批卡放行后内核
@@ -405,7 +454,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         readLaunchKpi(runDir)?.preflight === undefined &&
         preflightScriptAvailable(deps.preflight.command)
       ) {
-        const outcome = await runPreflightFlow(deps.preflight, { runId: args.run_id, apply: false }, exec, {
+        const outcome = await runPreflightFlow(deps.preflight, { runId: args.run_id, apply: false, workspacePath: args.workspace_path }, exec, {
           presentCard: !isAutoTrainingTier(ctx, exec),
         });
         if (outcome.ok && outcome.report !== undefined && outcome.report.items.length > 0) {
@@ -696,6 +745,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         return asToolValue({
           ok: true,
           run_id: args.run_id,
+          // E3：落点与来源透出（三级单源——快照实际落哪棵树可核对）
+          run_dir: runDir,
+          run_dir_source: runDirSource,
           confirmed: true,
           auto: true,
           tier: AUTO_TRAINING_PRESET,
@@ -866,7 +918,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const sessionIdCfg = sessionIdOfExec(exec);
       if (sessionIdCfg !== undefined) appendBinding(runDir, sessionIdCfg);
       injectBashRunWorkspace(runDir); // 批㊶-S1 门2修复
-      return asToolValue({ ok: true, run_id: args.run_id, confirmed: true, fields, snapshot: "webui/config-snapshot.json", ...(preflightNote !== undefined ? { preflight: preflightNote } : {}), ...(amendNote !== undefined ? { amend: amendNote } : {}) });
+      return asToolValue({ ok: true, run_id: args.run_id, run_dir: runDir, run_dir_source: runDirSource, confirmed: true, fields, snapshot: "webui/config-snapshot.json", ...(preflightNote !== undefined ? { preflight: preflightNote } : {}), ...(amendNote !== undefined ? { amend: amendNote } : {}) });
     },
   });
 
@@ -876,15 +928,21 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       "发布确认 digest 卡（审批必经）：对候选契约件（contract-candidate）做发布前确认——卡面呈现 artifact digest（sha256 凭据）与发布目标；Allow once＝确认发布凭据。digest 缺失时如实拒绝（不造数）。",
     parameters: {
       run_id: { type: "string", required: true, description: "run 标识" },
+      workspace_path: { type: "string", description: "workspace 根（绝对路径——与 atf_pipeline_stage 的 workspace_path 同值；落点 <workspace_path>/runs/<run_id>，未传时按会话工作区事实与实例 runs 根顺次解析）" },
       digest: { type: "string", description: "契约件 sha256 digest（缺省读 runs/<run_id>/contract-candidate.json 的 digest 字段）" },
     },
     output: {
       schema: { type: "object", additionalProperties: true },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
-    async execute(args: { run_id: string; digest?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
-      // 批㊶Q增补三 段3：run 目录双形态解析（同 configTool）
-      const runDir = resolveRunDir(deps.runsRoot, args.run_id, { workspace: sessionWorkspaceSlug(exec) });
+    async execute(args: { run_id: string; workspace_path?: string; digest?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+      // E3（缺口 D 同源）：run 落点三级单源（config_confirm 同款——契约件读取与段事实同棵树）
+      const resolvedRun = resolveConfirmRunDir(deps, args.run_id, args.workspace_path, exec);
+      if (!resolvedRun.ok) {
+        return asToolValue({ ok: false, run_id: args.run_id, error: resolvedRun.error, note: resolvedRun.note });
+      }
+      const runDir = resolvedRun.runDir;
+      const runDirSource = resolvedRun.source;
       const candidatePath = join(runDir, "contract-candidate.json");
       let candidateDigest = args.digest;
       if (candidateDigest === undefined && existsSync(candidatePath)) {
@@ -920,7 +978,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const sessionIdPub = sessionIdOfExec(exec);
       if (sessionIdPub !== undefined) appendBinding(runDir, sessionIdPub);
       injectBashRunWorkspace(runDir); // 批㊶-S1 门2修复
-      return asToolValue({ ok: true, run_id: args.run_id, confirmed: true, digest: candidateDigest, artifact: "contract-candidate.json" });
+      return asToolValue({ ok: true, run_id: args.run_id, run_dir: runDir, run_dir_source: runDirSource, confirmed: true, digest: candidateDigest, artifact: "contract-candidate.json" });
     },
   });
 
