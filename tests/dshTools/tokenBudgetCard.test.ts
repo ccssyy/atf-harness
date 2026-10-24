@@ -342,8 +342,8 @@ describe("批次 R H1-1——atf-ui web 面：buildLaunchSurface token_budget �
 
 // ---------------------------------------------------------------- H1-3 错误回流人话
 
-describe("批次 R H1-3——kernelErrorFace 四码人话映射（提前接线）", () => {
-  it("四码闭集：文案含指令要点＋下一步指引；未知码 null（不猜）", () => {
+describe("批次 R H1-3——kernelErrorFace 人话映射（提前接线；D98 扩五码）", () => {
+  it("闭集文案：既有四码要点＋下一步指引；D98 run 落点非空文案零内部码；未知码 null（不猜）", () => {
     expect(humanizeKernelError("token_budget_missing")).toContain("预算文件缺失，先确认实验配置");
     expect(humanizeKernelError("token_budget_missing")).toContain("下一步");
     const inconsistent = humanizeKernelError("token_budget_inconsistent:cutoff_len_mismatch:8000≠9000");
@@ -355,8 +355,12 @@ describe("批次 R H1-3——kernelErrorFace 四码人话映射（提前接线�
     expect(gpu).toContain("每卡 free");
     expect(gpu).toContain("GPU 0");
     expect(gpu).toContain("不自动降档");
+    const notEmpty = humanizeKernelError("walkthrough_run_dir_not_empty");
+    expect(notEmpty).toContain("登记被拒");
+    expect(notEmpty).toContain("换一个新 run 标识");
+    expect(notEmpty).not.toContain("walkthrough_run_dir_not_empty"); // B6 锚：拒绝文案无内部码
     expect(humanizeKernelError("some_unknown_code")).toBeNull();
-    expect(KERNEL_ERROR_FACE_CODES.size).toBe(4);
+    expect(KERNEL_ERROR_FACE_CODES.size).toBe(5); // D98：四码→五码
   });
   it("scanKernelErrorFace：错误文本（构造的错误对象串）命中带 detail 码；未命中 null", () => {
     const hit = scanKernelErrorFace(['{"error": "token_gate_not_configured"}']);

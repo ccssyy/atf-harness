@@ -9,15 +9,19 @@
  * 未知码一律返回 null（不猜不编造——原样走既有 note，不覆盖）。
  * D77（模型面对账面裁定）：scratch 通道返回体只带 note 人话，完整码（code:detail）不进
  * 模型可见面——模型照抄进散文即用户可见；对账面＝<scratch>/.harness/kernel-error-face.jsonl。
+ * D98：增 register 段 run 落点非空拦截码（内核 D97 非空闸 walkthrough_pipeline.py，
+ * 实锚 :743——同 run-id 重复执行即报；内核发版 0.7.25b6 起真实来源在位）。
  */
 
 /** 已知内核错误码闭集（token_budget_missing / token_budget_inconsistent:<detail> /
- *  token_gate_not_configured / gpu_capacity_insufficient）。 */
+ *  token_gate_not_configured / gpu_capacity_insufficient /
+ *  walkthrough_run_dir_not_empty）。 */
 export const KERNEL_ERROR_FACE_CODES: ReadonlySet<string> = new Set([
   "token_budget_missing",
   "token_budget_inconsistent",
   "token_gate_not_configured",
   "gpu_capacity_insufficient",
+  "walkthrough_run_dir_not_empty",
 ]);
 
 /** 人话文案选项：gpuFreeRows＝每卡 free 表行（gpu_capacity_insufficient 专属——由调用方
@@ -45,6 +49,10 @@ export const humanizeKernelError = (code: string, opts: KernelErrorFaceOptions =
         : "";
       return `GPU 显存/算力不足（gpu_capacity_insufficient）——不自动降档。\n${table}建议：按每卡 free 表换空闲卡，或由你显式决定降 batch / 降 LoRA rank / 换量化档（降档是用户决策，harness 不代选）后重推`;
     }
+    // D98：register 段 run 落点非空（内核 D97 非空闸——拦截＝同 run-id 重复；文案零内部
+    // 码，下一步按内核首选/次选顺序给全：换新 run-id 并存 ＞ --rerun 幂等重跑，明示无须删除）。
+    case "walkthrough_run_dir_not_empty":
+      return "登记被拒：该 run 标识的落点目录已存在且非空——同 run 标识重复登记。下一步：首选（零删除）在本 workspace 换一个新 run 标识重新登记，与既有 run 并存，既有目录原样保留；确要复用同 run 标识重跑才加 --rerun（各段按幂等口径执行，已确认产物不覆写）。不需要删除工作目录";
     default:
       return null;
   }
