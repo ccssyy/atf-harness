@@ -225,6 +225,8 @@ describe("F1 §二.4-3 KPI 落盘——preflight／first_launch_at 首写固定"
 describe("F1 §二.4-2 apply 路径——atf_training_preflight 工具面", () => {
   it("只读预检：三态清单＋待依赖＋可派生未执行指路；KPI preflight 首记", async () => {
     const runsRoot = tempRoot("f1-runs-");
+    // E2 对齐：落点探测 fail-closed——run 目录须在场（实例 runsRoot 平铺兜底序 c）
+    mkdirSync(join(runsRoot, "f1-apply-1"), { recursive: true });
     const askLog: string[] = [];
     const approvals: string[] = [];
     const deps = preflightDepsOf(manualCtx([
@@ -249,9 +251,11 @@ describe("F1 §二.4-2 apply 路径——atf_training_preflight 工具面", () =
   it("apply=true 直参：审批卡放行 → 内核 --apply 执行 → 执行后清单（derivable 清零）", async () => {
     const askLog: string[] = [];
     const approvals: string[] = [];
+    const runsRoot = tempRoot("f1-runs-");
+    mkdirSync(join(runsRoot, "f1-apply-2"), { recursive: true });
     const deps = preflightDepsOf(manualCtx([
       { match: "preflight-", selected: ["grouping_preset=B"] },
-    ], askLog, approvals));
+    ], askLog, approvals), mockPreflightCommand, runsRoot);
     const tool = findTool([buildPreflightTool(deps)], "atf_training_preflight");
     const result = (await tool.execute({ run_id: "f1-apply-2", apply: true }, sessionExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
@@ -267,9 +271,11 @@ describe("F1 §二.4-2 apply 路径——atf_training_preflight 工具面", () =
   it("apply 审批拒：不执行（applied 不在场）、原清单如实返回", async () => {
     const askLog: string[] = [];
     const approvals: string[] = [];
+    const runsRoot = tempRoot("f1-runs-");
+    mkdirSync(join(runsRoot, "f1-apply-3"), { recursive: true });
     const deps = preflightDepsOf(manualCtx([
       { match: "preflight-", selected: [] },
-    ], askLog, approvals, "denied"));
+    ], askLog, approvals, "denied"), mockPreflightCommand, runsRoot);
     const tool = findTool([buildPreflightTool(deps)], "atf_training_preflight");
     const result = (await tool.execute({ run_id: "f1-apply-3", apply: true }, sessionExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
@@ -281,9 +287,11 @@ describe("F1 §二.4-2 apply 路径——atf_training_preflight 工具面", () =
   it("预检卡勾选 apply_derivables=yes：同走审批卡后执行（卡上收集意愿，授权在审批卡）", async () => {
     const askLog: string[] = [];
     const approvals: string[] = [];
+    const runsRoot = tempRoot("f1-runs-");
+    mkdirSync(join(runsRoot, "f1-apply-4"), { recursive: true });
     const deps = preflightDepsOf(manualCtx([
       { match: "preflight-", selected: ["grouping_preset=B", "apply_derivables=yes"] },
-    ], askLog, approvals));
+    ], askLog, approvals), mockPreflightCommand, runsRoot);
     const tool = findTool([buildPreflightTool(deps)], "atf_training_preflight");
     const result = (await tool.execute({ run_id: "f1-apply-4" }, sessionExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
@@ -301,6 +309,7 @@ describe("F1 §二.4-2 apply 路径——atf_training_preflight 工具面", () =
       },
     };
     const deps = preflightDepsOf(ctx);
+    mkdirSync(join(deps.runsRoot, "f1-apply-5"), { recursive: true });
     const tool = findTool([buildPreflightTool(deps)], "atf_training_preflight");
     const result = (await tool.execute({ run_id: "f1-apply-5" }, sessionExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
@@ -319,6 +328,7 @@ describe("F1 §二.4-2 apply 路径——atf_training_preflight 工具面", () =
 
   it("schema 不符对端：结构化拒（preflight_schema_invalid），不猜不修", async () => {
     const deps = preflightDepsOf(manualCtx([], [], []), mockPreflightBadCommand);
+    mkdirSync(join(deps.runsRoot, "f1-apply-7"), { recursive: true });
     const tool = findTool([buildPreflightTool(deps)], "atf_training_preflight");
     const result = (await tool.execute({ run_id: "f1-apply-7" }, sessionExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(false);
@@ -336,6 +346,7 @@ describe("F1 §二.4-4 预检卡在九要素前——config_confirm 前置预检
 
   it("无 preflight KPI＋脚本在场：出卡顺序＝预检卡在前、九要素表单卡在后；返回体带 preflight 清单", async () => {
     const runsRoot = tempRoot("f1-order-");
+    mkdirSync(join(runsRoot, "f1-order-1"), { recursive: true });
     const askLog: string[] = [];
     const approvals: string[] = [];
     const ctx = manualCtx(CONFIRM_ASK_SCRIPT, askLog, approvals);
@@ -398,6 +409,7 @@ describe("F1 §二.4-4 预检卡在九要素前——config_confirm 前置预检
       { match: "preflight-", selected: ["grouping_preset=B", "apply_derivables=yes"] },
       { match: "config-confirm-", selected: ["max_total_tokens=9000"] },
     ], askLog, approvals);
+    mkdirSync(join(runsRoot, "f1-order-5"), { recursive: true });
     const tools = buildConfirmTools({ runsRoot, ctx, preflight: preflightDepsOf(ctx, mockPreflightCommand, runsRoot) });
     const configConfirm = findTool(tools, "atf_config_confirm");
     const result = (await configConfirm.execute({ action: "present", run_id: "f1-order-5" }, sessionExec)) as Record<string, unknown>;
@@ -416,6 +428,7 @@ describe("F1 §二.4-4 预检卡在九要素前——config_confirm 前置预检
     const askLog: string[] = [];
     const approvals: string[] = [];
     const greenCommand = `node ${join(repoRoot, "tests", "fixtures", "mock_preflight_green.mjs")}`;
+    mkdirSync(join(runsRoot, "f1-green-1"), { recursive: true });
     const deps = preflightDepsOf(manualCtx([], askLog, approvals), greenCommand, runsRoot);
     const outcome = await runPreflightFlow(deps, { runId: "f1-green-1", apply: false }, sessionExec);
     expect(outcome.ok).toBe(true);
