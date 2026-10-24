@@ -180,7 +180,10 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // （confirmTools——九要素卡前先出预检卡）。
   const preflightDeps: PreflightDeps = {
     command: process.env["ATF_DSH_PREFLIGHT_COMMAND"] ?? `python3 ${join(config.kernelDir, "tools", "training_preflight.py")}`,
-    timeoutMs: config.preflightTimeoutMs ?? 120_000,
+    // E3 补（执行中实锚）：--apply 的坐标整批重试＝resize 探针加载 transformers＋
+    // 逐张处理（50 张实测超 120s）——120s 超时会把已完成预算落盘的 apply 中途杀掉，
+    // 返回超时失败诱发产品内 agent scratch 自救（红线形态）；提至 10 分钟。
+    timeoutMs: config.preflightTimeoutMs ?? 600_000,
     runsRoot: config.runsRoot,
     ctx,
   };
