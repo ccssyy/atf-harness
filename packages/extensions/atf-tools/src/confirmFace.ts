@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows, pixelPairViolationOf, READONLY_CONFIG_KEYS } from "../../../../src/webui/configConfirm.js";
+import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows, pixelPairViolationOf, READONLY_CONFIG_KEYS, configFieldPlaceholderOf } from "../../../../src/webui/configConfirm.js";
 
 /** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型；批㊶-Q 增第四态 agent_recommend，
  *  仅全自动档采纳 agent 参数推荐时由本文件后处理标注，buildConfigConfirmFields 不产出该态）。
@@ -116,7 +116,8 @@ const PIXEL_PAIR_LABELS: Record<string, string> = {
  *  批次 R H1-2 改值后建议值＝9000 惯例基线；必填拦空兜底保留——用户清空提交仍拦）。
  *  批次 R H1-1：max_model_len 只读——不生成输入框（值恒单源惯例基线，卡面三要素区只读呈现，
  *  独立取值禁 cutoff 推导）。A1：与回归断言单源。b5 像素对：两键呈现名中文化＋hint 尾
- *  来源标注（默认/用户——指令 b5 §三）。 */
+ *  来源标注（默认/用户——指令 b5 §三）。H7c：留空＝回退 deploy 的键（卡位）补输入框占位
+ *  提示——空值看着像没填，提示文案单源 configFieldPlaceholderOf，提示不入值。 */
 /** 卡面只读行（D92 单源）：dataset_keys 不入表单输入框（READONLY_CONFIG_KEYS 过滤），
  *  实算值经只读行如实呈现——值在＝「数据集键（实算，只读）：<值>」；值缺（IterationConfig
  *  缺席/未实算）＝如实「实算值未产出」，不造占位数。 */
@@ -133,11 +134,14 @@ export const configFormFieldsOf = (fields: ConfigConfirmField[], gpuCount: numbe
     const hint = domainHintOf(field.key, gpuCount);
     const pixelPair = PIXEL_PAIR_LABELS[field.key] !== undefined;
     const sourceNote = pixelPair ? `（来源：${field.tag === "need_confirm" ? "用户" : "默认"}）` : "";
+    // H7c：留空＝回退 deploy 的键补占位提示（呈现层，不入值——值仍为空串）
+    const emptyHint = configFieldPlaceholderOf(field.key, gpuCount);
     return {
       key: field.key,
       label: PIXEL_PAIR_LABELS[field.key] ?? field.key,
       value: field.value,
       ...(hint !== undefined || sourceNote !== "" ? { hint: `${hint ?? ""}${sourceNote}` } : {}),
+      ...(emptyHint !== undefined ? { placeholder: emptyHint } : {}),
       ...(field.key === "max_total_tokens" && field.value.trim() === ""
         ? {
             required: true,
