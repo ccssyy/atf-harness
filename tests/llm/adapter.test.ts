@@ -1,6 +1,9 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { adaptProjectionToMessages, expandModelResponse } from "../../src/llm/index.js";
+import { extractResultImages, structuredResultSummary } from "../../src/llm/adapter.js";
+import { IMAGE_MAX_BYTES, IMAGE_MAX_COUNT } from "../../src/core/session/constantsBudget.js";
 import { type LlmContextEvent } from "../../src/core/session/index.js";
 
 /**
@@ -488,5 +491,115 @@ describe("L1c 提前批 A1：成功体取消 160 截断（体量纪律）", () =
       tool: "atf_style_cluster_execute", ok: false, reason: "invalid_params", call_ref: 2, guidance, nudge,
     });
     expect(summary).toBe(`invalid_params｜${guidance}｜${nudge}`);
+  });
+});
+
+describe("H-E9d H9a：图像件提取（result.images 闭集＋显式拒＋摘要剥离）", () => {
+  /** 已知 1×1 PNG（67 字节）——锚①源字节。 */
+  const PNG_1X1_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+  const pngBytes = Buffer.from(PNG_1X1_BASE64, "base64");
+  const pngSha256 = createHash("sha256").update(pngBytes).digest("hex");
+  const imageBlock = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    media_type: "image/png",
+    sha256: pngSha256,
+    bytes: pngBytes.length,
+    data_base64: PNG_1X1_BASE64,
+    ...overrides,
+  });
+  const toolResultEvent = (result: unknown): LlmContextEvent =>
+    event(5, "tool/result", { tool: "atf_read", ok: true, result, call_ref: 4 });
+
+  it("锚①：1×1 PNG tool/result → images[0].sha256 与源一致；摘要=剥离 images 后全文（逐字节对拍）", () => {
+    const result = { path: "/ws/runs/r/shot.png", images: [imageBlock()] };
+    const mapped = adaptProjectionToMessages([toolResultEvent(result)]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const message = mapped.value[0];
+    if (message?.role !== "tool_result") throw new Error("unreachable");
+    expect(message.images).toEqual([{ media_type: "image/png", sha256: pngSha256, bytes: pngBytes.length, data_base64: PNG_1X1_BASE64 }]);
+    // 摘要与「剥离 images 后的 result」全文逐字节一致（structuredResultSummary 逻辑一字不改）
+    const { images: _images, ...rest } = result;
+    expect(message.summary).toBe(structuredResultSummary(rest));
+    // base64 不进模型可见文本（摘要剥离的落点锚）
+    expect(message.summary).not.toContain(PNG_1X1_BASE64);
+  });
+
+  it("锚①零回归：无图像键的 tool/result 摘要与改前逐字节一致（images 键缺省不产生消息字段）", () => {
+    const result = { status: "pass", cluster_material: "absent" };
+    const mapped = adaptProjectionToMessages([toolResultEvent(result)]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const message = mapped.value[0];
+    if (message?.role !== "tool_result") throw new Error("unreachable");
+    expect(message.summary).toBe(JSON.stringify(result));
+    expect("images" in message).toBe(false);
+    // ok:false 失败径零改：result 含 images 形态也不提取（失败不携图）
+    const failed = adaptProjectionToMessages([event(6, "tool/result", { tool: "atf_read", ok: false, reason: "blocked", result: { images: [imageBlock()] }, call_ref: 4 })]);
+    expect(failed.ok).toBe(true);
+    if (!failed.ok) return;
+    const failedMessage = failed.value[0];
+    if (failedMessage?.role !== "tool_result") throw new Error("unreachable");
+    expect(failedMessage.summary).toBe("blocked");
+    expect("images" in failedMessage).toBe(false);
+  });
+
+  it("锚③：多图原序提取（4 张上限内）；media_type 闭集各值可过", () => {
+    const jpegSha = createHash("sha256").update(pngBytes).digest("hex");
+    const images = [
+      imageBlock(),
+      imageBlock({ media_type: "image/jpeg" }),
+      imageBlock({ media_type: "image/webp" }),
+      imageBlock({ media_type: "image/gif", sha256: jpegSha }),
+    ];
+    const mapped = adaptProjectionToMessages([toolResultEvent({ images })]);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    const message = mapped.value[0];
+    if (message?.role !== "tool_result") throw new Error("unreachable");
+    expect(message.images?.map((image) => image.media_type)).toEqual(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+    // 剥离后 result 为空对象 → 摘要 "{}"（结构保全语义：无文本面就是无文本面）
+    expect(message.summary).toBe("{}");
+  });
+
+  it("锚③：形状不认识 → 各自显式拒（fail-closed 整体拒绝，不静默丢）", () => {
+    const cases: Array<{ name: string; images: unknown; expectMessage: string }> = [
+      { name: "非数组", images: "not-array", expectMessage: "须为非空数组" },
+      { name: "空数组", images: [], expectMessage: "须为非空数组" },
+      { name: "元素非对象", images: ["x"], expectMessage: "不是 JSON 对象" },
+      { name: "元素多键", images: [{ ...imageBlock(), extra: 1 }], expectMessage: "含未声明字段" },
+      { name: "元素缺键", images: [{ media_type: "image/png", sha256: pngSha256, bytes: 1 }], expectMessage: "缺必填字段" },
+      { name: "media_type 越闭集", images: [imageBlock({ media_type: "image/bmp" })], expectMessage: "media_type 非法" },
+      { name: "sha256 非法形态", images: [imageBlock({ sha256: "ZZZ" })], expectMessage: "sha256 非法" },
+      { name: "sha256 与字节不符", images: [imageBlock({ sha256: "0".repeat(64) })], expectMessage: "sha256 与字节内容不符" },
+      { name: "bytes 非法", images: [imageBlock({ bytes: 0 })], expectMessage: "bytes 非法" },
+      { name: "bytes 与解码长度不符", images: [imageBlock({ bytes: 9999 })], expectMessage: "解码长度不符" },
+      { name: "data_base64 非法", images: [imageBlock({ data_base64: 123 })], expectMessage: "data_base64 非法" },
+    ];
+    for (const testCase of cases) {
+      const mapped = adaptProjectionToMessages([toolResultEvent({ images: testCase.images })]);
+      expect(mapped.ok, testCase.name).toBe(false);
+      if (!mapped.ok) expect(mapped.error.message, testCase.name).toContain(testCase.expectMessage);
+    }
+  });
+
+  it("锚③：超 4 张 → 拒并说明；单张超字节上限 → 拒并说明（sha 前 8 位可定位）", () => {
+    const five = adaptProjectionToMessages([toolResultEvent({ images: [imageBlock(), imageBlock(), imageBlock(), imageBlock(), imageBlock()] })]);
+    expect(five.ok).toBe(false);
+    if (!five.ok) expect(five.error.message).toContain(`超数量上限（${String(IMAGE_MAX_COUNT + 1)} > ${String(IMAGE_MAX_COUNT)}）`);
+
+    const oversized = imageBlock({ bytes: IMAGE_MAX_BYTES + 1, data_base64: "eA==" });
+    const tooBig = adaptProjectionToMessages([toolResultEvent({ images: [oversized] })]);
+    expect(tooBig.ok).toBe(false);
+    if (!tooBig.ok) {
+      expect(tooBig.error.message).toContain("超单张字节上限");
+      expect(tooBig.error.message).toContain(pngSha256.slice(0, 8));
+      expect(tooBig.error.message).toContain(String(IMAGE_MAX_BYTES + 1));
+    }
+  });
+
+  it("纯函数面：extractResultImages 对无 images 键返回 ok(null)（逐字节不变路径的构成件）", () => {
+    expect(extractResultImages(undefined)).toEqual({ ok: true, value: null });
+    expect(extractResultImages("plain-string")).toEqual({ ok: true, value: null });
+    expect(extractResultImages({ status: "pass" })).toEqual({ ok: true, value: null });
   });
 });
