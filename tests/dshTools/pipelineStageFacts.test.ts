@@ -165,6 +165,55 @@ describe("A2.2b——argv 面单源（只传内核声明四参）", () => {
     expect(argv).toEqual(["--workspace", ws, "--run-id", "run-b", "--stage", "publish", "--actor", "s1", "--approval-mode", "ui", "--round-dir", join(ws, "runs", "run-b")]);
     expect(argv.some((a) => a === "--source-root")).toBe(false);
   });
+  it("E8b·H5：同一 run 两段登记（do→swb）argv 快照——各自带 --doc-type、恒无 --rerun、工具面零拦（准入面锚：第二次登记不被 harness 拦）", async () => {
+    const root = tempRoot();
+    const markerDo = join(root, "argv-do.json");
+    const markerSwb = join(root, "argv-swb.json");
+    // 两次调用各落 marker（脚本按 STAGE_DOC 环境变量选落点——同一脚本复用）
+    const script = writeScript(
+      root,
+      "argv-doc.mjs",
+      `import { writeFileSync } from "node:fs";\nwriteFileSync(process.env["MARKER"] ?? "", JSON.stringify(process.argv.slice(2)));process.stdout.write("{}")\n`,
+    );
+    const ws = join(root, "ws");
+    mkdirSync(ws, { recursive: true });
+    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
+      execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
+    };
+    const run = async (docType: string, marker: string): Promise<void> => {
+      process.env["MARKER"] = marker;
+      try {
+        const result = await tool.execute(
+          { stage: "register", run_id: "run-joint", workspace_path: ws, source_root: join(root, "src"), doc_type: docType },
+          execWithSession("s1"),
+        );
+        expect(result).toMatchObject({ ok: true, run_dir: join(ws, "runs", "run-joint") });
+      } finally {
+        delete process.env["MARKER"];
+      }
+    };
+    // 第一类登记（do）
+    await run("do", markerDo);
+    expect(JSON.parse(readArgv(markerDo))).toEqual([
+      "--workspace", ws, "--run-id", "run-joint", "--stage", "register", "--source-root", join(root, "src"),
+      "--doc-type", "do",
+      "--actor", "s1", "--approval-mode", "ui", "--round-dir", join(ws, "runs", "run-joint"),
+    ]);
+    // 第二类登记（swb，同 run）——harness 工具面零拦（内核 b13 准入闸槽位化；旧「同 run-id 重复拦」口径已退役）
+    await run("swb", markerSwb);
+    expect(JSON.parse(readArgv(markerSwb))).toEqual([
+      "--workspace", ws, "--run-id", "run-joint", "--stage", "register", "--source-root", join(root, "src"),
+      "--doc-type", "swb",
+      "--actor", "s1", "--approval-mode", "ui", "--round-dir", join(ws, "runs", "run-joint"),
+    ]);
+    for (const marker of [markerDo, markerSwb]) {
+      expect((JSON.parse(readArgv(marker)) as string[]).some((a) => a === "--rerun")).toBe(false); // 桥接面零 rerun 通道
+    }
+    // 工具描述面：新口径在位（同一 run 可继续登记其它单据／幂等跳过），旧口径零残留
+    const desc = (tool as unknown as { description: string }).description;
+    expect(desc).toContain("同一 run 可继续登记其它单据");
+    expect(desc).toContain("幂等跳过");
+  });
 });
 
 /** argv marker 读取（缺文件＝空串，断言侧自报）。 */

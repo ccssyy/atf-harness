@@ -357,7 +357,10 @@ describe("批次 R H1-3——kernelErrorFace 人话映射（提前接线；D98 �
     expect(gpu).toContain("不自动降档");
     const notEmpty = humanizeKernelError("walkthrough_run_dir_not_empty");
     expect(notEmpty).toContain("登记被拒");
-    expect(notEmpty).toContain("换一个新 run 标识");
+    // E8b H1（内核 b13 起）：本码收缩为「非空但缺合法 run.json」兜底——指补齐 run.json，不引导换 run
+    expect(notEmpty).toContain("run.json");
+    expect(notEmpty).toContain("同一 run 继续登记其它单据是被允许的");
+    expect(notEmpty).not.toContain("换一个新 run 标识"); // 旧口径（N+1 诱因）不回流
     expect(notEmpty).not.toContain("walkthrough_run_dir_not_empty"); // B6 锚：拒绝文案无内部码
     expect(humanizeKernelError("some_unknown_code")).toBeNull();
     expect(KERNEL_ERROR_FACE_CODES.size).toBe(5); // D98：四码→五码

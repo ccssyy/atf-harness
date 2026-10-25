@@ -11,6 +11,11 @@
  *      由 per-instance overlay 登记声明；产品资产零具体路径）
  *   ⑦ 注册工作区（A4——D2 收口）：注册表 records[].path（exists===true 记录；缺失/
  *      不可解析/读失败一律空集 fail-open 不猜不回退）——UI 建工作区免重启即可读写。
+ *   ⑧ DSH 家附件目录（E8b·H4 D151）：<DSH_HOME>/attachments——用户上传附件落点
+ *      （vendor 上传面契约），**只读证据面**：读通道（atf_read 与 glob/grep/read_image
+ *      守卫）经本面放行；写拒在 fileTools 写闸（attachment_write_denied，atf_edit/
+ *      atf_write 均拒；atf_bash 围栏可写仅 run 工作区天然不含）。仅认显式 DSH_HOME
+ *      （vendor 家解析链的 homedir 兜底不是实例声明——缺省形态不派生）。
  *
  * 本文件（及一切产品资产）不得出现具体绝对路径（守护测试 staticNoHardcodedPaths 钉死）；
  * 换环境/换机器＝改实例配置，白名单随声明面自动重建。
@@ -154,6 +159,11 @@ export const deriveFileToolRoots = (input: DeriveFileRootsInput): DerivedFileRoo
   for (const part of (env["ATF_V1_FILE_TOOL_ROOTS"] ?? "").split(":")) {
     push(part, "env:ATF_V1_FILE_TOOL_ROOTS");
   }
+  // ⑧ DSH 家附件目录（E8b·H4 D151——用户上传附件只读面；目录尚未创建也入集：
+  // 声明面镜像语义，首次上传前 atf_read 即可定向，读到与否由文件存在性如实回答。
+  // 只认显式 DSH_HOME——vendor 家解析链的 homedir 兜底不是实例声明，缺省形态不派生）。
+  const dshHomeEnv = env["DSH_HOME"]?.trim() ?? "";
+  if (dshHomeEnv !== "") push(join(dshHomeEnv, "attachments"), "dsh-home:attachments");
   // ⑦ 注册工作区（A4——UI 建工作区免重启可读写；热加载见 fileGuardFace.startFileRootsHotReload）。
   // 清单获取失败（注入桩抛错/实读异常）＝空集 fail-open——派生面永不因注册表不可读而失败。
   try {

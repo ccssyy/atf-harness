@@ -60,6 +60,20 @@ export const BRIDGE_TOOL_NAMES: readonly string[] = [
   "atf_rebind_workspace",
 ];
 
+/** E8b·H3 D152——桥接工具的业务动作名（审批卡面用）：卡面零内部工具名（atf_* 名只进
+ *  日志与审计面）；映射缺项不冒充具体动作，退回「执行训练流程操作」泛化描述。 */
+const BRIDGE_ACTION_LABELS: Readonly<Record<string, string>> = {
+  atf_workspace_status: "查看训练工作区状态",
+  atf_admit_data: "登记训练数据集",
+  atf_label_qc_inspect: "抽检标注质量",
+  atf_scratch_exec: "在工作区草稿目录执行脚本",
+  atf_skill_read: "读取操作指引文档",
+  atf_gate: "调用流程闸门核验",
+  atf_launch_execute: "启动训练编排",
+  atf_create_experiment: "创建训练实验",
+  atf_rebind_workspace: "变更会话工作区绑定",
+};
+
 /** 定义查找单源：桥接契约面（TOOL_DEFINITIONS）＋工作区治理分册（WORKSPACE_TOOL_DEFINITIONS，
  *  scratch_exec/skill_read 在此登记）——与手搓审批 hook 的唯一查找出口同构。 */
 export const allDefinitions = (): ToolDefinition[] => {
@@ -221,7 +235,6 @@ export const createLaunchGpuQueueFace = (
         target: `（GPU ${windowState.snapshot.gpuIndexes.join("、")} 空闲命中，已等待 ${windowState.snapshot.waitedText}；launch.sh=${input.launchShRel}）`,
         effect: "占用 GPU 与写训练编排产物",
         reversible: "不可自动回滚（产物可人工清理）",
-        cost: "按任务卡",
       }) + `\n${formatCardTable(windowState.snapshot.table)}`);
     if (!amber.ok) return { verdict: "denied", outcome: amber.outcome };
     return { verdict: "proceed", queued: true, waited_text: windowState.snapshot.waitedText, amber: "approved" };
@@ -246,15 +259,16 @@ export const buildBridgeTools = (
           render: renderAsJsonText,
         },
         async execute(args: Record<string, unknown>, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
-          // 审批前置（指令要求 2）：requiresApprovalFor 语义为唯一判定源；E5 模板四行（零黑话）
+          // 审批前置（指令要求 2）：requiresApprovalFor 语义为唯一判定源；E8b·H3 D152——
+          // 卡面三行模板＋业务动作名（零内部工具名：工具名经 requestApproval 的 toolName
+          // 进审批服务记录＝日志审计面，卡面 reason 不出现）。
           if (requiresApprovalFor(definition, args)) {
             const verdict = await requestApproval(ctx, exec, definition.name,
               buildApprovalReason({
-                action: "执行训练内核工具",
-                target: `（${definition.name}）`,
-                effect: "按该工具语义执行（写面以实际参数为准）",
-                reversible: "按工具语义（写盘产物可人工清理）",
-                cost: "按任务卡",
+                action: BRIDGE_ACTION_LABELS[definition.name] ?? "执行训练流程操作",
+                target: "",
+                effect: "按该操作的业务语义执行（写面以实际参数为准）",
+                reversible: "按操作语义（写盘产物可人工清理）",
               }));
             if (!verdict.ok) return approvalDeniedResult(definition.name, verdict.outcome);
           }

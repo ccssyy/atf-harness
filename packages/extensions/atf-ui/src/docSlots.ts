@@ -11,6 +11,8 @@
  *
  * 类枚举单源＝prep/variants/ 下「有 train.jsonl 的子目录」（E8 K1.4，与内核同式）；根级
  * train.jsonl 文件不构成类（run 级合并件／legacy 平铺形态）。doc_type 字典序（内核 sorted 同式）。
+ * E8b 补 runDocRegistry：已登记单据清单读侧（内核 b13 run.json docs[] 优先，缺键目录探测
+ * 标 legacy）——「已登记清单」与「已备槽位」（listDocSlots）是两个事实面，消费方比对不合并。
  * legacy 只读 fallback（E8 §〇 旧 run 兼容：不迁移、不双写）：run 根三件＋publish/<attempt>/
  * （内核 RunLayout/v1 canonical 现形态——attempt 目录＝候选 sha 前 8 hex）；经
  * legacyCandidatePath／legacyPublishWorkspaces 提供，槽位优先、根级仅 fallback。
@@ -116,4 +118,70 @@ export const countJsonlRows = (path: string): number | null => {
   } catch {
     return null;
   }
+};
+
+// ── E8b：已登记单据清单读侧（run.json docs[] 单源；镜像内核 run_doc_registry 语义）──
+
+/** 已登记单据条目（内核 register 段 append_run_doc 写入形态——doc_type 之外键原样保留）。 */
+export interface RunDocEntry {
+  doc_type: string;
+  [key: string]: unknown;
+}
+
+/** 已登记单据清单读侧结果。
+ *  - ok：清单可得（run_json_docs＝b13+ canonical 权威面；legacy_dir_probe＝目录探测兜底）；
+ *  - docs_invalid：run.json 带 docs 键但形态非法——清单不可信（fail-closed，不降级为目录
+ *    探测：身份文件声称有清单却不可读，静默改用探测会让「登记清单」失去单源意义）。 */
+export type RunDocRegistryResult =
+  | { status: "ok"; source: "run_json_docs" | "legacy_dir_probe"; docs: RunDocEntry[] }
+  | { status: "docs_invalid" };
+
+/** run 根 register 段摘要文件名模式（legacy 目录探测证据——内核布局检查 docs[] 一致性同式）。 */
+const STAGE_REGISTER_SUMMARY_RE = /^stage-register\.(.+)\.summary\.json$/;
+
+/**
+ * 读 run 的已登记单据清单（E8b·内核 b13 run.json docs[] 读侧单源；消费「已登记清单」
+ * 一律经本函数，禁止各写目录探测猜清单）。与「已备数据槽位」（listDocSlots）语义不同：
+ * docs[]＝登记事实（register 段写入），槽位＝数据事实（data-prep 段产物）——两者由
+ * 消费方比对（不一致即拒），本模块不合并。
+ * - run.json 在场且带合法 docs[] → source=run_json_docs（按 doc_type 排序，逐项浅拷贝）；
+ * - run.json 缺席或无 docs 键（b13 前 canonical／legacy run）→ 目录探测（run 根
+ *   stage-register.\<doc\>.summary.json 集合）标 legacy_dir_probe；
+ * - docs 键形态非法（非列表／条目缺非空 doc_type）→ docs_invalid。
+ */
+export const runDocRegistry = (runDir: string): RunDocRegistryResult => {
+  let document: Record<string, unknown> | null = null;
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(join(runDir, "run.json"), "utf8"));
+    document = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    document = null; // run.json 缺席/不可解析 → 目录探测（legacy）
+  }
+  if (document === null || !("docs" in document)) {
+    // legacy 探测：register 段摘要文件名集合（登记证据，与槽位枚举的判据区分）。
+    try {
+      const names = readdirSync(runDir, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && STAGE_REGISTER_SUMMARY_RE.test(entry.name))
+        .map((entry) => (STAGE_REGISTER_SUMMARY_RE.exec(entry.name) ?? [])[1] ?? "")
+        .filter((name) => name !== "")
+        .sort();
+      return { status: "ok", source: "legacy_dir_probe", docs: names.map((docType) => ({ doc_type: docType })) };
+    } catch {
+      return { status: "ok", source: "legacy_dir_probe", docs: [] };
+    }
+  }
+  const docs = document["docs"];
+  if (!Array.isArray(docs) || !docs.every(
+    (item) => typeof item === "object" && item !== null && !Array.isArray(item)
+      && typeof (item as Record<string, unknown>)["doc_type"] === "string"
+      && ((item as Record<string, unknown>)["doc_type"] as string).trim() !== "",
+  )) {
+    return { status: "docs_invalid" };
+  }
+  const entries = (docs as Array<Record<string, unknown>>)
+    .map((item) => ({ ...item }) as RunDocEntry)
+    .sort((a, b) => (a.doc_type < b.doc_type ? -1 : a.doc_type > b.doc_type ? 1 : 0));
+  return { status: "ok", source: "run_json_docs", docs: entries };
 };

@@ -26,6 +26,11 @@
  * - run 落点单源＝resolvePipelineRunDir（与 atf_pipeline_stage 同一决定者：canonical
  *   <wp>/workspace/runs/<run_id> 在场即用，否则 legacy <wp>/runs/<run_id>；软链拒）；
  *   workspace_path 必填（E3 同裁——内核贯通 workspace 根，不做 env 隐式缺省）。
+ * E8b·H2（内核 b13 docs[] 对齐）：已登记单据清单读侧＝docSlots runDocRegistry（run.json
+ *   docs[] 优先，缺键目录探测标 legacy，形态非法 fail-closed）；卡前新增「已登记 vs 已备
+ *   槽位」集合比对快败 joint_docs_slots_mismatch——防「登记两类只装配一类」的静默漏类。
+ *   装配面（内核 assemble 槽位枚举）与 docs[] 是两个事实面（已备数据 vs 已登记清单），
+ *   本工具校验两面前置，不合并不重写内核准入。
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
@@ -35,7 +40,7 @@ import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTransl
 import { approvalDeniedResult, buildApprovalReason, requestApproval, type ApprovalFace } from "./approvalFace.js";
 import { buildRunTrainingTool, type TrainingToolsConfig } from "./trainingFace.js";
 import { buildPipelineTool, resolvePipelineRunDir } from "./pipelineFace.js";
-import { listDocSlots, countJsonlRows } from "../../atf-ui/src/docSlots.js";
+import { listDocSlots, countJsonlRows, runDocRegistry } from "../../atf-ui/src/docSlots.js";
 import { listRegistryRecords, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { formatRowCount } from "../../atf-ui/src/jointTrainState.js";
 import type { RegistryWorkspaceSeed } from "../../atf-ui/src/server.js";
@@ -122,7 +127,8 @@ export const buildJointTrainTool = (ctx: { get(service: string): unknown }, cfg:
     description:
       "单 run 槽位联合训练（唯一训练入口的多类面——单类是 N=1 特例，不要拆步）：对本 run 内已备好的 N 类单据槽位一次完成「联合装配（合并训练数据＋迭代配置＋启动件）→ 训练启动」。" +
       "run_id＝本 run（类数据全在它的单据槽位里——每类先各跑数据准备段）；workspace_path 必填（workspace 根绝对路径——落点与 atf_pipeline_stage 同一决定者）；oversample＝按类型倍率对象（可选，缺省全 1 倍；如 {\"pl\":1,\"swb\":2}，键集须与槽位类型一致）；seed（缺省 0，记入倍率账）；base_model_family（缺省 qwen3_vl）；prelaunch_report 可选。" +
-      "确认卡会呈类型清单／各类行数／合并倍率／seed——一张卡放行整链（内部段审批与训练启动由本卡承接）。槽位缺失或某类数据为空会被卡前拒绝（零消耗），先补齐数据准备段再重推。",
+      "确认卡会呈已登记单据清单／类型清单／各类行数／合并倍率／seed——一张卡放行整链（内部段审批与训练启动由本卡承接）。" +
+      "卡前快败（零消耗）：已登记单据（run.json 单据清单）与已备数据槽位不一致（缺槽位的已登记类会导致整体拒绝——不会静默只装配其余类）、槽位缺失、某类数据为空——先补齐对应数据准备段再重推。",
     parameters: {
       // schema 全可选（必填语义由 description 携带）——卡前快败结构化码在 execute 内
       // 单源产出（quantize/D32 先例：schema 硬校验会抢走结构化错误面）。
@@ -185,6 +191,41 @@ export const buildJointTrainTool = (ctx: { get(service: string): unknown }, cfg:
           note: `实验 ${runId} 内还没有单据槽位——先对每类单据各跑一次数据准备段（每类一个类型键），槽位备齐后再联合训练`,
         });
       }
+      // E8b·H2：已登记单据清单（run.json docs[] 单源；缺键目录探测标 legacy）与已备槽位
+      // 集合比对——不一致即卡前快败（装配面＝内核 assemble 仍按已备槽位枚举，本校验防
+      // 「登记两类只装配一类」的静默：缺槽位的已登记类会被合并件无声丢下）。
+      const registry = runDocRegistry(runDir);
+      if (registry.status === "docs_invalid") {
+        return asToolValue({
+          ok: false, error: "joint_docs_registry_invalid", run_id: runId, run_dir: runDir,
+          note: "本 run 的已登记单据清单（run.json 的 docs）形态非法——登记记录不可信即拒绝联合训练；核对该 run 的登记状态（run.json）修复后再重推",
+        });
+      }
+      const registeredTypes = registry.docs.map((doc) => doc.doc_type);
+      const slotTypes = slots.map((slot) => slot.doc_type);
+      const missingSlots = registeredTypes.filter((docType) => !slotTypes.includes(docType));
+      const unregisteredSlots = slotTypes.filter((docType) => !registeredTypes.includes(docType));
+      if (missingSlots.length > 0 || unregisteredSlots.length > 0) {
+        const parts: string[] = [];
+        if (missingSlots.length > 0) {
+          parts.push(
+            `已登记「${missingSlots.join("、")}」但没有训练数据槽位——联合训练装配的是全部已登记单据，缺槽位即整体拒绝（不会静默只装配其余类）：` +
+            `先对缺的类逐类跑数据准备段（experiment_setup → candidate_build → publish）补齐后再重推`,
+          );
+        }
+        if (unregisteredSlots.length > 0) {
+          parts.push(
+            `槽位里有「${unregisteredSlots.join("、")}」但不在已登记清单（run.json 的 docs）——数据来历与登记记录不一致：核对该类是否经正式登记后处理`,
+          );
+        }
+        return asToolValue({
+          ok: false, error: "joint_docs_slots_mismatch", run_id: runId, run_dir: runDir,
+          registered: registeredTypes, prepared_slots: slotTypes,
+          ...(missingSlots.length > 0 ? { missing_slots: missingSlots } : {}),
+          ...(unregisteredSlots.length > 0 ? { unregistered_slots: unregisteredSlots } : {}),
+          note: `已登记单据与已备数据槽位不一致——${parts.join("；")}`,
+        });
+      }
       const slotRows = slots.map((slot) => ({ doc_type: slot.doc_type, rows: countJsonlRows(slot.train_jsonl) }));
       const emptySlots = slotRows.filter((slot) => slot.rows === 0);
       if (emptySlots.length > 0) {
@@ -239,11 +280,11 @@ export const buildJointTrainTool = (ctx: { get(service: string): unknown }, cfg:
         buildApprovalReason({
           action: "联合装配并启动训练",
           target: `（${String(slots.length)} 类：${typeList} → run ${runId}）`,
-          effect: "装配本 run 的槽位训练数据并启动该 run 训练（GPU 占用与训练产物写入）",
+          effect: "装配本 run 的槽位训练数据并启动该 run 训练（GPU 占用与训练产物写入——卡数/时长以启动件为准）",
           reversible: "装配产物可人工清理；训练启动不可自动回滚",
-          cost: "按任务卡（GPU/时长以确认卡与启动件为准）",
         }) + "\n" + [
           "联合明细：",
+          `- 已登记单据（${registry.source === "run_json_docs" ? "run.json 单据清单" : "目录探测（legacy run）"}）：${registeredTypes.join("、")}${registry.source === "run_json_docs" ? "" : "——run 缺登记清单，按登记摘要探测"}`,
           `- 类型：${typeList}（${String(slots.length)} 类——来自本 run 的单据槽位）`,
           `- 各类行数（实测槽位）：${rowDetail}`,
           `- 合并倍率：${ratioText}${ratios === null ? "（缺省全 1）" : ""}`,
@@ -378,6 +419,8 @@ export const buildJointTrainTool = (ctx: { get(service: string): unknown }, cfg:
         run_dir: runDir,
         // 落点形态如实标注（resolvePipelineRunDir 单源——canonical/legacy）
         run_dir_layout: resolvedRun.layout,
+        // 已登记单据清单读侧投影（E8b·H2——run.json docs[] 优先，缺键目录探测标 legacy）
+        docs_registry: { source: registry.source, doc_types: registeredTypes },
         doc_types: slots.map((slot) => slot.doc_type),
         seed,
         base_model_family: baseModelFamily,

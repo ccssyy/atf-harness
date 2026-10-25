@@ -4,7 +4,7 @@
  */
 import { mkdirSync, mkdtempSync, existsSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { deriveFileToolRoots, rootsFromEnvProfileText } from "../../src/agent/fileRoots.js";
 import { startFileRootsHotReload } from "../../packages/extensions/atf-tools/src/fileGuardFace.js";
@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试②）", () => {
-  it("派生集逐项等于声明面：config.workspace_root／env-profiles venv／五个 env 名镜像＋追加集＋注册工作区⑦，多一分不算", () => {
+  it("派生集逐项等于声明面：config.workspace_root／env-profiles venv／五个 env 名镜像＋追加集＋注册工作区⑦＋附件只读面⑧，多一分不算", () => {
     const home = tempRoot();
     mkdirSync(join(home, ".atf", "env-profiles"), { recursive: true });
     const ws = join(home, "ws");
@@ -46,9 +46,11 @@ describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试�
     const logs = join(home, "logs");
     const extra = join(home, "extra-declared");
     const regWs = join(home, "ui-created-workspace");
+    const dshHome = join(home, "dsh-home");
     const derived = deriveFileToolRoots({
       env: {
         HOME: home,
+        DSH_HOME: dshHome,
         ATF_DSH_RUNS_ROOT: runs,
         ATF_DSH_KERNEL_DIR: kernel,
         ATF_DSH_EXEC_HOME: execHome,
@@ -71,7 +73,7 @@ describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试�
         }
       },
     });
-    expect(derived.roots).toEqual([runs, ws, venv, kernel, execHome, logs, extra, regWs]);
+    expect(derived.roots).toEqual([runs, ws, venv, kernel, execHome, logs, extra, join(dshHome, "attachments"), regWs]);
     expect(derived.sources).toEqual([
       "env:ATF_DSH_RUNS_ROOT",
       "config:workspace_root",
@@ -80,6 +82,7 @@ describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试�
       "env:ATF_DSH_EXEC_HOME",
       "env:ATF_DSH_LOG_DIR",
       "env:ATF_V1_FILE_TOOL_ROOTS",
+      "dsh-home:attachments",
       "registry:workspace",
     ]);
   });
@@ -132,8 +135,8 @@ describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试�
     });
     try {
       const derived = deriveFileToolRoots({ env: { DSH_HOME: home, ATF_DSH_RUNS_ROOT: runs } });
-      expect(derived.roots).toEqual([runs]); // ⑦ 空集——坏 JSON 不入任何根
-      expect(derived.sources).toEqual(["env:ATF_DSH_RUNS_ROOT"]);
+      expect(derived.roots).toEqual([runs, join(home, "attachments")]); // ⑦ 空集——坏 JSON 不入任何根；⑧ 附件只读面照常派生
+      expect(derived.sources).toEqual(["env:ATF_DSH_RUNS_ROOT", "dsh-home:attachments"]);
       expect(warns.some((line) => line.includes("[file-roots]") && line.includes("注册表读取失败"))).toBe(true);
     } finally {
       warnSpy.mockRestore();
@@ -157,8 +160,8 @@ describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试�
     const derived = deriveFileToolRoots({
       env: { DSH_HOME: home, ATF_DSH_RUNS_ROOT: runs, ATF_V1_FILE_TOOL_ROOTS: linkWs },
     });
-    expect(derived.roots).toEqual([runs, linkWs]); // ⑦ 真身被 ⑥ 首见归一吸收
-    expect(derived.sources).toEqual(["env:ATF_DSH_RUNS_ROOT", "env:ATF_V1_FILE_TOOL_ROOTS"]);
+    expect(derived.roots).toEqual([runs, linkWs, join(home, "attachments")]); // ⑦ 真身被 ⑥ 首见归一吸收；⑧ 附件只读面
+    expect(derived.sources).toEqual(["env:ATF_DSH_RUNS_ROOT", "env:ATF_V1_FILE_TOOL_ROOTS", "dsh-home:attachments"]);
     // 反序（⑦ 在前）同样收敛为一根——注册表真身保留
     const derivedR = deriveFileToolRoots({ env: { DSH_HOME: home, ATF_DSH_RUNS_ROOT: runs } });
     expect(derivedR.roots).toContain(realWs);
@@ -240,6 +243,43 @@ describe("批㊶-H/I A7 四件 DSH 挂载（buildFileGuardTools）＋产品资�
     expect(JSON.stringify(read)).toContain("白名单内内容");
     const bash = (await tools[3]!.execute({ command: "cat /etc/passwd" }, { callId: "t2" })) as Record<string, unknown>;
     expect(bash["error"]).toBe(FILE_PATH_OUTSIDE_ALLOWLIST);
+  });
+
+  it("E8b·H4 D151：上传附件→atf_read 可读（DSH 家 attachments 派生面⑧真实链）；写面全拒（atf_write 新建/覆写与 atf_edit 均 attachment_write_denied）", async () => {
+    const home = tempRoot();
+    // 模拟 vendor 上传落点：<DSH_HOME>/attachments/v1/files/<hash>/<文件>
+    const uploaded = join(home, "attachments", "v1", "files", "f6", "f6f69e74", "字段清单_提货单.md");
+    mkdirSync(dirname(uploaded), { recursive: true });
+    writeFileSync(uploaded, "# 字段清单\n提货单号 / 海运单号 / 发货人", "utf8");
+    const runs = join(home, "runs");
+    mkdirSync(runs, { recursive: true });
+    // 真实派生链（不手拼 roots——⑧随 DSH_HOME 声明自动入集）
+    const derived = deriveFileToolRoots({ env: { DSH_HOME: home, ATF_DSH_RUNS_ROOT: runs } });
+    expect(derived.roots).toContain(join(home, "attachments"));
+    const tools = buildFileGuardTools({ roots: derived.roots, env: { DSH_HOME: home } }) as Array<{
+      name: string;
+      execute: (args: Record<string, unknown>, exec: { callId?: string }) => Promise<unknown>;
+    }>;
+    const byName = (name: string): { execute: (args: Record<string, unknown>, exec: { callId?: string }) => Promise<unknown> } =>
+      tools.find((tool) => tool.name === name)!;
+    // ① atf_read 读上传附件成功（D151 场景闭环——不再需要绕过）
+    const read = (await byName("atf_read").execute({ path: uploaded }, { callId: "att-1" })) as Record<string, unknown>;
+    expect(JSON.stringify(read)).toContain("字段清单");
+    expect(JSON.stringify(read)).toContain("提货单号");
+    // ② atf_write 覆写既有附件 → 拒（attachment_write_denied；附件只读）
+    const overwrite = (await byName("atf_write").execute({ path: uploaded, content: "改写证据" }, { callId: "att-2" })) as Record<string, unknown>;
+    expect(overwrite["error"]).toBe("attachment_write_denied");
+    // ③ atf_write 在附件目录新建 → 同拒（不存在路径按字面判定）
+    const create = (await byName("atf_write").execute({ path: join(home, "attachments", "v1", "files", "new.md"), content: "新文件" }, { callId: "att-3" })) as Record<string, unknown>;
+    expect(create["error"]).toBe("attachment_write_denied");
+    // ④ atf_edit 改既有附件 → 同拒（与 write 同判定闭合）
+    const edit = (await byName("atf_edit").execute({ path: uploaded, old_string: "提货单号", new_string: "改" }, { callId: "att-4" })) as Record<string, unknown>;
+    expect(edit["error"]).toBe("attachment_write_denied");
+    // ⑤ 家目录内但附件目录外（config.json）仍不可读（⑧只开 attachments 子树，DSH 家本身不入集）
+    const outside = (await byName("atf_read").execute({ path: join(home, "config.json") }, { callId: "att-5" })) as Record<string, unknown>;
+    expect(JSON.stringify(outside)).toContain("path_escape");
+    // ⑥ 附件内容未被任何写面改动（只读证据保真）
+    expect(readFileSync(uploaded, "utf8")).toContain("提货单号");
   });
 
   it("守护测试①：产品资产（src／packages／deploy）零硬编码绝对路径（/data｜/home｜盘符）", () => {

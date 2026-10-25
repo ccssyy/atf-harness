@@ -489,7 +489,6 @@ export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: stri
                     target: `（${String(destructive.paths.length)} 个目标）`,
                     effect: `不可逆删除：${targets}`,
                     reversible: "不可逆——删除后无自动恢复",
-                    cost: "无算力代价；数据面不可恢复",
                   }) + "\n仅 owner 可点；执行方不得代点");
             if (!verdict.ok) {
               const why = verdict.outcome === "unavailable"
