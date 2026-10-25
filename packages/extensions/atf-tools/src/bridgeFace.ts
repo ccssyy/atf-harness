@@ -26,6 +26,7 @@ import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./ap
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+import { resolvePipelineRunDir } from "./pipelineFace.js";
 import { SCOPE_UNRESOLVED_NOTE, resolveSessionWorkspace, sessionCwdOfExec } from "./scopeFace.js";
 // E8c：业务动作名映射单源（webui GPU 队列卡同表复用——D152 卡面零内部工具名）
 import { BRIDGE_ACTION_LABELS } from "../../../../src/agent/bridgeActionLabels.js";
@@ -148,10 +149,20 @@ export class BridgeManager {
  *  `exec-home/<session-id>/`；无会话 id（CLI 单会话/测试）落 `exec-home/default/`。
  *  跨会话同名暂存互踩面（散放 awb_*.json 实锚）在子目录层消除；既有散放文件不迁移
  *  （D4①——根目录原地保留不冲突）；清理策略候裁本批不实现。 */
-const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHome: string; dshHome?: string }, args: Record<string, unknown>, exec: unknown): LocalToolHost => {
+export const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHome: string; dshHome?: string }, args: Record<string, unknown>, exec: unknown): LocalToolHost => {
   const runId = typeof args["run_id"] === "string" && args["run_id"] !== "" ? args["run_id"] : "default";
-  // D115：run 目录单源（与 scratch 同一解析——run 树启动件/就绪检测的根）
-  const runDir = resolveRunDir(localRoots.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) });
+  // 显式工作区优先：验证/临时工作区的 run 不在实例桶布局下（<ws>/workspace/runs/<id>），
+  // 只按实例 runsRoot 解析会落到桶里的同名残留目录（真机 ws2 事故：启动件被"布点"进
+  // runs/default，且读的是 10-24 的旧件）。显式给了工作区就按 RunLayout 单源解析。
+  const explicitWorkspace = typeof args["workspace_path"] === "string" ? args["workspace_path"].trim() : "";
+  const runDir = (() => {
+    if (explicitWorkspace !== "") {
+      const resolved = resolvePipelineRunDir(explicitWorkspace, runId);
+      if (!("error" in resolved)) return resolved.runDir;
+    }
+    // D115：run 目录单源（与 scratch 同一解析——run 树启动件/就绪检测的根）
+    return resolveRunDir(localRoots.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) });
+  })();
   const scratchDir = join(runDir, "scratch");
   mkdirSync(scratchDir, { recursive: true });
   const sessionId = sessionIdOfExec(exec);
@@ -241,7 +252,19 @@ export const buildBridgeTools = (
       defineTool({
         name: definition.name,
         description: definition.description,
-        parameters: translateParameters(definition.parameters),
+        // 显式工作区入参（仅 atf_launch_execute）：run 落点解析的输入，不是内核参数
+        parameters: (definition.name === "atf_launch_execute"
+          ? {
+              ...(translateParameters(definition.parameters) as Record<string, unknown>),
+              properties: {
+                ...(((translateParameters(definition.parameters) as Record<string, unknown>)["properties"] as Record<string, unknown> | undefined) ?? {}),
+                workspace_path: {
+                  type: "string",
+                  description: "工作区根绝对路径（可选）：run 落在 <workspace_path>/workspace/runs/<run_id>（RunLayout 单源）。验证/临时工作区必须显式给，否则按实例 runs 桶解析可能落到同名残留目录",
+                },
+              },
+            }
+          : translateParameters(definition.parameters)) as ReturnType<typeof translateParameters>,
         output: {
           schema: looseObjectOutput,
           render: renderAsJsonText,
