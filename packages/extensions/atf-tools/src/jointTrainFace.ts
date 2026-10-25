@@ -366,7 +366,9 @@ export const validateJointRequestShape = (args: {
         },
       };
     }
-    const draft: JointClassDraft = { doc_type: docType, run_id: runIds[i] as string, document_zh: documentZh, fields };
+    // E8：JointClassDraft 已无 run_id（单 run 语义——run_id 由 datasets 各项自带并已在 ①
+    // 校验非空）；此处只做字段规格结构校验。
+    const draft: JointClassDraft = { doc_type: docType, document_zh: documentZh, fields };
     const issues = jointSpecIssues([draft]);
     const first = issues[0];
     if (first !== undefined) {

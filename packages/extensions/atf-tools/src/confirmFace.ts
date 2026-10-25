@@ -45,6 +45,7 @@ import {
   defaultBaseModelPath,
 } from "../../../../src/core/workspace/smartDefaults.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
+import { legacyCandidatePath, listDocSlots } from "../../atf-ui/src/docSlots.js";
 import { readLaunchKpi } from "../../../../src/core/workspace/trainingPreflight.js";
 import { isValidRunId, resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
 // F1 前置预检共用交互流（循环 import 安全：两侧顶层均零执行对方导出——函数体内引用）
@@ -935,13 +936,14 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
     parameters: {
       run_id: { type: "string", required: true, description: "run 标识" },
       workspace_path: { type: "string", description: "workspace 根（绝对路径——与 atf_pipeline_stage 的 workspace_path 同值；落点 <workspace_path>/runs/<run_id>，未传时按会话工作区事实与实例 runs 根顺次解析）" },
-      digest: { type: "string", description: "契约件 sha256 digest（缺省读 runs/<run_id>/contract-candidate.json 的 digest 字段）" },
+      digest: { type: "string", description: "契约件 sha256 digest（缺省读契约候选的 digest 字段——E8 槽位形态按类读 publish/<doc>/contract-candidate.json；无槽位 legacy 读 run 根）" },
+      doc_type: { type: "string", description: "单据类型键（E8 槽位形态）：多类 run 必填——按类逐一确认，不取任一份冒充全部；单类可省（缺省取该类）；无槽位 legacy run 不得传" },
     },
     output: {
       schema: { type: "object", additionalProperties: true },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
-    async execute(args: { run_id: string; workspace_path?: string; digest?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+    async execute(args: { run_id: string; workspace_path?: string; digest?: string; doc_type?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // E3（缺口 D 同源）：run 落点三级单源（config_confirm 同款——契约件读取与段事实同棵树）
       const resolvedRun = resolveConfirmRunDir(deps, args.run_id, args.workspace_path, exec);
       if (!resolvedRun.ok) {
@@ -949,7 +951,40 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       }
       const runDir = resolvedRun.runDir;
       const runDirSource = resolvedRun.source;
-      const candidatePath = join(runDir, "contract-candidate.json");
+      // E8：digest 缺省读取槽位优先（listDocSlots——全仓唯一路径表）。多类必须显式 doc_type
+      // 按类出卡（每类一张卡逐一确认），不得取任一份冒充全部；单类缺省取该类；无槽位回退
+      // run 根契约候选（legacy 只读）。
+      const slots = listDocSlots(runDir);
+      const wantedDocType = typeof args.doc_type === "string" ? args.doc_type.trim() : "";
+      const slotTypes = slots.map((slot) => slot.doc_type);
+      let candidatePath: string;
+      let cardDocType: string | null = null;
+      if (slots.length > 0) {
+        const slot = wantedDocType !== "" ? slots.find((entry) => entry.doc_type === wantedDocType) ?? null : slots.length === 1 ? slots[0] ?? null : null;
+        if (wantedDocType !== "" && slot === null) {
+          return asToolValue({
+            ok: false, run_id: args.run_id, error: "doc_slot_unknown", doc_type: wantedDocType, doc_types: slotTypes,
+            note: `run ${args.run_id} 没有「${wantedDocType}」的单据槽位（在场类型：${slotTypes.join("、") || "（无）"}）——按在场类型给出 doc_type`,
+          });
+        }
+        if (slot === null) {
+          return asToolValue({
+            ok: false, run_id: args.run_id, error: "doc_type_required", doc_types: slotTypes,
+            note: `run ${args.run_id} 有 ${String(slotTypes.length)} 类单据槽位（${slotTypes.join("、")}）——多类须显式给 doc_type 按类逐一确认，不取任一份冒充全部`,
+          });
+        }
+        candidatePath = slot.candidate_path;
+        cardDocType = slot.doc_type;
+      } else {
+        if (wantedDocType !== "") {
+          return asToolValue({
+            ok: false, run_id: args.run_id, error: "doc_slot_unknown", doc_type: wantedDocType, doc_types: [],
+            note: `run ${args.run_id} 无单据槽位（legacy 形态——契约件在 run 根），不接受 doc_type`,
+          });
+        }
+        candidatePath = legacyCandidatePath(runDir);
+      }
+      const candidateRel = cardDocType !== null ? `publish/${cardDocType}/contract-candidate.json` : "contract-candidate.json";
       let candidateDigest = args.digest;
       if (candidateDigest === undefined && existsSync(candidatePath)) {
         try {
@@ -960,12 +995,12 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         }
       }
       if (candidateDigest === undefined) {
-        return asToolValue({ ok: false, run_id: args.run_id, note: "无契约件 digest（contract-candidate.json 缺失或无 digest 字段）——无可发布凭据，不造数" });
+        return asToolValue({ ok: false, run_id: args.run_id, note: `无契约件 digest（${candidateRel} 缺失或无 digest 字段）——无可发布凭据，不造数` });
       }
-      const title = `发布确认（digest 凭据）— run ${args.run_id}`;
+      const title = `发布确认（digest 凭据）— run ${args.run_id}${cardDocType !== null ? ` · ${cardDocType}` : ""}`;
       // 批㊶-U §五：凭据卡退化形式——无可调参数不虚构；卡面 note＝统一说明＋复核通道（聊天重呈）
-      const body = `  artifact: contract-candidate.json\n  digest: ${candidateDigest}\n  ${dualStageNote("契约凭据卡", { amendable: false })}`;
-      writePending(runDir, { kind: "publish_confirm", run_id: args.run_id, title, digest: candidateDigest, at: new Date().toISOString() });
+      const body = `  artifact: ${candidateRel}\n  digest: ${candidateDigest}\n  ${dualStageNote("契约凭据卡", { amendable: false })}`;
+      writePending(runDir, { kind: "publish_confirm", run_id: args.run_id, title, digest: candidateDigest, ...(cardDocType !== null ? { doc_type: cardDocType } : {}), at: new Date().toISOString() });
       // E5 模板四行（凭据摘要续行；点按指引由审批卡自身承载）
       const verdict = await requestApproval(ctx, exec, "atf_publish_confirm",
         buildApprovalReason({
@@ -984,7 +1019,10 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const sessionIdPub = sessionIdOfExec(exec);
       if (sessionIdPub !== undefined) appendBinding(runDir, sessionIdPub);
       injectBashRunWorkspace(runDir); // 批㊶-S1 门2修复
-      return asToolValue({ ok: true, run_id: args.run_id, run_dir: runDir, run_dir_source: runDirSource, confirmed: true, digest: candidateDigest, artifact: "contract-candidate.json" });
+      return asToolValue({
+        ok: true, run_id: args.run_id, run_dir: runDir, run_dir_source: runDirSource, confirmed: true, digest: candidateDigest,
+        artifact: candidateRel, ...(cardDocType !== null ? { doc_type: cardDocType } : {}),
+      });
     },
   });
 

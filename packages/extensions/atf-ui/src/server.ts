@@ -26,6 +26,7 @@ import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
 import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/workspace/oomFallback.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { hasSegmentFact, stageSummarySegmentFacts } from "../../../../src/core/workspace/segmentFacts.js";
+import { countJsonlRows, listDocSlots } from "./docSlots.js";
 import { completionFromExitCodeFile, readTrainingCompletion, writeTrainingCompletion } from "../../../../src/core/workspace/trainingCompletion.js";
 import { buildEvalNoticeFaces, type EvalNoticeFace, type EvalProgressFace } from "../../../../src/core/workspace/evalProgressTrack.js";
 import {
@@ -177,6 +178,9 @@ export interface RunScan {
   gpu_binding: GpuBinding | null;
   /** 批㉞H：逐 eval 轮对比面（两轮对比视图数据源——空数组＝无轮产物）。 */
   eval_rounds: EvalRoundFace[];
+  /** E8：单据槽位面（additive——每类 doc_type/有无 candidate/有无 variants/train.jsonl 行数；
+   *  空数组＝无槽位（legacy／未槽位化）。段灯仍是段级——本面只呈按类事实，不改段粒度）。 */
+  doc_slots?: Array<{ doc_type: string; has_candidate: boolean; has_variants: boolean; rows: number | null }>;
 }
 
 /** 批㉛段2：Web 发起训练面（monitor.json 下发——client 摘要对话框与发起消息模板的数据源）。 */
@@ -628,12 +632,19 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
   // 抑制（后段 done 前提＝前段 done 成立；评估先于训练的陈旧倒挂场景在此天然覆盖）。
   // D96：八段键＝内核段名（SEGMENT_ORDER_KEYS＝内核 STAGE_ORDER 唯一权威）；训练执行
   // （training）与评估（evaluate）不占段灯——独立卡/区块态，同函数内独立计算（不入前缀）。
+  // E8：单据槽位读侧单源（listDocSlots——全仓唯一路径表）。槽位形态下 candidate_build/
+  // publish 段灯「全类槽位齐才 done」（每类 publish/<doc>/contract-candidate.json／
+  // confirmation-report.md 各自齐备，缺一类即不 done）；无槽位保留现有 root 判据
+  // （legacy 只读 fallback，E8 §〇 不迁移不双写）。段灯仍是段级——按类事实呈现在 doc_slots。
+  const docSlots = listDocSlots(dir);
+  const slotCandidatesAll = docSlots.length > 0 && docSlots.every((slot) => existsSync(slot.candidate_path));
+  const slotReportsAll = docSlots.length > 0 && docSlots.every((slot) => existsSync(join(slot.slot_dir, "confirmation-report.md")));
   const rawDone: Record<string, boolean> = {
     register: segmentDone("register", has("registration.json") || has("dataset")),
     label_qc: segmentDone("label_qc", has("label_qc") || has("qc")),
     experiment_setup: has("webui/config-snapshot.json"),
-    candidate_build: has("contract-candidate.json"),
-    publish: (has("report") && reportFiles.some((f) => f.startsWith("segment-"))) || has("contract-candidate.json"),
+    candidate_build: has("contract-candidate.json") || slotCandidatesAll,
+    publish: (has("report") && reportFiles.some((f) => f.startsWith("segment-"))) || has("contract-candidate.json") || slotReportsAll,
     family_split: has("split") || has("dataset/split"),
     admission: has("launch/train.sh") || has("admission.json") || has("training/train.sh"),
     // D96：training_prep 段灯＝内核训练准备段产物锚（迭代配置两形态——prep/iteration-config
@@ -804,6 +815,13 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
     })(),
     // 批㊶-TRAIN-OBS T3：日志尾部投影（两键闭集 captured_at/lines——摘要化：行已 200 字符截断）
     trainlog_tail: readTrainlogTail(dir),
+    // E8：单据槽位面（additive——按类事实；行数＝train.jsonl 非空行计数，缺失如实 null）
+    doc_slots: docSlots.map((slot) => ({
+      doc_type: slot.doc_type,
+      has_candidate: existsSync(slot.candidate_path),
+      has_variants: existsSync(slot.variants_dir),
+      rows: countJsonlRows(slot.train_jsonl),
+    })),
   };
 }
 
