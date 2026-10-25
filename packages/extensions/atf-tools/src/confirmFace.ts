@@ -432,7 +432,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       // pending 态卡面——九要素确认标题（具体 fields 在 execute 中构造后经 content 呈现）
       return {
         card: "generic" as const,
-        title: args.action === "amend" ? `九要素配置确认（改参重呈）— ${args.run_id}` : `九要素训练配置确认 — ${args.run_id}`,
+        title: args.action === "amend" ? `参数变更请示（仅改动项）— ${args.run_id}` : `九要素训练配置确认 — ${args.run_id}`,
         kind: "other" as const,
       }
     },
@@ -583,7 +583,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         for (const [key, value] of Object.entries(rawEdits)) amended[key] = String(value);
         // 改参值一律过确定性护栏（同 L3 clamp 域）——越界回退到域边界＋说明可读（不静默）
         const clampedKeys = clampEdits(amended);
-        amendNote = `已按结构化改参重呈：${Object.keys(amended).join(", ")}；其余按现值${clampedKeys.length > 0 ? `；越界拦截回退（域边界）：${clampedKeys.join("、")}` : ""}`;
+        amendNote = `已提交变更请示：${Object.keys(amended).join(", ")}；其余按现值${clampedKeys.length > 0 ? `；越界拦截回退（域边界）：${clampedKeys.join("、")}` : ""}`;
       }
       // 批㊶R前置②：卡数基线＝机器事实拉满（owner 裁定：训练默认拉满可用卡·训练时长优先）——
       // iteration-config/快照显式值（from_registry）优先保留；用户显式覆盖（overrides/amend）
@@ -726,7 +726,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         if (accumField !== undefined) accumField.value = String(reDerived.accum);
         guardNotes.push(hit.note);
       }
-      const title = args.action === "amend" ? `九要素配置确认（改参重呈）— run ${args.run_id}` : `九要素训练配置确认 — run ${args.run_id}`;
+      const title = args.action === "amend" ? `参数变更请示（仅改动项）— run ${args.run_id}` : `九要素训练配置确认 — run ${args.run_id}`;
       // 批㊶-W F5：双段式文案（共用 helper——表单卡改值提交，聊天打字路径退役）
       const baseNote = dualStageNote("九要素确认卡", { amendNote: amendNote });
       const note = guardNotes.length > 0 ? `${baseNote}\n${guardNotes.join("\n")}` : baseNote;
