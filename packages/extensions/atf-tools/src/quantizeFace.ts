@@ -205,7 +205,6 @@ export const buildQuantizeTool = (
           target: `（源 ${basename(sourceResolved)} → 输出 ${basename(outResolved)}，mode=${mode}${dryRun ? "，dry-run 只报数" : ""}${allowDegenerate ? "，放行退化框" : ""}）`,
           effect: dryRun ? "dry-run 只报数不写盘" : "在输出目录写出量化副本与逐值映射留档；源目录零写入",
           reversible: "输出目录为新建目录可整目录删除回退；源目录不可变",
-          cost: "按任务卡",
         }));
       if (!verdict.ok) return approvalDeniedResult("atf_quantize_annotations", verdict.outcome);
       // ⑤ 内核 CLI 单源执行（argv 只传内核声明参数；禁传未声明参数）

@@ -883,7 +883,6 @@ export const buildPipelineTool = (
           target: `「${args.stage}」（run ${args.run_id}）`,
           effect: "在 run 目录内写该段产物（register 段另读源文档根）",
           reversible: "段产物可人工清理；已写数据面不自动回滚",
-          cost: "按任务卡",
           // D24h：卡面追加放行权属行（与评估 EVAL_RELEASE 卡同款——点卡权属只在 owner）
         })
         // D89：分组方案行仅 experiment_setup 段呈现（其它段该参无意义不上卡）

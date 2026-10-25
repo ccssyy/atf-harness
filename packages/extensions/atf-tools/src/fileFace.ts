@@ -77,9 +77,8 @@ const approveScopeOrDeny = async (
     buildApprovalReason({
       action: "跨任务读取 run 面",
       target: `（scope=${scopeLabel}）`,
-      effect: "只读枚举/读取其他任务工作区的 run 清单、报告与 metrics（不写盘）",
+      effect: "只读枚举/读取其他任务工作区的 run 清单、报告与 metrics（不写盘；本次放行仅一次，再次跨任务需重新确认）",
       reversible: "只读操作（零写盘、零删除）",
-      cost: "按需（本次调用一次性放行，再次跨任务需重新审批）",
     }),
   );
   if (!verdict.ok) return { ok: false, result: approvalDeniedResult(toolName, verdict.outcome) };

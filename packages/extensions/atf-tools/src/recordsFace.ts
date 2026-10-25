@@ -98,7 +98,6 @@ export function buildRecordsQueryTool(ctx: { get(service: string): unknown }, cf
             target: `（任务 ${args.task_run}${args.note !== undefined ? `；目的：${args.note}` : ""}）`,
             effect: "只读读取该任务记录，并写一条同会话豁免登记",
             reversible: "可逆（读取不改动原记录；豁免条目可删）",
-            cost: "无额外代价（本地读取）",
           }) + "\n允许＝本次读取并登记豁免（同会话后续免打扰）；拒绝＝不读取。");
         if (!verdict.ok) return approvalDeniedResult("atf_records_query", verdict.outcome);
         if (currentWs !== null) grantExemption(currentWs, args.task_run, `atf_records_query${args.note !== undefined ? `（${args.note}）` : ""}`);

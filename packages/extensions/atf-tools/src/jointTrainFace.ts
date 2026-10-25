@@ -280,9 +280,8 @@ export const buildJointTrainTool = (ctx: { get(service: string): unknown }, cfg:
         buildApprovalReason({
           action: "联合装配并启动训练",
           target: `（${String(slots.length)} 类：${typeList} → run ${runId}）`,
-          effect: "装配本 run 的槽位训练数据并启动该 run 训练（GPU 占用与训练产物写入）",
+          effect: "装配本 run 的槽位训练数据并启动该 run 训练（GPU 占用与训练产物写入——卡数/时长以启动件为准）",
           reversible: "装配产物可人工清理；训练启动不可自动回滚",
-          cost: "按任务卡（GPU/时长以确认卡与启动件为准）",
         }) + "\n" + [
           "联合明细：",
           `- 已登记单据（${registry.source === "run_json_docs" ? "run.json 单据清单" : "目录探测（legacy run）"}）：${registeredTypes.join("、")}${registry.source === "run_json_docs" ? "" : "——run 缺登记清单，按登记摘要探测"}`,

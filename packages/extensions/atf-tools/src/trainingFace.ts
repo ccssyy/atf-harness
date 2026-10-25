@@ -734,9 +734,8 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         buildApprovalReason({
           action: "启动真实 GPU 训练",
           target: `（train.sh=${args.train_sh}）`,
-          effect: "占用 GPU 与写训练产物",
+          effect: "占用 GPU 与写训练产物（卡数/时长以九要素确认卡与 train.sh 为准）",
           reversible: "不可自动回滚（产物可人工清理）",
-          cost: "按任务卡（GPU/时长以九要素确认卡与 train.sh 为准）",
         }) + conflictNote);
       if (!verdict.ok) return approvalDeniedResult("atf_run_training", verdict.outcome);
       // 批㊶-W F7：九要素确认值 → train.sh 生成面逐键透传对账（start 面即拒——awb_r1
@@ -821,7 +820,6 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
               target: `（GPU ${windowState.snapshot.gpuIndexes.join("、")}，已等待 ${windowState.snapshot.waitedText}；train.sh=${args.train_sh}）`,
               effect: "占用 GPU 与写训练产物",
               reversible: "不可自动回滚（产物可人工清理）",
-              cost: "按任务卡",
             }) + `\n${formatCardTable(windowState.snapshot.table)}`);
           if (!amber.ok) return approvalDeniedResult("atf_run_training", amber.outcome);
         }
@@ -1362,7 +1360,6 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
           target: `（run ${runId}／checkpoint ${args.checkpoint}）`,
           effect: "写发布库（归档复制＋SHA256 清单＋manifest＋发布报告）",
           reversible: "可逆（发布库条目可人工删除）",
-          cost: "按任务卡",
         }) + `\n发布明细：归档复制 ${ckptDir} → ${destDir}（SHA256 清单）＋manifest＋发布报告${args.note !== undefined ? `｜说明：${args.note}` : ""}\n如需改参（publish_root/checkpoint），直接回复。`);
       if (!verdict.ok) return approvalDeniedResult("atf_publish_model", verdict.outcome);
       // 确定性归档复制（SHA256 清单）——零内核触碰（node fs 实现）；E4 断点续传：
@@ -2001,9 +1998,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         buildApprovalReason({
           action: "放行评估服务编排",
           target: `（run ${runId}）`,
-          effect: "登记放行账本（config sha256）并启动评估编排",
+          effect: `登记放行账本（config sha256）并启动评估编排——${evalGpuCostText(args.service_config, manifest)}`,
           reversible: "不可自动回滚（评估产物可人工清理）",
-          cost: evalGpuCostText(args.service_config, manifest),
         }) + "\n" + [
           `确认摘要：${summary.headline}`,
           ...summary.metrics,

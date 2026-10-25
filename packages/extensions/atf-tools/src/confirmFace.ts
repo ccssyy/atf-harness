@@ -901,7 +901,6 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
             target: `（${title}）`,
             effect: "写 run 配置快照（确认值全部键＋TokenBudget 三要素）",
             reversible: "可逆（可改参后重新确认）",
-            cost: "按任务卡",
           }) + `\n${renderFields(fields)}\n${tokenBudgetFaceText(fields, [])}\n${note}${amendNote !== undefined ? `\n${amendNote}` : ""}${pixelPairViolationNoteOf(fields) !== undefined ? `\n${pixelPairViolationNoteOf(fields)}` : ""}`);
         if (verdict.ok) break;
         if (verdict.outcome === "rejected") {
@@ -1008,7 +1007,6 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           target: `（run ${args.run_id}）`,
           effect: "登记发布段事实（写 run 段记录）",
           reversible: "可逆（可重新走确认）",
-          cost: "按任务卡",
         }) + `\n${title}\n${body}`);
       if (!verdict.ok) return approvalDeniedResult("atf_publish_confirm", verdict.outcome);
       // 批㊶Q增补二3：放行完成即清 pending 卡（同确认卡语义）

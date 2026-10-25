@@ -353,8 +353,9 @@ describe("批D14——评测参数继承（field_config/prompt_mode 缺省继承
     // c. 无「完整报告：/data/...」绝对路径行（报告位置改业务表述）
     expect(cardText).not.toContain("完整报告：");
     expect(cardText).toContain("详细报告已生成（评估轮目录内）");
-    // d. cost 占卡实况（TP 单源——service_config.tensor_parallel_size=4）
-    expect(cardText).toContain("预计代价：占用 4 张 GPU，直到服务停止");
+    // d. 占卡实况并入影响范围行（E8b·H3：预计代价行退役，TP 单源——service_config.tensor_parallel_size=4）
+    expect(cardText).toContain("影响范围：登记放行账本（config sha256）并启动评估编排——占用 4 张 GPU，直到服务停止");
+    expect(cardText).not.toContain("预计代价：");
     // headline：评估放行 — <run_id>
     expect(cardText).toContain(`确认摘要：评估放行 — ${RUN_ID}`);
     expect(tmuxTestOk(`kill-session -t ${orchName()}`)).toBe(true);

@@ -300,7 +300,6 @@ export const runPreflightFlow = async (
         target: `（${String(derivable.length)} 项：${derivable.map((item) => item.id).join("、")}；run ${args.runId}）`,
         effect: "对 derivable 项自动执行（坐标换算整批重试／内置 CPU provider 计量生成 token 预算）",
         reversible: "不可自动回滚（run 目录产物可人工清理）",
-        cost: "按任务卡",
       }) + `\n${checklist}`);
     if (!verdict.ok) {
       return { ok: true, ...meta, ...firstDegraded, report, checklist, ...(decisions !== undefined ? { decisions } : {}), note: `apply 未获放行（${verdict.outcome}）——清单如实返回` };
