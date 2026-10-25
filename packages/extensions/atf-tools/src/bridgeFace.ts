@@ -252,19 +252,11 @@ export const buildBridgeTools = (
       defineTool({
         name: definition.name,
         description: definition.description,
-        // 显式工作区入参（仅 atf_launch_execute）：run 落点解析的输入，不是内核参数
-        parameters: (definition.name === "atf_launch_execute"
-          ? {
-              ...(translateParameters(definition.parameters) as Record<string, unknown>),
-              properties: {
-                ...(((translateParameters(definition.parameters) as Record<string, unknown>)["properties"] as Record<string, unknown> | undefined) ?? {}),
-                workspace_path: {
-                  type: "string",
-                  description: "工作区根绝对路径（可选）：run 落在 <workspace_path>/workspace/runs/<run_id>（RunLayout 单源）。验证/临时工作区必须显式给，否则按实例 runs 桶解析可能落到同名残留目录",
-                },
-              },
-            }
-          : translateParameters(definition.parameters)) as ReturnType<typeof translateParameters>,
+        // 参数面单一真相源＝定义处（workspaceTools 的 LAUNCH_EXECUTE_PARAMS 已含
+        // run_id／workspace_path／launch_sh 三形态／config 自动探测）——此处只做投影，
+        // 不得二次增删参数：投影层加的参数 handler 不读，是假参数（真机踩过，
+        // 模型照 schema 传了却被 handler 判缺参）。
+        parameters: translateParameters(definition.parameters),
         output: {
           schema: looseObjectOutput,
           render: renderAsJsonText,
