@@ -22,6 +22,7 @@ import {
   legacyCandidatePath,
   legacyPublishWorkspaces,
   listDocSlots,
+  runDocRegistry,
 } from "../../packages/extensions/atf-ui/src/docSlots.js";
 import { scanRunDirAt } from "../../packages/extensions/atf-ui/src/server.js";
 import { buildMonitorSnapshot } from "../../packages/extensions/atf-ui/src/snapshot.js";
@@ -200,5 +201,80 @@ describe("E8 H3b——scanRunDirAt 段灯（全类槽位齐才 done）与 doc_sl
     expect(runWith.runs[0]!.doc_slots).toEqual([{ doc_type: "pl", has_candidate: true, has_variants: true, rows: 3 }]);
     const runWithout = buildMonitorSnapshot([{ run_id: "e8-no" } as never]);
     expect(runWithout.runs[0]!.doc_slots).toEqual([]);
+  });
+});
+
+describe("E8b·H2——runDocRegistry（已登记单据清单读侧：run.json docs[] 优先／缺键目录探测标 legacy／形态非法 fail-closed）", () => {
+  const seedRunJson = (runDir: string, docs: unknown): void => {
+    writeFileSync(join(runDir, "run.json"), `${JSON.stringify({ run_id: "r", layout_version: "RunLayout/v1", ...(docs === null ? {} : { docs }) }, null, 1)}\n`);
+  };
+  const seedRegisterSummary = (runDir: string, docType: string): void => {
+    writeFileSync(join(runDir, `stage-register.${docType}.summary.json`), "{}\n");
+  };
+
+  it("docs[] 权威面：run.json 带合法 docs → source=run_json_docs，按 doc_type 排序，未知键原样保留（镜像内核 run_doc_registry）", () => {
+    const runDir = tempRoot();
+    mkdirSync(runDir, { recursive: true });
+    seedRunJson(runDir, [
+      { doc_type: "swb", lane_suffix: "goods", registered_at: "2026-10-25T02:00:00+00:00" },
+      { doc_type: "do", lane_suffix: "docs", registered_at: "2026-10-25T01:00:00+00:00" },
+    ]);
+    const registry = runDocRegistry(runDir);
+    expect(registry).toEqual({
+      status: "ok",
+      source: "run_json_docs",
+      docs: [
+        { doc_type: "do", lane_suffix: "docs", registered_at: "2026-10-25T01:00:00+00:00" },
+        { doc_type: "swb", lane_suffix: "goods", registered_at: "2026-10-25T02:00:00+00:00" },
+      ],
+    });
+  });
+
+  it("legacy 目录探测：run.json 缺席或无 docs 键 → stage-register.<doc>.summary.json 集合（排序）；无摘要 → 空清单", () => {
+    // ① run.json 缺席（legacy run 落点）
+    const legacyDir = tempRoot();
+    mkdirSync(legacyDir, { recursive: true });
+    seedRegisterSummary(legacyDir, "swb");
+    seedRegisterSummary(legacyDir, "do");
+    expect(runDocRegistry(legacyDir)).toEqual({
+      status: "ok",
+      source: "legacy_dir_probe",
+      docs: [{ doc_type: "do" }, { doc_type: "swb" }],
+    });
+    // ② run.json 在场但无 docs 键（b13 前 canonical run）
+    const preB13 = tempRoot();
+    mkdirSync(preB13, { recursive: true });
+    seedRunJson(preB13, null);
+    seedRegisterSummary(preB13, "pl");
+    expect(runDocRegistry(preB13)).toEqual({
+      status: "ok",
+      source: "legacy_dir_probe",
+      docs: [{ doc_type: "pl" }],
+    });
+    // ③ 目录缺席/空 → 空清单（不抛不猜）
+    const empty = tempRoot();
+    mkdirSync(empty, { recursive: true });
+    expect(runDocRegistry(empty)).toEqual({ status: "ok", source: "legacy_dir_probe", docs: [] });
+  });
+
+  it("docs 键形态非法（非列表／条目缺 doc_type／doc_type 空串）→ docs_invalid（fail-closed 不降级为目录探测）", () => {
+    for (const bad of [["not-object"], [{ lane_suffix: "x" }], [{ doc_type: "  " }], "string"]) {
+      const runDir = tempRoot();
+      mkdirSync(runDir, { recursive: true });
+      seedRunJson(runDir, bad);
+      expect(runDocRegistry(runDir)).toEqual({ status: "docs_invalid" });
+    }
+  });
+
+  it("已登记清单与已备槽位是两个事实面：docs[] 含未备类／槽位含未登类均如实呈现（比对由消费方 jointTrainFace 快败）", () => {
+    const runDir = tempRoot();
+    mkdirSync(runDir, { recursive: true });
+    seedRunJson(runDir, [{ doc_type: "do" }, { doc_type: "swb" }]);
+    seedSlot(runDir, "do"); // 只备 do，swb 已登记未备
+    const registry = runDocRegistry(runDir);
+    const registered = registry.status === "ok" ? registry.docs.map((d) => d.doc_type) : [];
+    const prepared = listDocSlots(runDir).map((s) => s.doc_type);
+    expect(registered).toEqual(["do", "swb"]);
+    expect(prepared).toEqual(["do"]); // 槽位枚举不受 docs[] 影响（内核 assemble 同式——已备数据面）
   });
 });

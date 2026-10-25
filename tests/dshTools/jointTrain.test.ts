@@ -257,6 +257,59 @@ describe("E8——atf_joint_train 单 run 槽位联合训练（schema 面＋卡�
     mkdirSync(join(runDir, "prep", "variants", "notype"), { recursive: true }); // 无 train.jsonl 不构成类
     expect(listDocSlots(runDir).map((s) => s.doc_type)).toEqual(["aa", "zz"]);
   });
+
+  it("E8b·H2 卡前校验——已登记 docs[] 与已备槽位不一致即快败（防「登记两类只装配一类」的静默）：登记多备少／备多登少／docs 形态非法三态；legacy 目录探测来源直通并在卡面与返回体标注", async () => {
+    const root = tempRoot();
+    const ctx = makeCtx();
+    const tool = buildTool(root, ctx.ctx);
+    // ① 登记两类（run.json docs[]＝do+swb）只备一类（槽位 do）→ joint_docs_slots_mismatch
+    const partial = seedSlots(root, "partial-prep", [{ doc: "do", rows: 2 }]);
+    // seedSlots 已写 docs[]=[do]——补登 swb（append-only 形态：手工重写 run.json）
+    writeFileSync(join(partial, "run.json"), `${JSON.stringify({
+      run_id: "partial-prep", layout_version: "RunLayout/v1",
+      docs: [
+        { doc_type: "do", lane_suffix: "do", registered_at: "2026-10-25T00:00:00+00:00" },
+        { doc_type: "swb", lane_suffix: "swb", registered_at: "2026-10-25T01:00:00+00:00" },
+      ],
+    }, null, 1)}\n`);
+    const mismatch = await tool.execute({ run_id: "partial-prep", workspace_path: root }, fakeExec);
+    expect(mismatch["error"]).toBe("joint_docs_slots_mismatch");
+    expect(mismatch["missing_slots"]).toEqual(["swb"]);
+    expect(mismatch["registered"]).toEqual(["do", "swb"]);
+    expect(String(mismatch["note"])).toContain("不会静默只装配其余类");
+    expect(String(mismatch["note"])).toContain("先对缺的类逐类跑数据准备段");
+    // ② 槽位有、登记无（docs[] 只登 do，槽位 do+swb）→ 同码 unregistered_slots 方向
+    const unregistered = seedSlots(root, "unreg-slot", [{ doc: "do", rows: 1 }, { doc: "swb", rows: 1 }]);
+    writeFileSync(join(unregistered, "run.json"), `${JSON.stringify({
+      run_id: "unreg-slot", layout_version: "RunLayout/v1",
+      docs: [{ doc_type: "do", lane_suffix: "do", registered_at: "2026-10-25T00:00:00+00:00" }],
+    }, null, 1)}\n`);
+    const mismatch2 = await tool.execute({ run_id: "unreg-slot", workspace_path: root }, fakeExec);
+    expect(mismatch2["error"]).toBe("joint_docs_slots_mismatch");
+    expect(mismatch2["unregistered_slots"]).toEqual(["swb"]);
+    expect(String(mismatch2["note"])).toContain("来历与登记记录不一致");
+    // ③ run.json docs 键形态非法 → joint_docs_registry_invalid（清单不可信即拒）
+    const broken = seedSlots(root, "broken-docs", [{ doc: "do", rows: 1 }]);
+    writeFileSync(join(broken, "run.json"), `${JSON.stringify({ run_id: "broken-docs", docs: "not-a-list" }, null, 1)}\n`);
+    const invalid = await tool.execute({ run_id: "broken-docs", workspace_path: root }, fakeExec);
+    expect(invalid["error"]).toBe("joint_docs_registry_invalid");
+    expect(String(invalid["note"])).toContain("形态非法");
+    // 三态全部零审批零段调用（卡前快败）
+    expect(ctx.calls()).toBe(0);
+    // ④ legacy 目录探测（无 run.json、有 stage-register 摘要）→ 校验直通，卡面与返回体标 legacy
+    const legacyRun = join(root, "runs", "legacy-run");
+    for (const doc of ["pl", "swb"]) {
+      mkdirSync(join(legacyRun, "prep", "variants", doc), { recursive: true });
+      writeFileSync(join(legacyRun, "prep", "variants", doc, "train.jsonl"), '{"row":"x"}\n');
+      writeFileSync(join(legacyRun, `stage-register.${doc}.summary.json`), "{}\n");
+    }
+    seedAssembleArtifacts(legacyRun, [{ doc: "pl", rows: 1 }, { doc: "swb", rows: 1 }]);
+    const legacyResult = await tool.execute({ run_id: "legacy-run", workspace_path: root }, fakeExec);
+    expect(legacyResult["ok"]).toBe(true);
+    expect(legacyResult["docs_registry"]).toEqual({ source: "legacy_dir_probe", doc_types: ["pl", "swb"] });
+    expect(ctx.card()).toContain("目录探测（legacy run）");
+    expect(ctx.card()).toContain("已登记单据");
+  });
 });
 
 describe("E8——状态面单 run（jointTrainState 收敛：{run_id, classes 来自槽位, oversample, seed, base_model_family}）", () => {
