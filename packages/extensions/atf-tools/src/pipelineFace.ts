@@ -709,6 +709,15 @@ export const buildPipelineTool = (
           "不给时按构造器内置常量带（0.02,0.05）兜底（不静默——审批卡与返回体如实标注来源）。" +
           "九要素确认卡的 negative_ratio_target 值在本段触发时应原样带入",
       },
+      // H7h：卡位（仅 training_prep 段；显式 > 确认快照兜底 > 不下传，回退 deploy 层）
+      visible_devices: {
+        type: "string",
+        description:
+          "训练绑卡（仅 training_prep 段有意义，其它段忽略该参）：形如 0-7 或 4,5,6,7。" +
+          "显式给定时原样下传内核 --visible-devices（nproc ≤ 卡数 由内核校验）；" +
+          "不给时不下传（回退 deploy 层 cuda_visible_devices）——本批只做显式通道，" +
+          "快照兜底随预算五参前移一并接线",
+      },
       // E3：预算三参（仅 experiment_setup 段；显式 > 确认快照兜底 > unspecified 不下传）
       max_total_tokens: {
         type: "number",
@@ -779,7 +788,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; training_overrides?: Record<string, unknown> },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown> },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -817,6 +826,9 @@ export const buildPipelineTool = (
       // D99：负样本目标带取值（同 D89 口径——trim 后空串视同未指定；形态合法性由内核
       // 实验门脚本解析（float 化失败即业务拒绝），harness 不复制格式校验不夹取）。
       const negativeRatioTarget = typeof args.negative_ratio_target === "string" ? args.negative_ratio_target.trim() : "";
+      // H7h：卡位透传（仅 training_prep；内核 b16 K-E9c 新增旗标）。不走 --training-overrides——
+      // 9 键白名单明确排除 visible_devices（卡位属 deploy/launch 域）
+      const visibleDevices = typeof args.visible_devices === "string" ? args.visible_devices.trim() : "";
       // E3：落点单源提前到审批前（预算三参快照兜底要读 run 目录）；canonical 在场优先
       // （内核 RunLayout v1 同口径——canonical <wp>/workspace/runs/<id>，legacy 公式兜底；
       // 软链拒）。argv 的 --workspace 仍传用户原值（workspace 根贯通内核——内核自解析
@@ -940,6 +952,8 @@ export const buildPipelineTool = (
       // E3：预算三参透传（仅 experiment_setup 段；终值在场才追加——显式值与快照兜底值
       // 同面下传（内核 b8 argparse --max-total-tokens／--image-min-pixels／
       // --image-max-pixels）；unspecified 不出现在 argv，零新增语义）。
+      // H7h：绑卡下传（仅 training_prep；缺省不追加，回退 deploy 层）
+      if (args.stage === "training_prep" && visibleDevices !== "") argv.push("--visible-devices", visibleDevices);
       if (args.stage === "experiment_setup" && tokenParams !== undefined) {
         if (tokenParams.values.max_total_tokens !== undefined) argv.push("--max-total-tokens", String(tokenParams.values.max_total_tokens));
         if (tokenParams.values.image_min_pixels !== undefined) argv.push("--image-min-pixels", String(tokenParams.values.image_min_pixels));
