@@ -199,9 +199,10 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   console.log("[atf-tools] atf_prelaunch_report 已挂载");
   const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx, models: { root: modelInventory.root, names: modelInventory.models }, bindRun: (runId) => manager.bindRun(runId) };
   ctx.tools.register(buildRunTrainingTool(ctx, trainCfg));
-  // H5：多类联合训练入口（唯一训练入口的多类面——D25；内部训练直调 atf_run_training 执行函数，
-  // 不出现 A/B 入口）。kernelDir 单源消费（实例 pin 解析——builder 脚本面禁硬编码路径）。
-  ctx.tools.register(buildJointTrainTool(ctx, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, logDir: config.logDir, models: { root: modelInventory.root, names: modelInventory.models }, bindRun: (runId) => manager.bindRun(runId) }));
+  // E8（第二批重写）：单 run 槽位联合训练入口（唯一训练入口的多类面——槽位装配经
+  // atf_pipeline_stage 执行函数直调〔assemble=true〕，训练直调 atf_run_training 执行函数，
+  // 不出现 A/B 入口）。pipelineCommand 与段工具同源注入（零第二套段调用面）。
+  ctx.tools.register(buildJointTrainTool(ctx, { runsRoot: config.runsRoot, logDir: config.logDir, pipelineCommand, pipelineTimeoutMs: config.pipelineTimeoutMs, models: { root: modelInventory.root, names: modelInventory.models }, bindRun: (runId) => manager.bindRun(runId) }));
   for (const tool of buildEvalTools(ctx, { runsRoot: config.runsRoot, logDir: config.logDir, kernelDir: config.kernelDir, bindRun: (runId) => manager.bindRun(runId) })) ctx.tools.register(tool);
   ctx.tools.register(buildPublishModelTool(ctx, { runsRoot: config.runsRoot }));
   ctx.tools.register(buildRecordsQueryTool(ctx, { runsRoot: config.runsRoot, currentRunWorkspace: () => process.env["ATF_BASH_RUN_WORKSPACE"] ?? null }));
