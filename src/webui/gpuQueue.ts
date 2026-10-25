@@ -10,6 +10,8 @@
  */
 import { queryNvidiaSmi, type GpuStatus } from "./readOnlyTools.js";
 import type { ChatEvent } from "./chatModel.js";
+// E8c·D159：确认卡动作名单源（与桥接审批卡同一映射——禁第二套文案表）
+import { BRIDGE_ACTION_LABELS } from "../agent/bridgeActionLabels.js";
 
 /** 命中阈值（指令口径：利用率 <20% 且显存 <10GB 连续 2 周期）。显存单位 MiB。 */
 export const GPU_HIT_UTILIZATION_PCT = 20;
@@ -60,6 +62,12 @@ export const queueStatusText = (waitedText: string): string =>
 
 /** 命中琥珀确认卡文案（danger_confirm 标题；真跑守门不变）。 */
 export const queueHitText = (gpuIndex: number): string => `GPU ${String(gpuIndex)} 已空闲，确认开跑？`;
+
+/** 命中琥珀确认卡预计占用文案（E8c·D159：业务话术替工程占位——动作名单源
+ *  BRIDGE_ACTION_LABELS（atf_launch_execute＝启动训练编排），含占卡数与「GPU 空闲后
+ *  自动开始」语义；排队链＝确认后入列，GPU 空闲即自动推进到本卡）。 */
+export const queueHitEstimateText = (gpuCount: number): string =>
+  `${BRIDGE_ACTION_LABELS["atf_launch_execute"] ?? "启动训练编排"}——占 ${String(gpuCount)} 卡，GPU 空闲后自动开始`;
 
 /** 排队编排器（会话级；管理定时器与事件发射——测试注入 pollMs 与 query）。 */
 export class GpuQueueOrchestrator {
