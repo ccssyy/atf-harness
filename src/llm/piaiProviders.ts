@@ -48,3 +48,18 @@ export const applyPiaiCompatFloor = (
     supports_reasoning_effort: floor?.supports_reasoning_effort === false ? false : compat.supports_reasoning_effort,
   };
 };
+
+/**
+ * H9c（H-E9d，2026-10-25）：boot 能力审计行文案单点（设计要点 §(九).4）——两线装配面
+ * （runner 线 PiAiLlmProvider 构造器／丙线 assembleProviderModel）共用；调用方打到
+ * **stderr**（进程日志面——不污 TUI 界面 stdout，不进用户可见面）。数据源＝pi-ai 目录
+ * model.input（只读）；模型未声明图像输入时行尾给配置指引，但**不自动补声明、不改目录、
+ * 不改 LLM_MODEL_KEYS**（vendor read_image 能力闸语义不动——它按同源目录判定，两面一致）。
+ */
+export const piaiInputCapabilityLine = (providerId: string, modelId: string, input: readonly string[]): string => {
+  const hasImage = input.includes("image");
+  const guidance = hasImage
+    ? ""
+    : "；模型未声明图像输入，读图不可用——如需读图请换用声明图像输入的模型（目录只读，不自动补声明）";
+  return `[llm] ${providerId}/${modelId}/input=${hasImage ? "text+image" : "text"}${guidance}`;
+};

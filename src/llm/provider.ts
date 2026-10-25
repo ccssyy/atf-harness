@@ -78,15 +78,19 @@ export const assertModelDecision = (value: unknown): { ok: true; decision: LlmDe
 };
 
 /**
- * LlmErrorCode（L1a 门 2 扩一值；L1c 提前批 C 项再扩一值）：
+ * LlmErrorCode（L1a 门 2 扩一值；L1c 提前批 C 项再扩一值；H-E9d 扩一值）：
  * - provider_failure：provider 自身/协议/响应形状故障（既有语义零改动）；
  * - call_budget_exhausted：单 run 调用次数上限命中（门 2 任务书 §1.1 / D5 成本护栏——
  *   与轮次预算是两件事；结构化可区分，调用方按故障终局收敛，不静默继续）；
  * - provider_quota_or_rate_limited：provider 侧配额/限流/欠费（HTTP 429 或 body 配额类
  *   标记）——映射人读提示「用量已达上限」，不重试（L1c 提前批 C 项查证补映射，2026-09-22；
- *   复核点①核验行：本闭集未登记于 bridge/session/workspace 三契约件，扩值零契约 diff）。
+ *   复核点①核验行：本闭集未登记于 bridge/session/workspace 三契约件，扩值零契约 diff）；
+ * - image_budget_exhausted：本轮模型请求图像件预算上限命中（H-E9d·H9d，2026-10-25——
+ *   est tokens＝Σbytes/IMAGE_BYTES_PER_TOKEN 超 IMAGE_REQUEST_MAX_TOKENS；call_budget_
+ *   exhausted 同族的体量护栏，结构化可区分；detail 逐张列 sha256 前 8 位＋bytes＋
+ *   media_type，禁 base64 进日志/审计——设计要点 §(九).5；闭集不登记于三契约件，零契约 diff）。
  */
-export type LlmErrorCode = "provider_failure" | "call_budget_exhausted" | "provider_quota_or_rate_limited";
+export type LlmErrorCode = "provider_failure" | "call_budget_exhausted" | "provider_quota_or_rate_limited" | "image_budget_exhausted";
 
 export interface LlmError {
   code: LlmErrorCode;

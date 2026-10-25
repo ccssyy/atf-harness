@@ -19,7 +19,7 @@ import {
   type SimpleStreamOptions,
 } from "@earendil-works/pi-ai";
 import type { StreamFn } from "@earendil-works/pi-agent-core";
-import { piaiProviderFactory } from "../llm/piaiProviders.js";
+import { piaiInputCapabilityLine, piaiProviderFactory } from "../llm/piaiProviders.js";
 
 /** 丙线真实调用配置（env-only 凭据；provider_id 参数化——GLM/DeepSeek 同路径）。 */
 export interface ProviderStreamFnConfig {
@@ -42,6 +42,8 @@ export const assembleProviderModel = (
       `pi-ai streamFn 装配失败: pi-ai 目录无 openai-completions 模型 ${JSON.stringify(config.model)}（provider=${JSON.stringify(config.provider_id)}；fail-closed）`,
     );
   }
+  // H9c（H-E9d）：boot 能力审计行（stderr 进程日志面；与 runner 线 PiAiLlmProvider 同文案单点）。
+  console.error(piaiInputCapabilityLine(config.provider_id, config.model, catalogModel.input));
   return { models, model: { ...catalogModel, baseUrl: config.base_url } };
 };
 
