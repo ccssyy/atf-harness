@@ -214,7 +214,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     }
   });
 
-  it("审批卡：预算三参行仅 experiment_setup 段呈现（终值与来源双双上卡；unspecified 明示）", async () => {
+  it("审批卡：预算五参行仅 experiment_setup 段呈现（终值与来源双双上卡；unspecified 明示）", async () => {
     const ws = tempRoot("e3-ws-");
     writeSnapshot(join(ws, "runs", "e3-card"), { image_min_pixels: "65536", image_max_pixels: "1605632" });
     const record: string[] = [];
@@ -222,8 +222,10 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
       { stage: "experiment_setup", run_id: "e3-card", workspace_path: ws, max_total_tokens: 9000 },
       fakeExec,
     );
-    expect(record[0]).toContain("预算三参（实验门）");
+    expect(record[0]).toContain("预算五参（实验门）");
     expect(record[0]).toContain("max_total_tokens=9000（用户指定）");
+    expect(record[0]).toContain("cutoff_len=未定（未指定——内核按缺省处理）");
+    expect(record[0]).toContain("max_model_len=未定（未指定——内核按缺省处理）");
     expect(record[0]).toContain("image_min_pixels=65536（确认快照）");
     expect(record[0]).toContain("image_max_pixels=1605632（确认快照）");
     const recordNone: string[] = [];
@@ -237,19 +239,69 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
       { stage: "label_qc", run_id: "e3-card-lq", workspace_path: tempRoot("e3-ws-"), max_total_tokens: 9000 },
       fakeExec,
     );
-    expect(recordOther[0]).not.toContain("预算三参");
+    expect(recordOther[0]).not.toContain("预算五参");
   });
 
-  it("参数 schema：三参 number 型＋description 提及快照兜底与成对口径", () => {
+  it("参数 schema：五参 number 型＋description 提及快照兜底与成对口径", () => {
     const tool = toolOf();
     const props = (tool.parameters as { properties?: Record<string, { type?: string; description?: string }> }).properties ?? {};
-    for (const key of ["max_total_tokens", "image_min_pixels", "image_max_pixels"]) {
+    for (const key of ["max_total_tokens", "cutoff_len", "max_model_len", "image_min_pixels", "image_max_pixels"]) {
       expect(props[key]?.["type"]).toBe("number");
       expect(String(props[key]?.["description"])).toContain("确认快照");
     }
     expect(String(props["max_total_tokens"]?.["description"])).toContain("config-snapshot.json");
     expect(String(props["image_min_pixels"]?.["description"])).toContain("成对提供");
     expect(String(tool.description)).toContain("max_total_tokens");
+  });
+
+  // C（2026-10-26）五参同门：cutoff_len／max_model_len 与构造上限、像素对同门进实验门，
+  // 内核 b17 起据此落 prep/token_budget.json（不再写死基线）。
+  it("显式五参透传：argv 含 --cutoff-len／--max-model-len 与值；返回体两参 source=user_specified", async () => {
+    const ws = tempRoot("e3-ws-");
+    const result = await toolOf().execute(
+      {
+        stage: "experiment_setup",
+        run_id: "e3-five",
+        workspace_path: ws,
+        max_total_tokens: 9000,
+        cutoff_len: 12000,
+        max_model_len: 16000,
+        image_min_pixels: 65536,
+        image_max_pixels: 1605632,
+      },
+      fakeExec,
+    );
+    const argv = summaryArgv(result);
+    expect(argv).toContain("--cutoff-len");
+    expect(argv).toContain("12000");
+    expect(argv).toContain("--max-model-len");
+    expect(argv).toContain("16000");
+    expect((result as Record<string, unknown>)["cutoff_len"]).toBe(12000);
+    expect((result as Record<string, unknown>)["cutoff_len_source"]).toBe("user_specified");
+    expect((result as Record<string, unknown>)["max_model_len"]).toBe(16000);
+    expect((result as Record<string, unknown>)["max_model_len_source"]).toBe("user_specified");
+  });
+
+  it("快照兜底同源：config-snapshot 带 cutoff_len／max_model_len 时两参随段下传（source=config_snapshot）", async () => {
+    const ws = tempRoot("e3-ws-");
+    writeSnapshot(join(ws, "runs", "e3-five-snap"), {
+      max_total_tokens: "9000",
+      cutoff_len: "10000",
+      max_model_len: "14000",
+      image_min_pixels: "65536",
+      image_max_pixels: "1605632",
+    });
+    const result = await toolOf().execute(
+      { stage: "experiment_setup", run_id: "e3-five-snap", workspace_path: ws },
+      fakeExec,
+    );
+    const argv = summaryArgv(result);
+    expect(argv).toContain("--cutoff-len");
+    expect(argv).toContain("10000");
+    expect(argv).toContain("--max-model-len");
+    expect(argv).toContain("14000");
+    expect((result as Record<string, unknown>)["cutoff_len_source"]).toBe("config_snapshot");
+    expect((result as Record<string, unknown>)["max_model_len_source"]).toBe("config_snapshot");
   });
 
   it("纯函数直测：experimentTokenApprovalLine 文案与 resolveExperimentTokenParams 三态", () => {
