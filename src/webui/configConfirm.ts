@@ -154,10 +154,11 @@ export const buildConfigConfirmFields = (
   options: { fromRegistry?: Record<string, string> } = {},
 ): Array<{ key: string; value: string; tag: "need_confirm" | "from_registry" | "default_used" }> =>
   CONFIG_CONFIRM_KEYS.map((entry) => {
-    const registry = options.fromRegistry?.[entry.key];
-    if (registry !== undefined) return { key: entry.key, value: registry, tag: "from_registry" as const };
+    // H7f：优先级＝用户显式 > 已确认快照/派生 > 缺省（派生只填空缺，绝不覆盖用户值）
     const explicit = overrides[entry.key];
     if (explicit !== undefined) return { key: entry.key, value: explicit, tag: "need_confirm" as const };
+    const registry = options.fromRegistry?.[entry.key];
+    if (registry !== undefined) return { key: entry.key, value: registry, tag: "from_registry" as const };
     return { key: entry.key, value: entry.default, tag: "default_used" as const };
   });
 

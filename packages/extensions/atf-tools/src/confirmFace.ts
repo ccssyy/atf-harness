@@ -526,6 +526,27 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const rawOverrides = (args.overrides ?? {}) as Record<string, unknown>;
       const overrides: Record<string, string> = {};
       for (const [key, value] of Object.entries(rawOverrides)) overrides[key] = String(value);
+      // H7b：overrides 路径同样联动 alpha=2×rank（此前只有 iteration 建议值那条路联动）
+      if (overrides["lora_rank"] !== undefined) {
+        overrides["lora_alpha"] = String(loraAlphaFor(Number(overrides["lora_rank"])));
+      }
+      // H7a：overrides 也走同一道形状校验（此前 clamp 只作用于 iteration 建议值，
+      // 导致 image_min_pixels=802816 与 max_total_tokens>cutoff 能直接进卡）
+      if (overrides["image_min_pixels"] !== undefined && overrides["image_min_pixels"].trim() !== "65536") {
+        return asToolValue({
+          ok: false, error: "image_min_pixels_fixed", run_id: args.run_id,
+          value: overrides["image_min_pixels"],
+          note: "像素下限固定 65536（数据构造/训练/评估同一像素对），不接受改动；只可改上限（image_max_pixels）",
+        });
+      }
+      if (overrides["max_total_tokens"] !== undefined && overrides["cutoff_len"] !== undefined
+        && Number(overrides["max_total_tokens"]) > Number(overrides["cutoff_len"])) {
+        return asToolValue({
+          ok: false, error: "max_total_tokens_exceeds_cutoff", run_id: args.run_id,
+          max_total_tokens: overrides["max_total_tokens"], cutoff_len: overrides["cutoff_len"],
+          note: "总预算不得超过单条截断长度（cutoff_len）——两者是上下界关系，请先调 cutoff_len 或压低预算",
+        });
+      }
       let amendNote: string | undefined;
       let amended: Record<string, string> | undefined;
       // 批㊶-W F5：结构化值域 clamp 表（amend edits 与表单卡提交共用——文字解析链退役，
@@ -612,7 +633,10 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       if ("error" in accumDerived) {
         return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: accumDerived.error });
       }
-      baseline["gradient_accumulation_steps"] = String(accumDerived.accum);
+      // H7g：派生只填空缺——用户显式给了 accum 就不派生（今天实测：卡上 2 落盘 16）
+      if (overrides["gradient_accumulation_steps"] === undefined) {
+        baseline["gradient_accumulation_steps"] = String(accumDerived.accum);
+      }
       // P-1c：deepspeed 智能缺省＝ds_z3_offload（显式 > 缺省——iteration-config 显式声明优先）
       if (baseline["deepspeed"] === undefined) baseline["deepspeed"] = SMART_DEEPSPEED_DEFAULT;
       let fields: ConfigConfirmField[] = (() => {
