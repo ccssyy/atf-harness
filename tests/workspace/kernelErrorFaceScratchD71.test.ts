@@ -88,19 +88,22 @@ describe("D71 封口：替换单源（kernelErrorFace 纯函数）", () => {
   });
 
   it("D98 run 落点非空码：扫描命中即换人话；文案零内部码（内核真实输出形态驱动）", () => {
-    // 内核 D97 非空闸（walkthrough_pipeline.py register 段）经 CLI stdout 流回的
-    // 真实形态——reason code 与业务文案同段出现
+    // 内核非空闸（walkthrough_pipeline.py register 段）经 CLI stdout 流回的真实形态。
+    // E8b 内核 b13 起该码收缩为「非空但缺合法 run.json」兜底——内核兜底文案已改新口径，
+    // 这里保留旧形态输入验证扫描/替换通道不受文案演变影响（码命中逻辑与文案解耦）。
     const raw =
-      'run 落点已存在且非空:/abs/ws/runs/walkthrough-20261024 (walkthrough_run_dir_not_empty) 首选(零删除):同 workspace 起新 run';
+      'run 落点已存在且非空:/abs/ws/runs/walkthrough-20261024 (walkthrough_run_dir_not_empty) 如需在新落点登记:同 workspace 起新 --run-id';
     const hit = replaceKernelErrorFace(raw);
     expect(hit).not.toBeNull();
     if (hit !== null) {
       expect(hit.hits).toHaveLength(1);
       expect(hit.hits[0]?.code).toBe("walkthrough_run_dir_not_empty");
       expect(hit.text).toContain("登记被拒");
-      expect(hit.text).toContain("换一个新 run 标识");
-      expect(hit.text).toContain("--rerun");
-      expect(hit.text).toContain("不需要删除工作目录");
+      // E8b H1：指补齐 run.json、明示同 run 续登记被允许；旧口径（换新 run 标识/--rerun）不回流
+      expect(hit.text).toContain("run.json");
+      expect(hit.text).toContain("同一 run 继续登记其它单据是被允许的");
+      expect(hit.text).not.toContain("换一个新 run 标识");
+      expect(hit.text).not.toContain("--rerun");
       // B6 验收锚「D98 拒绝文案无内部码」：人话面不出现码本身（D77 纪律延续）
       expect(hit.text).not.toContain("walkthrough_run_dir_not_empty");
     }

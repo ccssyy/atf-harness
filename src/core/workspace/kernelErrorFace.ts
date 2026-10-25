@@ -9,8 +9,10 @@
  * 未知码一律返回 null（不猜不编造——原样走既有 note，不覆盖）。
  * D77（模型面对账面裁定）：scratch 通道返回体只带 note 人话，完整码（code:detail）不进
  * 模型可见面——模型照抄进散文即用户可见；对账面＝<scratch>/.harness/kernel-error-face.jsonl。
- * D98：增 register 段 run 落点非空拦截码（内核 D97 非空闸 walkthrough_pipeline.py，
- * 实锚 :743——同 run-id 重复执行即报；内核发版 0.7.25b6 起真实来源在位）。
+ * D98：增 register 段 run 落点非空拦截码（内核 D97 非空闸，发版 0.7.25b6 起真实来源在位；
+ * E8b 内核 b13 起准入闸槽位化——本码收缩为「非空但缺合法 run.json」兜底，同 run 续登记
+ * 另一单据不再触发本码；同单据重复为幂等跳过 register_already_done_skip〔ok 态零产物，
+ * 非错误码不入本闭集〕）。
  */
 
 /** 已知内核错误码闭集（token_budget_missing / token_budget_inconsistent:<detail> /
@@ -49,10 +51,11 @@ export const humanizeKernelError = (code: string, opts: KernelErrorFaceOptions =
         : "";
       return `GPU 显存/算力不足（gpu_capacity_insufficient）——不自动降档。\n${table}建议：按每卡 free 表换空闲卡，或由你显式决定降 batch / 降 LoRA rank / 换量化档（降档是用户决策，harness 不代选）后重推`;
     }
-    // D98：register 段 run 落点非空（内核 D97 非空闸——拦截＝同 run-id 重复；文案零内部
-    // 码，下一步按内核首选/次选顺序给全：换新 run-id 并存 ＞ --rerun 幂等重跑，明示无须删除）。
+    // E8b H1（内核 b13 起）：register 准入闸槽位化——非空 run 目录不再整体拦，同一 run
+    // 可继续登记其它单据；本码收缩为「非空但缺合法 run.json」兜底（伪 run/竞争窗口）。
+    // 下一步指「补齐 run.json」而非「换 run」——换 run 是旧口径，会落成 N+1（ADR-0017）。
     case "walkthrough_run_dir_not_empty":
-      return "登记被拒：该 run 标识的落点目录已存在且非空——同 run 标识重复登记。下一步：首选（零删除）在本 workspace 换一个新 run 标识重新登记，与既有 run 并存，既有目录原样保留；确要复用同 run 标识重跑才加 --rerun（各段按幂等口径执行，已确认产物不覆写）。不需要删除工作目录";
+      return "登记被拒：该 run 标识的落点目录已存在且非空，但缺合法的 run 身份文件（run.json）——落点内容无法确认为正式 run。这不是重复登记问题：同一 run 继续登记其它单据是被允许的，不需要换 run。下一步：核对落点目录内容与来历，补齐该 run 的 run.json 后重试；确属误建或废弃落点时由用户决定处置（该落点不删除、不覆盖）";
     default:
       return null;
   }

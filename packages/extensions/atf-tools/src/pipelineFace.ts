@@ -41,6 +41,12 @@
  * prelaunchFace detectIterationConfig 同序；harness 零公式复制），缺席时按内核
  * ADR-0005 run 布局呈现预期值 join(runDir,"training") 并标注来源（段产出后以落盘
  * 终值为准）。
+ * E8b·H1（内核 b13 准入闸槽位化对齐）：register 段说明与错误回流改新口径——同一
+ * run 可继续登记其它单据（无需 --rerun，多类联合训练共用一个 run）；同单据本段
+ * 重复登记为幂等跳过 register_already_done_skip（ok 零产物不覆写，非错误）；
+ * walkthrough_run_dir_not_empty 收缩为「非空但缺合法 run.json」兜底，错误回流
+ * 指引（kernelErrorFace）改指补齐 run.json，不引导换 run（换 run 会落成 ADR-0017
+ * 明禁的 N+1）。
  *
  * 接口契约（引自内核件 K-A2.2a §二，双件同步；A-E14b 增补 K-E14a 命令面；E10b 增补
  * E10a 命令面；E10d 增补 E10f 命令面；D89 增补 --grouping-preset 命令面；D93 增补
@@ -64,6 +70,11 @@
  *   参数、禁拼第二套路径。
  *   落点（唯一）＝<workspace_path>/runs/<run_id>——本工具内 resolveRunDir 退役
  *   （内核与 harness 同一决定者，其余工具不受影响）。
+ *   register 段准入口径（E8b·内核 b13 起）：非空 run 目录不再整体拦——带合法
+ *   run.json 即 canonical 复用，同一 run 可继续登记其它单据（无需 --rerun）；
+ *   同单据本段已放行且无 --rerun → register_already_done_skip（ok 零产物不覆写）；
+ *   walkthrough_run_dir_not_empty 收缩为「非空但缺合法 run.json」兜底（错误回流
+ *   kernelErrorFace 指引补齐 run.json，不引导换 run）。
  *   退出码：0 贯通／2 有拒绝（越序等，blocked）／3 环境错误。
  *   摘要面（E10b）：真内核段模式摘要落盘不落 stdout——stdout 解析缺席时回读内核
  *   缺省落点 <runDir>/stage-<段>.summary.json（同一份内核摘要；run_id/stage 双对账
@@ -629,7 +640,10 @@ export const buildPipelineTool = (
     description:
       `按段驱动 walkthrough_pipeline 段模式（审批必经）：单段触发 ${PIPELINE_STAGES.join("/")} 之一。` +
       `落点＝<workspace_path>/runs/<run_id>（与内核同源唯一落点）；workspace_path 必填绝对路径（贯通内核 workspace），` +
-      `run_id 必填；source_root 仅 register 段必填（其余段可省——缺了也不影响非 register 段）；` +
+      `run_id 必填；source_root 仅 register 段必填（其余段可省——缺了也不影响非 register 段）。` +
+      `register 段准入口径（一个 run 可承载多类单据）：同一 run 可继续登记其它单据（多类联合训练共用一个 run，` +
+      `无需换 run-id——逐类带各自 doc_type 调 register 即可）；同单据本段重复登记为幂等跳过` +
+      `（register_already_done_skip——成功态、零产物、已确认产物不覆写，可直接继续下一段）。` +
       `base_model_path 仅 training_prep 段必填（本地模型目录绝对路径，含 config.json；模型家族名（如 qwen3_vl）不可当路径用——` +
       `缺参/非绝对路径在审批卡前快败，指路 ATF_MODEL_ROOT 可用模型清单；其它段忽略该参）。` +
       `family_split 段另支持 auto_style_cluster 三态（缺省 auto，其它段忽略该参）：` +
