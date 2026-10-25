@@ -3069,7 +3069,7 @@
     "type": "<expr:Path>",
     "choices": null,
     "default": null,
-    "required": true
+    "required": null
    },
    {
     "option": "--l1-dir",
@@ -3078,7 +3078,16 @@
     "type": "<expr:Path>",
     "choices": null,
     "default": null,
-    "required": true
+    "required": null
+   },
+   {
+    "option": "--joint-plan",
+    "dest": "joint_plan",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
    },
    {
     "option": "--deploy",
@@ -4484,6 +4493,15 @@
     "required": null
    },
    {
+    "option": "--from-run",
+    "dest": "from_run",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--base-model-family",
     "dest": "base_model_family",
     "action": "store",
@@ -4957,6 +4975,15 @@
    {
     "option": "--retry-coordinate-pending",
     "dest": "retry_coordinate_pending",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--assemble",
+    "dest": "assemble",
     "action": "store_true",
     "type": null,
     "choices": null,

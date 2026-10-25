@@ -81,6 +81,12 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   // generate_iteration_config.py 声明面（b9 K1-1），b10 起 walkthrough 段命令接线
   // 并随段 argv 下传（re-pin b10 后快照已含该声明面——豁免同步退役）
   training_overrides: "--training-overrides",
+  // E8·H1：training_prep 段 run 级联合装配旗标（内核 b12 walkthrough 声明面
+  // store_true；与 doc-type 互斥，true 时不传 doc_type）
+  assemble: "--assemble",
+  // E8·H2 配套：基模型家族全局参数（内核缺省 qwen3_vl；显式给才追加——联合装配链
+  // atf_joint_train 透传面）
+  base_model_family: "--base-model-family",
 };
 
 /** 参数面前瞻豁免集（E5·H1 D139 已退役——空集）：b9 快照无 walkthrough 声明面的

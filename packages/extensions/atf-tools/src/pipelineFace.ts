@@ -50,7 +50,11 @@
  *   命令面（段模式）：--workspace 必填／--stage 八段之一／--run-id 建议显式／
  *   --source-root 仅 register 必填其余可省／--base-model 仅 training_prep（本地模型目录
  *   绝对路径；K-E14a 拆分后渲染位吃 --base-model-family，内核段模式另有盘上只读再水合，
- *   harness 案 a＝必填显式值卡前快败）／--auto-style-cluster 仅 family_split（三态
+ *   harness 案 a＝必填显式值卡前快败；E8 起 assemble 模式豁免——run 级联合装配由内核
+ *   再水合单源，恢复不了内核 blocked 指路）／--assemble 仅 training_prep（E8 store_true：
+ *   true＝run 级联合装配——枚举单据槽位合并＋生成迭代配置与启动件，与 --doc-type 单类
+ *   语义互斥，true 时不传 doc_type）／--base-model-family 全局（内核缺省 qwen3_vl
+ *   不下传；显式给且非空才追加——渲染口径用，E8 联合装配链透传面）／--auto-style-cluster 仅 family_split（三态
  *   auto|on|off，缺省 auto；其它段不下传不报错）／--grouping-preset 仅 experiment_setup
  *   （A|B，缺省 B；未给不下传——按内核缺省处理，D89）／--negative-ratio-target 仅
  *   experiment_setup（<下限,上限> 形态如 0.03,0.06；显式给才下传——内核以该值进实验门
@@ -655,7 +659,9 @@ export const buildPipelineTool = (
       run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/runs/<run_id>）" },
       workspace_path: { type: "string", required: true, description: "workspace 根（必填绝对路径——内核贯通 workspace；落点单源起点）" },
       source_root: { type: "string", description: "源文档根（仅 register 段必填；其余段可省）" },
-      base_model_path: { type: "string", description: "本地模型目录绝对路径（含 config.json）；模型家族名（如 qwen3_vl）不可当路径用（training_prep 段必填，其它段忽略）" },
+      base_model_path: { type: "string", description: "本地模型目录绝对路径（含 config.json）；模型家族名（如 qwen3_vl）不可当路径用（training_prep 段必填，其它段忽略；assemble=true 时豁免——内核盘上再水合单源，恢复不了内核 blocked 指路）" },
+      assemble: { type: "boolean", description: "run 级联合装配（仅 training_prep 段有效，其它段忽略）：true 时下传 --assemble——内核枚举 run 的单据槽位（prep/variants/<doc>/）合并生成迭代配置与启动件；与 doc_type 单类语义互斥，true 时不传 doc_type" },
+      base_model_family: { type: "string", description: "基模型家族标识（内核全局参数，渲染口径用，缺省 qwen3_vl 不下传；显式给且非空才追加——E8 联合装配链由 atf_joint_train 透传）" },
       auto_style_cluster: {
         type: "string",
         enum: [...AUTO_STYLE_CLUSTER_VALUES],
@@ -759,7 +765,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; training_overrides?: Record<string, unknown> },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; training_overrides?: Record<string, unknown> },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -777,8 +783,12 @@ export const buildPipelineTool = (
       // A-E14b：base_model_path——training_prep 段必填（卡前快败 base_model_path_missing，
       // 指路 ATF_MODEL_ROOT 清单；不触审批面板）；其它段忽略该参（不报错、不下传）。
       // harness 只查非空与绝对路径（家族名形态在此 fail-closed，不等内核 exit 2）——
-      // 路径是否合法（目录在位/config.json 在位）＝内核闸单源，harness 不复制。
-      const needsBaseModel = args.stage === "training_prep";
+      // 路径是否合法（目录在位/config.json 在场）＝内核闸单源，harness 不复制。
+      // E8（H1）：assemble 模式豁免必填——run 级联合装配的 base-model 由内核盘上只读
+      // 再水合单源（experiment-config/iteration-config/launch argv 三源），恢复不了内核
+      // blocked 指路；harness 不复制再水合（禁第二套水合面）。
+      const assembleMode = args.stage === "training_prep" && args.assemble === true;
+      const needsBaseModel = args.stage === "training_prep" && !assembleMode;
       const baseModelPath = typeof args.base_model_path === "string" ? args.base_model_path.trim() : "";
       if (needsBaseModel && baseModelPath === "") {
         return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "base_model_path_missing", note: baseModelPathGuidance() });
@@ -870,6 +880,9 @@ export const buildPipelineTool = (
         + (args.stage === "experiment_setup" && tokenParams !== undefined ? `\n${experimentTokenApprovalLine(tokenParams.values, tokenParams.sources)}` : "")
         // E4-乙：训练参数覆盖行仅 training_prep 段呈现（终值与来源逐键上卡；convention 明示只呈现不下传）
         + (args.stage === "training_prep" && trainingOverrides !== undefined ? `\n${trainingOverridesApprovalLine(trainingOverrides.values, trainingOverrides.sources)}` : "")
+        // E8·H1：装配模式行仅 training_prep 段呈现（run 级联合装配语义上卡——槽位枚举
+        // 与 doc_type 互斥口径可见，卡面不出现落点路径指引）
+        + (assembleMode ? "\n装配模式（assemble）：run 级联合装配——枚举本 run 单据槽位合并训练数据并生成迭代配置与启动件（不按单类执行）" : "")
         // E5·H3 D140：训练输出目录行仅 training_prep 段呈现（落点可见——盘上终值优先，
         // 首跑无配置时按内核 ADR-0005 run 布局呈现预期并标注来源）
         + (args.stage === "training_prep" ? `\n${trainingOutputDirApprovalLine(trainingOutputDirOf(runDir))}` : "")
@@ -888,12 +901,22 @@ export const buildPipelineTool = (
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");
       // D82：单据类型三件透传（给才追加、trim 后非空才上线，缺省不上送——内核自行推断，
       // doc_type 推断不出即 blocked；各段均有效）。与上方段特定追加逻辑并存，零触碰其语义。
+      // E8·H1：assemble 模式与 doc_type 单类语义互斥（内核 argparse 同裁）——true 时
+      // doc_type 一律不传（run 级联合装配按槽位枚举，不按单类执行）。
       const docType = typeof args.doc_type === "string" ? args.doc_type.trim() : "";
-      if (docType !== "") argv.push("--doc-type", docType);
+      if (docType !== "" && !assembleMode) argv.push("--doc-type", docType);
       const laneSuffix = typeof args.lane_suffix === "string" ? args.lane_suffix.trim() : "";
       if (laneSuffix !== "") argv.push("--lane-suffix", laneSuffix);
       const fieldConfig = typeof args.field_config === "string" ? args.field_config.trim() : "";
       if (fieldConfig !== "") argv.push("--field-config", fieldConfig);
+      // E8·H1：装配模式旗标（仅 training_prep 段且显式 true 才追加——缺省不出现在
+      // argv，其它段不追加不报错；内核 b12 声明面 store_true）。
+      if (assembleMode) argv.push("--assemble");
+      // E8·H2 配套：基模型家族透传（内核全局参数、多段读取——D93 先例不按段 gate；
+      // 显式给且 trim 非空才追加，缺省 qwen3_vl 由内核自带不下传——联合装配链经
+      // atf_joint_train 透传非缺省家族）。
+      const baseModelFamily = typeof args.base_model_family === "string" ? args.base_model_family.trim() : "";
+      if (baseModelFamily !== "") argv.push("--base-model-family", baseModelFamily);
       // D89：分组方案透传（仅 experiment_setup 段；显式给且 trim 非空才追加——未给不追加，
       // 内核缺省 B 生效；其它段忽略该参不下传不报错）。与上方段特定/全局追加逻辑并存。
       if (args.stage === "experiment_setup" && groupingPreset !== "") argv.push("--grouping-preset", groupingPreset);
