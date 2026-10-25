@@ -630,3 +630,45 @@ describe("E3-3 confirmFace 落点三级单源（缺口 D——快照与内核读
     expect(result["run_dir"]).toBe(runDir);
   });
 });
+
+// G3 真机发现（2026-10-26）：assemble 模式把用户显式给的 base_model_path 静默丢弃——
+// 内核只能盘上再水合，再水合不到即 blocked（卡上填了基模型却报「未提供」，违反不静默）。
+// 修法：显式给的照传；再水合只在「没给」时兜底。
+describe("training_prep 基模型通道（assemble 模式不丢显式值）", () => {
+  it("assemble ＋ 显式绝对路径 → argv 带 --base-model 与该路径", async () => {
+    const ws = tempRoot("e3-ws-");
+    const result = await toolOf().execute(
+      {
+        stage: "training_prep",
+        run_id: "bp-abs",
+        workspace_path: ws,
+        assemble: true,
+        base_model_path: "/data/LLM_model/Qwen3-VL-32B-Instruct",
+      },
+      fakeExec,
+    );
+    const argv = summaryArgv(result);
+    expect(argv).toContain("--base-model");
+    expect(argv).toContain("/data/LLM_model/Qwen3-VL-32B-Instruct");
+  });
+
+  it("assemble 未给路径 → 不追 --base-model（必填豁免，内核再水合单源）", async () => {
+    const ws = tempRoot("e3-ws-");
+    const result = await toolOf().execute(
+      { stage: "training_prep", run_id: "bp-none", workspace_path: ws, assemble: true },
+      fakeExec,
+    );
+    const argv = summaryArgv(result);
+    expect(argv).not.toContain("--base-model");
+    expect((result as Record<string, unknown>)["error"]).toBeUndefined();
+  });
+
+  it("assemble ＋ 相对路径 → 卡前快败 base_model_path_not_absolute（与单类模式同裁）", async () => {
+    const ws = tempRoot("e3-ws-");
+    const result = await toolOf().execute(
+      { stage: "training_prep", run_id: "bp-rel", workspace_path: ws, assemble: true, base_model_path: "Qwen3-VL-32B-Instruct" },
+      fakeExec,
+    );
+    expect((result as Record<string, unknown>)["error"]).toBe("base_model_path_not_absolute");
+  });
+});

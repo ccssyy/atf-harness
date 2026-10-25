@@ -839,7 +839,7 @@ export const buildPipelineTool = (
       if (needsBaseModel && baseModelPath === "") {
         return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "base_model_path_missing", note: baseModelPathGuidance() });
       }
-      if (needsBaseModel && !isAbsolute(baseModelPath)) {
+      if (baseModelPath !== "" && !isAbsolute(baseModelPath)) {
         return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "base_model_path_not_absolute", note: `base_model_path 须为本地模型目录绝对路径（得 ${baseModelPath}）——模型家族名（如 qwen3_vl）不可当路径用；目录内须有 config.json（合法性由内核闸复核）` });
       }
       // D89：分组方案取值（审批前定——卡面要呈现分组方案行；「按未给处理」＝trim 后空串
@@ -944,7 +944,9 @@ export const buildPipelineTool = (
       // 开关，缺省不出现在 argv，其它段不追加不报错）；禁拼第二套路径。
       const argv: string[] = ["--workspace", workspacePath, "--run-id", args.run_id, "--stage", args.stage];
       if (args.stage === "register") argv.push("--source-root", (args.source_root as string).trim());
-      if (needsBaseModel) argv.push("--base-model", baseModelPath);
+      // 显式给的基模型一律下传（assemble 模式亦然）：再水合只是「没给」时的兜底，
+      // 不能把用户显式值静默丢掉（不静默原则——丢了就是 blocked 与卡上填值不符）。
+      if (needsBaseModel || baseModelPath !== "") argv.push("--base-model", baseModelPath);
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");
       // D82：单据类型三件透传（给才追加、trim 后非空才上线，缺省不上送——内核自行推断，
