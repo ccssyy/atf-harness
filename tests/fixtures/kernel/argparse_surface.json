@@ -4563,6 +4563,38 @@
   ]
  },
  {
+  "script": "tools/list_doc_slots.py",
+  "args": [
+   {
+    "option": "--run",
+    "dest": "run",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--json",
+    "dest": "json",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--check",
+    "dest": "check",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
   "script": "tools/probe_runtime_env.py",
   "args": [
    {
