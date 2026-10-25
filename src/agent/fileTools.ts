@@ -28,6 +28,7 @@ import { err, ok, type Result } from "../bridge/index.js";
 import { checkSchema, validateCanonicalOutput, type SchemaNode, type ToolDefinition } from "../core/tools/index.js";
 import { LEDGER_ENV, homeLedgerPathOf } from "../core/workspace/approvalLedger.js";
 import { findBash, runScratchCommand, SCRATCH_EXEC_STDERR_TAIL_BYTES, SCRATCH_WRITE_MAX_BYTES } from "../core/workspace/scratchExec.js";
+import { resolveDshHome } from "../core/workspace/workspaceRegistry.js";
 
 /** A7 四工具名（atf_ 前缀＝治理包装面，与全工具面命名一致；指令件记名 read/edit/write/bash）。 */
 export const FILE_TOOL_NAMES: readonly string[] = ["atf_read", "atf_edit", "atf_write", "atf_bash"];
@@ -119,6 +120,31 @@ export const resolveWhitelistedPath = async (
 };
 
 // ---------------------------------------------------------------- A6：受保护产物 denylist（写保护第二道）
+
+/** E8b·H4 D151——用户上传附件只读面：DSH 家 attachments/ 经白名单派生面⑧放行读，
+ *  写闸（atf_write/atf_edit）在此拒绝——附件是用户上传的证据材料，agent 不可改写
+ *  或新增（防污染输入证据；atf_bash 围栏可写仅 run 工作区，天然不含本面）。 */
+export const ATTACHMENT_WRITE_DENIED = "attachment_write_denied";
+
+/** 附件目录根（<DSH 家>/attachments——与 fileRoots 派生面⑧同源同解析链）。 */
+export const attachmentsRootOf = (env: Readonly<Record<string, string | undefined>>): string =>
+  join(resolveDshHome(env), "attachments");
+
+/** 附件路径判定（白名单解析后的 abs；realpath 与既有写闸路径形态一致——目标不存在按
+ *  字面判定，新建附件路径同样拒）。 */
+export const isAttachmentPath = (absPath: string, env: Readonly<Record<string, string | undefined>>): boolean => {
+  let probe = absPath;
+  try {
+    probe = realpathSync(absPath);
+  } catch {
+    // 目标不存在 → 按字面判定（与 isProtectedArtifactPath 同口径）
+  }
+  const normalized = resolve(probe);
+  const root = resolve(attachmentsRootOf(env));
+  return normalized === root || normalized.startsWith(root + sep);
+};
+
+export const ATTACHMENT_WRITE_NOTE = "用户上传的附件是只读材料（经 atf_read 读取）——不可改写或新建附件文件";
 
 /** A6 拒绝码：命中受保护产物 denylist——审计产物（段事实/段摘要/事实轨/审批账本）由对应工具链
  *  写入，直接改写会让审计链失真；白名单判定之后第二道，命中即拒。 */
@@ -433,6 +459,10 @@ const writeHandler = async (params: Record<string, unknown>, host: FileToolHost)
   if (isProtectedArtifactPath(guard.value.abs, protectedArtifactLedgerPathOf(host.env ?? {}))) {
     return rejected(PROTECTED_ARTIFACT_WRITE, `受保护产物不可直接改写: ${path}。${PROTECTED_ARTIFACT_NOTE}`);
   }
+  // E8b·H4 D151：附件只读面（新建/覆写均拒——上传证据不可经文件工具改写）
+  if (isAttachmentPath(guard.value.abs, host.env ?? {})) {
+    return rejected(ATTACHMENT_WRITE_DENIED, `附件目录只读: ${path}。${ATTACHMENT_WRITE_NOTE}`);
+  }
   const existing = await stat(guard.value.abs).catch(() => undefined);
   if (existing !== undefined && !existing.isFile()) return rejected("not_a_file", `目标已存在且非普通文件: ${path}`);
   try {
@@ -468,6 +498,10 @@ const editHandler = async (params: Record<string, unknown>, host: FileToolHost):
   // 故同判定闭合；read 面零此闸，只读放行）
   if (isProtectedArtifactPath(guard.value.abs, protectedArtifactLedgerPathOf(host.env ?? {}))) {
     return rejected(PROTECTED_ARTIFACT_WRITE, `受保护产物不可直接改写: ${path}。${PROTECTED_ARTIFACT_NOTE}`);
+  }
+  // E8b·H4 D151：附件只读面（edit 与 write 同判定闭合——read 面零此闸，只读放行）
+  if (isAttachmentPath(guard.value.abs, host.env ?? {})) {
+    return rejected(ATTACHMENT_WRITE_DENIED, `附件目录只读: ${path}。${ATTACHMENT_WRITE_NOTE}`);
   }
   let text: string;
   try {
