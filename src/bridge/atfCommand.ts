@@ -8,17 +8,18 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 契约轴 2026-10-25 窗口 E5：v0.7.25b9 → v0.7.25b10，唯一真相源 = bridge.contract.yaml
+// 当前 pin（re-pin 契约轴 2026-10-25 窗口 E8b：v0.7.25b12 → v0.7.25b13，唯一真相源 = bridge.contract.yaml
 // atf_upstream，本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.25b10（E5 链路收口内核批生效窗——D139 training_overrides walkthrough 段直下
-// 〔training_prep 段 --training-overrides stage 参数＋--output-dir 显式改传 <run>/training〕＋D140 落点护栏
-// 〔--output-dir 指向 <run>/prep/ 之下即拒 output_dir_inside_config_dir；缺省仍 <run>/training〕＋D141 留出
-// 判定比例化〔ratios_actual.test round(x,4) 比较删 int() 截断〕＋D142/D143 显式实例根
-// 〔ATF_INSTANCE_ROOT>ATF_HOME 两键同义；均缺抛 InstanceRootMissing fail-closed〕
-// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit c34ab73，方法面零增（session/ 零 diff），
+// 本轮 pin 取值＝tag v0.7.25b13（E8b 联合训练可达内核批生效窗——register 准入闸槽位化
+// 〔非空 run 目录不再整体拦，带合法 run.json 即 canonical 复用，同一 run 可继续登记其它单据
+// 无需 --rerun；同单据本段已放行且无 --rerun 记 register_already_done_skip（ok 零产物不覆写）；
+// walkthrough_run_dir_not_empty 收缩为缺合法 run.json 兜底〕＋run.json 增 docs[]
+// 〔append-only＋doc_type 排序；读侧单源 run_doc_registry，legacy 缺键目录探测〕＋
+// check_run_layout 补 layout_docs_registry_mismatch〔docs[] 与 register 段摘要双向一致〕
+// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit b5b015d，方法面零增（session/ 零 diff），
 // 会话协议轴 1／桥接契约轴 2 零 diff）。
-export const ATF_UPSTREAM_TAG = "v0.7.25b10";
-export const ATF_UPSTREAM_COMMIT_SHA = "c34ab7334333d60c4f0df91b504c8d17a1e543b4";
+export const ATF_UPSTREAM_TAG = "v0.7.25b13";
+export const ATF_UPSTREAM_COMMIT_SHA = "b5b015d3e95039f94d5feb3bda342d8245608e47";
 
 export interface AtfCliInvocation {
   command: string;
