@@ -60,13 +60,21 @@ const buildTool = (root: string, ctx: ReturnType<typeof makeCtx>["ctx"], opts: {
     registryWorkspaces: [],
   }) as unknown as Tool;
 
-/** 槽位夹具：每类 prep/variants/<doc>/train.jsonl（行＝{"row":"<doc>-<i>"}）。 */
+/** 槽位夹具：每类 prep/variants/<doc>/train.jsonl（行＝{"row":"<doc>-<i>"}）＋登记清单
+ *  run.json docs[]（E8b·内核 b13 形态——已登记与已备槽位一致，卡前校验通过）。 */
 const seedSlots = (root: string, runId: string, classes: ReadonlyArray<{ doc: string; rows: number }>): string => {
   const runDir = join(root, "runs", runId);
   for (const c of classes) {
     mkdirSync(join(runDir, "prep", "variants", c.doc), { recursive: true });
     writeFileSync(join(runDir, "prep", "variants", c.doc, "train.jsonl"), Array.from({ length: c.rows }, (_, i) => JSON.stringify({ row: `${c.doc}-${i}` })).join("\n") + "\n");
   }
+  writeFileSync(join(runDir, "run.json"), `${JSON.stringify({
+    run_id: runId,
+    layout_version: "RunLayout/v1",
+    docs: [...classes]
+      .sort((a, b) => (a.doc < b.doc ? -1 : 1))
+      .map((c) => ({ doc_type: c.doc, lane_suffix: c.doc, registered_at: "2026-10-25T00:00:00+00:00" })),
+  }, null, 1)}\n`);
   return runDir;
 };
 
