@@ -12,6 +12,7 @@
  * tests/run/piaiLengthRecovery.test.ts）、R3 切换即时生效、N 工具→N 决策、usage/配额/脱敏、
  * walk fail-closed。
  */
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   HARNESS_SYSTEM_PROMPT,
@@ -399,5 +400,111 @@ describe("序列 walk 纯函数（walkAdapterMessagesToPi）", () => {
       scaffold,
     );
     expect(nameMismatch.ok).toBe(false);
+  });
+});
+
+describe("H-E9d H9b：图像件渲染（walk parts＋出站 payload image_url）", () => {
+  const scaffold = { api: "openai-completions", provider: "deepseek", model: "deepseek-flash", timestamp: 0 };
+  /** 与 adapter.test.ts 同源的 1×1 PNG 字节。 */
+  const PNG_1X1_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+  const pngBytes = Buffer.from(PNG_1X1_BASE64, "base64");
+  const pngSha256 = createHash("sha256").update(pngBytes).digest("hex");
+  const imageOf = (mediaType: string, base64: string) => ({
+    media_type: mediaType,
+    sha256: createHash("sha256").update(Buffer.from(base64, "base64")).digest("hex"),
+    bytes: Buffer.from(base64, "base64").length,
+    data_base64: base64,
+  });
+
+  it("walk 纯函数：有图像 → content parts（text 前 image 后原序，多图保持 result 序）；无图像 → content 恰单 text 块（与改前形态逐字节一致）", () => {
+    const images = [imageOf("image/png", PNG_1X1_BASE64), imageOf("image/gif", "R0lGODlhAQABAAAAACw=")];
+    const walked = walkAdapterMessagesToPi(
+      [
+        { role: "assistant_tool_call", tool: "atf_read", params: {}, source_event_id: 2 },
+        { role: "tool_result", tool: "atf_read", ok: true, summary: "摘要", source_event_id: 3, images },
+      ],
+      scaffold,
+    );
+    expect(walked.ok).toBe(true);
+    if (!walked.ok) return;
+    const toolResult = walked.value.at(-1);
+    if (toolResult?.role !== "toolResult") throw new Error("unreachable");
+    expect(toolResult.content).toEqual([
+      { type: "text", text: "摘要" },
+      { type: "image", data: images[0]?.data_base64, mimeType: "image/png" },
+      { type: "image", data: images[1]?.data_base64, mimeType: "image/gif" },
+    ]);
+    // base64 解码 sha 与源一致（parts 面保真）
+    const firstImage = toolResult.content[1];
+    if (firstImage?.type !== "image") throw new Error("unreachable");
+    expect(createHash("sha256").update(Buffer.from(firstImage.data, "base64")).digest("hex")).toBe(pngSha256);
+
+    // 无图像（images 缺省）：content 形态与改前逐字节一致——既有 fixture 五组 payload 锚的构成件
+    const plain = walkAdapterMessagesToPi(
+      [
+        { role: "assistant_tool_call", tool: "atf_read", params: {}, source_event_id: 2 },
+        { role: "tool_result", tool: "atf_read", ok: true, summary: "摘要", source_event_id: 3 },
+      ],
+      scaffold,
+    );
+    expect(plain.ok).toBe(true);
+    if (!plain.ok) return;
+    const plainResult = plain.value.at(-1);
+    if (plainResult?.role !== "toolResult") throw new Error("unreachable");
+    expect(plainResult.content).toEqual([{ type: "text", text: "摘要" }]);
+  });
+
+  it("锚②：出站 payload 含 image part 且 base64 解码 sha 一致（pi-ai 真编码器；deepseek-flash 目录声明 image 输入；tool 文本仍在）", async () => {
+    const { provider, payloads, requests } = harness({ responses: [textFinishStop("收到")] });
+    const decision = await provider.decide(
+      CTX([
+        userEvent(1, "看这张图"),
+        callEvent(2, "atf_read", { path: "/ws/shot.png" }),
+        resultEvent(3, "atf_read", true, {
+          result: { path: "/ws/shot.png", images: [imageOf("image/png", PNG_1X1_BASE64)] },
+          call_ref: 2,
+        }),
+      ]),
+    );
+    expect(decision.ok).toBe(true);
+    expect(requests.length).toBe(1);
+    const messages = messagesOf(payloads[0] as Record<string, unknown>);
+    const imageUrls: string[] = [];
+    for (const message of messages) {
+      const content = message["content"];
+      if (Array.isArray(content)) {
+        for (const part of content as Record<string, unknown>[]) {
+          if (part["type"] === "image_url") {
+            const imageUrl = part["image_url"] as Record<string, unknown>;
+            imageUrls.push(String(imageUrl["url"]));
+          }
+        }
+      }
+    }
+    expect(imageUrls.length).toBe(1);
+    expect(imageUrls[0]).toBe(`data:image/png;base64,${PNG_1X1_BASE64}`);
+    const decoded = Buffer.from((imageUrls[0] as string).split(",")[1] ?? "", "base64");
+    expect(createHash("sha256").update(decoded).digest("hex")).toBe(pngSha256);
+    // tool 消息文本仍在（摘要与剥离语义不受渲染影响）
+    const toolMessage = messages.find((message) => message["role"] === "tool");
+    expect(toolMessage).toBeDefined();
+    expect(JSON.stringify(toolMessage)).toContain("/ws/shot.png");
+  });
+
+  it("锚②零回归：无图像上下文出站 payload 与既有 fixture 形态一致（既有五组锚全绿即本锚的另一面——此处直证请求次数与消息面）", async () => {
+    const { provider, payloads, requests } = harness({ responses: [textFinishStop("ok")] });
+    const decision = await provider.decide(
+      CTX([
+        userEvent(1, "hi"),
+        callEvent(2, "atf_fact_scan", {}),
+        resultEvent(3, "atf_fact_scan", true, { result: { facts: [] }, call_ref: 2 }),
+      ]),
+    );
+    expect(decision.ok).toBe(true);
+    expect(requests.length).toBe(1);
+    // 全 payload 无 image part（无图像路径零渗漏——只钉渲染面形态词，不钉普通文本用词）
+    expect(JSON.stringify(payloads[0])).not.toContain("image_url");
+    expect(JSON.stringify(payloads[0])).not.toContain(PNG_1X1_BASE64);
+    expect(JSON.stringify(payloads[0])).not.toContain("Attached image");
   });
 });

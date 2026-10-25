@@ -243,11 +243,19 @@ export const walkAdapterMessagesToPi = (
           return err(`tool_result 与配对工具调用不一致（期望 ${paired.tool}，实得 ${message.tool}）`);
         }
         state.pending.shift();
+        // H9b（H-E9d，2026-10-25）：投影携带图像件 → content 为 parts（text 恒在前、图像随后、
+        // 多图保持 result 内原序——设计要点 §(九).3）。pi-ai ToolResultMessage.content 本就是
+        // (TextContent | ImageContent)[]，openai-completions 编码器既有行为承接（tool 文本＋随后
+        // user 消息 image_url）——本层零新增编码逻辑。无图像（images 缺省）时 spread 空数组，
+        // content 形态与改前逐字节相同（既有 fixture 五组锚即快照）。
         out.push({
           role: "toolResult",
           toolCallId: paired.id,
           toolName: message.tool,
-          content: [{ type: "text", text: message.summary }],
+          content: [
+            { type: "text", text: message.summary },
+            ...(message.images ?? []).map((image) => ({ type: "image" as const, data: image.data_base64, mimeType: image.media_type })),
+          ],
           isError: !message.ok,
           timestamp: scaffold.timestamp,
         });
