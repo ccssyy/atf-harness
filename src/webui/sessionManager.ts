@@ -335,12 +335,14 @@ export class WebUiSessionManager {
         session.queue = orchestrator;
         session.queueStartedAt = Date.now();
         orchestrator.enqueue(session.boundRunId ?? session.id, (chatEvent) => this.emit(session, chatEvent), () => {
-          // 命中：琥珀确认卡（危险动作守门不变——用户仍需点确认）
+          // 命中：琥珀确认卡（危险动作守门不变——用户仍需点确认）。
+          // E9a·H7a（D160）：command 不再上卡面（chatModel 渲染已去命令行）——事件数据
+          // 仅作日志/审计承载，字面纯业务（零 .sh 文件名与「GPU 窗口」内部术语）。
           void this.emitDangerConfirm(session.id, {
             title: queueHitText(0),
             gpuCount: 1,
             estimate: queueHitEstimateText(1),
-            command: "bash train.sh（GPU 窗口已命中——训练启动放行）",
+            command: "开始本轮训练——GPU 空闲命中，待确认放行",
           });
         });
         this.emit(session, {

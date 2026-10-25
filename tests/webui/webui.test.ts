@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { renderChatEvent, renderChatHtml, type ChatEvent } from "../../src/webui/chatModel.js";
+import { queueHitText, queueHitEstimateText } from "../../src/webui/gpuQueue.js";
 import { readFileSync } from "node:fs";
 import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, parseConfigEditText, loadConfigSnapshot, saveConfigSnapshot, hasConfigSnapshot } from "../../src/webui/configConfirm.js";
 import { filterRunsByWorkspace, makeReadOnlyTools } from "../../src/webui/readOnlyTools.js";
@@ -71,7 +72,8 @@ describe("渲染快照（消息组件闭集 7 种）", () => {
       pending: true,
       at: "t",
     },
-    { seq: 6, kind: "danger_confirm", title: "train.sh 真跑", gpuCount: 8, estimate: "4h", command: "bash train.sh", pending: true, at: "t" },
+    // H7c：整卡数据升真实形态（自造 estimate:"4h" 退役——estimate/命令取 sessionManager 同源实值）
+    { seq: 6, kind: "danger_confirm", title: queueHitText(0), gpuCount: 1, estimate: queueHitEstimateText(1), command: "开始本轮训练——GPU 空闲命中，待确认放行", pending: true, at: "t" },
     { seq: 7, kind: "system_notice", level: "warn", text: "gpu_window_pending：训练段未放行", at: "t" },
   ];
 
@@ -90,11 +92,38 @@ describe("渲染快照（消息组件闭集 7 种）", () => {
     expect(html[4]).toContain("来自登记");
     expect(html[4]).toContain("确认并继续");
     expect(html[4]).toContain("也可直接回复如『lr 改 2e-4』");
-    expect(html[5]).toContain("确认真实训练 · GPU 8 卡 · 预计 4h");
     expect(html[6]).toContain("gpu_window_pending");
     // 整页渲染 = 单条顺序拼接（纯函数：同输入同输出）
     expect(renderChatHtml(events)).toBe(html.join("\n"));
     expect(renderChatHtml(events)).toBe(renderChatHtml([...events]));
+  });
+
+  it("E9a·H7c 整卡渲染快照——GPU 队列命中确认卡真实形态（estimate＝queueHitEstimateText(1) 实值）：estimate 直出无「预计」前缀、占卡数恰一次、零命令行/.sh/「GPU 窗口」", () => {
+    // 真实形态（sessionManager 命中回调同源三件：title/estimate 来自 gpuQueue 单源；command 仅审计承载）
+    const card: ChatEvent = {
+      seq: 6, kind: "danger_confirm",
+      title: queueHitText(0),
+      gpuCount: 1,
+      estimate: queueHitEstimateText(1),
+      command: "开始本轮训练——GPU 空闲命中，待确认放行",
+      pending: true, at: "t",
+    };
+    const html = renderChatEvent(card);
+    expect(html).toContain('class="msg danger_confirm"');
+    expect(html).toContain('<div class="card-title">GPU 0 已空闲，确认开跑？</div>');
+    // estimate 直出（动作＋占卡＋自动开始——不加「预计」前缀）
+    expect(html).toContain('<div class="cost">启动训练编排——占 1 卡，GPU 空闲后自动开始</div>');
+    expect(html).not.toContain("预计");
+    // 卡数只出现一次（estimate 内「占 1 卡」——按钮/cost 前缀不再重复）
+    expect((html.match(/占 1 卡/g) ?? []).length).toBe(1);
+    expect(html).not.toMatch(/GPU \d+ 卡 ·/);
+    // 按钮纯动作（D161：按钮不再拼卡数与 estimate）
+    expect(html).toContain('>确认真实训练</button>');
+    expect(html).toContain("暂不启动");
+    // H7a（D160）：命令行不单列上卡；卡面零 .sh 文件名与「GPU 窗口」内部术语
+    expect(html).not.toContain('<pre class="params">');
+    expect(html).not.toContain(".sh");
+    expect(html).not.toContain("GPU 窗口");
   });
 
   it("危险卡应答后按钮消失（代价显性化只到确认点）", () => {

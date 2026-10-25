@@ -140,13 +140,16 @@ export const renderChatEvent = (event: ChatEvent): string => {
     }
     case "danger_confirm": {
       const answered = event.answered ? `<div class="answered">已应答：${esc(event.answered.verdict)}</div>` : "";
+      // E9a·H7a/H7b（D160/D161）：命令行不单列上卡（改由事件数据＝日志/审计面承载——
+      // 卡面零 .sh 文件名与内部术语）；estimate 语义＝动作＋占卡＋自动开始，直出不加
+      // 「预计」前缀，占卡数只在 estimate 出现一次（按钮纯动作）。
       const button =
         event.pending && !event.answered
-          ? `<button class="btn danger" data-action="danger-confirm">确认真实训练 · GPU ${String(event.gpuCount)} 卡 · 预计 ${esc(event.estimate)}</button><button class="btn" data-action="danger-deny">暂不启动</button>`
+          ? `<button class="btn danger" data-action="danger-confirm">确认真实训练</button><button class="btn" data-action="danger-deny">暂不启动</button>`
           : "";
       return (
         `<div class="msg danger_confirm"><div class="card-title">${esc(event.title)}</div>` +
-        `<pre class="params">${esc(event.command)}</pre><div class="cost">GPU ${String(event.gpuCount)} 卡 · 预计 ${esc(event.estimate)}</div>${button}${answered}</div>`
+        `<div class="cost">${esc(event.estimate)}</div>${button}${answered}</div>`
       );
     }
     case "system_notice":
