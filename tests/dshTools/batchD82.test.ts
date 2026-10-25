@@ -164,17 +164,19 @@ describe("D82 §一.6——非行为面中性化锚（文件级 grep，审计件
     expect(pipelineSource()).not.toContain("装箱单");
     expect(trainingSource()).not.toContain("装箱单");
   });
-  it("client.js :882 doczh placeholder＝中性「单据中文名」（去举例）；doctype placeholder 无 pl 举例", () => {
+  it("E8 后字段编辑面退役：doczh/doctype 锚清零（中性化语义随面退役成立——举例词零回归）", () => {
     const source = clientSource();
-    expect(source).toContain("'data-joint-doczh': '1', placeholder: '单据中文名'");
+    expect(source).not.toContain("data-joint-doczh");
+    expect(source).not.toContain("data-joint-doctype");
     expect(source).not.toContain("（如 装箱单）");
     expect(source).not.toContain("（如 pl）");
   });
-  it("client.js 倍率示例与导入示例 JSON 去 pl/swb（document_zh＝中性「单据A」，结构示例完整）", () => {
+  it("E8 后倍率/导入示例零残留（导入面退役——字段规格槽位登记不由卡面收集）", () => {
     const source = clientSource();
     expect(source).not.toContain('{"pl":1,"swb":2}');
-    expect(source).toContain('"document_zh":"单据A"');
-    expect(source).toContain('"schema_version":"FieldSpec/v1"');
+    expect(source).not.toContain("data-joint-import");
+    expect(source).not.toContain("reader.readAsText");
+    expect(source).not.toContain("field_specs: fieldSpecs");
   });
   it("client.js :2795 胶囊注释去 pl 举例、保留「取 title 首段短名」语义", () => {
     const source = clientSource();

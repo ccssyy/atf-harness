@@ -30,7 +30,7 @@ import {
   jointOutLayoutVerdict,
   parseJointBuilderStderr,
 } from "../../packages/extensions/atf-tools/src/jointTrainFace.js";
-import { jointSpecIssues, normalizeJointFieldSpec } from "../../packages/extensions/atf-ui/src/jointTrainState.js";
+import { buildJointTrainMessage, jointSpecIssues, normalizeJointFieldSpec } from "../../packages/extensions/atf-ui/src/jointTrainState.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -519,13 +519,13 @@ describe("H5——atf_joint_train（schema 面＋卡前快败＋builder 链＋ov
     expect(existsSync(join(root, "run-target", "prep", "joint"))).toBe(false);
   });
 
-  it("共享判定单源：jointSpecIssues（UI 同锚）与 normalizeJointFieldSpec 形态（locators 归一/group 闭集/选中过滤）", () => {
-    expect(jointSpecIssues([{ doc_type: "pl", run_id: "r", document_zh: "装箱单", fields: [{ field_id: "f", zh: "中", group: "goods", definition: "d", selected: true }] }])).toEqual([]);
+  it("共享判定单源：jointSpecIssues（UI 同锚——E8 类草稿无 run_id）与 normalizeJointFieldSpec 形态（locators 归一/group 闭集/选中过滤）", () => {
+    expect(jointSpecIssues([{ doc_type: "pl", document_zh: "装箱单", fields: [{ field_id: "f", zh: "中", group: "goods", definition: "d", selected: true }] }])).toEqual([]);
     const issues = jointSpecIssues([
-      { doc_type: "pl", run_id: "", document_zh: "", fields: [] },
-      { doc_type: "pl", run_id: "r2", document_zh: "装箱单", fields: [{ field_id: "", zh: "x", group: "goods", definition: "" }] },
+      { doc_type: "pl", document_zh: "", fields: [] },
+      { doc_type: "pl", document_zh: "装箱单", fields: [{ field_id: "", zh: "x", group: "goods", definition: "" }] },
     ]);
-    expect(issues.map((i) => i.code)).toEqual(["joint_run_id_missing", "joint_document_zh_missing", "joint_field_missing", "joint_doc_type_duplicate"]);
+    expect(issues.map((i) => i.code)).toEqual(["joint_document_zh_missing", "joint_field_missing", "joint_doc_type_duplicate"]);
     const spec = normalizeJointFieldSpec("pl", "装箱单", [
       { field_id: "a", zh: "甲", group: "non_goods", definition: "d1", locator_keywords: ["K1"] },
       { field_id: "b", zh: "乙", definition: "d2", selected: false },
@@ -538,5 +538,48 @@ describe("H5——atf_joint_train（schema 面＋卡前快败＋builder 链＋ov
         { field_id: "c", zh: "丙", group: "goods", definition: "d3", locators: [] },
       ],
     });
+  });
+});
+
+describe("E8——状态面单 run（jointTrainState 收敛：{run_id, classes 来自槽位, oversample, seed, base_model_family}）", () => {
+  it("buildJointTrainMessage：文案＝「本次训练（N 类）」——run 单值；不出现 target run／落点实验与 prep/joint；字段规格槽位登记句在位", () => {
+    const message = buildJointTrainMessage({
+      run_id: "run-x",
+      classes: [
+        { doc_type: "pl", rows: 3410, field_count: 12 },
+        { doc_type: "swb", rows: 1205 },
+      ],
+      oversample: { pl: 1, swb: 2 },
+      seed: 42,
+      base_model_family: "qwen3_vl",
+      estimated_rows: 5820,
+    });
+    expect(message).toContain("本次训练（2 类：pl、swb → run run-x）：");
+    expect(message).toContain("run_id：run-x");
+    expect(message).toContain('oversample：{"pl":1,"swb":2}');
+    expect(message).toContain("seed：42");
+    expect(message).toContain("base_model_family：qwen3_vl");
+    expect(message).toContain("pl 3,410 行 · 12 字段");
+    expect(message).toContain("swb 1,205 行");
+    expect(message).toContain("已按类登记在 experiment-setup（field-config.json）");
+    expect(message).toContain("预计 5,820 行");
+    // 禁词（E8 H3d：不出现 target run／落点实验概念与 prep/joint 落点指引；无 datasets 语义
+    // ——atf_joint_train 工具名本身含 joint，禁的是路径指引非工具名）
+    expect(message).not.toContain("target");
+    expect(message).not.toContain("落点");
+    expect(message).not.toContain("prep");
+    expect(message).not.toContain("datasets：");
+  });
+
+  it("倍率/seed/基座族缺省形态：oversample 省略行在位；seed/base_model_family/预计行缺省不打行（不造数）", () => {
+    const message = buildJointTrainMessage({ run_id: "run-y", classes: [{ doc_type: "only" }] });
+    expect(message).toContain("本次训练（1 类：only → run run-y）：");
+    expect(message).toContain("oversample：省略（全部类型 1 倍）");
+    expect(message).not.toContain("seed：");
+    expect(message).not.toContain("base_model_family：");
+    expect(message).not.toContain("预计");
+    // 行数未知（槽位投影缺 rows）——类型与数据行不带行数不造数
+    expect(message).toContain("类型与数据：only");
+    expect(message).not.toContain("行 · ");
   });
 });
