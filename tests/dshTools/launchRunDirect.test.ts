@@ -8,7 +8,7 @@
  *
  * 本文件只锚 handler 侧（落点解析见 launchRundir.test.ts）。
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -25,11 +25,12 @@ afterEach(() => {
 });
 
 /** 可启动的 launch.sh 桩：写 `<SCRIPT_DIR>/launch/state.json`（handler 读回 state）。 */
-const writeStubLaunch = (dirOfLaunchSh: string): string => {
+const writeStubLaunch = (dirOfLaunchSh: string, trainDir?: string): string => {
   const path = join(dirOfLaunchSh, "launch.sh");
   mkdirSync(dirOfLaunchSh, { recursive: true });
   writeFileSync(path, [
     "#!/usr/bin/env bash",
+    ...(trainDir !== undefined ? [`TRAIN_DIR='${trainDir}'`] : []),
     'SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"',
     'mkdir -p "$SCRIPT_DIR/launch"',
     'cat > "$SCRIPT_DIR/launch/state.json" <<EOF',
@@ -117,5 +118,31 @@ describe("atf_launch_execute run 直调（launch_sh 省略）", () => {
     const detail = result.detail as Record<string, unknown>;
     expect(String(detail["message"])).toContain("训练准备段");
     expect(detail["run_dir"]).toBe(runDir);
+  });
+
+  it("launch_manifest 声明 approval_ledger → 写账显式带该值（三处同源，不各自解析 HOME）", async () => {
+    const root = tempRoot();
+    const runDir = join(root, "runs", "ledger-src");
+    writeStubLaunch(join(runDir, "launch"), runDir);
+    mkdirSync(join(runDir, "prep", "iteration-config"), { recursive: true });
+    const config = join(runDir, "prep", "iteration-config", "iteration-config.json");
+    writeFileSync(config, '{"schema":"IterationConfig/v1"}\n');
+    const ledger = join(root, "instance", ".atf", "approval-ledger", "training-release.jsonl");
+    writeFileSync(join(runDir, "launch_manifest.json"), JSON.stringify({ approval_ledger: ledger }));
+    // 桩脚本回显收到的 argv，供断言
+    const argvDump = join(root, "record-argv.json");
+    const stubDir = join(root, "skills", "atf-prepare-training", "scripts");
+    mkdirSync(stubDir, { recursive: true });
+    writeFileSync(
+      join(stubDir, "generate_train_launch.py"),
+      `import json, sys\nopen(${JSON.stringify(argvDump)}, "w").write(json.dumps(sys.argv[1:]))\nprint("recorded: stub")\n`,
+    );
+
+    const result = (await launchHandler({ run_id: "ledger-src" }, hostOf(runDir, root))) as Executed;
+    expect(result.kind).toBe("executed");
+    expect(result.result["release_ledger"]).toBe(ledger);
+    const argv = JSON.parse(readFileSync(argvDump, "utf-8")) as string[];
+    expect(argv).toContain("--approval-ledger");
+    expect(argv[argv.indexOf("--approval-ledger") + 1]).toBe(ledger);
   });
 });

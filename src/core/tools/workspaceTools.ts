@@ -827,6 +827,7 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
   // ② 放行记录（harness 代执行——以用户确认卡为前提；agent 永不代签）
   let releaseRecorded = false;
   let releaseResult = "skipped_no_config";
+  let releaseLedger: string | undefined;
   if (configRel !== undefined) {
     const configGuard = resolveConfigPath(host, configRel);
     if (!configGuard.ok) return rejected(configGuard.reason, { message: configGuard.message });
@@ -847,8 +848,26 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
     const recordScript = join(host.kernelDir, "skills", "atf-prepare-training", "scripts", "generate_train_launch.py");
     const dirs = await ensureExecDirs(host.scratchDir);
     if (!dirs.ok) return rejected(dirs.error.reason, { message: dirs.error.message });
+    // 放行账本单源：以 launch_manifest 的 approval_ledger 为准（train.sh 头部 export 与
+    // launch.sh 放行闸的同一值）。让内核按自身进程 HOME 重新解析会与另外两处错位——真机
+    // 曾出现两份账本：launch.sh 闸读一份、train.sh 闸读另一份，真训必须换两个 HOME 各写
+    // 一遍账才起得来。manifest 未声明（旧产物）时才交回内核解析（其回退只到实例根，不猜 HOME）。
+    const manifestLedger =
+      manifestRecord !== undefined && typeof manifestRecord["approval_ledger"] === "string" && String(manifestRecord["approval_ledger"]).trim() !== ""
+        ? String(manifestRecord["approval_ledger"]).trim()
+        : undefined;
+    releaseLedger = manifestLedger;
     const recorded = await runScratchCommand({
-      argv: [pythonPath, recordScript, "--record-training-release", "--config", configGuard.abs, "--note", note],
+      argv: [
+        pythonPath,
+        recordScript,
+        "--record-training-release",
+        "--config",
+        configGuard.abs,
+        "--note",
+        note,
+        ...(manifestLedger !== undefined ? ["--approval-ledger", manifestLedger] : []),
+      ],
       cwd: host.scratchDir,
       env,
       timeoutMs: 60_000,
@@ -918,6 +937,7 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
       release_recorded: releaseRecorded,
       release_result: releaseResult,
       release_config: configRel ?? null,
+      release_ledger: releaseLedger ?? null,
       state: typeof state?.["state"] === "string" ? state["state"] : "unknown",
       ...(typeof state?.["launcher_count"] === "number" ? { launcher_count: state["launcher_count"] as number } : {}),
       ...(typeof state?.["effect_started"] === "boolean" ? { effect_started: state["effect_started"] as boolean } : {}),
