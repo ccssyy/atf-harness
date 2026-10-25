@@ -8,7 +8,7 @@ import { BRIDGE_CONTRACT_VERSION } from "../../src/bridge/index.js";
  * 契约文件自检（契约修订 v2 验收 §4.3 的自动化承载）：bridge.contract.yaml 为双侧唯一
  * 真相源，本测试锚定其关键不变量——零依赖（不引 YAML 解析器，按行/文本断言）。
  * 契约 v2（2026-09-13 契约修订）：
- *   - contract_version: 2；
+ *   - contract_version: 3；
  *   - 运行时方法面 = 握手 atf.version + 4 工具 + 2 账本方法（ledger_query/ledger_consume）；
      工具面含改名后的 atf_fact_scan；旧方法名与旧数组字段零残留；
  *   - ledger_record 原为 mock setup 基建；【K4 补登 2026-09-16】升为运行时方法面
@@ -18,7 +18,7 @@ import { BRIDGE_CONTRACT_VERSION } from "../../src/bridge/index.js";
  *   - atf_upstream pin = v0.7.5b1（re-pin 2026-10-11 批㊶R前置 门 2 后段；pin sha＝内核补丁 tag v0.7.5b1 commit 4966574，模型路径双防线＋卡数一致性〔纯增量零契约面变更〕；tag/sha 自检锚定，会话协议版本轴保持 1）。
  * 契约 v2 方法面补登（2026-09-13，《ATF-Harness_Owner指令_推送授权与bind_run补登_20260913.md》）：
  *   - 运行时方法面扩为 握手 + 会话上下文（atf.bind_run）+ 4 工具 + 2 账本；
- *   - contract_version 仍为 2（方法面补登不 bump，沿用批次一先例）；
+ *   - contract_version = 3（v3：评估面组维度登记，owner 裁定 bump；轴一握手仍 1）；
  *   - 错误码 no_run_bound / unknown_run 登记（连接保持）；绑定留痕 event session/run-bound；
  *   - atf_workspace_status / atf_fact_scan 参数为可选 run_id（显式优先于会话绑定）。
  * 版本轴修正（2026-09-13，《ATF-Harness_Owner指令_版本轴修正与推送_20260913.md》双轴裁定）：
@@ -44,10 +44,10 @@ const methodKeys = (): string[] =>
     .map((match) => match[1] as string);
 
 describe("契约文件自检（v2）", () => {
-  it("contract_version: 2（桥接契约版本轴 = BRIDGE_CONTRACT_VERSION；握手走会话协议版本轴）", () => {
-    expect(contract).toMatch(/^contract_version: 2$/m);
+  it("contract_version: 3（桥接契约版本轴 = BRIDGE_CONTRACT_VERSION；握手走会话协议版本轴）", () => {
+    expect(contract).toMatch(/^contract_version: 3$/m);
     expect(contract).not.toMatch(/^contract_version: 1$/m);
-    expect(contract).not.toMatch(/^contract_version: 3$/m);
+    expect(contract).not.toMatch(/^contract_version: 2$/m);
     // 版本轴修正（2026-09-13）双轴语义：文件头部值 = 桥接契约版本轴，与 BRIDGE_CONTRACT_VERSION
     // 一致；握手校验值是另一轴（EXPECTED_SESSION_CONTRACT_VERSION = 1），不归本文件头部承载。
     expect(BRIDGE_CONTRACT_VERSION).toBe(2);
@@ -117,7 +117,7 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/纯增量（新增方法、新增可选字段\/参数、错误码枚举扩面）→ 补登登记，不 bump/);
     expect(contract).toMatch(/破坏性（改名、删字段、改既有字段语义、收窄枚举、帧\/握手\/生命周期变更）→ bump 桥接契约版本轴/);
     // 文件头部值仍为 2（纯增量不 bump）
-    expect(contract).toMatch(/^contract_version: 2$/m);
+    expect(contract).toMatch(/^contract_version: 3$/m);
   });
 
   it("改名完整性：旧方法名不作方法键/字段残留（仅存于 v2 变更登记的时代说明注释行）", () => {
@@ -162,9 +162,9 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/- facts_log_tail_corrupt/);
   });
 
-  it("atf_upstream pin 升至 v0.7.25b14（re-pin 窗口 E9a 评估槽位单源内核批 2026-10-25；pin＝tag commit 2c31606，权威槽位表＋CLI 出口＋分析侧改表：run_layout 增 doc_slots 权威槽位表〔逐类 12 键——原 8 键＋eval_assets_dir/split_manifest/training_data_manifest/lanes〔读该类 training-data-manifest lanes 键〕；类枚举与 attempt 发现与 harness docSlots.ts 同式；未发布槽位 None 化不造假〕＋tools/list_doc_slots.py CLI 出口〔--run/--json/--check；--check 与 run.json docs[] 对账 doc_slots_registry_mismatch/docs 键缺席豁免 skipped〕＋run_joint_analysis 槽位解析改走同表〔评估资产 publish/<doc>/<attempt>/eval、train.jsonl 缺省 prep/variants/ 优先；legacy 仅 fallback；缺资产列候选路径不静默〕＋test_e9a_doc_slots 17 锚＋旅程增评估资产可见性段；ADR-0017 已 Accepted（决定 1-12）；argparse surface 恰一项增量（list_doc_slots.py 三旗标入面，harness 快照覆盖 sha256 bef7e3bf）——历史括注 v0.7.25b13 E8b 线、v0.7.25b12 E8 槽位线、v0.7.25b11 E6 线、v0.7.25b10 E5 线、v0.7.25b9 E4-乙线、v0.7.25b8 E3 线、v0.7.25b7 U1 线、v0.7.25b6 五 bump 线、v0.7.25b1 b5 像素对线、v0.7.24b0 批次R 线、v0.7.23b3 D48 线与 v0.7.21b0 E10 线保留）", () => {
-    expect(contract).toMatch(/  tag: v0\.7\.25b14/);
-    expect(contract).toMatch(/  commit_sha: 2c31606ff19e2c9d23e28100df9c363844458a9a/);
+  it("atf_upstream pin 升至 v0.7.25b16（re-pin 窗口 E9c 卡位透传＋跨类字段命名空间；pin＝tag commit 6429d11）", () => {
+    expect(contract).toMatch(/  tag: v0\.7\.25b16/);
+    expect(contract).toMatch(/  commit_sha: 6429d119dc83533a07eb59bb9f077e337a5201b4/);
     // 会话协议版本轴不随 re-pin 变动（内核方法面补登不 bump——session/ 零 diff）；桥接契约版本轴恒 2（另轴）
     expect(contract).toMatch(/  contract_version: 1/);
     // 历史括注保留（re-pin 指令：baseline 首句同步当前 pin；历史括注保留）
@@ -178,6 +178,6 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/历史括注：v0\.7\.24b0＝a039693/);
     expect(contract).toMatch(/历史括注：v0\.7\.23b3＝6834d1b/);
     expect(contract).toMatch(/v0\.7\.21b0＝d9c3295/);
-    expect(contract).toMatch(/pin＝tag v0\.7\.25b14 commit 2c31606（禁追新）/);
+    expect(contract).toMatch(/pin＝tag v0\.7\.25b16 commit 6429d11（禁追新）/);
   });
 });
