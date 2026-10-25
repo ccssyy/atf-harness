@@ -2261,6 +2261,33 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // E9a·H5：多类先 fail-closed（与 atf_evaluate 同裁——一次评多类下一批落地，禁静默只评一类）
       const analyzeSlots = listDocSlots(runDir);
       const analyzeDocTypes = analyzeSlots.map((slot) => slot.doc_type);
+      // H-E9b：多槽位走内核联合一键入口（run_joint_analysis.py --run）——它按槽位表枚举
+      // 评估轮下全部 <单据>-<模式> 组，逐组解析输入，产出 run 级一份报告＋一个查看器
+      //（单据/模式可筛选）。单槽位仍走既有两步链（freeze→chain），两者是内核的两个入口，
+      // 不是 harness 侧的两套实现；选哪个人由槽位数决定（数据驱动，非路径复制）。
+      if (analyzeSlots.length > 1) {
+        const jointScript = join(cfg.kernelDir, "skills", "atf-analyze-badcases", "scripts", "run_joint_analysis.py");
+        if (!existsSync(jointScript)) {
+          return asToolValue({ ok: false, error: "skill_script_missing", script: jointScript, note: "pin 内技能脚本缺失——核 kernelDir 装配" });
+        }
+        const jointOut = join(runDir, "analysis");
+        const jointArgs = [jointScript, "--run", runDir, "--output-dir", jointOut,
+          ...(args.lane !== undefined && args.lane.trim() !== "" ? ["--lane", args.lane.trim()] : [])];
+        const joint = await runCapture("python3", jointArgs, 600_000, evalChildEnvOf());
+        if (joint.code !== 0) {
+          return asToolValue({
+            ok: false, step: "joint_analysis", exit_code: joint.code, analysis_dir: jointOut,
+            stderr_tail: joint.stderr.slice(-800),
+            doc_types: analyzeDocTypes,
+            note: "逐类分析失败（run_joint_analysis 非零退出）——按 stderr 修正后重试；输入缺失时内核以 joint_slot_labels_missing 列出候选路径",
+          });
+        }
+        return asToolValue({
+          ok: true, mode: "multi_doc", doc_types: analyzeDocTypes,
+          analysis_dir: jointOut, report: join(jointOut, "report.md"), viewer: join(jointOut, "viewer.html"),
+          note: `逐类分析完成（${analyzeDocTypes.join("、")}）：一份报告＋一个查看器，按单据/模式可筛选`,
+        });
+      }
       // pin 单源脚本面（批㉕B 段1：禁 ATF 源工作树绝对路径）
       const freezeScript = join(cfg.kernelDir, "skills", "atf-evaluate-checkpoints", "scripts", "build_raw_badcase_input.py");
       const chainScript = join(cfg.kernelDir, "skills", "atf-analyze-badcases", "scripts", "run_analysis_chain.py");
