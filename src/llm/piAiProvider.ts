@@ -60,13 +60,13 @@ import {
   type Usage as PiUsage,
   type UserMessage as PiUserMessage,
 } from "@earendil-works/pi-ai";
-import { applyPiaiCompatFloor, piaiProviderFactory } from "./piaiProviders.js";
+import { applyPiaiCompatFloor, piaiInputCapabilityLine, piaiProviderFactory } from "./piaiProviders.js";
 import { err, ok, type Result } from "../bridge/index.js";
 import { adaptProjectionToMessages, expandModelResponse, type AdapterMessage, type ModelResponse } from "./adapter.js";
 import { HARNESS_SYSTEM_PROMPT } from "./systemPrompt.js";
 import { PIAI_REASONING_EFFORTS, type ResolvedLlmProviderConfig } from "./providerConfig.js";
 import { llmError, llmErrorOf, type LlmDecision, type LlmError, type LlmProvider } from "./provider.js";
-import { resolveSummaryResultCapChars } from "../core/session/constantsBudget.js";
+import { resolveSummaryResultCapChars, IMAGE_BYTES_PER_TOKEN, IMAGE_REQUEST_MAX_TOKENS } from "../core/session/constantsBudget.js";
 import { type ModelVisibleTool } from "../core/tools/index.js";
 import { type LlmContextEvent } from "../core/session/index.js";
 
@@ -243,11 +243,19 @@ export const walkAdapterMessagesToPi = (
           return err(`tool_result 与配对工具调用不一致（期望 ${paired.tool}，实得 ${message.tool}）`);
         }
         state.pending.shift();
+        // H9b（H-E9d，2026-10-25）：投影携带图像件 → content 为 parts（text 恒在前、图像随后、
+        // 多图保持 result 内原序——设计要点 §(九).3）。pi-ai ToolResultMessage.content 本就是
+        // (TextContent | ImageContent)[]，openai-completions 编码器既有行为承接（tool 文本＋随后
+        // user 消息 image_url）——本层零新增编码逻辑。无图像（images 缺省）时 spread 空数组，
+        // content 形态与改前逐字节相同（既有 fixture 五组锚即快照）。
         out.push({
           role: "toolResult",
           toolCallId: paired.id,
           toolName: message.tool,
-          content: [{ type: "text", text: message.summary }],
+          content: [
+            { type: "text", text: message.summary },
+            ...(message.images ?? []).map((image) => ({ type: "image" as const, data: image.data_base64, mimeType: image.media_type })),
+          ],
           isError: !message.ok,
           timestamp: scaffold.timestamp,
         });
@@ -352,6 +360,8 @@ export class PiAiLlmProvider implements LengthAwareLlmProvider {
     // R4 配置保真：base_url/model 以用户配置为准（目录 baseUrl 被覆盖；compat 因 provider="deepseek"
     // 仍走 deepseek 规则——detectCompat 以 provider id 优先判定，不依赖 URL 嗅探）。
     this.model = { ...catalogModel, baseUrl: this.config.base_url };
+    // H9c（H-E9d）：boot 能力审计行（stderr 进程日志面；目录 input 只读——不自动补声明）。
+    console.error(piaiInputCapabilityLine(this.config.provider_id, this.config.model, this.model.input));
   }
 
   /** 已消耗调用次数（诊断/测试；每次 completeSimple 计 1，length 重试计入）。 */
@@ -415,6 +425,39 @@ export class PiAiLlmProvider implements LengthAwareLlmProvider {
     });
     if (!messages.ok) {
       return err(llmError("模型上下文投影失败（fail-closed）", this.redactDetail(messages.error)));
+    }
+    // H9c/H9d 治理闸（H-E9d，2026-10-25；设计要点 §(九).4/§(九).5）——先能力后预算，
+    // 均先于请求发出（零网络）。detail 禁 base64（只记 sha256 前 8 位＋bytes＋media_type）。
+    const carriedImages = messages.value.flatMap((message) =>
+      message.role === "tool_result" && message.images !== undefined ? message.images : [],
+    );
+    if (carriedImages.length > 0) {
+      if (!(this.model.input as readonly string[]).includes("image")) {
+        // pi-ai 编码器对未声明 image 的模型会静默丢图像块（只留占位文本）——本仓 fail-closed
+        // 兜底：拒绝发送而非静默丢（「读不了图」由 boot 审计行＋此处拒绝双通道显性化）。
+        return err(llmError(
+          `模型 ${JSON.stringify(this.config.model)} 未声明图像输入（provider=${JSON.stringify(this.config.provider_id)}）——拒绝发送图像内容（fail-closed，不静默丢）`,
+          this.redactDetail({
+            reason: "model_input_text_only",
+            provider: this.config.provider_id,
+            model: this.config.model,
+            images: carriedImages.map((image) => ({ sha256: image.sha256.slice(0, 8), bytes: image.bytes, media_type: image.media_type })),
+          }),
+        ));
+      }
+      const imageEstTokens = Math.ceil(carriedImages.reduce((sum, image) => sum + image.bytes, 0) / IMAGE_BYTES_PER_TOKEN);
+      if (imageEstTokens > IMAGE_REQUEST_MAX_TOKENS) {
+        return err(llmErrorOf(
+          "image_budget_exhausted",
+          `本轮模型请求图像件预算超限（est ${String(imageEstTokens)} > 上限 ${String(IMAGE_REQUEST_MAX_TOKENS)} tokens；每 ${String(IMAGE_BYTES_PER_TOKEN)} 字节折 1 token）——请缩小或减少图像后重试`,
+          this.redactDetail({
+            est_tokens: imageEstTokens,
+            limit_tokens: IMAGE_REQUEST_MAX_TOKENS,
+            bytes_per_token: IMAGE_BYTES_PER_TOKEN,
+            images: carriedImages.map((image) => ({ sha256: image.sha256.slice(0, 8), bytes: image.bytes, media_type: image.media_type })),
+          }),
+        ));
+      }
     }
     const scaffold: ReplayScaffold = {
       api: this.model.api,

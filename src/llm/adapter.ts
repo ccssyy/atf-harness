@@ -9,11 +9,15 @@
  *     "一次决策一个工具"；每个决策各自过守卫（切片 0）与各自过审批检查点（禁止共享授权，
  *     ADR-07 无配额复用红线）。具体 provider 的响应解析属 L1a；本模块定义中性契约并以桩验证。
  */
+import { createHash } from "node:crypto";
 import { err, ok, type Result } from "../bridge/index.js";
 import { type LlmDecision } from "./provider.js";
 import { type LlmContextEvent } from "../core/session/index.js";
 import { renderGuidanceText } from "../core/run/blockGuidance.js";
 import {
+  IMAGE_MAX_BYTES,
+  IMAGE_MAX_COUNT,
+  IMAGE_MEDIA_TYPES,
   SUMMARY_ARRAY_MAX_ITEMS,
   SUMMARY_RESULT_FALLBACK_CHARS,
   SUMMARY_STRING_VALUE_MAX_CHARS,
@@ -28,8 +32,26 @@ export type AdapterMessage =
   | { role: "user"; text: string; source_event_id: number }
   | { role: "assistant"; text: string; source_event_id: number }
   | { role: "assistant_tool_call"; tool: string; params: Record<string, unknown>; source_event_id: number }
-  | { role: "tool_result"; tool: string; ok: boolean; summary: string; source_event_id: number }
+  | {
+      role: "tool_result";
+      tool: string;
+      ok: boolean;
+      summary: string;
+      source_event_id: number;
+      /** H9a（H-E9d，2026-10-25）：合法提取的图像件（result.images[] 闭集形态；缺省＝无图像，
+       *  与改前逐字节一致）。data_base64 是投影运行期态——只用于模型请求，不进任何
+       *  日志/审计/事件长期存储（长期面只记 sha256/bytes/media_type 三元组，H9d 注释锚）。 */
+      images?: ReadonlyArray<AdapterToolResultImage>;
+    }
   | { role: "approval"; phase: "request" | "response"; summary: string; source_event_id: number };
+
+/** 图像件形态（H9a；与事件 result.images[] 元素同构——四键闭集，见设计要点 §(九).1）。 */
+export interface AdapterToolResultImage {
+  media_type: string;
+  sha256: string;
+  bytes: number;
+  data_base64: string;
+}
 
 export interface AdapterError {
   code: "adapter_schema_violation";
@@ -137,6 +159,80 @@ export const structuredResultSummary = (result: unknown, capChars: number = SUMM
   return `${degraded.slice(0, capChars)}…[已截断，原文${String(text.length)}字符]`;
 };
 
+// ---------------------------------------------------------------------------
+// H9a（H-E9d，2026-10-25）：图像件提取——设计要点 §(九).1/§(九).2。
+// 源形状＝payload.result 内可选键 images（元素四键闭集 {media_type, sha256, bytes,
+// data_base64}）；result 本就是自由 JSON（设计要点 §(一).5 跳 1），payload 顶层白名单
+// 闭集零扩。任一校验不成立 → adapter_schema_violation 显式拒（fail-closed，不静默丢、
+// 不降级重试）；result 无 images 键 → ok(null)（投影行为与改前逐字节一致）。
+// 摘要剥离：图像走 parts 通道后，文本摘要输入 = 剥离 images 键的 result——
+// structuredResultSummary 本体一字不改，base64 不进模型可见文本。
+// ---------------------------------------------------------------------------
+
+/** sha256 十六进制形态（64 位小写）。 */
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+/** 图像件元素的四键闭集（与 AdapterToolResultImage 同构）。 */
+const IMAGE_ITEM_KEYS: readonly string[] = ["media_type", "sha256", "bytes", "data_base64"];
+
+export const extractResultImages = (
+  result: unknown,
+): Result<{ images: AdapterToolResultImage[]; resultWithoutImages: Record<string, unknown> } | null, AdapterError> => {
+  if (!isPlainObject(result)) return ok(null);
+  if (result["images"] === undefined) return ok(null);
+  const rawImages = result["images"];
+  if (!Array.isArray(rawImages) || rawImages.length === 0) {
+    return err(adapterError("tool/result.result.images 非法（须为非空数组；空数组＝无图像请整键省略）"));
+  }
+  if (rawImages.length > IMAGE_MAX_COUNT) {
+    return err(adapterError(`tool/result.result.images 超数量上限（${String(rawImages.length)} > ${String(IMAGE_MAX_COUNT)}）`));
+  }
+  const images: AdapterToolResultImage[] = [];
+  for (let i = 0; i < rawImages.length; i += 1) {
+    const item = rawImages[i];
+    if (!isPlainObject(item)) return err(adapterError(`result.images[${String(i)}] 不是 JSON 对象`));
+    for (const key of Object.keys(item)) {
+      if (!IMAGE_ITEM_KEYS.includes(key)) {
+        return err(adapterError(`result.images[${String(i)}] 含未声明字段 "${key}"（四键闭集：${IMAGE_ITEM_KEYS.join("/")}）`));
+      }
+    }
+    for (const key of IMAGE_ITEM_KEYS) {
+      if (item[key] === undefined) return err(adapterError(`result.images[${String(i)}] 缺必填字段 "${key}"`));
+    }
+    const mediaType = item["media_type"];
+    const sha = item["sha256"];
+    const bytes = item["bytes"];
+    const dataBase64 = item["data_base64"];
+    if (typeof mediaType !== "string" || !(IMAGE_MEDIA_TYPES as readonly string[]).includes(mediaType)) {
+      return err(adapterError(`result.images[${String(i)}].media_type 非法（闭集：${IMAGE_MEDIA_TYPES.join("/")}）`));
+    }
+    if (typeof sha !== "string" || !SHA256_HEX.test(sha)) {
+      return err(adapterError(`result.images[${String(i)}].sha256 非法（须为 64 位小写十六进制）`));
+    }
+    if (typeof bytes !== "number" || !Number.isSafeInteger(bytes) || bytes <= 0) {
+      return err(adapterError(`result.images[${String(i)}].bytes 非法（须为正整数）`));
+    }
+    if (typeof dataBase64 !== "string" || dataBase64 === "") {
+      return err(adapterError(`result.images[${String(i)}].data_base64 非法（须为非空字符串）`));
+    }
+    if (bytes > IMAGE_MAX_BYTES) {
+      return err(adapterError(`result.images[${String(i)}] 超单张字节上限（${String(bytes)} > ${String(IMAGE_MAX_BYTES)}；sha256=${sha.slice(0, 8)}）`));
+    }
+    const decoded = Buffer.from(dataBase64, "base64");
+    if (decoded.length !== bytes) {
+      return err(adapterError(`result.images[${String(i)}].bytes 与 base64 解码长度不符（声明 ${String(bytes)}，实得 ${String(decoded.length)}）`));
+    }
+    const actualSha = createHash("sha256").update(decoded).digest("hex");
+    if (actualSha !== sha) {
+      return err(adapterError(`result.images[${String(i)}].sha256 与字节内容不符（声明 ${sha.slice(0, 8)}，实得 ${actualSha.slice(0, 8)}）`));
+    }
+    images.push({ media_type: mediaType, sha256: sha, bytes, data_base64: dataBase64 });
+  }
+  const rest: Record<string, unknown> = { ...result };
+  delete rest["images"];
+  return ok({ images, resultWithoutImages: rest });
+};
+
 const mapEvent = (event: LlmContextEvent, toolResultSummaryCapChars: number): Result<AdapterMessage | null, AdapterError> => {
   const mapping = ADAPTER_MAPPINGS[event.type];
   if (mapping === undefined) {
@@ -192,12 +288,27 @@ const mapEvent = (event: LlmContextEvent, toolResultSummaryCapChars: number): Re
       // B3（走查修复批 2026-09-23）：ok:true 增 guidance 段——runner 对完整性闸门 blocked
       // 结果（executed 径）回填的三段式指引（ok:true 此前恒无 payload.guidance，缺省时
       // 逐字节不变）。
+      // H9a（H-E9d，2026-10-25）：ok:true 且 result 含合法 images → 提取为消息级图像件＋
+      // 摘要输入剥离 images 键（structuredResultSummary 本体与降级参数一字不改；失败径
+      // ok:false 零改——失败结果不携图）；形状不认识/超限 → 上方 extractResultImages 已
+      // 显式拒（fail-closed，不静默丢）。无图像键时两路径与改前逐字节一致。
+      const extractedImages = okFlag === true ? extractResultImages(event.payload["result"]) : ok<null>(null);
+      if (!extractedImages.ok) return err(extractedImages.error);
+      const summarySource =
+        extractedImages.value !== null ? extractedImages.value.resultWithoutImages : event.payload["result"];
       const parts: (string | undefined)[] =
         okFlag === true
-          ? [structuredResultSummary(event.payload["result"], toolResultSummaryCapChars), renderGuidanceText(event.payload["guidance"]), event.payload["nudge"] as string | undefined]
+          ? [structuredResultSummary(summarySource, toolResultSummaryCapChars), renderGuidanceText(event.payload["guidance"]), event.payload["nudge"] as string | undefined]
           : [String(event.payload["reason"] ?? ""), adviceTextOf(event.payload), renderGuidanceText(event.payload["guidance"]), event.payload["nudge"] as string | undefined];
       const summary = parts.filter((part): part is string => typeof part === "string" && part !== "").join("｜");
-      return ok({ role: "tool_result", tool: event.payload["tool"], ok: okFlag, summary, source_event_id: event.id });
+      return ok({
+        role: "tool_result",
+        tool: event.payload["tool"],
+        ok: okFlag,
+        summary,
+        source_event_id: event.id,
+        ...(extractedImages.value !== null ? { images: extractedImages.value.images } : {}),
+      });
     }
     case "approval/request":
     case "approval/response": {

@@ -126,3 +126,26 @@ export const resolveTurnTokenBudget = (contextWindowTokens: number | null, expli
 
 /** 进程级生效 turn 预算（est tokens；runner 判定与外壳注入同源——A1.5.2 holder 同款模式）。 */
 export const turnTokenBudget = (): number => resolveTurnTokenBudget(activeContextWindowTokens, explicitTurnTokenBudget);
+
+// ---------------------------------------------------------------------------
+// H-E9d 图像件预算常量（设计要点 §(九).1/§(九).5，2026-10-25）——图像件是文本摘要之外
+// 的独立通道，预算四件套与文本面常量同文件登记（禁魔数散落）。
+// ---------------------------------------------------------------------------
+
+/** 单个工具结果图像数上限（>4 张 → 投影显式拒；变更单钦定值）。 */
+export const IMAGE_MAX_COUNT = 4;
+
+/** 单张图像字节上限（5 MiB；超出 → 投影显式拒——防单条巨图挤爆事件与内存）。 */
+export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+/** 图像字节预算系数：每 256 字节折 1 est token（保守口径——base64 线缆体积 ≈4/3×原始
+ *  字节、模型实际计费远低于此；与 TOKEN_ESTIMATE_DIVISOR=2 同「宁高勿低」哲学）。 */
+export const IMAGE_BYTES_PER_TOKEN = 256;
+
+/** 本轮请求图像预算上限（est tokens；单次模型请求全部图像合计 ≈4 MiB 原始字节）——
+ *  取值依据：与 SUMMARY_RESULT_CAP_TOKENS=25K 同量级略紧（图像是摘要外增量通道，
+ *  不应高于文本单条上限；设计要点 §(九).5）。 */
+export const IMAGE_REQUEST_MAX_TOKENS = 16_000;
+
+/** 图像媒体型闭集（对齐 vendor read_image 接受集：PNG/JPEG/WebP/GIF）。 */
+export const IMAGE_MEDIA_TYPES: readonly string[] = ["image/png", "image/jpeg", "image/webp", "image/gif"];

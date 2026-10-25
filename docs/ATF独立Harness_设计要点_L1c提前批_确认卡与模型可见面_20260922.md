@@ -271,3 +271,50 @@ provider 侧经 `adaptProjectionToMessages(context, { toolResultSummaryCapChars 
 ---
 
 **状态（v3）**：合并版指令（`64cfb82c…`）已按 §〇–§八 实施；本 v3 随实施批提交（单批 `--no-ff` 合入 main）→ 交 owner 复核（两口径＋批前走查双验）。
+
+---
+
+## (九) 图像件投影与渲染（H-E9d，2026-10-25）
+
+- **性质**：H-E9d 变更单批（《ATF_变更单_H-E9d_多模态读图_20261025》——四组 H9a/H9b/H9c/H9d）的设计基线小节；随批落盘，先于代码。
+- **问题定位（变更单背景已实证，此处只登记不重证）**：工具面可读到图（vendor `read_image` 能力闸对已声明 `input:["text","image"]` 的模型放行——目录 `zai-coding-cn.json` 的 `glm-5.3-flash` 即此形态），但模型面投影层无图像形态——`AdapterMessage.tool_result` 只有文本摘要（§(一).2 丙案产物），消息 walk 的 content 恒纯文本，`grep image src/llm/` 零命中——工具结果里的像素永远到不了模型。**卡点不在配置**（`LLM_MODEL_KEYS` 不含 `input` 键，向配置补键会被 `rejectUnknownKeys` fail-closed 拒绝——已实测，勿再动配置面）。
+- **硬边界（变更单红线，全文有效）**：payload 顶层白名单闭集（§(一).5 跳 2 的 `[tool, ok, result, reason, call_ref, block, detail, nudge, guidance]`）**零扩**；文本摘要生成逻辑一字不改；无图像路径逐字节不变；fail-closed（形状不认识/超限/超预算一律显式拒，不静默丢）；不改 vendor、不改 `LLM_MODEL_KEYS`、不改 pi-ai 目录、base64 不进日志/审计/事件长期存储。
+
+### 1. 事件内图像块形态（H9a 源形状契约）
+
+图像块在 `tool/result` 的 `payload.result` **内部**（result 是自由 JSON——§(一).5 跳 1 既有事实），形态为可选键 `images`，元素四键闭集：
+
+```
+result.images[] = { media_type, sha256, bytes, data_base64 }
+```
+
+- `media_type` 闭集四值：`image/png`／`image/jpeg`／`image/webp`／`image/gif`（对齐 vendor `read_image` 的接受集——PNG/JPEG/WebP/GIF）；
+- `sha256`：64 位小写十六进制，且**与 `data_base64` 解码字节的 sha256 自洽**（防伪造元数据）；
+- `bytes`：正整数，且**与解码字节长度自洽**；
+- 数量上限 **4 张**／单结果；单张字节上限 **5 MiB（5_242_880）**（`IMAGE_MAX_BYTES`）。
+
+**提取与拒绝（mapEvent ok:true 分支）**：result 是对象且含 `images` 键 → 逐项按上表校验后提取为 `AdapterMessage.tool_result.images`（`{media_type, sha256, bytes, data_base64}` 同构）；任一校验不成立（多键/缺键/类型错/媒体型越闭集/sha 不符/bytes 不符/超 4 张/超单张上限）→ `adapter_schema_violation` 显式拒，**不静默丢、不降级重试**。result 无 `images` 键 → 行为与改前逐字节一致。
+
+### 2. 摘要与剥离（§(一).2 丙案零改）
+
+`structuredResultSummary`／`readableSummary` 函数体与降级参数**一字不改**；改动仅在喂入端：ok:true 且 result 含合法 `images` 时，摘要输入 = **剥离 `images` 键后的 result**（图像走 parts 通道不重复走文本通道，且 base64 不进模型可见文本）。无图像事件（含 ok:false 全系）摘要路径与改前逐字节一致。
+
+### 3. 渲染（H9b：pi-ai 消息 walk）
+
+`walkAdapterMessagesToPi` 的 `tool_result` 分支：无图像 → content 形态与改前逐字节相同（既有 fixture 五组锚即快照）；有图像 → `content` 为 parts 数组：`[{type:"text", text:摘要}, {type:"image", data:data_base64, mimeType:media_type} × N 原序]`——text 恒在前、图像随后、多图保持 result 内原序。pi-ai `ToolResultMessage.content` 类型本就是 `(TextContent | ImageContent)[]`；openai-completions 编码器既有行为承接（tool 文本＋随后 user 消息的 `image_url` data URL）——**本批不新增编码逻辑，只把图像块送到编码器门口**。
+
+### 4. 能力面（H9c：只读审计）
+
+- **boot 审计行**：provider 装配单点打一行进程日志（stderr——不污 TUI 界面）——`[llm] <provider>/<model>/input=<text|text+image>`；数据源＝pi-ai 目录 `model.input`（只读）。模型未声明图像输入时追加一句配置指引（换用声明图像输入的模型）；**不自动补声明、不改目录、不改 `LLM_MODEL_KEYS`、不动 vendor `read_image` 能力闸**。
+- **text-only 防静默丢**：pi-ai 编码器对未声明 image 的模型**静默丢弃图像块**（只留占位文本）——本仓在 provider 决策面 fail-closed 兜底：模型 `input` 不含 `image` 而投影携带图像 → 显式拒（不发请求）。「读不了图」由 boot 行可查＋拒绝面显性，双通道消静默。
+
+### 5. 预算与审计（H9d）
+
+- **图像字节预算系数**：`IMAGE_BYTES_PER_TOKEN = 256`（每 256 字节折 1 est token）——保守口径（base64 线缆体积 ≈4/3×原始字节，模型对图像实际计费远低于此；与 `TOKEN_ESTIMATE_DIVISOR=2` 同为「宁高勿低」估算哲学）。
+- **本轮图像预算上限**：`IMAGE_REQUEST_MAX_TOKENS = 16_000` est tokens（单次模型请求全部图像合计 ≈4 MiB 原始字节）——取值依据：与单条工具结果绝对上限 `SUMMARY_RESULT_CAP_TOKENS=25K` 同量级略紧（图像是摘要之外的增量通道，不应高于文本单条上限）。
+- **超限拒绝**：decide 请求发出前合计 walked 消息全部 image 块 est tokens，超限 → 显式拒（`LlmErrorCode` 扩一值 `image_budget_exhausted`——L1a/L1c 两度扩值同族先例，闭集不登记于三契约件，零契约 diff），拒绝信息**逐张列出** `sha256 前 8 位＋bytes＋media_type`。
+- **长期存储纪律（注释锚）**：`data_base64` 是投影运行期态（模型请求专用），**不进任何日志/审计/错误信息/事件长期存储**——日志与审计面只记 `sha256/bytes/media_type` 三元组；投影层以下任何落盘面禁 base64。
+
+### 6. 影响面清单
+
+`src/llm/adapter.ts`（类型＋提取＋剥离）、`src/llm/piAiProvider.ts`（walk parts＋text-only 拒＋图像预算闸＋boot 审计行）、`src/llm/provider.ts`（LlmErrorCode 扩一值）、`src/agent/providerStreamFn.ts`（丙线装配面同款 boot 审计行）、`src/core/session/constantsBudget.ts`（图像常量四件：`IMAGE_MAX_COUNT`/`IMAGE_MAX_BYTES`/`IMAGE_BYTES_PER_TOKEN`/`IMAGE_REQUEST_MAX_TOKENS`）、`tests/llm/adapter.test.ts`＋`tests/llm/piAiProvider.test.ts`（锚①–⑤）。schema.ts／契约件／vendor／`LLM_MODEL_KEYS` 零改。

@@ -12,7 +12,8 @@
  * tests/run/piaiLengthRecovery.test.ts）、R3 切换即时生效、N 工具→N 决策、usage/配额/脱敏、
  * walk fail-closed。
  */
-import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+import { describe, expect, it, vi } from "vitest";
 import {
   HARNESS_SYSTEM_PROMPT,
   PiAiLlmProvider,
@@ -399,5 +400,220 @@ describe("序列 walk 纯函数（walkAdapterMessagesToPi）", () => {
       scaffold,
     );
     expect(nameMismatch.ok).toBe(false);
+  });
+});
+
+describe("H-E9d H9b：图像件渲染（walk parts＋出站 payload image_url）", () => {
+  const scaffold = { api: "openai-completions", provider: "deepseek", model: "deepseek-flash", timestamp: 0 };
+  /** 与 adapter.test.ts 同源的 1×1 PNG 字节。 */
+  const PNG_1X1_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+  const pngBytes = Buffer.from(PNG_1X1_BASE64, "base64");
+  const pngSha256 = createHash("sha256").update(pngBytes).digest("hex");
+  const imageOf = (mediaType: string, base64: string) => ({
+    media_type: mediaType,
+    sha256: createHash("sha256").update(Buffer.from(base64, "base64")).digest("hex"),
+    bytes: Buffer.from(base64, "base64").length,
+    data_base64: base64,
+  });
+
+  it("walk 纯函数：有图像 → content parts（text 前 image 后原序，多图保持 result 序）；无图像 → content 恰单 text 块（与改前形态逐字节一致）", () => {
+    const images = [imageOf("image/png", PNG_1X1_BASE64), imageOf("image/gif", "R0lGODlhAQABAAAAACw=")];
+    const walked = walkAdapterMessagesToPi(
+      [
+        { role: "assistant_tool_call", tool: "atf_read", params: {}, source_event_id: 2 },
+        { role: "tool_result", tool: "atf_read", ok: true, summary: "摘要", source_event_id: 3, images },
+      ],
+      scaffold,
+    );
+    expect(walked.ok).toBe(true);
+    if (!walked.ok) return;
+    const toolResult = walked.value.at(-1);
+    if (toolResult?.role !== "toolResult") throw new Error("unreachable");
+    expect(toolResult.content).toEqual([
+      { type: "text", text: "摘要" },
+      { type: "image", data: images[0]?.data_base64, mimeType: "image/png" },
+      { type: "image", data: images[1]?.data_base64, mimeType: "image/gif" },
+    ]);
+    // base64 解码 sha 与源一致（parts 面保真）
+    const firstImage = toolResult.content[1];
+    if (firstImage?.type !== "image") throw new Error("unreachable");
+    expect(createHash("sha256").update(Buffer.from(firstImage.data, "base64")).digest("hex")).toBe(pngSha256);
+
+    // 无图像（images 缺省）：content 形态与改前逐字节一致——既有 fixture 五组 payload 锚的构成件
+    const plain = walkAdapterMessagesToPi(
+      [
+        { role: "assistant_tool_call", tool: "atf_read", params: {}, source_event_id: 2 },
+        { role: "tool_result", tool: "atf_read", ok: true, summary: "摘要", source_event_id: 3 },
+      ],
+      scaffold,
+    );
+    expect(plain.ok).toBe(true);
+    if (!plain.ok) return;
+    const plainResult = plain.value.at(-1);
+    if (plainResult?.role !== "toolResult") throw new Error("unreachable");
+    expect(plainResult.content).toEqual([{ type: "text", text: "摘要" }]);
+  });
+
+  it("锚②：出站 payload 含 image part 且 base64 解码 sha 一致（pi-ai 真编码器；deepseek-flash 目录声明 image 输入；tool 文本仍在）", async () => {
+    const { provider, payloads, requests } = harness({ responses: [textFinishStop("收到")] });
+    const decision = await provider.decide(
+      CTX([
+        userEvent(1, "看这张图"),
+        callEvent(2, "atf_read", { path: "/ws/shot.png" }),
+        resultEvent(3, "atf_read", true, {
+          result: { path: "/ws/shot.png", images: [imageOf("image/png", PNG_1X1_BASE64)] },
+          call_ref: 2,
+        }),
+      ]),
+    );
+    expect(decision.ok).toBe(true);
+    expect(requests.length).toBe(1);
+    const messages = messagesOf(payloads[0] as Record<string, unknown>);
+    const imageUrls: string[] = [];
+    for (const message of messages) {
+      const content = message["content"];
+      if (Array.isArray(content)) {
+        for (const part of content as Record<string, unknown>[]) {
+          if (part["type"] === "image_url") {
+            const imageUrl = part["image_url"] as Record<string, unknown>;
+            imageUrls.push(String(imageUrl["url"]));
+          }
+        }
+      }
+    }
+    expect(imageUrls.length).toBe(1);
+    expect(imageUrls[0]).toBe(`data:image/png;base64,${PNG_1X1_BASE64}`);
+    const decoded = Buffer.from((imageUrls[0] as string).split(",")[1] ?? "", "base64");
+    expect(createHash("sha256").update(decoded).digest("hex")).toBe(pngSha256);
+    // tool 消息文本仍在（摘要与剥离语义不受渲染影响）
+    const toolMessage = messages.find((message) => message["role"] === "tool");
+    expect(toolMessage).toBeDefined();
+    expect(JSON.stringify(toolMessage)).toContain("/ws/shot.png");
+  });
+
+  it("锚②零回归：无图像上下文出站 payload 与既有 fixture 形态一致（既有五组锚全绿即本锚的另一面——此处直证请求次数与消息面）", async () => {
+    const { provider, payloads, requests } = harness({ responses: [textFinishStop("ok")] });
+    const decision = await provider.decide(
+      CTX([
+        userEvent(1, "hi"),
+        callEvent(2, "atf_fact_scan", {}),
+        resultEvent(3, "atf_fact_scan", true, { result: { facts: [] }, call_ref: 2 }),
+      ]),
+    );
+    expect(decision.ok).toBe(true);
+    expect(requests.length).toBe(1);
+    // 全 payload 无 image part（无图像路径零渗漏——只钉渲染面形态词，不钉普通文本用词）
+    expect(JSON.stringify(payloads[0])).not.toContain("image_url");
+    expect(JSON.stringify(payloads[0])).not.toContain(PNG_1X1_BASE64);
+    expect(JSON.stringify(payloads[0])).not.toContain("Attached image");
+  });
+});
+
+describe("H-E9d H9c/H9d：能力面审计＋图像预算闸（先于请求，零网络）", () => {
+  const PNG_1X1_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+  const pngBytes = Buffer.from(PNG_1X1_BASE64, "base64");
+  const pngSha256 = createHash("sha256").update(pngBytes).digest("hex");
+  const imageCtxEvent = (): LlmContextEvent[] => [
+    userEvent(1, "看这张图"),
+    callEvent(2, "atf_read", { path: "/ws/shot.png" }),
+    resultEvent(3, "atf_read", true, {
+      result: { path: "/ws/shot.png", images: [{ media_type: "image/png", sha256: pngSha256, bytes: pngBytes.length, data_base64: PNG_1X1_BASE64 }] },
+      call_ref: 2,
+    }),
+  ];
+
+  it("锚⑤：boot 审计行存在——deepseek-flash（目录声明 image）input=text+image 无指引；text-only 模型 input=text 且带指引（stderr 不进用户面）", () => {
+    const stderrWrites: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      stderrWrites.push(args.map(String).join(" "));
+    });
+    try {
+      const multi = harness({ responses: [] });
+      expect(stderrWrites.join("\n")).toContain("[llm] deepseek/deepseek-flash/input=text+image");
+      expect(stderrWrites.join("\n")).not.toContain("读图不可用");
+      stderrWrites.length = 0;
+      new PiAiLlmProvider({
+        config: CONFIG({ model: "deepseek-v4-pro" }) as never,
+        tools: TOOLS,
+      });
+      const textOnlyLine = stderrWrites.find((line) => line.includes("deepseek-v4-pro"));
+      expect(textOnlyLine).toContain("[llm] deepseek/deepseek-v4-pro/input=text");
+      expect(textOnlyLine).toContain("模型未声明图像输入，读图不可用");
+      expect(textOnlyLine).toContain("目录只读，不自动补声明");
+      void multi;
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("锚⑤：text-only 模型携带图像 → 显式拒且零网络请求（fail-closed 防静默丢；detail 只记三元组禁 base64）", async () => {
+    const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const { provider, requests } = harness({ responses: [textFinishStop("x")], config: { model: "deepseek-v4-pro" } });
+      const decision = await provider.decide(CTX(imageCtxEvent()));
+      expect(decision.ok).toBe(false);
+      if (decision.ok) return;
+      expect(decision.error.code).toBe("provider_failure");
+      expect(decision.error.message).toContain("未声明图像输入");
+      expect(decision.error.message).toContain("拒绝发送图像内容");
+      expect(JSON.stringify(decision.error.detail)).not.toContain(PNG_1X1_BASE64);
+      expect(JSON.stringify(decision.error.detail)).toContain(pngSha256.slice(0, 8));
+      expect(requests.length).toBe(0);
+    } finally {
+      stderrSpy.mockRestore();
+    }
+  });
+
+  it("锚④：超图像预算 → image_budget_exhausted 拒并列出该图（sha 前 8＋bytes＋media_type；零网络）", async () => {
+    // 单张 4.2MB（< 单张 5MiB 上限、> 预算 16_000 tokens×256=4_096_000 bytes）——预算闸生效而单张闸不触发
+    const bigBytes = Buffer.alloc(4_200_000, 7);
+    const bigBase64 = bigBytes.toString("base64");
+    const bigSha = createHash("sha256").update(bigBytes).digest("hex");
+    const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const { provider, requests } = harness({ responses: [textFinishStop("x")] });
+      const decision = await provider.decide(
+        CTX([
+          userEvent(1, "看这张图"),
+          callEvent(2, "atf_read", { path: "/ws/big.png" }),
+          resultEvent(3, "atf_read", true, {
+            result: { path: "/ws/big.png", images: [{ media_type: "image/png", sha256: bigSha, bytes: bigBytes.length, data_base64: bigBase64 }] },
+            call_ref: 2,
+          }),
+        ]),
+      );
+      expect(decision.ok).toBe(false);
+      if (decision.ok) return;
+      expect(decision.error.code).toBe("image_budget_exhausted");
+      expect(decision.error.message).toContain("图像件预算超限");
+      const detail = JSON.stringify(decision.error.detail);
+      expect(detail).toContain(bigSha.slice(0, 8));
+      expect(detail).toContain(String(bigBytes.length));
+      expect(detail).toContain("image/png");
+      expect(detail).not.toContain(bigBase64);
+      expect(requests.length).toBe(0);
+    } finally {
+      stderrSpy.mockRestore();
+    }
+  });
+
+  it("预算内图像正常放行（小图过闸——4 张 1×1 PNG 合计远低于上限，请求发出且含 image part）", async () => {
+    const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const smallImage = { media_type: "image/png", sha256: pngSha256, bytes: pngBytes.length, data_base64: PNG_1X1_BASE64 };
+      const { provider, payloads, requests } = harness({ responses: [textFinishStop("ok")] });
+      const decision = await provider.decide(
+        CTX([
+          userEvent(1, "对比这四张"),
+          callEvent(2, "atf_read", { path: "/ws/a.png" }),
+          resultEvent(3, "atf_read", true, { result: { images: [smallImage, smallImage, smallImage, smallImage] }, call_ref: 2 }),
+        ]),
+      );
+      expect(decision.ok).toBe(true);
+      expect(requests.length).toBe(1);
+      expect(JSON.stringify(payloads[0])).toContain("image_url");
+    } finally {
+      stderrSpy.mockRestore();
+    }
   });
 });
