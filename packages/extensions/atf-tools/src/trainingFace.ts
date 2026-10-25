@@ -62,6 +62,7 @@ import { humanizeKernelError, scanKernelErrorFace } from "../../../../src/core/w
 // E9a·H2-H5：评估面走 docSlots 唯一路径表（ADR-0017 决定 10/12——禁再自拼槽位路径）
 import { listDocSlots } from "../../atf-ui/src/docSlots.js";
 import { queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
+import { buildEvalOrchArgs } from "./evalOrchArgs.js";
 
 // ── 批㊶Q增补三 段2：start 探活（终结 started:true 假成功）──
 
@@ -2142,15 +2143,17 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const port = Number((manifest["request_defaults"] as Record<string, unknown> | undefined)?.["port"] ?? (JSON.parse(readFileSync(args.service_config, "utf8")) as Record<string, unknown>)["port"]);
       const orchDir = join(roundDir, "orch");
       const promptRendererPath = skill("atf-admit-training-data", "render_prompt.py");
-      const orchArgs = [orchestration, "--service", serviceDir, "--ckpt", ckptPlanDir, "--out", orchDir,
-        "--eval-runner", runner, "--prompt-renderer", promptRendererPath,
-        "--assets", args.eval_assets_dir, "--field-config", fieldConfigResolved.path,
-        "--base-url", `http://127.0.0.1:${port}/v1`, "--env-profile", args.env_profile,
+      // H-E9b：组装单点 buildEvalOrchArgs（N=1 与 N>1 同路径两形态；N=1 逐字恒等有黄金锚）
+      const orchArgs = buildEvalOrchArgs({
+        orchestration, serviceDir, ckptPlanDir, orchDir, runner, promptRenderer: promptRendererPath,
+        port, envProfile: args.env_profile,
         // 批D17：并发贯通编排（恒传，缺省 1——generator 内嵌进 runner 调用与 plan 口径披露；
         // 值来源＝prelaunch 确认值，容量校验由 prelaunch 承载，此处不设第二套）
-        "--concurrency", String(concurrency),
-        ...(splitManifestResolved !== null ? ["--split-manifest", splitManifestResolved.path] : []),
-        ...(args.assets_external_confirm === true ? ["--assets-external-confirm"] : [])];
+        concurrency,
+        assetsDir: args.eval_assets_dir, fieldConfig: fieldConfigResolved.path,
+        ...(splitManifestResolved !== null ? { splitManifest: splitManifestResolved.path } : {}),
+        ...(args.assets_external_confirm === true ? { assetsExternalConfirm: true } : {}),
+      });
       const orchPlanned = await runCapture("python3", orchArgs, 120_000, evalChildEnvOf());
       if (orchPlanned.code !== 0) {
         return asToolValue({
