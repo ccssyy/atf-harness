@@ -162,9 +162,9 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/- facts_log_tail_corrupt/);
   });
 
-  it("atf_upstream pin 升至 v0.7.25b18（re-pin 窗口 预算五参同门＋walkthrough 通道补线；pin＝tag commit 648cb2c）", () => {
-    expect(contract).toMatch(/  tag: v0\.7\.25b18/);
-    expect(contract).toMatch(/  commit_sha: 648cb2ca0ca33f3a929760b8b9eca2c0286ac053/);
+  it("atf_upstream pin 升至 v0.7.25b19（re-pin 窗口 联合装配证据链上卷；pin＝tag commit cdbce14）", () => {
+    expect(contract).toMatch(/  tag: v0\.7\.25b19/);
+    expect(contract).toMatch(/  commit_sha: cdbce14e94b84403c258fe4ad8ae8939a35535a3/);
     // 会话协议版本轴不随 re-pin 变动（内核方法面补登不 bump——session/ 零 diff）；桥接契约版本轴恒 2（另轴）
     expect(contract).toMatch(/  contract_version: 1/);
     // 历史括注保留（re-pin 指令：baseline 首句同步当前 pin；历史括注保留）
@@ -178,7 +178,7 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/历史括注：v0\.7\.24b0＝a039693/);
     expect(contract).toMatch(/历史括注：v0\.7\.23b3＝6834d1b/);
     expect(contract).toMatch(/v0\.7\.21b0＝d9c3295/);
-    expect(contract).toMatch(/历史括注：v0\.7\.25b17＝ca6e0d8/);
-    expect(contract).toMatch(/pin＝tag v0\.7\.25b18 commit 648cb2c（禁追新）/);
+    expect(contract).toMatch(/历史括注：v0\.7\.25b18＝648cb2c/);
+    expect(contract).toMatch(/pin＝tag v0\.7\.25b19 commit cdbce14（禁追新）/);
   });
 });
