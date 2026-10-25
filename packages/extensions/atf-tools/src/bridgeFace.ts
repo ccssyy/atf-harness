@@ -27,6 +27,8 @@ import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.j
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
 import { SCOPE_UNRESOLVED_NOTE, resolveSessionWorkspace, sessionCwdOfExec } from "./scopeFace.js";
+// E8c：业务动作名映射单源（webui GPU 队列卡同表复用——D152 卡面零内部工具名）
+import { BRIDGE_ACTION_LABELS } from "../../../../src/agent/bridgeActionLabels.js";
 
 /** 批㊶-N N-5：会话身份提取（exec.agent.session.id；取不到＝undefined 如实跳过）。 */
 const sessionIdOfExec = (exec: unknown): string | undefined => {
@@ -59,20 +61,6 @@ export const BRIDGE_TOOL_NAMES: readonly string[] = [
   "atf_create_experiment",
   "atf_rebind_workspace",
 ];
-
-/** E8b·H3 D152——桥接工具的业务动作名（审批卡面用）：卡面零内部工具名（atf_* 名只进
- *  日志与审计面）；映射缺项不冒充具体动作，退回「执行训练流程操作」泛化描述。 */
-const BRIDGE_ACTION_LABELS: Readonly<Record<string, string>> = {
-  atf_workspace_status: "查看训练工作区状态",
-  atf_admit_data: "登记训练数据集",
-  atf_label_qc_inspect: "抽检标注质量",
-  atf_scratch_exec: "在工作区草稿目录执行脚本",
-  atf_skill_read: "读取操作指引文档",
-  atf_gate: "调用流程闸门核验",
-  atf_launch_execute: "启动训练编排",
-  atf_create_experiment: "创建训练实验",
-  atf_rebind_workspace: "变更会话工作区绑定",
-};
 
 /** 定义查找单源：桥接契约面（TOOL_DEFINITIONS）＋工作区治理分册（WORKSPACE_TOOL_DEFINITIONS，
  *  scratch_exec/skill_read 在此登记）——与手搓审批 hook 的唯一查找出口同构。 */

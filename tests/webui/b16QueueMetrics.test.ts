@@ -14,7 +14,7 @@ import {
   readLossSeries,
   ingestTrainerLogLines,
 } from "../../src/webui/logParser.js";
-import { GpuQueueWatcher, GpuQueueOrchestrator, gpuCycleHit, formatWaited, queueStatusText, queueHitText, GPU_HIT_CONSECUTIVE } from "../../src/webui/gpuQueue.js";
+import { GpuQueueWatcher, GpuQueueOrchestrator, gpuCycleHit, formatWaited, queueStatusText, queueHitText, queueHitEstimateText, GPU_HIT_CONSECUTIVE } from "../../src/webui/gpuQueue.js";
 import { startWebUiServer } from "../../src/webui/server.js";
 import type { GpuStatus } from "../../src/webui/readOnlyTools.js";
 
@@ -130,6 +130,13 @@ describe("批⑯A：GPU 排队语义（命中条件＋编排）", () => {
     expect(formatWaited(3_600_000)).toBe("1 时 0 分");
     expect(queueStatusText("5 分")).toContain("⏳ 排队中");
     expect(queueHitText(2)).toBe("GPU 2 已空闲，确认开跑？");
+  });
+
+  it("E8c·D159 命中确认卡预计占用文案快照：业务话术（动作名单源＋占卡数＋GPU 空闲后自动开始），零工程占位语", () => {
+    // 快照锚：动作短语来自 BRIDGE_ACTION_LABELS.atf_launch_execute（单源——与桥接审批卡同一映射）
+    expect(queueHitEstimateText(1)).toBe("启动训练编排——占 1 卡，GPU 空闲后自动开始");
+    expect(queueHitEstimateText(4)).toBe("启动训练编排——占 4 卡，GPU 空闲后自动开始");
+    expect(queueHitEstimateText(1)).not.toContain("按任务卡"); // 工程占位语退役（D152/D159）
   });
 });
 

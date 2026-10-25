@@ -37,7 +37,7 @@ import { ensureTemBranch } from "../agent/tem/store.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/pi-agent-core";
 import type { ChatEvent } from "./chatModel.js";
 import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, hasConfigSnapshot, loadConfigSnapshot, parseConfigEditText, saveConfigSnapshot } from "./configConfirm.js";
-import { GpuQueueOrchestrator, queueHitText, formatWaited } from "./gpuQueue.js";
+import { GpuQueueOrchestrator, queueHitText, queueHitEstimateText, formatWaited } from "./gpuQueue.js";
 import { computeContextUsage, type ApprovalPolicy, type ContextUsage, type ScenarioProfileId, type SettingsStore } from "./settings.js";
 import { buildReadOnlyAgentTools } from "./readOnlyTools.js";
 import { compactionTriggerTokens, setCompactionContextWindow } from "../core/session/constantsBudget.js";
@@ -339,7 +339,7 @@ export class WebUiSessionManager {
           void this.emitDangerConfirm(session.id, {
             title: queueHitText(0),
             gpuCount: 1,
-            estimate: "按任务卡",
+            estimate: queueHitEstimateText(1),
             command: "bash train.sh（GPU 窗口已命中——训练启动放行）",
           });
         });

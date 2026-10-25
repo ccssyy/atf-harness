@@ -6,7 +6,7 @@
 //   （禁自由文案形态）；
 // - 文案纪律：零「手搓版」「同款」自拟黑话（O7 根因字面）；卡面零内部工具名与
 //   「按任务卡」（D152：atf_* 工具名只进日志与审计面）。
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildApprovalReason } from "../../packages/extensions/atf-tools/src/approvalFace.js";
@@ -88,5 +88,32 @@ describe("调用点全量走模板（源面钉——禁自由文案）", () => {
     expect(source).toContain('action: BRIDGE_ACTION_LABELS[definition.name] ?? "执行训练流程操作"');
     // 卡面构造处不再出现 target 回填工具名形态
     expect(source).not.toContain("target: `（${definition.name}）`");
+  });
+  it("E8c·D159 产品面全量扫描：src/＋packages/ 零「按任务卡」（含注释；白名单为空）", () => {
+    // 扫描器与守护测试①同式：递归 .ts/.tsx，跳过 node_modules/dist；测试文件不在产品面
+    // （断言字面量自身在本文件——「测试内断言」的实义即产品面零命中）。
+    const repo = join(import.meta.dirname, "..", "..");
+    const scan = (dir: string): string[] => {
+      const hits: string[] = [];
+      let entries: Array<{ name: string; isDir: boolean }> = [];
+      try {
+        entries = readdirSync(dir, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
+      } catch {
+        return hits;
+      }
+      for (const entry of entries) {
+        if (entry.name === "node_modules" || entry.name === "dist" || entry.name.startsWith(".")) continue;
+        const abs = join(dir, entry.name);
+        if (entry.isDir) {
+          hits.push(...scan(abs));
+          continue;
+        }
+        if (!/\.tsx?$/.test(entry.name)) continue;
+        if (readFileSync(abs, "utf8").includes("按任务卡")) hits.push(abs);
+      }
+      return hits;
+    };
+    const hits = [...scan(join(repo, "src")), ...scan(join(repo, "packages"))];
+    expect(hits, `产品面残留「按任务卡」: ${hits.join("；")}`).toEqual([]);
   });
 });
