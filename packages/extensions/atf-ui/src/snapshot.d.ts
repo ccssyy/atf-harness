@@ -48,6 +48,8 @@ export interface AtfRunScan {
   trainlog_tail?: unknown;
   /** 批B1：run 显示名（用户改名优先，否则自动名；title 不含 workspace；null＝读失败不造名）。 */
   display?: { title: string } | null;
+  /** E8：单据槽位面（additive——server scanRunDirAt 产物；空数组＝无槽位）。 */
+  doc_slots?: Array<{ doc_type: string; has_candidate: boolean; has_variants: boolean; rows: number | null }>;
 }
 export interface AtfGpuStatus {
   offline: boolean;
@@ -95,6 +97,8 @@ export interface AtfMonitorSnapshot {
     trainlog_tail: unknown;
     /** 批B1：run 显示名（additive 可选——缺席＝旧装配面，client 回退 run_id）。 */
     display?: { title: string } | null;
+    /** E8：单据槽位面（additive——联合训练对话框按类呈现的数据源；空数组＝无槽位）。 */
+    doc_slots: Array<{ doc_type: string; has_candidate: boolean; has_variants: boolean; rows: number | null }>;
     training: { active: boolean; points: Array<Record<string, unknown>>; pending_confirm: unknown };
     /** 批㊶-N N-3／批㊶Q增补二2：段内进度（恒输出——顶层直通＞training 子键回退＞null；
      *  浮卡进度行数据源）。 */

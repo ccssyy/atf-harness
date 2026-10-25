@@ -100,6 +100,9 @@ export function buildMonitorSnapshot(runs, gpu, gpuAll) {
       train_notices: Array.isArray(run.train_notices) ? run.train_notices : [],
       // 批㊶-P P-2：训练探针（additive——{level,reason,since}，无告警 null；schema v2 续）
       probe: run.probe ?? null,
+      // E8：单据槽位面（additive——server scanRunDirAt doc_slots 透传；空数组＝无槽位。
+      //  UI 联合训练对话框按类呈现的数据源——client 无盘读取面，槽位事实只经本投影下发）
+      doc_slots: Array.isArray(run.doc_slots) ? run.doc_slots : [],
       training: {
         active: run.training?.active === true,
         points: Array.isArray(run.training?.loss) ? run.training.loss : [],
