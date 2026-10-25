@@ -59,6 +59,8 @@ export const derivePublishRoot = (env: Readonly<Record<string, string | undefine
 };
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { humanizeKernelError, scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
+// E9a·H2-H5：评估面走 docSlots 唯一路径表（ADR-0017 决定 10/12——禁再自拼槽位路径）
+import { listDocSlots } from "../../atf-ui/src/docSlots.js";
 import { queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
 
 // ── 批㊶Q增补三 段2：start 探活（终结 started:true 假成功）──
@@ -380,15 +382,25 @@ export interface EvalReadiness {
   training_done: boolean;
   checkpoint_candidates: string[];
   latest_checkpoint: string | null;
+  /** 以下三键单值形态＝N=1 该类在场值；N>1 为 null（逐类明细看 doc_slots）——E9a·H2。 */
   eval_assets_dir: string | null;
   field_config: string | null;
   split_manifest: string | null;
   four_set_ready: boolean;
   badcases_ready: boolean;
+  /** E9a·H2：逐类评估三件明细（走 docSlots 表；缺项类带 missing 清单——miss 不静默）。 */
+  doc_slots: Array<{
+    doc_type: string;
+    eval_assets_dir: string | null;
+    field_config: string | null;
+    split_manifest: string | null;
+    missing?: string[];
+  }>;
+  /** E9a·H2：缺项人话清单（哪类缺什么；无槽位＝legacy 说明行）。 */
+  missing: string[];
 }
 
 export const collectEvalReadiness = (runDir: string): EvalReadiness => {
-  const has = (rel: string): boolean => existsSync(join(runDir, rel));
   const trainingDir = join(runDir, "training");
   let ckpts: string[] = [];
   try {
@@ -396,18 +408,36 @@ export const collectEvalReadiness = (runDir: string): EvalReadiness => {
       ? readdirSync(trainingDir, { withFileTypes: true }).filter((d) => d.isDirectory() && /^checkpoint-\d+$/.test(d.name) && existsSync(join(trainingDir, d.name, "adapter_model.safetensors"))).map((d) => d.name).sort()
       : [];
   } catch { /* 缺目录＝空候选 */ }
-  let evalAssets: string | null = null;
-  for (const cand of [join(runDir, "l1", "eval"), join(runDir, "eval_assets")]) {
-    if (existsSync(join(cand, "test_images.json")) && existsSync(join(cand, "eval_labels.jsonl"))) { evalAssets = cand; break; }
-  }
-  let fieldConfig: string | null = null;
-  for (const cand of [join(runDir, "l1", "field_config.json"), join(runDir, "prep", "field_config.json")]) {
-    if (existsSync(cand)) { fieldConfig = cand; break; }
-  }
-  let splitManifest: string | null = null;
-  for (const cand of [join(runDir, "l1", "split-manifest.json"), join(runDir, "split", "split-manifest.json")]) {
-    if (existsSync(cand)) { splitManifest = cand; break; }
-  }
+  // E9a·H2：评估三件一律走 docSlots 唯一路径表（publish/<doc>/<attempt>/eval、
+  // experiment-setup/<doc>/field-config.json、publish/<doc>/<attempt>/split-manifest.json
+  // ——ADR-0017 决定 10 评估输入逐类）；旧平铺探测（l1/eval、l1/field_config.json、
+  // prep/field_config.json、l1/split-manifest.json、split/…）整链退役。miss 不静默：
+  // 逐类给缺项清单（哪类缺什么），单值三键仅 N=1 填该类在场值。
+  const slots = listDocSlots(runDir);
+  const evalAssetsReady = (dir: string | null): boolean =>
+    dir !== null && existsSync(join(dir, "test_images.json")) && existsSync(join(dir, "eval_labels.jsonl"));
+  const docDetails = slots.map((slot) => {
+    const missing: string[] = [];
+    if (!evalAssetsReady(slot.eval_assets_dir)) missing.push("评估资产（test_images.json＋eval_labels.jsonl）");
+    if (slot.eval_assets_dir === null) missing.push("评估资产目录（该类尚未发布——无 attempt 工作区）");
+    if (!existsSync(slot.field_config)) missing.push("字段配置（field-config.json）");
+    if (slot.split_manifest === null || !existsSync(slot.split_manifest)) missing.push("分区清单（split-manifest.json）");
+    return {
+      doc_type: slot.doc_type,
+      eval_assets_dir: evalAssetsReady(slot.eval_assets_dir) ? slot.eval_assets_dir : null,
+      field_config: existsSync(slot.field_config) ? slot.field_config : null,
+      split_manifest: slot.split_manifest !== null && existsSync(slot.split_manifest) ? slot.split_manifest : null,
+      ...(missing.length > 0 ? { missing } : {}),
+    };
+  });
+  const sole = slots.length === 1 ? docDetails[0]! : null;
+  const evalAssets = sole !== null ? sole.eval_assets_dir : null;
+  const fieldConfig = sole !== null ? sole.field_config : null;
+  const splitManifest = sole !== null ? sole.split_manifest : null;
+  const missing = slots.length === 0
+    ? ["无单据槽位（prep/variants/ 下无含 train.jsonl 的单据子目录）——legacy 平铺 run 的评估三件不再自动探测，槽位化后重推"]
+    : docDetails.flatMap((detail) =>
+        ((detail as { missing?: string[] }).missing ?? []).map((item) => `${detail.doc_type} 类缺${item}`));
   const evalRoot = join(runDir, "eval");
   let fourSetReady = false;
   try {
@@ -435,6 +465,9 @@ export const collectEvalReadiness = (runDir: string): EvalReadiness => {
     split_manifest: splitManifest,
     four_set_ready: fourSetReady,
     badcases_ready: badcasesReady,
+    // E9a·H2：逐类明细＋缺项清单（走表单源——miss 不静默）
+    doc_slots: docDetails,
+    missing,
   };
 };
 
@@ -1559,17 +1592,42 @@ export type EvalFieldConfigResolution =
     }
   | {
       ok: false;
-      error: "eval_field_config_unresolved" | "eval_field_config_drift" | "eval_field_config_unverified";
+      error: "eval_field_config_unresolved" | "eval_field_config_drift" | "eval_field_config_unverified" | "eval_field_config_multi_doc";
       path: string;
       note: string;
     };
 
-/** D14——field_config 解析（纯函数）：显式传入→直接用（漂移仅告警）；缺省→
- *  <runDir>/experiment-setup/field-config.json；一律与 iteration-config 的训练指纹比对。
- *  失败 fail-closed：文件缺失→unresolved；指纹不一致→drift；run 无指纹→unverified（缺省路径时）。 */
-export const resolveEvalFieldConfig = (runDir: string, explicit?: string): EvalFieldConfigResolution => {
+/** D14/E9a·H4——field_config 解析（纯函数）：显式传入→直接用（漂移仅告警）；缺省→
+ *  槽位 run（docSlots 表非空）取该类 experiment-setup/<doc>/field-config.json（指定
+ *  docType 判该类；N=1 判唯一类＝恒等路径换槽位；N>1 未指定→multi_doc 结构化拒——
+ *  一次评多类 E9b 前不支持）；legacy run（表空）保持平铺 experiment-setup/
+ *  field-config.json 恒等。一律与 iteration-config 的训练指纹比对。失败 fail-closed：
+ *  文件缺失→unresolved；指纹不一致→drift；run 无指纹→unverified（缺省路径时）。 */
+export const resolveEvalFieldConfig = (runDir: string, explicit?: string, docType?: string): EvalFieldConfigResolution => {
   const isExplicit = explicit !== undefined && explicit.trim() !== "";
-  const path = isExplicit ? (explicit as string) : join(runDir, "experiment-setup", "field-config.json");
+  let path: string;
+  if (isExplicit) {
+    path = explicit as string;
+  } else {
+    const slots = listDocSlots(runDir);
+    if (slots.length > 0) {
+      const wanted = docType !== undefined && docType.trim() !== "" ? docType.trim() : null;
+      const slot = wanted !== null
+        ? slots.find((entry) => entry.doc_type === wanted) ?? null
+        : slots.length === 1 ? slots[0]! : null;
+      if (slot === null) {
+        return {
+          ok: false, error: "eval_field_config_multi_doc", path: join(runDir, "experiment-setup"),
+          note: slots.find((entry) => entry.doc_type === wanted) === undefined && wanted !== null
+            ? `本 run 无「${wanted}」类的单据槽位——核对单据类型后重推`
+            : `本 run 有 ${String(slots.length)} 类单据（${slots.map((entry) => entry.doc_type).join("、")}）——一次评多类尚不支持，评估请面向单类 run 或等下一批`,
+        };
+      }
+      path = slot.field_config;
+    } else {
+      path = join(runDir, "experiment-setup", "field-config.json"); // legacy 平铺恒等
+    }
+  }
   if (!existsSync(path)) {
     return {
       ok: false, error: "eval_field_config_unresolved", path,
@@ -1735,21 +1793,46 @@ const listLaneManifestSources = (runDir: string): string[] => {
   return sources;
 };
 
-/** 评估 lane 判定（evaluate/analyze 共用单源）：① 显式 lane trim 非空即采纳（用户指路语义）；
- *  ② 任务事实多源解析（D113——l1/ 与 publish-* 双源）：读全部在场源的 training-data-manifest
- *  lanes 键集——恰一非空键＝唯一 lane（多源须同值）；显式空串＝explicit_empty（显式给了空值
- *  不静默忽略）；全源缺失＝task_fact_missing；lanes 键缺失/非对象＝lanes_field_invalid；
- *  零键＝lanes_empty；单源多键＝lanes_ambiguous（两态均带 lanesSeen）；多源键集不一致＝
- *  lanes_conflict_across_sources（fail-closed 报两值——不猜先来后到，显式 lane 覆盖可解）。 */
+/** 评估 lane 判定（evaluate/analyze 共用单源；E9a·H3 槽位表逐类化）：① 显式 lane
+ *  trim 非空即采纳（用户指路语义）；② 槽位 run（docSlots 表非空）按类判定——lane 键
+ *  形 `<doc>_<lane>` 归位该类（取自该类 training-data-manifest 的 lanes 键）：指定
+ *  docType 判该类；未指定且 N=1 判唯一类（恒等旧语义——恰一键＝唯一 lane）；N>1 未
+ *  指定＝lanes_multi_doc（逐类键清单随行——一次评多类在 E9b 前不支持，入口另有快败）；
+ *  ③ legacy run（表空）保持 D113 双源逻辑恒等（l1/ 与 publish-* 平铺）。
+ *  显式空串＝explicit_empty；全源缺失＝task_fact_missing；lanes 键缺失/非对象＝
+ *  lanes_field_invalid；零键＝lanes_empty；单类多键＝lanes_ambiguous（带 lanesSeen）；
+ *  多源键集不一致＝lanes_conflict_across_sources（legacy 双源 fail-closed 报两值）。 */
 export const resolveEvalLaneFrom = (
   runDir: string,
   explicitLane: string | undefined,
-): { ok: true; lane: string; source: "explicit" | "task_fact" } | { ok: false; reason: "explicit_empty" | "task_fact_missing" | "lanes_field_invalid" | "lanes_empty" | "lanes_ambiguous" | "lanes_conflict_across_sources"; lanesSeen?: string[]; conflict?: Array<{ source: string; lanes: string[] }> } => {
+  docType?: string,
+): { ok: true; lane: string; source: "explicit" | "task_fact" } | { ok: false; reason: "explicit_empty" | "task_fact_missing" | "lanes_field_invalid" | "lanes_empty" | "lanes_ambiguous" | "lanes_multi_doc" | "lanes_conflict_across_sources"; lanesSeen?: string[]; lanesByDoc?: Array<{ doc_type: string; lanes: string[] }>; conflict?: Array<{ source: string; lanes: string[] }> } => {
   if (explicitLane !== undefined) {
     const trimmed = explicitLane.trim();
     if (trimmed === "") return { ok: false, reason: "explicit_empty" };
     return { ok: true, lane: trimmed, source: "explicit" };
   }
+  // E9a·H3：槽位 run 按类判定（lane 键归位——类内恰一键才成立，取消全局「恰一 lane」判）
+  const slots = listDocSlots(runDir);
+  if (slots.length > 0) {
+    const lanesByDoc = slots.map((slot) => ({ doc_type: slot.doc_type, lanes: slot.lanes }));
+    const target = docType !== undefined && docType.trim() !== ""
+      ? lanesByDoc.find((entry) => entry.doc_type === docType.trim())
+      : undefined;
+    if (docType !== undefined && docType.trim() !== "" && target === undefined) {
+      return { ok: false, reason: "task_fact_missing", lanesByDoc };
+    }
+    const pick = target ?? (slots.length === 1 ? lanesByDoc[0]! : null);
+    if (pick === null) {
+      return { ok: false, reason: "lanes_multi_doc", lanesSeen: lanesByDoc.flatMap((entry) => entry.lanes), lanesByDoc };
+    }
+    const manifestPath = slots.find((slot) => slot.doc_type === pick.doc_type)!.training_data_manifest;
+    if (manifestPath === null) return { ok: false, reason: "task_fact_missing", lanesByDoc }; // 该类未发布——manifest 缺席
+    if (pick.lanes.length === 0) return { ok: false, reason: "lanes_empty", lanesSeen: pick.lanes, lanesByDoc };
+    if (pick.lanes.length > 1) return { ok: false, reason: "lanes_ambiguous", lanesSeen: pick.lanes, lanesByDoc };
+    return { ok: true, lane: pick.lanes[0] as string, source: "task_fact" };
+  }
+  // legacy run（表空）——D113 双源逻辑恒等
   const sources = listLaneManifestSources(runDir);
   if (sources.length === 0) return { ok: false, reason: "task_fact_missing" };
   const lanesBySource: Array<{ source: string; lanes: string[] }> = [];
@@ -1862,6 +1945,17 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const orchestration = skill("atf-evaluate-checkpoints", "generate_eval_orchestration.py");
       const runner = skill("atf-evaluate-checkpoints", "run_formal_eval.py");
       if (args.action === "status") return evalStatus(runId, cfg);
+      // E9a·H5：多类先 fail-closed——一次评多类（逐类推理调度）在下一批落地，本批禁止
+      // 静默只评一类（字段闭集串类＝指标无意义，ADR-0017 决定 10）。槽位表>1 即卡前快败
+      //（零产物零审批零 spawn；legacy 平铺 run 表空不触发本闸）。
+      const evalSlots = listDocSlots(runDir);
+      if (evalSlots.length > 1) {
+        return asToolValue({
+          started: false, error: "eval_multi_doc_unsupported", run_id: runId,
+          doc_types: evalSlots.map((slot) => slot.doc_type),
+          note: `本 run 有 ${String(evalSlots.length)} 类单据（${evalSlots.map((slot) => slot.doc_type).join("、")}）——本轮尚不支持一次评多类（逐类评估在下一批落地）；当前请对单类 run 发起评估，不要只挑其中一类静默评`,
+        });
+      }
       // D32：status 只按 run/轮次查询（start 四参降 optional）；start 路径逐参验证
       // （缺即结构化 *_missing——先于一切产物生成与审批，零消耗放行）
       if (typeof args.adapter_path !== "string" || args.adapter_path.trim() === "") {
@@ -2138,6 +2232,15 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       if (!runResolution.ok) return asToolValue(runResolution.payload);
       const runId = runResolution.runId;
       const runDir = runResolution.runDir;
+      // E9a·H5：多类先 fail-closed（与 atf_evaluate 同裁——一次评多类下一批落地，禁静默只评一类）
+      const analyzeSlots = listDocSlots(runDir);
+      if (analyzeSlots.length > 1) {
+        return asToolValue({
+          ok: false, error: "eval_multi_doc_unsupported", run_id: runId,
+          doc_types: analyzeSlots.map((slot) => slot.doc_type),
+          note: `本 run 有 ${String(analyzeSlots.length)} 类单据（${analyzeSlots.map((slot) => slot.doc_type).join("、")}）——本轮尚不支持一次评多类（逐类评估在下一批落地）；当前请对单类 run 发起分析`,
+        });
+      }
       // pin 单源脚本面（批㉕B 段1：禁 ATF 源工作树绝对路径）
       const freezeScript = join(cfg.kernelDir, "skills", "atf-evaluate-checkpoints", "scripts", "build_raw_badcase_input.py");
       const chainScript = join(cfg.kernelDir, "skills", "atf-analyze-badcases", "scripts", "run_analysis_chain.py");

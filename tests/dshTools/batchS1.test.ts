@@ -33,18 +33,54 @@ const seedCompleteRun = (root: string, runId = "run-done"): string => {
 };
 
 describe("批㊶-S1 段 1——闭环推荐层事实核对（next_steps）", () => {
-  it("collectEvalReadiness：训练 done＋checkpoint 候选实锚＋评估资产/field_config/split 绑定状态", () => {
+  it("collectEvalReadiness：训练 done＋checkpoint 候选实锚＋评估资产/field_config/split 绑定状态（E9a·H2 走槽位表——平铺 l1/ 探测退役）", () => {
     const runDir = seedCompleteRun(tempRoot());
-    mkdirSync(join(runDir, "l1", "eval"), { recursive: true });
-    writeFileSync(join(runDir, "l1", "eval", "test_images.json"), "{}");
-    writeFileSync(join(runDir, "l1", "eval", "eval_labels.jsonl"), "");
+    // E9a·H2：评估三件走 docSlots 表——夹具升槽位形态（prep/variants/<doc>/train.jsonl
+    // ＋experiment-setup/<doc>/field-config.json＋publish/<doc>/<8hex>/{eval,split-manifest}）
+    const ws = join(runDir, "publish", "pl", "1a2b3c4d");
+    mkdirSync(join(runDir, "prep", "variants", "pl"), { recursive: true });
+    writeFileSync(join(runDir, "prep", "variants", "pl", "train.jsonl"), '{"row":"x"}\n');
+    mkdirSync(join(runDir, "experiment-setup", "pl"), { recursive: true });
+    writeFileSync(join(runDir, "experiment-setup", "pl", "field-config.json"), "{}");
+    mkdirSync(join(ws, "eval"), { recursive: true });
+    writeFileSync(join(ws, "eval", "test_images.json"), "{}");
+    writeFileSync(join(ws, "eval", "eval_labels.jsonl"), "");
+    writeFileSync(join(ws, "split-manifest.json"), "{}");
     const r = collectEvalReadiness(runDir);
     expect(r.training_done).toBe(true);
     expect(r.checkpoint_candidates).toEqual(["checkpoint-30"]);
     expect(r.latest_checkpoint).toContain("checkpoint-30");
-    expect(r.eval_assets_dir).toBe(join(runDir, "l1", "eval"));
+    // N=1 单值三键＝该类槽位值（表单源）；旧平铺 l1/eval 不再命中
+    expect(r.eval_assets_dir).toBe(join(ws, "eval"));
+    expect(r.field_config).toBe(join(runDir, "experiment-setup", "pl", "field-config.json"));
+    expect(r.split_manifest).toBe(join(ws, "split-manifest.json"));
     expect(r.four_set_ready).toBe(true);
     expect(r.badcases_ready).toBe(true);
+    expect(r.doc_slots).toHaveLength(1);
+    expect(r.doc_slots[0]?.doc_type).toBe("pl");
+    expect(r.missing).toEqual([]);
+  });
+  it("E9a·H2 miss 不静默：槽位在但评估三件缺 → 单值 null＋缺项人话清单（哪类缺什么）；平铺 legacy run → 无槽位说明行", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-gap");
+    mkdirSync(join(runDir, "prep", "variants", "pl"), { recursive: true });
+    writeFileSync(join(runDir, "prep", "variants", "pl", "train.jsonl"), '{"row":"x"}\n');
+    const r = collectEvalReadiness(runDir);
+    expect(r.eval_assets_dir).toBeNull();
+    expect(r.field_config).toBeNull();
+    expect(r.split_manifest).toBeNull();
+    expect(r.missing.some((line) => line.includes("pl 类缺"))).toBe(true);
+    expect(r.missing.some((line) => line.includes("评估资产"))).toBe(true);
+    expect(r.missing.some((line) => line.includes("字段配置"))).toBe(true);
+    expect(r.missing.some((line) => line.includes("分区清单"))).toBe(true);
+    // legacy 平铺（无槽位）：整链说明行——不再自动探测 l1/
+    const legacy = seedCompleteRun(root, "run-legacy");
+    mkdirSync(join(legacy, "l1", "eval"), { recursive: true });
+    writeFileSync(join(legacy, "l1", "eval", "test_images.json"), "{}");
+    writeFileSync(join(legacy, "l1", "eval", "eval_labels.jsonl"), "");
+    const rl = collectEvalReadiness(legacy);
+    expect(rl.eval_assets_dir).toBeNull();
+    expect(rl.missing.some((line) => line.includes("无单据槽位"))).toBe(true);
   });
   it("未完成 run：无含 adapter 的 checkpoint → training_done=false（不猜测）", () => {
     const root = tempRoot();
