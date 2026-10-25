@@ -13,6 +13,9 @@
  * train.jsonl 文件不构成类（run 级合并件／legacy 平铺形态）。doc_type 字典序（内核 sorted 同式）。
  * E8b 补 runDocRegistry：已登记单据清单读侧（内核 b13 run.json docs[] 优先，缺键目录探测
  * 标 legacy）——「已登记清单」与「已备槽位」（listDocSlots）是两个事实面，消费方比对不合并。
+ * E9a·H1a 扩评估面四键（eval_assets_dir/split_manifest/training_data_manifest/lanes——
+ * ADR-0017 决定 10 评估输入逐类），键序与内核 run_layout.doc_slots 12 键一致（H1b parity
+ * 与 tools/list_doc_slots.py --json 三 fixture 逐项对账——两侧禁再起第二张路径表）。
  * legacy 只读 fallback（E8 §〇 旧 run 兼容：不迁移、不双写）：run 根三件＋publish/<attempt>/
  * （内核 RunLayout/v1 canonical 现形态——attempt 目录＝候选 sha 前 8 hex）；经
  * legacyCandidatePath／legacyPublishWorkspaces 提供，槽位优先、根级仅 fallback。
@@ -27,7 +30,8 @@ export const DOC_TYPE_SLOT_RE = /^[a-z0-9][a-z0-9_-]*$/;
 /** attempt 目录名（候选 sha 前 8——hex 小写；publish 工作区标识）。 */
 export const ATTEMPT_DIR_RE = /^[0-9a-f]{8}$/;
 
-/** 单据槽位（路径表——存在性由消费方按需判，本结构不造假值）。 */
+/** 单据槽位（路径表——存在性由消费方按需判，本结构不造假值；键序与内核
+ *  run_layout.doc_slots 12 键一致（E9a·H1a 扩四评估面键，parity 逐项对账）。） */
 export interface DocSlot {
   doc_type: string;
   /** 槽位根 <runDir>/publish/<doc>/。 */
@@ -44,6 +48,15 @@ export interface DocSlot {
   publish_ws: string | null;
   /** attempt 名（候选 sha 前 8；未发现＝null）。 */
   attempt: string | null;
+  /** 评估资产目录 <publish_ws>/eval（E9a·ADR-0017 决定 10；未发布＝null）。 */
+  eval_assets_dir: string | null;
+  /** 该类 test 分区清单 <publish_ws>/split-manifest.json（未发布＝null）。 */
+  split_manifest: string | null;
+  /** 训练数据 manifest <publish_ws>/training-data-manifest.json（未发布＝null）。 */
+  training_data_manifest: string | null;
+  /** 该类 lane 键名列表（读 training-data-manifest 的 lanes 键，排序；缺失/不可
+   *  解析/未发布＝空表——镜像内核 _manifest_lanes，不猜）。 */
+  lanes: string[];
 }
 
 /** 槽位发布工作区发现：slot_dir 直下 attempt 形态目录，字典序取首（确定性）。 */
@@ -56,6 +69,22 @@ const firstAttemptOf = (slotDir: string): string | null => {
     return names[0] ?? null;
   } catch {
     return null; // 槽位根缺席＝尚未发布
+  }
+};
+
+/** 读训练数据 manifest 的 lane 键名列表（E9a·镜像内核 _manifest_lanes：lanes 键为
+ *  对象时取键名排序；缺失/不可解析＝空表，不猜）。 */
+export const manifestLanesOf = (manifestPath: string | null): string[] => {
+  if (manifestPath === null) return [];
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const lanes = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)["lanes"]
+      : undefined;
+    if (typeof lanes !== "object" || lanes === null || Array.isArray(lanes)) return [];
+    return Object.keys(lanes as Record<string, unknown>).sort();
+  } catch {
+    return [];
   }
 };
 
@@ -79,6 +108,8 @@ export const listDocSlots = (runDir: string): DocSlot[] => {
   return classes.map((docType) => {
     const slotDir = join(runDir, "publish", docType);
     const attempt = firstAttemptOf(slotDir);
+    const publishWs = attempt !== null ? join(slotDir, attempt) : null;
+    const trainingDataManifest = publishWs !== null ? join(publishWs, "training-data-manifest.json") : null;
     return {
       doc_type: docType,
       slot_dir: slotDir,
@@ -86,8 +117,12 @@ export const listDocSlots = (runDir: string): DocSlot[] => {
       variants_dir: join(runDir, "prep", "variants", docType),
       train_jsonl: join(runDir, "prep", "variants", docType, "train.jsonl"),
       field_config: join(runDir, "experiment-setup", docType, "field-config.json"),
-      publish_ws: attempt !== null ? join(slotDir, attempt) : null,
+      publish_ws: publishWs,
       attempt,
+      eval_assets_dir: publishWs !== null ? join(publishWs, "eval") : null,
+      split_manifest: publishWs !== null ? join(publishWs, "split-manifest.json") : null,
+      training_data_manifest: trainingDataManifest,
+      lanes: manifestLanesOf(trainingDataManifest),
     };
   });
 };
