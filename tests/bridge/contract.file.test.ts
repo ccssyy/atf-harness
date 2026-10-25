@@ -162,12 +162,13 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/- facts_log_tail_corrupt/);
   });
 
-  it("atf_upstream pin 升至 v0.7.25b10（re-pin 窗口 E5 契约轴 2026-10-25；pin＝tag commit c34ab73，E5 链路收口内核批生效窗：D139 training_overrides walkthrough 段直下〔training_prep 段 stage 参数＋--output-dir 显式改传 <run>/training〕＋D140 落点护栏〔--output-dir 指向 <run>/prep/ 之下即拒 output_dir_inside_config_dir；缺省仍 <run>/training〕＋D141 留出判定比例化〔ratios_actual.test round(x,4) 删 int() 截断〕＋D142/D143 显式实例根〔ATF_INSTANCE_ROOT>ATF_HOME 同义；均缺 InstanceRootMissing fail-closed〕——历史括注 v0.7.25b9 E4-乙线、v0.7.25b8 E3 线、v0.7.25b7 U1 线、v0.7.25b6 五 bump 线、v0.7.25b1 b5 像素对线、v0.7.24b0 批次R 线、v0.7.23b3 D48 线与 v0.7.21b0 E10 线保留）", () => {
-    expect(contract).toMatch(/  tag: v0\.7\.25b10/);
-    expect(contract).toMatch(/  commit_sha: c34ab7334333d60c4f0df91b504c8d17a1e543b4/);
+  it("atf_upstream pin 升至 v0.7.25b11（re-pin 窗口 E6 契约轴 2026-10-25；pin＝tag commit 31785a8，E6 预检派生消费内核批生效窗：D145 walkthrough token 门禁缺省走内置 CPU 计量真审计〔provider 缺+旗标缺→缺省 provider=token_meter_cpu.py，steps 记 provider_source=builtin_cpu；显式 provider 记 explicit；豁免语义不变；不加 CLI 参数 argparse surface 零 diff〕＋D146 门禁像素对同源透传〔run_token_gate 增 image_pixels 透传 --min-pixels/--max-pixels；调用点自 token_budget.json 取像素对，缺键 token_budget_pixels_missing fail-closed 禁回退 65536/802816〕——历史括注 v0.7.25b10 E5 线、v0.7.25b9 E4-乙线、v0.7.25b8 E3 线、v0.7.25b7 U1 线、v0.7.25b6 五 bump 线、v0.7.25b1 b5 像素对线、v0.7.24b0 批次R 线、v0.7.23b3 D48 线与 v0.7.21b0 E10 线保留）", () => {
+    expect(contract).toMatch(/  tag: v0\.7\.25b11/);
+    expect(contract).toMatch(/  commit_sha: 31785a814534da056024a3194ca028cc2f6508f4/);
     // 会话协议版本轴不随 re-pin 变动（内核方法面补登不 bump）；桥接契约版本轴恒 2（另轴）
     expect(contract).toMatch(/  contract_version: 1/);
     // 历史括注保留（re-pin 指令：baseline 首句同步当前 pin；历史括注保留）
+    expect(contract).toMatch(/历史括注：v0\.7\.25b10＝c34ab73/);
     expect(contract).toMatch(/历史括注：v0\.7\.25b9＝432c1de/);
     expect(contract).toMatch(/历史括注：v0\.7\.25b8＝ebe0293/);
     expect(contract).toMatch(/历史括注：v0\.7\.25b7＝997db63/);
@@ -176,6 +177,6 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/历史括注：v0\.7\.24b0＝a039693/);
     expect(contract).toMatch(/历史括注：v0\.7\.23b3＝6834d1b/);
     expect(contract).toMatch(/v0\.7\.21b0＝d9c3295/);
-    expect(contract).toMatch(/pin＝tag v0\.7\.25b10 commit c34ab73（禁追新）/);
+    expect(contract).toMatch(/pin＝tag v0\.7\.25b11 commit 31785a8（禁追新）/);
   });
 });
