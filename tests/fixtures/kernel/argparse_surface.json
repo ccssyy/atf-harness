@@ -189,6 +189,24 @@
     "required": null
    },
    {
+    "option": "--cutoff-len",
+    "dest": "cutoff_len",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--max-model-len",
+    "dest": "max_model_len",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--negative-ratio-target",
     "dest": "negative_ratio_target",
     "action": "store",
@@ -4924,6 +4942,24 @@
    {
     "option": "--image-max-pixels",
     "dest": "image_max_pixels",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--cutoff-len",
+    "dest": "cutoff_len",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--max-model-len",
+    "dest": "max_model_len",
     "action": "store",
     "type": "<expr:int>",
     "choices": null,

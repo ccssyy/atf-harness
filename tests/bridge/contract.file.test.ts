@@ -162,9 +162,9 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/- facts_log_tail_corrupt/);
   });
 
-  it("atf_upstream pin 升至 v0.7.25b16（re-pin 窗口 E9c 卡位透传＋跨类字段命名空间；pin＝tag commit 6429d11）", () => {
-    expect(contract).toMatch(/  tag: v0\.7\.25b16/);
-    expect(contract).toMatch(/  commit_sha: 6429d119dc83533a07eb59bb9f077e337a5201b4/);
+  it("atf_upstream pin 升至 v0.7.25b18（re-pin 窗口 预算五参同门＋walkthrough 通道补线；pin＝tag commit 648cb2c）", () => {
+    expect(contract).toMatch(/  tag: v0\.7\.25b18/);
+    expect(contract).toMatch(/  commit_sha: 648cb2ca0ca33f3a929760b8b9eca2c0286ac053/);
     // 会话协议版本轴不随 re-pin 变动（内核方法面补登不 bump——session/ 零 diff）；桥接契约版本轴恒 2（另轴）
     expect(contract).toMatch(/  contract_version: 1/);
     // 历史括注保留（re-pin 指令：baseline 首句同步当前 pin；历史括注保留）
@@ -178,6 +178,7 @@ describe("契约文件自检（v2）", () => {
     expect(contract).toMatch(/历史括注：v0\.7\.24b0＝a039693/);
     expect(contract).toMatch(/历史括注：v0\.7\.23b3＝6834d1b/);
     expect(contract).toMatch(/v0\.7\.21b0＝d9c3295/);
-    expect(contract).toMatch(/pin＝tag v0\.7\.25b16 commit 6429d11（禁追新）/);
+    expect(contract).toMatch(/历史括注：v0\.7\.25b17＝ca6e0d8/);
+    expect(contract).toMatch(/pin＝tag v0\.7\.25b18 commit 648cb2c（禁追新）/);
   });
 });

@@ -8,17 +8,17 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 契约轴 2026-10-25 窗口 E9a：v0.7.25b13 → v0.7.25b16，唯一真相源 = bridge.contract.yaml
+// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b18，唯一真相源 = bridge.contract.yaml
 // atf_upstream，本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.25b16（E9a 评估槽位单源内核批生效窗——run_layout 新增 doc_slots 权威
-// 槽位表〔逐类 12 键：8 键＋eval_assets_dir/split_manifest/training_data_manifest/lanes〕＋
-// tools/list_doc_slots.py CLI 出口〔--run/--json/--check；--check 与 run.json docs[] 对账〕＋
-// run_joint_analysis 分析侧改走同表〔legacy 仅 fallback〕＋test_e9a_doc_slots 17 锚＋旅程评估资产
-// 可见性段；ADR-0017 Accepted 决定 1-12 生效
-// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit 6429d11，方法面零增（session/ 零 diff），
-// 会话协议轴 1／桥接契约轴 3 零 diff；argparse surface 恰一项增量，harness 快照 sha256 bef7e3bf）。
-export const ATF_UPSTREAM_TAG = "v0.7.25b16";
-export const ATF_UPSTREAM_COMMIT_SHA = "6429d119dc83533a07eb59bb9f077e337a5201b4";
+// 本轮 pin 取值＝tag v0.7.25b18（预算五参同门——实验门 token_gate 扩至五键：cutoff_len／
+// max_model_len 与构造上限、像素对同门确认；walkthrough_pipeline 与 build_experiment_setup
+// 两处均增 --cutoff-len／--max-model-len 声明面并同路下传；训练准备段预算子步与
+// training_preflight apply_budget 均按门值落 <run>/prep/token_budget.json 并标
+// provenance=gate_confirmed〔缺项才回退基线〕；旧三键门迁移口径不变
+// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit 648cb2c，方法面零增（session/ 零 diff），
+// 会话协议轴 1／桥接契约轴 3 零 diff；argparse surface 恰四项增量 〔两脚本各两 flag〕）。
+export const ATF_UPSTREAM_TAG = "v0.7.25b18";
+export const ATF_UPSTREAM_COMMIT_SHA = "648cb2ca0ca33f3a929760b8b9eca2c0286ac053";
 
 export interface AtfCliInvocation {
   command: string;
