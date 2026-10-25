@@ -785,7 +785,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
             if (parsed.confirmed !== undefined && parsed.confirmed !== null) return parsed.confirmed;
           }
         } catch { /* 降级 iteration-config */ }
-        for (const candidate of [join(snapDir, "prep", "iteration-config.json"), join(snapDir, "prep", "iteration-config", "iteration-config.json")]) {
+        for (const candidate of [join(snapDir, "prep", "iteration-config", "iteration-config.json"), join(snapDir, "prep", "iteration-config.json")]) {
           try {
             if (!existsSync(candidate)) continue;
             const iter = JSON.parse(readFileSync(candidate, "utf8")) as { training?: Record<string, unknown> };
@@ -1004,7 +1004,7 @@ export function checkStartModelPath(
   runDir: string,
   env: Readonly<Record<string, string | undefined>>,
 ): { ok: true; path: string } | { ok: false; path: string | null; reason: string; reasonText: string; models: string[]; root: string } {
-  const candidates = [join(runDir, "prep", "iteration-config.json"), join(runDir, "prep", "iteration-config", "iteration-config.json")];
+  const candidates = [join(runDir, "prep", "iteration-config", "iteration-config.json"), join(runDir, "prep", "iteration-config.json")];
   let configPath: string | null = null;
   let iter: Record<string, unknown> | null = null;
   for (const candidate of candidates) {
@@ -1560,8 +1560,8 @@ export const projectConcurrencyMetricLine = (value: string, source: string): str
 
 /** iteration-config 双形态候选（与 checkStartModelPath 同面——prep/ 平铺与目录两形态）。 */
 export const iterationConfigCandidates = (runDir: string): string[] => [
-  join(runDir, "prep", "iteration-config.json"),
   join(runDir, "prep", "iteration-config", "iteration-config.json"),
+  join(runDir, "prep", "iteration-config.json"),
 ];
 
 /** run 记录的字段配置指纹（dataset.digest_provenance.field_config_sha256；可读候选首个权威；
