@@ -34,14 +34,18 @@ describe("D94 阴性对照——六类护栏故意注入偏差必红", () => {
     expect(violations.some((v) => v.kind === "参数面" && v.detail.includes("--not-a-kernel-flag"))).toBe(true);
   });
 
-  it("参数面：choices 同源断裂（内核 --grouping-preset choices 改动）→ 必红", () => {
+  it("参数面：choices 同源断裂（内核 --auto-style-cluster choices 改动）→ 必红", () => {
+    // G2 退役 --grouping-preset 的词表对账（取值集合归内核），本类阴性对照改用仍在册的
+    // auto-style-cluster 词汇闭集——护栏能力不因退役而丢失。
     const { facts } = base();
     const snapshot = deepClone(snapshotOf());
     const entry = snapshot.find((script) => script.script === "tools/walkthrough_pipeline.py");
-    const arg = entry?.args.find((item) => item.option === "--grouping-preset");
-    if (arg !== undefined) arg.choices = ["A", "B", "C"];
+    const arg = entry?.args.find((item) => item.option === "--auto-style-cluster");
+    expect(arg).toBeDefined();
+    const before = [...((arg?.choices ?? []) as string[])];
+    arg!.choices = [...before.filter((value) => value !== before[0]), "injected-drift"];
     const violations = guardParamsFace(snapshot, facts);
-    expect(violations.some((v) => v.kind === "参数面" && v.detail.includes("--grouping-preset"))).toBe(true);
+    expect(violations.some((v) => v.kind === "参数面" && v.detail.includes("--auto-style-cluster"))).toBe(true);
   });
 
   it("参数面：豁免退役后全对账——b9-like 快照缺旗标必红（行为面/映射面两项，禁以 waiver 过关）；b10 现状零违例", () => {

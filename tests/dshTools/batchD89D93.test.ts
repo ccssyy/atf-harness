@@ -20,7 +20,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildPipelineTool,
-  GROUPING_PRESET_VALUES,
+  GROUPING_PRESET_SHAPE,
   groupingPresetApprovalLine,
 } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
 
@@ -56,8 +56,9 @@ const summaryArgv = (result: unknown): string[] =>
   ((result as { summary?: { argv?: string[] } }).summary?.argv ?? []);
 
 describe("D89——grouping_preset 透传（experiment_setup 段）", () => {
-  it("A/B 逐值透传：experiment_setup 段 argv 含 --grouping-preset <值>；返回体 source=explicit", async () => {
-    for (const value of GROUPING_PRESET_VALUES) {
+  it("内核取值逐值透传：experiment_setup 段 argv 含 --grouping-preset <值>；返回体 source=explicit", async () => {
+    // G2：harness 不再声明词表——这里用内核 argparse 实际接受的取值（测试数据）
+    for (const value of ["A", "B"]) {
       const result = (await toolOf().execute(
         { stage: "experiment_setup", run_id: `d89-${value}`, workspace_path: tempRoot(), grouping_preset: value },
         fakeExec,
@@ -80,15 +81,16 @@ describe("D89——grouping_preset 透传（experiment_setup 段）", () => {
     expect((result as Record<string, unknown>)["grouping_preset"]).toBe("B");
     expect((result as Record<string, unknown>)["grouping_preset_source"]).toBe("kernel_default");
   });
-  it("空白串 → 框架参数校验层拒（enum 校验先于 execute 的 trim 防御；审批零触达）", async () => {
+  it("空白串 → 视同未给（trim 后空串走缺省，不触框架拒收也不进 argv）", async () => {
     const approvals: string[] = [];
-    await expect(
-      toolOf(approvals).execute(
-        { stage: "experiment_setup", run_id: "d89-blank", workspace_path: tempRoot(), grouping_preset: "  " },
-        fakeExec,
-      ),
-    ).rejects.toThrow(/grouping_preset/);
-    expect(approvals).toHaveLength(0);
+    const result = (await toolOf(approvals).execute(
+      { stage: "experiment_setup", run_id: "d89-blank", workspace_path: tempRoot(), grouping_preset: "  " },
+      fakeExec,
+    )) as Record<string, unknown>;
+    expect(result["ok"]).toBe(true);
+    expect(summaryArgv(result)).not.toContain("--grouping-preset");
+    expect(result["grouping_preset_source"]).toBe("kernel_default");
+    expect(approvals).toHaveLength(1);
   });
   it("非 experiment_setup 段（family_split）给了也不出现在 argv，且返回体无两键（仅 experiment_setup 加键）", async () => {
     const result = (await toolOf().execute(
@@ -100,20 +102,21 @@ describe("D89——grouping_preset 透传（experiment_setup 段）", () => {
     expect((result as Record<string, unknown>)["grouping_preset"]).toBeUndefined();
     expect((result as Record<string, unknown>)["grouping_preset_source"]).toBeUndefined();
   });
-  it("非法值 → 框架参数校验层拒（enum 闭集；审批零触达）", async () => {
+  it("取值集合归内核：形状合法的任意标识都透传（不再由 harness 枚举拒收）", async () => {
     const approvals: string[] = [];
-    await expect(
-      toolOf(approvals).execute(
-        { stage: "experiment_setup", run_id: "d89-bad", workspace_path: tempRoot(), grouping_preset: "C" },
-        fakeExec,
-      ),
-    ).rejects.toThrow(/grouping_preset/);
-    expect(approvals).toHaveLength(0);
+    const result = (await toolOf(approvals).execute(
+      { stage: "experiment_setup", run_id: "d89-any", workspace_path: tempRoot(), grouping_preset: "custom_recipe" },
+      fakeExec,
+    )) as Record<string, unknown>;
+    expect(result["ok"]).toBe(true);
+    expect(summaryArgv(result)[summaryArgv(result).indexOf("--grouping-preset") + 1]).toBe("custom_recipe");
+    // 越界值由内核 argparse choices 拒绝（回流为内核错误），harness 不复制词表
+    expect(approvals).toHaveLength(1);
   });
 });
 
 describe("D89——审批卡分组方案呈现（reason 内追加一行，仅 experiment_setup 段）", () => {
-  it("显式 A → 卡含「分组方案：A（3 组·按单据层级…）」；显式 B 同构", async () => {
+  it("显式 A/B → 卡含「分组方案：<标识>（候选方案由训练内核定义…）」", async () => {
     for (const value of ["A", "B"] as const) {
       const approvals: string[] = [];
       await toolOf(approvals).execute(
@@ -122,23 +125,20 @@ describe("D89——审批卡分组方案呈现（reason 内追加一行，仅 ex
       );
       expect(approvals).toHaveLength(1);
       expect(approvals[0]).toContain(groupingPresetApprovalLine(value));
-      expect(approvals[0]).toContain(
-        value === "A"
-          ? "分组方案：A（3 组·按单据层级：doc_identifier／page_summary／goods_item）"
-          : "分组方案：B（2 组·单据级 vs 条目级：goods_item／doc_level）",
-      );
+      // G2：卡面只报标识＋「候选由内核定义」，不复述组构成（测试样板字段名不进产品文案）
+      expect(approvals[0]).toContain(`分组方案：${value}（候选方案由训练内核定义，组构成以内核产出为准）`);
+      expect(approvals[0]).not.toContain("doc_identifier");
+      expect(approvals[0]).not.toContain("goods_item");
     }
   });
-  it("未给 → 卡含「分组方案：未指定——将按内核缺省 B（…）」（缺省不静默，卡上可见）", async () => {
+  it("未给 → 卡含「分组方案：未指定——将由训练内核按其缺省方案处理」（缺省不静默，卡上可见）", async () => {
     const approvals: string[] = [];
     await toolOf(approvals).execute(
       { stage: "experiment_setup", run_id: "d89-card-def", workspace_path: tempRoot() },
       fakeExec,
     );
     expect(approvals).toHaveLength(1);
-    expect(approvals[0]).toContain(
-      "分组方案：未指定——将按内核缺省 B（2 组·单据级 vs 条目级：goods_item／doc_level）",
-    );
+    expect(approvals[0]).toContain("分组方案：未指定——将由训练内核按其缺省方案处理（组构成以内核产出为准）");
   });
   it("非 experiment_setup 段卡无分组方案行（该段该参无意义不上卡）", async () => {
     const approvals: string[] = [];
@@ -149,29 +149,43 @@ describe("D89——审批卡分组方案呈现（reason 内追加一行，仅 ex
     expect(approvals).toHaveLength(1);
     expect(approvals[0]).not.toContain("分组方案：");
   });
-  it("groupingPresetApprovalLine 纯函数：A/B 两形态＋未指定形态直测（文案单源）", () => {
-    expect(groupingPresetApprovalLine("A")).toBe("分组方案：A（3 组·按单据层级：doc_identifier／page_summary／goods_item）");
-    expect(groupingPresetApprovalLine("B")).toBe("分组方案：B（2 组·单据级 vs 条目级：goods_item／doc_level）");
-    expect(groupingPresetApprovalLine("")).toBe(
-      "分组方案：未指定——将按内核缺省 B（2 组·单据级 vs 条目级：goods_item／doc_level）",
-    );
+  it("groupingPresetApprovalLine 纯函数：给值／未给两形态直测（文案单源，零组名词汇）", () => {
+    expect(groupingPresetApprovalLine("A")).toBe("分组方案：A（候选方案由训练内核定义，组构成以内核产出为准）");
+    expect(groupingPresetApprovalLine("custom_recipe")).toBe("分组方案：custom_recipe（候选方案由训练内核定义，组构成以内核产出为准）");
+    expect(groupingPresetApprovalLine("")).toBe("分组方案：未指定——将由训练内核按其缺省方案处理（组构成以内核产出为准）");
   });
 });
 
 describe("D89——参数面 schema 与描述红线（不写死示例）", () => {
-  it("GROUPING_PRESET_VALUES 闭集在位；参数 schema enum 同源；工具描述含关键句", () => {
-    expect(GROUPING_PRESET_VALUES).toEqual(["A", "B"]);
+  it("G2：参数 schema 无枚举（词表归内核）、描述零组名；形状校验在位并被消费", () => {
     const tool = toolOf();
     const props = (tool.parameters as { properties?: Record<string, { type?: string; enum?: string[]; description?: string }> }).properties ?? {};
     expect(props["grouping_preset"]?.type).toBe("string");
-    expect(props["grouping_preset"]?.enum).toEqual(["A", "B"]);
+    expect(props["grouping_preset"]?.enum).toBeUndefined();
     const desc = String(props["grouping_preset"]?.description);
     expect(desc).toContain("仅 experiment_setup 段有意义");
-    expect(desc).toContain("A＝3 组·按单据层级");
-    expect(desc).toContain("B＝2 组·单据级 vs 条目级");
-    expect(desc).toContain("内核缺省 B");
+    expect(desc).toContain("由训练内核声明");
     expect(tool.description).toContain("grouping_preset");
     expect(tool.description).toContain("返回体如实标注分组来源");
+    // 组名零残留（工具描述＋参数描述两面）
+    for (const text of [desc, tool.description]) {
+      for (const name of ["doc_identifier", "page_summary", "goods_item", "doc_level"]) {
+        expect(text).not.toContain(name);
+      }
+    }
+    // 形状校验单源在位（1-32 位字母数字/下划线/连字符）
+    expect(GROUPING_PRESET_SHAPE.test("A")).toBe(true);
+    expect(GROUPING_PRESET_SHAPE.test("custom_recipe-2")).toBe(true);
+    expect(GROUPING_PRESET_SHAPE.test("a b")).toBe(false);
+    expect(GROUPING_PRESET_SHAPE.test("x".repeat(33))).toBe(false);
+  });
+  it("G2：形状不合即拒（grouping_preset_invalid，不静默纠正不猜缺省）", async () => {
+    const result = (await toolOf().execute(
+      { stage: "experiment_setup", run_id: "d89-shape", workspace_path: tempRoot(), grouping_preset: "a b" },
+      fakeExec,
+    )) as Record<string, unknown>;
+    expect(result["ok"]).toBe(false);
+    expect(result["error"]).toBe("grouping_preset_invalid");
   });
   it("描述不写死示例（红线）：参数描述与工具描述均无「grouping_preset='…'」式示例句", () => {
     const tool = toolOf();

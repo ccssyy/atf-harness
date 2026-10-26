@@ -227,25 +227,27 @@ export const userMessageOf = (summary: unknown): string | undefined => {
   return undefined;
 };
 
-// ── D89：experiment_setup 段分组方案（内核 argparse --grouping-preset A/B）──
+// ── D89（G2 退役词汇表）：experiment_setup 段分组方案标识 ──────────────────────
+//
+// 历史：本处曾内置 {A,B} 闭集，并把**某一批测试样本**的字段名抄成了「各组包含哪些字段」的
+// 产品默认文案。owner 2026-10-26 裁定：
+// harness 不再持有该词表，分组方案的取值集合与组构成由训练内核声明（内核 argparse choices ＋
+// SKILL），harness 只做形状校验与透传。
+//
+// 通道为何不整套退役（owner 给的两个选项里选「标 deprecated 保留透传」）：内核
+// build_experiment_setup.py 的 `--grouping-preset` 是 **required**（choices 由内核自己定义），
+// 退掉本通道会让该段内核调用直接缺参失败——退役权在内核侧，harness 单方面摘通道＝把产品
+// 打坏。故本通道降级为「值由内核定义、harness 只校形状」的透传位。
 
-/** grouping_preset 词汇闭集（权威＝内核 argparse choices：A/B；内核缺省 B 同源——
- *  A＝3 组·按单据层级，B＝2 组·单据级 vs 条目级，仅 experiment_setup 段消费）。 */
-export const GROUPING_PRESET_VALUES: readonly string[] = ["A", "B"];
+/** 分组方案标识的形状校验（不枚举取值——取值集合归内核）：1-32 位的字母数字／下划线／连字符。
+ *  越界即拒（不静默纠正、不猜缺省）。 */
+export const GROUPING_PRESET_SHAPE = /^[A-Za-z0-9_-]{1,32}$/;
 
-/** 分组方案组构成（审批卡/摘要文案单源——组构成与内核 build_experiment_setup 产出
- *  experiment-config.json 的 grouping 面同源，两处禁第二套文案）。 */
-const GROUPING_PRESET_PROFILE: Readonly<Record<string, string>> = {
-  A: "3 组·按单据层级：doc_identifier／page_summary／goods_item",
-  B: "2 组·单据级 vs 条目级：goods_item／doc_level",
-};
-
-/** 审批卡分组方案行（仅 experiment_setup 段追加——分组方案是 owner 卡上要确认的决策点；
- *  「缺省不静默」：未给时明示将按内核缺省 B 处理，不让缺省偷偷生效；B 文案单源复用）。 */
+/** 审批卡分组方案行（仅 experiment_setup 段追加——分组方案是 owner 卡上要确认的决策点）。
+ *  「缺省不静默」：未给时明示将按训练内核的缺省处理，但不复述内核缺省是哪一个档（词表归内核）。 */
 export const groupingPresetApprovalLine = (preset: string): string => {
-  const profile = GROUPING_PRESET_PROFILE[preset];
-  if (profile !== undefined) return `分组方案：${preset}（${profile}）`;
-  return `分组方案：未指定——将按内核缺省 B（${GROUPING_PRESET_PROFILE["B"]}）`;
+  if (preset !== "") return `分组方案：${preset}（候选方案由训练内核定义，组构成以内核产出为准）`;
+  return "分组方案：未指定——将由训练内核按其缺省方案处理（组构成以内核产出为准）";
 };
 
 // ── D99：experiment_setup 段负样本目标带（内核 argparse --negative-ratio-target，
@@ -705,8 +707,8 @@ export const buildPipelineTool = (
       `缺参/非绝对路径在审批卡前快败，指路 ATF_MODEL_ROOT 可用模型清单；其它段忽略该参）。` +
       `family_split 段另支持 auto_style_cluster 三态（缺省 auto，其它段忽略该参）：` +
       `auto＝先检测——已聚类则不复聚；未聚类/状态不明会拒绝并指路。` +
-      `experiment_setup 段另支持 grouping_preset 分组方案（缺省按内核缺省 B 处理，其它段忽略该参；` +
-      `返回体如实标注分组来源，审批卡呈现分组方案供确认）。` +
+      `experiment_setup 段另支持 grouping_preset 分组方案标识（取值由训练内核声明；不给＝按内核` +
+      `缺省方案处理，其它段忽略该参；返回体如实标注分组来源，审批卡呈现分组方案供确认）。` +
       // A 面可发现性（工具描述面）：模型此前即使被点名要求，也会「不传覆盖参数、按缺省处理」，
       // 于是确认与建议永远到不了内核（真机实证：模型自述「未带任何覆盖参数」）。
       // 这里把「不传的后果」写进工具描述——系统知识不靠用户提示词承载。
@@ -763,11 +765,10 @@ export const buildPipelineTool = (
       },
       grouping_preset: {
         type: "string",
-        enum: [...GROUPING_PRESET_VALUES],
         description:
-          "实验分组方案（仅 experiment_setup 段有意义，其它段忽略该参）：A＝3 组·按单据层级" +
-          "（doc_identifier／page_summary／goods_item）；B＝2 组·单据级 vs 条目级（goods_item／doc_level）。" +
-          "不给时按内核缺省 B 处理（不静默——返回体如实标注分组来源，审批卡亦明示）",
+          "实验分组方案标识（仅 experiment_setup 段有意义，其它段忽略该参）：取值集合与各方案的分组" +
+          "构成均由训练内核声明（本工具不复制词表——按内核报错回流取值即可）。不给＝由内核按其缺省" +
+          "方案处理（不静默——返回体如实标注分组来源，审批卡亦明示）",
       },
       grouping_confirm: {
         type: "boolean",
@@ -937,6 +938,10 @@ export const buildPipelineTool = (
       // 一律视同未指定，内核缺省 B 生效。harness 不复制枚举外的校验，choices 越界由框架
       // enum 校验与内核 argparse 双闸）。
       const groupingPreset = typeof args.grouping_preset === "string" ? args.grouping_preset.trim() : "";
+      // G2：形状校验（取值集合归内核，harness 不再持有 A/B 词表）——形状不合即拒，不猜不改
+      if (groupingPreset !== "" && !GROUPING_PRESET_SHAPE.test(groupingPreset)) {
+        return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "grouping_preset_invalid", note: `grouping_preset 形状不合法（得「${groupingPreset.slice(0, 32)}」）：应为 1-32 位字母数字／下划线／连字符；具体取值集合以训练内核声明为准` });
+      }
       // D99：负样本目标带取值（同 D89 口径——trim 后空串视同未指定；形态合法性由内核
       // 实验门脚本解析（float 化失败即业务拒绝），harness 不复制格式校验不夹取）。
       const negativeRatioTarget = typeof args.negative_ratio_target === "string" ? args.negative_ratio_target.trim() : "";

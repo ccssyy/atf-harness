@@ -55,8 +55,8 @@ export interface HarnessSurfaceFacts {
   pipelineStages: readonly string[];
   /** 段事实映射键集（segmentFacts SEGMENT_FACT_BY_KERNEL_STAGE 键）。 */
   segmentFactKeys: readonly string[];
-  /** 词汇闭集（pipelineFace 常量）。 */
-  groupingPresetValues: readonly string[];
+  /** 词汇闭集（pipelineFace 常量）。G2 退役：grouping_preset 取值集合归内核，harness 不再声明，
+   *  故不在册（choices 同源对账随之取消——内核 argparse 仍是唯一权威）。 */
   autoStyleClusterValues: readonly string[];
   /** 行为面下传的 approval-mode 值。 */
   approvalModeValue: string;
@@ -135,9 +135,8 @@ export const guardParamsFace = (snapshot: SurfaceSnapshot, facts: HarnessSurface
   const choicesOf = (flag: string): unknown => byOption.get(flag)?.choices;
   const sameSet = (a: unknown, b: readonly string[]): boolean =>
     Array.isArray(a) && a.length === b.length && [...b].sort().join("\u0000") === [...(a as string[])].sort().join("\u0000");
-  if (!sameSet(choicesOf("--grouping-preset"), facts.groupingPresetValues)) {
-    out.push({ kind: "参数面", detail: `--grouping-preset choices 与 harness GROUPING_PRESET_VALUES 不同源（快照=${JSON.stringify(choicesOf("--grouping-preset"))}）` });
-  }
+  // G2（owner 2026-10-26）：--grouping-preset 的 choices 归内核，harness 不再持有词表——
+  // 本项「choices 同源」对账随枚举退役，改由「形状校验＋内核拒绝回流」保证（见 pipelineFace）。
   if (!sameSet(choicesOf("--auto-style-cluster"), facts.autoStyleClusterValues)) {
     out.push({ kind: "参数面", detail: `--auto-style-cluster choices 与 harness AUTO_STYLE_CLUSTER_VALUES 不同源（快照=${JSON.stringify(choicesOf("--auto-style-cluster"))}）` });
   }

@@ -8,7 +8,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   AUTO_STYLE_CLUSTER_VALUES,
-  GROUPING_PRESET_VALUES,
   buildPipelineTool,
 } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
 import { SEGMENT_ORDER } from "../../src/core/workspace/runFacts.js";
@@ -225,7 +224,6 @@ export const factsOf = (argvTokens: readonly string[]): HarnessSurfaceFacts & { 
   paramFaceWaivers: PARAM_FACE_WAIVERS,
   pipelineStages: SEGMENT_ORDER,
   segmentFactKeys: Object.keys(SEGMENT_FACT_BY_KERNEL_STAGE),
-  groupingPresetValues: GROUPING_PRESET_VALUES,
   autoStyleClusterValues: AUTO_STYLE_CLUSTER_VALUES,
   approvalModeValue: "ui",
   configConfirmKeys: CONFIG_CONFIRM_KEYS.map((entry) => entry.key),
