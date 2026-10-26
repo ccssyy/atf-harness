@@ -161,7 +161,7 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
     );
     const reason = record.join("\n");
     expect(reason).toContain("分组方案：已确认（mode1 按组逐图各一条生成）");
-    expect(reason).toContain("mode5 增广：0（用户显式不启用）");
+    expect(reason).toContain("mode5 增广：0 倍（用户显式不启用）");
   });
 
   it("风险信号在场才自动带 --risk-signals（供 evidence 出处校验）", async () => {

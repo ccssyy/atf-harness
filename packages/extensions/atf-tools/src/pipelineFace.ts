@@ -288,8 +288,8 @@ export const constructionParamsApprovalLines = (input: {
     input.mode5Random === undefined
       ? "mode5 增广：未确认——本轮不生成（扩充倍数不得固定值，需用户给值或确认 agent 建议）"
       : input.mode5Random === 0
-        ? "mode5 增广：0（用户显式不启用）"
-        : `mode5 增广：每图 ${input.mode5Random} 条（用户指定）`;
+        ? "mode5 增广：0 倍（用户显式不启用）"
+        : `mode5 增广：${input.mode5Random} 倍（用户指定）`;
   let partTargeted: string;
   const adv = input.targetedAdvice;
   if (adv === undefined) {
@@ -779,8 +779,9 @@ export const buildPipelineTool = (
       mode5_random: {
         type: "number",
         description:
-          "mode5 增广每图条数（仅 experiment_setup 段有意义，其它段忽略；0=不启用）：" +
-          "扩充倍数不得固定值——要么用户给定、要么 agent 按数据分析建议后用户确认。" +
+          "mode5 增广倍数（仅 experiment_setup 段有意义，其它段忽略；0=不启用）：倍数＝产出总量相对" +
+          "「基线行数」的倍数，基线行数＝mode0 全字段透传的行数（一页一行，即页数）；mode1 与 targeted " +
+          "产出的行不计入基线。倍数不得固定值——要么用户给定、要么 agent 按数据分析建议后用户确认。" +
           "不给＝未确认，mode5 本轮不生成（卡面明示，不静默用缺省）",
       },
       mode5_advice_stats: {
