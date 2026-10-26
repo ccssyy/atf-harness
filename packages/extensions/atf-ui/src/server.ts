@@ -2914,12 +2914,12 @@ export function apply(
       console.log("[atf-ui] 默认工作区自愈跳过：HOME 未设置");
       throw new Error("HOME 未设置");
     }
-    const atfHome = join(home, ".atf");
     const bootNow = new Date();
     const outcome = ensureDefaultWorkspace({
-      atfHome,
       dshHome: resolveDshHome(process.env),
       now: bootNow.toISOString(),
+      // 旧落点仅在需要迁移时使用（早期版本按 ATF 家目录登记）
+      legacyAtfHome: join(home, ".atf"),
     });
     const patched = syncWorkspaceExperiments(outcome.path, bootNow);
     console.log(

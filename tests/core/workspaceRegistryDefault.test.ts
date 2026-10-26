@@ -37,8 +37,8 @@ describe("B3 默认工作区", () => {
     const home = mkdtempSync(join(tmpdir(), "atf-home-"));
     const dsh = mkdtempSync(join(tmpdir(), "dsh-home-"));
     const registryPath = seedRegistry(dsh);
-    const out = ensureDefaultWorkspace({ atfHome: home, dshHome: dsh, now: NOW, newId: () => "ws-default" });
-    const wsPath = defaultWorkspacePathOf(home);
+    const out = ensureDefaultWorkspace({ dshHome: dsh, now: NOW, newId: () => "ws-default" });
+    const wsPath = defaultWorkspacePathOf(dsh);
     expect(out.path).toBe(wsPath);
     expect(out.id).toBe("ws-default");
     expect(out.created).toBe(true);
@@ -62,9 +62,9 @@ describe("B3 默认工作区", () => {
     const home = mkdtempSync(join(tmpdir(), "atf-home-"));
     const dsh = mkdtempSync(join(tmpdir(), "dsh-home-"));
     const registryPath = seedRegistry(dsh);
-    ensureDefaultWorkspace({ atfHome: home, dshHome: dsh, now: NOW, newId: () => "ws-default" });
+    ensureDefaultWorkspace({ dshHome: dsh, now: NOW, newId: () => "ws-default" });
     const before = readFileSync(registryPath, "utf8");
-    const again = ensureDefaultWorkspace({ atfHome: home, dshHome: dsh, now: NOW, newId: () => "other-id" });
+    const again = ensureDefaultWorkspace({ dshHome: dsh, now: NOW, newId: () => "other-id" });
     expect(again.registryStatus).toBe("already_registered");
     expect(again.restartRequired).toBe(false);
     expect(readFileSync(registryPath, "utf8")).toBe(before);
@@ -74,24 +74,24 @@ describe("B3 默认工作区", () => {
     const home = mkdtempSync(join(tmpdir(), "atf-home-"));
     const dsh = mkdtempSync(join(tmpdir(), "dsh-home-"));
     const registryPath = seedRegistry(dsh);
-    ensureDefaultWorkspace({ atfHome: home, dshHome: dsh, now: NOW, newId: () => "ws-default" });
+    ensureDefaultWorkspace({ dshHome: dsh, now: NOW, newId: () => "ws-default" });
     // 手工把呈现名改回旧值,模拟存量记录
     const doc = JSON.parse(readFileSync(registryPath, "utf8"));
     doc.tables.workspaces["ws-default"].title = "默认工作区";
     writeFileSync(registryPath, JSON.stringify(doc, null, 2) + "\n", "utf8");
-    const migrated = ensureDefaultWorkspace({ atfHome: home, dshHome: dsh, now: NOW, newId: () => "x" });
+    const migrated = ensureDefaultWorkspace({ dshHome: dsh, now: NOW, newId: () => "x" });
     expect(migrated.registryStatus).toBe("title_updated");
     const after = JSON.parse(readFileSync(registryPath, "utf8"));
     expect(after.tables.workspaces["ws-default"].title).toBe(DEFAULT_WORKSPACE_TITLE);
     // 二次调用回到 already_registered
-    expect(ensureDefaultWorkspace({ atfHome: home, dshHome: dsh, now: NOW, newId: () => "x" }).registryStatus)
+    expect(ensureDefaultWorkspace({ dshHome: dsh, now: NOW, newId: () => "x" }).registryStatus)
       .toBe("already_registered");
   });
 
   it("注册表缺失：如实 registry_missing，不代建注册表", () => {
     const home = mkdtempSync(join(tmpdir(), "atf-home-"));
     const dsh = mkdtempSync(join(tmpdir(), "dsh-home-"));
-    const out = ensureDefaultWorkspace({ atfHome: home, dshHome: dsh, now: NOW, newId: () => "ws-default" });
+    const out = ensureDefaultWorkspace({ dshHome: dsh, now: NOW, newId: () => "ws-default" });
     expect(out.registryStatus).toBe("registry_missing");
     expect(existsSync(registryPathOf(dsh))).toBe(false);
   });
@@ -100,7 +100,7 @@ describe("B3 默认工作区", () => {
     const home = mkdtempSync(join(tmpdir(), "atf-home-"));
     const dsh = mkdtempSync(join(tmpdir(), "dsh-home-"));
     seedRegistry(dsh);
-    const out = ensureDefaultWorkspace({ atfHome: home, dshHome: dsh, now: NOW, newId: () => "ws-default" });
+    const out = ensureDefaultWorkspace({ dshHome: dsh, now: NOW, newId: () => "ws-default" });
     const expDir = join(out.path, "experiments", "20261026-adhoc");
     mkdirSync(join(expDir, "runs", "run-1"), { recursive: true });
     const patched = syncWorkspaceExperiments(out.path, new Date(NOW), () => "exp-1");

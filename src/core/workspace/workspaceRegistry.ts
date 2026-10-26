@@ -19,6 +19,7 @@
  */
 import { randomUUID } from "node:crypto";
 import {
+  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -414,9 +415,15 @@ export const listRegistryRecords = (dshHome: string): Array<RegistryRecordView &
 export const DEFAULT_WORKSPACE_DIRNAME = "default-workspace";
 export const DEFAULT_WORKSPACE_TITLE = "任务";
 
-/** 默认工作区绝对路径（ATF 家目录下，与内核 ``atf init`` 建的骨架同址）。 */
-export const defaultWorkspacePathOf = (atfHome: string): string =>
-  join(atfHome, DEFAULT_WORKSPACE_DIRNAME);
+/** 默认工作区绝对路径＝``<DSH_HOME>/default-workspace``。
+ *
+ *  **必须与 DSH 的 session cwd 解析同根**：DSH 把工作区 path 当作会话 cwd 的
+ *  唯一真相，登记路径与它解析出的路径不一致时会 ``workspace-attach-failed``。
+ *  实例化部署里 DSH_HOME 是实例目录（与 ``$HOME/.atf`` 不同），
+ *  不等于 ``$HOME/.atf``——早期按 ATF 家目录落位正是 attach 失败的成因。
+ */
+export const defaultWorkspacePathOf = (dshHome: string): string =>
+  join(dshHome, DEFAULT_WORKSPACE_DIRNAME);
 
 export interface EnsureDefaultWorkspaceOutcome {
   /** 默认工作区绝对路径。 */
@@ -496,13 +503,34 @@ export const updateRegistryRecordTitle = (
  *  :return: 处置结果（含是否需重启生效）。
  */
 export const ensureDefaultWorkspace = (opts: {
-  atfHome: string;
   dshHome: string;
   now: string;
+  /** 旧落点（``~/.atf``）：仅用于把早期按 ATF 家目录登记的默认工作区迁到 DSH 根。 */
+  legacyAtfHome?: string;
   newId?: () => string;
 }): EnsureDefaultWorkspaceOutcome => {
-  const wsPath = defaultWorkspacePathOf(opts.atfHome);
+  const wsPath = defaultWorkspacePathOf(opts.dshHome);
   let created = false;
+  // 旧落点迁移（一次即幂等）：早期把默认工作区登记在 ``<ATF_HOME>/default-workspace``,
+  // 而 DSH 的 session cwd 解析以 DSH_HOME 为根 → 登记路径与解析路径不一致会 attach 失败。
+  // 处置：目录搬到 DSH 根（跨设备用 cpSync），注册表 path 同步改写；旧目录不删（只读留证）。
+  if (opts.legacyAtfHome) {
+    const legacyPath = join(opts.legacyAtfHome, DEFAULT_WORKSPACE_DIRNAME);
+    const legacyRegistry = readRegistryFile(registryPathOf(opts.dshHome));
+    const staleId = legacyRegistry !== null ? findRecordIdByPath(legacyRegistry, legacyPath) : null;
+    if (staleId !== null && existsSync(legacyPath)) {
+      if (!existsSync(wsPath)) {
+        try {
+          renameSync(legacyPath, wsPath);
+        } catch {
+          // 跨设备(EXDEV)等：递归复制后保留源目录（不删,留作只读证据）
+          cpSync(legacyPath, wsPath, { recursive: true });
+        }
+        created = true;
+      }
+      updateRegistryRecordPath(registryPathOf(opts.dshHome), staleId, wsPath, opts.now);
+    }
+  }
   for (const sub of ["datasets", "splits", "experiments"]) {
     const dir = join(wsPath, sub);
     if (!existsSync(dir)) {
