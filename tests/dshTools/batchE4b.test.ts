@@ -336,11 +336,13 @@ const seedRunTree = (ws: string, runId: string, configForm: "live" | "legacy", p
   writeFileSync(join(runDir, "launch", "launch.sh"), "#!/bin/bash\nexit 0\n");
   const config = { schema_version: "IterationConfig/v1", training: { learning_rate: "1e-4", per_device_train_batch_size: 2 }, ...(paramSources !== undefined ? { param_sources: paramSources } : {}) };
   if (configForm === "live") {
-    mkdirSync(join(runDir, "prep"), { recursive: true });
-    writeFileSync(join(runDir, "prep", "iteration-config.json"), JSON.stringify(config, null, 1));
-  } else {
+    // live＝目录形态 prep/iteration-config/iteration-config.json（内核 RunLayout 实写位；
+    // harness 探测与内核同序，平铺副本降为 legacy——真机踩过平铺优先读到陈旧副本）
     mkdirSync(join(runDir, "prep", "iteration-config"), { recursive: true });
     writeFileSync(join(runDir, "prep", "iteration-config", "iteration-config.json"), JSON.stringify(config, null, 1));
+  } else {
+    mkdirSync(join(runDir, "prep"), { recursive: true });
+    writeFileSync(join(runDir, "prep", "iteration-config.json"), JSON.stringify(config, null, 1));
   }
   return runDir;
 };
