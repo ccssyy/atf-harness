@@ -406,10 +406,13 @@ export const listRegistryRecords = (dshHome: string): Array<RegistryRecordView &
 };
 
 
-/** 默认工作区（B3/D-1、D-4）：自由任务会话的确定落点。
- *  位置 ``<ATF_HOME>/default-workspace``；UI 显示名「默认工作区」（不展示路径）。 */
+/** 默认工作区（B3/D-1、D-4）：未指定工作区的会话的确定落点。
+ *
+ *  位置 ``<ATF_HOME>/default-workspace``（内部实现名）；**UI 呈现为「任务」分组**
+ *  ——与具名工作区分组并列，语义对齐「不绑定具体工作区的会话集合」，不展示路径。
+ */
 export const DEFAULT_WORKSPACE_DIRNAME = "default-workspace";
-export const DEFAULT_WORKSPACE_TITLE = "默认工作区";
+export const DEFAULT_WORKSPACE_TITLE = "任务";
 
 /** 默认工作区绝对路径（ATF 家目录下，与内核 ``atf init`` 建的骨架同址）。 */
 export const defaultWorkspacePathOf = (atfHome: string): string =>
@@ -422,8 +425,8 @@ export interface EnsureDefaultWorkspaceOutcome {
   id: string;
   /** 本次是否新建了目录/身份文件。 */
   created: boolean;
-  /** 注册表处置：已登记／本次登记／注册表缺失（需先在 WebUI 添加工作区）。 */
-  registryStatus: "already_registered" | "registered" | "registry_missing";
+  /** 注册表处置：已登记／本次登记／呈现名已迁移／注册表缺失。 */
+  registryStatus: "already_registered" | "registered" | "title_updated" | "registry_missing";
   /** 本次登记是否要等实例重启才进入运行时视野。 */
   restartRequired: boolean;
 }
@@ -458,11 +461,32 @@ export const appendRegistryRecord = (
   renameSync(tmpPath, registryPath);
 };
 
+/** 注册表 record 呈现名定向更新（写前备份＋tmp 原子落盘，其余字段与 record 原样保留）。
+ *  用途：默认工作区的 UI 名从旧呈现名迁移到当前常量（一次即幂等）。 */
+export const updateRegistryRecordTitle = (
+  registryPath: string,
+  id: string,
+  nextTitle: string,
+  now: string,
+): void => {
+  const registry = readRegistryFile(registryPath);
+  if (registry === null) throw new Error(`注册表不存在: ${registryPath}`);
+  const table = registryWorkspacesTable(registry);
+  const record = table[id];
+  if (typeof record !== "object" || record === null) throw new Error(`注册表无 id 记录: ${id}`);
+  const backupPath = `${registryPath}.bak-${now.replace(/[:.]/g, "-")}`;
+  writeFileSync(backupPath, JSON.stringify(registry, null, 2) + "\n", { mode: 0o600 });
+  table[id] = { ...(record as Record<string, unknown>), title: nextTitle, updatedAt: now };
+  const tmpPath = `${registryPath}.tmp-${process.pid}`;
+  writeFileSync(tmpPath, JSON.stringify(registry, null, 2) + "\n", { mode: 0o600 });
+  renameSync(tmpPath, registryPath);
+};
+
 /** 确保默认工作区存在并登记（幂等；纯本地文件面，零网络）。
  *
  *  行为：①建 ``datasets/ splits/ experiments/`` 三桶；②缺身份文件则生成
  *  （id 由调用方注入，便于测试确定性）；③注册表未含该路径则追加 record
- *  （title=「默认工作区」），已含则零触碰；④注册表文件本身缺失时如实返回
+ *  （title=「任务」），已含则仅校验呈现名；④注册表文件本身缺失时如实返回
  *  ``registry_missing``（与 atf_create_workspace 同口径：不代建注册表）。
  *
  *  :param opts.atfHome: ATF 家目录（``~/.atf``）。
@@ -500,7 +524,17 @@ export const ensureDefaultWorkspace = (opts: {
   if (registry === null) {
     return { path: wsPath, id: identity.id, created, registryStatus: "registry_missing", restartRequired: false };
   }
-  if (findRecordIdByPath(registry, wsPath) !== null) {
+  const existingId = findRecordIdByPath(registry, wsPath);
+  if (existingId !== null) {
+    const existing = findRecordById(registry, existingId);
+    if (existing !== null && existing.title !== DEFAULT_WORKSPACE_TITLE) {
+      // 呈现名迁移（旧记录仍是旧名时一次性改写；幂等,二次进 already 分支）
+      updateRegistryRecordTitle(registryPath, existingId, DEFAULT_WORKSPACE_TITLE, opts.now);
+      return {
+        path: wsPath, id: identity.id, created,
+        registryStatus: "title_updated", restartRequired: true,
+      };
+    }
     return { path: wsPath, id: identity.id, created, registryStatus: "already_registered", restartRequired: false };
   }
   appendRegistryRecord(registryPath, registry, {
