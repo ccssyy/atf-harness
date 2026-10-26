@@ -108,6 +108,7 @@ import { formAskQuestion, editsFromFormAnswers, visibleDevicesViolationsOf, type
 import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 // E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
 import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
+import { fieldNameMapOf, readExperimentGrouping, renderGroupingSection } from "../../../../src/core/workspace/experimentGrouping.js";
 import { join } from "node:path";
 
 /** 段名闭集（权威＝内核 STAGE_ORDER 八项——禁增删改序；旧六段名别名不保留）。 */
@@ -1209,6 +1210,13 @@ export const buildPipelineTool = (
         }
         trainingOverrides = { values: resolvedOverrides.values, sources: resolvedOverrides.sources, passDown: resolvedOverrides.passDown };
       }
+      // 分组节（读内核 experiment-config 的新 keys；列表形态只读 group_plan——groups 是 dict）：
+      // 仅当 run 里已有一次实验配置时上卡（重跑/复用场景，用户确认要不要沿用）；
+      // 首次跑没有产物就不占卡面视线。
+      const priorGrouping = args.stage === "experiment_setup" ? readExperimentGrouping(runDir) : null;
+      const priorGroupingSection = priorGrouping === null
+        ? undefined
+        : `（以下是 run 里已有的一次实验配置，本次会按当前输入重算）\n${renderGroupingSection(priorGrouping, fieldNameMapOf(runDir))}`;
       const verdict = await requestApproval(ctx, exec, "atf_pipeline_stage",
         buildApprovalReason({
           action: "触发管线段",
@@ -1229,6 +1237,7 @@ export const buildPipelineTool = (
         + (args.stage === "experiment_setup" && constructionParams?.targetedAdvice !== undefined ? `\n采纳选择：${acceptNote}` : "")
         // E3：预算三参行仅 experiment_setup 段呈现（终值与来源双双上卡）
         + (args.stage === "experiment_setup" && tokenParams !== undefined ? `\n${experimentTokenApprovalLine(tokenParams.values, tokenParams.sources)}` : "")
+        + (priorGroupingSection === undefined ? "" : `\n${priorGroupingSection}`)
         // T4 例外：下限偏离基线时把理由摆上卡（用户在自己确认的这一屏能看到差异与原因）
         + (pixelPairException !== undefined
             ? `\n像素下限例外：${String(pixelPairException.image_min_pixels)}（基线 ${pixelPairException.baseline.toLocaleString("en-US")}）——理由：${pixelPairException.reason}`
@@ -1444,6 +1453,10 @@ export const buildPipelineTool = (
         // 指令性措辞——模型可见面不导流任何二次注入步骤）。
         ...(args.stage === "training_prep"
           ? { visible_devices: visibleDevices === "" ? null : visibleDevices, visible_devices_source: visibleDevicesSource }
+          : {}),
+        // 分组节（跑完后重读本次产物——卡面与回执同一渲染单源）
+        ...(args.stage === "experiment_setup"
+          ? { grouping_section: renderGroupingSection(readExperimentGrouping(runDir), fieldNameMapOf(runDir)) }
           : {}),
         ...(pixelPairException !== undefined ? { pixel_pair_exception: pixelPairException } : {}),
         ...(args.stage === "training_prep" && trainingOverrides !== undefined
