@@ -278,6 +278,7 @@ export const constructionParamsApprovalLines = (input: {
   groupingConfirm: boolean;
   mode5Random: number | undefined;
   targetedAdvice: { carry: string[]; min: number | null; max: number | null; reason: string; evidence: string[]; evidenceStatus: string } | undefined;
+  riskSignalsProvided?: boolean;
 }): string => {
   const partGroup = input.groupingConfirm
     ? "分组方案：已确认（mode1 按组逐图各一条生成）"
@@ -294,7 +295,14 @@ export const constructionParamsApprovalLines = (input: {
     partTargeted = "targeted 组合：未提供 agent 建议（必带字段与区间按当前生效值构造）";
   } else {
     const range = adv.min !== null && adv.max !== null ? `${adv.min}-${adv.max} 字段` : "区间不主张";
-    const ev = adv.evidenceStatus === "verified" ? "出处已校验" : "出处未校验（无本批风险信号）";
+    // 出处三态：已校验／待内核校验（风险信号已随调用带上）／无信号不校验
+    // ——审批前拿不到内核结论，不能把「待校验」说成「无风险信号」（会误导 owner）。
+    const ev =
+      adv.evidenceStatus === "verified"
+        ? "出处已校验"
+        : input.riskSignalsProvided === true
+          ? "出处待内核按本批风险信号校验"
+          : "未提供风险信号，出处不做校验";
     partTargeted =
       `targeted 组合建议：必带 ${adv.carry.length > 0 ? adv.carry.join("、") : "(无)"}、${range}` +
       `（agent 建议，未自动生效；${ev}）——理由：${adv.reason}`;
@@ -698,6 +706,17 @@ export const buildPipelineTool = (
       `auto＝先检测——已聚类则不复聚；未聚类/状态不明会拒绝并指路。` +
       `experiment_setup 段另支持 grouping_preset 分组方案（缺省按内核缺省 B 处理，其它段忽略该参；` +
       `返回体如实标注分组来源，审批卡呈现分组方案供确认）。` +
+      // A 面可发现性（工具描述面）：模型此前即使被点名要求，也会「不传覆盖参数、按缺省处理」，
+      // 于是确认与建议永远到不了内核（真机实证：模型自述「未带任何覆盖参数」）。
+      // 这里把「不传的后果」写进工具描述——系统知识不靠用户提示词承载。
+      `【构造参数必须作为工具参数显式传入，只在回复文字里说明不会被采纳】experiment_setup 段另有三个` +
+      `确认／建议参数：grouping_confirm（确认当前分组方案；不传＝未确认，mode1 样本本轮不生成）、` +
+      `mode5_random（mode5 增广倍数；不传＝未确认，mode5 本轮不生成）、` +
+      `targeted_advice（targeted 组合建议：必带字段／字段数区间／理由／出处，格式 ` +
+      `{schema_version:"TargetedRulesAdvice/v1",suggested_carry_fields:[…],suggested_min_fields,suggested_max_fields,` +
+      `reason,evidence:["field:signal",…],effective:false}；不传＝未提供建议）。` +
+      `当用户已确认分组方案、或你已据字段风险分析得出建议时，必须把这些值通过对应参数传入；` +
+      `遗漏时内核按「未确认／未提供」处理、对应样本不生成，审批卡与 variants_report 都会如实标注未确认。` +
       `experiment_setup 段另支持 negative_ratio_target 负样本目标带 <下限,上限>（其它段忽略该参）：` +
       `显式给定时实验门以该值锁定并标注用户指定；不给时按构造器内置常量带兜底（审批卡与返回体均如实标注来源）。` +
       `experiment_setup 段另支持预算五参 max_total_tokens／cutoff_len／max_model_len／image_min_pixels／image_max_pixels（其它段忽略）：` +
@@ -1045,7 +1064,9 @@ export const buildPipelineTool = (
         // D99：负样本带行仅 experiment_setup 段呈现（与分组方案行同款「缺省不静默」）
         + (args.stage === "experiment_setup" ? `\n${negativeRatioApprovalLine(negativeRatioTarget)}` : "")
         // A 面：构造参数确认段（分组确认／mode5／targeted 建议）仅 experiment_setup 段呈现
-        + (args.stage === "experiment_setup" && constructionParams !== undefined ? `\n${constructionParamsApprovalLines(constructionParams)}` : "")
+        + (args.stage === "experiment_setup" && constructionParams !== undefined
+            ? `\n${constructionParamsApprovalLines({ ...constructionParams, riskSignalsProvided: constructionAdvicePaths.riskSignals !== undefined })}`
+            : "")
         // E3：预算三参行仅 experiment_setup 段呈现（终值与来源双双上卡）
         + (args.stage === "experiment_setup" && tokenParams !== undefined ? `\n${experimentTokenApprovalLine(tokenParams.values, tokenParams.sources)}` : "")
         // E4-乙：训练参数覆盖行仅 training_prep 段呈现（终值与来源逐键上卡；convention 明示只呈现不下传）
