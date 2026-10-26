@@ -218,7 +218,9 @@ describe("atf-ui 同步器落盘（scan→monitor/artifacts/panel）", () => {
 });
 
 describe("批C1-1 D5 训练终态跃迁通知（tickOnce 状态机——跨 tick 跃迁产 train_notices）", () => {
-  it("活跃→done：二跳出卡一次；三跳不重复；pending→failed 同理；首见即终态不出", async () => {
+  // 显式超时：本用例串三次 tickOnce（每轮都探一次机器事实：tmux/GPU/端口），并行跑批时
+  // 单次 tick 可达 8s 量级，30s 缺省会假红。只放宽预算，不动断言。
+  it("活跃→done：二跳出卡一次；三跳不重复；pending→failed 同理；首见即终态不出", { timeout: 120_000 }, async () => {
     const root = tempRoot();
     const mkRun = (runId: string): string => {
       const runDir = join(root, runId);
