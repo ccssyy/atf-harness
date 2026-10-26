@@ -4,7 +4,7 @@
  * toAtfAgentTool（src/agent/atfAgentTools.ts：参数校验 → 桥接 request → canonical
  * 校验 → 结构化 rejected 回填），本层只做 DSH defineTool 包装＋DSH 审批 seam 前置。
  */
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { AtfBridgeConnection } from "../../../../src/bridge/index.js";
 import {
@@ -164,7 +164,12 @@ export const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; 
     return resolveRunDir(localRoots.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) });
   })();
   const scratchDir = join(runDir, "scratch");
-  mkdirSync(scratchDir, { recursive: true });
+  // 显式工作区形态不代建目录：工作区路径是否存在由治理工具校验——此处无条件 mkdir
+  // 会把「不存在的路径」变成存在，绕过 atf_create_experiment 的「不代建顶层工作区
+  // 目录」闸（真机表现为该工具对不存在路径返回 ok:true）。
+  if (explicitWorkspace === "" || existsSync(explicitWorkspace)) {
+    mkdirSync(scratchDir, { recursive: true });
+  }
   const sessionId = sessionIdOfExec(exec);
   const home = join(localRoots.execHome, sessionHomeSlug(sessionId ?? "default"));
   mkdirSync(home, { recursive: true });

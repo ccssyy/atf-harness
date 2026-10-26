@@ -946,7 +946,12 @@ export const buildPipelineTool = (
       if (args.stage === "register") argv.push("--source-root", (args.source_root as string).trim());
       // 显式给的基模型一律下传（assemble 模式亦然）：再水合只是「没给」时的兜底，
       // 不能把用户显式值静默丢掉（不静默原则——丢了就是 blocked 与卡上填值不符）。
-      if (needsBaseModel || baseModelPath !== "") argv.push("--base-model", baseModelPath);
+      // 只有训练准备段接受 --base-model（其它段内核不声明该参数，传了会被 argparse 拒）。
+      // 段内：非 assemble 必传（上方已校验非空）；assemble 形态此前被 needsBaseModel 判成
+      // 「不需要」而把显式值一起丢掉——真机事故：卡上填了基模型、系统报「路径未提供」。
+      if (args.stage === "training_prep" && (needsBaseModel || baseModelPath !== "")) {
+        argv.push("--base-model", baseModelPath);
+      }
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");
       // D82：单据类型三件透传（给才追加、trim 后非空才上线，缺省不上送——内核自行推断，
