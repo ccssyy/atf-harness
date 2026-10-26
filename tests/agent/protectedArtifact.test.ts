@@ -52,7 +52,9 @@ describe("A6——受保护产物 denylist（atf_write 白名单后第二道）"
     if (r.ok) throw new Error("unreachable");
     expect(r.error.reason).toBe(PROTECTED_ARTIFACT_WRITE);
     expect(r.error.message).toContain("请勿直接改写");
-    expect(r.error.message).not.toMatch(/K\d|批[㊶①-⑳A-Z]/); // 错误文案零内部代号
+    // 错误文案零内部代号——先剥离文件路径再判定：临时目录随机名可能恰含 `K1`／`批㊶`
+    // 一类字样（真机路径同样可能），那不是代号泄漏，误判会随随机种子飘。
+    expect(r.error.message.split(segments).join("<path>")).not.toMatch(/K\d|批[㊶①-⑳A-Z]/);
     expect(readFileSync(segments, "utf8")).toBe(before); // 内容零变（零写入）
   });
 
