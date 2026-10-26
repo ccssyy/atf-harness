@@ -459,11 +459,12 @@ export const nprocDeviceConsistencyNoteOf = (visibleDevicesRaw: string, nprocRaw
   return `卡位个数（${String(count)} 张：${visibleDevicesRaw.trim()}）与训练卡数（${String(nproc)}）不一致——两者必须同源相等：要么把卡数改成 ${String(count)}，要么把卡位改成 ${String(nproc)} 个`;
 };
 
-/** 训练卡数来源的用户面说法（owner 2026-10-26：跟像素对那条一样，让用户知道哪些不是自己填的）。 */
+/** 训练卡数来源的用户面说法（owner 2026-10-26：跟像素对那条一样，让用户知道哪些不是自己填的）。
+ *  实例基线那条要一眼看出「不是用户填的」——预填 8 本身合法，但不能伪装成用户的选择。 */
 export const NPROC_SOURCE_LABEL: Readonly<Record<"user" | "snapshot" | "settings" | "devices" | "none", string>> = {
   user: "你填写",
-  snapshot: "确认快照",
-  settings: "实例配置",
+  snapshot: "已确认的方案（沿用上次确认值）",
+  settings: "实例基线，不是你填的，可改",
   devices: "卡位个数",
   none: "待定",
 };
@@ -962,11 +963,18 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       //   回退后 accum 随卡数重派生（整除校验不过即停点）。
       // 卡数未知（待定）时护栏无输入——跳过（护栏判的是「给了卡数之后的取舍」，不是替用户定卡数）。
       // 卡位来源的卡数是用户声明的卡位个数（真实来源），作回退参照，避免被「拉满偏置」改写。
+      // 回退参照（判据单源）：
+      //   有主值 = 用户填写／卡位个数／已确认方案（快照/iteration-config 沿用值）——**一律不改写**，
+      //     参照传本次值本身（nproc === reference ⇒ 护栏的「低配拉满」支不触发）；
+      //   无主值（实例基线／agent 推荐／旧配置）——保留旧回退语义（参照＝实例基线）。
+      // 理由：UAT 那刀的根因就是「用户确认了 4 卡、被 8 卡盖掉」；只要已确认值还可能被拉满，
+      // 这条路就没真正堵住。
+      const nprocHasOwner = nprocSource === "user" || nprocSource === "devices" || nprocSource === "snapshot";
       const guardResult = accumPending
         ? { hits: [], conflicts: [] }
         : guardNprocAntiPatterns(fields, {
             gpuCount,
-            baselineNproc: nprocSource === "devices" ? nprocValueNow : settingsBaseline,
+            baselineNproc: nprocHasOwner ? nprocValueNow : settingsBaseline,
             qlora: qloraActive,
           });
       if ("error" in guardResult) {

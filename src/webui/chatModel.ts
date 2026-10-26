@@ -6,7 +6,7 @@
  * 渲染树，展示层零第二权威）。
  */
 import type { ContractConfirmationReport } from "../core/confirmRequest.js";
-import { configBlockOf } from "./configConfirm.js";
+import { configBlockOf, configFieldDisplayValueOf } from "./configConfirm.js";
 
 /** 消息组件闭集（kind 判别）。 */
 export type ChatEvent =
@@ -135,7 +135,7 @@ export const renderChatEvent = (event: ChatEvent): string => {
             ? `<div class="field-block">${esc(block.title)}</div>`
             : "";
           if (block !== undefined) lastBlockId = block.id;
-          return `${heading}<div class="field-row"><span class="key">${esc(f.key)}</span><span class="value">${esc(f.value)}</span>${fieldTagHtml(f.tag)}</div>`;
+          return `${heading}<div class="field-row"><span class="key">${esc(f.key)}</span><span class="value">${esc(configFieldDisplayValueOf(f.key, f.value))}</span>${fieldTagHtml(f.tag)}</div>`;
         })
         .join("");
       const report =

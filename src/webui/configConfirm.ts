@@ -47,6 +47,12 @@ export const configBlockOf = (key: string): ConfigBlock | undefined =>
 /** 区块顺序展平的键序（CONFIG_CONFIRM_KEYS 必须按此序声明——单源防两份排序漂移）。 */
 export const CONFIG_BLOCK_ORDER: readonly string[] = CONFIG_CONFIRM_BLOCKS.flatMap((block) => block.keys);
 
+/** 配置值的显示文本（呈现面单源：卡面与 web 摘要同一句，禁一处「待定」一处空）。
+ *  梯度累积没有确定值（卡数未定）时统一显示「待定（先定卡数）」——它不是一个「空值」，
+ *  而是「还没法算」的状态。 */
+export const configFieldDisplayValueOf = (key: string, value: string): string =>
+  key === "gradient_accumulation_steps" && value.trim() === "" ? "待定（先定卡数）" : value;
+
 /** 方案键与缺省值（顺序＝六区块序，见 CONFIG_CONFIRM_BLOCKS；缺省语义与
  *  generate_iteration_config 批⑪缺省表同源对齐）。 */
 export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; default: string }> = [
