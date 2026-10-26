@@ -970,37 +970,53 @@ const hasConfigSnapshotFile = (path: string): boolean => {
 };
 
 /**
- * badcase viewer 产物发现（批㉛段1；批C2 E9 多形态）：analysis 目录三形态——
- * ①run 一级 analysis 前缀目录（批㉕B 两步链 analysis＋批㉙ 命名变体 analysis-b29）；
- * ②eval 前缀域直挂 analysis（uat awb_r1 实形）；③eval 前缀域内轮目录（N-日期）深挂
- * analysis（内核链产物真实形态；E9 台账更正：写者在深、读者在浅的四跳断链修复）。
+ * badcase viewer 产物发现（批㉛段1；批C2 E9 多形态；E6 lane 形态修复）。
+ *
+ * 「viewer 根」＝含 `viewer/viewer.html` 的 analysis 目录。候选按宿主位置分四类：
+ * ①run 一级 analysis 前缀目录；②run 一级其单层 `<lane>` 子目录（**真实产物形态**：
+ *   `analysis/<lane>/viewer/viewer.html`——旧规则只认一层，导致候选被 stamp 过滤清空、
+ *   HTML 与图片双 404）；
+ * ③eval 前缀域直挂（eval 域下的 analysis 目录）及其 `<lane>`；
+ * ④eval 轮目录深挂（eval 域 / <N>-<日期> / analysis 目录）及其 `<lane>`。
+ * `<lane>` 是任意单层目录名（业务侧自定义，不由本函数枚举白名单）。
  * `.bak` 备份目录不入列（历史备份不是现役产物，也不得经 URL 服务）；无 viewer 子目录
- * （含 viewer.html）的 analysis 自然落选。
+ * （含 viewer.html）的候选自然落选（stamp＝-1）。
  * 排序＝viewer.html mtime 新者在前（A 重评后重建的 viewer 即首选），mtime 同值按路径升序。
  */
 export function discoverViewerDirs(runDir: string): string[] {
   const candidates: string[] = [];
-  // ①一级 analysis*
+  /** 入列 analysis* 自身＋其单层 lane 子目录（stamp 过滤会剔除没有 viewer/viewer.html 的）。 */
+  const pushAnalysisWithLanes = (rel: string): void => {
+    candidates.push(rel);
+    try {
+      for (const lane of readdirSync(join(runDir, rel), { withFileTypes: true })) {
+        if (lane.isDirectory() && !lane.name.includes(".bak")) candidates.push(`${rel}/${lane.name}`);
+      }
+    } catch {
+      // 目录不可读＝该 analysis 域零 lane 候选
+    }
+  };
+  // ①一级 analysis*（含其 lane）
   try {
     for (const entry of readdirSync(runDir, { withFileTypes: true })) {
-      if (entry.isDirectory() && entry.name.startsWith("analysis") && !entry.name.includes(".bak")) candidates.push(entry.name);
+      if (entry.isDirectory() && entry.name.startsWith("analysis") && !entry.name.includes(".bak")) pushAnalysisWithLanes(entry.name);
     }
   } catch {
     // runDir 缺席＝无浅层候选
   }
-  // ②③eval* 域：直挂 analysis*＋轮目录 <N>-<日期>/analysis* 深挂
+  // ②③④eval* 域：直挂 analysis*（含 lane）＋轮目录 <N>-<日期>/analysis*（含 lane）深挂
   try {
     for (const evalDir of readdirSync(runDir, { withFileTypes: true })) {
       if (!evalDir.isDirectory() || !evalDir.name.startsWith("eval") || evalDir.name.includes(".bak")) continue;
       const evalRel = evalDir.name;
       const evalAbs = join(runDir, evalRel);
       for (const entry of readdirSync(evalAbs, { withFileTypes: true })) {
-        if (entry.isDirectory() && entry.name.startsWith("analysis") && !entry.name.includes(".bak")) candidates.push(`${evalRel}/${entry.name}`);
+        if (entry.isDirectory() && entry.name.startsWith("analysis") && !entry.name.includes(".bak")) pushAnalysisWithLanes(`${evalRel}/${entry.name}`);
         if (entry.isDirectory() && /^\d+-\d{8}/.test(entry.name) && !entry.name.includes(".bak")) {
           const roundRel = `${evalRel}/${entry.name}`;
           try {
             for (const deep of readdirSync(join(runDir, roundRel), { withFileTypes: true })) {
-              if (deep.isDirectory() && deep.name.startsWith("analysis") && !deep.name.includes(".bak")) candidates.push(`${roundRel}/${deep.name}`);
+              if (deep.isDirectory() && deep.name.startsWith("analysis") && !deep.name.includes(".bak")) pushAnalysisWithLanes(`${roundRel}/${deep.name}`);
             }
           } catch {
             // 轮目录不可读＝该轮零候选
@@ -1022,6 +1038,22 @@ export function discoverViewerDirs(runDir: string): string[] {
     .filter((rel) => stamp(rel) >= 0)
     .sort((a, b) => (stamp(b) - stamp(a)) || (a < b ? -1 : a > b ? 1 : 0));
 }
+
+/**
+ * viewer 404 提示（E6）：按**实际发现结果**生成，不写死某个目录形态。
+ * 空的 viewer 清单＝该 run 没有可服务产物（列出真实查询面）；非空＝告知本 run 可用变体
+ * （请求没命中哪一条），避免用户按历史文档去猜 `analysis/viewer` 这类不存在的落点。
+ * @param runId 请求里的 run 标识（回显，方便用户直接拼 URL）。
+ * @param viewers discoverViewerDirs 的现役清单（相对路径，可多段）。
+ * @returns 单行可读文案。
+ */
+export const viewerNotFoundNotice = (runId: string, viewers: readonly string[]): string => {
+  if (viewers.length === 0) {
+    return `run ${runId} 没有可服务的 viewer 产物。已查这些落点：run 一级 analysis 目录及其单层业务子目录（如 analysis/<lane>）、eval 域直挂与轮目录深挂的同构位置，且要求其下有 viewer/viewer.html。产物由 badcase 分析链生成，跑完链后刷新本页。`;
+  }
+  const list = viewers.map((rel) => `/atf-ui/viewer/${runId}/${rel}/`).join("、");
+  return `请求的 viewer 路径不在本 run 的现役清单内。当前可用：${list}`;
+};
 
 /** 批㊶-M2 段 2：run 特征判定（防御性——目录含特征之一才收录为 run）。
  *  特征集＝launch_manifest.json／prep/／training/／webui/／eval/（防 atf-ui/default 等混入）。 */
@@ -1389,10 +1421,13 @@ export const viewerRouteHandler = (deps: {
     res.end();
     return;
   }
-  const resolved = resolveViewerRequest(deps.runsRoot, pathname, deps.viewersOf(parts[0]!), deps.runDirOf);
+  const runId = parts[0]!;
+  const viewers = deps.viewersOf(runId);
+  const resolved = resolveViewerRequest(deps.runsRoot, pathname, viewers, deps.runDirOf);
   if (resolved === null) {
+    // E6：404 不再是裸 not found——按实际发现清单说明「查过哪些落点／本 run 有哪些可用变体」
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-    res.end("not found\n");
+    res.end(`${viewerNotFoundNotice(runId, viewers)}\n`);
     return;
   }
   const body = readFileSync(resolved.abs);

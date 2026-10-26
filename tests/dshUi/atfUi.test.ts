@@ -112,6 +112,45 @@ describe("快照构造纯函数（八段四态推导＋loss 曲线＋KPI＋空�
     utimesSync(join(deep, "viewer.html"), new Date(), new Date());
     expect(discoverViewerDirs(runDir)).toEqual(["eval/2-20261018/analysis", "eval_r2/analysis", "analysis"]);
   });
+  it("E6 lane 形态发现：analysis/<lane>/viewer 与 eval 三层同构（真实产物 analysis/awb-review/viewer/）", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-awb");
+    // 真实形态：analysis/<lane>/viewer/viewer.html（旧规则只认一层 → 候选被 stamp 清空 → 双 404）
+    const lane = seedViewerTree(runDir, "analysis/awb-review", { "viewer.html": "<html>lane</html>" });
+    // 同一 analysis 域下没有 viewer 的兄弟目录不入列
+    seedViewerTree(runDir, "analysis/ledger", { "frozen.json": "{}" });
+    // eval 域同构：eval/<轮>/analysis/<lane>
+    const evalLane = seedViewerTree(join(runDir, "eval", "1-20261020"), "analysis/awb-review", { "viewer.html": "<html>eval-lane</html>" });
+    // eval 直挂域的 lane 形态
+    const evalDirectLane = seedViewerTree(join(runDir, "eval_r1"), "analysis/awb-review", { "viewer.html": "<html>eval-direct</html>" });
+    const now = Date.now();
+    utimesSync(join(lane, "viewer.html"), new Date(now - 120_000), new Date(now - 120_000));
+    utimesSync(join(evalLane, "viewer.html"), new Date(now - 60_000), new Date(now - 60_000));
+    utimesSync(join(evalDirectLane, "viewer.html"), new Date(now), new Date(now));
+    const out = discoverViewerDirs(runDir);
+    expect(out).toEqual(["eval_r1/analysis/awb-review", "eval/1-20261020/analysis/awb-review", "analysis/awb-review"]);
+    // 没有 viewer 的 lane 与无 viewer 的 analysis 自身都不入列
+    expect(out).not.toContain("analysis/ledger");
+    expect(out).not.toContain("analysis");
+  });
+  it("E6 路由：多段 lane 变体命中（HTML＋images 相对资源），未命中清单仍 fail-closed", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-awb");
+    const lane = seedViewerTree(runDir, "analysis/awb-review", { "viewer.html": "<html>lane</html>" });
+    mkdirSync(join(lane, "images"), { recursive: true });
+    writeFileSync(join(lane, "images", "abc.png"), "PNG");
+    const viewers = discoverViewerDirs(runDir);
+    expect(viewers).toEqual(["analysis/awb-review"]);
+    const P = VIEWER_ROUTE_PREFIX;
+    // 裸 run URL：回落首选 lane 变体
+    expect(resolveViewerRequest(root, `${P}/run-awb/`, viewers)?.abs).toBe(join(lane, "viewer.html"));
+    // 显式 lane 变体
+    expect(resolveViewerRequest(root, `${P}/run-awb/analysis/awb-review/`, viewers)?.abs).toBe(join(lane, "viewer.html"));
+    // 图片相对资源（viewer 根下的 images/<sha>.png）
+    expect(resolveViewerRequest(root, `${P}/run-awb/images/abc.png`, viewers)?.type).toBe("image/png");
+    // 清单外的 lane 不可达
+    expect(resolveViewerRequest(root, `${P}/run-awb/analysis/other-lane/viewer.html`, viewers)).toBeNull();
+  });
   it("批㉛段1 discoverViewerDirs：无 viewer 目录 → 空数组；run 目录缺失不抛", () => {
     const root = tempRoot();
     mkdirSync(join(root, "run-empty"), { recursive: true });
@@ -619,6 +658,42 @@ describe("批㉛段1 viewer 静态路由（resolveViewerRequest fail-closed＋ha
     const r405 = fakeRes();
     call(serving, fakeReq(`${P}/run-v/`, "POST"), r405);
     expect(r405.statusCode).toBe(405);
+  });
+  it("E6 404 提示按实际命中形态生成（无产物说明查询面／有产物列出可用变体）", () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-awb");
+    seedViewerTree(runDir, "analysis/awb-review", { "viewer.html": "<html>lane</html>" });
+    const viewers = discoverViewerDirs(runDir);
+    const viewersOf = (runId: string) => (runId === "run-awb" ? viewers : []);
+    const handler = viewerRouteHandler({ runsRoot: root, viewersOf });
+    type FakeReq = { url: string; method: string };
+    type FakeRes = { statusCode: number; headers: Record<string, unknown>; body: unknown; writeHead(c: number, h?: Record<string, unknown>): void; end(b?: unknown): void };
+    const fakeRes = (): FakeRes => {
+      const res: FakeRes = {
+        statusCode: 0,
+        headers: {},
+        body: undefined,
+        writeHead(c, h) { res.statusCode = c; Object.assign(res.headers, h ?? {}); },
+        end(b) { if (b !== undefined) res.body = b; },
+      };
+      return res;
+    };
+    const call = (req: FakeReq, res: FakeRes): void => {
+      (handler as unknown as (r: FakeReq, s: FakeRes) => void)(req, res);
+    };
+    // 有产物但请求了清单外路径 → 列出可用变体（含真实 lane 路径，不写死 analysis/viewer）
+    const hit = fakeRes();
+    call({ url: `${VIEWER_ROUTE_PREFIX}/run-awb/analysis/other-lane/viewer.html`, method: "GET" }, hit);
+    expect(hit.statusCode).toBe(404);
+    expect(String(hit.body)).toContain("/atf-ui/viewer/run-awb/analysis/awb-review/");
+    expect(String(hit.body)).not.toContain("analysis/viewer");
+    // 无产物 → 说明查过哪些落点（按形态描述，不指向不存在的目录）
+    const empty = fakeRes();
+    call({ url: `${VIEWER_ROUTE_PREFIX}/run-none/`, method: "GET" }, empty);
+    expect(empty.statusCode).toBe(404);
+    expect(String(empty.body)).toContain("没有可服务的 viewer 产物");
+    expect(String(empty.body)).toContain("analysis/<lane>");
+    expect(String(empty.body)).not.toContain("analysis/viewer");
   });
   it("apply：webServer＋connection 在场 → prefix 路由注册（含 VIEWER_ROUTE_PREFIX）", async () => {
     const root = tempRoot();
