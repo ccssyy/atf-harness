@@ -55,11 +55,57 @@ export interface PreflightSummary {
   confirm: number;
 }
 
+/**
+ * T5（内核 141a5dec 起）三节契约：预检从「只报缺」改为「会取数」——
+ * `derivable[]` 能推的（默认生效并留痕）/ `must_ask[]` 该问的（业务话＋为什么推不出来）/
+ * `degraded[]` 推不动的（断点与原因）。都是**可选**节：旧内核（无三节）报告照旧按
+ * 三态清单渲染（向后兼容，不因缺节拒收）。
+ */
+export interface PreflightDerivable {
+  id: string;
+  /** 推导出来的值（null＝尚待执行）；展示面只呈现，不参与计算。 */
+  value: string | null;
+  /** 推导依据（注册/切分/统计/契约——四类依据，内核只给有依据的项）。 */
+  basis: string;
+  /** 是否已默认生效（false＝需 --apply 才生效）。 */
+  effective: boolean;
+  mode: string;
+  detail: string;
+  action: string;
+}
+
+export interface PreflightMustAsk {
+  id: string;
+  /** 业务话问句（内核已保证：禁参数名）。 */
+  question: string;
+  /** 为什么推不出来（业务话）。 */
+  why_not_derivable: string;
+  blocking: boolean;
+  detail: string;
+  action: string;
+}
+
+export interface PreflightDegraded {
+  id: string;
+  /** 断点（内核内部标识，仅供运维对账——用户面不呈现）。 */
+  step: string;
+  /** 断在哪一步/为什么（业务话）。 */
+  reason: string;
+  detail: string;
+  action: string;
+}
+
 export interface PreflightReport {
   generated_at: string;
   items: PreflightItem[];
   order: string[];
   summary: PreflightSummary;
+  /** 三节（可选）：在场即以三节渲染，缺席回落三态清单。 */
+  derivable?: PreflightDerivable[];
+  must_ask?: PreflightMustAsk[];
+  degraded?: PreflightDegraded[];
+  /** must_ask 超过软上限时的原因（内核原文，呈现前做业务化清洗）。 */
+  must_ask_overflow_reason?: string;
 }
 
 export type PreflightParse =
@@ -143,6 +189,54 @@ export const parsePreflightReport = (raw: string): PreflightParse => {
       return { ok: false, error: `summary.${key} 缺失或非非负数` };
     }
   }
+  const str = (value: unknown): string => (typeof value === "string" ? value : "");
+  const optionalList = (key: string): unknown[] | undefined => {
+    const raw = root[key];
+    return Array.isArray(raw) ? raw : undefined;
+  };
+  const derivable = optionalList("derivable")?.flatMap((entry): PreflightDerivable[] => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const row = entry as Record<string, unknown>;
+    const id = str(row["id"]);
+    if (id === "") return [];
+    const value = row["value"];
+    return [{
+      id,
+      value: typeof value === "string" ? value : typeof value === "number" || typeof value === "boolean" ? String(value) : null,
+      basis: str(row["basis"]),
+      effective: row["effective"] === true,
+      mode: str(row["mode"]),
+      detail: str(row["detail"]),
+      action: str(row["action"]),
+    }];
+  });
+  const mustAsk = optionalList("must_ask")?.flatMap((entry): PreflightMustAsk[] => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const row = entry as Record<string, unknown>;
+    const id = str(row["id"]);
+    if (id === "") return [];
+    return [{
+      id,
+      question: str(row["question"]),
+      why_not_derivable: str(row["why_not_derivable"]),
+      blocking: row["blocking"] !== false,
+      detail: str(row["detail"]),
+      action: str(row["action"]),
+    }];
+  });
+  const degraded = optionalList("degraded")?.flatMap((entry): PreflightDegraded[] => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const row = entry as Record<string, unknown>;
+    const id = str(row["id"]);
+    if (id === "") return [];
+    return [{
+      id,
+      step: str(row["step"]),
+      reason: str(row["reason"]),
+      detail: str(row["detail"]),
+      action: str(row["action"]),
+    }];
+  });
   return {
     ok: true,
     report: {
@@ -150,6 +244,10 @@ export const parsePreflightReport = (raw: string): PreflightParse => {
       items,
       order,
       summary: { missing: summary["missing"] as number, derivable: summary["derivable"] as number, confirm: summary["confirm"] as number },
+      ...(derivable === undefined ? {} : { derivable }),
+      ...(mustAsk === undefined ? {} : { must_ask: mustAsk }),
+      ...(degraded === undefined ? {} : { degraded }),
+      ...(typeof root["must_ask_overflow_reason"] === "string" ? { must_ask_overflow_reason: root["must_ask_overflow_reason"] as string } : {}),
     },
   };
 };
@@ -198,6 +296,90 @@ export const renderPreflightChecklist = (report: PreflightReport): string => {
       ? "预检全绿——八段链当前无待办（各段既有校验仍在场，预检不替代段内校验）。"
       : `共 ${String(total)} 项待处理：missing ${String(report.summary.missing)}／derivable ${String(report.summary.derivable)}／needs_confirm ${String(report.summary.confirm)}（按依赖链顺序逐项清；预检不替代各段既有校验）。`,
   );
+  return lines.join("\n");
+};
+
+// ── T5 三节卡面（能推的／该问的／推不动的）──────────────────────────────────
+
+/** must_ask 软上限（与内核 MUST_ASK_SOFT_LIMIT 同值——只用于呈现判断，不参与拒绝）。 */
+export const PREFLIGHT_MUST_ASK_SOFT_LIMIT = 3;
+
+/** 内核 overflow 原因的业务化清洗：去掉「must_ask=N 超过软上限 M:」这类内部前缀，
+ *  只留业务解释（权威原文仍在报告里，这里是用户面）。 */
+export const businessOverflowReason = (raw: string | undefined): string => {
+  const text = (raw ?? "").trim();
+  if (text === "") return "";
+  return text
+    .replace(/^must_ask\s*=\s*\d+[^:：]*[:：]\s*/, "")
+    .replace(/[（(]\s*R\d+[^）)]*[）)]/g, "")
+    .trim();
+};
+
+/** 派生项的「值」呈现（null＝待执行；不造占位）。 */
+export const derivableValueText = (entry: PreflightDerivable): string =>
+  entry.value === null || entry.value === "" ? "待执行" : entry.value;
+
+/** 推不动的项的业务标签：优先用内核给的业务 detail；detail 空时如实说明形态，
+ *  不把内部断点（step）搬到用户面。 */
+export const degradedLabelOf = (entry: PreflightDegraded): string => {
+  const detail = entry.detail.trim();
+  if (detail !== "") return detail.length > 140 ? `${detail.slice(0, 140)}…` : detail;
+  return "有一项本来能自动推导、但推导链断了";
+};
+
+/**
+ * 预检卡面（T5 单源）：三节在场即按「该问的／能推的／推不动的」渲染，否则回落三态清单
+ * （旧内核兼容）。呈现纪律：问句与理由**一律用内核给的业务话**，不出现参数名/内部键名；
+ * 派生项折成一行（不逐项占主视线），逐项值与依据降为缩进展开；推不动的项显式列出并给原因。
+ * @param report 已解析的预检报告。
+ * @returns 卡面文本（多行）。
+ */
+export const renderPreflightFace = (report: PreflightReport): string => {
+  const mustAsk = report.must_ask;
+  const derivable = report.derivable;
+  const degraded = report.degraded;
+  if (mustAsk === undefined && derivable === undefined && degraded === undefined) {
+    return renderPreflightChecklist(report);
+  }
+  const asks = mustAsk ?? [];
+  const derived = derivable ?? [];
+  const degradedRows = degraded ?? [];
+  const lines: string[] = [];
+  // 软上限提示（>3 才出；原因取内核，清洗掉内部键名）
+  if (asks.length > PREFLIGHT_MUST_ASK_SOFT_LIMIT) {
+    const why = businessOverflowReason(report.must_ask_overflow_reason);
+    lines.push(`这次需要你确认的项偏多（${String(asks.length)} 项）${why === "" ? "。" : `：${why}`}`);
+    lines.push("");
+  }
+  if (asks.length > 0) {
+    lines.push(`【需要你确认的（${String(asks.length)}）】`);
+    asks.forEach((entry, index) => {
+      lines.push(`  ${String(index + 1)}. ${entry.question}`);
+      lines.push(`     为什么推不出来：${entry.why_not_derivable}`);
+    });
+  }
+  if (derived.length > 0) {
+    const pending = derived.filter((entry) => !entry.effective).length;
+    const settled = derived.length - pending;
+    const modeNote = pending === 0
+      ? "已全部默认生效"
+      : settled === 0 ? `${String(pending)} 项待执行` : `${String(settled)} 项默认生效、${String(pending)} 项待执行`;
+    lines.push(`【已按数据自动带入（${String(derived.length)}）】已按数据自动带入 ${String(derived.length)} 项（${modeNote}）——展开核对：`);
+    for (const entry of derived) {
+      lines.push(`     · ${derivableValueText(entry)} —— 依据：${entry.basis === "" ? "数据本身" : entry.basis}`);
+    }
+  }
+  if (degradedRows.length > 0) {
+    lines.push(`【本来能自动推、但推不出来的（${String(degradedRows.length)}）】`);
+    degradedRows.forEach((entry, index) => {
+      lines.push(`  ${String(index + 1)}. ${degradedLabelOf(entry)}`);
+      lines.push(`     原因：${entry.reason === "" ? "推导链断了（内核未给出更细原因）" : entry.reason}`);
+    });
+  }
+  if (asks.length === 0 && degradedRows.length === 0) {
+    lines.push(derived.length > 0 ? "除上面自动带入的项之外，预检没有需要你回答的问题。" : "预检全绿——八段链当前无待办（各段既有校验仍在场，预检不替代段内校验）。");
+  }
+  lines.push("（预检不替代各段既有校验；确认项一次问完，不逐项弹。）");
   return lines.join("\n");
 };
 

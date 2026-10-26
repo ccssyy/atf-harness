@@ -40,7 +40,7 @@ import { appendAskFailureDiagnostic } from "./askDiagnostics.js";
 import { asToolValue } from "./schemaTranslate.js";
 import {
   parsePreflightReport,
-  renderPreflightChecklist,
+  renderPreflightFace,
   recordPreflightAt,
   type PreflightReport,
 } from "../../../../src/core/workspace/trainingPreflight.js";
@@ -233,32 +233,50 @@ export const runPreflightFlow = async (
   // E2 缺陷 B：degraded/exitCode 随「报告来自 first」的全部返回点透传
   const firstDegraded = first.degraded === true ? { degraded: true as const, exitCode: first.exitCode ?? null } : {};
   const report = first.report;
-  const checklist = renderPreflightChecklist(report);
+  // T5：卡面单源＝三节渲染（旧内核无三节时自动回落三态清单）
+  const checklist = renderPreflightFace(report);
   const needsConfirm = report.items.filter((item) => item.state === "needs_confirm");
   const derivable = report.items.filter((item) => item.state === "derivable");
+  const mustAsk = report.must_ask ?? [];
+  // 待执行的派生项：新 schema 以 derivable[].effective 为准（已生效项内核不再进 items），
+  // 旧 schema 回落 items 里 state=derivable 的条数。
+  const pendingDerivableCount = report.derivable !== undefined
+    ? report.derivable.filter((entry) => !entry.effective).length
+    : derivable.length;
+  const hasQuestions = mustAsk.length > 0 || needsConfirm.length > 0;
 
   // needs_confirm 合并一屏（§二.2——不逐项弹）：form 卡 detail＝三态清单；
   // fields＝逐项决策行＋（有可派生项时）apply 行——apply 只收意愿，授权在审批卡。
   let decisions: Record<string, string> | undefined;
-  if (needsConfirm.length > 0 && opts?.presentCard !== false) {
+  if (hasQuestions && opts?.presentCard !== false) {
     const svc = deps.ctx.get("userQuestions") as FormAskService | undefined;
     if (svc === undefined || typeof svc.ask !== "function") {
       return { ok: true, ...meta, ...firstDegraded, report, checklist, note: "user_questions_unavailable——needs_confirm 项以清单呈现，决策值请由 agent 结构化转达后续段参数" };
     }
-    const fields = needsConfirm.map((item) => ({
-      key: item.id,
-      label: item.id,
-      value: "",
-      placeholder: item.action !== "" ? item.action.slice(0, 200) : item.detail.slice(0, 200),
-      hint: item.detail.slice(0, 200),
-    }));
-    if (derivable.length > 0) {
+    // 卡面只出现业务话：问句与理由都用内核给的 question/why_not_derivable，
+    // 不把参数名或内部键名当问句（key 仍是稳定 id，仅供结构化回传，UI 不显示）。
+    const fields = mustAsk.length > 0
+      ? mustAsk.map((entry) => ({
+          key: entry.id,
+          label: entry.question === "" ? entry.detail : entry.question,
+          value: "",
+          placeholder: "在此填写你的决定（不确定就留空——留空＝本轮按现状跳过）",
+          hint: `为什么推不出来：${entry.why_not_derivable}`,
+        }))
+      : needsConfirm.map((item) => ({
+          key: item.id,
+          label: item.id,
+          value: "",
+          placeholder: item.action !== "" ? item.action.slice(0, 200) : item.detail.slice(0, 200),
+          hint: item.detail.slice(0, 200),
+        }));
+    if (pendingDerivableCount > 0) {
       fields.push({
         key: "apply_derivables",
-        label: "apply_derivables（是否执行全部可派生项）",
+        label: `把能自动算的 ${String(pendingDerivableCount)} 项一并算好（填 yes 执行）`,
         value: "no",
-        placeholder: `共 ${String(derivable.length)} 项可自动执行（${derivable.map((item) => item.id).join("、")}）——填 yes 后仍需审批卡放行才执行`,
-        hint: "填 yes＝执行全部可派生项（授权在后续审批卡）；no/留空＝本轮不执行",
+        placeholder: `共 ${String(pendingDerivableCount)} 项可由数据推导，填 yes 后仍需一次授权确认才执行`,
+        hint: "填 yes＝执行这 1 组自动项（授权在后续审批卡）；no/留空＝本轮不执行，不影响其它项",
       });
     }
     let answers: { answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string> }> };
@@ -293,11 +311,11 @@ export const runPreflightFlow = async (
 
   // apply 路径：意愿＝工具参数直给 ｜ 卡上 apply_derivables=yes；授权恒走审批卡。
   const wantApply = args.apply || decisions?.["apply_derivables"] === "yes";
-  if (wantApply && derivable.length > 0) {
+  if (wantApply && pendingDerivableCount > 0) {
     const verdict = await requestApproval(deps.ctx, exec, "atf_training_preflight",
       buildApprovalReason({
         action: "执行预检可派生项（一键）",
-        target: `（${String(derivable.length)} 项：${derivable.map((item) => item.id).join("、")}；run ${args.runId}）`,
+        target: `（${String(pendingDerivableCount)} 项自动派生；run ${args.runId}）`,
         effect: "对 derivable 项自动执行（坐标换算整批重试／内置 CPU provider 计量生成 token 预算）",
         reversible: "不可自动回滚（run 目录产物可人工清理）",
       }) + `\n${checklist}`);
@@ -315,13 +333,13 @@ export const runPreflightFlow = async (
       ...meta,
       ...secondDegraded,
       report: second.report,
-      checklist: renderPreflightChecklist(second.report),
+      checklist: renderPreflightFace(second.report),
       ...(decisions !== undefined ? { decisions } : {}),
       applied: true,
     };
   }
-  if (derivable.length > 0 && !wantApply) {
-    return { ok: true, ...meta, ...firstDegraded, report, checklist, ...(decisions !== undefined ? { decisions } : {}), note: `有 ${String(derivable.length)} 项可派生未执行——apply=true（或在预检卡 apply_derivables 填 yes）经审批卡放行后一键执行` };
+  if (pendingDerivableCount > 0 && !wantApply) {
+    return { ok: true, ...meta, ...firstDegraded, report, checklist, ...(decisions !== undefined ? { decisions } : {}), note: `有 ${String(pendingDerivableCount)} 项可由数据推导但尚未执行——apply=true（或在预检卡上勾「一并算好」）经一次授权确认后执行` };
   }
   return { ok: true, ...meta, ...firstDegraded, report, checklist, ...(decisions !== undefined ? { decisions } : {}) };
 };
