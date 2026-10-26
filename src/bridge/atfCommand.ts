@@ -8,18 +8,19 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b23，唯一真相源 = bridge.contract.yaml
+// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b24，唯一真相源 = bridge.contract.yaml
 // atf_upstream，本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.25b23（构造方案可视：`build_variants_analysis` 此前**全仓零调用**，
-// 数据集特点／实际生效构造配比／与目标配额偏差只存在于代码里，report 侧看不到「为什么行数
-// 这么少、mode1/mode5 为什么没生成」；现由 training_prep 段在变体落盘后自动产出
-// `<run>/analysis/variants-analysis-<doc>.md`，该步计入段 steps。另修负样本判定措辞——
-// 构造器按实际下调下限时不再笼统印「达标」，写明下调值与原因〔无自然空页，不伪造空样本〕。
+// 本轮 pin 取值＝tag v0.7.25b24（构造参数可信度批）：targeted 组合「2-6 字段三档」
+// 由「randint 下界恰好为 1」的**巧合实现**改为显式收口——新增 `TARGETED_COMBO_FIELD_BAND`
+// 单源常量，读侧按 `randint(min-1, max-1)` 取陪衬且区间越界/倒置 fail-closed；写侧
+// construction.targeted_rules 不再整体写 null 而是落生效值＋来源标注（此前报告印
+// 「组合规则未声明」而实际按 2/6 跑，双盲）；分析侧改以 variants_report 的生效值为权威
+// 并附实测字段数分布。缺省路径随机序列与产物逐字节不变（真机四件 sha256 对拍通过）。
 // CLI 声明面零变化：surface 与上一 pin 逐字相同（SURFACE_IDENTICAL）。
-// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit bbeb64f，方法面零增（session/ 零 diff），
+// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit f4ab0e7，方法面零增（session/ 零 diff），
 // 会话协议轴 1／桥接契约轴 3 零 diff）。
-export const ATF_UPSTREAM_TAG = "v0.7.25b23";
-export const ATF_UPSTREAM_COMMIT_SHA = "bbeb64fbf2bad21eaaf33242018109a60f46a0ac";
+export const ATF_UPSTREAM_TAG = "v0.7.25b24";
+export const ATF_UPSTREAM_COMMIT_SHA = "f4ab0e75909b53db3ffabf084df04ccc0f525c33";
 
 export interface AtfCliInvocation {
   command: string;
