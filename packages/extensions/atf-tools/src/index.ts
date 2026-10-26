@@ -35,6 +35,7 @@ import { buildPreflightTool, type PreflightDeps } from "./preflightFace.js";
 import { buildQuantizeTool } from "./quantizeFace.js";
 import { buildConfirmTools } from "./confirmFace.js";
 import { buildPrelaunchReportTool } from "./prelaunchFace.js";
+import { buildAttachmentsTool } from "./attachmentsFace.js";
 import { buildRunTrainingTool, buildEvalTools, buildPublishModelTool, type TrainingToolsConfig } from "./trainingFace.js";
 import { buildJointTrainTool } from "./jointTrainFace.js";
 import { buildRecordsQueryTool } from "./recordsFace.js";
@@ -211,6 +212,10 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // build_prelaunch_report.py 单源，param_sources 来源校验归内核不复制）
   ctx.tools.register(buildPrelaunchReportTool(ctx, { kernelDir: config.kernelDir, timeoutMs: 120_000 }));
   console.log("[atf-tools] atf_prelaunch_report 已挂载");
+  // T2：素材装配结果的呈现与修订入口（数据整理面免审批——判断权在内核，呈现与转达在会话面；
+  // 两档只改呈现：非完全授权弹选项卡、完全授权一行汇报＋落 analysis/attachments-report.md）
+  ctx.tools.register(buildAttachmentsTool(ctx, { kernelDir: config.kernelDir, timeoutMs: 120_000 }));
+  console.log("[atf-tools] atf_attachments_assembly 已挂载");
   const trainCfg: TrainingToolsConfig = { runsRoot: config.runsRoot, logDir: config.logDir, ctx, models: { root: modelInventory.root, names: modelInventory.models }, bindRun: (runId) => manager.bindRun(runId) };
   ctx.tools.register(buildRunTrainingTool(ctx, trainCfg));
   // E8（第二批重写）：单 run 槽位联合训练入口（唯一训练入口的多类面——槽位装配经
