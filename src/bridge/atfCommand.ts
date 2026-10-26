@@ -8,20 +8,20 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b25，唯一真相源 = bridge.contract.yaml
+// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b26，唯一真相源 = bridge.contract.yaml
 // atf_upstream，本文件常量为镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.25b25（构造参数建议面落地）：新增 `--targeted-advice`
-// （TargetedRulesAdvice/v1：suggested_carry_fields／min／max／reason／evidence[field:signal]
-// ／effective 必须 false）与 `--risk-signals`（仅用于 evidence 出处校验）——agent 依数据
-// 风险信号给建议与理由，内核只校验出处存在性、字段存在性与值域，不评价理由；建议不自动
-// 生效（effective:false），随实验门确认卡呈现。报告新增「targeted 组合确认」节。
-// walkthrough 同步声明并转发 --grouping-confirm／--mode5-random／--mode5-advice-stats／
-// --targeted-advice／--risk-signals（双处改：只改被调脚本则参数到不了门）。
-// CLI 声明面恰五条增量（上列五 flag）——harness surface 快照随更，差集仅新增无删除。
-// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit 3f9db7d，方法面零增（session/ 零 diff），
+// 本轮 pin 取值＝tag v0.7.25b26（建议采纳入口）：新增 `--targeted-accept` —— 把
+// `--targeted-advice` 的建议（必带字段／字段数区间）原样写入 construction.targeted_rules，
+// 来源标 `advice_accepted`；单独给而不给建议则 fail-closed（targeted_accept_requires_advice）。
+// b25 只有「呈现建议」，采纳无入口，owner 认可后仍须手写 ConstructionSpec；本批补上
+// 「经用户确认后写入」这半段，设计上仍保持「不传 accept 即不自动生效」。
+// harness 侧配一张采纳卡（userQuestions 表单：yes＝按建议执行／no＝保持当前值），
+// 卡只收意愿、执行授权仍在审批卡。
+// CLI 声明面恰一条增量（--targeted-accept）——surface 差集仅新增无删除。
+// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit 5f98d3a，方法面零增（session/ 零 diff），
 // 会话协议轴 1／桥接契约轴 3 零 diff）。
-export const ATF_UPSTREAM_TAG = "v0.7.25b25";
-export const ATF_UPSTREAM_COMMIT_SHA = "3f9db7de84b848f25a3c05cbe8199cb0120c321c";
+export const ATF_UPSTREAM_TAG = "v0.7.25b26";
+export const ATF_UPSTREAM_COMMIT_SHA = "5f98d3afe9dea080343e1747dfa39ff437012034";
 
 export interface AtfCliInvocation {
   command: string;

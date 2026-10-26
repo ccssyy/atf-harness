@@ -70,6 +70,7 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   mode5_random: "--mode5-random",
   mode5_advice_stats: "--mode5-advice-stats",
   targeted_advice: "--targeted-advice",
+  targeted_accept: "--targeted-accept",
   risk_signals: "--risk-signals",
   negative_ratio_target: "--negative-ratio-target",
   // E3：experiment_setup 预算五参（b8 起三参；预算五参同门窗扩 cutoff_len／max_model_len）

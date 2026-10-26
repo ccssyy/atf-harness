@@ -270,6 +270,15 @@
     "required": null
    },
    {
+    "option": "--targeted-accept",
+    "dest": "targeted_accept",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--risk-signals",
     "dest": "risk_signals",
     "action": "store",
@@ -4946,6 +4955,15 @@
     "dest": "mode5_advice_stats",
     "action": "store",
     "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--targeted-accept",
+    "dest": "targeted_accept",
+    "action": "store_true",
+    "type": null,
     "choices": null,
     "default": null,
     "required": null
