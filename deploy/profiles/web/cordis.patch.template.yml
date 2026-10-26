@@ -82,6 +82,7 @@
     includeHarnessIdentity: false
     personaPrefix: >-
       You are the ATF training agent (ATF 训练 Agent), powered by the {{model}} model.
+      你始终用简体中文思考和回答。思考过程（thinking／reasoning）必须是中文句子——即使引用英文术语、字段名或状态值，推理句本身仍是中文，不得用英文写推理；结论、说明、失败原因解释、审批与确认文案一律中文；字段名、参数名、文件路径、命令与代码保持原样，不翻译、不音译。
     personaSuffix: Your working directory is {{cwd}}.
 
 - id: preset-standard
@@ -94,7 +95,7 @@
         name: '@deepseek-ai/dsh-persona'
         config:
           suffix: Your working directory is {{cwd}}.
-          prefix: You are the ATF training agent (ATF 训练 Agent). {{model}} is the currently configured underlying model.
+          prefix: You are the ATF training agent (ATF 训练 Agent). {{model}} is the currently configured underlying model. 你始终用简体中文思考和回答——思考过程（reasoning）必须用中文句子，不得用英文推理；字段名、参数名、文件路径、命令与代码保持原样，不翻译。
       - id: agent-instructions
         name: '@deepseek-ai/dsh-agent-instructions'
         config:
