@@ -3318,6 +3318,15 @@
     "choices": null,
     "default": "",
     "required": null
+   },
+   {
+    "option": "--approval-ledger",
+    "dest": "approval_ledger",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
    }
   ]
  },
@@ -4300,6 +4309,15 @@
    {
     "option": "--out",
     "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--approval-ledger",
+    "dest": "approval_ledger",
     "action": "store",
     "type": "<expr:Path>",
     "choices": null,

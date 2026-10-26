@@ -8,19 +8,18 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b19，唯一真相源 = bridge.contract.yaml
+// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b20，唯一真相源 = bridge.contract.yaml
 // atf_upstream，本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.25b19（预算五参同门——实验门 token_gate 扩至五键：cutoff_len／
-// max_model_len 与构造上限、像素对同门确认；walkthrough_pipeline 与 build_experiment_setup
-// 两处均增 --cutoff-len／--max-model-len 声明面并同路下传；训练准备段预算子步与
-// training_preflight apply_budget 均按门值落 <run>/prep/token_budget.json 并标
-// provenance=gate_confirmed〔缺项才回退基线〕；旧三键门迁移口径不变
-// 另含联合装配证据链上卷（run 级 train.lineage.jsonl 合并 ＋ bbox_space 披露一致上卷——
-// 联合形态此前过不了启动三查闸）。本轮无 CLI 声明面变化（surface 零 diff）。
-// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit cdbce14，方法面零增（session/ 零 diff），
+// 本轮 pin 取值＝tag v0.7.25b20（两项内核侧修复：①放行账本路径单源——解析只发生一次
+// 〔显式 --approval-ledger ＞ 实例 env ATF_APPROVAL_LEDGER ＞ 实例根派生 ＞ HOME 兜底并告警〕，
+// 路径与来源写入 launch_manifest，train.sh 头部 export／launch.sh 放行闸／写账三处跟随，
+// 消除「同一机器两份账本、真训要换两个 HOME 各写一遍账」；②技能包兄弟件路径推导改为
+// 向上查找仓库根〔skills 25 脚本 27 处〕，安装态 _skills_pack 布局不再断链
+// 〔原症状 pool_tool_not_found〕。CLI 声明面恰两项增量：两脚本各增 --approval-ledger。
+// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit ed7910e，方法面零增（session/ 零 diff），
 // 会话协议轴 1／桥接契约轴 3 零 diff）。
-export const ATF_UPSTREAM_TAG = "v0.7.25b19";
-export const ATF_UPSTREAM_COMMIT_SHA = "cdbce14e94b84403c258fe4ad8ae8939a35535a3";
+export const ATF_UPSTREAM_TAG = "v0.7.25b20";
+export const ATF_UPSTREAM_COMMIT_SHA = "ed7910e0d0ab42fe38be5119609f2a222d229b21";
 
 export interface AtfCliInvocation {
   command: string;
