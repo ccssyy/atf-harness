@@ -434,7 +434,7 @@ describe("H2.1 rev2（D37+D38）——runs 根四类身份分类与注册工作�
     expect(scanRuns(root, undefined, registryWorkspaces).filter((s) => s.run_id === "run-x")).toHaveLength(1);
   });
 
-  it("D38 三档候选根：旧布局 <ws>/runs 与历史实验树可枚举；同 runId 跨档 canonical 优先不重复", () => {
+  it("D38 三档候选根：旧布局 <ws>/runs 与实验树可枚举；同 runId 跨档实验树优先不重复", () => {
     const root = tempRoot();
     const ws1 = tempRoot();
     seedRun(join(ws1, "runs", "run-y")); // ②旧布局
@@ -450,7 +450,7 @@ describe("H2.1 rev2（D37+D38）——runs 根四类身份分类与注册工作�
     expect(y[0]).toMatchObject({ dir: join(ws1, "runs", "run-y"), workspace: "旧布局工作区", workspaceSource: "registry" });
     const z = entries.filter((e) => e.runId === "run-z");
     expect(z).toHaveLength(1); // 同 (workspace,runId) 跨档去重
-    expect(z[0]?.dir).toBe(join(ws2, "workspace", "runs", "run-z")); // canonical 档先 claim 胜出
+    expect(z[0]?.dir).toBe(join(ws2, "experiments", "e1", "runs", "run-z")); // v2 实验树先 claim 胜出
   });
 
   it("legacy run（qc-02 形态：RUN_MARKER_RELS 标记、无 run.json）可见", () => {

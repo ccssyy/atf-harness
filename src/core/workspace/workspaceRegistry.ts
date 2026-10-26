@@ -404,3 +404,187 @@ export const listRegistryRecords = (dshHome: string): Array<RegistryRecordView &
   }
   return out;
 };
+
+
+/** 默认工作区（B3/D-1、D-4）：自由任务会话的确定落点。
+ *  位置 ``<ATF_HOME>/default-workspace``；UI 显示名「默认工作区」（不展示路径）。 */
+export const DEFAULT_WORKSPACE_DIRNAME = "default-workspace";
+export const DEFAULT_WORKSPACE_TITLE = "默认工作区";
+
+/** 默认工作区绝对路径（ATF 家目录下，与内核 ``atf init`` 建的骨架同址）。 */
+export const defaultWorkspacePathOf = (atfHome: string): string =>
+  join(atfHome, DEFAULT_WORKSPACE_DIRNAME);
+
+export interface EnsureDefaultWorkspaceOutcome {
+  /** 默认工作区绝对路径。 */
+  path: string;
+  /** 身份 id（uuid，永不改变）。 */
+  id: string;
+  /** 本次是否新建了目录/身份文件。 */
+  created: boolean;
+  /** 注册表处置：已登记／本次登记／注册表缺失（需先在 WebUI 添加工作区）。 */
+  registryStatus: "already_registered" | "registered" | "registry_missing";
+  /** 本次登记是否要等实例重启才进入运行时视野。 */
+  restartRequired: boolean;
+}
+
+/** 注册表追加 record（写前备份＋tmp 原子落盘；global.workspaceIds 同步追加）。
+ *  与 updateRegistryRecordPath 同一落盘纪律（2 空格缩进＋尾换行，diff 最小）。 */
+export const appendRegistryRecord = (
+  registryPath: string,
+  registry: Record<string, unknown>,
+  rec: { id: string; path: string; title: string; now: string },
+): void => {
+  const table = registryWorkspacesTable(registry);
+  if (typeof table[rec.id] === "object" && table[rec.id] !== null) return;
+  const backupPath = `${registryPath}.bak-${rec.now.replace(/[:.]/g, "-")}`;
+  writeFileSync(backupPath, JSON.stringify(registry, null, 2) + "\n", { mode: 0o600 });
+  table[rec.id] = {
+    id: rec.id,
+    path: rec.path,
+    title: rec.title,
+    sessionIds: [],
+    createdAt: rec.now,
+    updatedAt: rec.now,
+  };
+  const globalRaw = registry["global"];
+  if (typeof globalRaw === "object" && globalRaw !== null) {
+    const global = globalRaw as Record<string, unknown>;
+    const ids = Array.isArray(global["workspaceIds"]) ? (global["workspaceIds"] as string[]) : [];
+    if (!ids.includes(rec.id)) global["workspaceIds"] = [...ids, rec.id];
+  }
+  const tmpPath = `${registryPath}.tmp-${process.pid}`;
+  writeFileSync(tmpPath, JSON.stringify(registry, null, 2) + "\n", { mode: 0o600 });
+  renameSync(tmpPath, registryPath);
+};
+
+/** 确保默认工作区存在并登记（幂等；纯本地文件面，零网络）。
+ *
+ *  行为：①建 ``datasets/ splits/ experiments/`` 三桶；②缺身份文件则生成
+ *  （id 由调用方注入，便于测试确定性）；③注册表未含该路径则追加 record
+ *  （title=「默认工作区」），已含则零触碰；④注册表文件本身缺失时如实返回
+ *  ``registry_missing``（与 atf_create_workspace 同口径：不代建注册表）。
+ *
+ *  :param opts.atfHome: ATF 家目录（``~/.atf``）。
+ *  :param opts.dshHome: DSH 家目录（注册表根）。
+ *  :param opts.now: ISO 时刻（注入以便测试确定性）。
+ *  :param opts.newId: id 生成器（缺省 uuid v4）。
+ *  :return: 处置结果（含是否需重启生效）。
+ */
+export const ensureDefaultWorkspace = (opts: {
+  atfHome: string;
+  dshHome: string;
+  now: string;
+  newId?: () => string;
+}): EnsureDefaultWorkspaceOutcome => {
+  const wsPath = defaultWorkspacePathOf(opts.atfHome);
+  let created = false;
+  for (const sub of ["datasets", "splits", "experiments"]) {
+    const dir = join(wsPath, sub);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+      created = true;
+    }
+  }
+  let identity = readWorkspaceIdentity(wsPath);
+  if (identity === null) {
+    const id = (opts.newId ?? (() => randomUUID()))();
+    identity = { id, name: "default", experiments: [], createdAt: opts.now };
+    const metaDir = join(wsPath, ".atf");
+    mkdirSync(metaDir, { recursive: true });
+    writeFileSync(join(metaDir, "workspace.json"), JSON.stringify(identity, null, 2) + "\n", "utf8");
+    created = true;
+  }
+  const registryPath = registryPathOf(opts.dshHome);
+  const registry = readRegistryFile(registryPath);
+  if (registry === null) {
+    return { path: wsPath, id: identity.id, created, registryStatus: "registry_missing", restartRequired: false };
+  }
+  if (findRecordIdByPath(registry, wsPath) !== null) {
+    return { path: wsPath, id: identity.id, created, registryStatus: "already_registered", restartRequired: false };
+  }
+  appendRegistryRecord(registryPath, registry, {
+    id: identity.id,
+    path: wsPath,
+    title: DEFAULT_WORKSPACE_TITLE,
+    now: opts.now,
+  });
+  return { path: wsPath, id: identity.id, created, registryStatus: "registered", restartRequired: true };
+};
+
+
+export interface EnsureExperimentMetaOutcome {
+  /** 本次是否补写了 experiment.json。 */
+  written: boolean;
+  /** 实验 id。 */
+  experimentId: string;
+  /** 实验名（＝目录名，adhoc 形态为 `<YYYYMMDD>-adhoc`）。 */
+  experimentName: string;
+}
+
+/** 补齐单个实验的元数据（B3）：内核 adhoc 实验只建目录、不写 experiment.json，
+ *  本函数按「工作区身份」单源补写 experiment.json 与身份索引 experiments[]；
+ *  已存在则不触碰（幂等，只补缺不覆写）。
+ *
+ *  displayName 不落盘：`<YYYYMMDD>-adhoc` → 「未命名实验」的映射属 UI 呈现，
+ *  避免把展示文案钉进数据文件。
+ *
+ *  :param workspacePath: 工作区根（须有 .atf/workspace.json）。
+ *  :param dirName: 实验目录名（`experiments/` 下一级）。
+ *  :param now: 注入时刻（写 createdAt 用）。
+ *  :param newId: id 生成器（缺省 uuid v4，注入以便测试确定性）。
+ *  :return: 补写结果。
+ */
+export const ensureExperimentMeta = (
+  workspacePath: string,
+  dirName: string,
+  now: Date,
+  newId?: () => string,
+): EnsureExperimentMetaOutcome => {
+  const experimentDir = join(workspacePath, "experiments", dirName);
+  if (!existsSync(experimentDir)) throw new Error(`实验目录不存在: ${experimentDir}`);
+  const identity = readWorkspaceIdentity(workspacePath);
+  if (identity === null) throw new Error(`工作区缺身份文件: ${join(workspacePath, ".atf", "workspace.json")}`);
+  const metaPath = join(experimentDir, "experiment.json");
+  const createdAt = now.toISOString();
+  const patchIndex = (id: string, name: string): void => {
+    if (identity.experiments.some((entry) => entry.dir === dirName)) return;
+    identity.experiments.push({ id, name, dir: dirName, createdAt });
+    writeFileSync(join(workspacePath, ".atf", "workspace.json"),
+      JSON.stringify(identity, null, 2) + "\n", { mode: 0o644 });
+  };
+  if (existsSync(metaPath)) {
+    const existing = JSON.parse(readFileSync(metaPath, "utf8")) as ExperimentMeta;
+    patchIndex(existing.id, existing.name);
+    return { written: false, experimentId: existing.id, experimentName: existing.name };
+  }
+  const experimentId = (newId ?? (() => randomUUID()))();
+  const meta: ExperimentMeta = {
+    id: experimentId,
+    name: dirName,
+    createdAt,
+    workspaceId: identity.id,
+    datasets: [],
+    baseline: null,
+  };
+  writeFileSync(metaPath, JSON.stringify(meta, null, 2) + "\n", { mode: 0o644 });
+  patchIndex(experimentId, dirName);
+  return { written: true, experimentId, experimentName: dirName };
+};
+
+/** 给工作区内所有缺元数据的实验补写（boot 期自愈；零改动时返回 0）。 */
+export const syncWorkspaceExperiments = (
+  workspacePath: string,
+  now: Date,
+  newId?: () => string,
+): number => {
+  const experimentsDir = join(workspacePath, "experiments");
+  if (!existsSync(experimentsDir)) return 0;
+  let patched = 0;
+  for (const entry of readdirSync(experimentsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    const outcome = ensureExperimentMeta(workspacePath, entry.name, now, newId);
+    if (outcome.written) patched += 1;
+  }
+  return patched;
+};

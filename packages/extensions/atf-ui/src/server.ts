@@ -20,6 +20,10 @@ import { queryNvidiaSmi, queryNvidiaSmiAll, queryGpuComputeApps, gpuProcTopByInd
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS, renderPixelPairRows, renderTokenBudgetRows } from "../../../../src/webui/configConfirm.js";
 import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
 import { resolveInstanceKernelDir } from "../../../../src/core/workspace/instancePin.js";
+import {
+  ensureDefaultWorkspace,
+  syncWorkspaceExperiments,
+} from "../../../../src/core/workspace/workspaceRegistry.js";
 import { sessionDomainRefusal, listTrainingSessionCmdlines, probeTrainingEvidence, resolveSessionName, trainingSessionBase } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
@@ -1171,6 +1175,7 @@ const registryWorkspaceRealRoot = (ws: RegistryWorkspaceSeed): string | null => 
 const registryExperimentRunDirs = (wsReal: string): string[] => {
   const out: string[] = [];
   const seen = new Set<string>();
+  const seenRunIds = new Set<string>(); // 同名 run 只收最高优先级根（实验树优先）
   const pushRoot = (root: string): void => {
     let names: string[];
     try {
@@ -1182,22 +1187,25 @@ const registryExperimentRunDirs = (wsReal: string): string[] => {
     }
     for (const name of names) {
       const dir = join(root, name);
-      if (seen.has(dir)) continue;
+      if (seen.has(dir) || seenRunIds.has(name)) continue;
       seen.add(dir);
+      seenRunIds.add(name);
       out.push(dir);
     }
   };
-  pushRoot(join(wsReal, "workspace", "runs")); // ①canonical
-  pushRoot(join(wsReal, "runs")); // ②旧布局
-  let experiments: string[];
+  // RunLayout/v2:唯一主根＝实验树(<ws>/experiments/<exp>/runs);legacy 两桶只读兜底,
+  // 下一版删除(deprecated)。同名 run 以主根为准,legacy 不重复收录。
+  let experiments: string[] = [];
   try {
     experiments = readdirSync(join(wsReal, "experiments"), { withFileTypes: true })
       .filter((e) => e.isDirectory() && !e.name.startsWith("."))
       .map((e) => e.name);
   } catch {
-    return out;
+    experiments = [];
   }
-  for (const experiment of experiments) pushRoot(join(wsReal, "experiments", experiment, "runs")); // ③历史实验树
+  for (const experiment of experiments) pushRoot(join(wsReal, "experiments", experiment, "runs"));
+  pushRoot(join(wsReal, "workspace", "runs")); // legacy v1 桶（只读，deprecated）
+  pushRoot(join(wsReal, "runs")); // legacy ADR-0005 桶（只读，deprecated）
   return out;
 };
 
@@ -2888,6 +2896,42 @@ export function apply(
     });
     ctx.effect(() => disposeSessionBinding, "atf-ui: 会话绑定端点");
     console.log("[atf-ui] 会话绑定端点已注册（/atf-ui/session-binding——SessionRunBinding/v1 账本）");
+  }
+  // B3/D-1:默认工作区自愈（建三桶→补身份→登记注册表→补实验元数据）。
+  // 幂等且只补缺；失败不阻断启动（错误如实打日志,不做静默）。
+  // 测试环境不执行：否则会把真实 DSH 注册表写脏，污染同仓用例。
+  const bootEnsureDisabled =
+    process.env.ATF_UI_BOOT_ENSURE === "0"
+    || process.env.VITEST !== undefined
+    || process.env.NODE_ENV === "test";
+  try {
+    if (bootEnsureDisabled) {
+      throw new Error("跳过");
+    }
+    // 无 HOME 不派生（守 fileGuard「声明缺席不猜」纪律：不用 homedir() 兜底猜路径）
+    const home = process.env.HOME ?? "";
+    if (home === "") {
+      console.log("[atf-ui] 默认工作区自愈跳过：HOME 未设置");
+      throw new Error("HOME 未设置");
+    }
+    const atfHome = join(home, ".atf");
+    const bootNow = new Date();
+    const outcome = ensureDefaultWorkspace({
+      atfHome,
+      dshHome: resolveDshHome(process.env),
+      now: bootNow.toISOString(),
+    });
+    const patched = syncWorkspaceExperiments(outcome.path, bootNow);
+    console.log(
+      `[atf-ui] 默认工作区 ${outcome.registryStatus}（${outcome.path}）`
+        + (outcome.restartRequired ? "；重启后进入侧栏" : "")
+        + (patched > 0 ? `；补写实验元数据 ${patched} 个` : ""),
+    );
+  } catch (error) {
+    const reason = (error as Error).message;
+    if (reason !== "HOME 未设置" && reason !== "跳过") {
+      console.error(`[atf-ui] 默认工作区自愈失败（不阻断启动）: ${reason}`);
+    }
   }
   void tickOnce(resolved);
   const timer: NodeJS.Timeout = setInterval(() => void tickOnce(resolved), resolved.intervalMs);

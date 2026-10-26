@@ -68,7 +68,7 @@
  *   --reuse-experiment-setup 全局三参（内核 argparse 已声明、多段读取；给才下传，D93）。
  *   本工具下传 argv 只含上述参数，禁传内核未声明
  *   参数、禁拼第二套路径。
- *   落点（唯一）＝<workspace_path>/runs/<run_id>——本工具内 resolveRunDir 退役
+ *   落点（唯一）＝<workspace_path>/experiments/<exp>/runs/<run_id>（RunLayout/v2）——本工具内 resolveRunDir 退役
  *   （内核与 harness 同一决定者，其余工具不受影响）。
  *   register 段准入口径（E8b·内核 b13 起）：非空 run 目录不再整体拦——带合法
  *   run.json 即 canonical 复用，同一 run 可继续登记其它单据（无需 --rerun）；
@@ -696,7 +696,7 @@ export const buildPipelineTool = (
     name: "atf_pipeline_stage",
     description:
       `按段驱动 walkthrough_pipeline 段模式（审批必经）：单段触发 ${PIPELINE_STAGES.join("/")} 之一。` +
-      `落点＝<workspace_path>/runs/<run_id>（与内核同源唯一落点）；workspace_path 必填绝对路径（贯通内核 workspace），` +
+      `落点＝<workspace_path>/experiments/<exp>/runs/<run_id>（与内核同源唯一落点）；workspace_path 可省（缺省解析并回显），` +
       `run_id 必填；source_root 仅 register 段必填（其余段可省——缺了也不影响非 register 段）。` +
       `register 段准入口径（一个 run 可承载多类单据）：同一 run 可继续登记其它单据（多类联合训练共用一个 run，` +
       `无需换 run-id——逐类带各自 doc_type 调 register 即可）；同单据本段重复登记为幂等跳过` +
@@ -738,8 +738,8 @@ export const buildPipelineTool = (
       `exit 2（blocked）／exit 3（环境错误）一律零写入。审批面板放行后才会执行。`,
     parameters: {
       stage: { type: "string", required: true, enum: [...PIPELINE_STAGES], description: "要触发的内核管线段（八段原文，单段）" },
-      run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/runs/<run_id>）" },
-      workspace_path: { type: "string", required: true, description: "workspace 根（必填绝对路径——内核贯通 workspace；落点单源起点）" },
+      run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/experiments/<exp>/runs/<run_id>；未指定实验归入当日「未命名实验」）" },
+      workspace_path: { type: "string", description: "workspace 根（可选覆盖——缺省按会话 cwd→工作区身份→实例配置解析，并回显所用根与依据；显式给时必须含 .atf/workspace.json 或 datasets+splits）" },
       source_root: { type: "string", description: "源文档根（仅 register 段必填；其余段可省）" },
       base_model_path: { type: "string", description: "本地模型目录绝对路径（含 config.json）；模型家族名（如 qwen3_vl）不可当路径用（training_prep 段必填，其它段忽略；assemble=true 时豁免——内核盘上再水合单源，恢复不了内核 blocked 指路）" },
       assemble: { type: "boolean", description: "run 级联合装配（仅 training_prep 段有效，其它段忽略）：true 时下传 --assemble——内核枚举 run 的单据槽位（prep/variants/<doc>/）合并生成迭代配置与启动件；与 doc_type 单类语义互斥，true 时不传 doc_type" },

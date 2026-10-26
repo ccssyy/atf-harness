@@ -84,12 +84,20 @@ describe("A2.2b——段模式闭集与映射表", () => {
 });
 
 describe("A2.2b——fail-closed 参数面（先于审批，坏参数不消耗放行）", () => {
-  it("workspace_path 缺失 → 参数校验层 fail-closed（ToolArgsError，不触审批、零 spawn）", async () => {
+  it("workspace_path 可省（RunLayout/v2 缺省解析）——不再以参数缺失拒绝", async () => {
     const root = tempRoot();
     const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
-    await expect(tool.execute({ stage: "label_qc", run_id: "r1" }, execWithSession("s1"))).rejects.toThrow(/workspace_path/);
+    // v2:workspace_path 退为可选覆盖(缺省按会话 cwd→工作区身份→实例配置解析),
+    // 因此缺失不再在参数面拒绝;显式非法值仍 fail-closed(见下两条用例)。
+    let message = "";
+    try {
+      await tool.execute({ stage: "label_qc", run_id: "r1" }, execWithSession("s1"));
+    } catch (error) {
+      message = String((error as Error)?.message ?? error);
+    }
+    expect(message).not.toMatch(/workspace_path (缺失|required)/i);
   });
 
   it("workspace_path 空串 → execute 面 workspace_path_missing（穿透 schema 的空白形态兜底）", async () => {

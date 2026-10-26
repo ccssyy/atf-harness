@@ -257,12 +257,12 @@ const LAUNCH_EXECUTE_PARAMS: SchemaNode = {
     run_id: {
       type: "string",
       optional: true,
-      description: "run 标识（run 直调形态）：与 workspace_path 一起定位 <workspace_path>/workspace/runs/<run_id>；launch_sh 省略时取其 launch/launch.sh",
+      description: "run 标识（run 直调形态）：定位 <workspace_path>/experiments/<exp>/runs/<run_id>；launch_sh 省略时取其 launch/launch.sh",
     },
     workspace_path: {
       type: "string",
       optional: true,
-      description: "工作区根绝对路径（run 直调形态）：run 落在 <workspace_path>/workspace/runs/<run_id>（RunLayout 单源）。验证/临时工作区必须显式给，否则按实例 runs 桶解析可能落到同名残留目录",
+      description: "工作区根（run 直调形态，可选）：run 落在 <workspace_path>/experiments/<exp>/runs/<run_id>（RunLayout/v2 单源）；缺省按会话 cwd→工作区身份→实例配置解析",
     },
     launch_sh: {
       type: "string",

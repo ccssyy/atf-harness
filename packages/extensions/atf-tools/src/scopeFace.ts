@@ -152,14 +152,33 @@ const readRegistryFileSafe = (registryPath: string): Record<string, unknown> | n
 
 // ---------------------------------------------------------------- runs 布局与真 run 识别
 
-/** 本工作区 runs 子目录（双布局兼容）：canonical `workspace/runs/` 优先，legacy `runs/`
- *  回退；皆不在场＝null（本区无 runs 面——空，不猜测）。 */
+/** 本工作区 runs 面根集合（RunLayout/v2 单源）：`<ws>/experiments/<exp>/runs` 全部命中，
+ *  再追加 legacy 两桶（已废止的 v1 桶与 ADR-0005 旧桶，只读兼容）。皆不在场＝空数组。 */
+export const workspaceRunDirs = (workspaceRoot: string): string[] => {
+  const out: string[] = [];
+  const experiments = join(workspaceRoot, "experiments");
+  try {
+    for (const entry of readdirSync(experiments, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      const runs = join(experiments, entry.name, "runs");
+      if (existsSync(runs)) out.push(runs);
+    }
+  } catch {
+    // 无 experiments 目录＝纯 legacy 工作区
+  }
+  for (const legacy of [
+    join(workspaceRoot, "workspace", "runs"), // legacy v1 桶（只读）
+    join(workspaceRoot, "runs"), // legacy ADR-0005 桶（只读）
+  ]) {
+    if (existsSync(legacy)) out.push(legacy);
+  }
+  return out;
+};
+
+/** @deprecated v2 无单一 runs 根，改用 :func:`workspaceRunDirs`；本函数仅返回首个候选。 */
 export const workspaceRunsDir = (workspaceRoot: string): string | null => {
-  const canonical = join(workspaceRoot, "workspace", "runs");
-  if (existsSync(canonical)) return canonical;
-  const legacy = join(workspaceRoot, "runs");
-  if (existsSync(legacy)) return legacy;
-  return null;
+  const dirs = workspaceRunDirs(workspaceRoot);
+  return dirs.length > 0 ? dirs[0]! : null;
 };
 
 /** 真 run 识别（指令 §二.2）：run.json 在场且可解析为 JSON 对象（RunLayout/v1 身份锚）
@@ -251,7 +270,7 @@ export const SCOPE_UNRESOLVED_NOTE =
 
 /** 本区无 runs 子目录（归属成立但双布局皆缺）。 */
 export const workspaceRunsDirMissingNote =
-  "当前归属工作区内未发现 runs 子目录（workspace/runs/ 或 runs/ 均不在场）——本工作区还没有任何 run。";
+  "当前归属工作区内未发现 runs 目录（experiments/<exp>/runs 与历史两桶均不在场）——本工作区还没有任何 run。";
 
 /** 越界指引（指令 §二.4——错误回流带「显式请求跨任务」指引）。 */
 export const scopeOutOfWorkspaceNote =

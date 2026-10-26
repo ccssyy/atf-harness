@@ -102,22 +102,46 @@ export const resolveRunDir = (runsRoot: string, runId: string, opts?: { workspac
   return flat;
 };
 
-/** D49：canonical run 目录解析（注册工作区根清单 → `<ws>/workspace/runs/<runId>`）。
- *  合法判据＝run.json 在场且可解析为 JSON 对象（RunLayout/v1 身份锚——与 atf-ui
- *  classifyRunRootEntries 的 valid_run 判据同口径；更深的 dirs 校验属内核面不复制）。
+/**
+ * RunLayout/v2 候选 run 目录（单源，调用方不各自拼路径）：
+ *   ① 实验树 `<ws>/experiments/<exp>/runs/<runId>`（唯一写面与唯一主读面）；
+ *   ② legacy `<ws>/workspace/runs/<runId>`（已废止的 v1 固定名桶，只读）；
+ *   ③ legacy `<ws>/runs/<runId>`（ADR-0005 旧桶，只读）。
+ * ②③ 只为让存量 run 仍可读，不迁移、不补建（ADR-0016/ADR-0018）。
+ */
+export const runCandidateDirs = (root: string, runId: string): string[] => {
+  const out: string[] = [];
+  const experiments = join(root, "experiments");
+  try {
+    for (const entry of readdirSync(experiments, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      out.push(join(experiments, entry.name, "runs", runId));
+    }
+  } catch {
+    // 无 experiments 目录＝纯 legacy 工作区
+  }
+  out.push(join(root, "workspace", "runs", runId)); // legacy v1 桶（只读）
+  out.push(join(root, "runs", runId)); // legacy ADR-0005 桶（只读）
+  return out;
+};
+
+/** canonical run 目录解析（ADR-0018）：按 runCandidateDirs 逐候选验证 run.json。
+ *  合法判据＝run.json 在场且可解析为 JSON 对象（与 atf-ui classifyRunRootEntries 的
+ *  valid_run 判据同口径；更深的 dirs/experiment_id 校验属内核面不复制）。
  *  任一根命中即返回；全缺/全不合法＝null（调用方回落平铺/桶）。只读探测零写盘。 */
 export const canonicalRunDirOf = (canonicalRoots: readonly string[], runId: string): string | null => {
   if (!isValidRunId(runId)) return null;
   for (const root of canonicalRoots) {
     if (typeof root !== "string" || root === "") continue;
-    const dir = join(root, "workspace", "runs", runId);
-    const manifest = join(dir, "run.json");
-    try {
-      if (!existsSync(manifest)) continue;
-      const parsed: unknown = JSON.parse(readFileSync(manifest, "utf8"));
-      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) return dir;
-    } catch {
-      // 坏 run.json＝该根不合法，下一根
+    for (const dir of runCandidateDirs(root, runId)) {
+      const manifest = join(dir, "run.json");
+      try {
+        if (!existsSync(manifest)) continue;
+        const parsed: unknown = JSON.parse(readFileSync(manifest, "utf8"));
+        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) return dir;
+      } catch {
+        // 坏 run.json＝该候选不合法，下一个
+      }
     }
   }
   return null;
