@@ -64,6 +64,13 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   auto_style_cluster: "--auto-style-cluster",
   allow_small_cluster_test: "--allow-small-cluster-test",
   grouping_preset: "--grouping-preset",
+  // A 面：构造参数通道（内核 --grouping-confirm／--mode5-random／--mode5-advice-stats
+  // ／--targeted-advice／--risk-signals；advice 两条为 b25 新增声明面）
+  grouping_confirm: "--grouping-confirm",
+  mode5_random: "--mode5-random",
+  mode5_advice_stats: "--mode5-advice-stats",
+  targeted_advice: "--targeted-advice",
+  risk_signals: "--risk-signals",
   negative_ratio_target: "--negative-ratio-target",
   // E3：experiment_setup 预算五参（b8 起三参；预算五参同门窗扩 cutoff_len／max_model_len）
   max_total_tokens: "--max-total-tokens",

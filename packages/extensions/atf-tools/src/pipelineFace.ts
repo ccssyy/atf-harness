@@ -94,7 +94,7 @@
  * 「仅 owner 可点；执行方不得代点」。
  */
 import { execFile } from "node:child_process";
-import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
@@ -261,6 +261,45 @@ export const NEGATIVE_RATIO_DEFAULT_BAND = "0.02,0.05";
 export const negativeRatioApprovalLine = (band: string): string => {
   if (band !== "") return `负样本构造带：${band}（用户指定——实验门以该值锁定）`;
   return `负样本构造带：未指定——将按构造器内置常量带（${NEGATIVE_RATIO_DEFAULT_BAND}）兜底`;
+};
+
+// ── A 面：构造参数确认段（分组确认／mode5 增广／targeted 建议）──────────
+//
+//  三条都是「必须用户确认」的参数（内核 SKILL：字段分组与 mode5 增广必须用户确认，
+//  mode5 扩充倍数不得固定值；targeted 必带字段由风险分析推荐后经用户确认写入配置）。
+//  此前 harness 侧**没有任何参数通道**，模型即使分析出建议也表达不出来——这正是
+//  「为什么行数这么少」的真实原因之一（分组未确认 → mode1 不生成）。
+
+/** 构造参数确认段（仅 experiment_setup 段追加）：三行如实呈现确认态与建议值。
+ *
+ *  「缺省不静默」：未确认一律明说对应 kind 不生成，不让缺省偷偷生效；
+ *  有 agent 建议时把建议值、理由与出处校验态一起摆到卡上（建议不自动生效）。 */
+export const constructionParamsApprovalLines = (input: {
+  groupingConfirm: boolean;
+  mode5Random: number | undefined;
+  targetedAdvice: { carry: string[]; min: number | null; max: number | null; reason: string; evidence: string[]; evidenceStatus: string } | undefined;
+}): string => {
+  const partGroup = input.groupingConfirm
+    ? "分组方案：已确认（mode1 按组逐图各一条生成）"
+    : "分组方案：未确认——mode1 本轮不生成（需显式确认分组方案）";
+  const partM5 =
+    input.mode5Random === undefined
+      ? "mode5 增广：未确认——本轮不生成（扩充倍数不得固定值，需用户给值或确认 agent 建议）"
+      : input.mode5Random === 0
+        ? "mode5 增广：0（用户显式不启用）"
+        : `mode5 增广：每图 ${input.mode5Random} 条（用户指定）`;
+  let partTargeted: string;
+  const adv = input.targetedAdvice;
+  if (adv === undefined) {
+    partTargeted = "targeted 组合：未提供 agent 建议（必带字段与区间按当前生效值构造）";
+  } else {
+    const range = adv.min !== null && adv.max !== null ? `${adv.min}-${adv.max} 字段` : "区间不主张";
+    const ev = adv.evidenceStatus === "verified" ? "出处已校验" : "出处未校验（无本批风险信号）";
+    partTargeted =
+      `targeted 组合建议：必带 ${adv.carry.length > 0 ? adv.carry.join("、") : "(无)"}、${range}` +
+      `（agent 建议，未自动生效；${ev}）——理由：${adv.reason}`;
+  }
+  return `构造参数确认：\n- ${partGroup}\n- ${partM5}\n- ${partTargeted}`;
 };
 
 // ── E3 补：run 落点解析与内核 canonical RunLayout 对齐 ──
@@ -710,6 +749,37 @@ export const buildPipelineTool = (
           "（doc_identifier／page_summary／goods_item）；B＝2 组·单据级 vs 条目级（goods_item／doc_level）。" +
           "不给时按内核缺省 B 处理（不静默——返回体如实标注分组来源，审批卡亦明示）",
       },
+      grouping_confirm: {
+        type: "boolean",
+        description:
+          "确认当前 grouping_preset 为选定方案（仅 experiment_setup 段有意义，其它段忽略）：" +
+          "确认后内核按组逐图各一条生成 mode1 样本；不给＝未确认，mode1 本轮不生成（卡面明示）。" +
+          "分组必须用户确认——agent 给出的只是候选，不得默认成立",
+      },
+      mode5_random: {
+        type: "number",
+        description:
+          "mode5 增广每图条数（仅 experiment_setup 段有意义，其它段忽略；0=不启用）：" +
+          "扩充倍数不得固定值——要么用户给定、要么 agent 按数据分析建议后用户确认。" +
+          "不给＝未确认，mode5 本轮不生成（卡面明示，不静默用缺省）",
+      },
+      mode5_advice_stats: {
+        type: "object",
+        additionalProperties: true,
+        description:
+          "mode5 建议所依据的数据规模统计（Mode5AdviceStats/v1：images／full_field_baseline_rows／可选 suggested_mode5_random）" +
+          "（仅 experiment_setup 段有意义）：给出时内核据此算建议值与理由并随卡呈现；" +
+          "建议不自动生效（effective:false），用户仍须给 mode5_random 才定值。可直接给对象，无需自行落盘",
+      },
+      targeted_advice: {
+        type: "object",
+        additionalProperties: true,
+        description:
+          "targeted 组合的 agent 建议（TargetedRulesAdvice/v1）（仅 experiment_setup 段有意义）：" +
+          "字段 suggested_carry_fields／suggested_min_fields／suggested_max_fields／reason／" +
+          "evidence（形如 container_no:occurrence_rate，须能在本批风险信号里查到）／effective（必须 false）。" +
+          "建议不自动生效、随卡呈现；必带字段与区间须由风险分析得出，无理由或无出处会被拒。可直接给对象，无需自行落盘",
+      },
       negative_ratio_target: {
         type: "string",
         description:
@@ -811,7 +881,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown> },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown> },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -905,6 +975,56 @@ export const buildPipelineTool = (
         | { values: Record<string, string>; sources: Record<string, TrainingOverrideSource>; passDown: Record<string, string | number> }
         | undefined;
       const overridesIgnored = args.training_overrides !== undefined && args.stage !== "training_prep";
+      // A 面：构造参数通道（分组确认／mode5 增广／targeted 建议）。
+      // 三条都是「必须用户确认」的参数，此前 harness 侧完全没有通道——模型即使分析出
+      // 结论也表达不出来（真机表现：分组未确认 → mode1 不生成 → 行数少）。内联对象
+      // 由本层落 <run>/prep 再传路径，模型不需要自己写文件。
+      let constructionParams:
+        | {
+            groupingConfirm: boolean;
+            mode5Random: number | undefined;
+            targetedAdvice:
+              | { carry: string[]; min: number | null; max: number | null; reason: string; evidence: string[]; evidenceStatus: string }
+              | undefined;
+          }
+        | undefined;
+      const constructionAdvicePaths: { mode5AdviceStats?: string; targetedAdvice?: string; riskSignals?: string } = {};
+      if (args.stage === "experiment_setup") {
+        const groupingConfirm = args.grouping_confirm === true;
+        const mode5Random = typeof args.mode5_random === "number" ? Number(args.mode5_random) : undefined;
+        const writeAdviceFile = (name: string, payload: unknown): string => {
+          const prepDir = join(runDir, "prep");
+          mkdirSync(prepDir, { recursive: true });
+          const target = join(prepDir, name);
+          writeFileSync(target, JSON.stringify(payload, null, 1) + "\n", "utf-8");
+          return target;
+        };
+        if (args.mode5_advice_stats !== undefined) {
+          constructionAdvicePaths.mode5AdviceStats = writeAdviceFile("mode5-advice-stats.json", args.mode5_advice_stats);
+        }
+        let targetedAdvice:
+          | { carry: string[]; min: number | null; max: number | null; reason: string; evidence: string[]; evidenceStatus: string }
+          | undefined;
+        if (args.targeted_advice !== undefined) {
+          const raw = args.targeted_advice as Record<string, unknown>;
+          constructionAdvicePaths.targetedAdvice = writeAdviceFile("targeted-advice.json", raw);
+          const asStrings = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(x)) : []);
+          targetedAdvice = {
+            carry: asStrings(raw["suggested_carry_fields"]),
+            min: typeof raw["suggested_min_fields"] === "number" ? Number(raw["suggested_min_fields"]) : null,
+            max: typeof raw["suggested_max_fields"] === "number" ? Number(raw["suggested_max_fields"]) : null,
+            reason: String(raw["reason"] ?? ""),
+            evidence: asStrings(raw["evidence"]),
+            // 卡面先按未校验呈现；真实校验态以内核返回的 construction 为准（下一步会带回来）
+            evidenceStatus: "pending_kernel_verify",
+          };
+        }
+        constructionParams = { groupingConfirm, mode5Random, targetedAdvice };
+        // 风险信号在场才带：targeted evidence 的出处校验要用它（缺则内核标未校验）
+        const riskDocType = typeof args.doc_type === "string" && args.doc_type.trim() !== "" ? args.doc_type.trim() : "do";
+        const riskPath = join(runDir, "prep", "risk-signals", riskDocType, "field_risk_signals.json");
+        if (existsSync(riskPath)) constructionAdvicePaths.riskSignals = riskPath;
+      }
       if (args.stage === "training_prep") {
         const resolvedOverrides = resolveTrainingOverrides(args, runDir);
         if (!resolvedOverrides.ok) {
@@ -924,6 +1044,8 @@ export const buildPipelineTool = (
         + (args.stage === "experiment_setup" ? `\n${groupingPresetApprovalLine(groupingPreset)}` : "")
         // D99：负样本带行仅 experiment_setup 段呈现（与分组方案行同款「缺省不静默」）
         + (args.stage === "experiment_setup" ? `\n${negativeRatioApprovalLine(negativeRatioTarget)}` : "")
+        // A 面：构造参数确认段（分组确认／mode5／targeted 建议）仅 experiment_setup 段呈现
+        + (args.stage === "experiment_setup" && constructionParams !== undefined ? `\n${constructionParamsApprovalLines(constructionParams)}` : "")
         // E3：预算三参行仅 experiment_setup 段呈现（终值与来源双双上卡）
         + (args.stage === "experiment_setup" && tokenParams !== undefined ? `\n${experimentTokenApprovalLine(tokenParams.values, tokenParams.sources)}` : "")
         // E4-乙：训练参数覆盖行仅 training_prep 段呈现（终值与来源逐键上卡；convention 明示只呈现不下传）
@@ -979,6 +1101,14 @@ export const buildPipelineTool = (
       // :1155 显式才下传实验门并标 user_specified；未给不追加，构造器常量带兜底；其它段
       // 忽略该参不下传不报错）。
       if (args.stage === "experiment_setup" && negativeRatioTarget !== "") argv.push("--negative-ratio-target", negativeRatioTarget);
+      // A 面：构造参数透传（分组确认/mode5/targeted 建议＋风险信号出处校验文件）
+      if (args.stage === "experiment_setup" && constructionParams !== undefined) {
+        if (constructionParams.groupingConfirm) argv.push("--grouping-confirm");
+        if (constructionParams.mode5Random !== undefined) argv.push("--mode5-random", String(constructionParams.mode5Random));
+        if (constructionAdvicePaths.mode5AdviceStats !== undefined) argv.push("--mode5-advice-stats", constructionAdvicePaths.mode5AdviceStats);
+        if (constructionAdvicePaths.targetedAdvice !== undefined) argv.push("--targeted-advice", constructionAdvicePaths.targetedAdvice);
+        if (constructionAdvicePaths.riskSignals !== undefined) argv.push("--risk-signals", constructionAdvicePaths.riskSignals);
+      }
       // E3：预算三参透传（仅 experiment_setup 段；终值在场才追加——显式值与快照兜底值
       // 同面下传（内核 b8 argparse --max-total-tokens／--image-min-pixels／
       // --image-max-pixels）；unspecified 不出现在 argv，零新增语义）。

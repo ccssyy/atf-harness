@@ -8,19 +8,20 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b24，唯一真相源 = bridge.contract.yaml
-// atf_upstream，本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.25b24（构造参数可信度批）：targeted 组合「2-6 字段三档」
-// 由「randint 下界恰好为 1」的**巧合实现**改为显式收口——新增 `TARGETED_COMBO_FIELD_BAND`
-// 单源常量，读侧按 `randint(min-1, max-1)` 取陪衬且区间越界/倒置 fail-closed；写侧
-// construction.targeted_rules 不再整体写 null 而是落生效值＋来源标注（此前报告印
-// 「组合规则未声明」而实际按 2/6 跑，双盲）；分析侧改以 variants_report 的生效值为权威
-// 并附实测字段数分布。缺省路径随机序列与产物逐字节不变（真机四件 sha256 对拍通过）。
-// CLI 声明面零变化：surface 与上一 pin 逐字相同（SURFACE_IDENTICAL）。
-// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit f4ab0e7，方法面零增（session/ 零 diff），
+// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b25，唯一真相源 = bridge.contract.yaml
+// atf_upstream，本文件常量为镜像；变更走 re-pin 三步显式 PR）。
+// 本轮 pin 取值＝tag v0.7.25b25（构造参数建议面落地）：新增 `--targeted-advice`
+// （TargetedRulesAdvice/v1：suggested_carry_fields／min／max／reason／evidence[field:signal]
+// ／effective 必须 false）与 `--risk-signals`（仅用于 evidence 出处校验）——agent 依数据
+// 风险信号给建议与理由，内核只校验出处存在性、字段存在性与值域，不评价理由；建议不自动
+// 生效（effective:false），随实验门确认卡呈现。报告新增「targeted 组合确认」节。
+// walkthrough 同步声明并转发 --grouping-confirm／--mode5-random／--mode5-advice-stats／
+// --targeted-advice／--risk-signals（双处改：只改被调脚本则参数到不了门）。
+// CLI 声明面恰五条增量（上列五 flag）——harness surface 快照随更，差集仅新增无删除。
+// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit 3f9db7d，方法面零增（session/ 零 diff），
 // 会话协议轴 1／桥接契约轴 3 零 diff）。
-export const ATF_UPSTREAM_TAG = "v0.7.25b24";
-export const ATF_UPSTREAM_COMMIT_SHA = "f4ab0e75909b53db3ffabf084df04ccc0f525c33";
+export const ATF_UPSTREAM_TAG = "v0.7.25b25";
+export const ATF_UPSTREAM_COMMIT_SHA = "3f9db7de84b848f25a3c05cbe8199cb0120c321c";
 
 export interface AtfCliInvocation {
   command: string;

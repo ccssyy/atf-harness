@@ -261,6 +261,24 @@
     "required": null
    },
    {
+    "option": "--targeted-advice",
+    "dest": "targeted_advice",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--risk-signals",
+    "dest": "risk_signals",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--nproc-per-node",
     "dest": "nproc_per_node",
     "action": "store",
@@ -4901,6 +4919,51 @@
     "dest": "rerun",
     "action": "store_true",
     "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--grouping-confirm",
+    "dest": "grouping_confirm",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--mode5-random",
+    "dest": "mode5_random",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--mode5-advice-stats",
+    "dest": "mode5_advice_stats",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--targeted-advice",
+    "dest": "targeted_advice",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--risk-signals",
+    "dest": "risk_signals",
+    "action": "store",
+    "type": "<expr:Path>",
     "choices": null,
     "default": null,
     "required": null
