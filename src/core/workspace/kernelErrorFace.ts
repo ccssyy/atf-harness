@@ -40,9 +40,9 @@ export const humanizeKernelError = (code: string, opts: KernelErrorFaceOptions =
   const detail = code.includes(":") ? code.slice(code.indexOf(":") + 1) : (opts.detail ?? "");
   switch (base) {
     case "token_budget_missing":
-      return "预算文件缺失，先确认实验配置——run 缺 token 预算文件（token_budget.json），构造被拒。下一步：先走实验配置确认（九要素确认卡）落 TokenBudget 三要素（预算/训练截断/推理窗口）后重推构造";
+      return "预算文件缺失，先确认实验配置——run 缺 token 预算文件（token_budget.json），构造被拒。下一步：先走实验配置确认（本次训练方案卡）落 TokenBudget 三要素（预算/训练截断/推理窗口）后重推构造";
     case "token_budget_inconsistent":
-      return `预算不一致${detail !== "" ? `：${detail}` : "（预算三要素不一致）"}——展示两值指到对应字段：请回九要素确认卡核对 max_total_tokens / cutoff_len / max_model_len 三要素（预算 ≤ 训练截断 cutoff、预算 ≤ 推理窗口两条不变式须成立）。下一步：修正对应字段后重新确认`;
+      return `预算不一致${detail !== "" ? `：${detail}` : "（预算三要素不一致）"}——展示两值指到对应字段：请回本次训练方案卡核对 max_total_tokens / cutoff_len / max_model_len 三要素（预算 ≤ 训练截断 cutoff、预算 ≤ 推理窗口两条不变式须成立）。下一步：修正对应字段后重新确认`;
     case "token_gate_not_configured":
       return "数据构造未配置 token 审计，已拒绝构造——构造命令未传 token provider（token 审计不再可选，D59 实锚：跳过闸门会把超限样本放行给训练截断）。下一步：构造命令带上 token provider（--token-provider）后重推";
     case "gpu_capacity_insufficient": {

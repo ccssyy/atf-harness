@@ -253,8 +253,11 @@ describe("D92——confirmFace 链级（baseline 注入实算值＋卡面只读�
     const tools = buildConfirmTools({ runsRoot: root, ctx: makeCtx(calls) }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
     const result = await tools[0]!.execute({ action: "present", run_id: runId }, { callId: "d92", agent: { session: { id: "d92", header: { cwd: "/w" } } } });
     expect(result.ok).toBe(true);
-    // ask 入参形态＝{ questions: [formAskQuestion(...)], agent, signal }——问题对象在 questions[0]
-    return (calls[0] as { questions: AskRequest[] }).questions[0] as AskRequest;
+    // ask 入参形态＝{ questions: [formAskQuestion(...)], agent, signal }——问题对象在 questions[0]；
+    // 决策卡（options 形态、无 intent）先于表单卡发出，故取「带 intent 的那一次」。
+    const formCall = (calls as Array<{ questions: Array<AskRequest & { intent?: unknown }> }>)
+      .find((call) => call.questions[0]?.intent !== undefined);
+    return formCall!.questions[0] as AskRequest;
   };
   const seedIter = (root: string, runId: string, iter: Record<string, unknown>): void => {
     const dir = join(root, runId, "prep", "iteration-config");

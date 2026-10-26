@@ -51,7 +51,12 @@ const noApprovalCtx = { get: () => undefined };
 const formAskOrCancel = (): { ask: (req: unknown) => Promise<unknown> } => {
   let calls = 0;
   return {
-    ask: async () => {
+    ask: async (req: unknown) => {
+      const questions = (req as { questions?: Array<{ id?: string; intent?: unknown }> } | undefined)?.questions ?? [];
+      // 形态分流：决策卡（无 intent 的选项卡）空选应答、不计入表单卡调用次数
+      if (questions.every((item) => item.intent === undefined)) {
+        return { answers: questions.map((item) => ({ id: item.id ?? "choice", selected: [] })) };
+      }
       calls += 1;
       if (calls > 1) throw Object.assign(new Error("cancelled by user"), { code: "ASK_CANCELLED" });
       return { answers: [{ id: "config-confirm-x", selected: [] }] };

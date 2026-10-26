@@ -11,7 +11,7 @@
  * 并在返回体标注分组来源，审批卡呈现分组方案）；D93 增三参透传（train_all／
  * assignment_source／reuse_experiment_setup——内核全局 argparse 参数，只透传不新增语义）；
  * D99 增 experiment_setup 段 negative_ratio_target 透传（内核 argparse
- * --negative-ratio-target <下限,上限>——D90 用户确认值通路 harness 侧补派：九要素卡
+ * --negative-ratio-target <下限,上限>——D90 用户确认值通路 harness 侧补派：本次训练方案卡
  * 确认值经本参进实验门；显式给才下传且审批卡/返回体标来源，「缺省不静默」同 D89）。
  * E3（缺口 D 产品管道半）增 experiment_setup 段预算三参——max_total_tokens／
  * image_min_pixels／image_max_pixels（内核 b8 argparse --max-total-tokens／
@@ -19,7 +19,7 @@
  * 显式 > run 目录 webui/config-snapshot.json 确认快照兜底 > unspecified（不下传）；
  * 来源逐参独立标注 user_specified|config_snapshot|unspecified（审批卡与返回体均
  * 呈现终值与来源）；像素对成对校验（min<max，判据单源 configConfirm
- * pixelPairViolationOf——先于审批，卡前快败业务文案）。九要素确认值经本通路进
+ * pixelPairViolationOf——先于审批，卡前快败业务文案）。方案确认值经本通路进
  * 实验门——确认卡（落快照）与本段工具（快照兜底下传）同源成环，替代任何代写。
  * E4-乙（改动 1）增 training_prep 段 training_overrides——九键白名单（训练参数
  * 单源桥，内核 b9 TRAINING_OVERRIDES_KEYS 逐字同源）：显式 > 确认快照构造
@@ -103,7 +103,7 @@ import { appendSegmentFact, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../../../src
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
-// E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与九要素卡同源）
+// E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与本次训练方案卡同源）
 import { formAskQuestion, editsFromFormAnswers, type FormAskService } from "./confirmFace.js";
 import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 // E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
@@ -249,7 +249,7 @@ export const groupingPresetApprovalLine = (preset: string): string => {
 };
 
 // ── D99：experiment_setup 段负样本目标带（内核 argparse --negative-ratio-target，
-//    D90 用户确认值通路的 harness 侧补派——九要素卡 negative_ratio_target 确认值
+//    D90 用户确认值通路的 harness 侧补派——本次训练方案卡 negative_ratio_target 确认值
 //    经本参进实验门；内核显式才下传实验门脚本，来源标 user_specified）──
 
 /** 负样本构造带缺省形态（内核构造器常量 NEGATIVE_RATIO_CONSTRUCTION_BAND=(0.02,0.05)
@@ -337,14 +337,14 @@ export const resolvePipelineRunDir = (
 };
 
 // ── E3：experiment_setup 段预算三参（max_total_tokens／像素对）——显式 > 确认快照
-//    兜底 > unspecified（不下传）。九要素确认卡的预算三要素经本通路进实验门（缺口 D
+//    兜底 > unspecified（不下传）。本次训练方案卡的预算三要素经本通路进实验门（缺口 D
 //    产品管道：确认卡落 config-snapshot.json → 本段工具兜底读并下传，全程零代写）。──
 
 
 /** 预算三参来源三值闭集（审批卡/返回体逐参标注——「缺省不静默」）。 */
 export type ExperimentTokenParamSource = "user_specified" | "config_snapshot" | "unspecified";
 
-/** 预算五参键（参数名与快照 confirmed 键、九要素卡键同名同义）。
+/** 预算五参键（参数名与快照 confirmed 键、本次训练方案卡键同名同义）。
  *  C（2026-10-26）五参同门：cutoff_len／max_model_len 与构造上限、像素对一起经本段进
  *  实验门 token_gate——内核 b17 起据此落 <run>/prep/token_budget.json（不再写死基线）。 */
 export const EXPERIMENT_TOKEN_PARAM_KEYS: readonly string[] = [
@@ -383,7 +383,7 @@ export const snapshotTokenParamsOf = (runDir: string): ExperimentTokenParams => 
     if (confirmed === null || typeof confirmed !== "object") return out;
     for (const key of EXPERIMENT_TOKEN_PARAM_KEYS) {
       const raw = (confirmed as Record<string, unknown>)[key];
-      // 快照键值历史形态为字符串（九要素卡值全字符串面）——数字/纯数字串均认
+      // 快照键值历史形态为字符串（本次训练方案卡值全字符串面）——数字/纯数字串均认
       const num = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw.trim()) : NaN;
       if (isSafePositiveInteger(num)) out[key as keyof ExperimentTokenParams] = num;
     }
@@ -486,7 +486,7 @@ export const TRAINING_OVERRIDE_FORBIDDEN_KEYS: readonly string[] = [
 /** training_overrides 逐键来源四值闭集（审批卡/返回体标注——「缺省不静默」）。 */
 export type TrainingOverrideSource = "user_confirmed" | "config_snapshot" | "derived" | "convention";
 
-/** 来源标注文案（审批卡行单源；user_confirmed＝当次显式确认值、config_snapshot＝九要素
+/** 来源标注文案（审批卡行单源；user_confirmed＝当次显式确认值、config_snapshot＝本次训练方案确认值
  *  确认快照、derived＝global_batch=256 派生、convention＝内核惯例缺省〔只呈现不下传〕）。 */
 export const TRAINING_OVERRIDE_SOURCE_LABEL: Readonly<Record<TrainingOverrideSource, string>> = {
   user_confirmed: "用户确认",
@@ -806,7 +806,7 @@ export const buildPipelineTool = (
           "负样本目标带 <下限,上限>（仅 experiment_setup 段有意义，其它段忽略该参）：用户确认的" +
           "负样本构造配额带（如 0.03,0.06）。显式给定时实验门以该值锁定并标注来源为用户指定；" +
           "不给时按构造器内置常量带（0.02,0.05）兜底（不静默——审批卡与返回体如实标注来源）。" +
-          "九要素确认卡的 negative_ratio_target 值在本段触发时应原样带入",
+          "本次训练方案卡的 negative_ratio_target 值在本段触发时应原样带入",
       },
       // H7h：卡位（仅 training_prep 段；显式 > 确认快照兜底 > 不下传，回退 deploy 层）
       visible_devices: {
@@ -822,7 +822,7 @@ export const buildPipelineTool = (
         type: "number",
         description:
           "单样本 token 上限（仅 experiment_setup 段有意义，其它段忽略该参；安全正整数）：与截断/推理窗口、像素对成组进实验门。" +
-          "未显式给定时读 run 目录 webui/config-snapshot.json 确认快照兜底（九要素确认值通路——原样带入）；" +
+          "未显式给定时读 run 目录 webui/config-snapshot.json 确认快照兜底（方案确认值通路——原样带入）；" +
           "两者皆无则不下传（内核按缺省处理，来源如实标注 unspecified）",
       },
       cutoff_len: {
@@ -890,7 +890,7 @@ export const buildPipelineTool = (
         description:
           "训练参数覆盖（仅 training_prep 段消费，其它段忽略并记 note）：九键白名单 per_device_train_batch_size／gradient_accumulation_steps／nproc_per_node／num_train_epochs／learning_rate／" +
           "lora_rank／lora_alpha／deepspeed／warmup_ratio——像素对（image_min_pixels/image_max_pixels）与 TokenBudget 三键（max_total_tokens/cutoff_len/max_model_len）不得出现（分别走 experiment_setup 段预算三参与" +
-          " token 预算链路，混入即卡前拒绝）；卡位 visible_devices 走 deploy/launch 亦不收。未显式给时读 run 目录 webui/config-snapshot.json 确认快照构造（九要素确认值通路——快照是训练参数唯一出口，" +
+          " token 预算链路，混入即卡前拒绝）；卡位 visible_devices 走 deploy/launch 亦不收。未显式给时读 run 目录 webui/config-snapshot.json 确认快照构造（方案确认值通路——快照是训练参数唯一出口，" +
           "本桥不做任何代写）；accum 缺而 bs×nproc 在场时按 global_batch=256 派生（除不尽停点）；bs 缺按内核缺省（cutoff<10000→2）、deepspeed 缺按 ds_z3_offload——逐键来源 user_confirmed/config_snapshot/" +
           "derived/convention 在审批卡与返回体呈现（convention 态只呈现，缺省单源在内核）。注入通路（E5·H1 D139）：终值随本段命令 argv 直接下传内核生成器（--training-overrides）——被采纳键内核落账" +
           " param_sources user_confirmed(ref=stage:training_overrides)；本段命令完成后无需任何后续注入步骤",
@@ -964,7 +964,7 @@ export const buildPipelineTool = (
         }
         // E3：像素对成对校验（内核 b8 main() 参数形状层同款口径——单端即拒，业务
         // 文案对齐；先于审批不消耗放行）＋两端在场时的 min<max 关系校验（判据单源
-        // pixelPairViolationOf——与九要素卡同一文案面）。
+        // pixelPairViolationOf——与本次训练方案卡同一文案面）。
         const minPx = resolvedParams.values.image_min_pixels;
         const maxPx = resolvedParams.values.image_max_pixels;
         if ((minPx !== undefined) !== (maxPx !== undefined)) {

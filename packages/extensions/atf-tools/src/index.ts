@@ -192,7 +192,7 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // F1（首跑体验批）：训练链入口预检——内核 tools/training_preflight.py 单源（kernelDir
   // 消费链）；pin 未含脚本时工具如实报 preflight_script_missing（不 mock 不猜），env
   // ATF_DSH_PREFLIGHT_COMMAND 可注入替代命令（测试/过渡态）。前置卡装配同源一份
-  // （confirmTools——九要素卡前先出预检卡）。
+  // （confirmTools——本次训练方案卡前先出预检卡）。
   const preflightDeps: PreflightDeps = {
     command: process.env["ATF_DSH_PREFLIGHT_COMMAND"] ?? `python3 ${join(config.kernelDir, "tools", "training_preflight.py")}`,
     // E3 补（执行中实锚）：--apply 的坐标整批重试＝resize 探针加载 transformers＋

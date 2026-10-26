@@ -1,7 +1,7 @@
 /**
  * 批⑱-M2——确认卡工具面（ui-atf-confirm 的数据与语义源）。
  *
- * atf_config_confirm：九要素训练配置确认卡——构造/改参/重呈/快照全链复用手搓
+ * atf_config_confirm：本次训练方案确认卡——构造/改参/重呈/快照全链复用手搓
  * src/webui/configConfirm.ts（buildConfigConfirmFields/saveConfigSnapshot——逻辑零重写）。
  * 批㊶-W F5 合并版表单化（R2）：第一段改参收集＝DSH 原生问题卡 form intent 表单卡
  * （vendor patch 0003——逐键输入框＋现值预填＋clamp 域提示；结构化 key=value selected 回传，
@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows, pixelPairViolationOf, READONLY_CONFIG_KEYS, configFieldPlaceholderOf } from "../../../../src/webui/configConfirm.js";
+import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows, pixelPairViolationOf, READONLY_CONFIG_KEYS, configFieldPlaceholderOf, configBlockOf, configChoiceValuesOf } from "../../../../src/webui/configConfirm.js";
 
 /** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型；批㊶-Q 增第四态 agent_recommend，
  *  仅全自动档采纳 agent 参数推荐时由本文件后处理标注，buildConfigConfirmFields 不产出该态）。
@@ -60,21 +60,36 @@ const sessionIdOfExec = (exec: unknown): string | undefined => {
 };
 import { asToolValue } from "./schemaTranslate.js";
 
+/** 表单类问题（原生 form intent：逐键输入框）。 */
+export interface FormAskQuestion {
+  id: string;
+  question: string;
+  header?: string;
+  detail?: string;
+  intent: {
+    kind: "form";
+    fields: ReadonlyArray<{ key: string; label: string; value?: string; placeholder?: string; hint?: string; required?: boolean }>;
+    submitLabel?: string;
+  };
+}
+
+/** 选项类问题（原生 options/multiSelect：决策面用下拉/多选，**不设 intent**）。
+ *  「其他」自由输入由客户端在选项组末尾自带（答案的 custom 字段），与选项视觉分区。 */
+export interface ChoiceAskQuestion {
+  id: string;
+  question: string;
+  header?: string;
+  detail?: string;
+  options: ReadonlyArray<{ label: string; description?: string }>;
+  multiSelect?: boolean;
+}
+
 /** DSH user-questions 服务消费面（结构类型——零 import；plan-mode 同款直调 ask() 通道）。
- *  批㊶-P1 S3：导出共享——atf_run_training 双启请示闸同走本通道（请示是一等工具）。 */
+ *  批㊶-P1 S3：导出共享——atf_run_training 双启请示闸同走本通道（请示是一等工具）。
+ *  owner 2026-10-26：question 面放开「表单类 | 选项类」两形态（原生本就支持，此前未用）。 */
 export interface FormAskService {
   ask(request: {
-    questions: ReadonlyArray<{
-      id: string;
-      question: string;
-      header?: string;
-      detail?: string;
-      intent: {
-        kind: "form";
-        fields: ReadonlyArray<{ key: string; label: string; value?: string; placeholder?: string; hint?: string; required?: boolean }>;
-        submitLabel?: string;
-      };
-    }>;
+    questions: ReadonlyArray<FormAskQuestion | ChoiceAskQuestion>;
     agent?: unknown;
     signal?: unknown;
   }): Promise<{ answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string>; custom?: string }> }>;
@@ -126,19 +141,34 @@ export const datasetKeysFaceLineOf = (fields: ReadonlyArray<{ key: string; value
   return value === "" ? "数据集键（实算，只读）：实算值未产出（IterationConfig 缺席）" : `数据集键（实算，只读）：${value}`;
 };
 
-export const configFormFieldsOf = (fields: ConfigConfirmField[], gpuCount: number | null) =>
+export const configFormFieldsOf = (
+  fields: ConfigConfirmField[],
+  gpuCount: number | null,
+  options: { collectedByChoices?: boolean } = {},
+) =>
   fields
     // D92：只读键单源过滤（max_model_len 惯例基线＋dataset_keys 内核实算——卡上可编辑值不消费）
     .filter((field) => !READONLY_CONFIG_KEYS.has(field.key))
+    // 闭集已被决策卡收集（present 形态）→ 表单不再生成同键输入框（「可编辑不消费」禁的反面：
+    // 「已收集不重复收」）。amend 形态不带决策卡，故照旧保留输入框（改参数值不丢能力）。
+    // visible_devices 例外：卡位除枚举外还接受 a-b 区间（自由输入通道留在表单）。
+    .filter((field) =>
+      options.collectedByChoices !== true
+      || field.key === "visible_devices"
+      || configChoiceValuesOf(field.key).length === 0)
     .map((field) => {
     const hint = domainHintOf(field.key, gpuCount);
     const pixelPair = PIXEL_PAIR_LABELS[field.key] !== undefined;
     const sourceNote = pixelPair ? `（来源：${field.tag === "need_confirm" ? "用户" : "默认"}）` : "";
     // H7c：留空＝回退 deploy 的键补占位提示（呈现层，不入值——值仍为空串）
     const emptyHint = configFieldPlaceholderOf(field.key, gpuCount);
+    // 六区块呈现：原生 form intent 无分节能力（扁平 fields）——区块标题作为标签前缀，
+    // 保证区块内键相邻且顺序＝CONFIG_CONFIRM_BLOCKS 声明序（排序理由见 configConfirm 头注）。
+    const block = configBlockOf(field.key);
+    const label = PIXEL_PAIR_LABELS[field.key] ?? field.key;
     return {
       key: field.key,
-      label: PIXEL_PAIR_LABELS[field.key] ?? field.key,
+      label: block === undefined ? label : `${block.title}｜${label}`,
       value: field.value,
       ...(hint !== undefined || sourceNote !== "" ? { hint: `${hint ?? ""}${sourceNote}` } : {}),
       ...(emptyHint !== undefined ? { placeholder: emptyHint } : {}),
@@ -151,19 +181,158 @@ export const configFormFieldsOf = (fields: ConfigConfirmField[], gpuCount: numbe
     };
   });
 
-/** 表单卡答案 → 结构化 edits（selected 逐条 `key=value`——首个 = 拆分；结构化解析，
- *  非自由文本正则——批㊶-W F5 文字解析链退役后的唯一回传面）。 */
-export const editsFromFormAnswers = (answers: { answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string> }> }): Record<string, string> => {
+/** 选项类问题的回传索引（label → value）：解析单源，不另写第二套解析器。 */
+export interface ChoicePick {
+  readonly questionId: string;
+  readonly key: string;
+  readonly multiSelect?: boolean;
+  readonly options: ReadonlyArray<{ label: string; value: string }>;
+}
+
+/** 答案 → 结构化 edits（唯一解析器，三种编码同口）：
+ *  ① 表单/文字编码：selected 逐条 `key=value`（首个 = 拆分；批㊶-W F5 唯一回传面）；
+ *  ② 选项编码：selected 是所选选项 label → 经 picks 映射回 key=value（多选以逗号拼接）；
+ *  ③ 自由输入：选项组末尾「其他」（答案 custom）——含 `=` 按 `key=value` 解析，否则视为
+ *     本问的裸值（用户直接填档位名/卡位串）。
+ *  未登记的选项问（id 不在 picks）其 selected 不参与 ② —— 未知面不猜。 */
+export const editsFromFormAnswers = (
+  answers: { answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string>; custom?: string }> },
+  picks: readonly ChoicePick[] = [],
+): Record<string, string> => {
   const edits: Record<string, string> = {};
+  const pickById = new Map(picks.map((pick) => [pick.questionId, pick]));
   for (const item of answers.answers) {
-    for (const entry of item.selected) {
-      const eq = entry.indexOf("=");
-      if (eq <= 0) continue;
-      const key = entry.slice(0, eq).trim();
-      if (key !== "") edits[key] = entry.slice(eq + 1).trim();
+    const pick = pickById.get(item.id);
+    if (pick === undefined) {
+      // ① 表单/文字编码：仅对未登记为选项问的条目生效（选项问的 selected 是 label，
+      //    不含 key=value；混着解析会把两套编码串味）
+      for (const entry of item.selected) {
+        const eq = entry.indexOf("=");
+        if (eq <= 0) continue;
+        const key = entry.slice(0, eq).trim();
+        if (key !== "") edits[key] = entry.slice(eq + 1).trim();
+      }
+      continue;
+    }
+    if (item.selected.length > 0) {
+      const values = item.selected
+        .map((label) => pick.options.find((option) => option.label === label)?.value)
+        .filter((value): value is string => value !== undefined && value !== "");
+      if (values.length > 0) {
+        edits[pick.key] = pick.multiSelect === true ? values.join(",") : (values[0] as string);
+      }
+    }
+    const custom = typeof item.custom === "string" ? item.custom.trim() : "";
+    if (custom === "") continue;
+    if (custom.includes("=")) {
+      for (const pair of custom.split(/[，,；;\s]+/)) {
+        const eq = pair.indexOf("=");
+        if (eq <= 0) continue;
+        edits[pair.slice(0, eq).trim()] = pair.slice(eq + 1).trim();
+      }
+    } else {
+      edits[pick.key] = custom;
     }
   }
   return edits;
+};
+
+/**
+ * 决策卡问题单源（选项形态；owner 2026-10-26）：只收「闭集决策」，录入类留在表单卡。
+ * 与录入卡同一次确认链：决策先问（点选），录入卡随后（预填现值，可精改）。
+ * @param fields 当前卡面字段（现值进 detail，让用户点选时看得见「不选就是它」）。
+ * @param gpuCount 机器事实可用卡数（null＝未探测，卡位问题不生成——不猜域）。
+ * @returns questions＝原生问题项（无 intent、不设 form）；picks＝解析索引（同序）。
+ */
+export const buildConfigChoiceQuestions = (
+  fields: ReadonlyArray<{ key: string; value: string }>,
+  gpuCount: number | null,
+): { questions: ChoiceAskQuestion[]; picks: ChoicePick[] } => {
+  const questions: ChoiceAskQuestion[] = [];
+  const picks: ChoicePick[] = [];
+  const push = (question: ChoiceAskQuestion, pick: ChoicePick): void => {
+    questions.push(question);
+    picks.push(pick);
+  };
+  const currentOf = (key: string): string => (fields.find((field) => field.key === key)?.value ?? "").trim();
+
+  // A 运行环境：卡位（多选——个数须等于训练卡数，二者同区块相邻）
+  if (gpuCount !== null && Number.isInteger(gpuCount) && gpuCount > 0) {
+    // 选项 label 是用户面、value 是卡号（回传面）——两者同表，解析器不改写
+    const gpuPairs = Array.from({ length: gpuCount }, (_, index) => ({ label: `卡 ${String(index)}`, value: String(index) }));
+    const options = gpuPairs.map((pair, index) =>
+      index === 0
+        ? { label: pair.label, description: "可多选；一张都不选＝全部可见卡（回退部署缺省）" }
+        : { label: pair.label });
+    push(
+      {
+        id: "config-choice-visible-devices",
+        header: "运行环境",
+        question: "占哪几张卡？",
+        detail: `可多选。卡位个数须与训练卡数一致；不选＝全部可见卡（回退部署缺省）。` +
+          `${currentOf("visible_devices") === "" ? "" : `现值：${currentOf("visible_devices")}`}`,
+        options,
+        multiSelect: true,
+      },
+      { questionId: "config-choice-visible-devices", key: "visible_devices", multiSelect: true, options: gpuPairs },
+    );
+  }
+
+  // C 长度与预算：像素上限（两档闭集）
+  const pixelOptions = configChoiceValuesOf("image_max_pixels");
+  if (pixelOptions.length > 0) {
+    push(
+      {
+        id: "config-choice-image-max-pixels",
+        header: "长度与预算",
+        question: "像素上限取哪一档？",
+        detail: `与像素下限成对确认（min < max）。现值：${currentOf("image_max_pixels") || "（未定）"}`,
+        options: pixelOptions,
+      },
+      {
+        questionId: "config-choice-image-max-pixels",
+        key: "image_max_pixels",
+        options: pixelOptions.map((option) => ({ label: option.label, value: option.value })),
+      },
+    );
+  }
+
+  // D 优化设置：LoRA 容量档 + 显存策略（deepspeed 闭集——必须下拉，不手打）
+  const rankOptions = configChoiceValuesOf("lora_rank");
+  if (rankOptions.length > 0) {
+    push(
+      {
+        id: "config-choice-lora-rank",
+        header: "优化设置",
+        question: "LoRA 容量取哪一档？",
+        detail: `alpha 随 rank 联动（2×rank）。现值：${currentOf("lora_rank") || "（未定）"}`,
+        options: rankOptions,
+      },
+      {
+        questionId: "config-choice-lora-rank",
+        key: "lora_rank",
+        options: rankOptions.map((option) => ({ label: option.label, value: option.value })),
+      },
+    );
+  }
+  const deepspeedOptions = configChoiceValuesOf("deepspeed");
+  if (deepspeedOptions.length > 0) {
+    push(
+      {
+        id: "config-choice-deepspeed",
+        header: "优化设置",
+        question: "显存策略取哪一档（DeepSpeed）？",
+        detail: `档位闭集来自训练内核内置配置；现值：${currentOf("deepspeed") || "（未定）"}。单卡×非 Z0 档与 QLoRA 同时出现会被内核拒绝。`,
+        options: deepspeedOptions,
+      },
+      {
+        questionId: "config-choice-deepspeed",
+        key: "deepspeed",
+        options: deepspeedOptions.map((option) => ({ label: option.label, value: option.value })),
+      },
+    );
+  }
+  return { questions, picks };
 };
 
 /** clamp 域提示（表单卡逐键 hint——min/max 可读；数值全部单源派生零硬编码）。 */
@@ -320,7 +489,7 @@ interface ConfirmDeps {
   ctx: { get(service: string): unknown };
   /** 批㊶R前置：可用卡数探测注入（vitest 假件；缺省＝真实机器事实通道 nvidia-smi/CUDA_VISIBLE_DEVICES）。 */
   gpuProbe?: () => number | null;
-  /** F1：前置预检装配（九要素卡前先出预检卡；缺席＝不出预检卡，九要素链现状语义）。 */
+  /** F1：前置预检装配（本次训练方案卡前先出预检卡；缺席＝不出预检卡，训练方案链现状语义）。 */
   preflight?: PreflightDeps;
 }
 
@@ -345,7 +514,7 @@ const clearPending = (runDir: string): void => {
 
 
 /** 批㊶-U §五：双段式共用 helper（问题卡收改参→amend 校验 clamp 重呈→审批卡落闸）。
- *  四张确认卡统一复用（九要素/评估 EVAL_RELEASE/凭据卡退化/S1 publish_model 随后）——
+ *  四张确认卡统一复用（本次训练方案/评估 EVAL_RELEASE/凭据卡退化/S1 publish_model 随后）——
  *  禁每卡手搓。批㊶-W F5：第一段指引改表单卡语义（改参在表单卡改值提交；纯文字应答
  *  通道退役）；第二段授权仍走审批卡 Allow once（账本留痕不变）。凭据卡（amendable=false）
  *  退化形式：仅统一卡面说明＋复核通道，不虚构可调参数（诚实呈现原则）。 */
@@ -372,7 +541,7 @@ export const injectBashRunWorkspace = (runDir: string): void => {
  *  workspace_path 给定时在显式落点创建 run 目录（非法 runId 拒——路径穿越不进创建面），
  *  未给时按现行 resolveRunDir 桶落点新建（writePending/saveConfigSnapshot 落点一致，
  *  新建 run 现状零破坏）。非绝对路径与 symlink 与预检同拒（红线：确认值永不落镜像位）。
- *  效果：九要素确认快照/pending/段事实/会话绑定与内核 training_prep 读点同棵树。 */
+ *  效果：方案确认快照/pending/段事实/会话绑定与内核 training_prep 读点同棵树。 */
 export const resolveConfirmRunDir = (
   deps: ConfirmDeps,
   runId: string,
@@ -416,7 +585,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const configTool = defineTool({
     name: "atf_config_confirm",
     description:
-      "九要素训练配置确认卡：action=present 构造/重呈九要素卡（overrides 传显式覆盖值）；action=amend 应用结构化改参（edits 传键值对象）后重呈。合并版双段式编排（present/amend 同链）：第一段改参收集——工具内部直接以 DSH 原生问题卡 form intent 表单卡向用户呈确认键逐键输入框（现值预填＋clamp 域提示；max_model_len 只读不入输入框——批次 R H1-1 三要素区只读呈现），卡面附 TokenBudget 三要素区（预算/训练截断/推理窗口三行＋两条不变式校验：预算超 cutoff 或超 max_model_len 即红字禁确认；预算与 cutoff 不等须同步（用户动作不自动）或填不同步理由），用户改值/直接提交即回结构化 key=value；第二段授权——有改动走确定性 clamp（越界回退域边界＋可读说明），最终授权一律走审批卡 Allow once（账本留痕不变）；审批卡 Reject → 回表单卡（带上次值）循环，用户关闭表单卡＝取消（结构化拒绝）。问题卡只收集改参、不承载授权（审批≠请示，闸门语义不迁移）；用户在聊天里的改参话术由 agent 语义理解后转 edits 结构化参数（自由文本永不直达生成面）。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——登记源，卡面与 Web 摘要同源）＞缺省。手动档（权限档）：审批面板 Allow once 确认后 config-snapshot 落盘。全自动训练档（会话档位=auto_training，经界面人工切换）：present 免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend（同样免阻塞）。" +
+      "本次训练方案确认卡：action=present 构造/重呈本次训练方案卡（overrides 传显式覆盖值）；action=amend 应用结构化改参（edits 传键值对象）后重呈。合并版双段式编排（present/amend 同链）：第一段改参收集——决策类（卡位/像素上限/LoRA 容量/显存策略）走原生选项卡（可多选处开 multiSelect，自由输入走选项组末尾「其他」），录入类走原生 form intent 表单卡逐键输入框（现值预填＋clamp 域提示；max_model_len 只读不入输入框；标签带六区块业务标题），卡面附 TokenBudget 三要素区（预算/训练截断/推理窗口三行＋两条不变式校验：预算超 cutoff 或超 max_model_len 即红字禁确认；预算与 cutoff 不等须同步（用户动作不自动）或填不同步理由），用户改值/直接提交即回结构化 key=value；第二段授权——有改动走确定性 clamp（越界回退域边界＋可读说明），最终授权一律走审批卡 Allow once（账本留痕不变）；审批卡 Reject → 回表单卡（带上次值）循环，用户关闭表单卡＝取消（结构化拒绝）。问题卡只收集改参、不承载授权（审批≠请示，闸门语义不迁移）；用户在聊天里的改参话术由 agent 语义理解后转 edits 结构化参数（自由文本永不直达生成面）。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——登记源，卡面与 Web 摘要同源）＞缺省。人工档（预设非 atf-training 或权限档非 danger-full-access）：审批面板 Allow once 确认后 config-snapshot 落盘。训练自动驾驶（Agent 预设 atf-training ＋ 权限档 danger-full-access 两轴齐备）：present 免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend（同样免阻塞）。" +
       "全自动档 agent 参数推荐（recommend 参数，本档专属）：训练提交前基于任务描述＋数据集统计（样本数/长度分布/模态）＋经验锚点给出 epochs/lr/rank/cutoff/负样本带推荐值并附 reason（理由）。经验锚点（owner 手工训练经验，参考知识非硬规则）：样本 2万–3万 → 3 epochs；4万以上 → 2 epochs；小样本（<1万）宜多轮并防过拟合（配早停观察）。护栏：epochs∈[1,10] 整数、lr∈[5e-5,5e-4]、lora_rank∈{16,32,64,128}（alpha=2×rank 联动）、cutoff≤12800、像素两档∈{802816,1605632}（单源）、负样本构造带∈[0.02,0.05]（F2 R1 终裁——空对象构造配额）、bs 正整数、nproc∈[1,可用卡数]——越界推荐被拦截并回退固定建议（不静默修正），拦截事实进通报；推荐缺失同样回退。lora_alpha 不单独推荐（随 rank 联动）。" +
       "基模型锚点（owner 裁定 2026-10-12 §九）：确认卡基模型字段默认值＝模型库位置下的 Qwen3-VL-32B-Instruct（owner 偏置锚点，非查表推导；卡上可改，改动经防线①本地复核）。评估侧继续锚定 -AWQ 变体（现状不变）。" +
       "卡数偏置（owner 裁定 2026-10-11）：训练卡数默认拉满本机可用卡（nproc_per_node=机器事实可用卡数），训练时长优先；代价（显存/时长）如实呈现给用户，不作降档依据；降档仅在用户任务上下文明确要求时采纳。卡数维度无成文锚点——不编造「数据规模→卡数」映射、不查表推荐，卡数只来自机器事实与用户显式要求；自动档默认低于可用卡的 nproc 推荐会被护栏回退拉满。",
@@ -433,29 +602,29 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
     presentCall: function(args: { action: string; run_id: string }) {
-      // pending 态卡面——九要素确认标题（具体 fields 在 execute 中构造后经 content 呈现）
+      // pending 态卡面——本次训练方案确认标题（具体 fields 在 execute 中构造后经 content 呈现）
       return {
         card: "generic" as const,
-        title: args.action === "amend" ? `参数变更请示（仅改动项）— ${args.run_id}` : `九要素训练配置确认 — ${args.run_id}`,
+        title: args.action === "amend" ? `参数变更请示（仅改动项）— ${args.run_id}` : `本次训练方案确认 — ${args.run_id}`,
         kind: "other" as const,
       }
     },
     async execute(args: { action: "present" | "amend"; run_id: string; workspace_path?: string; overrides?: Record<string, unknown>; edits?: Record<string, unknown>; recommend?: Record<string, unknown> }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // E3（缺口 D）：run 落点三级单源（workspace_path 显式 > 会话工作区事实 > 实例
       // runsRoot 兜底——preflightFace E2 同一解析器，写面语义见 resolveConfirmRunDir）；
-      // 快照/pending/段事实/会话绑定/KPI 全落同一棵树——九要素确认值经此与内核读点同源。
+      // 快照/pending/段事实/会话绑定/KPI 全落同一棵树——方案确认值经此与内核读点同源。
       const resolvedRun = resolveConfirmRunDir(deps, args.run_id, args.workspace_path, exec);
       if (!resolvedRun.ok) {
         return asToolValue({ ok: false, run_id: args.run_id, error: resolvedRun.error, note: resolvedRun.note });
       }
       const runDir = resolvedRun.runDir;
       const runDirSource = resolvedRun.source;
-      // F1（首跑体验批）§二.2：九要素卡之前先出「首跑预检卡」——顺序机制保证：
+      // F1（首跑体验批）§二.2：本次训练方案卡之前先出「首跑预检卡」——顺序机制保证：
       // preflight KPI 事实缺席且预检脚本在场时先跑预检（有问题项才出卡：needs_confirm
       // 合并一屏收集；derivable 项卡上可勾选 apply_derivables，经审批卡放行后内核
       // --apply 执行）。全绿只记 KPI 零介入；全自动训练档免阻塞不出卡（清单进返回体）；
-      // 脚本缺席/预检失败＝跳过（九要素链现状零回归——pin 未含脚本过渡态）。预检不
-      // 替代各段校验、不阻塞本卡（用户取消预检卡也继续九要素链）；KPI 首写固定天然
+      // 脚本缺席/预检失败＝跳过（训练方案链现状零回归——pin 未含脚本过渡态）。预检不
+      // 替代各段校验、不阻塞本卡（用户取消预检卡也继续训练方案链）；KPI 首写固定天然
       // 幂等（amend 重呈不重跑预检）。
       let preflightNote: string | undefined;
       if (
@@ -731,9 +900,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         if (accumField !== undefined) accumField.value = String(reDerived.accum);
         guardNotes.push(hit.note);
       }
-      const title = args.action === "amend" ? `参数变更请示（仅改动项）— run ${args.run_id}` : `九要素训练配置确认 — run ${args.run_id}`;
+      const title = args.action === "amend" ? `参数变更请示（仅改动项）— run ${args.run_id}` : `本次训练方案确认 — run ${args.run_id}`;
       // 批㊶-W F5：双段式文案（共用 helper——表单卡改值提交，聊天打字路径退役）
-      const baseNote = dualStageNote("九要素确认卡", { amendNote: amendNote });
+      const baseNote = dualStageNote("本次训练方案卡", { amendNote: amendNote });
       const note = guardNotes.length > 0 ? `${baseNote}\n${guardNotes.join("\n")}` : baseNote;
       if (autoTier) {
         // —— 全自动档：免阻塞落快照＋通报呈现（无静默：每键取值＋来源标注可回看） ——
@@ -813,6 +982,34 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       if (userQuestions === undefined || typeof userQuestions.ask !== "function") {
         return asToolValue({ ok: false, run_id: args.run_id, error: "user_questions_unavailable", note: "DSH user-questions 服务未挂载——表单卡通道不可用（fail-closed；不退纯文字链）" });
       }
+      // —— 决策卡（选项形态）先于录入卡 ——
+      // owner 2026-10-26：枚举值不再塞进表单输入框让用户手打（原状：多选用量 0、全部枚举当纯文本）。
+      // 决策卡只收闭集选择（可多选处开 multiSelect），自由输入走客户端选项组末尾的「其他」；
+      // 改参（amend）不带决策卡——用户已给显式 structured edits，重复问是噪声。
+      if (args.action !== "amend") {
+        const decisions = buildConfigChoiceQuestions(fields, gpuCount);
+        if (decisions.questions.length > 0) {
+          let decisionAnswers: { answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string>; custom?: string }> };
+          try {
+            decisionAnswers = await userQuestions.ask({ questions: decisions.questions, agent: exec.agent, signal: exec.signal });
+          } catch (cause) {
+            const diagRel = appendAskFailureDiagnostic(runDir, "atf_config_confirm", "config-choice", cause);
+            if ((cause as { code?: string }).code === "ASK_CANCELLED") {
+              return approvalDeniedResult("atf_config_confirm", "cancelled");
+            }
+            return asToolValue({ ok: false, run_id: args.run_id, error: "form_ask_failed", note: `决策卡应答失败：${String(cause).slice(0, 200)}（通道诊断已落 run 目录 ${diagRel}）` });
+          }
+          const chosen = editsFromFormAnswers(decisionAnswers, decisions.picks);
+          for (const [key, value] of Object.entries(chosen)) {
+            if (value === "") continue;
+            const field = fields.find((entry) => entry.key === key);
+            if (field === undefined) continue;
+            // 用户在决策卡上点选＝当次显式选择（来源标 user-specified，与表单改值同义）
+            field.value = value;
+            field.tag = "need_confirm";
+          }
+        }
+      }
       // 批次 R H1-1：进卡初始校验态（基线惯例值 9000/9000/12800 恒通过；登记值异常进卡即红字）。
       const initialBudgetViolations = tokenBudgetCheckOf(fields, "").violations;
       // D76：卡位卡前校验态（缺省空恒通过；amend 携 visible_devices 异常值进卡即红字）。
@@ -829,13 +1026,13 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         // 批㊶-W 真机修正：typert lossless JSON 拒绝嵌套 undefined（对象键值 undefined
         // 即「not lossless JSON data」）——可选键一律条件 spread，禁显式 undefined 值。
         const formFields = [
-          ...configFormFieldsOf(fields, gpuCount),
+          ...configFormFieldsOf(fields, gpuCount, { collectedByChoices: args.action !== "amend" }),
           // 批次 R H1-1：不同步理由输入行（预算与 cutoff 不等时必填——空即拦确认；
           // 相等时留空。理由是用户输入，不自动生成；不落配置（非配置键）。
           { key: "token_budget_sync_reason", label: "token_budget_sync_reason", value: "", placeholder: "预算与 cutoff 不等时的不同步理由（不等必填；相等留空）——同步请在 cutoff_len 框直接填预算值（用户动作）" },
         ];
         const formDetail = [
-          // F1：预检清单首行注入（预检卡在前、九要素卡承接呈现——清单随卡可回看）
+          // F1：预检清单首行注入（预检卡在前、本次训练方案卡承接呈现——清单随卡可回看）
           ...(preflightNote !== undefined ? [preflightNote] : []),
           "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。",
           // D92：dataset_keys 只读行（输入框已滤——实算值/缺席均如实呈现，不造占位数）
@@ -853,7 +1050,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           answers = await userQuestions.ask({
             questions: [formAskQuestion({
               id: `config-confirm-${args.run_id}`,
-              question: `九要素训练配置确认 — ${args.run_id}`,
+              question: `本次训练方案确认 — ${args.run_id}`,
               header: "训练配置",
               detail: formDetail,
               fields: formFields,

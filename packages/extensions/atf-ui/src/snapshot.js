@@ -219,7 +219,7 @@ export function buildTrainLaunchMessage(plan) {
   const lines = [
     `发起训练（${runId} · ${real ? "真实训练" : "DRY_RUN 验收"}）：`,
     "请按 prepare/run SKILL.md 正道链执行并逐步回报：",
-    `① atf_config_confirm present（run_id=${runId}）——九要素卡呈我确认${plan?.summary && plan.summary.length > 0 ? `（Web 摘要已核：${plan.summary.filter((r) => r.source === "iteration_config").length} 项来自 IterationConfig，其余为缺省/KB 未校准值，卡面如实标注）` : ""}；`,
+    `① atf_config_confirm present（run_id=${runId}）——本次训练方案卡呈我确认${plan?.summary && plan.summary.length > 0 ? `（Web 摘要已核：${plan.summary.filter((r) => r.source === "iteration_config").length} 项来自 IterationConfig，其余为缺省/KB 未校准值，卡面如实标注）` : ""}；`,
     "② 我 Allow once 后：DRY_RUN 校验——DRY_RUN=1 bash 该 run 的 train.sh，输出须含 ADMISSION=pass；",
     "③ prelaunch 报告在场检查（train.sh 同目录 prelaunch*.md|json）——缺失则按 prepare SKILL.md:84 以 build_prelaunch_report.py 生成到 scratch 并回报路径（不回写 run 目录）；",
     "④ 账本登记核验：generate_train_launch.py --record-training-release --config <该 IterationConfig>（已放行过则如实回报 already_recorded），贴 ledger 命中行作登记证据；",

@@ -17,7 +17,7 @@
  * 脚本参数面假设（内核脚本落地前按此开发，re-pin 集成时对账）：
  * `training_preflight.py --run-dir <abs> [--apply]`（stdout＝固定 schema JSON）。
  * pin 未含脚本时工具如实报 preflight_script_missing（fail-closed，不 mock 不猜）；
- * confirmFace 前置预检在脚本缺席时跳过（九要素链现状零回归）。
+ * confirmFace 前置预检在脚本缺席时跳过（训练方案链现状零回归）。
  *
  * E2（微批·预检双缺陷 20261024）：
  * - 缺陷 A（run 解析双源）：旧解析只查实例 runsRoot＋会话桶，而段工具
@@ -143,7 +143,7 @@ export const resolvePreflightRunDir = (deps: PreflightDeps, args: PreflightFlowA
       return { ok: false, error: "workspace_path_not_absolute", note: `workspace_path 须为绝对路径（得 ${workspacePath}）` };
     }
     // E3 补（与 pipelineFace canonical 修复同族）：显式 wp 下 canonical 布局
-    // <wp>/workspace/runs/<id>（内核 RunLayout v1）在场优先——否则九要素确认卡的
+    // <wp>/workspace/runs/<id>（内核 RunLayout v1）在场优先——否则本次训练方案卡的
     // 快照/iteration-config 回写会落到 legacy 假树，与 training_prep 的 canonical
     // 真树不同树（F7 train_sh 对账必拦）；canonical 缺席回落 legacy 公式
     // <wp>/runs/<id>（存量/新建形态），两形态都不在场才拒（显式优先不静默改道）。
@@ -330,7 +330,7 @@ export const buildPreflightTool = (deps: PreflightDeps): unknown =>
   defineTool({
     name: "atf_training_preflight",
     description:
-      "训练链入口预检（首跑前先跑这个——跑完八段才不会被拦）：读内核预检脚本输出，渲染三态清单——missing（环境/用户必须提供）／derivable（可自动执行，给动作与数量）／needs_confirm（业务确认，合并一屏收集不逐项弹），按依赖链顺序呈现（provider→预算→坐标→variants→iteration，derivable 项依赖未清会如实标待依赖）。apply=true 时经审批卡放行后触发内核 --apply 对可派生项一键执行（坐标换算整批重试／内置 CPU provider 计量生成 token 预算）。预检不替代各段既有校验（防御纵深不变），只是把「缺什么」提前聚合；预检结果与首次预检/首次放行时间戳（time-to-launch 统计）落 run 事实。九要素确认卡前会自动先出本预检（顺序机制保证）。",
+      "训练链入口预检（首跑前先跑这个——跑完八段才不会被拦）：读内核预检脚本输出，渲染三态清单——missing（环境/用户必须提供）／derivable（可自动执行，给动作与数量）／needs_confirm（业务确认，合并一屏收集不逐项弹），按依赖链顺序呈现（provider→预算→坐标→variants→iteration，derivable 项依赖未清会如实标待依赖）。apply=true 时经审批卡放行后触发内核 --apply 对可派生项一键执行（坐标换算整批重试／内置 CPU provider 计量生成 token 预算）。预检不替代各段既有校验（防御纵深不变），只是把「缺什么」提前聚合；预检结果与首次预检/首次放行时间戳（time-to-launch 统计）落 run 事实。本次训练方案卡前会自动先出本预检（顺序机制保证）。",
     parameters: {
       run_id: { type: "string", required: true, description: "run 标识（run 目录＝<workspace_path>/runs/<run_id>；未传 workspace_path 时按会话工作区事实与实例 runs 根顺次探测）" },
       apply: { type: "boolean", description: "true＝对 derivable 项执行内核 --apply（经审批卡放行后执行）；缺省 false 只读预检" },

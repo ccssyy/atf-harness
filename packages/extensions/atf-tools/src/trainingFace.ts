@@ -767,11 +767,11 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         buildApprovalReason({
           action: "启动真实 GPU 训练",
           target: `（train.sh=${args.train_sh}）`,
-          effect: "占用 GPU 与写训练产物（卡数/时长以九要素确认卡与 train.sh 为准）",
+          effect: "占用 GPU 与写训练产物（卡数/时长以本次训练方案卡与 train.sh 为准）",
           reversible: "不可自动回滚（产物可人工清理）",
         }) + conflictNote);
       if (!verdict.ok) return approvalDeniedResult("atf_run_training", verdict.outcome);
-      // 批㊶-W F7：九要素确认值 → train.sh 生成面逐键透传对账（start 面即拒——awb_r1
+      // 批㊶-W F7：方案确认值 → train.sh 生成面逐键透传对账（start 面即拒——awb_r1
       // 首跑 nproc 确认 8 生成 1 被静默丢弃的回归锚）。对账基线＝config-snapshot.confirmed
       // ＞iteration-config training 段；两处皆缺＝无对账对象（存量 run 重跑兼容——账本
       // 闸门仍在 train.sh 内），跳过对账并在结果如实标注 reconcile: "skipped_no_baseline"。

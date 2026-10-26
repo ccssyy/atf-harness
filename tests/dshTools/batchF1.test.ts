@@ -58,7 +58,12 @@ const makeUserQuestions = (
   script: ReadonlyArray<{ match: string; selected: string[] }>,
   log: string[],
 ) => ({
-  ask: async (req: { questions: ReadonlyArray<{ id: string }> }): Promise<{ answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string> }> }> => {
+  ask: async (req: { questions: ReadonlyArray<{ id: string; options?: unknown; intent?: unknown }> }): Promise<{ answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string> }> }> => {
+    // 形态分流：决策卡（options 形态、无 intent）不参与表单卡脚本与出卡顺序断言——
+    // 本组断言的是「表单卡相对预检卡的顺序」。
+    if (req.questions.every((item) => item.intent === undefined)) {
+      return { answers: req.questions.map((item) => ({ id: item.id, selected: [] })) };
+    }
     const question = req.questions[0];
     if (question === undefined) throw new Error("ask 桩收到空问题集");
     log.push(question.id);

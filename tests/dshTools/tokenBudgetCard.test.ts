@@ -213,7 +213,12 @@ describe("批次 R H1-1——confirmFace 手动档：关系不成立禁确认＋
           if (service === "approval") return { request: async () => "allowed-once" };
           if (service === "userQuestions") {
             return {
-              ask: async (req: { questions?: Array<{ intent?: { fields?: Array<{ key: string }> }; detail?: string }> }) => {
+              ask: async (req: { questions?: Array<{ id?: string; intent?: { fields?: Array<{ key: string }> }; detail?: string }> }) => {
+                // 形态分流：决策卡不占表单卡脚本步
+                if ((req.questions ?? []).every((item) => item.intent === undefined)) {
+                  // 决策卡不记入 asks（asks 是表单卡日志——索引断言按表单卡计数）
+                  return { answers: (req.questions ?? []).map((item) => ({ id: item.id ?? "choice", selected: [] })) };
+                }
                 calls += 1;
                 const question = req.questions?.[0];
                 asks.push({ detail: question?.detail, fields: question?.intent?.fields });
@@ -555,8 +560,10 @@ describe("b5 像素对——表单卡呈现（中文呈现名＋来源标注＋m
     const rows = configFormFieldsOf(fields, null);
     const minRow = rows.find((row) => row.key === "image_min_pixels");
     const maxRow = rows.find((row) => row.key === "image_max_pixels");
-    expect(minRow?.label).toBe("最小像素");
-    expect(maxRow?.label).toBe("最大像素");
+    // 六区块：标签带区块业务标题前缀（长度与预算），像素对仍中文呈现名（零内部键名）
+    expect(minRow?.label).toBe("长度与预算｜最小像素");
+    expect(maxRow?.label).toBe("长度与预算｜最大像素");
+    expect(minRow?.label ?? "").not.toContain("image_min_pixels");
     expect(minRow?.hint).toContain("65,536");
     expect(minRow?.hint).toContain("（来源：默认）");
     expect(maxRow?.hint).toContain("802,816");
@@ -599,7 +606,12 @@ describe("b5 像素对——confirmFace 手动档链（变更提示上卡面；m
           if (service === "approval") return { request: async (_req: { reason?: string }) => { approvals.push(_req?.reason ?? ""); return "allowed-once"; } };
           if (service === "userQuestions") {
             return {
-              ask: async (req: { questions?: Array<{ intent?: { fields?: Array<{ key: string; label?: string; value?: string; hint?: string }> }; detail?: string }> }) => {
+              ask: async (req: { questions?: Array<{ id?: string; intent?: { fields?: Array<{ key: string; label?: string; value?: string; hint?: string }> }; detail?: string }> }) => {
+                // 形态分流：决策卡（无 intent 的选项卡）只记形态、不占表单卡脚本步
+                if ((req.questions ?? []).every((item) => item.intent === undefined)) {
+                  // 决策卡不记入 asks（asks 是表单卡日志——索引断言按表单卡计数）
+                  return { answers: (req.questions ?? []).map((item) => ({ id: item.id ?? "choice", selected: [] })) };
+                }
                 calls += 1;
                 const question = req.questions?.[0];
                 asks.push({ detail: question?.detail, fields: question?.intent?.fields });
@@ -624,7 +636,9 @@ describe("b5 像素对——confirmFace 手动档链（变更提示上卡面；m
     const face = formCtx([[]]);
     await execTool(face.ctx, { action: "present", run_id: "run-tb" });
     const minRow = face.asks[0]?.fields?.find((row) => row.key === "image_min_pixels");
-    expect(minRow?.label).toBe("最小像素");
+    // 六区块：标签前缀＝区块业务标题（长度与预算），呈现名仍中文（零内部键名）
+    expect(minRow?.label).toBe("长度与预算｜最小像素");
+    expect(minRow?.label ?? "").not.toContain("image_min_pixels");
     expect(minRow?.hint).toContain("（来源：默认）");
   });
   it("改 max 提交：变更提示上审批卡（不重呈不阻塞——快照照落）", async () => {
@@ -648,7 +662,8 @@ describe("b5 像素对——confirmFace 手动档链（变更提示上卡面；m
     }, { action: "present", run_id: "run-tb" });
     expect(result).toMatchObject({ ok: true, confirmed: true });
     expect(face.asks[1]?.detail ?? "").toContain("将影响坐标换算与 token");
-    expect(face.asks[1]?.fields?.find((row) => row.key === "image_max_pixels")?.value).toBe("1605632");
+    // 闭集键（像素上限）已改由决策卡 options 收集——表单卡不再生成同键输入框（不重复收）
+    expect(face.asks[1]?.fields?.find((row) => row.key === "image_max_pixels")).toBeUndefined();
   });
   it("min ≥ max 提交：警示上审批卡但不停链；Reject 回卡后警示在 detail（不阻塞语义）", async () => {
     const face = formCtx([["image_min_pixels=999999999"], []]);

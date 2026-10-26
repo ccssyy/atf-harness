@@ -440,7 +440,7 @@ describe("e2e 冒烟（HTTP 面；场景 2-6 对应）", () => {
     await waitFor(() => manager.getSession(sessionId)?.pending?.cardType === "config_confirm");
     const events = (await get(`/api/sessions/${sessionId}/events?since=0`)) as { events: Array<{ html: string; seq: number }> };
     const confirmHtml = events.events.map((event) => event.html).join("");
-    expect(confirmHtml).toContain("训练配置确认（九要素）");
+    expect(confirmHtml).toContain("本次训练方案");
     expect(confirmHtml).toContain("已用缺省⚠");
 
     // 场景 3：文字改参重呈 → 点卡确认 → snapshot 落盘
@@ -595,11 +595,14 @@ describe("批㊶-W F5——表单卡链（结构化 edits＋form intent ask＋Re
   /** user-questions 服务假件：记录 ask 调用，可编程序列回答案（selected key=value）。 */
   const fakeUserQuestions = (script: Array<Record<string, string>>, calls: Array<Record<string, unknown>> = []) => ({
     ask: async (request: { questions: Array<Record<string, unknown>> }) => {
+      // 形态分流：决策卡（options 形态、无 intent）不占表单卡脚本步，也不计入 calls
+      // （calls 是表单卡断言面——决策卡另有专项断言）。
+      if (request.questions.every((question) => question["intent"] === undefined)) {
+        return { answers: request.questions.map((question) => ({ id: String(question["id"]), selected: [] })) };
+      }
       calls.push(request as Record<string, unknown>);
       const step = script[Math.min(calls.length - 1, script.length - 1)] as Record<string, string>;
-      const fields = (request.questions[0]?.intent as { fields: Array<{ key: string; value?: string }> }).fields;
       const selected = Object.entries(step).map(([key, value]) => `${key}=${value}`);
-      void fields;
       return { answers: [{ id: `config-confirm-x`, selected }] };
     },
   });
@@ -669,16 +672,17 @@ describe("批㊶-W F5——表单卡链（结构化 edits＋form intent ask＋Re
     //（token_budget_sync_reason——预算与 cutoff 不等时的不同步理由入口）。
     // D76 卡位入卡：17＝16 配置键输入框（17 键滤 max_model_len 只读）＋1 理由行。
     // D92 只读键单源：16＝15 配置键输入框（17 键滤只读双键 max_model_len/dataset_keys）＋1 理由行。
-    expect(intent?.fields.length).toBe(16);
+    // owner 2026-10-26：闭集三键（deepspeed／lora_rank／image_max_pixels）改由决策卡 options 收集，
+    // 表单只剩录入类 → 13＝12 配置键输入框（17 键 － 只读双键 － 闭集三键）＋1 理由行。
+    expect(intent?.fields.length).toBe(13);
     const lrField = intent?.fields.find((f) => f.key === "learning_rate");
     expect(lrField?.value).toBe("2e-4"); // 现值预填
     expect(lrField?.hint).toContain("5e-5"); // clamp 域提示可读
-    // b5 像素对：max hint 千分位两档＋变更影响提示＋来源标注（指令 b5 §三）
-    const maxHint = intent?.fields.find((f) => f.key === "image_max_pixels")?.hint ?? "";
-    expect(maxHint).toContain("802,816");
-    expect(maxHint).toContain("1,605,632");
-    expect(maxHint).toContain("将影响坐标换算与 token");
-    expect(maxHint).toContain("（来源：默认）");
+    // owner 2026-10-26：像素上限闭集已改由决策卡 options 收集——表单卡不再有该键输入框；
+    // 两档候选与档位说明改由选项 description 承载（下方决策卡专项断言）。
+    expect(intent?.fields.find((f) => f.key === "image_max_pixels")).toBeUndefined();
+    expect(intent?.fields.find((f) => f.key === "deepspeed")).toBeUndefined();
+    expect(intent?.fields.find((f) => f.key === "lora_rank")).toBeUndefined();
     // 批次 R H1-2 锚：max_total_tokens 预填惯例基线 9000（非空——required 只在清空兜底时出现；
     // 空值必填锚由 askFormIntent.test.ts SAMPLE_FIELDS 承载）；理由行在位
     expect(intent?.fields.find((f) => f.key === "max_total_tokens")?.value).toBe("9000");

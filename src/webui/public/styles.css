@@ -76,6 +76,13 @@ body { margin: 0; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; col
 .confirm_card.amber, .msg.confirm_card { border: 2px solid #f59e0b; background: #fffbeb; }
 .confirm-report { font-size: 11px; color: var(--text-sub); margin-bottom: 8px; }
 .fields { margin-top: 4px; }
+.field-block {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted, #8a8f98);
+}
 .field-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; border-bottom: 1px dashed #fde68a; }
 .field-row:last-child { border-bottom: 0; }
 .field-row .key { font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; min-width: 220px; color: var(--text-main); }

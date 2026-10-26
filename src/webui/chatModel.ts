@@ -6,6 +6,7 @@
  * 渲染树，展示层零第二权威）。
  */
 import type { ContractConfirmationReport } from "../core/confirmRequest.js";
+import { configBlockOf } from "./configConfirm.js";
 
 /** 消息组件闭集（kind 判别）。 */
 export type ChatEvent =
@@ -33,7 +34,7 @@ export type ChatEvent =
   | {
       seq: number;
       kind: "confirm_card";
-      /** 配置确认（九要素）或审批确认（审批卡） */
+      /** 配置确认（本次训练方案）或审批确认（审批卡） */
       cardType: "config_confirm" | "approval";
       title: string;
       /** 逐项行：键＝等宽、值、右侧三态标签 */
@@ -124,8 +125,18 @@ export const renderChatEvent = (event: ChatEvent): string => {
         : event.pending
           ? `<div class="actions"><button class="btn primary" data-action="confirm">确认并继续</button><button class="btn" data-action="edit">逐项修改…</button></div><div class="hint">也可直接回复如『lr 改 2e-4』</div>`
           : "";
+      // 六区块分组（owner 2026-10-26）：键 → 区块标题单源 configConfirm.configBlockOf，
+      // 区块切换处插一行业务标题（运行环境／训练规模／长度与预算／优化设置／数据构造／只读信息）。
+      let lastBlockId: string | null = null;
       const rows = event.fields
-        .map((f) => `<div class="field-row"><span class="key">${esc(f.key)}</span><span class="value">${esc(f.value)}</span>${fieldTagHtml(f.tag)}</div>`)
+        .map((f) => {
+          const block = configBlockOf(f.key);
+          const heading = block !== undefined && block.id !== lastBlockId
+            ? `<div class="field-block">${esc(block.title)}</div>`
+            : "";
+          if (block !== undefined) lastBlockId = block.id;
+          return `${heading}<div class="field-row"><span class="key">${esc(f.key)}</span><span class="value">${esc(f.value)}</span>${fieldTagHtml(f.tag)}</div>`;
+        })
         .join("");
       const report =
         event.confirmReport === undefined

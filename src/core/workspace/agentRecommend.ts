@@ -22,7 +22,7 @@ const existsSyncDir = (path: string): boolean => {
   }
 };
 
-/** 推荐护栏可消费的键集（九要素卡键集为闭集——卡外键一律拒收）。 */
+/** 推荐护栏可消费的键集（方案键集为闭集——卡外键一律拒收）。 */
 export const RECOMMENDABLE_KEYS: ReadonlySet<string> = new Set(CONFIG_CONFIRM_KEYS.map((entry) => entry.key));
 
 export interface RecommendVerdict {
@@ -59,7 +59,7 @@ export interface RecommendLimits {
 /** 单键推荐判定（纯函数）：域内原样采纳（不做判断）；越界/不可解析/未知键拦截回退基线。 */
 export const evalAgentRecommend = (key: string, raw: unknown, baseline: string, reason?: string, limits?: RecommendLimits): RecommendVerdict => {
   if (!RECOMMENDABLE_KEYS.has(key)) {
-    return { key, accepted: false, terminal: baseline, source: "default:harness-smart-defaults", note: `推荐键 ${key} 不在九要素卡键集——拦截` };
+    return { key, accepted: false, terminal: baseline, source: "default:harness-smart-defaults", note: `推荐键 ${key} 不在方案键集——拦截` };
   }
   if (raw === undefined || raw === null || raw === "") {
     return { key, accepted: false, terminal: baseline, source: "default:harness-smart-defaults", note: "推荐缺失该键——回退固定建议" };

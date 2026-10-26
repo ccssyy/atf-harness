@@ -1,8 +1,8 @@
 /**
- * 批㊶-W F7——九要素确认值 → train.sh 生成面逐键透传对账（awb_r1 首跑回归实锚：
+ * 批㊶-W F7——方案确认值 → train.sh 生成面逐键透传对账（awb_r1 首跑回归实锚：
  * nproc 确认 8 生成 1 被静默丢弃——本面使该类偏差 start 面即拒）。
  *
- * 对账输入：config-snapshot confirmed（九要素确认快照；缺席降级 iteration-config training 段）
+ * 对账输入：config-snapshot confirmed（方案确认快照；缺席降级 iteration-config training 段）
  * 对账目标：train.sh 文本——export NPROC_PER_NODE=N＋TRAIN_CMD 数组 `--key value` 对
  * 裁决：逐键数值等值（"3.0"≡"3"——数值比较）；任一不符即拒＋diff 呈现；
  *       global batch（bs×accum×nproc）乘积相等校验——不许静默换算。

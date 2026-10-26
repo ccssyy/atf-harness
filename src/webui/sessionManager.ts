@@ -682,14 +682,14 @@ export class WebUiSessionManager {
   }
 
   /** config_confirm 工具（interactive 机制在 tools 层实现——指令 §0）：agent 产出迭代配置后
-   *  调用本工具 → 九要素卡（缺省标已用缺省⚠；config-snapshot 已确认则不重问）→ 用户点卡/
+   *  调用本工具 → 本次训练方案卡（缺省标已用缺省⚠；config-snapshot 已确认则不重问）→ 用户点卡/
    *  纯文字应答（同凭据语义）→ 返回确认凭据与生效配置。 */
   private buildConfigConfirmTool(session: Session): AgentTool[] {
     const confirmTool: AgentTool = {
       name: "atf_config_confirm",
       label: "atf_config_confirm",
       description:
-        "训练迭代配置确认（须真人应答）：产出 IterationConfig 后调用，harness 以九要素卡面向用户确认（缺省键标『已用缺省⚠』）。" +
+        "训练迭代配置确认（须真人应答）：产出 IterationConfig 后调用，harness 以本次训练方案卡面向用户确认（缺省键标『已用缺省⚠』）。" +
         "用户可点卡确认或纯文字改参（如『lr 改 2e-4 其他 ok』）；同一 run 已确认过（config-snapshot 在案）时直接返回既有确认，不重复打扰用户。" +
         "返回的 confirmed_config 即生效配置——把它写入 scratch 的 IterationConfig JSON，勿自行改键。",
       parameters: {
@@ -718,7 +718,7 @@ export class WebUiSessionManager {
           const event = this.emit(session, {
             kind: "confirm_card",
             cardType: "config_confirm",
-            title: "训练配置确认（九要素）",
+            title: "本次训练方案",
             fields: buildConfigConfirmFields(currentValues),
             pending: true,
             at: new Date().toISOString(),
@@ -806,7 +806,7 @@ export class WebUiSessionManager {
       items: [
         { label: "理解任务并检查工作区", state: "done" },
         { label: "数据登记与体检（pipeline 前段）", state: "running" },
-        { label: "配置确认（九要素）", state: "pending" },
+        { label: "本次训练方案", state: "pending" },
         { label: "候选构建与发布确认", state: "pending" },
         { label: "训练准备与启动确认（danger 卡）", state: "pending" },
       ],
