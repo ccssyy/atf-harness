@@ -1,12 +1,14 @@
 /**
- * 批㊶-Q 测试锚——全自动智能训练档三段（指令 6c936c82 v3）。
+ * 训练自动驾驶测试锚（owner 2026-10-26 两轴裁定后的回归面）。
  *
- * 段1 档位面：dev profile 注册 auto_training（defaultPreset 不动）＋投影面 catalog additive；
- *   uat profile 本批零触碰（同事真训现场冻结）。
- * 段2 确认链路分支：档位识别 fail-closed；全自动档免阻塞落快照＋通报写入＋agent 推荐护栏
- *   （域内原样采纳／越界拦截回退／推荐缺失回退）＋amend 兼容；手动档 recommend 不消费＋
- *   审批链零变化（回归锚）。
- * 段3 OOM 自动降档重发：批参解析/补丁纯函数＋编排护栏（通报前置·每 run 一次·bs1 不重发·
+ * 段1 预设面：权限轴回三档（auto_training 权限档退役）；Agent 预设 atf-training 在模板声明，
+ *   其与 standard 的工具集差异（vendor 技能面关闭）与八段流程约束全在配置里；免审工具清单
+ *   由 atf-tools config.approvalPolicy 显式列举（零前缀匹配、零治理点）。
+ * 段2 两轴判据：预设 + 权限档**同时**齐备才算自动驾驶（任一缺席 fail-closed）；确认链路
+ *   免阻塞落快照＋通报写入＋agent 推荐护栏；人工档 recommend 不消费＋审批链零变化。
+ * 段3 训练链豁免 answerer：chainTools 未声明／预设不符／权限档不足三种情形一律 next()；
+ *   三者齐备 allowed-once；治理点恒 next()；bash/write 类语义不变。
+ * 段4 OOM 自动降档重发：批参解析/补丁纯函数＋编排护栏（通报前置·每 run 一次·bs1 不重发·
  *   端口占用停手·DRY_RUN 不过不重发）。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -14,7 +16,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
-import { currentPresetKey, isAutoTrainingTier } from "../../packages/extensions/atf-tools/src/autoTrainingTier.js";
+import {
+  agentPresetOf,
+  isTrainingAutopilot,
+  sandboxModeOf,
+  ATF_TRAINING_PRESET,
+} from "../../packages/extensions/atf-tools/src/trainingPreset.js";
+import { makeApprovalExemptAnswerer, type ApprovalExemptPolicy } from "../../packages/extensions/atf-tools/src/approvalExempt.js";
 import { readTrainShBatchParams, patchTrainShForOom, maybeAutoOomFallback, oomFallbackStatePath } from "../../src/core/workspace/oomFallback.js";
 import { resolveLaunchSessionName, tmuxSocketFlag, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
 import { injectMonitorGlobal } from "../../packages/extensions/atf-ui/src/server.js";
@@ -45,22 +53,35 @@ const findTool = (tools: unknown[], name: string): DshToolLike => {
 /** exec 带 agent.session（档位识别与会话绑定双消费）。 */
 const sessionExec = { agent: { session: { id: "sess-q-test" } }, callId: "q-call-1", signal: undefined };
 
-/** ctx 桩：permissionPresets.current 按 tier 回值；approval 记录调用（断言免阻塞/阻塞）。 */
-const tierCtx = (tier: string, recorded?: { approvals: string[] }) => ({
+/**
+ * ctx 桩（两轴）：sessionProjections.agentPreset ＝ Agent 预设轴；
+ * permissionPresets.current/resolve ＝ 权限档轴（按 sandbox 值判危险档）。
+ * approval 记录调用（断言免阻塞/阻塞）。
+ */
+const twoAxisCtx = (
+  axes: { preset: string | null; sandbox: string },
+  recorded?: { approvals: string[] },
+) => ({
   get: (service: string) => {
     if (service === "permissionPresets") {
       return {
-        current: (session: unknown) => (session !== undefined ? tier : "danger-full-access"),
+        current: (session: unknown) => (session !== undefined ? "danger-full-access" : axes.sandbox),
+        resolve: () => ({ sandbox: axes.sandbox, approval: "ask" }),
         defaultPreset: "danger-full-access",
         catalog: () => ({
           options: [
             { value: "read-only", name: "Read only" },
             { value: "workspace-write", name: "Workspace write" },
             { value: "danger-full-access", name: "Full access" },
-            { value: "auto_training", name: "全自动训练" },
           ],
           defaultPreset: "danger-full-access",
         }),
+      };
+    }
+    if (service === "sessionProjections") {
+      return {
+        stateOf: (_session: unknown, key: string) =>
+          key === "agentPreset" ? axes.preset : key === "sandboxMode" ? axes.sandbox : undefined,
       };
     }
     if (service === "approval") {
@@ -73,6 +94,14 @@ const tierCtx = (tier: string, recorded?: { approvals: string[] }) => ({
     return undefined;
   },
 });
+
+/** 自动驾驶档：预设 atf-training ＋ 权限档 danger-full-access（两轴齐备）。 */
+const autopilotCtx = (recorded?: { approvals: string[] }) =>
+  twoAxisCtx({ preset: "atf-training", sandbox: "danger-full-access" }, recorded);
+
+/** 人工档：预设 standard（权限档仍是完全权限——故意让「只缺预设」这一轴单独成立）。 */
+const manualCtx = (recorded?: { approvals: string[] }) =>
+  twoAxisCtx({ preset: "standard", sandbox: "danger-full-access" }, recorded);
 
 /** run 夹具：iteration-config 登记源（training 段带 L3 可 clamp 值）。 */
 const seedRun = (root: string, runId = "run-q"): string => {
@@ -97,25 +126,45 @@ const seedRun = (root: string, runId = "run-q"): string => {
 const readAlertsFile = (runDir: string): Array<Record<string, unknown>> =>
   JSON.parse(readFileSync(join(runDir, "webui", "alerts.json"), "utf8")) as Array<Record<string, unknown>>;
 
-// ---------------------------------------------------------------- 段1 档位面
+// ---------------------------------------------------------------- 段1 预设面（权限轴回三档）
 
-describe("批㊶-Q 段1 档位面（auto_training 注册＋投影 catalog＋uat 零触碰）", () => {
-  it("dev profile 注册 auto_training（name 全自动训练）；defaultPreset 仍为 danger-full-access（存量默认零变化）", () => {
-    const profile = readFileSync(join(repoRoot, "poc", "dsh-home", "profiles", "web", "cordis.patch.yml"), "utf8");
-    expect(profile).toMatch(/auto_training:\n\s+sandbox: danger-full-access\n\s+approval: ask\n\s+name: 全自动训练/);
-    expect(profile).toContain("defaultPreset: danger-full-access");
-  });
-  it("模板注册 auto_training（批㊶Q增补一裁定 2：uat 随窗——两环境同款自模板单源出）；defaultPreset 仍为 danger-full-access", () => {
-    const template = readFileSync(join(repoRoot, "deploy", "profiles", "web", "cordis.patch.template.yml"), "utf8");
-    expect(template).toMatch(/auto_training:\n\s+sandbox: danger-full-access\n\s+approval: ask\n\s+name: 全自动训练/);
+describe("两轴改造 段1：权限轴回三档＋Agent 预设 atf-training 声明在配置里", () => {
+  const template = readFileSync(join(repoRoot, "deploy", "profiles", "web", "cordis.patch.template.yml"), "utf8");
+  it("模板不再注册 auto_training 档（训练形态已改由 Agent 预设承担；权限轴回三档）", () => {
+    expect(template).not.toMatch(/^\s+auto_training:\s*$/m);
+    const sandboxLines = template.match(/^\s{6}(read-only|workspace-write|danger-full-access):$/gm) ?? [];
+    expect(sandboxLines).toHaveLength(3);
     expect(template).toContain("defaultPreset: danger-full-access");
   });
-  it("uat profile（dsh-home-tongshi）已随窗注册 auto_training（批㊶Q增补一裁定 2；生成物与 dev 同款）", () => {
-    const profile = readFileSync(join(repoRoot, "poc", "dsh-home-tongshi", "profiles", "web", "cordis.patch.yml"), "utf8");
-    expect(profile).toMatch(/auto_training:\n\s+sandbox: danger-full-access\n\s+approval: ask\n\s+name: 全自动训练/);
-    expect(profile).toContain("defaultPreset: danger-full-access");
+  it("Agent 预设 atf-training 在模板声明：id／order／八段流程约束／工具集差异全在配置里", () => {
+    expect(template).toContain("- id: preset-atf-training");
+    expect(template).toMatch(/id: atf-training\n\s+order: 2/);
+    // 八段流程约束（persona 内，配置声明——不是 TS 分支）
+    for (const stage of ["register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep"]) {
+      expect(template).toContain(stage);
+    }
+    expect(template).toContain("训练链固定八段");
+    // 工具集差异：vendor 技能面关（atf_skill_read 单源）
+    expect(template).toMatch(/- id: skill-filesystem\n\s+name: '@deepseek-ai\/dsh-skill-filesystem'\n\s+disabled: true/);
+    expect(template).toMatch(/- id: tool-skill\n\s+name: '@deepseek-ai\/dsh-tool-skill'\n\s+disabled: true/);
   });
-  it("投影面：injectMonitorGlobal 增 catalog additive 键（key+label 两键形态，auto_training 流入）；旧键零变化", () => {
+  it("免审清单在 atf-tools config.approvalPolicy：显式工具名、零 atf_ 前缀、零治理点", () => {
+    const block = template.slice(template.indexOf("approvalPolicy:"), template.indexOf("# —— M3 品牌定稿"));
+    expect(block).toContain("preset: atf-training");
+    for (const tool of ["atf_pipeline_stage", "atf_config_confirm", "atf_training_preflight"]) {
+      expect(block).toContain(`- ${tool}`);
+    }
+    // 治理点排除（既有裁定「GPU 训练启动确认任何档位阻塞」因此无需废止）
+    for (const governed of ["atf_run_training", "atf_publish_confirm", "atf_publish_model", "atf_launch_execute", "atf_joint_train", "atf_gate", "atf_admit_data", "atf_scratch_exec"]) {
+      expect(block).not.toContain(`- ${governed}`);
+      expect(block).not.toContain(governed);
+    }
+    // 禁前缀/通配：清单行必须是完整工具名（无 atf_* / atf_ 结尾通配）
+    const entries = block.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("- "));
+    expect(entries.length).toBeGreaterThan(0);
+    for (const entry of entries) expect(entry).toMatch(/^- atf_[a-z_]+$/);
+  });
+  it("投影面：injectMonitorGlobal catalog 投影仍为 additive（三档时代形态不变）", () => {
     const html = injectMonitorGlobal(
       "<html><head></head><body></body></html>",
       "/runs/atf-ui/monitor.json",
@@ -123,32 +172,122 @@ describe("批㊶-Q 段1 档位面（auto_training 注册＋投影 catalog＋uat 
       { key: "danger-full-access", label: "Full access" },
       [
         { key: "read-only", label: "Read only" },
+        { key: "workspace-write", label: "Workspace write" },
         { key: "danger-full-access", label: "Full access" },
-        { key: "auto_training", label: "全自动训练" },
       ],
     );
-    expect(html).toContain('"permissionPresets":[{"key":"read-only","label":"Read only"},{"key":"danger-full-access","label":"Full access"},{"key":"auto_training","label":"全自动训练"}]');
+    expect(html).toContain('"permissionPresets":[{"key":"read-only","label":"Read only"},{"key":"workspace-write","label":"Workspace write"},{"key":"danger-full-access","label":"Full access"}]');
     expect(html).toContain('"permissionPreset":{"key":"danger-full-access","label":"Full access"}');
-    expect(html).toContain('"monitorPath":"/runs/atf-ui/monitor.json"');
     // 缺席 catalog＝旧装配面零变化（不投影该键）
     expect(injectMonitorGlobal("<html></html>", "/m.json")).not.toContain("permissionPresets");
   });
 });
 
-// ---------------------------------------------------------------- 段2 档位识别（fail-closed）
+// ---------------------------------------------------------------- 段2 两轴判据（fail-closed）
 
-describe("批㊶-Q 段2 档位识别（fail-closed＝手动语义）", () => {
-  const ctxOf = (service: unknown) => ({ get: (name: string) => (name === "permissionPresets" ? service : undefined) });
-  it("current=auto_training → isAutoTrainingTier true", () => {
-    const service = { current: () => "auto_training" };
-    expect(isAutoTrainingTier(ctxOf(service), sessionExec)).toBe(true);
-    expect(currentPresetKey(ctxOf(service), sessionExec)).toBe("auto_training");
+describe("两轴改造 段2：预设 + 权限档双齐才自动驾驶（任一缺席 fail-closed）", () => {
+  const exec = { agent: { session: { id: "sess-axis" } } };
+  const ctxOf = (axes: { preset?: string | null; sandbox?: string | null }) => ({
+    get: (name: string) => {
+      if (name === "sessionProjections") {
+        return {
+          stateOf: (_s: unknown, key: string) => {
+            if (key === "agentPreset") return axes.preset === undefined ? "atf-training" : axes.preset;
+            if (key === "sandboxMode") return axes.sandbox === undefined ? "danger-full-access" : axes.sandbox;
+            return undefined;
+          },
+        };
+      }
+      if (name === "permissionPresets") {
+        return {
+          current: () => "any",
+          resolve: () => ({ sandbox: axes.sandbox === undefined ? "danger-full-access" : axes.sandbox }),
+        };
+      }
+      return undefined;
+    },
   });
-  it("其他档位/服务缺席/会话缺席/current 抛错 → 一律 false（fail-closed 阻塞审批语义不变）", () => {
-    expect(isAutoTrainingTier(ctxOf({ current: () => "danger-full-access" }), sessionExec)).toBe(false);
-    expect(isAutoTrainingTier(ctxOf(undefined), sessionExec)).toBe(false);
-    expect(isAutoTrainingTier(ctxOf({ current: () => "auto_training" }), { agent: undefined })).toBe(false);
-    expect(isAutoTrainingTier(ctxOf({ current: () => { throw new Error("boom"); } }), sessionExec)).toBe(false);
+  it("两轴齐备 → isTrainingAutopilot true（预设/权限档各自可见）", () => {
+    expect(isTrainingAutopilot(ctxOf({}), exec)).toBe(true);
+    expect(agentPresetOf(ctxOf({}), exec)).toBe("atf-training");
+    expect(sandboxModeOf(ctxOf({}), exec)).toBe("danger-full-access");
+  });
+  it("只缺预设轴（standard）或只缺权限轴（workspace-write）→ 一律 false", () => {
+    expect(isTrainingAutopilot(ctxOf({ preset: "standard" }), exec)).toBe(false);
+    expect(isTrainingAutopilot(ctxOf({ sandbox: "workspace-write" }), exec)).toBe(false);
+    expect(isTrainingAutopilot(ctxOf({ preset: null }), exec)).toBe(false);
+    expect(isTrainingAutopilot(ctxOf({ sandbox: null }), exec)).toBe(false);
+  });
+  it("服务缺席 / 会话缺席 / stateOf 抛错 → 一律 false（fail-closed 阻塞审批语义不变）", () => {
+    expect(isTrainingAutopilot({ get: () => undefined }, exec)).toBe(false);
+    expect(isTrainingAutopilot(ctxOf({}), { agent: undefined })).toBe(false);
+    expect(isTrainingAutopilot({ get: () => { throw new Error("boom"); } }, exec)).toBe(false);
+  });
+  it("ATF 预设 id 常量与模板一致（防两份字面量漂移）", () => {
+    const template = readFileSync(join(repoRoot, "deploy", "profiles", "web", "cordis.patch.template.yml"), "utf8");
+    expect(template).toContain(`preset: ${ATF_TRAINING_PRESET}`);
+    expect(template).toContain(`id: ${ATF_TRAINING_PRESET}`);
+  });
+});
+
+// ---------------------------------------------------------------- 段3 训练链豁免 answerer 真值表
+
+describe("两轴改造 段3：训练链豁免 = 声明命中 + 预设 + 权限档三齐（治理点恒 next）", () => {
+  const policy: ApprovalExemptPolicy = {
+    preset: "atf-training",
+    chainTools: ["atf_pipeline_stage", "atf_config_confirm"],
+  };
+  const answer = async (
+    toolName: string,
+    ctx: { get(service: string): unknown },
+    declared: ApprovalExemptPolicy | undefined = policy,
+  ): Promise<{ outcome: string; nextCalled: boolean }> => {
+    let nextCalled = false;
+    const outcome = await makeApprovalExemptAnswerer({ ctx, policy: declared })({ toolName, agent: { session: { id: "s" } } }, async () => {
+      nextCalled = true;
+      return "unavailable";
+    });
+    return { outcome, nextCalled };
+  };
+
+  it("三齐 → allowed-once（面板不见，next 零触达）", async () => {
+    const hit = await answer("atf_pipeline_stage", autopilotCtx());
+    expect(hit).toEqual({ outcome: "allowed-once", nextCalled: false });
+  });
+  it("未声明 chainTools / 未给 policy → next()（治理语义零变化）", async () => {
+    expect(await answer("atf_pipeline_stage", autopilotCtx(), { preset: "atf-training", chainTools: [] })).toEqual({ outcome: "unavailable", nextCalled: true });
+    let nextCalled = false;
+    const outcome = await makeApprovalExemptAnswerer({ ctx: autopilotCtx() })({ toolName: "atf_pipeline_stage", agent: { session: { id: "s" } } }, async () => {
+      nextCalled = true;
+      return "unavailable";
+    });
+    expect(outcome).toBe("unavailable");
+    expect(nextCalled).toBe(true);
+  });
+  it("预设不符（standard）→ next()（预设不得替用户放大能力）", async () => {
+    expect(await answer("atf_pipeline_stage", manualCtx())).toEqual({ outcome: "unavailable", nextCalled: true });
+  });
+  it("权限档不足（workspace-write）→ next()（授权轴优先）", async () => {
+    const weak = twoAxisCtx({ preset: "atf-training", sandbox: "workspace-write" });
+    expect(await answer("atf_pipeline_stage", weak)).toEqual({ outcome: "unavailable", nextCalled: true });
+  });
+  it("治理点即使三齐也恒 next()：训练启动/发布/release/编排/联合训练/门/准入/临时执行", async () => {
+    for (const governed of ["atf_run_training", "atf_publish_confirm", "atf_publish_model", "atf_evaluate", "atf_launch_execute", "atf_joint_train", "atf_gate", "atf_admit_data", "atf_scratch_exec"]) {
+      expect(await answer(governed, autopilotCtx())).toEqual({ outcome: "unavailable", nextCalled: true });
+    }
+  });
+  it("禁前缀匹配：清单里没有 atf_ 前缀时，同前缀的治理点不被连带放行", async () => {
+    const loose: ApprovalExemptPolicy = { preset: "atf-training", chainTools: ["atf_pipeline_stage"] };
+    expect(await answer("atf_pipeline_stage_v2", autopilotCtx(), loose)).toEqual({ outcome: "unavailable", nextCalled: true });
+    expect(await answer("atf_run_training", autopilotCtx(), { preset: "atf-training", chainTools: ["atf_"] })).toEqual({ outcome: "unavailable", nextCalled: true });
+  });
+  it("bash/write 类语义不变：不看预设与档位，恒 allowed-once", async () => {
+    for (const toolName of ["bash", "write", "edit"]) {
+      expect(await answer(toolName, manualCtx(), { preset: "", chainTools: [] })).toEqual({ outcome: "allowed-once", nextCalled: false });
+    }
+  });
+  it("声明预设与实际预设漂移（policy.preset=other）→ next()", async () => {
+    expect(await answer("atf_pipeline_stage", autopilotCtx(), { preset: "other", chainTools: ["atf_pipeline_stage"] })).toEqual({ outcome: "unavailable", nextCalled: true });
   });
 });
 
@@ -158,14 +297,14 @@ describe("批㊶-Q 段2 atf_config_confirm 全自动分支（免阻塞落快照�
   it("present＋域内推荐：免审批落快照（auto/tier/sources），alerts info·config_auto 通报含全键取值＋来源，无 pending 卡", async () => {
     const root = seedRun(tempRoot("kQ-auto-"));
     const recorded = { approvals: [] as string[] };
-    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx("auto_training", recorded) });
+    const tools = buildConfirmTools({ runsRoot: root, ctx: autopilotCtx(recorded) });
     const result = (await findTool(tools, "atf_config_confirm").execute(
       { action: "present", run_id: "run-q", recommend: { num_train_epochs: 3, learning_rate: "2e-4", lora_rank: 64, reason: "2.8万样本→3 epochs 防欠拟合" } },
       sessionExec,
     )) as Record<string, unknown>;
     // 免阻塞：审批零调用；结构化 auto 面
     expect(recorded.approvals).toHaveLength(0);
-    expect(result).toMatchObject({ ok: true, confirmed: true, auto: true, tier: "auto_training" });
+    expect(result).toMatchObject({ ok: true, confirmed: true, auto: true, tier: "atf-training" });
     // 推荐域内原样采纳（不做判断——lr 2e-4 非 clamp 出口形态也保留）
     const fields = result.fields as Array<{ key: string; value: string; tag: string }>;
     const byKey = Object.fromEntries(fields.map((f) => [f.key, f]));
@@ -176,7 +315,7 @@ describe("批㊶-Q 段2 atf_config_confirm 全自动分支（免阻塞落快照�
     // 快照 auto 面＋逐键来源（agent 推荐键＝default:agent-recommend:<简据>，其余＝default:harness-smart-defaults）
     const snap = JSON.parse(readFileSync(join(root, "run-q", "webui", "config-snapshot.json"), "utf8")) as { auto?: boolean; tier?: string; sources?: Record<string, string>; confirmed: Record<string, string> };
     expect(snap.auto).toBe(true);
-    expect(snap.tier).toBe("auto_training");
+    expect(snap.tier).toBe("atf-training");
     expect(snap.confirmed["num_train_epochs"]).toBe("3");
     expect(snap.sources?.["num_train_epochs"]).toMatch(/^default:agent-recommend:.+/);
     expect(snap.sources?.["cutoff_len"]).toBe("default:harness-smart-defaults");
@@ -197,7 +336,7 @@ describe("批㊶-Q 段2 atf_config_confirm 全自动分支（免阻塞落快照�
   });
   it("越界推荐逐键拦截回退：epochs 15 / lr 9e-4 被拒（终值=登记建议），拦截事实进通报；快照仍落盘", async () => {
     const root = seedRun(tempRoot("kQ-clamp-"));
-    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx("auto_training") });
+    const tools = buildConfirmTools({ runsRoot: root, ctx: autopilotCtx() });
     const result = (await findTool(tools, "atf_config_confirm").execute(
       { action: "present", run_id: "run-q", recommend: { num_train_epochs: 15, learning_rate: "9e-4" } },
       sessionExec,
@@ -214,7 +353,7 @@ describe("批㊶-Q 段2 atf_config_confirm 全自动分支（免阻塞落快照�
   });
   it("rank 非档位（24）拦截；推荐缺失全键回退固定建议（不猜不编造）", async () => {
     const root = seedRun(tempRoot("kQ-fallback-"));
-    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx("auto_training") });
+    const tools = buildConfirmTools({ runsRoot: root, ctx: autopilotCtx() });
     const rankResult = (await findTool(tools, "atf_config_confirm").execute(
       { action: "present", run_id: "run-q", recommend: { lora_rank: 24 } },
       sessionExec,
@@ -223,7 +362,7 @@ describe("批㊶-Q 段2 atf_config_confirm 全自动分支（免阻塞落快照�
     expect(Object.fromEntries(rankFields.map((f) => [f.key, f]))["lora_rank"]).toMatchObject({ key: "lora_rank", value: "32" });
 
     const root2 = seedRun(tempRoot("kQ-missing-"));
-    const missing = (await findTool(buildConfirmTools({ runsRoot: root2, ctx: tierCtx("auto_training") }), "atf_config_confirm").execute(
+    const missing = (await findTool(buildConfirmTools({ runsRoot: root2, ctx: autopilotCtx() }), "atf_config_confirm").execute(
       { action: "present", run_id: "run-q", recommend: {} },
       sessionExec,
     )) as Record<string, unknown>;
@@ -233,7 +372,7 @@ describe("批㊶-Q 段2 atf_config_confirm 全自动分支（免阻塞落快照�
   it("全自动档 amend 结构化改参（F5 edits 形态）：同样免阻塞，改参键来源 user-specified", async () => {
     const root = seedRun(tempRoot("kQ-amend-"));
     const recorded = { approvals: [] as string[] };
-    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx("auto_training", recorded) });
+    const tools = buildConfirmTools({ runsRoot: root, ctx: autopilotCtx(recorded) });
     const result = (await findTool(tools, "atf_config_confirm").execute(
       { action: "amend", run_id: "run-q", edits: { learning_rate: "2e-4" } },
       sessionExec,
@@ -251,7 +390,7 @@ describe("批㊶-Q 段2 手动档回归（确认卡行为零变化＋recommend �
   it("手动档 present：审批链原样（requestApproval 调用），确认完成后 pending 卡清（增补二3——.answered 备份留存），alerts 无 config_auto 通报", async () => {
     const root = seedRun(tempRoot("kQ-manual-"));
     const recorded = { approvals: [] as string[] };
-    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx("danger-full-access", recorded) });
+    const tools = buildConfirmTools({ runsRoot: root, ctx: manualCtx(recorded) });
     const result = (await findTool(tools, "atf_config_confirm").execute({ action: "present", run_id: "run-q" }, sessionExec)) as Record<string, unknown>;
     expect(recorded.approvals).toHaveLength(1);
     expect(result).toMatchObject({ ok: true, confirmed: true });
@@ -266,7 +405,7 @@ describe("批㊶-Q 段2 手动档回归（确认卡行为零变化＋recommend �
     const root = seedRun(tempRoot("kQ-auto-pending-"));
     mkdirSync(join(root, "run-q", "webui"), { recursive: true });
     writeFileSync(join(root, "run-q", "webui", "pending-confirm.json"), '{"kind":"config_confirm","run_id":"run-q"}');
-    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx("auto_training") });
+    const tools = buildConfirmTools({ runsRoot: root, ctx: autopilotCtx() });
     await findTool(tools, "atf_config_confirm").execute({ action: "present", run_id: "run-q" }, sessionExec);
     expect(existsSync(join(root, "run-q", "webui", "pending-confirm.json"))).toBe(false);
     const webuiFiles = readdirSync(join(root, "run-q", "webui"));
@@ -274,7 +413,7 @@ describe("批㊶-Q 段2 手动档回归（确认卡行为零变化＋recommend �
   });
   it("手动档 recommend 参数不消费（自动档专属）——不落快照不通报，结构化提示", async () => {
     const root = seedRun(tempRoot("kQ-manual-rec-"));
-    const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx("danger-full-access") });
+    const tools = buildConfirmTools({ runsRoot: root, ctx: manualCtx() });
     const result = (await findTool(tools, "atf_config_confirm").execute(
       { action: "present", run_id: "run-q", recommend: { num_train_epochs: 3 } },
       sessionExec,
@@ -454,12 +593,19 @@ describe("批㊶-Q 段3 OOM 自动降档重发（纯函数＋编排护栏）", (
 
 
 /** 审批结果可控的 ctx 桩（tierCtx 的 request 恒 allowed-once——本组需要 rejected 形态）。 */
-const tierCtxOutcome = (tier: string, outcome: string, recorded: { approvals: string[] }) => ({
+const tierCtxOutcome = (axes: { preset: string | null; sandbox: string }, outcome: string, recorded: { approvals: string[] }) => ({
   get: (service: string) => {
     if (service === "permissionPresets") {
       return {
-        current: (session: unknown) => (session !== undefined ? tier : "danger-full-access"),
+        current: (session: unknown) => (session !== undefined ? "danger-full-access" : axes.sandbox),
+        resolve: () => ({ sandbox: axes.sandbox, approval: "ask" }),
         defaultPreset: "danger-full-access",
+      };
+    }
+    if (service === "sessionProjections") {
+      return {
+        stateOf: (_session: unknown, key: string) =>
+          key === "agentPreset" ? axes.preset : key === "sandboxMode" ? axes.sandbox : undefined,
       };
     }
     if (service === "approval") {
@@ -468,6 +614,10 @@ const tierCtxOutcome = (tier: string, outcome: string, recorded: { approvals: st
     return undefined;
   },
 });
+
+/** 自动驾驶两轴 / 人工两轴（danger 卡阻塞回归的两侧）。 */
+const AUTOPILOT_AXES = { preset: "atf-training", sandbox: "danger-full-access" } as const;
+const MANUAL_AXES = { preset: "standard", sandbox: "danger-full-access" } as const;
 
 describe("批㊶Q增补一 danger 卡任何档位阻塞（owner 裁定 1 乙——真实 GPU 训练启动确认永远人工审批）", () => {
   /** start 前置夹具：DRY_RUN 过（ADMISSION=pass）＋prelaunch 报告在场＋冷端口＋
@@ -491,7 +641,7 @@ describe("批㊶Q增补一 danger 卡任何档位阻塞（owner 裁定 1 乙—�
     const root = tempRoot("kQz1-auto-");
     const { trainSh } = seedStart(root);
     const recorded = { approvals: [] as string[] };
-    const tool = buildRunTrainingTool(tierCtxOutcome("auto_training", "rejected", recorded), { runsRoot: root, logDir: join(root, "logs"), ctx: {} as never });
+    const tool = buildRunTrainingTool(tierCtxOutcome(AUTOPILOT_AXES, "rejected", recorded), { runsRoot: root, logDir: join(root, "logs"), ctx: {} as never });
     const result = (await (tool as unknown as DshToolLike).execute(
       { action: "start", train_sh: trainSh, run_id: "run-q" },
       sessionExec,
@@ -508,7 +658,7 @@ describe("批㊶Q增补一 danger 卡任何档位阻塞（owner 裁定 1 乙—�
     const root = tempRoot("kQz1-manual-");
     const { trainSh } = seedStart(root);
     const recorded = { approvals: [] as string[] };
-    const tool = buildRunTrainingTool(tierCtxOutcome("danger-full-access", "rejected", recorded), { runsRoot: root, logDir: join(root, "logs"), ctx: {} as never });
+    const tool = buildRunTrainingTool(tierCtxOutcome(MANUAL_AXES, "rejected", recorded), { runsRoot: root, logDir: join(root, "logs"), ctx: {} as never });
     const result = (await (tool as unknown as DshToolLike).execute(
       { action: "start", train_sh: trainSh, run_id: "run-q" },
       sessionExec,
@@ -518,13 +668,14 @@ describe("批㊶Q增补一 danger 卡任何档位阻塞（owner 裁定 1 乙—�
     expect(result).toMatchObject({ error: "approval_denied", outcome: "rejected" });
   });
 
-  it("源码锚：GPU 琥珀卡免再确认分支在位（全自动档通报化语义保持）＋train_auto 放行通报块已移除", () => {
+  it("源码锚：GPU 琥珀卡免再确认分支在位（自动驾驶通报化语义保持）＋train_auto 放行通报块已移除", () => {
     const src = readFileSync(join(repoRoot, "packages", "extensions", "atf-tools", "src", "trainingFace.ts"), "utf8");
     // 琥珀卡：全自动档免再确认（窗口命中即启动）保持 Q 批语义
     expect(src).toContain("if (!autoTierStart)");
     // 裁定 1 乙：train_auto「训练自动放行（免审批）」通报块不再存在
     expect(src).not.toContain("训练自动放行");
-    // danger 卡无条件审批（任何档位）
-    expect(src).toContain("danger 卡\n      // 恢复任何档位阻塞");
+    // danger 卡无条件审批（任何档位）——注释行以「本 danger 卡永远保留人工审批」声明
+    expect(src).toContain("本 danger 卡永远保留人工审批");
+    expect(src).toContain("atf_run_training 不进 chainTools");
   });
 });

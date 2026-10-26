@@ -75,6 +75,24 @@
 - insert:
     - id: atf-tools
       name: '@atf/dsh-atf-tools'
+      config:
+        # —— 授权豁免声明（owner 2026-10-26 裁定：豁免＝便利、权限＝授权）——————————
+        # 生效条件＝「预设声明该工具 ∈ chainTools」且「用户权限档 = danger-full-access」，
+        # 两轴齐备才免审；任一缺席回落人工面板（fail-closed）。
+        # chainTools 显式列举工具名：**禁 atf_ 前缀／通配匹配**——前缀会把训练启动、
+        # 发布、评估 release 等治理点一起放掉（那是越权，不是便利）。
+        # 治理点永不在清单内：atf_run_training（真实 GPU）、atf_publish_confirm／
+        # atf_publish_model（发布）、atf_launch_execute（编排执行）、atf_joint_train、
+        # atf_gate、atf_admit_data、atf_scratch_exec——「GPU 训练启动确认任何档位保留
+        # 阻塞」的既有裁定因此无需废止。
+        approvalPolicy:
+          preset: atf-training
+          chainTools:
+            - atf_pipeline_stage
+            - atf_config_confirm
+            - atf_training_preflight
+            - atf_records_query
+            - atf_quantize_annotations
 
 # —— M3 品牌定稿（owner 10-06 裁定文案；vendor bump 随台账重同步）——————————
 - id: system-prompt
@@ -145,6 +163,88 @@
               section: |
                 You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
 
+
+# —— Agent 预设 atf-training（owner 2026-10-26 裁定：训练形态＝预设轴，不是权限档）——
+# 与 standard 的差异**全部落在配置里**（禁 TS 分支）：① persona 追加八段流程约束；
+# ② 工具集去掉 vendor 技能面（skill-filesystem／tool-skill）。免审资格的工具清单一律
+# 由文件顶部 atf-tools config.approvalPolicy 声明，此处不重复列举工具名。
+- id: preset-atf-training
+  name: '@deepseek-ai/dsh-agent-preset'
+  config:
+    id: atf-training
+    order: 2
+    name: 训练
+    description: ATF 训练链预设——按八段流程推进（登记／标注质检／实验配置／候选构造／发布段／家族切分／准入／训练准备）；是否逐段确认由用户权限档决定
+    plugins:
+      - id: persona
+        name: '@deepseek-ai/dsh-persona'
+        config:
+          suffix: Your working directory is {{cwd}}.
+          prefix: |
+            You are the ATF training agent (ATF 训练 Agent). {{model}} is the currently configured underlying model. 你始终用简体中文思考和回答——思考过程（reasoning）必须用中文句子，不得用英文推理；字段名、参数名、文件路径、命令与代码保持原样，不翻译。
+
+            训练链固定八段，按序推进（同一 run 内不跳段、不并段、不重复跑已完成段）：
+            1) 登记 register 2) 标注质检 label_qc 3) 实验配置 experiment_setup
+            4) 候选构造 candidate_build 5) 发布段 publish 6) 家族切分 family_split
+            7) 准入 admission 8) 训练准备 training_prep。
+            段外动作不属于训练链：真实 GPU 训练启动、模型发布、评估 release 恒为独立治理点，
+            任何档位都逐次人工确认——不得把它们说成训练链的一步，以免用户误判授权边界。
+
+            逐段确认与否由用户权限档决定（权限档＝授权，预设只是能力声明）：用户没给完全
+            权限时不得声称已获授权，也不得请求升级；被判为需要确认的动作一律走既有确认面。
+      - id: agent-instructions
+        name: '@deepseek-ai/dsh-agent-instructions'
+        config:
+          maxBytes: 65536
+      # 批㊶-I 段 C 单轨：vendor bash 通道关闭——bash 能力由 A7 atf_bash 承接
+      # （白名单守卫＋命令分类＋命令串绝对路径扫描；atf-tools 插件挂载）。
+      - id: tool-bash
+        name: '@deepseek-ai/dsh-tool-bash'
+        disabled: true
+      # vendor pwsh 仅 Windows 语义（vendor 原行 !!js 条件在本部署面恒真）——Linux 恒关。
+      - id: tool-pwsh
+        name: '@deepseek-ai/dsh-tool-pwsh'
+        disabled: true
+      # vendor fs/search 保留挂载：glob/grep/read_image 经 pre-execute 白名单守卫
+      # （atf-tools 路径守卫）；read/edit/write 由守卫恒 deny 并改道 atf_read/atf_edit/atf_write。
+      - id: tool-fs
+        name: '@deepseek-ai/dsh-tool-fs'
+      - id: tool-fs-search
+        name: '@deepseek-ai/dsh-tool-fs-search'
+        config:
+          sampleOverCapGlobResults: false
+      - id: tool-jobs
+        name: '@deepseek-ai/dsh-tool-jobs'
+      # 工具集差异（配置声明，禁 TS 分支）：训练链读技能只走 atf_skill_read（桥接契约面，
+      # 带内核技能包版本）；vendor 技能目录会引入非 ATF 技能，属错误引导面——本预设关闭。
+      - id: skill-filesystem
+        name: '@deepseek-ai/dsh-skill-filesystem'
+        disabled: true
+      - id: tool-skill
+        name: '@deepseek-ai/dsh-tool-skill'
+        disabled: true
+      # 批㊶-I 段 B：goal 产品收敛——自主多轮循环是能力面开关，须显式开启。
+      # 三行齐关（模型工具＋人类命令＋host 续轮引擎）才彻底；重开＝模板按实例
+      # 显式开启三行＋收敛 maxGoalRounds（vendor 自报 blocked ≥3 轮机制照用）。
+      # 重开时须覆写 create_goal 描述去掉"infer goal intent"推断授权，覆写不可行则维持 disabled。
+      - id: tool-goal
+        name: '@deepseek-ai/dsh-tool-goal'
+        disabled: true
+      - id: command-goal
+        name: '@deepseek-ai/dsh-command-goal'
+        disabled: true
+      - id: planning
+        name: cordis:group
+        group: true
+        isolate:
+          planMode: true
+        config:
+          - id: plan-mode
+            name: '@deepseek-ai/dsh-plan-mode'
+            config:
+              section: |
+                You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
 # —— 后台作业数上限（会话护栏部分兜底：每 owner 并发作业数上限；解析/对话失控的
 #   完整护栏无宿主等价 seam——PARSE_BUDGET 随宿主消亡、CHAT_BUDGET 候选另批）——————
 - id: jobs
@@ -179,12 +279,12 @@
         sandbox: danger-full-access
         approval: ask
         name: Full access
-      # 批㊶-Q 全自动智能训练档（批㊶Q增补一 owner 裁定 2：uat 随窗注册——两环境同款）。
-      # 档位语义在 ATF 工具层（autoTrainingTier）；approval 恒 ask 与三档同旋钮。
-      # 批㊶Q增补一（裁定 1 乙）：danger 卡（真实 GPU 训练启动确认）任何档位保留阻塞。
-      auto_training:
-        sandbox: danger-full-access
-        approval: ask
-        name: 全自动训练
-        description: 训练链自动确认＋通报呈现（真实放行账本闸门不变；切档须经界面人工操作）
+      # 批㊶-Q 第四档 `auto_training` 已退役（owner 2026-10-26 裁定）：它把「Agent 预设」
+      # （我是谁、会什么、走什么流程）错做成「权限档」（能碰多远），三重错位——语义、
+      # 归属（让用户在权限菜单选产品形态）、传导（业务流程读权限档决定＝两轴纠缠）。
+      # 训练形态改由 Agent 预设 `atf-training` 承担；权限轴回三档，语义单轴：本轴只回答
+      # 「能碰多远」，不回答「我是谁」。
+      # 切档说明：需要「训练链不再逐段确认」时，用户切到原生 danger-full-access（它本来
+      # 就有确认门）**且**会话使用 atf-training 预设——此时训练链不再逐段确认，仅保留训练
+      # 启动与发布确认。单切权限档不产生任何免确认效果（两轴齐备才生效）。
     defaultPreset: danger-full-access

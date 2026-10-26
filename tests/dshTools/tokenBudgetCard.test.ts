@@ -277,8 +277,10 @@ describe("批次 R H1-1——confirmFace 手动档：关系不成立禁确认＋
 // ---------------------------------------------------------------- H1-1 全自动档终检
 
 describe("批次 R H1-1——confirmFace 全自动档：落快照前 TokenBudget 终检（fail-closed）", () => {
+  // 训练自动驾驶＝两轴齐备（预设 atf-training ＋ 权限档 danger-full-access）
   const autoCtx = (service: string): unknown => {
-    if (service === "permissionPresets") return { current: () => "auto_training" };
+    if (service === "permissionPresets") return { current: () => "danger-full-access", resolve: () => ({ sandbox: "danger-full-access" }) };
+    if (service === "sessionProjections") return { stateOf: (_s: unknown, key: string) => (key === "agentPreset" ? "atf-training" : undefined) };
     return undefined;
   };
   const execAuto = async (recommend: Record<string, unknown>) => {
@@ -667,8 +669,10 @@ describe("b5 像素对——confirmFace 手动档链（变更提示上卡面；m
 });
 
 describe("b5 像素对——confirmFace 全自动档（recommend 采纳＋通报变更提示）", () => {
+  // 训练自动驾驶＝两轴齐备（预设 atf-training ＋ 权限档 danger-full-access）
   const autoCtx = (service: string): unknown => {
-    if (service === "permissionPresets") return { current: () => "auto_training" };
+    if (service === "permissionPresets") return { current: () => "danger-full-access", resolve: () => ({ sandbox: "danger-full-access" }) };
+    if (service === "sessionProjections") return { stateOf: (_s: unknown, key: string) => (key === "agentPreset" ? "atf-training" : undefined) };
     return undefined;
   };
   const execAuto = async (args: Record<string, unknown>) => {

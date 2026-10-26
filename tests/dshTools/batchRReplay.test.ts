@@ -90,8 +90,14 @@ describe("批㊶R前置 VERIFY3 工具面真机重演（确认卡拦截＋卡数
     const tierCtx = {
       get: (service: string) => {
         if (service === "permissionPresets") {
-          return { current: () => "auto_training", defaultPreset: "danger-full-access" };
+          return {
+            current: () => "danger-full-access",
+            resolve: () => ({ sandbox: "danger-full-access" }),
+            defaultPreset: "danger-full-access",
+          };
         }
+        // 训练自动驾驶＝两轴齐备（预设 atf-training ＋ 权限档 danger-full-access）
+        if (service === "sessionProjections") return { stateOf: (_s: unknown, key: string) => (key === "agentPreset" ? "atf-training" : "danger-full-access") };
         if (service === "approval") return { request: async (req: { reason: string }) => { recorded.push(req.reason); return "allowed-once"; } };
         return undefined;
       },

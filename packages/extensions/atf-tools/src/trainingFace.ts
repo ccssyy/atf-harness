@@ -30,7 +30,7 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
 import { scanRunDir } from "../../atf-ui/src/server.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
-import { isAutoTrainingTier } from "./autoTrainingTier.js";
+import { isTrainingAutopilot, ATF_TRAINING_PRESET } from "./trainingPreset.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { probeSession, resolveLaunchSessionName, tmuxCommand, tmuxTrainingEvidenceFor, evalOrchSessionBase, trainingSessionBase, type SessionProbe } from "../../../../src/core/workspace/tmuxLiveness.js";
@@ -758,12 +758,11 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         return asToolValue({ started: false, error: "port_occupied_non_residue", port, occupant, note: formatPortConflictNote(port, occupant) });
       }
       const conflictNote = occupant !== null ? `\n${formatPortConflictNote(port, occupant)}` : "";
-      // 批㊶-Q 段2：全自动训练档（会话档位=auto_training）——九要素确认卡与 GPU 琥珀卡
-      // （下方 amber 段）维持通报化/免再确认。批㊶Q增补一（owner 裁定 1 乙）：danger 卡
-      // 恢复任何档位阻塞——真实 GPU 训练启动确认永远保留人工审批（真实 GPU 代价操作一次
-      // 人工确认，产品纪律）；ADR-07 内核侧账本闸门不变（train.sh 内放行记录校验原样保留，
-      // 无记录 exit 78）。手动档审批链零变化。
-      const autoTierStart = isAutoTrainingTier(ctx, exec);
+      // 训练自动驾驶（Agent 预设 = atf-training **且** 权限档 = danger-full-access）下，
+      // 方案确认与段卡免逐段确认；但本 danger 卡永远保留人工审批（真实 GPU 代价操作一次
+      // 人工确认，产品纪律；atf_run_training 不进 chainTools）。ADR-07 内核侧账本闸门不变
+      // （train.sh 内放行记录校验原样保留，无记录 exit 78）。非自动驾驶审批链零变化。
+      const autoTierStart = isTrainingAutopilot(ctx, exec);
       const verdict = await requestApproval(ctx, exec, "atf_run_training",
         buildApprovalReason({
           action: "启动真实 GPU 训练",
@@ -988,7 +987,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
         log: logPath,
         reconcile: reconcileSkipped ? "skipped_no_baseline" : "ok",
         probe: { outcome: probe.outcome, feed_seen: probe.feedSeen },
-        ...(autoTierStart ? { auto: true, tier: "auto_training" } : {}),
+        ...(autoTierStart ? { auto: true, tier: ATF_TRAINING_PRESET } : {}),
         ...(rotated !== null ? { previous_log: rotated } : {}),
         note: autoTierStart
           ? `训练已启动（全自动档·免审批放行已通报；${feedNote}）——status 查询进度与 ckpt；完成回报 ckpt 路径`

@@ -61,6 +61,11 @@ export interface AtfToolsConfig {
   quantizeTimeoutMs?: number;
   /** F1：预检脚本 CLI 超时（缺省同管线 120s）。 */
   preflightTimeoutMs?: number;
+  /** 授权豁免声明（训练链工具白名单——显式工具名，overlay 声明，代码零硬编码）。 */
+  approvalPolicy?: {
+    preset?: string;
+    chainTools?: readonly string[];
+  };
 }
 
 export const Config = z.object({
@@ -85,6 +90,14 @@ export const Config = z.object({
   logDir: z
     .string()
     .default(process.env["ATF_DSH_LOG_DIR"] ?? join(repoRoot, "tmp", "atf-logs")),
+  // 授权豁免声明：preset＝声明该链的 Agent 预设；chainTools＝显式工具名清单（禁前缀匹配）。
+  // 空缺省＝零训练链豁免（仅 bash/write 类原语义），治理点永不在清单内。
+  approvalPolicy: z
+    .object({
+      preset: z.string(),
+      chainTools: z.array(z.string()),
+    })
+    .default({ preset: "", chainTools: [] }),
 });
 
 export function apply(ctx: any, config: AtfToolsConfig): void {
@@ -146,8 +159,9 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
 
   // 批㊶-F-H 项 1：bash/write 类审批豁免 answerer（择案 A——waterfall 头部 prepend；
   // 高危治理点 atf_* 全体不进类仍走人工面板；详见 approvalExempt.ts 头注）
-  if (registerApprovalExempt(ctx)) {
-    console.log("[atf-tools] bash/write 免审 answerer 已挂（approval/request waterfall 头部；atf_* 契约工具审批语义零变化）");
+  if (registerApprovalExempt(ctx, config.approvalPolicy)) {
+    const chain = config.approvalPolicy?.chainTools ?? [];
+    console.log(`[atf-tools] 免审 answerer 已挂（approval/request waterfall 头部；bash/write 恒免；训练链 ${chain.length} 件仅在预设 ${config.approvalPolicy?.preset ?? "（未声明）"}＋完全权限双齐时免；治理点审批语义零变化）`);
   }
 
   // 批㊶-H/I：文件工具路径守卫＋A7 治理四件挂载（案 甲单轨）——白名单根＝派生集

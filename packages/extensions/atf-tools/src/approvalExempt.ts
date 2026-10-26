@@ -9,12 +9,23 @@
  * gate）不进类 → next() 原路人工面板，审批语义零变化。
  *
  * 择案依据（报告同步）：案 B 所指 approvalHook（src/core/tools 审批判定面）不在该弹卡
- * 链路上——bash 卡走 DSH ApprovalService waterfall（'approval/request' 事件）至 client
+ * 链路上——bash 卡走 DSH ApprovalService waterfall（approval/request 事件）至 client
  * 面板，不经 atf approvalHook；故豁免必须落 waterfall 头部（案 A）。案 A 亦无需逐会话
  * seed 机制：宿主级 listener 覆盖进程内全部会话，prepend 保证先于 api-remotes 的
  * client 转发桥（其 apply 先于 profile patch insert 行执行）。
+ *
+ * owner 2026-10-26 裁定（两轴改造）：本 answerer 由「只认工具名」改为「档位 + 预设
+ * 双感知」。训练链工具（43/43 段调用 100% 弹卡实测）在
+ *   ①预设声明该工具 ∈ chainTools 且 ②用户权限档 = danger-full-access
+ * 同时成立时免审；任一不成立一律 next()。理由：豁免是便利、权限是授权——用户没给完全
+ * 权限时预设不得自行放大能力，否则是 agent 越过用户自我提权。
+ * 命中判定显式列举工具名（**禁 atf_ 前缀匹配**：前缀会把训练启动/发布/评估 release
+ * 等治理点一起放掉）。治理点（atf_run_training／atf_publish_*／atf_launch_execute／
+ * atf_joint_train／atf_gate／atf_admit_data／atf_scratch_exec）永不出现在 chainTools。
  */
-/** bash/write 类工具名（本部署 preset 实际挂载面：tool-bash='bash'；tool-fs 写类='write'/'edit'）。 */
+import { ATF_TRAINING_PRESET, isPresetAutopilot, type ExecSessionFace, type ServiceCtxFace } from "./trainingPreset.js";
+
+/** bash/write 类工具名（本部署 preset 实际挂载面：tool-bash=bash；tool-fs 写类=write/edit）。 */
 export const BASH_WRITE_APPROVAL_TOOLS: ReadonlySet<string> = new Set(["bash", "write", "edit"]);
 
 /** atf_* 前缀＝契约工具全体（高危治理点）——永远 next() 人工面板，语义零变化。 */
@@ -22,8 +33,18 @@ export const isAtfContractTool = (toolName: string): boolean => toolName.startsW
 
 export const isBashWriteClass = (toolName: string): boolean => BASH_WRITE_APPROVAL_TOOLS.has(toolName);
 
+/**
+ * 训练链豁免声明（overlay 侧 atf-tools config.approvalPolicy——预设声明 + 工具白名单）。
+ * `preset`＝声明该链的 Agent 预设 id；`chainTools`＝显式工具名清单（禁前缀/通配）。
+ * 两者皆由 profile 配置给出，代码零硬编码工具名——预设间的工具集差异只落配置。
+ */
+export interface ApprovalExemptPolicy {
+  readonly preset?: string;
+  readonly chainTools?: readonly string[];
+}
+
 /** ApprovalRequest 的消费面（结构类型——与 DSH ApprovalRequestEvent 最小交集）。 */
-interface ExemptRequest {
+interface ExemptRequest extends ExecSessionFace {
   toolName?: unknown;
   reason?: unknown;
 }
@@ -37,27 +58,66 @@ const warnExempt = (toolName: string, reason: unknown): void => {
   process.stderr.write(`[atf-approval] 沙箱不可用，${what}${brief}\n`);
 };
 
+/** 训练链工具命中的事实通报（与 bash 类告警同纪律：放行必留痕，且带上放行依据两轴）。 */
+const warnChainExempt = (toolName: string, preset: string): void => {
+  process.stderr.write(`[atf-approval] 训练链工具 ${toolName} 免审放行（预设=${preset}／权限档=danger-full-access）\n`);
+};
+
 /**
- * 豁免 answerer（'approval/request' waterfall 头部形态）：
- * bash/write 类 → 返回 'allowed-once'（不调 next——审批请求不产生、面板不见）；
- * 其余（atf_* 全体与其余工具）→ next() 原路（人工面板／后续 answerer 语义零变化）。
+ * 豁免判定单源（档位 + 预设双感知）：
+ * - bash/write 类：原有语义不变（不看档位/预设，恒 allowed-once）；
+ * - 训练链工具：预设声明 ∈ chainTools **且** isTrainingAutopilot 才放行；
+ *   其余（含全部治理点）→ next()。
+ * @returns allowed-once 表示免审放行，null 表示交给 waterfall 后续 answerer。
  */
-export const approvalExemptAnswerer: Answerer = async (request, next) => {
+export const exemptOutcomeOf = (
+  request: ExemptRequest,
+  deps: { ctx?: ServiceCtxFace; policy?: ApprovalExemptPolicy },
+): { outcome: "allowed-once"; basis: "bash-write" | "chain" } | null => {
   const toolName = typeof request?.toolName === "string" ? request.toolName : "";
-  if (!isBashWriteClass(toolName)) return next();
-  warnExempt(toolName, request.reason);
+  if (isBashWriteClass(toolName)) return { outcome: "allowed-once", basis: "bash-write" };
+  const { ctx, policy } = deps;
+  if (ctx === undefined || policy === undefined) return null;
+  const chainTools = policy.chainTools ?? [];
+  // 显式列举命中（禁前缀匹配——前缀会连带放行训练启动/发布/release 等治理点）
+  if (!chainTools.includes(toolName)) return null;
+  // 两轴齐备：配置声明的预设 = 当前会话预设（声明漂移即不放行）且权限档 = 完全权限。
+  if (!isPresetAutopilot(ctx, request, policy.preset ?? ATF_TRAINING_PRESET)) return null;
+  return { outcome: "allowed-once", basis: "chain" };
+};
+
+/**
+ * answerer 工厂（approval/request waterfall 头部形态）：deps 携带 ctx 与 overlay 声明，
+ * 缺省（无 ctx／无声明）＝仅 bash/write 类豁免，其余一律 next()。
+ */
+export const makeApprovalExemptAnswerer = (
+  deps: { ctx?: ServiceCtxFace; policy?: ApprovalExemptPolicy } = {},
+): Answerer => async (request, next) => {
+  const hit = exemptOutcomeOf(request, deps);
+  if (hit === null) return next();
+  const toolName = typeof request?.toolName === "string" ? request.toolName : "";
+  if (hit.basis === "bash-write") warnExempt(toolName, request.reason);
+  else warnChainExempt(toolName, deps.policy?.preset ?? "");
   return "allowed-once";
 };
+
+/** 无装配面直接调用形态（bash/write 类语义单源；训练链判定需 ctx，故此处仅前一类）。 */
+export const approvalExemptAnswerer: Answerer = makeApprovalExemptAnswerer();
 
 /**
  * 宿主级注册（atf-tools apply() 调用）：prepend 抢 waterfall 头部——先于 api-remotes
  * 的 client 转发桥（后者 apply 更早，普通 on 会排在桥后致面板先弹）。
  * @returns 注册是否发生（ctx.on 缺席的裸装配面跳过——返回 false）。
  */
-export const registerApprovalExempt = (ctx: {
-  on?: (event: string, listener: Answerer, options?: { prepend?: boolean }) => unknown;
-}): boolean => {
+export const registerApprovalExempt = (
+  ctx: {
+    on?: (event: string, listener: Answerer, options?: { prepend?: boolean }) => unknown;
+    get?: (service: string) => unknown;
+  },
+  policy?: ApprovalExemptPolicy,
+): boolean => {
   if (typeof ctx.on !== "function") return false;
-  ctx.on("approval/request", approvalExemptAnswerer, { prepend: true });
+  const serviceCtx = typeof ctx.get === "function" ? { get: (service: string): unknown => ctx.get?.(service) } : undefined;
+  ctx.on("approval/request", makeApprovalExemptAnswerer({ ctx: serviceCtx, policy }), { prepend: true });
   return true;
 };

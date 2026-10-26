@@ -578,6 +578,19 @@ describe("批㊶-U——确认卡参数输入化（批㊶-W F5 表单化改版�
   });
 });
 
+/** 训练自动驾驶两轴桩：预设 atf-training（sessionProjections）＋权限档 danger-full-access
+ *  （permissionPresets，含 resolve 以便按 sandbox 值判危险档）。 */
+const autopilotAxes = {
+  permissionPresets: {
+    current: () => "danger-full-access",
+    resolve: () => ({ sandbox: "danger-full-access" }),
+    defaultPreset: "danger-full-access",
+  },
+  sessionProjections: {
+    stateOf: (_session: unknown, key: string) => (key === "agentPreset" ? "atf-training" : "danger-full-access"),
+  },
+};
+
 describe("批㊶-W F5——表单卡链（结构化 edits＋form intent ask＋Reject 回卡）", () => {
   /** user-questions 服务假件：记录 ask 调用，可编程序列回答案（selected key=value）。 */
   const fakeUserQuestions = (script: Array<Record<string, string>>, calls: Array<Record<string, unknown>> = []) => ({
@@ -597,7 +610,7 @@ describe("批㊶-W F5——表单卡链（结构化 edits＋form intent ask＋Re
     const tierCtx = {
       get: (s: string) =>
         s === "permissionPresets"
-          ? { current: () => "auto_training", defaultPreset: "x" }
+          ? autopilotAxes.permissionPresets : s === "sessionProjections" ? autopilotAxes.sessionProjections
           : s === "approval"
             ? { request: async () => "allowed-once" }
             : s === "userQuestions"
@@ -735,7 +748,7 @@ describe("批㊶-W §二.2——amend 改参 clamp 护栏（结构化 edits 版�
     const root = tempRoot();
     mkdirSync(join(root, "run-u", "prep"), { recursive: true });
     const runDir = join(root, "run-u");
-    const tierCtx = { get: (s: string) => (s === "permissionPresets" ? { current: () => "auto_training", defaultPreset: "x" } : s === "approval" ? { request: async () => "allowed-once" } : undefined) };
+    const tierCtx = { get: (s: string) => (s === "permissionPresets" ? autopilotAxes.permissionPresets : s === "sessionProjections" ? autopilotAxes.sessionProjections : s === "approval" ? { request: async () => "allowed-once" } : undefined) };
     const { buildConfirmTools } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
     const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
     const tool = tools[0]!;
@@ -756,7 +769,7 @@ describe("批㊶-W §二.2——amend 改参 clamp 护栏（结构化 edits 版�
     const root = tempRoot();
     mkdirSync(join(root, "run-u2", "prep"), { recursive: true });
     let approvalCalls = 0;
-    const tierCtx = { get: (s: string) => (s === "permissionPresets" ? { current: () => "auto_training", defaultPreset: "x" } : s === "approval" ? { request: async () => { approvalCalls += 1; return "allowed-once"; } } : undefined) };
+    const tierCtx = { get: (s: string) => (s === "permissionPresets" ? autopilotAxes.permissionPresets : s === "sessionProjections" ? autopilotAxes.sessionProjections : s === "approval" ? { request: async () => { approvalCalls += 1; return "allowed-once"; } } : undefined) };
     const { buildConfirmTools } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
     const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
     const tool = tools[0]!;
@@ -769,7 +782,7 @@ describe("批㊶-W §二.2——amend 改参 clamp 护栏（结构化 edits 版�
   });
   it("amend 缺 edits＝结构化拒绝（自由文本不再解析——F5 退役锚）", async () => {
     const root = tempRoot();
-    const tierCtx = { get: (s: string) => (s === "permissionPresets" ? { current: () => "auto_training", defaultPreset: "x" } : s === "approval" ? { request: async () => "allowed-once" } : undefined) };
+    const tierCtx = { get: (s: string) => (s === "permissionPresets" ? autopilotAxes.permissionPresets : s === "sessionProjections" ? autopilotAxes.sessionProjections : s === "approval" ? { request: async () => "allowed-once" } : undefined) };
     const { buildConfirmTools } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
     const tools = buildConfirmTools({ runsRoot: root, ctx: tierCtx }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
     const r = await tools[0]!.execute(

@@ -24,7 +24,7 @@ import { appendAskFailureDiagnostic } from "./askDiagnostics.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
 import { evalAgentRecommend, type RecommendVerdict } from "../../../../src/core/workspace/agentRecommend.js";
-import { isAutoTrainingTier, AUTO_TRAINING_PRESET } from "./autoTrainingTier.js";
+import { isTrainingAutopilot, ATF_TRAINING_PRESET } from "./trainingPreset.js";
 import {
   FIXED_SMART_DEFAULTS,
   CLAMP_DOMAINS,
@@ -464,7 +464,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         preflightScriptAvailable(deps.preflight.command)
       ) {
         const outcome = await runPreflightFlow(deps.preflight, { runId: args.run_id, apply: false, workspacePath: args.workspace_path }, exec, {
-          presentCard: !isAutoTrainingTier(ctx, exec),
+          presentCard: !isTrainingAutopilot(ctx, exec),
         });
         if (outcome.ok && outcome.report !== undefined && outcome.report.items.length > 0) {
           preflightNote = [
@@ -649,10 +649,11 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         const base = buildConfigConfirmFields({}, { fromRegistry: Object.keys(baseline).length > 0 ? baseline : undefined });
         return base.map((field) => (amended[field.key] !== undefined ? { key: field.key, value: String(amended[field.key]), tag: "need_confirm" as const } : field));
       })();
-      // 批㊶-Q 段2：全自动档分支——档位=auto_training 时不调用 requestApproval 阻塞，
-      // 以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐（护栏校验）直接落 config-snapshot，
-      // 卡面内容转为通报（告警行＋alerts.json，含每键取值＋来源标注）。手动档行为零变化。
-      const autoTier = isAutoTrainingTier(ctx, exec);
+      // 训练自动驾驶分支（预设 atf-training ＋ 权限档 danger-full-access 两轴齐备）：
+      // 不调用 requestApproval 阻塞，以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐
+      // （护栏校验）直接落 config-snapshot，卡面内容转为通报（告警行＋alerts.json，含每键
+      // 取值＋来源标注）。任一轴缺席＝人工档，行为零变化（判据单源 trainingPreset）。
+      const autoTier = isTrainingAutopilot(ctx, exec);
       const recommendReport: RecommendVerdict[] = [];
       const reason = (() => {
         const rawRecommend = (args.recommend ?? {}) as Record<string, unknown>;
@@ -772,7 +773,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         const notification = `全自动训练档·配置自动确认（免审批，run ${args.run_id}）——${fields.map((f) => `${f.key}=${f.value}[${sources[f.key]}]`).join(" ")}${recommendSummary}${rejectedNotes.length > 0 ? `；拦截：${rejectedNotes.join("；")}` : ""}${guardNotes.length > 0 ? `；卡数护栏：${guardNotes.join("；")}` : ""}${pixelChangeAuto !== undefined ? `；${pixelChangeAuto}` : ""}${pixelViolationAuto !== undefined ? `；${pixelViolationAuto}` : ""}`;
         // 不写 pending 卡（无卡可应答——卡面内容转为通报）；改参走 amend 纯文字（同样免阻塞）
         appendNotification(runDir, { level: "info", kind: "config_auto", reason: notification, since: new Date().toISOString() });
-        saveConfigSnapshot(runDir, confirmed, { auto: true, tier: AUTO_TRAINING_PRESET, sources });
+        saveConfigSnapshot(runDir, confirmed, { auto: true, tier: ATF_TRAINING_PRESET, sources });
         // 批㊶Q增补二3：自动档同样确认完成——历史残留 pending 卡（如手动卡后切档）一并清理
         clearPending(runDir);
         // E4-乙（改动 2）：停写 iteration-config——快照是训练参数唯一出口（param_sources
@@ -790,7 +791,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           run_dir_source: runDirSource,
           confirmed: true,
           auto: true,
-          tier: AUTO_TRAINING_PRESET,
+          tier: ATF_TRAINING_PRESET,
           fields,
           sources,
           ...(recommendReport.length > 0 ? { recommend_report: recommendReport } : { recommend: "missing_fallback_defaults" }),
