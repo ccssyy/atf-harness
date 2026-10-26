@@ -9,6 +9,13 @@
  * <run>/launch/prelaunch-report.md（脚本写产物＝内核产物由内核件写，harness 零直写——
  * 「快照是唯一出口」红线不破）→ 读回路径＋摘要返回。
  *
+ * E3（owner 2026-10-26）：同一屏增「本次训练字段＋prompt 字段段」只读呈现——训练前用户
+ * 就能看到到底用哪些字段、字段段原文长什么样（此前唯一能看到 prompt 的地方是评估阶段的
+ * 事后回显）。呈现选在这里而不是方案确认卡：本工具是训练前最后一屏**材料**（零交互、零审批，
+ * 与「只读呈现」同性质），而方案卡已承载预检/预算/像素对/卡位四块确认信息，再把 prompt 全文
+ * 塞进去会把确认屏变成阅读屏。读盘只读（field-config.json＋experiment_setup_report.md），
+ * 不重算不渲染第二套 prompt——渲染权在内核。
+ *
  * 不承担审批（材料不是闸）：本工具免审批——放行闸在 atf_launch_execute／atf_run_training
  * 的既有审批链；本工具只产材料。也不设第二套来源校验（E4-乙改动 3）：iteration-config 的
  * param_sources 来源串校验单源在内核 build_prelaunch_report（validate_param_sources——
@@ -21,6 +28,7 @@ import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { resolvePipelineRunDir, runPipeline } from "./pipelineFace.js";
+import { buildTrainingPromptPreview, renderTrainingPromptPreviewBlock } from "../../../../src/core/workspace/trainingPromptPreview.js";
 
 /** 报告读回摘要行数上限（head 截断——全文落盘在 report_path，摘要仅呈现面）。 */
 const REPORT_SUMMARY_HEAD_LINES = 24;
@@ -109,6 +117,9 @@ export const buildPrelaunchReportTool = (
       } catch {
         return asToolValue({ ok: false, run_id: args.run_id, run_dir: runDir, error: "prelaunch_report_unreadable", note: `脚本退出 0 但报告不可读：${reportPath}` });
       }
+      // E3：本次训练字段＋prompt 字段段（只读呈现；读盘失败不影响材料本身）
+      const promptPreview = buildTrainingPromptPreview(runDir);
+      const promptBlock = renderTrainingPromptPreviewBlock(promptPreview);
       return asToolValue({
         ok: true,
         run_id: args.run_id,
@@ -119,7 +130,13 @@ export const buildPrelaunchReportTool = (
         report_path: reportPath,
         report_bytes: bytes,
         summary_head: head,
-        note: "训练启动前材料（不承担审批——放行走 atf_launch_execute/atf_run_training 既有审批链）",
+        // 只读呈现块（用户面原文；模型应原样转述，不改写成参数名）
+        training_prompt_preview: promptBlock,
+        training_fields: promptPreview.fields.map((field) => ({ name: field.name, id: field.id, source: field.source })),
+        prompt_field_lines: promptPreview.promptLines,
+        ...(promptPreview.verbatimFields.length > 0 ? { fields_using_verbatim_text: promptPreview.verbatimFields } : {}),
+        ...(promptPreview.unavailable !== undefined ? { training_prompt_preview_unavailable: promptPreview.unavailable } : {}),
+        note: "训练启动前材料（不承担审批——放行走 atf_launch_execute/atf_run_training 既有审批链）；training_prompt_preview 是只读呈现，原样转述给用户即可",
       });
     },
   });
