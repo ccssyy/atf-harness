@@ -62,6 +62,18 @@ export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; de
  *  实算不读。只读呈现单源——confirmFace 表单过滤与卡面只读行共用本集。 */
 export const READONLY_CONFIG_KEYS: ReadonlySet<string> = new Set(["max_model_len", "dataset_keys"]);
 
+// ── H7c：留空＝回退部署缺省的键，卡面输入框占位提示（呈现层单源）──
+
+/** 卡面输入框占位提示（当前仅卡位：留空＝全部可见卡，回退 deploy 的 cuda_visible_devices）。
+ *  纯呈现提示——绝不写入字段值（空值不落快照，禁空串覆盖 deploy；落盘面见
+ *  confirmedSnapshotOf／sessionManager）。卡号上界取机器事实可用卡数（gpuCount−1）；
+ *  未探测到卡数＝只报「全部可见卡」，不编造区间（不猜）。 */
+export const configFieldPlaceholderOf = (key: string, gpuCount: number | null): string | undefined => {
+  if (key !== "visible_devices") return undefined;
+  const upper = gpuCount !== null && Number.isInteger(gpuCount) && gpuCount > 0 ? gpuCount - 1 : null;
+  return upper === null ? "自动（全部可见卡）" : `自动（全部可见卡 0-${String(upper)}）`;
+};
+
 // ── 批次 R H1-1：TokenBudget 三要素区（卡面与 web 摘要共用单源渲染）──
 
 /** TokenBudget 三要素键（同屏呈现：预算可编辑，cutoff/max_model_len 只读参照）。 */
@@ -154,10 +166,11 @@ export const buildConfigConfirmFields = (
   options: { fromRegistry?: Record<string, string> } = {},
 ): Array<{ key: string; value: string; tag: "need_confirm" | "from_registry" | "default_used" }> =>
   CONFIG_CONFIRM_KEYS.map((entry) => {
-    const registry = options.fromRegistry?.[entry.key];
-    if (registry !== undefined) return { key: entry.key, value: registry, tag: "from_registry" as const };
+    // H7f：优先级＝用户显式 > 已确认快照/派生 > 缺省（派生只填空缺，绝不覆盖用户值）
     const explicit = overrides[entry.key];
     if (explicit !== undefined) return { key: entry.key, value: explicit, tag: "need_confirm" as const };
+    const registry = options.fromRegistry?.[entry.key];
+    if (registry !== undefined) return { key: entry.key, value: registry, tag: "from_registry" as const };
     return { key: entry.key, value: entry.default, tag: "default_used" as const };
   });
 

@@ -9,7 +9,7 @@
  * 红线：缺省保持「回退 deploy」，校验失败为卡前红字＋业务语言（不出码原文）。
  */
 import { describe, expect, it } from "vitest";
-import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields } from "../../src/webui/configConfirm.js";
+import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, configFieldPlaceholderOf } from "../../src/webui/configConfirm.js";
 import {
   confirmedSnapshotOf,
   configFormFieldsOf,
@@ -51,6 +51,29 @@ describe("D76 卡位入卡：卡面渲染与快照空值纪律（T4）", () => {
       fieldOf("visible_devices", " 4,5,6,7 "),
     ]);
     expect(filled["visible_devices"]).toBe(" 4,5,6,7 ");
+  });
+
+  // H7c：留空看着像没填 → 输入框占位提示（呈现层）。三跳同验：①字段载荷带提示
+  // ②提示文案单源（机器事实卡数−1，未探测到不编造区间）③提示不入值、不落快照。
+  it("空值输入框占位提示＝自动全部可见卡（卡数−1）；提示不入值、不落快照", () => {
+    const rows = configFormFieldsOf(buildConfigConfirmFields({}), 8);
+    const row = rows.find((r) => r.key === "visible_devices");
+    expect(row?.placeholder).toBe("自动（全部可见卡 0-7）");
+    expect(row?.value).toBe("");
+    // 未探测到卡数＝不编造区间
+    const unknown = configFormFieldsOf(buildConfigConfirmFields({}), null).find((r) => r.key === "visible_devices");
+    expect(unknown?.placeholder).toBe("自动（全部可见卡）");
+    // 已填值：值原样、提示不参与落盘（占位只在空值显示，值永不被提示污染）
+    const filledRows = configFormFieldsOf(buildConfigConfirmFields({ visible_devices: "4-7" }), 8);
+    const filledRow = filledRows.find((r) => r.key === "visible_devices");
+    expect(filledRow?.value).toBe("4-7");
+    const snapshot = confirmedSnapshotOf(buildConfigConfirmFields({ visible_devices: "4-7" }));
+    expect(snapshot["visible_devices"]).toBe("4-7");
+    // 空值落盘面复核：占位在场但值仍空 → 快照无该键
+    expect(confirmedSnapshotOf(buildConfigConfirmFields({}))["visible_devices"]).toBeUndefined();
+    // 提示文案与「留空＝全部可见卡」标签语义同源，且不写内部键名叙事
+    expect(configFieldPlaceholderOf("visible_devices", 8)).toContain("全部可见卡");
+    expect(configFieldPlaceholderOf("nproc_per_node", 8)).toBeUndefined();
   });
 });
 

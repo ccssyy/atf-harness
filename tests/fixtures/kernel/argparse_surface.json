@@ -189,6 +189,24 @@
     "required": null
    },
    {
+    "option": "--cutoff-len",
+    "dest": "cutoff_len",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--max-model-len",
+    "dest": "max_model_len",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--negative-ratio-target",
     "dest": "negative_ratio_target",
     "action": "store",
@@ -2403,6 +2421,15 @@
     "required": null
    },
    {
+    "option": "--run",
+    "dest": "run",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--model",
     "dest": "model",
     "action": "store",
@@ -3290,6 +3317,15 @@
     "type": null,
     "choices": null,
     "default": "",
+    "required": null
+   },
+   {
+    "option": "--approval-ledger",
+    "dest": "approval_ledger",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
     "required": null
    }
   ]
@@ -4278,6 +4314,15 @@
     "choices": null,
     "default": null,
     "required": null
+   },
+   {
+    "option": "--approval-ledger",
+    "dest": "approval_ledger",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
    }
   ]
  },
@@ -4595,6 +4640,38 @@
   ]
  },
  {
+  "script": "tools/pool_eval_groups.py",
+  "args": [
+   {
+    "option": "--round",
+    "dest": "round",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--out",
+    "dest": "out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--json",
+    "dest": "json",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
   "script": "tools/probe_runtime_env.py",
   "args": [
    {
@@ -4890,6 +4967,24 @@
     "required": null
    },
    {
+    "option": "--cutoff-len",
+    "dest": "cutoff_len",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--max-model-len",
+    "dest": "max_model_len",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--allow-small-cluster-test",
     "dest": "allow_small_cluster_test",
     "action": "store_true",
@@ -4989,6 +5084,15 @@
    {
     "option": "--training-overrides",
     "dest": "training_overrides",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--visible-devices",
+    "dest": "visible_devices",
     "action": "store",
     "type": null,
     "choices": null,

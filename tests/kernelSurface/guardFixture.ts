@@ -65,10 +65,14 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   allow_small_cluster_test: "--allow-small-cluster-test",
   grouping_preset: "--grouping-preset",
   negative_ratio_target: "--negative-ratio-target",
-  // E3：experiment_setup 预算三参（内核 b8 argparse 新声明面；快照随更 b8 同批）
+  // E3：experiment_setup 预算五参（b8 起三参；预算五参同门窗扩 cutoff_len／max_model_len）
   max_total_tokens: "--max-total-tokens",
+  cutoff_len: "--cutoff-len",
+  max_model_len: "--max-model-len",
   image_min_pixels: "--image-min-pixels",
   image_max_pixels: "--image-max-pixels",
+  // H7h：卡位显式通道（内核 b16 walkthrough --visible-devices；快照随 b17 同批）
+  visible_devices: "--visible-devices",
   doc_type: "--doc-type",
   lane_suffix: "--lane-suffix",
   field_config: "--field-config",

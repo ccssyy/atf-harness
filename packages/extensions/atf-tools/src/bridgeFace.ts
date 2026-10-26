@@ -4,7 +4,7 @@
  * toAtfAgentTool（src/agent/atfAgentTools.ts：参数校验 → 桥接 request → canonical
  * 校验 → 结构化 rejected 回填），本层只做 DSH defineTool 包装＋DSH 审批 seam 前置。
  */
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { AtfBridgeConnection } from "../../../../src/bridge/index.js";
 import {
@@ -26,6 +26,7 @@ import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./ap
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+import { resolvePipelineRunDir } from "./pipelineFace.js";
 import { SCOPE_UNRESOLVED_NOTE, resolveSessionWorkspace, sessionCwdOfExec } from "./scopeFace.js";
 // E8c：业务动作名映射单源（webui GPU 队列卡同表复用——D152 卡面零内部工具名）
 import { BRIDGE_ACTION_LABELS } from "../../../../src/agent/bridgeActionLabels.js";
@@ -148,12 +149,27 @@ export class BridgeManager {
  *  `exec-home/<session-id>/`；无会话 id（CLI 单会话/测试）落 `exec-home/default/`。
  *  跨会话同名暂存互踩面（散放 awb_*.json 实锚）在子目录层消除；既有散放文件不迁移
  *  （D4①——根目录原地保留不冲突）；清理策略候裁本批不实现。 */
-const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHome: string; dshHome?: string }, args: Record<string, unknown>, exec: unknown): LocalToolHost => {
+export const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; execHome: string; dshHome?: string }, args: Record<string, unknown>, exec: unknown): LocalToolHost => {
   const runId = typeof args["run_id"] === "string" && args["run_id"] !== "" ? args["run_id"] : "default";
-  // D115：run 目录单源（与 scratch 同一解析——run 树启动件/就绪检测的根）
-  const runDir = resolveRunDir(localRoots.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) });
+  // 显式工作区优先：验证/临时工作区的 run 不在实例桶布局下（<ws>/workspace/runs/<id>），
+  // 只按实例 runsRoot 解析会落到桶里的同名残留目录（真机 ws2 事故：启动件被"布点"进
+  // runs/default，且读的是 10-24 的旧件）。显式给了工作区就按 RunLayout 单源解析。
+  const explicitWorkspace = typeof args["workspace_path"] === "string" ? args["workspace_path"].trim() : "";
+  const runDir = (() => {
+    if (explicitWorkspace !== "") {
+      const resolved = resolvePipelineRunDir(explicitWorkspace, runId);
+      if (!("error" in resolved)) return resolved.runDir;
+    }
+    // D115：run 目录单源（与 scratch 同一解析——run 树启动件/就绪检测的根）
+    return resolveRunDir(localRoots.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) });
+  })();
   const scratchDir = join(runDir, "scratch");
-  mkdirSync(scratchDir, { recursive: true });
+  // 显式工作区形态不代建目录：工作区路径是否存在由治理工具校验——此处无条件 mkdir
+  // 会把「不存在的路径」变成存在，绕过 atf_create_experiment 的「不代建顶层工作区
+  // 目录」闸（真机表现为该工具对不存在路径返回 ok:true）。
+  if (explicitWorkspace === "" || existsSync(explicitWorkspace)) {
+    mkdirSync(scratchDir, { recursive: true });
+  }
   const sessionId = sessionIdOfExec(exec);
   const home = join(localRoots.execHome, sessionHomeSlug(sessionId ?? "default"));
   mkdirSync(home, { recursive: true });
@@ -241,6 +257,10 @@ export const buildBridgeTools = (
       defineTool({
         name: definition.name,
         description: definition.description,
+        // 参数面单一真相源＝定义处（workspaceTools 的 LAUNCH_EXECUTE_PARAMS 已含
+        // run_id／workspace_path／launch_sh 三形态／config 自动探测）——此处只做投影，
+        // 不得二次增删参数：投影层加的参数 handler 不读，是假参数（真机踩过，
+        // 模型照 schema 传了却被 handler 判缺参）。
         parameters: translateParameters(definition.parameters),
         output: {
           schema: looseObjectOutput,

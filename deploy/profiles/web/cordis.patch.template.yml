@@ -42,6 +42,7 @@
         models:
           - id: glm-5.3
             name: GLM-5.3
+            input: [text, image]
             contextWindow: 1048576
             maxTokens: 131072
             reasoningEfforts:
@@ -51,6 +52,7 @@
               max: max
           - id: glm-5.3-flash
             name: GLM-5.3-Flash
+            input: [text, image]
             contextWindow: 1048576
             maxTokens: 131072
             reasoningEfforts:

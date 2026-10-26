@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows, pixelPairViolationOf, READONLY_CONFIG_KEYS } from "../../../../src/webui/configConfirm.js";
+import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows, pixelPairViolationOf, READONLY_CONFIG_KEYS, configFieldPlaceholderOf } from "../../../../src/webui/configConfirm.js";
 
 /** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型；批㊶-Q 增第四态 agent_recommend，
  *  仅全自动档采纳 agent 参数推荐时由本文件后处理标注，buildConfigConfirmFields 不产出该态）。
@@ -116,7 +116,8 @@ const PIXEL_PAIR_LABELS: Record<string, string> = {
  *  批次 R H1-2 改值后建议值＝9000 惯例基线；必填拦空兜底保留——用户清空提交仍拦）。
  *  批次 R H1-1：max_model_len 只读——不生成输入框（值恒单源惯例基线，卡面三要素区只读呈现，
  *  独立取值禁 cutoff 推导）。A1：与回归断言单源。b5 像素对：两键呈现名中文化＋hint 尾
- *  来源标注（默认/用户——指令 b5 §三）。 */
+ *  来源标注（默认/用户——指令 b5 §三）。H7c：留空＝回退 deploy 的键（卡位）补输入框占位
+ *  提示——空值看着像没填，提示文案单源 configFieldPlaceholderOf，提示不入值。 */
 /** 卡面只读行（D92 单源）：dataset_keys 不入表单输入框（READONLY_CONFIG_KEYS 过滤），
  *  实算值经只读行如实呈现——值在＝「数据集键（实算，只读）：<值>」；值缺（IterationConfig
  *  缺席/未实算）＝如实「实算值未产出」，不造占位数。 */
@@ -133,11 +134,14 @@ export const configFormFieldsOf = (fields: ConfigConfirmField[], gpuCount: numbe
     const hint = domainHintOf(field.key, gpuCount);
     const pixelPair = PIXEL_PAIR_LABELS[field.key] !== undefined;
     const sourceNote = pixelPair ? `（来源：${field.tag === "need_confirm" ? "用户" : "默认"}）` : "";
+    // H7c：留空＝回退 deploy 的键补占位提示（呈现层，不入值——值仍为空串）
+    const emptyHint = configFieldPlaceholderOf(field.key, gpuCount);
     return {
       key: field.key,
       label: PIXEL_PAIR_LABELS[field.key] ?? field.key,
       value: field.value,
       ...(hint !== undefined || sourceNote !== "" ? { hint: `${hint ?? ""}${sourceNote}` } : {}),
+      ...(emptyHint !== undefined ? { placeholder: emptyHint } : {}),
       ...(field.key === "max_total_tokens" && field.value.trim() === ""
         ? {
             required: true,
@@ -432,7 +436,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       // pending 态卡面——九要素确认标题（具体 fields 在 execute 中构造后经 content 呈现）
       return {
         card: "generic" as const,
-        title: args.action === "amend" ? `九要素配置确认（改参重呈）— ${args.run_id}` : `九要素训练配置确认 — ${args.run_id}`,
+        title: args.action === "amend" ? `参数变更请示（仅改动项）— ${args.run_id}` : `九要素训练配置确认 — ${args.run_id}`,
         kind: "other" as const,
       }
     },
@@ -526,6 +530,27 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const rawOverrides = (args.overrides ?? {}) as Record<string, unknown>;
       const overrides: Record<string, string> = {};
       for (const [key, value] of Object.entries(rawOverrides)) overrides[key] = String(value);
+      // H7b：overrides 路径同样联动 alpha=2×rank（此前只有 iteration 建议值那条路联动）
+      if (overrides["lora_rank"] !== undefined) {
+        overrides["lora_alpha"] = String(loraAlphaFor(Number(overrides["lora_rank"])));
+      }
+      // H7a：overrides 也走同一道形状校验（此前 clamp 只作用于 iteration 建议值，
+      // 导致 image_min_pixels=802816 与 max_total_tokens>cutoff 能直接进卡）
+      if (overrides["image_min_pixels"] !== undefined && overrides["image_min_pixels"].trim() !== "65536") {
+        return asToolValue({
+          ok: false, error: "image_min_pixels_fixed", run_id: args.run_id,
+          value: overrides["image_min_pixels"],
+          note: "像素下限固定 65536（数据构造/训练/评估同一像素对），不接受改动；只可改上限（image_max_pixels）",
+        });
+      }
+      if (overrides["max_total_tokens"] !== undefined && overrides["cutoff_len"] !== undefined
+        && Number(overrides["max_total_tokens"]) > Number(overrides["cutoff_len"])) {
+        return asToolValue({
+          ok: false, error: "max_total_tokens_exceeds_cutoff", run_id: args.run_id,
+          max_total_tokens: overrides["max_total_tokens"], cutoff_len: overrides["cutoff_len"],
+          note: "总预算不得超过单条截断长度（cutoff_len）——两者是上下界关系，请先调 cutoff_len 或压低预算",
+        });
+      }
       let amendNote: string | undefined;
       let amended: Record<string, string> | undefined;
       // 批㊶-W F5：结构化值域 clamp 表（amend edits 与表单卡提交共用——文字解析链退役，
@@ -562,7 +587,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         for (const [key, value] of Object.entries(rawEdits)) amended[key] = String(value);
         // 改参值一律过确定性护栏（同 L3 clamp 域）——越界回退到域边界＋说明可读（不静默）
         const clampedKeys = clampEdits(amended);
-        amendNote = `已按结构化改参重呈：${Object.keys(amended).join(", ")}；其余按现值${clampedKeys.length > 0 ? `；越界拦截回退（域边界）：${clampedKeys.join("、")}` : ""}`;
+        amendNote = `已提交变更请示：${Object.keys(amended).join(", ")}；其余按现值${clampedKeys.length > 0 ? `；越界拦截回退（域边界）：${clampedKeys.join("、")}` : ""}`;
       }
       // 批㊶R前置②：卡数基线＝机器事实拉满（owner 裁定：训练默认拉满可用卡·训练时长优先）——
       // iteration-config/快照显式值（from_registry）优先保留；用户显式覆盖（overrides/amend）
@@ -612,7 +637,10 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       if ("error" in accumDerived) {
         return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: accumDerived.error });
       }
-      baseline["gradient_accumulation_steps"] = String(accumDerived.accum);
+      // H7g：派生只填空缺——用户显式给了 accum 就不派生（今天实测：卡上 2 落盘 16）
+      if (overrides["gradient_accumulation_steps"] === undefined) {
+        baseline["gradient_accumulation_steps"] = String(accumDerived.accum);
+      }
       // P-1c：deepspeed 智能缺省＝ds_z3_offload（显式 > 缺省——iteration-config 显式声明优先）
       if (baseline["deepspeed"] === undefined) baseline["deepspeed"] = SMART_DEEPSPEED_DEFAULT;
       let fields: ConfigConfirmField[] = (() => {
@@ -702,7 +730,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         if (accumField !== undefined) accumField.value = String(reDerived.accum);
         guardNotes.push(hit.note);
       }
-      const title = args.action === "amend" ? `九要素配置确认（改参重呈）— run ${args.run_id}` : `九要素训练配置确认 — run ${args.run_id}`;
+      const title = args.action === "amend" ? `参数变更请示（仅改动项）— run ${args.run_id}` : `九要素训练配置确认 — run ${args.run_id}`;
       // 批㊶-W F5：双段式文案（共用 helper——表单卡改值提交，聊天打字路径退役）
       const baseNote = dualStageNote("九要素确认卡", { amendNote: amendNote });
       const note = guardNotes.length > 0 ? `${baseNote}\n${guardNotes.join("\n")}` : baseNote;

@@ -128,18 +128,34 @@ describe("E9a·H5——多类先 fail-closed（evaluate/analyze 卡前快败；�
     };
   };
 
-  it("atf_evaluate start 多类 run → eval_multi_doc_unsupported（先于参数校验；说明本轮不支持）", async () => {
+  // 撤多类闸后（ADR-0017 决定 1：N=1 与 N>1 同一条代码路径）旧 eval_multi_doc_unsupported
+  // 已退役；多类 run 带单类入参＝歧义，按新码卡前快败（单类入参不能冒充多类）。
+  it("atf_evaluate start 多类 run ＋ 显式单类入参 → eval_inputs_ambiguous_in_multi_doc（卡前快败、零 spawn）", async () => {
     const root = tempRoot();
     const runDir = join(root, "run-multi");
     seedSlot(runDir, "do", ["do_goods"]);
     seedSlot(runDir, "swb", ["swb_goods"], "2b3c4d5e");
     const { evaluate } = buildTools(root);
     const result = await evaluate.execute({ action: "start", run_id: "run-multi", adapter_path: join(runDir, "training", "checkpoint-1"), eval_assets_dir: "/abs/a", service_config: "/abs/s.json", env_profile: "p" }, fakeExec);
-    expect(result["error"]).toBe("eval_multi_doc_unsupported");
+    expect(result["error"]).toBe("eval_inputs_ambiguous_in_multi_doc");
     expect(result["doc_types"]).toEqual(["do", "swb"]);
-    expect(String(result["note"])).toContain("本轮尚不支持一次评多类");
-    expect(String(result["note"])).toContain("不要只挑其中一类静默评");
+    expect(result["explicit_inputs"]).toEqual(expect.arrayContaining(["eval_assets_dir"]));
+    expect(String(result["note"])).toContain("单类入参");
+    expect(String(result["note"])).toContain("槽位表派生");
     expect(result["started"]).toBe(false);
+  });
+
+  it("atf_evaluate start 多类 run 且无单类入参 → 不再撞多类闸（同一路径继续到下游参数校验）", async () => {
+    const root = tempRoot();
+    const runDir = join(root, "run-multi-clean");
+    seedSlot(runDir, "do", ["do_goods"]);
+    seedSlot(runDir, "swb", ["swb_goods"], "2b3c4d5e");
+    const { evaluate } = buildTools(root);
+    const result = await evaluate.execute({ action: "start", run_id: "run-multi-clean" }, fakeExec);
+    expect(result["error"]).not.toBe("eval_multi_doc_unsupported");
+    expect(result["error"]).not.toBe("eval_inputs_ambiguous_in_multi_doc");
+    // 撤闸＝继续走既有参数链（fixture 无产物，首个缺口为 adapter_path_missing）
+    expect(result["error"]).toBe("adapter_path_missing");
   });
 
   it("atf_evaluate status 不受闸（查询面无害）；单类 run start 不触发多类闸（走后续参数校验链）", async () => {
@@ -154,14 +170,16 @@ describe("E9a·H5——多类先 fail-closed（evaluate/analyze 卡前快败；�
     expect(start["error"]).not.toBe("eval_multi_doc_unsupported");
   });
 
-  it("atf_analyze_badcases 多类 run → eval_multi_doc_unsupported（同裁）", async () => {
+  it("atf_analyze_badcases 多类 run 不再撞多类闸（撤闸后进入下游链；fixture 无内核脚本即如实报缺）", async () => {
     const root = tempRoot();
     const runDir = join(root, "run-ana");
     seedSlot(runDir, "do", ["do_goods"]);
     seedSlot(runDir, "swb", ["swb_goods"], "2b3c4d5e");
     const { analyze } = buildTools(root);
     const result = await analyze.execute({ run_id: "run-ana" }, fakeExec);
-    expect(result["error"]).toBe("eval_multi_doc_unsupported");
-    expect(String(result["note"])).toContain("本轮尚不支持一次评多类");
+    expect(result["error"]).not.toBe("eval_multi_doc_unsupported");
+    expect(String(result["note"])).not.toContain("本轮尚不支持一次评多类");
+    // 下游如实失败（fixture 的 kernelDir 无联合分析脚本）——不静默、不伪装成功
+    expect(String(result["error"])).toBe("skill_script_missing");
   });
 });

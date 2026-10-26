@@ -62,6 +62,7 @@ import { humanizeKernelError, scanKernelErrorFace } from "../../../../src/core/w
 // E9a·H2-H5：评估面走 docSlots 唯一路径表（ADR-0017 决定 10/12——禁再自拼槽位路径）
 import { listDocSlots } from "../../atf-ui/src/docSlots.js";
 import { queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
+import { buildEvalOrchArgs } from "./evalOrchArgs.js";
 
 // ── 批㊶Q增补三 段2：start 探活（终结 started:true 假成功）──
 
@@ -784,7 +785,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
             if (parsed.confirmed !== undefined && parsed.confirmed !== null) return parsed.confirmed;
           }
         } catch { /* 降级 iteration-config */ }
-        for (const candidate of [join(snapDir, "prep", "iteration-config.json"), join(snapDir, "prep", "iteration-config", "iteration-config.json")]) {
+        for (const candidate of [join(snapDir, "prep", "iteration-config", "iteration-config.json"), join(snapDir, "prep", "iteration-config.json")]) {
           try {
             if (!existsSync(candidate)) continue;
             const iter = JSON.parse(readFileSync(candidate, "utf8")) as { training?: Record<string, unknown> };
@@ -1003,7 +1004,7 @@ export function checkStartModelPath(
   runDir: string,
   env: Readonly<Record<string, string | undefined>>,
 ): { ok: true; path: string } | { ok: false; path: string | null; reason: string; reasonText: string; models: string[]; root: string } {
-  const candidates = [join(runDir, "prep", "iteration-config.json"), join(runDir, "prep", "iteration-config", "iteration-config.json")];
+  const candidates = [join(runDir, "prep", "iteration-config", "iteration-config.json"), join(runDir, "prep", "iteration-config.json")];
   let configPath: string | null = null;
   let iter: Record<string, unknown> | null = null;
   for (const candidate of candidates) {
@@ -1559,8 +1560,8 @@ export const projectConcurrencyMetricLine = (value: string, source: string): str
 
 /** iteration-config 双形态候选（与 checkStartModelPath 同面——prep/ 平铺与目录两形态）。 */
 export const iterationConfigCandidates = (runDir: string): string[] => [
-  join(runDir, "prep", "iteration-config.json"),
   join(runDir, "prep", "iteration-config", "iteration-config.json"),
+  join(runDir, "prep", "iteration-config.json"),
 ];
 
 /** run 记录的字段配置指纹（dataset.digest_provenance.field_config_sha256；可读候选首个权威；
@@ -1948,12 +1949,22 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // E9a·H5：多类先 fail-closed——一次评多类（逐类推理调度）在下一批落地，本批禁止
       // 静默只评一类（字段闭集串类＝指标无意义，ADR-0017 决定 10）。槽位表>1 即卡前快败
       //（零产物零审批零 spawn；legacy 平铺 run 表空不触发本闸）。
+      // H-E9b：一条路（ADR-0017 决定 1）——N 个槽位同一条路径，N=1 就是 1 个槽位。
+      // 逐类输入（资产/字段配置/分区清单/lane）由内核 --run 按权威槽位表派生；
+      // 显式单值参数只在**单槽位**时可用（此时等同覆盖），多槽位下无法挑代表即快败。
       const evalSlots = listDocSlots(runDir);
-      if (evalSlots.length > 1) {
+      const evalDocTypes = evalSlots.map((slot) => slot.doc_type);
+      const multiDoc = evalSlots.length > 1; // eval_doc_types_derived
+      const explicitSingleInputs = [
+        typeof args.eval_assets_dir === "string" && args.eval_assets_dir.trim() !== "" ? "eval_assets_dir" : null,
+        typeof args.field_config === "string" && args.field_config.trim() !== "" ? "field_config" : null,
+        typeof args.assets_split_manifest === "string" && args.assets_split_manifest.trim() !== "" ? "assets_split_manifest" : null,
+      ].filter((v): v is string => v !== null);
+      if (multiDoc && explicitSingleInputs.length > 0) {
         return asToolValue({
-          started: false, error: "eval_multi_doc_unsupported", run_id: runId,
-          doc_types: evalSlots.map((slot) => slot.doc_type),
-          note: `本 run 有 ${String(evalSlots.length)} 类单据（${evalSlots.map((slot) => slot.doc_type).join("、")}）——本轮尚不支持一次评多类（逐类评估在下一批落地）；当前请对单类 run 发起评估，不要只挑其中一类静默评`,
+          started: false, error: "eval_inputs_ambiguous_in_multi_doc", run_id: runId, doc_types: evalDocTypes,
+          explicit_inputs: explicitSingleInputs,
+          note: `本 run 有 ${String(evalSlots.length)} 类单据（${evalDocTypes.join("、")}）——${explicitSingleInputs.join("／")} 是单类入参，无法代表多类；去掉这些参数后重试，逐类输入由内核按槽位表派生`,
         });
       }
       // D32：status 只按 run/轮次查询（start 四参降 optional）；start 路径逐参验证
@@ -1985,7 +1996,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
           ? { path: args.assets_split_manifest.trim(), source: "explicit" as const }
           : null) // 显式 owner 外部确认优先于自动发现（发现仅补缺席——不覆盖显式选择的外部通道）
         : resolveEvalSplitManifest(runDir, args.assets_split_manifest);
-      if (splitManifestResolved === null && args.assets_external_confirm !== true) {
+      if (!multiDoc && splitManifestResolved === null && args.assets_external_confirm !== true) {
         return asToolValue({
           started: false, error: "eval_assets_binding_missing", eval_assets_dir: args.eval_assets_dir,
           note: "评估资产须显式绑定：跨 run/发布区资产传 assets_split_manifest（分区清单——内核逐页校验 ⊆ test 分区），或经 owner 级确认传 assets_external_confirm=true（外部显式通道）；本 run 树内 l1/ 或 publish-* 下的 split-manifest.json 可自动发现绑定，补参或落件后重试",
@@ -1996,7 +2007,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       }
       // 批㊶Q增补三 段3：run 目录已由 resolveToolRun 双形态解析（显式/绑定 run 均须已存在）
       if (!existsSync(args.service_config)) return asToolValue({ started: false, error: "service_config_missing", path: args.service_config });
-      if (!existsSync(join(args.eval_assets_dir, "eval_labels.jsonl")) || !existsSync(join(args.eval_assets_dir, "test_images.json"))) {
+      if (!multiDoc && (!existsSync(join(String(args.eval_assets_dir), "eval_labels.jsonl")) || !existsSync(join(String(args.eval_assets_dir), "test_images.json")))) {
         return asToolValue({ started: false, error: "eval_assets_missing", eval_assets_dir: args.eval_assets_dir, note: "test_images.json+eval_labels.jsonl 必备" });
       }
       // —— 批D17：并发参数门（先于一切产物生成——超容量零落盘零审批；容量单源＝
@@ -2014,7 +2025,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // —— D14：评测参数继承（先于一切产物生成——解析失败零编排启动零落盘）——
       // field_config 缺省自动继承训练（显式传入→覆盖，漂移仅告警）；prompt_mode 缺省继承训练声明。
       const fieldConfigResolved = resolveEvalFieldConfig(runDir, args.field_config);
-      if (!fieldConfigResolved.ok) {
+      if (!multiDoc && !fieldConfigResolved.ok) {
         return asToolValue({
           started: false, error: fieldConfigResolved.error, run_id: runId,
           ...(fieldConfigResolved.error === "eval_field_config_unresolved" ? { field_config_expected: fieldConfigResolved.path } : {}),
@@ -2026,7 +2037,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // pipelineFace A-E14b）：显式 lane ＞ 任务事实（run 内 training-data-manifest lanes 键集
       // 恰一 lane）；判定不了即停——禁缺省 goods。checkpoint staging selections 用判定值。
       const evalLaneResolved = resolveEvalLaneFrom(runDir, args.lane);
-      if (!evalLaneResolved.ok) {
+      if (!multiDoc && !evalLaneResolved.ok) {
         return asToolValue({
           started: false, error: "eval_lane_unresolved", run_id: runId,
           ...(evalLaneResolved.lanesSeen !== undefined ? { lanes_seen: evalLaneResolved.lanesSeen } : {}),
@@ -2035,9 +2046,12 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
           note: EVAL_LANE_UNRESOLVED_NOTE_OF(evalLaneResolved.lanesSeen),
         });
       }
-      const evalLane = evalLaneResolved.lane;
-      const caliber = computeEvalCaliber(fieldConfigResolved.path, args.eval_assets_dir, promptMode);
-      const caliberLine = formatEvalCaliberLine(caliber);
+      // 多槽位：staging 标签取 joint（同一 adapter 服务全体类；lane 本身逐类，见 doc_slots lanes）
+      const evalLane = evalLaneResolved.ok ? evalLaneResolved.lane : "joint";
+      // 多槽位：字段配置逐类由内核派生，harness 侧不再持有一份（禁挑一类当代表）
+      const fieldConfigPath = fieldConfigResolved.ok ? fieldConfigResolved.path : undefined;
+      const caliber = fieldConfigPath !== undefined ? computeEvalCaliber(fieldConfigPath, args.eval_assets_dir, promptMode) : null;
+      const caliberLine = caliber !== null ? formatEvalCaliberLine(caliber) : null;
       const roundDir = deriveEvalRoundDir(runDir);
       const serviceDir = join(roundDir, "service");
       const deployArgs = args.deploy !== undefined ? ["--deploy", args.deploy] : [];
@@ -2073,7 +2087,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 主动推理域，串行缺省无推荐；内核校验推荐值 ≤ max_num_seqs——harness 不设第二套）
       const reportPath = join(serviceDir, "service-prelaunch-report.md");
       const reported = await runCapture("python3", [prelaunch, "--service-dir", serviceDir, "--env-profile", args.env_profile, "--out", reportPath,
-        "--field-config", fieldConfigResolved.path, "--prompt-renderer", skill("atf-admit-training-data", "render_prompt.py"),
+        "--field-config", fieldConfigPath ?? "", "--prompt-renderer", skill("atf-admit-training-data", "render_prompt.py"),
         "--concurrency", String(concurrency),
         ...(args.concurrency !== undefined ? ["--concurrency-recommended", String(concurrency)] : []),
         ...(args.concurrency_reason !== undefined && args.concurrency_reason.trim() !== "" ? ["--concurrency-reason", args.concurrency_reason.trim()] : [])], 120_000, evalChildEnvOf());
@@ -2098,7 +2112,9 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
           `确认摘要：${summary.headline}`,
           ...summary.metrics,
           ...(caliberLine !== null ? [caliberLine] : []),
-          `字段配置：${fieldConfigResolved.source === "run_recorded" ? "继承训练记录（run_recorded）" : "显式传入（explicit）"}${fieldConfigResolved.warning !== undefined ? "——与训练记录指纹不一致，按显式覆盖执行" : ""}`,
+          fieldConfigResolved.ok
+            ? `字段配置：${fieldConfigResolved.source === "run_recorded" ? "继承训练记录（run_recorded）" : "显式传入（explicit）"}${fieldConfigResolved.warning !== undefined ? "——与训练记录指纹不一致，按显式覆盖执行" : ""}`
+            : `字段配置：逐类派生（${String(evalDocTypes.length)} 类单据，由内核按槽位表各取各的配置）`,
           // D114：分区清单来源行（信息行，不新增确认项——自动发现不静默，run 树 l1/ 与
           // publish-* 布局如实标注；owner 外部确认通道明示）
           ...(splitManifestResolved !== null
@@ -2142,15 +2158,23 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const port = Number((manifest["request_defaults"] as Record<string, unknown> | undefined)?.["port"] ?? (JSON.parse(readFileSync(args.service_config, "utf8")) as Record<string, unknown>)["port"]);
       const orchDir = join(roundDir, "orch");
       const promptRendererPath = skill("atf-admit-training-data", "render_prompt.py");
-      const orchArgs = [orchestration, "--service", serviceDir, "--ckpt", ckptPlanDir, "--out", orchDir,
-        "--eval-runner", runner, "--prompt-renderer", promptRendererPath,
-        "--assets", args.eval_assets_dir, "--field-config", fieldConfigResolved.path,
-        "--base-url", `http://127.0.0.1:${port}/v1`, "--env-profile", args.env_profile,
+      // H-E9b：组装单点 buildEvalOrchArgs（N=1 与 N>1 同路径两形态；N=1 逐字恒等有黄金锚）
+      const orchArgs = buildEvalOrchArgs({
+        orchestration, serviceDir, ckptPlanDir, orchDir, runner, promptRenderer: promptRendererPath,
+        port, envProfile: args.env_profile,
         // 批D17：并发贯通编排（恒传，缺省 1——generator 内嵌进 runner 调用与 plan 口径披露；
         // 值来源＝prelaunch 确认值，容量校验由 prelaunch 承载，此处不设第二套）
-        "--concurrency", String(concurrency),
-        ...(splitManifestResolved !== null ? ["--split-manifest", splitManifestResolved.path] : []),
-        ...(args.assets_external_confirm === true ? ["--assets-external-confirm"] : [])];
+        concurrency,
+        // 单槽位：单值三参；多槽位：只给 --run（内核按槽位逐类派生，单值三参互斥）
+        ...(multiDoc
+          ? { runDir }
+          : {
+              assetsDir: args.eval_assets_dir,
+              fieldConfig: fieldConfigPath ?? "",
+              ...(splitManifestResolved !== null ? { splitManifest: splitManifestResolved.path } : {}),
+              ...(args.assets_external_confirm === true ? { assetsExternalConfirm: true } : {}),
+            }),
+      });
       const orchPlanned = await runCapture("python3", orchArgs, 120_000, evalChildEnvOf());
       if (orchPlanned.code !== 0) {
         return asToolValue({
@@ -2189,11 +2213,13 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         prelaunch_report: reportPath, release: "eval-release 账本已登记（config sha256）",
         ...(approvalEntryId !== undefined ? { approval_entry_id: approvalEntryId } : {}),
         // D14：评测参数继承落账（报告面——解析来源/指纹/口径；GT 外字段只在此报告面，不上卡）
-        field_config: fieldConfigResolved.path,
-        field_config_source: fieldConfigResolved.source,
-        field_config_sha256: fieldConfigResolved.sha256,
-        field_config_sha256_prefix12: fieldConfigResolved.sha256.slice(0, 12),
-        ...(fieldConfigResolved.warning !== undefined ? { field_config_warning: fieldConfigResolved.warning } : {}),
+        ...(fieldConfigResolved.ok ? {
+          field_config: fieldConfigResolved.path,
+          field_config_source: fieldConfigResolved.source,
+          field_config_sha256: fieldConfigResolved.sha256,
+          field_config_sha256_prefix12: fieldConfigResolved.sha256.slice(0, 12),
+          ...(fieldConfigResolved.warning !== undefined ? { field_config_warning: fieldConfigResolved.warning } : {}),
+        } : { field_config: null, field_config_source: "per_doc_derived" as const }),
         prompt_mode: promptMode.mode,
         prompt_mode_source: promptMode.source,
         eval_caliber: caliber,
@@ -2234,11 +2260,32 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const runDir = runResolution.runDir;
       // E9a·H5：多类先 fail-closed（与 atf_evaluate 同裁——一次评多类下一批落地，禁静默只评一类）
       const analyzeSlots = listDocSlots(runDir);
+      const analyzeDocTypes = analyzeSlots.map((slot) => slot.doc_type);
+      // H-E9b：多槽位走内核联合一键入口（run_joint_analysis.py --run）——它按槽位表枚举
+      // 评估轮下全部 <单据>-<模式> 组，逐组解析输入，产出 run 级一份报告＋一个查看器
+      //（单据/模式可筛选）。单槽位仍走既有两步链（freeze→chain），两者是内核的两个入口，
+      // 不是 harness 侧的两套实现；选哪个人由槽位数决定（数据驱动，非路径复制）。
       if (analyzeSlots.length > 1) {
+        const jointScript = join(cfg.kernelDir, "skills", "atf-analyze-badcases", "scripts", "run_joint_analysis.py");
+        if (!existsSync(jointScript)) {
+          return asToolValue({ ok: false, error: "skill_script_missing", script: jointScript, note: "pin 内技能脚本缺失——核 kernelDir 装配" });
+        }
+        const jointOut = join(runDir, "analysis");
+        const jointArgs = [jointScript, "--run", runDir, "--output-dir", jointOut,
+          ...(args.lane !== undefined && args.lane.trim() !== "" ? ["--lane", args.lane.trim()] : [])];
+        const joint = await runCapture("python3", jointArgs, 600_000, evalChildEnvOf());
+        if (joint.code !== 0) {
+          return asToolValue({
+            ok: false, step: "joint_analysis", exit_code: joint.code, analysis_dir: jointOut,
+            stderr_tail: joint.stderr.slice(-800),
+            doc_types: analyzeDocTypes,
+            note: "逐类分析失败（run_joint_analysis 非零退出）——按 stderr 修正后重试；输入缺失时内核以 joint_slot_labels_missing 列出候选路径",
+          });
+        }
         return asToolValue({
-          ok: false, error: "eval_multi_doc_unsupported", run_id: runId,
-          doc_types: analyzeSlots.map((slot) => slot.doc_type),
-          note: `本 run 有 ${String(analyzeSlots.length)} 类单据（${analyzeSlots.map((slot) => slot.doc_type).join("、")}）——本轮尚不支持一次评多类（逐类评估在下一批落地）；当前请对单类 run 发起分析`,
+          ok: true, mode: "multi_doc", doc_types: analyzeDocTypes,
+          analysis_dir: jointOut, report: join(jointOut, "report.md"), viewer: join(jointOut, "viewer.html"),
+          note: `逐类分析完成（${analyzeDocTypes.join("、")}）：一份报告＋一个查看器，按单据/模式可筛选`,
         });
       }
       // pin 单源脚本面（批㉕B 段1：禁 ATF 源工作树绝对路径）

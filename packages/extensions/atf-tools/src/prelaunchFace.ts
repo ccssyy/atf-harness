@@ -25,11 +25,16 @@ import { resolvePipelineRunDir, runPipeline } from "./pipelineFace.js";
 /** 报告读回摘要行数上限（head 截断——全文落盘在 report_path，摘要仅呈现面）。 */
 const REPORT_SUMMARY_HEAD_LINES = 24;
 
-/** IterationConfig 两形态探测（confirmFace 读序同源：live ＞ legacy；都不在＝拒并指路）。 */
+/** IterationConfig 两形态探测（读序＝内核 RunLayout 单源：目录形态 live ＞ 平铺 legacy；
+ *  都不在＝拒并指路）。
+ *
+ *  真机教训（ws2 联合 run）：两者并存时按「平铺优先」会读到 01:21 的陈旧副本
+ *  （sha 与 launch_manifest 指纹不符），而内核实际写的是目录形态——优先级必须与
+ *  RunLayout 一致，否则预检/放行在陈旧件上对账。 */
 const detectIterationConfig = (runDir: string): { path: string; form: "live" | "legacy" } | null => {
-  const live = join(runDir, "prep", "iteration-config.json");
+  const live = join(runDir, "prep", "iteration-config", "iteration-config.json");
   if (existsSync(live)) return { path: live, form: "live" };
-  const legacy = join(runDir, "prep", "iteration-config", "iteration-config.json");
+  const legacy = join(runDir, "prep", "iteration-config.json");
   if (existsSync(legacy)) return { path: legacy, form: "legacy" };
   return null;
 };

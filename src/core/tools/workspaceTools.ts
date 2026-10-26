@@ -239,16 +239,40 @@ const SKILL_READ_CANONICAL: SchemaNode = {
   },
 };
 
-/** atf_launch_execute 参数。 */
+/** atf_launch_execute 参数。
+ *
+ *  两种调用形态等价（run 直调优先）：真机教训是启动件本来就由内核落在 <run>/launch/，
+ *  而参数面把 launch_sh 的语义锁死在 scratch（launch_ready）——模型手上没有 scratch 路径，
+ *  于是判定「没有合法调用方式」并把执行推回 operator。系统知识不得由持有人提示词承载：
+ *  形态须在 schema 与错误回流里自陈。
+ *    ① run 直调：run_id（+ workspace_path）→ launch_sh 缺席时默认 <run>/launch/launch.sh；
+ *    ② scratch 路径：launch_sh＝atf_scratch_exec 返回的 launch_ready.launch_sh。
+ *  launch_sh 自身三形态（绝对＝run 树内守卫／相对＝run 树优先／scratch 回落）见
+ *  resolveLaunchShPath；config 省略时按 run 树 canonical→legacy 探测（见 handler）。
+ */
 const LAUNCH_EXECUTE_PARAMS: SchemaNode = {
   type: "object",
-  required: ["launch_sh"],
+  required: [],
   properties: {
-    launch_sh: { type: "string", description: "launch.sh 的 scratch 相对路径（来自 atf_scratch_exec 返回的 launch_ready.launch_sh）" },
+    run_id: {
+      type: "string",
+      optional: true,
+      description: "run 标识（run 直调形态）：与 workspace_path 一起定位 <workspace_path>/workspace/runs/<run_id>；launch_sh 省略时取其 launch/launch.sh",
+    },
+    workspace_path: {
+      type: "string",
+      optional: true,
+      description: "工作区根绝对路径（run 直调形态）：run 落在 <workspace_path>/workspace/runs/<run_id>（RunLayout 单源）。验证/临时工作区必须显式给，否则按实例 runs 桶解析可能落到同名残留目录",
+    },
+    launch_sh: {
+      type: "string",
+      optional: true,
+      description: "launch.sh 路径，三形态均可：绝对路径（须在本 run 目录内）／run 树内相对路径（如 launch/launch.sh）／scratch 相对路径（atf_scratch_exec 返回的 launch_ready.launch_sh）。run 直调形态下可省略",
+    },
     config: {
       type: "string",
       optional: true,
-      description: "IterationConfig 的 scratch 相对路径（来自 launch_ready.config）。提供时执行放行记录登记（--record-training-release，须用户确认），随后执行 launch.sh",
+      description: "IterationConfig 路径（run 树内相对或绝对均可）。省略时按 run 树 prep/iteration-config/iteration-config.json → prep/iteration-config.json 探测；提供后执行放行记录登记（--record-training-release，须用户确认），随后执行 launch.sh",
     },
     note: { type: "string", optional: true, description: "放行记录备注（缺省标注来源为启动确认卡）" },
   },
@@ -725,10 +749,49 @@ const resolveConfigPath = (
 
 const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
   if (!isPlainObject(rawParams)) return rejected("invalid_input", { message: "参数须为 JSON 对象" });
-  const launchShRel = stringParam(rawParams, "launch_sh");
-  if (launchShRel === undefined) return rejected("invalid_input", { message: "launch_sh 须为非空字符串" });
-  const configRel = stringParam(rawParams, "config");
   const note = stringParam(rawParams, "note") ?? "训练启动确认卡放行";
+
+  // ① launch.sh 定位（形态收敛）：显式 launch_sh 三形态直通；缺席则按 run 直调取
+  // <run>/launch/launch.sh。缺参不静默——错误里把两种合法形态都点名，模型不必猜。
+  let launchShRel = stringParam(rawParams, "launch_sh");
+  let launchTargetForm = "explicit";
+  if (launchShRel === undefined) {
+    if (host.runDir === undefined) {
+      return rejected("launch_target_unresolved", {
+        message:
+          "未给出 launch_sh，且当前装配无 run 目录可回退——请改用任一种合法形态：" +
+          "① run 直调：run_id（+ workspace_path）由工具按 RunLayout 定位 <run>/launch/launch.sh；" +
+          "② 显式路径：launch_sh 传 launch/launch.sh（run 树内相对）或 atf_scratch_exec 返回的 launch_ready.launch_sh",
+      });
+    }
+    const defaultLaunchSh = join(host.runDir, "launch", "launch.sh");
+    if (!existsSync(defaultLaunchSh)) {
+      return rejected("launch_target_unresolved", {
+        message:
+          `未给出 launch_sh，run 树内也没有默认启动件（${defaultLaunchSh} 不存在）——` +
+          "启动件须先由训练准备段产出；请先跑训练准备/启动编排生成 <run>/launch/launch.sh，或显式传 launch_sh",
+        run_dir: host.runDir,
+        expected: defaultLaunchSh,
+      });
+    }
+    launchShRel = "launch/launch.sh";
+    launchTargetForm = "run_default";
+  }
+
+  // ② config 定位：省略时按 run 树 canonical→legacy 探测（canonical 优先与内核 RunLayout
+  // 同序——平铺副本可能是陈旧件）。探测到即用；都无则保持 skipped_no_config 并在结果如实标注。
+  let configRel = stringParam(rawParams, "config");
+  if (configRel === undefined && host.runDir !== undefined) {
+    for (const candidate of [
+      join(host.runDir, "prep", "iteration-config", "iteration-config.json"),
+      join(host.runDir, "prep", "iteration-config.json"),
+    ]) {
+      if (existsSync(candidate)) {
+        configRel = candidate;
+        break;
+      }
+    }
+  }
   const pythonPath = findPython3(host.pythonPath);
   const env = buildScratchExecEnv({
     scratchDir: host.scratchDir,
@@ -764,6 +827,7 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
   // ② 放行记录（harness 代执行——以用户确认卡为前提；agent 永不代签）
   let releaseRecorded = false;
   let releaseResult = "skipped_no_config";
+  let releaseLedger: string | undefined;
   if (configRel !== undefined) {
     const configGuard = resolveConfigPath(host, configRel);
     if (!configGuard.ok) return rejected(configGuard.reason, { message: configGuard.message });
@@ -784,8 +848,26 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
     const recordScript = join(host.kernelDir, "skills", "atf-prepare-training", "scripts", "generate_train_launch.py");
     const dirs = await ensureExecDirs(host.scratchDir);
     if (!dirs.ok) return rejected(dirs.error.reason, { message: dirs.error.message });
+    // 放行账本单源：以 launch_manifest 的 approval_ledger 为准（train.sh 头部 export 与
+    // launch.sh 放行闸的同一值）。让内核按自身进程 HOME 重新解析会与另外两处错位——真机
+    // 曾出现两份账本：launch.sh 闸读一份、train.sh 闸读另一份，真训必须换两个 HOME 各写
+    // 一遍账才起得来。manifest 未声明（旧产物）时才交回内核解析（其回退只到实例根，不猜 HOME）。
+    const manifestLedger =
+      manifestRecord !== undefined && typeof manifestRecord["approval_ledger"] === "string" && String(manifestRecord["approval_ledger"]).trim() !== ""
+        ? String(manifestRecord["approval_ledger"]).trim()
+        : undefined;
+    releaseLedger = manifestLedger;
     const recorded = await runScratchCommand({
-      argv: [pythonPath, recordScript, "--record-training-release", "--config", configGuard.abs, "--note", note],
+      argv: [
+        pythonPath,
+        recordScript,
+        "--record-training-release",
+        "--config",
+        configGuard.abs,
+        "--note",
+        note,
+        ...(manifestLedger !== undefined ? ["--approval-ledger", manifestLedger] : []),
+      ],
       cwd: host.scratchDir,
       env,
       timeoutMs: 60_000,
@@ -854,6 +936,8 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
       ok: true,
       release_recorded: releaseRecorded,
       release_result: releaseResult,
+      release_config: configRel ?? null,
+      release_ledger: releaseLedger ?? null,
       state: typeof state?.["state"] === "string" ? state["state"] : "unknown",
       ...(typeof state?.["launcher_count"] === "number" ? { launcher_count: state["launcher_count"] as number } : {}),
       ...(typeof state?.["effect_started"] === "boolean" ? { effect_started: state["effect_started"] as boolean } : {}),
@@ -864,6 +948,7 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
       timed_out: launched.value.timed_out,
       ...(launched.value.exit_code !== null ? { exit_code: launched.value.exit_code } : {}),
       launch_sh: launchShRel,
+      launch_target_form: launchTargetForm,
       ...gpuQueueResult,
     },
   };

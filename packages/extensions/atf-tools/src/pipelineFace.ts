@@ -296,8 +296,21 @@ export const resolvePipelineRunDir = (
 /** 预算三参来源三值闭集（审批卡/返回体逐参标注——「缺省不静默」）。 */
 export type ExperimentTokenParamSource = "user_specified" | "config_snapshot" | "unspecified";
 
-/** 三参键闭集（参数名与快照 confirmed 键、九要素卡键同名同义）。 */
-export const EXPERIMENT_TOKEN_PARAM_KEYS: readonly string[] = ["max_total_tokens", "image_min_pixels", "image_max_pixels"];
+/** 预算五参键（参数名与快照 confirmed 键、九要素卡键同名同义）。
+ *  C（2026-10-26）五参同门：cutoff_len／max_model_len 与构造上限、像素对一起经本段进
+ *  实验门 token_gate——内核 b17 起据此落 <run>/prep/token_budget.json（不再写死基线）。 */
+export const EXPERIMENT_TOKEN_PARAM_KEYS: readonly string[] = [
+  "max_total_tokens",
+  "cutoff_len",
+  "max_model_len",
+  "image_min_pixels",
+  "image_max_pixels",
+];
+
+/** 五参键值类型（缺项＝键不在，不造占位）。 */
+export type ExperimentTokenParams = Partial<
+  Record<"max_total_tokens" | "cutoff_len" | "max_model_len" | "image_min_pixels" | "image_max_pixels", number>
+>;
 
 /** 来源标注文案（审批卡行单源）。 */
 export const TOKEN_PARAM_SOURCE_LABEL: Readonly<Record<ExperimentTokenParamSource, string>> = {
@@ -310,12 +323,10 @@ export const TOKEN_PARAM_SOURCE_LABEL: Readonly<Record<ExperimentTokenParamSourc
 export const isSafePositiveInteger = (raw: unknown): raw is number =>
   typeof raw === "number" && Number.isSafeInteger(raw) && (raw as number) > 0;
 
-/** run 目录确认快照兜底读取（webui/config-snapshot.json 的 confirmed 子对象三键；
+/** run 目录确认快照兜底读取（webui/config-snapshot.json 的 confirmed 子对象五键；
  *  快照缺席/键非安全正整数＝该键无兜底值（如实 unspecified，不造占位）。 */
-export const snapshotTokenParamsOf = (
-  runDir: string,
-): { max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number } => {
-  const out: { max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number } = {};
+export const snapshotTokenParamsOf = (runDir: string): ExperimentTokenParams => {
+  const out: ExperimentTokenParams = {};
   try {
     const parsed = JSON.parse(readFileSync(join(runDir, "webui", "config-snapshot.json"), "utf8")) as {
       confirmed?: Record<string, unknown>;
@@ -326,38 +337,36 @@ export const snapshotTokenParamsOf = (
       const raw = (confirmed as Record<string, unknown>)[key];
       // 快照键值历史形态为字符串（九要素卡值全字符串面）——数字/纯数字串均认
       const num = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw.trim()) : NaN;
-      if (isSafePositiveInteger(num)) out[key as "max_total_tokens" | "image_min_pixels" | "image_max_pixels"] = num;
+      if (isSafePositiveInteger(num)) out[key as keyof ExperimentTokenParams] = num;
     }
   } catch { /* 快照缺席/解析失败＝无兜底值（fail-open：兜底面不阻塞段触发） */ }
   return out;
 };
 
-/** 预算三参终值解析（仅 experiment_setup 段调用）：显式参数 > 快照兜底，逐参独立
+/** 预算五参终值解析（仅 experiment_setup 段调用）：显式参数 > 快照兜底，逐参独立
  *  来源标注；显式值非法形态直接快败（error 不下传不进审批——坏参数不消耗放行）。 */
 export const resolveExperimentTokenParams = (
-  args: { max_total_tokens?: unknown; image_min_pixels?: unknown; image_max_pixels?: unknown },
+  args: Partial<Record<string, unknown>>,
   runDir: string,
 ):
-  | {
-      ok: true;
-      values: { max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number };
-      sources: Record<string, ExperimentTokenParamSource>;
-    }
+  | { ok: true; values: ExperimentTokenParams; sources: Record<string, ExperimentTokenParamSource> }
   | { ok: false; error: string; note: string } => {
-  const values: { max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number } = {};
+  const values: ExperimentTokenParams = {};
   const sources: Record<string, ExperimentTokenParamSource> = {};
   const snapshot = snapshotTokenParamsOf(runDir);
   const labels: Record<string, string> = {
     max_total_tokens: "max_total_tokens（单样本 token 上限，正整数）",
+    cutoff_len: "cutoff_len（训练截断长度，正整数；须 ≥ max_total_tokens）",
+    max_model_len: "max_model_len（推理窗口，正整数；须 ≥ max_total_tokens）",
     image_min_pixels: "image_min_pixels（最小像素，正整数）",
     image_max_pixels: "image_max_pixels（最大像素，正整数）",
   };
   for (const key of EXPERIMENT_TOKEN_PARAM_KEYS) {
     const raw = (args as Record<string, unknown>)[key];
     if (raw === undefined) {
-      const fallback = snapshot[key as keyof typeof snapshot];
+      const fallback = snapshot[key as keyof ExperimentTokenParams];
       if (fallback !== undefined) {
-        values[key as keyof typeof values] = fallback;
+        values[key as keyof ExperimentTokenParams] = fallback;
         sources[key] = "config_snapshot";
       } else {
         sources[key] = "unspecified";
@@ -367,20 +376,20 @@ export const resolveExperimentTokenParams = (
     if (!isSafePositiveInteger(raw)) {
       return { ok: false, error: `${key}_invalid`, note: `${labels[key]}——得 ${String(raw)}（非安全正整数即拒，不夹取）` };
     }
-    values[key as keyof typeof values] = raw;
+    values[key as keyof ExperimentTokenParams] = raw;
     sources[key] = "user_specified";
   }
   return { ok: true, values, sources };
 };
 
-/** 审批卡预算三参行（仅 experiment_setup 段追加——终值与来源双双上卡；unspecified
+/** 审批卡预算五参行（仅 experiment_setup 段追加——终值与来源双双上卡；unspecified
  *  明示「内核按缺省处理」，缺省不静默）。 */
 export const experimentTokenApprovalLine = (
-  values: { max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number },
+  values: ExperimentTokenParams,
   sources: Record<string, ExperimentTokenParamSource>,
 ): string =>
-  `预算三参（实验门）：${EXPERIMENT_TOKEN_PARAM_KEYS.map((key) => {
-    const value = values[key as keyof typeof values];
+  `预算五参（实验门）：${EXPERIMENT_TOKEN_PARAM_KEYS.map((key) => {
+    const value = values[key as keyof ExperimentTokenParams];
     return `${key}=${value !== undefined ? String(value) : "未定"}（${TOKEN_PARAM_SOURCE_LABEL[sources[key] ?? "unspecified"]}）`;
   }).join("／")}`;
 
@@ -652,7 +661,7 @@ export const buildPipelineTool = (
       `返回体如实标注分组来源，审批卡呈现分组方案供确认）。` +
       `experiment_setup 段另支持 negative_ratio_target 负样本目标带 <下限,上限>（其它段忽略该参）：` +
       `显式给定时实验门以该值锁定并标注用户指定；不给时按构造器内置常量带兜底（审批卡与返回体均如实标注来源）。` +
-      `experiment_setup 段另支持预算三参 max_total_tokens／image_min_pixels／image_max_pixels（其它段忽略）：` +
+      `experiment_setup 段另支持预算五参 max_total_tokens／cutoff_len／max_model_len／image_min_pixels／image_max_pixels（其它段忽略）：` +
       `显式给 > run 目录 webui/config-snapshot.json 确认快照兜底 > 皆无则不下传（内核按缺省处理）；` +
       `审批卡与返回体逐参呈现终值与来源（user_specified／config_snapshot／unspecified）；` +
       `像素对须成对提供且 min<max（成对校验先于审批——单端或越界即卡前快败）。` +
@@ -709,13 +718,36 @@ export const buildPipelineTool = (
           "不给时按构造器内置常量带（0.02,0.05）兜底（不静默——审批卡与返回体如实标注来源）。" +
           "九要素确认卡的 negative_ratio_target 值在本段触发时应原样带入",
       },
-      // E3：预算三参（仅 experiment_setup 段；显式 > 确认快照兜底 > unspecified 不下传）
+      // H7h：卡位（仅 training_prep 段；显式 > 确认快照兜底 > 不下传，回退 deploy 层）
+      visible_devices: {
+        type: "string",
+        description:
+          "训练绑卡（仅 training_prep 段有意义，其它段忽略该参）：形如 0-7 或 4,5,6,7。" +
+          "显式给定时原样下传内核 --visible-devices（nproc ≤ 卡数 由内核校验）；" +
+          "不给时不下传（回退 deploy 层 cuda_visible_devices）——本批只做显式通道，" +
+          "快照兜底随预算五参前移一并接线",
+      },
+      // E3：预算五参（仅 experiment_setup 段；显式 > 确认快照兜底 > unspecified 不下传）
       max_total_tokens: {
         type: "number",
         description:
-          "单样本 token 上限（仅 experiment_setup 段有意义，其它段忽略该参；安全正整数）：与像素对成组进实验门。" +
+          "单样本 token 上限（仅 experiment_setup 段有意义，其它段忽略该参；安全正整数）：与截断/推理窗口、像素对成组进实验门。" +
           "未显式给定时读 run 目录 webui/config-snapshot.json 确认快照兜底（九要素确认值通路——原样带入）；" +
           "两者皆无则不下传（内核按缺省处理，来源如实标注 unspecified）",
+      },
+      cutoff_len: {
+        type: "number",
+        description:
+          "训练截断长度（仅 experiment_setup 段有意义，其它段忽略该参；安全正整数，须 ≥ max_total_tokens）：" +
+          "与 max_model_len 独立取值、禁互相推导。进实验门后由内核落 <run>/prep/token_budget.json 并注入训练配置；" +
+          "未显式给定时读确认快照兜底；皆无则不下传（内核按缺省处理，来源如实标注）",
+      },
+      max_model_len: {
+        type: "number",
+        description:
+          "推理窗口（仅 experiment_setup 段有意义，其它段忽略该参；安全正整数，须 ≥ max_total_tokens）：" +
+          "独立取值、禁由 cutoff 推导；进实验门后由内核落预算文件并被评估服务引用；" +
+          "未显式给定时读确认快照兜底；皆无则不下传（内核按缺省处理，来源如实标注）",
       },
       image_min_pixels: {
         type: "number",
@@ -779,7 +811,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; training_overrides?: Record<string, unknown> },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown> },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -807,7 +839,7 @@ export const buildPipelineTool = (
       if (needsBaseModel && baseModelPath === "") {
         return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "base_model_path_missing", note: baseModelPathGuidance() });
       }
-      if (needsBaseModel && !isAbsolute(baseModelPath)) {
+      if (baseModelPath !== "" && !isAbsolute(baseModelPath)) {
         return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "base_model_path_not_absolute", note: `base_model_path 须为本地模型目录绝对路径（得 ${baseModelPath}）——模型家族名（如 qwen3_vl）不可当路径用；目录内须有 config.json（合法性由内核闸复核）` });
       }
       // D89：分组方案取值（审批前定——卡面要呈现分组方案行；「按未给处理」＝trim 后空串
@@ -817,6 +849,9 @@ export const buildPipelineTool = (
       // D99：负样本目标带取值（同 D89 口径——trim 后空串视同未指定；形态合法性由内核
       // 实验门脚本解析（float 化失败即业务拒绝），harness 不复制格式校验不夹取）。
       const negativeRatioTarget = typeof args.negative_ratio_target === "string" ? args.negative_ratio_target.trim() : "";
+      // H7h：卡位透传（仅 training_prep；内核 b16 K-E9c 新增旗标）。不走 --training-overrides——
+      // 9 键白名单明确排除 visible_devices（卡位属 deploy/launch 域）
+      const visibleDevices = typeof args.visible_devices === "string" ? args.visible_devices.trim() : "";
       // E3：落点单源提前到审批前（预算三参快照兜底要读 run 目录）；canonical 在场优先
       // （内核 RunLayout v1 同口径——canonical <wp>/workspace/runs/<id>，legacy 公式兜底；
       // 软链拒）。argv 的 --workspace 仍传用户原值（workspace 根贯通内核——内核自解析
@@ -830,7 +865,7 @@ export const buildPipelineTool = (
       // unspecified 不下传）＋像素对成对校验（min<max，判据单源 pixelPairViolationOf）；
       // 坏值一律卡前快败不进审批（不消耗放行）；其它段零进入（不加键不下传）。
       let tokenParams:
-        | { values: { max_total_tokens?: number; image_min_pixels?: number; image_max_pixels?: number }; sources: Record<string, ExperimentTokenParamSource> }
+        | { values: ExperimentTokenParams; sources: Record<string, ExperimentTokenParamSource> }
         | undefined;
       if (args.stage === "experiment_setup") {
         const resolvedParams = resolveExperimentTokenParams(args, runDir);
@@ -909,7 +944,14 @@ export const buildPipelineTool = (
       // 开关，缺省不出现在 argv，其它段不追加不报错）；禁拼第二套路径。
       const argv: string[] = ["--workspace", workspacePath, "--run-id", args.run_id, "--stage", args.stage];
       if (args.stage === "register") argv.push("--source-root", (args.source_root as string).trim());
-      if (needsBaseModel) argv.push("--base-model", baseModelPath);
+      // 显式给的基模型一律下传（assemble 模式亦然）：再水合只是「没给」时的兜底，
+      // 不能把用户显式值静默丢掉（不静默原则——丢了就是 blocked 与卡上填值不符）。
+      // 只有训练准备段接受 --base-model（其它段内核不声明该参数，传了会被 argparse 拒）。
+      // 段内：非 assemble 必传（上方已校验非空）；assemble 形态此前被 needsBaseModel 判成
+      // 「不需要」而把显式值一起丢掉——真机事故：卡上填了基模型、系统报「路径未提供」。
+      if (args.stage === "training_prep" && (needsBaseModel || baseModelPath !== "")) {
+        argv.push("--base-model", baseModelPath);
+      }
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");
       // D82：单据类型三件透传（给才追加、trim 后非空才上线，缺省不上送——内核自行推断，
@@ -940,8 +982,14 @@ export const buildPipelineTool = (
       // E3：预算三参透传（仅 experiment_setup 段；终值在场才追加——显式值与快照兜底值
       // 同面下传（内核 b8 argparse --max-total-tokens／--image-min-pixels／
       // --image-max-pixels）；unspecified 不出现在 argv，零新增语义）。
+      // H7h：绑卡下传（仅 training_prep；缺省不追加，回退 deploy 层）
+      if (args.stage === "training_prep" && visibleDevices !== "") argv.push("--visible-devices", visibleDevices);
       if (args.stage === "experiment_setup" && tokenParams !== undefined) {
         if (tokenParams.values.max_total_tokens !== undefined) argv.push("--max-total-tokens", String(tokenParams.values.max_total_tokens));
+        // C（2026-10-26）：训练截断与推理窗口同门下传（内核 b17 argparse 新增）——
+        // 缺项不追加（内核侧门内 null，预算落盘缺项才回退基线）。
+        if (tokenParams.values.cutoff_len !== undefined) argv.push("--cutoff-len", String(tokenParams.values.cutoff_len));
+        if (tokenParams.values.max_model_len !== undefined) argv.push("--max-model-len", String(tokenParams.values.max_model_len));
         if (tokenParams.values.image_min_pixels !== undefined) argv.push("--image-min-pixels", String(tokenParams.values.image_min_pixels));
         if (tokenParams.values.image_max_pixels !== undefined) argv.push("--image-max-pixels", String(tokenParams.values.image_max_pixels));
       }
@@ -1055,12 +1103,16 @@ export const buildPipelineTool = (
               negative_ratio_target_source: negativeRatioTarget !== "" ? "explicit" : "kernel_default",
             }
           : {}),
-        // E3：预算三参终值与来源（仅 experiment_setup 段三键恒在场——「缺省不静默」：
+        // E3：预算五参终值与来源（仅 experiment_setup 段五键恒在场——「缺省不静默」：
         // unspecified 如实标注、值未定＝null 呈现不造缺省值；其它段零键）
         ...(args.stage === "experiment_setup" && tokenParams !== undefined
           ? {
               max_total_tokens: tokenParams.values.max_total_tokens ?? null,
               max_total_tokens_source: tokenParams.sources["max_total_tokens"] ?? "unspecified",
+              cutoff_len: tokenParams.values.cutoff_len ?? null,
+              cutoff_len_source: tokenParams.sources["cutoff_len"] ?? "unspecified",
+              max_model_len: tokenParams.values.max_model_len ?? null,
+              max_model_len_source: tokenParams.sources["max_model_len"] ?? "unspecified",
               image_min_pixels: tokenParams.values.image_min_pixels ?? null,
               image_min_pixels_source: tokenParams.sources["image_min_pixels"] ?? "unspecified",
               image_max_pixels: tokenParams.values.image_max_pixels ?? null,
