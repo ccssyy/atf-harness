@@ -46,6 +46,26 @@ const MOCK = join(import.meta.dirname, "..", "fixtures", "mock_pipeline_params.m
 const toolOf = (record: string[] = []): DshToolLike =>
   buildPipelineTool(approvalCtx(record), `node ${MOCK}`, 30_000) as unknown as DshToolLike;
 
+/** 带 userQuestions 的 ctx（采纳卡应答桩）：answer 非空即模拟在卡上填了该值。 */
+const toolWithAsk = (record: string[], answer: string): DshToolLike =>
+  buildPipelineTool(
+    {
+      get: (service: string) => {
+        if (service === "approval") {
+          return { request: async (req: { reason: string }) => { record.push(req.reason); return "allowed-once"; } };
+        }
+        if (service === "userQuestions") {
+          return {
+            ask: async () => ({ answers: [{ id: "construction", selected: [`targeted_accept=${answer}`] }] }),
+          };
+        }
+        return undefined;
+      },
+    },
+    `node ${MOCK}`,
+    30_000,
+  ) as unknown as DshToolLike;
+
 const summaryArgv = (result: unknown): string[] =>
   ((result as { summary?: { argv?: string[] } }).summary?.argv ?? []);
 
@@ -161,5 +181,52 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
     const argv = summaryArgv(result);
     expect(argv).toContain("--risk-signals");
     expect(argv[argv.indexOf("--risk-signals") + 1]).toContain("field_risk_signals.json");
+  });
+});
+
+describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
+  it("卡上填 yes → argv 带 --targeted-accept，授权卡标已采纳", async () => {
+    const ws = tempRoot("a-ws-");
+    const record: string[] = [];
+    const result = await toolWithAsk(record, "yes").execute(
+      { stage: "experiment_setup", run_id: "a-accept", workspace_path: ws, targeted_advice: ADVICE },
+      fakeExec,
+    );
+    const argv = summaryArgv(result);
+    expect(argv).toContain("--targeted-accept");
+    expect(record.join("\n")).toContain("采纳选择：已采纳建议");
+  });
+
+  it("卡上填 no → argv 不带 --targeted-accept，授权卡标保持当前值", async () => {
+    const ws = tempRoot("a-ws-");
+    const record: string[] = [];
+    const result = await toolWithAsk(record, "no").execute(
+      { stage: "experiment_setup", run_id: "a-reject", workspace_path: ws, targeted_advice: ADVICE },
+      fakeExec,
+    );
+    expect(summaryArgv(result)).not.toContain("--targeted-accept");
+    expect(record.join("\n")).toContain("采纳选择：保持当前值");
+  });
+
+  it("无 userQuestions 服务 → 降级不阻塞，如实标未弹卡（不假装采纳）", async () => {
+    const ws = tempRoot("a-ws-");
+    const record: string[] = [];
+    const result = await toolOf(record).execute(
+      { stage: "experiment_setup", run_id: "a-degrade", workspace_path: ws, targeted_advice: ADVICE },
+      fakeExec,
+    );
+    expect(summaryArgv(result)).not.toContain("--targeted-accept");
+    expect(record.join("\n")).toContain("user_questions_unavailable");
+  });
+
+  it("没给建议 → 不弹卡、不带采纳参数", async () => {
+    const ws = tempRoot("a-ws-");
+    const record: string[] = [];
+    const result = await toolWithAsk(record, "yes").execute(
+      { stage: "experiment_setup", run_id: "a-noadvice", workspace_path: ws },
+      fakeExec,
+    );
+    expect(summaryArgv(result)).not.toContain("--targeted-accept");
+    expect(record.join("\n")).not.toContain("采纳选择");
   });
 });

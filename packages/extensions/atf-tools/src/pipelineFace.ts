@@ -104,6 +104,7 @@ import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
 // E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与九要素卡同源）
+import { formAskQuestion, editsFromFormAnswers, type FormAskService } from "./confirmFace.js";
 import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 // E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
 import { deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
@@ -1044,6 +1045,53 @@ export const buildPipelineTool = (
         const riskPath = join(runDir, "prep", "risk-signals", riskDocType, "field_risk_signals.json");
         if (existsSync(riskPath)) constructionAdvicePaths.riskSignals = riskPath;
       }
+      // A 面采纳卡：agent 给了建议 → 先问 owner「是否按建议执行」（卡收意愿，审批卡授权）。
+      // 依据 SKILL「必带字段由字段风险分析推荐、经用户确认后写入构造配置」——先前只有呈现
+      // 没有采纳入口，建议永远停在配置里不改变构造行为。无 userQuestions 服务时降级：
+      // 不弹卡、不采纳，卡面与返回体如实标注（不假装采纳过）。
+      let targetedAccept = false;
+      let acceptNote = "未提供建议，无需采纳";
+      if (constructionParams !== undefined && constructionParams.targetedAdvice !== undefined) {
+        const adv = constructionParams.targetedAdvice;
+        const range = adv.min !== null && adv.max !== null ? `${adv.min}-${adv.max} 字段` : "区间不主张";
+        const svc = ctx.get("userQuestions") as FormAskService | undefined;
+        if (svc !== undefined && typeof svc.ask === "function") {
+          try {
+            const answers = await svc.ask({
+              questions: [formAskQuestion({
+                id: `construction-${args.run_id}`,
+                question: `构造参数确认 — ${args.run_id}`,
+                header: "targeted 组合建议",
+                detail: [
+                  `agent 建议：必带 ${adv.carry.length > 0 ? adv.carry.join("、") : "(无)"}；字段数 ${range}`,
+                  `理由：${adv.reason}`,
+                  `依据：${adv.evidence.join("、")}（${adv.evidenceStatus === "verified" ? "已校验" : "待内核按本批风险信号校验"}）`,
+                  `填 yes＝把建议写入本轮构造规则（必带字段与字段数按建议，来源标 advice_accepted）；`,
+                  `no/留空＝保持当前生效值，建议只留档不改变构造行为。`,
+                  `本卡只收意愿——执行授权仍在随后那张审批卡。`,
+                ].join("\n"),
+                fields: [{
+                  key: "targeted_accept",
+                  label: "targeted_accept（是否按建议执行）",
+                  value: "no",
+                  placeholder: "yes＝按建议写入构造规则；no/留空＝保持当前值",
+                  hint: "建议不自动生效；填 yes 后仍需审批卡放行才执行",
+                }],
+                submitLabel: "提交构造参数选择",
+              })],
+              agent: exec.agent,
+              signal: exec.signal,
+            });
+            const submitted = editsFromFormAnswers(answers);
+            targetedAccept = String(submitted["targeted_accept"] ?? "").trim().toLowerCase() === "yes";
+            acceptNote = targetedAccept ? "已采纳建议（写入本轮构造规则）" : "保持当前值（建议仅留档）";
+          } catch (cause) {
+            acceptNote = `采纳卡应答失败：${String(cause).slice(0, 120)}（按未采纳处理，保持当前值）`;
+          }
+        } else {
+          acceptNote = "user_questions_unavailable——未弹采纳卡，建议仅留档（保持当前值）";
+        }
+      }
       if (args.stage === "training_prep") {
         const resolvedOverrides = resolveTrainingOverrides(args, runDir);
         if (!resolvedOverrides.ok) {
@@ -1067,6 +1115,8 @@ export const buildPipelineTool = (
         + (args.stage === "experiment_setup" && constructionParams !== undefined
             ? `\n${constructionParamsApprovalLines({ ...constructionParams, riskSignalsProvided: constructionAdvicePaths.riskSignals !== undefined })}`
             : "")
+        // A 面：采纳选择行（卡上选了 yes/no 的结果如实呈现在授权卡上）
+        + (args.stage === "experiment_setup" && constructionParams?.targetedAdvice !== undefined ? `\n采纳选择：${acceptNote}` : "")
         // E3：预算三参行仅 experiment_setup 段呈现（终值与来源双双上卡）
         + (args.stage === "experiment_setup" && tokenParams !== undefined ? `\n${experimentTokenApprovalLine(tokenParams.values, tokenParams.sources)}` : "")
         // E4-乙：训练参数覆盖行仅 training_prep 段呈现（终值与来源逐键上卡；convention 明示只呈现不下传）
@@ -1129,6 +1179,7 @@ export const buildPipelineTool = (
         if (constructionAdvicePaths.mode5AdviceStats !== undefined) argv.push("--mode5-advice-stats", constructionAdvicePaths.mode5AdviceStats);
         if (constructionAdvicePaths.targetedAdvice !== undefined) argv.push("--targeted-advice", constructionAdvicePaths.targetedAdvice);
         if (constructionAdvicePaths.riskSignals !== undefined) argv.push("--risk-signals", constructionAdvicePaths.riskSignals);
+        if (targetedAccept) argv.push("--targeted-accept");
       }
       // E3：预算三参透传（仅 experiment_setup 段；终值在场才追加——显式值与快照兜底值
       // 同面下传（内核 b8 argparse --max-total-tokens／--image-min-pixels／
