@@ -866,6 +866,14 @@ export const buildPipelineTool = (
           "不给时按构造器内置常量带（0.02,0.05）兜底（不静默——审批卡与返回体如实标注来源）。" +
           "本次训练方案卡的 negative_ratio_target 值在本段触发时应原样带入",
       },
+      // owner 2026-10-26（T4 放宽）：像素下限偏离惯例基线时的理由位（harness 侧账，不下传内核）
+      pixel_pair_reason: {
+        type: "string",
+        description:
+          "像素下限偏离惯例基线时的理由（仅 experiment_setup 段有意义；**不传给内核**，只进本工具回执与卡面账）：" +
+          "下限默认锚定惯例基线（训练/评估用同一对值）。若确需别的下限，在此写清原因即可放行；" +
+          "不写原因即拒（不静默放行、也不静默改回基线）",
+      },
       // H7h：卡位（仅 training_prep 段；显式 > 确认快照兜底 > 不下传，回退 deploy 层）
       visible_devices: {
         type: "string",
@@ -959,7 +967,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown> },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown> },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -1021,6 +1029,8 @@ export const buildPipelineTool = (
       let tokenParams:
         | { values: ExperimentTokenParams; sources: Record<string, ExperimentTokenParamSource> }
         | undefined;
+      /** T4 例外账（下限偏离基线且理由在场时才填——回执与卡面双呈现）。 */
+      let pixelPairException: { image_min_pixels: number; baseline: number; reason: string } | undefined;
       if (args.stage === "experiment_setup") {
         const resolvedParams = resolveExperimentTokenParams(args, runDir);
         if (!resolvedParams.ok) {
@@ -1064,14 +1074,20 @@ export const buildPipelineTool = (
             note: `image_max_pixels=${String(maxPx)} 不在两档闭集（${TRAINING_PIN_CONSTANTS.image_max_pixels.map((value) => value.toLocaleString("en-US")).join(" / ")}）——请改选其中一档后重推（不静默纠正）`,
           });
         }
+        // owner 裁定（2026-10-26）：护栏防的是「两本账不一致」，不是「用户明确选择的不同下限」——
+        // 下限偏离基线时**带理由即放行**（理由进回执与卡面账），缺理由才拒；不静默改写。
+        const pixelPairReason = typeof args.pixel_pair_reason === "string" ? args.pixel_pair_reason.trim() : "";
         if (minPx !== undefined && minPx !== TRAINING_PIN_CONSTANTS.image_min_pixels) {
-          return asToolValue({
-            ok: false,
-            stage: args.stage,
-            run_id: args.run_id,
-            error: "pixel_pair_min_not_pinned",
-            note: `image_min_pixels=${String(minPx)} 与惯例基线 ${TRAINING_PIN_CONSTANTS.image_min_pixels.toLocaleString("en-US")} 不一致——训练/评估必须同一对值（评估只引用训练确认值），故下限锚定基线；如确需改基线，先改单源常量再重推（不在本通道静默改写）`,
-          });
+          if (pixelPairReason === "") {
+            return asToolValue({
+              ok: false,
+              stage: args.stage,
+              run_id: args.run_id,
+              error: "pixel_pair_min_not_pinned_without_reason",
+              note: `image_min_pixels=${String(minPx)} 与惯例基线 ${TRAINING_PIN_CONSTANTS.image_min_pixels.toLocaleString("en-US")} 不一致——训练与评估必须用同一对像素值，改下限要有可解释的理由：请在 pixel_pair_reason 写明原因后重推（缺理由即拒；本通道不改写、不静默回退）`,
+            });
+          }
+          pixelPairException = { image_min_pixels: minPx, baseline: TRAINING_PIN_CONSTANTS.image_min_pixels, reason: pixelPairReason };
         }
         tokenParams = { values: resolvedParams.values, sources: resolvedParams.sources };
       }
@@ -1213,6 +1229,10 @@ export const buildPipelineTool = (
         + (args.stage === "experiment_setup" && constructionParams?.targetedAdvice !== undefined ? `\n采纳选择：${acceptNote}` : "")
         // E3：预算三参行仅 experiment_setup 段呈现（终值与来源双双上卡）
         + (args.stage === "experiment_setup" && tokenParams !== undefined ? `\n${experimentTokenApprovalLine(tokenParams.values, tokenParams.sources)}` : "")
+        // T4 例外：下限偏离基线时把理由摆上卡（用户在自己确认的这一屏能看到差异与原因）
+        + (pixelPairException !== undefined
+            ? `\n像素下限例外：${String(pixelPairException.image_min_pixels)}（基线 ${pixelPairException.baseline.toLocaleString("en-US")}）——理由：${pixelPairException.reason}`
+            : "")
         // E4-乙：训练参数覆盖行仅 training_prep 段呈现（终值与来源逐键上卡；convention 明示只呈现不下传）
         + (args.stage === "training_prep" && trainingOverrides !== undefined ? `\n${trainingOverridesApprovalLine(trainingOverrides.values, trainingOverrides.sources)}` : "")
         // E8·H1：装配模式行仅 training_prep 段呈现（run 级联合装配语义上卡——槽位枚举
@@ -1425,6 +1445,7 @@ export const buildPipelineTool = (
         ...(args.stage === "training_prep"
           ? { visible_devices: visibleDevices === "" ? null : visibleDevices, visible_devices_source: visibleDevicesSource }
           : {}),
+        ...(pixelPairException !== undefined ? { pixel_pair_exception: pixelPairException } : {}),
         ...(args.stage === "training_prep" && trainingOverrides !== undefined
           ? {
               training_overrides_resolution: Object.fromEntries(

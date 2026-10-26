@@ -117,13 +117,38 @@ describe("T4 像素对不变量（段参数通道：越界即拒，不静默纠�
     expect(result["error"]).toBe("pixel_pair_max_not_in_closed_set");
     expect(String(result["note"])).toContain("不静默纠正");
   });
-  it("下限偏离惯例基线 → pixel_pair_min_not_pinned（原则一：训练/评估同一对值）", async () => {
+  it("下限偏离基线且无理由 → pixel_pair_min_not_pinned_without_reason（缺理由才拒）", async () => {
     const result = (await toolOf().execute(
       { ...base(), image_min_pixels: 1024, image_max_pixels: TRAINING_PIN_CONSTANTS.image_max_pixels[0] },
       fakeExec,
     )) as Record<string, unknown>;
     expect(result["ok"]).toBe(false);
-    expect(result["error"]).toBe("pixel_pair_min_not_pinned");
+    expect(result["error"]).toBe("pixel_pair_min_not_pinned_without_reason");
+    expect(String(result["note"])).toContain("pixel_pair_reason");
+  });
+  it("下限偏离基线但带理由 → 放行；例外连同理由进回执与卡面（不改写、不静默回退）", async () => {
+    const record: string[] = [];
+    const result = (await toolOf(record).execute(
+      {
+        ...base(),
+        image_min_pixels: 1024,
+        image_max_pixels: TRAINING_PIN_CONSTANTS.image_max_pixels[0],
+        pixel_pair_reason: "这批单据字号小，256² 下限会把细字糊掉",
+      },
+      fakeExec,
+    )) as Record<string, unknown>;
+    expect(result["ok"]).toBe(true);
+    expect(result["pixel_pair_exception"]).toEqual({
+      image_min_pixels: 1024,
+      baseline: TRAINING_PIN_CONSTANTS.image_min_pixels,
+      reason: "这批单据字号小，256² 下限会把细字糊掉",
+    });
+    // 实际下传值＝用户值（不静默改回基线）
+    const argv = summaryArgv(result);
+    expect(argv[argv.indexOf("--image-min-pixels") + 1]).toBe("1024");
+    const card = record.join("\n");
+    expect(card).toContain("像素下限例外：1024");
+    expect(card).toContain("这批单据字号小");
   });
   it("基线对合法 → 通过并随 argv 下传（两档上限均可）", async () => {
     for (const maxPixels of TRAINING_PIN_CONSTANTS.image_max_pixels) {

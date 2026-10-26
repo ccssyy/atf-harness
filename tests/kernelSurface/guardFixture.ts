@@ -63,6 +63,10 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   auto_style_cluster: "--auto-style-cluster",
   allow_small_cluster_test: "--allow-small-cluster-test",
   grouping_preset: "--grouping-preset",
+  // T4 放宽：像素下限例外的理由位——**harness 侧账**，从不下传内核（无对应旗标），
+  // 故在 PARAM_FACE_WAIVERS 登记为前瞻豁免键（只跳过「旗标落内核声明面」单项对账，
+  // 映射完整性与其它对账照旧）。
+  pixel_pair_reason: "--pixel-pair-reason",
   // A 面：构造参数通道（内核 --grouping-confirm／--mode5-random／--mode5-advice-stats
   // ／--targeted-advice／--risk-signals；advice 两条为 b25 新增声明面）
   grouping_confirm: "--grouping-confirm",
@@ -105,7 +109,10 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
  *  恢复全对账。集恒空＝无豁免在期（guardParamsFace 的 waivedFlags 派生逻辑保留，
  *  供将来前瞻豁免复用；「快照缺旗标」场景的阴性锚改构造 b9-like 快照——见
  *  guard.negative，禁以 waiver 过关）。 */
-export const PARAM_FACE_WAIVERS: ReadonlySet<string> = new Set<string>();
+export const PARAM_FACE_WAIVERS: ReadonlySet<string> = new Set<string>([
+  // harness 自用参数（不落内核 argv，只进回执账）：T4 像素下限例外的理由位。
+  "pixel_pair_reason",
+]);
 
 /** 九要素键 → 消费点登记表（「可编辑不消费」禁的正向登记；旗标空串＝脚本级组装消费
  *  ——值经脚本组装进产物文件，非 CLI 参数直收）。新增卡键必须同步在册：消费点参数级

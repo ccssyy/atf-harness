@@ -236,7 +236,13 @@ export const guardClosedSets = (snapshot: SurfaceSnapshot, facts: HarnessSurface
 export const guardDocImplementation = (snapshot: SurfaceSnapshot, facts: HarnessSurfaceFactsWithMock): GuardViolation[] => {
   void snapshot;
   const out: GuardViolation[] = [];
+  // 前瞻豁免键（含 harness 自用参数：T4 像素下限例外的理由位——从不进 argv）不参与
+  // 「契约文档段在册」对账：它们不是下传旗标，写进契约段反而制造反向漂移。
+  const waivedFlags = new Set(
+    [...facts.paramFaceWaivers].map((key) => facts.flagByParam[key]).filter((flag) => flag !== undefined),
+  );
   for (const flag of Object.values(facts.flagByParam)) {
+    if (waivedFlags.has(flag)) continue;
     if (!facts.docContractText.includes(flag)) {
       out.push({ kind: "文档实现", detail: `实现下传旗标 ${flag} 未记载于 pipelineFace 接口契约文档段（文档漂移）` });
     }
