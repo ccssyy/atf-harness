@@ -8,18 +8,18 @@ import { err, ok, type Result } from "./result.js";
  * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b22，唯一真相源 = bridge.contract.yaml
+// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b23，唯一真相源 = bridge.contract.yaml
 // atf_upstream，本文件常量为运行时镜像；变更走 re-pin 三步显式 PR）。
-// 本轮 pin 取值＝tag v0.7.25b22（报告分组口径：`experiment-config.grouping.decision`
-// ＝agent-proposed(unconfirmed) 此前被两处吞掉——组装侧 C12 闭集只取 preset/preset_name/
-// groups，渲染侧只印 preset_name——未确认的 agent 提议被当既定口径展示；而
-// `--grouping-confirm` 未给时内核不按分组构造 mode1 样本，那份"2 组"实际未参与构造。
-// 现按三态输出：用户已确认／未确认（agent 提议，本轮未据此构造样本）／确认状态未提供。
+// 本轮 pin 取值＝tag v0.7.25b23（构造方案可视：`build_variants_analysis` 此前**全仓零调用**，
+// 数据集特点／实际生效构造配比／与目标配额偏差只存在于代码里，report 侧看不到「为什么行数
+// 这么少、mode1/mode5 为什么没生成」；现由 training_prep 段在变体落盘后自动产出
+// `<run>/analysis/variants-analysis-<doc>.md`，该步计入段 steps。另修负样本判定措辞——
+// 构造器按实际下调下限时不再笼统印「达标」，写明下调值与原因〔无自然空页，不伪造空样本〕。
 // CLI 声明面零变化：surface 与上一 pin 逐字相同（SURFACE_IDENTICAL）。
-// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit 17d25bb，方法面零增（session/ 零 diff），
+// ——详见 bridge.contract.yaml atf_upstream.baseline；tag commit bbeb64f，方法面零增（session/ 零 diff），
 // 会话协议轴 1／桥接契约轴 3 零 diff）。
-export const ATF_UPSTREAM_TAG = "v0.7.25b22";
-export const ATF_UPSTREAM_COMMIT_SHA = "17d25bba4d7707c611c14fc7bb20a298d238a05d";
+export const ATF_UPSTREAM_TAG = "v0.7.25b23";
+export const ATF_UPSTREAM_COMMIT_SHA = "bbeb64fbf2bad21eaaf33242018109a60f46a0ac";
 
 export interface AtfCliInvocation {
   command: string;
