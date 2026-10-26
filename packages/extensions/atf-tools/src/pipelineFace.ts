@@ -104,10 +104,10 @@ import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
 // E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与本次训练方案卡同源）
-import { formAskQuestion, editsFromFormAnswers, type FormAskService } from "./confirmFace.js";
+import { formAskQuestion, editsFromFormAnswers, visibleDevicesViolationsOf, type FormAskService } from "./confirmFace.js";
 import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 // E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
-import { deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
+import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
 import { join } from "node:path";
 
 /** 段名闭集（权威＝内核 STAGE_ORDER 八项——禁增删改序；旧六段名别名不保留）。 */
@@ -356,6 +356,62 @@ export const EXPERIMENT_TOKEN_PARAM_KEYS: readonly string[] = [
   "image_min_pixels",
   "image_max_pixels",
 ];
+
+// ── T3：training_prep 段卡位（visible_devices）——显式 > 确认快照 > 不下传（回退 deploy）──
+//
+// 历史缺口：本次训练方案卡把卡位写进 config-snapshot，但 training_prep 只认工具显式参数，
+// 快照桥（training_overrides 九键白名单）**按内核口径排除** visible_devices（内核明确
+// 不收该键，执行面走 deploy/launch 的 --visible-devices 旗标）——于是「卡面选了卡位却不生效」。
+// 修法不是把它塞进九键（内核会拒），而是让本段的专用旗标也具备「显式 > 快照」来源链，
+// 与预算五参同构；两者皆无＝不下传，内核回退 deploy 层 cuda_visible_devices。
+
+/** 卡位来源三值（审批卡/返回体标注——「缺省不静默」）。 */
+export type VisibleDevicesSource = "user_specified" | "config_snapshot" | "deploy_default";
+
+export const VISIBLE_DEVICES_SOURCE_LABEL: Readonly<Record<VisibleDevicesSource, string>> = {
+  user_specified: "用户指定",
+  config_snapshot: "确认快照",
+  deploy_default: "未指定——回退部署层（cuda_visible_devices）",
+};
+
+/** 快照里的卡位值（confirmed.visible_devices，字符串面；空/非法形态原样返回给调用方判）。 */
+export const snapshotVisibleDevicesOf = (runDir: string): string => {
+  try {
+    const parsed = JSON.parse(readFileSync(join(runDir, "webui", "config-snapshot.json"), "utf8")) as {
+      confirmed?: Record<string, unknown>;
+    };
+    const raw = parsed?.confirmed?.["visible_devices"];
+    return typeof raw === "string" ? raw.trim() : typeof raw === "number" ? String(raw) : "";
+  } catch {
+    return "";
+  }
+};
+
+/** 卡位终值解析（仅 training_prep 段）：显式 > 快照 > 部署缺省；形态非法即拒（不静默纠正、
+ *  不猜卡位——卡位错了等于训练跑在错的卡上）。形态判据单源＝confirmFace.visibleDevicesViolationsOf
+ *  （与方案卡同一套业务文案）。 */
+export const resolveVisibleDevices = (
+  args: { visible_devices?: unknown },
+  runDir: string,
+): { ok: true; value: string; source: VisibleDevicesSource } | { ok: false; error: string; note: string } => {
+  const explicit = typeof args.visible_devices === "string" ? args.visible_devices.trim() : "";
+  const snapshot = explicit === "" ? snapshotVisibleDevicesOf(runDir) : "";
+  const value = explicit !== "" ? explicit : snapshot;
+  const source: VisibleDevicesSource = explicit !== "" ? "user_specified" : snapshot !== "" ? "config_snapshot" : "deploy_default";
+  if (value === "") return { ok: true, value: "", source };
+  const violations = visibleDevicesViolationsOf([{ key: "visible_devices", value }]);
+  if (violations.length > 0) {
+    const from = source === "config_snapshot" ? "确认快照里的" : "参数里的";
+    return { ok: false, error: "visible_devices_invalid", note: `${from}卡位不可用：${violations.join("；")}——请修正后重推（不静默纠正）` };
+  }
+  return { ok: true, value, source };
+};
+
+/** 审批卡卡位行（仅 training_prep 段追加——终值与来源双双可见）。 */
+export const visibleDevicesApprovalLine = (value: string, source: VisibleDevicesSource): string =>
+  value === ""
+    ? `训练绑卡：${VISIBLE_DEVICES_SOURCE_LABEL.deploy_default}`
+    : `训练绑卡：${value}（${VISIBLE_DEVICES_SOURCE_LABEL[source]}）`;
 
 /** 五参键值类型（缺项＝键不在，不造占位）。 */
 export type ExperimentTokenParams = Partial<
@@ -816,8 +872,8 @@ export const buildPipelineTool = (
         description:
           "训练绑卡（仅 training_prep 段有意义，其它段忽略该参）：形如 0-7 或 4,5,6,7。" +
           "显式给定时原样下传内核 --visible-devices（nproc ≤ 卡数 由内核校验）；" +
-          "不给时不下传（回退 deploy 层 cuda_visible_devices）——本批只做显式通道，" +
-          "快照兜底随预算五参前移一并接线",
+          "不给时读 run 目录 webui/config-snapshot.json 的确认值兜底（本次训练方案卡选的卡位即由此生效）；" +
+          "两者皆无＝不下传（回退 deploy 层 cuda_visible_devices）。形态非法即拒（不静默纠正）",
       },
       // E3：预算五参（仅 experiment_setup 段；显式 > 确认快照兜底 > unspecified 不下传）
       max_total_tokens: {
@@ -945,9 +1001,11 @@ export const buildPipelineTool = (
       // D99：负样本目标带取值（同 D89 口径——trim 后空串视同未指定；形态合法性由内核
       // 实验门脚本解析（float 化失败即业务拒绝），harness 不复制格式校验不夹取）。
       const negativeRatioTarget = typeof args.negative_ratio_target === "string" ? args.negative_ratio_target.trim() : "";
-      // H7h：卡位透传（仅 training_prep；内核 b16 K-E9c 新增旗标）。不走 --training-overrides——
-      // 9 键白名单明确排除 visible_devices（卡位属 deploy/launch 域）
-      const visibleDevices = typeof args.visible_devices === "string" ? args.visible_devices.trim() : "";
+      // H7h/T3：卡位终值（仅 training_prep；内核 b16 K-E9c 专用旗标）。不走 --training-overrides
+      // ——内核九键白名单明确排除 visible_devices；来源链＝显式 > 确认快照 > 不下传，
+      // 解析在 runDir 就绪后的 training_prep 分支执行（下方 resolvedDevices）。
+      let visibleDevices = "";
+      let visibleDevicesSource: VisibleDevicesSource = "deploy_default";
       // E3：落点单源提前到审批前（预算三参快照兜底要读 run 目录）；canonical 在场优先
       // （内核 RunLayout v1 同口径——canonical <wp>/workspace/runs/<id>，legacy 公式兜底；
       // 软链拒）。argv 的 --workspace 仍传用户原值（workspace 根贯通内核——内核自解析
@@ -991,6 +1049,29 @@ export const buildPipelineTool = (
             : null;
         if (pixelViolation !== null) {
           return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "pixel_pair_violation", note: pixelViolation });
+        }
+        // T4：像素对不变量下沉到段参数通道（此前只有确认卡 overrides 分支有）——
+        // ①上限必须落在两档闭集（单源 TRAINING_PIN_CONSTANTS，与方案卡 clamp 域同源）；
+        // ②下限锚定惯例基线（原则一：训练/评估必须同一对值，评估只引用训练确认值）。
+        // 越界即拒，**不静默纠正**（clamp 是卡面交互的事，段通道一旦静默改写就等于
+        // 用户确认值与实际生效值两份账）。
+        if (maxPx !== undefined && !TRAINING_PIN_CONSTANTS.image_max_pixels.includes(maxPx)) {
+          return asToolValue({
+            ok: false,
+            stage: args.stage,
+            run_id: args.run_id,
+            error: "pixel_pair_max_not_in_closed_set",
+            note: `image_max_pixels=${String(maxPx)} 不在两档闭集（${TRAINING_PIN_CONSTANTS.image_max_pixels.map((value) => value.toLocaleString("en-US")).join(" / ")}）——请改选其中一档后重推（不静默纠正）`,
+          });
+        }
+        if (minPx !== undefined && minPx !== TRAINING_PIN_CONSTANTS.image_min_pixels) {
+          return asToolValue({
+            ok: false,
+            stage: args.stage,
+            run_id: args.run_id,
+            error: "pixel_pair_min_not_pinned",
+            note: `image_min_pixels=${String(minPx)} 与惯例基线 ${TRAINING_PIN_CONSTANTS.image_min_pixels.toLocaleString("en-US")} 不一致——训练/评估必须同一对值（评估只引用训练确认值），故下限锚定基线；如确需改基线，先改单源常量再重推（不在本通道静默改写）`,
+          });
         }
         tokenParams = { values: resolvedParams.values, sources: resolvedParams.sources };
       }
@@ -1099,6 +1180,13 @@ export const buildPipelineTool = (
         }
       }
       if (args.stage === "training_prep") {
+        // T3：卡位来源链（快照兜底接线——方案卡选的卡位由此真正进启动件）
+        const resolvedDevices = resolveVisibleDevices(args, runDir);
+        if (!resolvedDevices.ok) {
+          return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: resolvedDevices.error, note: resolvedDevices.note });
+        }
+        visibleDevices = resolvedDevices.value;
+        visibleDevicesSource = resolvedDevices.source;
         const resolvedOverrides = resolveTrainingOverrides(args, runDir);
         if (!resolvedOverrides.ok) {
           return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: resolvedOverrides.error, note: resolvedOverrides.note });
@@ -1133,6 +1221,8 @@ export const buildPipelineTool = (
         // E5·H3 D140：训练输出目录行仅 training_prep 段呈现（落点可见——盘上终值优先，
         // 首跑无配置时按内核 ADR-0005 run 布局呈现预期并标注来源）
         + (args.stage === "training_prep" ? `\n${trainingOutputDirApprovalLine(trainingOutputDirOf(runDir))}` : "")
+        // T3：卡位终值与来源上卡（仅 training_prep——「卡面选了什么卡」与「实际绑了什么卡」同屏可对账）
+        + (args.stage === "training_prep" ? `\n${visibleDevicesApprovalLine(visibleDevices, visibleDevicesSource)}` : "")
         + "\n仅 owner 可点；执行方不得代点");
       if (!verdict.ok) return approvalDeniedResult("atf_pipeline_stage", verdict.outcome);
       // 落点单源（A2.2b）：与内核同一决定者 <workspace_path>/runs/<run_id>；resolveRunDir 本工具内退役
@@ -1332,6 +1422,9 @@ export const buildPipelineTool = (
         // （内核 b10 接线）——E4-乙补的 training_overrides_json＋training_overrides_next_step
         // （指引经 atf_scratch_exec 直调生成器）主路径撤销；delivery 键＋兼容说明保留（零
         // 指令性措辞——模型可见面不导流任何二次注入步骤）。
+        ...(args.stage === "training_prep"
+          ? { visible_devices: visibleDevices === "" ? null : visibleDevices, visible_devices_source: visibleDevicesSource }
+          : {}),
         ...(args.stage === "training_prep" && trainingOverrides !== undefined
           ? {
               training_overrides_resolution: Object.fromEntries(
