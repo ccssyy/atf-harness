@@ -144,7 +144,7 @@ export const datasetKeysFaceLineOf = (fields: ReadonlyArray<{ key: string; value
 export const configFormFieldsOf = (
   fields: ConfigConfirmField[],
   gpuCount: number | null,
-  options: { collectedByChoices?: boolean } = {},
+  options: { collectedByChoices?: boolean; notes?: Readonly<Record<string, string>> } = {},
 ) =>
   fields
     // D92：只读键单源过滤（max_model_len 惯例基线＋dataset_keys 内核实算——卡上可编辑值不消费）
@@ -160,6 +160,8 @@ export const configFormFieldsOf = (
     const hint = domainHintOf(field.key, gpuCount);
     const pixelPair = PIXEL_PAIR_LABELS[field.key] !== undefined;
     const sourceNote = pixelPair ? `（来源：${field.tag === "need_confirm" ? "用户" : "默认"}）` : "";
+    // 卡数来源标注 / 累积待定（与像素对来源同形态：跟在同一行 hint 上，用户一眼看到「谁给的」）
+    const extraNote = options.notes?.[field.key] ?? "";
     // H7c：留空＝回退 deploy 的键补占位提示（呈现层，不入值——值仍为空串）
     const emptyHint = configFieldPlaceholderOf(field.key, gpuCount);
     // 六区块呈现：原生 form intent 无分节能力（扁平 fields）——区块标题作为标签前缀，
@@ -170,7 +172,9 @@ export const configFormFieldsOf = (
       key: field.key,
       label: block === undefined ? label : `${block.title}｜${label}`,
       value: field.value,
-      ...(hint !== undefined || sourceNote !== "" ? { hint: `${hint ?? ""}${sourceNote}` } : {}),
+      ...(hint !== undefined || sourceNote !== "" || extraNote !== ""
+        ? { hint: [hint ?? "", sourceNote, extraNote].filter((text) => text !== "").join("；") }
+        : {}),
       ...(emptyHint !== undefined ? { placeholder: emptyHint } : {}),
       ...(field.key === "max_total_tokens" && field.value.trim() === ""
         ? {
@@ -395,6 +399,35 @@ export const tokenBudgetCheckOf = (
 // （逗号分隔整数或 a-b 段、元素 0–7、不重复、个数须等于 nproc_per_node）；
 // 卡前拒绝一律业务语言红字，不得出现 visible_devices_nproc_mismatch 等码原文（§四红线）。
 
+/** 卡位串 → 卡号集合（单一解析器：卡位校验、卡数派生、数量对账共用）。
+ *  形态坏＝null（调用方按形态错处理，不猜）；空串＝[]（留空＝全部可见卡）。 */
+export const visibleDevicesIdsOf = (raw: string): number[] | null => {
+  const text = raw.trim();
+  if (text === "") return [];
+  const ids: number[] = [];
+  for (const token of text.split(",").map((t) => t.trim()).filter((t) => t !== "")) {
+    const range = /^(\d+)-(\d+)$/.exec(token);
+    if (range !== null) {
+      const lo = Number(range[1]);
+      const hi = Number(range[2]);
+      if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi < lo) return null;
+      for (let i = lo; i <= hi; i++) ids.push(i);
+      continue;
+    }
+    if (!/^\d+$/.test(token)) return null;
+    ids.push(Number(token));
+  }
+  return ids;
+};
+
+/** 卡位个数（卡数来源链的一级：用户没填卡数时按声明的卡位个数取）。
+ *  形态坏/留空＝null（不当作 0 张，也不猜）。 */
+export const visibleDevicesCountOf = (raw: string): number | null => {
+  const ids = visibleDevicesIdsOf(raw);
+  if (ids === null || ids.length === 0) return null;
+  return ids.length;
+};
+
 /** 卡位卡前校验（卡前红字单源——手动档表单卡循环与自动档落快照前共用）。
  *  留空＝全部可见卡（回退 deploy 缺省，不校验）。返回红字行（业务语言）；空数组＝通过。 */
 export const visibleDevicesViolationsOf = (
@@ -403,29 +436,36 @@ export const visibleDevicesViolationsOf = (
   const raw = (fields.find((f) => f.key === "visible_devices")?.value ?? "").trim();
   if (raw === "") return [];
   const shapeNote = "卡位形态不对——应为逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7），每张卡最多出现一次";
-  const ids: number[] = [];
-  for (const token of raw.split(",").map((t) => t.trim()).filter((t) => t !== "")) {
-    const range = /^(\d+)-(\d+)$/.exec(token);
-    if (range !== null) {
-      const lo = Number(range[1]);
-      const hi = Number(range[2]);
-      if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi < lo) return [shapeNote];
-      for (let i = lo; i <= hi; i++) ids.push(i);
-      continue;
-    }
-    if (!/^\d+$/.test(token)) return [shapeNote];
-    ids.push(Number(token));
-  }
+  const ids = visibleDevicesIdsOf(raw);
+  if (ids === null) return [shapeNote];
   const outOfRange = [...new Set(ids.filter((id) => id < 0 || id > 7))];
   if (outOfRange.length > 0) return [`卡位含本机不存在的卡号 ${outOfRange.join("、")}——可用卡号为 0–7`];
   const duplicated = [...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))];
   if (duplicated.length > 0) return [`卡位有重复卡号 ${duplicated.join("、")}——每张卡只能出现一次`];
-  const nprocRaw = (fields.find((f) => f.key === "nproc_per_node")?.value ?? "").trim();
-  const nprocNum = Number(nprocRaw);
-  if (nprocRaw !== "" && Number.isFinite(nprocNum) && nprocNum > 0 && ids.length !== nprocNum) {
-    return [`卡位个数（${String(ids.length)} 张：${raw}）与训练卡数 nproc_per_node（${String(nprocNum)}）不一致——两者须相等，请改齐后提交`];
-  }
-  return [];
+  return nprocDeviceConsistencyNoteOf(raw, (fields.find((f) => f.key === "nproc_per_node")?.value ?? "").trim()) === null
+    ? []
+    : [nprocDeviceConsistencyNoteOf(raw, (fields.find((f) => f.key === "nproc_per_node")?.value ?? "").trim()) as string];
+};
+
+/** 卡数 × 卡位 一致性（同源同传的唯一判据）：卡位个数必须等于训练卡数。
+ *  任一未填＝不判（留空＝全部可见卡、卡数待定两种情况都不在这里拒）。
+ *  @returns 不一致时的业务话（同时对账错误码 visible_devices_inconsistency）；一致/不判＝null。 */
+export const nprocDeviceConsistencyNoteOf = (visibleDevicesRaw: string, nprocRaw: string): string | null => {
+  const count = visibleDevicesCountOf(visibleDevicesRaw);
+  const nproc = Number(nprocRaw.trim());
+  if (count === null) return null;
+  if (nprocRaw.trim() === "" || !Number.isFinite(nproc) || nproc <= 0) return null;
+  if (count === nproc) return null;
+  return `卡位个数（${String(count)} 张：${visibleDevicesRaw.trim()}）与训练卡数（${String(nproc)}）不一致——两者必须同源相等：要么把卡数改成 ${String(count)}，要么把卡位改成 ${String(nproc)} 个`;
+};
+
+/** 训练卡数来源的用户面说法（owner 2026-10-26：跟像素对那条一样，让用户知道哪些不是自己填的）。 */
+export const NPROC_SOURCE_LABEL: Readonly<Record<"user" | "snapshot" | "settings" | "devices" | "none", string>> = {
+  user: "你填写",
+  snapshot: "确认快照",
+  settings: "实例配置",
+  devices: "卡位个数",
+  none: "待定",
 };
 
 /** 确认字段 → 快照 confirmed（D76：卡位留空＝全部可见卡，空值不落快照——禁空串覆盖
@@ -778,16 +818,32 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           return null;
         }
       })();
+      // —— 训练卡数来源链（owner 2026-10-26：内核已无卡数缺省，harness 也绝不预填 8）——
+      // 用户填写 > 确认快照 > 实例配置（设置面训练卡数基线）> 卡位个数 > 待定。
+      // 「待定」不写值、不派生 accum（卡面显示「待定（先定卡数）」），由用户给数或给卡位；
+      // 机器可用卡数（nvidia-smi）**不再**作为填充来源——它就是过去那个「默认 8」的来源。
+      type NprocSource = "user" | "snapshot" | "settings" | "devices" | "none";
       const explicitNproc = overrides["nproc_per_node"] ?? amended?.["nproc_per_node"];
-      if (baseline["nproc_per_node"] === undefined && explicitNproc === undefined) {
-        if (settingsBaseline !== null) {
+      let nprocSource: NprocSource = "none";
+      if (explicitNproc !== undefined && String(explicitNproc).trim() !== "") {
+        nprocSource = "user";
+      } else if (baseline["nproc_per_node"] !== undefined && String(baseline["nproc_per_node"]).trim() !== "") {
+        nprocSource = "snapshot";
+      } else {
+        // 卡位个数优先于实例配置：卡位是用户在本次卡上声明的运行范围（内核链里「声明卡位个数」
+        // 也高于 deploy 绑卡串），实例基线只是操作者给的默认参照，不该盖掉本次声明。
+        const deviceCount = visibleDevicesCountOf(overrides["visible_devices"] ?? baseline["visible_devices"] ?? "");
+        if (deviceCount !== null && deviceCount > 0) {
+          baseline["nproc_per_node"] = String(deviceCount);
+          nprocSource = "devices";
+        } else if (settingsBaseline !== null) {
           baseline["nproc_per_node"] = settingsBaseline;
-        } else if (gpuCount === null) {
-          return asToolValue({ ok: false, run_id: args.run_id, error: "machine_facts_missing", note: "训练卡数基线不可得：visible_devices（CUDA_VISIBLE_DEVICES）与 nvidia-smi 皆未提供可用卡数——停下问用户，不设默认值" });
-        } else {
-          baseline["nproc_per_node"] = String(gpuCount);
+          nprocSource = "settings";
         }
       }
+      const nprocValueNow = String(explicitNproc ?? baseline["nproc_per_node"] ?? "").trim();
+      const nprocNumNow = Number(nprocValueNow);
+      const nprocKnown = nprocValueNow !== "" && Number.isFinite(nprocNumNow) && Number.isInteger(nprocNumNow) && nprocNumNow > 0;
       // E4-乙（改动 2）：bs 卡面缺省＝内核缺省分档单源（kernelBsDefaultOf——cutoff<10000→2；
       // 删 `?? 2` 硬编码，与 training_overrides 桥 convention 同源）；注入态标 convention
       // （表单卡 hint 与自动档快照 sources 呈现——「缺省不静默」）。
@@ -796,19 +852,27 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         const cutoffRaw = Number(baseline["cutoff_len"]);
         baseline["per_device_train_batch_size"] = String(kernelBsDefaultOf(Number.isFinite(cutoffRaw) && cutoffRaw > 0 ? cutoffRaw : undefined));
       }
-      // L2 派生（bs×nproc 除尽 256 校验——除不尽/矛盾即停点问题串；nproc 用基线/显式卡数非静态缺省）
+      // L2 派生（bs×nproc 除尽 256 校验——除不尽/矛盾即停点问题串）。
+      // 卡数未定时**不派生** accum（否则就是拿假设卡数算出一个假值），卡面转「待定」。
       const bsNum = Number(baseline["per_device_train_batch_size"]);
-      const nprocNum = Number(baseline["nproc_per_node"] ?? explicitNproc);
-      if (!Number.isFinite(nprocNum) || nprocNum <= 0) {
-        return asToolValue({ ok: false, run_id: args.run_id, error: "nproc_invalid", note: `nproc_per_node 现值（${baseline["nproc_per_node"] ?? explicitNproc}）非正整数——停下核实，不猜测` });
+      if (nprocValueNow !== "" && !nprocKnown) {
+        return asToolValue({ ok: false, run_id: args.run_id, error: "nproc_invalid", note: `训练卡数现值（${nprocValueNow}）非正整数——停下核实，不猜测` });
       }
-      const accumDerived = deriveGradAccum(Number.isFinite(bsNum) && bsNum > 0 ? bsNum : kernelBsDefaultOf(undefined), nprocNum);
-      if ("error" in accumDerived) {
-        return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: accumDerived.error });
-      }
-      // H7g：派生只填空缺——用户显式给了 accum 就不派生（今天实测：卡上 2 落盘 16）
-      if (overrides["gradient_accumulation_steps"] === undefined) {
-        baseline["gradient_accumulation_steps"] = String(accumDerived.accum);
+      let accumPending = false;
+      if (nprocKnown) {
+        const accumDerived = deriveGradAccum(Number.isFinite(bsNum) && bsNum > 0 ? bsNum : kernelBsDefaultOf(undefined), nprocNumNow);
+        if ("error" in accumDerived) {
+          return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: accumDerived.error });
+        }
+        // H7g：派生只填空缺——用户显式给了 accum 就不派生（今天实测：卡上 2 落盘 16）
+        if (overrides["gradient_accumulation_steps"] === undefined) {
+          baseline["gradient_accumulation_steps"] = String(accumDerived.accum);
+        }
+      } else if (overrides["gradient_accumulation_steps"] === undefined) {
+        // 卡数待定：累积既不能派生、也不许用静态缺省顶上（配置键里的旧缺省 8 正是「猜一个值」）。
+        // 清成空串，卡面标注「待定（先定卡数）」；用户显式给的 accum 仍保留。
+        accumPending = true;
+        delete baseline["gradient_accumulation_steps"];
       }
       // P-1c：deepspeed 智能缺省＝ds_z3_offload（显式 > 缺省——iteration-config 显式声明优先）
       if (baseline["deepspeed"] === undefined) baseline["deepspeed"] = SMART_DEEPSPEED_DEFAULT;
@@ -818,6 +882,15 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         const base = buildConfigConfirmFields({}, { fromRegistry: Object.keys(baseline).length > 0 ? baseline : undefined });
         return base.map((field) => (amended[field.key] !== undefined ? { key: field.key, value: String(amended[field.key]), tag: "need_confirm" as const } : field));
       })();
+      // 卡数 × 卡位 同源同传（owner 2026-10-26）：两者都给了且个数不等 → 当场拒，
+      // 不静默取其一（取哪个都会让「卡面写的」与「实际绑的」对不上）。
+      const deviceConsistency = nprocDeviceConsistencyNoteOf(
+        String(fields.find((field) => field.key === "visible_devices")?.value ?? ""),
+        String(fields.find((field) => field.key === "nproc_per_node")?.value ?? nprocValueNow),
+      );
+      if (deviceConsistency !== null) {
+        return asToolValue({ ok: false, run_id: args.run_id, error: "visible_devices_inconsistency", note: deviceConsistency });
+      }
       // 训练自动驾驶分支（预设 atf-training ＋ 权限档 danger-full-access 两轴齐备）：
       // 不调用 requestApproval 阻塞，以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐
       // （护栏校验）直接落 config-snapshot，卡面内容转为通报（告警行＋alerts.json，含每键
@@ -861,7 +934,16 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           if (!Number.isFinite(bsNumNew) || bsNumNew <= 0 || !Number.isInteger(bsNumNew)) {
             return asToolValue({ ok: false, run_id: args.run_id, error: "recommend_bs_invalid", note: `推荐 bs=${bsField.value} 不是正整数——拦截，未落快照` });
           }
-          const reDerived = deriveGradAccum(bsNumNew);
+          // 卡数未知时不派生（同一纪律：不拿假设卡数算 accum）——要派生就必须先有卡数
+          if (!nprocKnown && overrides["gradient_accumulation_steps"] === undefined) {
+            return asToolValue({
+              ok: false,
+              run_id: args.run_id,
+              error: "accum_requires_nproc",
+              note: "训练卡数还没定（卡面「待定」）——按全局批量推不出梯度累积：请先给训练卡数或给出卡位，或直接给 gradient_accumulation_steps",
+            });
+          }
+          const reDerived = deriveGradAccum(bsNumNew, nprocNumNow);
           if ("error" in reDerived) {
             return asToolValue({ ok: false, run_id: args.run_id, error: "global_batch_derive_failed", note: reDerived.error });
           }
@@ -878,7 +960,15 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       //   用户显式（need_confirm）不回退不改值，conflicts 冲突原文标注上卡面/回执，内核拒；
       //   B. 超机器事实上限/非用户显式低配 → 回退拉满（need_confirm＝用户显式降档放行）；
       //   回退后 accum 随卡数重派生（整除校验不过即停点）。
-      const guardResult = guardNprocAntiPatterns(fields, { gpuCount, baselineNproc: settingsBaseline, qlora: qloraActive });
+      // 卡数未知（待定）时护栏无输入——跳过（护栏判的是「给了卡数之后的取舍」，不是替用户定卡数）。
+      // 卡位来源的卡数是用户声明的卡位个数（真实来源），作回退参照，避免被「拉满偏置」改写。
+      const guardResult = accumPending
+        ? { hits: [], conflicts: [] }
+        : guardNprocAntiPatterns(fields, {
+            gpuCount,
+            baselineNproc: nprocSource === "devices" ? nprocValueNow : settingsBaseline,
+            qlora: qloraActive,
+          });
       if ("error" in guardResult) {
         return asToolValue({ ok: false, run_id: args.run_id, error: "nproc_anti_pattern_blocked", note: guardResult.error });
       }
@@ -1025,8 +1115,15 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       for (;;) {
         // 批㊶-W 真机修正：typert lossless JSON 拒绝嵌套 undefined（对象键值 undefined
         // 即「not lossless JSON data」）——可选键一律条件 spread，禁显式 undefined 值。
+        if (accumPending) {
+          const accumFieldPending = fields.find((field) => field.key === "gradient_accumulation_steps");
+          if (accumFieldPending !== undefined && accumFieldPending.tag !== "need_confirm") accumFieldPending.value = "";
+        }
+        const fieldNotes: Record<string, string> = {};
+        if (nprocSource !== "none") fieldNotes["nproc_per_node"] = `值来源：${NPROC_SOURCE_LABEL[nprocSource]}`;
+        if (accumPending) fieldNotes["gradient_accumulation_steps"] = "待定（先定卡数）";
         const formFields = [
-          ...configFormFieldsOf(fields, gpuCount, { collectedByChoices: args.action !== "amend" }),
+          ...configFormFieldsOf(fields, gpuCount, { collectedByChoices: args.action !== "amend", notes: fieldNotes }),
           // 批次 R H1-1：不同步理由输入行（预算与 cutoff 不等时必填——空即拦确认；
           // 相等时留空。理由是用户输入，不自动生成；不落配置（非配置键）。
           { key: "token_budget_sync_reason", label: "token_budget_sync_reason", value: "", placeholder: "预算与 cutoff 不等时的不同步理由（不等必填；相等留空）——同步请在 cutoff_len 框直接填预算值（用户动作）" },
@@ -1040,6 +1137,10 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           ...(amendNote !== undefined ? [amendNote] : []),
           ...(guardNotes.length > 0 ? [`卡数护栏：${guardNotes.join("；")}`] : []),
           tokenBudgetFaceText(fields, budgetViolations),
+          // 卡数待定：把「为什么累积是空的」直接说清（不猜 1 也不猜 8）
+          ...(accumPending
+            ? ["梯度累积：待定（先定卡数）——卡数没定就推不出累积步数（全局批量 ÷（单卡 batch × 卡数））；给卡数或给卡位后自动补齐。"]
+            : []),
           // D76：卡位红字行（0–7 子集/不重复/个数＝nproc——业务语言，零内部码）。
           ...(deviceViolations.length > 0 ? deviceViolations : []),
           // b5 像素对复用补丁：像素对关系警示（每轮现算——只提示不阻塞确认链）。

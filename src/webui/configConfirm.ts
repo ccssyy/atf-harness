@@ -67,7 +67,9 @@ export const CONFIG_CONFIRM_KEYS: ReadonlyArray<{ key: string; label: string; de
   // E4-乙（改动 2）：bs 静态缺省退役为注入位（confirmFace 以内核缺省分档 kernelBsDefaultOf
   // 注入——cutoff<10000→2 标 convention；静态字面会造成第二套口径）
   { key: "per_device_train_batch_size", label: "单卡 batch", default: "" },
-  { key: "gradient_accumulation_steps", label: "梯度累积", default: "8" },
+  // 卡数无缺省后（owner 2026-10-26），累积只能由「全局批量 ÷（单卡 batch × 卡数）」派生：
+  // 静态缺省 8 会在卡数未定时冒出一个凭空的「已定值」，故清空为派生位（卡面未派生时标「待定」）。
+  { key: "gradient_accumulation_steps", label: "梯度累积", default: "" },
   { key: "num_train_epochs", label: "训练轮数 epochs", default: "3" },
   // ── C 长度与预算 ──────────────────────────────────────────────────────────────
   // 批次 R H1-1：TokenBudget 三要素——cutoff_len/max_model_len 缺省改单源惯例基线

@@ -138,9 +138,12 @@ export const defaultBaseModelPath = (env: Readonly<Record<string, string | undef
 
 /** 全局批量目标（owner 修订：iteration-config 全局目标）。 */
 export const GLOBAL_BATCH_TARGET = 256;
-/** 单实例 GPU 数（N-2 附录：nproc 8 卡固定缺省——批㊶R前置起仅作 kernel 面历史缺省，
- *  确认卡基线改走机器事实探测 detectAvailableGpuCount，不再静态取 8）。 */
-export const NPROC_DEFAULT = 8;
+
+// ⚠ 卡数没有缺省（owner 2026-10-26）：内核 generate_iteration_config 已删
+// TRAINING_REQUIRED_KEY_DEFAULTS["nproc_per_node"]，改为五级来源链取卡数、四处皆无即拒绝
+// （accum_requires_nproc / nproc_per_node_required），**绝不按 1 或 8 派生**。
+// harness 侧同步：本文件不再提供 NPROC_DEFAULT；deriveGradAccum/oomFallbackParams 的卡数
+// 参数一律必填——调用方取不到真实卡数时，正确做法是「不派生 accum」，不是拿 8 顶上。
 
 // ── 批㊶R前置：训练卡数机器事实（owner 裁定 10-11：训练默认拉满可用卡·训练时长优先）──
 
@@ -292,8 +295,10 @@ export const guardNprocAntiPatterns = (
   return { hits, conflicts };
 };
 
-/** L2 派生：grad_accum = 256/(bs×nproc)；除不尽/矛盾组合返回问题串（禁止静默取整）。 */
-export const deriveGradAccum = (bs: number, nproc: number = NPROC_DEFAULT): { accum: number; globalBatch: number } | { error: string } => {
+/** L2 派生：grad_accum = 256/(bs×nproc)；除不尽/矛盾组合返回问题串（禁止静默取整）。
+ *  `nproc` **必填**（无缺省）：卡数取不到时应调用方不调用本函数（卡面显示「待定」），
+ *  不得用任何常量顶上——否则会出现「卡面预览 8 卡、内核拒绝生成」的两本账。 */
+export const deriveGradAccum = (bs: number, nproc: number): { accum: number; globalBatch: number } | { error: string } => {
   if (!Number.isFinite(bs) || bs <= 0 || !Number.isInteger(bs)) return { error: `grad_accum_derive_invalid_bs:${bs}` };
   if (!Number.isFinite(nproc) || nproc <= 0 || !Number.isInteger(nproc)) return { error: `grad_accum_derive_invalid_nproc:${nproc}` };
   const world = bs * nproc;
@@ -359,8 +364,9 @@ export const clampNegativeRatio = (raw: string | number): string => {
   return clamped.map((p) => String(Number(p.toFixed(4)))).join(",");
 };
 
-/** OOM 降档重发参数（P-1 OOM 策略）：bs 2→1、grad_accum 翻倍、global_batch 保持 256。 */
-export const oomFallbackParams = (nproc: number = NPROC_DEFAULT): { bs: number; accum: number; globalBatch: number } | { error: string } => {
+/** OOM 降档重发参数（P-1 OOM 策略）：bs 2→1、grad_accum 翻倍、global_batch 保持 256。
+ *  `nproc` 必填（同 deriveGradAccum：卡数无缺省）。 */
+export const oomFallbackParams = (nproc: number): { bs: number; accum: number; globalBatch: number } | { error: string } => {
   const bs = 1;
   const derived = deriveGradAccum(bs, nproc);
   if ("error" in derived) return derived;
