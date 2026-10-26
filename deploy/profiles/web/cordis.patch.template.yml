@@ -83,8 +83,10 @@
         # 发布、评估 release 等治理点一起放掉（那是越权，不是便利）。
         # 治理点永不在清单内：atf_run_training（真实 GPU）、atf_publish_confirm／
         # atf_publish_model（发布）、atf_launch_execute（编排执行）、atf_joint_train、
-        # atf_gate、atf_admit_data、atf_scratch_exec——「GPU 训练启动确认任何档位保留
-        # 阻塞」的既有裁定因此无需废止。
+        # atf_gate、atf_admit_data、atf_scratch_exec，以及 atf_quantize_annotations
+        # （写操作：产 map.csv、改数据形态——owner 2026-10-26 裁定按治理点处理）——
+        # 「GPU 训练启动确认任何档位保留阻塞」的既有裁定因此无需废止。
+        # 判据：只读或链内取值类才进清单；凡改写数据/产物/算力占用的都不进。
         approvalPolicy:
           preset: atf-training
           chainTools:
@@ -92,7 +94,6 @@
             - atf_config_confirm
             - atf_training_preflight
             - atf_records_query
-            - atf_quantize_annotations
 
 # —— M3 品牌定稿（owner 10-06 裁定文案；vendor bump 随台账重同步）——————————
 - id: system-prompt

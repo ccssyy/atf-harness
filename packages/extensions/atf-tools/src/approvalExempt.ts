@@ -25,7 +25,14 @@
  */
 import { ATF_TRAINING_PRESET, isPresetAutopilot, type ExecSessionFace, type ServiceCtxFace } from "./trainingPreset.js";
 
-/** bash/write 类工具名（本部署 preset 实际挂载面：tool-bash=bash；tool-fs 写类=write/edit）。 */
+/**
+ * bash/write 类工具名（vendor 面：tool-bash=bash；tool-fs 写类=write/edit）。
+ *
+ * ⚠ atf_bash 不在此集合（owner 2026-10-26 裁定）：A7 治理面把 bash 换成了 atf_bash
+ * （fileGuardFace：白名单守卫＋命令串扫描），它的审批面是**独立**的——只在破坏性命令
+ * （D23 递归删除）时经 requestApproval 出卡，且必须以「逐次人工确认」结案。若把 atf_bash
+ * 并进本集合，等于把递归删除卡也变成免审，与 D23 裁定冲突。故此处只收 vendor 三名，
+ * atf_bash 恒走 next()（是裁定，不是漏配）。 */
 export const BASH_WRITE_APPROVAL_TOOLS: ReadonlySet<string> = new Set(["bash", "write", "edit"]);
 
 /** atf_* 前缀＝契约工具全体（高危治理点）——永远 next() 人工面板，语义零变化。 */

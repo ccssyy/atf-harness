@@ -76,8 +76,9 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
       | undefined;
     const policy = atfTools?.config?.approvalPolicy;
     expect(policy?.preset).toBe("atf-training");
-    expect(policy?.chainTools).toEqual(["atf_pipeline_stage", "atf_config_confirm", "atf_training_preflight", "atf_records_query", "atf_quantize_annotations"]);
-    for (const governed of ["atf_run_training", "atf_publish_confirm", "atf_publish_model", "atf_launch_execute", "atf_joint_train", "atf_gate", "atf_admit_data", "atf_scratch_exec"]) {
+    // owner 2026-10-26 裁定：写操作（quantize）按治理点处理，出清单 → 4 项
+    expect(policy?.chainTools).toEqual(["atf_pipeline_stage", "atf_config_confirm", "atf_training_preflight", "atf_records_query"]);
+    for (const governed of ["atf_run_training", "atf_publish_confirm", "atf_publish_model", "atf_launch_execute", "atf_joint_train", "atf_gate", "atf_admit_data", "atf_scratch_exec", "atf_quantize_annotations"]) {
       expect(policy?.chainTools ?? []).not.toContain(governed);
     }
   });

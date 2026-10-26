@@ -155,7 +155,7 @@ describe("两轴改造 段1：权限轴回三档＋Agent 预设 atf-training 声
       expect(block).toContain(`- ${tool}`);
     }
     // 治理点排除（既有裁定「GPU 训练启动确认任何档位阻塞」因此无需废止）
-    for (const governed of ["atf_run_training", "atf_publish_confirm", "atf_publish_model", "atf_launch_execute", "atf_joint_train", "atf_gate", "atf_admit_data", "atf_scratch_exec"]) {
+    for (const governed of ["atf_run_training", "atf_publish_confirm", "atf_publish_model", "atf_launch_execute", "atf_joint_train", "atf_gate", "atf_admit_data", "atf_scratch_exec", "atf_quantize_annotations"]) {
       expect(block).not.toContain(`- ${governed}`);
       expect(block).not.toContain(governed);
     }

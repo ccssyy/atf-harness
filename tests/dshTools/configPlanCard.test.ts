@@ -60,7 +60,7 @@ describe("决策卡（options 形态；自由输入留在选项组末尾）", ()
   it("决策卡问题一律不设 intent（原生选项卡），且每题都有 options", () => {
     expect(questions.length).toBeGreaterThan(1);
     for (const question of questions) {
-      expect(question.intent).toBeUndefined();
+      expect((question as { intent?: unknown }).intent).toBeUndefined();
       expect((question.options ?? []).length).toBeGreaterThan(0);
     }
   });

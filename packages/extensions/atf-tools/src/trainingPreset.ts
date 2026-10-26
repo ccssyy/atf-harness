@@ -10,6 +10,15 @@
  * 两轴交汇规则（owner 裁定）：预设声明 + 完全权限**同时成立**才视为自动驾驶。
  * 豁免是便利、权限是授权——预设不得在用户未给完全权限时自行放大能力，否则即
  * agent 越过用户自我提权。故任一轴缺席一律回落人工面板（fail-closed 语义不变）。
+ *
+ * ⚠ 待办风险（owner 2026-10-26 记录，本批不动）：预设轴读会话投影 `agentPreset`，
+ * 而 `agentPresets.select()` 是 remote 方法（现仅在 blank 会话可调，属用户界面动作）。
+ * 若将来把「切预设」暴露成模型工具，agent 就能自选 atf-training；配合用户已开的完全
+ * 权限，两轴即被动齐备＝自获免审——同一提权边界的另一条边。缓解方向（择一）：
+ *   ① 预设切换纳入「仅 owner 可点」并留审计；
+ *   ② 本文件只认会话创建头（header.agentPreset），忽略运行期切换；
+ *   ③ 免审判定再加一条「本会话内预设切换必须由 owner 发起」的事实锚。
+ * 在此之前不得把预设切换开放为模型工具。
  */
 /** 训练预设 machine id（profile 层 preset 注册同名 id）。 */
 export const ATF_TRAINING_PRESET = "atf-training";
