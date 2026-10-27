@@ -41,6 +41,9 @@ export const readBindings = (runDir: string): SessionBinding[] => {
 export const appendBinding = (runDir: string, sessionId: string, boundAt: string = new Date().toISOString()): void => {
   if (sessionId === "") return;
   try {
+    // run 目录不在场＝run 尚未创建：不写、不建目录（否则内核 create_run 会判落点被占）；
+    // 绑定是对已存在 run 的归属记录，无 run 即无绑定。
+    if (!existsSync(runDir)) return;
     const bindings = readBindings(runDir);
     if (bindings.some((binding) => binding.session_id === sessionId)) return;
     bindings.push({ session_id: sessionId, bound_at: boundAt });
@@ -134,6 +137,8 @@ export const readProgress = (runDir: string): RunProgress | null => {
 /** 写进度（原子写：tmp＋rename——批㊶-TRAIN-OBS 升级，读侧永不见半截文件；写失败静默）。 */
 export const writeProgress = (runDir: string, progress: RunProgress): void => {
   try {
+    // 同 appendBinding：run 不存在不落盘、不建目录（进度只属于已存在的 run）
+    if (!existsSync(runDir)) return;
     const dir = resolveRunSubdir(runDir, "webui");
     mkdirSync(dir, { recursive: true });
     const target = progressPathOf(runDir);

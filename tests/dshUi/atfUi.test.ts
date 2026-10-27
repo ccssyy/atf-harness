@@ -1201,7 +1201,26 @@ describe("批㊶-M2 段 2 scanRuns 特征过滤（布局规范＋防御）", () 
       writeFileSync(join(runDir, rel), "{}");
       expect(looksLikeRun(runDir), rel).toBe(true);
     }
-    expect(RUN_MARKER_RELS.length).toBe(7); // 批㊶-O 补：launch/launch_manifest.json 路径锚；D3/D4：stage-register.summary.json 收录锚
+    // RunLayout/v3：不钉长度（骨架随版本演进，钉长度＝禁止演进），改钉「关键锚必须在场」。
+    // v3 三锚（config/iteration-config、runtime/webui、stage）是段模式空 run 的唯一收录凭据；
+    // analysis/launch 是 v1 起就在的稳定锚（跨版本回归防线）。
+    for (const rel of [
+      "config/iteration-config", // v3 唯一配置锚
+      "runtime/webui", // v3 运行时锚（v2 的 webui 仍在列，存量可读）
+      "stage", // v3 段产物锚
+      "prep", // v2 存量锚（只读兼容）
+      "webui",
+      "training",
+      "eval",
+      join("launch", "launch_manifest.json"), // 路径锚（防 launch 子目录被当成 run）
+      "launch_manifest.json",
+      "stage-register.summary.json", // D3/D4 段模式身份锚
+    ]) {
+      expect(RUN_MARKER_RELS, rel).toContain(rel);
+    }
+    // 反向：analysis/ 不是 run 判定锚（v1 起就没有——viewer 产物域不等于 run 身份），
+    // 若将来有人往里加，这条会提醒先核对枚举面影响。
+    expect(RUN_MARKER_RELS).not.toContain("analysis");
   });
   it("无特征忽略：atf-ui 输出面（monitor.json/artifacts.json/panel.html）与空目录不收录", () => {
     const root = tempRoot();
@@ -1301,7 +1320,9 @@ describe("批㊶Q增补三 段3——工作区桶投影与作用域过滤（单�
   });
   it("viewer 路由 runDirOf 注入钉子（分桶实例 viewer 发现走双形态解析）", () => {
     const serverSource = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-ui/src/server.ts"), "utf8");
-    expect(serverSource).toContain("runDirOf: (runId) => resolveRunDir(resolved.runsRoot, runId)");
+    // run 落点解析必带 canonical 根（RunLayout/v3 canonical run 住
+    // <ws>/experiments/<exp>/<run_id>；不带只能查平铺/桶 → viewer 恒 404）
+    expect(serverSource).toContain("runDirOf: (runId) => resolveRunDir(resolved.runsRoot, runId, { canonicalRoots: canonicalRootsHere() })");
     expect(serverSource).toContain("sweepAnsweredPendings(resolved.runsRoot)");
     expect(serverSource).toContain("ledgerEnvPrefix: ledgerEnvPrefixForShell(process.env)");
   });

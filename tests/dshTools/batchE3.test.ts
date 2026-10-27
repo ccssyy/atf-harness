@@ -348,8 +348,9 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     expect(approvals).toHaveLength(0);
   });
 
-  it("E3 补·legacy 零变化：run 不在 canonical 位（含新建 run）→ run_dir 仍 <wp>/runs/<id>＋layout=legacy", async () => {
+  it("E3 补·legacy 存量只读仍在位；新建 run 落 v3 占位（ADR-0018：不再造 <wp>/runs/<id> 游离 run）", async () => {
     const ws = tempRoot("e3-ws-");
+    // 存量 legacy run（<wp>/runs/<id> 已在场）：读到 legacy、layout=legacy，零破坏
     writeSnapshot(join(ws, "runs", "e3-legacy"), { max_total_tokens: "9000" });
     const result = await toolOf().execute(
       { stage: "experiment_setup", run_id: "e3-legacy", workspace_path: ws },
@@ -358,11 +359,19 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     expect((result as Record<string, unknown>)["run_dir"]).toBe(join(ws, "runs", "e3-legacy"));
     expect((result as Record<string, unknown>)["run_dir_layout"]).toBe("legacy");
     expect((result as Record<string, unknown>)["max_total_tokens_source"]).toBe("config_snapshot");
+    // 新建 run（三处皆不在场）：落 v3 占位 <wp>/experiments/<YYYYMMDD>-adhoc/<id>（与内核
+    // _resolve_run_target 的占位同式），layout=canonical；且**不建任何目录**（register 段 create_run 落位）
     const fresh = await toolOf().execute(
       { stage: "experiment_setup", run_id: "e3-fresh-new", workspace_path: ws },
       fakeExec,
     );
-    expect((fresh as Record<string, unknown>)["run_dir"]).toBe(join(ws, "runs", "e3-fresh-new"));
+    const freshDir = (fresh as Record<string, unknown>)["run_dir"] as string;
+    expect(freshDir.startsWith(join(ws, "experiments"))).toBe(true);
+    expect(freshDir.endsWith(join("e3-fresh-new"))).toBe(true);
+    expect(existsSync(join(ws, "runs", "e3-fresh-new"))).toBe(false); // 不再造 legacy 桶
+    // （本用例前半段已铺过 <wp>/runs/e3-legacy，故此处只钉「新 id 不落 runs 桶」）
+    expect(existsSync(join(ws, "experiments"))).toBe(false); // 占位是纯路径，落位归 register 段 create_run
+    expect((fresh as Record<string, unknown>)["run_dir_layout"]).toBe("canonical");
     expect((fresh as Record<string, unknown>)["max_total_tokens_source"]).toBe("unspecified");
   });
 });
@@ -536,16 +545,18 @@ describe("E3-3 confirmFace 落点三级单源（缺口 D——快照与内核读
     expect(confirmedOf(runDir)["max_total_tokens"]).toBe("9000");
   });
 
-  it("workspace_path 给定（run 不存在）：写面在显式落点创建（快照落新树）；不静默改道", async () => {
+  it("workspace_path 给定但 run 不存在：fail-closed run_experiment_required，不造游离 run", async () => {
     const ws = tempRoot("e3-ws-");
     const askLog: string[] = [];
     const approvals: string[] = [];
     const configConfirm = configToolOf(tempRoot("e3-runs-"), askLog, approvals);
     const result = (await configConfirm.execute({ action: "present", run_id: "e3-wp-new", workspace_path: ws }, confirmExec)) as Record<string, unknown>;
-    expect(result["ok"]).toBe(true);
-    expect(result["run_dir_source"]).toBe("workspace_path");
-    const runDir = join(ws, "runs", "e3-wp-new");
-    expect(existsSync(join(runDir, "webui", "config-snapshot.json"))).toBe(true);
+    expect(result["ok"]).toBe(false);
+    expect(result["error"]).toBe("run_experiment_required");
+    // 写侧不造目录（ADR-0018）——否则又会复现「webui 落 legacy 桶」的错位写
+    expect(existsSync(join(ws, "runs", "e3-wp-new"))).toBe(false);
+    expect(existsSync(join(ws, "experiments"))).toBe(false);
+    expect(askLog).toHaveLength(0); // 不进卡
   });
 
   it("会话工作区事实命中 <cwd>/runs/<id>：source=session_fact，快照落工作区树（非实例 runsRoot）", async () => {
@@ -562,16 +573,16 @@ describe("E3-3 confirmFace 落点三级单源（缺口 D——快照与内核读
     expect(existsSync(join(runDir, "webui", "config-snapshot.json"))).toBe(true);
   });
 
-  it("新建 run（无 wp 无 cwd 命中）：现状桶落点零破坏——source=instance_runs_root，快照落 runsRoot 树", async () => {
+  it("新建 run（无 wp 无 cwd 命中）：fail-closed run_experiment_required，不到 runsRoot 造桶", async () => {
     const runsRoot = tempRoot("e3-runs-");
     const askLog: string[] = [];
     const approvals: string[] = [];
     const configConfirm = configToolOf(runsRoot, askLog, approvals);
     const result = (await configConfirm.execute({ action: "present", run_id: "e3-fresh" }, confirmExec)) as Record<string, unknown>;
-    expect(result["ok"]).toBe(true);
-    expect(result["run_dir_source"]).toBe("instance_runs_root");
-    expect(result["run_dir"]).toBe(join(runsRoot, "e3-fresh"));
-    expect(existsSync(join(runsRoot, "e3-fresh", "webui", "config-snapshot.json"))).toBe(true);
+    expect(result["ok"]).toBe(false);
+    expect(result["error"]).toBe("run_experiment_required");
+    expect(existsSync(join(runsRoot, "e3-fresh"))).toBe(false);
+    expect(askLog).toHaveLength(0);
   });
 
   it("落点为软链：拒（run_dir_symlink_rejected）——确认值永不落镜像位，零快照写入", async () => {

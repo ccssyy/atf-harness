@@ -559,6 +559,9 @@ const clearPending = (runDir: string): void => {
 };
 
 
+/** amend 缺结构化 edits 的统一拒绝文案（参数面校验先于落点解析——单源）。 */
+const AMEND_EDITS_REQUIRED_NOTE = "amend 需结构化 edits（键值对象，如 {\"num_train_epochs\":\"4\",\"learning_rate\":\"2e-4\"}）——请把用户改参话术转成具体键值后传入；自由文本不再解析（表单化）";
+
 /** 批㊶-U §五：双段式共用 helper（问题卡收改参→amend 校验 clamp 重呈→审批卡落闸）。
  *  四张确认卡统一复用（本次训练方案/评估 EVAL_RELEASE/凭据卡退化/S1 publish_model 随后）——
  *  禁每卡手搓。批㊶-W F5：第一段指引改表单卡语义（改参在表单卡改值提交；纯文字应答
@@ -584,9 +587,10 @@ export const injectBashRunWorkspace = (runDir: string): void => {
 /** 写面落点解析（config_confirm／publish_confirm 共用）：与只读预检同一三级序
  *  （workspace_path 显式 > 会话工作区事实 > 实例 runsRoot 兜底——resolvePreflightRunDir
  *  同一决定者），差别仅在「目录不存在」：预检只读拒之；本面是建卡/确认写面——显式
- *  workspace_path 给定时在显式落点创建 run 目录（非法 runId 拒——路径穿越不进创建面），
- *  未给时按现行 resolveRunDir 桶落点新建（writePending/saveConfigSnapshot 落点一致，
- *  新建 run 现状零破坏）。非绝对路径与 symlink 与预检同拒（红线：确认值永不落镜像位）。
+ *  **解析不到 run 一律 fail-closed（run_experiment_required，不造目录）**——ADR-0018
+ *  「run 必属某个实验，不存在游离 run」；旧实现会在 `<wp>/runs/<run_id>` 建目录，
+ *  写侧自己造 legacy 桶（错位桶 bug 的源头）。非绝对路径与 symlink 与预检同拒
+ *  （红线：确认值永不落镜像位）。
  *  效果：方案确认快照/pending/段事实/会话绑定与内核 training_prep 读点同棵树。 */
 export const resolveConfirmRunDir = (
   deps: ConfirmDeps,
@@ -602,29 +606,23 @@ export const resolveConfirmRunDir = (
   );
   if (resolved.ok) return { ok: true, runDir: resolved.runDir, source: resolved.source };
   if (resolved.error === "run_dir_not_found") {
-    if (wp !== "") {
-      if (!isValidRunId(runId)) {
-        return { ok: false, error: "run_id_invalid", note: `run_id 形态非法（${runId}）——拒绝在显式落点创建 run 目录` };
-      }
-      const runDir = join(wp, "runs", runId);
-      try {
-        mkdirSync(runDir, { recursive: true });
-        return { ok: true, runDir, source: "workspace_path" };
-      } catch (cause) {
-        return { ok: false, error: "run_dir_create_failed", note: `显式落点 run 目录创建失败（${runDir}）：${String(cause).slice(0, 200)}` };
-      }
+    if (wp !== "" && !isValidRunId(runId)) {
+      return { ok: false, error: "run_id_invalid", note: `run_id 形态非法（${runId}）——拒绝在显式落点解析 run 目录` };
     }
-    // 新建 run 现状形态：实例 runsRoot 桶落点（writePending 落点 mkdir——零破坏）。
-    // canonical 档必须带注册工作区根：v3 canonical run 住 `<ws>/experiments/<exp>/<run_id>`，
-    // 不带＝只查平铺/桶＝已存在的 canonical run 被当成「不存在」而在 legacy 桶新建（现场 bug：
-    // run.json 在 experiments/<exp>/<run>/，webui/ 却落在 <ws>/runs/<run>/webui/）。
+    // fail-closed（ADR-0018「run 必属某个实验，不存在游离 run」）：解析不到 run 时
+    // **不落任何目录**。旧实现在此处 `<wp>/runs/<run_id>` 建目录，写侧自己造 legacy 桶
+    // ——正是「run.json 在 experiments/<exp>/<run>/，webui/ 却落 <ws>/runs/<run>/webui/」
+    // 那条 bug 的源头。canonical 档仍带注册工作区根，让已存在的实验树 run 命中（含实例根）。
+    const fallback = resolveRunDir(deps.runsRoot, runId, {
+      workspace: sessionWorkspaceSlug(exec),
+      canonicalRoots: deps.canonicalRoots ?? registeredWorkspaceRoots(),
+    });
+    if (existsSync(fallback)) return { ok: true, runDir: fallback, source: "instance_runs_root" };
     return {
-      ok: true,
-      runDir: resolveRunDir(deps.runsRoot, runId, {
-        workspace: sessionWorkspaceSlug(exec),
-        canonicalRoots: deps.canonicalRoots ?? registeredWorkspaceRoots(),
-      }),
-      source: "instance_runs_root",
+      ok: false,
+      error: "run_experiment_required",
+      note: "run 必属某个实验——先经创实验入口建 run（实验树 <workspace>/experiments/<exp>/<run_id>）"
+        + "再用同一 run_id 重推；本工具不在 <workspace>/runs 下造游离 run（ADR-0018）",
     };
   }
   return { ok: false, error: resolved.error, note: resolved.note };
@@ -669,6 +667,11 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       // E3（缺口 D）：run 落点三级单源（workspace_path 显式 > 会话工作区事实 > 实例
       // runsRoot 兜底——preflightFace E2 同一解析器，写面语义见 resolveConfirmRunDir）；
       // 快照/pending/段事实/会话绑定/KPI 全落同一棵树——方案确认值经此与内核读点同源。
+      // 参数面先于落点解析（RunLayout/v3 fail-closed 后，run 不存在会先报 run_experiment_required
+      // ——坏参数不该被它掩码，故 amend 的 edits 缺失在此先拒）。
+      if (args.action === "amend" && Object.keys((args.edits ?? {}) as Record<string, unknown>).length === 0) {
+        return asToolValue({ ok: false, run_id: args.run_id, note: AMEND_EDITS_REQUIRED_NOTE });
+      }
       const resolvedRun = resolveConfirmRunDir(deps, args.run_id, args.workspace_path, exec);
       if (!resolvedRun.ok) {
         return asToolValue({ ok: false, run_id: args.run_id, error: resolvedRun.error, note: resolvedRun.note });
@@ -804,10 +807,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       if (args.action === "amend") {
         // 批㊶-W F5：结构化 amend——edits 键值对象（用户聊天话术经 agent 语义理解后转入）；
         // 自由文本解析链退役（自由文本永不直达生成面）。
+        // edits 缺失已在 execute 入口拒（单源：AMEND_EDITS_REQUIRED_NOTE）——此处只用值
         const rawEdits = (args.edits ?? {}) as Record<string, unknown>;
-        if (Object.keys(rawEdits).length === 0) {
-          return asToolValue({ ok: false, run_id: args.run_id, note: "amend 需结构化 edits（键值对象，如 {\"num_train_epochs\":\"4\",\"learning_rate\":\"2e-4\"}）——请把用户改参话术转成具体键值后传入；自由文本不再解析（表单化）" });
-        }
         amended = {};
         for (const [key, value] of Object.entries(rawEdits)) amended[key] = String(value);
         // 改参值一律过确定性护栏（同 L3 clamp 域）——越界回退到域边界＋说明可读（不静默）

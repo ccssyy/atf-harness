@@ -172,7 +172,10 @@ export const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; 
   // 显式工作区形态不代建目录：工作区路径是否存在由治理工具校验——此处无条件 mkdir
   // 会把「不存在的路径」变成存在，绕过 atf_create_experiment 的「不代建顶层工作区
   // 目录」闸（真机表现为该工具对不存在路径返回 ok:true）。
-  if (explicitWorkspace === "" || existsSync(explicitWorkspace)) {
+  // 追加 gate（RunLayout/v3 fail-closed）：run 目录本身不在场＝run 还没建（register 段经内核
+  // create_run 落位）——此时在占位路径下建 scratch 会让内核判「落点已被占用且缺合法 run.json」
+  // 而永久拒绝该 run_id。故只在 run 已存在时建 scratch（runDir 由上面的单源解析给出）。
+  if ((explicitWorkspace === "" || existsSync(explicitWorkspace)) && existsSync(runDir)) {
     mkdirSync(scratchDir, { recursive: true });
   }
   const sessionId = sessionIdOfExec(exec);

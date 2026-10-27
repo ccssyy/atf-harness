@@ -322,9 +322,9 @@ export const constructionParamsApprovalLines = (input: {
  *   ① v3 实验树 `<wp>/experiments/<exp>/<runId>`（canonical，唯一写面与主读面）；
  *   ② v2 实验树 `<wp>/experiments/<exp>/runs/<runId>`（存量只读兼容）；
  *   ③ legacy `<wp>/workspace/runs/<runId>`（v1 固定名桶）／④ `<wp>/runs/<runId>`。
- *  ①② 与 ③（v1 固定名桶）归 "canonical"，④ 归 "legacy"（存量兼容）。全缺＝新建：v3 的 run 必属某实验
- *  （exp 未知不可推导），故维持 legacy 公式不变——不代建目录、不猜实验归属（归属由内核
- *  create_experiment 决定）。命中项为软链即拒（E2 同纪律——不接受镜像/软链自救形态）。 */
+ *  ①② 与 ③（v1 固定名桶）归 "canonical"，④ 归 "legacy"（存量兼容）。
+ *  全缺＝run 尚未创建 → 返回 v3 占位（不建目录，实验归属按内核同式推导为 <YYYYMMDD>-adhoc，
+ *  落位归 register 段 create_run）。命中项为软链即拒（E2 同纪律——不接受镜像/软链自救）。 */
 export const resolvePipelineRunDir = (
   workspacePath: string,
   runId: string,
@@ -368,7 +368,20 @@ export const resolvePipelineRunDir = (
     if (rejected !== null) return rejected;
     return { runDir: legacy, layout: "legacy" };
   }
-  return { runDir: join(workspacePath, "runs", runId), layout: "legacy" };
+  // 全缺＝run 尚未创建：返回**与内核同式的 v3 占位路径**（纯路径计算，不建目录）。
+  // 内核 walkthrough_pipeline 的 _resolve_run_target 同样在 run 不在场时取 canonical 占位、
+  // 由 register 段 create_run 落位；占位实验归属推导序与之逐条同源
+  // （①显式 --experiment ②既有 run 的 experiment_id ③按日期 <YYYYMMDD>-adhoc）。
+  // ①② 在此恒不成立（能命中就已在上面的候选扫描里返回；本工具无 --experiment 入参），
+  // 故落 ③。**旧实现在此返回 `<wp>/runs/<run_id>`（legacy 桶）当新建落点——写侧自己造
+  // 游离 run，正是本轮要消灭的错位桶 bug 的另一半。**
+  return { runDir: join(experiments, adhocExperimentId(new Date()), runId), layout: "canonical" };
+};
+
+/** 未命名实验（adhoc）标识推导——与内核 `<YYYYMMDD>-adhoc` 同式同值（本地时区日期）。 */
+const adhocExperimentId = (now: Date): string => {
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-adhoc`;
 };
 
 // ── E3：experiment_setup 段预算三参（max_total_tokens／像素对）——显式 > 确认快照
@@ -1148,6 +1161,18 @@ export const buildPipelineTool = (
       if (args.stage === "experiment_setup") {
         const groupingConfirm = args.grouping_confirm === true;
         const mode5Random = typeof args.mode5_random === "number" ? Number(args.mode5_random) : undefined;
+        // run 尚未创建（register 段前）且本次要落 advice 文件时不落任何目录：在占位路径下
+        // 建目录会让内核 create_run 判「落点已被占用且缺合法 run.json」而永久拒绝该 run_id。
+        // 不带 advice 参数的 experiment_setup 段（常规路径）不受影响——本工具只读不建。
+        const wantsAdviceWrite = args.mode5_advice_stats !== undefined || args.targeted_advice !== undefined;
+        if (wantsAdviceWrite && !existsSync(runDir)) {
+          return asToolValue({
+            ok: false, stage: args.stage, run_id: args.run_id, run_dir: runDir,
+            error: "run_not_created",
+            note: "run 尚未创建（register 段经内核 create_run 落位）——先跑 register 段再带 advice 参数重推；"
+              + "本工具不在未创建的 run 路径下建目录（否则内核将无法落位该 run_id）",
+          });
+        }
         const writeAdviceFile = (name: string, payload: unknown): string => {
           // RunLayout/v3：prep → data（存量 v2 run 的 prep/ 经 resolveRunSubdir 只读兼容）；
           // 产物路径以显式路径回传内核（--mode5-advice-stats/--targeted-advice），落点不猜
