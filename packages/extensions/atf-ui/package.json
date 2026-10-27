@@ -9,7 +9,10 @@
   },
   "dsh": {
     "bundle": {
-      "patch": "./cordis.patch.yml"
+      "patch": [
+        "./cordis.patch.yml",
+        "./presets/atf-training.patch.yml"
+      ]
     },
     "client": {
       "inject": [],
