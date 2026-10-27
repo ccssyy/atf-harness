@@ -450,35 +450,46 @@ describe("RunLayout/v3 写侧落名——v3 树不写 v2 名（声明闭集单�
 
 // ── 验收附录：跨仓双向对账（harness 写 → 内核审计），发包/回归时手工跑一次 ──
 //
-// 上述 7 条是「函数返回什么」；这份附录是「写完的东西经得起审计」。两者都要，缺一不可
-// （单测能证明落名对，但证明不了"有没有多写"）。
+// 上述 8 条是「函数返回什么」；这份附录是「写完的东西经得起审计」。两者都要，缺一不可
+// （单测能证明落名对，但证明不了"有没有多写"；反之审计能证明整体形态，但证明不了 helper 的落名规则）。
 //
-//   WS=$(mktemp -d); mkdir -p "$WS/experiments/e1/run-v3"
-//   # run.json 六键 + RUN_LAYOUT_V3 的 dirs（与内核 _RUN_JSON_KEYS 同口径）
-//   # 用 harness helper 真写：appendSegmentFact / appendBinding / resolveRunFile(webui/config-snapshot.json)
-//   # 期望 run 顶层 = run.json, runtime        ← 不得出现 webui/
+// ── 复跑步骤 ──
+//   1) 空 workspace 上真造一棵 v3 run（必须显式给 experiment_id——run 必属某个实验；
+//      canonical 落位**没有 runs/ 中间层**。注意：内核 create_run / run_dir / locate_run_dir /
+//      run_root_containing 的 docstring 仍写 <ws>/experiments/<exp>/runs/<run_id>，是迁移漏网的
+//      v2 措辞，别照 docstring 建——照它建出来就是 v2 形态）：
+//        create_run(ws, "v3s-01", experiment_id="20261027-adhoc")
+//        → 预期 <ws>/experiments/20261027-adhoc/v3s-01/   （无 runs/ 这一层）
+//   2) 用 harness helper 真写：appendSegmentFact / appendBinding / resolveRunFile(webui/config-snapshot.json)
+//        → 预期 run 顶层 = run.json + 9 类（config/data/stage/launch/training/eval/analysis/publish/runtime）
+//          其中 config/ 4 件、data/ 7 件、runtime/{loop,webui} 在位；**不得出现 webui/、prep/**
+//   3) 审计：
+//        python3 <kernel>/src/agentic_training_flow/_skills_pack/atf-audit-run/scripts/check_run_layout.py \
+//          --workspace-root <ws>
+//        期望：layout_scanned {"RunLayout/v3": 1} / findings [] / verdict pass
+//   4) 阴性对照（证明审计真能抓，不是永远 pass）：往该 run 里手工塞一个未声明目录
+//        mkdir -p <run>/webui
+//        期望：findings ["layout_undeclared_dir:run-v3:webui(...)"] / verdict fail；删掉后回 pass。
 //
-//   python3 <kernel>/src/agentic_training_flow/_skills_pack/atf-audit-run/scripts/check_run_layout.py \
-//     --workspace-root "$WS"
-//   期望：layout_scanned {"RunLayout/v3": 1} / findings [] / verdict pass
+// ── 判据（实测，别写成不存在的兜底）──
+//   错形态**不会**被 layout_undeclared_dir 判死：它比的是「树 vs **该 run 自己声明的** dirs」，
+//   于是"整棵树是旧形态但内部自洽"（如 layout_version=RunLayout/v2 + 18 项 v2 dirs 全建）
+//   会 findings 为空、verdict pass。写侧落名护栏同理——它只判"是不是 v3"，v2 树判 false → 写 v2 名 → 也自洽。
+//   真正的判据是**代际读出**：layout_scanned 出现 {"RunLayout/v2": …} 即说明造错了树；
+//   v3 的正确读数必须是 {"RunLayout/v3": …} 且 findings: []。
+//   两向对照实测（2026-10-27）：自洽 v2 树 → pass；同一棵树加未声明 runtime/ → layout_undeclared_dir / fail。
 //
-// 阴性对照（证明审计真能抓，不是永远 pass）：
-//   mkdir -p "$WS/experiments/e1/run-v3/webui"      # 手工塞一个未声明目录
-//   期望：findings ["layout_undeclared_dir:run-v3:webui(...)"] / verdict fail
-//   删掉后回 pass。
-//
-// 实测记录（2026-10-27，A800_5005）：
-//   ① 存量：全机 RunLayout/v3 run = 0（os.walk，相对扫描根 MAXDEPTH≥8 饱和口径；
-//      run.json=22 / legacy=37 / 总 59，两方独立复现）。
-//   ② 另有**本轮新建的验证 run**（不在①的存量普查口径内；数据同样是假的）：
-//      /tmp/v3s/ws  (dev:ino=116:247792136)，内核 create_run + register 真落位
-//      （9 类顶层、config/ 4 件、data/ 7 件、runtime/{loop,webui} 在位）。
-//      check_run_layout → layout_scanned {"RunLayout/v3":1} / findings [] / pass
-//      （run.json docs=[{doc_type:pl, lane_suffix:all}] 与 stage/stage-register.pl.summary.json
-//      对得上，否则会报 layout_docs_registry_mismatch）；
-//      harness helper 对该树解析：webui→runtime/webui、loop→runtime/loop、prep→data、
+// ── 实测记录（2026-10-27，A800_5005）──
+//   ① 存量普查：全机 RunLayout/v3 run = 0
+//      （os.walk，深度按「相对扫描根」MAXDEPTH≥8——实测 6 会丢 22%、8 起饱和；
+//       run.json=22 / legacy=37 / 总 59，两方独立复现）。
+//   ② 本轮现造的验证件（不在①存量口径内；数据为假；/tmp 会随清理消失，故此条按
+//      "可复跑"而非"可访问"引用）：当时指纹 /tmp/v3s/ws → dev:ino=116:247792136（仅当时确证，重建即变）。
+//      内核 create_run + register 真落位；check_run_layout → layout_scanned {"RunLayout/v3":1}
+//      / findings [] / pass（run.json docs=[{doc_type:pl, lane_suffix:all}] 与
+//      stage/stage-register.pl.summary.json 对得上，否则会报 layout_docs_registry_mismatch）；
+//      harness helper 解析：webui→runtime/webui、loop→runtime/loop、prep→data、
 //      experiment-setup→config/experiment-setup，全部落在 run.json.dirs 声明内。
-//      ⚠ 措辞纪律：不得写成「v3 有 1 个真机 run」——①才是存量普查口径（=0），
-//      ②是现造的验证件，混写会让人误判线上迁移进度。
+//      ⚠ 措辞纪律：不得写成「v3 有 1 个真机 run」——①才是存量口径（=0），②是现造验证件，
+//      混写会让人误判线上迁移进度。
 //   ③ 合成样本对账：写后 pass、手工塞 webui/ 后 fail、删掉回 pass——三方对上。
-//   （②是唯一非合成数据来源的样本，但数据内容仍是假数据——引用时两句话一起写。）
