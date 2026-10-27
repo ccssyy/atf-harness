@@ -93,8 +93,18 @@
  * 落点 run 目录，内核账本 round_dir 字段面）；内核 stdout 携 approval_id 时回传返回体
  * approval_entry_id（解析失败省略键不阻断段回报，stderr 记一条）；卡面追加放行权属行
  * 「仅 owner 可点；执行方不得代点」。
+ *
+ * 询问闸（DecisionGate/v1）权限档传导：本段命令的子进程 env 追加 ATF_ACCESS_MODE
+ * ＝会话权限档（sandboxModeOf(ctx,exec)===DANGER_FULL_ACCESS_SANDBOX ? full : limited；
+ * sandbox 值判据单源在 trainingPreset，档位名可改语义不可改）。「问不问」的裁决面在
+ * 内核（可推导/策略默认类在完全访问档按数据事实自动推进、受限档停下来问、业务取舍类
+ * 恒问），harness 只做确定性传导、零规则复制。用 env 而非 CLI 旗标：pin 内旧内核不认识
+ * --access-mode 会让整条链 argparse 失败，env 未识别＝被忽略——升级前后同一份 harness
+ * 都安全，re-pin 后自动生效。返回体回传内核渲染的 decision_report（措辞内核单源，段内
+ * 判定账 <run>/analysis/decisions/decisions.jsonl 同源；旧内核无该块＝零键降级）。
  */
 import { execFile } from "node:child_process";
+import { DANGER_FULL_ACCESS_SANDBOX, sandboxModeOf } from "./trainingPreset.js";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
@@ -774,14 +784,40 @@ export const trainingOutputDirApprovalLine = (resolved: { outputDir: string; sou
   `训练输出目录（output_dir）：${resolved.outputDir}（${resolved.source === "iteration_config" ? "盘上迭代配置终值" : "内核 run 布局预期——段产出后以落盘终值为准"}）`;
 
 
+/**
+ * 段回执的询问闸报告键：内核段摘要 decisions 块在场才出键（措辞由内核渲染单源，
+ * harness 不复刻、不暴露内部 id；旧内核无该块＝零键，不造假空报告）。
+ *
+ * @param summary 内核段摘要（stdout 解析或落盘回读，可为 null）。
+ * @returns 报告键集合（report 文本 + auto/ask 计数）；块缺席返回空对象。
+ */
+export const decisionReportKeys = (summary: unknown): Record<string, unknown> => {
+  const block = (summary as { decisions?: { report?: unknown; auto?: unknown; ask?: unknown; access_mode?: unknown } } | null)?.decisions;
+  if (block === undefined || block === null || typeof block !== "object") return {};
+  const report = typeof block.report === "string" && block.report !== "" ? block.report : null;
+  if (report === null) return {};
+  return {
+    decision_report: report,
+    decisions_auto: typeof block.auto === "number" ? block.auto : 0,
+    decisions_ask: typeof block.ask === "number" ? block.ask : 0,
+    decisions_access_mode: typeof block.access_mode === "string" ? block.access_mode : null,
+  };
+};
+
 /** 子进程封装（execFile——非零退出/超时如实回传，不抛；F1 预检工具同源复用）。 */
-export const runPipeline = (command: string, args: readonly string[], timeoutMs: number): Promise<{ code: number | null; stdout: string; stderr: string }> =>
+export const runPipeline = (command: string, args: readonly string[], timeoutMs: number,
+  extraEnv?: Readonly<Record<string, string>>): Promise<{ code: number | null; stdout: string; stderr: string }> =>
   new Promise((resolve) => {
     const [file, ...rest] = command.split(" ");
     execFile(
       file ?? command,
       [...rest, ...args],
-      { timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 },
+      {
+        timeout: timeoutMs,
+        maxBuffer: 4 * 1024 * 1024,
+        // 逐调用追加 env（会话级事实如权限档）——不污染 process.env，多会话并发各归各。
+        ...(extraEnv === undefined ? {} : { env: { ...process.env, ...extraEnv } }),
+      },
       (error, stdout, stderr) => {
         // 非零退出也返回（如实回报；超时时 code 为 null）
         const rawCode = error === null ? 0 : (error as NodeJS.ErrnoException & { code?: number | string }).code;
@@ -1404,7 +1440,13 @@ export const buildPipelineTool = (
       // D24h：放行登记带会话身份与 ui 模式（actor＝会话 id，缺失＝unattributed——不伪造 owner）；
       // round_dir＝本段落点 run 目录（内核账本 round_dir 字段面，与评估 D20 同构）
       argv.push("--actor", sessionIdOfExec(exec) ?? "unattributed", "--approval-mode", "ui", "--round-dir", runDir);
-      const result = await runPipeline(pipelineCommand, argv, pipelineTimeoutMs);
+      // 询问闸权限档（DecisionGate/v1）：会话权限档＝完全访问时下传 full，其余一律
+      // limited——「问不问」的裁决面在内核（同一份规则单源），harness 只做确定性传导。
+      // 用 env 而非 CLI 旗标：pin 内旧内核不认识 --access-mode 会让整条链 argparse
+      // 失败，env 未识别＝被忽略——升级前后同一份 harness 都安全，re-pin 后自动生效。
+      const accessMode = sandboxModeOf(ctx, exec) === DANGER_FULL_ACCESS_SANDBOX ? "full" : "limited";
+      const result = await runPipeline(pipelineCommand, argv, pipelineTimeoutMs,
+        { ATF_ACCESS_MODE: accessMode });
       let summary: unknown = null;
       const trimmed = result.stdout.trim();
       const jsonStart = trimmed.indexOf("{");
@@ -1466,6 +1508,10 @@ export const buildPipelineTool = (
         run_dir_layout: resolvedRun.layout,
         ok: result.code === 0,
         exit_code: result.code,
+        // 询问闸：本次权限档 + 内核渲染的判定报告（「怎么执行 → 得到什么结果」，
+        // 与内核 <run>/analysis/decisions/decisions.jsonl 同源；旧内核无该块＝省略键）。
+        access_mode: accessMode,
+        ...decisionReportKeys(summary),
         segment_fact_recorded,
         session_bound,
         ...(fact_segment !== null ? { fact_segment } : {}),
