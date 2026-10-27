@@ -17,6 +17,16 @@ const templateRows = (): Array<Record<string, unknown>> =>
   JSON.parse(execFileSync("python3.10", ["-c", "import json,yaml,sys; print(json.dumps(yaml.safe_load(open(sys.argv[1],encoding='utf8'))))", TEMPLATE], { cwd: repo }).toString("utf8")) as Array<Record<string, unknown>>;
 const rowById = (rows: Array<Record<string, unknown>>, id: string): Record<string, unknown> | undefined =>
   rows.find((row) => row["id"] === id);
+/** atf-training 预设已移出模板：走 bundle 层 `- insert:` 声明（profile 层只按 id 覆盖、新增不加载）。 */
+const PRESET_PATCH = join(repo, "packages", "extensions", "atf-ui", "presets", "atf-training.patch.yml");
+const trainingPresetRow = (): Record<string, unknown> => {
+  const parsed = JSON.parse(
+    execFileSync("python3.10", ["-c", "import json,yaml,sys; print(json.dumps(yaml.safe_load(open(sys.argv[1],encoding='utf8'))))", PRESET_PATCH], { cwd: repo }).toString("utf8"),
+  ) as Array<{ insert?: Array<Record<string, unknown>> }>;
+  const inserted = parsed[0]?.insert?.[0];
+  if (!inserted) throw new Error("bundle 预设文件里没有 insert 行");
+  return inserted;
+};
 const presetPlugins = (): Array<Record<string, unknown>> => {
   const preset = rowById(templateRows(), "preset-standard") as { config?: { plugins?: Array<Record<string, unknown>> } };
   return preset?.config?.plugins ?? [];
@@ -47,17 +57,18 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
   });
 
   it("Agent 预设 atf-training：与 standard 的工具集差异落在配置里（vendor 技能面关）＋八段流程约束在 persona", () => {
-    const rows = templateRows();
-    const training = rowById(rows, "preset-atf-training") as
-      | { config?: { id?: string; order?: number; plugins?: Array<Record<string, unknown> & { config?: Record<string, unknown> }> } }
-      | undefined;
+    // 模板里不该再有该行（profile 层新增不加载）；声明在 bundle 的 presets patch 里
+    expect(rowById(templateRows(), "preset-atf-training")).toBeUndefined();
+    const training = trainingPresetRow() as {
+      config?: { id?: string; order?: number; plugins?: Array<Record<string, unknown> & { config?: Record<string, unknown> }> };
+    };
     expect(training?.config?.id).toBe("atf-training");
     const plugins = training?.config?.plugins ?? [];
     const byId = new Map(plugins.map((plugin) => [plugin["id"] as string, plugin]));
     expect(byId.get("skill-filesystem")?.["disabled"]).toBe(true);
     expect(byId.get("tool-skill")?.["disabled"]).toBe(true);
     // 与 standard 的插件 id 集合差异＝仅技能面两个 disabled（其余逐项同名同序，防手抄漂移）
-    const standard = (rowById(rows, "preset-standard") as { config?: { plugins?: Array<Record<string, unknown>> } })?.config?.plugins ?? [];
+    const standard = (rowById(templateRows(), "preset-standard") as { config?: { plugins?: Array<Record<string, unknown>> } })?.config?.plugins ?? [];
     expect(plugins.map((p) => p["id"])).toEqual(standard.map((p) => p["id"]));
     // 八段流程约束在 persona 配置里（配置声明，禁 TS 分支）
     const persona = byId.get("persona") as { config?: { prefix?: string } } | undefined;
@@ -116,7 +127,7 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
     expect(model?.config).toEqual({ provider: "zai-coding-cn", model: "glm-5.3-flash" });
     // 覆写不丢模板其余行（insert 无 id 行原样保留）
     expect(rows.filter((row) => row["id"] === undefined).length).toBeGreaterThan(0);
-    expect(rows.length).toBe(10); // 模板 10 行（批㊶-K jobs 兜底行＋preset-atf-training 预设行）
+    expect(rows.length).toBe(9); // 模板 9 行（preset-atf-training 已移入 bundle 层）
   });
 });
 

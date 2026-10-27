@@ -28,6 +28,13 @@ import { resolveLaunchSessionName, tmuxSocketFlag, trainingSessionBase } from ".
 import { injectMonitorGlobal } from "../../packages/extensions/atf-ui/src/server.js";
 import { buildRunTrainingTool } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 
+/** atf-training 预设已移出模板：走 bundle 层 `- insert:` 声明（profile 层新增不加载）。 */
+const presetPatch = (): string =>
+  readFileSync(
+    join(import.meta.url.replace("file://", ""), "..", "..", "..", "packages", "extensions", "atf-ui", "presets", "atf-training.patch.yml"),
+    "utf8",
+  );
+
 const repoRoot = join(import.meta.dirname, "..", "..");
 
 const tempRoots: string[] = [];
@@ -129,24 +136,32 @@ const readAlertsFile = (runDir: string): Array<Record<string, unknown>> =>
 // ---------------------------------------------------------------- 段1 预设面（权限轴回三档）
 
 describe("两轴改造 段1：权限轴回三档＋Agent 预设 atf-training 声明在配置里", () => {
-  const template = readFileSync(join(repoRoot, "deploy", "profiles", "web", "cordis.patch.template.yml"), "utf8");
+  /** atf-training 预设已移出模板：走 bundle 层 `- insert:` 声明（profile 层新增不加载）。 */
+const presetPatch = (): string => {
+  const p = join(import.meta.url.replace("file://", ""), "..", "..", "..", "packages", "extensions", "atf-ui", "presets", "atf-training.patch.yml");
+  return readFileSync(p, "utf8");
+};
+const template = readFileSync(join(repoRoot, "deploy", "profiles", "web", "cordis.patch.template.yml"), "utf8");
   it("模板不再注册 auto_training 档（训练形态已改由 Agent 预设承担；权限轴回三档）", () => {
     expect(template).not.toMatch(/^\s+auto_training:\s*$/m);
     const sandboxLines = template.match(/^\s{6}(read-only|workspace-write|danger-full-access):$/gm) ?? [];
     expect(sandboxLines).toHaveLength(3);
     expect(template).toContain("defaultPreset: danger-full-access");
   });
-  it("Agent 预设 atf-training 在模板声明：id／order／八段流程约束／工具集差异全在配置里", () => {
-    expect(template).toContain("- id: preset-atf-training");
-    expect(template).toMatch(/id: atf-training\n\s+order: 2/);
+  it("Agent 预设 atf-training 在 bundle 层声明：id／order／八段流程约束／工具集差异全在配置里", () => {
+    const bundle = presetPatch();
+    // 模板里不该再有该行（profile 层新增不加载）
+    expect(template).not.toContain("- id: preset-atf-training");
+    expect(bundle).toContain("- id: preset-atf-training");
+    expect(bundle).toMatch(/id: atf-training\n\s+order: 2/);
     // 八段流程约束（persona 内，配置声明——不是 TS 分支）
     for (const stage of ["register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep"]) {
-      expect(template).toContain(stage);
+      expect(bundle).toContain(stage);
     }
-    expect(template).toContain("训练链固定八段");
+    expect(bundle).toContain("训练链固定八段");
     // 工具集差异：vendor 技能面关（atf_skill_read 单源）
-    expect(template).toMatch(/- id: skill-filesystem\n\s+name: '@deepseek-ai\/dsh-skill-filesystem'\n\s+disabled: true/);
-    expect(template).toMatch(/- id: tool-skill\n\s+name: '@deepseek-ai\/dsh-tool-skill'\n\s+disabled: true/);
+    expect(bundle).toMatch(/- id: skill-filesystem\n\s+name: '@deepseek-ai\/dsh-skill-filesystem'\n\s+disabled: true/);
+    expect(bundle).toMatch(/- id: tool-skill\n\s+name: '@deepseek-ai\/dsh-tool-skill'\n\s+disabled: true/);
   });
   it("免审清单在 atf-tools config.approvalPolicy：显式工具名、零 atf_ 前缀、零治理点", () => {
     const block = template.slice(template.indexOf("approvalPolicy:"), template.indexOf("# —— M3 品牌定稿"));
@@ -223,10 +238,12 @@ describe("两轴改造 段2：预设 + 权限档双齐才自动驾驶（任一�
     expect(isTrainingAutopilot(ctxOf({}), { agent: undefined })).toBe(false);
     expect(isTrainingAutopilot({ get: () => { throw new Error("boom"); } }, exec)).toBe(false);
   });
-  it("ATF 预设 id 常量与模板一致（防两份字面量漂移）", () => {
+  it("ATF 预设 id 常量与声明单源一致（防两份字面量漂移）", () => {
+    // 预设声明已从模板迁到 bundle 层：id 常量对 bundle presets，模板只保留 approvalPolicy 引用
     const template = readFileSync(join(repoRoot, "deploy", "profiles", "web", "cordis.patch.template.yml"), "utf8");
-    expect(template).toContain(`preset: ${ATF_TRAINING_PRESET}`);
-    expect(template).toContain(`id: ${ATF_TRAINING_PRESET}`);
+    const bundle = presetPatch();
+    // 预设声明单源＝bundle presets；模板里只剩 approvalPolicy 的 preset 引用（不校验，避免把引用当声明）
+    expect(bundle).toContain(`id: ${ATF_TRAINING_PRESET}`);
   });
 });
 

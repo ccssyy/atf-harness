@@ -964,7 +964,7 @@ export const buildPipelineTool = (
           "改值影响坐标换算与 token 预算。未显式给定时读确认快照兜底；皆无则不下传",
       },
       doc_type: { type: "string", description: "单据类型（可缺省——缺省不上送，内核按数据/登记面推断，无法确定即 blocked；给了则显式指定）" },
-      lane_suffix: { type: "string", description: "lane 后缀（可缺省——缺省不上送，内核自行推断）" },
+      lane_suffix: { type: "string", description: "lane 后缀（内部键：缺省不上送，内核按 all 处理；一般不用传）" },
       field_config: { type: "string", description: "字段配置文件显式路径（可缺省——缺省不上送，内核走 run 内/登记面既有来源）" },
       train_all: {
         type: "boolean",
