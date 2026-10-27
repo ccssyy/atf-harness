@@ -9,6 +9,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { bucketedRunEntries, flatRunDirNames, hasRunMarkers, resolveRunDir, runFileCandidates, RUN_MARKER_RELS } from "../core/workspace/runLayout.js";
+import { captureGpuProbeAsync, formatProbeEvidence, gpuOfflineLabel, type ProbeResult } from "../core/workspace/gpuProbe.js";
 import { registeredWorkspaceRoots } from "../core/workspace/workspaceRegistry.js";
 
 /** AgentTool 兼容形状（与 src/agent/atfAgentTools.ts 的 AgentTool 同构——避免循环 import 用结构类型）。 */
@@ -147,9 +148,9 @@ export const makeReadOnlyTools = (deps: ReadOnlyToolDeps): ReadOnlyTool[] => {
     description: "GPU 状态（只读，nvidia-smi 包装）：利用率/显存/在跑进程 top3。nvidia-smi 不可用时报 gpu_offline（不猜测）。",
     parameters: { type: "object", properties: {}, required: [] },
     execute: async (_toolCallId: string) => {
-      const queried = await queryNvidiaSmi();
-      if (queried === null) return textResult({ gpu_offline: true, note: "nvidia-smi 不可用或无 GPU——状态如实上报为离线" });
-      return textResult({ gpu_offline: false, ...queried });
+      const view = await queryNvidiaSmiProbed();
+      if (view.gpu === null) return textResult(gpuOfflinePayload(view.probe));
+      return textResult({ gpu_offline: false, ...view.gpu });
     },
   },
   ];
@@ -294,39 +295,73 @@ export const gpuProcTopByIndex = (
   return top;
 };
 
-/** nvidia-smi 查询（不可用/非零退出 → null，调用方如实报离线）。 */
-export const queryNvidiaSmi = async (): Promise<GpuStatus | null> => {
+/** nvidia-smi 查询（不可用/非零退出 → null，调用方如实报离线）。
+ *  D88-A：底层改走三态探针（gpuProbe.ts）——**展示面不判致命性**，只据探针状态选文案；
+ *  需要区分「探测超时」与「不可达」的调用方用 queryNvidiaSmiProbed / gpuOfflinePayload。 */
+export const queryNvidiaSmi = async (): Promise<GpuStatus | null> => (await queryNvidiaSmiProbed()).gpu;
+
+/** 展示面探针参数（预算＝GPU_PROBE_DISPLAY_DEFAULT_BUDGET_MS 10s／ATF_GPU_PROBE_TIMEOUT_MS；
+ *  与启动闸同一变量、各自缺省——结构上排除「卡面说离线但机器好」）。 */
+const GPU_QUERY_ARGS: readonly string[] = [
+  "--query-gpu=utilization.gpu,memory.used,memory.total",
+  "--format=csv,noheader,nounits",
+];
+
+/** 探针＋首行单卡面（同一份探针数据；gpu=null 时 probe 说明为什么离线）。 */
+export interface GpuStatusView {
+  gpu: GpuStatus | null;
+  probe: ProbeResult;
+}
+
+/** 探针驱动的单卡查询（展示面单源）：探针非 ok → 原样把 probe 状态交给调用方选文案，
+ *  **不复用缓存**（一次超时不该被缓存永久钉在卡面上）。 */
+export const queryNvidiaSmiProbed = async (): Promise<GpuStatusView> => {
+  const { result: probe, stdout } = await captureGpuProbeAsync({ args: GPU_QUERY_ARGS, env: process.env });
+  if (probe.status !== "ok") return { gpu: null, probe };
+  const first = stdout.trim().split("\n")[0]?.split(",") ?? [];
+  if (first.length < 3) {
+    // 命令回了但输出不可解析＝确定态失败（不是 timeout，别混进超时文案）
+    return {
+      gpu: null,
+      probe: { status: "failed", code: "unparsable_output", stderr: stdout.slice(0, 200), elapsedMs: probe.elapsedMs },
+    };
+  }
+  let processes: string[] = [];
   try {
-    const stdout = await new Promise<string>((resolve, reject) => {
-      execFile(
-        "nvidia-smi",
-        ["--query-gpu=utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"],
-        { timeout: 5_000 },
-        (error, stdoutText) => (error === null ? resolve(stdoutText) : reject(error)),
+    const procOut = await new Promise<string>((resolve, reject) => {
+      execFile("nvidia-smi", ["--query-compute-apps=pid,process_name,used_memory", "--format=csv,noheader"], { timeout: 5_000 }, (error, text) =>
+        error === null ? resolve(text) : reject(error),
       );
     });
-    const first = stdout.trim().split("\n")[0]?.split(",") ?? [];
-    if (first.length < 3) return null;
-    let processes: string[] = [];
-    try {
-      const procOut = await new Promise<string>((resolve, reject) => {
-        execFile("nvidia-smi", ["--query-compute-apps=pid,process_name,used_memory", "--format=csv,noheader"], { timeout: 5_000 }, (error, text) =>
-          error === null ? resolve(text) : reject(error),
-        );
-      });
-      processes = procOut.trim().split("\n").filter((line) => line !== "").slice(0, 3);
-    } catch {
-      processes = [];
-    }
-    return {
+    processes = procOut.trim().split("\n").filter((line) => line !== "").slice(0, 3);
+  } catch {
+    processes = [];
+  }
+  return {
+    gpu: {
       utilization: `${(first[0] ?? "").trim()}%`,
       memoryUsed: `${(first[1] ?? "").trim()} MiB`,
       memoryTotal: `${(first[2] ?? "").trim()} MiB`,
       topProcesses: processes,
-    };
-  } catch {
-    return null;
-  }
+    },
+    probe,
+  };
+};
+
+/** 离线载荷（两处 atf_gpu_status 展示面单源）：timeout 与不可达**必须可区分**——
+ *  前者指向负载/预算（「探测超时」），后者指向驱动/可见性（「不可达」），并带探针证据。 */
+export const gpuOfflinePayload = (probe: ProbeResult): Record<string, unknown> => {
+  const timedOut = probe.status === "timeout";
+  return {
+    gpu_offline: true,
+    offline_reason: timedOut ? "timeout" : "unreachable",
+    offline_label: gpuOfflineLabel(probe),
+    note: timedOut
+      ? `nvidia-smi 探活超时（${formatProbeEvidence(probe)}）——是否可见未证实：按「${gpuOfflineLabel(probe)}」上报，先查负载/预算，不要按驱动故障排查`
+      : `nvidia-smi 不可达或无 GPU（${formatProbeEvidence(probe)}）——按「${gpuOfflineLabel(probe)}」如实上报，不猜测`,
+    probe_status: probe.status,
+    probe_evidence: formatProbeEvidence(probe),
+  };
 };
 
 /** AgentTool 装配（结构对齐 src/agent 的 AgentTool：name/description/parameters/execute）。 */

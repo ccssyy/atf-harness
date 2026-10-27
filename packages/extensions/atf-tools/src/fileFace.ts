@@ -11,7 +11,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { listRuns, queryNvidiaSmi, queryNvidiaSmiAll, queryGpuComputeApps } from "../../../../src/webui/readOnlyTools.js";
+import { listRuns, queryNvidiaSmiProbed, gpuOfflinePayload, queryNvidiaSmiAll, queryGpuComputeApps } from "../../../../src/webui/readOnlyTools.js";
 import { buildCardOccupancyTable, formatCardTable } from "./gpuQueueFace.js";
 import { resolveRunDir } from "../../../../src/core/workspace/runLayout.js";
 import { registeredWorkspaceRoots } from "../../../../src/core/workspace/workspaceRegistry.js";
@@ -286,13 +286,14 @@ export const buildFileTools = (runsRoot: string, scopeDeps?: FileToolScopeDeps):
       render: renderAsJsonText,
     },
     async execute() {
-      const queried = await queryNvidiaSmi();
-      if (queried === null) return asToolValue({ gpu_offline: true, note: "nvidia-smi 不可用或无 GPU——状态如实上报为离线" });
+      const view = await queryNvidiaSmiProbed();
+      // D88-A：展示面不判致命性——只用探针状态选文案（「探测超时」≠「不可达」）。
+      if (view.gpu === null) return asToolValue(gpuOfflinePayload(view.probe));
       // 批㊶-W F6 ⑤：全卡状态表＋归属（compute-apps 不可得＝归属面如实 unavailable，不猜测）
       const [cards, apps] = await Promise.all([queryNvidiaSmiAll(), queryGpuComputeApps()]);
       const table = cards !== null ? buildCardOccupancyTable(cards, apps ?? []) : [];
       const tableText = cards !== null ? formatCardTable(table) : null;
-      return asToolValue({ gpu_offline: false, ...queried, card_table: table, card_table_text: tableText, ownership_available: apps !== null });
+      return asToolValue({ gpu_offline: false, ...view.gpu, card_table: table, card_table_text: tableText, ownership_available: apps !== null });
     },
   }),
 ];
