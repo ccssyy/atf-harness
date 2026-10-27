@@ -1215,20 +1215,33 @@ export function validateFixedCheckpoint(path: string): { ok: true } | { ok: fals
   return { ok: true };
 }
 
-/** 轮号推导的**旧实现**（仅供降级：内核 resolve-eval-round 不可用时）。
- *  纯 maxN+1——它绕过内核 E5 复评复用判定，是 UAT 四个空轮的根因，
- *  因此**只在降级路径**使用，且调用方必须把 degraded 标注带进回执。 */
-export function deriveEvalRoundDirLegacy(runDir: string): string {
+/** 轮目录解析的**降级**实现（仅内核 resolve-eval-round 不可用时）。
+ *
+ *  语义＝**复用 run 下现有最新编号轮**；run 下没有任何轮时才新建 `1-<date>`。
+ *  为什么不是纯 maxN+1：那会每次评估都新派一轮，正是 UAT 四个空轮
+ *  （`1-/2-/3-/4-20261027`）的根因——降级态若照旧派轮，等于「内核不在时缺陷复现」，
+ *  降级不是免责。复用是内核 E5「同批判档复用同轮」的等价下界。
+ *
+ *  代价（必须让上层知道）：降级态无法按 checkpoint 集合判定「该复用还是该新开」，
+ *  因此要新开轮时必须配置新内核——回执以 degraded/degraded_note 显式告知。 */
+export function resolveEvalRoundDirFallback(runDir: string): string {
   const evalRoot = join(runDir, "eval");
   let maxN = 0;
+  let latest: string | null = null;
   try {
     for (const entry of readdirSync(evalRoot, { withFileTypes: true })) {
       const m = /^(\d+)-\d{8}$/.exec(entry.name);
-      if (entry.isDirectory() && m !== null) maxN = Math.max(maxN, Number(m[1]));
+      if (!entry.isDirectory() || m === null) continue;
+      const n = Number(m[1]);
+      if (n > maxN) {
+        maxN = n;
+        latest = entry.name;
+      }
     }
   } catch { /* eval 根不存在＝首轮 */ }
+  if (latest !== null) return join(evalRoot, latest);
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  return join(evalRoot, `${maxN + 1}-${date}`);
+  return join(evalRoot, `1-${date}`);
 }
 
 /** 评估轮目录解析（ADR-0007 决定 2）——**内核单源**：调
@@ -1238,14 +1251,22 @@ export function deriveEvalRoundDirLegacy(runDir: string): string {
  *  next_eval_round_dir 的 E5 复评复用判定，UAT 现场一个 run 因此长出 1-/2-/3-/4- 四个空轮。
  *  同一次评估动作（service／ckpt-plan／orch 三子步）必须共用一个轮号——轮号只由内核定，
  *  harness 不再自建第二套。
- *  失败降级：非零退出/空输出 → 结构化 resolve_eval_round_unavailable（带 stderr 尾部），
- *  **不静默退回 maxN+1**（静默降级正是空轮根因）。 */
+ *  失败降级：非零退出/空输出 → 复用现有最新轮（resolveEvalRoundDirFallback），
+ *  并在回执标 degraded/degraded_note。**绝不新派轮**——静默派轮正是空轮根因。 */
 export const resolveEvalRoundDir = async (
   runDir: string,
   cfg: { kernelDir: string },
   checkpoints: readonly string[] = [],
-): Promise<{ ok: true; roundDir: string; degraded?: boolean; degraded_reason?: string }
-  | { ok: false; payload: Record<string, unknown> }> => {
+): Promise<
+  | {
+      ok: true;
+      roundDir: string;
+      degraded?: boolean;
+      degraded_reason?: string;
+      degraded_note?: string;
+    }
+  | { ok: false; payload: Record<string, unknown> }
+> => {
   const ids = checkpoints.map((id) => id.trim()).filter((id) => id !== "");
   const resolved = await runCapture("python3", [
     "-m", "agentic_training_flow", "resolve-eval-round", "--run", runDir,
@@ -1254,14 +1275,18 @@ export const resolveEvalRoundDir = async (
   const lines = resolved.stdout.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== "");
   const roundDir = lines.length > 0 ? (lines[lines.length - 1] as string) : "";
   if (resolved.code !== 0 || roundDir === "") {
-    // 降级（2026-10-28）：内核新 CLI 不可用（测试环境 / 内核未 pin 新版本）时
-    // 退回旧 maxN+1 推导，但**显式标注 degraded** 带进回执——降级要可见，不是静默，
-    // 但也不能把降级做成阻断（那会让所有 start 链在旧内核上直接不可用）。
+    // 降级（2026-10-28 修订）：内核 CLI 不可用（测试环境 / 内核未 pin 新版本）时
+    // **复用现有最新轮**，绝不新派轮——纯 maxN+1 会每次评估堆一个空轮，正是 UAT
+    // 四个空轮的根因，降级态照旧派轮等于缺陷复现。降级要可见（degraded + note），
+    // 但不做成阻断（否则旧内核上所有 start 链直接不可用）。
     return {
       ok: true,
-      roundDir: deriveEvalRoundDirLegacy(runDir),
+      roundDir: resolveEvalRoundDirFallback(runDir),
       degraded: true,
       degraded_reason: "resolve_eval_round_unavailable",
+      degraded_note:
+        "内核 resolve-eval-round 不可用，本轮复用现有最新轮目录（不新建）；"
+        + "如需按新 checkpoint 集合新开轮，请把内核配置到含该命令的版本。",
     };
   }
   return { ok: true, roundDir };
@@ -2549,6 +2574,16 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         report_html: reportHtml,
         viewer_ready: existsSync(viewerPath),
         report_ready: existsSync(reportMd),
+        // F7(2026-10-28)：回执必须给**可点开的 URL**，不能只给磁盘路径。
+        // 现场教训：产物路径给到用户后，用户拿去本地打开，html 与 images/ 不同层
+        // 导致整页图裂——用户以为"viewer 坏了"，其实是打开方式不对。
+        // 首选 viewer 走 /atf-ui/viewer/<runId>/（路由自己发现现役 viewer 清单）。
+        ...(existsSync(viewerPath)
+          ? {
+              viewer_url: `/atf-ui/viewer/${encodeURIComponent(runId)}/`,
+              viewer_url_note: "在已登录的 dsh web 会话里直接打开（浏览器已登录即可）；不要取磁盘路径在本地打开，否则相对图片路径会裂",
+            }
+          : {}),
         ...rebound,
       });
     },
