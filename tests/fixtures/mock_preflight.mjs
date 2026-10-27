@@ -28,6 +28,16 @@ const beforeApply = {
   ],
   order: ["token_provider", "token_budget", "coordinate_pending", "grouping_preset"],
   summary: { missing: 1, derivable: 2, confirm: 1 },
+  decisions: {
+    schema_version: "DecisionGate/v1",
+    access_mode: "limited",
+    auto: 0,
+    ask: 2,
+    entries: [
+      { schema_version: "DecisionGate/v1", question_id: "token_provider", kind: "policy", mode: "ask", decision: null, basis: "内置计量脚本不在场，显式路径也没给", evidence: [], reason: "no_evidence" },
+      { schema_version: "DecisionGate/v1", question_id: "grouping", kind: "policy", mode: "ask", decision: null, basis: "分组必须用户确认——agent 给出的只是候选", evidence: [], reason: "limited_access" },
+    ],
+  },
 };
 const afterApply = {
   generated_at: "2026-10-24T08:01:00Z",

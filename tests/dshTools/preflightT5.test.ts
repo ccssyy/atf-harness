@@ -106,7 +106,7 @@ describe("T5 预检卡装配（问句即业务话，apply 行为业务话）", (
     },
   });
 
-  it("卡面：label＝问句、hint＝为什么推不出来、apply 行不列内部 id", async () => {
+  it("A3 收编：工具不弹卡，ask 项随 decisions 结构化回传（ask 序由 agent 对话流组织）", async () => {
     const root = tempRoot("t5-card-");
     const asks: Array<Record<string, unknown>> = [];
     const deps: PreflightDeps = { command: mockT5, timeoutMs: 20_000, runsRoot: root, ctx: ctxWithAsk(asks) as unknown as PreflightDeps["ctx"] };
@@ -116,22 +116,22 @@ describe("T5 预检卡装配（问句即业务话，apply 行为业务话）", (
     writeFileSync(join(root, runId, "run.json"), "{}");
     const result = (await tool.execute({ run_id: runId }, { agent: { session: { id: "s" } }, callId: "t5", signal: undefined })) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
-    expect(asks).toHaveLength(1);
-    const question = (asks[0]!["questions"] as Array<{ id: string; detail?: string; intent?: { fields?: Array<{ key: string; label: string; hint?: string; placeholder?: string }> } }>)[0]!;
-    const fields = question.intent?.fields ?? [];
-    // 问句即业务话（label），key 只作结构化回传不显示
-    expect(fields.map((field) => field.label)).toContain("这批训练素材（图片 + 同名标注文件）放在哪个目录？");
-    expect(fields.map((field) => field.label)).toContain("训练样本怎么分组？（按单据层级分成一组，还是按必带条目分组）");
-    const grouping = fields.find((field) => field.label.includes("训练样本怎么分组"))!;
-    expect(grouping.hint).toContain("为什么推不出来：分组必须用户确认");
-    // apply 行：业务话，不列内部 id
-    const apply = fields.find((field) => field.key === "apply_derivables")!;
-    expect(apply.label).toContain("把能自动算的 1 项一并算好");
-    expect(apply.placeholder ?? "").not.toContain("coordinate_pending");
-    // 卡面 detail 同样零内部键名
-    const detail = String(question.detail ?? "");
-    for (const token of INTERNAL_TOKENS) expect(detail, token).not.toContain(token);
-    expect(detail).toContain("这次需要你确认的项偏多（4 项）");
+    // 不再弹卡：userQuestions 零调用（问询归 agent 对话流）
+    expect(asks).toHaveLength(0);
+    // decisions 结构化回传：ask 项带 question/mode/reason（供 agent 组织原生选项卡）
+    const decisions = result["decisions"] as { access_mode: string; ask: number; entries: Array<{ question_id: string; mode: string; reason: string; basis: string }> };
+    expect(decisions.access_mode).toBe("limited");
+    expect(decisions.ask).toBe(4);
+    const sourcePairs = decisions.entries.find((entry) => entry.question_id === "source_pairs")!;
+    expect(sourcePairs.mode).toBe("ask");
+    expect(sourcePairs.basis).toContain("登记件");
+    // note 指路 agent 发起问询（业务话，零内部键名）
+    const note = String(result["note"] ?? "");
+    expect(note).toContain("待确认");
+    for (const token of INTERNAL_TOKENS) expect(note, token).not.toContain(token);
+    // 三节卡面清单仍随回执（渲染面单源不变）
+    const checklist = String(result["checklist"]);
+    expect(checklist).toContain("这次需要你确认的项偏多（4 项）");
   });
 
   it("apply=true：派生项执行后卡面转为已生效（待执行清零）", async () => {

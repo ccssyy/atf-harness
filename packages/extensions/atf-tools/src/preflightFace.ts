@@ -8,7 +8,7 @@
  * - apply=true 或预检卡上勾选执行 → 经 DSH 审批卡放行后触发内核 --apply
  *   （对 derivable 项一键执行：坐标批处理整批重试／内置 provider 计量生成预算）。
  *   授权恒在审批卡（表单卡只收决策不承载授权——confirmFace F5 同纪律）。
- * - needs_confirm 项合并一张 form 卡收集（不逐项弹）；decisions 结构化回传，
+ * - A2 收编：问不问由内核 DecisionGate 按权限档判定，decisions 结构化回传（工具不弹卡），
  *   由 agent 转后续段参数（自由文本永不直达生成面）。
  * - KPI：预检成功即记首次 preflight 时间戳（launch-kpi.json——首写固定）。
  * - 预检只是把「缺什么」提前聚合：不替代各段既有校验（防御纵深不变），
@@ -42,6 +42,7 @@ import {
   parsePreflightReport,
   renderPreflightFace,
   recordPreflightAt,
+  type PreflightDecisions,
   type PreflightReport,
 } from "../../../../src/core/workspace/trainingPreflight.js";
 import { isValidRunId, resolveRunDir, runCandidateDirs, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
@@ -98,7 +99,8 @@ export interface PreflightOutcome {
   report?: PreflightReport;
   checklist?: string;
   /** needs_confirm 项决策（form 卡 selected 解析——agent 转后续段参数）。 */
-  decisions?: Record<string, string>;
+  /** A2 询问闸判定块（结构化回传——auto 项带依据，ask 项由 agent 对话流转达）。 */
+  decisions?: PreflightDecisions;
   /** true＝--apply 已实际执行（审批卡放行后）。 */
   applied?: boolean;
   /** true＝预检卡被用户取消（清单仍如实返回，不阻塞后续）。 */
@@ -258,72 +260,30 @@ export const runPreflightFlow = async (
     : derivable.length;
   const hasQuestions = mustAsk.length > 0 || needsConfirm.length > 0;
 
-  // needs_confirm 合并一屏（§二.2——不逐项弹）：form 卡 detail＝三态清单；
-  // fields＝逐项决策行＋（有可派生项时）apply 行——apply 只收意愿，授权在审批卡。
-  let decisions: Record<string, string> | undefined;
-  if (hasQuestions && opts?.presentCard !== false) {
-    const svc = deps.ctx.get("userQuestions") as FormAskService | undefined;
-    if (svc === undefined || typeof svc.ask !== "function") {
-      return { ok: true, ...meta, ...firstDegraded, report, checklist, note: "user_questions_unavailable——needs_confirm 项以清单呈现，决策值请由 agent 结构化转达后续段参数" };
-    }
-    // 卡面只出现业务话：问句与理由都用内核给的 question/why_not_derivable，
-    // 不把参数名或内部键名当问句（key 仍是稳定 id，仅供结构化回传，UI 不显示）。
-    const fields = mustAsk.length > 0
-      ? mustAsk.map((entry) => ({
-          key: entry.id,
-          label: entry.question === "" ? entry.detail : entry.question,
-          value: "",
-          placeholder: "在此填写你的决定（不确定就留空——留空＝本轮按现状跳过）",
-          hint: `为什么推不出来：${entry.why_not_derivable}`,
-        }))
-      : needsConfirm.map((item) => ({
-          key: item.id,
-          label: item.id,
-          value: "",
-          placeholder: item.action !== "" ? item.action.slice(0, 200) : item.detail.slice(0, 200),
-          hint: item.detail.slice(0, 200),
-        }));
-    if (pendingDerivableCount > 0) {
-      fields.push({
-        key: "apply_derivables",
-        label: `把能自动算的 ${String(pendingDerivableCount)} 项一并算好（填 yes 执行）`,
-        value: "no",
-        placeholder: `共 ${String(pendingDerivableCount)} 项可由数据推导，填 yes 后仍需一次授权确认才执行`,
-        hint: "填 yes＝执行这 1 组自动项（授权在后续审批卡）；no/留空＝本轮不执行，不影响其它项",
-      });
-    }
-    let answers: { answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string> }> };
-    try {
-      answers = await svc.ask({
-        questions: [formAskQuestion({
-          id: `preflight-${args.runId}`,
-          question: `首跑预检 — ${args.runId}`,
-          header: "训练链入口预检",
-          detail: `${checklist}\n确认项请逐项填写决策值后提交（一屏合并收集，不逐项弹）。`,
-          fields,
-          submitLabel: "提交预检决策",
-        })],
-        agent: exec.agent,
-        signal: exec.signal,
-      });
-    } catch (cause) {
-      const diagRel = appendAskFailureDiagnostic(runDir, "atf_training_preflight", `preflight-${args.runId}`, cause);
-      if ((cause as { code?: string }).code === "ASK_CANCELLED") {
-        return { ok: true, ...meta, ...firstDegraded, report, checklist, cancelled: true, note: "预检卡被取消——清单如实返回（预检不阻塞后续链）" };
-      }
-      return { ok: true, ...meta, ...firstDegraded, report, checklist, note: `预检卡应答失败：${String(cause).slice(0, 200)}（通道诊断已落 run 目录 ${diagRel}）——清单如实返回` };
-    }
-    const submitted = editsFromFormAnswers(answers);
-    const collected: Record<string, string> = {};
-    for (const [key, value] of Object.entries(submitted)) {
-      if (value === "") continue;
-      collected[key] = value;
-    }
-    decisions = Object.keys(collected).length > 0 ? collected : undefined;
+  // A3(2026-10-27) 询问机制收编：本工具不再弹卡——问不问由内核 DecisionGate
+  // 按权限档判定（auto 项已带依据自动推进并落账 decisions.jsonl；ask 项随回执
+  // decisions.entries 返回），交互由 agent 在对话流里用 DSH 原生选项卡组织，
+  // 工具只回传事实。「把能自动算的项算好（填 yes）」输入行删除——派生项执行
+  // 意愿只收工具参数 apply=true，授权恒走审批卡（确定性计算不占问询面）。
+  const decisionsBlock = report.decisions;
+  const askEntries = (decisionsBlock?.entries ?? []).filter(
+    (entry) => entry.mode === "ask",
+  );
+  // apply 路径：意愿只收工具参数 apply=true（卡上勾选行已删除）；授权恒走审批卡。
+  // 显式动作授权优先于 ask 回执——apply=true 不被待答项截停（动作审批是独立闸）。
+  const wantApply = args.apply === true;
+  if (!wantApply && askEntries.length > 0 && opts?.presentCard !== false) {
+    // limited 档（或 tradeoff）仍有待答项：清单如实返回＋note 指明由 agent 发起问询
+    return {
+      ok: true,
+      ...meta,
+      ...firstDegraded,
+      report,
+      checklist,
+      decisions: decisionsBlock,
+      note: `有 ${String(askEntries.length)} 项待确认（权限档 ${decisionsBlock?.access_mode ?? "limited"}）——按 decisions.entries 的 question/options 在对话里向用户发起（DSH 原生问题卡，业务话），答案经后续段参数回传；full 档不应出现本状态（出现＝内核无证据降级，如实转达）`,
+    };
   }
-
-  // apply 路径：意愿＝工具参数直给 ｜ 卡上 apply_derivables=yes；授权恒走审批卡。
-  const wantApply = args.apply || decisions?.["apply_derivables"] === "yes";
   if (wantApply && pendingDerivableCount > 0) {
     const verdict = await requestApproval(deps.ctx, exec, "atf_training_preflight",
       buildApprovalReason({
@@ -333,11 +293,11 @@ export const runPreflightFlow = async (
         reversible: "不可自动回滚（run 目录产物可人工清理）",
       }) + `\n${checklist}`);
     if (!verdict.ok) {
-      return { ok: true, ...meta, ...firstDegraded, report, checklist, ...(decisions !== undefined ? { decisions } : {}), note: `apply 未获放行（${verdict.outcome}）——清单如实返回` };
+      return { ok: true, ...meta, ...firstDegraded, report, checklist, ...(decisionsBlock !== undefined ? { decisions: decisionsBlock } : {}), note: `apply 未获放行（${verdict.outcome}）——清单如实返回` };
     }
     const second = await runPreflightOnce(deps, runDir, ["--apply"]);
     if (!second.ok) {
-      return { ok: true, ...meta, ...firstDegraded, report, checklist, ...(decisions !== undefined ? { decisions } : {}), applied: false, note: `apply 执行失败：${second.note}` };
+      return { ok: true, ...meta, ...firstDegraded, report, checklist, ...(decisionsBlock !== undefined ? { decisions: decisionsBlock } : {}), applied: false, note: `apply 执行失败：${second.note}` };
     }
     // 执行后报告来自 second——degraded/exitCode 随之取 second 的（如实反映最终态）
     const secondDegraded = second.degraded === true ? { degraded: true as const, exitCode: second.exitCode ?? null } : {};
@@ -347,14 +307,14 @@ export const runPreflightFlow = async (
       ...secondDegraded,
       report: second.report,
       checklist: renderPreflightFace(second.report),
-      ...(decisions !== undefined ? { decisions } : {}),
+      ...(second.report.decisions !== undefined ? { decisions: second.report.decisions } : {}),
       applied: true,
     };
   }
   if (pendingDerivableCount > 0 && !wantApply) {
-    return { ok: true, ...meta, ...firstDegraded, report, checklist, ...(decisions !== undefined ? { decisions } : {}), note: `有 ${String(pendingDerivableCount)} 项可由数据推导但尚未执行——apply=true（或在预检卡上勾「一并算好」）经一次授权确认后执行` };
+    return { ok: true, ...meta, ...firstDegraded, report, checklist, ...(decisionsBlock !== undefined ? { decisions: decisionsBlock } : {}), note: `有 ${String(pendingDerivableCount)} 项可由数据推导但尚未执行——apply=true 经一次授权确认后执行` };
   }
-  return { ok: true, ...meta, ...firstDegraded, report, checklist, ...(decisions !== undefined ? { decisions } : {}) };
+  return { ok: true, ...meta, ...firstDegraded, report, checklist, ...(decisionsBlock !== undefined ? { decisions: decisionsBlock } : {}) };
 };
 
 export const buildPreflightTool = (deps: PreflightDeps): unknown =>

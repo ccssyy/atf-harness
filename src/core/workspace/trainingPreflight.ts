@@ -96,6 +96,29 @@ export interface PreflightDegraded {
   action: string;
 }
 
+/** A2(2026-10-27) 询问闸判定条目（DecisionGate/v1 additive 键——内核
+ *  training_preflight --access-mode 判定 auto/ask 后随报告透出）。 */
+export interface PreflightDecisionEntry {
+  schema_version: string;
+  question_id: string;
+  kind: string | null;
+  mode: "auto" | "ask";
+  decision: unknown;
+  basis: string;
+  evidence: string[];
+  reason: string;
+}
+
+/** 询问闸判定块（报告 additive 键 decisions——ask 项由 agent 在对话流里
+ *  用 DSH 原生选项卡转达，工具不弹卡）。 */
+export interface PreflightDecisions {
+  schema_version: string;
+  access_mode: string;
+  auto: number;
+  ask: number;
+  entries: PreflightDecisionEntry[];
+}
+
 export interface PreflightReport {
   generated_at: string;
   items: PreflightItem[];
@@ -107,6 +130,8 @@ export interface PreflightReport {
   degraded?: PreflightDegraded[];
   /** must_ask 超过软上限时的原因（内核原文，呈现前做业务化清洗）。 */
   must_ask_overflow_reason?: string;
+  /** A2 询问闸判定块（可选：旧内核无此键）。 */
+  decisions?: PreflightDecisions;
 }
 
 export type PreflightParse =
@@ -249,8 +274,39 @@ export const parsePreflightReport = (raw: string): PreflightParse => {
       ...(mustAsk === undefined ? {} : { must_ask: mustAsk }),
       ...(degraded === undefined ? {} : { degraded }),
       ...(typeof root["must_ask_overflow_reason"] === "string" ? { must_ask_overflow_reason: root["must_ask_overflow_reason"] as string } : {}),
+      ...parseDecisions(root["decisions"]),
     },
   };
+};
+
+/** A2 询问闸判定块解析（additive 键 decisions——形状不对整体丢弃，不猜形态；
+ *  旧内核无此键＝undefined，消费面按缺席回落）。 */
+const parseDecisions = (raw: unknown): { decisions?: PreflightDecisions } => {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const row = raw as Record<string, unknown>;
+  const entriesRaw = row["entries"];
+  if (typeof row["access_mode"] !== "string" || !Array.isArray(entriesRaw)) return {};
+  const entries: PreflightDecisionEntry[] = [];
+  for (const entry of entriesRaw) {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return {};
+    const item = entry as Record<string, unknown>;
+    const mode = item["mode"];
+    if (mode !== "auto" && mode !== "ask") return {};
+    if (typeof item["question_id"] !== "string") return {};
+    entries.push({
+      schema_version: typeof item["schema_version"] === "string" ? item["schema_version"] : "DecisionGate/v1",
+      question_id: item["question_id"] as string,
+      kind: typeof item["kind"] === "string" ? item["kind"] as string : null,
+      mode,
+      decision: item["decision"] ?? null,
+      basis: typeof item["basis"] === "string" ? item["basis"] as string : "",
+      evidence: Array.isArray(item["evidence"]) ? item["evidence"].map(String) : [],
+      reason: typeof item["reason"] === "string" ? item["reason"] as string : "",
+    });
+  }
+  const auto = typeof row["auto"] === "number" ? row["auto"] as number : entries.filter((entry) => entry.mode === "auto").length;
+  const ask = typeof row["ask"] === "number" ? row["ask"] as number : entries.filter((entry) => entry.mode === "ask").length;
+  return { decisions: { schema_version: typeof row["schema_version"] === "string" ? row["schema_version"] as string : "DecisionGate/v1", access_mode: row["access_mode"] as string, auto, ask, entries } };
 };
 
 // ── 三态清单渲染（依赖链顺序）──

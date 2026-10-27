@@ -242,12 +242,15 @@ describe("F1 §二.4-2 apply 路径——atf_training_preflight 工具面", () =
     expect(result["ok"]).toBe(true);
     expect(result["checklist"]).toContain("needs_confirm——业务确认");
     expect(result["checklist"]).toContain("待依赖：token_provider 未就绪");
-    // needs_confirm 合并一屏收集（form 卡一问承载全部确认项）
-    expect(askLog).toEqual(["preflight-f1-apply-1"]);
-    expect(result["decisions"]).toEqual({ grouping_preset: "B" });
-    // 未申请 apply＝零审批卡；note 指路一键执行
+    // A3 收编：工具不弹卡，ask 项随 decisions 结构化回传（agent 对话流组织问询）
+    expect(askLog).toEqual([]);
+    const decisions = result["decisions"] as { access_mode: string; ask: number; entries: Array<{ question_id: string; mode: string }> };
+    expect(decisions.access_mode).toBe("limited");
+    expect(decisions.ask).toBe(2);
+    expect(decisions.entries.map((entry) => entry.question_id).sort()).toEqual(["grouping", "token_provider"]);
+    // 未申请 apply＝零审批卡；note 指路 agent 发起问询
     expect(approvals).toHaveLength(0);
-    expect(String(result["note"])).toContain("apply=true");
+    expect(String(result["note"])).toContain("待确认");
     // KPI 首记
     const runDir = join(runsRoot, "f1-apply-1");
     expect(readLaunchKpi(runDir)?.preflight).toBeDefined();
@@ -289,7 +292,7 @@ describe("F1 §二.4-2 apply 路径——atf_training_preflight 工具面", () =
     expect(result["summary"]).toEqual({ missing: 1, derivable: 2, confirm: 1 });
   });
 
-  it("预检卡勾选 apply_derivables=yes：同走审批卡后执行（卡上收集意愿，授权在审批卡）", async () => {
+  it("A3 收编：apply_derivables 卡上意愿路径退役——无 apply 直参零审批零执行（apply 只收工具参数）", async () => {
     const askLog: string[] = [];
     const approvals: string[] = [];
     const runsRoot = tempRoot("f1-runs-");
@@ -300,12 +303,13 @@ describe("F1 §二.4-2 apply 路径——atf_training_preflight 工具面", () =
     const tool = findTool([buildPreflightTool(deps)], "atf_training_preflight");
     const result = (await tool.execute({ run_id: "f1-apply-4" }, sessionExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
-    expect(result["applied"]).toBe(true);
-    expect(approvals).toHaveLength(1);
-    expect(result["decisions"]).toEqual({ grouping_preset: "B", apply_derivables: "yes" });
+    // 卡上勾选行已删除：无 apply=true 直参＝不执行、不审批（确定性计算不占问询面）
+    expect("applied" in result).toBe(false);
+    expect(approvals).toHaveLength(0);
+    expect(askLog).toEqual([]);
   });
 
-  it("userQuestions 服务缺席：needs_confirm 以清单呈现（note 指路 agent 结构化转达），预检结果不丢", async () => {
+  it("A3 收编：userQuestions 服务缺席零影响（工具本就不弹卡），decisions 照常回传", async () => {
     const approvals: string[] = [];
     const ctx = {
       get: (service: string) => {
@@ -318,8 +322,10 @@ describe("F1 §二.4-2 apply 路径——atf_training_preflight 工具面", () =
     const tool = findTool([buildPreflightTool(deps)], "atf_training_preflight");
     const result = (await tool.execute({ run_id: "f1-apply-5" }, sessionExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
-    expect(String(result["note"])).toContain("user_questions_unavailable");
-    expect(String(result["checklist"])).toContain("grouping_preset");
+    const decisions = result["decisions"] as { ask: number } | undefined;
+    expect(decisions?.ask).toBe(2);
+    expect(String(result["note"])).toContain("待确认");
+    expect(String(result["checklist"])).toContain("needs_confirm——业务确认");
   });
 
   it("脚本缺席（pin 未含过渡态）：fail-closed 报 preflight_script_missing，不 mock 不猜", async () => {
@@ -349,7 +355,7 @@ describe("F1 §二.4-4 预检卡在九要素前——config_confirm 前置预检
     { match: "config-confirm-", selected: ["max_total_tokens=9000"] },
   ];
 
-  it("无 preflight KPI＋脚本在场：出卡顺序＝预检卡在前、九要素表单卡在后；返回体带 preflight 清单", async () => {
+  it("A3 收编：前置预检不再出卡（ask 清单进 preflightNote），唯一问卡＝九要素表单卡", async () => {
     const runsRoot = tempRoot("f1-order-");
     mkdirSync(join(runsRoot, "f1-order-1"), { recursive: true });
     const askLog: string[] = [];
@@ -359,8 +365,9 @@ describe("F1 §二.4-4 预检卡在九要素前——config_confirm 前置预检
     const configConfirm = findTool(tools, "atf_config_confirm");
     const result = (await configConfirm.execute({ action: "present", run_id: "f1-order-1" }, sessionExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
-    expect(askLog).toEqual(["preflight-f1-order-1", "config-confirm-f1-order-1"]);
-    // 审批：九要素确认 1 次（预检卡未勾 apply＝零 apply 审批）
+    // 预检工具不再弹卡：唯一 ask＝九要素表单卡
+    expect(askLog).toEqual(["config-confirm-f1-order-1"]);
+    // 审批：九要素确认 1 次（apply 意愿已不进预检卡＝零 apply 审批）
     expect(approvals).toHaveLength(1);
     expect(String(result["preflight"])).toContain("missing——环境/用户必须提供");
     // KPI 首记（前置预检成功即落）
@@ -411,7 +418,7 @@ describe("F1 §二.4-4 预检卡在九要素前——config_confirm 前置预检
     expect("preflight" in result).toBe(false);
   });
 
-  it("前置预检卡勾 apply_derivables=yes：审批卡放行后 --apply 执行，随后九要素链继续（全链 ask 序＝预检→九要素）", async () => {
+  it("A3 收编：前置预检零卡零审批（apply_derivables 意愿路径退役），九要素链独走", async () => {
     const runsRoot = tempRoot("f1-order-");
     const askLog: string[] = [];
     const approvals: string[] = [];
@@ -424,13 +431,11 @@ describe("F1 §二.4-4 预检卡在九要素前——config_confirm 前置预检
     const configConfirm = findTool(tools, "atf_config_confirm");
     const result = (await configConfirm.execute({ action: "present", run_id: "f1-order-5" }, sessionExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
-    expect(askLog).toEqual(["preflight-f1-order-5", "config-confirm-f1-order-5"]);
-    // 审批序：apply 审批在前、九要素确认审批在后
-    expect(approvals).toHaveLength(2);
-    expect(approvals[0]).toContain("执行预检可派生项");
-    expect(approvals[1]).toContain("确认训练配置并落快照");
-    // 执行后清单进返回体（derivable 清零）
-    expect(String(result["preflight"])).not.toContain("derivable——可自动执行");
+    // 前置预检零弹卡：apply_derivables 勾选即使出现也无人消费（preflight- 前缀无卡可答）
+    expect(askLog).toEqual(["config-confirm-f1-order-5"]);
+    // 审批：仅九要素确认 1 次（派生项执行申请改走 atf_training_preflight apply=true 直参）
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0]).toContain("确认训练配置并落快照");
   });
 
   it("runPreflightFlow 直调：全绿报告不出卡零审批（只记 KPI）——全绿零介入锚", async () => {

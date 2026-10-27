@@ -114,6 +114,22 @@ const beforeApply = {
   },
   must_ask_overflow_reason:
     "must_ask=4 超过软上限 3:这些项互不替代(缺任一项都不能生成训练配置),合并提问会丢业务取舍,故一次性列全并注明原因(R8 软上限,非硬拒绝)",
+  decisions: {
+    schema_version: "DecisionGate/v1",
+    access_mode: "limited",
+    auto: 0,
+    ask: 4,
+    entries: mustAsk.map((entry) => ({
+      schema_version: "DecisionGate/v1",
+      question_id: entry.id,
+      kind: entry.id === "grouping_preset" ? "policy" : "derivable",
+      mode: "ask",
+      decision: null,
+      basis: entry.why_not_derivable,
+      evidence: [],
+      reason: "limited_access",
+    })),
+  },
 };
 
 const afterApply = {
