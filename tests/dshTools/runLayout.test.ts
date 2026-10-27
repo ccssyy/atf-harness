@@ -16,6 +16,14 @@ import {
   sweepAnsweredPendings,
 } from "../../src/core/workspace/runLayout.js";
 import { appendSegmentFact } from "../../src/core/workspace/segmentFacts.js";
+import { appendBinding } from "../../src/core/workspace/runFacts.js";
+import {
+  isV3RunTree,
+  resolveRunFile,
+  resolveRunSubdir,
+  RUN_LAYOUT_V3,
+  runLayoutVersionOf,
+} from "../../src/core/workspace/runSubdirs.js";
 import {
   appendLedgerAuditComment,
   checkApprovalLedgerStartup,
@@ -316,3 +324,125 @@ describe("D49——resolveRunDir canonical 优先（注册工作区 run.json 合
     }
   });
 });
+
+// ══ RunLayout/v3 写侧落名（写侧只认 run.json 声明的闭集；读侧才允许回退）══
+//
+// 背景（真实事故链）：v3 run 内部若意外存在 v2 名目录（webui/ 之类），旧实现是
+// 「v3 名存在→v3；否则 v2 名存在→v2」，于是会优先把产物写进那个**未声明**的 v2 名目录
+// ——skills 侧 check_run_layout 的 layout_undeclared_dir 是失败级（一次写就永远红）。
+// 现约定：run.json 明示 RunLayout/v3 → 落名恒取 v3 名；非 v3（v2/v1/无 manifest/
+// 读不到或读坏 run.json）→ 沿用 v2 名（不认识的 run 不动它）。
+
+const v3Run = (dirs: string[] = [...RUN_LAYOUT_V3]): string => {
+  const runDir = tempRoot();
+  writeFileSync(
+    join(runDir, "run.json"),
+    JSON.stringify({ layout_version: "RunLayout/v3", workspace_id: "w", run_id: "r", experiment_id: "e", created_at: "2026-10-27T00:00:00Z", dirs }, null, 1),
+    "utf8",
+  );
+  return runDir;
+};
+/** run 根一级目录名（排序；run.json 是文件不计入）。 */
+const topDirsOf = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+
+describe("RunLayout/v3 写侧落名——v3 树不写 v2 名（声明闭集单源）", () => {
+  it("① v3 树 + 预置空 webui/：webui 落 runtime/webui（不被 v2 名目录改道），且 webui/ 永不被写", () => {
+    const runDir = v3Run();
+    mkdirSync(join(runDir, "webui"), { recursive: true }); // 残留的 v2 名目录
+    expect(isV3RunTree(runDir)).toBe(true);
+    expect(resolveRunSubdir(runDir, "webui")).toBe(join(runDir, "runtime", "webui"));
+    expect(resolveRunFile(runDir, "webui/config-snapshot.json")).toBe(join(runDir, "runtime", "webui", "config-snapshot.json"));
+
+    appendSegmentFact(runDir, "register", "atf_admit_data");
+    expect(existsSync(join(runDir, "runtime", "webui", "segments.json"))).toBe(true);
+    expect(readdirSync(join(runDir, "webui"))).toEqual([]); // 残留目录保持空——没被写进去
+  });
+
+  it("② v3 树：prep 落 data（不是 prep）；data/ 已在场时不新增 prep/", () => {
+    const runDir = v3Run();
+    mkdirSync(join(runDir, "data"), { recursive: true });
+    expect(resolveRunSubdir(runDir, "prep")).toBe(join(runDir, "data"));
+    expect(resolveRunSubdir(runDir, "prep/variants")).toBe(join(runDir, "data", "variants"));
+    expect(resolveRunFile(runDir, "prep/iteration-config/iteration-config.json")).toBe(join(runDir, "config", "iteration-config", "iteration-config.json"));
+    appendSegmentFact(runDir, "training_prep", "atf_pipeline_stage");
+    expect(existsSync(join(runDir, "prep"))).toBe(false); // 未声明目录零新增
+  });
+
+  it("③ v2 树（webui/＋prep/ 已在场）：沿用 v2 名，不新增 runtime/（存量不迁移）", () => {
+    const runDir = tempRoot();
+    writeFileSync(join(runDir, "run.json"), JSON.stringify({ layout_version: "RunLayout/v2", dirs: ["webui", "prep"] }), "utf8");
+    mkdirSync(join(runDir, "webui"), { recursive: true });
+    mkdirSync(join(runDir, "prep"), { recursive: true });
+    expect(isV3RunTree(runDir)).toBe(false);
+    expect(resolveRunSubdir(runDir, "webui")).toBe(join(runDir, "webui"));
+    expect(resolveRunSubdir(runDir, "prep")).toBe(join(runDir, "prep"));
+    appendSegmentFact(runDir, "register", "atf_admit_data");
+    expect(existsSync(join(runDir, "runtime"))).toBe(false);
+    expect(existsSync(join(runDir, "webui", "segments.json"))).toBe(true);
+  });
+
+  it("④ 无 run.json（legacy）：落 v2 名", () => {
+    const runDir = tempRoot();
+    expect(runLayoutVersionOf(runDir)).toBeNull();
+    expect(resolveRunSubdir(runDir, "webui")).toBe(join(runDir, "webui"));
+  });
+
+  it("⑤ run.json 在场但缺 layout_version：非 v3 → 落 v2 名（真机畸形样本同形态）", () => {
+    const runDir = tempRoot();
+    writeFileSync(join(runDir, "run.json"), JSON.stringify({ run_id: "x", dirs: [] }), "utf8");
+    expect(isV3RunTree(runDir)).toBe(false);
+    expect(resolveRunSubdir(runDir, "webui")).toBe(join(runDir, "webui"));
+    expect(resolveRunSubdir(runDir, "prep")).toBe(join(runDir, "prep"));
+  });
+
+  it("⑥ run.json 坏（非法 JSON）：fail-open 当非 v3 → 落 v2 名，且不抛错（读取失败不得打断写入）", () => {
+    const runDir = tempRoot();
+    writeFileSync(join(runDir, "run.json"), "{ this is not json", "utf8");
+    expect(() => runLayoutVersionOf(runDir)).not.toThrow();
+    expect(runLayoutVersionOf(runDir)).toBeNull();
+    expect(() => resolveRunSubdir(runDir, "webui")).not.toThrow();
+    expect(resolveRunSubdir(runDir, "webui")).toBe(join(runDir, "webui"));
+  });
+
+  it("⑦ v3 树真写（段事实＋绑定＋快照）：顶层只多出 runtime/，且每个新目录都在 run.json.dirs 声明内", () => {
+    const declared = new Set(RUN_LAYOUT_V3);
+    const runDir = v3Run();
+    const before = new Set(topDirsOf(runDir));
+    appendSegmentFact(runDir, "register", "atf_admit_data");
+    appendBinding(runDir, "sess-v3");
+    const snap = resolveRunFile(runDir, "webui/config-snapshot.json");
+    mkdirSync(join(runDir, "runtime", "webui"), { recursive: true });
+    writeFileSync(snap, JSON.stringify({ confirmed: { max_total_tokens: "9000" } }), "utf8");
+
+    const added = topDirsOf(runDir).filter((name) => !before.has(name));
+    expect(added).toEqual(["runtime"]); // 只多出 runtime/（v3 声明内），没有 webui/ prep/ 之类
+    for (const name of added) expect(declared.has(name), name).toBe(true);
+    expect(existsSync(join(runDir, "runtime", "webui", "segments.json"))).toBe(true);
+    expect(existsSync(join(runDir, "runtime", "webui", "binding.json"))).toBe(true);
+    expect(existsSync(join(runDir, "runtime", "webui", "config-snapshot.json"))).toBe(true);
+    expect(existsSync(join(runDir, "webui"))).toBe(false);
+  });
+});
+
+// ── 验收附录：跨仓双向对账（harness 写 → 内核审计），发包/回归时手工跑一次 ──
+//
+// 上述 7 条是「函数返回什么」；这份附录是「写完的东西经得起审计」。两者都要，缺一不可
+// （单测能证明落名对，但证明不了"有没有多写"）。
+//
+//   WS=$(mktemp -d); mkdir -p "$WS/experiments/e1/run-v3"
+//   # run.json 六键 + RUN_LAYOUT_V3 的 dirs（与内核 _RUN_JSON_KEYS 同口径）
+//   # 用 harness helper 真写：appendSegmentFact / appendBinding / resolveRunFile(webui/config-snapshot.json)
+//   # 期望 run 顶层 = run.json, runtime        ← 不得出现 webui/
+//
+//   python3 <kernel>/src/agentic_training_flow/_skills_pack/atf-audit-run/scripts/check_run_layout.py \
+//     --workspace-root "$WS"
+//   期望：layout_scanned {"RunLayout/v3": 1} / findings [] / verdict pass
+//
+// 阴性对照（证明审计真能抓，不是永远 pass）：
+//   mkdir -p "$WS/experiments/e1/run-v3/webui"      # 手工塞一个未声明目录
+//   期望：findings ["layout_undeclared_dir:run-v3:webui(...)"] / verdict fail
+//   删掉后回 pass。
+//
+// 实测记录（2026-10-27，A800_5005，合成样本；本机 RunLayout/v3 存量 run = 0）：
+//   写后 pass、塞 webui/ 后 fail、删掉回 pass——三方对上。
