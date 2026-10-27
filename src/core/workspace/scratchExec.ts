@@ -5,8 +5,9 @@
  * - env 白名单：PATH（解析出的 python3 目录 + 固定最小集）＋ HOME（对端隔离 home 同源）＋
  *   ATF_WORKSPACE_ROOT／ATF_SKILLS_AUTO_INSTALL（对端同源）＋ PYTHONPATH=<内核>/src（pin 唯一
  *   真相源；skills scripts 自注入 parents[3]/src 与此同值，双保险）＋ PYTHONUTF8/LANG ＋
- *   TMPDIR=<scratch>/.tmp ＋ 宿主 ATF_* 透传——排除 ATF_LLM_*（凭据不进子进程，脱敏红线）
+ *   TMPDIR=/tmp/atf-scratch（可经 ATF_SCRATCH_TMPDIR 覆盖）＋ 宿主 ATF_* 透传——排除 ATF_LLM_*（凭据不进子进程，脱敏红线）
  *   与键名含 KEY/TOKEN/SECRET/PASSWORD/PASSWD 的变量；其余宿主 env 一律不继承；
+ *   TMPDIR 落全局短路径（F10，见 resolveScratchTmpdir）——不放 scratch 深处；
  * - argv[0] 白名单：python3/python 解释器，或 .py 脚本（<内核>/skills/** 或 scratch 内）——
  *   一切放行执行统一经解析出的 python3 解释器 spawn（无 shell、无第二二进制入口）；
  *   launch.sh/train.sh 不是合法 argv[0]（harness 专执行点，见 atf_launch_execute）；
@@ -17,7 +18,7 @@
  *   IterationConfig/v1 字节级 sha256 对拍（对不上不给 config，fail-honest）。
  *
  * 边界声明：OS 级硬隔离不可得（零 npm 运行时依赖），本引擎提供的是「argv 白名单＋env 定向＋
- * cwd/TMPDIR 归 scratch＋上限」的实用 containment；子进程内部再 spawn 不在本引擎可控面。
+ * cwd 归 scratch、TMPDIR 落全局短路径＋上限」的实用 containment；子进程内部再 spawn 不在本引擎可控面。
  */
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -56,6 +57,19 @@ export const findPython3 = (override?: string): string => {
 const ENV_DENY = /(ATF_LLM_|KEY|TOKEN|SECRET|PASSWORD|PASSWD)/i;
 
 /**
+ * scratch 受控执行的 TMPDIR 落点（F10）：全局短路径，隔离语义不变。
+ * 为何必须短：scratch 在 run 树深处（…/<run>/scratch/<id>/.tmp），HF datasets 多进程在
+ * TMPDIR 下建 Unix socket，路径超 107 字节即 AF_UNIX path too long。
+ * 为何不用 /dev/shm：转 arrow 的临时文件可达数 GB，tmpfs 会吃内存；磁盘满的失败模式
+ * 比 OOM 温和。性能优先时用 ATF_SCRATCH_TMPDIR 显式指过去（逃生阀）。
+ */
+export const resolveScratchTmpdir = (): string => {
+  const configured = process.env["ATF_SCRATCH_TMPDIR"] ?? "";
+  if (configured !== "") return configured;
+  return "/tmp/atf-scratch";
+};
+
+/**
  * 构造受控执行 env（白名单；禁继承宿主任意 env——设计要点 §一）。
  * baseEnv＝对端同源键（HOME/ATF_WORKSPACE_ROOT/ATF_SKILLS_AUTO_INSTALL 等，调用方装配），
  * 显式键优先于宿主 ATF_* 透传。具名例外：LD_LIBRARY_PATH（python3 解释器运行时依赖——
@@ -84,7 +98,9 @@ export const buildScratchExecEnv = (input: {
     PYTHONPATH: join(input.kernelDir, "src"),
     PYTHONUTF8: "1",
     LANG: "C.UTF-8",
-    TMPDIR: join(input.scratchDir, ".tmp"),
+    // F10：scratch 在 run 树深处，TMPDIR 过长会让 HF datasets 多进程的 Unix socket
+    // 超 107 字节上限（AF_UNIX path too long）。落点改到全局短路径，隔离语义不变。
+    TMPDIR: resolveScratchTmpdir(),
   };
 };
 
@@ -156,6 +172,15 @@ export const runScratchCommand = (input: {
     let stderrText = "";
     let settled = false;
     let child;
+    // F10：TMPDIR 目录须在 spawn 前存在（/dev/shm/atf-scratch 通常无预置）；建不出不阻断执行。
+    const tmpdir = input.env["TMPDIR"];
+    if (tmpdir !== undefined && tmpdir !== "") {
+      try {
+        mkdirSync(tmpdir, { recursive: true });
+      } catch {
+        // 不可创建则不阻断：子进程侧 tempfile 自行回落，env 不静默改写。
+      }
+    }
     try {
       child = spawn(input.argv[0] as string, input.argv.slice(1), {
         cwd: input.cwd,
@@ -536,7 +561,7 @@ export const guardedScratchWrite = async (input: {
   return ok({ path: input.relPath, bytes, sha256: createHash("sha256").update(input.content, "utf8").digest("hex") });
 };
 
-/** ensure scratch/.tmp 存在（exec 前置；TMPDIR 定向落 scratch）。 */
+/** ensure scratch/.tmp 存在（exec 前置；TMPDIR 已改全局短路径，此目录仅留作兼容位）。 */
 export const ensureExecDirs = async (scratchDir: string): Promise<Result<true, { reason: string; message: string }>> => {
   try {
     await mkdir(join(scratchDir, ".tmp"), { recursive: true });

@@ -5,10 +5,10 @@
  *
  * D89 覆盖（§一.1 分组确认可达）：
  *   A/B 逐值透传（仅 experiment_setup 段 argv 含 --grouping-preset）；未给 → argv 无该参
- *   （内核缺省 B 生效）＋返回体 grouping_preset="B"／grouping_preset_source="kernel_default"
- *   （「缺省不静默」）；显式给 → source="explicit"；非 experiment_setup 段给了也不出现在
- *   argv 且返回体无两键；审批卡 reason 含分组方案行（显式与缺省两形态）；参数 schema
- *   enum 闭集与 GROUPING_PRESET_VALUES 在位；描述不写死示例。
+ *   ＋返回体 grouping_preset=null／grouping_preset_source="undeclared"（G2 后内核无内置
+ *   预设，不再有 B 缺省；「缺省不静默」＝如实标未声明）；显式给 → source="explicit"；
+ *   非 experiment_setup 段给了也不出现在 argv 且返回体无两键；审批卡 reason 含分组方案行
+ *   （显式与未给两形态）；参数 schema 无枚举（词表归内核）；描述不写死示例。
  * D93 覆盖（§一.4 三参接入——只透传内核已声明参数，不新增语义）：
  *   train_all／assignment_source／reuse_experiment_setup——给才下传、缺省不出现；
  *   三参并存透传互不干扰；与既有段特定追加逻辑并存零回归（不按段 gate——内核全局参数）。
@@ -70,7 +70,7 @@ describe("D89——grouping_preset 透传（experiment_setup 段）", () => {
       expect((result as Record<string, unknown>)["grouping_preset_source"]).toBe("explicit");
     }
   });
-  it("未给 → argv 无该参（按未给处理，内核缺省 B 生效）＋返回体标注 kernel_default 的 B（缺省不静默）", async () => {
+  it("未给 → argv 无该参＋返回体标 grouping_preset=null／source=undeclared（内核无内置预设，不静默）", async () => {
     const result = (await toolOf().execute(
       { stage: "experiment_setup", run_id: "d89-omit", workspace_path: tempRoot() },
       fakeExec,
@@ -78,8 +78,9 @@ describe("D89——grouping_preset 透传（experiment_setup 段）", () => {
     expect((result as Record<string, unknown>)["ok"]).toBe(true);
     const argv = summaryArgv(result);
     expect(argv).not.toContain("--grouping-preset");
-    expect((result as Record<string, unknown>)["grouping_preset"]).toBe("B");
-    expect((result as Record<string, unknown>)["grouping_preset_source"]).toBe("kernel_default");
+    // G2：内核 --grouping-preset 已 default=None、无闭集词表——"B" 是死值，未给即未声明
+    expect((result as Record<string, unknown>)["grouping_preset"]).toBeNull();
+    expect((result as Record<string, unknown>)["grouping_preset_source"]).toBe("undeclared");
   });
   it("空白串 → 视同未给（trim 后空串走缺省，不触框架拒收也不进 argv）", async () => {
     const approvals: string[] = [];
@@ -89,7 +90,7 @@ describe("D89——grouping_preset 透传（experiment_setup 段）", () => {
     )) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
     expect(summaryArgv(result)).not.toContain("--grouping-preset");
-    expect(result["grouping_preset_source"]).toBe("kernel_default");
+    expect(result["grouping_preset_source"]).toBe("undeclared");
     expect(approvals).toHaveLength(1);
   });
   it("非 experiment_setup 段（family_split）给了也不出现在 argv，且返回体无两键（仅 experiment_setup 加键）", async () => {
@@ -131,14 +132,14 @@ describe("D89——审批卡分组方案呈现（reason 内追加一行，仅 ex
       expect(approvals[0]).not.toContain("goods_item");
     }
   });
-  it("未给 → 卡含「分组方案：未指定——将由训练内核按其缺省方案处理」（缺省不静默，卡上可见）", async () => {
+  it("未给 → 卡含「分组方案：未指定——不预设（按字段配置中的分组键走）」（缺省不静默，卡上可见）", async () => {
     const approvals: string[] = [];
     await toolOf(approvals).execute(
       { stage: "experiment_setup", run_id: "d89-card-def", workspace_path: tempRoot() },
       fakeExec,
     );
     expect(approvals).toHaveLength(1);
-    expect(approvals[0]).toContain("分组方案：未指定——将由训练内核按其缺省方案处理（组构成以内核产出为准）");
+    expect(approvals[0]).toContain("分组方案：未指定——不预设（按字段配置中的分组键走，组构成以内核产出为准）");
   });
   it("非 experiment_setup 段卡无分组方案行（该段该参无意义不上卡）", async () => {
     const approvals: string[] = [];
@@ -152,7 +153,7 @@ describe("D89——审批卡分组方案呈现（reason 内追加一行，仅 ex
   it("groupingPresetApprovalLine 纯函数：给值／未给两形态直测（文案单源，零组名词汇）", () => {
     expect(groupingPresetApprovalLine("A")).toBe("分组方案：A（候选方案由训练内核定义，组构成以内核产出为准）");
     expect(groupingPresetApprovalLine("custom_recipe")).toBe("分组方案：custom_recipe（候选方案由训练内核定义，组构成以内核产出为准）");
-    expect(groupingPresetApprovalLine("")).toBe("分组方案：未指定——将由训练内核按其缺省方案处理（组构成以内核产出为准）");
+    expect(groupingPresetApprovalLine("")).toBe("分组方案：未指定——不预设（按字段配置中的分组键走，组构成以内核产出为准）");
   });
 });
 

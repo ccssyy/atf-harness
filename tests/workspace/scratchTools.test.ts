@@ -14,6 +14,7 @@ import {
   findPython3,
   guardScratchArgv,
   guardedScratchWrite,
+  resolveScratchTmpdir,
   runScratchCommand,
   scanLaunchReady,
   SCRATCH_EXEC_STDOUT_CAP_BYTES,
@@ -88,7 +89,7 @@ describe("批 3 §一：scratch 路径与 argv 白名单", () => {
     }
   });
 
-  it("buildScratchExecEnv：白名单形态——PYTHONPATH 指内核 src、TMPDIR 落 scratch、ATF_LLM_* 凭据不透传、宿主任意 env 不继承", () => {
+  it("buildScratchExecEnv：白名单形态——PYTHONPATH 指内核 src、TMPDIR 落全局短路径（不落 scratch 深处）、ATF_LLM_* 凭据不透传、宿主任意 env 不继承", () => {
     const scratch = makeTemp("env");
     const kernelDir = makeTemp("kernel");
     try {
@@ -101,7 +102,14 @@ describe("批 3 §一：scratch 路径与 argv 白名单", () => {
         pythonPath: "/usr/bin/python3",
       });
       expect(env["PYTHONPATH"]).toBe(join(kernelDir, "src"));
-      expect(env["TMPDIR"]).toBe(join(scratch, ".tmp"));
+      // F10：TMPDIR 必须落全局短路径——scratch 在 run 树深处，长 TMPDIR 会让 HF datasets
+      // 多进程的 Unix socket 超 107 字节上限（AF_UNIX path too long）。显式覆盖优先。
+      const configuredTmp = process.env["ATF_SCRATCH_TMPDIR"];
+      const expectedTmp = configuredTmp !== undefined && configuredTmp !== "" ? configuredTmp : "/tmp/atf-scratch";
+      expect(env["TMPDIR"]).toBe(expectedTmp);
+      expect(env["TMPDIR"]).toBe(resolveScratchTmpdir());
+      // 防回归：107 是硬上限，留足余量（任何 run 树内的路径都远超此值）
+      expect((env["TMPDIR"] as string).length).toBeLessThan(60);
       expect(env["HOME"]).toBe("/home/isolated");
       expect(env["ATF_WORKSPACE_ROOT"]).toBe("/ws/root");
       expect(env["PATH"]).toContain("/usr/bin");
@@ -121,7 +129,6 @@ describe("批 3 §一：受控执行（python 径）", () => {
   it.runIf(python !== "python3" || process.env["ATF_B3_PY"] !== undefined)("cwd 恒 scratch、stdout 捕获、exit code 如实", { timeout: 30_000 }, async () => {
     const scratch = makeTemp("exec");
     try {
-      mkdirSync(join(scratch, ".tmp"), { recursive: true });
       const ran = await runScratchCommand({
         argv: [python, "-c", "import os;print(os.getcwd());raise SystemExit(3)"],
         cwd: scratch,
@@ -142,7 +149,6 @@ describe("批 3 §一：受控执行（python 径）", () => {
   it.runIf(python !== "python3" || process.env["ATF_B3_PY"] !== undefined)("超时置 timed_out；stdout 超限截断并标注", { timeout: 30_000 }, async () => {
     const scratch = makeTemp("exec2");
     try {
-      mkdirSync(join(scratch, ".tmp"), { recursive: true });
       const env = buildScratchExecEnv({ scratchDir: scratch, kernelDir: scratch, baseEnv: {}, pythonPath: python });
       const timed = await runScratchCommand({
         argv: [python, "-c", "import time;time.sleep(5)"],

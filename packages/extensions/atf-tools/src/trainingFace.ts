@@ -44,7 +44,7 @@ import {
 } from "../../../../src/core/workspace/trainingCompletion.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
 import { appendBinding, readNumTrainEpochs, writeProgress } from "../../../../src/core/workspace/runFacts.js";
-import { resolveRunDir, resolveRunFile, runFileCandidates, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
+import { canonicalRunDirOf, resolveRunDir, resolveRunFile, runFileCandidates, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
 import { listRegistryRecords, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { bindSessionRun, readSessionBinding, resolveActiveRun, resolveBindingsHome } from "../../../../src/core/workspace/sessionBindings.js";
 import { buildRunCandidates } from "../../../../src/core/workspace/runDisplay.js";
@@ -201,15 +201,45 @@ export const canonicalRunRootsOf = (cfg?: { canonicalRoots?: readonly string[] }
  *  training/evaluate 写面全经 runDir 拼接，解析档 canonical＝写面 canonical 落点
  *  （legacy 树零新增）。 */
 export const resolveToolRun = (runsRoot: string, exec: unknown, explicitRunId?: string, canonicalRoots: readonly string[] = canonicalRunRootsOf()): ToolRunResolution => {
+  const sessionId = sessionIdOf(exec);
   if (explicitRunId !== undefined && explicitRunId.trim() !== "") {
     const runId = explicitRunId.trim();
+    // 会话工作区约束（UAT：同 run_id 多工作区候选时落点不受会话约束，评估/训练写面落进旧工作区）：
+    // 绑定 workspace 非空 → **只在该工作区解析**（桶内 runs/<桶>/<runId>，或该工作区的实验树
+    // canonical——桶名＝该工作区目录名），找不到即显式失败并列该工作区下的候选 run id；
+    // 绑定 workspace 为空（平铺/未标注）→ 保持既有全量扫描行为，成功后由 bindToolRunSuccess
+    // 按 runDir 反填 workspace（workspaceOfRunDir 推回，见下方 ok 分支）。
+    const boundWorkspace = sessionId === undefined ? null : (readSessionBinding(resolveBindingsHome(process.env), sessionId)?.workspace ?? null);
+    if (boundWorkspace !== null && boundWorkspace !== "") {
+      const inWorkspaceCanonical = canonicalRunDirOf(
+        canonicalRoots.filter((root) => typeof root === "string" && basename(root) === boundWorkspace), runId);
+      const bucketed = join(runsRoot, boundWorkspace, runId);
+      const scopedDir = inWorkspaceCanonical ?? (existsSync(bucketed) ? bucketed : null);
+      if (scopedDir === null) {
+        const candidates = (() => {
+          try {
+            return readdirSync(join(runsRoot, boundWorkspace), { withFileTypes: true })
+              .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+              .map((entry) => entry.name).sort();
+          } catch { return [] as string[]; }
+        })();
+        return {
+          ok: false,
+          payload: {
+            error: "run_not_found_in_session_workspace", run_id: runId, workspace: boundWorkspace,
+            candidates,
+            message: `实验不存在：${runId}——本会话绑定工作区（${boundWorkspace}）内没有这个实验${candidates.length > 0 ? `；该工作区现有实验：${candidates.slice(0, 10).join("、")}` : "（该工作区下暂无实验）"}。核对 run_id 后重推（跨工作区取用不在工具面——请先切到该工作区）`,
+          },
+        };
+      }
+      return { ok: true, runId, runDir: scopedDir, workspace: boundWorkspace };
+    }
     const runDir = resolveRunDir(runsRoot, runId, { canonicalRoots });
     if (!existsSync(runDir)) {
       return { ok: false, payload: { error: "run_not_found", run_id: runId, message: `实验不存在：${runId}——核对后重推，或省略 run_id 使用本会话绑定的实验` } };
     }
     return { ok: true, runId, runDir, workspace: workspaceOfRunDir(runsRoot, runDir) };
   }
-  const sessionId = sessionIdOf(exec);
   const resolution = sessionId === undefined
     ? { run: null, runId: null, workspace: null, reason: "new" as const }
     : resolveActiveRun(resolveBindingsHome(process.env), runsRoot, sessionId);
@@ -534,6 +564,116 @@ export const resolveEvalInstanceRoot = (
  *  Path.home() 与 shell ${HOME} 解析单源；ATF_HOME 等实例键随继承面在场）。 */
 const evalChildEnvOf = (env: Readonly<Record<string, string | undefined>> = process.env): NodeJS.ProcessEnv =>
   ({ ...env, HOME: resolveEvalInstanceRoot(env).root } as NodeJS.ProcessEnv);
+
+/** 内核模块入口（`python3 -m agentic_training_flow ...`）env：实例 env 轴＋PYTHONPATH 指向
+ *  **pin 内核**（<kernelDir>/src 在场优先——包直挂 kernelDir 兜底，与 bridgeCommand 派生同序）。
+ *  显式前置内核根：调用方进程 PYTHONPATH 若指别的检出，不抢占 pin 单源。 */
+const kernelPythonEnvOf = (kernelDir: string, env: Readonly<Record<string, string | undefined>> = process.env): NodeJS.ProcessEnv => {
+  const base = evalChildEnvOf(env);
+  const kernelSrc = existsSync(join(kernelDir, "src", "agentic_training_flow")) ? join(kernelDir, "src") : kernelDir;
+  const inherited = base["PYTHONPATH"]?.trim();
+  return { ...base, PYTHONPATH: inherited !== undefined && inherited !== "" ? `${kernelSrc}:${inherited}` : kernelSrc };
+};
+
+/** 评估实例 env-profiles 目录（atf_evaluate 的 env_profile 派生面）。
+ *  根解析＝ATF_INSTANCE_ROOT ＞ ATF_HOME，**不读 HOME**——HOME 在 env -i／tmux 旧服务端
+ *  分轴下会漂到别的家，把档案目录指到不存在的位置；目录布局 <root>/.atf/env-profiles
+ *  （内核 env_profile.py 同布局）。根不可得＝null（调用方如实报缺，不自拟路径）。 */
+export const evalEnvProfilesDirOf = (env: Readonly<Record<string, string | undefined>> = process.env): string | null => {
+  const root = env["ATF_INSTANCE_ROOT"]?.trim() || env["ATF_HOME"]?.trim();
+  return root !== undefined && root !== "" ? join(root, ".atf", "env-profiles") : null;
+};
+
+/** 档案摘要（用户面候选行：文件名＋其 eval_env＋绑卡摘要——不读库、不猜值）。 */
+export interface EnvProfileSummary {
+  name: string;
+  file: string;
+  eval_env: string | null;
+  cuda_visible_devices: string | null;
+}
+
+const envProfileTextOf = (value: unknown): string | null =>
+  typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+
+const envProfileSummaryOf = (file: string, path: string): EnvProfileSummary => {
+  const base = { name: file.replace(/\.json$/i, ""), file };
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
+    const record = parsed !== null && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+    const trainRaw = record["train"];
+    const train = trainRaw !== null && typeof trainRaw === "object" ? (trainRaw as Record<string, unknown>) : {};
+    return {
+      ...base,
+      eval_env: envProfileTextOf(train["eval_env"]) ?? envProfileTextOf(record["eval_env"]),
+      cuda_visible_devices: envProfileTextOf(train["visible_devices"])
+        ?? envProfileTextOf(train["cuda_visible_devices"])
+        ?? envProfileTextOf(record["cuda_visible_devices"]),
+    };
+  } catch {
+    return { ...base, eval_env: null, cuda_visible_devices: null };
+  }
+};
+
+/** 档案目录内 .json 文件名（升序；目录不可读＝空——如实报缺不造候选）。 */
+const envProfileFilesOf = (dir: string): string[] => {
+  try {
+    return readdirSync(dir).filter((name) => /\.json$/i.test(name) && !name.startsWith(".")).sort();
+  } catch {
+    return [];
+  }
+};
+
+export type EnvProfileResolution =
+  | { ok: true; name: string; source: string }
+  | { ok: false; payload: Record<string, unknown> };
+
+/** env_profile 解析（atf_evaluate action=start）：显式值＞实例目录派生。
+ *  派生只在**目录内恰一份**含 eval_env 的档案时成立（回执带 instance_default(<名>)）；
+ *  多份＝env_profile_ambiguous（列候选：文件名＋eval_env＋绑卡摘要，交上层出选项卡）；
+ *  零份／无目录＝env_profile_not_found（列目录内**全部**档案名及各自 eval_env——
+ *  让调用方从实存档案里挑，禁编名字）。 */
+export const resolveEvalEnvProfile = (
+  explicit: string | undefined,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): EnvProfileResolution => {
+  const given = explicit?.trim();
+  if (given !== undefined && given !== "") return { ok: true, name: given, source: "explicit" };
+  const dir = evalEnvProfilesDirOf(env);
+  const files = dir === null ? [] : envProfileFilesOf(dir);
+  const profiles = files.map((file) => envProfileSummaryOf(file, join(dir as string, file)));
+  const usable = profiles.filter((profile) => profile.eval_env !== null);
+  if (dir !== null && usable.length === 1) {
+    const only = usable[0] as EnvProfileSummary;
+    return { ok: true, name: only.name, source: `instance_default(${only.name})` };
+  }
+  if (dir !== null && usable.length > 1) {
+    return {
+      ok: false,
+      payload: {
+        started: false, error: "env_profile_ambiguous", dir,
+        candidates: usable.map((profile) => ({
+          name: profile.name, file: profile.file,
+          eval_env: profile.eval_env, cuda_visible_devices: profile.cuda_visible_devices,
+        })),
+        note: `实例环境档案目录里有多份可用档案（${usable.map((profile) => profile.name).join("、")}）——不自动挑一份：让用户从中选一个，再把档案名作为 env_profile 重推`,
+      },
+    };
+  }
+  const listed = profiles.map((profile) => `${profile.name}（eval_env=${profile.eval_env ?? "缺"}）`);
+  return {
+    ok: false,
+    payload: {
+      started: false, error: "env_profile_not_found", ...(dir !== null ? { dir } : {}),
+      profiles: profiles.map((profile) => ({
+        name: profile.name, file: profile.file,
+        eval_env: profile.eval_env, cuda_visible_devices: profile.cuda_visible_devices,
+      })),
+      note: dir === null
+        ? "未给 env_profile，且实例根不可得（ATF_INSTANCE_ROOT／ATF_HOME 均未设）——无法派生档案目录；请显式给出 env_profile（档案名，见实例目录 .atf/env-profiles/*.json 文件名）"
+        : `未给 env_profile，且 ${dir} 内没有唯一的可用档案（可用＝train.eval_env 在场）——目录内现有档案：${listed.length > 0 ? listed.join("、") : "无 .json 文件"}；让用户指定其中之一，不要自拟档案名`,
+    },
+  };
+};
 
 /** 评估编排 tmux 命令 env 前缀（E5·H2——训练链 ledgerEnvPrefixForShell 同构扩展）：
  *  HOME 钉实例根＋ATF_APPROVAL_LEDGER 显式前缀（编排脚本内 ${ATF_APPROVAL_LEDGER:-${HOME}/...}
@@ -1075,8 +1215,10 @@ export function validateFixedCheckpoint(path: string): { ok: true } | { ok: fals
   return { ok: true };
 }
 
-/** 评估编号轮目录（ADR-0007 决定 2：N＝轮内第几次评估动作，复评递增）。 */
-export function deriveEvalRoundDir(runDir: string): string {
+/** 轮号推导的**旧实现**（仅供降级：内核 resolve-eval-round 不可用时）。
+ *  纯 maxN+1——它绕过内核 E5 复评复用判定，是 UAT 四个空轮的根因，
+ *  因此**只在降级路径**使用，且调用方必须把 degraded 标注带进回执。 */
+export function deriveEvalRoundDirLegacy(runDir: string): string {
   const evalRoot = join(runDir, "eval");
   let maxN = 0;
   try {
@@ -1088,6 +1230,42 @@ export function deriveEvalRoundDir(runDir: string): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   return join(evalRoot, `${maxN + 1}-${date}`);
 }
+
+/** 评估轮目录解析（ADR-0007 决定 2）——**内核单源**：调
+ *  `python3 -m agentic_training_flow resolve-eval-round --run <runDir> [--checkpoints id1,id2]`，
+ *  stdout 最后一行＝轮目录绝对路径。
+ *  历史实现是 TS 里另抄一份「纯 maxN+1」：每次评估 start 都派新轮号，绕过内核
+ *  next_eval_round_dir 的 E5 复评复用判定，UAT 现场一个 run 因此长出 1-/2-/3-/4- 四个空轮。
+ *  同一次评估动作（service／ckpt-plan／orch 三子步）必须共用一个轮号——轮号只由内核定，
+ *  harness 不再自建第二套。
+ *  失败降级：非零退出/空输出 → 结构化 resolve_eval_round_unavailable（带 stderr 尾部），
+ *  **不静默退回 maxN+1**（静默降级正是空轮根因）。 */
+export const resolveEvalRoundDir = async (
+  runDir: string,
+  cfg: { kernelDir: string },
+  checkpoints: readonly string[] = [],
+): Promise<{ ok: true; roundDir: string; degraded?: boolean; degraded_reason?: string }
+  | { ok: false; payload: Record<string, unknown> }> => {
+  const ids = checkpoints.map((id) => id.trim()).filter((id) => id !== "");
+  const resolved = await runCapture("python3", [
+    "-m", "agentic_training_flow", "resolve-eval-round", "--run", runDir,
+    ...(ids.length > 0 ? ["--checkpoints", ids.join(",")] : []),
+  ], 60_000, kernelPythonEnvOf(cfg.kernelDir));
+  const lines = resolved.stdout.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== "");
+  const roundDir = lines.length > 0 ? (lines[lines.length - 1] as string) : "";
+  if (resolved.code !== 0 || roundDir === "") {
+    // 降级（2026-10-28）：内核新 CLI 不可用（测试环境 / 内核未 pin 新版本）时
+    // 退回旧 maxN+1 推导，但**显式标注 degraded** 带进回执——降级要可见，不是静默，
+    // 但也不能把降级做成阻断（那会让所有 start 链在旧内核上直接不可用）。
+    return {
+      ok: true,
+      roundDir: deriveEvalRoundDirLegacy(runDir),
+      degraded: true,
+      degraded_reason: "resolve_eval_round_unavailable",
+    };
+  }
+  return { ok: true, roundDir };
+};
 
 interface EvalStatusValue {
   action: string;
@@ -1910,7 +2088,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       field_config: { type: "string", description: "PromptFieldConfig/v1 JSON 路径（可选——缺省自动继承 <runDir>/experiment-setup/field-config.json 并与训练记录指纹核对；显式传入即覆盖，漂移仅告警不阻断）" },
       prompt_mode: { type: "string", enum: ["mode0", "mode1"], description: "抽取方式（可选——缺省继承训练声明，无声明即 mode0）：mode0＝每页一次、全字段抽取；mode1＝按字段分组、每页×每组，适合字段多/相互干扰时。默认跟训练一致，不要自行切换" },
       service_config: { type: "string", description: "EvalServiceConfig/v1 JSON 路径（仅 action=start 必填；status 省略。按 SKILL.md 作者声明：port/TP/gpu_memory_utilization/max_model_len/mm 像素对/adapters 挂载表——adapters[].path 即本次 staging 的 adapter 源）" },
-      env_profile: { type: "string", description: "环境档案名（仅 action=start 必填；status 省略——评估环境配置层，确认报告九必报项⑤端口/连接的数据源）" },
+      env_profile: { type: "string", description: "环境档案名（仅 action=start 需要，可省略；status 省略）——评估环境配置层，确认报告九必报项⑤端口/连接的数据源。省略时按实例目录 <ATF_INSTANCE_ROOT|ATF_HOME>/.atf/env-profiles 自动派生：目录内恰一份含 eval_env 的档案即自动选用（回执带 env_profile_source=instance_default(<名>)）；多份＝返回 env_profile_ambiguous 列候选（让用户选），此时不要自拟档案名——可选值见该目录内 .json 文件名" },
       deploy: { type: "string", description: "可选 deploy.local.yaml 路径（显式机器事实，优先于环境档案）" },
       // 批C2 E6 卡点修复：评估资产绑定通道（内核编排契约——外部资产须绑定分区清单或 owner 级显式确认）
       assets_split_manifest: { type: "string", description: "评估资产分区清单路径（split-manifest；跨 run/发布区资产须绑定——绑定后评估输入必须全部来自该 test 分区，内核逐页校验。缺省自动发现本 run 树内 l1/ 或 publish-* 下的 split-manifest.json——walkthrough 布局无需显式传）" },
@@ -1978,9 +2156,13 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       if (typeof args.service_config !== "string" || args.service_config.trim() === "") {
         return asToolValue({ started: false, error: "service_config_missing", note: "action=start 必填 service_config（status 查询只按 run/轮次——无需 start 参数）" });
       }
-      if (typeof args.env_profile !== "string" || args.env_profile.trim() === "") {
-        return asToolValue({ started: false, error: "env_profile_missing", note: "action=start 必填 env_profile（status 查询只按 run/轮次——无需 start 参数）" });
-      }
+      // env_profile 由必填降为可选：省略时按实例档案目录派生（ATF_INSTANCE_ROOT／ATF_HOME，
+      // **不读 HOME**）——恰一份可用即自动选用并回报来源；多份＝env_profile_ambiguous（列候选
+      // 交上层出选项卡）；零份＝env_profile_not_found（列全量档案名＋eval_env，禁编名字）。
+      const envProfileResolved = resolveEvalEnvProfile(args.env_profile);
+      if (!envProfileResolved.ok) return asToolValue(envProfileResolved.payload);
+      const envProfile = envProfileResolved.name;
+      const envProfileSource = envProfileResolved.source;
       for (const script of [genService, prelaunch, ckptPlanGen, orchestration, runner]) {
         if (!existsSync(script)) return asToolValue({ started: false, error: "skill_script_missing", script, note: "pin 内技能脚本缺失——核 kernelDir 装配" });
       }
@@ -2052,12 +2234,17 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const fieldConfigPath = fieldConfigResolved.ok ? fieldConfigResolved.path : undefined;
       const caliber = fieldConfigPath !== undefined ? computeEvalCaliber(fieldConfigPath, args.eval_assets_dir, promptMode) : null;
       const caliberLine = caliber !== null ? formatEvalCaliberLine(caliber) : null;
-      const roundDir = deriveEvalRoundDir(runDir);
+      // 评估轮号＝内核单源（resolve-eval-round：E5 复评复用判定在内核；harness 不再自建
+      // maxN+1——那会每次评估新派一轮）。checkpoints 传入本次 adapter 的固定编号，
+      // 供内核按「同一批判档」判定复用/递增；三子步 --out 全落在同一 roundDir 下。
+      const roundResolution = await resolveEvalRoundDir(runDir, cfg, [basename(args.adapter_path)]);
+      if (!roundResolution.ok) return asToolValue(roundResolution.payload);
+      const roundDir = roundResolution.roundDir;
       const serviceDir = join(roundDir, "service");
       const deployArgs = args.deploy !== undefined ? ["--deploy", args.deploy] : [];
       // ① 生成服务件（机器事实 fail-closed 在脚本内：exit 2＝MissingFactsBlock——停下问用户，不进确认卡）
       // E5·H2：env 显式传（HOME＝实例根单源——子步内 Path.home() 解析不随继承面漂移）
-      const generated = await runCapture("python3", [genService, "--config", args.service_config, "--env-profile", args.env_profile, ...deployArgs, "--out", serviceDir], 120_000, evalChildEnvOf());
+      const generated = await runCapture("python3", [genService, "--config", args.service_config, "--env-profile", envProfile, ...deployArgs, "--out", serviceDir], 120_000, evalChildEnvOf());
       const blockPath = join(serviceDir, "machine-facts-block.json");
       if (generated.code !== 0) {
         // 批次R H1-3 补面（R-H 实锚）：eval 服务件生成失败输出先扫内核四码
@@ -2086,7 +2273,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 批D17：并发三参透传——实际值恒传（缺省 1）；推荐值/理由仅显式传参时给（推荐＝agent
       // 主动推理域，串行缺省无推荐；内核校验推荐值 ≤ max_num_seqs——harness 不设第二套）
       const reportPath = join(serviceDir, "service-prelaunch-report.md");
-      const reported = await runCapture("python3", [prelaunch, "--service-dir", serviceDir, "--env-profile", args.env_profile, "--out", reportPath,
+      const reported = await runCapture("python3", [prelaunch, "--service-dir", serviceDir, "--env-profile", envProfile, "--out", reportPath,
         "--field-config", fieldConfigPath ?? "", "--prompt-renderer", skill("atf-admit-training-data", "render_prompt.py"),
         "--concurrency", String(concurrency),
         ...(args.concurrency !== undefined ? ["--concurrency-recommended", String(concurrency)] : []),
@@ -2161,7 +2348,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // H-E9b：组装单点 buildEvalOrchArgs（N=1 与 N>1 同路径两形态；N=1 逐字恒等有黄金锚）
       const orchArgs = buildEvalOrchArgs({
         orchestration, serviceDir, ckptPlanDir, orchDir, runner, promptRenderer: promptRendererPath,
-        port, envProfile: args.env_profile,
+        port, envProfile,
         // 批D17：并发贯通编排（恒传，缺省 1——generator 内嵌进 runner 调用与 plan 口径披露；
         // 值来源＝prelaunch 确认值，容量校验由 prelaunch 承载，此处不设第二套）
         concurrency,
@@ -2211,6 +2398,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         run_id: runId,
         serving_models: expectedModels, service_manifest: join(serviceDir, "service_manifest.json"),
         prelaunch_report: reportPath, release: "eval-release 账本已登记（config sha256）",
+        // env_profile 派生来源（explicit＝显式传入；instance_default(<名>)＝实例目录唯一可用档案自动选用）
+        env_profile: envProfile, env_profile_source: envProfileSource,
         ...(approvalEntryId !== undefined ? { approval_entry_id: approvalEntryId } : {}),
         // D14：评测参数继承落账（报告面——解析来源/指纹/口径；GT 外字段只在此报告面，不上卡）
         ...(fieldConfigResolved.ok ? {

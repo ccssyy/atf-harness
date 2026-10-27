@@ -86,6 +86,9 @@ export const buildAttachmentsTool = (
   return defineTool({
     name: "atf_attachments_assembly",
     description:
+      "素材包（zip / 目录 / 多文件）装配的唯一入口。" +
+      "atf_bash 读 attachments 会被围栏拒；用 atf_scratch_exec 手工解包不产生装配方案，" +
+      "下游 register / experiment_setup 会因缺方案被拒。" +
       "素材装配结果的呈现与修订（数据整理面，免审批）：" +
       "action=review 读 `<workspace_path>/analysis/<name>/assembly-report.json`，按档位二分呈现——" +
       "非完全授权档弹一张选择卡（列出「单据图像 438 个」这类业务话，用户可勾掉判错的项；缺口与未读到项一并呈现），" +

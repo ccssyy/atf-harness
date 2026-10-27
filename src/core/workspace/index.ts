@@ -55,6 +55,7 @@ export {
   guardedScratchWrite,
   LAUNCH_WAIT_MS_DEFAULT,
   readLaunchState,
+  resolveScratchTmpdir,
   runLaunchScript,
   runScratchCommand,
   scanLaunchReady,

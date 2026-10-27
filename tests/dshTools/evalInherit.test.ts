@@ -529,8 +529,12 @@ describe("D32——status 只按 run/轮次查询（start 四参降 optional，�
     expect(noAssets).toMatchObject({ started: false, error: "eval_assets_dir_missing" });
     const noService = await tool.execute({ action: "start", run_id: "run-d32b", adapter_path: "/tmp/ckpt", eval_assets_dir: "/tmp/assets" }, fakeExec);
     expect(noService).toMatchObject({ started: false, error: "service_config_missing" });
-    const noProfile = await tool.execute({ action: "start", run_id: "run-d32b", adapter_path: "/tmp/ckpt", eval_assets_dir: "/tmp/assets", service_config: "/tmp/sc.json" }, fakeExec);
-    expect(noProfile).toMatchObject({ started: false, error: "env_profile_missing" });
+    // F11(2026-10-28)：env_profile 已由必填改为**可选**（缺省按实例目录派生，
+    // 见同文件下方「四键退出 required」用例）。故缺它不再报 env_profile_missing，
+    // 而是落到派生面：测试环境无实例目录 → not_found；多档案 → ambiguous。
+    const noProfile = (await tool.execute({ action: "start", run_id: "run-d32b", adapter_path: "/tmp/ckpt", eval_assets_dir: "/tmp/assets", service_config: "/tmp/sc.json" }, fakeExec)) as Record<string, unknown>;
+    expect(noProfile["started"]).toBe(false);
+    expect(["env_profile_not_found", "env_profile_ambiguous"]).toContain(String(noProfile["error"]));
   });
 
   it("参数 schema：adapter_path/eval_assets_dir/service_config/env_profile 四键退出 required（status schema 退出；action 仍必填）", () => {

@@ -257,10 +257,11 @@ export const userMessageOf = (summary: unknown): string | undefined => {
 export const GROUPING_PRESET_SHAPE = /^[A-Za-z0-9_-]{1,32}$/;
 
 /** 审批卡分组方案行（仅 experiment_setup 段追加——分组方案是 owner 卡上要确认的决策点）。
- *  「缺省不静默」：未给时明示将按训练内核的缺省处理，但不复述内核缺省是哪一个档（词表归内核）。 */
+ *  「缺省不静默」：未给时明示「不预设」——G2 后内核无内置预设，分组唯一来源是
+ *  field-config 的 group 键（旧文案「按内核缺省处理」是退役预设的死值残留）。 */
 export const groupingPresetApprovalLine = (preset: string): string => {
   if (preset !== "") return `分组方案：${preset}（候选方案由训练内核定义，组构成以内核产出为准）`;
-  return "分组方案：未指定——将由训练内核按其缺省方案处理（组构成以内核产出为准）";
+  return "分组方案：未指定——不预设（按字段配置中的分组键走，组构成以内核产出为准）";
 };
 
 // ── D99：experiment_setup 段负样本目标带（内核 argparse --negative-ratio-target，
@@ -845,8 +846,9 @@ export const buildPipelineTool = (
       `缺参/非绝对路径在审批卡前快败，指路 ATF_MODEL_ROOT 可用模型清单；其它段忽略该参）。` +
       `family_split 段另支持 auto_style_cluster 三态（缺省 auto，其它段忽略该参）：` +
       `auto＝先检测——已聚类则不复聚；未聚类/状态不明会拒绝并指路。` +
-      `experiment_setup 段另支持 grouping_preset 分组方案标识（取值由训练内核声明；不给＝按内核` +
-      `缺省方案处理，其它段忽略该参；返回体如实标注分组来源，审批卡呈现分组方案供确认）。` +
+      `experiment_setup 段另支持 grouping_preset 分组方案标识（取值由训练内核声明，内核无内置预设；` +
+      `不给＝不预设——分组唯一来源是 field-config 的 group 键，其它段忽略该参；` +
+      `返回体如实标注分组来源（未给标 undeclared），审批卡呈现分组方案供确认）。` +
       // A 面可发现性（工具描述面）：模型此前即使被点名要求，也会「不传覆盖参数、按缺省处理」，
       // 于是确认与建议永远到不了内核（真机实证：模型自述「未带任何覆盖参数」）。
       // 这里把「不传的后果」写进工具描述——系统知识不靠用户提示词承载。
@@ -905,8 +907,8 @@ export const buildPipelineTool = (
         type: "string",
         description:
           "实验分组方案标识（仅 experiment_setup 段有意义，其它段忽略该参）：取值集合与各方案的分组" +
-          "构成均由训练内核声明（本工具不复制词表——按内核报错回流取值即可）。不给＝由内核按其缺省" +
-          "方案处理（不静默——返回体如实标注分组来源，审批卡亦明示）",
+          "构成均由训练内核声明（本工具不复制词表——按内核报错回流取值即可）。内核无内置预设，不给＝" +
+          "不预设（分组唯一来源是 field-config 的 group 键；不静默——返回体如实标 undeclared，审批卡亦明示）",
       },
       grouping_confirm: {
         type: "boolean",
@@ -1520,11 +1522,12 @@ export const buildPipelineTool = (
         // A-E14b：base_model 对账值（explicit＝显式下传优先；对端摘要携带 source 时透传）
         ...(baseModelSourceOf(needsBaseModel, summary) !== undefined ? { base_model_source: baseModelSourceOf(needsBaseModel, summary) } : {}),
         // D89：分组方案标注（仅 experiment_setup 段）——「缺省不静默」：显式给标注 explicit，
-        // 未给按内核缺省 B 标注 kernel_default（可见、可对账；其它段不加两键）
+        // 未给标 undeclared——内核无内置预设，分组唯一来源是 field-config 的 group 键
+        // （可见、可对账；其它段不加两键）
         ...(args.stage === "experiment_setup"
           ? {
-              grouping_preset: groupingPreset !== "" ? groupingPreset : "B",
-              grouping_preset_source: groupingPreset !== "" ? "explicit" : "kernel_default",
+              grouping_preset: groupingPreset !== "" ? groupingPreset : null,
+              grouping_preset_source: groupingPreset !== "" ? "explicit" : "undeclared",
             }
           : {}),
         // D99：负样本带标注（仅 experiment_setup 段）——「缺省不静默」同 D89：显式给标
