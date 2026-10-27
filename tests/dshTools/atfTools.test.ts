@@ -282,7 +282,7 @@ describe("atf-tools 文件面（临时 runs 目录）", () => {
       expect(String(result["utilization"])).toMatch(/%$/);
       expect(result["memoryTotal"]).toContain("MiB");
     }
-  });
+  }, 60_000); // D88-A 预算耦合：真机 nvidia-smi 探针预算 5s→10s（本机中位 3.3s／峰值 6.25s），用例超时须 ≥60s 才有余量
 });
 
 // ---------------------------------------------------------------- pipeline 集成＋审批触发

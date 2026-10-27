@@ -235,7 +235,7 @@ describe("只读工具四件（atf_run_list/report_read/metrics_compare/gpu_stat
     const result = await tools[3]?.execute("t", {});
     const details = result?.details as Record<string, unknown>;
     expect(typeof details["gpu_offline"]).toBe("boolean");
-  });
+  }, 60_000); // D88-A 预算耦合：展示面探针预算 5s→10s（+compute-apps 5s），用例超时须 ≥60s 才有余量——否则「探针没超时、用例先超时」，错误又被误读成「用例慢」
 });
 
 // ---------------------------------------------------------------- 会话语义（绑定互斥/确认流转/护栏）
