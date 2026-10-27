@@ -18,6 +18,7 @@
  * 不被新灯面读取，段证据由启发式文件锚兜底。
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { resolveRunSubdir } from "./runSubdirs.js";
 import { join } from "node:path";
 
 /** 段事实条目（append 队列形态）。 */
@@ -45,8 +46,8 @@ export const SEGMENT_FACT_BY_KERNEL_STAGE: Readonly<Record<string, string | null
   training_prep: "training_prep",
 };
 
-/** 段事实文件路径（run 目录 webui/segments.json）。 */
-export const segmentsFactPathOf = (runDir: string): string => join(runDir, "webui", "segments.json");
+/** 段事实文件路径（RunLayout/v3 <run>/runtime/webui/segments.json；v2 存量 webui/ 只读兜底）。 */
+export const segmentsFactPathOf = (runDir: string): string => join(resolveRunSubdir(runDir, "webui"), "segments.json");
 
 /** 读段事实（缺失/坏行如实空数组，不猜）。 */
 export const readSegmentFacts = (runDir: string): SegmentFact[] => {
@@ -76,7 +77,7 @@ export const appendSegmentFact = (runDir: string, segment: string, source: strin
   const facts = readSegmentFacts(runDir);
   if (facts.some((fact) => fact.segment === segment && fact.source === source)) return;
   facts.push({ segment, at, source });
-  const dir = join(runDir, "webui");
+  const dir = resolveRunSubdir(runDir, "webui");
   mkdirSync(dir, { recursive: true });
   writeFileSync(segmentsFactPathOf(runDir), `${JSON.stringify(facts, null, 1)}\n`, "utf8");
 };

@@ -11,6 +11,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { CLAMP_DOMAINS, TRAINING_PIN_CONSTANTS } from "../core/workspace/smartDefaults.js";
+import { resolveRunSubdir } from "../core/workspace/runSubdirs.js";
 
 // ── 六区块（owner 2026-10-26 重排裁定：卡面按「问什么」分组，不按实现键序）──────────
 // 排序理由（owner 明示，改动前先读这段）：
@@ -317,8 +318,9 @@ export const parseConfigEditText = (text: string): { edits: Record<string, strin
   return { edits, explicitOnly: Object.keys(edits).length > 0 };
 };
 
-/** config-snapshot 存储（runs/<id>/webui/config-snapshot.json；§三.2 已确认不重问）。 */
-export const snapshotPath = (runDir: string): string => join(runDir, "webui", "config-snapshot.json");
+/** config-snapshot 存储（RunLayout/v3 <run>/runtime/webui/config-snapshot.json；v2 存量
+ *  <run>/webui/ 只读兜底——§三.2 已确认不重问）。 */
+export const snapshotPath = (runDir: string): string => join(resolveRunSubdir(runDir, "webui"), "config-snapshot.json");
 
 export const loadConfigSnapshot = (runDir: string): Record<string, string> | null => {
   const path = snapshotPath(runDir);

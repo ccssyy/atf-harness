@@ -8,11 +8,15 @@ import { execFile } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { bucketedRunEntries, flatRunDirNames, hasRunMarkers, resolveRunDir, RUN_MARKER_RELS } from "../core/workspace/runLayout.js";
+import { bucketedRunEntries, flatRunDirNames, hasRunMarkers, resolveRunDir, runFileCandidates, RUN_MARKER_RELS } from "../core/workspace/runLayout.js";
+import { registeredWorkspaceRoots } from "../core/workspace/workspaceRegistry.js";
 
 /** AgentTool 兼容形状（与 src/agent/atfAgentTools.ts 的 AgentTool 同构——避免循环 import 用结构类型）。 */
 export interface ReadOnlyToolDeps {
   runsRoot: string;
+  /** RunLayout/v3 canonical 档根清单（缺省＝注册工作区根：v3 canonical run 住
+   *  `<ws>/experiments/<exp>/<run_id>`，不带只能查平铺/桶）。 */
+  canonicalRoots?: readonly string[];
 }
 
 export interface ReadOnlyTool {
@@ -32,7 +36,8 @@ const ensure_plain_replacer = (_key: string, value: unknown): unknown => value;
 /** run 条目状态/产物推导（run 目录特征，不猜——平铺/桶内同码）。
  *  D81-B：导出为 run 面读具状态推导单源（scopeFace 会话作用域枚举同码复用，防双份漂移）。 */
 export const deriveRunEntry = (runDir: string, runId: string, workspace: string | null): Record<string, unknown> => {
-  const has = (rel: string): boolean => existsSync(join(runDir, rel));
+  // 产物判定按 V2_TO_V3 映射双向探测（v3 形态在前、v2 存量在后——存量 run 继续可读）
+  const has = (rel: string): boolean => runFileCandidates(runDir, rel).some((path) => existsSync(path));
   const state = has("webui/config-snapshot.json")
     ? "config_confirmed"
     : has("launch/train.sh")
@@ -73,8 +78,8 @@ export const listRuns = async (runsRoot: string): Promise<Array<Record<string, u
 };
 
 /** metrics_summary 读取（runs/<id>/report/metrics_summary.json；缺 → null）。 */
-const readMetrics = async (runsRoot: string, runId: string): Promise<Record<string, unknown> | null> => {
-  const path = join(resolveRunDir(runsRoot, runId), "report", "metrics_summary.json");
+const readMetrics = async (runsRoot: string, runId: string, canonicalRoots: readonly string[]): Promise<Record<string, unknown> | null> => {
+  const path = join(resolveRunDir(runsRoot, runId, { canonicalRoots }), "report", "metrics_summary.json");
   if (!existsSync(path)) return null;
   try {
     return JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
@@ -83,7 +88,9 @@ const readMetrics = async (runsRoot: string, runId: string): Promise<Record<stri
   }
 };
 
-export const makeReadOnlyTools = (deps: ReadOnlyToolDeps): ReadOnlyTool[] => [
+export const makeReadOnlyTools = (deps: ReadOnlyToolDeps): ReadOnlyTool[] => {
+  const canonicalRoots = deps.canonicalRoots ?? registeredWorkspaceRoots();
+  return [
   {
     name: "atf_run_list",
     label: "atf_run_list",
@@ -107,7 +114,7 @@ export const makeReadOnlyTools = (deps: ReadOnlyToolDeps): ReadOnlyTool[] => [
       const runId = String(params["run_id"] ?? "");
       const segment = typeof params["segment"] === "number" ? params["segment"] : undefined;
       const rel = segment === undefined ? "report/report.md" : `report/segment-${String(segment)}.md`;
-      const path = join(resolveRunDir(deps.runsRoot, runId), rel);
+      const path = join(resolveRunDir(deps.runsRoot, runId, { canonicalRoots }), rel);
       if (!existsSync(path)) return textResult({ run_id: runId, path: rel, exists: false, note: "报告不存在（该 run 无此段记录）" });
       const text = await readFile(path, "utf8");
       return textResult({ run_id: runId, path: rel, exists: true, text: text.slice(0, 8000) });
@@ -123,8 +130,8 @@ export const makeReadOnlyTools = (deps: ReadOnlyToolDeps): ReadOnlyTool[] => [
       required: ["run_a", "run_b"],
     },
     execute: async (_toolCallId: string, params: Record<string, unknown>) => {
-      const a = await readMetrics(deps.runsRoot, String(params["run_a"] ?? ""));
-      const b = await readMetrics(deps.runsRoot, String(params["run_b"] ?? ""));
+      const a = await readMetrics(deps.runsRoot, String(params["run_a"] ?? ""), canonicalRoots);
+      const b = await readMetrics(deps.runsRoot, String(params["run_b"] ?? ""), canonicalRoots);
       if (a === null || b === null) {
         return textResult({ comparable: false, note: "无可比轮次", missing: [a === null ? params["run_a"] : null, b === null ? params["run_b"] : null].filter(Boolean) });
       }
@@ -145,7 +152,8 @@ export const makeReadOnlyTools = (deps: ReadOnlyToolDeps): ReadOnlyTool[] => [
       return textResult({ gpu_offline: false, ...queried });
     },
   },
-];
+  ];
+};
 
 export interface GpuStatus {
   utilization: string;

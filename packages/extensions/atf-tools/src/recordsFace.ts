@@ -8,9 +8,11 @@ import { join, dirname } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
+import { resolveRunSubdir } from "../../../../src/core/workspace/runLayout.js";
 
-/** 豁免登记落点（run 工作区 webui/records-exemptions.json——append 留痕可回看）。 */
-export const exemptionsPathOf = (runWorkspace: string): string => join(runWorkspace, "webui", "records-exemptions.json");
+/** 豁免登记落点（RunLayout/v3 <runworkspace>/runtime/webui/records-exemptions.json；
+ *  v2 存量 webui/ 只读兼容——append 留痕可回看）。 */
+export const exemptionsPathOf = (runWorkspace: string): string => join(resolveRunSubdir(runWorkspace, "webui"), "records-exemptions.json");
 
 export const readExemptions = (runWorkspace: string): Array<{ task_id: string; granted_at: string; via: string }> => {
   const path = exemptionsPathOf(runWorkspace);
@@ -109,7 +111,7 @@ export function buildRecordsQueryTool(ctx: { get(service: string): unknown }, cf
         ...(args.task_workspace !== undefined ? { task_workspace: args.task_workspace } : {}),
         exempt,
         ...digest,
-        note: "路径翻译由 harness 完成（本结果不含绝对路径）；豁免登记留痕 webui/records-exemptions.json",
+        note: "路径翻译由 harness 完成（本结果不含绝对路径）；豁免登记留痕 runtime/webui/records-exemptions.json",
       });
     },
   });

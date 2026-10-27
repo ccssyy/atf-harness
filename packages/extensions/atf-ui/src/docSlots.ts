@@ -4,12 +4,14 @@
  * 槽位合同＝owner 决议《ATF_决议与指令_E8_一个run多槽位_20261025》§〇（裁定 A）：
  * - 槽位根 publish/<doc>/：契约三件随槽位（contract-candidate.json／confirmation-report.md／
  *   contract-user-confirmation.json）＋发布工作区 publish/<doc>/<attempt>/（attempt＝候选 sha 前 8）；
- * - 槽位 prep/variants/<doc>/（train.jsonl／lineage／dataset_info／variants_report）；
- * - 槽位 experiment-setup/<doc>/（field-config.json 登记副本）；prep/prompt-profile/<doc>.json、
- *   prep/risk-signals/<doc>/ 同轴（本仓暂未消费不展开——需要时经本模块补，不另起路径表）；
- * - run 级联合合并件落 prep/variants/ 根（train.jsonl 文件形态）——与槽位子目录天然区分。
+ * - 槽位 data/variants/<doc>/（v2 存量 prep/variants/<doc>/；train.jsonl／lineage／dataset_info／
+ *   variants_report）；
+ * - 槽位 config/experiment-setup/<doc>/（v2 存量 experiment-setup/<doc>/；field-config.json
+ *   登记副本）；data/risk-signals/<doc>/ 同轴（本仓暂未消费不展开——需要时经本模块补，
+ *   不另起路径表）；路径一律经 runSubdirs 单源解析（v3 优先、v2 只读兜底）。
+ * - run 级联合合并件落 data/variants/ 根（train.jsonl 文件形态）——与槽位子目录天然区分。
  *
- * 类枚举单源＝prep/variants/ 下「有 train.jsonl 的子目录」（E8 K1.4，与内核同式）；根级
+ * 类枚举单源＝data/variants/ 下「有 train.jsonl 的子目录」（E8 K1.4，与内核同式）；根级
  * train.jsonl 文件不构成类（run 级合并件／legacy 平铺形态）。doc_type 字典序（内核 sorted 同式）。
  * E8b 补 runDocRegistry：已登记单据清单读侧（内核 b13 run.json docs[] 优先，缺键目录探测
  * 标 legacy）——「已登记清单」与「已备槽位」（listDocSlots）是两个事实面，消费方比对不合并。
@@ -23,6 +25,7 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { resolveRunFile, resolveRunSubdir } from "../../../../src/core/workspace/runSubdirs.js";
 
 /** 槽位名规则（E8 §〇：doc_type 须匹配本式——内核写入侧 fail-closed，读侧非法名不构成类）。 */
 export const DOC_TYPE_SLOT_RE = /^[a-z0-9][a-z0-9_-]*$/;
@@ -38,11 +41,11 @@ export interface DocSlot {
   slot_dir: string;
   /** 契约候选 <slot_dir>/contract-candidate.json。 */
   candidate_path: string;
-  /** 变体槽位 <runDir>/prep/variants/<doc>/。 */
+  /** 变体槽位 <runDir>/data-variants（v3 名 data/variants）／<doc>/——v2 存量为 prep/variants。 */
   variants_dir: string;
   /** 该类训练数据 <variants_dir>/train.jsonl。 */
   train_jsonl: string;
-  /** 字段规格登记副本 <runDir>/experiment-setup/<doc>/field-config.json。 */
+  /** 字段规格登记副本 <runDir>/config/experiment-setup/<doc>/field-config.json。 */
   field_config: string;
   /** 发布工作区 <slot_dir>/<attempt>/（字典序首；未发现＝null）。 */
   publish_ws: string | null;
@@ -89,16 +92,19 @@ export const manifestLanesOf = (manifestPath: string | null): string[] => {
 };
 
 /**
- * 单据槽位枚举（全仓唯一读侧路径表）：prep/variants/<doc>/ 有 train.jsonl 的子目录即类；
- * prep/variants 缺席／无合格子目录 → 空数组（legacy／未槽位化 run，消费方走 legacy fallback）。
+ * 单据槽位枚举（全仓唯一读侧路径表）：data/variants/<doc>/（v2 存量 prep/variants/）有
+ * train.jsonl 的子目录即类；两形态皆缺席／无合格子目录 → 空数组（legacy／未槽位化 run，
+ * 消费方走 legacy fallback）。
  */
 export const listDocSlots = (runDir: string): DocSlot[] => {
   const classes: string[] = [];
+  // RunLayout/v3：变体槽位 data/variants/<doc>/（v2 存量 prep/variants/ 只读兼容——单源解析）
+  const variantsRoot = resolveRunSubdir(runDir, "prep/variants");
   try {
-    for (const entry of readdirSync(join(runDir, "prep", "variants"), { withFileTypes: true })) {
+    for (const entry of readdirSync(variantsRoot, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue; // 根级 train.jsonl 文件＝run 级合并件，不构成类
       if (!DOC_TYPE_SLOT_RE.test(entry.name)) continue; // 非法槽位名不构成类（如实跳过）
-      if (!existsSync(join(runDir, "prep", "variants", entry.name, "train.jsonl"))) continue;
+      if (!existsSync(join(variantsRoot, entry.name, "train.jsonl"))) continue;
       classes.push(entry.name);
     }
   } catch {
@@ -114,9 +120,9 @@ export const listDocSlots = (runDir: string): DocSlot[] => {
       doc_type: docType,
       slot_dir: slotDir,
       candidate_path: join(slotDir, "contract-candidate.json"),
-      variants_dir: join(runDir, "prep", "variants", docType),
-      train_jsonl: join(runDir, "prep", "variants", docType, "train.jsonl"),
-      field_config: join(runDir, "experiment-setup", docType, "field-config.json"),
+      variants_dir: join(variantsRoot, docType),
+      train_jsonl: join(variantsRoot, docType, "train.jsonl"),
+      field_config: resolveRunFile(runDir, `experiment-setup/${docType}/field-config.json`),
       publish_ws: publishWs,
       attempt,
       eval_assets_dir: publishWs !== null ? join(publishWs, "eval") : null,

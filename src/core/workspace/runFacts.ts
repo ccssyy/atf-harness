@@ -11,6 +11,7 @@
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
+import { runFileCandidates, runSubdirCandidates, resolveRunSubdir } from "./runLayout.js";
 
 // ── 绑定 ──
 
@@ -19,7 +20,7 @@ export interface SessionBinding {
   bound_at: string;
 }
 
-export const bindingPathOf = (runDir: string): string => join(runDir, "webui", "binding.json");
+export const bindingPathOf = (runDir: string): string => join(resolveRunSubdir(runDir, "webui"), "binding.json");
 
 export const readBindings = (runDir: string): SessionBinding[] => {
   const path = bindingPathOf(runDir);
@@ -43,7 +44,7 @@ export const appendBinding = (runDir: string, sessionId: string, boundAt: string
     const bindings = readBindings(runDir);
     if (bindings.some((binding) => binding.session_id === sessionId)) return;
     bindings.push({ session_id: sessionId, bound_at: boundAt });
-    const dir = join(runDir, "webui");
+    const dir = resolveRunSubdir(runDir, "webui");
     mkdirSync(dir, { recursive: true });
     writeFileSync(bindingPathOf(runDir), `${JSON.stringify(bindings, null, 1)}\n`, "utf8");
   } catch {
@@ -61,6 +62,8 @@ export const appendBinding = (runDir: string, sessionId: string, boundAt: string
 export const resolveSessionRunWorkspace = (runsRoot: string, sessionId: string): string | null => {
   if (sessionId === "") return null;
   const hits: Array<{ runDir: string; at: number }> = [];
+  const hasBinding = (runDir: string): boolean =>
+    runSubdirCandidates(runDir, "webui").some((dir) => existsSync(join(dir, "binding.json")));
   const visit = (runDir: string): void => {
     for (const binding of readBindings(runDir)) {
       if (binding.session_id !== sessionId) continue;
@@ -73,7 +76,7 @@ export const resolveSessionRunWorkspace = (runsRoot: string, sessionId: string):
     for (const level1 of readdirSync(runsRoot, { withFileTypes: true })) {
       if (!level1.isDirectory()) continue;
       const level1Path = join(runsRoot, level1.name);
-      if (existsSync(join(level1Path, "webui", "binding.json"))) {
+      if (hasBinding(level1Path)) {
         visit(level1Path);
         continue;
       }
@@ -81,7 +84,7 @@ export const resolveSessionRunWorkspace = (runsRoot: string, sessionId: string):
       try {
         for (const level2 of readdirSync(level1Path, { withFileTypes: true })) {
           if (!level2.isDirectory()) continue;
-          if (!existsSync(join(level1Path, level2.name, "webui", "binding.json"))) continue;
+          if (!hasBinding(join(level1Path, level2.name))) continue;
           visit(join(level1Path, level2.name));
         }
       } catch { /* 桶层不可读——跳过 */ }
@@ -114,7 +117,7 @@ export interface RunProgress {
   source_updated_at?: string;
 }
 
-export const progressPathOf = (runDir: string): string => join(runDir, "webui", "progress.json");
+export const progressPathOf = (runDir: string): string => join(resolveRunSubdir(runDir, "webui"), "progress.json");
 
 export const readProgress = (runDir: string): RunProgress | null => {
   const path = progressPathOf(runDir);
@@ -131,7 +134,7 @@ export const readProgress = (runDir: string): RunProgress | null => {
 /** 写进度（原子写：tmp＋rename——批㊶-TRAIN-OBS 升级，读侧永不见半截文件；写失败静默）。 */
 export const writeProgress = (runDir: string, progress: RunProgress): void => {
   try {
-    const dir = join(runDir, "webui");
+    const dir = resolveRunSubdir(runDir, "webui");
     mkdirSync(dir, { recursive: true });
     const target = progressPathOf(runDir);
     const tmp = `${target}.tmp`;
@@ -221,9 +224,14 @@ export const parseTrainerLogLine = (line: string): TrainerLogTail | null => {
 
 /** D27：trainer_log 双拓扑解析序（单源）——training/（训练段主形态）＞
  *  prep/iteration-config/（walkthrough prep 段拓扑——readNumTrainEpochs 同款双路）；
+ *  RunLayout/v3：prep/iteration-config → config/iteration-config，v3 形态排在 v2 存量前。
  *  两路俱缺席＝null。消费面：readTrainerLogTail／trainObsSync 源新鲜度门／atf-ui
  *  trainer_log 活性面（同一份源解析，禁第二套路径表）。 */
-export const TRAINER_LOG_RELS: readonly string[] = ["training/trainer_log.jsonl", "prep/iteration-config/trainer_log.jsonl"];
+export const TRAINER_LOG_RELS: readonly string[] = [
+  "training/trainer_log.jsonl",
+  "config/iteration-config/trainer_log.jsonl",
+  "prep/iteration-config/trainer_log.jsonl",
+];
 
 export const trainerLogPathOf = (runDir: string): string | null => {
   for (const rel of TRAINER_LOG_RELS) {
@@ -250,17 +258,19 @@ export const readTrainerLogTail = (runDir: string): TrainerLogTail | null => {
   }
 };
 
-/** iteration-config num_train_epochs 读取（两候选路径沿 confirmFace 同款；缺/非法＝null）。 */
+/** iteration-config num_train_epochs 读取（两候选路径沿 confirmFace 同款；缺/非法＝null）。
+ *  RunLayout/v3：config/iteration-config 与 data/ 映射形态优先，v2 prep/ 存量只读兜底。 */
 export const readNumTrainEpochs = (runDir: string): number | null => {
-  for (const rel of ["prep/iteration-config.json", "prep/iteration-config/iteration-config.json"]) {
-    const path = join(runDir, rel);
-    if (!existsSync(path)) continue;
-    try {
-      const raw = JSON.parse(readFileSync(path, "utf8")) as { training?: Record<string, unknown> };
-      const v = raw.training?.["num_train_epochs"];
-      const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
-      if (Number.isFinite(n) && n > 0) return n;
-    } catch { /* 下一路候选 */ }
+  for (const rel of ["prep/iteration-config/iteration-config.json", "prep/iteration-config.json"]) {
+    for (const path of runFileCandidates(runDir, rel)) {
+      if (!existsSync(path)) continue;
+      try {
+        const raw = JSON.parse(readFileSync(path, "utf8")) as { training?: Record<string, unknown> };
+        const v = raw.training?.["num_train_epochs"];
+        const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+        if (Number.isFinite(n) && n > 0) return n;
+      } catch { /* 下一路候选 */ }
+    }
   }
   return null;
 };

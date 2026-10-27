@@ -15,6 +15,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { resolveRunFile } from "./runSubdirs.js";
 
 /** 分组来源闭集（内核 grouping.source）。 */
 export const GROUPING_SOURCES = ["field_group", "field_projection", "none"] as const;
@@ -42,7 +43,7 @@ export interface ExperimentGrouping {
 
 /** 读取 experiment-config.json 的 grouping（缺席/坏件＝null，呈现面不阻塞）。 */
 export const readExperimentGrouping = (runDir: string): ExperimentGrouping | null => {
-  const path = join(runDir, "experiment-setup", "experiment-config.json");
+  const path = resolveRunFile(runDir, "experiment-setup/experiment-config.json");
   if (!existsSync(path)) return null;
   let parsed: unknown;
   try {
@@ -82,7 +83,7 @@ export const readExperimentGrouping = (runDir: string): ExperimentGrouping | nul
 /** 字段 id → 业务名（读 field-config.json 的 zh；缺席回退 id，不造占位）。 */
 export const fieldNameMapOf = (runDir: string): ReadonlyMap<string, string> => {
   const map = new Map<string, string>();
-  const path = join(runDir, "experiment-setup", "field-config.json");
+  const path = resolveRunFile(runDir, "experiment-setup/field-config.json");
   if (!existsSync(path)) return map;
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as { fields?: unknown };

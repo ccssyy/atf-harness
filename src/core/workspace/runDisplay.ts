@@ -12,7 +12,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { enumerateBindingCandidates, type BindingCandidateEntry } from "./sessionBindings.js";
-import { hasRunMarkers } from "./runLayout.js";
+import { hasRunMarkers, resolveRunFile, resolveRunSubdir, runFileCandidates } from "./runLayout.js";
 
 export const DISPLAY_SCHEMA_VERSION = "RunDisplay/v1";
 
@@ -23,10 +23,11 @@ export interface RunDisplayDoc {
   updated_at: string;
 }
 
-/** iteration-config 双形态候选（与 checkStartModelPath/runFacts 同面——prep/ 平铺与目录两形态）。 */
+/** iteration-config 双形态候选（与 checkStartModelPath/runFacts 同面——v2 prep/ 平铺与目录
+ *  两形态；RunLayout/v3 各自前置 config/iteration-config 映射形态）。 */
 const iterationConfigPaths = (runDir: string): string[] => [
-  join(runDir, "prep", "iteration-config.json"),
-  join(runDir, "prep", "iteration-config", "iteration-config.json"),
+  ...runFileCandidates(runDir, "prep/iteration-config.json"),
+  ...runFileCandidates(runDir, "prep/iteration-config/iteration-config.json"),
 ];
 
 const readJsonFile = (abs: string): Record<string, unknown> | null => {
@@ -82,7 +83,7 @@ export const autoTitle = (runDir: string, workspace?: string | null, runId?: str
   const id = runId !== undefined && runId !== "" ? runId : basename(runDir);
   // 单据名：field-config document_zh ＞ document_type；缺＝不算件（不落 "—" 占位）
   let doc: string | null = null;
-  const fieldConfig = readJsonFile(join(runDir, "experiment-setup", "field-config.json"));
+  const fieldConfig = readJsonFile(resolveRunFile(runDir, "experiment-setup/field-config.json"));
   if (fieldConfig !== null) {
     const zh = fieldConfig["document_zh"];
     const type = fieldConfig["document_type"];
@@ -112,9 +113,10 @@ export const autoTitle = (runDir: string, workspace?: string | null, runId?: str
   return `实验 ${id.slice(-6)}`;
 };
 
-/** 读用户改名（<run>/webui/display.json——仅在用户改名时存在；缺/坏＝null）。 */
+/** 读用户改名（<run>/runtime/webui/display.json——v3；v2 存量 <run>/webui/ 只读兜底；
+ *  仅在用户改名时存在；缺/坏＝null）。 */
 export const readDisplay = (runDir: string): RunDisplayDoc | null => {
-  const parsed = readJsonFile(join(runDir, "webui", "display.json"));
+  const parsed = readJsonFile(resolveRunFile(runDir, "webui/display.json"));
   if (parsed === null) return null;
   if (typeof parsed["title"] !== "string" || (parsed["title"] as string).trim() === "") return null;
   if (parsed["source"] !== "user") return null; // 用户名才优先（auto 形态不入盘）
@@ -125,8 +127,9 @@ export const readDisplay = (runDir: string): RunDisplayDoc | null => {
 export const writeDisplay = (runDir: string, title: string): boolean => {
   const doc: RunDisplayDoc = { schema_version: DISPLAY_SCHEMA_VERSION, title, source: "user", updated_at: new Date().toISOString() };
   try {
-    mkdirSync(join(runDir, "webui"), { recursive: true });
-    const target = join(runDir, "webui", "display.json");
+    const dir = resolveRunSubdir(runDir, "webui");
+    mkdirSync(dir, { recursive: true });
+    const target = join(dir, "display.json");
     const tmp = `${target}.tmp-${process.pid}`;
     writeFileSync(tmp, `${JSON.stringify(doc, null, 1)}\n`, "utf8");
     renameSync(tmp, target);

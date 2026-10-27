@@ -28,6 +28,7 @@ import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { resolvePipelineRunDir, runPipeline } from "./pipelineFace.js";
+import { runFileCandidates } from "../../../../src/core/workspace/runLayout.js";
 import { buildTrainingPromptPreview, renderTrainingPromptPreviewBlock } from "../../../../src/core/workspace/trainingPromptPreview.js";
 
 /** 报告读回摘要行数上限（head 截断——全文落盘在 report_path，摘要仅呈现面）。 */
@@ -40,10 +41,11 @@ const REPORT_SUMMARY_HEAD_LINES = 24;
  *  （sha 与 launch_manifest 指纹不符），而内核实际写的是目录形态——优先级必须与
  *  RunLayout 一致，否则预检/放行在陈旧件上对账。 */
 const detectIterationConfig = (runDir: string): { path: string; form: "live" | "legacy" } | null => {
-  const live = join(runDir, "prep", "iteration-config", "iteration-config.json");
-  if (existsSync(live)) return { path: live, form: "live" };
-  const legacy = join(runDir, "prep", "iteration-config.json");
-  if (existsSync(legacy)) return { path: legacy, form: "legacy" };
+  // RunLayout/v3：每形态各自 v3 名（config/iteration-config）优先、v2 存量（prep/…）只读兜底
+  for (const rel of ["prep/iteration-config/iteration-config.json", "prep/iteration-config.json"] as const) {
+    const hit = runFileCandidates(runDir, rel).find((candidate) => existsSync(candidate));
+    if (hit !== undefined) return { path: hit, form: rel === "prep/iteration-config/iteration-config.json" ? "live" : "legacy" };
+  }
   return null;
 };
 
@@ -56,7 +58,7 @@ export const buildPrelaunchReportTool = (
   return defineTool({
     name: "atf_prelaunch_report",
     description:
-      "生成/回读训练启动前报告（只读材料面，免审批）：定位 run 树（workspace_path＋run_id——与 atf_pipeline_stage 同值；run 不存在即拒，不代建）→ 探测 IterationConfig（prep/iteration-config.json，legacy 深层形态兜底）→ 调内核 build_prelaunch_report.py 在 <run>/launch/prelaunch-report.md 生成报告（需 launch 产物在场：launch.sh/launch_manifest——缺即拒并指路先跑 training_prep）→ 返回报告路径＋字节＋摘要（头部行）。" +
+      "生成/回读训练启动前报告（只读材料面，免审批）：定位 run 树（workspace_path＋run_id——与 atf_pipeline_stage 同值；run 不存在即拒，不代建）→ 探测 IterationConfig（config/iteration-config/iteration-config.json，v2 存量 prep/ 形态兜底）→ 调内核 build_prelaunch_report.py 在 <run>/launch/prelaunch-report.md 生成报告（需 launch 产物在场：launch.sh/launch_manifest——缺即拒并指路先跑 training_prep）→ 返回报告路径＋字节＋摘要（头部行）。" +
       "材料不是闸：放行仍走 atf_launch_execute／atf_run_training 既有审批链；param_sources 来源串校验单源在内核脚本（b9 起接受 user_confirmed(ref=stage:training_overrides)）——本工具不设第二套来源校验，脚本裁决如实回传。报告已生成时幂等重跑（内核脚本覆盖重写）。",
     parameters: {
       run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/runs/<run_id>——与 atf_pipeline_stage 同值；run 不存在即拒）" },

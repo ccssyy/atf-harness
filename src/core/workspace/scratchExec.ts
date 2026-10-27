@@ -26,6 +26,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { err, ok, type Result } from "../../bridge/index.js";
 import { safeScratchPath } from "./runWorkspace.js";
+import { runRelPathV3 } from "./runSubdirs.js";
 
 /** stdout 字节上限（超出截断；管道继续排空）。 */
 export const SCRATCH_EXEC_STDOUT_CAP_BYTES = 16 * 1024;
@@ -390,7 +391,7 @@ export const scanRunTreeLaunchReady = async (runDir: string): Promise<LaunchRead
   }
   let config: string | undefined;
   if (manifest.iteration_config_sha256 !== undefined) {
-    const candidates = ["launch", "prep"]
+    const candidates = ["launch", runRelPathV3("prep")]
       .flatMap((dir) => {
         try {
           return readdirSync(join(runDir, dir)).filter((name) => name.endsWith(".json")).map((name) => join(runDir, dir, name));

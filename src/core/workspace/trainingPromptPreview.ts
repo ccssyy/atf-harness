@@ -18,6 +18,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { resolveRunFile } from "./runSubdirs.js";
 
 /** 字段来源两类（业务话，不暴露内部词汇）。 */
 export type TrainingFieldSource = "declared" | "generated";
@@ -46,13 +47,14 @@ export interface TrainingPromptPreview {
   unavailable?: string;
 }
 
+/** RunLayout/v3 实验设置目录（v2 存量 experiment-setup/ 只读兼容——路径经 runSubdirs 解析）。 */
 const EXPERIMENT_DIR = "experiment-setup";
 const FENCE_START = "```text";
 const SAMPLE_HEAD = "训练 prompt 实文样例";
 
 /** 读字段配置（缺失/坏件＝空，不抛——呈现面不阻塞训练前报告）。 */
 const readFieldConfig = (runDir: string): { id: string; zh: string; definition: string; declared: boolean }[] => {
-  const path = join(runDir, EXPERIMENT_DIR, "field-config.json");
+  const path = resolveRunFile(runDir, `${EXPERIMENT_DIR}/field-config.json`);
   if (!existsSync(path)) return [];
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as { fields?: unknown };
@@ -77,7 +79,7 @@ const readFieldConfig = (runDir: string): { id: string; zh: string; definition: 
 
 /** 从内核报告截取 prompt 实文样例块（```text 围栏内），再取其中的字段段行。 */
 const readPromptSampleBlock = (runDir: string): string[] => {
-  const path = join(runDir, EXPERIMENT_DIR, "experiment_setup_report.md");
+  const path = resolveRunFile(runDir, `${EXPERIMENT_DIR}/experiment_setup_report.md`);
   if (!existsSync(path)) return [];
   let text: string;
   try {

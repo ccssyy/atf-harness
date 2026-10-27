@@ -44,7 +44,7 @@ import {
 } from "../../../../src/core/workspace/trainingCompletion.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
 import { appendBinding, readNumTrainEpochs, writeProgress } from "../../../../src/core/workspace/runFacts.js";
-import { resolveRunDir, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
+import { resolveRunDir, resolveRunFile, runFileCandidates, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
 import { listRegistryRecords, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { bindSessionRun, readSessionBinding, resolveActiveRun, resolveBindingsHome } from "../../../../src/core/workspace/sessionBindings.js";
 import { buildRunCandidates } from "../../../../src/core/workspace/runDisplay.js";
@@ -436,7 +436,7 @@ export const collectEvalReadiness = (runDir: string): EvalReadiness => {
   const fieldConfig = sole !== null ? sole.field_config : null;
   const splitManifest = sole !== null ? sole.split_manifest : null;
   const missing = slots.length === 0
-    ? ["无单据槽位（prep/variants/ 下无含 train.jsonl 的单据子目录）——legacy 平铺 run 的评估三件不再自动探测，槽位化后重推"]
+    ? ["无单据槽位（data/variants/ 下无含 train.jsonl 的单据子目录；v2 存量 prep/variants/ 只读兼容）——legacy 平铺 run 的评估三件不再自动探测，槽位化后重推"]
     : docDetails.flatMap((detail) =>
         ((detail as { missing?: string[] }).missing ?? []).map((item) => `${detail.doc_type} 类缺${item}`));
   const evalRoot = join(runDir, "eval");
@@ -777,14 +777,14 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       // 闸门仍在 train.sh 内），跳过对账并在结果如实标注 reconcile: "skipped_no_baseline"。
       const confirmedBaseline: Record<string, string> | null = (() => {
         const snapDir = resolveRunDir(cfg.runsRoot, args.run_id, { canonicalRoots: canonicalRunRootsOf(cfg) });
-        const snapPath = join(snapDir, "webui", "config-snapshot.json");
+        const snapPath = resolveRunFile(snapDir, "webui/config-snapshot.json");
         try {
           if (existsSync(snapPath)) {
             const parsed = JSON.parse(readFileSync(snapPath, "utf8")) as { confirmed?: Record<string, string> };
             if (parsed.confirmed !== undefined && parsed.confirmed !== null) return parsed.confirmed;
           }
         } catch { /* 降级 iteration-config */ }
-        for (const candidate of [join(snapDir, "prep", "iteration-config", "iteration-config.json"), join(snapDir, "prep", "iteration-config.json")]) {
+        for (const candidate of iterationConfigCandidates(snapDir)) {
           try {
             if (!existsSync(candidate)) continue;
             const iter = JSON.parse(readFileSync(candidate, "utf8")) as { training?: Record<string, unknown> };
@@ -1003,7 +1003,7 @@ export function checkStartModelPath(
   runDir: string,
   env: Readonly<Record<string, string | undefined>>,
 ): { ok: true; path: string } | { ok: false; path: string | null; reason: string; reasonText: string; models: string[]; root: string } {
-  const candidates = [join(runDir, "prep", "iteration-config", "iteration-config.json"), join(runDir, "prep", "iteration-config.json")];
+  const candidates = iterationConfigCandidates(runDir);
   let configPath: string | null = null;
   let iter: Record<string, unknown> | null = null;
   for (const candidate of candidates) {
@@ -1019,7 +1019,7 @@ export function checkStartModelPath(
   const inventory = scanLocalModels(env);
   const fail = (path: string | null, reason: string, reasonText: string): { ok: false; path: string | null; reason: string; reasonText: string; models: string[]; root: string } =>
     ({ ok: false, path, reason, reasonText, models: inventory.models, root: inventory.root });
-  if (iter === null || configPath === null) return fail(null, "iteration_config_missing", "缺席（prep/iteration-config 两候选路径均无）——先走确认卡落快照回写链");
+  if (iter === null || configPath === null) return fail(null, "iteration_config_missing", "缺席（config/iteration-config 与存量 prep/iteration-config 两候选路径均无）——先走确认卡落快照回写链");
   const baseModel = iter["base_model"];
   const path = baseModel !== null && typeof baseModel === "object" ? (baseModel as Record<string, unknown>)["path"] : undefined;
   if (typeof path !== "string" || path.trim() === "") return fail(null, "base_model_path_absent", "缺席（base_model.path 未声明）——不猜测缺省模型");
@@ -1557,10 +1557,11 @@ export const projectConcurrencyMetricLine = (value: string, source: string): str
 
 // ── 批D14：评测参数继承（field_config 缺省自动继承训练＋prompt_mode 继承＋评测口径投影）──
 
-/** iteration-config 双形态候选（与 checkStartModelPath 同面——prep/ 平铺与目录两形态）。 */
+/** iteration-config 双形态候选（与 checkStartModelPath 同面——目录与平铺两形态；
+ *  RunLayout/v3：每形态各自 config/iteration-config 优先、v2 prep/iteration-config 只读兜底）。 */
 export const iterationConfigCandidates = (runDir: string): string[] => [
-  join(runDir, "prep", "iteration-config", "iteration-config.json"),
-  join(runDir, "prep", "iteration-config.json"),
+  ...runFileCandidates(runDir, "prep/iteration-config/iteration-config.json"),
+  ...runFileCandidates(runDir, "prep/iteration-config.json"),
 ];
 
 /** run 记录的字段配置指纹（dataset.digest_provenance.field_config_sha256；可读候选首个权威；
@@ -1617,7 +1618,7 @@ export const resolveEvalFieldConfig = (runDir: string, explicit?: string, docTyp
         : slots.length === 1 ? slots[0]! : null;
       if (slot === null) {
         return {
-          ok: false, error: "eval_field_config_multi_doc", path: join(runDir, "experiment-setup"),
+          ok: false, error: "eval_field_config_multi_doc", path: resolveRunFile(runDir, "experiment-setup"),
           note: slots.find((entry) => entry.doc_type === wanted) === undefined && wanted !== null
             ? `本 run 无「${wanted}」类的单据槽位——核对单据类型后重推`
             : `本 run 有 ${String(slots.length)} 类单据（${slots.map((entry) => entry.doc_type).join("、")}）——一次评多类尚不支持，评估请面向单类 run 或等下一批`,
@@ -1625,7 +1626,7 @@ export const resolveEvalFieldConfig = (runDir: string, explicit?: string, docTyp
       }
       path = slot.field_config;
     } else {
-      path = join(runDir, "experiment-setup", "field-config.json"); // legacy 平铺恒等
+      path = resolveRunFile(runDir, "experiment-setup/field-config.json"); // 单单据 run：v3 config/experiment-setup ＞ v2 存量只读
     }
   }
   if (!existsSync(path)) {
@@ -1633,7 +1634,7 @@ export const resolveEvalFieldConfig = (runDir: string, explicit?: string, docTyp
       ok: false, error: "eval_field_config_unresolved", path,
       note: isExplicit
         ? "显式传入的 field_config 路径不存在——核对路径后重推"
-        : "缺省解析失败：run 目录无 experiment-setup/field-config.json——显式传 field_config（PromptFieldConfig/v1 路径）后重推",
+        : "缺省解析失败：run 目录无 config/experiment-setup/field-config.json（v2 存量 experiment-setup/ 已按映射探测）——显式传 field_config（PromptFieldConfig/v1 路径）后重推",
     };
   }
   let sha256: string;

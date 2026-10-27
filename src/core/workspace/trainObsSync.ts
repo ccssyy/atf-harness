@@ -29,6 +29,7 @@ import {
 import {
   latestCheckpointOf, readTrainingExitCode, readTrainingStartedAt, writeTrainingCompletion,
 } from "./trainingCompletion.js";
+import { resolveRunSubdir } from "./runSubdirs.js";
 
 /** 记账本停更阈值：连续 12 轮读不到有效行（同步器 5s 环 ≈1 分钟）。 */
 export const TRAIN_OBS_STALE_ROUNDS = 12;
@@ -95,7 +96,7 @@ export const truncateCaptureLines = (raw: string): string[] =>
     .map((line) => (line.length > TRAINLOG_TAIL_MAX_LINE_CHARS ? `${line.slice(0, TRAINLOG_TAIL_MAX_LINE_CHARS)}…` : line));
 
 /** trainlog.tail.json 落点。 */
-export const trainlogTailPathOf = (runDir: string): string => join(runDir, "webui", "trainlog.tail.json");
+export const trainlogTailPathOf = (runDir: string): string => join(resolveRunSubdir(runDir, "webui"), "trainlog.tail.json");
 
 /** 投影面形态（adapter 白名单两键闭集——摘要化：行已截断，无路径命令面）。 */
 export interface TrainlogTailFace {

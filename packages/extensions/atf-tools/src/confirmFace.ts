@@ -47,7 +47,8 @@ import {
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { legacyCandidatePath, listDocSlots } from "../../atf-ui/src/docSlots.js";
 import { readLaunchKpi } from "../../../../src/core/workspace/trainingPreflight.js";
-import { isValidRunId, resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+import { isValidRunId, resolveRunDir, resolveRunFile, resolveRunSubdir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+import { registeredWorkspaceRoots } from "../../../../src/core/workspace/workspaceRegistry.js";
 // F1 前置预检共用交互流（循环 import 安全：两侧顶层均零执行对方导出——函数体内引用）
 import { preflightScriptAvailable, runPreflightFlow, resolvePreflightRunDir, type PreflightDeps, type PreflightRunDirSource } from "./preflightFace.js";
 import { openSettingsStore } from "../../../../src/webui/settings.js";
@@ -528,15 +529,19 @@ const cardBlocks = (title: string, fields: ConfigConfirmField[], note: string) =
 interface ConfirmDeps {
   runsRoot: string;
   ctx: { get(service: string): unknown };
+  /** RunLayout/v3 canonical 档根清单（缺省＝注册工作区根；测试可注入固定清单）。 */
+  canonicalRoots?: readonly string[];
   /** 批㊶R前置：可用卡数探测注入（vitest 假件；缺省＝真实机器事实通道 nvidia-smi/CUDA_VISIBLE_DEVICES）。 */
   gpuProbe?: () => number | null;
   /** F1：前置预检装配（本次训练方案卡前先出预检卡；缺席＝不出预检卡，训练方案链现状语义）。 */
   preflight?: PreflightDeps;
 }
 
-/** pending 卡落盘（刷新重建源：<runDir>/webui/pending-confirm.json——runDir 双形态解析归调用方）。 */
+/** pending 卡落盘（刷新重建源：<runDir>/runtime/webui/pending-confirm.json——RunLayout/v3；
+ *  存量 v2 run 的 <runDir>/webui/ 经 resolveRunSubdir 只读兼容，落点单源不劈两处。
+ *  runDir 由 resolveConfirmRunDir 单源解析（本函数不再自带形态判定）。 */
 const writePending = (runDir: string, payload: Record<string, unknown>): void => {
-  const dir = join(runDir, "webui");
+  const dir = resolveRunSubdir(runDir, "webui");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "pending-confirm.json"), `${JSON.stringify(payload, null, 1)}\n`, "utf8");
 };
@@ -547,7 +552,7 @@ const writePending = (runDir: string, payload: Record<string, unknown>): void =>
  *  sweepAnsweredPendings 兜底（完成证据判据），本函数只管本 run 完成即清。 */
 const clearPending = (runDir: string): void => {
   try {
-    const path = join(runDir, "webui", "pending-confirm.json");
+    const path = join(resolveRunSubdir(runDir, "webui"), "pending-confirm.json");
     if (!existsSync(path)) return;
     renameSync(path, `${path}.answered.${Date.now()}.json`);
   } catch { /* fail-open */ }
@@ -609,8 +614,18 @@ export const resolveConfirmRunDir = (
         return { ok: false, error: "run_dir_create_failed", note: `显式落点 run 目录创建失败（${runDir}）：${String(cause).slice(0, 200)}` };
       }
     }
-    // 新建 run 现状形态：实例 runsRoot 桶落点（writePending 落点 mkdir——零破坏）
-    return { ok: true, runDir: resolveRunDir(deps.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) }), source: "instance_runs_root" };
+    // 新建 run 现状形态：实例 runsRoot 桶落点（writePending 落点 mkdir——零破坏）。
+    // canonical 档必须带注册工作区根：v3 canonical run 住 `<ws>/experiments/<exp>/<run_id>`，
+    // 不带＝只查平铺/桶＝已存在的 canonical run 被当成「不存在」而在 legacy 桶新建（现场 bug：
+    // run.json 在 experiments/<exp>/<run>/，webui/ 却落在 <ws>/runs/<run>/webui/）。
+    return {
+      ok: true,
+      runDir: resolveRunDir(deps.runsRoot, runId, {
+        workspace: sessionWorkspaceSlug(exec),
+        canonicalRoots: deps.canonicalRoots ?? registeredWorkspaceRoots(),
+      }),
+      source: "instance_runs_root",
+    };
   }
   return { ok: false, error: resolved.error, note: resolved.note };
 };
@@ -626,14 +641,14 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const configTool = defineTool({
     name: "atf_config_confirm",
     description:
-      "本次训练方案确认卡：action=present 构造/重呈本次训练方案卡（overrides 传显式覆盖值）；action=amend 应用结构化改参（edits 传键值对象）后重呈。合并版双段式编排（present/amend 同链）：第一段改参收集——决策类（卡位/像素上限/LoRA 容量/显存策略）走原生选项卡（可多选处开 multiSelect，自由输入走选项组末尾「其他」），录入类走原生 form intent 表单卡逐键输入框（现值预填＋clamp 域提示；max_model_len 只读不入输入框；标签带六区块业务标题），卡面附 TokenBudget 三要素区（预算/训练截断/推理窗口三行＋两条不变式校验：预算超 cutoff 或超 max_model_len 即红字禁确认；预算与 cutoff 不等须同步（用户动作不自动）或填不同步理由），用户改值/直接提交即回结构化 key=value；第二段授权——有改动走确定性 clamp（越界回退域边界＋可读说明），最终授权一律走审批卡 Allow once（账本留痕不变）；审批卡 Reject → 回表单卡（带上次值）循环，用户关闭表单卡＝取消（结构化拒绝）。问题卡只收集改参、不承载授权（审批≠请示，闸门语义不迁移）；用户在聊天里的改参话术由 agent 语义理解后转 edits 结构化参数（自由文本永不直达生成面）。现值基线＝已确认快照＞run 的 IterationConfig 实值（prep/iteration-config——登记源，卡面与 Web 摘要同源）＞缺省。人工档（预设非 atf-training 或权限档非 danger-full-access）：审批面板 Allow once 确认后 config-snapshot 落盘。训练自动驾驶（Agent 预设 atf-training ＋ 权限档 danger-full-access 两轴齐备）：present 免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend（同样免阻塞）。" +
+      "本次训练方案确认卡：action=present 构造/重呈本次训练方案卡（overrides 传显式覆盖值）；action=amend 应用结构化改参（edits 传键值对象）后重呈。合并版双段式编排（present/amend 同链）：第一段改参收集——决策类（卡位/像素上限/LoRA 容量/显存策略）走原生选项卡（可多选处开 multiSelect，自由输入走选项组末尾「其他」），录入类走原生 form intent 表单卡逐键输入框（现值预填＋clamp 域提示；max_model_len 只读不入输入框；标签带六区块业务标题），卡面附 TokenBudget 三要素区（预算/训练截断/推理窗口三行＋两条不变式校验：预算超 cutoff 或超 max_model_len 即红字禁确认；预算与 cutoff 不等须同步（用户动作不自动）或填不同步理由），用户改值/直接提交即回结构化 key=value；第二段授权——有改动走确定性 clamp（越界回退域边界＋可读说明），最终授权一律走审批卡 Allow once（账本留痕不变）；审批卡 Reject → 回表单卡（带上次值）循环，用户关闭表单卡＝取消（结构化拒绝）。问题卡只收集改参、不承载授权（审批≠请示，闸门语义不迁移）；用户在聊天里的改参话术由 agent 语义理解后转 edits 结构化参数（自由文本永不直达生成面）。现值基线＝已确认快照（runtime/webui/config-snapshot.json，v2 存量 webui/ 只读兼容）＞run 的 IterationConfig 实值（config/iteration-config，v2 存量 prep/iteration-config 只读兼容——登记源，卡面与 Web 摘要同源）＞缺省。人工档（预设非 atf-training 或权限档非 danger-full-access）：审批面板 Allow once 确认后 config-snapshot 落盘。训练自动驾驶（Agent 预设 atf-training ＋ 权限档 danger-full-access 两轴齐备）：present 免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend（同样免阻塞）。" +
       "全自动档 agent 参数推荐（recommend 参数，本档专属）：训练提交前基于任务描述＋数据集统计（样本数/长度分布/模态）＋经验锚点给出 epochs/lr/rank/cutoff/负样本带推荐值并附 reason（理由）。经验锚点（owner 手工训练经验，参考知识非硬规则）：样本 2万–3万 → 3 epochs；4万以上 → 2 epochs；小样本（<1万）宜多轮并防过拟合（配早停观察）。护栏：epochs∈[1,10] 整数、lr∈[5e-5,5e-4]、lora_rank∈{16,32,64,128}（alpha=2×rank 联动）、cutoff≤12800、像素两档∈{802816,1605632}（单源）、负样本构造带∈[0.02,0.05]（F2 R1 终裁——空对象构造配额）、bs 正整数、nproc∈[1,可用卡数]——越界推荐被拦截并回退固定建议（不静默修正），拦截事实进通报；推荐缺失同样回退。lora_alpha 不单独推荐（随 rank 联动）。" +
       "基模型锚点（owner 裁定 2026-10-12 §九）：确认卡基模型字段默认值＝模型库位置下的 Qwen3-VL-32B-Instruct（owner 偏置锚点，非查表推导；卡上可改，改动经防线①本地复核）。评估侧继续锚定 -AWQ 变体（现状不变）。" +
       "卡数偏置（owner 裁定 2026-10-11）：训练卡数默认拉满本机可用卡（nproc_per_node=机器事实可用卡数），训练时长优先；代价（显存/时长）如实呈现给用户，不作降档依据；降档仅在用户任务上下文明确要求时采纳。卡数维度无成文锚点——不编造「数据规模→卡数」映射、不查表推荐，卡数只来自机器事实与用户显式要求；自动档默认低于可用卡的 nproc 推荐会被护栏回退拉满。",
     parameters: {
       action: { type: "string", required: true, enum: ["present", "amend"], description: "present=构造/重呈卡；amend=应用结构化改参后重呈（edits 键值对象）" },
       run_id: { type: "string", required: true, description: "run 标识（快照与 pending 卡落点）" },
-      workspace_path: { type: "string", description: "workspace 根（绝对路径——与 atf_pipeline_stage 的 workspace_path 同值；落点 <workspace_path>/runs/<run_id>，未传时按会话工作区事实与实例 runs 根顺次解析——快照/段事实与内核读取同棵树）" },
+      workspace_path: { type: "string", description: "workspace 根（绝对路径——与 atf_pipeline_stage 的 workspace_path 同值；落点 RunLayout/v3 <workspace_path>/experiments/<exp>/<run_id>（v2 存量 <exp>/runs/<run_id> 只读兼容），未传时按会话工作区事实与实例 runs 根顺次解析——快照/段事实与内核读取同棵树）" },
       overrides: { type: "object", additionalProperties: true, description: "显式覆盖值（present 形态：{learning_rate:\"2e-4\",...}）" },
       edits: { type: "object", additionalProperties: true, description: "amend 结构化改参（用户聊天话术经 agent 语义理解后的键值对象，如 {num_train_epochs:\"4\", learning_rate:\"2e-4\"}）——clamp 校验后随表单卡重呈双确认" },
       recommend: { type: "object", additionalProperties: true, description: "全自动档专属 agent 参数推荐：{epochs:3, learning_rate:\"2e-4\", lora_rank:32, cutoff_len:9000, reason:\"2.8万样本→3 epochs 防欠拟合\"}——越界键被拦截回退，手动档不消费" },
@@ -685,7 +700,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       }
       // 现值基线：已确认快照（不重问）→ run 的 IterationConfig 实值（批㉛段2：登记源，确认卡
       // 与 Web 摘要同源——deepspeed 等实值不再落回泛化缺省）→ pending 卡现值 → 缺省
-      const snapshotPath = join(runDir, "webui", "config-snapshot.json");
+      const snapshotPath = resolveRunFile(runDir, "webui/config-snapshot.json");
       // saveConfigSnapshot 形态＝{schema_version, confirmed}——基线取 confirmed 子对象
       // （批㉛段2 修正：原实现整文件映射，快照确认值从未真正入卡基线）
       const snapshot = (() => {
@@ -697,7 +712,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           return {} as Record<string, string>;
         }
       })();
-      const iterPath = join(runDir, "prep", "iteration-config", "iteration-config.json");
+      const iterPath = resolveRunFile(runDir, "prep/iteration-config/iteration-config.json");
       let iterTraining: Record<string, string> = {};
       if (existsSync(iterPath)) {
         try {
@@ -1063,7 +1078,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           sources,
           ...(recommendReport.length > 0 ? { recommend_report: recommendReport } : { recommend: "missing_fallback_defaults" }),
           notification,
-          snapshot: "webui/config-snapshot.json",
+          snapshot: "runtime/webui/config-snapshot.json",
           ...(preflightNote !== undefined ? { preflight: preflightNote } : {}),
           ...(amendNote !== undefined ? { amend: amendNote } : {}),
         });
@@ -1259,7 +1274,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const sessionIdCfg = sessionIdOfExec(exec);
       if (sessionIdCfg !== undefined) appendBinding(runDir, sessionIdCfg);
       injectBashRunWorkspace(runDir); // 批㊶-S1 门2修复
-      return asToolValue({ ok: true, run_id: args.run_id, run_dir: runDir, run_dir_source: runDirSource, confirmed: true, fields, snapshot: "webui/config-snapshot.json", ...(preflightNote !== undefined ? { preflight: preflightNote } : {}), ...(amendNote !== undefined ? { amend: amendNote } : {}) });
+      return asToolValue({ ok: true, run_id: args.run_id, run_dir: runDir, run_dir_source: runDirSource, confirmed: true, fields, snapshot: "runtime/webui/config-snapshot.json", ...(preflightNote !== undefined ? { preflight: preflightNote } : {}), ...(amendNote !== undefined ? { amend: amendNote } : {}) });
     },
   });
 

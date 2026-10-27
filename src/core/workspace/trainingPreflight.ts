@@ -21,6 +21,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { resolveRunSubdir } from "./runSubdirs.js";
 
 // ── 固定 schema（内核输出消费面）──
 
@@ -392,7 +393,7 @@ export interface LaunchKpi {
   first_launch_at?: string;
 }
 
-export const launchKpiPathOf = (runDir: string): string => join(runDir, "webui", "launch-kpi.json");
+export const launchKpiPathOf = (runDir: string): string => join(resolveRunSubdir(runDir, "webui"), "launch-kpi.json");
 
 export const readLaunchKpi = (runDir: string): LaunchKpi | null => {
   const path = launchKpiPathOf(runDir);
@@ -408,7 +409,7 @@ export const readLaunchKpi = (runDir: string): LaunchKpi | null => {
 
 const writeLaunchKpi = (runDir: string, kpi: LaunchKpi): boolean => {
   try {
-    const dir = join(runDir, "webui");
+    const dir = resolveRunSubdir(runDir, "webui");
     mkdirSync(dir, { recursive: true });
     const target = launchKpiPathOf(runDir);
     const tmp = `${target}.tmp`;

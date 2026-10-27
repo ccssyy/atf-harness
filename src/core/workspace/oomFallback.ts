@@ -17,9 +17,10 @@ import { dirname, join } from "node:path";
 import { deriveGradAccum } from "./smartDefaults.js";
 import { appendNotification, OOM_PATTERN } from "./trainProbe.js";
 import { resolveLaunchSessionName, tmuxCommand, trainingSessionBase } from "./tmuxLiveness.js";
+import { resolveRunSubdir } from "./runSubdirs.js";
 
 /** OOM 降档状态文件（webui/oom-fallback.json——每 run 一次护栏）。 */
-export const oomFallbackStatePath = (runDir: string): string => join(runDir, "webui", "oom-fallback.json");
+export const oomFallbackStatePath = (runDir: string): string => join(resolveRunSubdir(runDir, "webui"), "oom-fallback.json");
 
 export interface TrainShBatchParams {
   bs: number;
@@ -113,7 +114,7 @@ export const maybeAutoOomFallback = async (deps: OomFallbackDeps): Promise<OomFa
   }
   const writeState = (payload: Record<string, unknown>): void => {
     try {
-      mkdirSync(join(runDir, "webui"), { recursive: true });
+      mkdirSync(resolveRunSubdir(runDir, "webui"), { recursive: true });
       deps.writeText(oomFallbackStatePath(runDir), `${JSON.stringify({ run_id: runId, at: deps.now().toISOString(), ...payload }, null, 1)}\n`);
     } catch { /* fail-open——状态写失败仅影响幂等护栏 */ }
   };

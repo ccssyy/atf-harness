@@ -44,7 +44,8 @@ import {
   recordPreflightAt,
   type PreflightReport,
 } from "../../../../src/core/workspace/trainingPreflight.js";
-import { isValidRunId, resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+import { isValidRunId, resolveRunDir, runCandidateDirs, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+import { registeredWorkspaceRoots } from "../../../../src/core/workspace/workspaceRegistry.js";
 
 /** 预检命令形态："python3 /abs/tools/training_preflight.py"（或 mock "node /abs/mock.mjs"）。
  *  在场判定＝脚本路径存在（首 token 为解释器，其余为脚本路径——缺空格＝命令本身）。 */
@@ -61,6 +62,8 @@ export interface PreflightDeps {
   timeoutMs: number;
   runsRoot: string;
   ctx: { get(service: string): unknown };
+  /** RunLayout/v3 canonical 档根清单（缺省＝注册工作区根；测试可注入固定清单）。 */
+  canonicalRoots?: readonly string[];
 }
 
 export interface PreflightFlowArgs {
@@ -138,35 +141,45 @@ export const resolvePreflightRunDir = (deps: PreflightDeps, args: PreflightFlowA
 
   const runId = args.runId;
   const workspacePath = typeof args.workspacePath === "string" ? args.workspacePath.trim() : "";
+  // 显式给定根下的候选链单源＝runCandidateDirs（RunLayout/v3 实验树
+  // `<root>/experiments/<exp>/<runId>` ＞ v2 `<exp>/runs/<runId>` ＞ legacy
+  // `<root>/workspace/runs/<runId>` ＞ `<root>/runs/<runId>`）——本函数只做首中探测，
+  // 不迁移不改道；全缺才拒（显式优先不静默改道）。
+  const firstExisting = (root: string, probed: string[]): string | null => {
+    for (const candidate of runCandidateDirs(root, runId)) {
+      if (existsSync(candidate)) return candidate;
+      probed.push(candidate);
+    }
+    return null;
+  };
   if (workspacePath !== "") {
     if (!isAbsolute(workspacePath)) {
       return { ok: false, error: "workspace_path_not_absolute", note: `workspace_path 须为绝对路径（得 ${workspacePath}）` };
     }
-    // E3 补（与 pipelineFace canonical 修复同族）：显式 wp 下 canonical 布局
-    // <wp>/workspace/runs/<id>（内核 RunLayout v1）在场优先——否则本次训练方案卡的
-    // 快照/iteration-config 回写会落到 legacy 假树，与 training_prep 的 canonical
-    // 真树不同树（F7 train_sh 对账必拦）；canonical 缺席回落 legacy 公式
-    // <wp>/runs/<id>（存量/新建形态），两形态都不在场才拒（显式优先不静默改道）。
-    const canonical = join(workspacePath, "workspace", "runs", runId);
-    if (isValidRunId(runId) && existsSync(canonical)) return settle(canonical, "workspace_path", [canonical]);
-    const legacy = join(workspacePath, "runs", runId);
-    if (!isValidRunId(runId) || !existsSync(legacy)) {
-      return { ok: false, error: "run_dir_not_found", note: runDirNotFoundNote([canonical, legacy]) };
-    }
-    return settle(legacy, "workspace_path", [canonical, legacy]);
+    // E3 补（RunLayout/v3）：canonical 真树在 `<wp>/experiments/<exp>/<runId>`
+    // （v2 存量 `<exp>/runs/<runId>`）。不查实验树＝本次训练方案卡的快照/iteration-config
+    // 回写落到 legacy 假树 `<wp>/runs/<runId>`，与 training_prep 的 canonical 真树不同树
+    // （F7 train_sh 对账必拦）——现场 bug（webui 落 legacy 桶）即此。
+    const wpProbed: string[] = [];
+    const hit = isValidRunId(runId) ? firstExisting(workspacePath, wpProbed) : null;
+    if (hit !== null) return settle(hit, "workspace_path", wpProbed);
+    return { ok: false, error: "run_dir_not_found", note: runDirNotFoundNote(wpProbed) };
   }
 
   const probed: string[] = [];
-  // b. 会话工作区事实：cwd 取法与 sessionWorkspaceSlug 同源（runLayout vendor 锚）
+  // b. 会话工作区事实：cwd 取法与 sessionWorkspaceSlug 同源（runLayout vendor 锚）；
+  //    候选链与 a 同源（实验树优先——v3 run 不在 cwd/runs 下）。
   const cwd = (exec as { agent?: { session?: { header?: { cwd?: unknown } } } })?.agent?.session?.header?.cwd;
   if (isValidRunId(runId) && typeof cwd === "string" && cwd.trim() !== "") {
-    for (const candidate of [join(cwd, "runs", runId), join(cwd, "workspace", "runs", runId)]) {
-      if (existsSync(candidate)) return settle(candidate, "session_fact", probed);
-      probed.push(candidate);
-    }
+    const hit = firstExisting(cwd, probed);
+    if (hit !== null) return settle(hit, "session_fact", probed);
   }
-  // c. 兜底：实例 runsRoot 平铺/桶（存量形态；canonicalRoots 缺省不查＝既有行为）
-  const fallback = resolveRunDir(deps.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) });
+  // c. 兜底：实例 runsRoot（canonical 档带注册工作区根——v3 canonical run 亦可命中；
+  //    平铺/桶形态保持既有行为）
+  const fallback = resolveRunDir(deps.runsRoot, runId, {
+    workspace: sessionWorkspaceSlug(exec),
+    canonicalRoots: deps.canonicalRoots ?? registeredWorkspaceRoots(),
+  });
   if (!existsSync(fallback)) {
     return { ok: false, error: "run_dir_not_found", note: runDirNotFoundNote([...probed, fallback]) };
   }

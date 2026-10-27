@@ -7,13 +7,35 @@
  * 桶名＝发起会话 DSH 工作区目录名（exec.agent.session.header.cwd 的 basename——
  * vendor tool-bash 同源锚，见 packages/shell/tool-bash sessionCwd 解析）；无工作区
  * 归属（取不到 cwd／系统级 run 如 default）留根目录平铺，不入桶。
- * 解析序（resolveRunDir）：平铺在场＞桶内在场＞新建（有归属→入桶，无→平铺）——
- * 存量平铺 run 全链路（工具写面／监控扫描／viewer 路由）向后兼容，零迁移。
+ * 解析序（resolveRunDir）：canonical（实验树）＞平铺在场＞桶内在场＞新建（有归属→入桶，
+ * 无→平铺）——存量平铺 run 全链路（工具写面／监控扫描／viewer 路由）向后兼容，零迁移。
  * 均 runsRoot 本地文件面操作，不进 bridge 契约面；列目录失败如实降级（fail-open）。
+ *
+ * RunLayout/v3 对齐（与内核 src/agentic_training_flow/run_layout.py 同值同序）：
+ *   - canonical run 路径 `<ws>/experiments/<exp>/<run_id>`（v2 的 `<exp>/runs/<run_id>`
+ *     降为只读兼容，不迁移、不补建）；
+ *   - run 内目录按 V2_TO_V3_DIR_MAP 重排（webui→runtime/webui、prep→data、
+ *     experiment-setup→config/experiment-setup、loop→runtime/loop）；
+ *   - 读写统一经 resolveRunSubdir／runSubdirCandidates：v3 在场用 v3，缺席回落 v2
+ *     存量（只读不改写）——存量 run 的产物继续原地可读，新 run 落 v3。
  */
 import { existsSync, readdirSync, readFileSync, renameSync } from "node:fs";
 import { basename, isAbsolute, join, relative, sep } from "node:path";
 import { hasSegmentFact } from "./segmentFacts.js";
+import { resolveRunSubdir } from "./runSubdirs.js";
+
+// RunLayout/v3 常量与 run 内目录解析单源（叶子模块——runLayout 对外 re-export，调用方
+// 仍可从 runLayout 取；segmentFacts 等被本模块依赖者从 runSubdirs 直接取以免循环 import）。
+export {
+  RUN_LAYOUT_VERSION,
+  RUN_LAYOUT_V3,
+  V2_TO_V3_DIR_MAP,
+  runFileCandidates,
+  runRelPathV3,
+  runSubdirCandidates,
+  resolveRunFile,
+  resolveRunSubdir,
+} from "./runSubdirs.js";
 
 /** 桶名/run_id 合法形态（字母数字开头，仅 字母数字._-；`..` 与分隔符天然被拒）。 */
 export const RUN_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -76,14 +98,14 @@ const findBucketed = (runsRoot: string, runId: string, prefer?: string | null): 
 };
 
 /**
- * run_id → 实际 run 目录（双形态兼容单源）：
- *   ⓪ canonical 优先（D49）：注册工作区根下 `<ws>/workspace/runs/<runId>/run.json` 合法
- *      （在场且可解析为对象——RunLayout/v1 身份锚）→ 返回 canonical 目录；
+ * run_id → 实际 run 目录（多形态兼容单源）：
+ *   ⓪ canonical 优先（D49）：注册工作区根下实验树命中合法 run.json（RunLayout/v3 身份锚
+ *      `<ws>/experiments/<exp>/<runId>`，v2 `<exp>/runs/<runId>` 只读兼容）→ 返回该目录；
  *   ① 平铺在场（存量，含全部既有 run）→ 平铺；
  *   ② 桶内在场（新形态，指定桶优先）→ 桶；
  *   ③ 两缺（新建）：有工作区归属且非系统级 → runs/<桶>/<run_id>；否则平铺。
  * 非法 runId 原样平铺拼接（行为兼容——不扫描、不助穿越：调用方既有校验面不变）。
- * canonicalRoots＝注册工作区根清单（listRegistryRecords 派生——工具面调用方注入；
+ * canonicalRoots＝注册工作区根清单（registeredWorkspaceRoots／工具面调用方注入；
  * 缺省不查 canonical＝既有行为零变化）。canonical 无 run.json（legacy run）不命中
  * 本档——回落平铺/桶（canonical 无 run.json → legacy，D49 验收锚）。
  */
@@ -103,23 +125,28 @@ export const resolveRunDir = (runsRoot: string, runId: string, opts?: { workspac
 };
 
 /**
- * RunLayout/v2 候选 run 目录（单源，调用方不各自拼路径）：
- *   ① 实验树 `<ws>/experiments/<exp>/runs/<runId>`（唯一写面与唯一主读面）；
- *   ② legacy `<ws>/workspace/runs/<runId>`（已废止的 v1 固定名桶，只读）；
- *   ③ legacy `<ws>/runs/<runId>`（ADR-0005 旧桶，只读）。
- * ②③ 只为让存量 run 仍可读，不迁移、不补建（ADR-0016/ADR-0018）。
+ * RunLayout/v3 候选 run 目录（单源，调用方不各自拼路径）：
+ *   ① 实验树 v3 `<ws>/experiments/<exp>/<runId>`（唯一写面与唯一主读面）；
+ *   ② 实验树 v2 `<ws>/experiments/<exp>/runs/<runId>`（存量只读兼容）；
+ *   ③ legacy `<ws>/workspace/runs/<runId>`（已废止的 v1 固定名桶，只读）；
+ *   ④ legacy `<ws>/runs/<runId>`（ADR-0005 旧桶，只读）。
+ * ②③④ 只为让存量 run 仍可读，不迁移、不补建（ADR-0016/ADR-0018）。
  */
 export const runCandidateDirs = (root: string, runId: string): string[] => {
   const out: string[] = [];
   const experiments = join(root, "experiments");
+  const expNames: string[] = [];
   try {
     for (const entry of readdirSync(experiments, { withFileTypes: true })) {
       if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-      out.push(join(experiments, entry.name, "runs", runId));
+      expNames.push(entry.name);
     }
   } catch {
     // 无 experiments 目录＝纯 legacy 工作区
   }
+  // v3 全树优先于 v2 全树（同 run 在 v3/v2 并存时认 v3——不按实验名字典序偶然择一）
+  for (const name of expNames) out.push(join(experiments, name, runId));
+  for (const name of expNames) out.push(join(experiments, name, "runs", runId));
   out.push(join(root, "workspace", "runs", runId)); // legacy v1 桶（只读）
   out.push(join(root, "runs", runId)); // legacy ADR-0005 桶（只读）
   return out;
@@ -164,10 +191,14 @@ export interface BucketedRunEntry {
   dir: string;
 }
 
-/** run 目录特征集（单源——atf-ui looksLikeRun 同码 re-export；readOnlyTools 列表共用）。 */
+/** run 目录特征集（单源——atf-ui looksLikeRun 同码 re-export；readOnlyTools 列表共用）。
+ *  v3 形态（config／data／stage／runtime）与 v2 存量形态（prep／webui）同列：两类 run 都算 run。 */
 export const RUN_MARKER_RELS: readonly string[] = [
   join("launch", "launch_manifest.json"),
   "launch_manifest.json",
+  "config/iteration-config",
+  "runtime/webui",
+  "stage",
   "prep",
   "training",
   "webui",
@@ -213,12 +244,13 @@ export const bucketedRunEntries = (runsRoot: string, opts?: BucketedRunEntryOpti
  * 判据（完成证据在场才清，等待中的卡不动）：
  *   - kind=config_confirm 且 webui/config-snapshot.json 在场（saveConfigSnapshot＝确认完成产物）；
  *   - kind=publish_confirm 且 publish 段事实在场（appendSegmentFact＝放行完成产物）。
+ * 路径经 resolveRunSubdir/resolveRunFile 解析（v3 runtime/webui 优先，v2 存量 webui 兜底）。
  * 返回清理的 pending 文件清单（原路径）；IO 异常逐 run fail-open 跳过。
  */
 export const sweepAnsweredPendings = (runsRoot: string): string[] => {
   const swept: string[] = [];
   const consider = (dir: string): void => {
-    const pendingPath = join(dir, "webui", "pending-confirm.json");
+    const pendingPath = join(resolveRunSubdir(dir, "webui"), "pending-confirm.json");
     if (!existsSync(pendingPath)) return;
     let kind = "";
     try {
@@ -228,7 +260,7 @@ export const sweepAnsweredPendings = (runsRoot: string): string[] => {
       return; // 坏行不动（诚实优先）
     }
     const done =
-      (kind === "config_confirm" && existsSync(join(dir, "webui", "config-snapshot.json"))) ||
+      (kind === "config_confirm" && existsSync(join(resolveRunSubdir(dir, "webui"), "config-snapshot.json"))) ||
       (kind === "publish_confirm" && hasSegmentFact(dir, "publish"));
     if (!done) return;
     try {

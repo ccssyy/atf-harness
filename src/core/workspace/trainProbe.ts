@@ -22,6 +22,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { readProgress, progressFresh, type RunProgress } from "./runFacts.js";
+import { resolveRunSubdir } from "./runSubdirs.js";
 
 // gpu_queue：批㊶-S4b（编排主路径排队）与 trainingFace 既有排队通报共用 kind——
 // 类型闭集补真值（该 kind 此前已在运行时流通，client 徽标面同源消费）。
@@ -39,7 +40,7 @@ export interface ProbeAlert {
 export const OOM_PATTERN = /cuda out of memory/i;
 
 /** alerts.json 路径与上限（append＋截断）。 */
-export const alertsPathOf = (runDir: string): string => join(runDir, "webui", "alerts.json");
+export const alertsPathOf = (runDir: string): string => join(resolveRunSubdir(runDir, "webui"), "alerts.json");
 const ALERTS_MAX = 50;
 
 export const readAlerts = (runDir: string): ProbeAlert[] => {
@@ -64,7 +65,7 @@ const appendAlert = (runDir: string, alert: ProbeAlert): void => {
     if (recent !== undefined) return;
     alerts.push(alert);
     const trimmed = alerts.slice(-ALERTS_MAX);
-    const dir = join(runDir, "webui");
+    const dir = resolveRunSubdir(runDir, "webui");
     mkdirSync(dir, { recursive: true });
     writeFileSync(alertsPathOf(runDir), `${JSON.stringify(trimmed, null, 1)}\n`, "utf8");
   } catch {

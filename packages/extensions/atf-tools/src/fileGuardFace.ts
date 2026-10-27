@@ -23,6 +23,7 @@ import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { toFileAgentTool, FILE_TOOL_DEFINITIONS, type FileToolHost } from "../../../../src/agent/fileTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { resolveSessionRunWorkspace } from "../../../../src/core/workspace/runFacts.js";
+import { runFileCandidates } from "../../../../src/core/workspace/runLayout.js";
 import { listRegistryRecords, registryPathOf, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { deriveFileToolRoots, type DeriveFileRootsInput } from "../../../../src/agent/fileRoots.js";
 import { translateParameters, asToolValue, looseObjectOutput } from "./schemaTranslate.js";
@@ -327,7 +328,8 @@ const hardDenyFactsIO = (): HardDenyFacts => ({
       return false;
     }
   },
-  hasRunBinding: (dir) => existsSync(join(dir, "webui", "binding.json")),
+  // RunLayout/v3：绑定锚在 runtime/webui/binding.json（v2 存量 webui/ 只读兼容——两形态皆认）
+  hasRunBinding: (dir) => runFileCandidates(dir, "webui/binding.json").some((path) => existsSync(path)),
 });
 
 /** 单目标硬 deny 归类（纯函数——fs 事实注入）：target 须为已 resolve 绝对路径。

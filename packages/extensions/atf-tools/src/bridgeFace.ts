@@ -17,7 +17,7 @@ import {
   type ToolDefinition,
 } from "../../../../src/core/tools/index.js";
 import { appendNotification } from "../../../../src/core/workspace/trainProbe.js";
-import { resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
+import { registeredWorkspaceRoots, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { awaitGpuWindow, formatCardTable, gpuQueuePollMsFromEnv } from "./gpuQueueFace.js";
 import { toAtfAgentTool } from "../../../../src/agent/atfAgentTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
@@ -160,8 +160,13 @@ export const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; 
       const resolved = resolvePipelineRunDir(explicitWorkspace, runId);
       if (!("error" in resolved)) return resolved.runDir;
     }
-    // D115：run 目录单源（与 scratch 同一解析——run 树启动件/就绪检测的根）
-    return resolveRunDir(localRoots.runsRoot, runId, { workspace: sessionWorkspaceSlug(exec) });
+    // D115：run 目录单源（与 scratch 同一解析——run 树启动件/就绪检测的根）。
+    // RunLayout/v3 canonical 档带注册工作区根：v3 canonical run 住
+    // `<ws>/experiments/<exp>/<run_id>`，不带＝落到 runsRoot 同名残留目录（真机 ws2 事故同族）。
+    return resolveRunDir(localRoots.runsRoot, runId, {
+      workspace: sessionWorkspaceSlug(exec),
+      canonicalRoots: registeredWorkspaceRoots(localRoots.dshHome),
+    });
   })();
   const scratchDir = join(runDir, "scratch");
   // 显式工作区形态不代建目录：工作区路径是否存在由治理工具校验——此处无条件 mkdir
@@ -318,8 +323,12 @@ export const buildBridgeTools = (
             const segment = segmentByTool[definition.name];
             const runIdForFact = typeof args["run_id"] === "string" && args["run_id"] !== "" ? args["run_id"] : "default";
             if (segment !== undefined && localRoots !== undefined) {
-              // 批㊶Q增补三 段3：段事实/绑定落实际 run 目录（双形态解析——dir 已由 scratch 建立或存量平铺）
-              const factRunDir = resolveRunDir(localRoots.runsRoot, runIdForFact);
+              // 段事实/绑定落实际 run 目录（多形态解析单源——dir 已由 scratch 建立或存量平铺；
+              // canonical 档带注册工作区根，否则 v3 实验树内的 run 会落到 legacy 同名目录）
+              const factRunDir = resolveRunDir(localRoots.runsRoot, runIdForFact, {
+                workspace: sessionWorkspaceSlug(exec),
+                canonicalRoots: registeredWorkspaceRoots(),
+              });
               appendSegmentFact(factRunDir, segment, definition.name);
               // 批㊶-N N-5：会话绑定（桥接面——run_id 显式给出时才绑定；default 归属不明不绑）
               const sessionIdBridge = sessionIdOfExec(exec);

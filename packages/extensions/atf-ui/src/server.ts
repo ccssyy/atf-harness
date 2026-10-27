@@ -40,7 +40,7 @@ import {
 import { probeEvalServiceHealth, type EvalServiceHealthFace } from "../../../../src/core/workspace/evalServiceHealth.js";
 import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readNumTrainEpochs, trainerLogPathOf, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
 import { trainObsTick, readTrainlogTail, resetTrainObsForTest, type TrainlogTailFace } from "../../../../src/core/workspace/trainObsSync.js";
-import { bucketedRunEntries, flatRunDirNames, resolveRunDir, RUN_MARKER_RELS, sweepAnsweredPendings, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
+import { bucketedRunEntries, flatRunDirNames, resolveRunDir, resolveRunFile, runFileCandidates, runRelPathV3, RUN_MARKER_RELS, sweepAnsweredPendings, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
 import { displayOf, buildRunCandidates, writeDisplay } from "../../../../src/core/workspace/runDisplay.js";
 import {
   bindSessionRun, migrateFromRunBindings, readSessionBinding, resolveActiveRun, resolveBindingsHome, unbindSession,
@@ -57,7 +57,7 @@ import {
   ensureConventionSubdirs,
 } from "../../../../src/webui/storageSettings.js";
 import { detectAvailableGpuCount, checkTokenBudget } from "../../../../src/core/workspace/smartDefaults.js";
-import { listRegistryRecords, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
+import { listRegistryRecords, registeredWorkspaceRoots, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { readAlerts } from "../../../../src/core/workspace/trainProbe.js";
 
 /** Cordis 插件名。 */
@@ -90,6 +90,10 @@ const OUT_DIR = "atf-ui";
 
 /** monitor 快照路径单源（同步器写盘位＝client 半轮询位——批㉘注入面共用了同一推导）。 */
 export const monitorPathOf = (runsRoot: string): string => join(runsRoot, OUT_DIR, "monitor.json");
+
+/** 注册工作区根清单（resolveRunDir canonical 档注入源——RunLayout/v3 canonical run 住
+ *  `<ws>/experiments/<exp>/<run_id>`；不带只能查 runsRoot 平铺/桶，viewer 与文件回读全 404）。 */
+const canonicalRootsHere = (): string[] => registeredWorkspaceRoots();
 
 /** index HTML 注入（纯函数）：`</head>` 前插 per-instance monitor 路径全局；
  *  无 head 锚则整体前置。值经 JSON.stringify 转义，路径含特殊字符也安全。
@@ -615,7 +619,9 @@ export function scanRunDir(root: string, runId: string, liveness?: ScanLiveness,
 
 /** A2 案 a：绝对目录扫描变体（注册工作区实验树 run——runsRoot 之外，dir 由枚举面给定）。 */
 export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness, workspace: string | null = null, workspaceSource: "bucket" | "registry" = "bucket"): RunScan {
-  const has = (rel: string): boolean => existsSync(join(dir, rel));
+  // RunLayout/v3：产物探测按 V2_TO_V3_DIR_MAP 双向（v3 形态在前、v2 存量在后）——
+  // 调用面仍写 v2 名（webui/…、prep/…），落点解析单源在 runSubdirs，不在本函数散落第二套路径表。
+  const has = (rel: string): boolean => runFileCandidates(dir, rel).some((path) => existsSync(path));
   // 批㊶-M M-3＋D3/D4：段完成事实三源——①webui/segments.json（工具路径写）→
   // ②stage-<内核段>.summary.json exit 0（内核直跑落盘——run_id/stage 双对账，E10b 同款）
   // → ③启发式文件锚（降级兜底）。三源 OR；映射 SEGMENT_FACT_BY_KERNEL_STAGE 单源。
@@ -623,11 +629,12 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
   const segmentDone = (segment: string, heuristicFallback: boolean): boolean =>
     hasSegmentFact(dir, segment) || summaryFacts.has(segment) || heuristicFallback;
   const readJson = (rel: string): unknown => {
-    try {
-      return JSON.parse(readFileSync(join(dir, rel), "utf8")) as unknown;
-    } catch {
-      return null;
+    for (const path of runFileCandidates(dir, rel)) {
+      try {
+        return JSON.parse(readFileSync(path, "utf8")) as unknown;
+      } catch { /* 该形态缺席/坏行——试下一形态 */ }
     }
+    return null;
   };
   const reportDir = join(dir, "report");
   const reportFiles = existsSync(reportDir) ? readdirSync(reportDir).filter((f) => f.endsWith(".md") || f.endsWith(".json")) : [];
@@ -891,8 +898,9 @@ export const buildIterationSummary = (
     return { key: entry.key, label: entry.label, value, source, meaning };
   });
 
-/** IterationConfig 落点（批㉙ 链产物形态：<run>/prep/iteration-config/iteration-config.json）。 */
-export const iterationConfigPathOf = (runDir: string): string => join(runDir, "prep", "iteration-config", "iteration-config.json");
+/** IterationConfig 落点（RunLayout/v3：<run>/config/iteration-config/iteration-config.json；
+ *  v2 存量 <run>/prep/iteration-config/iteration-config.json 只读兼容——两个形态均为目录形态）。 */
+export const iterationConfigPathOf = (runDir: string): string => resolveRunFile(runDir, "prep/iteration-config/iteration-config.json");
 
 const readJsonFile = (abs: string): unknown => {
   try {
@@ -905,7 +913,7 @@ const readJsonFile = (abs: string): unknown => {
 /** 批㉛段2：单 run 发起面扫描（train.sh/快照/IterationConfig/prelaunch 报告/摘要）。 */
 export const buildLaunchSurface = (dir: string): LaunchSurface => {
   const trainSh = existsSync(join(dir, "launch", "train.sh"));
-  const snapshotPath = join(dir, "webui", "config-snapshot.json");
+  const snapshotPath = resolveRunFile(dir, "webui/config-snapshot.json");
   const snapshot = hasConfigSnapshotFile(snapshotPath)
     ? (readJsonFile(snapshotPath) as { confirmed?: Record<string, string>; sources?: Record<string, string> } | null)
     : null;
@@ -954,7 +962,7 @@ export const buildLaunchSurface = (dir: string): LaunchSurface => {
   return {
     train_sh: trainSh,
     config_snapshot: existsSync(snapshotPath),
-    iteration_config: iter !== null ? "prep/iteration-config/iteration-config.json" : null,
+    iteration_config: iter !== null ? runRelPathV3(join("prep", "iteration-config", "iteration-config.json")) : null,
     prelaunch_report: prelaunch,
     summary,
     token_budget: { rows: budgetRows, violations: budgetViolations, pixel_pair: pixelPair },
@@ -1075,7 +1083,7 @@ export const looksLikeRun = (dir: string): boolean =>
  *  （atf-prodtest-20261021 子 run prep+training+webui+eval ≥4 命中；H21 夹具 run-x 走锚 ②）。 */
 export const isQualifyingRunChild = (child: string): boolean => {
   if (existsSync(join(child, "run.json"))) return true;
-  if (existsSync(join(child, "webui", "segments.json"))) return true;
+  if (runFileCandidates(child, "webui/segments.json").some((path) => existsSync(path))) return true;
   if (existsSync(join(child, "stage-register.summary.json"))) return true;
   return RUN_MARKER_RELS.filter((rel) => existsSync(join(child, rel))).length >= 2;
 };
@@ -2504,7 +2512,7 @@ export const sessionBindingRouteHandler = (deps: {
         return;
       }
       if (raw !== null) {
-        bindDir = resolveRunDir(deps.runsRoot, (raw as string).trim());
+        bindDir = resolveRunDir(deps.runsRoot, (raw as string).trim(), { canonicalRoots: canonicalRootsHere() });
         if (!existsSync(bindDir)) {
           respondJson(404, { error: "run_not_found", message: `实验不存在：${(raw as string).trim()}` });
           return;
@@ -2512,7 +2520,7 @@ export const sessionBindingRouteHandler = (deps: {
       }
     }
     if (renameParsed !== null) {
-      const renameDir = resolveRunDir(deps.runsRoot, renameParsed.runId);
+      const renameDir = resolveRunDir(deps.runsRoot, renameParsed.runId, { canonicalRoots: canonicalRootsHere() });
       if (!existsSync(renameDir)) {
         respondJson(404, { error: "run_not_found", message: `实验不存在：${renameParsed.runId}` });
         return;
@@ -2612,8 +2620,8 @@ export function apply(
           handler: viewerRouteHandler({
             runsRoot: resolved.runsRoot,
             // 批㊶Q增补三 段3：viewer 目录发现走双形态解析（平铺存量＋分桶新形态）
-            viewersOf: (runId) => discoverViewerDirs(resolveRunDir(resolved.runsRoot, runId)),
-            runDirOf: (runId) => resolveRunDir(resolved.runsRoot, runId),
+            viewersOf: (runId) => discoverViewerDirs(resolveRunDir(resolved.runsRoot, runId, { canonicalRoots: canonicalRootsHere() })),
+            runDirOf: (runId) => resolveRunDir(resolved.runsRoot, runId, { canonicalRoots: canonicalRootsHere() }),
             reject: (req) => connection.requestRejection(req),
           }),
         });
@@ -2879,7 +2887,7 @@ export function apply(
         return;
       }
       // run 目录双形态解析（分桶/平铺——viewer 路由 runDirOf 同源 resolveRunDir，不直拼 runsRoot/runId）
-      let baseDir = resolve(resolveRunDir(resolved.runsRoot, runId));
+      let baseDir = resolve(resolveRunDir(resolved.runsRoot, runId, { canonicalRoots: canonicalRootsHere() }));
       // runsRoot 本身可能经符号链接落盘（dev 实锚：runs → datasets/.../runs）——containment
       // 基准必须取 realpath 归一后的 run 目录，否则合法文件恒被判越界。
       try {

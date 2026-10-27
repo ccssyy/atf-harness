@@ -68,7 +68,8 @@
  *   --reuse-experiment-setup 全局三参（内核 argparse 已声明、多段读取；给才下传，D93）。
  *   本工具下传 argv 只含上述参数，禁传内核未声明
  *   参数、禁拼第二套路径。
- *   落点（唯一）＝<workspace_path>/experiments/<exp>/runs/<run_id>（RunLayout/v2）——本工具内 resolveRunDir 退役
+ *   落点（唯一）＝<workspace_path>/experiments/<exp>/<run_id>（RunLayout/v3；v2 存量
+ *   <exp>/runs/<run_id> 只读兼容）——本工具内 resolveRunDir 退役
  *   （内核与 harness 同一决定者，其余工具不受影响）。
  *   register 段准入口径（E8b·内核 b13 起）：非空 run 目录不再整体拦——带合法
  *   run.json 即 canonical 复用，同一 run 可继续登记其它单据（无需 --rerun）；
@@ -94,13 +95,14 @@
  * 「仅 owner 可点；执行方不得代点」。
  */
 import { execFile } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { appendSegmentFact, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
+import { resolveRunFile, resolveRunSubdir, runFileCandidates } from "../../../../src/core/workspace/runLayout.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
 // E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与本次训练方案卡同源）
@@ -316,26 +318,56 @@ export const constructionParamsApprovalLines = (input: {
 
 // ── E3 补：run 落点解析与内核 canonical RunLayout 对齐 ──
 
-/** E3（缺口 D 执行中发现的落点公式缺口）：内核 run_layout.resolve_run_dir 的 canonical
- *  形态＝<workspace>/workspace/runs/<run_id>（RunLayout v1——上次八段实锚：workspace=
- *  my-zito 根、run 树落 <root>/workspace/runs/），legacy <wp>/runs/<id> 仅旧 run 兼容。
- *  本工具原 runDir 公式恒 <wp>/runs/<id>——在 canonical 树 run 上事实轨/段摘要回读/
- *  E3 预算三参快照兜底全部读错树。本函数与内核同口径：canonical 在场即用 canonical，
- *  否则维持 legacy 公式（新建 run 形态不变）；canonical 为软链拒（E2 同纪律——
- *  不接受镜像/软链自救形态，不可绕过）。 */
+/** run 落点解析（与内核 RunLayout/v3 同序，单源）：
+ *   ① v3 实验树 `<wp>/experiments/<exp>/<runId>`（canonical，唯一写面与主读面）；
+ *   ② v2 实验树 `<wp>/experiments/<exp>/runs/<runId>`（存量只读兼容）；
+ *   ③ legacy `<wp>/workspace/runs/<runId>`（v1 固定名桶）／④ `<wp>/runs/<runId>`。
+ *  ①② 与 ③（v1 固定名桶）归 "canonical"，④ 归 "legacy"（存量兼容）。全缺＝新建：v3 的 run 必属某实验
+ *  （exp 未知不可推导），故维持 legacy 公式不变——不代建目录、不猜实验归属（归属由内核
+ *  create_experiment 决定）。命中项为软链即拒（E2 同纪律——不接受镜像/软链自救形态）。 */
 export const resolvePipelineRunDir = (
   workspacePath: string,
   runId: string,
 ): { runDir: string; layout: "canonical" | "legacy" } | { error: "run_dir_symlink_rejected"; note: string } => {
-  const canonical = join(workspacePath, "workspace", "runs", runId);
-  try {
-    if (existsSync(canonical)) {
-      if (lstatSync(canonical).isSymbolicLink()) {
+  const symlinkRejected = (dir: string): { error: "run_dir_symlink_rejected"; note: string } | null => {
+    try {
+      if (lstatSync(dir).isSymbolicLink()) {
         return { error: "run_dir_symlink_rejected", note: "run 目录落点是软链——请使用真实工作区路径（不接受镜像/软链）" };
       }
-      return { runDir: canonical, layout: "canonical" };
+    } catch { /* 不存在/不可探测——按不命中处理 */ }
+    return null;
+  };
+  const experiments = join(workspacePath, "experiments");
+  const expNames: string[] = [];
+  try {
+    for (const entry of readdirSync(experiments, { withFileTypes: true })) {
+      if (entry.isDirectory() && !entry.name.startsWith(".")) expNames.push(entry.name);
     }
-  } catch { /* 探测失败按不存在处理——落 legacy 公式 */ }
+  } catch { /* 无实验树＝纯 legacy 工作区 */ }
+  // v3 全树优先于 v2 全树（同 run 在 v3/v2 并存时认 v3——不按实验名字典序偶然择一）
+  for (const v3 of [true, false]) {
+    for (const name of expNames) {
+      const candidate = v3 ? join(experiments, name, runId) : join(experiments, name, "runs", runId);
+      if (!existsSync(candidate)) continue;
+      const rejected = symlinkRejected(candidate);
+      if (rejected !== null) return rejected;
+      return { runDir: candidate, layout: "canonical" };
+    }
+  }
+  // v1 固定名桶 `<wp>/workspace/runs/<id>` 仍归 canonical 档（存量只读兼容，语义不变）；
+  // `<wp>/runs/<id>`（ADR-0005 旧桶）才是 legacy。
+  const v1Bucket = join(workspacePath, "workspace", "runs", runId);
+  if (existsSync(v1Bucket)) {
+    const rejected = symlinkRejected(v1Bucket);
+    if (rejected !== null) return rejected;
+    return { runDir: v1Bucket, layout: "canonical" };
+  }
+  const legacy = join(workspacePath, "runs", runId);
+  if (existsSync(legacy)) {
+    const rejected = symlinkRejected(legacy);
+    if (rejected !== null) return rejected;
+    return { runDir: legacy, layout: "legacy" };
+  }
   return { runDir: join(workspacePath, "runs", runId), layout: "legacy" };
 };
 
@@ -378,7 +410,7 @@ export const VISIBLE_DEVICES_SOURCE_LABEL: Readonly<Record<VisibleDevicesSource,
 /** 快照里的卡位值（confirmed.visible_devices，字符串面；空/非法形态原样返回给调用方判）。 */
 export const snapshotVisibleDevicesOf = (runDir: string): string => {
   try {
-    const parsed = JSON.parse(readFileSync(join(runDir, "webui", "config-snapshot.json"), "utf8")) as {
+    const parsed = JSON.parse(readFileSync(resolveRunFile(runDir, "webui/config-snapshot.json"), "utf8")) as {
       confirmed?: Record<string, unknown>;
     };
     const raw = parsed?.confirmed?.["visible_devices"];
@@ -435,7 +467,7 @@ export const isSafePositiveInteger = (raw: unknown): raw is number =>
 export const snapshotTokenParamsOf = (runDir: string): ExperimentTokenParams => {
   const out: ExperimentTokenParams = {};
   try {
-    const parsed = JSON.parse(readFileSync(join(runDir, "webui", "config-snapshot.json"), "utf8")) as {
+    const parsed = JSON.parse(readFileSync(resolveRunFile(runDir, "webui/config-snapshot.json"), "utf8")) as {
       confirmed?: Record<string, unknown>;
     };
     const confirmed = parsed?.confirmed;
@@ -563,7 +595,7 @@ export const snapshotTrainingOverridesOf = (
   const out: Record<string, string> = {};
   let cutoffLen: number | undefined;
   try {
-    const parsed = JSON.parse(readFileSync(join(runDir, "webui", "config-snapshot.json"), "utf8")) as {
+    const parsed = JSON.parse(readFileSync(resolveRunFile(runDir, "webui/config-snapshot.json"), "utf8")) as {
       confirmed?: Record<string, unknown>;
     };
     const confirmed = parsed?.confirmed;
@@ -711,7 +743,7 @@ export type TrainingOutputDirSource = "iteration_config" | "kernel_layout";
 export const trainingOutputDirOf = (
   runDir: string,
 ): { outputDir: string; source: TrainingOutputDirSource } => {
-  for (const candidate of [join(runDir, "prep", "iteration-config.json"), join(runDir, "prep", "iteration-config", "iteration-config.json")]) {
+  for (const candidate of [...runFileCandidates(runDir, "prep/iteration-config.json"), ...runFileCandidates(runDir, "prep/iteration-config/iteration-config.json")]) {
     try {
       const parsed = JSON.parse(readFileSync(candidate, "utf8")) as {
         output?: { output_dir?: unknown };
@@ -755,7 +787,7 @@ export const buildPipelineTool = (
     name: "atf_pipeline_stage",
     description:
       `按段驱动 walkthrough_pipeline 段模式（审批必经）：单段触发 ${PIPELINE_STAGES.join("/")} 之一。` +
-      `落点＝<workspace_path>/experiments/<exp>/runs/<run_id>（与内核同源唯一落点）；workspace_path 可省（缺省解析并回显），` +
+      `落点＝<workspace_path>/experiments/<exp>/<run_id>（与内核同源唯一落点·RunLayout/v3；v2 存量 <exp>/runs/<run_id> 只读兼容）；workspace_path 可省（缺省解析并回显），` +
       `run_id 必填；source_root 仅 register 段必填（其余段可省——缺了也不影响非 register 段）。` +
       `register 段准入口径（一个 run 可承载多类单据）：同一 run 可继续登记其它单据（多类联合训练共用一个 run，` +
       `无需换 run-id——逐类带各自 doc_type 调 register 即可）；同单据本段重复登记为幂等跳过` +
@@ -797,7 +829,7 @@ export const buildPipelineTool = (
       `exit 2（blocked）／exit 3（环境错误）一律零写入。审批面板放行后才会执行。`,
     parameters: {
       stage: { type: "string", required: true, enum: [...PIPELINE_STAGES], description: "要触发的内核管线段（八段原文，单段）" },
-      run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/experiments/<exp>/runs/<run_id>；未指定实验归入当日「未命名实验」）" },
+      run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/experiments/<exp>/<run_id>·RunLayout/v3；未指定实验归入当日「未命名实验」）" },
       workspace_path: { type: "string", description: "workspace 根（可选覆盖——缺省按会话 cwd→工作区身份→实例配置解析，并回显所用根与依据；显式给时必须含 .atf/workspace.json 或 datasets+splits）" },
       source_root: { type: "string", description: "源文档根（仅 register 段必填；其余段可省）" },
       base_model_path: { type: "string", description: "本地模型目录绝对路径（含 config.json）；模型家族名（如 qwen3_vl）不可当路径用（training_prep 段必填，其它段忽略；assemble=true 时豁免——内核盘上再水合单源，恢复不了内核 blocked 指路）" },
@@ -1117,7 +1149,9 @@ export const buildPipelineTool = (
         const groupingConfirm = args.grouping_confirm === true;
         const mode5Random = typeof args.mode5_random === "number" ? Number(args.mode5_random) : undefined;
         const writeAdviceFile = (name: string, payload: unknown): string => {
-          const prepDir = join(runDir, "prep");
+          // RunLayout/v3：prep → data（存量 v2 run 的 prep/ 经 resolveRunSubdir 只读兼容）；
+          // 产物路径以显式路径回传内核（--mode5-advice-stats/--targeted-advice），落点不猜
+          const prepDir = resolveRunSubdir(runDir, "prep");
           mkdirSync(prepDir, { recursive: true });
           const target = join(prepDir, name);
           writeFileSync(target, JSON.stringify(payload, null, 1) + "\n", "utf-8");
@@ -1146,7 +1180,7 @@ export const buildPipelineTool = (
         constructionParams = { groupingConfirm, mode5Random, targetedAdvice };
         // 风险信号在场才带：targeted evidence 的出处校验要用它（缺则内核标未校验）
         const riskDocType = typeof args.doc_type === "string" && args.doc_type.trim() !== "" ? args.doc_type.trim() : "do";
-        const riskPath = join(runDir, "prep", "risk-signals", riskDocType, "field_risk_signals.json");
+        const riskPath = resolveRunFile(runDir, `prep/risk-signals/${riskDocType}/field_risk_signals.json`);
         if (existsSync(riskPath)) constructionAdvicePaths.riskSignals = riskPath;
       }
       // A 面采纳卡：agent 给了建议 → 先问 owner「是否按建议执行」（卡收意愿，审批卡授权）。

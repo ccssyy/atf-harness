@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { listRuns, queryNvidiaSmi, queryNvidiaSmiAll, queryGpuComputeApps } from "../../../../src/webui/readOnlyTools.js";
 import { buildCardOccupancyTable, formatCardTable } from "./gpuQueueFace.js";
 import { resolveRunDir } from "../../../../src/core/workspace/runLayout.js";
-import { listRegistryRecords, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
+import { registeredWorkspaceRoots } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import {
@@ -54,11 +54,8 @@ const readMetrics = (runsBase: string, runId: string, canonicalRoots?: readonly 
   }
 };
 
-/** 注册工作区根清单（resolveRunDir canonical 档——跨任务全局面解析用）。 */
-const canonicalRootsOf = (dshHome: string | undefined): string[] =>
-  listRegistryRecords(dshHome ?? resolveDshHome())
-    .filter((record) => record.exists)
-    .map((record) => record.path);
+/** 注册工作区根清单（resolveRunDir canonical 档——跨任务全局面解析用；单源在 registry）。 */
+const canonicalRootsOf = (dshHome: string | undefined): string[] => registeredWorkspaceRoots(dshHome);
 
 /** 跨任务 scope 审批（既有 approvalFace 单通道——E5 四行模板；ctx 缺席＝unavailable fail-closed）。 */
 const approveScopeOrDeny = async (
@@ -207,8 +204,11 @@ export const buildFileTools = (runsRoot: string, scopeDeps?: FileToolScopeDeps):
         return asToolValue({ run_id: args.run_id, exists: false, error: "scope_unresolved", note: SCOPE_UNRESOLVED_NOTE });
       }
       const runsDir = workspaceRunsDir(current.root);
-      if (runsDir !== null && existsSync(join(runsDir, args.run_id))) {
-        const path = join(resolveRunDir(runsDir, args.run_id), rel);
+      // 本区解析：canonical 档只给当前工作区根（RunLayout/v3 实验树
+      // `<ws>/experiments/<exp>/<run_id>`）——不塞全量注册根，否则跨区 run 会不经审批被读到。
+      const inScopeDir = resolveRunDir(runsDir ?? runsRoot, args.run_id, { canonicalRoots: [current.root] });
+      if (runsDir !== null && existsSync(inScopeDir)) {
+        const path = join(inScopeDir, rel);
         if (!existsSync(path)) return asToolValue({ run_id: args.run_id, path: rel, exists: false, note: "报告不存在（该 run 无此段记录）" });
         return asToolValue({ run_id: args.run_id, path: rel, exists: true, text: readFileSync(path, "utf8").slice(0, 8000) });
       }

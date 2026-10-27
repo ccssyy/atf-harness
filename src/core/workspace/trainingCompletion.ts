@@ -26,6 +26,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { appendSegmentFact } from "./segmentFacts.js";
+import { resolveRunSubdir } from "./runSubdirs.js";
 
 /** completion.json 相对落点。 */
 export const TRAINING_COMPLETION_REL = join("training", "completion.json");
@@ -89,7 +90,7 @@ export const writeTrainingCompletion = (runDir: string, completion: TrainingComp
  *  落 prep 侧；checkpoint-<数字> 取最大编号；无＝null）。 */
 export const latestCheckpointOf = (runDir: string): string | null => {
   let best: { name: string; n: number } | null = null;
-  for (const parent of [join(runDir, "training"), join(runDir, "prep", "iteration-config")]) {
+  for (const parent of [join(runDir, "training"), resolveRunSubdir(runDir, "prep/iteration-config")]) {
     let entries: string[];
     try {
       entries = readdirSync(parent);

@@ -40,12 +40,14 @@ import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTransl
 import { approvalDeniedResult, buildApprovalReason, requestApproval, type ApprovalFace } from "./approvalFace.js";
 import { buildRunTrainingTool, type TrainingToolsConfig } from "./trainingFace.js";
 import { buildPipelineTool, resolvePipelineRunDir } from "./pipelineFace.js";
+import { resolveRunSubdir } from "../../../../src/core/workspace/runLayout.js";
 import { listDocSlots, countJsonlRows, runDocRegistry } from "../../atf-ui/src/docSlots.js";
 import { listRegistryRecords, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { formatRowCount } from "../../atf-ui/src/jointTrainState.js";
 import type { RegistryWorkspaceSeed } from "../../atf-ui/src/server.js";
 
-/** 内核 assemble 合并账文件名（prep/variants 根——b12 assemble 产物，行级账驱动倍率复制）。 */
+/** 内核 assemble 合并账文件名（data/variants 根·v3；v2 存量 prep/variants 只读兼容——
+ *  b12 assemble 产物，行级账驱动倍率复制）。 */
 export const JOINT_MANIFEST_FILENAME = "merge_manifest.json";
 /** harness 侧倍率账注记（与内核合并账并列，不改写内核产物）。 */
 export const JOINT_OVERSAMPLE_NOTE_FILENAME = "harness-oversample.json";
@@ -334,7 +336,7 @@ export const buildJointTrainTool = (ctx: { get(service: string): unknown }, cfg:
       }
 
       // ── ④ 倍率（全 1 直通零写；行级账驱动确定性复制）＋倍率账注记 ──
-      const variantsRoot = join(runDir, "prep", "variants");
+      const variantsRoot = resolveRunSubdir(runDir, "prep/variants");
       const trainPath = join(variantsRoot, "train.jsonl");
       const manifestPath = join(variantsRoot, JOINT_MANIFEST_FILENAME);
       let oversample = { ok: true, text: "", changed: false, final_rows: 0 } as JointOversampleOutcome;

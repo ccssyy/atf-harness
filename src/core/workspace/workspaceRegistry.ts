@@ -406,6 +406,17 @@ export const listRegistryRecords = (dshHome: string): Array<RegistryRecordView &
   return out;
 };
 
+/** 注册工作区根清单（存在于本机者）——`resolveRunDir` canonical 档的注入源。
+ *
+ *  RunLayout/v3 canonical run 住在 `<ws>/experiments/<exp>/<run_id>`，故凡是要按 run_id
+ *  定位 run 的调用点都必须带本清单（缺省＝只查平铺/桶＝落到 legacy 桶，webui 落错树即由此来）。
+ *  只读探测（stat 级），与 listRegistryRecords 同源同口径；dshHome 缺省按 resolveDshHome() 解析。
+ */
+export const registeredWorkspaceRoots = (dshHome?: string): string[] =>
+  listRegistryRecords(dshHome ?? resolveDshHome())
+    .filter((record) => record.exists)
+    .map((record) => record.path);
+
 
 /** 默认工作区（B3/D-1、D-4）：未指定工作区的会话的确定落点。
  *

@@ -13,8 +13,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import { registeredWorkspaceRoots } from "./workspaceRegistry.js";
 import { readBindings } from "./runFacts.js";
 import { bucketedRunEntries, flatRunDirNames, resolveRunDir } from "./runLayout.js";
+import { runSubdirCandidates } from "./runSubdirs.js";
 
 /** 绑定来源闭集：auto_tool＝工具对既有 run 成功动作；user_pick＝用户显式选择；
  *  carried＝会话继承；created＝本会话新建实验后自动绑定；migrated＝自 run 侧账本聚合。 */
@@ -176,7 +178,9 @@ export const resolveActiveRun = (home: string, runsRoot: string, sessionId: stri
     return { run: null, runId: null, workspace: record.workspace, reason: record.unbound_reason ?? "cleared" };
   }
   const runId = record.active_run_id;
-  const runDir = resolveRunDir(runsRoot, runId);
+  // canonical 档必须带注册工作区根：v3 canonical run 住 `<ws>/experiments/<exp>/<run_id>`，
+  // 不带＝只查平铺/桶＝已绑定 run 被误判 stale（D49 单源缺口）。
+  const runDir = resolveRunDir(runsRoot, runId, { canonicalRoots: registeredWorkspaceRoots(home) });
   if (!existsSync(runDir)) return { run: null, runId, workspace: record.workspace, reason: "stale" };
   return { run: runDir, runId, workspace: record.workspace, reason: "bound" };
 };
@@ -198,9 +202,11 @@ export const migrateFromRunBindings = (home: string, runsRoot: string): number =
   };
   try {
     if (!existsSync(runsRoot)) return 0;
+    const hasBinding = (runDir: string): boolean =>
+      runSubdirCandidates(runDir, "webui").some((dir) => existsSync(join(dir, "binding.json")));
     for (const level1 of flatRunDirNames(runsRoot)) {
       const level1Path = join(runsRoot, level1);
-      if (existsSync(join(level1Path, "webui", "binding.json"))) {
+      if (hasBinding(level1Path)) {
         visit(level1Path);
         continue;
       }
@@ -215,7 +221,7 @@ export const migrateFromRunBindings = (home: string, runsRoot: string): number =
       }
       for (const runId of children) {
         const runDir = join(level1Path, runId);
-        if (existsSync(join(runDir, "webui", "binding.json"))) visit(runDir);
+        if (hasBinding(runDir)) visit(runDir);
       }
     }
   } catch {
