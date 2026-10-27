@@ -455,9 +455,11 @@ describe("RunLayout/v3 写侧落名——v3 树不写 v2 名（声明闭集单�
 //
 // ── 复跑步骤 ──
 //   1) 空 workspace 上真造一棵 v3 run（必须显式给 experiment_id——run 必属某个实验；
-//      canonical 落位**没有 runs/ 中间层**。注意：内核 create_run / run_dir / locate_run_dir /
-//      run_root_containing 的 docstring 仍写 <ws>/experiments/<exp>/runs/<run_id>，是迁移漏网的
-//      v2 措辞，别照 docstring 建——照它建出来就是 v2 形态）：
+//      canonical 落位**没有 runs/ 中间层**。注意：**v3 迁移前的文档曾写**
+//      <ws>/experiments/<exp>/runs/<run_id>；HEAD 已由 2af934d9 对齐（run_layout.py 的
+//      create_run / run_dir / locate_run_dir / run_root_containing 均已是无 runs/ 层的 v3 形态），
+//      但 workspace_init.py 的 run create --experiment help 仍残留该措辞（该段 help 还写 RunLayout/v1）。
+//      故一律**以 canonical_run_path() 的实际返回为准**，别照任何文档手建——照旧文档建出来就是 v2 形态）：
 //        create_run(ws, "v3s-01", experiment_id="20261027-adhoc")
 //        → 预期 <ws>/experiments/20261027-adhoc/v3s-01/   （无 runs/ 这一层）
 //   2) 用 harness helper 真写：appendSegmentFact / appendBinding / resolveRunFile(webui/config-snapshot.json)
@@ -479,7 +481,8 @@ describe("RunLayout/v3 写侧落名——v3 树不写 v2 名（声明闭集单�
 //     判据                                 | 比什么                    | 抓不到什么
 //     layout_undeclared_dir               | 树 vs 自己的 dirs 声明     | 自洽的旧树（v2 树 + v2 dirs）
 //     layout_version_position_mismatch    | 声明 vs 自己的位置         | 桶位（legacy/v1）不判；无 run.json 不判
-//                                          (skills 侧 73cdcf39：v3位↔v3、v2位↔v2，两向都判)
+//                                          (skills 侧：判据 73cdcf39 ＋ 四向断言入仓 7ec16c37，
+//                                           test_check_run_layout 11 passed；v3位↔v3、v2位↔v2 两向都判)
 //     layout_scanned（读出字段，非 finding）| 实际扫到的代际           | 需人去看，不会让 verdict 变 fail
 //   故验收判据＝ layout_scanned 必须为 {"RunLayout/v3": …} 且 findings: []；
 //   出现 {"RunLayout/v2": …} 即说明造错了树（这就是"代际读出"，别指望某条 finding 替你报）。
