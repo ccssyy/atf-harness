@@ -405,7 +405,9 @@ describe("RunLayout/v3 写侧落名——v3 树不写 v2 名（声明闭集单�
     expect(resolveRunSubdir(runDir, "webui")).toBe(join(runDir, "webui"));
   });
 
-  it("⑦ v3 树真写（段事实＋绑定＋快照）：顶层只多出 runtime/，且每个新目录都在 run.json.dirs 声明内", () => {
+  it("⑦ 空 v3 树真写（段事实＋绑定＋快照）：顶层只多出 runtime/，且每个新目录都在 run.json.dirs 声明内", () => {
+    // 前提是「空树」（只有 run.json）：新增集合才有意义地等于 ["runtime"]。
+    // 满骨架树（create_run 产出）见 ⑧——那里 runtime/ 早已建好，新增集合应为空集。
     const declared = new Set(RUN_LAYOUT_V3);
     const runDir = v3Run();
     const before = new Set(topDirsOf(runDir));
@@ -422,6 +424,27 @@ describe("RunLayout/v3 写侧落名——v3 树不写 v2 名（声明闭集单�
     expect(existsSync(join(runDir, "runtime", "webui", "binding.json"))).toBe(true);
     expect(existsSync(join(runDir, "runtime", "webui", "config-snapshot.json"))).toBe(true);
     expect(existsSync(join(runDir, "webui"))).toBe(false);
+  });
+
+  it("⑧ 满骨架 v3 树（create_run 产出形态）真写：顶层新增集合为空集（runtime/ 早已建好），只落声明内路径", () => {
+    // 真机 v3 run 就是这种形态（实测 /tmp/v3s/ws/experiments/20261027-adhoc/v3s-01：
+    // 9 类顶层齐、runtime/{loop,webui} 已在）。此处若沿用 ⑦ 的「等值 [runtime]」会假红，
+    // 故断言改为「新增集合 ⊆ 声明闭集」＋「本次写入确实落在 runtime/webui 内」。
+    const declared = new Set(RUN_LAYOUT_V3);
+    const runDir = v3Run();
+    for (const rel of RUN_LAYOUT_V3) mkdirSync(join(runDir, rel), { recursive: true }); // 满骨架
+    const before = new Set(topDirsOf(runDir));
+
+    appendSegmentFact(runDir, "register", "atf_admit_data");
+    appendBinding(runDir, "sess-v3");
+    expect(resolveRunFile(runDir, "webui/config-snapshot.json")).toBe(join(runDir, "runtime", "webui", "config-snapshot.json"));
+
+    const added = topDirsOf(runDir).filter((name) => !before.has(name));
+    expect(added).toEqual([]); // 满骨架树上不该冒出任何新顶层目录
+    for (const name of added) expect(declared.has(name), name).toBe(true); // 不变式：新增只可能在声明闭集内
+    expect(existsSync(join(runDir, "runtime", "webui", "segments.json"))).toBe(true);
+    expect(existsSync(join(runDir, "webui"))).toBe(false);
+    expect(existsSync(join(runDir, "prep"))).toBe(false);
   });
 });
 
@@ -444,5 +467,14 @@ describe("RunLayout/v3 写侧落名——v3 树不写 v2 名（声明闭集单�
 //   期望：findings ["layout_undeclared_dir:run-v3:webui(...)"] / verdict fail
 //   删掉后回 pass。
 //
-// 实测记录（2026-10-27，A800_5005，合成样本；本机 RunLayout/v3 存量 run = 0）：
-//   写后 pass、塞 webui/ 后 fail、删掉回 pass——三方对上。
+// 实测记录（2026-10-27，A800_5005）：
+//   ① 存量：全机 RunLayout/v3 run = 0（os.walk，相对扫描根 MAXDEPTH≥8 饱和口径；
+//      run.json=22 / legacy=37 / 总 59，两方独立复现）。
+//   ② 真机跑过 v3，但数据是合成的：/tmp/v3s/ws  (dev:ino=116:247792136)
+//      内核 create_run + register 真落位的 v3 run（9 类顶层、config/ 4 件、data/ 7 件、
+//      runtime/{loop,webui} 在位），check_run_layout → layout_scanned {"RunLayout/v3":1}
+//      / findings [] / pass；harness helper 对该树解析：webui→runtime/webui、
+//      loop→runtime/loop、prep→data、experiment-setup→config/experiment-setup，
+//      全部落在 run.json.dirs 声明内。
+//   ③ 合成样本对账：写后 pass、手工塞 webui/ 后 fail、删掉回 pass——三方对上。
+//   （②是唯一非合成数据来源的样本，但数据内容仍是假数据——引用时两句话一起写。）
