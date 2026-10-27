@@ -475,9 +475,18 @@ describe("RunLayout/v3 写侧落名——v3 树不写 v2 名（声明闭集单�
 //   错形态**不会**被 layout_undeclared_dir 判死：它比的是「树 vs **该 run 自己声明的** dirs」，
 //   于是"整棵树是旧形态但内部自洽"（如 layout_version=RunLayout/v2 + 18 项 v2 dirs 全建）
 //   会 findings 为空、verdict pass。写侧落名护栏同理——它只判"是不是 v3"，v2 树判 false → 写 v2 名 → 也自洽。
-//   真正的判据是**代际读出**：layout_scanned 出现 {"RunLayout/v2": …} 即说明造错了树；
-//   v3 的正确读数必须是 {"RunLayout/v3": …} 且 findings: []。
-//   两向对照实测（2026-10-27）：自洽 v2 树 → pass；同一棵树加未声明 runtime/ → layout_undeclared_dir / fail。
+//   三条判据各有缺口，**合起来才覆盖"代际"这件事**（单看任何一条都会留缺口——这轮反复踩的就是它）：
+//     判据                                 | 比什么                    | 抓不到什么
+//     layout_undeclared_dir               | 树 vs 自己的 dirs 声明     | 自洽的旧树（v2 树 + v2 dirs）
+//     layout_version_position_mismatch    | 声明 vs 自己的位置         | 桶位（legacy/v1）不判；无 run.json 不判
+//                                          (skills 侧 73cdcf39：v3位↔v3、v2位↔v2，两向都判)
+//     layout_scanned（读出字段，非 finding）| 实际扫到的代际           | 需人去看，不会让 verdict 变 fail
+//   故验收判据＝ layout_scanned 必须为 {"RunLayout/v3": …} 且 findings: []；
+//   出现 {"RunLayout/v2": …} 即说明造错了树（这就是"代际读出"，别指望某条 finding 替你报）。
+//   两向对照实测（2026-10-27，我自己跑的）：
+//     · 自洽 v2 树 → layout_scanned {v2:1} / findings [] / pass（判不死，故不能当兜底）
+//     · 同树加未声明 runtime/ → layout_undeclared_dir / fail
+//     · v3 位自称 v2 → layout_version_position_mismatch / fail；v2 位自称 v2 → pass（存量零误伤）
 //
 // ── 实测记录（2026-10-27，A800_5005）──
 //   ① 存量普查：全机 RunLayout/v3 run = 0
