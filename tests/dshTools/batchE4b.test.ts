@@ -268,7 +268,16 @@ const manualCtx = (askLog: string[], approvals: string[]) => ({
 const configToolOf = (runsRoot: string, askLog: string[], approvals: string[]): DshToolLike => {
   const tool = (buildConfirmTools({ runsRoot, ctx: manualCtx(askLog, approvals) }) as unknown as DshToolLike[]).find((entry) => entry.name === "atf_config_confirm");
   if (tool === undefined) throw new Error("atf_config_confirm 未注册");
-  return tool;
+  // 夹具建模「run 已在场」：confirmFace 对解析不到的 run fail-closed（run_experiment_required，
+  // ADR-0018）；本套件断言卡面/快照语义，不测落点创建。
+  return {
+    ...tool,
+    execute: async (args: unknown, exec: unknown) => {
+      const runId = typeof (args as { run_id?: unknown }).run_id === "string" ? ((args as { run_id: string }).run_id) : "";
+      if (runId !== "") mkdirSync(join(runsRoot, runId), { recursive: true });
+      return tool.execute(args, exec);
+    },
+  };
 };
 
 describe("E4b-H2 confirmFace 停回写＋bs convention＋deepspeed 统一", () => {

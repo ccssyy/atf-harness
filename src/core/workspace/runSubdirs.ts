@@ -15,7 +15,7 @@
  *     无 manifest／v1／v2 树落 v2 名（与它自己声明的 dirs 一致，不制造未声明目录）；
  *   - 存量 v2 只读兼容：不改名、不迁移、不补建（ADR-0016/ADR-0018）。
  */
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /** 布局契约版本标识（run.json 的 layout_version 单源——与内核 RUN_LAYOUT_VERSION 同值）。 */
@@ -84,15 +84,10 @@ export const runLayoutVersionOf = (runDir: string): string | null => {
 
 /** 该 run 是否 v3 契约树（run.json 明示 RunLayout/v3；无 manifest／v1／v2 一律不是）。
  *  写面用它决定「新建产物该落哪套名」——存量 v2 树保持 v2 名，不制造与自身 run.json
- *  dirs 声明不符的目录（内核 validate_run_layout 会判未声明目录）。 */
+ *  dirs 声明不符的目录（skills 侧 check_run_layout 的 layout_undeclared_dir 是失败级）。
+ *  fail-open 语义：**读不到 run.json（缺席／坏行／不可读）一律按「非 v3」处理**——即回退
+ *  到 v2 名、也就是「不认识的 run 不动它」；宁可沿用旧名，也不给来路不明的树添新目录。 */
 export const isV3RunTree = (runDir: string): boolean => runLayoutVersionOf(runDir) === RUN_LAYOUT_VERSION;
-
-/** 新建产物的相对落名：无映射的路径（report/、launch/、eval/… 两版同名）原样返回，
- *  不读 run.json（热路径零额外 IO）；只有 v2/v3 名不同的路径才按 layout_version 裁决。 */
-const writeRelOf = (runDir: string, v2Rel: string): string => {
-  const v3Rel = runRelPathV3(v2Rel);
-  return v3Rel === v2Rel || !isV3RunTree(runDir) ? v2Rel : v3Rel;
-};
 
 /** run 内子目录候选链（v3 名在前、v2 存量名在后——顺序即优先级，只读扫描用）。 */
 export const runSubdirCandidates = (runDir: string, v2Rel: string): string[] => {
@@ -100,11 +95,18 @@ export const runSubdirCandidates = (runDir: string, v2Rel: string): string[] => 
   return v3Rel === v2Rel ? [join(runDir, v2Rel)] : [join(runDir, v3Rel), join(runDir, v2Rel)];
 };
 
-/** run 内子目录单源落点（读写同源）：v3 在场→v3；否则 v2 存量在场→v2（只读兼容、
- *  不迁移）；两缺→按该 run 的 layout_version 落名（v3 树→v3 名；无 manifest／v2 树
- *  →v2 名，与其 run.json dirs 声明一致）。 */
-export const resolveRunSubdir = (runDir: string, v2Rel: string): string =>
-  runSubdirCandidates(runDir, v2Rel).find((dir) => existsSync(dir)) ?? join(runDir, writeRelOf(runDir, v2Rel));
+/** run 内子目录落点（**写侧单源**）：
+ *   - run.json 明示 RunLayout/v3 → **落名恒取 v3 名**，不因 v2 名目录「恰好存在」而改道。
+ *     理由：写侧只认该 run 自己声明的闭集；v3 树里若残留 v2 名目录（webui/ 之类），
+ *     写进去就是未声明目录（审计失败级），所以「存在优先」在写侧是错的。
+ *   - 非 v3（v2／v1／无 manifest／读不到 run.json）→ 沿用 v2 名：存量树不迁移、不改名，
+ *     两代产物不劈成两处。
+ *  读侧需要回退请用 runSubdirCandidates（v3 名先行、v2 名回退）。 */
+export const resolveRunSubdir = (runDir: string, v2Rel: string): string => {
+  const v3Rel = runRelPathV3(v2Rel);
+  if (v3Rel === v2Rel || !isV3RunTree(runDir)) return join(runDir, v2Rel);
+  return join(runDir, v3Rel);
+};
 
 /** run 内文件候选链（v3 映射形态在前、v2 存量形态在后——只读探测用）。 */
 export const runFileCandidates = (runDir: string, v2Rel: string): string[] => {
@@ -112,8 +114,11 @@ export const runFileCandidates = (runDir: string, v2Rel: string): string[] => {
   return v3Rel === v2Rel ? [join(runDir, v2Rel)] : [join(runDir, v3Rel), join(runDir, v2Rel)];
 };
 
-/** run 内文件单源落点：首个在场候选；全缺→按 layout_version 落名（v3 树→v3 形态，
- *  无 manifest／v2 树→v2 形态）。 */
-export const resolveRunFile = (runDir: string, v2Rel: string): string =>
-  runFileCandidates(runDir, v2Rel).find((path) => existsSync(path)) ?? join(runDir, writeRelOf(runDir, v2Rel));
+/** run 内文件落点（与 resolveRunSubdir 同口径的**写侧单源**）：v3 树 → 恒取 v3 形态；
+ *  非 v3（含读不到 run.json）→ 沿用 v2 形态。读侧探测用 runFileCandidates。 */
+export const resolveRunFile = (runDir: string, v2Rel: string): string => {
+  const v3Rel = runRelPathV3(v2Rel);
+  if (v3Rel === v2Rel || !isV3RunTree(runDir)) return join(runDir, v2Rel);
+  return join(runDir, v3Rel);
+};
 

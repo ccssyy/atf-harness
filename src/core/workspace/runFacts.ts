@@ -43,7 +43,10 @@ export const appendBinding = (runDir: string, sessionId: string, boundAt: string
   try {
     // run 目录不在场＝run 尚未创建：不写、不建目录（否则内核 create_run 会判落点被占）；
     // 绑定是对已存在 run 的归属记录，无 run 即无绑定。
-    if (!existsSync(runDir)) return;
+    if (!existsSync(runDir)) {
+      console.warn(`[atf-layout] run 目录不存在，跳过会话绑定写入（run 尚未创建）：${runDir} session=${sessionId}`);
+      return;
+    }
     const bindings = readBindings(runDir);
     if (bindings.some((binding) => binding.session_id === sessionId)) return;
     bindings.push({ session_id: sessionId, bound_at: boundAt });
@@ -138,7 +141,10 @@ export const readProgress = (runDir: string): RunProgress | null => {
 export const writeProgress = (runDir: string, progress: RunProgress): void => {
   try {
     // 同 appendBinding：run 不存在不落盘、不建目录（进度只属于已存在的 run）
-    if (!existsSync(runDir)) return;
+    if (!existsSync(runDir)) {
+      console.warn(`[atf-layout] run 目录不存在，跳过进度写入（run 尚未创建）：${runDir} round=${progress.round ?? "-"}`);
+      return;
+    }
     const dir = resolveRunSubdir(runDir, "webui");
     mkdirSync(dir, { recursive: true });
     const target = progressPathOf(runDir);

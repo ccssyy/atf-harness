@@ -44,11 +44,22 @@ const manualCtx = (asked: Array<Record<string, unknown>>) => ({
   },
 });
 
-const toolOf = (ctx: Record<string, unknown>, runsRoot: string, gpuCount: number) =>
-  (buildConfirmTools({ runsRoot, ctx: ctx as never, gpuProbe: () => gpuCount }) as unknown as Array<{
+const toolOf = (ctx: Record<string, unknown>, runsRoot: string, gpuCount: number) => {
+  const tool = (buildConfirmTools({ runsRoot, ctx: ctx as never, gpuProbe: () => gpuCount }) as unknown as Array<{
     name: string;
     execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
-  }>).find((tool) => tool.name === "atf_config_confirm")!;
+  }>).find((entry) => entry.name === "atf_config_confirm")!;
+  // 夹具建模「run 已在场」：confirmFace 对解析不到的 run fail-closed（run_experiment_required，
+  // ADR-0018）；本套件断言卡数派生/卡面语义，不测落点创建。
+  return {
+    ...tool,
+    execute: async (args: Record<string, unknown>, e: unknown) => {
+      const runId = typeof args["run_id"] === "string" ? (args["run_id"] as string) : "";
+      if (runId !== "") mkdirSync(join(runsRoot, runId), { recursive: true });
+      return tool.execute(args, e);
+    },
+  };
+};
 
 type Row = { key: string; value?: string; hint?: string; placeholder?: string };
 

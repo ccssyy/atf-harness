@@ -77,7 +77,10 @@ export const appendSegmentFact = (runDir: string, segment: string, source: strin
   // run 目录不在场＝run 还没建（register 段经内核 create_run 落位）：此时不写、更不建目录。
   // 在占位路径下建目录会让内核判「落点已被占用且缺合法 run.json」而永久拒绝该 run_id
   // （run_layout.create_run 的 fail-closed 语义）；段事实对不存在的 run 也无意义。
-  if (!existsSync(runDir)) return;
+  if (!existsSync(runDir)) {
+    console.warn(`[atf-layout] run 目录不存在，跳过段事实写入（run 尚未创建）：${runDir} 段=${segment} 源=${source}`);
+    return;
+  }
   const facts = readSegmentFacts(runDir);
   if (facts.some((fact) => fact.segment === segment && fact.source === source)) return;
   facts.push({ segment, at, source });

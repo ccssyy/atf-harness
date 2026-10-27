@@ -55,6 +55,8 @@ describe("A-C3b E11——确认卡面用户显式冲突态（need_confirm 单卡
       },
     };
     const tools = buildConfirmTools({ runsRoot: root, ctx, gpuProbe: () => 8 });
+    // 夹具建模「run 已在场」（confirmFace 对解析不到的 run fail-closed——ADR-0018）
+    mkdirSync(join(root, "run-c3b"), { recursive: true });
     const result = (await findTool(tools, "atf_config_confirm").execute(
       { action: "present", run_id: "run-c3b", overrides: { nproc_per_node: "1" } },
       fakeExec,

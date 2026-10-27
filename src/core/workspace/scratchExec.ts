@@ -391,7 +391,8 @@ export const scanRunTreeLaunchReady = async (runDir: string): Promise<LaunchRead
   }
   let config: string | undefined;
   if (manifest.iteration_config_sha256 !== undefined) {
-    const candidates = ["launch", runRelPathV3("prep")]
+    // 读侧候选双代同列：launch/ 两版同名；v2 存量读 prep/，v3 树读 data/（仅替换会丢存量）
+    const candidates = ["launch", runRelPathV3("prep"), "prep"].filter((dir, i, all) => all.indexOf(dir) === i)
       .flatMap((dir) => {
         try {
           return readdirSync(join(runDir, dir)).filter((name) => name.endsWith(".json")).map((name) => join(runDir, dir, name));

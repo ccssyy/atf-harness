@@ -57,8 +57,21 @@ const approvalCtx = (record: string[]): { get(service: string): unknown } => ({
       : undefined),
 });
 const MOCK = join(import.meta.dirname, "..", "fixtures", "mock_pipeline_params.mjs");
-const toolOf = (record: string[] = []): DshToolLike =>
-  buildPipelineTool(approvalCtx(record), `node ${MOCK}`, 30_000) as unknown as DshToolLike;
+const toolOf = (record: string[] = []): DshToolLike => {
+  const tool = buildPipelineTool(approvalCtx(record), `node ${MOCK}`, 30_000) as unknown as DshToolLike;
+  return {
+    ...tool,
+    // 夹具建模「run 已在场」：管道只定位不建树（run 必属实验、register 段才 create_run），
+    // 本套件断言 output_dir 终值/来源，不测落点创建。
+    execute: async (args: unknown, exec: unknown) => {
+      const a = args as { workspace_path?: unknown; run_id?: unknown };
+      const ws = typeof a.workspace_path === "string" ? a.workspace_path : "";
+      const runId = typeof a.run_id === "string" ? a.run_id : "";
+      if (ws !== "" && runId !== "") mkdirSync(join(ws, "runs", runId), { recursive: true });
+      return tool.execute(args, exec);
+    },
+  };
+};
 
 const summaryArgv = (result: unknown): string[] =>
   ((result as { summary?: { argv?: string[] } }).summary?.argv ?? []);

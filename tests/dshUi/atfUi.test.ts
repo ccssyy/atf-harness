@@ -1218,9 +1218,13 @@ describe("批㊶-M2 段 2 scanRuns 特征过滤（布局规范＋防御）", () 
     ]) {
       expect(RUN_MARKER_RELS, rel).toContain(rel);
     }
-    // 反向：analysis/ 不是 run 判定锚（v1 起就没有——viewer 产物域不等于 run 身份），
-    // 若将来有人往里加，这条会提醒先核对枚举面影响。
-    expect(RUN_MARKER_RELS).not.toContain("analysis");
+    // 反向：这些名字不是 run 判定锚——理由各不相同，合起来钉住「别顺手往里加」：
+    //   analysis／publish：产物域，v1 起就不是身份锚（有产物不等于这目录是 run）；
+    //   data：v3 的 data/ 太泛（工作区/数据目录同名），身份由 data 下的实锚（config/iteration-config
+    //         等）承担；v2 的 prep/ 之所以在列是因为它只出现在 run 内、且是存量唯一凭据。
+    for (const rel of ["analysis", "publish", "data"]) {
+      expect(RUN_MARKER_RELS, rel).not.toContain(rel);
+    }
   });
   it("无特征忽略：atf-ui 输出面（monitor.json/artifacts.json/panel.html）与空目录不收录", () => {
     const root = tempRoot();

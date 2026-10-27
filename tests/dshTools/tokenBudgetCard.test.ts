@@ -234,6 +234,10 @@ describe("批次 R H1-1——confirmFace 手动档：关系不成立禁确认＋
   };
   const execTool = async (ctx: { get: (s: string) => unknown }, args: Record<string, unknown>) => {
     const root = tempRoot();
+    // 夹具建模「run 已在场」：atf_config_confirm 对解析不到的 run fail-closed
+    // （run_experiment_required，ADR-0018），本套件断言的是卡面/快照语义而非落点创建。
+    const seedRunId = typeof args["run_id"] === "string" ? (args["run_id"] as string) : "";
+    if (seedRunId !== "") mkdirSync(join(root, seedRunId), { recursive: true });
     const tools = buildConfirmTools({ runsRoot: root, ctx, gpuProbe: () => 8 }) as Array<{ name: string; execute: (a: unknown, e: unknown) => Promise<unknown> }>;
     const tool = tools.find((t) => t.name === "atf_config_confirm")!;
     const result = (await tool.execute(args, { agent: undefined, callId: "h1-c1", signal: undefined })) as Record<string, unknown>;
@@ -290,6 +294,8 @@ describe("批次 R H1-1——confirmFace 全自动档：落快照前 TokenBudget
   };
   const execAuto = async (recommend: Record<string, unknown>) => {
     const root = tempRoot();
+    // 同手动档：夹具建模「run 已在场」（confirm 对解析不到的 run fail-closed）
+    mkdirSync(join(root, "run-tb"), { recursive: true });
     const tools = buildConfirmTools({ runsRoot: root, ctx: { get: autoCtx }, gpuProbe: () => 8 }) as Array<{ name: string; execute: (a: unknown, e: unknown) => Promise<unknown> }>;
     const tool = tools.find((t) => t.name === "atf_config_confirm")!;
     const result = (await tool.execute(
@@ -627,6 +633,10 @@ describe("b5 像素对——confirmFace 手动档链（变更提示上卡面；m
   };
   const execTool = async (ctx: { get: (s: string) => unknown }, args: Record<string, unknown>) => {
     const root = tempRoot();
+    // 夹具建模「run 已在场」：atf_config_confirm 对解析不到的 run fail-closed
+    // （run_experiment_required，ADR-0018），本套件断言的是卡面/快照语义而非落点创建。
+    const seedRunId = typeof args["run_id"] === "string" ? (args["run_id"] as string) : "";
+    if (seedRunId !== "") mkdirSync(join(root, seedRunId), { recursive: true });
     const tools = buildConfirmTools({ runsRoot: root, ctx, gpuProbe: () => 8 }) as Array<{ name: string; execute: (a: unknown, e: unknown) => Promise<unknown> }>;
     const tool = tools.find((t) => t.name === "atf_config_confirm")!;
     const result = (await tool.execute(args, { agent: undefined, callId: "b5-c1", signal: undefined })) as Record<string, unknown>;
@@ -692,6 +702,8 @@ describe("b5 像素对——confirmFace 全自动档（recommend 采纳＋通报
   };
   const execAuto = async (args: Record<string, unknown>) => {
     const root = tempRoot();
+    // 同手动档：夹具建模「run 已在场」（confirm 对解析不到的 run fail-closed）
+    mkdirSync(join(root, "run-tb"), { recursive: true });
     const tools = buildConfirmTools({ runsRoot: root, ctx: { get: autoCtx }, gpuProbe: () => 8 }) as Array<{ name: string; execute: (a: unknown, e: unknown) => Promise<unknown> }>;
     const tool = tools.find((t) => t.name === "atf_config_confirm")!;
     const result = (await tool.execute(

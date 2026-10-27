@@ -48,6 +48,8 @@ const runCard = async (
     name: string;
     execute: (a: unknown, e: unknown) => Promise<Record<string, unknown>>;
   }>).find((entry) => entry.name === "atf_config_confirm")!;
+  // 夹具建模「run 已在场」（confirmFace 对解析不到的 run fail-closed——ADR-0018）
+  mkdirSync(join(root, "pin"), { recursive: true });
   const result = await tool.execute({ action: "present", run_id: "pin", overrides }, fakeExec);
   const formAsk = asked.find((request) => ((request["questions"] as Array<{ intent?: unknown }>)[0]?.intent) !== undefined);
   const question = formAsk === undefined ? undefined : (formAsk["questions"] as Array<{ intent?: { fields?: Row[] } }>)[0];

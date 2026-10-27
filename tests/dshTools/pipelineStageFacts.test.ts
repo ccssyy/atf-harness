@@ -34,6 +34,25 @@ afterEach(() => {
   for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
+/** 夹具包装：执行前按 args 的 workspace_path／run_id 落位 run 目录。
+ *  管道只**定位**不建树（run 必属实验、register 段才 create_run，见内核 _resolve_run_target），
+ *  故夹具需先让 run 在场；本套件沿存量位置 runs/<run_id> 铺，断言读的是该解析结果。 */
+const pipelineToolOf = (ctx: unknown, command: string, timeoutMs: number, opts?: { seedRun?: boolean }) => {
+  const tool = buildPipelineTool(ctx as never, command, timeoutMs) as unknown as {
+    execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
+  };
+  const seedRun = opts?.seedRun !== false;
+  return {
+    ...tool,
+    execute: async (args: Record<string, unknown>, exec: unknown) => {
+      const ws = typeof args["workspace_path"] === "string" ? (args["workspace_path"] as string) : "";
+      const runId = typeof args["run_id"] === "string" ? (args["run_id"] as string) : "";
+      if (seedRun && ws !== "" && runId !== "") mkdirSync(join(ws, "runs", runId), { recursive: true });
+      return tool.execute(args, exec);
+    },
+  };
+};
+
 const approvalCtx = (outcome: string): { get: (service: string) => unknown } => ({
   get: (service: string) => (service === "approval" ? { request: async () => outcome } : undefined),
 });
@@ -86,7 +105,7 @@ describe("A2.2b——段模式闭集与映射表", () => {
 describe("A2.2b——fail-closed 参数面（先于审批，坏参数不消耗放行）", () => {
   it("workspace_path 可省（RunLayout/v2 缺省解析）——不再以参数缺失拒绝", async () => {
     const root = tempRoot();
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     // v2:workspace_path 退为可选覆盖(缺省按会话 cwd→工作区身份→实例配置解析),
@@ -102,7 +121,7 @@ describe("A2.2b——fail-closed 参数面（先于审批，坏参数不消耗�
 
   it("workspace_path 空串 → execute 面 workspace_path_missing（穿透 schema 的空白形态兜底）", async () => {
     const root = tempRoot();
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "label_qc", run_id: "r1", workspace_path: "   " }, execWithSession("s1"));
@@ -111,7 +130,7 @@ describe("A2.2b——fail-closed 参数面（先于审批，坏参数不消耗�
 
   it("workspace_path 非绝对路径 → workspace_path_not_absolute fail-closed", async () => {
     const root = tempRoot();
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "label_qc", run_id: "r1", workspace_path: "relative/ws" }, execWithSession("s1"));
@@ -120,7 +139,7 @@ describe("A2.2b——fail-closed 参数面（先于审批，坏参数不消耗�
 
   it("register 缺 source_root → source_root_missing 明确指路；非 register 省 source_root 正常下传", async () => {
     const root = tempRoot();
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const missing = await tool.execute({ stage: "register", run_id: "r1", workspace_path: root }, execWithSession("s1"));
@@ -142,7 +161,7 @@ describe("A2.2b——argv 面单源（只传内核声明四参）", () => {
     );
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "register", run_id: "run-a", workspace_path: ws, source_root: join(root, "src") }, execWithSession("s1"));
@@ -164,7 +183,7 @@ describe("A2.2b——argv 面单源（只传内核声明四参）", () => {
     );
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "publish", run_id: "run-b", workspace_path: ws }, execWithSession("s1"));
@@ -185,7 +204,7 @@ describe("A2.2b——argv 面单源（只传内核声明四参）", () => {
     );
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const run = async (docType: string, marker: string): Promise<void> => {
@@ -234,7 +253,7 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
     const root = tempRoot();
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "experiment_setup", run_id: "run-a", workspace_path: ws }, execWithSession("sess-9"));
@@ -254,7 +273,7 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
     const root = tempRoot();
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const cb = await tool.execute({ stage: "candidate_build", run_id: "run-cb", workspace_path: ws }, execWithSession("s1"));
@@ -271,7 +290,7 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
     const root = tempRoot();
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${BLOCKED_SCRIPT(root)}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${BLOCKED_SCRIPT(root)}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "family_split", run_id: "run-blk", workspace_path: ws }, execWithSession("sess-2"));
@@ -285,7 +304,7 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
     const root = tempRoot();
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${ENVFAIL_SCRIPT(root)}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${ENVFAIL_SCRIPT(root)}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "register", run_id: "run-e3", workspace_path: ws, source_root: join(root, "src") }, execWithSession("sess-3"));
@@ -299,7 +318,7 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
     const root = tempRoot();
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "label_qc", run_id: "run-d", workspace_path: ws }, { agent: undefined, callId: "c", signal: undefined });
@@ -311,7 +330,8 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
     const root = tempRoot();
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
-    const tool = buildPipelineTool(approvalCtx("rejected"), `node ${OK_SCRIPT(root)}`, 30_000) as {
+    // seedRun:false——本用例断言「拒绝即零写入」，夹具不得预先铺任何目录
+    const tool = pipelineToolOf(approvalCtx("rejected"), `node ${OK_SCRIPT(root)}`, 30_000, { seedRun: false }) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "register", run_id: "run-r", workspace_path: ws, source_root: join(root, "src") }, execWithSession("s1"));
@@ -339,7 +359,7 @@ describe("D24h——阶段放行 actor/mode 与 approval_id 回传", () => {
       "argv-d24h.mjs",
       `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, JSON.stringify(process.argv.slice(2)));process.stdout.write("{}")\n`,
     );
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "label_qc", run_id: "run-d24h", workspace_path: ws }, execWithSession("sess-d24h"));
@@ -360,7 +380,7 @@ describe("D24h——阶段放行 actor/mode 与 approval_id 回传", () => {
       "argv-nosess.mjs",
       `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, JSON.stringify(process.argv.slice(2)));process.stdout.write("{}")\n`,
     );
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "label_qc", run_id: "run-ns", workspace_path: ws }, { agent: undefined, callId: "c", signal: undefined });
@@ -376,7 +396,7 @@ describe("D24h——阶段放行 actor/mode 与 approval_id 回传", () => {
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
     const script = writeScript(root, "ledger.mjs", 'process.stdout.write(JSON.stringify({approval_id:"al-d24h-001"}))\n');
-    const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "label_qc", run_id: "run-led", workspace_path: ws }, execWithSession("s1"));
@@ -390,7 +410,7 @@ describe("D24h——阶段放行 actor/mode 与 approval_id 回传", () => {
     const script = writeScript(root, "badjson.mjs", 'process.stdout.write(\'{"approval_id":"x"\')\n');
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      const tool = buildPipelineTool(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
+      const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${script}`, 30_000) as {
         execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
       };
       const result = await tool.execute({ stage: "label_qc", run_id: "run-bj", workspace_path: ws }, execWithSession("s1"));
@@ -408,7 +428,7 @@ describe("D24h——阶段放行 actor/mode 与 approval_id 回传", () => {
     const ws = join(root, "ws");
     mkdirSync(ws, { recursive: true });
     const captured: { reason?: string } = {};
-    const tool = buildPipelineTool(approvalCaptureCtx(captured), `node ${OK_SCRIPT(root)}`, 30_000) as {
+    const tool = pipelineToolOf(approvalCaptureCtx(captured), `node ${OK_SCRIPT(root)}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     await tool.execute({ stage: "label_qc", run_id: "run-card", workspace_path: ws }, execWithSession("s1"));

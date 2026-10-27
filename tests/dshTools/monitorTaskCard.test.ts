@@ -36,6 +36,8 @@ describe("批㊶-M M-3 段事实轨（webui/segments.json）", () => {
   it("段轨优先于启发式锚：segments.json 有 register 而无 registration.json → 段仍 done", () => {
     const root = tempRoot();
     const runDir = join(root, "run-fact");
+    // 夹具建模「run 已在场」：段事实只写已存在的 run（run 未创建时不落盘、不建目录）
+    mkdirSync(runDir, { recursive: true });
     appendSegmentFact(runDir, "register", "atf_admit_data");
     const scan = scanRunDir(root, "run-fact");
     expect(scan.segments.register).toBe(true);

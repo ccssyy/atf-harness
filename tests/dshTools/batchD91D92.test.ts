@@ -248,6 +248,8 @@ describe("D92——confirmFace 链级（baseline 注入实算值＋卡面只读�
   });
   type AskRequest = { detail?: string; intent: { fields: Array<{ key: string }> } };
   const runConfirm = async (root: string, runId: string): Promise<AskRequest> => {
+    // 夹具建模「run 已在场」（confirmFace 对解析不到的 run fail-closed——ADR-0018）
+    mkdirSync(join(root, runId), { recursive: true });
     const calls: unknown[] = [];
     const { buildConfirmTools } = await import("../../packages/extensions/atf-tools/src/confirmFace.js");
     const tools = buildConfirmTools({ runsRoot: root, ctx: makeCtx(calls) }) as unknown as Array<{ execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;

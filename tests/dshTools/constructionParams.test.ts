@@ -43,12 +43,24 @@ const approvalCtx = (record: string[]): { get(service: string): unknown } => ({
       : undefined,
 });
 const MOCK = join(import.meta.dirname, "..", "fixtures", "mock_pipeline_params.mjs");
+/** 夹具包装：执行前按 args 的 workspace_path／run_id 落位 run 目录（管道只定位不建树；
+ *  advice 写面在 run 未创建时会拒 run_not_created——夹具先让 run 在场）。 */
+const seedRunOf = <T extends { execute: (a: Record<string, unknown>, e: unknown) => Promise<unknown> }>(tool: T): T => ({
+  ...tool,
+  execute: async (args: Record<string, unknown>, exec: unknown) => {
+    const ws = typeof args["workspace_path"] === "string" ? (args["workspace_path"] as string) : "";
+    const runId = typeof args["run_id"] === "string" ? (args["run_id"] as string) : "";
+    if (ws !== "" && runId !== "") mkdirSync(join(ws, "runs", runId), { recursive: true });
+    return tool.execute(args, exec) as Promise<unknown>;
+  },
+}) as T;
+
 const toolOf = (record: string[] = []): DshToolLike =>
-  buildPipelineTool(approvalCtx(record), `node ${MOCK}`, 30_000) as unknown as DshToolLike;
+  seedRunOf(buildPipelineTool(approvalCtx(record), `node ${MOCK}`, 30_000) as unknown as DshToolLike);
 
 /** 带 userQuestions 的 ctx（采纳卡应答桩）：answer 非空即模拟在卡上填了该值。 */
 const toolWithAsk = (record: string[], answer: string): DshToolLike =>
-  buildPipelineTool(
+  seedRunOf(buildPipelineTool(
     {
       get: (service: string) => {
         if (service === "approval") {
@@ -64,7 +76,7 @@ const toolWithAsk = (record: string[], answer: string): DshToolLike =>
     },
     `node ${MOCK}`,
     30_000,
-  ) as unknown as DshToolLike;
+  ) as unknown as DshToolLike);
 
 const summaryArgv = (result: unknown): string[] =>
   ((result as { summary?: { argv?: string[] } }).summary?.argv ?? []);

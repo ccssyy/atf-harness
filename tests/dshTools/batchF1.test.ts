@@ -386,7 +386,10 @@ describe("F1 §二.4-4 预检卡在九要素前——config_confirm 前置预检
     const askLog: string[] = [];
     const approvals: string[] = [];
     const ctx = manualCtx(CONFIRM_ASK_SCRIPT, askLog, approvals);
-    const tools = buildConfirmTools({ runsRoot: tempRoot("f1-order-"), ctx });
+    const runsRoot = tempRoot("f1-order-");
+    // 夹具建模「run 已在场」（confirmFace 对解析不到的 run fail-closed——ADR-0018）
+    mkdirSync(join(runsRoot, "f1-order-3"), { recursive: true });
+    const tools = buildConfirmTools({ runsRoot, ctx });
     const configConfirm = findTool(tools, "atf_config_confirm");
     const result = (await configConfirm.execute({ action: "present", run_id: "f1-order-3" }, sessionExec)) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
@@ -395,6 +398,8 @@ describe("F1 §二.4-4 预检卡在九要素前——config_confirm 前置预检
 
   it("脚本缺席（pin 未含过渡态）：前置预检跳过，九要素链零回归", async () => {
     const runsRoot = tempRoot("f1-order-");
+    // 夹具建模「run 已在场」（confirmFace 对解析不到的 run fail-closed——ADR-0018）
+    mkdirSync(join(runsRoot, "f1-order-4"), { recursive: true });
     const askLog: string[] = [];
     const approvals: string[] = [];
     const ctx = manualCtx(CONFIRM_ASK_SCRIPT, askLog, approvals);

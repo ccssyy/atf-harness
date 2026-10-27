@@ -158,6 +158,8 @@ describe("批㊶-N N-5 会话绑定＋三级作用域", () => {
   it("scanRunDir 镜像 bound_sessions（additive 字段）", () => {
     const root = tempRoot();
     const runDir = join(root, "run-b");
+    // 夹具建模「run 已在场」：绑定只写已存在的 run（run 未创建时不落盘、不建目录）
+    mkdirSync(runDir, { recursive: true });
     appendBinding(runDir, "sess-x");
     const scan = scanRunDir(root, "run-b");
     expect(scan.bound_sessions).toEqual(["sess-x"]);
