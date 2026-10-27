@@ -455,11 +455,15 @@ describe("RunLayout/v3 写侧落名——v3 树不写 v2 名（声明闭集单�
 //
 // ── 复跑步骤 ──
 //   1) 空 workspace 上真造一棵 v3 run（必须显式给 experiment_id——run 必属某个实验；
-//      canonical 落位**没有 runs/ 中间层**。注意：**v3 迁移前的文档曾写**
-//      <ws>/experiments/<exp>/runs/<run_id>；HEAD 已由 2af934d9 对齐（run_layout.py 的
-//      create_run / run_dir / locate_run_dir / run_root_containing 均已是无 runs/ 层的 v3 形态），
-//      但 workspace_init.py 的 run create --experiment help 仍残留该措辞（该段 help 还写 RunLayout/v1）。
-//      故一律**以 canonical_run_path() 的实际返回为准**，别照任何文档手建——照旧文档建出来就是 v2 形态）：
+//      canonical 落位**没有 runs/ 中间层**。**取证不变量（时效无关）**：
+//      一律以 `canonical_run_path()` 的实际返回为准，**不要照 docstring / help 文本手写路径**——
+//      迁移期文档面可能滞后；且部分历史目录名/版本名是**故意保留**的
+//      （run_layout.py 的 v2 历史说明、LEGACY_LAYOUT_VERSIONS、v1 冻结骨架常量）。
+//      时点记录（2026-10-27 核查）：v3 迁移前的文档曾写 <exp>/runs/<run_id>；HEAD 已由 2af934d9
+//      及后续收敛（run_layout.py / workspace_init.py 的 docstring 与 help、
+//      walkthrough_pipeline.py 的 --experiment help 标签均已为 v3；run create 那段 parser
+//      无 CLI dispatch，属死分支）。**实测仍余 1 处注释滞后**：
+//      workspace_init.py:953 以 `<ws>/experiments/<exp>/runs/<id>` 为"恒"形态——与 canonical 不符，已报 owner）：
 //        create_run(ws, "v3s-01", experiment_id="20261027-adhoc")
 //        → 预期 <ws>/experiments/20261027-adhoc/v3s-01/   （无 runs/ 这一层）
 //   2) 用 harness helper 真写：appendSegmentFact / appendBinding / resolveRunFile(webui/config-snapshot.json)
