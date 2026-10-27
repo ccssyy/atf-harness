@@ -470,11 +470,15 @@ describe("RunLayout/v3 写侧落名——v3 树不写 v2 名（声明闭集单�
 // 实测记录（2026-10-27，A800_5005）：
 //   ① 存量：全机 RunLayout/v3 run = 0（os.walk，相对扫描根 MAXDEPTH≥8 饱和口径；
 //      run.json=22 / legacy=37 / 总 59，两方独立复现）。
-//   ② 真机跑过 v3，但数据是合成的：/tmp/v3s/ws  (dev:ino=116:247792136)
-//      内核 create_run + register 真落位的 v3 run（9 类顶层、config/ 4 件、data/ 7 件、
-//      runtime/{loop,webui} 在位），check_run_layout → layout_scanned {"RunLayout/v3":1}
-//      / findings [] / pass；harness helper 对该树解析：webui→runtime/webui、
-//      loop→runtime/loop、prep→data、experiment-setup→config/experiment-setup，
-//      全部落在 run.json.dirs 声明内。
+//   ② 另有**本轮新建的验证 run**（不在①的存量普查口径内；数据同样是假的）：
+//      /tmp/v3s/ws  (dev:ino=116:247792136)，内核 create_run + register 真落位
+//      （9 类顶层、config/ 4 件、data/ 7 件、runtime/{loop,webui} 在位）。
+//      check_run_layout → layout_scanned {"RunLayout/v3":1} / findings [] / pass
+//      （run.json docs=[{doc_type:pl, lane_suffix:all}] 与 stage/stage-register.pl.summary.json
+//      对得上，否则会报 layout_docs_registry_mismatch）；
+//      harness helper 对该树解析：webui→runtime/webui、loop→runtime/loop、prep→data、
+//      experiment-setup→config/experiment-setup，全部落在 run.json.dirs 声明内。
+//      ⚠ 措辞纪律：不得写成「v3 有 1 个真机 run」——①才是存量普查口径（=0），
+//      ②是现造的验证件，混写会让人误判线上迁移进度。
 //   ③ 合成样本对账：写后 pass、手工塞 webui/ 后 fail、删掉回 pass——三方对上。
 //   （②是唯一非合成数据来源的样本，但数据内容仍是假数据——引用时两句话一起写。）

@@ -407,7 +407,8 @@ describe("D73 观测环端到端（launch/setsid 形态——tmux 域零会话�
       expect(run?.training.active).toBe(true);
       expect(run?.progress).toMatchObject({ percentage: 84.95, eta_s: 720 });
     });
-  });
+  }, 60_000); // 超时预算 30s→60s：本用例基线约 27s（余量仅 10%），并发跑批时 load≈28
+  // 实测精确卡在 30018ms 翻红（Timeout 而非 AssertionError），故放宽；断言零变化。
 
   it("trainer_log 停更超窗 → active=false 且观测环停写（progress.json 不续命——D16 不回归）", async () => {
     await withDomain(async () => {
@@ -429,7 +430,7 @@ describe("D73 观测环端到端（launch/setsid 形态——tmux 域零会话�
       expect(monitor.runs.find((r) => r.run_id === "run-d73-stale-e2e")?.training.active).toBe(false);
       expect(readFileSync(join(runDir, "webui", "progress.json"), "utf8")).toBe(v1); // 停写
     });
-  });
+  }, 60_000); // 同上：基线约 27s、余量 10%，并发跑批必假红（Timeout 非断言失败）；断言零变化。
 });
 
 describe("批㉘ monitor 路径注入（tapIndex → window.__ATF_UI_CONFIG__.monitorPath）", () => {
