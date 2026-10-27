@@ -896,13 +896,13 @@ describe("批㉛段3.1 右栏监控面（Loss 历史回退＋评估 KPI＋环境
     writeFileSync(join(runDir, "eval", "metrics_summary.json"), JSON.stringify({ model: "root-fallback", micro: { f1: 0.2 } }));
     expect(latestEvalMetrics(runDir)).toMatchObject({ round: "latest", model: "root-fallback" });
   });
-  it("buildEnvSurface：IterationConfig 同源（基模型取尾段/数据集键逗连/deepspeed/lane）；缺席如实 —", () => {
+  it("buildEnvSurface：IterationConfig 同源（基模型取尾段/数据集键逗连/deepspeed）；缺席如实 —（lane 行随 G3 退役）", () => {
     const env = buildEnvSurface(
-      { base_model: { path: "/data/LLM_model/Qwen3-VL-32B-Instruct" }, dataset: { dataset_keys: ["pl_goods"] }, training: { deepspeed: "ds_z3_fp8_config.json" }, lane: "pl_goods" },
+      { base_model: { path: "/data/LLM_model/Qwen3-VL-32B-Instruct" }, dataset: { dataset_keys: ["pl_all"] }, training: { deepspeed: "ds_z3_fp8_config.json" } },
       "run-x",
     );
-    expect(env).toEqual({ base_model: "Qwen3-VL-32B-Instruct", dataset_keys: "pl_goods", deepspeed: "ds_z3_fp8_config.json", lane: "pl_goods" });
-    expect(buildEnvSurface(null, "run-x")).toEqual({ base_model: "—", dataset_keys: "—", deepspeed: "—", lane: "—" });
+    expect(env).toEqual({ base_model: "Qwen3-VL-32B-Instruct", dataset_keys: "pl_all", deepspeed: "ds_z3_fp8_config.json" });
+    expect(buildEnvSurface(null, "run-x")).toEqual({ base_model: "—", dataset_keys: "—", deepspeed: "—" });
   });
   it("scanRunDir→monitor：metrics/env 随快照下发；live loss-series 优先于 trainer 历史回退", () => {
     const root = tempRoot();

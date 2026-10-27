@@ -230,12 +230,11 @@ export interface EvalMetricsSurface {
   max_completion_tokens: number | null;
 }
 
-/** 批㉛段3.1：环境卡面（IterationConfig 同源——基模型/数据集/deepspeed/lane）。 */
+/** 批㉛段3.1：环境卡面（IterationConfig 同源——基模型/数据集/deepspeed；lane 键随 G3 退役）。 */
 export interface EnvSurface {
   base_model: string;
   dataset_keys: string;
   deepspeed: string;
-  lane: string;
 }
 
 /** 批㉝H：run 绑卡声明——train.sh 实际执行面（export CUDA_VISIBLE_DEVICES）优先，
@@ -455,7 +454,6 @@ export const buildEnvSurface = (iter: Record<string, unknown> | null, runId: str
     base_model: strOrNull(baseModel["path"])?.split("/").filter(Boolean).pop() ?? "—",
     dataset_keys: Array.isArray(keys) && keys.every((k) => typeof k === "string") ? (keys as string[]).join(",") : "—",
     deepspeed: strOrNull(training["deepspeed"]) ?? "—",
-    lane: strOrNull(iter?.["lane"]) ?? "—",
   };
 };
 
