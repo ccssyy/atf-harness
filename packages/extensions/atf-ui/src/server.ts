@@ -11,7 +11,7 @@
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { execFile, execFileSync } from "node:child_process";
 import * as net from "node:net";
-import { basename, dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { buildArtifactsSnapshot, buildMonitorSnapshot } from "./snapshot.js";
@@ -962,7 +962,8 @@ export const buildLaunchSurface = (dir: string): LaunchSurface => {
   return {
     train_sh: trainSh,
     config_snapshot: existsSync(snapshotPath),
-    iteration_config: iter !== null ? runRelPathV3(join("prep", "iteration-config", "iteration-config.json")) : null,
+    // 如实呈现「实际读到的那一份」的相对路径（v3 树 config/…｜v2 存量 prep/…），不硬写死名
+    iteration_config: iter !== null ? relative(dir, iterPath).split(sep).join("/") : null,
     prelaunch_report: prelaunch,
     summary,
     token_budget: { rows: budgetRows, violations: budgetViolations, pixel_pair: pixelPair },
