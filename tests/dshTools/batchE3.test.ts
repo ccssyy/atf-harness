@@ -223,11 +223,11 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
       fakeExec,
     );
     expect(record[0]).toContain("预算五参（实验门）");
-    expect(record[0]).toContain("max_total_tokens=9000（用户指定）");
+    expect(record[0]).toContain("max_total_tokens=9000（本次调用传入，非你在方案卡确认）");
     expect(record[0]).toContain("cutoff_len=未定（未指定——内核按缺省处理）");
     expect(record[0]).toContain("max_model_len=未定（未指定——内核按缺省处理）");
-    expect(record[0]).toContain("image_min_pixels=65536（确认快照）");
-    expect(record[0]).toContain("image_max_pixels=1605632（确认快照）");
+    expect(record[0]).toContain("image_min_pixels=65536（你在方案卡确认的）");
+    expect(record[0]).toContain("image_max_pixels=1605632（你在方案卡确认的）");
     const recordNone: string[] = [];
     await toolOf(recordNone).execute(
       { stage: "experiment_setup", run_id: "e3-card-none", workspace_path: tempRoot("e3-ws-") },
@@ -250,7 +250,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
       expect(String(props[key]?.["description"])).toContain("确认快照");
     }
     expect(String(props["max_total_tokens"]?.["description"])).toContain("config-snapshot.json");
-    expect(String(props["image_min_pixels"]?.["description"])).toContain("成对提供");
+    expect(String(props["image_min_pixels"]?.["description"])).toContain("两个可选档位");
     expect(String(tool.description)).toContain("max_total_tokens");
   });
 
@@ -306,7 +306,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
 
   it("纯函数直测：experimentTokenApprovalLine 文案与 resolveExperimentTokenParams 三态", () => {
     expect(experimentTokenApprovalLine({ max_total_tokens: 9000 }, { max_total_tokens: "user_specified", image_min_pixels: "unspecified", image_max_pixels: "unspecified" }))
-      .toContain("max_total_tokens=9000（用户指定）");
+      .toContain("max_total_tokens=9000（本次调用传入，非你在方案卡确认）");
     const resolved = resolveExperimentTokenParams({ image_min_pixels: 65536, image_max_pixels: 802816 }, "/nonexistent-e3");
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;

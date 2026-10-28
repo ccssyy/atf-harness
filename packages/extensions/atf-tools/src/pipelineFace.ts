@@ -599,19 +599,12 @@ export const resolveGroupingFace = async (input: {
     };
   };
 
-  // 完全权限档：不出卡，直接按推荐候选选定（owner 裁定 §8-1-A：full 档自动选定、不问）
-  if (sandboxModeOf(input.ctx, input.exec) === DANGER_FULL_ACCESS_SANDBOX) {
-    const picked = pick(proposal.recommendedIndex);
-    return {
-      source: "policy_auto",
-      decision: "auto",
-      candidate_name: picked.name,
-      groups: picked.groups,
-      evidence,
-      payload: withChoice(picked.name),
-      note: `完全权限档：按推荐候选「${picked.name}」自动选定（共 ${String(proposal.candidates.length)} 个候选，没有打断用户）`,
-    };
-  }
+  // 闸门口径更正（owner 2026-10-28）：**任何权限档位下，只要 agent 传了分组候选，就必须出选项卡**。
+  // 理由：传候选这个动作本身就等于「在征求用户意见」——此时按档位静默替他选，用户永远看不到
+  // 候选对比，也就永远纠正不了 agent 拟错的分组（真机：full 档下直接「按推荐候选自动选定」，用户
+  // 连有第二套方案都不知道）。
+  // 覆盖旧裁定 §8-1-A（full 档自动选定、不问）——新口径优先。
+  // 仍保留的「不打扰」语义：用户没要求选（agent 不传候选）时，本函数根本走不到这里。
   const svc = input.ctx.get("userQuestions") as FormAskService | undefined;
   if (svc === undefined || typeof svc.ask !== "function") {
     const recommended = pick(proposal.recommendedIndex);
@@ -732,19 +725,21 @@ export const constructionParamsApprovalLines = (input: {
   targetedAdvice: { carry: string[]; min: number | null; max: number | null; reason: string; evidence: string[]; evidenceStatus: string } | undefined;
   riskSignalsProvided?: boolean;
 }): string => {
+  // 问题 6（owner 2026-10-28）：mode0/mode1/mode5/targeted 是工程内部叫法，
+  // 一律不得出现在用户可见文案里——按「这套参数会产出什么样本」说人话。
   const partGroup = input.groupingConfirm
-    ? "分组方案：已确认（mode1 按组逐图各一条生成）"
-    : "分组方案：未确认——mode1 本轮不生成（需显式确认分组方案）";
+    ? "分组方案：已确认（按组逐图各生成一条样本）"
+    : "分组方案：未确认——本轮不生成分组抽取样本（需显式确认分组方案）";
   const partM5 =
     input.mode5Random === undefined
-      ? "mode5 增广：未确认——本轮不生成（扩充倍数不得固定值，需用户给值或确认 agent 建议）"
+      ? "随机子集增强：未确认——本轮不生成（增强倍数不得用固定值，需用户给值或确认建议）"
       : input.mode5Random === 0
-        ? "mode5 增广：0 倍（用户显式不启用）"
-        : `mode5 增广：${input.mode5Random} 倍（用户指定）`;
+        ? "随机子集增强：0 倍（用户显式不启用）"
+        : `随机子集增强：${input.mode5Random} 倍（用户指定）`;
   let partTargeted: string;
   const adv = input.targetedAdvice;
   if (adv === undefined) {
-    partTargeted = "targeted 组合：未提供 agent 建议（必带字段与区间按当前生效值构造）";
+    partTargeted = "重点字段组合：未提供建议（必带字段与字段数区间按当前生效值构造）";
   } else {
     const range = adv.min !== null && adv.max !== null ? `${adv.min}-${adv.max} 字段` : "区间不主张";
     // 出处三态：已校验／待内核校验（风险信号已随调用带上）／无信号不校验
@@ -756,8 +751,8 @@ export const constructionParamsApprovalLines = (input: {
           ? "出处待内核按本批风险信号校验"
           : "未提供风险信号，出处不做校验";
     partTargeted =
-      `targeted 组合建议：必带 ${adv.carry.length > 0 ? adv.carry.join("、") : "(无)"}、${range}` +
-      `（agent 建议，未自动生效；${ev}）——理由：${adv.reason}`;
+      `重点字段组合建议：必带 ${adv.carry.length > 0 ? adv.carry.join("、") : "(无)"}、${range}` +
+      `（建议未自动生效；${ev}）——理由：${adv.reason}`;
   }
   return `构造参数确认：\n- ${partGroup}\n- ${partM5}\n- ${partTargeted}`;
 };
@@ -912,8 +907,12 @@ export type ExperimentTokenParams = Partial<
 
 /** 来源标注文案（审批卡行单源）。 */
 export const TOKEN_PARAM_SOURCE_LABEL: Readonly<Record<ExperimentTokenParamSource, string>> = {
-  user_specified: "用户指定",
-  config_snapshot: "确认快照",
+  // 语义纠正（owner 2026-10-28 当场指出）：`user_specified` 的真实含义只是「本次调用显式传了」，
+  // 而传值的是 agent、不是用户。原先显示「用户指定」＝把 agent 的臆断说成用户的话
+  // （真机：用户从没给过 cutoff_len=8192／max_model_len=16384，卡上却写「用户指定」，
+  //  用户看到后第一反应是「推理窗口不是定了默认 12800 吗」——完全合理）。
+  user_specified: "本次调用传入，非你在方案卡确认",
+  config_snapshot: "你在方案卡确认的",
   unspecified: "未指定——内核按缺省处理",
 };
 
@@ -1742,27 +1741,35 @@ export const buildPipelineTool = (
         type: "number",
         description:
           "训练截断长度（仅 experiment_setup 段有意义，其它段忽略该参；安全正整数，须 ≥ max_total_tokens）：" +
-          "与 max_model_len 独立取值、禁互相推导。进实验门后由内核落 <run>/prep/token_budget.json 并注入训练配置；" +
-          "未显式给定时读确认快照兜底；皆无则不下传（内核按缺省处理，来源如实标注）",
+          "系统惯例基线 **9000**（上限 12800）。与 max_model_len 独立取值、禁互相推导。" +
+          "**用户没给就不要传**——不传即按基线走；自行编一个数（如 8192）等于替用户改训练口径，" +
+          "且卡面会标成「本次调用传入（非你在方案卡确认的值）」，用户一眼看出不是他要的。" +
+          "进实验门后由内核落 <run>/prep/token_budget.json 并注入训练配置；" +
+          "未显式给定时读确认快照兜底；皆无则不下传（内核按缺省＝基线处理）",
       },
       max_model_len: {
         type: "number",
         description:
           "推理窗口（仅 experiment_setup 段有意义，其它段忽略该参；安全正整数，须 ≥ max_total_tokens）：" +
-          "独立取值、禁由 cutoff 推导；进实验门后由内核落预算文件并被评估服务引用；" +
-          "未显式给定时读确认快照兜底；皆无则不下传（内核按缺省处理，来源如实标注）",
+          "系统惯例基线 **12800**（这就是用户口中的「默认 12800」）。独立取值、禁由 cutoff 推导；" +
+          "**用户没给就不要传**——不传即按 12800；自行编 16384 之类属于替用户改推理口径。" +
+          "进实验门后由内核落预算文件并被评估服务引用；" +
+          "未显式给定时读确认快照兜底；皆无则不下传（内核按缺省＝基线处理）",
       },
       image_min_pixels: {
         type: "number",
         description:
-          "最小像素（仅 experiment_setup 段有意义，其它段忽略该参；安全正整数）：与 image_max_pixels 成对提供——" +
-          "只给一端会卡前快败（半新半旧的像素对会让坐标换算与 token 预算用两套口径），两端都在场时须 min<max。未显式给定时读确认快照兜底；皆无则不下传",
+          "最小像素下限。**固定 65536，不接受任何改动**（数据构造/训练/评估必须用同一对象素值，改下限会让三段各说各话）。" +
+          "⚠ 802816 与 1605632 是 **image_max_pixels 的两个可选档位**，与下限没有任何关系——" +
+          "不要把 802816 当 min 传（真机发生过：传了就被内核以 pixel_pair_min_not_pinned_without_reason 拦下）。" +
+          "一般根本不用传这个参数（不传即 65536；未显式给定时读确认快照兜底，皆无则不下传）。",
       },
       image_max_pixels: {
         type: "number",
         description:
-          "最大像素（仅 experiment_setup 段有意义，其它段忽略该参；安全正整数）：与 image_min_pixels 成对提供（单端即卡前快败）；" +
-          "改值影响坐标换算与 token 预算。未显式给定时读确认快照兜底；皆无则不下传",
+          "最大像素上限，两个可选档位 **802816／1605632**（这是「像素对」里唯一可调的那一端）。" +
+          "与 image_min_pixels 成对提供（单端即卡前快败），且须 65536 < 本值。改值影响坐标换算与 token 预算。" +
+          "未显式给定时读确认快照兜底；皆无则不下传（内核按第一档 802816）",
       },
       doc_type: { type: "string", description: "单据类型（可缺省——缺省不上送，内核按数据/登记面推断，无法确定即 blocked；给了则显式指定）" },
       lane_suffix: { type: "string", description: "数据后缀（内部键，一般不用传：缺省不上送，内核按全部处理）" },
@@ -2276,6 +2283,26 @@ export const buildPipelineTool = (
         // 缺项不追加（内核侧门内 null，预算落盘缺项才回退基线）。
         if (tokenParams.values.cutoff_len !== undefined) argv.push("--cutoff-len", String(tokenParams.values.cutoff_len));
         if (tokenParams.values.max_model_len !== undefined) argv.push("--max-model-len", String(tokenParams.values.max_model_len));
+        // 问题 4（owner 2026-10-28）：像素下限固定 65536——**在拼参前拦**，不给它走到内核
+        // 变成一句 pixel_pair_min_not_pinned_without_reason（那句话只说「与基线不一致」，
+        // 没说「802816 其实该填在 max_pixels」，用户和 agent 都得再猜一轮）。
+        // 只拦**owner 指出的那种错**：把 image_max_pixels 的档位（802816／1605632）当 min 传。
+        // 不拦其它偏离值——下调下限（如小字号数据用 1024）是合法场景，内核允许带
+        // pixel_pair_reason 说明理由后放行；harness 比内核更严会造成「内核允许但工具不让」。
+        const minPixelsAsMaxTier = [802_816, 1_605_632];
+        if (tokenParams.values.image_min_pixels !== undefined && minPixelsAsMaxTier.includes(tokenParams.values.image_min_pixels)) {
+          return asToolValue({
+            ok: false,
+            stage: args.stage,
+            run_id: args.run_id,
+            error: "image_min_pixels_is_max_tier",
+            image_min_pixels_given: tokenParams.values.image_min_pixels,
+            note:
+              `${String(tokenParams.values.image_min_pixels)} 是 **image_max_pixels 的档位**，不是像素下限——两者没有任何关系。`
+              + `像素下限（image_min_pixels）的基线与上限都是 65,536；要调像素请改 image_max_pixels`
+              + `（两档 802816／1605632 二选一）。本次未下传任何像素参数。`,
+          });
+        }
         if (tokenParams.values.image_min_pixels !== undefined) argv.push("--image-min-pixels", String(tokenParams.values.image_min_pixels));
         if (tokenParams.values.image_max_pixels !== undefined) argv.push("--image-max-pixels", String(tokenParams.values.image_max_pixels));
       }

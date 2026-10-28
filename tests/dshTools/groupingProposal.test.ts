@@ -219,16 +219,20 @@ describe("C2 分组四态", () => {
     expect(String(result["grouping_report"])).toContain("| 全部字段 | 3 |");
   });
 
-  it("policy_auto：完全权限档不出卡，直接取 candidates[recommended]＋候选摘要＋分组表", async () => {
+  it("完全权限档也必须出卡：传了候选＝在征求用户意见，不得替他静默选定（owner 2026-10-28 改口径）", async () => {
+    // 旧口径（§8-1-A：full 档自动选定、不问）已被推翻：
+    // 传候选这个动作本身就是「请人来选」，按档位静默替他选，用户连有第二套方案都不知道。
     const ws = tempRoot("c2-auto-");
     const asked: Array<Record<string, unknown>> = [];
     const result = await toolOf(ctxOf({ full: true, asked }), mockOf(MOCK_OK)).execute(
       { stage: "experiment_setup", run_id: "auto", workspace_path: ws, grouping_proposal: PROPOSAL },
       fakeExec,
     );
-    expect(asked).toHaveLength(0); // full 档不问
-    expect(result["grouping_source"]).toBe("policy_auto");
-    expect(result["grouping_decision"]).toBe("auto");
+    // full 档也问（且只问一次）
+    expect(asked).toHaveLength(1);
+    expect(result["grouping_source"]).toBe("proposal");
+    expect(result["grouping_decision"]).toBe("user_selected");
+    // 本次 mock 未选任何项 → 落到推荐候选（内核只认 recommended:true）
     expect(result["grouping_candidate_name"]).toBe("按单据/明细两层");
     const evidence = result["grouping_evidence"] as {
       candidate_count: number;
