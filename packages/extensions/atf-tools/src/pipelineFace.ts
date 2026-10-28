@@ -533,7 +533,16 @@ export const resolveGroupingFace = async (input: {
     // 现场：agent 为出卡先写了 17 个 group 占位值 → 被判「用户已给」→ 卡永远出不来 →
     // 它读内核源码自救 9 分钟。**agent 自己写进配置的东西，不能当成用户的决定。**
     const hasProposal = input.proposalRaw !== undefined && input.proposalRaw !== null;
-    if (input.fieldChoiceConfirmed === true || !hasProposal) {
+    // 真机教训（b17 之后的第一次真机）：**不能拿「字段清单确认过」当分组判据**——
+    // 用户确认「要训哪些字段」≠ 认可 agent 写进配置的那套分组。当时的现场是：
+    // 用户在字段卡上确认了 17 个字段 → 这里的判据为真 → agent 写的 4 组**占位分组**
+    // 被当成「用户已给」→ 审批卡写「分组来源：字段配置自带的分组（4 组）——不出卡」。
+    // 正确判据是**分组自己的账本**（用户在分组卡上真的选过一套，且字段集合未变）。
+    const groupingConfirmed =
+      input.runDir !== undefined
+        ? readGroupingDecision(input.runDir, fieldsDigestOf(input.fieldConfigPath)).ok
+        : false;
+    if (groupingConfirmed || !hasProposal) {
       return {
         source: "user_provided",
         decision: "none",
@@ -542,8 +551,8 @@ export const resolveGroupingFace = async (input: {
         evidence: null,
         payload: null,
         note:
-          input.fieldChoiceConfirmed === true
-            ? `分组按字段配置里的 group 走（${String(provided.length)} 组）——你在字段清单卡上确认过`
+          groupingConfirmed
+            ? `分组按字段配置里的 group 走（${String(provided.length)} 组）——这套分组你在分组卡上选定过`
             : `分组按字段配置里的 group 走（${String(provided.length)} 组）——**注意：这组分组来自 agent 写入的字段配置，你没在卡上确认过**`,
       };
     }
@@ -2109,67 +2118,17 @@ export const buildPipelineTool = (
       }
       // ── C2 分组四态（仅 experiment_setup 段）：字段自带 group＞候选建议＞都没有＝平铺 ──
       // 完全权限档不出卡、直接按推荐候选选定（owner 裁定 §8-1-A）；其余档出原生选项卡。
-      // ── 字段清单确认（问题 1，owner 2026-10-28）────────────────────────────
-      // 清单由内核算（<run> 下 data/field-labels.json，口径与实验门逐字一致），
-      // 但**必须经用户确认**：此前 agent 自己数出 17 个字段、自己起中文名与定义、
-      // 直接往下跑，用户第一次看到是在审批卡上——那时已经晚了。
-      let fieldChoiceConfirmed = false;
+      // 字段清单确认已前移到 register 段之后（owner 2026-10-28 顺序纠正：
+      // 字段是登记时从标注梳理出来的，确认必须紧跟着做，不能拖到实验配置段）。
+      // 这里只读账本，供回执与后续判据使用。
+      const fieldChoiceConfirmed = args.stage === "experiment_setup" && readFieldChoice(runDir) !== null;
       let fieldChoiceLine = "";
       if (args.stage === "experiment_setup") {
-        const labels = readFieldLabels(runDir);
-        if (labels !== null) {
-          const prior = readFieldChoice(runDir);
-          if (prior !== null) {
-            fieldChoiceConfirmed = true;
-            fieldChoiceLine = `字段清单：${String(prior.total_fields)} 个（沿用你 ${prior.decided_at} 的确认${
-              prior.all_fields ? "，全部训练" : `，训练 ${prior.confirmed_fields.join("、")}`
-            }）`;
-          } else {
-            const svc = ctx.get("userQuestions") as FormAskService | undefined;
-            if (svc !== undefined && typeof svc.ask === "function") {
-              try {
-                const answers = await svc.ask({
-                  questions: [{
-                    id: `field-choice-${args.run_id}`,
-                    question: `字段清单确认 — ${args.run_id}`,
-                    header: "字段清单",
-                    detail: fieldChoiceDetailOf(labels),
-                    options: labels.labels.map((item) => ({
-                      label: item.label,
-                      description:
-                        item.absent_pages === 0
-                          ? `每页都有（${String(item.page_count)}/${String(labels.page_count)} 页），${String(item.box_count)} 个框`
-                          : `只在 ${String(item.page_count)}/${String(labels.page_count)} 页出现，${String(item.box_count)} 个框`,
-                    })),
-                    multiSelect: true,
-                  }],
-                  agent: exec.agent,
-                  signal: exec.signal,
-                });
-                const picked = [
-                  ...new Set(answers.answers.flatMap((answer) => [...answer.selected]).filter((x) => x.trim() !== "")),
-                ];
-                // 一个都不勾＝全部训练（最常见；不强迫逐项点）
-                const allFields = picked.length === 0 || picked.length >= labels.label_count;
-                const confirmed = allFields ? labels.labels.map((item) => item.label) : picked;
-                writeFieldChoice(runDir, {
-                  run_id: args.run_id,
-                  confirmed_fields: confirmed,
-                  all_fields: allFields,
-                  total_fields: labels.label_count,
-                  decided_at: new Date().toISOString(),
-                  source: "user_confirmed",
-                });
-                fieldChoiceConfirmed = true;
-                fieldChoiceLine = `字段清单：${String(labels.label_count)} 个（你在卡上确认${
-                  allFields ? "，全部训练" : `，只训练 ${picked.join("、")}`
-                }）`;
-              } catch {
-                // 卡被关掉/通道失败 → **不造假确认**：本轮不落账，下一步仍会再问
-                fieldChoiceLine = `字段清单：${String(labels.label_count)} 个（本次未确认——下次仍会问）`;
-              }
-            }
-          }
+        const prior = readFieldChoice(runDir);
+        if (prior !== null) {
+          fieldChoiceLine = `字段清单：${String(prior.total_fields)} 个（你在登记后确认过${
+            prior.all_fields ? "，全部训练" : `，训练 ${prior.confirmed_fields.join("、")}`
+          }）`;
         }
       }
       let groupingFace: GroupingFace | undefined;
@@ -2419,6 +2378,89 @@ export const buildPipelineTool = (
       // C2：分组建议临时件用完即删（scratch/tmp 语义——不留在工作区冒充产物）
       if (groupingProposalPath !== null) {
         try { rmSync(groupingProposalPath, { force: true }); } catch { /* 删不掉不阻塞段回报 */ }
+      }
+      // ── 字段清单确认（问题 1）──────────────────────────────────────────────
+      // **紧接登记**：字段清单是 register 段从标注梳理出来的（field-labels.json），
+      // 所以登记一成功就问「这些字段对不对、要训哪些」——顺序上不能滞后。
+      // owner 2026-10-28 当场纠正过一次（原实现拖到 experiment_setup 才问）。
+      let fieldChoiceSummary: Record<string, unknown> | undefined;
+      if (args.stage === "register" && result.code === 0) {
+        const labels = readFieldLabels(runDir);
+        if (labels !== null) {
+          const prior = readFieldChoice(runDir);
+          if (prior !== null) {
+            fieldChoiceSummary = {
+              confirmed_fields: prior.confirmed_fields,
+              all_fields: prior.all_fields,
+              total_fields: prior.total_fields,
+              reused: true,
+              decided_at: prior.decided_at,
+            };
+          } else {
+            const svc = ctx.get("userQuestions") as FormAskService | undefined;
+            if (svc !== undefined && typeof svc.ask === "function") {
+              try {
+                // 提问卡（单选）——不是 17 项复选框（owner 2026-10-28：字段确认就是一句问答）。
+                const answers = await svc.ask({
+                  questions: [{
+                    id: `field-choice-${args.run_id}`,
+                    question: `这批数据的字段清单要全用它吗？— ${args.run_id}`,
+                    header: "字段清单",
+                    detail: fieldChoiceDetailOf(labels),
+                    options: [
+                      {
+                        label: `全部 ${String(labels.label_count)} 个字段都训练`,
+                        description: `推荐——共 ${String(labels.box_count)} 个框、覆盖 ${String(labels.page_count)} 页`,
+                      },
+                      {
+                        label: "我要挑几个字段",
+                        description: "选这个，然后告诉我要训练哪几个（不选这项就按全部训练）",
+                      },
+                    ],
+                    multiSelect: false,
+                  }],
+                  agent: exec.agent,
+                  signal: exec.signal,
+                });
+                const picked = answers.answers.flatMap((answer) => [...answer.selected])[0] ?? "";
+                const custom = answers.answers
+                  .map((answer) => answer.custom ?? "")
+                  .filter((value) => value.trim() !== "")
+                  .join("；")
+                  .trim();
+                const wantsAll = picked.startsWith("全部 ") && custom === "";
+                if (wantsAll) {
+                  writeFieldChoice(runDir, {
+                    run_id: args.run_id,
+                    confirmed_fields: labels.labels.map((item) => item.label),
+                    all_fields: true,
+                    total_fields: labels.label_count,
+                    decided_at: new Date().toISOString(),
+                    source: "user_confirmed",
+                  });
+                  fieldChoiceSummary = {
+                    confirmed_fields: labels.labels.map((item) => item.label),
+                    all_fields: true,
+                    total_fields: labels.label_count,
+                  };
+                } else {
+                  // 「我要挑几个」或用户直接写了字段名 → **不落账**（不把没定的事记成定论），
+                  // 把原话交回 agent，由它追问清楚后以 field_config 显式给出。
+                  fieldChoiceSummary = {
+                    confirmed_fields: [],
+                    all_fields: false,
+                    total_fields: labels.label_count,
+                    needs_selection: true,
+                    user_words: custom !== "" ? custom : picked,
+                    note: "用户没有确认「全部训练」——请按他说的字段范围弄清楚具体是哪几个，再以 field_config 显式给出；不要替他勾全选",
+                  };
+                }              } catch {
+                // 卡被关掉/通道失败 → 不造假确认：下一段前仍会再问（账本没有记录）
+                fieldChoiceSummary = { confirmed_fields: [], all_fields: false, total_fields: labels.label_count, skipped: true };
+              }
+            }
+          }
+        }
       }
       let summary: unknown = null;
       const trimmed = result.stdout.trim();

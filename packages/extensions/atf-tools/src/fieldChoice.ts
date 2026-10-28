@@ -171,7 +171,9 @@ export const fieldChoiceDetailOf = (labels: FieldLabels, alreadyConfirmed?: Fiel
     lines.push(`· ${item.label} —— ${rarity}，${String(item.box_count)} 个框`);
   }
   lines.push("");
-  lines.push("**勾选你要训练的字段**；一个都不勾＝全部 %d 个都训练（最常见）。".replace("%d", String(labels.label_count)));
+  lines.push(
+    "**这些字段要全部训练吗？** 全部训练就选第一项；只想训其中几个就选第二项并告诉我哪几个。".replace("%d", String(labels.label_count)),
+  );
   lines.push("中文名与字段定义由训练侧按标注标签生成——如果你要改某个字段的叫法，直接在这里说。");
   if (alreadyConfirmed !== undefined && alreadyConfirmed !== null) {
     lines.push(

@@ -27,6 +27,10 @@ import {
   type FieldLabels,
 } from "../../packages/extensions/atf-tools/src/fieldChoice.js";
 import { resolveGroupingFace } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
+import {
+  fieldsDigestOf,
+  writeGroupingDecision,
+} from "../../packages/extensions/atf-tools/src/groupingDecision.js";
 
 const runDirOf = (): string => mkdtempSync(join(tmpdir(), "atf-fc-"));
 
@@ -106,7 +110,7 @@ describe("卡面文案", () => {
     expect(detail).toContain("不是系统编的");
     expect(detail).toContain("awb —— 每页都有（12/12 页），14 个框");
     expect(detail).toContain("notify_party —— 只在 3/12 页出现，4 个框");
-    expect(detail).toContain("一个都不勾＝全部 3 个都训练");
+    expect(detail).toContain("这些字段要全部训练吗？");
   });
 });
 
@@ -136,17 +140,30 @@ describe("D-f：user_provided 只在「用户确认过」时成立", () => {
     ],
   };
 
-  it("已确认 → 走配置里的分组，不出卡", async () => {
+  it("分组账本里有记录 → 走配置里的分组，不出卡", async () => {
+    const runDir = runDirOf();
+    const cfg = fieldConfigWithGroups();
+    // 只有「分组自己的账本」才算用户确认过分组——字段清单确认过不算（真机踩过）
+    writeGroupingDecision(runDir, {
+      run_id: "r1",
+      candidate_name: "按业务域两组",
+      groups: [],
+      payload: { schema_version: "GroupingProposal/v1", candidates: [] },
+      fields_digest: fieldsDigestOf(cfg),
+      field_count: 2,
+      decided_at: "2026-10-28T20:00:00.000Z",
+      source: "user_selected",
+    });
     const face = await resolveGroupingFace({
       ctx: { get: () => undefined },
       exec: {},
       runId: "r1",
-      fieldConfigPath: fieldConfigWithGroups(),
+      fieldConfigPath: cfg,
       proposalRaw: proposal,
-      fieldChoiceConfirmed: true,
+      runDir,
     });
     expect("source" in face && face.source).toBe("user_provided");
-    expect("note" in face && String(face.note)).toContain("你在字段清单卡上确认过");
+    expect("note" in face && String(face.note)).toContain("你在分组卡上选定过");
   });
 
   it("未确认 + agent 给了候选 → **不短路**，继续走候选（D-f 现场就是卡在这里）", async () => {
@@ -156,7 +173,7 @@ describe("D-f：user_provided 只在「用户确认过」时成立", () => {
       runId: "r1",
       fieldConfigPath: fieldConfigWithGroups(),
       proposalRaw: proposal,
-      fieldChoiceConfirmed: false,
+      runDir: runDirOf(),   // 无账本
     });
     expect("source" in face && face.source).toBe("proposal");
     expect("note" in face && String(face.note)).toContain("选择卡通道不可用");
@@ -169,7 +186,7 @@ describe("D-f：user_provided 只在「用户确认过」时成立", () => {
       runId: "r1",
       fieldConfigPath: fieldConfigWithGroups(),
       proposalRaw: undefined,
-      fieldChoiceConfirmed: false,
+      runDir: runDirOf(),   // 无账本
     });
     expect("source" in face && face.source).toBe("user_provided");
     expect("note" in face && String(face.note)).toContain("没在卡上确认过");
