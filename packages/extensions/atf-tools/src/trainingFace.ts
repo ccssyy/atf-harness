@@ -2694,6 +2694,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       style_cluster_manifest: { type: "string", description: "StyleClusterManifest 路径（实验门②产出——缺省沿 L1 产物位 runs/<run_id>/l1/style-cluster-manifest.json）" },
       coordinate_space: { type: "string", description: "预测坐标空间声明（qwen_axis_1000|original_pixel；SKILL.md 条款：无法从 ExperimentConfig 派生时必传，链侧 fail-closed 拒绝静默缺省）" },
       gt_coordinate_space: { type: "string", description: "GT 标签坐标空间声明（闭集同上；GT 与预测可分属不同空间）" },
+      cluster_reviews: { type: "string", description: "图核审阅件路径（ClusterAgentReview/v1）：逐簇裁决按此件回注账本；账本同级已有审阅轮却不传，链会 fail-closed 拒绝（禁止把 coverage 标成完成）" },
+      review_check: { type: "string", description: "审阅覆盖校验件路径（BadcaseReviewCheck/v1，可选；与审阅件同源）" },
     },
     output: {
       schema: { type: "object", additionalProperties: true },
@@ -2702,7 +2704,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     presentCall: function(args: { run_id?: string }) {
       return { card: "generic" as const, title: `badcase 分析 — ${args.run_id ?? "会话绑定实验"}`, kind: "other" as const }
     },
-    async execute(args: { run_id?: string; eval_assets_dir?: string; lane?: string; doc_type?: string; style_cluster_manifest?: string; coordinate_space?: string; gt_coordinate_space?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+    async execute(args: { run_id?: string; eval_assets_dir?: string; lane?: string; doc_type?: string; style_cluster_manifest?: string; coordinate_space?: string; gt_coordinate_space?: string; cluster_reviews?: string; review_check?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选）
       const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id, canonicalRunRootsOf(cfg));
       if (!runResolution.ok) return asToolValue(runResolution.payload);
@@ -2722,7 +2724,12 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         }
         const jointOut = join(runDir, "analysis");
         const jointArgs = [jointScript, "--run", runDir, "--output-dir", jointOut,
-          ...(args.lane !== undefined && args.lane.trim() !== "" ? ["--lane", args.lane.trim()] : [])];
+          ...(args.lane !== undefined && args.lane.trim() !== "" ? ["--lane", args.lane.trim()] : []),
+          // 审阅件入口：联合链本身支持 --cluster-reviews/--review-check，此处只是把它接到工具面
+          ...(args.cluster_reviews !== undefined && args.cluster_reviews.trim() !== ""
+            ? ["--cluster-reviews", args.cluster_reviews.trim()] : []),
+          ...(args.review_check !== undefined && args.review_check.trim() !== ""
+            ? ["--review-check", args.review_check.trim()] : [])];
         const joint = await runCapture("python3", jointArgs, 600_000, evalChildEnvOf());
         if (joint.code !== 0) {
           return asToolValue({
@@ -2735,6 +2742,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         return asToolValue({
           ok: true, mode: "multi_doc", doc_types: analyzeDocTypes,
           analysis_dir: jointOut, report: join(jointOut, "report.md"), viewer: join(jointOut, "viewer.html"),
+          // 联合链内部委托单链，stdout 同样带 review_coverage/incomplete——多单据回执也须透传
+          ...reviewCoverageOf(joint.stdout),
           note: `逐类分析完成（${analyzeDocTypes.join("、")}）：一份报告＋一个查看器，按单据/模式可筛选`,
         });
       }
@@ -2792,6 +2801,13 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 坐标声明透传（不设缺省——缺失时链侧按 SKILL.md fail-closed 拒绝静默取默认值）
       if (args.coordinate_space !== undefined) chainArgs.push("--coordinate-space", args.coordinate_space);
       if (args.gt_coordinate_space !== undefined) chainArgs.push("--gt-coordinate-space", args.gt_coordinate_space);
+      // 审阅件透传（链内据此回注账本并更新覆盖账；缺它则回注/决策步显式跳过）
+      if (args.cluster_reviews !== undefined && args.cluster_reviews.trim() !== "") {
+        chainArgs.push("--cluster-reviews", args.cluster_reviews.trim());
+      }
+      if (args.review_check !== undefined && args.review_check.trim() !== "") {
+        chainArgs.push("--review-check", args.review_check.trim());
+      }
       const chained = await runCapture("python3", chainArgs, 300_000);
       const viewerPath = join(runDir, "analysis", "viewer", "viewer.html");
       const reportMd = join(runDir, "analysis", "report", "report.md");
