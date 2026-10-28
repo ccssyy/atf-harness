@@ -196,6 +196,8 @@ export const localHostFor = (localRoots: { runsRoot: string; kernelDir: string; 
     // 目录结构 v1 工具链：DSH 家同源注入（装配面显式值优先，回退本进程 DSH_HOME env→
     // ~/.dsh 解析链——与 vendor home-paths 一致；TUI/resume 装配缺席时 handler 同链回退）。
     dshHome: localRoots.dshHome ?? resolveDshHome(),
+    // 实例根同源注入（ATF_INSTANCE_ROOT 由实例 env 声明；缺席＝非实例形态，定域校验不启用）。
+    instanceRoot: process.env["ATF_INSTANCE_ROOT"],
   };
 };
 

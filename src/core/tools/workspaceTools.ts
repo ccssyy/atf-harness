@@ -16,7 +16,7 @@
  */
 import { createHash } from "node:crypto";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
   buildScratchExecEnv,
@@ -36,6 +36,7 @@ import {
   SCRATCH_WRITE_MAX_BYTES,
   type LaunchReady,
 } from "../workspace/scratchExec.js";
+import { withinRootOf } from "../../agent/fileRoots.js";
 import { startLossIngest } from "../workspace/lossIngest.js";
 import { recordFirstLaunchAt } from "../workspace/trainingPreflight.js";
 import {
@@ -108,6 +109,9 @@ export interface LocalToolHost {
   /** DSH 家（目录结构 v1 工具链：注册表/会话桶定位根）。web 桥装配注入（DSH_HOME env
    *  同源）；缺席时 handler 回退 env→~/.dsh 解析链（与 vendor home-paths 缺省一致）。 */
   dshHome?: string;
+  /** 实例根（ATF_INSTANCE_ROOT 同源）。准入/落点判定用；缺席＝非实例形态，定域校验不启用
+   *  （fail-open——不做无据约束）。 */
+  instanceRoot?: string;
 }
 
 /** 本地 handler 终态（无 failed——环境缺口一律结构化 rejected，模型可转述；见文件头）。 */
@@ -1001,6 +1005,17 @@ const rebindWorkspaceHandler: LocalToolHandler = async (rawParams, host) => {
   } catch (cause) {
     return rejected("invalid_params", { message: (cause as Error).message });
   }
+  // 定域 advisory（不阻断）：迁移/认领到实例根外是合法运维动作（换大盘、临时盘），
+  // 但该位置不会进文件工具白名单——如实告知，避免「绑好了却读不了」的黑箱。
+  const instanceRoot = host.instanceRoot?.trim() ?? "";
+  const outOfInstance =
+    instanceRoot !== "" && !withinRootOf(outcome.newPath, instanceRoot, (value) => {
+      try {
+        return realpathSync(value);
+      } catch {
+        return null;
+      }
+    });
   return {
     kind: "executed",
     result: {
@@ -1009,6 +1024,15 @@ const rebindWorkspaceHandler: LocalToolHandler = async (rawParams, host) => {
       old_path: outcome.oldPath,
       new_path: outcome.newPath,
       registry_updated: outcome.registryUpdated,
+      ...(outOfInstance
+        ? {
+            out_of_instance: true,
+            instance_root: instanceRoot,
+            out_of_instance_note:
+              "该位置不在实例根内——文件与命令工具不会放行此地（实例根外的工作区不进白名单）。" +
+              "要在此读写，须由运维在实例声明面登记目录；否则请把数据移入实例根内的工作区。",
+          }
+        : {}),
       bucket_disposition: outcome.bucketDisposition,
       ...(outcome.bucketOldName !== undefined ? { bucket_old_name: outcome.bucketOldName } : {}),
       bucket_new_name: outcome.bucketNewName,

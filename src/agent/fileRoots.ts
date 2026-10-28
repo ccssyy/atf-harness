@@ -42,6 +42,9 @@ export interface DerivedFileRoots {
   roots: string[];
   /** 逐根来源标注（与 roots 等长——守护测试②"派生集＝声明面"的断言面）。 */
   sources: string[];
+  /** 被实例定域闸排除的注册工作区（空数组＝无排除；调用方须如实投影，禁止静默）。
+   *  reason 闭集见 {@link WORKSPACE_OUT_OF_INSTANCE}。 */
+  excluded: Array<{ path: string; reason: string }>;
 }
 
 const KERNEL_CONFIG_RELPATH = join(".atf", "config.json");
@@ -77,6 +80,34 @@ const defaultRegistryWorkspaces = (env: NodeJS.ProcessEnv): (() => ReadonlyArray
     );
     return [];
   }
+};
+
+/** 注册工作区落在实例根外的拒绝码（定域纪律 F16 在文件围栏层的机器锚）。 */
+export const WORKSPACE_OUT_OF_INSTANCE = "workspace_out_of_instance";
+
+/** 路径是否落在根内（含根本身）。
+ *
+ *  逐段比较而非字符串前缀——`<根>/x` 不得匹配 `<根>/x2`（既有 workspace_init 同类教训）。
+ *  两侧都先 realpath 归一（软链同一性）；归一失败按字面比较，不猜。
+ *
+ *  @param path - 待判路径。
+ *  @param root - 根路径。
+ *  @param realpath - realpath 归一函数（注入桩供守卫测试）。
+ *  @returns 在根内为 true。
+ */
+export const withinRootOf = (
+  path: string,
+  root: string,
+  realpath: (value: string) => string | null,
+): boolean => {
+  const normalize = (value: string): string => {
+    const resolved = (realpath(value) ?? value).replace(/\/+$/, "");
+    return resolved === "" ? "/" : resolved;
+  };
+  const target = normalize(path);
+  const base = normalize(root);
+  if (base === "/") return target.startsWith("/");
+  return target === base || target.startsWith(base + "/");
 };
 
 /** 从一份 env-profile JSON 文本提取声明根：train_env/eval_env 非 "system"/空值。 */
@@ -166,12 +197,29 @@ export const deriveFileToolRoots = (input: DeriveFileRootsInput): DerivedFileRoo
   if (dshHomeEnv !== "") push(join(dshHomeEnv, "attachments"), "dsh-home:attachments");
   // ⑦ 注册工作区（A4——UI 建工作区免重启可读写；热加载见 fileGuardFace.startFileRootsHotReload）。
   // 清单获取失败（注入桩抛错/实读异常）＝空集 fail-open——派生面永不因注册表不可读而失败。
+  //
+  // 定域闸（F16 纪律在围栏层的落点）：注册表是无条件接受外部写入的面——UI picker 缺省根是
+  // 宿主家目录（vendor 行为），随手建一个工作区就会把实例根外目录（家目录、他人项目、/tmp）
+  // 变成白名单根。故此处按"实例根内 / 已被其它派生面覆盖"两条纳入，其余排除并如实记账。
+  // 实例根未声明（非实例形态）＝闸不启用（fail-open，旧行为不变）。
+  const excluded: Array<{ path: string; reason: string }> = [];
+  const instanceRoot = env["ATF_INSTANCE_ROOT"]?.trim() ?? "";
+  const coveredByDeclared = (path: string): boolean =>
+    roots.some((declared) => withinRootOf(path, declared, realpath));
   try {
     for (const entry of (input.listRegistryWorkspaces ?? defaultRegistryWorkspaces(env))()) {
-      push(entry.path, "registry:workspace");
+      const path = typeof entry.path === "string" ? entry.path.trim() : "";
+      if (path === "") continue;
+      if (instanceRoot === "" || withinRootOf(path, instanceRoot, realpath) || coveredByDeclared(path)) {
+        push(path, "registry:workspace");
+        continue;
+      }
+      if (!excluded.some((item) => item.path === path)) {
+        excluded.push({ path, reason: WORKSPACE_OUT_OF_INSTANCE });
+      }
     }
   } catch {
     // fail-open：该声明面缺席（不猜不回退——其余派生面不受累）
   }
-  return { roots, sources };
+  return { roots, sources, excluded };
 };

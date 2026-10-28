@@ -102,7 +102,7 @@ export const registerPathGuard = (
         if (pathOutsideRoots(rawPath, host.roots)) {
           return {
             kind: "deny",
-            reason: `${FILE_PATH_OUTSIDE_ALLOWLIST}: ${rawPath} 越出白名单（合法根：${host.roots.join("；")}）——改用工作区相对路径，或将数据目录经 ${"ATF_V1_FILE_TOOL_ROOTS"} 声明后使用`,
+            reason: `${FILE_PATH_OUTSIDE_ALLOWLIST}: ${rawPath} 越出白名单（合法根：${host.roots.join("；")}）——改用工作区相对路径，或将数据目录经 ${"ATF_V1_FILE_TOOL_ROOTS"} 声明后使用；注意实例根外的会话工作区不进白名单（workspace_out_of_instance），工作区请建在 <ATF_INSTANCE_ROOT> 内`,
           };
         }
       }
@@ -173,7 +173,7 @@ export const bashCommandGuard = (
       }
       return {
         ok: false,
-        message: `${FILE_PATH_OUTSIDE_ALLOWLIST}: 命令引用白名单外绝对路径 ${token}（合法根：${roots.join("；")}）——改用工作区相对路径，或将数据目录经 ATF_V1_FILE_TOOL_ROOTS 声明后使用`,
+        message: `${FILE_PATH_OUTSIDE_ALLOWLIST}: 命令引用白名单外绝对路径 ${token}（合法根：${roots.join("；")}）——改用工作区相对路径，或将数据目录经 ATF_V1_FILE_TOOL_ROOTS 声明后使用；注意实例根外的会话工作区不进白名单（workspace_out_of_instance），工作区请建在 <ATF_INSTANCE_ROOT> 内`,
       };
     }
   }
@@ -611,7 +611,14 @@ export const startFileRootsHotReload = (
       roots.length = 0;
       roots.push(...derived.roots);
       lastSignature = signature;
-      log(`[atf-tools] 白名单根热加载：${String(derived.roots.length)} 个（注册表感知——UI 建工作区免重启生效）`);
+      const excludedNote =
+        derived.excluded.length === 0
+          ? ""
+          : `；${String(derived.excluded.length)} 个注册工作区在实例根外已排除（${derived.excluded
+              .map((item) => item.path)
+              .slice(0, 5)
+              .join("、")}${derived.excluded.length > 5 ? " 等" : ""}——工作区请建在实例根内）`;
+      log(`[atf-tools] 白名单根热加载：${String(derived.roots.length)} 个（注册表感知——UI 建工作区免重启生效）${excludedNote}`);
     } catch (cause) {
       // 保留现集（不缩窄——白名单只增不减语义）
       log(`[atf-tools] 白名单根热加载失败（保留现集 ${String(roots.length)} 个）：${String(cause).slice(0, 200)}`);
