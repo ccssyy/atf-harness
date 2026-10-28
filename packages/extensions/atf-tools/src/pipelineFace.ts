@@ -1275,6 +1275,28 @@ const extractFieldConfigError = (stderr: string): Record<string, unknown> | null
   return null;
 };
 
+/**
+ * F14：label_qc 段被阻断（exit 2）时的续跑指路。
+ *
+ * 为什么要有它：内核在待确认项 > 0 时阻断该段，正解是「inspect 取 report_digest 与待裁决项 →
+ * resolve 提交二选一 → **同一 run** 重跑 label_qc 段」。回执若不说清这条路，agent 会把任务当成
+ * 新的重开，于是同实验下不断新增 run 目录（现场 run-awb-01/03/04 即此痕迹）。故 blocked 回执
+ * 必须自带 next 与 same_run_required，并点名两个工具的真实名字（可发现性三面之一）。
+ *
+ * @param stage - 本次段名（只有 label_qc 命中）。
+ * @param code - 内核退出码（2＝blocked）。
+ * @returns 追加进回执的键；不命中返回空对象。
+ */
+export const labelQcResumeHintOf = (stage: string, code: number | null): Record<string, unknown> => {
+  if (stage !== "label_qc" || code !== 2) return {};
+  return {
+    next_action: "label_adjudication",
+    next: "待确认标注项未裁决——用 atf_label_qc_inspect 取 report_digest 与待裁决清单，逐项二选一后交 atf_label_qc_resolve 提交，再用**同一个 run_id** 重跑 label_qc 段",
+    same_run_required: true,
+    same_run_note: "禁止新建 run 绕过：新 run 会丢掉本轮已登记的体检结论与裁决留痕，实验下还会多出空壳目录",
+  };
+};
+
 export const buildPipelineTool = (
   ctx: { get(service: string): unknown },
   pipelineCommand: string,
@@ -2159,6 +2181,8 @@ export const buildPipelineTool = (
         // D77：完整码不进模型可见返回体——模型照抄进散文即用户可见；对账面＝scratch 观测账。
         ...(kernelFace !== null ? { note: kernelFace.note } : {}),
         ...(fieldConfigError !== null ? { field_config: fieldConfigError } : {}),
+        // F14：label_qc 阻断 → 续跑指路（同 run 裁决后重跑，不得新建 run）
+        ...labelQcResumeHintOf(args.stage, result.code),
       });
     },
   }) as unknown as { execute: (args: Record<string, unknown>, exec: unknown) => Promise<Record<string, unknown>> };

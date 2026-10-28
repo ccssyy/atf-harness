@@ -49,6 +49,12 @@ export const BRIDGE_TOOL_NAMES: readonly string[] = [
   "atf_workspace_status",
   "atf_admit_data",
   "atf_label_qc_inspect",
+  // F14（2026-10-28）：裁决入口必须与 inspect 同面开放——只给 inspect 等于"看得到冲突、
+  // 提交不了裁决"，agent 只能把任务当新的重开，于是同实验下不断新增 run 目录（现场
+  // run-awb-01/03/04）。内核 `atf_label_qc.resolve` 早已就绪（tools.py:
+  // registry.register("atf_label_qc.resolve", …)），harness 定义与审批文案也在
+  // （toolDefinition.ts:394、approvalCopy.ts:93），缺的只是这张名单。
+  "atf_label_qc_resolve",
   "atf_scratch_exec",
   "atf_skill_read",
   "atf_gate",

@@ -355,11 +355,13 @@ describe("工作区治理两工具 handler（WebUI 桥装配同链——审批/�
 // ---------------------------------------------------------------- 投影面护栏（contract_field_wiring 同族）
 
 describe("投影面护栏：BRIDGE_TOOL_NAMES ⊆ 工作区分册（定义单源对账）", () => {
-  it("九件投影名全部能在契约定义单源找到（TOOL_DEFINITIONS ∪ WORKSPACE_TOOL_DEFINITIONS）", () => {
+  it("十件投影名全部能在契约定义单源找到（TOOL_DEFINITIONS ∪ WORKSPACE_TOOL_DEFINITIONS）", () => {
     const contractNames = [...TOOL_DEFINITIONS, ...WORKSPACE_TOOL_DEFINITIONS].map((definition) => definition.name);
     for (const name of BRIDGE_TOOL_NAMES) expect(contractNames).toContain(name);
     expect(BRIDGE_TOOL_NAMES).toContain("atf_create_experiment");
     expect(BRIDGE_TOOL_NAMES).toContain("atf_rebind_workspace");
-    expect(BRIDGE_TOOL_NAMES).toHaveLength(9);
+    // F14：atf_label_qc_resolve 与 inspect 同面开放（决议入口，见 labelQcResume.test.ts）→ 9→10
+    expect(BRIDGE_TOOL_NAMES).toContain("atf_label_qc_resolve");
+    expect(BRIDGE_TOOL_NAMES).toHaveLength(10);
   });
 });

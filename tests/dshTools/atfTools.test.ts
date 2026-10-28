@@ -91,7 +91,9 @@ describe("atf-tools 注册面（11 工具清单＝指令要求）", () => {
     // （atf_launch_execute 编排执行点对 DSH 面开放）→ registered 11→12
     // ＋目录结构 v1 工具链（设计基线 D4/D5/D6）：七件→九件（atf_create_experiment／
     // atf_rebind_workspace 工作区治理两件投影）→ registered 12→14。
-    expect(registered).toHaveLength(14);
+    // ＋F14（2026-10-28）：裁决入口 atf_label_qc_resolve 与 inspect 同面开放——只给 inspect
+    // 时会话里"看得到冲突、交不了裁决"，agent 只能重开任务并新增 run 目录 → registered 14→15。
+    expect(registered).toHaveLength(15);
     await manager.close();
   });
 
