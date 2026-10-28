@@ -342,7 +342,8 @@ describe("E10b——落盘摘要回读（真内核段模式摘要不落 stdout�
     expect(result["summary"]).toBeUndefined();
     expect(result["style_cluster_state"]).toBeUndefined();
     expect(result["user_message"]).toBeUndefined();
-    expect(String(result["note"])).toContain("摘要未含 rejections 原文");
+    expect(String(result["note"])).toContain("没拿到可采纳的摘要");
+    expect(result["kernel_stderr"]).toBeDefined();
   });
 });
 

@@ -2714,8 +2714,8 @@ export const buildPipelineTool = (
         ...(result.code === 2 && rejections === null
           ? {
               note:
-                "内核拒绝且没产出摘要——最常见原因是**命令参数内核不认**（argparse 直接 exit 2、零写入）。"
-                + "内核原始报错见 kernel_stderr：按它改参数或补内核接线后重试，不要靠猜或读源码。",
+                "内核拒绝，但没拿到可采纳的摘要——两种常见成因：①命令参数内核不认（argparse 直接 exit 2、零写入）；"
+                + "②落盘摘要的 run_id/stage 与本段不符被丢弃。内核原始输出见 kernel_stderr / kernel_stdout_tail：按它定位，不要靠猜或读源码。",
               kernel_stderr: result.stderr.slice(-2000),
               ...(result.stdout.trim() !== ""
                 ? { kernel_stdout_tail: result.stdout.trim().slice(-1000) }
