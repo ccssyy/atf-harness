@@ -122,6 +122,7 @@ import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
 import { fieldNameMapOf, readExperimentGrouping, renderGroupingSection } from "../../../../src/core/workspace/experimentGrouping.js";
 import { fieldsDigestOf, groupingDecisionPathOf, readGroupingDecision, writeGroupingDecision } from "./groupingDecision.js";
+import { fieldChoiceDetailOf, readFieldChoice, readFieldLabels, writeFieldChoice } from "./fieldChoice.js";
 import { decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
 import { join } from "node:path";
 
@@ -522,18 +523,31 @@ export const resolveGroupingFace = async (input: {
   /** run 根（定位分组选择账本 `<run>/runtime/webui/grouping-choice.json`）。
    *  缺省＝不读不写账本（保持旧调用方零改动；本工具内恒传）。 */
   runDir?: string;
+  /** 本次是否已有「用户在字段清单卡上确认过」的记录（D-f 的判据）。
+   *  缺省 undefined＝按未确认处理（宁可多问一次，不把 agent 自拟当用户决定）。 */
+  fieldChoiceConfirmed?: boolean;
 }): Promise<GroupingFace | { ok: false; errors: string[] }> => {
   const provided = fieldGroupsOf(input.fieldConfigPath);
   if (provided !== null) {
-    return {
-      source: "user_provided",
-      decision: "none",
-      candidate_name: null,
-      groups: provided,
-      evidence: null,
-      payload: null,
-      note: `分组按字段配置里的 group 走（${String(provided.length)} 组）——用户已经给了，不再出卡`,
-    };
+    // D-f（owner 2026-10-28）：判据从「文件里有 group」改成「用户确认过」。
+    // 现场：agent 为出卡先写了 17 个 group 占位值 → 被判「用户已给」→ 卡永远出不来 →
+    // 它读内核源码自救 9 分钟。**agent 自己写进配置的东西，不能当成用户的决定。**
+    const hasProposal = input.proposalRaw !== undefined && input.proposalRaw !== null;
+    if (input.fieldChoiceConfirmed === true || !hasProposal) {
+      return {
+        source: "user_provided",
+        decision: "none",
+        candidate_name: null,
+        groups: provided,
+        evidence: null,
+        payload: null,
+        note:
+          input.fieldChoiceConfirmed === true
+            ? `分组按字段配置里的 group 走（${String(provided.length)} 组）——你在字段清单卡上确认过`
+            : `分组按字段配置里的 group 走（${String(provided.length)} 组）——**注意：这组分组来自 agent 写入的字段配置，你没在卡上确认过**`,
+      };
+    }
+    // 未确认 + agent 给了候选：不短路，继续走候选出卡（下面 parse proposal 那段）
   }
   // ── D-c：用户上次在这个 run 里选过的分组方案 ─────────────────────────────
   // 真机（dev 2026-10-28）：卡弹出、用户选定、随后该段失败零写入 → 选择蒸发，
@@ -2095,6 +2109,69 @@ export const buildPipelineTool = (
       }
       // ── C2 分组四态（仅 experiment_setup 段）：字段自带 group＞候选建议＞都没有＝平铺 ──
       // 完全权限档不出卡、直接按推荐候选选定（owner 裁定 §8-1-A）；其余档出原生选项卡。
+      // ── 字段清单确认（问题 1，owner 2026-10-28）────────────────────────────
+      // 清单由内核算（<run> 下 data/field-labels.json，口径与实验门逐字一致），
+      // 但**必须经用户确认**：此前 agent 自己数出 17 个字段、自己起中文名与定义、
+      // 直接往下跑，用户第一次看到是在审批卡上——那时已经晚了。
+      let fieldChoiceConfirmed = false;
+      let fieldChoiceLine = "";
+      if (args.stage === "experiment_setup") {
+        const labels = readFieldLabels(runDir);
+        if (labels !== null) {
+          const prior = readFieldChoice(runDir);
+          if (prior !== null) {
+            fieldChoiceConfirmed = true;
+            fieldChoiceLine = `字段清单：${String(prior.total_fields)} 个（沿用你 ${prior.decided_at} 的确认${
+              prior.all_fields ? "，全部训练" : `，训练 ${prior.confirmed_fields.join("、")}`
+            }）`;
+          } else {
+            const svc = ctx.get("userQuestions") as FormAskService | undefined;
+            if (svc !== undefined && typeof svc.ask === "function") {
+              try {
+                const answers = await svc.ask({
+                  questions: [{
+                    id: `field-choice-${args.run_id}`,
+                    question: `字段清单确认 — ${args.run_id}`,
+                    header: "字段清单",
+                    detail: fieldChoiceDetailOf(labels),
+                    options: labels.labels.map((item) => ({
+                      label: item.label,
+                      description:
+                        item.absent_pages === 0
+                          ? `每页都有（${String(item.page_count)}/${String(labels.page_count)} 页），${String(item.box_count)} 个框`
+                          : `只在 ${String(item.page_count)}/${String(labels.page_count)} 页出现，${String(item.box_count)} 个框`,
+                    })),
+                    multiSelect: true,
+                  }],
+                  agent: exec.agent,
+                  signal: exec.signal,
+                });
+                const picked = [
+                  ...new Set(answers.answers.flatMap((answer) => [...answer.selected]).filter((x) => x.trim() !== "")),
+                ];
+                // 一个都不勾＝全部训练（最常见；不强迫逐项点）
+                const allFields = picked.length === 0 || picked.length >= labels.label_count;
+                const confirmed = allFields ? labels.labels.map((item) => item.label) : picked;
+                writeFieldChoice(runDir, {
+                  run_id: args.run_id,
+                  confirmed_fields: confirmed,
+                  all_fields: allFields,
+                  total_fields: labels.label_count,
+                  decided_at: new Date().toISOString(),
+                  source: "user_confirmed",
+                });
+                fieldChoiceConfirmed = true;
+                fieldChoiceLine = `字段清单：${String(labels.label_count)} 个（你在卡上确认${
+                  allFields ? "，全部训练" : `，只训练 ${picked.join("、")}`
+                }）`;
+              } catch {
+                // 卡被关掉/通道失败 → **不造假确认**：本轮不落账，下一步仍会再问
+                fieldChoiceLine = `字段清单：${String(labels.label_count)} 个（本次未确认——下次仍会问）`;
+              }
+            }
+          }
+        }
+      }
       let groupingFace: GroupingFace | undefined;
       if (args.stage === "experiment_setup") {
         const fieldConfigPath = typeof args.field_config === "string" ? args.field_config.trim() : "";
@@ -2105,6 +2182,7 @@ export const buildPipelineTool = (
           fieldConfigPath,
           proposalRaw: args.grouping_proposal,
           runDir,
+          fieldChoiceConfirmed,
         });
         if ("ok" in resolvedGrouping) {
           return asToolValue({
