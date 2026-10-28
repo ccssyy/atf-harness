@@ -1,3 +1,4 @@
+import { stubEvalRound } from "./evalRoundStub.js";
 /**
  * D91/D92 测试锚（指令《ATF_指令_参数面增补_harness_20261023》）。
  *
@@ -138,7 +139,7 @@ print(json.dumps({"argv": args}))`);
     return { assets };
   };
   const analyzeOf = (runsRoot: string, kernelDir: string): Tool =>
-    (buildEvalTools({ get: () => undefined }, { runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_analyze_badcases") as Tool);
+    (buildEvalTools({ get: () => undefined }, { resolveEvalRound: stubEvalRound, runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_analyze_badcases") as Tool);
   const flagValue = (argv: string[], flag: string): string => argv[argv.indexOf(flag) + 1] as string;
 
   it("non_goods 任务不传 lane → 任务事实判定 non_goods（冻结账本 argv --lane non_goods）＋链 ok", async () => {

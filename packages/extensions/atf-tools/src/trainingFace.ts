@@ -1215,34 +1215,13 @@ export function validateFixedCheckpoint(path: string): { ok: true } | { ok: fals
   return { ok: true };
 }
 
-/** 轮目录解析的**降级**实现（仅内核 resolve-eval-round 不可用时）。
- *
- *  语义＝**复用 run 下现有最新编号轮**；run 下没有任何轮时才新建 `1-<date>`。
- *  为什么不是纯 maxN+1：那会每次评估都新派一轮，正是 UAT 四个空轮
- *  （`1-/2-/3-/4-20261027`）的根因——降级态若照旧派轮，等于「内核不在时缺陷复现」，
- *  降级不是免责。复用是内核 E5「同批判档复用同轮」的等价下界。
- *
- *  代价（必须让上层知道）：降级态无法按 checkpoint 集合判定「该复用还是该新开」，
- *  因此要新开轮时必须配置新内核——回执以 degraded/degraded_note 显式告知。 */
-export function resolveEvalRoundDirFallback(runDir: string): string {
-  const evalRoot = join(runDir, "eval");
-  let maxN = 0;
-  let latest: string | null = null;
-  try {
-    for (const entry of readdirSync(evalRoot, { withFileTypes: true })) {
-      const m = /^(\d+)-\d{8}$/.exec(entry.name);
-      if (!entry.isDirectory() || m === null) continue;
-      const n = Number(m[1]);
-      if (n > maxN) {
-        maxN = n;
-        latest = entry.name;
-      }
-    }
-  } catch { /* eval 根不存在＝首轮 */ }
-  if (latest !== null) return join(evalRoot, latest);
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  return join(evalRoot, `1-${date}`);
-}
+
+/** 轮号解析注入面（F2）：生产缺省走内核 CLI（单源）；测试注入 stub 以免依赖真实内核进程。
+ *  注入**不是**第二套实现——语义仍是"由调用方给轮目录"，不在此处推导轮号。 */
+export type EvalRoundResolver = (
+  runDir: string,
+  checkpoints: readonly string[],
+) => Promise<{ ok: true; roundDir: string } | { ok: false; payload: Record<string, unknown> }>;
 
 /** 评估轮目录解析（ADR-0007 决定 2）——**内核单源**：调
  *  `python3 -m agentic_training_flow resolve-eval-round --run <runDir> [--checkpoints id1,id2]`，
@@ -1251,20 +1230,14 @@ export function resolveEvalRoundDirFallback(runDir: string): string {
  *  next_eval_round_dir 的 E5 复评复用判定，UAT 现场一个 run 因此长出 1-/2-/3-/4- 四个空轮。
  *  同一次评估动作（service／ckpt-plan／orch 三子步）必须共用一个轮号——轮号只由内核定，
  *  harness 不再自建第二套。
- *  失败降级：非零退出/空输出 → 复用现有最新轮（resolveEvalRoundDirFallback），
- *  并在回执标 degraded/degraded_note。**绝不新派轮**——静默派轮正是空轮根因。 */
+ *  失败即 fail-closed（resolve_eval_round_unavailable）——**不在 harness 侧推导轮号**：
+ *  任何本地推导（maxN+1 或"复用最新轮"）都是第二套实现，正是 F2 要消灭的东西。 */
 export const resolveEvalRoundDir = async (
   runDir: string,
   cfg: { kernelDir: string },
   checkpoints: readonly string[] = [],
 ): Promise<
-  | {
-      ok: true;
-      roundDir: string;
-      degraded?: boolean;
-      degraded_reason?: string;
-      degraded_note?: string;
-    }
+  | { ok: true; roundDir: string }
   | { ok: false; payload: Record<string, unknown> }
 > => {
   const ids = checkpoints.map((id) => id.trim()).filter((id) => id !== "");
@@ -1275,18 +1248,20 @@ export const resolveEvalRoundDir = async (
   const lines = resolved.stdout.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== "");
   const roundDir = lines.length > 0 ? (lines[lines.length - 1] as string) : "";
   if (resolved.code !== 0 || roundDir === "") {
-    // 降级（2026-10-28 修订）：内核 CLI 不可用（测试环境 / 内核未 pin 新版本）时
-    // **复用现有最新轮**，绝不新派轮——纯 maxN+1 会每次评估堆一个空轮，正是 UAT
-    // 四个空轮的根因，降级态照旧派轮等于缺陷复现。降级要可见（degraded + note），
-    // 但不做成阻断（否则旧内核上所有 start 链直接不可用）。
+    // F2（ADR-0005 条款 5＋E5 复用）：轮号只由内核定。CLI 不可用＝配置错误，fail-closed
+    // 显式失败——不退回任何 harness 侧实现（maxN+1 会每次评估堆一个空轮，正是 UAT
+    // 四个空轮的根因；即便改成"复用最新轮"也是第二套实现，仍是 F2 要消灭的东西）。
     return {
-      ok: true,
-      roundDir: resolveEvalRoundDirFallback(runDir),
-      degraded: true,
-      degraded_reason: "resolve_eval_round_unavailable",
-      degraded_note:
-        "内核 resolve-eval-round 不可用，本轮复用现有最新轮目录（不新建）；"
-        + "如需按新 checkpoint 集合新开轮，请把内核配置到含该命令的版本。",
+      ok: false,
+      payload: {
+        started: false,
+        error: "resolve_eval_round_unavailable",
+        note:
+          "内核 resolve-eval-round 不可用——轮号必须由内核单源解析（ADR-0005 条款 5／E5 复用判定），"
+          + "harness 不再自建第二套。下一步：确认内核 pin 是否含该命令（python3 -m "
+          + "agentic_training_flow resolve-eval-round --help）后重推。",
+        stderr_tail: resolved.stderr.slice(-800),
+      },
     };
   }
   return { ok: true, roundDir };
@@ -2096,7 +2071,7 @@ export const resolveEvalSplitManifest = (runDir: string, explicit?: string): Spl
 };
 
 /** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
-export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string; bindRun?: (runId: string) => Promise<void>; /** D49：canonical 解析种子（与 TrainingToolsConfig 同键——canonicalRunRootsOf(cfg) 注入面；缺省注册表实例态）。 */ canonicalRoots?: readonly string[] }): unknown[] {
+export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string; resolveEvalRound?: EvalRoundResolver; bindRun?: (runId: string) => Promise<void>; /** D49：canonical 解析种子（与 TrainingToolsConfig 同键——canonicalRunRootsOf(cfg) 注入面；缺省注册表实例态）。 */ canonicalRoots?: readonly string[] }): unknown[] {
   const evaluate = defineTool({
     name: "atf_evaluate",
     description:
@@ -2262,7 +2237,11 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 评估轮号＝内核单源（resolve-eval-round：E5 复评复用判定在内核；harness 不再自建
       // maxN+1——那会每次评估新派一轮）。checkpoints 传入本次 adapter 的固定编号，
       // 供内核按「同一批判档」判定复用/递增；三子步 --out 全落在同一 roundDir 下。
-      const roundResolution = await resolveEvalRoundDir(runDir, cfg, [basename(args.adapter_path)]);
+      const checkpoints = [basename(args.adapter_path)];
+      // F2：生产走内核 CLI（单源）；测试经 cfg.resolveEvalRound 注入 stub。
+      const roundResolution = cfg.resolveEvalRound !== undefined
+        ? await cfg.resolveEvalRound(runDir, checkpoints)
+        : await resolveEvalRoundDir(runDir, cfg, checkpoints);
       if (!roundResolution.ok) return asToolValue(roundResolution.payload);
       const roundDir = roundResolution.roundDir;
       const serviceDir = join(roundDir, "service");

@@ -24,6 +24,8 @@ export const KERNEL_ERROR_FACE_CODES: ReadonlySet<string> = new Set([
   "token_gate_not_configured",
   "gpu_capacity_insufficient",
   "walkthrough_run_dir_not_empty",
+  // C1（变更单 §3 C1.3）：字段配置契约错误——结构化体随回执透出（含 skeleton）。
+  "field_config_invalid",
 ]);
 
 /** 人话文案选项：gpuFreeRows＝每卡 free 表行（gpu_capacity_insufficient 专属——由调用方
@@ -56,6 +58,11 @@ export const humanizeKernelError = (code: string, opts: KernelErrorFaceOptions =
     // 下一步指「补齐 run.json」而非「换 run」——换 run 是旧口径，会落成 N+1（ADR-0017）。
     case "walkthrough_run_dir_not_empty":
       return "登记被拒：该 run 标识的落点目录已存在且非空，但缺合法的 run 身份文件（run.json）——落点内容无法确认为正式 run。这不是重复登记问题：同一 run 继续登记其它单据是被允许的，不需要换 run。下一步：核对落点目录内容与来历，补齐该 run 的 run.json 后重试；确属误建或废弃落点时由用户决定处置（该落点不删除、不覆盖）";
+    // C1-L 面（变更单 §3 C1.3）：field_config 不合契约——错误体已由调用方原样透传到
+    // 回执的 field_config 键（含 missing_top / malformed_fields / skeleton），这里只给
+    // 人读结论与下一步，不重复搬运骨架（避免两处口径）。
+    case "field_config_invalid":
+      return "字段配置不合契约（field_config_invalid）——回执 field_config 键给了 missing_top / malformed_fields / skeleton（只有键名与类型占位）。下一步：按清单一次补齐后重试，或先走素材装配七步（atf_attachments_assembly：plan → land）产出字段配置草案";
     default:
       return null;
   }

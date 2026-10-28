@@ -1,3 +1,4 @@
+import { stubEvalRound } from "./evalRoundStub.js";
 /**
  * 批D14——评测参数继承测试锚：field_config 缺省自动继承（命中/漂移拒/无指纹拒/缺文件拒/
  * 显式覆盖仅告警）＋prompt_mode 缺省与显式（真 tmux 命令断言——编排脚本 "$@" 落盘＋
@@ -188,7 +189,7 @@ const probePaneStartCommand = (): string => {
 
 describe("批D14——评测参数继承（field_config/prompt_mode 缺省继承＋卡面修复＋口径行）", () => {
   const evalOf = (runsRoot: string, kernelDir: string, ctx: { get: (s: string) => unknown }): Tool =>
-    (buildEvalTools(ctx, { runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
+    (buildEvalTools(ctx, { resolveEvalRound: stubEvalRound, runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
 
   it("缺省解析命中：不传 field_config → run_recorded＋sha 一致＋口径行 25/8＋真 tmux 命令 mode0 单处", async () => {
     const root = tempRoot();
@@ -364,7 +365,7 @@ describe("批D14——评测参数继承（field_config/prompt_mode 缺省继承
 
 describe("批D20h——审批 actor/mode 接入（放行 argv 三参＋approval_id 回传＋卡面 owner 行）", () => {
   const evalOf = (runsRoot: string, kernelDir: string, ctx: { get: (s: string) => unknown }): Tool =>
-    (buildEvalTools(ctx, { runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
+    (buildEvalTools(ctx, { resolveEvalRound: stubEvalRound, runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
   const recordArgv = (pin: string): string[] => JSON.parse(readFileSync(join(pin, "record-argv.json"), "utf8")) as string[];
   const flagValue = (argv: string[], flag: string): string => argv[argv.indexOf(flag) + 1] as string;
   const latestRoundDir = (root: string): string => {
@@ -508,7 +509,7 @@ describe("批D14——纯函数锚（prompt_mode 解析链/口径计算/卡面�
 
 describe("D32——status 只按 run/轮次查询（start 四参降 optional，退出 status schema）", () => {
   const evalOfD32 = (runsRoot: string, kernelDir: string): Tool =>
-    (buildEvalTools({ get: () => undefined }, { runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
+    (buildEvalTools({ get: () => undefined }, { resolveEvalRound: stubEvalRound, runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
 
   it("status 不传 start 参数可查：无评估轮 → status 面（note 先 start），零 *_missing 零审批", async () => {
     const root = tempRoot();

@@ -1,3 +1,4 @@
+import { stubEvalRound } from "./evalRoundStub.js";
 /**
  * 批次 R H1 测试锚（TokenBudget 九要素卡＋别名退役＋错误回流，2026-10-22）：
  *   H1-1 三要素渲染｜两条不变式关系校验（不成立禁确认）｜不同步须理由｜无 65536 预填
@@ -376,7 +377,9 @@ describe("批次 R H1-3——kernelErrorFace 人话映射（提前接线；D98 �
     expect(notEmpty).not.toContain("换一个新 run 标识"); // 旧口径（N+1 诱因）不回流
     expect(notEmpty).not.toContain("walkthrough_run_dir_not_empty"); // B6 锚：拒绝文案无内部码
     expect(humanizeKernelError("some_unknown_code")).toBeNull();
-    expect(KERNEL_ERROR_FACE_CODES.size).toBe(5); // D98：四码→五码
+    // C1（变更单 §3 C1.3）新增 field_config_invalid：五码 -> 六码。
+    // 该码不走扁平 note 承载骨架，骨架由 pipelineFace 从 stderr 解析后放回执 field_config 键。
+    expect(KERNEL_ERROR_FACE_CODES.size).toBe(6);
   });
   it("scanKernelErrorFace：错误文本（构造的错误对象串）命中带 detail 码；未命中 null", () => {
     const hit = scanKernelErrorFace(['{"error": "token_gate_not_configured"}']);
@@ -440,7 +443,7 @@ describe("批次 R H1-3——kernelErrorFace 人话映射（提前接线；D98 �
     for (const name of ["build_service_prelaunch_report.py", "generate_checkpoint_plan.py", "generate_eval_orchestration.py", "run_formal_eval.py"]) {
       writeFileSync(join(scripts, name), "# placeholder\n");
     }
-    const tools = buildEvalTools({ get: () => undefined }, { runsRoot: root, logDir: root, kernelDir: join(root, "pin") });
+    const tools = buildEvalTools({ get: () => undefined }, { resolveEvalRound: stubEvalRound, runsRoot: root, logDir: root, kernelDir: join(root, "pin") });
     const evaluate = tools.find((t) => (t as { name: string }).name === "atf_evaluate") as { execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> };
     const args = {
       action: "start", run_id: "run-h1e", adapter_path: join(runDir, "models", "checkpoint-100"),

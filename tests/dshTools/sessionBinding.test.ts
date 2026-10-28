@@ -1,3 +1,4 @@
+import { stubEvalRound } from "./evalRoundStub.js";
 /**
  * 批B1 测试锚——会话↔Run 绑定账本（SessionRunBinding/v1）＋run 显示名（RunDisplay/v1）＋
  * /atf-ui/session-binding 端点（GET/POST）＋工具接入（run_id 缺省解析/run_binding_required/
@@ -374,7 +375,7 @@ describe("工具 run_id 缺省解析与绑定", () => {
   it("增补 §5.1：三条工具 run_id description＝可选＋本会话绑定语义；run_training 必填＋created 语义", () => {
     const ctx = { get: () => undefined };
     const tools = [
-      ...(buildEvalTools(ctx, { runsRoot: "/tmp/x", logDir: "/tmp/x", kernelDir: "/tmp/x" }) as Tool[]),
+      ...(buildEvalTools(ctx, { resolveEvalRound: stubEvalRound, runsRoot: "/tmp/x", logDir: "/tmp/x", kernelDir: "/tmp/x" }) as Tool[]),
       buildPublishModelTool(ctx, { runsRoot: "/tmp/x" }) as Tool,
       buildRunTrainingTool(ctx, { runsRoot: "/tmp/x", logDir: "/tmp/x", ctx }) as Tool,
     ];
@@ -427,7 +428,7 @@ describe("工具 run_id 缺省解析与绑定", () => {
     seedRun(root, "c6");
     const home = tempRoot();
     process.env["DSH_HOME"] = home;
-    const tools = buildEvalTools({ get: () => undefined }, { runsRoot: root, logDir: root, kernelDir: root }) as Tool[];
+    const tools = buildEvalTools({ get: () => undefined }, { resolveEvalRound: stubEvalRound, runsRoot: root, logDir: root, kernelDir: root }) as Tool[];
     const evaluate = tools.find((t) => t.name === "atf_evaluate") as Tool;
     // 无 mock pin／无资产——run_binding_required 先于一切检查（红线：无绑定必报候选）
     const result = await evaluate.execute({ action: "start", adapter_path: "x", eval_assets_dir: "x", service_config: "x", env_profile: "x" }, fakeExec);
@@ -515,7 +516,7 @@ if "--output-dir" in args:
 print(json.dumps({"ok": True}))`);
     }
     bindSessionRun(home, "s-ana", { runId: "run-a", workspace: null, source: "user_pick" });
-    const analyze = (buildEvalTools({ get: () => undefined }, { runsRoot: root, logDir: root, kernelDir: pin }) as Tool[]).find((t) => t.name === "atf_analyze_badcases") as Tool;
+    const analyze = (buildEvalTools({ get: () => undefined }, { resolveEvalRound: stubEvalRound, runsRoot: root, logDir: root, kernelDir: pin }) as Tool[]).find((t) => t.name === "atf_analyze_badcases") as Tool;
     const result = await analyze.execute({ run_id: "run-b", eval_assets_dir: assetsB }, execWithSession("s-ana"));
     expect(result.ok).toBe(true);
     expect(result.run_id).toBe("run-b");
@@ -592,7 +593,7 @@ open(os.path.join(out, "eval_orchestration.sh"), "w").write("#!/bin/bash\\nexit 
 print("{}")`);
     bindSessionRun(home, "s-eval", { runId: RUN_ID, workspace: null, source: "user_pick" });
     const ctx = { get: (s: string) => (s === "approval" ? { request: async () => "allowed-once" } : undefined) };
-    const evaluate = (buildEvalTools(ctx, { runsRoot: root, logDir: root, kernelDir: pin }) as Tool[]).find((t) => t.name === "atf_evaluate") as Tool;
+    const evaluate = (buildEvalTools(ctx, { resolveEvalRound: stubEvalRound, runsRoot: root, logDir: root, kernelDir: pin }) as Tool[]).find((t) => t.name === "atf_evaluate") as Tool;
     const orchName = resolveLaunchSessionName(evalOrchSessionBase(RUN_ID));
     try {
       const result = await evaluate.execute({

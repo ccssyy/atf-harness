@@ -1,3 +1,4 @@
+import { stubEvalRound } from "./evalRoundStub.js";
 /**
  * 批⑱M2.75 测试锚——训练执行段三工具投影（atf_run_training/atf_evaluate/atf_analyze_badcases）：
  * 协议适配＋danger_confirm 联动＋mock 执行（DRY_RUN mock train.sh／status 枚举）。
@@ -391,7 +392,7 @@ describe("任务卡卡面（renderTaskCardText——liveness 覆盖语义）", (
 describe("atf_evaluate（批㉕B 段3 正道链——机器事实 fail-closed＋EVAL_RELEASE 确认卡）", () => {
   type Tool = { name: string; execute: (args: unknown, exec: unknown) => Promise<Record<string, unknown>> };
   const evalOf = (runsRoot: string, kernelDir: string, ctx: { get: (s: string) => unknown }): Tool =>
-    (buildEvalTools(ctx, { runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
+    (buildEvalTools(ctx, { resolveEvalRound: stubEvalRound, runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
 
   /** mock pin：generate_eval_service 可控失败（exit 2＋block JSON）或成功（写 manifest）；prelaunch 写报告；其余写最小产物。 */
   const writeMockPin = (pin: string, opts: { machineFactsFail?: boolean; labelLeak?: boolean } = {}) => {
@@ -640,7 +641,7 @@ print("{}")`);
     writeFileSync(join(orchEval, "state.json"), JSON.stringify({ state: "eval_complete" }));
     for (const f of ["raw_predictions.jsonl", "metrics_summary.json", "badcases.jsonl", "indexes.csv"]) writeFileSync(join(orchEval, f), "{}\n");
     writeFileSync(join(orchEval, "metrics_summary.json"), JSON.stringify({ model: "run-e2e_ckpt141", micro: { f1: 0.26 } }));
-    const tools = buildEvalTools(noApproval, { runsRoot: root, logDir: root, kernelDir: root });
+    const tools = buildEvalTools(noApproval, { resolveEvalRound: stubEvalRound, runsRoot: root, logDir: root, kernelDir: root });
     const evaluate = (tools as Tool[]).find((t) => t.name === "atf_evaluate") as Tool;
     const result = await evaluate.execute({ action: "status", run_id: "run-e2e", adapter_path: "x", eval_assets_dir: root, field_config: "x", service_config: "x", env_profile: "x" }, fakeExec);
     expect(result.eval_round).toBe(join(round));
@@ -703,7 +704,7 @@ print(json.dumps({"argv": args}))`}`);
     return { evalDir, assets };
   };
   const analyzeOf = (runsRoot: string, kernelDir: string): Tool =>
-    (buildEvalTools(noApproval, { runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_analyze_badcases") as Tool);
+    (buildEvalTools(noApproval, { resolveEvalRound: stubEvalRound, runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_analyze_badcases") as Tool);
 
   it("D35 引用值逐字一致指引：description 要求引用字段值原样拷贝源串（禁止千分位/小数点重排转写）", () => {
     const root = tempRoot();
@@ -911,7 +912,7 @@ describe("批⑳dot3 修复 2——评估声明名与标签泄漏防线（harnes
     const serviceDir2 = join(root, "r1", "eval", "1-20261003", "service");
     mkdirSync(serviceDir2, { recursive: true });
     writeFileSync(join(serviceDir2, "service_manifest.json"), JSON.stringify({ expected_model_names: ["b", "r1_x"] }));
-    const tool = buildEvalTools(noApproval, { runsRoot: root, logDir: root, kernelDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
+    const tool = buildEvalTools(noApproval, { resolveEvalRound: stubEvalRound, runsRoot: root, logDir: root, kernelDir: root }).find((t) => (t as Tool).name === "atf_evaluate") as Tool;
     const result = await tool.execute({ action: "status", run_id: "r1", adapter_path: "x", eval_assets_dir: root, field_config: "x", service_config: "x", env_profile: "x" }, fakeExec);
     expect(String(result["model_label_warning"])).toContain("标签泄漏");
     expect(result["metrics_summary"]).toBeTruthy();

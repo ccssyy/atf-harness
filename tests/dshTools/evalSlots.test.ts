@@ -1,3 +1,4 @@
+import { stubEvalRound } from "./evalRoundStub.js";
 /**
  * E9a 测试锚——评估面回到槽位单源（H2/H3/H4/H5；变更单《E9a 评估槽位单源》）。
  *
@@ -121,7 +122,7 @@ describe("E9a·H4——resolveEvalFieldConfig 逐类（槽位缺省＝该类 fie
 describe("E9a·H5——多类先 fail-closed（evaluate/analyze 卡前快败；零审批零 spawn）", () => {
   const fakeExec = { agent: { session: { id: "e9a-s1" } }, callId: "c1" };
   const buildTools = (runsRoot: string): { evaluate: { execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }; analyze: { execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> } } => {
-    const tools = buildEvalTools({ get: () => undefined }, { runsRoot, logDir: join(runsRoot, "logs"), kernelDir: runsRoot }) as Array<{ name: string; execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
+    const tools = buildEvalTools({ get: () => undefined }, { resolveEvalRound: stubEvalRound, runsRoot, logDir: join(runsRoot, "logs"), kernelDir: runsRoot }) as Array<{ name: string; execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>> }>;
     return {
       evaluate: tools.find((tool) => tool.name === "atf_evaluate")!,
       analyze: tools.find((tool) => tool.name === "atf_analyze_badcases")!,

@@ -1,3 +1,4 @@
+import { stubEvalRound } from "./evalRoundStub.js";
 /**
  * 批㊶-TRAIN-OBS-FIX2 测试锚——WebUI 链 run 域工具成功路径补 atf.bind_run（T1）。
  *
@@ -160,7 +161,7 @@ describe("批㊶-TRAIN-OBS-FIX2 T1：atf_evaluate 成功路径绑定（评估类
   beforeEach((ctx) => guardTrainingLock(ctx));
   type Tool = { name: string; execute: (args: unknown, exec: unknown) => Promise<Record<string, unknown>> };
   const evalOf = (runsRoot: string, kernelDir: string, ctx: { get: (s: string) => unknown }, bindRun?: (runId: string) => Promise<void>): Tool =>
-    (buildEvalTools(ctx, { runsRoot, logDir: runsRoot, kernelDir, bindRun }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
+    (buildEvalTools(ctx, { resolveEvalRound: stubEvalRound, runsRoot, logDir: runsRoot, kernelDir, bindRun }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
 
   /** mock pin（与 trainingFace.test.ts 同型瘦身后——全链成功形态）。 */
   const writeMockPin = (pin: string): void => {

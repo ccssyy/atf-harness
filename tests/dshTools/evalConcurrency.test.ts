@@ -1,3 +1,4 @@
+import { stubEvalRound } from "./evalRoundStub.js";
 /**
  * 批D17——评估并发参数测试锚：atf_evaluate 增 concurrency（可选，缺省 1）＋concurrency_reason；
  * 透传三处（generate_eval_service 不需要；prelaunch --concurrency/--concurrency-recommended/
@@ -191,7 +192,7 @@ const probePrelaunchArgv = (root: string): string => latestRoundFile(root, join(
 
 describe("批D17——评估并发参数（缺省 1/传 4 透传/超容量拒/卡面并发行）", () => {
   const evalOf = (runsRoot: string, kernelDir: string, ctx: { get: (s: string) => unknown }): Tool =>
-    (buildEvalTools(ctx, { runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
+    (buildEvalTools(ctx, { resolveEvalRound: stubEvalRound, runsRoot, logDir: runsRoot, kernelDir }).find((t) => (t as Tool).name === "atf_evaluate") as Tool);
 
   it("缺省不传 → prelaunch 命令含 --concurrency 1（无 recommended/reason）＋orch 脚本/plan 含 1", async () => {
     const root = tempRoot();

@@ -1,3 +1,4 @@
+import { stubEvalRound } from "./evalRoundStub.js";
 /**
  * E5（链路收口 20261025）测试锚——授权件 cc08a7ccdb7ac343 三 H 验收锚：
  *
@@ -225,7 +226,7 @@ print(json.dumps({"out": out}))`);
     writeFileSync(join(assets, "eval_labels.jsonl"), "\n");
     const serviceConfig = tempRoot("e5-svc-");
     writeFileSync(join(serviceConfig, "svc.json"), JSON.stringify({ port: 5031, max_num_seqs: 4 }));
-    const tools = buildEvalTools({ get: () => undefined }, { runsRoot, logDir: tempRoot("e5-logs-"), kernelDir: pin }) as unknown as DshToolLike[];
+    const tools = buildEvalTools({ get: () => undefined }, { resolveEvalRound: stubEvalRound, runsRoot, logDir: tempRoot("e5-logs-"), kernelDir: pin }) as unknown as DshToolLike[];
     const evaluate = tools.find((t) => t.name === "atf_evaluate");
     if (evaluate === undefined) throw new Error("atf_evaluate 未注册");
     const result = (await evaluate.execute(

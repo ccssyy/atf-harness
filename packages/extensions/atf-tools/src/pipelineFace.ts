@@ -828,6 +828,46 @@ export const runPipeline = (command: string, args: readonly string[], timeoutMs:
     );
   });
 
+/** 从内核 stderr 提取 field_config_invalid 结构化错误体（括号平衡切出，尾部 traceback 不影响）。
+ *
+ *  C1-L 面（变更单 §3 C1.3）：错误体须原样进回执——压成一句 "ValueError: {...}" 等于
+ *  agent 拿不到 skeleton / malformed_fields，只能回头读内核源码（1027-1 现场的样子）。
+ *
+ *  @param stderr 子进程 stderr 全文。
+ *  @return 解析出的对象；不是该错误或解析失败＝null。
+ */
+const extractFieldConfigError = (stderr: string): Record<string, unknown> | null => {
+  const marker = '{"error": "field_config_invalid"';
+  const start = stderr.indexOf(marker);
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < stderr.length; i += 1) {
+    const ch = stderr[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          const parsed = JSON.parse(stderr.slice(start, i + 1)) as unknown;
+          return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+};
+
 export const buildPipelineTool = (
   ctx: { get(service: string): unknown },
   pipelineCommand: string,
@@ -1003,7 +1043,15 @@ export const buildPipelineTool = (
       },
       doc_type: { type: "string", description: "单据类型（可缺省——缺省不上送，内核按数据/登记面推断，无法确定即 blocked；给了则显式指定）" },
       lane_suffix: { type: "string", description: "lane 后缀（内部键：缺省不上送，内核按 all 处理；一般不用传）" },
-      field_config: { type: "string", description: "字段配置文件显式路径（可缺省——缺省不上送，内核走 run 内/登记面既有来源）" },
+      field_config: {
+        type: "string",
+        description:
+          "字段配置 JSON 路径（可缺省——缺省不上送，内核走 run 内／登记面既有来源）。" +
+          "显式给出时须为 PromptFieldConfig/v1：顶层 document_type／document_zh／" +
+          "template（含 {extraction_info} 占位符）／training_excluded_fields（不排除写 []）／" +
+          "fields[]，fields 每项须含 field_id／zh／definition／group；group 键声明语义分组" +
+          "（mode1 按 group 逐组生成）。传入其他形态会得到一次性全量缺失清单与最小合法骨架。",
+      },
       train_all: {
         type: "boolean",
         description:
@@ -1501,6 +1549,10 @@ export const buildPipelineTool = (
       // 批次 R H1-3：失败输出扫描内核错误码（token_budget_* / token_gate_not_configured——
       // 提前接线：内核 v0.7.24b0 未发版，当前无真实来源；发版后经 stdout/stderr 流回即人话）。
       const kernelFace = result.code !== 0 ? scanKernelErrorFace([result.stdout, result.stderr]) : null;
+      // C1-L 面（变更单 §3 C1.3）：field_config_invalid 的结构化错误体原样透出。
+      // 内核以 `ValueError: {"error": "field_config_invalid", ...}` 抛出，stderr 尾部
+      // 可能还跟 traceback——用括号平衡切出对象，不靠整段 JSON.parse。
+      const fieldConfigError = result.code !== 0 ? extractFieldConfigError(result.stderr) : null;
       return asToolValue({
         stage: args.stage,
         run_id: args.run_id,
@@ -1614,6 +1666,7 @@ export const buildPipelineTool = (
         // 人话 note（覆盖上方笼统 note——更具体的用户文案优先）；未命中＝既有 note 不变。
         // D77：完整码不进模型可见返回体——模型照抄进散文即用户可见；对账面＝scratch 观测账。
         ...(kernelFace !== null ? { note: kernelFace.note } : {}),
+        ...(fieldConfigError !== null ? { field_config: fieldConfigError } : {}),
       });
     },
   });
