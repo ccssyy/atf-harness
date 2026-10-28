@@ -112,7 +112,7 @@ import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTransl
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { appendSegmentFact, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
-import { resolveRunFile, resolveRunSubdir, runFileCandidates } from "../../../../src/core/workspace/runLayout.js";
+import { resolveRunFile, resolveRunSubdir, runFileCandidates, runSubdirCandidates } from "../../../../src/core/workspace/runLayout.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
 // E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与本次训练方案卡同源）
@@ -1320,20 +1320,22 @@ export const assembleDecisionOf = (
   return { assemble: false, source: "single_doc" };
 };
 
-/** 单据槽位探测（D3）：两种既有布局都认（`data/prep/variants/<doc>` 与 `data/variants/<doc>`），
- *  取单据子目录数量；目录不可读按 0（保守——自动装配宁可不触发，也不误判成多类）。 */
+/** 单据槽位探测（D3）：**布局知识不在此处复制**——走 `runSubdirCandidates` 的候选链
+ *  （v2 名 → v3 名的映射单源在 `runSubdirs.ts` 的 V2_TO_V3_DIR_MAP，布局演进时只改那一处）。
+ *
+ *  取单据子目录数量；候选全不可读按 0（保守——自动装配宁可不触发，也不误判成多类）。
+ *
+ *  @param runDir - run 根目录。
+ *  @returns 单据槽位目录数（`<槽位根>/<doc>/` 的 doc 个数，多候选取最大）。
+ */
 export const slotDocCountOf = (runDir: string): number => {
-  const candidates = [
-    join(runDir, "data", "prep", "variants"),
-    join(runDir, "data", "variants"),
-  ];
   let best = 0;
-  for (const root of candidates) {
+  for (const root of runSubdirCandidates(runDir, "prep/variants")) {
     try {
       const count = readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).length;
       best = Math.max(best, count);
     } catch {
-      // 目录缺席/不可读：该候选面不计（不猜、不阻断）
+      // 候选缺席/不可读：换下一个候选（不猜、不阻断）
     }
   }
   return best;
@@ -1356,7 +1358,8 @@ export const launchArtifactsOf = (
   reason: "assemble_not_requested" | "assemble_incomplete" | null;
 } => {
   const trainSh = join(runDir, "launch", "train.sh");
-  const iterConfig = join(runDir, "config", "iteration-config", "iteration-config.json");
+  // 迭代配置的落点名同样走单源（读侧 resolveRunFile：v3 映射形态在前、v2 存量形态在后）。
+  const iterConfig = resolveRunFile(runDir, "prep/iteration-config/iteration-config.json");
   const hasTrain = existsSync(trainSh);
   const hasIter = existsSync(iterConfig);
   if (hasTrain && hasIter) {

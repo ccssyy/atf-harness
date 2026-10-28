@@ -65,8 +65,10 @@ describe("D3 slotDocCountOf（槽位探测两布局都认）", () => {
 });
 
 describe("D3 launchArtifactsOf（启动件在场判定）", () => {
-  it("两件齐备 → present 且给相对路径（回执只进相对，不外泄绝对路径）", () => {
+  it("v3 树两件齐备 → present 且给相对路径（回执只进相对，不外泄绝对路径）", () => {
     const runDir = tempRoot();
+    // 布局身份单源＝run.json 的 layout_version（不按目录名猜）；v3 树的迭代配置在 config/ 下
+    writeFileSync(join(runDir, "run.json"), JSON.stringify({ layout_version: "RunLayout/v3" }), "utf8");
     mkdirSync(join(runDir, "launch"), { recursive: true });
     mkdirSync(join(runDir, "config", "iteration-config"), { recursive: true });
     writeFileSync(join(runDir, "launch", "train.sh"), "#!/usr/bin/env bash\n", "utf8");
@@ -76,6 +78,17 @@ describe("D3 launchArtifactsOf（启动件在场判定）", () => {
     expect(artifacts.train_sh).toBe("launch/train.sh");
     expect(artifacts.iteration_config).toBe("config/iteration-config/iteration-config.json");
     expect(artifacts.reason).toBeNull();
+  });
+
+  it("v2 存量树同口径识别（迭代配置在 prep/ 下）——布局知识走单源，不在这里复制", () => {
+    const runDir = tempRoot();
+    mkdirSync(join(runDir, "launch"), { recursive: true });
+    mkdirSync(join(runDir, "prep", "iteration-config"), { recursive: true });
+    writeFileSync(join(runDir, "launch", "train.sh"), "#!/usr/bin/env bash\n", "utf8");
+    writeFileSync(join(runDir, "prep", "iteration-config", "iteration-config.json"), "{}", "utf8");
+    const artifacts = launchArtifactsOf(runDir);
+    expect(artifacts.present).toBe(true);
+    expect(artifacts.iteration_config).toBe("prep/iteration-config/iteration-config.json");
   });
 
   it("两件都缺 → present=false 且 reason=assemble_not_requested（现场即此形态）", () => {
@@ -88,6 +101,7 @@ describe("D3 launchArtifactsOf（启动件在场判定）", () => {
 
   it("只产一半 → assemble_incomplete（说清是装配没跑完，不是没跑）", () => {
     const runDir = tempRoot();
+    writeFileSync(join(runDir, "run.json"), JSON.stringify({ layout_version: "RunLayout/v3" }), "utf8");
     mkdirSync(join(runDir, "launch"), { recursive: true });
     writeFileSync(join(runDir, "launch", "train.sh"), "#!/usr/bin/env bash\n", "utf8");
     const artifacts = launchArtifactsOf(runDir);
