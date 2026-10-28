@@ -2708,7 +2708,20 @@ export const buildPipelineTool = (
           : {}),
         ...(summary !== null ? { summary } : {}),
         ...(result.code === 2 && rejections !== null ? { rejections } : {}),
-        ...(result.code === 2 && rejections === null ? { note: "内核拒绝（blocked）——零写入；摘要未含 rejections 原文" } : {}),
+        // exit 2 且无摘要：最常见是「命令参数内核不认」——argparse 会直接 exit 2 且零写入，
+        // 报错只在 stderr。原实现把手里的 stderr 丢掉、只回一句「摘要未含 rejections 原文」，
+        // 现场导致 agent 读内核源码 15 分钟仍定位不到（真凶是 --grouping-proposal 未接线）。
+        ...(result.code === 2 && rejections === null
+          ? {
+              note:
+                "内核拒绝且没产出摘要——最常见原因是**命令参数内核不认**（argparse 直接 exit 2、零写入）。"
+                + "内核原始报错见 kernel_stderr：按它改参数或补内核接线后重试，不要靠猜或读源码。",
+              kernel_stderr: result.stderr.slice(-2000),
+              ...(result.stdout.trim() !== ""
+                ? { kernel_stdout_tail: result.stdout.trim().slice(-1000) }
+                : {}),
+            }
+          : {}),
         // E10d：聚类状态拒绝的回流指引（把 user_message 原样告知用户，不展示内部选项名）
         ...(result.code === 2 && styleClusterRejectionOf(rejections) ? { note: STYLE_CLUSTER_REJECTION_NOTE } : {}),
         ...(result.code === 3 || result.code === null
