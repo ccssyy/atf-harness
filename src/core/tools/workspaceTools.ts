@@ -517,7 +517,7 @@ export const WORKSPACE_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "atf_create_experiment",
     description:
-      "在工作区内创建实验（须审批）：实验目录 experiments/<YYYYMMDD>-<实验名>/（含 experiment.json 元数据与 runs/），工作区身份文件 .atf/workspace.json 缺席时自动初始化（id=uuid 永不变）。workspace_path 必须是已存在的目录（不代建顶层目录）；实验名重复（同日同名目录已在）即拒绝并指路。工作区未注册到 DSH 侧栏时返回 pending_registration 回执——请引导用户在 WebUI「添加工作区」选择该目录，本工具不代建注册表记录。",
+      "在工作区内创建实验（须审批）：实验目录 experiments/<YYYYMMDD>-<实验名>/（含 experiment.json 元数据与 runs/），工作区身份文件 .atf/workspace.json 缺席时自动初始化（id=uuid 永不变）。workspace_path 必须是已存在的目录（不代建顶层目录）；实验名重复（同日同名目录已在）即拒绝并指路。工作区未注册到 DSH 侧栏时返回 pending_registration 回执——请引导用户在 WebUI「添加工作区」选择该目录，本工具不代建注册表记录。落点纪律：工作区应在实例根（<ATF_INSTANCE_ROOT>）内——实例根外的工作区不进文件工具白名单，读写会被拒。",
     parameters: CREATE_EXPERIMENT_PARAMS,
     requires_approval: true,
     canonical_output: CREATE_EXPERIMENT_CANONICAL,
@@ -525,7 +525,7 @@ export const WORKSPACE_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "atf_rebind_workspace",
     description:
-      "工作区目录迁移后的重新定位（须审批）：读新位置 .atf/workspace.json 的身份 id，在 DSH 注册表按 id 定位原记录并更新 path 字段（其余记录零触碰、id 永不改变）。会话桶零操作（会话归属由会话头 cwd 的 realpath 正典承载——旧路径以符号链接续用时既有会话归属保持，旧路径消失时会话显性入任务桶）；旧位置目录仅在确认为真实空目录时删除。新位置必须已含身份文件（随目录迁移带走）；注册表按 id 无记录时拒绝并指路（先在 WebUI 添加工作区建立记录）。注册表写入在实例重启后进入运行时视野——回执附注该语义。",
+      "工作区目录迁移后的重新定位（须审批）：读新位置 .atf/workspace.json 的身份 id，在 DSH 注册表按 id 定位原记录并更新 path 字段（其余记录零触碰、id 永不改变）。会话桶零操作（会话归属由会话头 cwd 的 realpath 正典承载——旧路径以符号链接续用时既有会话归属保持，旧路径消失时会话显性入任务桶）；旧位置目录仅在确认为真实空目录时删除。新位置必须已含身份文件（随目录迁移带走）；注册表按 id 无记录时拒绝并指路（先在 WebUI 添加工作区建立记录）。注册表写入在实例重启后进入运行时视野——回执附注该语义。落点纪律：迁移目标应在实例根（<ATF_INSTANCE_ROOT>）内；迁到实例根外可行（回执带 out_of_instance 标记），但该位置不会进文件工具白名单，工具读写会被拒——需由运维在实例声明面登记后方可读写。",
     parameters: REBIND_WORKSPACE_PARAMS,
     requires_approval: true,
     canonical_output: REBIND_WORKSPACE_CANONICAL,

@@ -180,8 +180,17 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // atf_* 契约工具不进 bash/write 豁免类，卡面恒达人工面板）
   for (const tool of buildFileGuardTools(fileHost, { runsRoot: config.runsRoot, approvalCtx: ctx })) ctx.tools.register(tool);
   if (registerPathGuard(ctx, fileHost)) {
+    // 定域闸排除项如实投影（无静默）：实例根外的注册工作区不进白名单——启动期就看得见，
+    // 不必等热加载或撞拒绝。前 5 条给路径，其余只给计数（日志行长可控）。
+    const excludedNote =
+      fileRoots.excluded.length === 0
+        ? ""
+        : `；实例根外工作区 ${String(fileRoots.excluded.length)} 个已排除（${fileRoots.excluded
+            .map((item) => item.path)
+            .slice(0, 5)
+            .join("、")}${fileRoots.excluded.length > 5 ? " 等" : ""}——工作区请建在 <ATF_INSTANCE_ROOT> 内）`;
     console.log(
-      `[atf-tools] 文件路径守卫已挂（tools/pre-execute prepend；守卫 glob/grep/read_image，封闭 vendor read/edit/write 改道 A7；A7 四件挂载）白名单根 ${String(fileRoots.roots.length)} 个（派生集＝配置声明面镜像＋env 附加集）`,
+      `[atf-tools] 文件路径守卫已挂（tools/pre-execute prepend；守卫 glob/grep/read_image，封闭 vendor read/edit/write 改道 A7；A7 四件挂载）白名单根 ${String(fileRoots.roots.length)} 个（派生集＝配置声明面镜像＋env 附加集）${excludedNote}`,
     );
   }
 
