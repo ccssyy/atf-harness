@@ -35,6 +35,9 @@ import { buildEvalTools } from "../../packages/extensions/atf-tools/src/training
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
   const root = mkdtempSync(join(tmpdir(), "h1-tbc-"));
+  // D-b 新契约：register 段要求数据批根真实存在（未传 doc_type 时只校验批根）。
+  // 本文件借 register 段触发「构造段失败输出含已知码」的映射面，故批根必须在位。
+  mkdirSync(join(root, "src"), { recursive: true });
   tempRoots.push(root);
   return root;
 };

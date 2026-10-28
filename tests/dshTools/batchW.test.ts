@@ -27,6 +27,8 @@ import { buildFileGuardTools } from "../../packages/extensions/atf-tools/src/fil
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
   const root = mkdtempSync(join(tmpdir(), "batch-w-test-"));
+  // D-b 新契约：register 段要求数据批根真实存在（未传 doc_type 时只校验批根）。
+  mkdirSync(join(root, "src"), { recursive: true });
   tempRoots.push(root);
   return root;
 };

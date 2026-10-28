@@ -106,7 +106,7 @@
 import { execFile } from "node:child_process";
 import { DANGER_FULL_ACCESS_SANDBOX, sandboxModeOf } from "./trainingPreset.js";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
@@ -121,6 +121,7 @@ import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 // E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
 import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
 import { fieldNameMapOf, readExperimentGrouping, renderGroupingSection } from "../../../../src/core/workspace/experimentGrouping.js";
+import { fieldsDigestOf, groupingDecisionPathOf, readGroupingDecision, writeGroupingDecision } from "./groupingDecision.js";
 import { decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
 import { join } from "node:path";
 
@@ -332,8 +333,11 @@ export interface GroupingProposal {
 
 /** 分组四态：source＝回执 grouping_source；decision＝怎么定的（用户选／授权档自动／无）。 */
 export interface GroupingFace {
-  source: "user_provided" | "proposal" | "policy_auto" | "none";
-  decision: "user_selected" | "auto" | "none";
+  /** 分组来源五态，优先级即声明顺序：
+   *  字段配置自带 group ＞ **上次用户选定（账本沿用）** ＞ 完全权限档自动 ＞ 出卡候选 ＞ 平铺无分组。
+   *  prior_decision 是 D-c 的落点：同一次 run 里选过一次就不再重复问。 */
+  source: "user_provided" | "prior_decision" | "proposal" | "policy_auto" | "none";
+  decision: "user_selected" | "inherited" | "auto" | "none";
   /** 选定候选的 name（user_provided／none 为 null）。 */
   candidate_name: string | null;
   groups: GroupingProposalGroup[];
@@ -478,6 +482,8 @@ export const renderGroupingReportMarkdown = (
 export const groupingApprovalLine = (face: GroupingFace): string => {
   if (face.source === "user_provided") return `分组来源：字段配置自带的分组（${String(face.groups.length)} 组）——按你给的走，不出卡`;
   if (face.source === "policy_auto") return `分组来源：完全权限档按推荐候选「${face.candidate_name ?? ""}」自动选定（${String(face.groups.length)} 组）`;
+  if (face.source === "prior_decision")
+    return `分组来源：沿用你上次在这次 run 里选定的「${face.candidate_name ?? ""}」（${String(face.groups.length)} 组）——同一次 run 不重复问；要换直接说`;
   if (face.source === "proposal") {
     return face.decision === "user_selected"
       ? `分组来源：你在候选里选定的「${face.candidate_name ?? ""}」（${String(face.groups.length)} 组）`
@@ -513,6 +519,9 @@ export const resolveGroupingFace = async (input: {
   runId: string;
   fieldConfigPath: string;
   proposalRaw: unknown;
+  /** run 根（定位分组选择账本 `<run>/runtime/webui/grouping-choice.json`）。
+   *  缺省＝不读不写账本（保持旧调用方零改动；本工具内恒传）。 */
+  runDir?: string;
 }): Promise<GroupingFace | { ok: false; errors: string[] }> => {
   const provided = fieldGroupsOf(input.fieldConfigPath);
   if (provided !== null) {
@@ -524,6 +533,33 @@ export const resolveGroupingFace = async (input: {
       evidence: null,
       payload: null,
       note: `分组按字段配置里的 group 走（${String(provided.length)} 组）——用户已经给了，不再出卡`,
+    };
+  }
+  // ── D-c：用户上次在这个 run 里选过的分组方案 ─────────────────────────────
+  // 真机（dev 2026-10-28）：卡弹出、用户选定、随后该段失败零写入 → 选择蒸发，
+  // agent 原话「那次零写入，选定记录没存下来」；重跑只能再问一遍，换会话必然重问。
+  // 现在先查账本：字段集合没变就沿用（不出卡），变了才作废重问（不拿旧选择套新字段）。
+  const priorDecision =
+    input.runDir === undefined
+      ? ({ ok: false, reason: "absent", note: "" } as const)
+      : readGroupingDecision(input.runDir, fieldsDigestOf(input.fieldConfigPath));
+  if (priorDecision.ok) {
+    const record = priorDecision.record;
+    return {
+      source: "prior_decision",
+      decision: "inherited",
+      candidate_name: record.candidate_name,
+      groups: record.groups as unknown as GroupingProposalGroup[],
+      evidence: {
+        inherited_from: groupingDecisionPathOf(input.runDir as string),
+        decided_at: record.decided_at,
+        field_count_at_decision: record.field_count,
+      },
+      payload: record.payload,
+      note:
+        `沿用你 ${record.decided_at} 选定的「${record.candidate_name}」（${String(record.groups.length)} 组）`
+        + `——同一次 run 里不重复问；字段集合与当时一致（${String(record.field_count)} 个字段）。`
+        + `要换分组直接说，我重新出卡再选一次。`,
     };
   }
   if (input.proposalRaw === undefined || input.proposalRaw === null) {
@@ -608,14 +644,42 @@ export const resolveGroupingFace = async (input: {
     const answers = await svc.ask({ questions: [question], agent: input.exec.agent, signal: input.exec.signal });
     const selectedName = answers.answers.flatMap((answer) => [...answer.selected])[0] ?? "";
     const chosen = proposal.candidates.find((candidate) => candidate.name === selectedName) ?? pick(proposal.recommendedIndex);
+    const chosenPayload = withChoice(chosen.name);
+    // ── D-c：选定即落账（**这里就写，不等段成功**）──────────────────────────
+    // 顺序是刻意的：段随后可能 blocked/异常，若等段成功再写，选择又会蒸发一次。
+    // 落点 runtime/webui（卡面输入态，与 config-snapshot／pending-confirm 同域）——
+    // **不是** analysis/decisions：那是内核 DecisionGate 的判定账，语义不同层。
+    let decisionPath: string | null = null;
+    let decisionWriteNote = "";
+    if (input.runDir !== undefined) {
+      try {
+        decisionPath = writeGroupingDecision(input.runDir, {
+          run_id: input.runId,
+          candidate_name: chosen.name,
+          groups: chosen.groups as unknown as Record<string, unknown>[],
+          payload: chosenPayload,
+          fields_digest: fieldsDigestOf(input.fieldConfigPath),
+          field_count: chosen.groups.reduce((sum, group) => sum + group.fields.length, 0),
+          decided_at: new Date().toISOString(),
+          source: "user_selected",
+        });
+      } catch (cause) {
+        // 落账失败不改判选择本身（选择仍然本次生效），但必须如实说出「没存住」——
+        // 静默失败＝下次又重问一遍，用户会以为系统没记住。
+        decisionWriteNote = `（注意：选择已生效，但落账失败 ${String(cause).slice(0, 120)}——重跑可能再问一次）`;
+      }
+    }
     return {
       source: "proposal",
       decision: "user_selected",
       candidate_name: chosen.name,
       groups: chosen.groups,
-      evidence,
-      payload: withChoice(chosen.name),
-      note: `用户选定了「${chosen.name}」（${String(chosen.groups.length)} 组）——按这套分组走`,
+      evidence: decisionPath !== null ? { ...evidence, decision_ledger: decisionPath } : evidence,
+      payload: chosenPayload,
+      note:
+        `用户选定了「${chosen.name}」（${String(chosen.groups.length)} 组）——按这套分组走`
+        + (decisionPath !== null ? `；已记账本，同一次 run 重跑不再重复问` : "")
+        + decisionWriteNote,
     };
   } catch (cause) {
     const code = (cause as { code?: string }).code;
@@ -1277,6 +1341,81 @@ const extractFieldConfigError = (stderr: string): Record<string, unknown> | null
 };
 
 /**
+ * D-b：`source_root` 传前校验（纯函数，便于单测）。
+ *
+ * 真机两次实证（dev 2026-10-28，两个不同会话）：agent 都把**单据目录**当批根传了，
+ * 内核拼成 `…/awb/awb` 后只回一句「单据来源目录不可解析」；agent 得读源码/试错才悟出
+ * 「来源根要传到 batch 这一层」（首次耗时约 4 分钟）。这是纯可发现性缺陷——口径写在
+ * 系统里，不该由用户提示词或试错来传达。
+ *
+ * 判据是**确定性**的，不是猜：内核 register 段要求 `<source_root>/<doc_type>` 必须存在
+ * （`walkthrough_pipeline.py` 里 `self.source_root = self.batch_root / self.doc_type`，
+ * 再判 `is_dir()`）。所以这里同一口径、同一判据，只是把它提前到拼参之前，并把
+ * 「批根下到底有哪些子目录」直接摆出来。
+ *
+ * 不做的事：doc_type 缺省时**不校验**（内核按数据/登记面自行推断，harness 不复制推断逻辑）。
+ *
+ * @param given - 调用方给的 source_root（可能相对）。
+ * @param docType - 显式单据类型（空串＝未指定，跳过校验）。
+ * @returns 通过时给绝对路径；不通过时给判据、批根实际子目录与可直接展示的说明。
+ */
+export const sourceRootPrecheckOf = (
+  given: string,
+  docType: string,
+):
+  | { ok: true; resolved: string }
+  | {
+      ok: false;
+      error: string;
+      resolved: string;
+      expected_dir: string | null;
+      subdirs_present: string[];
+      note: string;
+    } => {
+  const resolved = isAbsolute(given) ? given : resolve(given);
+  if (!existsSync(resolved)) {
+    return {
+      ok: false,
+      error: "source_root_not_found",
+      resolved,
+      expected_dir: null,
+      subdirs_present: [],
+      note:
+        `数据批根指不到目录：「${given}」→ 解析为 ${resolved}（不存在）。`
+        + `相对路径按本工具进程的当前目录解析，跨进程传递请一律给绝对路径。`,
+    };
+  }
+  if (docType.trim() === "") return { ok: true, resolved };
+  const expected = join(resolved, docType.trim());
+  if (existsSync(expected)) return { ok: true, resolved };
+  let subdirs: string[] = [];
+  try {
+    subdirs = readdirSync(resolved, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+      .slice(0, 12);
+  } catch {
+    subdirs = [];
+  }
+  const looksLikeDocDir = basename(resolved) === docType.trim();
+  return {
+    ok: false,
+    error: "source_root_doc_type_subdir_missing",
+    resolved,
+    expected_dir: expected,
+    subdirs_present: subdirs,
+    note:
+      `数据批根下没有单据类型目录：应为 ${expected}（不存在）。\n`
+      + `口径：source_root 传**批根**——内核拼 <批根>/<单据类型>/ 作为单据所在目录，其下可再有多层子目录（递归识别）。\n`
+      + `批根 ${resolved} 下现有子目录：${subdirs.length > 0 ? subdirs.join("、") : "(无子目录)"}\n`
+      + (looksLikeDocDir
+        ? `你给的路径末尾正好是单据类型名「${docType.trim()}」——很可能把**单据目录本身**当成了批根；请改传它的父目录 ${dirname(resolved)}。`
+        : `如果单据确实在别处，请把批根改为包含 <${docType.trim()}> 子目录的那一层。`),
+  };
+};
+
+/**
  * D-a：`--field-config` 传前校验（纯函数，便于单测）。
  *
  * 现场（dev 2026-10-28 webui 真机）：agent 显式传了 field_config（先相对后绝对），本工具原样
@@ -1437,6 +1576,11 @@ export const buildPipelineTool = (
       `按段驱动 walkthrough_pipeline 段模式（审批必经）：单段触发 ${PIPELINE_STAGES.join("/")} 之一。` +
       `落点＝<workspace_path>/experiments/<exp>/<run_id>（与内核同源唯一落点·RunLayout/v3；v2 存量 <exp>/runs/<run_id> 只读兼容）；workspace_path 可省（缺省解析并回显），` +
       `run_id 必填；source_root 仅 register 段必填（其余段可省——缺了也不影响非 register 段）。` +
+      `【source_root 是数据批根，不是单据目录】内核会拼 <source_root>/<doc_type>/ 作为单据所在目录，` +
+      `其下可再有多层子目录（递归识别）：例如批根 …/batch ＋ doc_type=awb → 实际读 …/batch/awb/。` +
+      `把单据目录本身（路径末尾正好是 <doc_type>）当批根传入，内核会拼成 …/awb/awb 并报目录不可解析——` +
+      `此时应改传它的父目录。本工具在 register 段拼参前就按此口径校验：批根下若无 <doc_type> 子目录，` +
+      `当场拒绝并列出批根实际子目录（不把错误留到内核侧变成一句「路径不可解析」）。` +
       `register 段准入口径（一个 run 可承载多类单据）：同一 run 可继续登记其它单据（多类联合训练共用一个 run，` +
       `无需换 run-id——逐类带各自 doc_type 调 register 即可）；同单据本段重复登记为幂等跳过` +
       `（register_already_done_skip——成功态、零产物、已确认产物不覆写，可直接继续下一段）。` +
@@ -1449,7 +1593,9 @@ export const buildPipelineTool = (
       `候选名是卡面标题、recommended 有且仅一个为 true、groups 逐组给组名与字段列表、reason 给候选理由；` +
       `传了就按候选出卡让用户挑一套；不传且字段配置自带 group＝用户已给，不出卡；` +
       `完全权限档不出卡、直接按推荐候选选定（复用既有授权档，不新增档位）。` +
-      `返回体如实标注分组来源（user_provided／proposal／policy_auto／none）并附分组表（组名｜字段数｜字段），可原样贴给用户。` +
+      `返回体如实标注分组来源（user_provided／prior_decision／proposal／policy_auto／none）并附分组表（组名｜字段数｜字段），可原样贴给用户。` +
+      `用户选定分组后会记进 <run>/runtime/webui/grouping-choice.json：同一次 run 重跑时若字段集合未变，` +
+      `直接沿用上次选择、不再重复出卡（来源标 prior_decision）；字段增删则旧选择作废、重新出卡。` +
       `experiment_setup 段另支持 grouping_preset 方案标识（取值由训练内核声明，内核无内置预设；` +
       `不给＝不预设——分组唯一来源是 field-config 的 group 键，其它段忽略该参）。` +
       // A 面可发现性（工具描述面）：模型此前即使被点名要求，也会「不传覆盖参数、按缺省处理」，
@@ -1485,7 +1631,13 @@ export const buildPipelineTool = (
       stage: { type: "string", required: true, enum: [...PIPELINE_STAGES], description: "要触发的内核管线段（八段原文，单段）" },
       run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/experiments/<exp>/<run_id>·RunLayout/v3；未指定实验归入当日「未命名实验」）" },
       workspace_path: { type: "string", description: "workspace 根（可选覆盖——缺省按会话 cwd→工作区身份→实例配置解析，并回显所用根与依据；显式给时必须含 .atf/workspace.json 或 datasets+splits）" },
-      source_root: { type: "string", description: "源文档根（仅 register 段必填；其余段可省）" },
+      source_root: {
+        type: "string",
+        description:
+          "数据批根（**不是单据目录**）：内核拼 <批根>/<单据类型>/ 作为单据所在目录，其下可再有多层子目录（递归）。" +
+          "例：批根 …/batch ＋ doc_type awb → 实际读 …/batch/awb/。" +
+          "传成单据目录会拼出 …/awb/awb 并报目录不可解析。仅 register 段必填；其余段可省。",
+      },
       base_model_path: { type: "string", description: "本地模型目录绝对路径（含 config.json）；模型家族名（如 qwen3_vl）不可当路径用（training_prep 段必填，其它段忽略；assemble=true 时豁免——内核盘上再水合单源，恢复不了内核 blocked 指路）" },
       assemble: { type: "boolean", description: "run 级联合装配（仅 training_prep 段有效，其它段忽略）：true 时下传 --assemble——内核枚举 run 的单据槽位（prep/variants/<doc>/）合并生成迭代配置与启动件；与 doc_type 单类语义互斥，true 时不传 doc_type。不给且 run 下单据槽位多于一个时本工具自动按联合装配执行（回执 assemble_auto=multi_doc_slots 标注）；回执的 launch_artifacts 恒说明启动件是否已生成" },
       base_model_family: { type: "string", description: "基模型家族标识（内核全局参数，渲染口径用，缺省 qwen3_vl 不下传；显式给且非空才追加——E8 联合装配链由 atf_joint_train 透传）" },
@@ -1945,6 +2097,7 @@ export const buildPipelineTool = (
           runId: args.run_id,
           fieldConfigPath,
           proposalRaw: args.grouping_proposal,
+          runDir,
         });
         if ("ok" in resolvedGrouping) {
           return asToolValue({
@@ -2011,7 +2164,28 @@ export const buildPipelineTool = (
       // 也显式上线解析值；E10d：allow_small_cluster_test 仅 family_split 且 true 才追加
       // 开关，缺省不出现在 argv，其它段不追加不报错）；禁拼第二套路径。
       const argv: string[] = ["--workspace", workspacePath, "--run-id", args.run_id, "--stage", args.stage];
-      if (args.stage === "register") argv.push("--source-root", (args.source_root as string).trim());
+      if (args.stage === "register") {
+        // D-b：传前按内核同一判据校验（批根 + 单据类型 → 子目录必须存在），
+        // 不把「拼成 …/awb/awb 不存在」这种可自证的错误留到内核侧只有一句「不可解析」。
+        const sourceRootGiven = (args.source_root as string).trim();
+        const docTypeForRoot = typeof args.doc_type === "string" ? args.doc_type.trim() : "";
+        const rootPrecheck = sourceRootPrecheckOf(sourceRootGiven, docTypeForRoot);
+        if (!rootPrecheck.ok) {
+          return asToolValue({
+            ok: false,
+            stage: args.stage,
+            run_id: args.run_id,
+            error: rootPrecheck.error,
+            source_root_given: sourceRootGiven,
+            source_root_resolved: rootPrecheck.resolved,
+            doc_type: docTypeForRoot === "" ? null : docTypeForRoot,
+            ...(rootPrecheck.expected_dir !== null ? { expected_dir: rootPrecheck.expected_dir } : {}),
+            subdirs_present: rootPrecheck.subdirs_present,
+            note: rootPrecheck.note,
+          });
+        }
+        argv.push("--source-root", rootPrecheck.resolved);
+      }
       // 显式给的基模型一律下传（assemble 模式亦然）：再水合只是「没给」时的兜底，
       // 不能把用户显式值静默丢掉（不静默原则——丢了就是 blocked 与卡上填值不符）。
       // 只有训练准备段接受 --base-model（其它段内核不声明该参数，传了会被 argparse 拒）。

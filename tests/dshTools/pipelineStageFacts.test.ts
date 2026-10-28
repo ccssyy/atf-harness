@@ -27,6 +27,10 @@ import { readBindings } from "../../src/core/workspace/runFacts.js";
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
   const root = mkdtempSync(join(tmpdir(), "a22b-pipeline-"));
+  // D-b 新契约：register 段要求 <source_root>/<doc_type> 真实存在（与内核同一判据）。
+  // 本文件 register 用例用 join(root, "src") 与 do/swb 两个单据类型——真实建出来。
+  mkdirSync(join(root, "src", "do"), { recursive: true });
+  mkdirSync(join(root, "src", "swb"), { recursive: true });
   tempRoots.push(root);
   return root;
 };

@@ -13,7 +13,7 @@
  *   中文名」／data-joint-doctype 无 pl 举例）；倍率示例无 {"pl":1,"swb":2}；
  *   导入示例 JSON document_zh＝中性「单据A」；trainingFace doc_type 描述保中性缺省语义。
  */
-import { readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -104,6 +104,9 @@ describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
   });
   it("并存零回归·register：--source-root 与三件同 argv（既有段特定追加逻辑零触碰）", async () => {
     const root = tempRoot();
+    // D-b 新契约：register 传参前要求 <source_root>/<doc_type> 真实存在
+    // （与内核同一判据）。原先这里是假想路径，新校验下会被当场拒。
+    mkdirSync(join(root, "src-docs", "bill_of_lading"), { recursive: true });
     const result = await toolOf(ARGV_MOCK).execute(
       {
         stage: "register",
