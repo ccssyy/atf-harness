@@ -2635,6 +2635,10 @@ export const buildPipelineTool = (
         ...(args.stage === "training_prep"
           ? { visible_devices: visibleDevices === "" ? null : visibleDevices, visible_devices_source: visibleDevicesSource }
           : {}),
+        // 字段清单确认结果（register 段即时确认）——**必须进回执**：
+        // 否则 agent 不知道用户只确认了哪几个字段，后续还会按 17 个字段往下走
+        // （真机发现：用户在卡上只留了 awb/shipper，agent 的回复里完全没提这件事）。
+        ...(fieldChoiceSummary !== undefined ? { field_choice: fieldChoiceSummary } : {}),
         // 分组节（跑完后重读本次产物——卡面与回执同一渲染单源）
         ...(args.stage === "experiment_setup"
           ? { grouping_section: renderGroupingSection(readExperimentGrouping(runDir), fieldNameMapOf(runDir)) }
