@@ -106,7 +106,7 @@
 import { execFile } from "node:child_process";
 import { DANGER_FULL_ACCESS_SANDBOX, sandboxModeOf } from "./trainingPreset.js";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { isAbsolute, relative } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
@@ -1277,6 +1277,41 @@ const extractFieldConfigError = (stderr: string): Record<string, unknown> | null
 };
 
 /**
+ * D-a：`--field-config` 传前校验（纯函数，便于单测）。
+ *
+ * 现场（dev 2026-10-28 webui 真机）：agent 显式传了 field_config（先相对后绝对），本工具原样
+ * 下传；内核按**自己进程的 CWD** 解析相对路径，解析不到就静默降级，最后报
+ * 「未显式传 --field-config」——错误归因。agent 因此连续四次撞同一句、怀疑传参链路/审批账本/
+ * 白名单，最后读内核源码，单次会话 16m41s、808K token。
+ *
+ * 所以本工具在拼 argv 之前就做两件事：**统一绝对化**（跨进程传相对路径必然歧义）＋
+ * **存在性校验**（不存在就当场拒绝，并把解析后的绝对路径摆出来）。
+ *
+ * @param given - 调用方给的 `field_config`（可能相对）。
+ * @param runDir - 本 run 根（用于给出「run 内登记副本槽位」这条正路的路径）。
+ * @param docType - 单据类型（可为空；仅用于拼槽位提示）。
+ * @returns 通过时给绝对路径；不通过时给解析后路径与可直接展示的说明。
+ */
+export const fieldConfigPrecheckOf = (
+  given: string,
+  runDir: string,
+  docType?: string,
+): { ok: true; resolved: string } | { ok: false; given: string; resolved: string; note: string } => {
+  const resolved = isAbsolute(given) ? given : resolve(given);
+  if (existsSync(resolved)) return { ok: true, resolved };
+  const slot = `${runDir}/config/experiment-setup/${docType ?? "<单据类型>"}/field-config.json`;
+  return {
+    ok: false,
+    given,
+    resolved,
+    note:
+      `字段配置指不到文件：「${given}」→ 解析为 ${resolved}（不存在）。`
+      + `相对路径按本次执行进程的当前目录解析，跨进程传递请一律给绝对路径；`
+      + `也可以把它放到 run 内登记副本槽位 ${slot}，本段会自行继承（不传 --field-config 亦可）。`,
+  };
+};
+
+/**
  * F14：label_qc 段被阻断（exit 2）时的续跑指路。
  *
  * 为什么要有它：内核在待确认项 > 0 时阻断该段，正解是「inspect 取 report_digest 与待裁决项 →
@@ -1996,7 +2031,22 @@ export const buildPipelineTool = (
       const laneSuffix = typeof args.lane_suffix === "string" ? args.lane_suffix.trim() : "";
       if (laneSuffix !== "") argv.push("--lane-suffix", laneSuffix);
       const fieldConfig = typeof args.field_config === "string" ? args.field_config.trim() : "";
-      if (fieldConfig !== "") argv.push("--field-config", fieldConfig);
+      if (fieldConfig !== "") {
+        // D-a：传前校验＋绝对化（纯函数单测覆盖；见 fieldConfigPrecheckOf）
+        const precheck = fieldConfigPrecheckOf(fieldConfig, runDir, args.doc_type);
+        if (!precheck.ok) {
+          return asToolValue({
+            ok: false,
+            stage: args.stage,
+            run_id: args.run_id,
+            error: "field_config_not_found",
+            field_config_given: precheck.given,
+            field_config_resolved: precheck.resolved,
+            note: precheck.note,
+          });
+        }
+        argv.push("--field-config", precheck.resolved);
+      }
       // E8·H1：装配模式旗标（仅 training_prep 段且显式 true 才追加——缺省不出现在
       // argv，其它段不追加不报错；内核 b12 声明面 store_true）。
       if (assembleMode || assembleDecision.assemble) argv.push("--assemble");

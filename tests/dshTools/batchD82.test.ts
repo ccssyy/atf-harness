@@ -13,10 +13,10 @@
  *   中文名」／data-joint-doctype 无 pl 举例）；倍率示例无 {"pl":1,"swb":2}；
  *   导入示例 JSON document_zh＝中性「单据A」；trainingFace doc_type 描述保中性缺省语义。
  */
-import { readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { buildPipelineTool } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
 
 interface DshToolLike {
@@ -25,6 +25,20 @@ interface DshToolLike {
   parameters: Record<string, unknown>;
   execute: (args: unknown, exec: unknown) => Promise<unknown>;
 }
+/**
+ * D-a 新契约（2026-10-28）：`--field-config` **传参前必须存在**——工具会先绝对化并
+ * `existsSync` 校验，不存在当场拒绝（`field_config_not_found`）。本文件原先指向
+ * `/tmp/d82-field-config.json` 这个不存在的路径来验 argv 透传，新契约下会被前置拒绝，
+ * 故在此真实建出该文件（顺带更贴近真实用法）。
+ */
+const FAKE_FIELD_CONFIG = "/tmp/d82-field-config.json";
+beforeAll(() => {
+  writeFileSync(FAKE_FIELD_CONFIG, JSON.stringify({ document_type: "awb", fields: [] }), "utf8");
+});
+afterAll(() => {
+  rmSync(FAKE_FIELD_CONFIG, { force: true });
+});
+
 const tempRoots: string[] = [];
 const envPinned: string[] = [];
 const tempRoot = (): string => {
@@ -58,7 +72,7 @@ describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
         workspace_path: tempRoot(),
         doc_type: "bill_of_lading",
         lane_suffix: "goods",
-        field_config: "/tmp/d82-field-config.json",
+        field_config: FAKE_FIELD_CONFIG,
       },
       fakeExec,
     );
@@ -66,7 +80,7 @@ describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
     const argv = summaryArgv(result);
     expect(argv[argv.indexOf("--doc-type") + 1]).toBe("bill_of_lading");
     expect(argv[argv.indexOf("--lane-suffix") + 1]).toBe("goods");
-    expect(argv[argv.indexOf("--field-config") + 1]).toBe("/tmp/d82-field-config.json");
+    expect(argv[argv.indexOf("--field-config") + 1]).toBe(FAKE_FIELD_CONFIG);
   });
   it("不给三件 → argv 不含三旗标（缺省不上送——内核自行推断，推断不出即 blocked）", async () => {
     const result = await toolOf(ARGV_MOCK).execute(
@@ -98,7 +112,7 @@ describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
         source_root: join(root, "src-docs"),
         doc_type: "bill_of_lading",
         lane_suffix: "goods",
-        field_config: "/tmp/d82-field-config.json",
+        field_config: FAKE_FIELD_CONFIG,
       },
       fakeExec,
     );
@@ -133,7 +147,7 @@ describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
         workspace_path: tempRoot(),
         doc_type: "bill_of_lading",
         lane_suffix: "goods",
-        field_config: "/tmp/d82-field-config.json",
+        field_config: FAKE_FIELD_CONFIG,
       },
       fakeExec,
     );
