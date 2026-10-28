@@ -106,7 +106,7 @@
 import { execFile } from "node:child_process";
 import { DANGER_FULL_ACCESS_SANDBOX, sandboxModeOf } from "./trainingPreset.js";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { isAbsolute } from "node:path";
+import { isAbsolute, relative } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
@@ -123,6 +123,7 @@ import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../.
 import { fieldNameMapOf, readExperimentGrouping, renderGroupingSection } from "../../../../src/core/workspace/experimentGrouping.js";
 import { decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
 import { join } from "node:path";
+
 import { tmpdir } from "node:os";
 
 /** 段名闭集（权威＝内核 STAGE_ORDER 八项——禁增删改序；旧六段名别名不保留）。 */
@@ -1297,6 +1298,83 @@ export const labelQcResumeHintOf = (stage: string, code: number | null): Record<
   };
 };
 
+/**
+ * 联合装配判定（D3）：run 下单据槽位 > 1 时，training_prep 不做联合装配就等于产不出可训练启动件。
+ *
+ * 为什么要有它：内核 manual 档的 training_prep 只产数据面（`walkthrough_pipeline.py:2692`
+ * 注释明写「不写 run 级 config/iteration-config 与 launch」），启动件归 assemble 分支；
+ * 而 `assemble` 是显式参数、缺省不传，于是多单据场景必然走空。此处按"槽位数"确定性判定，
+ * 不猜用户意图：单类（≤1 槽位）保持旧行为。
+ *
+ * @param requested - 工具参数 assemble（显式值；undefined＝未给）。
+ * @param slotDocCount - run 下探测到的单据槽位目录数（探测失败按 0）。
+ * @returns assemble＝是否联合装配；source＝判定来源（显式／多槽位自动／单类）。
+ */
+export const assembleDecisionOf = (
+  requested: boolean | undefined,
+  slotDocCount: number,
+): { assemble: boolean; source: "explicit_on" | "explicit_off" | "multi_doc_slots" | "single_doc" } => {
+  if (requested === true) return { assemble: true, source: "explicit_on" };
+  if (requested === false) return { assemble: false, source: "explicit_off" };
+  if (slotDocCount > 1) return { assemble: true, source: "multi_doc_slots" };
+  return { assemble: false, source: "single_doc" };
+};
+
+/** 单据槽位探测（D3）：两种既有布局都认（`data/prep/variants/<doc>` 与 `data/variants/<doc>`），
+ *  取单据子目录数量；目录不可读按 0（保守——自动装配宁可不触发，也不误判成多类）。 */
+export const slotDocCountOf = (runDir: string): number => {
+  const candidates = [
+    join(runDir, "data", "prep", "variants"),
+    join(runDir, "data", "variants"),
+  ];
+  let best = 0;
+  for (const root of candidates) {
+    try {
+      const count = readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).length;
+      best = Math.max(best, count);
+    } catch {
+      // 目录缺席/不可读：该候选面不计（不猜、不阻断）
+    }
+  }
+  return best;
+};
+
+/**
+ * 启动件在场判定（D3 可发现性面）：train.sh 与 iteration-config.json 齐备才算"能训练"。
+ *
+ * 回执必须说清这件事——否则现场只能靠 `ls` 三个目录才知道启动件没生成（本轮真机即如此）。
+ *
+ * @param runDir - run 根目录。
+ * @returns present＝两件都在位；缺席时 reason 指明是哪类缺席。
+ */
+export const launchArtifactsOf = (
+  runDir: string,
+): {
+  present: boolean;
+  train_sh: string | null;
+  iteration_config: string | null;
+  reason: "assemble_not_requested" | "assemble_incomplete" | null;
+} => {
+  const trainSh = join(runDir, "launch", "train.sh");
+  const iterConfig = join(runDir, "config", "iteration-config", "iteration-config.json");
+  const hasTrain = existsSync(trainSh);
+  const hasIter = existsSync(iterConfig);
+  if (hasTrain && hasIter) {
+    return {
+      present: true,
+      train_sh: relative(runDir, trainSh),
+      iteration_config: relative(runDir, iterConfig),
+      reason: null,
+    };
+  }
+  return {
+    present: false,
+    train_sh: hasTrain ? relative(runDir, trainSh) : null,
+    iteration_config: hasIter ? relative(runDir, iterConfig) : null,
+    reason: hasTrain || hasIter ? "assemble_incomplete" : "assemble_not_requested",
+  };
+};
+
 export const buildPipelineTool = (
   ctx: { get(service: string): unknown },
   pipelineCommand: string,
@@ -1358,7 +1436,7 @@ export const buildPipelineTool = (
       workspace_path: { type: "string", description: "workspace 根（可选覆盖——缺省按会话 cwd→工作区身份→实例配置解析，并回显所用根与依据；显式给时必须含 .atf/workspace.json 或 datasets+splits）" },
       source_root: { type: "string", description: "源文档根（仅 register 段必填；其余段可省）" },
       base_model_path: { type: "string", description: "本地模型目录绝对路径（含 config.json）；模型家族名（如 qwen3_vl）不可当路径用（training_prep 段必填，其它段忽略；assemble=true 时豁免——内核盘上再水合单源，恢复不了内核 blocked 指路）" },
-      assemble: { type: "boolean", description: "run 级联合装配（仅 training_prep 段有效，其它段忽略）：true 时下传 --assemble——内核枚举 run 的单据槽位（prep/variants/<doc>/）合并生成迭代配置与启动件；与 doc_type 单类语义互斥，true 时不传 doc_type" },
+      assemble: { type: "boolean", description: "run 级联合装配（仅 training_prep 段有效，其它段忽略）：true 时下传 --assemble——内核枚举 run 的单据槽位（prep/variants/<doc>/）合并生成迭代配置与启动件；与 doc_type 单类语义互斥，true 时不传 doc_type。不给且 run 下单据槽位多于一个时本工具自动按联合装配执行（回执 assemble_auto=multi_doc_slots 标注）；回执的 launch_artifacts 恒说明启动件是否已生成" },
       base_model_family: { type: "string", description: "基模型家族标识（内核全局参数，渲染口径用，缺省 qwen3_vl 不下传；显式给且非空才追加——E8 联合装配链由 atf_joint_train 透传）" },
       auto_style_cluster: {
         type: "string",
@@ -1597,6 +1675,12 @@ export const buildPipelineTool = (
         return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: resolvedRun.error, note: resolvedRun.note });
       }
       const runDir = resolvedRun.runDir;
+      // D3：联合装配判定（显式 assemble 优先；未给时按单据槽位数确定性判定——多类必需、
+      // 单类保持旧行为）。argv 与回执同用这一份结论，避免"装配了但回执说没装配"。
+      const assembleDecision =
+        args.stage === "training_prep"
+          ? assembleDecisionOf(args.assemble, slotDocCountOf(runDir))
+          : { assemble: false, source: "single_doc" as const };
       // E3：预算三参（仅 experiment_setup 段）——终值解析（显式 > 确认快照兜底 >
       // unspecified 不下传）＋像素对成对校验（min<max，判据单源 pixelPairViolationOf）；
       // 坏值一律卡前快败不进审批（不消耗放行）；其它段零进入（不加键不下传）。
@@ -1897,7 +1981,7 @@ export const buildPipelineTool = (
       if (fieldConfig !== "") argv.push("--field-config", fieldConfig);
       // E8·H1：装配模式旗标（仅 training_prep 段且显式 true 才追加——缺省不出现在
       // argv，其它段不追加不报错；内核 b12 声明面 store_true）。
-      if (assembleMode) argv.push("--assemble");
+      if (assembleMode || assembleDecision.assemble) argv.push("--assemble");
       // E8·H2 配套：基模型家族透传（内核全局参数、多段读取——D93 先例不按段 gate；
       // 显式给且 trim 非空才追加，缺省 qwen3_vl 由内核自带不下传——联合装配链经
       // atf_joint_train 透传非缺省家族）。
@@ -2059,6 +2143,25 @@ export const buildPipelineTool = (
         run_dir: runDir,
         // E3 补：落点形态对账（canonical＝内核 RunLayout v1 形态；legacy＝<wp>/runs 旧形态）
         run_dir_layout: resolvedRun.layout,
+        // D3：training_prep 段必须说清"启动件有没有生成、装配是显式还是自动"——否则现场只能
+        // 靠 ls 三个目录才发现 launch/train.sh 不存在（本轮真机即如此，训练因此没能拉起）。
+        ...(args.stage === "training_prep"
+          ? (() => {
+              const artifacts = launchArtifactsOf(runDir);
+              return {
+                assemble_auto: assembleDecision.source,
+                assemble_effective: assembleMode || assembleDecision.assemble,
+                launch_artifacts: artifacts,
+                ...(artifacts.present || !(result.code === 0)
+                  ? {}
+                  : {
+                      launch_next:
+                        "启动件尚未生成——用 assemble=true 重跑本段（内核枚举 run 的单据槽位合并生成 iteration-config 与 launch/train.sh），" +
+                        "或用 atf_joint_train 做联合装配并启动；不要直接调 atf_run_training（缺启动件会空跑）",
+                    }),
+              };
+            })()
+          : {}),
         ok: result.code === 0,
         exit_code: result.code,
         // 询问闸：本次权限档 + 内核渲染的判定报告（「怎么执行 → 得到什么结果」，

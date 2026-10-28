@@ -1,0 +1,46 @@
+diff --git a/packages/shell/bash-local/src/index.ts b/packages/shell/bash-local/src/index.ts
+index 373c739..6f10954 100644
+--- a/packages/shell/bash-local/src/index.ts
++++ b/packages/shell/bash-local/src/index.ts
+@@ -31,6 +31,31 @@ export const ENV_OVERRIDES = {
+   GIT_PAGER: 'cat',
+ } as const
+ 
++/** 可声明透传的宿主环境变量名单（缺省不声明＝不新增任何键，行为与旧版逐字节一致）。
++ *
++ *  为什么需要：容器里本地编译的 python3 依赖 LD_LIBRARY_PATH 才能加载 libpython 的扩展，
++ *  而 bash 会话的 dshEnv 快照只承载 `DSH_*` 键，运行期必需变量无处可放——表现为
++ *  「解释器坏了」。由部署声明 `DSH_BASH_PASSTHROUGH_ENV=LD_LIBRARY_PATH` 即可带上。
++ */
++const PASSTHROUGH_ENV_KEY = 'DSH_BASH_PASSTHROUGH_ENV'
++
++/** 单键名长度上限（防呆；超长一律忽略，不报错不阻断会话）。 */
++const PASSTHROUGH_NAME_MAX = 64
++
++/** 从宿主 env 采集声明名单里的变量（只读 process.env，不展开、不通配）。 */
++const passthroughFromHost = (): Record<string, string> => {
++  const raw = process.env[PASSTHROUGH_ENV_KEY] ?? ''
++  if (raw === '') return {}
++  const picked: Record<string, string> = {}
++  for (const item of raw.split(',')) {
++    const name = item.trim()
++    if (name === '' || name.length > PASSTHROUGH_NAME_MAX) continue
++    const value = process.env[name]
++    if (typeof value === 'string' && value !== '') picked[name] = value
++  }
++  return picked
++}
++
+ /** Default SIGTERM→SIGKILL grace period (the `graceMs` config; matches OpenCode's 3s). */
+ const DEFAULT_GRACE_MS = 3_000
+ 
+@@ -169,7 +194,8 @@ export class LocalBashExecutor extends ShellExecutor {
+       // One explicit env map for the seam, layered so the trusted dshEnv
+       // snapshot beats both the caller's env and the terminal overrides; the
+       // subprocess service merges the whole map after its ambient scrub.
+-      env: { ...ENV_OVERRIDES, ...spec.env, ...spec.dshEnv },
++      // 透传层置于 spec.env 之前：调用方显式给的 env 仍可覆盖（不改变既有优先级语义）。
++      env: { ...ENV_OVERRIDES, ...passthroughFromHost(), ...spec.env, ...spec.dshEnv },
+     }
+   }
+ 
