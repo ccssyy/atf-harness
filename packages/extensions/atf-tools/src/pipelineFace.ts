@@ -1313,9 +1313,16 @@ export const labelQcResumeHintOf = (stage: string, code: number | null): Record<
 export const assembleDecisionOf = (
   requested: boolean | undefined,
   slotDocCount: number,
-): { assemble: boolean; source: "explicit_on" | "explicit_off" | "multi_doc_slots" | "single_doc" } => {
+  docTypeProvided = false,
+): {
+  assemble: boolean;
+  source: "explicit_on" | "explicit_off" | "no_doc_type" | "multi_doc_slots" | "single_doc";
+} => {
   if (requested === true) return { assemble: true, source: "explicit_on" };
   if (requested === false) return { assemble: false, source: "explicit_off" };
+  // 没给 doc_type ＝没有单类入口（内核 assemble=true 时不传 doc_type，数据面分支不可达）——
+  // 此时不装配就永远产不出启动件，训练也拉不起来，所以按联合装配处理。
+  if (!docTypeProvided) return { assemble: true, source: "no_doc_type" };
   if (slotDocCount > 1) return { assemble: true, source: "multi_doc_slots" };
   return { assemble: false, source: "single_doc" };
 };
@@ -1323,16 +1330,22 @@ export const assembleDecisionOf = (
 /** 单据槽位探测（D3）：**布局知识不在此处复制**——走 `runSubdirCandidates` 的候选链
  *  （v2 名 → v3 名的映射单源在 `runSubdirs.ts` 的 V2_TO_V3_DIR_MAP，布局演进时只改那一处）。
  *
- *  取单据子目录数量；候选全不可读按 0（保守——自动装配宁可不触发，也不误判成多类）。
+ *  **只认含 `train.jsonl` 的子目录**——槽位根下还住着 `images/`（变体图片）这类非单据
+ *  目录，按 isDirectory() 计数会把 1 个单据算成 2 个（dev 2026-10-28 实测如此）。
  *
  *  @param runDir - run 根目录。
- *  @returns 单据槽位目录数（`<槽位根>/<doc>/` 的 doc 个数，多候选取最大）。
+ *  @returns 单据槽位目录数（`<槽位根>/<doc>/train.jsonl` 的 doc 个数，多候选取最大）。
  */
+export const VERTICAL_SLOT_MARKER = "train.jsonl";
+
 export const slotDocCountOf = (runDir: string): number => {
   let best = 0;
   for (const root of runSubdirCandidates(runDir, "prep/variants")) {
     try {
-      const count = readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).length;
+      const count = readdirSync(root, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .filter((entry) => existsSync(join(root, entry.name, VERTICAL_SLOT_MARKER)))
+        .length;
       best = Math.max(best, count);
     } catch {
       // 候选缺席/不可读：换下一个候选（不猜、不阻断）
@@ -1680,9 +1693,11 @@ export const buildPipelineTool = (
       const runDir = resolvedRun.runDir;
       // D3：联合装配判定（显式 assemble 优先；未给时按单据槽位数确定性判定——多类必需、
       // 单类保持旧行为）。argv 与回执同用这一份结论，避免"装配了但回执说没装配"。
+      const docTypeGiven =
+        typeof args.doc_type === "string" && args.doc_type.trim() !== "";
       const assembleDecision =
         args.stage === "training_prep"
-          ? assembleDecisionOf(args.assemble, slotDocCountOf(runDir))
+          ? assembleDecisionOf(args.assemble, slotDocCountOf(runDir), docTypeGiven)
           : { assemble: false, source: "single_doc" as const };
       // E3：预算三参（仅 experiment_setup 段）——终值解析（显式 > 确认快照兜底 >
       // unspecified 不下传）＋像素对成对校验（min<max，判据单源 pixelPairViolationOf）；

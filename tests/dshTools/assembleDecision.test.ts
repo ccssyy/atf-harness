@@ -28,13 +28,18 @@ describe("D3 assembleDecisionOf（联合装配判定）", () => {
   });
 
   it("未给且多单据槽位 → 自动联合装配（多类不装配等于产不出启动件）", () => {
-    expect(assembleDecisionOf(undefined, 2)).toEqual({ assemble: true, source: "multi_doc_slots" });
-    expect(assembleDecisionOf(undefined, 9)).toEqual({ assemble: true, source: "multi_doc_slots" });
+    expect(assembleDecisionOf(undefined, 2, true)).toEqual({ assemble: true, source: "multi_doc_slots" });
+    expect(assembleDecisionOf(undefined, 9, true)).toEqual({ assemble: true, source: "multi_doc_slots" });
   });
 
-  it("未给且单类/零槽位 → 保持旧行为（不装配，但回执会明示启动件缺席）", () => {
-    expect(assembleDecisionOf(undefined, 1)).toEqual({ assemble: false, source: "single_doc" });
-    expect(assembleDecisionOf(undefined, 0)).toEqual({ assemble: false, source: "single_doc" });
+  it("给了 doc_type 且单类/零槽位 → 保持旧行为（不装配，但回执会明示启动件缺席）", () => {
+    expect(assembleDecisionOf(undefined, 1, true)).toEqual({ assemble: false, source: "single_doc" });
+    expect(assembleDecisionOf(undefined, 0, true)).toEqual({ assemble: false, source: "single_doc" });
+  });
+
+  it("没给 doc_type → 自动装配（没有单类入口，不装配就产不出启动件）", () => {
+    expect(assembleDecisionOf(undefined, 1)).toEqual({ assemble: true, source: "no_doc_type" });
+    expect(assembleDecisionOf(undefined, 0)).toEqual({ assemble: true, source: "no_doc_type" });
   });
 
   it("显式 false 压过自动推断（用户说不要，工具不得替他改主意）", () => {
@@ -46,8 +51,11 @@ describe("D3 slotDocCountOf（槽位探测两布局都认）", () => {
   it("data/prep/variants/<doc> 与 data/variants/<doc> 都计入，取较大者", () => {
     const runDir = tempRoot();
     mkdirSync(join(runDir, "data", "prep", "variants", "awb"), { recursive: true });
+    writeFileSync(join(runDir, "data", "prep", "variants", "awb", "train.jsonl"), "{}\n", "utf8");
     mkdirSync(join(runDir, "data", "variants", "swb"), { recursive: true });
+    writeFileSync(join(runDir, "data", "variants", "swb", "train.jsonl"), "{}\n", "utf8");
     mkdirSync(join(runDir, "data", "variants", "pl"), { recursive: true });
+    writeFileSync(join(runDir, "data", "variants", "pl", "train.jsonl"), "{}\n", "utf8");
     expect(slotDocCountOf(runDir)).toBe(2);
   });
 
@@ -61,6 +69,16 @@ describe("D3 slotDocCountOf（槽位探测两布局都认）", () => {
     mkdirSync(variants, { recursive: true });
     writeFileSync(join(variants, "readme.txt"), "x", "utf8");
     expect(slotDocCountOf(runDir)).toBe(0);
+  });
+
+  it("只认含 train.jsonl 的单据目录——images/ 不算（现场实测：1 个单据曾被算成 2 个）", () => {
+    const runDir = tempRoot();
+    const variants = join(runDir, "data", "variants");
+    mkdirSync(join(variants, "awb"), { recursive: true });
+    writeFileSync(join(variants, "awb", "train.jsonl"), "{}\n", "utf8");
+    mkdirSync(join(variants, "images"), { recursive: true });
+    writeFileSync(join(variants, "images", "a.png"), "x", "utf8");
+    expect(slotDocCountOf(runDir)).toBe(1);
   });
 });
 
