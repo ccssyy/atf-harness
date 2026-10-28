@@ -1,0 +1,15 @@
+diff --git a/packages/host/directory-picker-browse/src/index.ts b/packages/host/directory-picker-browse/src/index.ts
+index 01fe5b9..6b698db 100644
+--- a/packages/host/directory-picker-browse/src/index.ts
++++ b/packages/host/directory-picker-browse/src/index.ts
+@@ -215,7 +215,9 @@ export default class BrowseDirectoryPicker extends DirectoryPicker {
+   }
+ 
+   private async list(path?: string, signal?: AbortSignal): Promise<DirectoryListing> {
+-    const home = homedir()
++    // 缺省根可声明：未声明 env 时逐字同旧行为（homedir()）；实例部署里宿主家目录通常不是
++    // 实例资产根，由 env 指向推荐落点（工作区目录），避免用户在家目录下建出实例外工作区。
++    const home = process.env["DSH_WORKSPACE_PICKER_ROOT"]?.trim() || homedir()
+     // The seam contract takes fully qualified paths only; resolve() would
+     // silently rebase a relative or empty wire value under the host process
+     // cwd (or, for rooted drive-less Windows forms, its current drive).
