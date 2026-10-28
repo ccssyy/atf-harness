@@ -21,11 +21,12 @@
 #   2026-10-16：staged tmux 2.7 实测可运行但不取——装 tmux＝容器系统态变更，nohup 形态
 #   零系统变更；pid 文件＋组杀承载旧 tmux 会话语义）。
 #
-# launch token 轮换口径（批㊶-OPSREPO T2 源码定案，禁猜实锚）：
-#   vendor `dsh web` 无固定 token 绑定点——launch token 每进程随机生成
-#   （packages/client/connection/src/browser-auth.ts processLaunchToken：WeakMap 私有；
-#   CLI 旗面闭集 --host/--no-open/--port/--trusted-host 无 --token；DSH_WEB_LAUNCH_TOKEN
-#   全仓零消费），每次 boot 轮换。本脚本 boot 完成从日志提取 token、打印完整公网 URL；
+# launch token 口径（10-28 实测更正，旧的「零消费」结论作废）：
+#   `packages/client/connection/src/browser-auth.ts:55` 的 processLaunchToken 里
+#   `const fromEnv = process.env.DSH_WEB_LAUNCH_TOKEN; const created = fromEnv ?? 随机`——
+#   即**有**固定绑定点；运行期读的是 `lib/index.js:247`（package main = lib/index.js）。
+#   实例 env 声明该键后 token 长期固定（32 字节 base64url 无 padding ＝ 43 字符），
+#   未声明则退回每 boot 随机。本脚本 boot 完成仍从日志提取 token 并打印完整公网 URL；
 #   已登录浏览器凭 DSH_HOME 内 30 天签名 cookie 跨重启存续，新 token 仅新浏览器需要。
 #
 # 流程：校验目标 → 容器内 uat checkout fetch+checkout（pin 子模块）→ CI 非交互

@@ -23,9 +23,11 @@
 #         /root/.atf-harness/.env；boot 形态＝setsid＋nohup＋pid 文件（容器无 tmux；
 #         staged tmux 2.7 实测可运行但不取——装 tmux＝容器系统态变更，2026-10-16 登记）。
 #
-# launch token 轮换口径（批㊶-OPSREPO T2 源码定案）：vendor `dsh web` 无固定 token
-# 绑定点（launch token 每进程随机——DSH_WEB_LAUNCH_TOKEN 零消费），token 每 boot
-# 轮换；uat 重启完成打印完整公网 URL，已登录浏览器凭 30 天签名 cookie 存续。
+# launch token 口径（10-28 实测更正，旧结论作废）：vendor `dsh web` **有**固定绑定点——
+# `DSH_WEB_LAUNCH_TOKEN` 在 `packages/client/connection/src/browser-auth.ts:55` 与
+# `lib/index.js:247`（package main 指 lib，运行期读 lib 那份）被 `processLaunchToken` 采用
+# （`fromEnv ?? 随机`）。实例 env 声明后 token 长期固定、不再每 boot 轮换；未声明则退回随机。
+# 重启完成仍打印完整公网 URL，已登录浏览器凭 30 天签名 cookie 跨重启存续。
 #
 # 纪律（沿 uat-deploy.sh 先例）：演示/同事使用时段禁重启；脚本不可用时先修脚本再重启；
 # 本脚本不回写任何 env 文件。
