@@ -2638,7 +2638,21 @@ export const buildPipelineTool = (
         // 字段清单确认结果（register 段即时确认）——**必须进回执**：
         // 否则 agent 不知道用户只确认了哪几个字段，后续还会按 17 个字段往下走
         // （真机发现：用户在卡上只留了 awb/shipper，agent 的回复里完全没提这件事）。
-        ...(fieldChoiceSummary !== undefined ? { field_choice: fieldChoiceSummary } : {}),
+        // 字段确认结果回执里附「写字段配置的正确姿势」——这是系统知识，
+        // 不能让 agent 靠试错发现（真机代价：裁 fields 表达「只训几个」，
+        // 发布段字段对账与映射覆盖两道闸全过不去，最后读内核源码才悟出来）。
+        ...(fieldChoiceSummary !== undefined
+          ? {
+              field_choice: {
+                ...fieldChoiceSummary,
+                config_advice:
+                  "写字段配置时：fields 要声明**标注全量**（标注里出现的每个字段都要有），"
+                  + "本次不训练的字段列进 training_excluded_fields —— 训练只跑未排除的那些，"
+                  + "契约仍覆盖全部字段。不要用「裁 fields」表达「只训几个」：那样契约覆盖不了"
+                  + "标注里的原字段，发布段会拦（字段对账与标注映射覆盖两道闸）。",
+              },
+            }
+          : {}),
         // 分组节（跑完后重读本次产物——卡面与回执同一渲染单源）
         ...(args.stage === "experiment_setup"
           ? { grouping_section: renderGroupingSection(readExperimentGrouping(runDir), fieldNameMapOf(runDir)) }
