@@ -27,6 +27,7 @@ import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { err, ok, type Result } from "../bridge/index.js";
 import { checkSchema, validateCanonicalOutput, type SchemaNode, type ToolDefinition } from "../core/tools/index.js";
 import { LEDGER_ENV, homeLedgerPathOf } from "../core/workspace/approvalLedger.js";
+import { bashEnvOf, CONTROLLED_BASH_ENV_KEYS } from "../core/workspace/controlledEnv.js";
 import { findBash, runScratchCommand, SCRATCH_EXEC_STDERR_TAIL_BYTES, SCRATCH_WRITE_MAX_BYTES } from "../core/workspace/scratchExec.js";
 import { resolveDshHome } from "../core/workspace/workspaceRegistry.js";
 
@@ -44,17 +45,16 @@ export const FILE_TOOL_READ_LINE_CAP_CHARS = 2000;
 /** read 文件体量上限（超限拒绝，不读入）。 */
 export const FILE_TOOL_READ_MAX_BYTES = 8 * 1024 * 1024;
 
-/** bash 受控执行：超时缺省/上限；env 白名单键（凭据不进子进程 env——红线 env-only 之外的键不透传）。
+/** bash 受控执行：超时缺省/上限；env 白名单键。
  *
- *  LD_LIBRARY_PATH 为什么在白名单里：容器内 python3 是本地编译版，缺它连解释器自身都起不来
- *  （`error while loading shared libraries: libpython3.10.so.1.0`），扩展模块更不用说——
- *  现场表现为"atf_bash 里 python3 坏了"。`scratchExec.ts:90` 的 `buildScratchExecEnv` 早已
- *  显式带该键（同一条理由），此处补齐口径，两条执行通道对运行时库路径一致。
- *  它不含凭据语义（纯路径列表），进白名单不破"凭据不进子进程"红线。
+ *  白名单**不在本文件判定**：键归属（运行时必需／会话键／ATF 面具名／凭据禁区）单源在
+ *  `core/workspace/controlledEnv.ts`——`atf_bash` 与 `atf_scratch_exec` 共用那一份，
+ *  避免再出现"同一个容器里 python3 在 scratch 能跑、在 bash 起不来"（`LD_LIBRARY_PATH`
+ *  曾只在 scratch 侧带）。本常量保留原名导出，消费方零改动。
  */
 export const FILE_TOOL_BASH_TIMEOUT_MS_DEFAULT = 60_000;
 export const FILE_TOOL_BASH_TIMEOUT_MS_MAX = 600_000;
-export const FILE_TOOL_BASH_ENV_KEYS: readonly string[] = ["PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TERM", "ATF_CLI_PATH", "ATF_WORKSPACE_ROOT", "LD_LIBRARY_PATH"];
+export const FILE_TOOL_BASH_ENV_KEYS: readonly string[] = CONTROLLED_BASH_ENV_KEYS;
 
 /** 白名单追加 env（追加语义，不覆盖装配给定根；path.delimiter 分隔）。 */
 export const FILE_TOOL_ROOTS_ENV = "ATF_V1_FILE_TOOL_ROOTS";
@@ -556,12 +556,8 @@ const bashHandler = async (params: Record<string, unknown>, host: FileToolHost):
     cwdAbs = guard.value.abs;
   }
   await mkdir(cwdAbs, { recursive: true }); // 白名单内 cwd 缺失即建（首跑 scratch 未落盘）
-  const env: Record<string, string> = {};
-  const source = host.env ?? process.env;
-  for (const key of FILE_TOOL_BASH_ENV_KEYS) {
-    const value = source[key];
-    if (value !== undefined && value !== "") env[key] = value;
-  }
+  // 白名单取值单源（bashEnvOf：按 controlledEnv 的键序取，空值跳过）
+  const env: Record<string, string> = bashEnvOf(host.env ?? process.env);
   const ran = await runScratchCommand({ argv: [findBash(), "-c", command], cwd: cwdAbs, env, timeoutMs });
   if (!ran.ok) return err(ran.error);
   const outcome = ran.value;

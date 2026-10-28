@@ -26,6 +26,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readdirSync } from "node:fs
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { err, ok, type Result } from "../../bridge/index.js";
+import { ENV_DENY_PATTERN, runtimeEnvOf } from "./controlledEnv.js";
 import { safeScratchPath } from "./runWorkspace.js";
 import { runRelPathV3 } from "./runSubdirs.js";
 
@@ -54,7 +55,8 @@ export const findPython3 = (override?: string): string => {
 };
 
 /** 脱敏透传拒绝键：ATF_LLM_*（凭据）与键名含敏感词的 ATF_* 一律不进子进程 env。 */
-const ENV_DENY = /(ATF_LLM_|KEY|TOKEN|SECRET|PASSWORD|PASSWD)/i;
+// 凭据禁区单源（与 atf_bash 共用一份判定，见 core/workspace/controlledEnv.ts）
+const ENV_DENY = ENV_DENY_PATTERN;
 
 /**
  * scratch 受控执行的 TMPDIR 落点（F10）：全局短路径，隔离语义不变。
@@ -87,9 +89,8 @@ export const buildScratchExecEnv = (input: {
     if (value === undefined || !key.startsWith("ATF_") || ENV_DENY.test(key)) continue;
     passthrough[key] = value;
   }
-  if (typeof process.env["LD_LIBRARY_PATH"] === "string") {
-    passthrough["LD_LIBRARY_PATH"] = process.env["LD_LIBRARY_PATH"];
-  }
+  // 解释器运行时键单源（runtimeEnvOf：RUNTIME_ENV_KEYS 逐个取，命中凭据禁区者跳过）
+  Object.assign(passthrough, runtimeEnvOf(process.env));
   const pythonDir = dirname(input.pythonPath);
   return {
     ...passthrough,
