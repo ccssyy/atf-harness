@@ -44,3 +44,43 @@ index 373c739..6f10954 100644
      }
    }
  
+diff --git a/packages/terminal/terminal-bash/src/index.ts b/packages/terminal/terminal-bash/src/index.ts
+index fb22f39..a0f1b3d 100644
+--- a/packages/terminal/terminal-bash/src/index.ts
++++ b/packages/terminal/terminal-bash/src/index.ts
+@@ -61,10 +61,35 @@ function ensureSandboxModeFence(ctx: Context, owner: Agent): void {
+   }, { global: true })
+ }
+ 
++/** 可声明透传的宿主环境变量名单（缺省不声明＝不新增任何键，行为与旧版一致）。
++ *
++ *  为什么需要：这个后端的 env 是**独立构造**的（不经过 subprocess provider 的 scrubbed
++ *  环境），于是容器里本地编译的 python3 所需的 LD_LIBRARY_PATH 无处可放——表现为
++ *  「python3: error while loading shared libraries: libpython3.10.so.1.0」。
++ *  由部署声明 `DSH_BASH_PASSTHROUGH_ENV=LD_LIBRARY_PATH` 即可带上。
++ */
++const PASSTHROUGH_ENV_KEY = 'DSH_BASH_PASSTHROUGH_ENV'
++
++/** 从宿主 env 采集声明名单里的变量（只读 process.env，不展开、不通配）。 */
++function passthroughFromHost(): Record<string, string> {
++  const raw = process.env[PASSTHROUGH_ENV_KEY] ?? ''
++  if (raw === '') return {}
++  const picked: Record<string, string> = {}
++  for (const item of raw.split(',')) {
++    const name = item.trim()
++    if (name === '' || name.length > 64) continue
++    const value = process.env[name]
++    if (typeof value === 'string' && value !== '') picked[name] = value
++  }
++  return picked
++}
++
+ function childEnvironment(spec: TerminalBackendSpawnSpec, dialect: ShellDialect): Record<string, string> {
+   // The subprocess provider supplies its own scrubbed ambient base; these are
+   // deliberate terminal-specific overrides layered after it.
+   const common = {
++    // 透传层（部署声明）：置于最前，下面的 terminal 专用键仍可覆盖同名项。
++    ...passthroughFromHost(),
+     TERM: 'dumb',
+     PAGER: 'cat',
+     GIT_PAGER: 'cat',

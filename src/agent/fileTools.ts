@@ -44,10 +44,17 @@ export const FILE_TOOL_READ_LINE_CAP_CHARS = 2000;
 /** read 文件体量上限（超限拒绝，不读入）。 */
 export const FILE_TOOL_READ_MAX_BYTES = 8 * 1024 * 1024;
 
-/** bash 受控执行：超时缺省/上限；env 白名单键（凭据不进子进程 env——红线 env-only 之外的键不透传）。 */
+/** bash 受控执行：超时缺省/上限；env 白名单键（凭据不进子进程 env——红线 env-only 之外的键不透传）。
+ *
+ *  LD_LIBRARY_PATH 为什么在白名单里：容器内 python3 是本地编译版，缺它连解释器自身都起不来
+ *  （`error while loading shared libraries: libpython3.10.so.1.0`），扩展模块更不用说——
+ *  现场表现为"atf_bash 里 python3 坏了"。`scratchExec.ts:90` 的 `buildScratchExecEnv` 早已
+ *  显式带该键（同一条理由），此处补齐口径，两条执行通道对运行时库路径一致。
+ *  它不含凭据语义（纯路径列表），进白名单不破"凭据不进子进程"红线。
+ */
 export const FILE_TOOL_BASH_TIMEOUT_MS_DEFAULT = 60_000;
 export const FILE_TOOL_BASH_TIMEOUT_MS_MAX = 600_000;
-export const FILE_TOOL_BASH_ENV_KEYS: readonly string[] = ["PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TERM", "ATF_CLI_PATH", "ATF_WORKSPACE_ROOT"];
+export const FILE_TOOL_BASH_ENV_KEYS: readonly string[] = ["PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TERM", "ATF_CLI_PATH", "ATF_WORKSPACE_ROOT", "LD_LIBRARY_PATH"];
 
 /** 白名单追加 env（追加语义，不覆盖装配给定根；path.delimiter 分隔）。 */
 export const FILE_TOOL_ROOTS_ENV = "ATF_V1_FILE_TOOL_ROOTS";
