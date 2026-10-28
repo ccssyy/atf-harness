@@ -2400,36 +2400,38 @@ export const buildPipelineTool = (
             const svc = ctx.get("userQuestions") as FormAskService | undefined;
             if (svc !== undefined && typeof svc.ask === "function") {
               try {
-                // 提问卡（单选）——不是 17 项复选框（owner 2026-10-28：字段确认就是一句问答）。
+                // 提问卡：DSH 原生 form 卡（**带自由输入框**，预填默认「全部 N 个字段」）。
+                // 不用 choice 卡：当前 vendor 客户端只渲染选项 + Skip/Submit，没有输入框
+                // （`ChoiceAskQuestion` 注释里说「客户端自带其他输入」与实现不符）。
+                const defaultScope = `全部 ${String(labels.label_count)} 个字段`;
                 const answers = await svc.ask({
-                  questions: [{
+                  questions: [formAskQuestion({
                     id: `field-choice-${args.run_id}`,
                     question: `这批数据的字段清单要全用它吗？— ${args.run_id}`,
                     header: "字段清单",
                     detail: fieldChoiceDetailOf(labels),
-                    options: [
-                      {
-                        label: `全部 ${String(labels.label_count)} 个字段都训练`,
-                        description: `推荐——共 ${String(labels.box_count)} 个框、覆盖 ${String(labels.page_count)} 页`,
-                      },
-                      {
-                        label: "我要挑几个字段",
-                        description: "选这个，然后告诉我要训练哪几个（不选这项就按全部训练）",
-                      },
-                    ],
-                    multiSelect: false,
-                  }],
+                    fields: [{
+                      key: "field_scope",
+                      label: "训练范围",
+                      value: defaultScope,
+                      placeholder:
+                        `保留「${defaultScope}」＝全部训练；只训某几个就改成字段名（逗号分隔），例如 awb, shipper`,
+                      hint: "这些字段是从你的标注里数出来的；中文名与定义由训练侧按标注标签生成",
+                    }],
+                    submitLabel: "确认字段范围",
+                  })],
                   agent: exec.agent,
                   signal: exec.signal,
                 });
-                const picked = answers.answers.flatMap((answer) => [...answer.selected])[0] ?? "";
-                const custom = answers.answers
-                  .map((answer) => answer.custom ?? "")
-                  .filter((value) => value.trim() !== "")
-                  .join("；")
-                  .trim();
-                const wantsAll = picked.startsWith("全部 ") && custom === "";
-                if (wantsAll) {
+                const scope = String(editsFromFormAnswers(answers)["field_scope"] ?? "").trim();
+                const known = new Set(labels.labels.map((item) => item.label));
+                const requested = scope
+                  .split(/[,，、\s]+/)
+                  .map((name) => name.trim())
+                  .filter((name) => name !== "");
+                const untouched = scope === "" || scope === defaultScope;
+                const allNamed = requested.length > 0 && requested.every((name) => known.has(name));
+                if (untouched) {
                   writeFieldChoice(runDir, {
                     run_id: args.run_id,
                     confirmed_fields: labels.labels.map((item) => item.label),
@@ -2443,18 +2445,37 @@ export const buildPipelineTool = (
                     all_fields: true,
                     total_fields: labels.label_count,
                   };
+                } else if (allNamed) {
+                  // 用户直接写了字段名且都在清单里 → 按他说的落账（这是明确的用户决定）
+                  writeFieldChoice(runDir, {
+                    run_id: args.run_id,
+                    confirmed_fields: requested,
+                    all_fields: requested.length === labels.label_count,
+                    total_fields: labels.label_count,
+                    decided_at: new Date().toISOString(),
+                    source: "user_confirmed",
+                  });
+                  fieldChoiceSummary = {
+                    confirmed_fields: requested,
+                    all_fields: requested.length === labels.label_count,
+                    total_fields: labels.label_count,
+                  };
                 } else {
-                  // 「我要挑几个」或用户直接写了字段名 → **不落账**（不把没定的事记成定论），
-                  // 把原话交回 agent，由它追问清楚后以 field_config 显式给出。
+                  // 写了清单里没有的东西（错字/新字段/一句人话）→ **不落账**，
+                  // 把原话交回 agent 追问或核对标注，不替他改成「全都不要」。
                   fieldChoiceSummary = {
                     confirmed_fields: [],
                     all_fields: false,
                     total_fields: labels.label_count,
                     needs_selection: true,
-                    user_words: custom !== "" ? custom : picked,
-                    note: "用户没有确认「全部训练」——请按他说的字段范围弄清楚具体是哪几个，再以 field_config 显式给出；不要替他勾全选",
+                    user_words: scope,
+                    unknown_names: requested.filter((name) => !known.has(name)),
+                    note:
+                      "用户填的范围里有清单外的名字——先核对是不是笔误或标注里真没有这些字段，"
+                      + "确认后以 field_config 显式给出；不要替他勾全选，也不要把没说清的记成定论",
                   };
-                }              } catch {
+                }
+              } catch {
                 // 卡被关掉/通道失败 → 不造假确认：下一段前仍会再问（账本没有记录）
                 fieldChoiceSummary = { confirmed_fields: [], all_fields: false, total_fields: labels.label_count, skipped: true };
               }

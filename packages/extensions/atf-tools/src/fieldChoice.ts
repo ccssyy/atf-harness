@@ -172,7 +172,8 @@ export const fieldChoiceDetailOf = (labels: FieldLabels, alreadyConfirmed?: Fiel
   }
   lines.push("");
   lines.push(
-    "**这些字段要全部训练吗？** 全部训练就选第一项；只想训其中几个就选第二项并告诉我哪几个。".replace("%d", String(labels.label_count)),
+    "**这些字段要全部训练吗？** 默认就是全部训练（下面输入框已填好）；只想训其中几个，"
+      + "把输入框改成字段名即可，例如 awb, shipper。",
   );
   lines.push("中文名与字段定义由训练侧按标注标签生成——如果你要改某个字段的叫法，直接在这里说。");
   if (alreadyConfirmed !== undefined && alreadyConfirmed !== null) {
