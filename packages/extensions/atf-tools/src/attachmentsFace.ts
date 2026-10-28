@@ -48,9 +48,30 @@ export const assemblyReportPathOf = (workspacePath: string, name: string): strin
 export const attachmentsReportPathOf = (workspacePath: string): string =>
   join(workspacePath, "analysis", "attachments-report.md");
 
+/** 装配方案的下一步（三态强引导，回执每条必带）：
+ *  · plan 段未跑（报告里没有方案路径）→ 先出方案再落地；
+ *  · 方案已出、还没落地（有方案路径、无落点）→ 直接落地；
+ *  · 已落地 → 去登记数据集。 */
+export type AssemblyNextStep = "run plan → land" | "land" | "register";
+
+export const assemblyNextStepOf = (report: AssemblyReport | null): AssemblyNextStep =>
+  report === null || report.planPath === "" ? "run plan → land" : report.landing === "" ? "land" : "register";
+
+/** 失败回执的固定提示（手工解包不产方案——下游会因此缺方案被拒）。 */
+export const ASSEMBLY_FAILURE_NEXT_HINT = "手工解包（scratch/bash）不产生装配方案，下游会标 assembly_plan_absent";
+
+/** 失败回执的 next（没有可用装配方案＝只能先跑 plan → land）。 */
+export const ASSEMBLY_FAILURE_NEXT: AssemblyNextStep = "run plan → land";
+
 /** 内核整理脚本（pin 内技能包；缺席即 fail-closed，不 mock）。 */
 const ingestScriptOf = (kernelDir: string): string =>
   join(kernelDir, "skills", "atf-ingest-attachments", "scripts", "run_assembly.py");
+
+/** 重读当前装配结果（只用于回执三态 next；读不到＝null 按「先出方案」处理）。 */
+const latestReportOf = (workspacePath: string, name: string): AssemblyReport | null => {
+  const parsed = readAssemblyReport(assemblyReportPathOf(workspacePath, name));
+  return parsed.ok ? parsed.report : null;
+};
 
 /** 判断编号 → 「第 N 项」（用户面说法；d3 → 3）。 */
 const ordinalOf = (id: string): string => {
@@ -131,7 +152,13 @@ export const buildAttachmentsTool = (
       const workspacePath = typeof args.workspace_path === "string" ? args.workspace_path.trim() : "";
       const name = typeof args.name === "string" ? args.name.trim() : "";
       if (workspacePath === "" || name === "") {
-        return asToolValue({ ok: false, error: "args_missing", note: "workspace_path 与 name 必填（与装配器 --workspace/--name 同值）" });
+        return asToolValue({
+          ok: false,
+          error: "args_missing",
+          note: "workspace_path 与 name 必填（与装配器 --workspace/--name 同值）",
+          next: ASSEMBLY_FAILURE_NEXT,
+          next_hint: ASSEMBLY_FAILURE_NEXT_HINT,
+        });
       }
       const action = args.action === "revise" ? "revise" : "review";
 
@@ -145,6 +172,8 @@ export const buildAttachmentsTool = (
             ok: false,
             error: "revise_args_missing",
             note: "revise 需要 id（哪一条判断）、to（改成哪一类）、reason（用户给的原因）三项——缺一项就会变成 harness 替用户做决定，故拒",
+            next: ASSEMBLY_FAILURE_NEXT,
+            next_hint: ASSEMBLY_FAILURE_NEXT_HINT,
           });
         }
         if (!(ASSEMBLY_ROLES as readonly string[]).includes(to)) {
@@ -152,6 +181,8 @@ export const buildAttachmentsTool = (
             ok: false,
             error: "revise_target_unknown",
             note: `改成哪一类不认识（${to}）——可用：${ASSEMBLY_ROLES.map((role) => roleBusinessOf(role)).join("、")}`,
+            next: ASSEMBLY_FAILURE_NEXT,
+            next_hint: ASSEMBLY_FAILURE_NEXT_HINT,
           });
         }
         const ran = await runPipeline(
@@ -174,6 +205,8 @@ export const buildAttachmentsTool = (
             stdout_head: ran.stdout.trim().slice(0, 300),
             stderr_tail: ran.stderr.trim().slice(-600),
             note: "内核修订没有返回可解析结果——方案未确认改动，请把 stderr 原文如实告知用户（不猜、不重放）",
+            next: ASSEMBLY_FAILURE_NEXT,
+            next_hint: ASSEMBLY_FAILURE_NEXT_HINT,
           });
         }
         if (parsed["error"] === "revision_conflict") {
@@ -189,6 +222,8 @@ export const buildAttachmentsTool = (
             error: "revision_conflict",
             conflicts,
             note: `这次改不了，因为和已有事实矛盾：${lines.length === 0 ? "（内核未给出细项）" : lines.join("；")}——方案一个字都没改，请先确认指认或补齐缺口`,
+            next: ASSEMBLY_FAILURE_NEXT,
+            next_hint: ASSEMBLY_FAILURE_NEXT_HINT,
           });
         }
         const revision = (parsed["revision"] ?? null) as Record<string, unknown> | null;
@@ -207,6 +242,7 @@ export const buildAttachmentsTool = (
           replayed: parsed["replayed"] === true,
           plan_path: typeof parsed["plan_path"] === "string" ? parsed["plan_path"] : "",
           note: "修订已由内核记录并只重放受影响的落地步骤；把这个结果用一句话告诉用户即可，不要自行改判或重放",
+          next: assemblyNextStepOf(latestReportOf(workspacePath, name)),
         });
       }
 
@@ -222,6 +258,8 @@ export const buildAttachmentsTool = (
           report_path: reportPath,
           ...(parsedReport.error === "assembly_report_incomplete" ? { missing_field: parsedReport.missing } : {}),
           note: parsedReport.note,
+          next: ASSEMBLY_FAILURE_NEXT,
+          next_hint: ASSEMBLY_FAILURE_NEXT_HINT,
         });
       }
       const report = parsedReport.report;
@@ -244,6 +282,8 @@ export const buildAttachmentsTool = (
             report_path: reportPath,
             detail,
             note: `一行汇报已可给用户，但业务话版本落盘失败（${filePath}）：${String(cause).slice(0, 160)}——请如实告知用户「报告没写成」`,
+            next: ASSEMBLY_FAILURE_NEXT,
+            next_hint: ASSEMBLY_FAILURE_NEXT_HINT,
           });
         }
         return asToolValue({
@@ -256,6 +296,7 @@ export const buildAttachmentsTool = (
           missing: report.missing.map((entry) => ({ role_label: roleBusinessOf(entry.role), detail: entry.detail })),
           degraded_lines: degradedLines,
           note: "完全授权档不弹卡：把 summary_line 原样告诉用户即可（一行汇报），细节在 report_file",
+          next: assemblyNextStepOf(report),
         });
       }
 
@@ -269,6 +310,8 @@ export const buildAttachmentsTool = (
           detail,
           summary_line: summaryLine,
           note: "确认卡通道不可用（user-questions 服务未挂载）——不静默按「全部正确」继续：请把上面的识别结果与缺口如实告知用户，让用户口头确认或指认",
+          next: ASSEMBLY_FAILURE_NEXT,
+          next_hint: ASSEMBLY_FAILURE_NEXT_HINT,
         });
       }
       const options = optionsOf(report);
@@ -299,6 +342,7 @@ export const buildAttachmentsTool = (
             detail,
             summary_line: summaryLine,
             note: "用户关掉了确认卡（未确认任何判断）——按「未确认」处理：不要据此继续落地，也不要替用户假定判断成立",
+            next: assemblyNextStepOf(report),
           });
         }
         return asToolValue({
@@ -307,6 +351,8 @@ export const buildAttachmentsTool = (
           report_path: reportPath,
           detail,
           note: `确认卡应答失败：${String(cause).slice(0, 200)}——请把识别结果与缺口如实告知用户，让用户口头确认或指认`,
+          next: ASSEMBLY_FAILURE_NEXT,
+          next_hint: ASSEMBLY_FAILURE_NEXT_HINT,
         });
       }
       const selected = answers.answers.flatMap((answer) => [...answer.selected]);
@@ -329,6 +375,7 @@ export const buildAttachmentsTool = (
         note: disputed.length === 0
           ? "用户确认全部判断成立——可以继续下一步（缺口按 missing 里的说明请用户补）"
           : "有判断被勾掉：逐项问清它实际是哪一类，再用 action=revise 转成内核修订（不要自行改判或重放）",
+        next: assemblyNextStepOf(report),
       });
     },
   });

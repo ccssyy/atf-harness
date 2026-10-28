@@ -20,7 +20,7 @@
  */
 import { existsSync, statSync, watchFile, unwatchFile } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
-import { toFileAgentTool, FILE_TOOL_DEFINITIONS, type FileToolHost } from "../../../../src/agent/fileTools.js";
+import { attachmentsRootOf, toFileAgentTool, FILE_TOOL_DEFINITIONS, type FileToolHost } from "../../../../src/agent/fileTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { resolveSessionRunWorkspace } from "../../../../src/core/workspace/runFacts.js";
 import { runFileCandidates } from "../../../../src/core/workspace/runLayout.js";
@@ -113,11 +113,64 @@ export const registerPathGuard = (
   return true;
 };
 
-/** atf_bash 命令串扫描（守卫面）：越界绝对路径记号 → 结构化拒绝。 */
-export const bashCommandGuard = (command: unknown, roots: readonly string[]): { ok: true } | { ok: false; message: string } => {
+// ── F9：会话附件目录只读开白（消掉「bash 被围栏挡 → scratch 手工解包 → 七步永不跑」的捷径）──
+
+/** 附件目录只读开白的写侧统一指引（唯一合法装配入口）。 */
+export const ATTACHMENTS_ONLY_ENTRY_HINT = "上传件装配走 atf_attachments_assembly（唯一入口）";
+
+/** 只读命令闭集（只看首命令；写语义命令一律不在集内）。 */
+const READ_ONLY_COMMANDS: ReadonlySet<string> = new Set([
+  "cat", "head", "tail", "less", "more", "wc", "ls", "ll", "find", "grep", "rg", "file", "stat",
+  "sha256sum", "md5sum", "du", "df", "tree", "zipinfo", "readlink", "realpath", "basename", "dirname", "pwd",
+]);
+
+/** F9——命令是否「只读」（应用层 best-effort，沿围栏既有语义如实声明非 OS 边界）：
+ *  逐段（&& || ; | 换行）取首命令（跳过 VAR=值 前缀）都须在只读闭集内；`unzip`/`tar` 仅列
+ *  目录旗标（-l／--list／-tf…）算只读；整串出现重定向（> >>）即非只读。 */
+export const readOnlyCommandIs = (command: string): boolean => {
+  if (typeof command !== "string" || command.trim() === "") return false;
+  if (command.includes(">")) return false; // 重定向＝写
+  for (const segment of splitShellSegments(command)) {
+    const tokens = tokenizeQuoted(segment);
+    let idx = 0;
+    while (idx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[idx]?.text ?? "")) idx += 1;
+    const head = tokens[idx]?.text ?? "";
+    if (head === "") return false;
+    const base = head.includes("/") ? head.slice(head.lastIndexOf("/") + 1) : head;
+    const rest = tokens.slice(idx + 1).map((token) => token.text);
+    if (base === "unzip") {
+      if (!rest.some((text) => text === "-l" || text === "-list" || text === "--list")) return false;
+      continue;
+    }
+    if (base === "tar") {
+      if (!rest.some((text) => text === "--list" || /^-[a-zA-Z]*t[a-zA-Z]*$/.test(text))) return false;
+      continue;
+    }
+    if (!READ_ONLY_COMMANDS.has(base)) return false;
+  }
+  return true;
+};
+
+/** atf_bash 命令串扫描（守卫面）：越界绝对路径记号 → 结构化拒绝。
+ *  F9：`opts.readOnlyRoots`（会话附件目录）内的路径——只读命令放行、写语义命令仍拒。 */
+export const bashCommandGuard = (
+  command: unknown,
+  roots: readonly string[],
+  opts?: { /** F9：只读开白根（附件目录）——只读命令放行、写语义命令仍拒。 */ readOnlyRoots?: readonly string[] },
+): { ok: true } | { ok: false; message: string } => {
   if (typeof command !== "string" || command === "") return { ok: true };
+  const readOnlyRoots = opts?.readOnlyRoots ?? [];
+  const commandIsReadOnly = readOnlyRoots.length > 0 && readOnlyCommandIs(command);
   for (const token of absolutePathTokensFromCommand(command)) {
     if (pathOutsideRoots(token, roots)) {
+      // F9：附件目录读放行（cat/ls/unzip -l …）；写/解包落盘仍拒（写仍归附件装配唯一入口）
+      if (readOnlyRoots.length > 0 && !pathOutsideRoots(token, readOnlyRoots)) {
+        if (commandIsReadOnly) continue;
+        return {
+          ok: false,
+          message: `${FILE_PATH_OUTSIDE_ALLOWLIST}: 附件目录只读（${token} 在只读开白域内，写/解包不放行）——${ATTACHMENTS_ONLY_ENTRY_HINT}`,
+        };
+      }
       return {
         ok: false,
         message: `${FILE_PATH_OUTSIDE_ALLOWLIST}: 命令引用白名单外绝对路径 ${token}（合法根：${roots.join("；")}）——改用工作区相对路径，或将数据目录经 ATF_V1_FILE_TOOL_ROOTS 声明后使用`,
@@ -150,9 +203,30 @@ export const workspaceFenceRoots = (input: {
 };
 
 /** 越界预检（包装层拒绝不弹卡——结构化指路回流；bash 字符串预检定位「防漫游」非防对抗）。 */
-export const workspaceFenceGuard = (command: string, fence: { writable: string; readable: readonly string[] }): { ok: true } | { ok: false; code: string; message: string } => {  if (typeof command !== "string" || command === "") return { ok: true };
+export const workspaceFenceGuard = (
+  command: string,
+  fence: {
+    writable: string;
+    readable: readonly string[];
+    /** F9：只读开白根（会话附件目录）——只读命令放行、写语义命令仍拒。 */
+    readOnlyRoots?: readonly string[];
+  },
+): { ok: true } | { ok: false; code: string; message: string } => {
+  if (typeof command !== "string" || command === "") return { ok: true };
+  const readOnlyRoots = fence.readOnlyRoots ?? [];
+  const commandIsReadOnly = readOnlyRoots.length > 0 && readOnlyCommandIs(command);
   for (const token of absolutePathTokensFromCommand(command)) {
     if (pathOutsideRoots(token, fence.readable)) {
+      // F9：附件目录只读开白——读（cat/ls/unzip -l …）放行；写/解包落盘仍拒（防「围栏挡 →
+      // scratch 手工解包 → 七步永不跑」的捷径；装配唯一入口＝atf_attachments_assembly）
+      if (readOnlyRoots.length > 0 && !pathOutsideRoots(token, readOnlyRoots)) {
+        if (commandIsReadOnly) continue;
+        return {
+          ok: false,
+          code: WORKSPACE_PATH_OUTSIDE_ALLOWLIST,
+          message: `${WORKSPACE_PATH_OUTSIDE_ALLOWLIST}: 附件目录只读（${token} 在只读开白域内，写/解包不放行）——${ATTACHMENTS_ONLY_ENTRY_HINT}`,
+        };
+      }
       return {
         ok: false,
         code: WORKSPACE_PATH_OUTSIDE_ALLOWLIST,
@@ -424,7 +498,9 @@ export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: stri
       },
       async execute(args: Record<string, unknown>, exec: { callId?: string; agent?: unknown }) {
         if (definition.name === "atf_bash") {
-          const scan = bashCommandGuard(args["command"], host.roots);
+          // F9：附件目录（<DSH 家>/attachments——与白名单派生面⑧同源）只读开白
+          const attachmentsReadOnlyRoots = [attachmentsRootOf(host.env ?? process.env)];
+          const scan = bashCommandGuard(args["command"], host.roots, { readOnlyRoots: attachmentsReadOnlyRoots });
           if (!scan.ok) {
             return asToolValue({ ok: false, error: FILE_PATH_OUTSIDE_ALLOWLIST, tool: definition.name, message: scan.message });
           }
@@ -451,7 +527,7 @@ export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: stri
           const fenceRoots = runWorkspace !== ""
             ? workspaceFenceRoots({ runWorkspace, runsRoot: runsRootFence, allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "", registryDirs })
             : { writable: "", readable: runsRootFence !== "" ? [runsRootFence, ...workspaceFenceRoots({ runWorkspace: runsRootFence, runsRoot: runsRootFence, allowlistEnv: process.env[WORKSPACE_ALLOWLIST_ENV] ?? "", registryDirs }).readable.filter((r) => r !== runsRootFence)] : [] };
-          const fence = workspaceFenceGuard(String(args["command"] ?? ""), fenceRoots);
+          const fence = workspaceFenceGuard(String(args["command"] ?? ""), { ...fenceRoots, readOnlyRoots: attachmentsReadOnlyRoots });
           if (!fence.ok) {
             return asToolValue({ ok: false, error: fence.code, tool: definition.name, message: fence.message });
           }

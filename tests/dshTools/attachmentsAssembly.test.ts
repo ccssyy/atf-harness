@@ -262,3 +262,50 @@ describe("T2 修订入口（转成内核 revise，不自作判断）", () => {
     expect(result["error"]).toBe("revise_args_missing");
   });
 });
+
+describe("F17a 回执强引导（每条回执都带下一步）", () => {
+  /** 用不同报告形态跑一遍完全授权档（不弹卡，直出回执）。 */
+  const runWith = async (report: unknown): Promise<Record<string, unknown>> => {
+    const ws = tempRoot("t2-next-");
+    seedReport(ws, "awb", report);
+    return toolOf(autopilotCtx([]), ws).execute({ workspace_path: ws, name: "awb" }, fakeExec);
+  };
+
+  it("plan 段未跑（无方案路径）→ next=「run plan → land」，不带失败提示", async () => {
+    const result = await runWith({ ...REPORT, plan_path: "", landing: "", version: "" });
+    expect(result["ok"]).toBe(true);
+    expect(result["next"]).toBe("run plan → land");
+    expect(result["next_hint"]).toBeUndefined();
+  });
+
+  it("方案已出、还没落地 → next=「land」", async () => {
+    const result = await runWith({ ...REPORT, landing: "" });
+    expect(result["ok"]).toBe(true);
+    expect(result["next"]).toBe("land");
+  });
+
+  it("已落地 → next=「register」", async () => {
+    const result = await runWith(REPORT);
+    expect(result["ok"]).toBe(true);
+    expect(result["next"]).toBe("register");
+  });
+
+  it("失败回执也带 next＋next_hint（手工解包不产生装配方案，下游会标 assembly_plan_absent）", async () => {
+    const ws = tempRoot("t2-next-miss-");
+    const result = await toolOf(autopilotCtx([]), ws).execute({ workspace_path: ws, name: "nope" }, fakeExec);
+    expect(result["ok"]).toBe(false);
+    expect(result["next"]).toBe("run plan → land");
+    expect(result["next_hint"]).toBe("手工解包（scratch/bash）不产生装配方案，下游会标 assembly_plan_absent");
+  });
+
+  it("revise 的失败回执同样带 next＋next_hint（不静默停在错误上）", async () => {
+    const ws = tempRoot("t2-next-revise-");
+    const result = await toolOf(autopilotCtx([]), ws).execute(
+      { workspace_path: ws, name: "awb", action: "revise", id: "d1" },
+      fakeExec,
+    );
+    expect(result["ok"]).toBe(false);
+    expect(result["next"]).toBe("run plan → land");
+    expect(String(result["next_hint"])).toContain("assembly_plan_absent");
+  });
+});

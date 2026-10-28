@@ -105,7 +105,7 @@
  */
 import { execFile } from "node:child_process";
 import { DANGER_FULL_ACCESS_SANDBOX, sandboxModeOf } from "./trainingPreset.js";
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
@@ -116,12 +116,14 @@ import { resolveRunFile, resolveRunSubdir, runFileCandidates } from "../../../..
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
 // E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与本次训练方案卡同源）
-import { formAskQuestion, editsFromFormAnswers, visibleDevicesViolationsOf, type FormAskService } from "./confirmFace.js";
+import { formAskQuestion, editsFromFormAnswers, visibleDevicesViolationsOf, type ChoiceAskQuestion, type FormAskService } from "./confirmFace.js";
 import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 // E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
 import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
 import { fieldNameMapOf, readExperimentGrouping, renderGroupingSection } from "../../../../src/core/workspace/experimentGrouping.js";
+import { decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 /** 段名闭集（权威＝内核 STAGE_ORDER 八项——禁增删改序；旧六段名别名不保留）。 */
 export const PIPELINE_STAGES: readonly string[] = [
@@ -134,6 +136,35 @@ export const PIPELINE_STAGES: readonly string[] = [
   "admission",
   "training_prep",
 ];
+
+/** 段名 → 用户面业务话（回执三句话用；不念内部段名）。 */
+export const STAGE_BUSINESS: Readonly<Record<string, string>> = {
+  register: "登记数据集",
+  label_qc: "标注检查",
+  experiment_setup: "实验配置",
+  candidate_build: "候选样本构造",
+  publish: "发布",
+  family_split: "版式划分",
+  admission: "准入检查",
+  training_prep: "训练准备",
+};
+
+/** 段回执 → 用户面三句话（业务语言；成败都说清停在哪、下一步是什么）。 */
+export const stageUserSummaryOf = (receipt: Record<string, unknown>, ok: boolean, stage: string): UserSummary => {
+  const stageLabel = STAGE_BUSINESS[stage] ?? "这一段";
+  if (ok) {
+    return {
+      conclusion: `${stageLabel}跑完了`,
+      stage: `${stageLabel}的产物已落到这个 run 目录`,
+      next: "看回执里的分组表与缺口提示，确认后继续下一段；要改哪一项直接说",
+    };
+  }
+  return {
+    conclusion: `${stageLabel}没跑成`,
+    stage: "停在本段，前面的产物没有被改",
+    next: "按回执里的说明补齐条件后重试；连续没成功会升级给你处理",
+  };
+};
 
 /** kernel stage → UI segment 映射表（A2.2b 落常量；D3/D4 起单源迁 src/core/workspace/
  *  segmentFacts.ts——import＋re-export 同一常量，atf-ui 兜底源同表消费，禁第二套）。 */
@@ -262,6 +293,345 @@ export const GROUPING_PRESET_SHAPE = /^[A-Za-z0-9_-]{1,32}$/;
 export const groupingPresetApprovalLine = (preset: string): string => {
   if (preset !== "") return `分组方案：${preset}（候选方案由训练内核定义，组构成以内核产出为准）`;
   return "分组方案：未指定——不预设（按字段配置中的分组键走，组构成以内核产出为准）";
+};
+// ── C2：分组候选（候选制）＝参数面＋四态卡面 ────────────────────────────────
+//
+// 真实契约（内核 skills/atf-admit-training-data/scripts/grouping_proposal.py）：
+//   {schema_version:"GroupingProposal/v1",
+//    candidates:[{name, recommended?, groups:[{name, fields:[]}], reason}]}
+// 候选标识＝candidates[].name；推荐＝某候选 recommended:true（有且仅一个）；组内字段＝fields。
+// 内核校验返回 {ok, errors, recommended:<索引>} 且**不抛异常**——errors 原样进回执。
+// 分组不是 harness 的决策：agent 只能提候选，选定权在用户；字段配置里自带 group＝用户
+// 已经给了 → 不出卡；完全权限档（既有授权判据 sandboxModeOf===danger-full-access）按
+// 推荐候选自动选定、不打断用户（owner 裁定 §8-1-A）。用户可见面只说「分组」。
+
+/** 分组候选语义版本（与内核 GroupingProposal/v1 同字面）。 */
+export const GROUPING_PROPOSAL_SCHEMA = "GroupingProposal/v1";
+
+export interface GroupingProposalGroup {
+  /** 组名（内核 groups[].name）。 */
+  name: string;
+  /** 组内字段 id（内核 groups[].fields）。 */
+  fields: string[];
+}
+
+export interface GroupingProposalCandidate {
+  /** 候选名（内核 candidates[].name——卡面标题就是它）。 */
+  name: string;
+  groups: GroupingProposalGroup[];
+  /** 候选理由（内核 candidates[].reason——卡面描述末句）。 */
+  reason: string;
+}
+
+export interface GroupingProposal {
+  candidates: GroupingProposalCandidate[];
+  /** 推荐候选下标（由 candidates[].recommended 唯一为 true 的那一项推出）。 */
+  recommendedIndex: number;
+}
+
+/** 分组四态：source＝回执 grouping_source；decision＝怎么定的（用户选／授权档自动／无）。 */
+export interface GroupingFace {
+  source: "user_provided" | "proposal" | "policy_auto" | "none";
+  decision: "user_selected" | "auto" | "none";
+  /** 选定候选的 name（user_provided／none 为 null）。 */
+  candidate_name: string | null;
+  groups: GroupingProposalGroup[];
+  evidence: Record<string, unknown> | null;
+  /** 透传内核的候选原文（用户选定后把 recommended 旗标挪到他选的那个）。 */
+  payload: Record<string, unknown> | null;
+  note: string;
+}
+
+const asRecordOf = (value: unknown): Record<string, unknown> | null =>
+  value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+
+/** 分组建议校验：形状不合＝逐条 errors 原样回传（不猜、不纠、不压成一句话）。 */
+export const parseGroupingProposal = (
+  raw: unknown,
+): { ok: true; proposal: GroupingProposal; payload: Record<string, unknown> } | { ok: false; errors: string[] } => {
+  const root = asRecordOf(raw);
+  if (root === null) {
+    return { ok: false, errors: ["grouping_proposal 须为对象：{schema_version:'GroupingProposal/v1', candidates:[…]}"] };
+  }
+  const errors: string[] = [];
+  const schema = typeof root["schema_version"] === "string" ? root["schema_version"] : "";
+  if (schema !== "" && schema !== GROUPING_PROPOSAL_SCHEMA) {
+    errors.push(`schema_version 须为 ${GROUPING_PROPOSAL_SCHEMA}（得「${schema}」）`);
+  }
+  const candidatesRaw = Array.isArray(root["candidates"]) ? (root["candidates"] as unknown[]) : null;
+  if (candidatesRaw === null || candidatesRaw.length === 0) {
+    errors.push("candidates 须为非空数组——每个候选是一套完整分组，供用户挑一套");
+  }
+  const candidates: GroupingProposalCandidate[] = [];
+  let recommendedIndex = -1;
+  for (const [index, entry] of (candidatesRaw ?? []).entries()) {
+    const row = asRecordOf(entry);
+    if (row === null) {
+      errors.push(`candidates[${String(index)}] 不是对象`);
+      continue;
+    }
+    const name = typeof row["name"] === "string" ? row["name"].trim() : "";
+    if (name === "") errors.push(`candidates[${String(index)}].name 缺失（候选名就是卡面标题）`);
+    if (row["recommended"] === true) {
+      if (recommendedIndex >= 0) errors.push("recommended 只能有一个候选为 true（同时推荐了多个）");
+      else recommendedIndex = index;
+    }
+    const groupsRaw = Array.isArray(row["groups"]) ? (row["groups"] as unknown[]) : [];
+    if (groupsRaw.length === 0) errors.push(`candidates[${String(index)}].groups 须为非空数组（每组给组名与字段列表）`);
+    const groups: GroupingProposalGroup[] = [];
+    for (const [gi, groupEntry] of groupsRaw.entries()) {
+      const grow = asRecordOf(groupEntry);
+      if (grow === null) {
+        errors.push(`candidates[${String(index)}].groups[${String(gi)}] 不是对象`);
+        continue;
+      }
+      const groupName = typeof grow["name"] === "string" ? grow["name"].trim() : "";
+      if (groupName === "") errors.push(`candidates[${String(index)}].groups[${String(gi)}].name 缺失`);
+      const fieldsRaw = Array.isArray(grow["fields"]) ? (grow["fields"] as unknown[]) : null;
+      if (fieldsRaw === null || fieldsRaw.length === 0) {
+        errors.push(`candidates[${String(index)}].groups[${String(gi)}].fields 须为非空字符串数组`);
+      }
+      const fields = (fieldsRaw ?? [])
+        .filter((field): field is string => typeof field === "string" && field.trim() !== "")
+        .map((field) => field.trim());
+      groups.push({ name: groupName, fields });
+    }
+    candidates.push({ name, groups, reason: typeof row["reason"] === "string" ? row["reason"].trim() : "" });
+  }
+  if (recommendedIndex < 0 && candidates.length > 0) {
+    errors.push("recommended 缺失——须恰好有一个候选标 recommended:true（推荐首选）");
+  }
+  if (errors.length > 0) return { ok: false, errors };
+  return { ok: true, proposal: { candidates, recommendedIndex }, payload: root };
+};
+
+/** 读字段配置里自带的 group（用户在字段配置里已给分组＝不出卡）；读不到/无 group＝null。 */
+export const fieldGroupsOf = (path: string): GroupingProposalGroup[] | null => {
+  if (path === "" || !existsSync(path)) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
+  } catch {
+    return null;
+  }
+  const root = asRecordOf(parsed);
+  const fields = root !== null && Array.isArray(root["fields"]) ? (root["fields"] as unknown[]) : [];
+  const buckets = new Map<string, string[]>();
+  for (const entry of fields) {
+    const row = asRecordOf(entry);
+    if (row === null) continue;
+    const groupName = typeof row["group"] === "string" ? row["group"].trim() : "";
+    const fieldId = typeof row["field_id"] === "string" ? row["field_id"].trim() : "";
+    if (groupName === "" || fieldId === "") continue;
+    const bucket = buckets.get(groupName) ?? [];
+    bucket.push(fieldId);
+    buckets.set(groupName, bucket);
+  }
+  return buckets.size === 0 ? null : [...buckets].map(([name, ids]) => ({ name, fields: ids }));
+};
+
+/** 字段业务名（读显式字段配置；读不到＝空表）——分组表显示「货名（goods_name）」而非裸 id。 */
+export const fieldNamesOfFieldConfig = (path: string): ReadonlyMap<string, string> => {
+  const names = new Map<string, string>();
+  if (path === "" || !existsSync(path)) return names;
+  try {
+    const root = asRecordOf(JSON.parse(readFileSync(path, "utf8")) as unknown);
+    const fields = root !== null && Array.isArray(root["fields"]) ? (root["fields"] as unknown[]) : [];
+    for (const entry of fields) {
+      const row = asRecordOf(entry);
+      if (row === null) continue;
+      const fieldId = typeof row["field_id"] === "string" ? row["field_id"].trim() : "";
+      const zh = typeof row["zh"] === "string" ? row["zh"].trim() : "";
+      if (fieldId !== "" && zh !== "") names.set(fieldId, zh);
+    }
+  } catch { /* 坏件＝不显示业务名，不阻塞段回报 */ }
+  return names;
+};
+
+/** 候选一行描述（组名 × 每组字段数＋候选理由——用户面只看分组与理由）。 */
+export const groupingCandidateDescriptionOf = (candidate: GroupingProposalCandidate): string => {
+  const groups = candidate.groups.map((group) => `${group.name} × ${String(group.fields.length)} 个字段`).join("、");
+  const head = `${String(candidate.groups.length)} 组：${groups}`;
+  return candidate.reason === "" ? head : `${head}；理由：${candidate.reason}`;
+};
+
+/** 分组表（markdown：分组｜字段数｜字段），供 agent 原样贴到对话——两档共用同一张表。 */
+export const renderGroupingReportMarkdown = (
+  groups: readonly GroupingProposalGroup[],
+  fieldNames: ReadonlyMap<string, string> = new Map<string, string>(),
+): string => {
+  const lines = ["| 分组 | 字段数 | 字段 |", "| --- | --- | --- |"];
+  for (const group of groups) {
+    const fields = group.fields
+      .map((id) => {
+        const zh = fieldNames.get(id) ?? "";
+        return zh === "" ? id : `${zh}（${id}）`;
+      })
+      .join("、");
+    lines.push(`| ${group.name} | ${String(group.fields.length)} | ${fields === "" ? "（无）" : fields} |`);
+  }
+  return lines.join("\n");
+};
+
+/** 审批卡上的分组行（业务话；四态各一句）。 */
+export const groupingApprovalLine = (face: GroupingFace): string => {
+  if (face.source === "user_provided") return `分组来源：字段配置自带的分组（${String(face.groups.length)} 组）——按你给的走，不出卡`;
+  if (face.source === "policy_auto") return `分组来源：完全权限档按推荐候选「${face.candidate_name ?? ""}」自动选定（${String(face.groups.length)} 组）`;
+  if (face.source === "proposal") {
+    return face.decision === "user_selected"
+      ? `分组来源：你在候选里选定的「${face.candidate_name ?? ""}」（${String(face.groups.length)} 组）`
+      : `分组来源：候选建议本次未确认——${face.note}`;
+  }
+  return "分组来源：无——全部平铺（字段没有分组、也没给候选建议）";
+};
+
+/** 内核判分组建议不合格时的 errors 原文（内核返回 {ok,errors,recommended} 且不抛异常）。 */
+export const groupingProposalErrorsOf = (summary: unknown, stderr: string): unknown[] | null => {
+  const fromSummary = groupingErrorsIn(asRecordOf(summary));
+  if (fromSummary !== null) return fromSummary;
+  for (const marker of ['{"ok": false', '{"ok":false', '{"error": "grouping_proposal_invalid"']) {
+    const fromStderr = groupingErrorsIn(extractJsonBody(stderr, marker));
+    if (fromStderr !== null) return fromStderr;
+  }
+  return null;
+};
+
+/** 从内核错误体取 errors（ok:false 或错误码在前才算不合格——不猜）。 */
+const groupingErrorsIn = (body: Record<string, unknown> | null): unknown[] | null => {
+  if (body === null) return null;
+  const errors = body["errors"];
+  if (!Array.isArray(errors) || errors.length === 0) return null;
+  return body["ok"] === false || body["error"] === "grouping_proposal_invalid" ? (errors as unknown[]) : null;
+};
+
+/** 分组四态判定（仅 experiment_setup 段调用）。
+ *  优先级：字段自带 group（用户已给）＞ 候选建议（完全权限档自动选定／其余档出卡）＞ 都没有＝平铺。 */
+export const resolveGroupingFace = async (input: {
+  ctx: { get(service: string): unknown };
+  exec: { agent?: unknown; signal?: unknown };
+  runId: string;
+  fieldConfigPath: string;
+  proposalRaw: unknown;
+}): Promise<GroupingFace | { ok: false; errors: string[] }> => {
+  const provided = fieldGroupsOf(input.fieldConfigPath);
+  if (provided !== null) {
+    return {
+      source: "user_provided",
+      decision: "none",
+      candidate_name: null,
+      groups: provided,
+      evidence: null,
+      payload: null,
+      note: `分组按字段配置里的 group 走（${String(provided.length)} 组）——用户已经给了，不再出卡`,
+    };
+  }
+  if (input.proposalRaw === undefined || input.proposalRaw === null) {
+    return {
+      source: "none",
+      decision: "none",
+      candidate_name: null,
+      groups: [],
+      evidence: null,
+      payload: null,
+      note: "本次没有分组：没有候选建议、字段也没有自带 group——全部平铺（不假装有分组）",
+    };
+  }
+  const parsed = parseGroupingProposal(input.proposalRaw);
+  if (!parsed.ok) return { ok: false, errors: parsed.errors };
+  const proposal = parsed.proposal;
+  const pick = (index: number): GroupingProposalCandidate => proposal.candidates[index] ?? proposal.candidates[0]!;
+  const evidence: Record<string, unknown> = {
+    candidate_count: proposal.candidates.length,
+    recommended_index: proposal.recommendedIndex,
+    recommended_name: pick(proposal.recommendedIndex).name,
+    candidates: proposal.candidates.map((candidate, index) => ({
+      name: candidate.name,
+      recommended: index === proposal.recommendedIndex,
+      group_count: candidate.groups.length,
+    })),
+  };
+  // 用户选定＝把 recommended 旗标挪到他选的那个（内核只认 recommended:true，不新增字段）
+  const withChoice = (candidateName: string): Record<string, unknown> => {
+    const rawCandidates = Array.isArray(parsed.payload["candidates"]) ? (parsed.payload["candidates"] as unknown[]) : [];
+    return {
+      ...parsed.payload,
+      candidates: rawCandidates.map((entry) => {
+        const row = asRecordOf(entry) ?? {};
+        return { ...row, recommended: (typeof row["name"] === "string" ? row["name"] : "") === candidateName };
+      }),
+    };
+  };
+
+  // 完全权限档：不出卡，直接按推荐候选选定（owner 裁定 §8-1-A：full 档自动选定、不问）
+  if (sandboxModeOf(input.ctx, input.exec) === DANGER_FULL_ACCESS_SANDBOX) {
+    const picked = pick(proposal.recommendedIndex);
+    return {
+      source: "policy_auto",
+      decision: "auto",
+      candidate_name: picked.name,
+      groups: picked.groups,
+      evidence,
+      payload: withChoice(picked.name),
+      note: `完全权限档：按推荐候选「${picked.name}」自动选定（共 ${String(proposal.candidates.length)} 个候选，没有打断用户）`,
+    };
+  }
+  const svc = input.ctx.get("userQuestions") as FormAskService | undefined;
+  if (svc === undefined || typeof svc.ask !== "function") {
+    const recommended = pick(proposal.recommendedIndex);
+    return {
+      source: "proposal",
+      decision: "none",
+      candidate_name: recommended.name,
+      groups: recommended.groups,
+      evidence,
+      payload: null,
+      note: "选择卡通道不可用——不替你选：先问用户要哪套分组，再把选定候选单独传进来重推（本次未下传分组建议）",
+    };
+  }
+  const question: ChoiceAskQuestion = {
+    id: `grouping-${input.runId}`,
+    question: `分组方案确认 — ${input.runId}`,
+    header: "分组",
+    detail: [
+      `这里有 ${String(proposal.candidates.length)} 套分组，请选一套：`,
+      ...proposal.candidates.map((candidate) => `  · ${candidate.name}：${groupingCandidateDescriptionOf(candidate)}`),
+      "选完按这套分组生成训练样本，分组表会贴给你看。",
+    ].join("\n"),
+    options: proposal.candidates.map((candidate) => ({
+      label: candidate.name,
+      description: groupingCandidateDescriptionOf(candidate),
+    })),
+    multiSelect: false,
+  };
+  try {
+    const answers = await svc.ask({ questions: [question], agent: input.exec.agent, signal: input.exec.signal });
+    const selectedName = answers.answers.flatMap((answer) => [...answer.selected])[0] ?? "";
+    const chosen = proposal.candidates.find((candidate) => candidate.name === selectedName) ?? pick(proposal.recommendedIndex);
+    return {
+      source: "proposal",
+      decision: "user_selected",
+      candidate_name: chosen.name,
+      groups: chosen.groups,
+      evidence,
+      payload: withChoice(chosen.name),
+      note: `用户选定了「${chosen.name}」（${String(chosen.groups.length)} 组）——按这套分组走`,
+    };
+  } catch (cause) {
+    const code = (cause as { code?: string }).code;
+    const recommended = pick(proposal.recommendedIndex);
+    return {
+      source: "proposal",
+      decision: "none",
+      candidate_name: recommended.name,
+      groups: recommended.groups,
+      evidence,
+      payload: null,
+      note:
+        code === "ASK_CANCELLED"
+          ? "用户关掉了分组卡（未选）——按未确认处理：不要替用户假定分组，本次未下传分组建议"
+          : `分组卡应答失败：${String(cause).slice(0, 160)}——按未确认处理，本次未下传分组建议`,
+    };
+  }
 };
 
 // ── D99：experiment_setup 段负样本目标带（内核 argparse --negative-ratio-target，
@@ -836,6 +1206,43 @@ export const runPipeline = (command: string, args: readonly string[], timeoutMs:
  *  @param stderr 子进程 stderr 全文。
  *  @return 解析出的对象；不是该错误或解析失败＝null。
  */
+/** 从内核输出切出以 marker 开头的结构化错误体（括号平衡；与 field_config 同一手法）。
+ *  C2：分组建议不合格时 errors 须原样进回执，不能压成一句话。
+ *  @param stderr 子进程 stderr 全文。
+ *  @param marker 错误体开头（如 {"ok": false）。
+ *  @return 解析出的对象；marker 不在场或解析失败＝null。
+ */
+const extractJsonBody = (stderr: string, marker: string): Record<string, unknown> | null => {
+  const start = stderr.indexOf(marker);
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < stderr.length; i += 1) {
+    const ch = stderr[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          const parsed = JSON.parse(stderr.slice(start, i + 1)) as unknown;
+          return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+};
+
 const extractFieldConfigError = (stderr: string): Record<string, unknown> | null => {
   const marker = '{"error": "field_config_invalid"';
   const start = stderr.indexOf(marker);
@@ -872,8 +1279,8 @@ export const buildPipelineTool = (
   ctx: { get(service: string): unknown },
   pipelineCommand: string,
   pipelineTimeoutMs: number,
-): unknown =>
-  defineTool({
+): unknown => {
+  const tool = defineTool({
     name: "atf_pipeline_stage",
     description:
       `按段驱动 walkthrough_pipeline 段模式（审批必经）：单段触发 ${PIPELINE_STAGES.join("/")} 之一。` +
@@ -886,9 +1293,14 @@ export const buildPipelineTool = (
       `缺参/非绝对路径在审批卡前快败，指路 ATF_MODEL_ROOT 可用模型清单；其它段忽略该参）。` +
       `family_split 段另支持 auto_style_cluster 三态（缺省 auto，其它段忽略该参）：` +
       `auto＝先检测——已聚类则不复聚；未聚类/状态不明会拒绝并指路。` +
-      `experiment_setup 段另支持 grouping_preset 分组方案标识（取值由训练内核声明，内核无内置预设；` +
-      `不给＝不预设——分组唯一来源是 field-config 的 group 键，其它段忽略该参；` +
-      `返回体如实标注分组来源（未给标 undeclared），审批卡呈现分组方案供确认）。` +
+      `experiment_setup 段另支持 grouping_proposal 分组建议（候选制）：` +
+      `{schema_version:"GroupingProposal/v1",candidates:[{name,recommended,groups:[{name,fields}],reason}]}——` +
+      `候选名是卡面标题、recommended 有且仅一个为 true、groups 逐组给组名与字段列表、reason 给候选理由；` +
+      `传了就按候选出卡让用户挑一套；不传且字段配置自带 group＝用户已给，不出卡；` +
+      `完全权限档不出卡、直接按推荐候选选定（复用既有授权档，不新增档位）。` +
+      `返回体如实标注分组来源（user_provided／proposal／policy_auto／none）并附分组表（组名｜字段数｜字段），可原样贴给用户。` +
+      `experiment_setup 段另支持 grouping_preset 方案标识（取值由训练内核声明，内核无内置预设；` +
+      `不给＝不预设——分组唯一来源是 field-config 的 group 键，其它段忽略该参）。` +
       // A 面可发现性（工具描述面）：模型此前即使被点名要求，也会「不传覆盖参数、按缺省处理」，
       // 于是确认与建议永远到不了内核（真机实证：模型自述「未带任何覆盖参数」）。
       // 这里把「不传的后果」写进工具描述——系统知识不靠用户提示词承载。
@@ -910,7 +1322,7 @@ export const buildPipelineTool = (
       `style_cluster_declared_but_absent）时，必须先问用户「这批数据做过版式聚类吗？」，` +
       `确认后再传 on（未聚类——内核自动补簇并产出 StyleClusterManifest/v1，按簇分层）或 off（已聚类——不再聚）重跑；` +
       `禁止在 auto 被拒后自行猜一个值重跑。` +
-      `doc_type／lane_suffix／field_config 三件可缺省（缺省不上送，各段均有效）：` +
+      `单据类型／数据后缀／字段配置三件可缺省（缺省不上送，各段均有效；数据后缀是内部键，一般不用传）：` +
       `不传 doc_type 时内核按数据/登记面推断单据类型，无法确定即 blocked（会带业务文案指路）——` +
       `需显式指定或补登记面后重跑；field_config 须为字段配置文件显式路径。` +
       `train_all／assignment_source／reuse_experiment_setup 三件为全局参数（各段均有效，给才下传，缺省不开）：` +
@@ -950,10 +1362,18 @@ export const buildPipelineTool = (
           "构成均由训练内核声明（本工具不复制词表——按内核报错回流取值即可）。内核无内置预设，不给＝" +
           "不预设（分组唯一来源是 field-config 的 group 键；不静默——返回体如实标 undeclared，审批卡亦明示）",
       },
+      grouping_proposal: {
+        type: "object",
+        additionalProperties: true,
+        description:
+          "分组建议（候选制）：{schema_version:'GroupingProposal/v1', candidates:[{name, recommended, groups:[{name, fields}], reason}]}——" +
+          "name＝候选名（卡面标题）、recommended 有且仅一个候选为 true（推荐首选）、groups 逐组给组名与字段 id 列表、reason 给候选理由。" +
+          "传了就按候选出卡让用户选；不传且字段自带 group＝用户已给，不出卡（仅 experiment_setup 段有意义，其它段忽略该参）",
+      },
       grouping_confirm: {
         type: "boolean",
         description:
-          "确认当前 grouping_preset 为选定方案（仅 experiment_setup 段有意义，其它段忽略）：" +
+          "确认当前分组方案为选定方案（仅 experiment_setup 段有意义，其它段忽略）：" +
           "确认后内核按组逐图各一条生成 mode1 样本；不给＝未确认，mode1 本轮不生成（卡面明示）。" +
           "分组必须用户确认——agent 给出的只是候选，不得默认成立",
       },
@@ -1042,7 +1462,7 @@ export const buildPipelineTool = (
           "改值影响坐标换算与 token 预算。未显式给定时读确认快照兜底；皆无则不下传",
       },
       doc_type: { type: "string", description: "单据类型（可缺省——缺省不上送，内核按数据/登记面推断，无法确定即 blocked；给了则显式指定）" },
-      lane_suffix: { type: "string", description: "lane 后缀（内部键：缺省不上送，内核按 all 处理；一般不用传）" },
+      lane_suffix: { type: "string", description: "数据后缀（内部键，一般不用传：缺省不上送，内核按全部处理）" },
       field_config: {
         type: "string",
         description:
@@ -1099,7 +1519,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown> },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown> },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -1355,6 +1775,30 @@ export const buildPipelineTool = (
         }
         trainingOverrides = { values: resolvedOverrides.values, sources: resolvedOverrides.sources, passDown: resolvedOverrides.passDown };
       }
+      // ── C2 分组四态（仅 experiment_setup 段）：字段自带 group＞候选建议＞都没有＝平铺 ──
+      // 完全权限档不出卡、直接按推荐候选选定（owner 裁定 §8-1-A）；其余档出原生选项卡。
+      let groupingFace: GroupingFace | undefined;
+      if (args.stage === "experiment_setup") {
+        const fieldConfigPath = typeof args.field_config === "string" ? args.field_config.trim() : "";
+        const resolvedGrouping = await resolveGroupingFace({
+          ctx,
+          exec,
+          runId: args.run_id,
+          fieldConfigPath,
+          proposalRaw: args.grouping_proposal,
+        });
+        if ("ok" in resolvedGrouping) {
+          return asToolValue({
+            ok: false,
+            stage: args.stage,
+            run_id: args.run_id,
+            error: "grouping_proposal_invalid",
+            errors: resolvedGrouping.errors,
+            note: "分组建议格式不合格——errors 是逐条原因（原样，不压缩成一句话）；按它改好再重推，或去掉该参数让字段配置自带的 group 生效",
+          });
+        }
+        groupingFace = resolvedGrouping;
+      }
       // 分组节（读内核 experiment-config 的新 keys；列表形态只读 group_plan——groups 是 dict）：
       // 仅当 run 里已有一次实验配置时上卡（重跑/复用场景，用户确认要不要沿用）；
       // 首次跑没有产物就不占卡面视线。
@@ -1372,6 +1816,8 @@ export const buildPipelineTool = (
         })
         // D89：分组方案行仅 experiment_setup 段呈现（其它段该参无意义不上卡）
         + (args.stage === "experiment_setup" ? `\n${groupingPresetApprovalLine(groupingPreset)}` : "")
+        // C2：分组来源行（四态各一句业务话——卡上能看到「按谁的分组走」）
+        + (args.stage === "experiment_setup" && groupingFace !== undefined ? `\n${groupingApprovalLine(groupingFace)}` : "")
         // D99：负样本带行仅 experiment_setup 段呈现（与分组方案行同款「缺省不静默」）
         + (args.stage === "experiment_setup" ? `\n${negativeRatioApprovalLine(negativeRatioTarget)}` : "")
         // A 面：构造参数确认段（分组确认／mode5／targeted 建议）仅 experiment_setup 段呈现
@@ -1438,6 +1884,26 @@ export const buildPipelineTool = (
       // D89：分组方案透传（仅 experiment_setup 段；显式给且 trim 非空才追加——未给不追加，
       // 内核缺省 B 生效；其它段忽略该参不下传不报错）。与上方段特定/全局追加逻辑并存。
       if (args.stage === "experiment_setup" && groupingPreset !== "") argv.push("--grouping-preset", groupingPreset);
+      // C2：分组建议透传（仅 experiment_setup 段且候选已定）——临时 JSON 落系统临时目录，
+      // 段命令退出即删（不落工作区，避免被当成产物）；用户选定后推荐值改成他选的那个。
+      let groupingProposalPath: string | null = null;
+      if (args.stage === "experiment_setup" && groupingFace?.payload != null) {
+        const safeRunId = args.run_id.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 40);
+        const proposalPath = join(tmpdir(), `atf-grouping-proposal-${safeRunId}-${String(process.pid)}.json`);
+        try {
+          writeFileSync(proposalPath, `${JSON.stringify(groupingFace.payload, null, 1)}\n`, "utf8");
+        } catch (cause) {
+          return asToolValue({
+            ok: false,
+            stage: args.stage,
+            run_id: args.run_id,
+            error: "grouping_proposal_unwritable",
+            note: `分组建议落临时文件失败（${proposalPath}）：${String(cause).slice(0, 160)}——本次没有下传分组建议，按字段配置或内核缺省走`,
+          });
+        }
+        groupingProposalPath = proposalPath;
+        argv.push("--grouping-proposal", groupingProposalPath);
+      }
       // D99：负样本目标带透传（仅 experiment_setup 段；显式给且 trim 非空才追加——内核
       // :1155 显式才下传实验门并标 user_specified；未给不追加，构造器常量带兜底；其它段
       // 忽略该参不下传不报错）。
@@ -1497,6 +1963,10 @@ export const buildPipelineTool = (
       const accessMode = sandboxModeOf(ctx, exec) === DANGER_FULL_ACCESS_SANDBOX ? "full" : "limited";
       const result = await runPipeline(pipelineCommand, argv, pipelineTimeoutMs,
         { ATF_ACCESS_MODE: accessMode });
+      // C2：分组建议临时件用完即删（scratch/tmp 语义——不留在工作区冒充产物）
+      if (groupingProposalPath !== null) {
+        try { rmSync(groupingProposalPath, { force: true }); } catch { /* 删不掉不阻塞段回报 */ }
+      }
       let summary: unknown = null;
       const trimmed = result.stdout.trim();
       const jsonStart = trimmed.indexOf("{");
@@ -1553,6 +2023,13 @@ export const buildPipelineTool = (
       // 内核以 `ValueError: {"error": "field_config_invalid", ...}` 抛出，stderr 尾部
       // 可能还跟 traceback——用括号平衡切出对象，不靠整段 JSON.parse。
       const fieldConfigError = result.code !== 0 ? extractFieldConfigError(result.stderr) : null;
+      // C2：内核判分组建议不合格（grouping_proposal_invalid）时 errors 原样透出——不压成一句话
+      const groupingKernelErrors = result.code !== 0 ? groupingProposalErrorsOf(summary, result.stderr) : null;
+      // 分组表的字段名：run 内字段配置＋本次显式字段配置（后者优先——用户刚给的那份最新）
+      const groupingFieldNames = new Map<string, string>(fieldNameMapOf(runDir));
+      for (const [fieldId, zh] of fieldNamesOfFieldConfig(typeof args.field_config === "string" ? args.field_config.trim() : "")) {
+        groupingFieldNames.set(fieldId, zh);
+      }
       return asToolValue({
         stage: args.stage,
         run_id: args.run_id,
@@ -1618,6 +2095,21 @@ export const buildPipelineTool = (
         ...(args.stage === "experiment_setup"
           ? { grouping_section: renderGroupingSection(readExperimentGrouping(runDir), fieldNameMapOf(runDir)) }
           : {}),
+        // C2：分组四态回执（grouping_source／grouping_decision）＋分组表（两档都必须有，
+        // agent 可原样贴到对话）＋内核判不合格时的 errors 原文
+        ...(args.stage === "experiment_setup" && groupingFace !== undefined
+          ? {
+              grouping_source: groupingFace.source,
+              grouping_decision: groupingFace.decision,
+              grouping_candidate_name: groupingFace.candidate_name,
+              grouping_note: groupingFace.note,
+              ...(groupingFace.evidence !== null ? { grouping_evidence: groupingFace.evidence } : {}),
+              ...(groupingFace.groups.length > 0
+                ? { grouping_report: renderGroupingReportMarkdown(groupingFace.groups, groupingFieldNames) }
+                : {}),
+            }
+          : {}),
+        ...(groupingKernelErrors !== null ? { grouping_errors: groupingKernelErrors } : {}),
         ...(pixelPairException !== undefined ? { pixel_pair_exception: pixelPairException } : {}),
         ...(args.stage === "training_prep" && trainingOverrides !== undefined
           ? {
@@ -1669,4 +2161,32 @@ export const buildPipelineTool = (
         ...(fieldConfigError !== null ? { field_config: fieldConfigError } : {}),
       });
     },
-  });
+  }) as unknown as { execute: (args: Record<string, unknown>, exec: unknown) => Promise<Record<string, unknown>> };
+  // F6：回执挂用户面三句话（user_summary）＋连续失败升级——用户不必靠 agent 转述；
+  // 回执内容零改写，只增键（decorateOutcome 口径）。
+  const runStage = tool.execute.bind(tool);
+  return {
+    ...tool,
+    execute: async (args: Record<string, unknown>, exec: unknown) => {
+      const receipt = await runStage(args, exec);
+      const ok = !receiptIsFailure(receipt);
+      const decorated = decorateOutcome(
+        receipt,
+        sessionIdOfExec(exec) ?? null,
+        "atf_pipeline_stage",
+        ok,
+        stageUserSummaryOf(receipt, ok, String(args["stage"] ?? "")),
+      );
+      if (decorated.escalate_to_user === true) {
+        const summary: UserSummary = {
+          ...decorated.user_summary,
+          next: "连续两次没成功——需要你介入：看一眼回执里缺的条件，或直接说要不要换做法",
+        };
+        decorated.user_summary = summary;
+        // 升级是「必须被看见」的一条：直接进会话流（不依赖 agent 转述）
+        projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, summary);
+      }
+      return decorated;
+    },
+  };
+};

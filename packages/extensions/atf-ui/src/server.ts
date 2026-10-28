@@ -1385,6 +1385,26 @@ export function scanRuns(runsRoot: string, liveness?: ScanLiveness, registryWork
 }
 
 /**
+ * F7-2——从原始 URL 里取 `token` 查询参数（**原样**返回：不解码、不重编码，避免把壳的
+ * 签名参数改形）。只用于拼 303 跳转的 Location，**不参与任何校验**——token 是否有效由壳
+ * 在根路径自己判（vendor authorizeIndex 只认 `pathname === "/"`）。空值/缺席＝null。
+ */
+export const rawTokenFromUrl = (url: string | undefined): string | null => {
+  if (url === undefined || url === "") return null;
+  const mark = url.indexOf("?");
+  if (mark < 0) return null;
+  const query = url.slice(mark + 1).split("#")[0] ?? "";
+  for (const pair of query.split("&")) {
+    const eq = pair.indexOf("=");
+    if (eq <= 0) continue;
+    if (pair.slice(0, eq) !== "token") continue;
+    const value = pair.slice(eq + 1);
+    return value === "" ? null : value;
+  }
+  return null;
+};
+
+/**
  * viewer 静态路由 handler 工厂：壳鉴权（connection.requestRejection——401/403 沿壳语义）
  * → GET/HEAD 门 → 逐 run 现役 viewer 清单解析（resolveViewerRequest fail-closed）→ 读盘回包。
  * html/json no-store（刷新即新），图片类 max-age=3600（sha 文件名内容寻址）。
@@ -1400,6 +1420,16 @@ export const viewerRouteHandler = (deps: {
 (req: IncomingMessage, res: ServerResponse): void => {
   const rejection = deps.reject?.(req);
   if (rejection !== undefined) {
+    // F7-2：viewer 深链直开——带 ?token=<原样 token> 且壳判 401 时，303 跳根路径
+    // `/?token=<原样 token>`，由壳在根路径铸 cookie 后再回 viewer。本处**不自建 token
+    // 校验、不比对、不新增 cookie、不写日志**：授权与否的唯一裁决仍归壳（未授权 token
+    // 会在根路径被壳自己拒）；无 token 时行为不变（仍旧 401）。
+    const directToken = rawTokenFromUrl(req.url);
+    if (rejection === 401 && directToken !== null) {
+      res.writeHead(303, { location: `/?token=${directToken}` });
+      res.end();
+      return;
+    }
     res.writeHead(rejection, { "content-type": "text/plain; charset=utf-8" });
     res.end("dsh web authentication required\n");
     return;

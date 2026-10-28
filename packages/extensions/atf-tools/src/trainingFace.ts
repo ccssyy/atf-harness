@@ -32,6 +32,7 @@ import { scanRunDir } from "../../atf-ui/src/server.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { isTrainingAutopilot, ATF_TRAINING_PRESET } from "./trainingPreset.js";
 import { asToolValue } from "./schemaTranslate.js";
+import { decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { probeSession, resolveLaunchSessionName, tmuxCommand, tmuxTrainingEvidenceFor, evalOrchSessionBase, trainingSessionBase, type SessionProbe } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { awaitGpuWindow, formatCardTable, gpuQueuePollMsFromEnv, TRAINING_RESIDUE_PATTERN } from "./gpuQueueFace.js";
@@ -621,6 +622,22 @@ const envProfileFilesOf = (dir: string): string[] => {
   } catch {
     return [];
   }
+};
+
+/** F11-2——实例档案清单（工具描述注入面）：启动时读一次实例 env-profiles 目录，列
+ *  实际档案名＋各自 eval_env 摘要（形如 `实例档案：<档案名>(eval_env=<venv 路径>)`）。
+ *  目录不可得／目录内无 .json ＝ null（调用方保留原文案并标「目录不可得」）；**不写死
+ *  任何实例的档案名**——名字只来自运行时磁盘。 */
+export const envProfileCatalogLineOf = (env: Readonly<Record<string, string | undefined>> = process.env): string | null => {
+  const dir = evalEnvProfilesDirOf(env);
+  if (dir === null) return null;
+  const files = envProfileFilesOf(dir);
+  if (files.length === 0) return null;
+  const entries = files.map((file) => {
+    const summary = envProfileSummaryOf(file, join(dir, file));
+    return `${summary.name}(eval_env=${summary.eval_env ?? "缺"})`;
+  });
+  return `实例档案：${entries.join("、")}`;
 };
 
 export type EnvProfileResolution =
@@ -1758,7 +1775,57 @@ export const recordedFieldConfigSha = (runDir: string): string | null => {
   return null;
 };
 
-/** D14——field_config 解析结果（成功＝路径＋来源＋指纹；失败＝三码之一＋下一步指引）。 */
+/** F1.1——run 记录的模板骨架指纹（dataset.digest_provenance.template_sha256＝内核写的
+ *  sha256(field_config["template"])；候选链与 field_config_sha256 同源）。缺席/损坏＝null
+ *  （老 run 零回归：不比对、不报错、回执标 absent）。 */
+export const recordedTemplateSha = (runDir: string): string | null => {
+  for (const candidate of iterationConfigCandidates(runDir)) {
+    try {
+      if (!existsSync(candidate)) continue;
+      const iter = JSON.parse(readFileSync(candidate, "utf8")) as { dataset?: { digest_provenance?: { template_sha256?: unknown } } };
+      const sha = iter.dataset?.digest_provenance?.template_sha256;
+      return typeof sha === "string" && /^[0-9a-f]{64}$/.test(sha) ? sha : null;
+    } catch {
+      return null; // 损坏＝无记录（不可核对即不比对，不造假指纹）
+    }
+  }
+  return null;
+};
+
+/** F1.1——内核口径的稳定 JSON 文本（json.dumps(ensure_ascii=False, sort_keys=True,
+ *  separators=(",", ":")) ＋尾部换行）。template_sha256 只能按这个口径实算才对得上记录值。 */
+export const canonicalJsonTextOf = (value: unknown, trailingNewline = true): string => {
+  const sort = (input: unknown): unknown => {
+    if (Array.isArray(input)) return input.map(sort);
+    if (input !== null && typeof input === "object") {
+      const record = input as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      for (const key of Object.keys(record).sort()) out[key] = sort(record[key]);
+      return out;
+    }
+    return input;
+  };
+  const text = JSON.stringify(sort(value));
+  return trailingNewline ? `${text}\n` : text;
+};
+
+/** F1.1——field_config 里 template 的实测指纹（两种序列化尾差口径都算：带/不带尾部换行——
+ *  尾差不算模板漂移）。文件不可读或无 template 键＝null（无法实算＝按漂移 fail-closed）。 */
+const fieldConfigTemplateDigestsOf = (path: string): { primary: string; variant: string } | null => {
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    if (!Object.prototype.hasOwnProperty.call(parsed, "template")) return null;
+    const template = parsed["template"];
+    return {
+      primary: createHash("sha256").update(Buffer.from(canonicalJsonTextOf(template, true), "utf8")).digest("hex"),
+      variant: createHash("sha256").update(Buffer.from(canonicalJsonTextOf(template, false), "utf8")).digest("hex"),
+    };
+  } catch {
+    return null;
+  }
+};
+
+/** D14——field_config 解析结果（成功＝路径＋来源＋指纹；失败＝码＋下一步指引）。 */
 export type EvalFieldConfigResolution =
   | {
       ok: true;
@@ -1768,10 +1835,14 @@ export type EvalFieldConfigResolution =
       /** 显式传入且与训练指纹不一致——只告警不阻断（用户显式覆盖，产品裁定）。 */
       warning?: "field_config_explicit_drift";
       recorded_sha256?: string;
+      /** F1.1：模板骨架核对结果——verified＝与记录一致；absent＝老 run 无记录键（不比对）；
+       *  drift_accepted＝显式放行模板差异（回执带 template_drift_accepted:true）。 */
+      template_sha256_source: "verified" | "absent" | "drift_accepted";
+      template_drift_accepted?: true;
     }
   | {
       ok: false;
-      error: "eval_field_config_unresolved" | "eval_field_config_drift" | "eval_field_config_unverified" | "eval_field_config_multi_doc";
+      error: "eval_field_config_unresolved" | "eval_field_config_drift" | "eval_field_config_unverified" | "eval_field_config_multi_doc" | "eval_template_drift";
       path: string;
       note: string;
     };
@@ -1782,8 +1853,9 @@ export type EvalFieldConfigResolution =
  *  一次评多类 E9b 前不支持）；legacy run（表空）保持平铺 experiment-setup/
  *  field-config.json 恒等。一律与 iteration-config 的训练指纹比对。失败 fail-closed：
  *  文件缺失→unresolved；指纹不一致→drift；run 无指纹→unverified（缺省路径时）。 */
-export const resolveEvalFieldConfig = (runDir: string, explicit?: string, docType?: string): EvalFieldConfigResolution => {
+export const resolveEvalFieldConfig = (runDir: string, explicit?: string, docType?: string, opts?: { /** F1.1：显式接受模板骨架漂移（仅显式 field_config 时生效）。 */ acceptTemplateDrift?: boolean }): EvalFieldConfigResolution => {
   const isExplicit = explicit !== undefined && explicit.trim() !== "";
+  const acceptTemplateDrift = opts?.acceptTemplateDrift === true;
   let path: string;
   if (isExplicit) {
     path = explicit as string;
@@ -1821,22 +1893,43 @@ export const resolveEvalFieldConfig = (runDir: string, explicit?: string, docTyp
   } catch {
     return { ok: false, error: "eval_field_config_unresolved", path, note: "field_config 文件不可读——核对权限/完整性后重推（或显式传入有效路径）" };
   }
+  // F1.1：模板骨架漂移核对（有记录值就必须对得上——模板换了＝提示渲染面不同源，
+  // 评估指标与训练口径不可比；老 run 无该键＝不比对，回执标 absent，零回归）。
+  const templateFields = ((): { template_sha256_source: "verified" | "absent" | "drift_accepted"; template_drift_accepted?: true } | null => {
+    const recordedTemplate = recordedTemplateSha(runDir);
+    if (recordedTemplate === null) return { template_sha256_source: "absent" };
+    const actual = fieldConfigTemplateDigestsOf(path);
+    if (actual !== null && (actual.primary === recordedTemplate || actual.variant === recordedTemplate)) {
+      return { template_sha256_source: "verified" };
+    }
+    if (isExplicit && acceptTemplateDrift) return { template_sha256_source: "drift_accepted", template_drift_accepted: true };
+    return null;
+  })();
+  if (templateFields === null) {
+    return {
+      ok: false, error: "eval_template_drift", path,
+      note: isExplicit
+        ? "字段配置的模板骨架与训练记录不同源（记录里的模板指纹对不上当前文件的 template）——先确认两批数据用的是同一套模板骨架；确认这份就是要用的，带模板差异放行开关（accept_template_drift）后重推"
+        : "字段配置的模板骨架与训练记录不同源（run 记录的模板指纹对不上当前继承的 field_config）——先确认训练时是否换过模板；确认要用当前文件，显式传 field_config 并带模板差异放行开关后重推",
+    };
+  }
+
   const recorded = recordedFieldConfigSha(runDir);
   if (recorded === null) {
-    if (isExplicit) return { ok: true, path, source: "explicit", sha256 }; // 无指纹可核对——显式即权威
+    if (isExplicit) return { ok: true, path, source: "explicit", sha256, ...templateFields }; // 无指纹可核对——显式即权威
     return {
       ok: false, error: "eval_field_config_unverified", path,
       note: "run 未记录字段配置指纹（iteration-config 无 dataset.digest_provenance.field_config_sha256）——显式传 field_config 后重推",
     };
   }
   if (recorded !== sha256) {
-    if (isExplicit) return { ok: true, path, source: "explicit", sha256, warning: "field_config_explicit_drift", recorded_sha256: recorded };
+    if (isExplicit) return { ok: true, path, source: "explicit", sha256, warning: "field_config_explicit_drift", recorded_sha256: recorded, ...templateFields };
     return {
       ok: false, error: "eval_field_config_drift", path,
       note: "字段配置指纹与训练记录不一致（experiment-setup/field-config.json 可能被改动）——先确认训练配置是否被改过；确认要用当前文件则显式传入 field_config 覆盖后重推",
     };
   }
-  return { ok: true, path, source: isExplicit ? "explicit" : "run_recorded", sha256 };
+  return { ok: true, path, source: isExplicit ? "explicit" : "run_recorded", sha256, ...templateFields };
 };
 
 /** D14——prompt_mode 解析结果（mode＋来源：显式/训练声明/训练缺省兜底）。 */
@@ -2070,8 +2163,164 @@ export const resolveEvalSplitManifest = (runDir: string, explicit?: string): Spl
   return null;
 };
 
+// ── F6-a/F6-b：atf_evaluate 的用户面摘要（user_summary）与连续失败升级（escalate_to_user）──
+// 方案 §3-1 修正：三句话结论文本**不进提示词**，由回执结构携带（T 面），并在工具执行侧
+// 直接投影进会话流（L 面——exec.deferContext，用户直接看到，不靠 agent 转述）。
+
+/** 评估工具名（失败计数键与通知来源标签同源）。 */
+const EVAL_TOOL_NAME = "atf_evaluate";
+
+/** 评估回执 → 用户面三句话（业务语言、零内部码；码本身仍留在回执机器面）。 */
+export const evalUserSummaryOf = (receipt: Record<string, unknown>, ok: boolean, action?: string): UserSummary => {
+  if (ok) {
+    if (action === "status") {
+      return {
+        conclusion: "评估进度已查到",
+        stage: "评估在跑或已出结果",
+        next: "按回执里的四件套与指标继续；要改参数就直接说要改哪一项",
+      };
+    }
+    return {
+      conclusion: "评估已启动",
+      stage: "评估服务与编排在后台跑（起服务→对齐检查点→正式评测→回灌结果）",
+      next: "用 atf_evaluate status 查进度；出结果后看四件套与指标",
+    };
+  }
+  const code = typeof receipt["error"] === "string" ? receipt["error"] : "";
+  const gate = "还没开始跑（未消耗审批与显卡）";
+  switch (code) {
+    case "adapter_path_missing":
+    case "eval_assets_dir_missing":
+    case "service_config_missing":
+    case "eval_assets_missing":
+      return { conclusion: "评估还缺必要的输入件", stage: gate, next: "按回执点名的那一项补齐后重推 start" };
+    case "env_profile_not_found":
+    case "env_profile_ambiguous":
+      return { conclusion: "评估环境档案需要你指定一份", stage: gate, next: "从回执列出的档案里挑一个，再说一次要用的档案名" };
+    case "machine_facts_missing":
+      return { conclusion: "评估要用的机器事实不全", stage: gate, next: "补服务配置或环境档案里的端口/显存/绑卡信息后重推" };
+    case "eval_assets_binding_missing":
+    case "assets_split_manifest_missing":
+      return { conclusion: "评估数据还没绑定来源分区", stage: gate, next: "给出分区清单，或明确确认这批数据就是外部来源" };
+    case "eval_field_config_unresolved":
+    case "eval_field_config_drift":
+    case "eval_field_config_unverified":
+    case "eval_field_config_multi_doc":
+      return { conclusion: "字段配置对不上，评估没有启动", stage: gate, next: "核对训练用的字段配置；确认要用现在这份就显式指定字段配置路径" };
+    case "eval_template_drift":
+      return { conclusion: "字段配置的模板骨架与训练时不同", stage: gate, next: "确认两批数据用的是同一套模板骨架；确认要用现在这份就带模板差异放行开关重推" };
+    case "eval_lane_unresolved":
+      return { conclusion: "评估批次（lane）定不下来", stage: gate, next: "说清这批数据属于哪一类，或核对训练数据里的批次记录" };
+    case "run_binding_required":
+      return { conclusion: "本会话还没有选择实验", stage: gate, next: "先从回执列出的候选里选一个实验，再说要评估什么" };
+    case "concurrency_invalid":
+    case "concurrency_exceeds_capacity":
+      return { conclusion: "评估并发值不合要求", stage: gate, next: "按回执给的容量值收紧并发后重推" };
+    case "approval_denied":
+      return { conclusion: "评估放行未获批准", stage: "停在确认卡（服务未启动）", next: "说明要调整的项后重推；审批只能由有权限的人点" };
+    default:
+      return { conclusion: "评估没有启动成功", stage: "停在准备阶段", next: "按回执里的提示补齐后重试；连着两次不成功会升级给你" };
+  }
+};
+
+/** atf_evaluate 外层包装：所有返回出口统一记成败＋挂 user_summary；升级时直投会话通知。 */
+const instrumentEvalOutcome = <T extends { execute: (args: unknown, exec: unknown) => Promise<unknown> }>(tool: T): T => {
+  const inner = tool.execute.bind(tool);
+  (tool as { execute: (args: unknown, exec: unknown) => Promise<unknown> }).execute = async (args: unknown, exec: unknown) => {
+    const receipt = await inner(args, exec);
+    if (receipt === null || typeof receipt !== "object" || Array.isArray(receipt)) return receipt;
+    const payload = receipt as Record<string, unknown>;
+    const rawAction = (args as { action?: unknown } | null | undefined)?.action;
+    const action = typeof rawAction === "string" ? rawAction : undefined;
+    const ok = !receiptIsFailure(payload);
+    const decorated = decorateOutcome(
+      payload, sessionIdOf(exec) ?? null, EVAL_TOOL_NAME, ok, evalUserSummaryOf(payload, ok, action),
+    );
+    const escalated = decorated.escalate_to_user === true;
+    const summary: UserSummary = escalated
+      ? { ...decorated.user_summary, next: "连续两次没成功——需要你介入：失败原因已写在回执里（可直接查看），看一眼就知道是缺条件还是环境问题；也可以直接说要改哪一项" }
+      : decorated.user_summary;
+    if (escalated) decorated.user_summary = summary;
+    // L 层投影：通知进会话流（status 查询且未升级时不投——免噪声）
+    if (!ok ? escalated : action !== "status") {
+      projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, summary);
+    }
+    return decorated;
+  };
+  return tool;
+};
+
+// ── F8：badcase 分析链的审阅覆盖透传（内核 run_analysis_chain.py 的 stdout 顶层）──
+
+/** 审阅覆盖（内核口径）。 */
+export interface ReviewCoverage {
+  pages_total: number;
+  pages_reviewed: number;
+  status: string;
+}
+
+/** 取 stdout 末段 JSON 对象（整串 → 逐行自尾向上 → 最后一个 `{` 起到串尾）；解析不到＝null。 */
+const trailingJsonObjectOf = (stdout: string): Record<string, unknown> | null => {
+  const text = stdout.trim();
+  if (text === "") return null;
+  const asObject = (candidate: string): Record<string, unknown> | null => {
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  const whole = asObject(text);
+  if (whole !== null) return whole;
+  const lines = text.split("\n");
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = (lines[i] ?? "").trim();
+    if (!line.startsWith("{")) continue;
+    const hit = asObject(line);
+    if (hit !== null) return hit;
+  }
+  const brace = text.lastIndexOf("{");
+  return brace >= 0 ? asObject(text.slice(brace)) : null;
+};
+
+/** F8——一键链 stdout → 回执透传面：`review_coverage{pages_total,pages_reviewed,status}` 原值
+ *  透传＋`incomplete`（内核给了布尔就照抄，否则 pages_reviewed===0）；解析不到＝
+ *  `review_coverage:null` ＋ `incomplete_reason:"chain_output_missing"`（不静默编造覆盖度）。 */
+export const reviewCoverageOf = (stdout: string): {
+  review_coverage: ReviewCoverage | null;
+  incomplete: boolean;
+  incomplete_reason?: "chain_output_missing";
+} => {
+  const parsed = trailingJsonObjectOf(stdout);
+  const raw = parsed?.["review_coverage"];
+  const coverage = ((): ReviewCoverage | null => {
+    if (raw === null || raw === undefined || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const record = raw as Record<string, unknown>;
+    const pagesTotal = record["pages_total"];
+    const pagesReviewed = record["pages_reviewed"];
+    const status = record["status"];
+    if (typeof pagesTotal !== "number" || typeof pagesReviewed !== "number" || typeof status !== "string") return null;
+    return { pages_total: pagesTotal, pages_reviewed: pagesReviewed, status };
+  })();
+  if (coverage === null) {
+    return { review_coverage: null, incomplete: true, incomplete_reason: "chain_output_missing" };
+  }
+  const kernelFlag = parsed?.["incomplete"];
+  return {
+    review_coverage: coverage,
+    incomplete: typeof kernelFlag === "boolean" ? kernelFlag : coverage.pages_reviewed === 0,
+  };
+};
+
 /** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
-export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string; resolveEvalRound?: EvalRoundResolver; bindRun?: (runId: string) => Promise<void>; /** D49：canonical 解析种子（与 TrainingToolsConfig 同键——canonicalRunRootsOf(cfg) 注入面；缺省注册表实例态）。 */ canonicalRoots?: readonly string[] }): unknown[] {
+export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string; resolveEvalRound?: EvalRoundResolver; bindRun?: (runId: string) => Promise<void>; /** D49：canonical 解析种子（与 TrainingToolsConfig 同键——canonicalRunRootsOf(cfg) 注入面；缺省注册表实例态）。 */ canonicalRoots?: readonly string[]; /** F11-2：档案清单读取面（缺省 process.env——测试注入用）。 */ env?: Readonly<Record<string, string | undefined>> }): unknown[] {
+  // F11-2：env_profile 参数描述里的实例档案清单——**启动时**读一次实例 env-profiles 目录，
+  // 把实际档案名与各自 eval_env 摘要写进工具描述（T 面可发现性）；目录不可得／无档案＝
+  // 保留原文案并标「目录不可得」（运行时读，源码不写死任何实例的档案名）。
+  const envProfileCatalog = envProfileCatalogLineOf(cfg.env ?? process.env) ?? "可选值见该目录内 .json 文件名（目录不可得）";
   const evaluate = defineTool({
     name: "atf_evaluate",
     description:
@@ -2085,10 +2334,11 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // D91：评估 lane 判定失败停下问时的显式覆盖通道（缺省从任务事实取——不设缺省 goods）
       lane: { type: "string", description: "评估 lane（可选——缺省从任务事实取 run 内训练数据 lane 记录；判定不了会停下来问；显式给值可覆盖）" },
       eval_assets_dir: { type: "string", description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl）（仅 action=start 必填；status 省略）" },
-      field_config: { type: "string", description: "PromptFieldConfig/v1 JSON 路径（可选——缺省自动继承 <runDir>/experiment-setup/field-config.json 并与训练记录指纹核对；显式传入即覆盖，漂移仅告警不阻断）" },
+      field_config: { type: "string", description: "PromptFieldConfig/v1 JSON 路径（可选——缺省自动继承 <runDir>/experiment-setup/field-config.json 并与训练记录指纹核对；显式传入即覆盖，文件指纹漂移仅告警不阻断。注意模板骨架（template）漂移是硬拒：记录里的 template 指纹对不上当前文件即返回 eval_template_drift，需先确认，确要换骨架时带 accept_template_drift=true 重推）" },
+      accept_template_drift: { type: "boolean", description: "显式接受字段配置的模板骨架差异（可选，缺省 false＝fail-closed）：仅在显式传 field_config 且确认要换模板骨架时给出；放行后回执标 template_drift_accepted=true" },
       prompt_mode: { type: "string", enum: ["mode0", "mode1"], description: "抽取方式（可选——缺省继承训练声明，无声明即 mode0）：mode0＝每页一次、全字段抽取；mode1＝按字段分组、每页×每组，适合字段多/相互干扰时。默认跟训练一致，不要自行切换" },
       service_config: { type: "string", description: "EvalServiceConfig/v1 JSON 路径（仅 action=start 必填；status 省略。按 SKILL.md 作者声明：port/TP/gpu_memory_utilization/max_model_len/mm 像素对/adapters 挂载表——adapters[].path 即本次 staging 的 adapter 源）" },
-      env_profile: { type: "string", description: "环境档案名（仅 action=start 需要，可省略；status 省略）——评估环境配置层，确认报告九必报项⑤端口/连接的数据源。省略时按实例目录 <ATF_INSTANCE_ROOT|ATF_HOME>/.atf/env-profiles 自动派生：目录内恰一份含 eval_env 的档案即自动选用（回执带 env_profile_source=instance_default(<名>)）；多份＝返回 env_profile_ambiguous 列候选（让用户选），此时不要自拟档案名——可选值见该目录内 .json 文件名" },
+      env_profile: { type: "string", description: `环境档案名（仅 action=start 需要，可省略；status 省略）——评估环境配置层，确认报告九必报项⑤端口/连接的数据源。省略时按实例目录 <ATF_INSTANCE_ROOT|ATF_HOME>/.atf/env-profiles 自动派生：目录内恰一份含 eval_env 的档案即自动选用（回执带 env_profile_source=instance_default(<名>)）；多份＝返回 env_profile_ambiguous 列候选（让用户选），此时不要自拟档案名——${envProfileCatalog}` },
       deploy: { type: "string", description: "可选 deploy.local.yaml 路径（显式机器事实，优先于环境档案）" },
       // 批C2 E6 卡点修复：评估资产绑定通道（内核编排契约——外部资产须绑定分区清单或 owner 级显式确认）
       assets_split_manifest: { type: "string", description: "评估资产分区清单路径（split-manifest；跨 run/发布区资产须绑定——绑定后评估输入必须全部来自该 test 分区，内核逐页校验。缺省自动发现本 run 树内 l1/ 或 publish-* 下的 split-manifest.json——walkthrough 布局无需显式传）" },
@@ -2111,7 +2361,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     presentCall: function(args: { action: string; run_id?: string }) {
       return { card: "generic" as const, title: `评估 — ${args.run_id ?? "会话绑定实验"}`, kind: "other" as const }
     },
-    async execute(args: { action: string; run_id?: string; adapter_path?: string; eval_assets_dir?: string; lane?: string; field_config?: string; prompt_mode?: string; service_config?: string; env_profile?: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean; concurrency?: number; concurrency_reason?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+    async execute(args: { action: string; run_id?: string; adapter_path?: string; eval_assets_dir?: string; lane?: string; field_config?: string; prompt_mode?: string; service_config?: string; env_profile?: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean; concurrency?: number; concurrency_reason?: string; accept_template_drift?: boolean }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选——先于一切检查）
       const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id, canonicalRunRootsOf(cfg));
       if (!runResolution.ok) return asToolValue(runResolution.payload);
@@ -2206,7 +2456,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const concurrency = concurrencyGate.concurrency;
       // —— D14：评测参数继承（先于一切产物生成——解析失败零编排启动零落盘）——
       // field_config 缺省自动继承训练（显式传入→覆盖，漂移仅告警）；prompt_mode 缺省继承训练声明。
-      const fieldConfigResolved = resolveEvalFieldConfig(runDir, args.field_config);
+      // F1.1：模板骨架漂移开关（显式接受＝仅显式 field_config 时放行；缺省 fail-closed 报 eval_template_drift）
+      const fieldConfigResolved = resolveEvalFieldConfig(runDir, args.field_config, undefined, { acceptTemplateDrift: args.accept_template_drift === true });
       if (!multiDoc && !fieldConfigResolved.ok) {
         return asToolValue({
           started: false, error: fieldConfigResolved.error, run_id: runId,
@@ -2412,6 +2663,9 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
           field_config_sha256: fieldConfigResolved.sha256,
           field_config_sha256_prefix12: fieldConfigResolved.sha256.slice(0, 12),
           ...(fieldConfigResolved.warning !== undefined ? { field_config_warning: fieldConfigResolved.warning } : {}),
+          // F1.1：模板骨架核对结果（verified＝与记录一致；absent＝老 run 无记录键未比对；drift_accepted＝显式放行）
+          template_sha256_source: fieldConfigResolved.template_sha256_source,
+          ...(fieldConfigResolved.template_drift_accepted === true ? { template_drift_accepted: true } : {}),
         } : { field_config: null, field_config_source: "per_doc_derived" as const }),
         prompt_mode: promptMode.mode,
         prompt_mode_source: promptMode.source,
@@ -2423,6 +2677,9 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       });
     },
   });
+
+  // F6：成败记数＋用户面摘要＋会话通知投影（覆盖 execute 内全部返回出口——早退失败与成功终局同一口径）
+  instrumentEvalOutcome(evaluate as unknown as { execute: (args: unknown, exec: unknown) => Promise<unknown> });
 
   const analyze = defineTool({
     name: "atf_analyze_badcases",
@@ -2557,6 +2814,9 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         // 现场教训：产物路径给到用户后，用户拿去本地打开，html 与 images/ 不同层
         // 导致整页图裂——用户以为"viewer 坏了"，其实是打开方式不对。
         // 首选 viewer 走 /atf-ui/viewer/<runId>/（路由自己发现现役 viewer 清单）。
+        // F8：审阅覆盖透传（内核 stdout 顶层 review_coverage/incomplete；解析不到＝null＋
+        // incomplete_reason=chain_output_missing——覆盖度未知时不假装已审阅完整）
+        ...reviewCoverageOf(chained.stdout),
         ...(existsSync(viewerPath)
           ? {
               viewer_url: `/atf-ui/viewer/${encodeURIComponent(runId)}/`,
