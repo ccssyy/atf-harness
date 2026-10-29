@@ -749,6 +749,9 @@ export const constructionParamsApprovalLines = (input: {
   groupingConfirm: boolean;
   mode5Random: number | undefined;
   targetedAdvice: { carry: string[]; min: number | null; max: number | null; reason: string; evidence: string[]; evidenceStatus: string } | undefined;
+  targetedPlan?:
+    | { targetRows: number; perPage: number; coverageFloor: number; coveredFields: number; reason: string }
+    | undefined;
   riskSignalsProvided?: boolean;
 }): string => {
   // 问题 6（owner 2026-10-28）：mode0/mode1/mode5/targeted 是工程内部叫法，
@@ -780,7 +783,15 @@ export const constructionParamsApprovalLines = (input: {
       `重点字段组合建议：必带 ${adv.carry.length > 0 ? adv.carry.join("、") : "(无)"}、${range}` +
       `（建议未自动生效；${ev}）——理由：${adv.reason}`;
   }
-  return `构造参数确认：\n- ${partGroup}\n- ${partM5}\n- ${partTargeted}`;
+  // D145：规模（目标条数／每页条数／每组最少次数）由模型判断，卡上必须显形——
+  // 此前规模由「风险分≥2.0」隐含决定，383 页只出 83 行也没人看得见。
+  const plan = input.targetedPlan;
+  const partScale =
+    plan === undefined
+      ? "重点字段组合规模：未给计划——按「页数×倍率（缺省 1 倍）」反推，每页条数由可用页数算出"
+      : `重点字段组合规模：计划 ${plan.targetRows} 条、每页 ${plan.perPage} 条、每个字段至少 ${plan.coverageFloor} 次` +
+        `（覆盖 ${plan.coveredFields} 个字段；由模型按数据缺口判断，引擎只做上限护栏）——理由：${plan.reason}`;
+  return `构造参数确认：\n- ${partGroup}\n- ${partM5}\n- ${partTargeted}\n- ${partScale}`;
 };
 
 // ── E3 补：run 落点解析与内核 canonical RunLayout 对齐 ──
@@ -1737,6 +1748,17 @@ export const buildPipelineTool = (
           "evidence（形如 container_no:occurrence_rate，须能在本批风险信号里查到）／effective（必须 false）。" +
           "建议不自动生效、随卡呈现；必带字段与区间须由风险分析得出，无理由或无出处会被拒。可直接给对象，无需自行落盘",
       },
+      targeted_plan: {
+        type: "object",
+        additionalProperties: true,
+        description:
+          "重点字段组合的规模计划（TargetedPlan/v1）（仅 experiment_setup 段有意义）：" +
+          "target_rows／per_page／coverage_floor（三键均为正整数）／可选 covered_fields（缺省=全部参与训练字段）" +
+          "／可选 fields_band 与 carry_fields／reason／evidence（形如 container_no:occurrence_rate，须能在本批风险信号里查到）。" +
+          "规模是**你的判断**：按覆盖缺口（哪些字段还没练过组合）与数据规模定，不要套固定倍数；" +
+          "引擎只做确定性与上限护栏（每页条数不超该页可生成组合数、条数×单行长度不超预算、单页/单字段曝光占比上限）。" +
+          "不给则按「页数×倍率（缺省 1 倍）」反推。可直接给对象，无需自行落盘",
+      },
       negative_ratio_target: {
         type: "string",
         description:
@@ -1862,7 +1884,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown> },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown> },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -2012,9 +2034,12 @@ export const buildPipelineTool = (
             targetedAdvice:
               | { carry: string[]; min: number | null; max: number | null; reason: string; evidence: string[]; evidenceStatus: string }
               | undefined;
+            targetedPlan:
+              | { targetRows: number; perPage: number; coverageFloor: number; coveredFields: number; reason: string }
+              | undefined;
           }
         | undefined;
-      const constructionAdvicePaths: { mode5AdviceStats?: string; targetedAdvice?: string; riskSignals?: string } = {};
+      const constructionAdvicePaths: { mode5AdviceStats?: string; targetedAdvice?: string; targetedPlan?: string; riskSignals?: string } = {};
       // D90：构造参数的真实来源（用户/agent）与一句话说明——上审批卡、进返回体。
       // 完全权限档下审批免了，这两项就是「谁定了分组与增强」的唯一凭据。
       let constructionDecisionNote: string | undefined;
@@ -2025,7 +2050,10 @@ export const buildPipelineTool = (
         // run 尚未创建（register 段前）且本次要落 advice 文件时不落任何目录：在占位路径下
         // 建目录会让内核 create_run 判「落点已被占用且缺合法 run.json」而永久拒绝该 run_id。
         // 不带 advice 参数的 experiment_setup 段（常规路径）不受影响——本工具只读不建。
-        const wantsAdviceWrite = args.mode5_advice_stats !== undefined || args.targeted_advice !== undefined;
+        const wantsAdviceWrite =
+          args.mode5_advice_stats !== undefined
+          || args.targeted_advice !== undefined
+          || args.targeted_plan !== undefined;
         if (wantsAdviceWrite && !existsSync(runDir)) {
           return asToolValue({
             ok: false, stage: args.stage, run_id: args.run_id, run_dir: runDir,
@@ -2063,7 +2091,25 @@ export const buildPipelineTool = (
             evidenceStatus: "pending_kernel_verify",
           };
         }
-        constructionParams = { groupingConfirm, mode5Random, targetedAdvice };
+        // D145：规模计划（TargetedPlan/v1）——目标条数/每页条数/每组最少次数由模型判断；
+        // 本工具只落盘并透传，合法性与出处由内核实验门校验（不在这里替模型定数）。
+        let targetedPlan:
+          | { targetRows: number; perPage: number; coverageFloor: number; coveredFields: number; reason: string }
+          | undefined;
+        if (args.targeted_plan !== undefined) {
+          const rawPlan = args.targeted_plan as Record<string, unknown>;
+          constructionAdvicePaths.targetedPlan = writeAdviceFile("targeted-plan.json", rawPlan);
+          const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? Number(v) : 0);
+          const covered = Array.isArray(rawPlan["covered_fields"]) ? rawPlan["covered_fields"].length : 0;
+          targetedPlan = {
+            targetRows: num(rawPlan["target_rows"]),
+            perPage: num(rawPlan["per_page"]),
+            coverageFloor: num(rawPlan["coverage_floor"]),
+            coveredFields: covered,
+            reason: String(rawPlan["reason"] ?? ""),
+          };
+        }
+        constructionParams = { groupingConfirm, mode5Random, targetedAdvice, targetedPlan };
         // D90：审批免的档位（完全权限／全自动）下，「构造参数」不能再靠审批卡承载——
         // 审批一免，卡上那几行「未确认」就没人看见（10-29 真机：八段跑完零问题卡，
         // 分组与增强全程未确认，样本一条没多生成）。故此处当场补一个决策闸：
@@ -2353,6 +2399,7 @@ export const buildPipelineTool = (
         if (constructionParams.mode5Random !== undefined) argv.push("--mode5-random", String(constructionParams.mode5Random));
         if (constructionAdvicePaths.mode5AdviceStats !== undefined) argv.push("--mode5-advice-stats", constructionAdvicePaths.mode5AdviceStats);
         if (constructionAdvicePaths.targetedAdvice !== undefined) argv.push("--targeted-advice", constructionAdvicePaths.targetedAdvice);
+        if (constructionAdvicePaths.targetedPlan !== undefined) argv.push("--targeted-plan", constructionAdvicePaths.targetedPlan);
         if (constructionAdvicePaths.riskSignals !== undefined) argv.push("--risk-signals", constructionAdvicePaths.riskSignals);
         if (targetedAccept) argv.push("--targeted-accept");
       }

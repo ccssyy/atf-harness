@@ -271,6 +271,15 @@
     "required": null
    },
    {
+    "option": "--targeted-plan",
+    "dest": "targeted_plan",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--targeted-advice",
     "dest": "targeted_advice",
     "action": "store",
@@ -5249,6 +5258,15 @@
     "dest": "targeted_accept",
     "action": "store_true",
     "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--targeted-plan",
+    "dest": "targeted_plan",
+    "action": "store",
+    "type": "<expr:Path>",
     "choices": null,
     "default": null,
     "required": null
