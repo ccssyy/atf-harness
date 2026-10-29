@@ -748,6 +748,9 @@ export const negativeRatioApprovalLine = (band: string): string => {
 export const constructionParamsApprovalLines = (input: {
   groupingConfirm: boolean;
   mode5Random: number | undefined;
+  /** 调用方在统计件里给的建议倍数（未给则 undefined）：卡面据实呈现，
+   *  不硬写某个常数——审批发生在内核计算之前，倍数真值以内核回执为准。 */
+  mode5Suggested?: number | undefined;
   targetedAdvice: { carry: string[]; min: number | null; max: number | null; reason: string; evidence: string[]; evidenceStatus: string } | undefined;
   targetedPlan?:
     | { targetRows: number; perPage: number; coverageFloor: number; coveredFields: number; reason: string }
@@ -759,9 +762,14 @@ export const constructionParamsApprovalLines = (input: {
   const partGroup = input.groupingConfirm
     ? "分组方案：已确认（按组逐图各生成一条样本）"
     : "分组方案：未确认——**按数据事实分组默认生成**（组数按标准压到常规区间），要改直接说";
+  // 未显式给倍数时不写具体数字：倍数由内核按「调用方建议 > 字段难度与预算推荐 >
+  // 默认开的最低倍数」定，审批前无法确定——写死数字会与实际执行不一致。
+  const suggestedLabel =
+    typeof input.mode5Suggested === "number" ? `（建议 ${input.mode5Suggested} 倍）` : "";
   const partM5 =
     input.mode5Random === undefined
-      ? "随机子集增强：未确认——**按建议倍数默认生成（2 倍）**，要改直接说"
+      ? `随机子集增强：未确认——**按建议倍数额度默认生成**${suggestedLabel}，` +
+        "具体倍数随执行回执给出（受字段难度与预算护栏约束），要改直接说"
       : input.mode5Random === 0
         ? "随机子集增强：0 倍（显式不启用）"
         : `随机子集增强：${input.mode5Random} 倍（已确认）`;
@@ -2037,6 +2045,7 @@ export const buildPipelineTool = (
             targetedPlan:
               | { targetRows: number; perPage: number; coverageFloor: number; coveredFields: number; reason: string }
               | undefined;
+            mode5Suggested: number | undefined;
           }
         | undefined;
       const constructionAdvicePaths: { mode5AdviceStats?: string; targetedAdvice?: string; targetedPlan?: string; riskSignals?: string } = {};
@@ -2109,7 +2118,15 @@ export const buildPipelineTool = (
             reason: String(rawPlan["reason"] ?? ""),
           };
         }
-        constructionParams = { groupingConfirm, mode5Random, targetedAdvice, targetedPlan };
+        // 统计件里的建议倍数：只用于卡面据实呈现（审批前内核还没算），
+        // 不做任何决定——真值由内核按来源分档给出并随回执返回。
+        const mode5SuggestedRaw = (args.mode5_advice_stats as Record<string, unknown> | undefined)
+          ?.["suggested_mode5_random"];
+        const mode5Suggested =
+          typeof mode5SuggestedRaw === "number" && Number.isFinite(mode5SuggestedRaw)
+            ? Number(mode5SuggestedRaw)
+            : undefined;
+        constructionParams = { groupingConfirm, mode5Random, targetedAdvice, targetedPlan, mode5Suggested };
         // D90：审批免的档位（完全权限／全自动）下，「构造参数」不能再靠审批卡承载——
         // 审批一免，卡上那几行「未确认」就没人看见（10-29 真机：八段跑完零问题卡，
         // 分组与增强全程未确认，样本一条没多生成）。故此处当场补一个决策闸：
