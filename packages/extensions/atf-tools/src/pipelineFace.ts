@@ -758,13 +758,13 @@ export const constructionParamsApprovalLines = (input: {
   // 一律不得出现在用户可见文案里——按「这套参数会产出什么样本」说人话。
   const partGroup = input.groupingConfirm
     ? "分组方案：已确认（按组逐图各生成一条样本）"
-    : "分组方案：未确认——本轮不生成分组抽取样本（需显式确认分组方案）";
+    : "分组方案：未确认——**按数据事实分组默认生成**（组数按标准压到常规区间），要改直接说";
   const partM5 =
     input.mode5Random === undefined
-      ? "随机子集增强：未确认——本轮不生成（增强倍数不得用固定值，需用户给值或确认建议）"
+      ? "随机子集增强：未确认——**按建议倍数默认生成（2 倍）**，要改直接说"
       : input.mode5Random === 0
-        ? "随机子集增强：0 倍（用户显式不启用）"
-        : `随机子集增强：${input.mode5Random} 倍（用户指定）`;
+        ? "随机子集增强：0 倍（显式不启用）"
+        : `随机子集增强：${input.mode5Random} 倍（已确认）`;
   let partTargeted: string;
   const adv = input.targetedAdvice;
   if (adv === undefined) {

@@ -156,8 +156,8 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
     );
     const reason = record.join("\n");
     expect(reason).toContain("构造参数确认");
-    expect(reason).toContain("分组方案：未确认——本轮不生成分组抽取样本");
-    expect(reason).toContain("随机子集增强：未确认——本轮不生成");
+    expect(reason).toContain("分组方案：未确认——**按数据事实分组默认生成**");
+    expect(reason).toContain("随机子集增强：未确认——**按建议倍数默认生成（2 倍）**");
     // 建议值/理由/出处态一起上卡（建议不自动生效）
     expect(reason).toContain("goods_name");
     expect(reason).toContain("建议未自动生效");
@@ -173,7 +173,7 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
     );
     const reason = record.join("\n");
     expect(reason).toContain("分组方案：已确认（按组逐图各生成一条样本）");
-    expect(reason).toContain("随机子集增强：0 倍（用户显式不启用）");
+    expect(reason).toContain("随机子集增强：0 倍（显式不启用）");
   });
 
   it("风险信号在场才自动带 --risk-signals（供 evidence 出处校验）", async () => {

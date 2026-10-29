@@ -171,12 +171,12 @@ export const decideConstructionParams = async (input: {
   if (needGrouping) {
     questions.push({
       id: `construction-grouping-${input.runId}`,
-      question: "这次要不要按分组生成训练样本？",
+      question: "分组生成沿用默认（按数据事实分组）还是改成一图一条？",
       header: "分组",
       detail: [
-        "按分组生成：同一张图按分组各出一条样本（分组越多，条数越多）。",
-        "一图一条：每张图只出一条样本，字段照样全部带上。",
-        "组构成由训练内核按字段配置产出；拿不准就选一图一条，后续可补跑。",
+        "默认（推荐）：按数据事实分组，每图每组各出一条样本；组数已按标准压到常规区间。",
+        "一图一条：每张图只出一条样本，字段照样全部带上，样本数＝图数。",
+        "不改也行——本轮会按默认生成，这里只是让你知道默认值是什么、并能当场改。",
       ].join("\n"),
       options: [
         { label: GROUPING_YES, description: "样本更多，覆盖同一张图的多种字段组合" },
@@ -188,12 +188,12 @@ export const decideConstructionParams = async (input: {
   if (needAugment) {
     questions.push({
       id: `construction-augment-${input.runId}`,
-      question: "要做随机子集增强吗？按几倍？",
+      question: "随机子集增强沿用建议倍数（2 倍）还是要改？",
       header: "增强",
       detail: [
-        "增强＝在原始样本之外，再按随机子集生成若干条不同字段组合的样本。",
-        "倍数相对原始条数：2 倍＝总量约翻一倍，3 倍＝约翻两倍。",
-        "选了就会真的生成，不是占位；倍数必须是确定的数字。",
+        "默认（推荐）：按建议值 2 倍生成——原始样本之外再生成约等量的随机子集样本。",
+        "倍数相对原始条数：2 倍＝总量约翻一倍；也可选不增强。",
+        "选了就会真的生成，不是占位；默认值同样会生成，这里只是给你改的机会。",
       ].join("\n"),
       options: AUGMENT_OPTIONS.map((option) => ({
         label: option.label,
