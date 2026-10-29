@@ -62,6 +62,10 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   base_model_path: "--base-model",
   auto_style_cluster: "--auto-style-cluster",
   allow_small_cluster_test: "--allow-small-cluster-test",
+  // b20/b21 补登（护栏当场修）：分组候选卡与簇合并开关都是段工具参数，旗标映射此前缺行
+  // → kernelSurface 参数面恒定两条违例（工具参数键在册、映射断链）。映射即内核真旗标。
+  grouping_proposal: "--grouping-proposal",
+  merge_small_clusters: "--merge-small-clusters",
   grouping_preset: "--grouping-preset",
   // T4 放宽：像素下限例外的理由位——**harness 侧账**，从不下传内核（无对应旗标），
   // 故在 PARAM_FACE_WAIVERS 登记为前瞻豁免键（只跳过「旗标落内核声明面」单项对账，

@@ -24,6 +24,7 @@ import { runBootPreflight, formatPreflightFatal, BOOT_PREFLIGHT_PIPELINE_ENV, BO
 import { resolveInstanceKernelDir, resolveInstancePinRoot } from "../../../../src/core/workspace/instancePin.js";
 import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
 import { registerApprovalExempt } from "./approvalExempt.js";
+import { registerUnattendedQuestionGuard } from "./unattendedGuard.js";
 import { buildFileGuardTools, registerPathGuard, startFileRootsHotReload } from "./fileGuardFace.js";
 import { deriveFileToolRoots } from "../../../../src/agent/fileRoots.js";
 import type { FileToolHost } from "../../../../src/agent/fileTools.js";
@@ -160,6 +161,11 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
 
   // 批㊶-F-H 项 1：bash/write 类审批豁免 answerer（择案 A——waterfall 头部 prepend；
   // 高危治理点 atf_* 全体不进类仍走人工面板；详见 approvalExempt.ts 头注）
+  // D90：全自动档的问题面守卫（与上一条对称——审批免在 approval/request，提问免在
+  // user-questions/request；两者都只对全自动档生效，其余档位原生面板照旧）
+  if (registerUnattendedQuestionGuard(ctx)) {
+    console.log("[atf-tools] 全自动档提问守卫已挂（user-questions/request waterfall 头部；仅全自动档交回模型自决，其它档位问题卡照弹）");
+  }
   if (registerApprovalExempt(ctx, config.approvalPolicy)) {
     const chain = config.approvalPolicy?.chainTools ?? [];
     console.log(`[atf-tools] 免审 answerer 已挂（approval/request waterfall 头部；bash/write 恒免；训练链 ${chain.length} 件仅在预设 ${config.approvalPolicy?.preset ?? "（未声明）"}＋完全权限双齐时免；治理点审批语义零变化）`);

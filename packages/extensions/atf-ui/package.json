@@ -11,7 +11,8 @@
     "bundle": {
       "patch": [
         "./cordis.patch.yml",
-        "./presets/atf-training.patch.yml"
+        "./presets/atf-training.patch.yml",
+        "./presets/atf-unattended.patch.yml"
       ]
     },
     "client": {

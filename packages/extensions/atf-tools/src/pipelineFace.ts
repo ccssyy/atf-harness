@@ -118,6 +118,8 @@ import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.j
 import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
 // E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与本次训练方案卡同源）
 import { formAskQuestion, editsFromFormAnswers, visibleDevicesViolationsOf, type ChoiceAskQuestion, type FormAskService } from "./confirmFace.js";
+import { decideConstructionParams } from "./constructionGate.js";
+import { approvalBypassed, permissionTierOf } from "./permissionTier.js";
 import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 // E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
 import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
@@ -2013,6 +2015,10 @@ export const buildPipelineTool = (
           }
         | undefined;
       const constructionAdvicePaths: { mode5AdviceStats?: string; targetedAdvice?: string; riskSignals?: string } = {};
+      // D90：构造参数的真实来源（用户/agent）与一句话说明——上审批卡、进返回体。
+      // 完全权限档下审批免了，这两项就是「谁定了分组与增强」的唯一凭据。
+      let constructionDecisionNote: string | undefined;
+      let constructionDecidedBy: "user" | "agent" | undefined;
       if (args.stage === "experiment_setup") {
         const groupingConfirm = args.grouping_confirm === true;
         const mode5Random = typeof args.mode5_random === "number" ? Number(args.mode5_random) : undefined;
@@ -2058,6 +2064,35 @@ export const buildPipelineTool = (
           };
         }
         constructionParams = { groupingConfirm, mode5Random, targetedAdvice };
+        // D90：审批免的档位（完全权限／全自动）下，「构造参数」不能再靠审批卡承载——
+        // 审批一免，卡上那几行「未确认」就没人看见（10-29 真机：八段跑完零问题卡，
+        // 分组与增强全程未确认，样本一条没多生成）。故此处当场补一个决策闸：
+        //   完全权限档 → 原生问题卡问人（分组要不要、增强几倍）；
+        //   全自动档   → 不问人，由 agent 自决并落账 decided_by: agent；
+        //   guarded 档 → 零变化（审批卡照弹、用户看得见）。
+        if (approvalBypassed(permissionTierOf(ctx, exec))) {
+          const decided = await decideConstructionParams({
+            ctx,
+            exec,
+            runId: args.run_id,
+            runDir,
+            state: {
+              // agent 传了分组候选＝分组由卡上选定那套决定（已在分组卡里问过），
+              // 决策闸不再重复问「要不要分组」，只补真缺的增强倍数。
+              groupingConfirm: args.grouping_proposal !== undefined ? true : constructionParams.groupingConfirm,
+              mode5Random: constructionParams.mode5Random,
+            },
+          });
+          constructionParams = {
+            ...constructionParams,
+            // 传了候选时分组口径归候选通道，本闸不改写 grouping_confirm 参数
+            groupingConfirm:
+              args.grouping_proposal !== undefined ? constructionParams.groupingConfirm : decided.groupingConfirm,
+            mode5Random: decided.mode5Random,
+          };
+          constructionDecisionNote = decided.note;
+          constructionDecidedBy = decided.decided_by;
+        }
         // 风险信号在场才带：targeted evidence 的出处校验要用它（缺则内核标未校验）
         const riskDocType = typeof args.doc_type === "string" && args.doc_type.trim() !== "" ? args.doc_type.trim() : "do";
         const riskPath = resolveRunFile(runDir, `prep/risk-signals/${riskDocType}/field_risk_signals.json`);
@@ -2188,6 +2223,8 @@ export const buildPipelineTool = (
         + (args.stage === "experiment_setup" && constructionParams !== undefined
             ? `\n${constructionParamsApprovalLines({ ...constructionParams, riskSignalsProvided: constructionAdvicePaths.riskSignals !== undefined })}`
             : "")
+        // D90：构造参数的来源行（用户确认／agent 代决——谁定的必须写在卡上也写在回执里）
+        + (args.stage === "experiment_setup" && constructionDecisionNote !== undefined ? `\n构造参数来源：${constructionDecisionNote}` : "")
         // A 面：采纳选择行（卡上选了 yes/no 的结果如实呈现在授权卡上）
         + (args.stage === "experiment_setup" && constructionParams?.targetedAdvice !== undefined ? `\n采纳选择：${acceptNote}` : "")
         // E3：预算三参行仅 experiment_setup 段呈现（终值与来源双双上卡）
@@ -2620,6 +2657,11 @@ export const buildPipelineTool = (
               grouping_preset: groupingPreset !== "" ? groupingPreset : null,
               grouping_preset_source: groupingPreset !== "" ? "explicit" : "undeclared",
             }
+          : {}),
+        // D90：构造参数来源（仅 experiment_setup 段）——分组与增强「谁定的」必须可对账：
+        // 完全权限档下审批已免，这一行就是唯一凭据（user＝卡上选定；agent＝代决，无人确认）。
+        ...(args.stage === "experiment_setup" && constructionDecidedBy !== undefined
+          ? { construction_decided_by: constructionDecidedBy }
           : {}),
         // D99：负样本带标注（仅 experiment_setup 段）——「缺省不静默」同 D89：显式给标
         // explicit，未给按构造器常量带标注 kernel_default（值与来源两侧可对账；其它段不加两键）

@@ -24,6 +24,7 @@
  * atf_joint_train／atf_gate／atf_admit_data／atf_scratch_exec）永不出现在 chainTools。
  */
 import { ATF_TRAINING_PRESET, isPresetAutopilot, type ExecSessionFace, type ServiceCtxFace } from "./trainingPreset.js";
+import { permissionTierOf } from "./permissionTier.js";
 
 /**
  * bash/write 类工具名（vendor 面：tool-bash=bash；tool-fs 写类=write/edit）。
@@ -39,6 +40,12 @@ export const BASH_WRITE_APPROVAL_TOOLS: ReadonlySet<string> = new Set(["bash", "
 export const isAtfContractTool = (toolName: string): boolean => toolName.startsWith("atf_");
 
 export const isBashWriteClass = (toolName: string): boolean => BASH_WRITE_APPROVAL_TOOLS.has(toolName);
+
+/**
+ * 全自动档也不免的审批面（D90）：`atf_bash` 的破坏性命令确认（D23 递归删除）属**不可逆
+ * 数据丢失**护栏，不是权限问题——档位再高也逐次确认。其余工具在全自动档一律免审。
+ */
+export const UNATTENDED_APPROVAL_KEEP: ReadonlySet<string> = new Set(["atf_bash"]);
 
 /**
  * 训练链豁免声明（overlay 侧 atf-tools config.approvalPolicy——预设声明 + 工具白名单）。
@@ -70,6 +77,11 @@ const warnChainExempt = (toolName: string, preset: string): void => {
   process.stderr.write(`[atf-approval] 训练链工具 ${toolName} 免审放行（预设=${preset}／权限档=danger-full-access）\n`);
 };
 
+/** 全自动档免审的事实通报（放行必留痕：审计面照旧有 asked/decided 对）。 */
+const warnUnattendedExempt = (toolName: string): void => {
+  process.stderr.write(`[atf-approval] 全自动档：${toolName} 免审放行（无人可审批）\n`);
+};
+
 /**
  * 豁免判定单源（档位 + 预设双感知）：
  * - bash/write 类：原有语义不变（不看档位/预设，恒 allowed-once）；
@@ -80,11 +92,16 @@ const warnChainExempt = (toolName: string, preset: string): void => {
 export const exemptOutcomeOf = (
   request: ExemptRequest,
   deps: { ctx?: ServiceCtxFace; policy?: ApprovalExemptPolicy },
-): { outcome: "allowed-once"; basis: "bash-write" | "chain" } | null => {
+): { outcome: "allowed-once"; basis: "bash-write" | "chain" | "unattended" } | null => {
   const toolName = typeof request?.toolName === "string" ? request.toolName : "";
   if (isBashWriteClass(toolName)) return { outcome: "allowed-once", basis: "bash-write" };
   const { ctx, policy } = deps;
-  if (ctx === undefined || policy === undefined) return null;
+  if (ctx === undefined) return null;
+  // D90 全自动档：审批全免（破坏性命令通道除外——那是数据丢失护栏，不是授权问题）
+  if (permissionTierOf(ctx, request) === "unattended" && !UNATTENDED_APPROVAL_KEEP.has(toolName)) {
+    return { outcome: "allowed-once", basis: "unattended" };
+  }
+  if (policy === undefined) return null;
   const chainTools = policy.chainTools ?? [];
   // 显式列举命中（禁前缀匹配——前缀会连带放行训练启动/发布/release 等治理点）
   if (!chainTools.includes(toolName)) return null;
@@ -104,6 +121,7 @@ export const makeApprovalExemptAnswerer = (
   if (hit === null) return next();
   const toolName = typeof request?.toolName === "string" ? request.toolName : "";
   if (hit.basis === "bash-write") warnExempt(toolName, request.reason);
+  else if (hit.basis === "unattended") warnUnattendedExempt(toolName);
   else warnChainExempt(toolName, deps.policy?.preset ?? "");
   return "allowed-once";
 };

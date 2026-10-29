@@ -89,16 +89,26 @@
     "required": true
    },
    {
+    "option": "--experiment",
+    "dest": "experiment",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
     "option": "--lane",
     "dest": "lane",
     "action": "store",
     "type": null,
     "choices": [
+     "all",
      "goods",
      "non_goods",
      "mixed"
     ],
-    "default": null,
+    "default": "all",
     "required": null
    },
    {
@@ -124,9 +134,9 @@
     "dest": "grouping_preset",
     "action": "store",
     "type": null,
-    "choices": "<expr:sorted(GROUPING_PRESETS)>",
+    "choices": null,
     "default": null,
-    "required": true
+    "required": null
    },
    {
     "option": "--iteration-intent",
@@ -349,6 +359,24 @@
     "dest": "decision_disposition",
     "action": "store",
     "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--grouping-proposal",
+    "dest": "grouping_proposal",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--require-assembly-plan",
+    "dest": "require_assembly_plan",
+    "action": "store_true",
+    "type": null,
     "choices": null,
     "default": null,
     "required": null
@@ -627,13 +655,31 @@
     "required": null
    },
    {
+    "option": "--agent-signals",
+    "dest": "agent_signals",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--sample-plan-out",
+    "dest": "sample_plan_out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--out",
     "dest": "out",
     "action": "store",
     "type": "<expr:Path>",
     "choices": null,
     "default": null,
-    "required": true
+    "required": null
    }
   ]
  },
@@ -695,6 +741,15 @@
     "dest": "workspace_root",
     "action": "store",
     "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--require-assembly-plan",
+    "dest": "require_assembly_plan",
+    "action": "store_true",
+    "type": null,
     "choices": null,
     "default": null,
     "required": null
@@ -1534,8 +1589,8 @@
     "action": "store",
     "type": null,
     "choices": null,
-    "default": null,
-    "required": true
+    "default": "all",
+    "required": null
    },
    {
     "option": "--unit",
@@ -1938,7 +1993,7 @@
     "action": "store",
     "type": null,
     "choices": null,
-    "default": "goods",
+    "default": "all",
     "required": null
    }
   ]
@@ -2075,7 +2130,7 @@
     "action": "store",
     "type": null,
     "choices": null,
-    "default": "goods",
+    "default": "all",
     "required": null
    },
    {
@@ -2651,6 +2706,15 @@
     "required": null
    },
    {
+    "option": "--allow-custom-renderer",
+    "dest": "allow_custom_renderer",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--base-url",
     "dest": "base_url",
     "action": "store",
@@ -2805,6 +2869,158 @@
     "choices": null,
     "default": null,
     "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-ingest-attachments/scripts/run_assembly.py",
+  "args": [
+   {
+    "option": "--source",
+    "dest": "source",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--workspace",
+    "dest": "workspace",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--name",
+    "dest": "name",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--stage",
+    "dest": "stage",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--classifier",
+    "dest": "classifier",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "heuristic",
+     "llm"
+    ],
+    "default": "heuristic",
+    "required": null
+   },
+   {
+    "option": "--llm-request-out",
+    "dest": "llm_request_out",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--llm-response-in",
+    "dest": "llm_response_in",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--workspace",
+    "dest": "workspace",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--name",
+    "dest": "name",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--workspace",
+    "dest": "workspace",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--name",
+    "dest": "name",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--id",
+    "dest": "id",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--to",
+    "dest": "to",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--reason",
+    "dest": "reason",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--workspace",
+    "dest": "workspace",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--name",
+    "dest": "name",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
    }
   ]
  },
@@ -3072,11 +3288,7 @@
     "dest": "lane",
     "action": "store",
     "type": null,
-    "choices": [
-     "goods",
-     "non_goods",
-     "mixed"
-    ],
+    "choices": null,
     "default": null,
     "required": null
    },
@@ -3410,13 +3622,9 @@
     "dest": "lane",
     "action": "store",
     "type": null,
-    "choices": [
-     "goods",
-     "non_goods",
-     "mixed"
-    ],
+    "choices": null,
     "default": null,
-    "required": true
+    "required": null
    },
    {
     "option": "--training-data-manifest",
@@ -4388,13 +4596,9 @@
     "dest": "lane",
     "action": "store",
     "type": null,
-    "choices": [
-     "goods",
-     "non_goods",
-     "mixed"
-    ],
+    "choices": null,
     "default": null,
-    "required": true
+    "required": null
    },
    {
     "option": "--checkpoint-dir",
@@ -4863,6 +5067,15 @@
     "choices": null,
     "default": null,
     "required": null
+   },
+   {
+    "option": "--access-mode",
+    "dest": "access_mode",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
    }
   ]
  },
@@ -4915,6 +5128,15 @@
     "required": null
    },
    {
+    "option": "--experiment",
+    "dest": "experiment",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": "",
+    "required": null
+   },
+   {
     "option": "--run-id",
     "dest": "run_id",
     "action": "store",
@@ -4928,6 +5150,15 @@
     "dest": "rerun",
     "action": "store_true",
     "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--grouping-proposal",
+    "dest": "grouping_proposal",
+    "action": "store",
+    "type": "<expr:Path>",
     "choices": null,
     "default": null,
     "required": null
@@ -4991,11 +5222,8 @@
     "dest": "grouping_preset",
     "action": "store",
     "type": null,
-    "choices": [
-     "A",
-     "B"
-    ],
-    "default": "B",
+    "choices": null,
+    "default": null,
     "required": null
    },
    {
@@ -5066,6 +5294,15 @@
     "required": null
    },
    {
+    "option": "--merge-small-clusters",
+    "dest": "merge_small_clusters",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--allow-small-cluster-test",
     "dest": "allow_small_cluster_test",
     "action": "store_true",
@@ -5102,7 +5339,7 @@
     "action": "store",
     "type": null,
     "choices": null,
-    "default": "qwen3_vl",
+    "default": null,
     "required": null
    },
    {
@@ -5124,6 +5361,18 @@
     "type": null,
     "choices": null,
     "default": null,
+    "required": null
+   },
+   {
+    "option": "--split-assignment-mode",
+    "dest": "split_assignment_mode",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "recompute_with_policy",
+     "source_assignment"
+    ],
+    "default": "recompute_with_policy",
     "required": null
    },
    {
@@ -5245,6 +5494,19 @@
      "ledger"
     ],
     "default": "ui",
+    "required": null
+   },
+   {
+    "option": "--access-mode",
+    "dest": "access_mode",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "full",
+     "limited",
+     "danger-full-access"
+    ],
+    "default": null,
     "required": null
    },
    {

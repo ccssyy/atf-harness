@@ -228,8 +228,16 @@ describe("C2 分组四态", () => {
       { stage: "experiment_setup", run_id: "auto", workspace_path: ws, grouping_proposal: PROPOSAL },
       fakeExec,
     );
-    // full 档也问（且只问一次）
-    expect(asked).toHaveLength(1);
+    // full 档也问：①分组候选卡（本次就是它在问选哪套）；
+    // ②D90 决策闸的增强倍数卡——审批在本档已免，构造参数缺口不能再靠审批卡承载，
+    //   必须当场问人（10-29 真机：零问题卡 → 分组与增强全程未确认 → 样本没多生成）。
+    expect(asked).toHaveLength(2);
+    const askedHeaders = asked.map(
+      (entry) => (entry["questions"] as Array<{ header?: string; options?: Array<{ label: string }> }>)[0]!,
+    );
+    // 决策闸先跑（段执行前），分组候选卡后跑（审批前）——顺序如实断言
+    expect(askedHeaders.map((question) => question.header)).toEqual(["增强", "分组"]);
+    expect(askedHeaders[0]!.options?.map((option) => option.label)).toEqual(["不增强", "2 倍", "3 倍"]);
     expect(result["grouping_source"]).toBe("proposal");
     expect(result["grouping_decision"]).toBe("user_selected");
     // 本次 mock 未选任何项 → 落到推荐候选（内核只认 recommended:true）
