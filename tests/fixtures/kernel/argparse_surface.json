@@ -477,6 +477,15 @@
     "required": null
    },
    {
+    "option": "--processor-path",
+    "dest": "processor_path",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--run-dir",
     "dest": "run_dir",
     "action": "store",
@@ -760,6 +769,15 @@
   "script": "skills/atf-admit-training-data/scripts/token_audit_provider.py",
   "args": [
    {
+    "option": "--progress-file",
+    "dest": "progress_file",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--processor-path",
     "dest": "processor_path",
     "action": "store",
@@ -808,6 +826,24 @@
     "choices": null,
     "default": null,
     "required": true
+   },
+   {
+    "option": "--processor-path",
+    "dest": "processor_path",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--progress-file",
+    "dest": "progress_file",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
    },
    {
     "option": "--min-pixels",
@@ -5397,6 +5433,15 @@
     "option": "--reuse-experiment-setup",
     "dest": "reuse_experiment_setup",
     "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--processor-path",
+    "dest": "processor_path",
+    "action": "store",
     "type": null,
     "choices": null,
     "default": null,
