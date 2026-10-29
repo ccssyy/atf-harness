@@ -846,6 +846,24 @@
     "required": null
    },
    {
+    "option": "--patch-size",
+    "dest": "patch_size",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 14,
+    "required": null
+   },
+   {
+    "option": "--merge-size",
+    "dest": "merge_size",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": 2,
+    "required": null
+   },
+   {
     "option": "--min-pixels",
     "dest": "min_pixels",
     "action": "store",
