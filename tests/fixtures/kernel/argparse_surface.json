@@ -3338,6 +3338,15 @@
   "script": "skills/atf-prepare-training/scripts/generate_iteration_config.py",
   "args": [
    {
+    "option": "--require-steps-floor",
+    "dest": "require_steps_floor",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--run-id",
     "dest": "run_id",
     "action": "store",
@@ -5468,6 +5477,15 @@
    {
     "option": "--reuse-experiment-setup",
     "dest": "reuse_experiment_setup",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--allow-below-steps-floor",
+    "dest": "allow_below_steps_floor",
     "action": "store_true",
     "type": null,
     "choices": null,
