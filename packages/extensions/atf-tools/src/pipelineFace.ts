@@ -744,7 +744,8 @@ export const negativeRatioApprovalLine = (band: string): string => {
 /** 构造参数确认段（仅 experiment_setup 段追加）：三行如实呈现确认态与建议值。
  *
  *  「缺省不静默」：未确认一律明说对应 kind 不生成，不让缺省偷偷生效；
- *  有 agent 建议时把建议值、理由与出处校验态一起摆到卡上（建议不自动生效）。 */
+ *  有 agent 建议时把建议值、理由与出处校验态一起摆到卡上（建议值作为默认倍数生效，
+ *  卡上可改；targeted 的建议仍须显式采纳）。 */
 export const constructionParamsApprovalLines = (input: {
   groupingConfirm: boolean;
   mode5Random: number | undefined;
@@ -1736,8 +1737,8 @@ export const buildPipelineTool = (
         description:
           "随机子集增强的倍数（仅 experiment_setup 段有意义，其它段忽略；0=不启用）：倍数＝产出总量相对" +
           "「基线行数」的倍数，基线行数＝每页一条全字段的行数（一页一行，即页数）；分组样本与重点字段组合样本" +
-          "产出的行不计入基线。倍数不得固定值——要么用户给定、要么 agent 按数据分析建议后用户确认。" +
-          "不给＝未确认，本轮不生成增强样本（卡面明示，不静默用缺省）",
+          "产出的行不计入基线。倍数不固定：显式给定 > 统计件里的建议倍数 > 默认最低倍数。" +
+          "不给＝按默认最低倍数生成（这是标准构造动作），卡面会问你沿用还是改",
       },
       mode5_advice_stats: {
         type: "object",
@@ -1745,7 +1746,9 @@ export const buildPipelineTool = (
         description:
           "随机子集增强建议所依据的数据规模统计（Mode5AdviceStats/v1：images／full_field_baseline_rows／可选 suggested_mode5_random）" +
           "（仅 experiment_setup 段有意义）：给出时内核据此算建议值与理由并随卡呈现；" +
-          "建议不自动生效（effective:false），用户仍须给 mode5_random 才定值。可直接给对象，无需自行落盘",
+          "建议值作为默认倍数生效（卡上可改，显式 mode5_random 覆盖）；内核只给可行域" +
+          "（预算允许哪些倍数、上限几倍）并校验，超上限按上限执行且在回执标 agent_advice_capped。" +
+          "可直接给对象，无需自行落盘",
       },
       targeted_advice: {
         type: "object",
