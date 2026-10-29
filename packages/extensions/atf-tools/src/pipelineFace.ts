@@ -1627,9 +1627,9 @@ export const buildPipelineTool = (
       // 于是确认与建议永远到不了内核（真机实证：模型自述「未带任何覆盖参数」）。
       // 这里把「不传的后果」写进工具描述——系统知识不靠用户提示词承载。
       `【构造参数必须作为工具参数显式传入，只在回复文字里说明不会被采纳】experiment_setup 段另有三个` +
-      `确认／建议参数：grouping_confirm（确认当前分组方案；不传＝未确认，mode1 样本本轮不生成）、` +
-      `mode5_random（mode5 增广倍数；不传＝未确认，mode5 本轮不生成）、` +
-      `targeted_advice（targeted 组合建议：必带字段／字段数区间／理由／出处，格式 ` +
+      `确认／建议参数：grouping_confirm（确认当前分组方案；不传＝未确认，本轮不生成分组样本）、` +
+      `mode5_random（随机子集增强的倍数；不传＝未确认，本轮不生成增强样本）、` +
+      `targeted_advice（重点字段组合建议：必带字段／字段数区间／理由／出处，格式 ` +
       `{schema_version:"TargetedRulesAdvice/v1",suggested_carry_fields:[…],suggested_min_fields,suggested_max_fields,` +
       `reason,evidence:["field:signal",…],effective:false}；不传＝未提供建议）。` +
       `当用户已确认分组方案、或你已据字段风险分析得出建议时，必须把这些值通过对应参数传入；` +
@@ -1709,22 +1709,22 @@ export const buildPipelineTool = (
         type: "boolean",
         description:
           "确认当前分组方案为选定方案（仅 experiment_setup 段有意义，其它段忽略）：" +
-          "确认后内核按组逐图各一条生成 mode1 样本；不给＝未确认，mode1 本轮不生成（卡面明示）。" +
+          "确认后内核按分组逐组各生成一条样本；不给＝未确认，本轮不生成分组样本（卡面明示）。" +
           "分组必须用户确认——agent 给出的只是候选，不得默认成立",
       },
       mode5_random: {
         type: "number",
         description:
-          "mode5 增广倍数（仅 experiment_setup 段有意义，其它段忽略；0=不启用）：倍数＝产出总量相对" +
-          "「基线行数」的倍数，基线行数＝mode0 全字段透传的行数（一页一行，即页数）；mode1 与 targeted " +
+          "随机子集增强的倍数（仅 experiment_setup 段有意义，其它段忽略；0=不启用）：倍数＝产出总量相对" +
+          "「基线行数」的倍数，基线行数＝每页一条全字段的行数（一页一行，即页数）；分组样本与重点字段组合样本" +
           "产出的行不计入基线。倍数不得固定值——要么用户给定、要么 agent 按数据分析建议后用户确认。" +
-          "不给＝未确认，mode5 本轮不生成（卡面明示，不静默用缺省）",
+          "不给＝未确认，本轮不生成增强样本（卡面明示，不静默用缺省）",
       },
       mode5_advice_stats: {
         type: "object",
         additionalProperties: true,
         description:
-          "mode5 建议所依据的数据规模统计（Mode5AdviceStats/v1：images／full_field_baseline_rows／可选 suggested_mode5_random）" +
+          "随机子集增强建议所依据的数据规模统计（Mode5AdviceStats/v1：images／full_field_baseline_rows／可选 suggested_mode5_random）" +
           "（仅 experiment_setup 段有意义）：给出时内核据此算建议值与理由并随卡呈现；" +
           "建议不自动生效（effective:false），用户仍须给 mode5_random 才定值。可直接给对象，无需自行落盘",
       },
@@ -1732,7 +1732,7 @@ export const buildPipelineTool = (
         type: "object",
         additionalProperties: true,
         description:
-          "targeted 组合的 agent 建议（TargetedRulesAdvice/v1）（仅 experiment_setup 段有意义）：" +
+          "重点字段组合的 agent 建议（TargetedRulesAdvice/v1）（仅 experiment_setup 段有意义）：" +
           "字段 suggested_carry_fields／suggested_min_fields／suggested_max_fields／reason／" +
           "evidence（形如 container_no:occurrence_rate，须能在本批风险信号里查到）／effective（必须 false）。" +
           "建议不自动生效、随卡呈现；必带字段与区间须由风险分析得出，无理由或无出处会被拒。可直接给对象，无需自行落盘",
@@ -1813,7 +1813,7 @@ export const buildPipelineTool = (
           "显式给出时须为 PromptFieldConfig/v1：顶层 document_type／document_zh／" +
           "template（含 {extraction_info} 占位符）／training_excluded_fields（不排除写 []）／" +
           "fields[]，fields 每项须含 field_id／zh／definition／group；group 键声明语义分组" +
-          "（mode1 按 group 逐组生成）。传入其他形态会得到一次性全量缺失清单与最小合法骨架。",
+          "（按分组逐组各生成一条）。传入其他形态会得到一次性全量缺失清单与最小合法骨架。",
       },
       train_all: {
         type: "boolean",
@@ -2114,7 +2114,7 @@ export const buildPipelineTool = (
               questions: [formAskQuestion({
                 id: `construction-${args.run_id}`,
                 question: `构造参数确认 — ${args.run_id}`,
-                header: "targeted 组合建议",
+                header: "重点字段组合",
                 detail: [
                   `agent 建议：必带 ${adv.carry.length > 0 ? adv.carry.join("、") : "(无)"}；字段数 ${range}`,
                   `理由：${adv.reason}`,

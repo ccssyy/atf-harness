@@ -325,8 +325,10 @@ describe("C2 用户可见面纪律", () => {
     expect(confirm.toLowerCase()).not.toContain("lane");
     expect(confirm).not.toContain("A/B");
     expect(confirm).not.toContain("批次");
-    // 分组确认仍按原语义（不传＝未确认，mode1 不生成）
-    expect(confirm).toContain("不给＝未确认，mode1 本轮不生成");
+    // 分组确认仍按原语义（不传＝未确认，本轮不生成分组样本）——且**用业务话术表述**：
+    // 描述里出现内部代号（mode0/mode1/mode5/targeted）模型就会原样复述到用户面（10-29 现场）。
+    expect(confirm).toContain("不给＝未确认，本轮不生成分组样本");
+    expect(confirm).not.toMatch(/mode[015]|targeted/i);
 
     // 卡面：审批卡文案也不许出现内部词
     const ws = tempRoot("c2-words-");

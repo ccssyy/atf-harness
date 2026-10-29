@@ -2336,7 +2336,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       eval_assets_dir: { type: "string", description: "L1 EvaluationAssets/v1 目录（test_images.json+eval_labels.jsonl）（仅 action=start 必填；status 省略）" },
       field_config: { type: "string", description: "PromptFieldConfig/v1 JSON 路径（可选——缺省自动继承 <runDir>/experiment-setup/field-config.json 并与训练记录指纹核对；显式传入即覆盖，文件指纹漂移仅告警不阻断。注意模板骨架（template）漂移是硬拒：记录里的 template 指纹对不上当前文件即返回 eval_template_drift，需先确认，确要换骨架时带 accept_template_drift=true 重推）" },
       accept_template_drift: { type: "boolean", description: "显式接受字段配置的模板骨架差异（可选，缺省 false＝fail-closed）：仅在显式传 field_config 且确认要换模板骨架时给出；放行后回执标 template_drift_accepted=true" },
-      prompt_mode: { type: "string", enum: ["mode0", "mode1"], description: "抽取方式（可选——缺省继承训练声明，无声明即 mode0）：mode0＝每页一次、全字段抽取；mode1＝按字段分组、每页×每组，适合字段多/相互干扰时。默认跟训练一致，不要自行切换" },
+      prompt_mode: { type: "string", enum: ["mode0", "mode1"], description: "抽取方式（可选——缺省继承训练声明，无声明即每页一条全字段）：每页一条全字段＝每页一次、全字段抽取；按分组逐组各一条＝按字段分组、每页×每组，适合字段多/相互干扰时。默认跟训练一致，不要自行切换" },
       service_config: { type: "string", description: "EvalServiceConfig/v1 JSON 路径（仅 action=start 必填；status 省略。按 SKILL.md 作者声明：port/TP/gpu_memory_utilization/max_model_len/mm 像素对/adapters 挂载表——adapters[].path 即本次 staging 的 adapter 源）" },
       env_profile: { type: "string", description: `环境档案名（仅 action=start 需要，可省略；status 省略）——评估环境配置层，确认报告九必报项⑤端口/连接的数据源。省略时按实例目录 <ATF_INSTANCE_ROOT|ATF_HOME>/.atf/env-profiles 自动派生：目录内恰一份含 eval_env 的档案即自动选用（回执带 env_profile_source=instance_default(<名>)）；多份＝返回 env_profile_ambiguous 列候选（让用户选），此时不要自拟档案名——${envProfileCatalog}` },
       deploy: { type: "string", description: "可选 deploy.local.yaml 路径（显式机器事实，优先于环境档案）" },
