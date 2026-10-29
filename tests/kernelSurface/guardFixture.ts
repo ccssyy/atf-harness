@@ -77,6 +77,13 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   mode5_random: "--mode5-random",
   mode5_advice_stats: "--mode5-advice-stats",
   targeted_advice: "--targeted-advice",
+  // D145/D163：重点字段组合计划（T/K/N 由 agent 给）与登记期输入声明
+  targeted_plan: "--targeted-plan",
+  style_clusters_source: "--style-clusters-source",
+  // 看图通道：判读件直传 / 只导出页清单 / 波次容量
+  visual_readings: "--visual-readings",
+  visual_plan_only: "--visual-sample-plan",
+  visual_wave_size: "--visual-wave-size",
   targeted_accept: "--targeted-accept",
   risk_signals: "--risk-signals",
   negative_ratio_target: "--negative-ratio-target",

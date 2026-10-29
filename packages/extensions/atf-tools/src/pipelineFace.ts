@@ -107,7 +107,7 @@
 import { execFile } from "node:child_process";
 import { DANGER_FULL_ACCESS_SANDBOX, sandboxModeOf } from "./trainingPreset.js";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
@@ -439,6 +439,56 @@ export const fieldGroupsOf = (path: string): GroupingProposalGroup[] | null => {
   return buckets.size === 0 ? null : [...buckets].map(([name, ids]) => ({ name, fields: ids }));
 };
 
+/** D163：登记输入件（register 段落盘的分组来源与版式簇形态）。 */
+export const REGISTRATION_INPUTS_FILE = "registration-inputs.json";
+
+/** 登记输入件路径（run/config/ 下，与内核落点一致）。 */
+export const registrationInputsPathOf = (runDir: string): string =>
+  join(runDir, "config", REGISTRATION_INPUTS_FILE);
+
+/** 读登记落账的分组来源；文件缺席或坏行返回 null（按未登记处理，走既有链路）。 */
+export const readRegistrationGrouping = (
+  runDir: string,
+): { source: string; providedBy: string; basis: string; groupCount: number; fieldCount: number } | null => {
+  if (runDir.trim() === "") return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(registrationInputsPathOf(runDir), "utf8")) as unknown;
+  } catch {
+    return null;
+  }
+  const root = asRecordOf(parsed);
+  const grouping = root === null ? null : asRecordOf(root["grouping"]);
+  if (grouping === null) return null;
+  const asString = (value: unknown, fallback: string): string =>
+    (typeof value === "string" && value.trim() !== "" ? value.trim() : fallback);
+  const asNumber = (value: unknown): number => (typeof value === "number" ? value : 0);
+  return {
+    source: asString(grouping["source"], "absent"),
+    providedBy: asString(grouping["provided_by"], "agent"),
+    basis: asString(grouping["basis"], "none"),
+    groupCount: asNumber(grouping["group_count"]),
+    fieldCount: asNumber(grouping["field_count"]),
+  };
+};
+
+/** D163：分组来路判定（user/agent）。
+ *
+ *  分组内容只是字段配置里的字符串，从内容反推不出谁写的，只能按文件来路判：落在
+ *  run 的实验门/配置落点即本系统生成，属 agent 写入；其余位置（工作区既有文件、
+ *  用户目录）按用户提供。判不出一律按 agent——宁可多问一次，也不把 agent 自拟当
+ *  成用户的决定（D-f）。
+ */
+export const groupingProvidedByOf = (runDir: string, fieldConfigPath: string): "user" | "agent" => {
+  const raw = fieldConfigPath.trim();
+  if (raw === "" || runDir.trim() === "") return "agent";
+  const resolved = resolve(raw);
+  const agentDirs = [join(runDir, "experiment-setup"), join(runDir, "config")];
+  return agentDirs.some((dir) => resolved === dir || resolved.startsWith(`${dir}${sep}`))
+    ? "agent"
+    : "user";
+};
+
 /** 字段业务名（读显式字段配置；读不到＝空表）——分组表显示「货名（goods_name）」而非裸 id。 */
 export const fieldNamesOfFieldConfig = (path: string): ReadonlyMap<string, string> => {
   const names = new Map<string, string>();
@@ -530,6 +580,26 @@ export const resolveGroupingFace = async (input: {
    *  缺省 undefined＝按未确认处理（宁可多问一次，不把 agent 自拟当用户决定）。 */
   fieldChoiceConfirmed?: boolean;
 }): Promise<GroupingFace | { ok: false; errors: string[] }> => {
+  // D163：分组来源以登记落账为准，不再靠账本反推——账本只在"卡上选过"时才有记录，
+  // 用户从外部带进来的分组永远没有记录，用账本判"给没给"必然把预给的判成没给。
+  const registrationGrouping = readRegistrationGrouping(input.runDir ?? "");
+  const registrationSource = registrationGrouping?.source ?? null;
+  const mustAskGrouping =
+    registrationSource === "agent_written" || registrationSource === "degenerate";
+  if (registrationSource === "user_supplied") {
+    const declared = fieldGroupsOf(input.fieldConfigPath) ?? [];
+    return {
+      source: "user_provided",
+      decision: "none",
+      candidate_name: null,
+      groups: declared,
+      evidence: { registration_inputs: registrationInputsPathOf(input.runDir ?? "") },
+      payload: null,
+      note: declared.length > 0
+        ? `分组按字段配置里的 group 走（${String(declared.length)} 组）——这套分组是你本次任务里提供的，不再重复确认。`
+        : "分组按字段配置里的契约投影走——这套分组是你本次任务里提供的，不再重复确认。",
+    };
+  }
   const provided = fieldGroupsOf(input.fieldConfigPath);
   if (provided !== null) {
     // D-f（owner 2026-10-28）：判据从「文件里有 group」改成「用户确认过」。
@@ -545,7 +615,7 @@ export const resolveGroupingFace = async (input: {
       input.runDir !== undefined
         ? readGroupingDecision(input.runDir, fieldsDigestOf(input.fieldConfigPath)).ok
         : false;
-    if (groupingConfirmed || !hasProposal) {
+    if (!mustAskGrouping && (groupingConfirmed || !hasProposal)) {
       return {
         source: "user_provided",
         decision: "none",
@@ -586,6 +656,19 @@ export const resolveGroupingFace = async (input: {
         `沿用你 ${record.decided_at} 选定的「${record.candidate_name}」（${String(record.groups.length)} 组）`
         + `——同一次 run 里不重复问；字段集合与当时一致（${String(record.field_count)} 个字段）。`
         + `要换分组直接说，我重新出卡再选一次。`,
+    };
+  }
+  if (mustAskGrouping) {
+    return {
+      source: "proposal",
+      decision: "none",
+      candidate_name: null,
+      groups: fieldGroupsOf(input.fieldConfigPath) ?? [],
+      evidence: { registration_inputs: registrationInputsPathOf(input.runDir ?? "") },
+      payload: null,
+      note: registrationSource === "degenerate"
+        ? "字段配置是一字段一组，没形成业务分组——先问用户想要的分组（或单独一图一条），再把候选传进来；不替他定"
+        : "这份分组是助手写进配置的，不是用户确认过的——先问用户要哪套分组，再把选定候选传进来",
     };
   }
   if (input.proposalRaw === undefined || input.proposalRaw === null) {
@@ -1697,6 +1780,15 @@ export const buildPipelineTool = (
           "确认后再传 on 或 off 重跑；禁止在 auto 被拒后自行猜一个值重跑。" +
           "对用户表述用业务语言：问「这批数据是否已经按版式分好组」，不要念枚举值",
       },
+      style_clusters_source: {
+        type: "string",
+        enum: ["auto", "directory", "placeholder"],
+        description:
+          "版式簇来源声明（仅 register 段有效，其它段忽略）：不给＝按目录形态判——来源目录分了多个子目录时会拒绝，" +
+          "回执列出各目录页数并问明「这些子目录是按版式分的吗」；答是就传 directory 重跑（目录名即簇，切分按你的划分走），" +
+          "答否就传 placeholder（目录只是批次/来源/时间组织，不参与切分分层）。" +
+          "对用户表述用业务语言：问「这些子目录是按版式分的吗」，不要念枚举值",
+      },
       merge_small_clusters: {
         type: "boolean",
         description:
@@ -1758,6 +1850,28 @@ export const buildPipelineTool = (
           "字段 suggested_carry_fields／suggested_min_fields／suggested_max_fields／reason／" +
           "evidence（形如 container_no:occurrence_rate，须能在本批风险信号里查到）／effective（必须 false）。" +
           "建议不自动生效、随卡呈现；必带字段与区间须由风险分析得出，无理由或无出处会被拒。可直接给对象，无需自行落盘",
+      },
+      visual_readings: {
+        type: "object",
+        additionalProperties: true,
+        description:
+          "看图判读结果（仅候选构造段有意义）：你直接看数据原图后，把结论按结构化回填——" +
+          "fields[{field_id, signals[], evidence[{page, note}]}] 逐个字段报「找得到吗、分得清吗」，" +
+          "pages[{page, signals[], note}] 报整页形态（版式风格、表格形态、成像质量），" +
+          "coverage{pages_reviewed[], pages_remaining, incomplete_reason} 报看过多少页。" +
+          "字段级与页级信号是两套闭集，写错位置会被拒并指路。必须带页名证据，不许只报结论",
+      },
+      visual_plan_only: {
+        type: "boolean",
+        description:
+          "只要看图清单（仅候选构造段有意义）：为 true 时本步只导出页清单与看图包（整页图 + 每字段局部图），" +
+          "返回清单路径与各自路径；看完图后再带 visual_readings 调一次做正式构造",
+      },
+      visual_wave_size: {
+        type: "number",
+        description:
+          "看图波次容量（配合 visual_plan_only）：每波多少页由你按本次能看多少张决定，不设固定阈值；" +
+          "清单会按此给你的页分批，便于逐波看完并报覆盖",
       },
       targeted_plan: {
         type: "object",
@@ -1895,7 +2009,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown> },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -2319,6 +2433,36 @@ export const buildPipelineTool = (
       // 也显式上线解析值；E10d：allow_small_cluster_test 仅 family_split 且 true 才追加
       // 开关，缺省不出现在 argv，其它段不追加不报错）；禁拼第二套路径。
       const argv: string[] = ["--workspace", workspacePath, "--run-id", args.run_id, "--stage", args.stage];
+      // 看图通道（仅候选构造段）：模型直接读图 → 交判读结果；或先只要页清单。
+      // 旗标名与中间文件路径不下发给模型——工具参数即接口，模型只负责「看」和「报」。
+      let visualSummary: Record<string, unknown> | undefined;
+      if (args.stage === "candidate_build") {
+        const visualPrepDir = resolveRunSubdir(runDir, "prep");
+        mkdirSync(visualPrepDir, { recursive: true });
+        if (args.visual_plan_only === true) {
+          // 只导出页清单 + 看图包（整页图 + 字段局部），本步不做信号计算。
+          const planPath = join(visualPrepDir, "visual-sample-plan.json");
+          const bundleDir = join(visualPrepDir, "visual-bundles");
+          argv.push("--visual-sample-plan", planPath, "--visual-bundle-out", bundleDir,
+                    "--visual-channel", "disabled");
+          if (typeof args.visual_wave_size === "number") {
+            argv.push("--visual-wave-size", String(Math.max(1, Math.trunc(args.visual_wave_size))));
+          }
+          visualSummary = {
+            mode: "plan_only",
+            plan_path: planPath,
+            bundle_dir: bundleDir,
+            note: "本步只导出看图清单（含整页图与字段局部图路径）；看完后带 visual_readings 再调一次做正式构造",
+          };
+        } else if (args.visual_readings !== undefined) {
+          // 交判读结果：声明「能看」并落盘判读件，内核据此判 available / partial。
+          const readingsPath = join(visualPrepDir, "visual-readings.json");
+          writeFileSync(readingsPath, JSON.stringify(args.visual_readings, null, 1) + "\n", "utf-8");
+          argv.push("--visual-readings", readingsPath, "--visual-channel", "enabled");
+          visualSummary = { mode: "readings", readings_path: readingsPath };
+        }
+        // 两者都不给：不传 → 内核默认 disabled（无图分析，报告如实披露缺版式/语义分量）
+      }
       if (args.stage === "register") {
         // D-b：传前按内核同一判据校验（批根 + 单据类型 → 子目录必须存在），
         // 不把「拼成 …/awb/awb 不存在」这种可自证的错误留到内核侧只有一句「不可解析」。
@@ -2349,6 +2493,14 @@ export const buildPipelineTool = (
       if (args.stage === "training_prep" && (needsBaseModel || baseModelPath !== "")) {
         argv.push("--base-model", baseModelPath);
       }
+      if (args.stage === "register") {
+        const clustersSource = typeof args.style_clusters_source === "string"
+          ? args.style_clusters_source.trim()
+          : "";
+        if (clustersSource === "directory" || clustersSource === "placeholder" || clustersSource === "auto") {
+          argv.push("--style-clusters-source", clustersSource);
+        }
+      }
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");
       // 显式声明「合并相近小类」：内核只在声明时合并，缺省保持产品原语义（拒绝并给三条出路）
@@ -2377,6 +2529,10 @@ export const buildPipelineTool = (
           });
         }
         argv.push("--field-config", precheck.resolved);
+        // D163：分组来路声明（分组内容是字符串，反推不出谁写的；本层按文件来路声明）
+        if (args.stage === "register" || args.stage === "experiment_setup") {
+          argv.push("--grouping-provided-by", groupingProvidedByOf(runDir, precheck.resolved));
+        }
       }
       // E8·H1：装配模式旗标（仅 training_prep 段且显式 true 才追加——缺省不出现在
       // argv，其它段不追加不报错；内核 b12 声明面 store_true）。
@@ -2729,6 +2885,11 @@ export const buildPipelineTool = (
         // 完全权限档下审批已免，这一行就是唯一凭据（user＝卡上选定；agent＝代决，无人确认）。
         ...(args.stage === "experiment_setup" && constructionDecidedBy !== undefined
           ? { construction_decided_by: constructionDecidedBy }
+          : {}),
+        // 看图通道（仅候选构造段）：把「只导出了清单」与「已交判读件」两态如实回传，
+        // 模型据此决定是继续看图还是直接跑正式构造。
+        ...(args.stage === "candidate_build" && visualSummary !== undefined
+          ? { visual: visualSummary }
           : {}),
         // D99：负样本带标注（仅 experiment_setup 段）——「缺省不静默」同 D89：显式给标
         // explicit，未给按构造器常量带标注 kernel_default（值与来源两侧可对账；其它段不加两键）

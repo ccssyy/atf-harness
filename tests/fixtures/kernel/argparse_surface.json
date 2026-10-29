@@ -682,6 +682,24 @@
     "required": null
    },
    {
+    "option": "--visual-wave-size",
+    "dest": "visual_wave_size",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--visual-bundle-out",
+    "dest": "visual_bundle_out",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--sample-plan-out",
     "dest": "sample_plan_out",
     "action": "store",
@@ -5170,6 +5188,79 @@
     "type": null,
     "choices": "<expr:list(STAGE_ORDER)>",
     "default": null,
+    "required": null
+   },
+   {
+    "option": "--visual-channel",
+    "dest": "visual_channel",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "enabled",
+     "disabled"
+    ],
+    "default": "disabled",
+    "required": null
+   },
+   {
+    "option": "--visual-readings",
+    "dest": "visual_readings",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--visual-sample-plan",
+    "dest": "visual_sample_plan",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--visual-bundle-out",
+    "dest": "visual_bundle_out",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--visual-wave-size",
+    "dest": "visual_wave_size",
+    "action": "store",
+    "type": "<expr:int>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--style-clusters-source",
+    "dest": "style_clusters_source",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "auto",
+     "directory",
+     "placeholder"
+    ],
+    "default": "auto",
+    "required": null
+   },
+   {
+    "option": "--grouping-provided-by",
+    "dest": "grouping_provided_by",
+    "action": "store",
+    "type": null,
+    "choices": [
+     "user",
+     "agent"
+    ],
+    "default": "user",
     "required": null
    },
    {
