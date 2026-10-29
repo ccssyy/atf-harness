@@ -4,6 +4,7 @@
  * 拆分——本工具 A-E14b 增 training_prep 段 base_model_path 显式下传；内核 main E10a
  * （2eed2c2，未发版，pin 不动）起 family_split 段 --auto-style-cluster 三态——本工具
  * E10b 增 auto_style_cluster 透传；内核 main E10e/E10f 拒绝带 user_message 业务文案＋
+ * --merge-small-clusters——显式声明「合并相近小类」（小簇并入最近簇后再按簇 8:2）
  * --allow-small-cluster-test——本工具 E10d 拒绝面业务化：user_message 原样透传
  * （未带按业务语言兜底并标注来源）、note 改「原样告知 user_message」指引、增
  * allow_small_cluster_test 透传；D89 增 experiment_setup 段 grouping_preset 透传
@@ -1674,6 +1675,13 @@ export const buildPipelineTool = (
           "确认后再传 on 或 off 重跑；禁止在 auto 被拒后自行猜一个值重跑。" +
           "对用户表述用业务语言：问「这批数据是否已经按版式分好组」，不要念枚举值",
       },
+      merge_small_clusters: {
+        type: "boolean",
+        description:
+          "版式分组过碎时的出路之一：把过小的分组并入最近的组再切分（仅 family_split 段有意义，其它段忽略）。" +
+          "收到「每类不足 N 页无法留出测试集」类拒绝时，先问用户选哪条出路：合并相近小类／全部用于训练／" +
+          "每个小类各留 1 页做测试；用户明确说「合并小类」才传 true，缺省不开、不自动推断",
+      },
       allow_small_cluster_test: {
         type: "boolean",
         description:
@@ -1852,7 +1860,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown> },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown> },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -2240,6 +2248,8 @@ export const buildPipelineTool = (
       }
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");
+      // 显式声明「合并相近小类」：内核只在声明时合并，缺省保持产品原语义（拒绝并给三条出路）
+      if (args.stage === "family_split" && args.merge_small_clusters === true) argv.push("--merge-small-clusters");
       // D82：单据类型三件透传（给才追加、trim 后非空才上线，缺省不上送——内核自行推断，
       // doc_type 推断不出即 blocked；各段均有效）。与上方段特定追加逻辑并存，零触碰其语义。
       // E8·H1：assemble 模式与 doc_type 单类语义互斥（内核 argparse 同裁）——true 时
@@ -2348,7 +2358,15 @@ export const buildPipelineTool = (
       // 路径空白＝「按未给处理」不追加，只传内核已声明参数、零新增语义）。
       if (args.train_all === true) argv.push("--train-all");
       const assignmentSource = typeof args.assignment_source === "string" ? args.assignment_source.trim() : "";
-      if (assignmentSource !== "") argv.push("--assignment-source", assignmentSource);
+      if (assignmentSource !== "") {
+        // 给了清单就是要用它：内核 --split-assignment-mode 缺省是 recompute_with_policy
+        // （清单只当审计输入，分区仍由自动分层重算）。不显式切模式，清单会被**完全忽略**——
+        // 真机实测（awb-e2e-1028）：同份 3 页被自动聚类拆到不同簇 → 判「不可分」；
+        // 改人工清单（明确 10/2、同份同侧）后仍撞 split_partition_empty:test，
+        // 因为清单根本没生效。故 assignment_source 在场即切清单模式。
+        argv.push("--assignment-source", assignmentSource);
+        argv.push("--split-assignment-mode", "source_assignment");
+      }
       if (args.reuse_experiment_setup === true) argv.push("--reuse-experiment-setup");
       // D108 harness 半：provider/retry 旗标透传（内核全局参数、不按段 gate——给才追加：
       // token_provider trim 非空才上线（路径合法性＝内核闸单源，harness 不复制）；

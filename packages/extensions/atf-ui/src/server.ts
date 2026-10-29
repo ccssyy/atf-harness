@@ -26,7 +26,7 @@ import {
 } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { sessionDomainRefusal, listTrainingSessionCmdlines, probeTrainingEvidence, resolveSessionName, trainingSessionBase } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
-import { probeAndRecord } from "../../../../src/core/workspace/trainProbe.js";
+import { probeAndRecord, OOM_PATTERN } from "../../../../src/core/workspace/trainProbe.js";
 import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/workspace/oomFallback.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { hasSegmentFact, stageSummarySegmentFacts } from "../../../../src/core/workspace/segmentFacts.js";
@@ -40,6 +40,7 @@ import {
 import { probeEvalServiceHealth, type EvalServiceHealthFace } from "../../../../src/core/workspace/evalServiceHealth.js";
 import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readNumTrainEpochs, trainerLogPathOf, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
 import { trainObsTick, readTrainlogTail, resetTrainObsForTest, type TrainlogTailFace } from "../../../../src/core/workspace/trainObsSync.js";
+import { guardTick } from "../../../../src/core/workspace/runGuard.js";
 import { bucketedRunEntries, flatRunDirNames, resolveRunDir, resolveRunFile, runFileCandidates, runRelPathV3, RUN_MARKER_RELS, sweepAnsweredPendings, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
 import { displayOf, buildRunCandidates, writeDisplay } from "../../../../src/core/workspace/runDisplay.js";
 import {
@@ -1615,6 +1616,32 @@ export async function tickOnce(resolved: AtfUiConfig): Promise<void> {
           logTailText: logTail,
           nowMs: Date.now(),
         });
+        // 守卫（RunGuard）：训练与推理共用同一套判定——定时汇报进度、健康态、恢复接口。
+        // 本处接训练面（推理面复用同一 decideGuard，接 eval_progress 后同一入口）；
+        // relaunch 缺省不注入＝只报不动手（fail-closed：自动拉起必须带账本/端口/双开护栏）。
+        try {
+          const guardProgress = readProgress(runDir);
+          const guardRound = typeof guardProgress?.round === "number" ? guardProgress.round : null;
+          const guardTotal = typeof guardProgress?.total_rounds === "number" ? guardProgress.total_rounds : null;
+          const guardUpdated = typeof guardProgress?.updated_at === "string" ? Date.parse(guardProgress.updated_at) : NaN;
+          const guardLastProgress = trainerLogMtimeMs ?? (Number.isFinite(guardUpdated) ? guardUpdated : null);
+          await guardTick({
+            runDir,
+            facts: {
+              phase: "train",
+              active: true,
+              done: run.segments.training === true,
+              processEvidence: evidenceProbe.usable ? evidenceProbe.evidence[run.run_id] === true : null,
+              lastProgressAtMs: guardLastProgress,
+              percent: guardRound !== null && guardTotal !== null && guardTotal > 0
+                ? Math.round((guardRound / guardTotal) * 100) : null,
+              progressLabel: guardRound !== null && guardTotal !== null ? `${guardRound}/${guardTotal} 轮` : null,
+              exitCode: null,
+              oom: alert !== null && OOM_PATTERN.test(alert.reason),
+              nowMs: Date.now(),
+            },
+          });
+        } catch { /* 守卫 fail-open：不影响既有观测面与 OOM 降档链路 */ }
         // 批㊶-Q 段3：OOM 自动降档重发（两档统一生效）——护栏全 fail-closed（状态文件/bs 已 1/
         // 补丁失败/端口占用/DRY_RUN 不过均只通报不重发）；通报先于重发落 alerts.json。
         if (alert !== null) {
