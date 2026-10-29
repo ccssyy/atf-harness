@@ -60,8 +60,42 @@ UAT_PUBLIC_HOST="124.220.53.207"
 UAT_PUBLIC_PORT=13081
 UAT_REMOTE_KEY_ENV="/root/.atf-harness/.env"
 SSH_KEY="/root/.ssh/id_ed25519_a800_uat"
-SSH_TARGET="root@172.18.0.20"
+UAT_CONTAINER="atf-uat"
 SSH_OPTS=(-i "$SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+
+# atf-uat 的 SSH 目标**禁写死 IP**（D148）：两容器在 docker 默认 bridge 上，容器重建后内网
+# 地址会变（2026-10-29 实测 .20→.6：发版首步 No route to host，旧脚本还把它归因成「容器内
+# 密钥 env 缺失」，排查方向被带偏）。dev 容器无 docker CLI / 无 socket / 无 DNS，故按
+# 「显式 env ＞ 实例 env 文件声明 ＞ 网段探测（认 3081 监听）」三级解析。
+resolve_uat_ssh_target() {
+  local explicit from_env ip
+  explicit="${ATF_UAT_SSH_TARGET:-}"
+  if [ -n "$explicit" ]; then printf '%s' "$explicit"; return 0; fi
+  if [ -f "$UAT_ENV" ]; then
+    from_env=$(grep -E '^export ATF_UAT_SSH_TARGET=' "$UAT_ENV" 2>/dev/null | tail -1 \
+      | sed -E "s/^export ATF_UAT_SSH_TARGET=['\"]?([^'\"]*)['\"]?$/\1/")
+    if [ -n "$from_env" ]; then printf '%s' "$from_env"; return 0; fi
+  fi
+  for ip in $(seq 2 30); do
+    if ssh "${SSH_OPTS[@]}" -o ConnectTimeout=1 "root@172.18.0.${ip}" \
+         'ss -ltn 2>/dev/null | grep -q ":3081 "' >/dev/null 2>&1; then
+      printf 'root@172.18.0.%s' "$ip"; return 0
+    fi
+  done
+  return 1
+}
+
+# SSH 失败归因（网络 ≠ 身份 ≠ 容器内文件缺失——三者混谈是 D148 的次生伤害）
+ssh_why() {
+  case "$1" in
+    *"No route to host"*|*"Connection refused"*|*"Connection timed out"*|*"Network is unreachable"*)
+      printf '网络不可达（%s 不是存活容器的内网地址）' "${SSH_TARGET:-?}" ;;
+    *"Permission denied"*|*"Host key verification"*|*"no such identity"*)
+      printf 'SSH 身份/主机校验失败（key=%s）' "$SSH_KEY" ;;
+    *) printf 'SSH 失败：%s' "$1" ;;
+  esac
+}
+
 DEPLOY_TIMEOUT_S=60
 
 log() { echo "[uat-deploy] $*"; }
@@ -75,13 +109,22 @@ if [[ -z "$TARGET" ]]; then
   die "无参调用（fail-closed——发版唯一触发＝owner 书面指定 commit/tag）"
 fi
 if [[ -f "$SSH_KEY" ]]; then :; else die "SSH 专用 key 不在位：${SSH_KEY}"; fi
+if ! SSH_TARGET=$(resolve_uat_ssh_target); then
+  die "无法定位 ${UAT_CONTAINER} 的 SSH 目标（网段探测 172.18.0.2-30 无 3081 监听命中）——先确认容器在跑（docker ps | grep ${UAT_CONTAINER}），或在 ${UAT_ENV} 声明 export ATF_UAT_SSH_TARGET=root@<容器内网IP> 固定指向"
+fi
+# 连通性前置：先分「网络/身份」，再谈容器内的文件（禁把 SSH 层失败说成 env 缺失）
+if ! SSH_PROBE_ERR=$(remote 'echo ok' 2>&1); then
+  die "SSH 连不上 ${SSH_TARGET}：$(ssh_why "$SSH_PROBE_ERR")"
+fi
 
 # ---------- --status：远端现态（不发版） ----------
 if [[ "$TARGET" == "--status" ]]; then
+  echo "SSH 目标（容器解析）:  ${SSH_TARGET}"
   echo "atf-uat checkout HEAD: $(remote "git -C ${UAT_REPO} rev-parse HEAD" 2>/dev/null || echo '（SSH/仓库未就绪）')"
   echo "uat describe:          $(remote "git -C ${UAT_REPO} describe --tags" 2>/dev/null || echo '—')"
   echo "主仓 HEAD:             $(git -C "$MAIN_REPO" rev-parse HEAD 2>/dev/null || echo '—')"
-  echo "dsh 进程/pid 文件:     $(remote "if [ -f ${UAT_PID} ] && kill -0 \$(cat ${UAT_PID} 2>/dev/null) 2>/dev/null; then echo alive; else echo dead; fi" 2>/dev/null || echo '—')"
+  echo "dsh 进程/pid 文件（uat_web_launch 形态不写该文件，不以此判活）:     $(remote "if [ -f ${UAT_PID} ] && kill -0 \$(cat ${UAT_PID} 2>/dev/null) 2>/dev/null; then echo alive; else echo dead; fi" 2>/dev/null || echo '—')"
+  echo "进程实际装载 commit:   $(remote "P=\$(pgrep -f 'apps/cli/src/bin.ts web --no-open --port ${UAT_PORT}' | head -1); C=\$(readlink /proc/\$P/cwd 2>/dev/null); R=\${C%%/vendor/*}; if [ -n \"\$R\" ]; then git -C \"\$R\" rev-parse --short HEAD 2>/dev/null; else echo 0; fi" 2>/dev/null || echo '—')"
   echo "实例监听:              $(remote "ss -tln 2>/dev/null | grep -q ':${UAT_PORT} ' && echo '${UAT_PORT} 在' || echo '不在'" 2>/dev/null || echo '—')"
   echo "容器内转发器:          $(remote "ss -tln 2>/dev/null | grep -q ':${UAT_PUBLIC_PORT} ' && echo '${UAT_PUBLIC_PORT} 在' || echo '不在'" 2>/dev/null || echo '—')"
   exit 0
