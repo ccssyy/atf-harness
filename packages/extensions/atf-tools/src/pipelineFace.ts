@@ -1873,6 +1873,14 @@ export const buildPipelineTool = (
           "答否就传 placeholder（目录只是批次/来源/时间组织，不参与切分分层）。" +
           "对用户表述用业务语言：问「这些子目录是按版式分的吗」，不要念枚举值",
       },
+      split_id: {
+        type: "string",
+        description:
+          "登记切分目录名（缺省＝walkthrough-<doc_type>）：同工作区多批内容不同的数据分别登记时必须换新名，" +
+          "否则撞既有切分证据 immutable 冲突（split_manifest_immutable_conflict——旧证据不可覆写）。" +
+          "登记段给值即透传；内容相同的重跑不需要传（同内容幂等）。对用户表述用业务语言：" +
+          "问「这批数据的切分目录叫什么名」，不要念参数名",
+      },
       merge_small_clusters: {
         type: "boolean",
         description:
@@ -2107,7 +2115,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -2697,6 +2705,13 @@ let visualSummary: Record<string, unknown> | undefined;
         if (clustersSource === "directory" || clustersSource === "placeholder" || clustersSource === "auto") {
           argv.push("--style-clusters-source", clustersSource);
         }
+      }
+      // N3：登记切分目录名透传（内核 --split-id 已声明，缺省 walkthrough-<doc_type>）——
+      // 同工作区多批内容不同的数据分别登记必须换名，否则撞 immutable 冲突且 agent 无解
+      // （S1 真机：被逼翻内核找出口）。显式给且 trim 非空才追加；register 段专用。
+      if (args.stage === "register") {
+        const splitId = typeof args.split_id === "string" ? args.split_id.trim() : "";
+        if (splitId !== "") argv.push("--split-id", splitId);
       }
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");
