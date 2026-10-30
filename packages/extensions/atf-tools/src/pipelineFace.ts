@@ -105,6 +105,39 @@
  * 判定账 <run>/analysis/decisions/decisions.jsonl 同源；旧内核无该块＝零键降级）。
  */
 import { execFile } from "node:child_process";
+
+/** D163/W6：分组确认后落账 inputs.json（resolved_via + groups + provenance）。
+ *
+ *  这是实验门"inputs_plan"来源的数据源——账本缺席/坏行时实验门回默认链（不猜）。
+ */
+const writeInputsGrouping = (
+  runDir: string,
+  entry: { resolved_via: string; groups: Record<string, string[]>; quote?: string | null },
+): void => {
+  const path = join(runDir, "config", "inputs.json");
+  let doc: Record<string, unknown> = {};
+  try {
+    doc = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  } catch {
+    doc = {};
+  }
+  doc.schema_version = "RunInputs/v1";
+  doc.grouping = {
+    ...(typeof doc.grouping === "object" && doc.grouping !== null ? doc.grouping : {}),
+    resolved_via: entry.resolved_via,
+    provenance: entry.resolved_via === "user_stated" ? "user_stated" : "agent_inferred",
+    quote: entry.quote ?? null,
+    groups: entry.groups,
+    decided_at: new Date().toISOString(),
+  };
+  try {
+    mkdirSync(join(runDir, "config"), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(doc, null, 1)}\n`, "utf8");
+  } catch {
+    // 落账失败不阻断主链——实验门读不到就回默认链（fail-open 到"必问"）
+  }
+};
+
 import { DANGER_FULL_ACCESS_SANDBOX, sandboxModeOf } from "./trainingPreset.js";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -808,6 +841,18 @@ export const resolveGroupingFace = async (input: {
         // 落账失败不改判选择本身（选择仍然本次生效），但必须如实说出「没存住」——
         // 静默失败＝下次又重问一遍，用户会以为系统没记住。
         decisionWriteNote = `（注意：选择已生效，但落账失败 ${String(cause).slice(0, 120)}——重跑可能再问一次）`;
+      }
+      // W6/D163：同步写 inputs.json（实验门 inputs_plan 来源）——卡上选定＝用户决定
+      if (input.runDir !== undefined) {
+        const groupMap: Record<string, string[]> = {};
+        for (const group of chosen.groups as unknown as Array<{ name: string; fields: string[] }>) {
+          groupMap[group.name] = group.fields;
+        }
+        writeInputsGrouping(input.runDir, {
+          resolved_via: registrationQuote != null ? "user_stated" : "user_confirmed",
+          groups: groupMap,
+          quote: registrationQuote,
+        });
       }
     }
     return {
@@ -2505,6 +2550,88 @@ const fieldCardSourceOf = (runDir: string): "labels" | "config" => {
 /** D163/P1-3：字段卡同 run 失败去重——账本缺席但本次会话已弹过且被跳过时不再重弹。 */
 const fieldCardAskedRuns = new Set<string>();
 
+
+
+/** D163/W3：prompt 选择落账 inputs.json.prompt（resolved_via）。 */
+const writeInputsPromptChoice = (
+  runDir: string,
+  entry: Record<string, unknown>,
+): void => {
+  const path = join(runDir, "config", "inputs.json");
+  let doc: Record<string, unknown> = {};
+  try {
+    doc = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  } catch {
+    doc = {};
+  }
+  doc.schema_version = "RunInputs/v1";
+  doc.prompt = {
+    ...(typeof doc.prompt === "object" && doc.prompt !== null ? doc.prompt : {}),
+    resolved_via: entry.resolved_via,
+    decided_at: new Date().toISOString(),
+  };
+  try {
+    mkdirSync(join(runDir, "config"), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(doc, null, 1)}\n`, "utf8");
+  } catch {
+    // 落账失败不阻断（fail-open 到内置缺省）
+  }
+};
+
+/** D163/W3：prompt 确认卡——材料抽取说明 vs 产品内置模板（atf-template-v1）。
+ *
+ *  owner 13:2x 裁定：训练 prompt 没从材料解析出来也要问；内置默认先摆出来。
+ *  卡通道缺席/被跳过 → 不替选，回执交 agent 追问（与字段卡同模式）。
+ */
+const askPromptChoice = async (
+  input: { runId: string; runDir?: string },
+  exec: { agent: unknown; signal: unknown },
+  svc: FormAskService,
+  materialHint: string | null,
+): Promise<Record<string, unknown>> => {
+  const hasMaterial = materialHint !== null;
+  const builtinDesc =
+    "产品内置抽取模板（atf-template-v1）：抽取任务描述 + 字段视图（字段名/定义/输出模式 flat|grouped）"
+    + " + 坐标声明行；支持整图平铺与分组两种输出形态，坐标空间自动匹配";
+  const detail = hasMaterial
+    ? `材料里带抽取说明（${materialHint}）。训练 prompt 用你给的这份，还是产品内置模板？`
+    : "材料里没有抽取说明。训练 prompt 用产品内置模板吗？\n\n内置模板结构：\n· 抽取任务描述（文档类型/输出模式）\n"
+      + "· 字段视图（逐字段：字段名、定义、输出模式 flat 或 grouped）\n· 坐标声明行（bbox 坐标空间，自动匹配模型）";
+  const answers = await svc.ask({
+    questions: [{
+      id: `prompt-choice-${input.runId}`,
+      question: `训练 prompt 用哪套？— ${input.runId}`,
+      header: "训练prompt",
+      detail,
+      options: hasMaterial
+        ? [
+            { label: "用材料里的抽取说明", description: "按你提供的说明构造 prompt" },
+            { label: "用产品内置模板", description: builtinDesc },
+          ]
+        : [
+            { label: "用产品内置模板", description: builtinDesc + "（推荐——没有材料时的缺省）" },
+            { label: "我自己提供", description: "在下面的输入框里贴抽取说明或说明要点" },
+          ],
+      multiSelect: false,
+    }],
+    agent: exec.agent,
+    signal: exec.signal,
+  });
+  const picked = answers.answers.flatMap((answer) => [...answer.selected])[0] ?? "";
+  const typed = answers.answers
+    .map((answer) => answer.custom ?? "")
+    .filter((value) => value.trim() !== "")
+    .join("；")
+    .trim();
+  return {
+    picked: picked || "(no pick)",
+    typed,
+    resolved_via: hasMaterial
+      ? (picked.startsWith("用材料") ? "material" : "builtin_default")
+      : (picked.startsWith("用产品内置") ? "builtin_default" : "user_stated"),
+  };
+};
+
 let visualSummary: Record<string, unknown> | undefined;
       if (args.stage === "candidate_build") {
         const visualPrepDir = resolveRunSubdir(runDir, "prep");
@@ -2750,6 +2877,7 @@ let visualSummary: Record<string, unknown> | undefined;
       // 所以登记一成功就问「这些字段对不对、要训哪些」——顺序上不能滞后。
       // owner 2026-10-28 当场纠正过一次（原实现拖到 experiment_setup 才问）。
       let fieldChoiceSummary: Record<string, unknown> | undefined;
+      let promptChoiceSummary: Record<string, unknown> | undefined;
       if (args.stage === "register" && result.code === 0) {
         const labels = readFieldLabels(runDir);
         if (labels !== null) {
@@ -2861,6 +2989,22 @@ let visualSummary: Record<string, unknown> | undefined;
                 fieldChoiceSummary = { confirmed_fields: [], all_fields: false, total_fields: labels.label_count, skipped: true };
               }
             }
+          }
+        }
+        // W3/D163：prompt 确认卡（owner 13:2x——训练 prompt 没解析出来也要问；
+        // 内置 atf-template-v1 先摆出来）。同 register 块、卡服务可用才问；失败不重试。
+        const promptSvc = ctx.get("userQuestions") as FormAskService | undefined;
+        if (promptSvc !== undefined && typeof promptSvc.ask === "function"
+            && !fieldCardAskedRuns.has(args.run_id)) {
+          try {
+            const promptSummary = await askPromptChoice(
+              { runId: args.run_id, runDir }, { agent: exec.agent, signal: exec.signal },
+              promptSvc, null,
+            );
+            writeInputsPromptChoice(runDir, promptSummary);
+            promptChoiceSummary = promptSummary;
+          } catch {
+            promptChoiceSummary = { skipped: true, note: "训练 prompt 卡未确认——按内置模板缺省走，agent 追问" };
           }
         }
       }
@@ -3106,6 +3250,7 @@ let visualSummary: Record<string, unknown> | undefined;
           : {}),
         // E10d：聚类状态拒绝的回流指引（把 user_message 原样告知用户，不展示内部选项名）
         ...(result.code === 2 && styleClusterRejectionOf(rejections) ? { note: STYLE_CLUSTER_REJECTION_NOTE } : {}),
+        ...(promptChoiceSummary !== undefined ? { prompt_choice: promptChoiceSummary } : {}),
         ...(result.code === 3 || result.code === null
           ? { stderr_tail: result.stderr.slice(-2000), note: "环境错误（exit 3）——零写入；核管线环境（python 依赖/数据在位）后重试" }
           : {}),
