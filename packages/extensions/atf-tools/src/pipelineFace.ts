@@ -2700,6 +2700,17 @@ let visualSummary: Record<string, unknown> | undefined;
       }
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");
+      // D163/W1（T2）：登记账本透传（仅 experiment_setup 段）——run 的 config/inputs.json
+      // 存在才追加（账本是登记卡选定分组的落账，缺席=登记面没落成分组，不冒充有用户决定）。
+      // 内核侧照 negative_ratio_target 同款显式才下传纪律；argparse 未声明该参的旧内核
+      // 不受影响（本分支只在 experiment_setup 段追加，re-pin 后自动生效）。
+      if (args.stage === "experiment_setup") {
+        const inputsLedgerPath = join(runDir, "config", "inputs.json");
+        if (existsSync(inputsLedgerPath)) {
+          argv.push("--inputs-file", inputsLedgerPath);
+        }
+      }
+
       // 显式声明「合并相近小类」：内核只在声明时合并，缺省保持产品原语义（拒绝并给三条出路）
       if (args.stage === "family_split" && args.merge_small_clusters === true) argv.push("--merge-small-clusters");
       // D82：单据类型三件透传（给才追加、trim 后非空才上线，缺省不上送——内核自行推断，

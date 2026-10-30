@@ -130,6 +130,15 @@
     "required": null
    },
    {
+    "option": "--inputs-file",
+    "dest": "inputs_file",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--grouping-preset",
     "dest": "grouping_preset",
     "action": "store",
@@ -5403,6 +5412,15 @@
     "dest": "grouping_preset",
     "action": "store",
     "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--inputs-file",
+    "dest": "inputs_file",
+    "action": "store",
+    "type": "<expr:Path>",
     "choices": null,
     "default": null,
     "required": null
