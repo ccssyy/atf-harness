@@ -156,13 +156,20 @@ export const writeFieldChoice = (
  * @param alreadyConfirmed 已有的确认记录（重跑时用于回显）。
  * @returns 卡面 detail 文本。
  */
-export const fieldChoiceDetailOf = (labels: FieldLabels, alreadyConfirmed?: FieldChoiceRecord | null): string => {
+export const fieldChoiceDetailOf = (
+  labels: FieldLabels,
+  alreadyConfirmed?: FieldChoiceRecord | null,
+  /** D163/W2：字段来源——"labels"＝从标注统计（缺省）；"config"＝用户给的配置。 */
+  source?: "labels" | "config",
+): string => {
   const lines: string[] = [];
   lines.push(
     `标注里一共 ${String(labels.label_count)} 个字段（${String(labels.box_count)} 个框，覆盖 ${String(labels.page_count)} 页）。`,
   );
   lines.push("");
-  lines.push("这些是**从你的标注里数出来的**，不是系统编的：");
+  lines.push(source === "config"
+    ? "字段清单按**你提供的字段配置**走："
+    : "这些是**从你的标注里数出来的**，不是系统编的：");
   for (const item of labels.labels) {
     const rarity =
       item.absent_pages === 0
@@ -175,7 +182,9 @@ export const fieldChoiceDetailOf = (labels: FieldLabels, alreadyConfirmed?: Fiel
     "**这些字段要全部训练吗？** 全部训练选第一项；只训其中几个，选第二项后在下面的输入框里写字段名"
       + "（例如 awb, shipper），也可以直接在输入框写。",
   );
-  lines.push("中文名与字段定义由训练侧按标注标签生成——如果你要改某个字段的叫法，直接在这里说。");
+  lines.push(source === "config"
+    ? "中文名与字段定义按你给的配置走——要改哪个字段的叫法直接说。"
+    : "中文名与字段定义由训练侧按标注标签生成——如果你要改某个字段的叫法，直接在这里说。");
   if (alreadyConfirmed !== undefined && alreadyConfirmed !== null) {
     lines.push(
       `（上次你确认过：${alreadyConfirmed.all_fields ? "全部字段" : alreadyConfirmed.confirmed_fields.join("、")}）`,

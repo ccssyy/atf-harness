@@ -163,7 +163,7 @@ const seedFieldConfig = (ws: string): string => {
 };
 
 describe("C2 分组四态", () => {
-  it("user_provided：字段配置自带 group＝用户已给 → 不出卡、不下传候选、回执一句话＋分组表", async () => {
+  it("配置自带 group → 仍出卡确认（W4：五项必问）；卡通道缺席 → 不替选、回执带分组表", async () => {
     const ws = tempRoot("c2-own-");
     const fieldConfig = seedFieldConfig(ws);
     const asked: Array<Record<string, unknown>> = [];
@@ -171,15 +171,13 @@ describe("C2 分组四态", () => {
       { stage: "experiment_setup", run_id: "own", workspace_path: ws, field_config: fieldConfig },
       fakeExec,
     );
+    // 卡通道不可用（ctxOf 无 userQuestions）→ 不替用户选：先问用户要哪套分组
     expect(asked).toHaveLength(0);
     expect(argvOf(result)).not.toContain("--grouping-proposal");
-    expect(result["grouping_source"]).toBe("user_provided");
+    expect(result["grouping_source"]).toBe("proposal");
     expect(result["grouping_decision"]).toBe("none");
-    expect(String(result["grouping_note"])).toContain("分组按字段配置里的 group 走（2 组）");
     const report = String(result["grouping_report"]);
-    expect(report).toContain("| 分组 | 字段数 | 字段 |");
-    expect(report).toContain("| 单据级 | 2 | 单据标识（doc_identifier）、页级汇总（page_summary） |");
-    expect(report).toContain("| 明细级 | 1 | 货名（goods_name） |");
+    expect(report).toContain("| 分组 | 字段数 |");
   });
 
   it("proposal：出原生选项卡（标题＝候选 name，描述＝组名×字段数＋reason），用户选定后内核拿到他选的那套", async () => {

@@ -626,23 +626,11 @@ export const resolveGroupingFace = async (input: {
   const registrationSource = registrationStale ? "absent" : (registrationGrouping?.source ?? null);
   const mustAskGrouping =
     registrationSource === "agent_written" || registrationSource === "degenerate";
-  if (registrationSource === "user_supplied") {
-    const declared = fieldGroupsOf(input.fieldConfigPath) ?? [];
-    return {
-      source: "user_provided",
-      decision: "none",
-      candidate_name: null,
-      groups: declared,
-      evidence: { registration_inputs: registrationInputsPathOf(input.runDir ?? "") },
-      payload: null,
-      note: (declared.length > 0
-        ? `分组按字段配置里的 group 走（${String(declared.length)} 组）`
-        : "分组按字段配置里的契约投影走")
-        + (registrationGrouping?.quote != null
-          ? `——按你说的「${registrationGrouping.quote}」，不再重复确认。`
-          : "——这套分组是你在本次任务里给的，不再重复确认。"),
-    };
-  }
+  // D163/W4（owner 13:2x 裁定）：五项输入任一没从材料解析出来都要问——出处声明
+  // （user_supplied）只改卡面文案（带原话），**不再跳过确认卡**。预给的分组照常
+  // 走出卡链，推荐候选预置为账本里的那套，用户点确认或改。
+  const registrationQuote = registrationSource === "user_supplied"
+    ? (registrationGrouping?.quote ?? null) : null;
   const provided = fieldGroupsOf(input.fieldConfigPath);
   if (provided !== null) {
     // D-f（owner 2026-10-28）：判据从「文件里有 group」改成「用户确认过」。
@@ -658,19 +646,11 @@ export const resolveGroupingFace = async (input: {
       input.runDir !== undefined
         ? readGroupingDecision(input.runDir, fieldsDigestOf(input.fieldConfigPath)).ok
         : false;
-    if (!mustAskGrouping && (groupingConfirmed || !hasProposal)) {
-      return {
-        source: "user_provided",
-        decision: "none",
-        candidate_name: null,
-        groups: provided,
-        evidence: null,
-        payload: null,
-        note:
-          groupingConfirmed
-            ? `分组按字段配置里的 group 走（${String(provided.length)} 组）——这套分组你在分组卡上选定过`
-            : `分组按字段配置里的 group 走（${String(provided.length)} 组）——**注意：这组分组来自 agent 写入的字段配置，你没在卡上确认过**`,
-      };
+    // D163/W4（owner 13:2x）：分组**始终出卡确认**——账本选过（groupingConfirmed）
+    // 时预选那套作为推荐候选（下方 priorDecision 分支会沿用并注明），配置自带时
+    // 出卡让用户点头。此处不再短路返回。
+    if (groupingConfirmed) {
+      // 继续走下方 priorDecision 沿用分支（它带"你选过"文案），落到卡上时预选。
     }
     // 未确认 + agent 给了候选：不短路，继续走候选出卡（下面 parse proposal 那段）
   }
@@ -715,6 +695,22 @@ export const resolveGroupingFace = async (input: {
     };
   }
   if (input.proposalRaw === undefined || input.proposalRaw === null) {
+    // W4（owner 13:2x）：配置自带 group 而用户没确认过 → 不静默平铺，出"待确认"卡
+    // （source=proposal/decision=none＝先问用户要哪套分组；卡通道缺席也不替选）。
+    const provided = fieldGroupsOf(input.fieldConfigPath);
+    if (provided !== null && provided.length > 0) {
+      return {
+        source: "proposal",
+        decision: "none",
+        candidate_name: null,
+        groups: provided,
+        evidence: { registration_inputs: registrationInputsPathOf(input.runDir ?? "") },
+        payload: null,
+        note: "字段配置自带分组（"
+          + String(provided.length) + " 组）但你还没在卡上确认过——先确认这套分组，"
+          + "再把选定候选传进来；不替你选",
+      };
+    }
     return {
       source: "none",
       decision: "none",
@@ -772,7 +768,7 @@ export const resolveGroupingFace = async (input: {
   }
   const question: ChoiceAskQuestion = {
     id: `grouping-${input.runId}`,
-    question: `分组方案确认 — ${input.runId}`,
+    question: `分组方案确认 — ${input.runId}${registrationQuote != null ? `（按你说的「${registrationQuote}」，确认或改）` : ""}`,
     header: "分组",
     detail: [
       `这里有 ${String(proposal.candidates.length)} 套分组，请选一套：`,
@@ -1801,7 +1797,7 @@ export const buildPipelineTool = (
     parameters: {
       stage: { type: "string", required: true, enum: [...PIPELINE_STAGES], description: "要触发的内核管线段（八段原文，单段）" },
       run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/experiments/<exp>/<run_id>·RunLayout/v3；未指定实验归入当日「未命名实验」）" },
-      workspace_path: { type: "string", description: "workspace 根（可选覆盖——缺省按会话 cwd→工作区身份→实例配置解析，并回显所用根与依据；显式给时必须含 .atf/workspace.json 或 datasets+splits）" },
+      workspace_path: { type: "string", description: "workspace 根（可选覆盖——缺省按会话 cwd→工作区身份→实例配置解析，并回显所用根与依据；显式给时必须含 .atf/workspace.json 或 datasets+splits）。注意：会话未绑定工作区时本参数**必须显式传**（绝对路径）——漏传会在段入口被拒（workspace_path_missing），白白多一轮" },
       source_root: {
         type: "string",
         description:
@@ -2079,7 +2075,7 @@ export const buildPipelineTool = (
         return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "workspace_path_not_absolute", note: `workspace_path 须为绝对路径（得 ${workspacePath}）` });
       }
       if (args.stage === "register" && (args.source_root === undefined || args.source_root.trim() === "")) {
-        return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "source_root_missing", note: "register 段必填 source_root（源文档根绝对路径）——其余段可省略该参数" });
+        return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "source_root_missing", note: "register 段必填 source_root（源文档根绝对路径）——其余段可省略该参数。另：run 不存在时 register 段会自动创建，不要先单独调用创建实验的工具（那会多撞一次审批）" });
       }
       // A-E14b：base_model_path——training_prep 段必填（卡前快败 base_model_path_missing，
       // 指路 ATF_MODEL_ROOT 清单；不触审批面板）；其它段忽略该参（不报错、不下传）。
@@ -2492,7 +2488,24 @@ export const buildPipelineTool = (
       const argv: string[] = ["--workspace", workspacePath, "--run-id", args.run_id, "--stage", args.stage];
       // 看图通道（仅候选构造段）：模型直接读图 → 交判读结果；或先只要页清单。
       // 旗标名与中间文件路径不下发给模型——工具参数即接口，模型只负责「看」和「报」。
-      let visualSummary: Record<string, unknown> | undefined;
+      
+/** D163/W2：字段卡来源——方案稿/登记账本带字段配置＝config 源，否则 labels（标注统计）。 */
+const fieldCardSourceOf = (runDir: string): "labels" | "config" => {
+  try {
+    const parsed = JSON.parse(readFileSync(join(runDir, "config", "inputs.json"), "utf8")) as {
+      field_config?: { ref?: unknown };
+    };
+    const ref = parsed.field_config?.ref;
+    return typeof ref === "string" && ref.trim() !== "" && existsSync(ref) ? "config" : "labels";
+  } catch {
+    return "labels";
+  }
+};
+
+/** D163/P1-3：字段卡同 run 失败去重——账本缺席但本次会话已弹过且被跳过时不再重弹。 */
+const fieldCardAskedRuns = new Set<string>();
+
+let visualSummary: Record<string, unknown> | undefined;
       if (args.stage === "candidate_build") {
         const visualPrepDir = resolveRunSubdir(runDir, "prep");
         mkdirSync(visualPrepDir, { recursive: true });
@@ -2741,7 +2754,11 @@ export const buildPipelineTool = (
         const labels = readFieldLabels(runDir);
         if (labels !== null) {
           const prior = readFieldChoice(runDir);
-          if (prior !== null) {
+          if (prior === null && fieldCardAskedRuns.has(args.run_id)) {
+            // P1-3：本会话已弹过且未确认——不重弹，交给 agent 按上次回执追问。
+            fieldChoiceSummary = { reused: false, asked_once: true,
+                                   note: "字段清单卡本会话已弹过未确认——按上次回执向用户追问，不重复弹卡" };
+          } else if (prior !== null) {
             fieldChoiceSummary = {
               confirmed_fields: prior.confirmed_fields,
               all_fields: prior.all_fields,
@@ -2762,7 +2779,7 @@ export const buildPipelineTool = (
                     id: `field-choice-${args.run_id}`,
                     question: `这批数据的字段清单要全用它吗？— ${args.run_id}`,
                     header: "字段清单",
-                    detail: fieldChoiceDetailOf(labels),
+                    detail: fieldChoiceDetailOf(labels, null, fieldCardSourceOf(runDir)),
                     options: [
                       {
                         label: `全部 ${String(labels.label_count)} 个字段都训练`,
@@ -2838,7 +2855,9 @@ export const buildPipelineTool = (
                   };
                 }
               } catch {
-                // 卡被关掉/通道失败 → 不造假确认：下一段前仍会再问（账本没有记录）
+                // 卡被关掉/通道失败 → 不造假确认；P1-3：同 run 记一次"已问过"，
+                // 重试进段不再重弹（交给 agent 按上一次回执追问，避免卡轰炸）。
+                fieldCardAskedRuns.add(args.run_id);
                 fieldChoiceSummary = { confirmed_fields: [], all_fields: false, total_fields: labels.label_count, skipped: true };
               }
             }

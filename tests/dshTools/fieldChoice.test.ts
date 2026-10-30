@@ -162,8 +162,9 @@ describe("D-f：user_provided 只在「用户确认过」时成立", () => {
       proposalRaw: proposal,
       runDir,
     });
-    expect("source" in face && face.source).toBe("user_provided");
-    expect("note" in face && String(face.note)).toContain("你在分组卡上选定过");
+    // W4（owner 13:2x）：分组始终确认；账本选过 → 沿用（prior_decision）并注明
+    expect("source" in face && face.source).toBe("prior_decision");
+    expect("note" in face && String(face.note)).toContain("选定");
   });
 
   it("未确认 + agent 给了候选 → **不短路**，继续走候选（D-f 现场就是卡在这里）", async () => {
@@ -179,7 +180,7 @@ describe("D-f：user_provided 只在「用户确认过」时成立", () => {
     expect("note" in face && String(face.note)).toContain("选择卡通道不可用");
   });
 
-  it("未确认 + 没有候选 → 仍用配置分组，但必须明说「你没在卡上确认过」", async () => {
+  it("未确认 + 没有候选 → 仍出卡确认（W4：五项输入必问，出处只管文案）", async () => {
     const face = await resolveGroupingFace({
       ctx: { get: () => undefined },
       exec: {},
@@ -188,7 +189,7 @@ describe("D-f：user_provided 只在「用户确认过」时成立", () => {
       proposalRaw: undefined,
       runDir: runDirOf(),   // 无账本
     });
-    expect("source" in face && face.source).toBe("user_provided");
-    expect("note" in face && String(face.note)).toContain("没在卡上确认过");
+    expect("source" in face && face.source).toBe("proposal");
+    expect("note" in face && String(face.note)).toContain("还没在卡上确认过");
   });
 });
