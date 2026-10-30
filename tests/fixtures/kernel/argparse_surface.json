@@ -5252,15 +5252,24 @@
     "required": null
    },
    {
-    "option": "--grouping-provided-by",
-    "dest": "grouping_provided_by",
+    "option": "--grouping-provenance",
+    "dest": "grouping_provenance",
     "action": "store",
     "type": null,
     "choices": [
-     "user",
-     "agent"
+     "user_stated",
+     "agent_inferred"
     ],
-    "default": "user",
+    "default": "agent_inferred",
+    "required": null
+   },
+   {
+    "option": "--grouping-quote",
+    "dest": "grouping_quote",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
     "required": null
    },
    {

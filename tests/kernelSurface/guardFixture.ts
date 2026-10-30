@@ -73,6 +73,9 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   pixel_pair_reason: "--pixel-pair-reason",
   // A 面：构造参数通道（内核 --grouping-confirm／--mode5-random／--mode5-advice-stats
   // ／--targeted-advice／--risk-signals；advice 两条为 b25 新增声明面）
+  // D163 出处模型：分组出处与用户原话（替代按文件路径猜来路）
+  grouping_provenance: "--grouping-provenance",
+  grouping_quote: "--grouping-quote",
   grouping_confirm: "--grouping-confirm",
   mode5_random: "--mode5-random",
   mode5_advice_stats: "--mode5-advice-stats",

@@ -106,8 +106,9 @@
  */
 import { execFile } from "node:child_process";
 import { DANGER_FULL_ACCESS_SANDBOX, sandboxModeOf } from "./trainingPreset.js";
+import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
@@ -449,7 +450,15 @@ export const registrationInputsPathOf = (runDir: string): string =>
 /** 读登记落账的分组来源；文件缺席或坏行返回 null（按未登记处理，走既有链路）。 */
 export const readRegistrationGrouping = (
   runDir: string,
-): { source: string; providedBy: string; basis: string; groupCount: number; fieldCount: number } | null => {
+): {
+  source: string;
+  provenance: string;
+  quote: string | null;
+  basis: string;
+  groupCount: number;
+  fieldCount: number;
+  fieldConfigSha256: string | null;
+} | null => {
   if (runDir.trim() === "") return null;
   let parsed: unknown;
   try {
@@ -465,11 +474,46 @@ export const readRegistrationGrouping = (
   const asNumber = (value: unknown): number => (typeof value === "number" ? value : 0);
   return {
     source: asString(grouping["source"], "absent"),
-    providedBy: asString(grouping["provided_by"], "agent"),
+    provenance: asString(grouping["provenance"], "agent_inferred"),
+    quote: typeof grouping["quote"] === "string" && grouping["quote"].trim() !== ""
+      ? grouping["quote"].trim()
+      : null,
     basis: asString(grouping["basis"], "none"),
     groupCount: asNumber(grouping["group_count"]),
     fieldCount: asNumber(grouping["field_count"]),
+    fieldConfigSha256: (() => {
+      const fc = asRecordOf(root?.["field_config"]);
+      return fc !== null && typeof fc["sha256"] === "string" && fc["sha256"].trim() !== ""
+        ? fc["sha256"].trim()
+        : null;
+    })(),
   };
+};
+
+/** D163：字段配置摘要（判断登记时的分组是否仍对应当前这份配置）。 */
+export const fileSha256Of = (path: string): string | null => {
+  const raw = path.trim();
+  if (raw === "") return null;
+  try {
+    return createHash("sha256").update(readFileSync(raw)).digest("hex");
+  } catch {
+    return null;
+  }
+};
+
+/** D163：登记时的分组是否仍适用于当前字段配置。
+ *
+ *  登记件是那一刻的快照；配置被改写过（字段增删、分组换了一套），快照里的
+ *  「用户给的」就不再成立——旧快照不能替新配置背书。
+ */
+export const registrationGroupingIsStale = (
+  registration: { fieldConfigSha256: string | null } | null,
+  fieldConfigPath: string,
+): boolean => {
+  if (registration === null) return false;
+  if (registration.fieldConfigSha256 === null) return true;
+  const current = fileSha256Of(fieldConfigPath);
+  return current === null || current !== registration.fieldConfigSha256;
 };
 
 /** D163：分组来路判定（user/agent）。
@@ -479,15 +523,7 @@ export const readRegistrationGrouping = (
  *  用户目录）按用户提供。判不出一律按 agent——宁可多问一次，也不把 agent 自拟当
  *  成用户的决定（D-f）。
  */
-export const groupingProvidedByOf = (runDir: string, fieldConfigPath: string): "user" | "agent" => {
-  const raw = fieldConfigPath.trim();
-  if (raw === "" || runDir.trim() === "") return "agent";
-  const resolved = resolve(raw);
-  const agentDirs = [join(runDir, "experiment-setup"), join(runDir, "config")];
-  return agentDirs.some((dir) => resolved === dir || resolved.startsWith(`${dir}${sep}`))
-    ? "agent"
-    : "user";
-};
+
 
 /** 字段业务名（读显式字段配置；读不到＝空表）——分组表显示「货名（goods_name）」而非裸 id。 */
 export const fieldNamesOfFieldConfig = (path: string): ReadonlyMap<string, string> => {
@@ -583,7 +619,11 @@ export const resolveGroupingFace = async (input: {
   // D163：分组来源以登记落账为准，不再靠账本反推——账本只在"卡上选过"时才有记录，
   // 用户从外部带进来的分组永远没有记录，用账本判"给没给"必然把预给的判成没给。
   const registrationGrouping = readRegistrationGrouping(input.runDir ?? "");
-  const registrationSource = registrationGrouping?.source ?? null;
+  // 登记快照过期（配置被改写过）就不再拿它背书：降级成「没给」，重新问。
+  const registrationStale = registrationGroupingIsStale(
+    registrationGrouping, input.fieldConfigPath,
+  );
+  const registrationSource = registrationStale ? "absent" : (registrationGrouping?.source ?? null);
   const mustAskGrouping =
     registrationSource === "agent_written" || registrationSource === "degenerate";
   if (registrationSource === "user_supplied") {
@@ -595,9 +635,12 @@ export const resolveGroupingFace = async (input: {
       groups: declared,
       evidence: { registration_inputs: registrationInputsPathOf(input.runDir ?? "") },
       payload: null,
-      note: declared.length > 0
-        ? `分组按字段配置里的 group 走（${String(declared.length)} 组）——这套分组是你本次任务里提供的，不再重复确认。`
-        : "分组按字段配置里的契约投影走——这套分组是你本次任务里提供的，不再重复确认。",
+      note: (declared.length > 0
+        ? `分组按字段配置里的 group 走（${String(declared.length)} 组）`
+        : "分组按字段配置里的契约投影走")
+        + (registrationGrouping?.quote != null
+          ? `——按你说的「${registrationGrouping.quote}」，不再重复确认。`
+          : "——这套分组是你在本次任务里给的，不再重复确认。"),
     };
   }
   const provided = fieldGroupsOf(input.fieldConfigPath);
@@ -1817,6 +1860,20 @@ export const buildPipelineTool = (
           "name＝候选名（卡面标题）、recommended 有且仅一个候选为 true（推荐首选）、groups 逐组给组名与字段 id 列表、reason 给候选理由。" +
           "传了就按候选出卡让用户选；不传且字段自带 group＝用户已给，不出卡（仅 experiment_setup 段有意义，其它段忽略该参）",
       },
+      grouping_provenance: {
+        type: "string",
+        enum: ["user_stated", "agent_inferred"],
+        description:
+          "这套字段分组是谁定的：user_stated＝用户在本次任务里说过（必须同时给 grouping_quote 原话）——"
+          + "用户给分组没有固定形态，口头说的、贴的一份表、一张截图都算，你负责把它落成配置并留下原话；"
+          + "agent_inferred＝你自己推断的（缺省）。声称用户说过却拿不出原话会被拒。",
+      },
+      grouping_quote: {
+        type: "string",
+        description:
+          "用户说分组时的原话（一句话即可，原样，不要改写）——只用于回执与审计，不参与解析。"
+          + "grouping_provenance=user_stated 时必填。",
+      },
       grouping_confirm: {
         type: "boolean",
         description:
@@ -2009,7 +2066,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
+      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -2529,9 +2586,27 @@ export const buildPipelineTool = (
           });
         }
         argv.push("--field-config", precheck.resolved);
-        // D163：分组来路声明（分组内容是字符串，反推不出谁写的；本层按文件来路声明）
+        // D163：分组出处声明——用户给分组没有固定形态（自然语言/表/截图都可能），
+        // 内核不猜「怎么给的」，只认「有没有用户原话」。声称用户说过却拿不出原话会被拒。
         if (args.stage === "register" || args.stage === "experiment_setup") {
-          argv.push("--grouping-provided-by", groupingProvidedByOf(runDir, precheck.resolved));
+          const provenance = typeof args.grouping_provenance === "string"
+            ? args.grouping_provenance.trim()
+            : "";
+          const quote = typeof args.grouping_quote === "string" ? args.grouping_quote.trim() : "";
+          if (provenance === "user_stated" && quote === "") {
+            return asToolValue({
+              ok: false,
+              stage: args.stage,
+              run_id: args.run_id,
+              error: "grouping_quote_required",
+              note: "要说这套分组是用户给的，就把用户原话带上（grouping_quote，一句话即可）；"
+                + "拿不出原话就按助手推断传，别替用户认领",
+            });
+          }
+          if (provenance === "user_stated" || provenance === "agent_inferred") {
+            argv.push("--grouping-provenance", provenance);
+          }
+          if (quote !== "") argv.push("--grouping-quote", quote);
         }
       }
       // E8·H1：装配模式旗标（仅 training_prep 段且显式 true 才追加——缺省不出现在
