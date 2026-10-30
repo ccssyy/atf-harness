@@ -56,32 +56,23 @@ const AUGMENT_OPTIONS: ReadonlyArray<{ label: string; value: number }> = [
   { label: "3 倍", value: 3 },
 ];
 
-/** 自由输入解析：用户可能写「3」「三倍」「不增强」——认不出按未答处理（不猜）。
+/** 自由输入解析（仅 custom 通道：用户手打「3」「三倍」「不增强」这类文字）。
  *
- * N5 修复：WebUI selected 回传形态不保证等于 label（可能含序号/描述整行），
- * 严格等值匹配曾把「2 倍」整行吞成未命中 → 兜底正则误中「不」→ 落 0（不增强）。
- * 现按「label 是回传文本的子串 → 命中该档」解析；数字提取只认以数字开头/含倍数字样
- * 的文本，「不/否」判零仅在未命中任何档位时兜底——杜绝「2 倍」被误读为不增强。
+ * 选项卡的 selected 回传的是 label 本身（契约 confirmFace.ts:199——选项编码），
+ * 等值命中在调用方完成，不经本函数。本函数只服务自由输入：认数字认否定，
+ * 认不出按未答处理（不猜）。N5 教训：不要为「回传形态可能变形」加猜测层——
+ * 形态不对修回传端（对齐契约），解析端不加启发式。
  */
 export const augmentFromText = (text: string): number | undefined => {
   const trimmed = text.trim();
   if (trimmed === "") return undefined;
-  // 1) 严格等值（旧行为保留）
   const exact = AUGMENT_OPTIONS.find((option) => option.label === trimmed);
   if (exact !== undefined) return exact.value;
-  // 2) 包含匹配：回传整行里含某档 label（如「2 倍」）即命中——多档同含时取最大档
-  //    （「不增强」含「增强」字样但不含「N 倍」label，不会误命中）
-  const contains = AUGMENT_OPTIONS.filter((option) => trimmed.includes(option.label));
-  if (contains.length > 0) {
-    return contains.reduce((best, option) => (option.value > best.value ? option : best)).value;
-  }
-  // 3) 数字提取：仅当文本带数字（「3」「3倍」「x3」）
   const numMatch = trimmed.match(/(\d+(?:\.\d+)?)/);
   if (numMatch !== null) {
     const num = Number(numMatch[1]);
     if (Number.isFinite(num) && num >= 0) return num;
   }
-  // 4) 否定兜底：不含数字且含否定词才算不增强
   if (/不|否|none|off/i.test(trimmed)) return 0;
   return undefined;
 };

@@ -259,18 +259,15 @@ describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
 // ── N5 回归锁：augmentFromText 解析（WebUI selected 回传整行曾把「2 倍」吞成不增强）──
 import { augmentFromText } from "../../packages/extensions/atf-tools/src/constructionGate.js";
 
-describe("augmentFromText（N5：卡上选定值必须原样落账）", () => {
-  it("整行回传（含序号与描述）命中「2 倍」档——旧实现严格等值失败后误落 0", () => {
+describe("augmentFromText（custom 自由输入通道；N5 更正：不做回传形态猜测）", () => {
+  it("label 等值命中", () => {
     expect(augmentFromText("2 倍")).toBe(2);
-    expect(augmentFromText("1\n2 倍\n总量约 2 倍")).toBe(2);
-  });
-  it("整行回传「不增强」仍正确判 0", () => {
-    expect(augmentFromText("不增强")).toBe(0);
-    expect(augmentFromText("不增强\n只保留原始样本")).toBe(0);
-  });
-  it("等值与数字形态兼容保留", () => {
     expect(augmentFromText("3 倍")).toBe(3);
+    expect(augmentFromText("不增强")).toBe(0);
+  });
+  it("custom 自由输入：数字与否定", () => {
     expect(augmentFromText("3")).toBe(3);
+    expect(augmentFromText("不要")).toBe(0);
   });
   it("认不出按未答处理（不猜）", () => {
     expect(augmentFromText("")).toBeUndefined();
