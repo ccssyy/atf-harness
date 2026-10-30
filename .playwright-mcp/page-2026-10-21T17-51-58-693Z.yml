@@ -1,0 +1,707 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - button "Open sidebar" [ref=f1e9] [cursor=pointer]:
+      - generic [ref=f1e11]: ATF
+    - button "New session" [ref=f1e13] [cursor=pointer]
+    - navigation "Global panels" [ref=f1e18]:
+      - button "Plugins" [ref=f1e19] [cursor=pointer]
+    - generic [ref=f1e29]:
+      - button "Add workspace" [ref=f1e32] [cursor=pointer]
+      - button "Search sessions" [ref=f1e36] [cursor=pointer]
+    - button "Settings" [ref=f1e46] [cursor=pointer]
+  - generic [ref=f1e54]:
+    - banner [ref=f1e87]:
+      - generic [ref=f1e88]:
+        - generic [ref=f1e89]:
+          - generic:
+            - navigation "Session hierarchy":
+              - generic: 汇总当前实验状态与进展
+          - generic [ref=f1e92]:
+            - button "More actions" [ref=f1e94] [cursor=pointer]
+            - generic [ref=f1e99]:
+              - button "装箱单 · Qwen3-VL-32B · 10-21 21:02 · 空闲 ▾ atf-prodtest" [ref=f1e4298] [cursor=pointer]:
+                - generic [ref=f1e102]: 装箱单 · Qwen3-VL-32B · 10-21 21:02 · 空闲 ▾
+                - generic "atf-prodtest-20261021" [ref=f1e105]: atf-prodtest
+              - button "监控" [ref=f1e106] [cursor=pointer]
+        - tablist [ref=f1e107]:
+          - tab "Chat" [selected] [ref=f1e108] [cursor=pointer]
+          - tab "Trajectory" [ref=f1e109] [cursor=pointer]
+    - generic [ref=f1e56]:
+      - generic [ref=f1e116]:
+        - button "Load earlier" [ref=f1e118] [cursor=pointer]
+        - generic [ref=f1e121]:
+          - generic [ref=f1e122]: 帮我看一下当前实验的整体状态和最近的进展，简单汇总即可。
+          - generic [ref=f1e124]:
+            - generic [ref=f1e125]: 00:35
+            - button "Copy" [ref=f1e126] [cursor=pointer]
+        - generic [ref=f1e131]:
+          - status [ref=f1e132]: Completed
+          - button "Completed in 3m 6s" [ref=f1e133] [cursor=pointer]
+        - generic [ref=f1e141]:
+          - heading "当前实验状态汇总" [level=1] [ref=f1e142]
+          - paragraph [ref=f1e143]:
+            - strong [ref=f1e144]:
+              - text: 总体：当前没有正在跑的训练/评估（8 卡 GPU 全部空闲），最近一轮工作集中在
+              - code [ref=f1e145]: atf-prodtest-20261021
+              - text: 实验簇（10/20–10/21）。
+            - text: 本会话尚未绑定 run，以下是从状态面与产物读出的情况。
+          - heading "最近进展（时间线）" [level=2] [ref=f1e146]
+          - table [ref=f1e148]:
+            - rowgroup [ref=f1e149]:
+              - row [ref=f1e150]:
+                - columnheader "时间" [ref=f1e151]
+                - columnheader "事件" [ref=f1e152]
+            - rowgroup [ref=f1e153]:
+              - row [ref=f1e154]:
+                - cell "10/20 晚" [ref=f1e155]
+                - cell [ref=f1e156]:
+                  - code [ref=f1e157]: run-admit-qc-01
+                  - text: 完成配置确认与诊断（未进入训练）
+              - row [ref=f1e158]:
+                - cell "10/21 凌晨" [ref=f1e159]
+                - cell [ref=f1e160]:
+                  - strong [ref=f1e161]:
+                    - code [ref=f1e162]: run-admit-qc-02
+                    - text: 训练完成（ckpt-6，验收通过）
+                  - text: ，随后完成正式评估 + badcase 分析报告
+              - row [ref=f1e163]:
+                - cell "10/21 中午" [ref=f1e164]
+                - cell [ref=f1e165]:
+                  - code [ref=f1e166]: run-admit-qc-02
+                  - text: 有两次训练失败通知（12:53/13:13，疑为重试/后续触发）
+              - row [ref=f1e167]:
+                - cell "10/21 13:19" [ref=f1e168]
+                - cell [ref=f1e169]:
+                  - text: 变体实验
+                  - strong [ref=f1e170]:
+                    - code [ref=f1e171]: run-admit-qc-02-eval-h5
+                    - text: 训练完成
+              - row [ref=f1e172]:
+                - cell "10/21 21:07" [ref=f1e173]
+                - cell [ref=f1e174]:
+                  - text: eval-h5 完成第 2 轮正式评估；
+                  - code [ref=f1e175]: prep/variants/
+                  - text: 生成了 142 行变体数据报告
+          - heading "关键指标（同口径 10 页 formal eval，goods lane）" [level=2] [ref=f1e176]
+          - list [ref=f1e177]:
+            - listitem [ref=f1e178]:
+              - strong [ref=f1e179]: run-admit-qc-02（ckpt6）
+              - text: ：micro
+              - strong [ref=f1e180]: F1 = 0.2991
+              - text: （P 0.2212 / R 0.4618，TP 296 / FP 1042 / FN 345），整页全对率 0
+            - listitem [ref=f1e181]:
+              - strong [ref=f1e182]: run-admit-qc-02-eval-h5（ckpt6）
+              - text: ：micro
+              - strong [ref=f1e183]: F1 = 0.2416
+              - text: （P 0.1908 / R 0.3292）——低于主 run，h5 变体这轮没有带来提升
+            - listitem [ref=f1e184]: 两轮共有 7 个零正例字段（currency、total_amount、doc_identifier 等）在测试集无标注正例，若属漏标需先修 GT
+          - heading "数据侧" [level=2] [ref=f1e185]
+          - paragraph [ref=f1e186]:
+            - code [ref=f1e187]: prep/variants/variants_report.json
+            - text: ：基线 40 行 → 产出 142 行（mode0 40 + targeted 102）；bbox 从 original_pixel 换算到 qwen_axis_1000，4528 个框全量反算核对通过；mode1/mode5 增广因未过实验门确认卡而显式跳过（未静默生成）。
+          - heading "待办 / 风险点" [level=2] [ref=f1e188]
+          - list [ref=f1e189]:
+            - listitem [ref=f1e190]:
+              - strong [ref=f1e191]: Badcase 行级审阅未闭合
+              - text: ：110 条错误事件 0 条已审、23 个错误簇 0 个机制闭合——分析报告（
+              - button "report.md" [ref=f1e192] [cursor=pointer]
+              - text: ）明确下一步是先补簇级机制审阅，再谈训练动作。
+            - listitem [ref=f1e196]: 未做 baseline 对比回归（阶段 7），本轮 F1 仅为观察值；run-admit-qc-02 未见正式发布（仅 checkpoint-6 说明文档）。
+            - listitem [ref=f1e197]: 中午两次 training_failed 通知的根因未核查，如需要我可以深入看日志。
+          - paragraph [ref=f1e198]: 需要我接着做哪一项？比如深入 badcase 簇审阅、对比 h5 变体为何掉点，或核查那两次训练失败。
+        - generic [ref=f1e202]:
+          - button "Copy" [ref=f1e203] [cursor=pointer]
+          - generic [ref=f1e207]:
+            - button "Good response" [ref=f1e208] [cursor=pointer]
+            - button "Bad response" [ref=f1e211] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e214] [cursor=pointer]
+          - generic [ref=f1e220]:
+            - button "Usage 458K tok" [ref=f1e222] [cursor=pointer]
+            - generic [ref=f1e228]: 00:39
+        - generic [ref=f1e231]:
+          - generic [ref=f1e232]: "发起联合训练（1 类：pl → run run-admit-qc-02）： 请用 atf_joint_train 工具一次完成联合数据构建与训练启动（一个入口，不要拆成单类两步）： datasets：[{\"run_id\":\"run-admit-qc-02\",\"doc_type\":\"pl\"}] field_specs：{\"schema_version\":\"FieldSpec/v1\",\"doc_type\":\"pl\",\"document_zh\":\"装箱单\",\"fields\":[{\"field_id\":\"goods_quantity\",\"zh\":\"数量\",\"group\":\"goods\",\"definition\":\"提取商品条目的数量值\",\"locators\":[\"QTY\"]},{\"field_id\":\"goods_name\",\"zh\":\"货名\",\"group\":\"goods\",\"definition\":\"提取商品名称/描述\",\"locators\":[\"DESCRIPTION\"]},{\"field_id\":\"goods_carton\",\"zh\":\"箱数\",\"group\":\"goods\",\"definition\":\"提取箱/纸箱数量\",\"locators\":[\"CTNS\"]},{\"field_id\":\"goods_gross_weight\",\"zh\":\"毛重\",\"group\":\"goods\",\"definition\":\"提取条目毛重\",\"locators\":[\"G.W.\"]},{\"field_id\":\"goods_net_weight\",\"zh\":\"净重\",\"group\":\"goods\",\"definition\":\"提取条目净重\",\"locators\":[\"N.W.\"]},{\"field_id\":\"goods_parcel\",\"zh\":\"包裹数\",\"group\":\"goods\",\"definition\":\"提取包裹件数\",\"locators\":[\"PARCEL\"]},{\"field_id\":\"goods_pallet\",\"zh\":\"托盘数\",\"group\":\"goods\",\"definition\":\"提取托盘数量\",\"locators\":[\"PALLET\"]},{\"field_id\":\"goods_weight\",\"zh\":\"重量\",\"group\":\"goods\",\"definition\":\"提取泛化的重量值\",\"locators\":[\"WEIGHT\"]},{\"field_id\":\"goods_qty_title_unit\",\"zh\":\"数量单位\",\"group\":\"goods\",\"definition\":\"提取数量单位行\",\"locators\":[\"UNIT\"]},{\"field_id\":\"goods_amount\",\"zh\":\"金额\",\"group\":\"goods\",\"definition\":\"提取金额值\",\"locators\":[\"AMOUNT\"]},{\"field_id\":\"price_of_goods\",\"zh\":\"货价\",\"group\":\"goods\",\"definition\":\"提取单价\",\"locators\":[\"PRICE\"]},{\"field_id\":\"product_no\",\"zh\":\"货号\",\"group\":\"goods\",\"definition\":\"提取产品编号\",\"locators\":[\"ART NO\"]},{\"field_id\":\"item_no\",\"zh\":\"条目号\",\"group\":\"goods\",\"definition\":\"提取条目序号\",\"locators\":[\"ITEM\"]},{\"field_id\":\"hs_code\",\"zh\":\"HS 编码\",\"group\":\"goods\",\"definition\":\"提取海关编码\",\"locators\":[\"HS\"]},{\"field_id\":\"container_no\",\"zh\":\"柜号\",\"group\":\"goods\",\"definition\":\"提取集装箱号\",\"locators\":[\"CONTAINER\"]},{\"field_id\":\"seal_no\",\"zh\":\"封号\",\"group\":\"goods\",\"definition\":\"提取铅封号\",\"locators\":[\"SEAL\"]},{\"field_id\":\"shipping_marks\",\"zh\":\"唛头\",\"group\":\"goods\",\"definition\":\"提取唛头文本\",\"locators\":[\"MARKS\"]},{\"field_id\":\"currency\",\"zh\":\"币种\",\"group\":\"goods\",\"definition\":\"提取币种标识\",\"locators\":[\"USD\",\"CURRENCY\"]},{\"field_id\":\"total_gross_weight\",\"zh\":\"总毛重\",\"group\":\"goods\",\"definition\":\"提取总毛重值\",\"locators\":[\"TOTAL GROSS\"]},{\"field_id\":\"total_net_weight\",\"zh\":\"总净重\",\"group\":\"goods\",\"definition\":\"提取总净重值\",\"locators\":[\"TOTAL NET\"]},{\"field_id\":\"total_qty\",\"zh\":\"总数量\",\"group\":\"goods\",\"definition\":\"提取总数量值\",\"locators\":[\"TOTAL QTY\"]},{\"field_id\":\"total_amount\",\"zh\":\"总金额\",\"group\":\"goods\",\"definition\":\"提取总金额值\",\"locators\":[\"TOTAL AMOUNT\"]}]} oversample：省略（全部类型 1 倍） seed：42 字段数核对：pl 22。 我会在确认卡上核对类型／各类字段数／预计行数／合并倍率后放行。"
+          - generic [ref=f1e234]:
+            - generic [ref=f1e235]: 00:46
+            - button "Copy" [ref=f1e236] [cursor=pointer]
+        - generic [ref=f1e241]:
+          - status [ref=f1e242]: Completed
+          - button "Completed in 17m 25s" [ref=f1e243] [cursor=pointer]
+        - generic [ref=f1e251]:
+          - heading "联合训练发起结果：数据构建成功，训练段被已知缺陷挡住（等待修复部署）" [level=1] [ref=f1e252]
+          - heading "✅ 已完成：联合数据集构建（审批已消耗）" [level=2] [ref=f1e253]
+          - list [ref=f1e254]:
+            - listitem [ref=f1e255]:
+              - text: 落点
+              - code [ref=f1e256]: …/workspace/runs/run-admit-qc-02/prep/joint/
+              - text: ：
+              - code [ref=f1e257]: train.jsonl
+              - text: （
+              - strong [ref=f1e258]: 142 行
+              - text: ）、
+              - code [ref=f1e259]: joint-dataset-plan.json
+              - text: 、
+              - code [ref=f1e260]: merge_manifest.json
+              - text: 、
+              - code [ref=f1e261]: field-specs/pl.json
+              - text: （
+              - strong [ref=f1e262]: 22 字段
+              - text: ，与你给的清单逐字一致）、
+              - code [ref=f1e263]: harness-oversample.json
+            - listitem [ref=f1e264]:
+              - text: 1 类 × 1 倍 →
+              - strong [ref=f1e265]: 透传
+              - text: （
+              - code [ref=f1e266]: "oversample_passthrough: true"
+              - text: ），合并 sha256
+              - code [ref=f1e267]: 36818922e0…
+              - text: 与源
+              - code [ref=f1e268]: prep/variants
+              - text: 数据
+              - strong [ref=f1e269]: 完全一致
+              - text: ——只有 1 类且 1 倍时，联合数据与原训练数据字节级相同
+            - listitem [ref=f1e270]: seed 42、基座族 qwen3_vl 已入 plan
+          - heading "❌ 未启动：训练段 F7 对账拒绝（根因＝产品缺陷，修复正在进行中）" [level=2] [ref=f1e271]
+          - paragraph [ref=f1e272]: 证据链：
+          - list [ref=f1e273]:
+            - listitem [ref=f1e274]:
+              - text: joint 训练段的 F7 闸用正则从 train.sh 提取九要素确认值；对账基线（iteration-config training 段）7 个键
+              - strong [ref=f1e275]: 全部报「生成面缺失」
+              - text: ，fail-closed 拒绝——不静默换算，行为本身正确。
+            - listitem [ref=f1e276]:
+              - text: 真实原因：生成器渲染 train.sh 用行尾
+              - code [ref=f1e277]: \
+              - text: 续行格式，
+              - strong [ref=f1e278]: 运行中服务的旧正则对这种格式零提取
+              - text: （我用 node 实测：现 train.sh 提取为空；该正则与真实生成器输出不兼容是结构性缺陷）。
+            - listitem [ref=f1e279]:
+              - strong [ref=f1e280]: 该缺陷的修复今天 01:01 刚写入源码
+              - text: （
+              - code [ref=f1e281]: trainShReconcile.ts
+              - text: 正则加
+              - code [ref=f1e282]: \
+              - text: 容忍，测试注释标注「2026-10-22 门2 幕4 修复锚」，工作树未提交）——
+              - strong [ref=f1e283]: 此刻正有 vitest 在跑验证
+              - text: （trainingFace/jointTrain/autoTraining 三件套，仍在运行）。
+            - listitem [ref=f1e284]:
+              - text: 但 GUI 服务进程是
+              - strong [ref=f1e285]: 00:19
+              - text: 启动的，早于修复 42 分钟；tsx 直跑 TS、模块启动时加载——
+              - strong [ref=f1e286]: 运行中的服务仍是旧代码
+              - text: 。
+          - heading "我停手的原因（未做任何绕行）" [level=2] [ref=f1e287]
+          - list [ref=f1e288]:
+            - listitem [ref=f1e289]:
+              - text: 手改 train.sh＝修改生成物，明令禁止；换
+              - code [ref=f1e290]: atf_run_training
+              - text: 入口违背你「一个入口」的要求，且同一 F7 闸也接在它上面（同样旧代码）；重启 GUI 服务会断开你当前页面、且他人验证还在跑——这三件事都需要你拍板，我没有擅自执行。
+          - heading "请你决定" [level=2] [ref=f1e291]
+          - list [ref=f1e292]:
+            - listitem [ref=f1e293]:
+              - strong [ref=f1e294]: 推荐
+              - text: ：等 vitest 验证通过（应该就在这几分钟）→ 重启 3080 服务让修复生效 → 我
+              - strong [ref=f1e295]:
+                - text: 原样重推
+                - code [ref=f1e296]: atf_joint_train
+              - text: （数据已在位，重推只需补训练段，会再出一次确认卡给你放行）。重启由你/修复方执行，或你明确授权我来。
+            - listitem [ref=f1e297]:
+              - text: 顺带确认一个语义点：本次联合构建与上一轮训练数据
+              - strong [ref=f1e298]: 字节相同
+              - text: （1 类 1 倍透传）。如果你本意是「同数据在 joint 链上重放」那没问题；如果预期是「新数据/新字段」，请告诉我差异点，先修数据再重推。
+          - paragraph [ref=f1e299]: 要我现在做什么，等你一句话。
+        - generic [ref=f1e303]:
+          - button "Copy" [ref=f1e304] [cursor=pointer]
+          - generic [ref=f1e308]:
+            - button "Good response" [ref=f1e309] [cursor=pointer]
+            - button "Bad response" [ref=f1e312] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e315] [cursor=pointer]
+          - generic [ref=f1e321]:
+            - button "Usage 5.3M tok" [ref=f1e323] [cursor=pointer]
+            - generic [ref=f1e329]: 01:04
+        - generic [ref=f1e429]:
+          - generic [ref=f1e430]: 对账闸的解析缺陷已在服务端修复并重启生效（正则现在能读生成器的续行格式）。请继续刚才的联合训练链：同一份数据（1 类 pl、142 行、1 倍透传、seed 42）重放即可，这是我本意；不要改 train.sh、不要换入口，重推 atf_joint_train 走完训练。
+          - generic [ref=f1e432]:
+            - generic [ref=f1e433]: 01:06
+            - button "Copy" [ref=f1e434] [cursor=pointer]
+        - generic [ref=f1e682]:
+          - status [ref=f1e683]: Completed
+          - button "Completed in 4m 5s" [ref=f1e684] [cursor=pointer]
+        - generic [ref=f1e669]:
+          - heading "✅ 联合训练链已走完——训练已启动并核实" [level=1] [ref=f1e670]
+          - heading "重推结果（同一参数：1 类 pl / 22 字段 / 142 行 / 1 倍透传 / seed 42）" [level=2] [ref=f1e671]
+          - list [ref=f1e672]:
+            - listitem [ref=f1e673]:
+              - strong [ref=f1e674]: 联合数据
+              - text: ：确定性重建完成，sha256
+              - code [ref=f1e675]: 36818922e0…
+              - text: 与上轮完全一致（重放语义成立）
+            - listitem [ref=f1e676]:
+              - strong [ref=f1e677]: F7 透传对账
+              - text: ：
+              - code [ref=f1e678]: "\"reconcile\": \"ok\""
+              - text: ——修复后的正则已正确读取续行格式，9 键全过
+            - listitem [ref=f1e688]:
+              - strong [ref=f1e689]: 启动探活
+              - text: ：
+              - code [ref=f1e690]: feed_ok
+              - text: （
+              - code [ref=f1e691]: SHA=pass / ADMISSION=pass
+              - text: ，数据准入自检通过，进程存活）
+          - heading "训练进程核实（tmux 直读）" [level=2] [ref=f1e692]
+          - list [ref=f1e693]:
+            - listitem [ref=f1e694]:
+              - text: 会话
+              - code [ref=f1e695]: dev-atf-training-run-run-admit-qc-02
+              - text: （01:08:57 创建）正在跑：
+              - list [ref=f1e696]:
+                - listitem [ref=f1e697]:
+                  - text: 基座
+                  - code [ref=f1e698]: /data/LLM_model/Qwen3-VL-32B-Instruct
+                  - text: ✓（与 train.sh 一致）
+                - listitem [ref=f1e699]: bnb 4-bit 量化加载中——32B 模型装载需几分钟，GPU util 现为 0% 属正常爬坡
+            - listitem [ref=f1e700]:
+              - text: 一处如实说明：stdout 日志落在共享 logDir
+              - code [ref=f1e701]: run-regress-formal-01/training-logs/train-stdout.log
+              - text: （历史遗留的共享日志目录名；旧日志已自动轮转为
+              - code [ref=f1e702]: train-stdout.20261022-010857.log
+              - text: ）。
+              - strong [ref=f1e703]: run 归属无误
+              - text: ——tmux 会话名、swanlab_run_name、output_dir 都是 run-admit-qc-02。
+          - heading "本次训练配置（沿既有 train.sh，未改动）" [level=2] [ref=f1e704]
+          - paragraph [ref=f1e705]:
+            - text: 3 epochs × 142 样本，global batch 128（bs1×accum16×8卡），lr 1e-4，LoRA r32/α64，cutoff 9000，Z3-offload——每 epoch 约 4 步，预计很快完成；checkpoint 落
+            - code [ref=f1e706]: prep/iteration-config/checkpoint-*
+            - text: 。
+          - paragraph [ref=f1e707]: 后续随时说一声，我用 status 跟进进度、训练完成后回报 ckpt 路径（评估按 pl 类字段集走既有评估链）。
+        - generic [ref=f1e711]:
+          - button "Copy" [ref=f1e712] [cursor=pointer]
+          - generic [ref=f1e716]:
+            - button "Good response" [ref=f1e717] [cursor=pointer]
+            - button "Bad response" [ref=f1e720] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e723] [cursor=pointer]
+          - generic [ref=f1e729]:
+            - button "Usage 464K tok" [ref=f1e731] [cursor=pointer]
+            - generic [ref=f1e737]: 01:10
+        - generic [ref=f1e1004]:
+          - generic [ref=f1e1005]: 训练已干净完成（6/6 步、末步 loss 0.2707、checkpoint-6 已落盘、GPU 已释放）。接下来做一次 mini 评估：用本轮联合训练最新的 checkpoint-6，评估集用全部 50 页 walkthrough 数据（不是 10 页测试集——50 页里含训练页，我知情且确认，外部资产确认通道可走）；并发 4 起步。走正道评估链，出确认卡我来放行。
+          - generic [ref=f1e1007]:
+            - generic [ref=f1e1008]: 01:26
+            - button "Copy" [ref=f1e1009] [cursor=pointer]
+        - generic [ref=f1e3982]:
+          - status [ref=f1e3983]: Completed
+          - button "Completed in 19m 36s" [ref=f1e3984] [cursor=pointer]
+        - generic [ref=f1e3992]:
+          - heading "评估链被实例配置问题挡住——根因已闭环，需要你授权两处修复" [level=1] [ref=f1e3993]
+          - heading "已就绪的部分" [level=2] [ref=f1e3994]
+          - list [ref=f1e3995]:
+            - listitem [ref=f1e3996]:
+              - strong [ref=f1e3997]: 50 页评估资产
+              - text: ：已构建并通过冻结锚校验（推导逻辑对既有 10 页 L1 资产
+              - strong [ref=f1e3998]: 逐页深等复现
+              - text: 才落盘）；50 页 / 2643 个标注框 / 0 非矩形 / 全部字段 ∈ 训练字段集，落位
+              - code [ref=f1e3999]: walkthrough-m12-real/eval-assets-50/
+              - text: （含 images 链接，双路径解析兼容）
+            - listitem [ref=f1e4000]:
+              - strong [ref=f1e4001]: EvalServiceConfig
+              - text: ：已按上轮同参数写好（AWQ base、端口 8200、TP1、0.85、12800、seqs8、训练像素对 65536/802816、ckpt-6 挂载、max_lora_rank 32）
+            - listitem [ref=f1e4002]:
+              - strong [ref=f1e4003]: checkpoint-6
+              - text: ：固定编号路径确认；端口 8200/5002 空闲；GPU 空闲
+          - heading "卡点（fail-closed，非机器事实问题）" [level=2] [ref=f1e4004]
+          - paragraph [ref=f1e4005]:
+            - code [ref=f1e4006]: atf_evaluate
+            - text: 链的
+            - strong [ref=f1e4007]: 内核 journal 步
+            - text: 崩溃，连锁根因：
+          - list [ref=f1e4008]:
+            - listitem [ref=f1e4009]:
+              - text: 内核 journal 把 run 身份解析到
+              - code [ref=f1e4010]: /root/.atf/config.json
+              - text: 的
+              - code [ref=f1e4011]: workspace_root
+              - text: =
+              - strong [ref=f1e4012]:
+                - code [ref=f1e4013]: /data/sam/DocCheckTraining/atf-workspace
+              - text: （9 月 4 日的过期实例配置）；
+            - listitem [ref=f1e4014]:
+              - text: 那里存在同名
+              - strong [ref=f1e4015]: 旧布局
+              - text: run（无 run.json）→ 触发 RunLayout 防分裂保护「旧布局同名 run 在场，请换 run-id」；
+            - listitem [ref=f1e4016]:
+              - text: 本实验真正的 canonical 树（
+              - code [ref=f1e4017]: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02
+              - text: ）是 walkthrough 时代产物，
+              - strong [ref=f1e4018]: 缺 run.json
+              - text: （早于 RunLayout/v1 契约）——即使把 workspace 指过去，也会撞另一闸「canonical 占用但缺合法 run.json」。
+          - paragraph [ref=f1e4019]:
+            - text: 本次尝试的 service 产物已写了一半（dev 树
+            - code [ref=f1e4020]: eval/6-20261021/service/
+            - text: ），但链路整体未闭合，我不会带病续跑。
+          - heading "提请你授权的修复（两处写，都在我的沙箱外）" [level=2] [ref=f1e4021]
+          - list [ref=f1e4022]:
+            - listitem [ref=f1e4023]:
+              - strong [ref=f1e4024]: 给 canonical 树补写 run.json
+              - text: （按当前契约五键，让它成为合法 canonical）：
+              - list [ref=f1e4025]:
+                - listitem [ref=f1e4026]:
+                  - text: 路径：
+                  - code [ref=f1e4027]: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/run.json
+                - listitem [ref=f1e4028]:
+                  - text: 内容：
+                  - code [ref=f1e4029]: "layout_version: \"RunLayout/v1\""
+                  - text: 、
+                  - code [ref=f1e4030]: "workspace_id: \"atf-prodtest-20261021\""
+                  - text: 、
+                  - code [ref=f1e4031]: "run_id: \"run-admit-qc-02\""
+                  - text: 、
+                  - code [ref=f1e4032]: "created_at: \"2026-10-20T15:32:41Z\""
+                  - text: （run 真实创建时刻，取自 stage 摘要）、
+                  - code [ref=f1e4033]: dirs
+                  - text: ：契约骨架 9 项＋追加闭集 8 项（webui/prep/prep/iteration-config/prep/variants/launch/training/eval/analysis/publish + analysis/journal 等，共 17 项——已逐项对照 pin 内契约常量）
+            - listitem [ref=f1e4034]:
+              - strong [ref=f1e4035]:
+                - text: 修正
+                - code [ref=f1e4036]: /root/.atf/config.json
+                - text: 的
+                - code [ref=f1e4037]: workspace_root
+              - text: →
+              - code [ref=f1e4038]: /data/atf/prodtest/atf-prodtest-20261021
+              - text: （其余键 awq_base/key_dir 等一律不动；这正是 canonical 公式
+              - code [ref=f1e4039]: <workspace>/workspace/runs/<run_id>
+              - text: 的归属根）
+          - paragraph [ref=f1e4040]:
+            - text: 之后我会清掉 dev 树里那次失败残留的
+            - code [ref=f1e4041]: eval/6-20261021/
+            - text: （在我的可写域内），重推
+            - code [ref=f1e4042]: atf_evaluate start
+            - text: ——确认卡会照常出，你来放行。
+          - paragraph [ref=f1e4043]:
+            - strong [ref=f1e4044]: 备选
+            - text: ：这两处你也可以自己改或交 owner 处理；另一个「让内核在别处新建空 run 骨架当 journal 宿主」的方案我不推荐（制造第三个身份孪生，正是防分裂条款要避免的）。
+          - paragraph [ref=f1e4045]: 改不改、谁来改，你定；授权我就动手。
+        - generic [ref=f1e4049]:
+          - button "Copy" [ref=f1e4050] [cursor=pointer]
+          - generic [ref=f1e4054]:
+            - button "Good response" [ref=f1e4055] [cursor=pointer]
+            - button "Bad response" [ref=f1e4058] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e4061] [cursor=pointer]
+          - generic [ref=f1e4067]:
+            - button "Usage 11.7M tok" [ref=f1e4069] [cursor=pointer]
+            - generic [ref=f1e4075]: 01:46
+        - generic [ref=f1e4082]:
+          - generic [ref=f1e4083]: 授权执行你提的方案：①按你核对过的 RunLayout 契约为 run-admit-qc-02 物化正典 run.json（created_at 取 stage 摘要、dirs 17 项闭集）；②把 /root/.atf/config.json 的 workspace_root 改为 /data/atf/prodtest/atf-prodtest-20261021（其余键不动）；③清掉失败残留的 eval/6-20261021 后重推 atf_evaluate start，确认卡我来放行。不采纳第三骨架方案。
+          - generic [ref=f1e4085]:
+            - generic [ref=f1e4086]: 01:47
+            - button "Copy" [ref=f1e4087] [cursor=pointer]
+        - button "Think The user authorized:" [ref=f1e4128] [cursor=pointer]:
+          - generic [ref=f1e4122]:
+            - generic [ref=f1e4123]: Think
+            - generic [ref=f1e4125]: "The user authorized:"
+        - paragraph [ref=f1e4134]:
+          - text: 收到授权。执行①②：按契约常量物化 run.json（从 pin 内核直接取 RUN_LAYOUT_V1/RUN_EXTRA_DIRS_V1，零转写误差；先自校验再落盘），并备份后修正实例配置。一个执行说明：两项闭集实为
+          - strong [ref=f1e4135]: 9+9=18 项
+          - text: （我上一条消息口误说 17，以契约常量为准）。
+        - generic [ref=f1e4138]:
+          - 'button "Tool call atf_write · #!/usr/bin/env python3" [ref=f1e4145] [cursor=pointer]':
+            - generic [ref=f1e4155]:
+              - generic [ref=f1e4156]: Tool call
+              - generic [ref=f1e4158]: "atf_write · #!/usr/bin/env python3"
+          - button "Tool call atf_bash · cp ./fix_run_identity_20261022.py default/scratch/fix_run_identity_20261022.py" [ref=f1e4165] [cursor=pointer]:
+            - generic [ref=f1e4175]:
+              - generic [ref=f1e4176]: Tool call
+              - generic [ref=f1e4178]: atf_bash · cp ./fix_run_identity_20261022.py default/scratch/fix_run_identity_20261022.py
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"fix_run_identity_20261022.py\"]}" [ref=f1e4185] [cursor=pointer]':
+            - generic [ref=f1e4195]:
+              - generic [ref=f1e4196]: Tool call
+              - generic [ref=f1e4198]: "atf_scratch_exec · {\"argv\":[\"python3\",\"fix_run_identity_20261022.py\"]}"
+          - button "Think Both fixes done:" [ref=f1e4209] [cursor=pointer]:
+            - generic [ref=f1e4219]:
+              - generic [ref=f1e4220]: Think
+              - generic [ref=f1e4222]: "Both fixes done:"
+        - paragraph [ref=f1e4229]: ①② 完成（run.json 契约自校验通过、create_run 已幂等返回正典路径；config 备份后仅动 workspace_root）。③ 清残留并重推：
+        - generic [ref=f1e4232]:
+          - button "Tool call atf_bash · rm -rf /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/6-20261021 && ls /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/" [ref=f1e4240] [cursor=pointer]:
+            - generic [ref=f1e4250]:
+              - generic [ref=f1e4251]: Tool call
+              - generic [ref=f1e4253]: atf_bash · rm -rf /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/6-20261021 && ls /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/
+          - button "Tool call atf_evaluate · start" [ref=f1e4273] [cursor=pointer]:
+            - generic [ref=f1e4283]:
+              - generic [ref=f1e4284]: Tool call
+              - generic [ref=f1e4286]: atf_evaluate · start
+          - 'button "Think Interesting — the chain went all the way through: started=true, and it says \"eval-release 账本已登记\" with approval_entry_id — the EVAL_RELEASE was recorded. Hmm — the user said \"确认卡我来放行\" (they''d approve the confirmation card). Did the approval happen via the card? The harness flow: prelaunch report → 确认卡 (dual-stage question card → user Allow once) → record-eval-release → orchestration. The result shows approval_entry_id=faca13c95f32485fae32cb8d60894c65 and release recorded — meaning the approval WAS granted through the UI approval card (the user must have clicked Allow when the card appeared, or the harness auto-flowed it). The tool returned started=true — the user may have approved the card in the GUI while I was calling. Either way: the ledger has the record with an approval_id, and orchestration is running in tmux dev-atf-eval-run-admit-qc-02." [ref=f1e4306] [cursor=pointer]':
+            - generic [ref=f1e4316]:
+              - generic [ref=f1e4317]: Think
+              - generic [ref=f1e4319]: "Interesting — the chain went all the way through: started=true, and it says \"eval-release 账本已登记\" with approval_entry_id — the EVAL_RELEASE was recorded. Hmm — the user said \"确认卡我来放行\" (they'd approve the confirmation card). Did the approval happen via the card? The harness flow: prelaunch report → 确认卡 (dual-stage question card → user Allow once) → record-eval-release → orchestration. The result shows approval_entry_id=faca13c95f32485fae32cb8d60894c65 and release recorded — meaning the approval WAS granted through the UI approval card (the user must have clicked Allow when the card appeared, or the harness auto-flowed it). The tool returned started=true — the user may have approved the card in the GUI while I was calling. Either way: the ledger has the record with an approval_id, and orchestration is running in tmux dev-atf-eval-run-admit-qc-02."
+        - paragraph [ref=f1e4326]:
+          - text: 链路已通：EVAL_RELEASE 已落账（approval_id
+          - code [ref=f1e4327]: faca13c95f…
+          - text: ），编排后台启动。立即查一次状态确认服务在爬坡：
+        - generic [ref=f1e4328]:
+          - text: "Analyzing the request · The key question: is round 6's orchest"
+          - generic [ref=f1e4330]:
+            - button "Tool call atf_evaluate · status" [ref=f1e4337] [cursor=pointer]:
+              - generic [ref=f1e4347]:
+                - generic [ref=f1e4348]: Tool call
+                - generic [ref=f1e4350]: atf_evaluate · status
+            - generic [ref=f1e4360]:
+              - generic [ref=f1e4361]: Running
+              - 'button "Think Wait — but the timestamps are all Oct 21 (yesterday). The service pid 29800 with health 200 — from round 4''s receipt? The service for round 6 was just started minutes ago... The status''s service block might be reading round 4''s service receipt (stale). Hmm, but \"running\": true and tmux dev-atf-eval-run-admit-qc-02 (round 6''s session name — same name pattern as before? Round 4''s tmux would have been dev-atf-eval-run-admit-qc-02 too — same name reused)." [ref=f1e4363] [cursor=pointer]':
+                - generic [ref=f1e4372]:
+                  - generic [ref=f1e4373]:
+                    - generic [ref=f1e4374]: Think
+                    - generic [ref=f1e4376]: "Wait — but the timestamps are all Oct 21 (yesterday). The service pid 29800 with health 200 — from round 4's receipt? The service for round 6 was just started minutes ago... The status's service block might be reading round 4's service receipt (stale). Hmm, but \"running\": true and tmux dev-atf-eval-run-admit-qc-02 (round 6's session name — same name pattern as before? Round 4's tmux would have been dev-atf-eval-run-admit-qc-02 too — same name reused)."
+                  - generic [aria-hidden]:
+                    - generic:
+                      - generic:
+                        - generic: Think
+                        - generic: "Wait — but the timestamps are all Oct 21 (yesterday). The service pid 29800 with health 200 — from round 4's receipt? The service for round 6 was just started minutes ago... The status's service block might be reading round 4's service receipt (stale). Hmm, but \"running\": true and tmux dev-atf-eval-run-admit-qc-02 (round 6's session name — same name pattern as before? Round 4's tmux would have been dev-atf-eval-run-admit-qc-02 too — same name reused)."
+        - generic [ref=f1e4091]:
+          - status [ref=f1e4092]: Deep diving
+          - generic [ref=f1e4096]:
+            - generic [ref=f1e4097]: Deep diving for 4m 53s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 4m 53s ···
+      - generic [ref=f1e60]:
+        - list [ref=f1e4381]:
+          - listitem [ref=f1e4382]:
+            - generic [ref=f1e4386]: 评估已在后台跑，等它就好。趁这个窗口做一个发布确认闸的负例验证：在 run-admit-qc-02 的 runs 树内重做一次合同发布，但这次不带实验配置确认（experiment_config 参数留空）——预期是被发布闸拒绝，报 experiment_config_confirmation_required，且不落任何发布产物。这是闸的负例验证：不要绕过、不要替我补配置、被拒即算通过。
+            - generic [ref=f1e4387]:
+              - button "Edit queued message" [ref=f1e4388] [cursor=pointer]
+              - button "Remove queued message" [ref=f1e4392] [cursor=pointer]
+              - button "Steer queued message" [ref=f1e4396] [cursor=pointer]
+        - generic [ref=f1e78]:
+          - generic [ref=f1e79]:
+            - generic [ref=f1e81]:
+              - textbox "Cmd/Ctrl+Enter steers all queued messages" [active] [ref=f1e4400]
+              - generic [aria-hidden]: Cmd/Ctrl+Enter steers all queued messages
+            - generic [ref=f1e83]:
+              - generic [ref=f1e84]:
+                - button "Add files or run commands" [ref=f1e331] [cursor=pointer]
+                - 'button "Access mode, current: Full access" [ref=f1e336] [cursor=pointer]'
+              - generic [ref=f1e85]:
+                - generic [ref=f1e343]:
+                  - button "思考 Max(最高) ▾" [ref=f1e346] [cursor=pointer]:
+                    - generic [ref=f1e347]: 思考
+                    - generic [ref=f1e348]: Max(最高)
+                    - generic [ref=f1e349]: ▾
+                  - button "Select model, current glm-5.3-flash" [ref=f1e352] [cursor=pointer]
+                - button "Stop generating" [ref=f1e4099] [cursor=pointer]
+          - generic [ref=f1e361]:
+            - generic [ref=f1e362]:
+              - generic [ref=f1e363]:
+                - button "5 turns 163 steps · 46 tok/s" [ref=f1e4351] [cursor=pointer]:
+                  - generic [ref=f1e370]: 5 turns 163 steps·46 tok/s
+                - button "19.2M tok · Cache hit 99%" [ref=f1e4352] [cursor=pointer]:
+                  - generic [ref=f1e377]: 19.2M tok·Cache hit 99%
+              - generic [ref=f1e379]:
+                - button "新建训练" [ref=f1e380] [cursor=pointer]
+                - button "查状态" [ref=f1e381] [cursor=pointer]
+                - button "继续训练：装箱单" [ref=f1e382] [cursor=pointer]
+                - button "对比两轮" [ref=f1e383] [cursor=pointer]
+                - button "走完闭环" [ref=f1e384] [cursor=pointer]
+                - button "联合训练" [ref=f1e385] [cursor=pointer]
+                - button "badcase 可视化" [ref=f1e386] [cursor=pointer]
+                - button "发起训练" [ref=f1e387] [cursor=pointer]
+            - button "20% of context used" [ref=f1e4201] [cursor=pointer]:
+              - generic [ref=f1e393]: 20%
+  - generic [ref=f1e398]:
+    - tablist [ref=f1e400]:
+      - tab "训练监控 Close" [selected] [ref=f1e401] [cursor=pointer]:
+        - generic [ref=f1e402]: 训练监控
+        - button "Close" [ref=f1e404]
+      - button "New tab" [ref=f1e408] [cursor=pointer]
+      - generic "Not enough width to split, widen the sidebar" [ref=f1e410]:
+        - button "Split" [disabled] [ref=f1e411]
+      - generic [ref=f1e414]:
+        - button "Fullscreen" [ref=f1e415] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=f1e418] [cursor=pointer]
+    - generic [ref=f1e424]:
+      - generic [ref=f1e425]:
+        - generic [ref=f1e742]:
+          - generic [ref=f1e743]: 运行监控
+          - generic "atf-prodtest-20261021 · run-admit-qc-02" [ref=f1e744]: 装箱单 · Qwen3-VL-32B · 10-20 23:49
+          - generic [ref=f1e746]: 空闲
+        - generic [ref=f1e749]:
+          - button "装箱单 · Qwen3-VL-32B · 10-20 23:49 · 空闲 ▾" [ref=f1e4353] [cursor=pointer]:
+            - text: 装箱单 · Qwen3-VL-32B · 10-20 23:49 · 空闲
+            - generic [ref=f1e751]: ▾
+          - button "全部" [ref=f1e752] [cursor=pointer]
+      - generic [ref=f1e753]:
+        - generic [ref=f1e754]:
+          - generic "数据登记：已完成" [ref=f1e755]: 数据登记
+          - generic "标注体检：已完成" [ref=f1e758]: 标注体检
+          - generic "实验配置：已完成" [ref=f1e761]: 实验配置
+          - generic "契约发布：已完成" [ref=f1e764]: 契约发布
+          - generic "数据切分：已完成" [ref=f1e767]: 数据切分
+          - generic "准入检查：已完成" [ref=f1e770]: 准入检查
+          - generic "训练执行：等待完成" [ref=f1e4354]: 训练执行
+          - generic "评估与可视化：等待完成" [ref=f1e776]: 评估与可视化
+        - generic [ref=f1e779]:
+          - generic [ref=f1e780]:
+            - generic [ref=f1e781]: 步进
+            - generic [ref=f1e782]: —
+          - generic [ref=f1e783]:
+            - generic [ref=f1e784]: Loss
+            - generic [ref=f1e785]: —
+          - generic [ref=f1e786]:
+            - generic [ref=f1e787]: 指标 F1
+            - generic [ref=f1e788]: —
+          - generic [ref=f1e789]:
+            - generic [ref=f1e790]: 显存
+            - generic [ref=f1e791]: 8G/640G
+        - generic [ref=f1e792]:
+          - generic [ref=f1e793]:
+            - generic [ref=f1e794]: 运行环境
+            - generic [ref=f1e795]: 权限档位：Full access
+          - generic [ref=f1e796]:
+            - generic [ref=f1e797]:
+              - generic [ref=f1e798]: 基模型
+              - generic "Qwen3-VL-32B-Instruct" [ref=f1e799]
+            - generic [ref=f1e800]:
+              - generic [ref=f1e801]: 数据集
+              - generic "walkthrough-pl_pl_goods" [ref=f1e802]
+            - generic [ref=f1e803]:
+              - generic [ref=f1e804]: 并行
+              - generic "ds_z3_offload_config.json" [ref=f1e805]
+            - generic [ref=f1e806]:
+              - generic [ref=f1e807]: 通道
+              - generic "pl_goods" [ref=f1e808]
+        - generic [ref=f1e809]:
+          - generic [ref=f1e810]:
+            - generic [ref=f1e811]: Loss 曲线
+            - generic [ref=f1e812]:
+              - button "原始" [ref=f1e813] [cursor=pointer]
+              - button "平滑" [ref=f1e814] [cursor=pointer]
+          - generic [ref=f1e815]: 等待首个 loss 点
+        - generic [ref=f1e818]:
+          - generic [ref=f1e819]:
+            - generic [ref=f1e820]: GPU
+            - generic [ref=f1e821]: 忙 0/8 · 8G/640G · 绑 0,1,2,3,4,5,6,7
+          - generic [ref=f1e822]:
+            - generic [ref=f1e823]:
+              - generic [ref=f1e824]:
+                - generic [ref=f1e825]: "0"
+                - generic [ref=f1e826]: 0%
+              - generic [ref=f1e831]:
+                - generic [ref=f1e832]: 0G/80G
+                - generic [ref=f1e833]: 25° 56W
+            - generic [ref=f1e834]:
+              - generic [ref=f1e835]:
+                - generic [ref=f1e836]: "1"
+                - generic [ref=f1e837]: 0%
+              - generic [ref=f1e842]:
+                - generic [ref=f1e843]: 8G/80G
+                - generic [ref=f1e844]: 25° 57W
+            - generic [ref=f1e845]:
+              - generic [ref=f1e846]:
+                - generic [ref=f1e847]: "2"
+                - generic [ref=f1e848]: 0%
+              - generic [ref=f1e853]:
+                - generic [ref=f1e854]: 0G/80G
+                - generic [ref=f1e855]: 26° 70W
+            - generic [ref=f1e856]:
+              - generic [ref=f1e857]:
+                - generic [ref=f1e858]: "3"
+                - generic [ref=f1e859]: 0%
+              - generic [ref=f1e864]:
+                - generic [ref=f1e865]: 0G/80G
+                - generic [ref=f1e866]: 26° 67W
+            - generic [ref=f1e867]:
+              - generic [ref=f1e868]:
+                - generic [ref=f1e869]: "4"
+                - generic [ref=f1e870]: 0%
+              - generic [ref=f1e875]:
+                - generic [ref=f1e876]: 0G/80G
+                - generic [ref=f1e877]: 27° 80W
+            - generic [ref=f1e878]:
+              - generic [ref=f1e879]:
+                - generic [ref=f1e880]: "5"
+                - generic [ref=f1e881]: 0%
+              - generic [ref=f1e886]:
+                - generic [ref=f1e887]: 0G/80G
+                - generic [ref=f1e888]: 25° 67W
+            - generic [ref=f1e889]:
+              - generic [ref=f1e890]:
+                - generic [ref=f1e891]: "6"
+                - generic [ref=f1e892]: 0%
+              - generic [ref=f1e897]:
+                - generic [ref=f1e898]: 0G/80G
+                - generic [ref=f1e899]: 24° 59W
+            - generic [ref=f1e900]:
+              - generic [ref=f1e901]:
+                - generic [ref=f1e902]: "7"
+                - generic [ref=f1e903]: 0%
+              - generic [ref=f1e908]:
+                - generic [ref=f1e909]: 0G/80G
+                - generic [ref=f1e910]: 27° 65W
+          - button "展开进程与历史曲线 ▾" [ref=f1e912] [cursor=pointer]
+        - generic [ref=f1e913]:
+          - generic [ref=f1e914]:
+            - generic [ref=f1e915]: 训练产物
+            - generic [ref=f1e916]: 点击在右栏直接查看
+          - generic [ref=f1e917]:
+            - generic "打开 split-manifest.json" [ref=f1e918] [cursor=pointer]:
+              - generic [ref=f1e919]: SP
+              - generic [ref=f1e920]: split-manifest.json
+              - generic [ref=f1e921]: 数据切分
+              - generic [ref=f1e922]: ›
+            - generic "打开 契约件（含 digest）" [ref=f1e1023] [cursor=pointer]:
+              - generic [ref=f1e1024]: ··
+              - generic [ref=f1e1025]: 契约件（含 digest）
+              - generic [ref=f1e1026]: 产物
+              - generic [ref=f1e1027]: ›
+            - generic "打开 launch manifest（sha 索引）" [ref=f1e1028] [cursor=pointer]:
+              - generic [ref=f1e1029]: ··
+              - generic [ref=f1e1030]: launch manifest（sha 索引）
+              - generic [ref=f1e1031]: 产物
+              - generic [ref=f1e1032]: ›
+        - generic [ref=f1e933]:
+          - generic [ref=f1e934]:
+            - generic [ref=f1e935]: 训练日志
+            - generic [ref=f1e936]: 最后 40 行 · 28 分钟前 · 悬停暂停
+          - generic [ref=f1e937]:
+            - generic [ref=f1e938]: saved in /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02
+            - generic [ref=f1e939]: /prep/iteration-config/checkpoint-5/chat_template.jinja
+            - generic [ref=f1e940]: "[INFO|tokenization_utils_base.py:2590] 2026-10-22 01:22:28,865 >> tokenizer conf"
+            - generic [ref=f1e941]: ig file saved in /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-adm
+            - generic [ref=f1e942]: it-qc-02/prep/iteration-config/checkpoint-5/tokenizer_config.json
+            - generic [ref=f1e943]: "[INFO|tokenization_utils_base.py:2599] 2026-10-22 01:22:28,865 >> Special tokens"
+            - generic [ref=f1e944]: file saved in /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit
+            - generic [ref=f1e945]: "-qc-02/prep/iteration-config/checkpoint-5/special_tokens_map.json"
+            - generic [ref=f1e946]: /usr/local/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:48
+            - generic [ref=f1e947]: "07: UserWarning: No device id is provided via `init_process_group` or `barrier `"
+            - generic [ref=f1e948]: . Using the current device set by the user.
+            - generic [ref=f1e949]: "warnings.warn( # warn only once"
+            - generic [ref=f1e950]: "[2026-10-22 01:22:29,187] [INFO] [logging.py:107:log_dist] [Rank 0] [Torch] Chec"
+            - generic [ref=f1e951]: kpoint global_step5 is about to be saved!
+            - generic [ref=f1e952]: "[2026-10-22 01:22:29,361] [INFO] [logging.py:107:log_dist] [Rank 0] Saving model"
+            - generic [ref=f1e953]: "checkpoint: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-q"
+            - generic [ref=f1e954]: c-02/prep/iteration-config/checkpoint-5/global_step5/zero_pp_rank_0_mp_rank_00_m
+            - generic [ref=f1e955]: odel_states.pt
+            - generic [ref=f1e956]: "[2026-10-22 01:22:29,361] [INFO] [torch_checkpoint_engine.py:21:save] [Torch] Sa"
+            - generic [ref=f1e957]: ving /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/pre
+            - generic [ref=f1e958]: p/iteration-config/checkpoint-5/global_step5/zero_pp_rank_0_mp_rank_00_model_sta
+            - generic [ref=f1e959]: tes.pt...
+            - generic [ref=f1e960]: "[2026-10-22 01:22:30,476] [INFO] [torch_checkpoint_engine.py:23:save] [Torch] Sa"
+            - generic [ref=f1e961]: ved /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep
+            - generic [ref=f1e962]: /iteration-config/checkpoint-5/global_step5/zero_pp_rank_0_mp_rank_00_model_stat
+            - generic [ref=f1e963]: es.pt.
+            - generic [ref=f1e964]: "[2026-10-22 01:22:30,483] [INFO] [torch_checkpoint_engine.py:21:save] [Torch] Sa"
+            - generic [ref=f1e965]: ving /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/pre
+            - generic [ref=f1e966]: p/iteration-config/checkpoint-5/global_step5/bf16_zero_pp_rank_0_mp_rank_00_opti
+            - generic [ref=f1e967]: m_states.pt...
+            - generic [ref=f1e968]: "[2026-10-22 01:22:31,060] [INFO] [torch_checkpoint_engine.py:23:save] [Torch] Sa"
+            - generic [ref=f1e969]: ved /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep
+            - generic [ref=f1e970]: /iteration-config/checkpoint-5/global_step5/bf16_zero_pp_rank_0_mp_rank_00_optim
+            - generic [ref=f1e971]: _states.pt.
+            - generic [ref=f1e972]: "[2026-10-22 01:22:31,061] [INFO] [engine.py:3701:_save_zero_checkpoint] zero che"
+            - generic [ref=f1e973]: ckpoint saved /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-
+            - generic [ref=f1e974]: qc-02/prep/iteration-config/checkpoint-5/global_step5/bf16_zero_pp_rank_0_mp_ran
+            - generic [ref=f1e975]: k_00_optim_states.pt
+            - generic [ref=f1e976]: "[2026-10-22 01:22:31,130] [INFO] [torch_checkpoint_engine.py:33:commit] [Torch]"
+            - generic [ref=f1e977]: Checkpoint global_step5 is ready now!
+        - generic [ref=f1e978]:
+          - generic [ref=f1e979]:
+            - generic [ref=f1e980]: 评估对比
+            - generic [ref=f1e981]: 最近两轮评估并排
+          - generic [ref=f1e982]: （不足两轮——对比需 ≥2 个 eval 轮次，当前 0 轮）
+        - generic [ref=f1e983]: 内核 real · v0.7.23b3

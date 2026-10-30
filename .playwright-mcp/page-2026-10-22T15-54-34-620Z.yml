@@ -1,0 +1,302 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e10]:
+          - generic [ref=e11]: ATF
+          - generic [ref=e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e17] [cursor=pointer]
+    - button "New session" [ref=e20] [cursor=pointer]:
+      - generic [ref=e21]: New Session
+    - navigation "Global panels" [ref=e26]:
+      - button "Plugins" [ref=e27] [cursor=pointer]
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]: Workspaces
+        - generic [ref=e42]:
+          - button "Search sessions" [ref=e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e47]:
+          - button "View options" [ref=e49] [cursor=pointer]
+          - button "Add workspace" [ref=e53] [cursor=pointer]
+      - tree "Sessions" [ref=e58]:
+        - generic [ref=e110]:
+          - treeitem "ws-pl-walkthrough-r1 Workspace actions for ws-pl-walkthrough-r1 New session in ws-pl-walkthrough-r1" [expanded] [ref=e358] [cursor=pointer]:
+            - generic [ref=e118]: ws-pl-walkthrough-r1
+            - generic [ref=e362]:
+              - button "Workspace actions for ws-pl-walkthrough-r1" [ref=e364]
+              - button "New session in ws-pl-walkthrough-r1" [ref=e369]
+          - treeitem "Running 训练数据构造前校验演练 now" [selected] [ref=e1572] [cursor=pointer]:
+            - generic [ref=e374]: Running
+            - generic [ref=e375]: 训练数据构造前校验演练
+            - generic [ref=e473]: now
+        - treeitem "ws-pl-walkthrough" [ref=e122] [cursor=pointer]
+        - generic [ref=e128]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e130] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 7h" [ref=e1276] [cursor=pointer]:
+            - generic [ref=e141]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e142]: 7h
+          - treeitem "装箱单字段抽取新实验全流程 9h" [ref=e1277] [cursor=pointer]:
+            - generic [ref=e146]: 装箱单字段抽取新实验全流程
+            - generic [ref=e147]: 9h
+        - treeitem "atf-prodtest-20261021" [ref=e150] [cursor=pointer]
+        - treeitem "a4-hotws" [ref=e158] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e166] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e174] [cursor=pointer]
+        - treeitem "sam" [ref=e182] [cursor=pointer]
+    - button "Settings" [ref=e68] [cursor=pointer]
+  - generic [ref=e376]:
+    - banner [ref=e378]:
+      - generic [ref=e379]:
+        - generic [ref=e380]:
+          - generic [ref=e474]:
+            - navigation "Session hierarchy" [ref=e475]:
+              - generic [ref=e476]: 训练数据构造前校验演练
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e480]: Standard mode
+          - generic [ref=e487]:
+            - button "More actions" [ref=e489] [cursor=pointer]
+            - generic [ref=e494]:
+              - button "选择实验 ▾" [ref=e496] [cursor=pointer]
+              - button "监控" [ref=e498] [cursor=pointer]
+          - button "Open right sidebar" [ref=e383] [cursor=pointer]
+        - tablist [ref=e499]:
+          - tab "Chat" [selected] [ref=e500] [cursor=pointer]
+          - tab "Trajectory" [ref=e501] [cursor=pointer]
+    - generic [ref=e387]:
+      - generic [ref=e505]:
+        - navigation "Turn navigation" [ref=e1278] [cursor=pointer]:
+          - generic [ref=e1280]:
+            - button "Jump to turn 1" [ref=e1281]
+            - button "Jump to turn 2" [ref=e1282]
+            - button "Jump to turn 3" [ref=e1578]
+        - generic [ref=e508]:
+          - generic [ref=e511]:
+            - generic [ref=e512]: 请对实验 run pl-walkthrough-r1 发起训练数据构造（只到构造前校验，不真跑构造）。直接调用 atf_prepare_training 工具，run_id=pl-walkthrough-r1，目标＝生成迭代配置。约束：不要传 --token-provider 等任何闸门绕过参数；如果构造被拒或报错，原样回报错误即可，不要尝试补写任何文件、不要弹确认卡、不要重试。
+            - generic [ref=e514]:
+              - generic [ref=e515]: 23:37
+              - button "Copy" [ref=e516] [cursor=pointer]
+          - generic [ref=e1187]:
+            - status [ref=e1188]: Completed
+            - button "Completed in 3m 1s" [ref=e1189] [cursor=pointer]
+          - generic [ref=e1166]:
+            - paragraph [ref=e1167]:
+              - text: 调用已完成，构造在
+              - strong [ref=e1168]: 前置校验第一阶段即被拒
+              - text: （exit code 2，argparse 层，未产生任何写入）。按约束：未重试、未补写文件、未弹确认卡。原样回报如下。
+            - heading "调用事实" [level=2] [ref=e1169]
+            - list [ref=e1170]:
+              - listitem [ref=e1171]:
+                - strong [ref=e1172]: 工具面说明
+                - text: ：我的工具集中没有名为
+                - code [ref=e1173]: atf_prepare_training
+                - text: 的直连工具；对应能力是
+                - code [ref=e1174]: atf-prepare-training
+                - text: 技能（已加载），其构造入口为 pin 单源脚本
+                - code [ref=e1175]: generate_iteration_config.py
+                - text: ，经受控执行通道
+                - code [ref=e1176]: atf_scratch_exec
+                - text: 调用。
+              - listitem [ref=e1177]:
+                - strong [ref=e1178]: 实际执行
+                - text: ：
+                - code [ref=e1179]: generate_iteration_config.py --run-id pl-walkthrough-r1
+                - text: ——仅此一个参数，未传
+                - code [ref=e1180]: "--token-provider"
+                - text: 等任何绕过参数（该脚本参数面上也不存在
+                - code [ref=e1181]: "--token-provider"
+                - text: 这一项）。
+              - listitem [ref=e1182]:
+                - strong [ref=e1193]: 原样错误输出（stderr，未改动）
+                - text: ：
+            - generic [ref=e1194]:
+              - generic [ref=e1196]:
+                - generic [ref=e1197]: Code block
+                - generic [ref=e1199]:
+                  - button "Wrap lines" [pressed] [ref=e1200] [cursor=pointer]
+                  - button "Copy" [ref=e1205] [cursor=pointer]
+              - code [ref=e1211]: "usage: generate_iteration_config.py [-h] --run-id RUN_ID [--lane LANE] [--experiment-config EXPERIMENT_CONFIG] [--image-min-pixels IMAGE_MIN_PIXELS] [--image-max-pixels IMAGE_MAX_PIXELS] --variants-dir VARIANTS_DIR --field-config FIELD_CONFIG --l1-dir L1_DIR [--deploy DEPLOY] [--source-version SOURCE_VERSION] --base-model BASE_MODEL [--base-model-family BASE_MODEL_FAMILY] [--modes MODES] [--epochs EPOCHS] [--lora-rank LORA_RANK] [--lora-alpha LORA_ALPHA] [--warmup-ratio WARMUP_RATIO] [--token-budget TOKEN_BUDGET] [--run-dir RUN_DIR] [--output-dir OUTPUT_DIR] --out-dir OUT_DIR generate_iteration_config.py: error: the following arguments are required: --variants-dir, --field-config, --l1-dir, --base-model, --out-dir"
+            - heading "拒因解读（只读核实，未做任何修复动作）" [level=2] [ref=e1212]
+            - paragraph [ref=e1213]:
+              - text: 被拒的直接原因是脚本必填上游参数缺失；且即使补这些路径也无从指起——run
+              - code [ref=e1214]: pl-walkthrough-r1
+              - text: 目录下当前
+              - strong [ref=e1215]:
+                - text: 只有
+                - code [ref=e1216]: webui/
+                - text: （binding.json + segments.json）
+              - text: ，不存在任何迭代配置生成所需的上游事实：
+            - list [ref=e1217]:
+              - listitem [ref=e1218]:
+                - code [ref=e1219]: "--variants-dir"
+                - text: ：无变体数据目录（无
+                - code [ref=e1220]: prep/
+                - text: 、无 L1 产物）
+              - listitem [ref=e1221]:
+                - code [ref=e1222]: "--field-config"
+                - text: ：无
+                - code [ref=e1223]: experiment-setup/field-config.json
+              - listitem [ref=e1224]:
+                - code [ref=e1225]: "--l1-dir"
+                - text: ：无 L1 workspace（split-manifest / leakage-audit）
+              - listitem [ref=e1226]:
+                - code [ref=e1227]: "--base-model"
+                - text: ：无实验门确认的基模型记录
+              - listitem [ref=e1228]:
+                - code [ref=e1229]: "--out-dir"
+                - text: /
+                - code [ref=e1230]: "--token-budget"
+                - text: ：无
+                - code [ref=e1231]: prep/token_budget.json
+                - text: （K1-2 单源，缺预算本会在更深处 fail-closed 报
+                - code [ref=e1232]: token_budget_missing
+                - text: ）
+            - paragraph [ref=e1233]:
+              - text: 按技能合同的停止-恢复表，这属于
+              - strong [ref=e1234]:
+                - code [ref=e1235]: blocked
+                - text: （上游事实未闭合）
+              - text: ：迭代配置生成需先有实验门产物、L1 资产与变体目录闭合。唯一下一动作（供你裁量，我未执行）：先走该 run 的数据准入/实验门链产出上述上游事实，再重推本次调用。
+          - generic [ref=e1239]:
+            - button "Copy" [ref=e1240] [cursor=pointer]
+            - generic [ref=e1244]:
+              - button "Good response" [ref=e1245] [cursor=pointer]
+              - button "Bad response" [ref=e1248] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e1251] [cursor=pointer]
+            - generic [ref=e1257]:
+              - button "Usage 315K tok" [ref=e1259] [cursor=pointer]
+              - generic [ref=e1265]: 23:40
+          - generic [ref=e1285]:
+            - generic [ref=e1286]: 继续对实验 run pl-walkthrough-r1 发起训练数据构造的前置校验（仍然不真跑构造、不写任何文件）。这次用受控执行通道直调 pin 单源脚本 build_training_variants.py，参数如下（原样传，不要改、不要增删）：--l1-workspace /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --risk-signals /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/risk-signals/risk-signals.json --experiment-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/experiment-config.json --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants。约束：不要传 --token-provider，也不要传 --allow-token-gate-skip 或 --debug-skip-token-gate 之类豁免参数。脚本被拒或报错就停止，把脚本的退出码和输出原样记录，不要重试、不要补救、不要写任何文件。
+            - generic [ref=e1288]:
+              - generic [ref=e1289]: 23:51
+              - button "Copy" [ref=e1290] [cursor=pointer]
+          - generic [ref=e1472]:
+            - status [ref=e1473]: Completed
+            - button "Completed in 1m 49s" [ref=e1474] [cursor=pointer]
+          - generic [ref=e1482]:
+            - paragraph [ref=e1483]:
+              - text: 执行完毕，脚本在构造前置校验的
+              - strong [ref=e1484]: token gate 处 fail-closed 被拒
+              - text: 。按约束：未传任何豁免参数、未重试、未补救、未写任何文件。记录如下。
+            - heading "调用事实（原样）" [level=2] [ref=e1485]
+            - list [ref=e1486]:
+              - listitem [ref=e1487]:
+                - strong [ref=e1488]: 脚本
+                - text: （pin 单源）：
+                - code [ref=e1489]: /data/sam/ATF-Harness/.atf-pinned/skills/atf-admit-training-data/scripts/build_training_variants.py
+              - listitem [ref=e1490]:
+                - strong [ref=e1491]: 参数
+                - text: ：与你给出的完全一致，仅
+                - code [ref=e1492]: "--l1-workspace / --field-config / --risk-signals / --experiment-config / --run-dir / --out"
+                - text: 六项；
+                - strong [ref=e1493]: 未传
+                - code [ref=e1494]: "--token-provider"
+                - text: ，
+                - strong [ref=e1495]: 未传
+                - code [ref=e1496]: "--debug-skip-token-gate"
+                - text: /
+                - code [ref=e1497]: "--allow-token-gate-skip"
+                - text: ，也未设置任何环境变量豁免
+              - listitem [ref=e1498]:
+                - strong [ref=e1499]: 退出码
+                - text: ：
+                - code [ref=e1500]: "2"
+              - listitem [ref=e1501]:
+                - strong [ref=e1502]: stdout
+                - text: ：（空）
+              - listitem [ref=e1503]:
+                - strong [ref=e1504]: stderr 原文（逐字，未改动）
+                - text: ：
+            - generic [ref=e1505]:
+              - generic [ref=e1507]:
+                - generic [ref=e1508]: json
+                - generic [ref=e1510]:
+                  - button "Wrap lines" [pressed] [ref=e1511] [cursor=pointer]
+                  - button "Copy" [ref=e1516] [cursor=pointer]
+              - code [ref=e1522]:
+                - generic [ref=e1523]: "{\"error\": \"token_gate_not_configured\", \"detail\": \"--token-provider 生产必填(未传即整体 skipped 是 D59 病根);豁免须 --debug-skip-token-gate 与 ATF_ALLOW_TOKEN_GATE_SKIP=1 同时在场\"}"
+            - heading "写入核实（只读）" [level=2] [ref=e1524]
+            - list [ref=e1525]:
+              - listitem [ref=e1526]: 本次调用耗时 76ms、在 token gate 处即拒，未产生任何写入。
+              - listitem [ref=e1527]:
+                - code [ref=e1528]: "--out"
+                - text: 指向的
+                - code [ref=e1529]: prep/variants/
+                - text: 目录内容（dataset_info.json、train.jsonl、train.lineage.jsonl、variants_report.json）时间戳为
+                - strong [ref=e1530]: 2026-10-22 08:32
+                - text: ，早于本次调用（当前 23:53）约 15 小时——系此前构造的既有产物，非本次所写。
+            - heading "状态" [level=2] [ref=e1531]
+            - paragraph [ref=e1532]:
+              - code [ref=e1533]: blocked
+              - text: （构造前校验未通过，reason＝
+              - code [ref=e1534]: token_gate_not_configured
+              - text: ）。脚本自述的两条通路——生产通路
+              - code [ref=e1535]: "--token-provider"
+              - text: 与豁免通路
+              - code [ref=e1536]: "--debug-skip-token-gate"
+              - text: ＋
+              - code [ref=e1537]: ATF_ALLOW_TOKEN_GATE_SKIP=1
+              - text: ——均在你的禁传清单内，故按约束就此停止；是否提供合法 token provider 重推，由你裁定。
+          - generic [ref=e1541]:
+            - button "Copy" [ref=e1542] [cursor=pointer]
+            - generic [ref=e1546]:
+              - button "Good response" [ref=e1547] [cursor=pointer]
+              - button "Bad response" [ref=e1550] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e1553] [cursor=pointer]
+            - generic [ref=e1559]:
+              - button "Usage 204K tok" [ref=e1561] [cursor=pointer]
+              - generic [ref=e1567]: 23:53
+          - generic [ref=e1581]:
+            - generic [ref=e1582]: 第三轮：对 run pl-walkthrough-r1 发起迭代配置构造的前置校验（不真跑构造、不写任何文件）。受控执行通道直调 pin 单源脚本 /data/sam/ATF-Harness/.atf-pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数如下（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training。约束：不传任何豁免或绕过参数；被拒即停止，原样记录退出码与输出，不要重试、不要补救、不要写任何文件。
+            - generic [ref=e1584]:
+              - generic [ref=e1585]: 23:54
+              - button "Copy" [ref=e1586] [cursor=pointer]
+          - generic [ref=e1590]:
+            - status [ref=e1591]: Deep diving
+            - generic [ref=e1595]:
+              - generic [ref=e1596]: Deep diving for 1s ···
+              - generic [aria-hidden]:
+                - generic: Deep diving for 1s ···
+      - generic [ref=e422]:
+        - generic [ref=e423]:
+          - generic [ref=e425]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=e528]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e427]:
+            - generic [ref=e428]:
+              - button "Add files or run commands" [ref=e429] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e434] [cursor=pointer]':
+                - generic [ref=e438]: Full access
+            - generic [ref=e442]:
+              - generic [ref=e443]:
+                - button "思考 Low(低) ▾" [ref=e446] [cursor=pointer]:
+                  - generic [ref=e447]: 思考
+                  - generic [ref=e448]: Low(低)
+                  - generic [ref=e449]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e452] [cursor=pointer]:
+                  - generic [ref=e453]: glm-5.3-flash
+              - button "Stop generating" [ref=e1598] [cursor=pointer]
+        - generic [ref=e531]:
+          - generic [ref=e532]:
+            - generic [ref=e617]:
+              - button "2 turns 16 steps · 55 tok/s" [ref=e1570] [cursor=pointer]:
+                - generic [ref=e624]: 2 turns 16 steps·55 tok/s
+              - button "519K tok · Cache hit 92%" [ref=e1571] [cursor=pointer]:
+                - generic [ref=e631]: 519K tok·Cache hit 92%
+            - generic [ref=e533]:
+              - status [ref=e534]:
+                - generic [ref=e535]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                - generic [ref=e536]:
+                  - generic [ref=e537]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                  - generic [ref=e538]: ws-pl-walkthrough · 1 会话
+              - generic [ref=e539]:
+                - button "新建训练" [ref=e540] [cursor=pointer]
+                - button "查状态" [disabled] [ref=e541]
+                - button "继续上次" [disabled] [ref=e542]
+                - button "对比两轮" [disabled] [ref=e543]
+                - button "走完闭环" [ref=e544] [cursor=pointer]
+                - button "联合训练" [disabled] [ref=e545]
+                - button "badcase 可视化" [ref=e546] [cursor=pointer]
+                - button "发起训练" [ref=e547] [cursor=pointer]
+          - button "4% of context used" [ref=e1304] [cursor=pointer]:
+            - generic [ref=e637]: 4%

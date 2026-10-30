@@ -1,0 +1,70 @@
+- generic [ref=f2e4]:
+  - generic [ref=f2e7]:
+    - generic [ref=f2e8]:
+      - button "New session" [ref=f2e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f2e10]:
+          - generic [ref=f2e11]: ATF
+          - generic [ref=f2e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f2e17] [cursor=pointer]
+    - button "New session" [ref=f2e20] [cursor=pointer]:
+      - generic [ref=f2e21]: New Session
+    - navigation "Global panels" [ref=f2e26]:
+      - button "Plugins" [ref=f2e27] [cursor=pointer]
+    - generic [ref=f2e38]:
+      - generic [ref=f2e39]:
+        - generic [ref=f2e40]: Workspaces
+        - generic [ref=f2e42]:
+          - button "Search sessions" [ref=f2e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f2e47]:
+          - button "View options" [ref=f2e49] [cursor=pointer]
+          - button "Add workspace" [ref=f2e53] [cursor=pointer]
+      - tree "Sessions" [ref=f2e58]:
+        - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=f2e112] [cursor=pointer]
+        - treeitem "ws-pl-walkthrough" [ref=f2e122] [cursor=pointer]
+        - generic [ref=f2e128]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=f2e130] [cursor=pointer]
+          - treeitem "New Session" [selected] [ref=f2e1988] [cursor=pointer]
+          - treeitem "装箱单字段抽取新实验全流程 1h" [ref=f2e143] [cursor=pointer]:
+            - generic [ref=f2e145]: 装箱单字段抽取新实验全流程
+            - generic [ref=f2e146]: 1h
+        - treeitem "atf-prodtest-20261021" [ref=f2e1991] [cursor=pointer]
+        - treeitem "a4-hotws" [ref=f2e157] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=f2e165] [cursor=pointer]
+        - treeitem "b18-ws" [ref=f2e173] [cursor=pointer]
+        - treeitem "sam" [ref=f2e181] [cursor=pointer]
+    - button "Settings" [ref=f2e68] [cursor=pointer]
+  - generic [ref=f2e1992]:
+    - banner [ref=f2e1994]:
+      - button "Open right sidebar" [ref=f2e1999] [cursor=pointer]
+    - generic [ref=f2e2007]:
+      - generic [ref=f2e2010]:
+        - generic [ref=f2e2011]: ATF
+        - generic [ref=f2e2014]:
+          - generic [ref=f2e2015]: Into the Unknown
+          - generic [ref=f2e2016]: Preview
+      - generic [ref=f2e2017]:
+        - button "Choose workspace" [ref=f2e2018] [cursor=pointer]:
+          - generic [ref=f2e2023]: atf-g2fresh-20261022
+        - button "Standard mode" [ref=f2e2028] [cursor=pointer]
+      - generic [ref=f2e2039]:
+        - generic [ref=f2e2041]:
+          - textbox "Describe the training task to advance, / commands, @ files or sessions" [active] [ref=f2e2042]
+          - generic [aria-hidden]: Describe the training task to advance, / commands, @ files or sessions
+        - generic [ref=f2e2043]:
+          - generic [ref=f2e2044]:
+            - button "Add files or run commands" [ref=f2e2045] [cursor=pointer]
+            - 'button "Access mode, current: Full access" [ref=f2e2050] [cursor=pointer]':
+              - generic [ref=f2e2054]: Full access
+          - generic [ref=f2e2058]:
+            - generic [ref=f2e2059]:
+              - button "思考 Low(低) ▾" [ref=f2e2062] [cursor=pointer]:
+                - generic [ref=f2e2063]: 思考
+                - generic [ref=f2e2064]: Low(低)
+                - generic [ref=f2e2065]: ▾
+              - button "Select model, current glm-5.3-flash" [ref=f2e2068] [cursor=pointer]:
+                - generic [ref=f2e2069]: glm-5.3-flash
+            - button "Send message" [disabled] [ref=f2e2072]
+  - generic [ref=f2e2076]:
+    - generic [aria-hidden]:
+      - generic: Start

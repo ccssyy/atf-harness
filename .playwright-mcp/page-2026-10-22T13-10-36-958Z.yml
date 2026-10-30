@@ -1,0 +1,105 @@
+- generic [ref=f3e4]:
+  - generic [ref=f3e7]:
+    - generic [ref=f3e8]:
+      - button "New session" [ref=f3e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f3e10]:
+          - generic [ref=f3e11]: ATF
+          - generic [ref=f3e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f3e17] [cursor=pointer]
+    - button "New session" [ref=f3e20] [cursor=pointer]:
+      - generic [ref=f3e21]: New Session
+    - navigation "Global panels" [ref=f3e26]:
+      - button "Plugins" [ref=f3e27] [cursor=pointer]
+    - generic [ref=f3e38]:
+      - generic [ref=f3e39]:
+        - generic [ref=f3e40]: Workspaces
+        - generic [ref=f3e42]:
+          - button "Search sessions" [ref=f3e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f3e47]:
+          - button "View options" [ref=f3e49] [cursor=pointer]
+          - button "Add workspace" [ref=f3e53] [cursor=pointer]
+      - tree "Sessions" [ref=f3e58]:
+        - generic [ref=f3e110]:
+          - treeitem "b5-walkthrough" [expanded] [ref=f3e112] [cursor=pointer]
+          - treeitem "请为 run-b5-rec 呈现九要素配置 1min" [selected] [ref=f3e321] [cursor=pointer]:
+            - generic [ref=f3e128]: 请为 run-b5-rec 呈现九要素配置
+            - generic [ref=f3e129]: 1min
+          - treeitem "Untitled 3min" [ref=f3e322] [cursor=pointer]:
+            - generic [ref=f3e133]: Untitled
+            - generic [ref=f3e134]: 3min
+          - treeitem "你好，请只回复“在”一个字 11min" [ref=f3e323] [cursor=pointer]:
+            - generic [ref=f3e138]: 你好，请只回复“在”一个字
+            - generic [ref=f3e139]: 11min
+    - button "Settings" [ref=f3e68] [cursor=pointer]
+  - generic [ref=f3e140]:
+    - banner [ref=f3e142]:
+      - generic [ref=f3e143]:
+        - generic [ref=f3e144]:
+          - generic [ref=f3e145]:
+            - navigation "Session hierarchy" [ref=f3e146]:
+              - generic [ref=f3e147]: 请为 run-b5-rec 呈现九要素配置
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f3e151]: Standard mode
+          - generic [ref=f3e158]:
+            - button "More actions" [ref=f3e160] [cursor=pointer]
+            - generic [ref=f3e165]:
+              - button "选择实验 ▾" [ref=f3e167] [cursor=pointer]
+              - button "监控" [ref=f3e169] [cursor=pointer]
+          - button "Open right sidebar" [ref=f3e172] [cursor=pointer]
+        - tablist [ref=f3e175]:
+          - tab "Chat" [selected] [ref=f3e176] [cursor=pointer]
+          - tab "Trajectory" [ref=f3e177] [cursor=pointer]
+    - generic [ref=f3e179]:
+      - generic [ref=f3e186]:
+        - generic [ref=f3e189]:
+          - generic [ref=f3e190]: 请为 run-b5-rec 呈现九要素配置确认卡
+          - generic [ref=f3e192]:
+            - generic [ref=f3e193]: 21:09
+            - button "Copy" [ref=f3e194] [cursor=pointer]
+        - generic [ref=f3e325]:
+          - status [ref=f3e326]: Completed
+          - button "Completed in 1m 35s" [ref=f3e327] [cursor=pointer]
+        - paragraph [ref=f3e336]: 配置确认卡流程已走完（faux）。
+        - generic [ref=f3e340]:
+          - button "Copy" [ref=f3e341] [cursor=pointer]
+          - generic [ref=f3e345]:
+            - button "Good response" [ref=f3e346] [cursor=pointer]
+            - button "Bad response" [ref=f3e349] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f3e352] [cursor=pointer]
+          - generic [ref=f3e358]:
+            - button "Usage 0 tok" [ref=f3e360] [cursor=pointer]
+            - generic [ref=f3e366]: 21:10
+      - generic [ref=f3e370]:
+        - generic [ref=f3e371]:
+          - generic [ref=f3e373]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [ref=f3e374]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=f3e375]:
+            - generic [ref=f3e376]:
+              - button "Add files or run commands" [ref=f3e377] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=f3e382] [cursor=pointer]':
+                - generic [ref=f3e386]: Full access
+            - generic [ref=f3e390]:
+              - generic [ref=f3e391]:
+                - button "思考 Max(最高) ▾" [ref=f3e394] [cursor=pointer]:
+                  - generic [ref=f3e395]: 思考
+                  - generic [ref=f3e396]: Max(最高)
+                  - generic [ref=f3e397]: ▾
+                - button "Select model, current faux-card" [ref=f3e400] [cursor=pointer]:
+                  - generic [ref=f3e401]: faux-card
+              - button "Send message" [disabled] [ref=f3e404]
+        - generic [ref=f3e407]:
+          - generic [ref=f3e408]:
+            - button "1 turns 2 steps · 0 tok/s" [ref=f3e411] [cursor=pointer]:
+              - generic [ref=f3e416]: 1 turns 2 steps·0 tok/s
+            - generic [ref=f3e418]:
+              - button "新建训练" [ref=f3e419] [cursor=pointer]
+              - button "查状态" [disabled] [ref=f3e420]
+              - button "继续上次" [disabled] [ref=f3e421]
+              - button "对比两轮" [disabled] [ref=f3e422]
+              - button "走完闭环" [ref=f3e423] [cursor=pointer]
+              - button "联合训练" [disabled] [ref=f3e424]
+              - button "badcase 可视化" [ref=f3e425] [cursor=pointer]
+              - button "发起训练" [ref=f3e426] [cursor=pointer]
+          - button "0% of context used" [ref=f3e428] [cursor=pointer]:
+            - generic [ref=f3e432]: 0%

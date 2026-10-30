@@ -1,0 +1,858 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - generic [ref=f1e8]:
+      - button "New session" [ref=f1e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f1e10]:
+          - generic [ref=f1e11]: ATF
+          - generic [ref=f1e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f1e17] [cursor=pointer]
+    - button "New session" [ref=f1e20] [cursor=pointer]:
+      - generic [ref=f1e21]: New Session
+    - navigation "Global panels" [ref=f1e26]:
+      - button "Plugins" [ref=f1e27] [cursor=pointer]
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]: Workspaces
+        - generic [ref=f1e42]:
+          - button "Search sessions" [ref=f1e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f1e47]:
+          - button "View options" [ref=f1e49] [cursor=pointer]
+          - button "Add workspace" [ref=f1e53] [cursor=pointer]
+      - tree "Sessions" [ref=f1e58]:
+        - generic [ref=f1e110]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=f1e112] [cursor=pointer]
+          - treeitem "Running 训练数据构造前校验演练 now" [selected] [ref=f1e121] [cursor=pointer]:
+            - generic [ref=f1e122]: Running
+            - generic [ref=f1e128]: 训练数据构造前校验演练
+            - generic [ref=f1e129]: now
+        - treeitem "ws-pl-walkthrough" [ref=f1e132] [cursor=pointer]
+        - generic [ref=f1e138]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=f1e140] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 21h" [ref=f1e149] [cursor=pointer]:
+            - generic [ref=f1e151]: 构造评估服务件 for run-rh-budget
+            - generic [ref=f1e152]: 21h
+          - treeitem "装箱单字段抽取新实验全流程 23h" [ref=f1e154] [cursor=pointer]:
+            - generic [ref=f1e156]: 装箱单字段抽取新实验全流程
+            - generic [ref=f1e157]: 23h
+        - generic [ref=f1e158]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=f1e160] [cursor=pointer]
+          - treeitem "等待发起真实训练走查指令 3h" [ref=f1e169] [cursor=pointer]:
+            - generic [ref=f1e171]: 等待发起真实训练走查指令
+            - generic [ref=f1e172]: 3h
+          - treeitem "汇总当前实验状态与进展 1d" [ref=f1e174] [cursor=pointer]:
+            - generic [ref=f1e176]: 汇总当前实验状态与进展
+            - generic [ref=f1e177]: 1d
+          - treeitem "我的训练数据放在 /data/atf/prodt 1d" [ref=f1e179] [cursor=pointer]:
+            - generic [ref=f1e181]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=f1e182]: 1d
+        - treeitem "a4-hotws" [ref=f1e185] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=f1e193] [cursor=pointer]
+        - treeitem "b18-ws" [ref=f1e201] [cursor=pointer]
+        - treeitem "sam" [ref=f1e209] [cursor=pointer]
+    - button "Settings" [ref=f1e68] [cursor=pointer]
+  - generic [ref=f1e77]:
+    - banner [ref=f1e216]:
+      - generic [ref=f1e217]:
+        - generic [ref=f1e218]:
+          - generic [ref=f1e219]:
+            - navigation "Session hierarchy" [ref=f1e220]:
+              - generic [ref=f1e221]: 训练数据构造前校验演练
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f1e225]: Standard mode
+          - generic [ref=f1e232]:
+            - button "More actions" [ref=f1e234] [cursor=pointer]
+            - generic [ref=f1e239]:
+              - button "选择实验 ▾" [ref=f1e241] [cursor=pointer]
+              - button "监控" [ref=f1e243] [cursor=pointer]
+          - button "Open right sidebar" [ref=f1e246] [cursor=pointer]
+        - tablist [ref=f1e249]:
+          - tab "Chat" [selected] [ref=f1e250] [cursor=pointer]
+          - tab "Trajectory" [ref=f1e251] [cursor=pointer]
+    - generic [ref=f1e79]:
+      - generic [ref=f1e255]:
+        - navigation "Turn navigation" [ref=f1e256] [cursor=pointer]:
+          - generic [ref=f1e258]:
+            - button "Jump to turn 1" [ref=f1e259]
+            - button "Jump to turn 2" [ref=f1e260]
+            - button "Jump to turn 3" [ref=f1e261]
+            - button "Jump to turn 4" [ref=f1e262]
+            - button "Jump to turn 5" [ref=f1e263]
+            - button "Jump to turn 6" [ref=f1e264]
+            - button "Jump to turn 7" [ref=f1e265]
+            - button "Jump to turn 8" [ref=f1e266]
+            - button "Jump to turn 9" [ref=f1e267]
+            - button "Jump to turn 10" [ref=f1e268]
+            - button "Jump to turn 11" [ref=f1e269]
+            - button "Jump to turn 12" [ref=f1e270]
+            - button "Jump to turn 13" [ref=f1e271]
+        - generic [ref=f1e274]:
+          - generic [ref=f1e277]:
+            - generic [ref=f1e278]: 请对实验 run pl-walkthrough-r1 发起训练数据构造（只到构造前校验，不真跑构造）。直接调用 atf_prepare_training 工具，run_id=pl-walkthrough-r1，目标＝生成迭代配置。约束：不要传 --token-provider 等任何闸门绕过参数；如果构造被拒或报错，原样回报错误即可，不要尝试补写任何文件、不要弹确认卡、不要重试。
+            - generic [ref=f1e280]:
+              - generic [ref=f1e281]: 10/22 23:37
+              - button "Copy" [ref=f1e282] [cursor=pointer]
+          - generic [ref=f1e287]:
+            - status [ref=f1e288]: Completed
+            - button "Completed in 3m 1s" [ref=f1e289] [cursor=pointer]
+          - generic [ref=f1e297]:
+            - paragraph [ref=f1e298]:
+              - text: 调用已完成，构造在
+              - strong [ref=f1e299]: 前置校验第一阶段即被拒
+              - text: （exit code 2，argparse 层，未产生任何写入）。按约束：未重试、未补写文件、未弹确认卡。原样回报如下。
+            - heading "调用事实" [level=2] [ref=f1e300]
+            - list [ref=f1e301]:
+              - listitem [ref=f1e302]:
+                - strong [ref=f1e303]: 工具面说明
+                - text: ：我的工具集中没有名为
+                - code [ref=f1e304]: atf_prepare_training
+                - text: 的直连工具；对应能力是
+                - code [ref=f1e305]: atf-prepare-training
+                - text: 技能（已加载），其构造入口为 pin 单源脚本
+                - code [ref=f1e306]: generate_iteration_config.py
+                - text: ，经受控执行通道
+                - code [ref=f1e307]: atf_scratch_exec
+                - text: 调用。
+              - listitem [ref=f1e308]:
+                - strong [ref=f1e309]: 实际执行
+                - text: ：
+                - code [ref=f1e310]: generate_iteration_config.py --run-id pl-walkthrough-r1
+                - text: ——仅此一个参数，未传
+                - code [ref=f1e311]: "--token-provider"
+                - text: 等任何绕过参数（该脚本参数面上也不存在
+                - code [ref=f1e312]: "--token-provider"
+                - text: 这一项）。
+              - listitem [ref=f1e313]:
+                - strong [ref=f1e314]: 原样错误输出（stderr，未改动）
+                - text: ：
+            - generic [ref=f1e315]:
+              - generic [ref=f1e317]:
+                - generic [ref=f1e318]: Code block
+                - generic [ref=f1e320]:
+                  - button "Wrap lines" [pressed] [ref=f1e321] [cursor=pointer]
+                  - button "Copy" [ref=f1e326] [cursor=pointer]
+              - code [ref=f1e332]: "usage: generate_iteration_config.py [-h] --run-id RUN_ID [--lane LANE] [--experiment-config EXPERIMENT_CONFIG] [--image-min-pixels IMAGE_MIN_PIXELS] [--image-max-pixels IMAGE_MAX_PIXELS] --variants-dir VARIANTS_DIR --field-config FIELD_CONFIG --l1-dir L1_DIR [--deploy DEPLOY] [--source-version SOURCE_VERSION] --base-model BASE_MODEL [--base-model-family BASE_MODEL_FAMILY] [--modes MODES] [--epochs EPOCHS] [--lora-rank LORA_RANK] [--lora-alpha LORA_ALPHA] [--warmup-ratio WARMUP_RATIO] [--token-budget TOKEN_BUDGET] [--run-dir RUN_DIR] [--output-dir OUTPUT_DIR] --out-dir OUT_DIR generate_iteration_config.py: error: the following arguments are required: --variants-dir, --field-config, --l1-dir, --base-model, --out-dir"
+            - heading "拒因解读（只读核实，未做任何修复动作）" [level=2] [ref=f1e333]
+            - paragraph [ref=f1e334]:
+              - text: 被拒的直接原因是脚本必填上游参数缺失；且即使补这些路径也无从指起——run
+              - code [ref=f1e335]: pl-walkthrough-r1
+              - text: 目录下当前
+              - strong [ref=f1e336]:
+                - text: 只有
+                - code [ref=f1e337]: webui/
+                - text: （binding.json + segments.json）
+              - text: ，不存在任何迭代配置生成所需的上游事实：
+            - list [ref=f1e338]:
+              - listitem [ref=f1e339]:
+                - code [ref=f1e340]: "--variants-dir"
+                - text: ：无变体数据目录（无
+                - code [ref=f1e341]: prep/
+                - text: 、无 L1 产物）
+              - listitem [ref=f1e342]:
+                - code [ref=f1e343]: "--field-config"
+                - text: ：无
+                - code [ref=f1e344]: experiment-setup/field-config.json
+              - listitem [ref=f1e345]:
+                - code [ref=f1e346]: "--l1-dir"
+                - text: ：无 L1 workspace（split-manifest / leakage-audit）
+              - listitem [ref=f1e347]:
+                - code [ref=f1e348]: "--base-model"
+                - text: ：无实验门确认的基模型记录
+              - listitem [ref=f1e349]:
+                - code [ref=f1e350]: "--out-dir"
+                - text: /
+                - code [ref=f1e351]: "--token-budget"
+                - text: ：无
+                - code [ref=f1e352]: prep/token_budget.json
+                - text: （K1-2 单源，缺预算本会在更深处 fail-closed 报
+                - code [ref=f1e353]: token_budget_missing
+                - text: ）
+            - paragraph [ref=f1e354]:
+              - text: 按技能合同的停止-恢复表，这属于
+              - strong [ref=f1e355]:
+                - code [ref=f1e356]: blocked
+                - text: （上游事实未闭合）
+              - text: ：迭代配置生成需先有实验门产物、L1 资产与变体目录闭合。唯一下一动作（供你裁量，我未执行）：先走该 run 的数据准入/实验门链产出上述上游事实，再重推本次调用。
+          - generic [ref=f1e360]:
+            - button "Copy" [ref=f1e361] [cursor=pointer]
+            - generic [ref=f1e365]:
+              - button "Good response" [ref=f1e366] [cursor=pointer]
+              - button "Bad response" [ref=f1e369] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e372] [cursor=pointer]
+            - generic [ref=f1e378]:
+              - button "Usage 315K tok" [ref=f1e380] [cursor=pointer]
+              - generic [ref=f1e386]: 10/22 23:40
+          - generic [ref=f1e389]:
+            - generic [ref=f1e390]: 继续对实验 run pl-walkthrough-r1 发起训练数据构造的前置校验（仍然不真跑构造、不写任何文件）。这次用受控执行通道直调 pin 单源脚本 build_training_variants.py，参数如下（原样传，不要改、不要增删）：--l1-workspace /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --risk-signals /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/risk-signals/risk-signals.json --experiment-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/experiment-config.json --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants。约束：不要传 --token-provider，也不要传 --allow-token-gate-skip 或 --debug-skip-token-gate 之类豁免参数。脚本被拒或报错就停止，把脚本的退出码和输出原样记录，不要重试、不要补救、不要写任何文件。
+            - generic [ref=f1e392]:
+              - generic [ref=f1e393]: 10/22 23:51
+              - button "Copy" [ref=f1e394] [cursor=pointer]
+          - generic [ref=f1e399]:
+            - status [ref=f1e400]: Completed
+            - button "Completed in 1m 49s" [ref=f1e401] [cursor=pointer]
+          - generic [ref=f1e409]:
+            - paragraph [ref=f1e410]:
+              - text: 执行完毕，脚本在构造前置校验的
+              - strong [ref=f1e411]: token gate 处 fail-closed 被拒
+              - text: 。按约束：未传任何豁免参数、未重试、未补救、未写任何文件。记录如下。
+            - heading "调用事实（原样）" [level=2] [ref=f1e412]
+            - list [ref=f1e413]:
+              - listitem [ref=f1e414]:
+                - strong [ref=f1e415]: 脚本
+                - text: （pin 单源）：
+                - code [ref=f1e416]: /data/sam/ATF-Harness/.atf-pinned/skills/atf-admit-training-data/scripts/build_training_variants.py
+              - listitem [ref=f1e417]:
+                - strong [ref=f1e418]: 参数
+                - text: ：与你给出的完全一致，仅
+                - code [ref=f1e419]: "--l1-workspace / --field-config / --risk-signals / --experiment-config / --run-dir / --out"
+                - text: 六项；
+                - strong [ref=f1e420]: 未传
+                - code [ref=f1e421]: "--token-provider"
+                - text: ，
+                - strong [ref=f1e422]: 未传
+                - code [ref=f1e423]: "--debug-skip-token-gate"
+                - text: /
+                - code [ref=f1e424]: "--allow-token-gate-skip"
+                - text: ，也未设置任何环境变量豁免
+              - listitem [ref=f1e425]:
+                - strong [ref=f1e426]: 退出码
+                - text: ：
+                - code [ref=f1e427]: "2"
+              - listitem [ref=f1e428]:
+                - strong [ref=f1e429]: stdout
+                - text: ：（空）
+              - listitem [ref=f1e430]:
+                - strong [ref=f1e431]: stderr 原文（逐字，未改动）
+                - text: ：
+            - generic [ref=f1e432]:
+              - generic [ref=f1e434]:
+                - generic [ref=f1e435]: json
+                - generic [ref=f1e437]:
+                  - button "Wrap lines" [pressed] [ref=f1e438] [cursor=pointer]
+                  - button "Copy" [ref=f1e443] [cursor=pointer]
+              - code [ref=f1e449]: "{\"error\": \"token_gate_not_configured\", \"detail\": \"--token-provider 生产必填(未传即整体 skipped 是 D59 病根);豁免须 --debug-skip-token-gate 与 ATF_ALLOW_TOKEN_GATE_SKIP=1 同时在场\"}"
+            - heading "写入核实（只读）" [level=2] [ref=f1e450]
+            - list [ref=f1e451]:
+              - listitem [ref=f1e452]: 本次调用耗时 76ms、在 token gate 处即拒，未产生任何写入。
+              - listitem [ref=f1e453]:
+                - code [ref=f1e454]: "--out"
+                - text: 指向的
+                - code [ref=f1e455]: prep/variants/
+                - text: 目录内容（dataset_info.json、train.jsonl、train.lineage.jsonl、variants_report.json）时间戳为
+                - strong [ref=f1e456]: 2026-10-22 08:32
+                - text: ，早于本次调用（当前 23:53）约 15 小时——系此前构造的既有产物，非本次所写。
+            - heading "状态" [level=2] [ref=f1e457]
+            - paragraph [ref=f1e458]:
+              - code [ref=f1e459]: blocked
+              - text: （构造前校验未通过，reason＝
+              - code [ref=f1e460]: token_gate_not_configured
+              - text: ）。脚本自述的两条通路——生产通路
+              - code [ref=f1e461]: "--token-provider"
+              - text: 与豁免通路
+              - code [ref=f1e462]: "--debug-skip-token-gate"
+              - text: ＋
+              - code [ref=f1e463]: ATF_ALLOW_TOKEN_GATE_SKIP=1
+              - text: ——均在你的禁传清单内，故按约束就此停止；是否提供合法 token provider 重推，由你裁定。
+          - generic [ref=f1e467]:
+            - button "Copy" [ref=f1e468] [cursor=pointer]
+            - generic [ref=f1e472]:
+              - button "Good response" [ref=f1e473] [cursor=pointer]
+              - button "Bad response" [ref=f1e476] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e479] [cursor=pointer]
+            - generic [ref=f1e485]:
+              - button "Usage 204K tok" [ref=f1e487] [cursor=pointer]
+              - generic [ref=f1e493]: 10/22 23:53
+          - generic [ref=f1e496]:
+            - generic [ref=f1e497]: 第三轮：对 run pl-walkthrough-r1 发起迭代配置构造的前置校验（不真跑构造、不写任何文件）。受控执行通道直调 pin 单源脚本 /data/sam/ATF-Harness/.atf-pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数如下（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training。约束：不传任何豁免或绕过参数；被拒即停止，原样记录退出码与输出，不要重试、不要补救、不要写任何文件。
+            - generic [ref=f1e499]:
+              - generic [ref=f1e500]: 10/22 23:54
+              - button "Copy" [ref=f1e501] [cursor=pointer]
+          - generic [ref=f1e506]:
+            - status [ref=f1e507]: Completed
+            - button "Completed in 57s" [ref=f1e508] [cursor=pointer]
+          - generic [ref=f1e516]:
+            - paragraph [ref=f1e517]:
+              - text: 第三轮执行完毕：脚本在配置级校验处被拒（退出码 2），且
+              - strong [ref=f1e518]: 在拒前有一个副作用写入
+              - text: ，如实记录如下。
+            - heading "调用事实（原样）" [level=2] [ref=f1e519]
+            - list [ref=f1e520]:
+              - listitem [ref=f1e521]:
+                - strong [ref=f1e522]: 脚本
+                - text: （pin 单源）：
+                - code [ref=f1e523]: /data/sam/ATF-Harness/.atf-pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py
+              - listitem [ref=f1e524]:
+                - strong [ref=f1e525]: 参数
+                - text: ：与你给出的完全一致，仅
+                - code [ref=f1e526]: "--run-id / --variants-dir / --field-config / --l1-dir / --base-model / --run-dir / --out-dir"
+                - text: 七项；未传任何豁免/绕过参数
+              - listitem [ref=f1e527]:
+                - strong [ref=f1e528]: 退出码
+                - text: ：
+                - code [ref=f1e529]: "2"
+              - listitem [ref=f1e530]:
+                - strong [ref=f1e531]: stderr
+                - text: ：（空）
+              - listitem [ref=f1e532]:
+                - strong [ref=f1e533]: stdout 原文（逐字，未改动）
+                - text: ：
+            - generic [ref=f1e534]:
+              - generic [ref=f1e536]:
+                - generic [ref=f1e537]: json
+                - generic [ref=f1e539]:
+                  - button "Wrap lines" [pressed] [ref=f1e540] [cursor=pointer]
+                  - button "Copy" [ref=f1e545] [cursor=pointer]
+              - code [ref=f1e551]: "{\"error\": \"iteration_config_output_dir_required:提供 --output-dir 或 --experiment-config 含 workspace_root\"}"
+            - heading "副作用写入（脚本自身行为，如实报告，未做任何清理）" [level=2] [ref=f1e552]
+            - paragraph [ref=f1e553]:
+              - text: 按脚本合同，未显式给
+              - code [ref=f1e554]: "--deploy"
+              - text: 时环境探针会先于配置生成在
+              - code [ref=f1e555]: "--out-dir"
+              - text: 落探测草稿。本次调用在 23:54 于
+              - code [ref=f1e556]: training/
+              - text: 目录写入了 3 个探针产物：
+            - list [ref=f1e557]:
+              - listitem [ref=f1e558]:
+                - code [ref=f1e559]: deploy-probed.local.yaml
+                - text: （23:54，新写入）
+              - listitem [ref=f1e560]:
+                - code [ref=f1e561]: deploy-profile.json
+                - text: （23:54，新写入）
+              - listitem [ref=f1e562]:
+                - code [ref=f1e563]: deploy-profile.yaml
+                - text: （23:54，新写入）
+            - paragraph [ref=f1e564]:
+              - code [ref=f1e565]: completion.json
+              - text: （09:47）为既有产物，未被触碰。我未删除、未修改上述任何文件（遵守"不补救、不写文件"约束）。
+            - heading "拒因解读（只读核实，未做修复）" [level=2] [ref=f1e566]
+            - list [ref=f1e567]:
+              - listitem [ref=f1e568]:
+                - text: 脚本要求
+                - code [ref=f1e569]: "--output-dir"
+                - text: （迭代配置里训练输出目录
+                - code [ref=f1e570]: output.output_dir
+                - text: 的来源）或含
+                - code [ref=f1e571]: workspace_root
+                - text: 的
+                - code [ref=f1e572]: "--experiment-config"
+                - text: ，二者本次均未传——参数面校验 fail-closed，迭代配置本体
+                - strong [ref=f1e573]: 未生成
+                - text: 。
+              - listitem [ref=f1e574]:
+                - text: 上游链路本身已走通较深：variants、field-config、L1 目录、基模型本地防线（
+                - code [ref=f1e575]: /data/LLM_model/Qwen3-VL-32B-Instruct
+                - text: 存在 config.json）、token budget（经
+                - code [ref=f1e576]: "--run-dir"
+                - text: 拼盘）都在被拒点之前通过了校验。
+            - paragraph [ref=f1e577]:
+              - strong [ref=f1e578]: 状态
+              - text: ：
+              - code [ref=f1e579]: blocked
+              - text: （reason＝
+              - code [ref=f1e580]: iteration_config_output_dir_required
+              - text: ）。被拒即停，未重试；是否补传
+              - code [ref=f1e581]: "--output-dir"
+              - text: （或改传含
+              - code [ref=f1e582]: workspace_root
+              - text: 的
+              - code [ref=f1e583]: "--experiment-config"
+              - text: ）重推，由你裁定。
+          - generic [ref=f1e587]:
+            - button "Copy" [ref=f1e588] [cursor=pointer]
+            - generic [ref=f1e592]:
+              - button "Good response" [ref=f1e593] [cursor=pointer]
+              - button "Bad response" [ref=f1e596] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e599] [cursor=pointer]
+            - generic [ref=f1e605]:
+              - button "Usage 133K tok" [ref=f1e607] [cursor=pointer]
+              - generic [ref=f1e613]: 10/22 23:55
+          - generic [ref=f1e616]:
+            - generic [ref=f1e617]: 第四轮：同脚本同 run，补全参数后再做一次构造前校验（不真跑构造）。在第三轮参数基础上增加两个参数：--output-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training 和 --deploy /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_assets/deploy.local.yaml（显式给 deploy 可免探针写盘）。其余七参原样保留。约束同前：不传任何豁免或绕过参数；被拒即停止，原样记录退出码与输出，不要重试、不要补救、不要写任何文件。
+            - generic [ref=f1e619]:
+              - generic [ref=f1e620]: 10/22 23:56
+              - button "Copy" [ref=f1e621] [cursor=pointer]
+          - generic [ref=f1e626]:
+            - status [ref=f1e627]: Completed
+            - button "Completed in 37s" [ref=f1e628] [cursor=pointer]
+          - generic [ref=f1e636]:
+            - paragraph [ref=f1e637]: 第四轮执行完毕：仍被拒（退出码 2），零写盘。原样记录如下。
+            - heading "调用事实（原样）" [level=2] [ref=f1e638]
+            - list [ref=f1e639]:
+              - listitem [ref=f1e640]:
+                - strong [ref=f1e641]: 脚本
+                - text: ：同第三轮（pin 单源
+                - code [ref=f1e642]: generate_iteration_config.py
+                - text: ）
+              - listitem [ref=f1e643]:
+                - strong [ref=f1e644]: 参数
+                - text: ：第三轮七参原样保留，新增
+                - code [ref=f1e645]: "--output-dir <…>/training"
+                - text: 与
+                - code [ref=f1e646]: "--deploy /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_assets/deploy.local.yaml"
+                - text: ，共九项；未传任何豁免/绕过参数
+              - listitem [ref=f1e647]:
+                - strong [ref=f1e648]: 退出码
+                - text: ：
+                - code [ref=f1e649]: "2"
+              - listitem [ref=f1e650]:
+                - strong [ref=f1e651]: stderr
+                - text: ：（空）
+              - listitem [ref=f1e652]:
+                - strong [ref=f1e653]: stdout 原文（逐字，未改动）
+                - text: ：
+            - generic [ref=f1e654]:
+              - generic [ref=f1e656]:
+                - generic [ref=f1e657]: json
+                - generic [ref=f1e659]:
+                  - button "Wrap lines" [pressed] [ref=f1e660] [cursor=pointer]
+                  - button "Copy" [ref=f1e665] [cursor=pointer]
+              - code [ref=f1e671]: "{\"error\": \"token_budget_missing:/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/token_budget.json(预算文件缺;旧 run 只读兼容不回填)\"}"
+            - heading "写入核实（只读）" [level=2] [ref=f1e672]
+            - list [ref=f1e673]:
+              - listitem [ref=f1e674]:
+                - code [ref=f1e675]: training/
+                - text: 目录自 23:54（第三轮探针产物）后
+                - strong [ref=f1e676]: 无任何新文件
+                - text: ——显式
+                - code [ref=f1e677]: "--deploy"
+                - text: 生效，本次 97ms 即拒，零写盘。
+              - listitem [ref=f1e678]:
+                - code [ref=f1e679]: prep/token_budget.json
+                - text: 确实不存在（
+                - code [ref=f1e680]: No such file or directory
+                - text: ），与报错一致。
+            - heading "拒因解读（只读核实，未做修复）" [level=2] [ref=f1e681]
+            - paragraph [ref=f1e682]:
+              - text: 较第三轮推进了一步：
+              - code [ref=f1e683]: "--output-dir"
+              - text: 校验通过、显式 deploy 登记成功，随后阻在
+              - strong [ref=f1e684]: K1-2 单源 TokenBudget 闸
+              - text: ——
+              - code [ref=f1e685]: cutoff_len
+              - text: 的唯一合法来源是
+              - code [ref=f1e686]: prep/token_budget.json
+              - text: （TokenBudget/v1），缺预算即 fail-closed，脚本不回退 9000 裸缺省、也不自动回填（“旧 run 只读兼容不回填”）。
+            - paragraph [ref=f1e687]:
+              - strong [ref=f1e688]: 状态
+              - text: ：
+              - code [ref=f1e689]: blocked
+              - text: （reason＝
+              - code [ref=f1e690]: token_budget_missing
+              - text: ）。被拒即停，未重试。合法出路（供你裁定，我未执行）：按上游 TokenBudget 确认链产出
+              - code [ref=f1e691]: prep/token_budget.json
+              - text: ，或以
+              - code [ref=f1e692]: "--token-budget"
+              - text: 显式指到一份已确认的预算文件后重推。
+          - generic [ref=f1e696]:
+            - button "Copy" [ref=f1e697] [cursor=pointer]
+            - generic [ref=f1e701]:
+              - button "Good response" [ref=f1e702] [cursor=pointer]
+              - button "Bad response" [ref=f1e705] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e708] [cursor=pointer]
+            - generic [ref=f1e714]:
+              - button "Usage 141K tok" [ref=f1e716] [cursor=pointer]
+              - generic [ref=f1e722]: 10/22 23:57
+          - generic [ref=f1e725]:
+            - generic [ref=f1e726]: R0-H 复跑（D71 验收，同第三轮同场景）：对 run pl-walkthrough-r1 发起迭代配置构造的前置校验（不真跑构造、不写任何文件）。受控执行通道直调 pin 单源脚本 /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数如下（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training。约束：不传任何豁免或绕过参数；被拒即停止，把工具返回内容原样记录进回复，不要重试、不要补救、不要写任何文件、不要弹确认卡。
+            - generic [ref=f1e728]:
+              - generic [ref=f1e729]: 10:05
+              - button "Copy" [ref=f1e730] [cursor=pointer]
+          - generic [ref=f1e735]:
+            - status [ref=f1e736]: Failed
+            - button "Failed" [disabled] [ref=f1e737]
+          - status [ref=f1e741]:
+            - generic [ref=f1e743]: This turn failedAPI key is invalid
+            - code [ref=f1e744]: AUTH
+          - generic [ref=f1e747]:
+            - generic [ref=f1e748]: R0-H 复跑重发（上一 turn 因实例 LLM key 失效 AUTH 失败，key 已换，与本 run 无关）：对 run pl-walkthrough-r1 发起迭代配置构造的前置校验（不真跑构造、不写任何文件）。受控执行通道直调 pin 单源脚本 /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数与昨晚第四轮完全一致（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --deploy /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_assets/deploy.local.yaml。约束：不传任何豁免或绕过参数；被拒即停止，把工具返回内容原样记录进回复，不要重试、不要补救、不要写任何文件、不要弹确认卡。
+            - generic [ref=f1e750]:
+              - generic [ref=f1e751]: 10:09
+              - button "Copy" [ref=f1e752] [cursor=pointer]
+          - generic [ref=f1e757]:
+            - status [ref=f1e758]: Failed
+            - button "Failed" [disabled] [ref=f1e759]
+          - status [ref=f1e763]:
+            - generic [ref=f1e765]: This turn failedAPI key is invalid
+            - code [ref=f1e766]: AUTH
+          - generic [ref=f1e769]:
+            - generic [ref=f1e770]: R0-H 复跑（D71 验收；前两次 turn 因实例 LLM key 失效 AUTH 失败，key 已更新，与本 run 无关）：对 run pl-walkthrough-r1 发起迭代配置构造的前置校验（不真跑构造、不写任何文件）。受控执行通道直调 pin 单源脚本 /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数与昨晚第四轮完全一致（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --deploy /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_assets/deploy.local.yaml。约束：不传任何豁免或绕过参数；被拒即停止，把工具返回内容原样记录进回复，不要重试、不要补救、不要写任何文件、不要弹确认卡。
+            - generic [ref=f1e772]:
+              - generic [ref=f1e773]: 10:13
+              - button "Copy" [ref=f1e774] [cursor=pointer]
+          - generic [ref=f1e779]:
+            - status [ref=f1e780]: Failed
+            - button "Failed" [disabled] [ref=f1e781]
+          - status [ref=f1e785]:
+            - generic [ref=f1e787]: This turn failedAPI key is invalid
+            - code [ref=f1e788]: AUTH
+          - generic [ref=f1e791]:
+            - generic [ref=f1e792]: R0-H 复跑（D71 验收；此前三次 turn 因实例 LLM key 失效 AUTH 失败，实例已带新 key 重启，与本 run 无关）：对 run pl-walkthrough-r1 发起迭代配置构造的前置校验（不真跑构造、不写任何文件）。受控执行通道直调 pin 单源脚本 /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数与昨晚第四轮完全一致（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --deploy /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_assets/deploy.local.yaml。约束：不传任何豁免或绕过参数；被拒即停止，把工具返回内容原样记录进回复，不要重试、不要补救、不要写任何文件、不要弹确认卡。
+            - generic [ref=f1e794]:
+              - generic [ref=f1e795]: 10:20
+              - button "Copy" [ref=f1e796] [cursor=pointer]
+          - generic [ref=f1e801]:
+            - status [ref=f1e802]: Completed
+            - button "Completed in 1m 18s" [ref=f1e803] [cursor=pointer]
+          - generic [ref=f1e811]:
+            - paragraph [ref=f1e812]: R0-H 复跑执行完毕：脚本被拒（退出码 2），零写盘，未弹确认卡。工具返回内容原样记录如下。
+            - heading "工具返回（原样，未改动）" [level=2] [ref=f1e813]
+            - list [ref=f1e814]:
+              - listitem [ref=f1e815]:
+                - strong [ref=f1e816]: 脚本
+                - text: ：
+                - code [ref=f1e817]: /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py
+                - text: （按你指定的 dev pin 路径）
+              - listitem [ref=f1e818]:
+                - strong [ref=f1e819]: 参数
+                - text: ：本 turn 清单所列八项原样传入（含
+                - code [ref=f1e820]: "--deploy"
+                - text: ，无任何豁免/绕过参数）
+              - listitem [ref=f1e821]:
+                - strong [ref=f1e822]: 退出码
+                - text: ：
+                - code [ref=f1e823]: "2"
+              - listitem [ref=f1e824]:
+                - strong [ref=f1e825]: stderr
+                - text: ：（空）
+              - listitem [ref=f1e826]:
+                - strong [ref=f1e827]: stdout 原文（逐字）
+                - text: ：
+            - generic [ref=f1e828]:
+              - generic [ref=f1e830]:
+                - generic [ref=f1e831]: json
+                - generic [ref=f1e833]:
+                  - button "Wrap lines" [pressed] [ref=f1e834] [cursor=pointer]
+                  - button "Copy" [ref=f1e839] [cursor=pointer]
+              - code [ref=f1e845]: "{\"error\": \"iteration_config_output_dir_required:提供 --output-dir 或 --experiment-config 含 workspace_root\"}"
+            - heading "写盘核实（只读）" [level=2] [ref=f1e846]
+            - paragraph [ref=f1e847]:
+              - code [ref=f1e848]: training/
+              - text: 目录内容与昨晚 23:54 后完全一致（仅既有 completion.json 与第三轮探针产物），本次调用（今日 10:21，97ms 即拒）
+              - strong [ref=f1e849]: 零写入
+              - text: 。
+            - heading "一处必须如实指出的差异" [level=2] [ref=f1e850]
+            - paragraph [ref=f1e851]:
+              - text: 本 turn 描述为“参数与昨晚第四轮完全一致”，但所列清单
+              - strong [ref=f1e852]:
+                - text: 缺
+                - code [ref=f1e853]: "--output-dir"
+              - text: （昨晚第四轮实传九参，含
+              - code [ref=f1e854]: "--output-dir <…>/training"
+              - text: ）。按“不要增删改”约束，我以清单为准原样传入八参——因此本次复现的阻点是
+              - strong [ref=f1e855]: 昨晚第三轮
+              - text: 的
+              - code [ref=f1e856]: iteration_config_output_dir_required
+              - text: ，而非第四轮推进到的
+              - code [ref=f1e857]: token_budget_missing
+              - text: 。这也顺带构成一个验收事实：dev pin（/data/atf/dev/pinned）与昨晚 pin（/data/sam/ATF-Harness/.atf-pinned）在该校验点行为一致。
+            - paragraph [ref=f1e858]:
+              - strong [ref=f1e859]: 状态
+              - text: ：
+              - code [ref=f1e860]: blocked
+              - text: （reason＝
+              - code [ref=f1e861]: iteration_config_output_dir_required
+              - text: ）。被拒即停，未重试。若你意图是四参对齐（补
+              - code [ref=f1e862]: "--output-dir"
+              - text: 复现
+              - code [ref=f1e863]: token_budget_missing
+              - text: 阻点），下一条指令明确即可，我不再自行重跑。
+          - generic [ref=f1e867]:
+            - button "Copy" [ref=f1e868] [cursor=pointer]
+            - generic [ref=f1e872]:
+              - button "Good response" [ref=f1e873] [cursor=pointer]
+              - button "Bad response" [ref=f1e876] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e879] [cursor=pointer]
+            - generic [ref=f1e885]:
+              - button "Usage 155K tok" [ref=f1e887] [cursor=pointer]
+              - generic [ref=f1e893]: 10:22
+          - generic [ref=f1e896]:
+            - generic [ref=f1e897]: 对齐补跑：你说得对，是我清单漏了 --output-dir。现补全为与昨晚第四轮完全一致的九参，再做一次构造前置校验（不真跑构造、不写任何文件）：直调同一脚本 /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --output-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --deploy /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_assets/deploy.local.yaml。约束同前：不传任何豁免或绕过参数；被拒即停止，把工具返回内容原样记录进回复，不要重试、不要补救、不要写任何文件、不要弹确认卡。
+            - generic [ref=f1e899]:
+              - generic [ref=f1e900]: 10:22
+              - button "Copy" [ref=f1e901] [cursor=pointer]
+          - generic [ref=f1e906]:
+            - status [ref=f1e907]: Completed
+            - button "Completed in 35s" [ref=f1e908] [cursor=pointer]
+          - generic [ref=f1e916]:
+            - paragraph [ref=f1e917]:
+              - text: 对齐补跑执行完毕：被拒（退出码 2），阻点与昨晚第四轮
+              - strong [ref=f1e918]: 逐字一致
+              - text: ，dev pin 行为对齐验收点复现成功。零写盘，未弹确认卡。原样记录如下。
+            - heading "工具返回（原样，未改动）" [level=2] [ref=f1e919]
+            - list [ref=f1e920]:
+              - listitem [ref=f1e921]:
+                - strong [ref=f1e922]: 脚本
+                - text: ：
+                - code [ref=f1e923]: /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py
+              - listitem [ref=f1e924]:
+                - strong [ref=f1e925]: 参数
+                - text: ：九参与昨晚第四轮完全一致（含
+                - code [ref=f1e926]: "--output-dir"
+                - text: 与
+                - code [ref=f1e927]: "--deploy"
+                - text: ）；无任何豁免/绕过参数
+              - listitem [ref=f1e928]:
+                - strong [ref=f1e929]: 退出码
+                - text: ：
+                - code [ref=f1e930]: "2"
+              - listitem [ref=f1e931]:
+                - strong [ref=f1e932]: stderr
+                - text: ：（空）
+              - listitem [ref=f1e933]:
+                - strong [ref=f1e934]: stdout 原文（逐字）
+                - text: ：
+            - generic [ref=f1e935]:
+              - generic [ref=f1e937]:
+                - generic [ref=f1e938]: json
+                - generic [ref=f1e940]:
+                  - button "Wrap lines" [pressed] [ref=f1e941] [cursor=pointer]
+                  - button "Copy" [ref=f1e946] [cursor=pointer]
+              - code [ref=f1e952]: "{\"error\": \"token_budget_missing:/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/token_budget.json(预算文件缺;旧 run 只读兼容不回填)\"}"
+            - heading "写盘核实（只读）" [level=2] [ref=f1e953]
+            - list [ref=f1e954]:
+              - listitem [ref=f1e955]:
+                - code [ref=f1e956]: training/
+                - text: 目录内容与昨晚 23:54 后完全一致，本次调用（今日 10:22，100ms 即拒）零写入——显式
+                - code [ref=f1e957]: "--deploy"
+                - text: 生效，探针未落盘。
+              - listitem [ref=f1e958]:
+                - code [ref=f1e959]: prep/
+                - text: 下各目录 mtime 均早于本次调用（07:58 / 08:32 / 09:34），
+                - code [ref=f1e960]: token_budget.json
+                - text: 仍不存在，与报错一致。
+            - heading "验收事实（D71，供对拍）" [level=2] [ref=f1e961]
+            - table [ref=f1e963]:
+              - rowgroup [ref=f1e964]:
+                - row [ref=f1e965]:
+                  - columnheader "校验点" [ref=f1e966]
+                  - columnheader "昨晚第四轮（.atf-pinned）" [ref=f1e967]
+                  - columnheader "本次补跑（/data/atf/dev/pinned）" [ref=f1e968]
+              - rowgroup [ref=f1e969]:
+                - row [ref=f1e970]:
+                  - cell [ref=f1e971]:
+                    - code [ref=f1e972]: "--output-dir"
+                    - text: 闸
+                  - cell "通过" [ref=f1e973]
+                  - cell "通过" [ref=f1e974]
+                - row [ref=f1e975]:
+                  - cell [ref=f1e976]:
+                    - text: 显式
+                    - code [ref=f1e977]: "--deploy"
+                    - text: 登记
+                  - cell "通过（探针零写盘）" [ref=f1e978]
+                  - cell "通过（探针零写盘）" [ref=f1e979]
+                - row [ref=f1e980]:
+                  - cell "K1-2 token budget 闸" [ref=f1e981]
+                  - cell [ref=f1e982]:
+                    - code [ref=f1e983]: token_budget_missing
+                    - text: （exit 2）
+                  - cell [ref=f1e984]:
+                    - code [ref=f1e985]: token_budget_missing
+                    - text: （exit 2，报错串逐字一致）
+            - paragraph [ref=f1e986]:
+              - strong [ref=f1e987]: 状态
+              - text: ：
+              - code [ref=f1e988]: blocked
+              - text: （reason＝
+              - code [ref=f1e989]: token_budget_missing
+              - text: ）。被拒即停，未重试。合法出路仍同前：经上游 TokenBudget 确认链产出
+              - code [ref=f1e990]: prep/token_budget.json
+              - text: ，或
+              - code [ref=f1e991]: "--token-budget"
+              - text: 显式指向已确认预算文件——是否推进由你裁定。
+          - generic [ref=f1e995]:
+            - button "Copy" [ref=f1e996] [cursor=pointer]
+            - generic [ref=f1e1000]:
+              - button "Good response" [ref=f1e1001] [cursor=pointer]
+              - button "Bad response" [ref=f1e1004] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e1007] [cursor=pointer]
+            - generic [ref=f1e1013]:
+              - button "Usage 162K tok" [ref=f1e1015] [cursor=pointer]
+              - generic [ref=f1e1021]: 10:22
+          - generic [ref=f1e1024]:
+            - generic [ref=f1e1025]: 第五轮：对 run pl-walkthrough-r1 发起迭代配置构造的前置校验（不真跑构造、不写任何文件）。受控执行通道直调 pin 单源脚本 /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数如下（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --output-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --deploy /data/atf/dev/pinned/tools/walkthrough_assets/deploy.local.yaml。约束：不传任何豁免或绕过参数；被拒即停止，原样记录退出码与输出，不要重试、不要补救、不要写任何文件。
+            - generic [ref=f1e1027]:
+              - generic [ref=f1e1028]: 12:14
+              - button "Copy" [ref=f1e1029] [cursor=pointer]
+          - generic [ref=f1e1034]:
+            - status [ref=f1e1035]: Failed
+            - button "Failed" [disabled] [ref=f1e1036]
+          - status [ref=f1e1040]:
+            - generic [ref=f1e1042]: This turn failedAPI key is invalid
+            - code [ref=f1e1043]: AUTH
+          - generic [ref=f1e1046]:
+            - generic [ref=f1e1047]: 第六轮（前两次 turn 因实例 LLM key 失效 AUTH 失败，key 已换、实例已重启，与本 run 无关）：对 run pl-walkthrough-r1 发起迭代配置构造的前置校验（不真跑构造、不写任何文件）。受控执行通道直调 pin 单源脚本 /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数如下（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --output-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --deploy /data/atf/dev/pinned/tools/walkthrough_assets/deploy.local.yaml。约束：不传任何豁免或绕过参数；被拒即停止，把工具返回内容原样记录进回复，不要重试、不要补救、不要写任何文件、不要弹确认卡。
+            - generic [ref=f1e1049]:
+              - generic [ref=f1e1050]: 12:18
+              - button "Copy" [ref=f1e1051] [cursor=pointer]
+          - generic [ref=f1e1056]:
+            - status [ref=f1e1057]: Completed
+            - button "Completed in 46s" [ref=f1e1058] [cursor=pointer]
+          - generic [ref=f1e1066]:
+            - paragraph [ref=f1e1067]: 第六轮执行完毕：被拒（退出码 2），零写盘，未弹确认卡。工具返回内容原样记录如下。
+            - heading "工具返回（原样，未改动）" [level=2] [ref=f1e1068]
+            - list [ref=f1e1069]:
+              - listitem [ref=f1e1070]:
+                - strong [ref=f1e1071]: 脚本
+                - text: ：
+                - code [ref=f1e1072]: /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py
+              - listitem [ref=f1e1073]:
+                - strong [ref=f1e1074]: 参数
+                - text: ：九参原样传入（本轮唯一变化＝
+                - code [ref=f1e1075]: "--deploy /data/atf/dev/pinned/tools/walkthrough_assets/deploy.local.yaml"
+                - text: ）；无任何豁免/绕过参数
+              - listitem [ref=f1e1076]:
+                - strong [ref=f1e1077]: 退出码
+                - text: ：
+                - code [ref=f1e1078]: "2"
+              - listitem [ref=f1e1079]:
+                - strong [ref=f1e1080]: stderr
+                - text: ：（空）
+              - listitem [ref=f1e1081]:
+                - strong [ref=f1e1082]: stdout 原文（逐字）
+                - text: ：
+            - generic [ref=f1e1083]:
+              - generic [ref=f1e1085]:
+                - generic [ref=f1e1086]: Code block
+                - generic [ref=f1e1088]:
+                  - button "Wrap lines" [pressed] [ref=f1e1089] [cursor=pointer]
+                  - button "Copy" [ref=f1e1094] [cursor=pointer]
+              - code [ref=f1e1100]: "{\"error\": \"预算文件缺失，先确认实验配置——run 缺 token 预算文件（token_budget.json），构造被拒。下一步：先走实验配置确认（九要素确认卡）落 TokenBudget 三要素（预算/训练截断/推理窗口）后重推构造\"}"
+            - list [ref=f1e1101]:
+              - listitem [ref=f1e1102]:
+                - strong [ref=f1e1103]: kernel_error 字段（逐字）
+                - text: ：
+            - generic [ref=f1e1104]:
+              - generic [ref=f1e1106]:
+                - generic [ref=f1e1107]: Code block
+                - generic [ref=f1e1109]:
+                  - button "Wrap lines" [pressed] [ref=f1e1110] [cursor=pointer]
+                  - button "Copy" [ref=f1e1115] [cursor=pointer]
+              - code [ref=f1e1121]: token_budget_missing:/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/token_budget.json(预算文件缺;旧 run 只读兼容不回填)
+            - list [ref=f1e1122]:
+              - listitem [ref=f1e1123]:
+                - strong [ref=f1e1124]: note 字段
+                - text: ：与 stdout 消息逐字相同（略）。
+            - heading "写盘核实（只读）" [level=2] [ref=f1e1125]
+            - paragraph [ref=f1e1126]:
+              - code [ref=f1e1127]: training/
+              - text: 与
+              - code [ref=f1e1128]: prep/
+              - text: 目录内容、mtime 与上轮完全一致（本次调用 12:18，96ms 即拒），零写入；dev pin 的
+              - code [ref=f1e1129]: deploy.local.yaml
+              - text: 存在且被显式登记（越过了 deploy 闸，未触发探针落盘）。
+            - heading "与前轮的对拍事实" [level=2] [ref=f1e1130]
+            - table [ref=f1e1132]:
+              - rowgroup [ref=f1e1133]:
+                - row [ref=f1e1134]:
+                  - columnheader "轮次" [ref=f1e1135]
+                  - columnheader "deploy 来源" [ref=f1e1136]
+                  - columnheader "内核阻点" [ref=f1e1137]
+                  - columnheader "报错面" [ref=f1e1138]
+              - rowgroup [ref=f1e1139]:
+                - row [ref=f1e1140]:
+                  - cell "昨晚第四轮" [ref=f1e1141]
+                  - cell [ref=f1e1142]:
+                    - code [ref=f1e1143]: .atf-pinned
+                  - cell [ref=f1e1144]:
+                    - code [ref=f1e1145]: token_budget_missing
+                  - cell "仅机器错误串" [ref=f1e1146]
+                - row [ref=f1e1147]:
+                  - cell "对齐补跑（今日 10:22）" [ref=f1e1148]
+                  - cell [ref=f1e1149]:
+                    - code [ref=f1e1150]: .atf-pinned
+                  - cell [ref=f1e1151]:
+                    - code [ref=f1e1152]: token_budget_missing
+                  - cell "仅机器错误串" [ref=f1e1153]
+                - row [ref=f1e1154]:
+                  - cell [ref=f1e1155]:
+                    - strong [ref=f1e1156]: 本次第六轮（12:18）
+                  - cell [ref=f1e1157]:
+                    - code [ref=f1e1158]: /data/atf/dev/pinned
+                  - cell [ref=f1e1159]:
+                    - code [ref=f1e1160]: token_budget_missing
+                    - text: （逐字同因）
+                  - cell [ref=f1e1161]:
+                    - strong [ref=f1e1162]: 新增人话处置指引
+                    - text: ：先走实验配置确认（九要素确认卡）落 TokenBudget 三要素后重推
+            - paragraph [ref=f1e1163]:
+              - strong [ref=f1e1164]: 状态
+              - text: ：
+              - code [ref=f1e1165]: blocked
+              - text: （reason＝
+              - code [ref=f1e1166]: token_budget_missing
+              - text: ，同因）。按约束我未弹九要素确认卡、未重试——脚本指引的下一步（经九要素确认卡确认 TokenBudget 预算/训练截断/推理窗口三要素后重推）是否执行，由你裁定。
+          - generic [ref=f1e1170]:
+            - button "Copy" [ref=f1e1171] [cursor=pointer]
+            - generic [ref=f1e1175]:
+              - button "Good response" [ref=f1e1176] [cursor=pointer]
+              - button "Bad response" [ref=f1e1179] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e1182] [cursor=pointer]
+            - generic [ref=f1e1188]:
+              - button "Usage 171K tok" [ref=f1e1190] [cursor=pointer]
+              - generic [ref=f1e1196]: 12:18
+          - generic [ref=f1e1199]:
+            - generic [ref=f1e1200]: H 复跑（D77 验收，harness 已收口模型面对账面）：对 run pl-walkthrough-r1 发起迭代配置构造的前置校验（不真跑构造、不写任何文件）。受控执行通道直调 pin 单源脚本 /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数如下（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --output-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --deploy /data/atf/dev/pinned/tools/walkthrough_assets/deploy.local.yaml。约束：不传任何豁免或绕过参数；被拒即停止，把工具返回内容原样记录进回复，不要重试、不要补救、不要写任何文件、不要弹确认卡。
+            - generic [ref=f1e1202]:
+              - generic [ref=f1e1203]: 14:11
+              - button "Copy" [ref=f1e1204] [cursor=pointer]
+          - generic [ref=f1e1209]:
+            - status [ref=f1e1210]: Failed
+            - button "Failed" [disabled] [ref=f1e1211]
+          - status [ref=f1e1215]:
+            - generic [ref=f1e1217]: This turn failedAPI key is invalid
+            - code [ref=f1e1218]: AUTH
+          - generic [ref=f1e1221]:
+            - generic [ref=f1e1222]: H 复跑（D77 验收；14:11 那轮因实例键源配错 AUTH 失败，实例已换正确键源重启，与本 run 无关）：对 run pl-walkthrough-r1 发起迭代配置构造的前置校验（不真跑构造、不写任何文件）。受控执行通道直调 pin 单源脚本 /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数如下（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --output-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --deploy /data/atf/dev/pinned/tools/walkthrough_assets/deploy.local.yaml。约束：不传任何豁免或绕过参数；被拒即停止，把工具返回内容原样记录进回复，不要重试、不要补救、不要写任何文件、不要弹确认卡。
+            - generic [ref=f1e1224]:
+              - generic [ref=f1e1225]: 14:22
+              - button "Copy" [ref=f1e1226] [cursor=pointer]
+          - generic [ref=f1e1230]:
+            - status [ref=f1e1231]: Deep diving
+            - generic [ref=f1e1235]:
+              - generic [ref=f1e1236]: Deep diving for 1s ···
+              - generic [aria-hidden]:
+                - generic: Deep diving for 1s ···
+      - generic [ref=f1e101]:
+        - generic [ref=f1e102]:
+          - generic [ref=f1e104]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=f1e1238]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=f1e106]:
+            - generic [ref=f1e107]:
+              - button "Add files or run commands" [ref=f1e1239] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=f1e1244] [cursor=pointer]':
+                - generic [ref=f1e1248]: Full access
+            - generic [ref=f1e108]:
+              - generic [ref=f1e1252]:
+                - button "思考 Low(低) ▾" [ref=f1e1255] [cursor=pointer]:
+                  - generic [ref=f1e1256]: 思考
+                  - generic [ref=f1e1257]: Low(低)
+                  - generic [ref=f1e1258]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=f1e1261] [cursor=pointer]:
+                  - generic [ref=f1e1262]: glm-5.3-flash
+              - button "Stop generating" [ref=f1e1265] [cursor=pointer]
+        - generic [ref=f1e1268]:
+          - generic [ref=f1e1269]:
+            - generic [ref=f1e1270]:
+              - button "12 turns 36 steps · 55 tok/s" [ref=f1e1272] [cursor=pointer]:
+                - generic [ref=f1e1277]: 12 turns 36 steps·55 tok/s
+              - button "1.3M tok · Cache hit 87%" [ref=f1e1279] [cursor=pointer]:
+                - generic [ref=f1e1284]: 1.3M tok·Cache hit 87%
+            - generic [ref=f1e1285]:
+              - status [ref=f1e1286]:
+                - generic [ref=f1e1287]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                - generic [ref=f1e1288]:
+                  - generic [ref=f1e1289]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                  - generic [ref=f1e1290]: ws-pl-walkthrough · 1 会话
+              - generic [ref=f1e1291]:
+                - button "新建训练" [ref=f1e1292] [cursor=pointer]
+                - button "查状态" [disabled] [ref=f1e1293]
+                - button "继续上次" [disabled] [ref=f1e1294]
+                - button "对比两轮" [disabled] [ref=f1e1295]
+                - button "走完闭环" [ref=f1e1296] [cursor=pointer]
+                - button "联合训练" [disabled] [ref=f1e1297]
+                - button "badcase 可视化" [ref=f1e1298] [cursor=pointer]
+                - button "发起训练" [ref=f1e1299] [cursor=pointer]
+          - button "0% of context used" [ref=f1e1301] [cursor=pointer]:
+            - generic [ref=f1e1305]: 0%

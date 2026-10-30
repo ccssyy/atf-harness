@@ -1,0 +1,43 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e10]:
+          - generic [ref=e11]: ATF
+          - generic [ref=e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e17] [cursor=pointer]
+    - button "New session" [ref=e20] [cursor=pointer]:
+      - generic [ref=e21]: New Session
+    - navigation "Global panels" [ref=e26]:
+      - button "Plugins" [ref=e27] [cursor=pointer]
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]: Workspaces
+        - generic [ref=e42]:
+          - button "Search sessions" [ref=e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e47]:
+          - button "View options" [ref=e49] [cursor=pointer]
+          - button "Add workspace" [ref=e53] [cursor=pointer]
+      - tree "Sessions" [ref=e58]:
+        - generic [ref=e59]: No sessions yet
+    - button "Settings" [ref=e68] [cursor=pointer]
+  - generic [ref=e77]:
+    - generic:
+      - banner
+    - generic [ref=e83]:
+      - generic [ref=e86]:
+        - generic [ref=e87]: ATF
+        - generic [ref=e90]:
+          - generic [ref=e91]: Into the Unknown
+          - generic [ref=e92]: Preview
+      - button "Choose workspace" [ref=e94] [cursor=pointer]
+      - generic [ref=e102] [cursor=pointer]:
+        - generic [ref=e104]:
+          - textbox "Choose workspace" [ref=e105]
+          - generic [aria-hidden]: Choose a workspace to start
+        - generic [ref=e106]:
+          - generic [ref=e107]:
+            - button "Add files or run commands" [disabled]
+          - generic [ref=e108]:
+            - button "Send message" [disabled]

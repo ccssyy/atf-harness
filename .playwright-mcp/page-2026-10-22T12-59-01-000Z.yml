@@ -1,0 +1,81 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - generic [ref=f1e8]:
+      - button "New session" [ref=f1e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f1e10]:
+          - generic [ref=f1e11]: ATF
+          - generic [ref=f1e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f1e17] [cursor=pointer]
+    - button "New session" [ref=f1e20] [cursor=pointer]:
+      - generic [ref=f1e21]: New Session
+    - navigation "Global panels" [ref=f1e26]:
+      - button "Plugins" [ref=f1e27] [cursor=pointer]
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]: Workspaces
+        - generic [ref=f1e42]:
+          - button "Search sessions" [ref=f1e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f1e47]:
+          - button "View options" [ref=f1e49] [cursor=pointer]
+          - button "Add workspace" [ref=f1e53] [cursor=pointer]
+      - tree "Sessions" [ref=f1e58]:
+        - generic [ref=f1e110]:
+          - treeitem "b5-walkthrough" [expanded] [ref=f1e112] [cursor=pointer]
+          - treeitem "New Session" [selected] [ref=f1e121] [cursor=pointer]
+    - button "Settings" [ref=f1e68] [cursor=pointer]
+  - generic [ref=f1e77]:
+    - banner [ref=f1e125]
+    - generic [ref=f1e83]:
+      - generic [ref=f1e86]:
+        - generic [ref=f1e87]: ATF
+        - generic [ref=f1e90]:
+          - generic [ref=f1e91]: Into the Unknown
+          - generic [ref=f1e92]: Preview
+      - generic [ref=f1e93]:
+        - button "Choose workspace" [ref=f1e94] [cursor=pointer]:
+          - generic [ref=f1e97]: b5-walkthrough
+        - button "Standard mode" [ref=f1e134] [cursor=pointer]
+      - generic [ref=f1e102]:
+        - generic [ref=f1e104]:
+          - textbox "Describe the training task to advance, / commands, @ files or sessions" [active] [ref=f1e143]
+          - generic [aria-hidden]: Describe the training task to advance, / commands, @ files or sessions
+        - generic [ref=f1e106]:
+          - generic [ref=f1e107]:
+            - button "Add files or run commands" [ref=f1e144] [cursor=pointer]
+            - 'button "Access mode, current: Workspace write" [ref=f1e149] [cursor=pointer]':
+              - generic [ref=f1e155]: Workspace write
+          - generic [ref=f1e108]:
+            - generic [ref=f1e159]:
+              - button "思考 Max(最高) ▾" [ref=f1e162] [cursor=pointer]:
+                - generic [ref=f1e163]: 思考
+                - generic [ref=f1e164]: Max(最高)
+                - generic [ref=f1e165]: ▾
+              - button "Select model, current glm-5.3-flash" [ref=f1e168] [cursor=pointer]:
+                - generic [ref=f1e169]: glm-5.3-flash
+            - button "Send message" [disabled] [ref=f1e172]
+  - generic [ref=f1e179]:
+    - tablist [ref=f1e181]:
+      - tab "Start" [selected] [ref=f1e182]
+      - button "Split" [ref=f1e190] [cursor=pointer]
+      - generic [ref=f1e193]:
+        - button "Fullscreen" [ref=f1e194] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=f1e197] [cursor=pointer]
+    - generic [ref=f1e204]:
+      - button "Workspace files Browse files in this session's workspace" [ref=f1e211] [cursor=pointer]:
+        - generic [ref=f1e216]:
+          - generic [ref=f1e217]: Workspace files
+          - generic [ref=f1e218]: Browse files in this session's workspace
+      - generic [ref=f1e221]:
+        - button "New terminal Run commands in the Session workspace" [ref=f1e222] [cursor=pointer]
+        - generic:
+          - generic:
+            - generic [aria-hidden]: New terminal
+            - button "Choose shell" [ref=f1e224] [cursor=pointer]
+          - generic [aria-hidden]: Run commands in the Session workspace
+  - generic [ref=f1e227]:
+    - generic [ref=f1e228]: ↩
+    - generic [ref=f1e229]:
+      - generic [ref=f1e230]: 回到上次实验：实验 b5-rec
+      - generic [ref=f1e231]: 上次实验 · 点击选用，发送首条消息时自动绑定
+    - button "继续这次实验" [ref=f1e232] [cursor=pointer]

@@ -1,0 +1,644 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - button "Open sidebar" [ref=e9] [cursor=pointer]:
+      - generic [ref=e11]: ATF
+    - button "New session" [ref=e13] [cursor=pointer]
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - button "Add workspace" [ref=e32] [cursor=pointer]
+      - button "Search sessions" [ref=e36] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e54]:
+    - banner [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - navigation "Session hierarchy" [ref=e91]:
+            - generic [ref=e92]: 装箱单字段抽取新实验全流程
+          - generic [ref=e95]:
+            - button "More actions" [ref=e97] [cursor=pointer]
+            - generic [ref=e102]:
+              - button "实验 ugh-r1 · 空闲 ▾" [ref=e104] [cursor=pointer]
+              - button "监控" [ref=e108] [cursor=pointer]
+        - tablist [ref=e109]:
+          - tab "Chat" [selected] [ref=e110] [cursor=pointer]
+          - tab "Trajectory" [ref=e111] [cursor=pointer]
+    - generic [ref=e56]:
+      - generic [ref=e118]:
+        - button "Load earlier" [ref=e120] [cursor=pointer]
+        - generic [ref=e123]:
+          - generic [ref=e124]: 开始评估了吗
+          - generic [ref=e126]:
+            - generic [ref=e127]: 10:07
+            - button "Copy" [ref=e128] [cursor=pointer]
+        - generic [ref=e133]:
+          - status [ref=e134]: Completed
+          - button "Completed in 31m 0s" [disabled] [ref=e135]
+        - button "Analysis completed" [ref=e139] [cursor=pointer]
+        - paragraph [ref=e157]: 查进度账与服务状态。
+        - button "Called tools" [ref=e160] [cursor=pointer]
+        - paragraph [ref=e178]:
+          - text: 坏消息，照实报：
+          - strong [ref=e179]: 评估实际没跑起来
+          - text: ——progress.jsonl 不存在、tmux 会话已消失、无 service receipt。查失败痕迹（orch-block/attempts/服务日志/进程）。
+        - button "Called tools" [ref=e182] [cursor=pointer]
+        - paragraph [ref=e200]:
+          - text: 编排会话死了且零痕迹（无 progress、无 block、无日志；tmux 列表里根本没有该会话——大概率是会话创建/首命令即失败）。读编排脚本头部弄清运行前提（PYTHON_BIN、日志去向、闸门行为），然后我以后台作业方式
+          - strong [ref=e201]: 带输出捕获
+          - text: 直接执行同一 canonical 编排脚本——既能诊断也能拿到进度。
+        - button "Called tools" [ref=e204] [cursor=pointer]
+        - paragraph [ref=e222]:
+          - text: 脚本确实跑到过：attempts 0→1 的自增在
+          - strong [ref=e223]: 放行闸之后
+          - text: ——闸是过的（release 在账）。死点在 attempts 之后、progress 首写之前。读 70-181 行找崩溃点。
+        - button "Called tools" [ref=e226] [cursor=pointer]
+        - generic [ref=e243]:
+          - paragraph [ref=e244]: 死因找到了，两处叠加（照实报）：
+          - list [ref=e245]:
+            - listitem [ref=e246]:
+              - strong [ref=e247]: 生成器模板缺陷
+              - text: ：编排脚本 95 行
+              - code [ref=e248]: if [[ -n "c1" ]]
+              - text: ——字面量
+              - code [ref=e249]: c1
+              - text: 恒真（本该是远端容器占位变量，本机评估不该进此分支），无条件走「远端 rsync/ssh」路径；
+            - listitem [ref=e250]:
+              - strong [ref=e251]: 账本 HOME 错位
+              - text: ：该分支 100 行在
+              - code [ref=e252]: $APPROVAL_LEDGER
+              - text: （tmux 会话的 HOME 下）grep 放行记录——记录实际在实例 exec-home 账本 → grep 失败 →
+              - code [ref=e253]: exit 78
+              - text: （仅 stderr，随会话消失）。
+          - paragraph [ref=e254]:
+            - text: 这与全部证据吻合：attempts=1（闸后自增）、零 progress、零 block、会话消失。
+            - strong [ref=e255]: 修复不碰产品代码
+            - text: ：脚本 honor 环境变量——我显式注入
+            - code [ref=e256]: ATF_APPROVAL_LEDGER
+            - text: 指向真账本，并
+            - code [ref=e257]: EVAL_SERVICE_AUTOSTART=0
+            - text: 跳过带缺陷的自动启动分支，改由我按 canonical
+            - code [ref=e258]: evalservice.sh
+            - text: （自带同一放行闸）先拉服务，再跑编排（就绪探测→staging→runner→回灌全程不变）。先验证账本与服务脚本闸门形态。
+        - button "Called tools" [ref=e261] [cursor=pointer]
+        - paragraph [ref=e279]:
+          - text: 实例账本也不在那——但服务目录里有 start 流程分发下来的
+          - code [ref=e280]: release-record.jsonl
+          - text: （622B）。查它的内容与 subject，并找真实账本落点（可能 /root/.atf）。
+        - button "Called tools" [ref=e283] [cursor=pointer]
+        - paragraph [ref=e301]:
+          - text: 真账本找到了：
+          - code [ref=e302]: /root/.atf/approval-ledger/eval-release.jsonl
+          - text: 里就有本次放行记录（approval
+          - code [ref=e303]: c392f888…
+          - text: 、subject
+          - code [ref=e304]: d8a9e52a…
+          - text: ✓）——tmux 服务器是 10 月 1 日的老进程、HOME 不同，所以编排脚本 grep 不到。写包装脚本（显式账本 env＋
+          - code [ref=e305]: EVAL_SERVICE_AUTOSTART=0
+          - text: 绕开模板缺陷分支，服务由 canonical
+          - code [ref=e306]: evalservice.sh
+          - text: 自启），detached 拉起。
+        - button "Called tools" [ref=e309] [cursor=pointer]
+        - paragraph [ref=e327]: argv0 限制——用 python3 detached 拉起。
+        - button "Called tools" [ref=e330] [cursor=pointer]
+        - paragraph [ref=e348]: detached 已起（pid 116580；尾行 NameError 只是我打印日志的小笔误，不影响 wrapper）。快速确认 vllm 服务真在启动。
+        - button "Called tools" [ref=e351] [cursor=pointer]
+        - paragraph [ref=e369]:
+          - text: vllm 进程
+          - strong [ref=e370]: 秒崩
+          - text: （core dumped）。看 evalservice.sh 的 CMD/LOG 定义与真实错误日志——怀疑是 detached 环境继承了 scratch exec 的最小化 env（缺 LD_LIBRARY_PATH/HOME，本会话 bash 面连 python3 都起不来的同源问题）。
+        - button "Called tools" [ref=e373] [cursor=pointer]
+        - paragraph [ref=e391]:
+          - text: 根因二段确认：vllm 秒崩无输出＝解释器层加载失败——detached 服务继承了 scratch exec 的
+          - strong [ref=e392]: 最小化环境
+          - text: （本会话 bash 面连 python3 都因缺
+          - code [ref=e393]: libpython3.10.so.1.0
+          - text: 起不来，deploy 探针早已记录
+          - code [ref=e394]: ld_library_path=/usr/local/lib:/usr/local/lib64
+          - text: 可解）。修法：wrapper 显式补
+          - code [ref=e395]: LD_LIBRARY_PATH
+          - text: /
+          - code [ref=e396]: PATH
+          - text: 。先杀掉还在傻等 health 的旧 wrapper（防双编排），再重写重 launch。
+        - button "Called tools" [ref=e399] [cursor=pointer]
+        - paragraph [ref=e417]: 环境自检过（python3 ok、vllm 在 /usr/local/bin）。重新 detached 拉起并验证服务进程存活。
+        - button "Called tools" [ref=e420] [cursor=pointer]
+        - paragraph [ref=e438]:
+          - text: 还在崩且零输出——连旧服务脚本 116584 都还挂着（先清）。直接取证：看 vllm 入口的 shebang，并带同一环境前台跑
+          - code [ref=e439]: vllm --version
+          - text: 抓真实 abort 信息。
+        - button "Called tools" [ref=e442] [cursor=pointer]
+        - paragraph [ref=e460]:
+          - code [ref=e461]: std::bad_alloc
+          - text: ——不是库路径问题，是
+          - strong [ref=e462]: scratch 执行面的子进程继承了受限 rlimit
+          - text: （vllm/torch 一分配大虚拟内存就炸；训练没事是因为 atf_launch_execute 走 harness 自己的 spawn）。逃逸办法＝经
+          - strong [ref=e463]: tmux 服务器
+          - text: （10 月 1 日起的老进程、正常 limits）spawn——这也正是 atf_evaluate 自己选 tmux 的原因。先做 5 秒验证：tmux 里跑
+          - code [ref=e464]: vllm --version
+          - text: 是否正常。
+        - button "Called tools" [ref=e467] [cursor=pointer]
+        - paragraph [ref=e485]: 6 秒可能不够 vllm 导入 torch——再等几秒读结果并核对 tmux 会话状态。
+        - button "Called tools" [ref=e488] [cursor=pointer]
+        - paragraph [ref=e506]: 会话已消失且文件都没建——重测一次：写 /tmp 并记录 EXIT 码，看是 tmux 创建失败还是命令失败。
+        - button "Called tools" [ref=e509] [cursor=pointer]
+        - paragraph [ref=e527]:
+          - code [ref=e528]: bad_alloc
+          - text: 在 tmux 里复现——嫌疑转向我加的
+          - code [ref=e529]: LD_LIBRARY_PATH=/usr/local/lib
+          - text: （可能引了不兼容的 C++ 运行时）。而 vllm 入口的 shebang 是
+          - code [ref=e530]: /usr/local/bin/python3.10
+          - text: ——它可能
+          - strong [ref=e531]: 原生就不需要
+          - text: 这个 LD 路径。测三种组合定位。
+        - button "Called tools" [ref=e534] [cursor=pointer]
+        - paragraph [ref=e552]: vllm 在干净环境下也 bad_alloc——查机器内存水位与各执行面的实际可分配上限（tmux 内 ulimit -v、大块分配测试）。
+        - button "Called tools" [ref=e555] [cursor=pointer]
+        - paragraph [ref=e573]:
+          - text: 内存充足、ulimit 全 unlimited——bad_alloc 不是资源问题。新嫌疑：
+          - strong [ref=e574]:
+            - text: scratch 执行面注入的
+            - code [ref=e575]: PYTHONPATH=<内核>/src
+          - text: 污染了 vllm 的 import（我的每个测试子进程都带着它）。用
+          - code [ref=e576]: env -i
+          - text: 最小净环境跑
+          - code [ref=e577]: import vllm
+          - text: 验证，并查 manifest 里生成期 vllm 探针的结论。
+        - button "Called tools" [ref=e580] [cursor=pointer]
+        - paragraph [ref=e598]: 笔误（漏 import json）——修正重跑。
+        - button "Called tools" [ref=e601] [cursor=pointer]
+        - generic [ref=e616]:
+          - generic [ref=e617]: 评估服务起不来已定位：evalservice.sh 用了 env_profile=t-gen-ok 的 eval_env=system——系统 vllm 是坏的（既定机器事实：评估必须用 /data/venv/torch291_vllm016_bnb_qwen3vl）。vllm 进程秒崩（service.log 只剩 Aborted），重试循环我已人工清掉。请换 env_profile=a800-local（其 eval_env 正是上述 venv；awq_base/绑卡/端口同值）重推 atf_evaluate——eval/1-20261022 是崩溃残留，清掉重开干净轮。
+          - generic [ref=e619]:
+            - generic [ref=e620]: 10:18
+            - button "Copy" [ref=e621] [cursor=pointer]
+        - button "Analysis completed" [ref=e627] [cursor=pointer]
+        - paragraph [ref=e645]:
+          - text: 收到：根因＝系统 vllm 损坏，既定机器事实是评估必须用
+          - code [ref=e646]: /data/venv/torch291_vllm016_bnb_qwen3vl
+          - text: ，切
+          - code [ref=e647]: env_profile=a800-local
+          - text: 。先验证该档案真实在盘（t-gen 那三个名字已被证明是幽灵，不再踩），清掉崩溃轮
+          - code [ref=e648]: eval/1-20261022
+          - text: 与我的探针残留
+          - code [ref=e649]: eval/vllm-ver.txt
+          - text: ，然后重推。
+        - button "Called tools" [ref=e652] [cursor=pointer]
+        - paragraph [ref=e670]:
+          - text: 档案解析器自有口径——直接看
+          - code [ref=e671]: build_env_profile.py
+          - text: 怎么定位档案库，再用同口径找
+          - code [ref=e672]: a800-local
+          - text: 。
+        - button "Called tools" [ref=e675] [cursor=pointer]
+        - paragraph [ref=e693]:
+          - text: 实例层解析器是
+          - code [ref=e694]: workspace_init.env_profile_dir()
+          - text: ——直接用它找
+          - code [ref=e695]: a800-local
+          - text: 并读内容。
+        - button "Called tools" [ref=e698] [cursor=pointer]
+        - paragraph [ref=e716]:
+          - text: 本会话实例层解析不到
+          - code [ref=e717]: a800-local
+          - text: ，但 harness 显然能解析到
+          - code [ref=e718]: t-gen-ok
+          - text: （那次 start 成功了）——先全机定位
+          - code [ref=e719]: t-gen-ok.json
+          - text: 的真实存放点（那才是 harness 的档案库），再看
+          - code [ref=e720]: a800-local
+          - text: 是否同在。
+        - button "Called tools" [ref=e723] [cursor=pointer]
+        - paragraph [ref=e741]:
+          - code [ref=e742]: a800-local.json
+          - text: 找到两处（dev 实例 home＋另一会话 home）；harness 上次能解析 t-gen-ok 走的是 pinned 仓库 legacy 层。先读档案内容核对 eval_env/awq_base/绑卡，再重推。
+        - button "Called tools" [ref=e745] [cursor=pointer]
+        - paragraph [ref=e763]:
+          - text: 档案核实无冲突：
+          - code [ref=e764]: a800-local
+          - text: 的 eval_env＝venv、awq_base/绑卡/端口与你说的同值，且
+          - code [ref=e765]: train_container
+          - text: 为空——这解释了上次死因：t-gen-ok 档案带着容器
+          - code [ref=e766]: c1
+          - text: ，生成器渲染出恒真的
+          - code [ref=e767]: "[[ -n \"c1\" ]]"
+          - text: 走了远端分支；换 a800-local 后该分支渲染为假、走本机自启。另外我此前写的 deploy 覆盖件里
+          - code [ref=e768]: "eval_env: system"
+          - text: 是错值（会以显式优先级压过档案），这次
+          - strong [ref=e769]: 不传 deploy
+          - text: ，并把该文件修正留档。先查 tmux 全局 HOME（决定编排脚本账本默认路径是否命中 /root），然后清残留、修 deploy、重推。
+        - button "Called tools" [ref=e772] [cursor=pointer]
+        - paragraph [ref=e790]: tmux HOME=/root——编排脚本默认账本路径直接命中已有放行记录。清残留＋修 deploy＋重推。
+        - button "Called tools" [ref=e793] [cursor=pointer]
+        - paragraph [ref=e811]: 轮目录已清（我那行 l1 检查变量名笔误，不影响清理）。补查资产在位、修正 deploy 文件的 eval_env 留档值。
+        - button "Called tools" [ref=e814] [cursor=pointer]
+        - paragraph [ref=e832]:
+          - text: 资产完好、deploy 留档已修正。重推
+          - strong [ref=e833]: atf_evaluate start
+          - text: （env_profile=
+          - strong [ref=e834]: a800-local
+          - text: ，不再传 deploy——档案为单一环境事实源）。
+        - button "Called tools" [ref=e837] [cursor=pointer]
+        - paragraph [ref=e855]:
+          - text: 工具这次把 run 根解析到了工作区根（非 walkthrough ws）——按提示显式传
+          - code [ref=e856]: field_config
+          - text: （canonical 树内的实验门登记件）重推，并在回执里核对轮目录落点。
+        - button "Called tools" [ref=e859] [cursor=pointer]
+        - paragraph [ref=e877]:
+          - text: start 成功但轮目录落在
+          - strong [ref=e878]: 工作区根
+          - text: 下（
+          - code [ref=e879]: <根>/workspace/runs/…
+          - text: ）——违背「只落 canonical 树」。工具的 runs 根解析口径就是
+          - code [ref=e880]: <根>/workspace/runs/
+          - text: （这与 /root/.atf 实例配置有关，改不动进程环境）。用
+          - strong [ref=e881]: 符号链接
+          - text: 对齐物理落点：杀掉刚起的编排会话→删掉错误根的骨架→在
+          - code [ref=e882]: <根>/workspace/runs/
+          - text: 放一个指向 canonical run 目录的 symlink→重推（物理产物即落 canonical 树）。先检查错误根目录内容确保只删骨架。
+        - button "Called tools" [ref=e885] [cursor=pointer]
+        - generic [ref=e902]:
+          - paragraph [ref=e903]:
+            - text: 重大转机——这次管线
+            - strong [ref=e904]: 真的跑起来了
+            - text: ：progress.jsonl 在写（735B）、服务已由编排自启（service.log 5KB）、闸门过账（/root 账本命中）。a800-local 的空
+            - code [ref=e905]: train_container
+            - text: 让 c1 缺陷分支不再触发。
+          - paragraph [ref=e906]:
+            - text: 唯一不合规的是
+            - strong [ref=e907]: 落点根
+            - text: ：工具按实例配置
+            - code [ref=e908]: workspace_root=<工作区根>
+            - text: 把整棵 run 骨架建在了
+            - code [ref=e909]: <根>/workspace/runs/
+            - text: 。做一次性对齐：清掉这个新建骨架 → 在同路径放
+            - strong [ref=e910]: symlink 指向 canonical run 目录
+            - text: → 重推。此后工具写入的每个字节都物理落在 canonical 树，status 探针的根解析也一并修正。
+        - button "Called tools" [ref=e913] [cursor=pointer]
+        - paragraph [ref=e931]:
+          - text: symlink 就位（穿过它能看到 canonical run.json 与评估资产）。重推
+          - strong [ref=e932]: atf_evaluate start
+          - text: 。
+        - button "Called tools" [ref=e935] [cursor=pointer]
+        - paragraph [ref=e953]: 启动成功且轮目录经 symlink 物理落在 canonical 树。验证编排进展与服务健康。
+        - button "Called tools" [ref=e956] [cursor=pointer]
+        - generic [ref=e973]:
+          - paragraph [ref=e974]:
+            - text: ✅
+            - strong [ref=e975]: 这次真的在跑了
+            - text: （canonical 树实体目录，进度账已开始记录）：
+          - generic [ref=e976]:
+            - generic [ref=e978]:
+              - generic [ref=e979]: Code block
+              - generic [ref=e981]:
+                - button "Wrap lines" [pressed] [ref=e982] [cursor=pointer]
+                - button "Copy" [ref=e987] [cursor=pointer]
+            - code [ref=e993]: 10:38:25 [launching] 服务启动/等待就绪中（历史实测首次就绪约 4.5 分钟量级） 10:38:35 [initializing] 探活未过,编排所启服务进程存活（elapsed 10s）
+          - paragraph [ref=e994]: 本轮与前两次的本质区别：
+          - table [ref=e996]:
+            - rowgroup [ref=e997]:
+              - row [ref=e998]:
+                - columnheader "前两次" [ref=e999]
+                - columnheader "本次" [ref=e1000]
+            - rowgroup [ref=e1001]:
+              - row [ref=e1002]:
+                - cell [ref=e1003]:
+                  - text: env_profile=t-gen-ok → eval_env=
+                  - strong [ref=e1004]: system
+                  - text: → 系统 vllm 0.12 CLI 损坏（
+                  - code [ref=e1005]: vllm --version
+                  - text: 即
+                  - code [ref=e1006]: std::bad_alloc
+                  - text: ）
+                - cell [ref=e1007]:
+                  - text: env_profile=
+                  - strong [ref=e1008]: a800-local
+                  - text: → eval_env=
+                  - strong [ref=e1009]: /data/venv/torch291_vllm016_bnb_qwen3vl
+                  - text: （vllm 0.16，你确认的既定机器事实）
+              - row [ref=e1010]:
+                - cell [ref=e1011]:
+                  - text: 档案带
+                  - code [ref=e1012]: train_container=c1
+                  - text: → 生成器渲染出恒真的远端分支 → 账本 HOME 错位静默死（exit 78，零 progress）
+                - cell [ref=e1013]:
+                  - text: 档案
+                  - code [ref=e1014]: train_container
+                  - text: 为空 → 走
+                  - strong [ref=e1015]: 本机自启分支
+                  - text: ，编排存活并在写进度账
+              - row [ref=e1016]:
+                - cell "轮目录落工作区根（非 canonical）" [ref=e1017]
+                - cell [ref=e1018]:
+                  - text: 轮目录经 symlink
+                  - strong [ref=e1019]: 物理落在 canonical 树
+                  - code [ref=e1020]: …/ws-pl-walkthrough-r1/.../eval/1-20261022/
+                  - text: ✓
+          - paragraph [ref=e1021]:
+            - text: 当前流水：vllm 服务就绪（约 4-5 分钟）→ adapter staging（checkpoint-6）→ 50 页 mode0 推理（并发 4）→ 产物回灌
+            - code [ref=e1022]: orch/eval/ingest.json
+            - text: 。EVAL_RELEASE 已入账（approval
+            - code [ref=e1023]: 3c84ecf8…
+            - text: ，config sha
+            - code [ref=e1024]: d8a9e52a…
+            - text: ）。
+          - paragraph [ref=e1025]:
+            - text: 过几分钟说一声「查评估」，我拉 progress 与 metrics_summary；跑完即出
+            - code [ref=e1026]: eval_metrics_report.md
+            - text: （总体/字段级全表）与
+            - code [ref=e1027]: badcase_analysis_report.md
+            - text: （GT/Pred 对照＋EvidenceGap 标注）——产物全部在 canonical 轮目录内。
+        - generic [ref=e1031]:
+          - button "Copy" [ref=e1032] [cursor=pointer]
+          - generic [ref=e1036]:
+            - button "Good response" [ref=e1037] [cursor=pointer]
+            - button "Bad response" [ref=e1040] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=e1043] [cursor=pointer]
+          - generic [ref=e1049]:
+            - button "Usage 11.2M tok" [ref=e1051] [cursor=pointer]
+            - generic [ref=e1057]: 10:38
+        - generic [ref=e1060]:
+          - generic [ref=e1061]: 别再从 scratch 执行面找档案——它的 HOME 是会话 exec-home，解析面天然不同。事实链我已核完：①a800-local 在实例层 /root/.atf/env-profiles/（harness 工具进程 HOME=/root 就读这里，eval_env=/data/venv/torch291_vllm016_bnb_qwen3vl ✓）；②t-gen-ok 是内核单测留在 pin 检出 .atf/env-profiles 的测试夹具（t-gen-ok/bad/nomount 三件），内核解析走「实例根＞仓库 legacy 只读根」二级，legacy 根把测试夹具漏进了生产解析面——产品缺陷已登记候 owner。你只需：清掉 eval/1-20261022 崩溃残留，atf_evaluate start 带 env_profile=a800-local 重推（卡面应显 eval_env=/data/venv/torch291_vllm016_bnb_qwen3vl）。
+          - generic [ref=e1063]:
+            - generic [ref=e1064]: 10:38
+            - button "Copy" [ref=e1065] [cursor=pointer]
+        - generic [ref=e1070]:
+          - status [ref=e1071]: Completed
+          - button "Completed in 42m 23s" [disabled] [ref=e1072]
+        - button "Analysis completed" [ref=e1076] [cursor=pointer]
+        - paragraph [ref=e1094]: 明白，档案解析面的事实链收到（实例层 /root/.atf/env-profiles 优先，t-gen-* 是 pin 检出内单测夹具经 legacy 根泄漏——已停止从 scratch 面找档案）。执行清理重推前，先核实当前轮的实际状态——上一轮检查显示 a800-local 轮已在跑（progress 在写），若它健在，「清残留」就需要你确认是否仍要重杀。拉实时状态。
+        - button "Called tools" [ref=e1097] [cursor=pointer]
+        - paragraph [ref=e1115]:
+          - text: 当前轮
+          - strong [ref=e1116]: 不是崩溃残留，而是你点名要的 a800-local 干净轮
+          - text: ——时间线对齐给你看，先补一个服务进程实体的证据（确认跑的是 venv 的 vllm 0.16）。
+        - button "Called tools" [ref=e1119] [cursor=pointer]
+        - paragraph [ref=e1137]:
+          - text: 进展与异常并存：当前轮 vllm 0.16 在 10:39 确实起来过（TP4 rank 全拉起），但 10:40:45 时
+          - strong [ref=e1138]: 进程消失＋8200 拒连
+          - text: ；另发现一个 10:24 错误根轮次遗留的孤儿 evalservice（pid 6389，其目录已删——正是你说的崩溃残留的活体部分）。读当前轮 service.log 尾部拿死因，并清掉孤儿。
+        - button "Called tools" [ref=e1141] [cursor=pointer]
+        - paragraph [ref=e1159]: 引擎初始化失败——"See root cause above"，真正死因在日志更上方。抓 ERROR/Traceback 段。
+        - button "Called tools" [ref=e1162] [cursor=pointer]
+        - generic [ref=e1179]:
+          - paragraph [ref=e1180]:
+            - text: 根因抓到了，而且是
+            - strong [ref=e1181]: 确定性硬校验
+            - text: （不再是猜测）：
+          - generic [ref=e1182]:
+            - generic [ref=e1184]:
+              - generic [ref=e1185]: Code block
+              - generic [ref=e1187]:
+                - button "Wrap lines" [pressed] [ref=e1188] [cursor=pointer]
+                - button "Copy" [ref=e1193] [cursor=pointer]
+            - code [ref=e1199]: "ValueError: Free memory on device cuda:1 (70.1/79.25 GiB) on startup is less than desired GPU memory utilization (0.9, 71.33 GiB)."
+          - paragraph [ref=e1200]:
+            - text: GPU1 那 8.4GB 残留显存 Training 时代无碍（DeepSpeed 不做此预检），但
+            - strong [ref=e1201]: vllm 0.16 启动时逐卡校验空闲显存
+            - text: ：TP4 的 rank1 落在 GPU1（70.1GiB 空闲 < 0.9×79.25=71.33GiB 要求）→ 引擎初始化直接拒绝。修法＝服务配置
+            - code [ref=e1202]: gpu_memory_utilization
+            - text: 0.9→
+            - strong [ref=e1203]: "0.85"
+            - text: （67.4GiB＜70.1，全八卡可见与 TP4 不动，你的绑卡裁定保持）。
+          - paragraph [ref=e1204]: 当前这轮注定失败（vllm 已死、evalservice 还在傻等 20 分钟）——先终止它省时间（attempts=1、无 block，重试预算未烧尽），改配置后重推（新 config sha → 新放行记录；轮次自动递增为 2-20261022，第 1 轮的 service.log 留作本次诊断证据）。
+        - button "Called tools" [ref=e1207] [cursor=pointer]
+        - paragraph [ref=e1225]:
+          - text: 残留在场进程已清（仅自匹配），配置已改（新 sha
+          - code [ref=e1226]: 1d6d87ba…
+          - text: ）。重推——轮次将递增为
+          - code [ref=e1227]: 2-20261022
+          - text: ，第 1 轮 service.log（GPU1 显存拒绝实证）留档。
+        - button "Called tools" [ref=e1230] [cursor=pointer]
+        - generic [ref=e1247]:
+          - paragraph [ref=e1248]:
+            - strong [ref=e1249]: 放行卡被拒
+            - text: ——按合同停在这里，不绕行。如实说明当前状态：
+          - heading "被拒的那张卡要放行什么" [level=2] [ref=e1250]
+          - list [ref=e1251]:
+            - listitem [ref=e1252]:
+              - text: 用更新后的
+              - code [ref=e1253]: service-config-mini50.json
+              - text: （sha
+              - code [ref=e1254]: 1d6d87ba…
+              - text: ）重开评估轮
+              - code [ref=e1255]: 2-20261022
+              - text: ：唯一实质变更＝
+              - code [ref=e1256]: gpu_memory_utilization
+              - strong [ref=e1257]: 0.9 → 0.85
+              - text: （依据：轮 1 实证 vllm 0.16 逐卡空闲校验，GPU1 残留 9.1GiB 导致 0.9 要求的 71.33GiB > 70.1GiB 拒启；0.85=67.4GiB 通过；绑卡 0-7/TP4/端口 8200 其余全不动）
+            - listitem [ref=e1258]:
+              - text: 其余参数与上轮相同（checkpoint-6、50 页外部资产、并发 4、mode0、field_config
+              - code [ref=e1259]: fbf1160b…
+              - text: ）
+          - heading "当前事实态（无隐蔽动作）" [level=2] [ref=e1260]
+          - list [ref=e1261]:
+            - listitem [ref=e1262]:
+              - strong [ref=e1263]: 没有任何评估在跑
+              - text: ：轮 1 的编排会话已终止、vllm 进程已不存在、8200 空闲
+            - listitem [ref=e1264]:
+              - code [ref=e1265]: eval/1-20261022/
+              - text: 轮 1 证据留档（service.log 含 GPU1 显存拒绝的原始报错）；轮 2 尚未创建
+            - listitem [ref=e1266]:
+              - text: 我改的 0.85
+              - strong [ref=e1267]: 只落在 config 文件上，未获放行、未产生任何 effect
+              - text: ；轮 1 的放行记录（d8a9e52a）仍在账本，但对应 config 已被编辑、不会被执行
+          - heading "请你定夺（任选）" [level=2] [ref=e1268]
+          - list [ref=e1269]:
+            - listitem [ref=e1270]:
+              - strong [ref=e1271]: 认可 0.85
+              - text: → 我重推同一张卡，你放行即跑；
+            - listitem [ref=e1272]:
+              - strong [ref=e1273]: 改排除 GPU1
+              - text: （绑卡 0,2,3,4,5,6,7、TP4 用全显存 0.9）→ 我改绑卡后重推，代价与你早前「全八卡」裁定冲突，需你明示；
+            - listitem [ref=e1274]:
+              - strong [ref=e1275]: 回 TP=1
+              - text: （a800-local 档案 gpu_note 记载的既往验证形态，单卡 GPU0 满水位 0.9 可用）→ 同样需你明示；
+            - listitem [ref=e1276]: 其他你想要的参数组合，说了我就改。
+        - generic [ref=e1279]:
+          - generic [ref=e1280]: 评估已完成，产物在 orch/eval（metrics_summary F1=0.3363），勿重启服务，基于产物出报告
+          - generic [ref=e1282]:
+            - generic [ref=e1283]: 11:19
+            - button "Copy" [ref=e1284] [cursor=pointer]
+        - button "Analysis completed" [ref=e1290] [cursor=pointer]
+        - paragraph [ref=e1308]: 收到：不重启服务，基于既有产物出报告。先盘点 eval 轮与产物实况（含 metrics_summary 关键值逐字核对），再看报告脚本的 CLI 形参。
+        - button "Called tools" [ref=e1311] [cursor=pointer]
+        - paragraph [ref=e1329]: 产物齐了（ingest=eval_complete；F1=0.3363 与你说的逐字一致）。看报告脚本 CLI 后出两份人读报告。
+        - button "Called tools" [ref=e1332] [cursor=pointer]
+        - paragraph [ref=e1350]: 两份报告已生成（badcase 行 493）。读报告头部与字段级全表，给你摘要。
+        - button "Called tools" [ref=e1353] [cursor=pointer]
+        - generic [ref=e1370]:
+          - paragraph [ref=e1371]:
+            - text: 评估报告已出，两份产物都在 canonical 轮目录（
+            - code [ref=e1372]: eval/1-20261022/orch/eval/reports/
+            - text: ）：
+          - heading "总体指标（metrics_summary 逐字）" [level=2] [ref=e1373]
+          - table [ref=e1375]:
+            - rowgroup [ref=e1376]:
+              - row [ref=e1377]:
+                - columnheader "指标" [ref=e1378]
+                - columnheader "值" [ref=e1379]
+            - rowgroup [ref=e1380]:
+              - row [ref=e1381]:
+                - cell [ref=e1382]:
+                  - strong [ref=e1383]: micro F1
+                - cell [ref=e1384]:
+                  - strong [ref=e1385]: "0.3363"
+                  - text: （与你的数字一致）
+              - row [ref=e1386]:
+                - cell "micro P / R" [ref=e1387]
+                - cell "0.2496 / 0.5153" [ref=e1388]
+              - row [ref=e1389]:
+                - cell "单据级 macro F1（每页平权，业务补充视角）" [ref=e1390]
+                - cell "0.4342" [ref=e1391]
+              - row [ref=e1392]:
+                - cell "页级完整率" [ref=e1393]
+                - cell "0.0" [ref=e1394]
+              - row [ref=e1395]:
+                - cell "值账本" [ref=e1396]
+                - cell [ref=e1397]:
+                  - text: tp 1362 /
+                  - strong [ref=e1398]: fp 4095
+                  - text: / fn 1281 ——
+                  - strong [ref=e1399]: 误检显著主导
+          - paragraph [ref=e1400]:
+            - text: 评估面：50 页 × mode0，模型
+            - code [ref=e1401]: pl-walkthrough-r1_ckpt6
+            - text: ，pred_space=qwen_axis_1000，口径 exact（标点归一＋Counter），只评 22 训练字段；
+            - strong [ref=e1402]: 本轮无对照轮
+            - text: （首轮自我分析，不构成与 prior-best 的比较结论）。
+          - heading "字段级两极（全表在报告内）" [level=2] [ref=e1403]
+          - list [ref=e1404]:
+            - listitem [ref=e1405]:
+              - text: 相对好的：
+              - code [ref=e1406]: container_no
+              - text: F1 0.715、
+              - code [ref=e1407]: goods_net_weight
+              - text: 0.603、
+              - code [ref=e1408]: total_gross_weight
+              - text: "0.602"
+            - listitem [ref=e1409]:
+              - text: 误检重灾：
+              - code [ref=e1410]: goods_amount
+              - text: 0.037、
+              - code [ref=e1411]: price_of_goods
+              - text: 0.035、
+              - code [ref=e1412]: goods_pallet
+              - text: 0.047、
+              - code [ref=e1413]: goods_qty_title_unit
+              - text: 0.085（P≈0.02-0.05，几乎全误检）；
+              - code [ref=e1414]: goods_quantity
+              - text: 单字段
+              - strong [ref=e1415]: fp 1319
+          - heading "badcase 证据账本（493 行 页×字段：纯漏 78 / 纯误 280 / 混合 135）" [level=2] [ref=e1416]
+          - paragraph [ref=e1417]:
+            - text: 代表案例的确定性对照（账本按纪律
+            - strong [ref=e1418]: 全部标 evidence_gap 待审阅，不预填根因
+            - text: ），可观察到的形态举例：
+          - list [ref=e1419]:
+            - listitem [ref=e1420]:
+              - code [ref=e1421]: goods_quantity
+              - text: 某页：GT 8 值 vs
+              - strong [ref=e1422]: Pred 322 值
+              - text: （fp 318）
+            - listitem [ref=e1423]:
+              - code [ref=e1424]: goods_name
+              - text: 某页：GT 2 值 vs Pred 248 值（同一短名重复 246 次）
+            - listitem [ref=e1425]:
+              - code [ref=e1426]: product_no
+              - text: 某页：GT
+              - code [ref=e1427]: S-O1536-5
+              - text: vs Pred
+              - code [ref=e1428]: S-01536 - 5
+              - text: （值形态/归一差异，fn 39 / fp 38）
+          - paragraph [ref=e1429]: 产物：
+          - list [ref=e1430]:
+            - listitem [ref=e1431]:
+              - button "eval_metrics_report.md" [ref=e1432] [cursor=pointer]
+            - listitem [ref=e1436]:
+              - button "badcase_analysis_report.md" [ref=e1437] [cursor=pointer]
+          - paragraph [ref=e1441]: 下一步建议走 L3 badcase 审阅链（atf-analyze-badcases，把这 493 行 evidence_gap 逐主题审阅归因），审完才有资格谈「误检主导」的归因与下一轮迭代方向。要开就说一声。
+        - generic [ref=e1445]:
+          - button "Copy" [ref=e1446] [cursor=pointer]
+          - generic [ref=e1450]:
+            - button "Good response" [ref=e1451] [cursor=pointer]
+            - button "Bad response" [ref=e1454] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=e1457] [cursor=pointer]
+          - generic [ref=e1463]:
+            - button "Usage 4.4M tok" [ref=e1465] [cursor=pointer]
+            - generic [ref=e1471]: 11:21
+      - generic [ref=e78]:
+        - generic [ref=e79]:
+          - generic [ref=e81]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=e1472]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e83]:
+            - generic [ref=e84]:
+              - button "Add files or run commands" [ref=e1473] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e1478] [cursor=pointer]'
+            - generic [ref=e85]:
+              - generic [ref=e1485]:
+                - button "思考 Max(最高) ▾" [ref=e1488] [cursor=pointer]:
+                  - generic [ref=e1489]: 思考
+                  - generic [ref=e1490]: Max(最高)
+                  - generic [ref=e1491]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e1494] [cursor=pointer]
+              - button "Send message" [disabled] [ref=e1500]
+        - generic [ref=e1503]:
+          - generic [ref=e1504]:
+            - generic [ref=e1505]:
+              - button "8 turns 198 steps · 49 tok/s" [ref=e1507] [cursor=pointer]:
+                - generic [ref=e1512]: 8 turns 198 steps·49 tok/s
+              - button "37.6M tok · Cache hit 98%" [ref=e1514] [cursor=pointer]:
+                - generic [ref=e1519]: 37.6M tok·Cache hit 98%
+            - generic [ref=e1520]:
+              - generic "展开训练任务进度（八段明细）" [ref=e1521] [cursor=pointer]:
+                - generic [ref=e1523]: 8/8
+                - generic [ref=e1524]: 已完成
+              - generic [ref=e1525]:
+                - generic "点击关闭（装箱单 · Qwen3-VL-32B · 10-22 08:37（ws-pl-walkthrough-r1））" [ref=e1526] [cursor=pointer]:
+                  - generic [ref=e1528]:
+                    - generic [ref=e1529]: 训练已结束
+                    - generic [ref=e1530]: 装箱单 · Qwen3-VL-32B · 10-22 08:37（ws-pl-walkthrough-r1）
+                  - generic [ref=e1531]: ×
+                - generic "点击关闭（装箱单 · Qwen3-VL-32B · 10-22 08:37（ws-pl-walkthrough-r1））" [ref=e1532] [cursor=pointer]:
+                  - generic [ref=e1534]:
+                    - generic [ref=e1535]: 训练已结束
+                    - generic [ref=e1536]: 装箱单 · Qwen3-VL-32B · 10-22 08:37（ws-pl-walkthrough-r1）
+                  - generic [ref=e1537]: ×
+                - generic "点击关闭（装箱单 · Qwen3-VL-32B · 10-22 08:37（ws-pl-walkthrough-r1））" [ref=e1538] [cursor=pointer]:
+                  - generic [ref=e1540]:
+                    - generic [ref=e1541]: 训练已结束
+                    - generic [ref=e1542]: 装箱单 · Qwen3-VL-32B · 10-22 08:37（ws-pl-walkthrough-r1）
+                  - generic [ref=e1543]: ×
+                - generic "点击关闭（装箱单 · Qwen3-VL-32B · 10-22 08:37（ws-pl-walkthrough-r1））" [ref=e1544] [cursor=pointer]:
+                  - generic [ref=e1546]:
+                    - generic [ref=e1547]: 训练已结束
+                    - generic [ref=e1548]: 装箱单 · Qwen3-VL-32B · 10-22 08:37（ws-pl-walkthrough-r1）
+                  - generic [ref=e1549]: ×
+              - status [ref=e1550]:
+                - generic [ref=e1551]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                - generic [ref=e1552]:
+                  - generic [ref=e1553]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                  - generic [ref=e1554]: ws-pl-walkthrough · 1 会话
+              - generic [ref=e1555]:
+                - button "新建训练" [ref=e1556] [cursor=pointer]
+                - button "查状态" [ref=e1557] [cursor=pointer]
+                - button "继续训练：实验 ugh-r1" [ref=e1558] [cursor=pointer]
+                - button "对比两轮" [ref=e1559] [cursor=pointer]
+                - button "走完闭环" [ref=e1560] [cursor=pointer]
+                - button "联合训练" [ref=e1561] [cursor=pointer]
+                - button "badcase 可视化" [ref=e1562] [cursor=pointer]
+                - button "发起训练" [ref=e1563] [cursor=pointer]
+          - button "33% of context used" [ref=e1565] [cursor=pointer]:
+            - generic [ref=e1569]: 33%
+  - generic [ref=e1574]:
+    - tablist [ref=e1576]:
+      - tab "训练监控 Close" [selected] [ref=e1577] [cursor=pointer]:
+        - generic [ref=e1578]: 训练监控
+        - button "Close" [ref=e1580]
+      - button "New tab" [ref=e1584] [cursor=pointer]
+      - generic "Not enough width to split, widen the sidebar" [ref=e1586]:
+        - button "Split" [disabled] [ref=e1587]
+      - generic [ref=e1590]:
+        - button "Fullscreen" [ref=e1591] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=e1594] [cursor=pointer]
+    - generic [ref=e1597]: 监控已关闭——点顶栏「监控」按钮重新打开

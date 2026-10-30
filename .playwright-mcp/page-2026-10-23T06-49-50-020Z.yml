@@ -1,0 +1,490 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - generic [ref=f1e8]:
+      - button "New session" [ref=f1e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f1e10]:
+          - generic [ref=f1e11]: ATF
+          - generic [ref=f1e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f1e17] [cursor=pointer]
+    - button "New session" [ref=f1e20] [cursor=pointer]:
+      - generic [ref=f1e21]: New Session
+    - navigation "Global panels" [ref=f1e26]:
+      - button "Plugins" [ref=f1e27] [cursor=pointer]
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]: Workspaces
+        - generic [ref=f1e42]:
+          - button "Search sessions" [ref=f1e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f1e47]:
+          - button "View options" [ref=f1e49] [cursor=pointer]
+          - button "Add workspace" [ref=f1e53] [cursor=pointer]
+      - tree "Sessions" [ref=f1e58]:
+        - generic [ref=f1e110]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=f1e112] [cursor=pointer]
+          - treeitem "Running run pl-walkthrough-r1 迭代配置构造前置校验 10min" [selected] [ref=f1e3786] [cursor=pointer]:
+            - generic [ref=f1e1494]: Running
+            - generic [ref=f1e1495]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [ref=f1e1594]: 10min
+          - treeitem "训练数据构造前校验演练 27min" [ref=f1e3787] [cursor=pointer]:
+            - generic [ref=f1e128]: 训练数据构造前校验演练
+            - generic [ref=f1e129]: 27min
+        - treeitem "ws-pl-walkthrough" [ref=f1e132] [cursor=pointer]
+        - generic [ref=f1e138]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=f1e140] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 22h" [ref=f1e3788] [cursor=pointer]:
+            - generic [ref=f1e151]: 构造评估服务件 for run-rh-budget
+            - generic [ref=f1e152]: 22h
+          - treeitem "装箱单字段抽取新实验全流程 1d" [ref=f1e3789] [cursor=pointer]:
+            - generic [ref=f1e156]: 装箱单字段抽取新实验全流程
+            - generic [ref=f1e157]: 1d
+        - generic [ref=f1e158]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=f1e160] [cursor=pointer]
+          - treeitem "等待发起真实训练走查指令 4h" [ref=f1e1674] [cursor=pointer]:
+            - generic [ref=f1e171]: 等待发起真实训练走查指令
+            - generic [ref=f1e172]: 4h
+          - treeitem "汇总当前实验状态与进展 1d" [ref=f1e174] [cursor=pointer]:
+            - generic [ref=f1e176]: 汇总当前实验状态与进展
+            - generic [ref=f1e177]: 1d
+          - treeitem "我的训练数据放在 /data/atf/prodt 1d" [ref=f1e179] [cursor=pointer]:
+            - generic [ref=f1e181]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=f1e182]: 1d
+        - treeitem "a4-hotws" [ref=f1e185] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=f1e193] [cursor=pointer]
+        - treeitem "b18-ws" [ref=f1e201] [cursor=pointer]
+        - treeitem "sam" [ref=f1e209] [cursor=pointer]
+    - button "Settings" [ref=f1e68] [cursor=pointer]
+  - generic [ref=f1e1497]:
+    - banner [ref=f1e1499]:
+      - generic [ref=f1e1500]:
+        - generic [ref=f1e1501]:
+          - generic [ref=f1e1596]:
+            - navigation "Session hierarchy" [ref=f1e1597]:
+              - generic [ref=f1e1598]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f1e1602]: Standard mode
+          - generic [ref=f1e1609]:
+            - button "More actions" [ref=f1e1611] [cursor=pointer]
+            - generic [ref=f1e1616]:
+              - button "装箱单 · Qwen3-VL-32B · 10-20 23:49 · 空闲 ▾" [ref=f1e2492] [cursor=pointer]
+              - button "监控" [ref=f1e1620] [cursor=pointer]
+          - button "Open right sidebar" [ref=f1e1504] [cursor=pointer]
+        - tablist [ref=f1e1621]:
+          - tab "Chat" [selected] [ref=f1e1622] [cursor=pointer]
+          - tab "Trajectory" [ref=f1e1623] [cursor=pointer]
+    - generic [ref=f1e1508]:
+      - generic [ref=f1e1627]:
+        - navigation "Turn navigation" [ref=f1e2531] [cursor=pointer]:
+          - generic [ref=f1e2533]:
+            - button "Jump to turn 1" [ref=f1e2534]
+            - button "Jump to turn 2" [ref=f1e2535]
+            - button "Jump to turn 3" [ref=f1e3070]
+        - generic [ref=f1e1630]:
+          - generic [ref=f1e1633]:
+            - generic [ref=f1e1634]: 对 run pl-walkthrough-r1 发起迭代配置构造的前置校验（不真跑构造、不写任何文件）。受控执行通道直调 pin 单源脚本 /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数如下（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --output-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --deploy /data/atf/dev/pinned/tools/walkthrough_assets/deploy.local.yaml。约束：不传任何豁免或绕过参数；被拒即停止，把工具返回内容原样记录进回复，不要重试、不要补救、不要写任何文件、不要弹确认卡。
+            - generic [ref=f1e1636]:
+              - generic [ref=f1e1637]: 14:26
+              - button "Copy" [ref=f1e1638] [cursor=pointer]
+          - generic [ref=f1e1801]:
+            - status [ref=f1e1802]: Completed
+            - button "Completed in 1m 52s" [ref=f1e1803] [cursor=pointer]
+          - generic [ref=f1e1746]:
+            - paragraph [ref=f1e1747]: 按约束执行完毕，脚本被拒，已停止。受控执行通道返回内容原样记录如下（未重试、未补救、未写任何文件、未弹确认卡）：
+            - generic [ref=f1e1748]:
+              - generic [ref=f1e1750]:
+                - generic [ref=f1e1751]: json
+                - generic [ref=f1e1753]:
+                  - button "Wrap lines" [pressed] [ref=f1e1754] [cursor=pointer]
+                  - button "Copy" [ref=f1e1759] [cursor=pointer]
+              - code [ref=f1e1765]:
+                - generic [ref=f1e1766]: "{"
+                - generic [ref=f1e1767]: "\"ok\": true,"
+                - generic [ref=f1e1768]: "\"exit_code\": 2,"
+                - generic [ref=f1e1769]: "\"timed_out\": false,"
+                - generic [ref=f1e1770]: "\"stdout\": \"{\\\"error\\\": \\\"预算文件缺失，先确认实验配置——run 缺 token 预算文件（token_budget.json），构造被拒。下一步：先走实验配置确认（九要素确认卡）落 TokenBudget 三要素（预算/训练截断/推理窗口）后重推构造\\\"}\","
+                - generic [ref=f1e1771]: "\"stdout_truncated\": false,"
+                - generic [ref=f1e1772]: "\"stderr_tail\": \"\","
+                - generic [ref=f1e1773]: "\"duration_ms\": 100,"
+                - generic [ref=f1e1774]: "\"note\": \"预算文件缺失，先确认实验配置——run 缺 token 预算文件（token_budget.json），构造被拒。下一步：先走实验配置确认（九要素确认卡）落 TokenBudget 三要素（预算/训练截断/推理窗口）后重推构造\""
+                - generic [ref=f1e1775]: "}"
+            - paragraph [ref=f1e1776]:
+              - text: 结论：前置校验被拒（exit 2），拒绝原因为 run 缺 token 预算文件（
+              - code [ref=f1e1807]: token_budget.json
+              - text: ）。脚本返回中附带的下一步指引（走九要素确认卡后重推）仅为原文记录，按你的约束我未采取任何后续动作。
+          - generic [ref=f1e1811]:
+            - button "Copy" [ref=f1e1812] [cursor=pointer]
+            - generic [ref=f1e1816]:
+              - button "Good response" [ref=f1e1817] [cursor=pointer]
+              - button "Bad response" [ref=f1e1820] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e1823] [cursor=pointer]
+            - generic [ref=f1e1829]:
+              - button "Usage 45.9K tok" [ref=f1e1831] [cursor=pointer]
+              - generic [ref=f1e1837]: 14:28
+          - generic [ref=f1e2538]:
+            - generic [ref=f1e2539]: D76 端到端正例（零 GPU 红线：只到配置生成即停，不调 atf_launch_execute、不起真训、不占 GPU、不写 run 目录以外的文件）。对当前实验 run-admit-qc-02-d76fx（run 目录 /data/atf/dev/runs/run-admit-qc-02-d76fx）发起训练配置构造：训练卡数 nproc_per_node=4，卡位 visible_devices=4-7，其余参数按现值。九要素确认卡弹出后，把上述两个值填入对应栏位再提交确认；确认链走完后迭代配置（prep/iteration-config/iteration-config.json）生成即停止，不要重试、不要发起真实训练。
+            - generic [ref=f1e2541]:
+              - generic [ref=f1e2542]: 14:31
+              - button "Copy" [ref=f1e2543] [cursor=pointer]
+          - generic [ref=f1e3072]:
+            - status [ref=f1e3073]: Completed
+            - button "Completed in 6m 35s" [ref=f1e3074] [cursor=pointer]
+          - generic [ref=f1e2990]:
+            - paragraph [ref=f1e2991]:
+              - text: 停止条件核验完成，结果如下——
+              - strong [ref=f1e2992]: 确认链已闭合，但目标文件并非本次生成
+              - text: ，如实报告：
+            - heading "确认链结果（已闭合）" [level=2] [ref=f1e2993]
+            - paragraph [ref=f1e2994]:
+              - code [ref=f1e2995]: atf_config_confirm(present)
+              - text: 返回
+              - code [ref=f1e2996]: "confirmed: true"
+              - text: ，两个目标值已入卡并随确认闭合：
+            - table [ref=f1e2998]:
+              - rowgroup [ref=f1e2999]:
+                - row [ref=f1e3000]:
+                  - columnheader "栏位" [ref=f1e3001]
+                  - columnheader "确认值" [ref=f1e3002]
+                  - columnheader "来源" [ref=f1e3003]
+              - rowgroup [ref=f1e3004]:
+                - row [ref=f1e3005]:
+                  - cell [ref=f1e3006]:
+                    - code [ref=f1e3007]: nproc_per_node
+                  - cell [ref=f1e3008]:
+                    - code [ref=f1e3009]: "4"
+                  - cell "本次显式改参" [ref=f1e3010]
+                - row [ref=f1e3011]:
+                  - cell [ref=f1e3012]:
+                    - code [ref=f1e3013]: visible_devices
+                  - cell [ref=f1e3014]:
+                    - code [ref=f1e3015]: 4-7
+                  - cell "本次显式改参" [ref=f1e3016]
+                - row [ref=f1e3017]:
+                  - cell [ref=f1e3018]:
+                    - code [ref=f1e3019]: gradient_accumulation_steps
+                  - cell [ref=f1e3020]:
+                    - code [ref=f1e3021]: "64"
+                  - cell "链内派生联动（amend 注记：accum 随 nproc 改动更新=64，gb=256 不变）" [ref=f1e3022]
+                - row [ref=f1e3023]:
+                  - cell "其余" [ref=f1e3024]
+                  - cell "按现值" [ref=f1e3025]
+                  - cell "from_registry / default_used" [ref=f1e3026]
+            - paragraph [ref=f1e3027]:
+              - text: 确认链实际落盘产物是
+              - button "webui/config-snapshot.json" [ref=f1e3078] [cursor=pointer]
+              - text: （WebUiConfigSnapshot/v1），confirmed 块中含
+              - code [ref=f1e3028]: "\"nproc_per_node\": \"4\""
+              - text: 、
+              - code [ref=f1e3029]: "\"visible_devices\": \"4-7\""
+              - text: 。
+            - heading "停止条件核验：发现不符" [level=2] [ref=f1e3030]
+            - paragraph [ref=f1e3031]:
+              - button "prep/iteration-config/iteration-config.json" [ref=f1e3083] [cursor=pointer]
+              - strong [ref=f1e3032]: 虽存在，但不是本次确认链生成的
+              - text: ，证据（均取自文件原文）：
+            - list [ref=f1e3033]:
+              - listitem [ref=f1e3034]:
+                - code [ref=f1e3035]: "generated.at: \"2026-10-20T15:32:40Z\""
+                - text: —— 早于今天（工作区日期 2026-10-22），是两天前的旧产物；
+              - listitem [ref=f1e3036]:
+                - text: 文件内
+                - code [ref=f1e3037]: "\"run_id\": \"run-admit-qc-02\""
+                - text: —— 不是本 run（run-admit-qc-02-d76fx）；
+              - listitem [ref=f1e3038]:
+                - code [ref=f1e3039]: dataset_dir
+                - text: /
+                - code [ref=f1e3040]: media_dir
+                - text: /
+                - code [ref=f1e3041]: output_dir
+                - text: /
+                - code [ref=f1e3042]: experiment_config_ref
+                - text: 全部指向
+                - code [ref=f1e3043]: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/...
+                - text: —— 原始 run 的工作区，而非本 run 目录；
+              - listitem [ref=f1e3044]:
+                - text: 全文
+                - strong [ref=f1e3045]:
+                  - text: 不含
+                  - code [ref=f1e3046]: visible_devices
+                  - text: 字段
+                - text: ，本次确认的
+                - code [ref=f1e3047]: 4-7
+                - text: 未落入任何产物；
+              - listitem [ref=f1e3048]:
+                - text: 伴生的
+                - button "iteration_config_confirmation.md" [ref=f1e3088] [cursor=pointer]
+                - text: 同样标注 run_id
+                - strong [ref=f1e3049]: run-admit-qc-02
+                - text: 、输出目录在 atf-prodtest-20261021。
+            - paragraph [ref=f1e3050]:
+              - text: 即：该文件是原 run-admit-qc-02 的历史迭代配置被预置进本 run 目录的旧拷贝，本次确认链只写了
+              - code [ref=f1e3051]: webui/config-snapshot.json
+              - text: ，并未重新生成本 run 的 iteration-config.json。
+            - heading "红线遵守情况" [level=2] [ref=f1e3052]
+            - list [ref=f1e3053]:
+              - listitem [ref=f1e3054]:
+                - text: 未调
+                - code [ref=f1e3055]: atf_launch_execute
+                - text: 、未发起真实训练、未占 GPU；
+              - listitem [ref=f1e3056]: 我未写任何文件（run 目录内外均无）；
+              - listitem [ref=f1e3057]: 未重试、未补救——发现不符后即停。
+            - paragraph [ref=f1e3058]:
+              - text: 如需让本 run 真正生成分确认快照一致的 iteration-config.json，下一步应走
+              - code [ref=f1e3059]: generate_iteration_config
+              - text: 消费确认快照重新生成——按你的约束，我不执行，是否推进由你决定。
+          - generic [ref=f1e3095]:
+            - button "Copy" [ref=f1e3096] [cursor=pointer]
+            - generic [ref=f1e3100]:
+              - button "Good response" [ref=f1e3101] [cursor=pointer]
+              - button "Bad response" [ref=f1e3104] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e3107] [cursor=pointer]
+            - generic [ref=f1e3113]:
+              - button "Usage 207K tok" [ref=f1e3115] [cursor=pointer]
+              - generic [ref=f1e3121]: 14:38
+          - generic [ref=f1e3124]:
+            - generic [ref=f1e3125]: 继续推进（仍守零 GPU 红线：不调 atf_launch_execute、不起真训、不占 GPU；除本 run 目录外不写任何文件）：用刚落的确认快照（webui/config-snapshot.json，confirmed 块含 nproc_per_node=4、visible_devices=4-7）重新生成本 run（run-admit-qc-02-d76fx，run 目录 /data/atf/dev/runs/run-admit-qc-02-d76fx）的迭代配置。要求：--run-dir／--out-dir／--output-dir 一律锚定本 run 目录（/data/atf/dev/runs/run-admit-qc-02-d76fx/...），不得写到 atf-prodtest-20261021 原工作区；显式 --deploy 用 /data/atf/dev/pinned/tools/walkthrough_assets/deploy.local.yaml 免探针落盘；生成后核对 prep/iteration-config/iteration-config.json 的 training.nproc_per_node 与 training.visible_devices 原文并回报片段；生成即停。
+            - generic [ref=f1e3127]:
+              - generic [ref=f1e3128]: 14:39
+              - button "Copy" [ref=f1e3129] [cursor=pointer]
+          - button "Think The user wants me to regenerate the iteration config for run-admit-qc-02-d76fx using the confirmation snapshot. Constraints:" [ref=f1e3170] [cursor=pointer]:
+            - generic [ref=f1e3165]:
+              - generic [ref=f1e3166]: Think
+              - generic [ref=f1e3168]: "The user wants me to regenerate the iteration config for run-admit-qc-02-d76fx using the confirmation snapshot. Constraints:"
+          - paragraph [ref=f1e3176]: 继续推进，先核对脚本契约与本 run 现状（确认快照、token 预算、deploy 资产是否就位）：
+          - generic [ref=f1e3179]:
+            - button "Tool call atf_skill_read · atf-prepare-training" [ref=f1e3215] [cursor=pointer]:
+              - generic [ref=f1e3194]:
+                - generic [ref=f1e3195]: Tool call
+                - generic [ref=f1e3197]: atf_skill_read · atf-prepare-training
+            - button "Glob **/token_budget*" [ref=f1e3223] [cursor=pointer]:
+              - generic [ref=f1e3211]:
+                - generic [ref=f1e3212]: Glob
+                - generic [ref=f1e3231]: "**/token_budget*"
+            - button "Glob deploy.local.yaml" [ref=f1e3238] [cursor=pointer]:
+              - generic [ref=f1e3247]:
+                - generic [ref=f1e3248]: Glob
+                - generic [ref=f1e3250]: deploy.local.yaml
+            - button "Think Findings:" [ref=f1e3258] [cursor=pointer]:
+              - generic [ref=f1e3268]:
+                - generic [ref=f1e3269]: Think
+                - generic [ref=f1e3271]: "Findings:"
+          - paragraph [ref=f1e3278]:
+            - text: deploy 资产在位；但 run 目录内未发现
+            - code [ref=f1e3279]: token_budget.json
+            - text: 。先读生成脚本本体确认参数契约与确认快照的消费方式：
+          - generic [ref=f1e3282]:
+            - button "Tool call atf_read · /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py" [ref=f1e3289] [cursor=pointer]:
+              - generic [ref=f1e3299]:
+                - generic [ref=f1e3300]: Tool call
+                - generic [ref=f1e3302]: atf_read · /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py
+            - button "Think The script is 587 lines. I've read the first 200. Key learnings so far:" [ref=f1e3331] [cursor=pointer]:
+              - generic [ref=f1e3321]:
+                - generic [ref=f1e3322]: Think
+                - generic [ref=f1e3324]: "The script is 587 lines. I've read the first 200. Key learnings so far:"
+          - paragraph [ref=f1e3337]:
+            - text: 脚本用法已见雏形（
+            - code [ref=f1e3338]: "--token-budget|--run-dir"
+            - text: 、
+            - code [ref=f1e3339]: "--visible-devices"
+            - text: 、实验门 train 段确认值）。继续读完脚本并核对本 run 的 experiment-config 现状：
+          - generic [ref=f1e3342]:
+            - button "Tool call atf_read · /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py" [ref=f1e3349] [cursor=pointer]:
+              - generic [ref=f1e3359]:
+                - generic [ref=f1e3360]: Tool call
+                - generic [ref=f1e3362]: atf_read · /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py
+            - button "Tool call atf_read · /data/atf/dev/runs/run-admit-qc-02-d76fx/experiment-setup/experiment-config.json" [ref=f1e3369] [cursor=pointer]:
+              - generic [ref=f1e3379]:
+                - generic [ref=f1e3380]: Tool call
+                - generic [ref=f1e3382]: atf_read · /data/atf/dev/runs/run-admit-qc-02-d76fx/experiment-setup/experiment-config.json
+            - button "Think Now I have the full picture. Key facts:" [ref=f1e3413] [cursor=pointer]:
+              - generic [ref=f1e3401]:
+                - generic [ref=f1e3402]: Think
+                - generic [ref=f1e3404]: "Now I have the full picture. Key facts:"
+          - paragraph [ref=f1e3419]:
+            - text: 脚本契约已明确：
+            - code [ref=f1e3420]: nproc_per_node
+            - text: 无 CLI 旗标（只能来自
+            - code [ref=f1e3421]: "--experiment-config"
+            - text: 的 train 段确认值），
+            - code [ref=f1e3422]: cutoff_len
+            - text: 唯一来源是
+            - code [ref=f1e3423]: token_budget.json
+            - text: ，而本 run 目录内两者皆缺。先查清确认快照的合法投影机制（是否有内建脚本/内核函数负责落预算与 train 段）：
+          - generic [ref=f1e3426]:
+            - button "Glob **/*" [ref=f1e3433] [cursor=pointer]:
+              - generic [ref=f1e3442]:
+                - generic [ref=f1e3443]: Glob
+                - generic [ref=f1e3445]: "**/*"
+            - button "Grep config-snapshot|config_snapshot" [ref=f1e3452] [cursor=pointer]:
+              - generic [ref=f1e3461]:
+                - generic [ref=f1e3462]: Grep
+                - generic [ref=f1e3464]: config-snapshot|config_snapshot
+            - button "Grep def write_token_budget" [ref=f1e3471] [cursor=pointer]:
+              - generic [ref=f1e3480]:
+                - generic [ref=f1e3481]: Grep
+                - generic [ref=f1e3483]: def write_token_budget
+            - button "Think Findings:" [ref=f1e3491] [cursor=pointer]:
+              - generic [ref=f1e3501]:
+                - generic [ref=f1e3502]: Think
+                - generic [ref=f1e3504]: "Findings:"
+          - paragraph [ref=f1e3511]:
+            - text: walkthrough_assets 无投影脚本；内核侧确认
+            - code [ref=f1e3512]: write_token_budget
+            - text: 单源存在。继续查它的调用方与 DSH 确认链对快照的消费方式：
+          - generic [ref=f1e3515]:
+            - button "Grep write_token_budget" [ref=f1e3522] [cursor=pointer]:
+              - generic [ref=f1e3531]:
+                - generic [ref=f1e3532]: Grep
+                - generic [ref=f1e3534]: write_token_budget
+            - button "Grep config[-_]snapshot" [ref=f1e3541] [cursor=pointer]:
+              - generic [ref=f1e3550]:
+                - generic [ref=f1e3551]: Grep
+                - generic [ref=f1e3553]: config[-_]snapshot
+            - generic [ref=f1e3558]:
+              - generic [ref=f1e3559]: Failed
+              - 'button "Read Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）" [ref=f1e3561] [cursor=pointer]':
+                - generic [ref=f1e3569]:
+                  - generic [ref=f1e3570]: Read
+                  - generic [ref=f1e3572]: "Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）"
+            - 'button "Think Key discovery: `/data/atf/dev/pinned/tools/walkthrough_pipeline.py` line 2106 calls `write_token_budget(self.run_dir, values={...})`. So the walkthrough_pipeline tool (the D76 drill driver!) lands the token budget. This is the sanctioned mechanism. Let me look at that section of walkthrough_pipeline.py to understand the command/CLI — maybe there''s a subcommand for this whole \"training_prep/config generation\" flow that consumes the confirm snapshot." [ref=f1e3580] [cursor=pointer]':
+              - generic [ref=f1e3590]:
+                - generic [ref=f1e3591]: Think
+                - generic [ref=f1e3593]: "Key discovery: `/data/atf/dev/pinned/tools/walkthrough_pipeline.py` line 2106 calls `write_token_budget(self.run_dir, values={...})`. So the walkthrough_pipeline tool (the D76 drill driver!) lands the token budget. This is the sanctioned mechanism. Let me look at that section of walkthrough_pipeline.py to understand the command/CLI — maybe there's a subcommand for this whole \"training_prep/config generation\" flow that consumes the confirm snapshot."
+          - paragraph [ref=f1e3600]:
+            - text: 发现关键调用方：
+            - code [ref=f1e3601]: walkthrough_pipeline.py:2106
+            - text: 调
+            - code [ref=f1e3602]: write_token_budget
+            - text: ——这是 D76 演练的编排器。查它的 CLI 与该段逻辑：
+          - generic [ref=f1e3605]:
+            - button "Grep add_parser|def main|set_defaults|choice|choices=" [ref=f1e3644] [cursor=pointer]:
+              - generic [ref=f1e3619]:
+                - generic [ref=f1e3620]: Grep
+                - generic [ref=f1e3622]: add_parser|def main|set_defaults|choice|choices=
+            - button "Tool call atf_read · /data/atf/dev/pinned/tools/walkthrough_pipeline.py" [ref=f1e3651] [cursor=pointer]:
+              - generic [ref=f1e3637]:
+                - generic [ref=f1e3638]: Tool call
+                - generic [ref=f1e3640]: atf_read · /data/atf/dev/pinned/tools/walkthrough_pipeline.py
+            - 'button "Think Now I see the walkthrough_pipeline training_prep stage logic: it lands the token budget from the experiment gate values (`experiment-config.construction.token_gate`) — gate values (max_total_tokens + pixel pair) must be confirmed (non-null); cutoff_len/max_model_len from TOKEN_BUDGET_BASELINE. If gate values missing → pending, no file written." [ref=f1e3686] [cursor=pointer]':
+              - generic [ref=f1e3677]:
+                - generic [ref=f1e3678]: Think
+                - generic [ref=f1e3680]: "Now I see the walkthrough_pipeline training_prep stage logic: it lands the token budget from the experiment gate values (`experiment-config.construction.token_gate`) — gate values (max_total_tokens + pixel pair) must be confirmed (non-null); cutoff_len/max_model_len from TOKEN_BUDGET_BASELINE. If gate values missing → pending, no file written."
+          - paragraph [ref=f1e3692]:
+            - text: 编排器的预算落盘逻辑清楚了（
+            - code [ref=f1e3693]: write_token_budget
+            - text: 单源、门值确认后落盘）。还差三个事实：预算 schema、真实链里
+            - code [ref=f1e3694]: "--experiment-config"
+            - text: train 段的形态、run 布局守卫的
+            - code [ref=f1e3695]: run.json
+            - text: ：
+          - generic [ref=f1e3698]:
+            - button "Tool call atf_read · /data/atf/dev/pinned/src/agentic_training_flow/token_budget.py" [ref=f1e3705] [cursor=pointer]:
+              - generic [ref=f1e3715]:
+                - generic [ref=f1e3716]: Tool call
+                - generic [ref=f1e3718]: atf_read · /data/atf/dev/pinned/src/agentic_training_flow/token_budget.py
+            - button "Tool call atf_read · /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/experiment-setup/experiment-config.json" [ref=f1e3725] [cursor=pointer]:
+              - generic [ref=f1e3735]:
+                - generic [ref=f1e3736]: Tool call
+                - generic [ref=f1e3738]: atf_read · /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/experiment-setup/experiment-config.json
+            - button "Glob run.json" [ref=f1e3745] [cursor=pointer]:
+              - generic [ref=f1e3754]:
+                - generic [ref=f1e3755]: Glob
+                - generic [ref=f1e3757]: run.json
+            - button "Think Important new facts:" [ref=f1e3790] [cursor=pointer]:
+              - generic [ref=f1e3776]:
+                - generic [ref=f1e3777]: Think
+                - generic [ref=f1e3779]: "Important new facts:"
+          - paragraph [ref=f1e3796]:
+            - text: 关键事实齐了：预算三主键 schema/校验/基线明确；原 run 的 experiment-config 同样无 train 段（nproc 无 CLI 入口，只能经
+            - code [ref=f1e3797]: "--experiment-config"
+            - text: train 段进卡）；本 run 无
+            - code [ref=f1e3798]: run.json
+            - text: （out-dir 守卫按树外放行）。生成前最后核对数据推导前提（media_dir 逐位对账、基模型 config.json）：
+          - generic [ref=f1e3799]:
+            - text: "Analyzing the request · values = { \"max_total_tokens\": 9000, \"cutoff_len\": 9000, \"max_model_len\": 12800, \"image_min_pixels\": 65536, \"image_max_pixels\": 802816, \"provenance\": { \"max_to…"
+            - generic [ref=f1e3801]:
+              - button "Tool call atf_read · /data/atf/dev/runs/run-admit-qc-02-d76fx/prep/variants/dataset_info.json" [ref=f1e3808] [cursor=pointer]:
+                - generic [ref=f1e3818]:
+                  - generic [ref=f1e3819]: Tool call
+                  - generic [ref=f1e3821]: atf_read · /data/atf/dev/runs/run-admit-qc-02-d76fx/prep/variants/dataset_info.json
+              - button "Tool call atf_read · /data/atf/dev/runs/run-admit-qc-02-d76fx/prep/variants/train.jsonl" [ref=f1e3828] [cursor=pointer]:
+                - generic [ref=f1e3838]:
+                  - generic [ref=f1e3839]: Tool call
+                  - generic [ref=f1e3841]: atf_read · /data/atf/dev/runs/run-admit-qc-02-d76fx/prep/variants/train.jsonl
+              - button "Glob config.json" [ref=f1e3848] [cursor=pointer]:
+                - generic [ref=f1e3857]:
+                  - generic [ref=f1e3858]: Glob
+                  - generic [ref=f1e3860]: config.json
+              - generic [ref=f1e3866]:
+                - generic [ref=f1e3867]: Running
+                - 'button "Think values = {" [ref=f1e3869] [cursor=pointer]':
+                  - generic [ref=f1e3878]:
+                    - generic [ref=f1e3879]:
+                      - generic [ref=f1e3880]: Think
+                      - generic [ref=f1e3882]: "values = {"
+                    - generic [aria-hidden]:
+                      - generic:
+                        - generic:
+                          - generic: Think
+                          - generic: "values = {"
+          - generic [ref=f1e3133]:
+            - status [ref=f1e3134]: Deep diving
+            - generic [ref=f1e3138]:
+              - generic [ref=f1e3139]: Deep diving for 10m 40s ···
+              - generic [aria-hidden]:
+                - generic: Deep diving for 10m 40s ···
+      - generic [ref=f1e1543]:
+        - generic [ref=f1e1544]:
+          - generic [ref=f1e1546]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=f1e1650]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=f1e1548]:
+            - generic [ref=f1e1549]:
+              - button "Add files or run commands" [ref=f1e1550] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=f1e1555] [cursor=pointer]':
+                - generic [ref=f1e1559]: Full access
+            - generic [ref=f1e1563]:
+              - generic [ref=f1e1564]:
+                - button "思考 Low(低) ▾" [ref=f1e1567] [cursor=pointer]:
+                  - generic [ref=f1e1568]: 思考
+                  - generic [ref=f1e1569]: Low(低)
+                  - generic [ref=f1e1570]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=f1e1573] [cursor=pointer]:
+                  - generic [ref=f1e1574]: glm-5.3-flash
+              - button "Stop generating" [ref=f1e2555] [cursor=pointer]
+        - generic [ref=f1e1653]:
+          - generic [ref=f1e1654]:
+            - generic [ref=f1e1777]:
+              - button "3 turns 16 steps · 44 tok/s" [ref=f1e3884] [cursor=pointer]:
+                - generic [ref=f1e1784]: 3 turns 16 steps·44 tok/s
+              - button "817K tok · Cache hit 89%" [ref=f1e3885] [cursor=pointer]:
+                - generic [ref=f1e1791]: 817K tok·Cache hit 89%
+            - generic [ref=f1e1655]:
+              - generic "展开训练任务进度（八段明细）" [ref=f1e2824] [cursor=pointer]:
+                - generic [ref=f1e2826]: 6/8
+                - generic [ref=f1e2827]: 已完成
+              - generic [ref=f1e2828]:
+                - generic "点击关闭（装箱单 · Qwen3-VL-32B · 10-20 23:49（atf-prodtest-20261021））" [ref=f1e2829] [cursor=pointer]:
+                  - generic [ref=f1e2831]:
+                    - generic [ref=f1e2832]: 训练未完成退出，可查看训练日志或报告
+                    - generic [ref=f1e2833]: 装箱单 · Qwen3-VL-32B · 10-20 23:49（atf-prodtest-20261021）
+                  - generic [ref=f1e2834]: ×
+                - generic "点击关闭（装箱单 · Qwen3-VL-32B · 10-20 23:49（atf-prodtest-20261021））" [ref=f1e2835] [cursor=pointer]:
+                  - generic [ref=f1e2837]:
+                    - generic [ref=f1e2838]: 训练已结束
+                    - generic [ref=f1e2839]: 装箱单 · Qwen3-VL-32B · 10-20 23:49（atf-prodtest-20261021）
+                  - generic [ref=f1e2840]: ×
+              - status [ref=f1e1656]:
+                - generic [ref=f1e1657]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                - generic [ref=f1e1658]:
+                  - generic [ref=f1e1659]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                  - generic [ref=f1e1660]: ws-pl-walkthrough · 1 会话
+              - generic [ref=f1e1661]:
+                - button "新建训练" [ref=f1e1662] [cursor=pointer]
+                - button "查状态" [ref=f1e1663] [cursor=pointer]
+                - button "继续训练：装箱单" [ref=f1e2495] [cursor=pointer]
+                - button "对比两轮" [ref=f1e1665] [cursor=pointer]
+                - button "走完闭环" [ref=f1e1666] [cursor=pointer]
+                - button "联合训练" [ref=f1e1667] [cursor=pointer]
+                - button "badcase 可视化" [ref=f1e1668] [cursor=pointer]
+                - button "发起训练" [ref=f1e1669] [cursor=pointer]
+          - button "9% of context used" [ref=f1e3886] [cursor=pointer]:
+            - generic [ref=f1e1797]: 9%

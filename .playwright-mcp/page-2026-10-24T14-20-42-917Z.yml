@@ -1,0 +1,110 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e10]:
+          - generic [ref=e11]: ATF
+          - generic [ref=e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e17] [cursor=pointer]
+    - button "New session" [ref=e20] [cursor=pointer]:
+      - generic [ref=e21]: New Session
+    - navigation "Global panels" [ref=e26]:
+      - button "Plugins" [ref=e27] [cursor=pointer]
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]: Workspaces
+        - generic [ref=e42]:
+          - button "Search sessions" [ref=e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e47]:
+          - button "View options" [ref=e49] [cursor=pointer]
+          - button "Add workspace" [ref=e53] [cursor=pointer]
+      - tree "Sessions" [ref=e58]:
+        - generic [ref=e2237]:
+          - treeitem "my-zito" [expanded] [ref=e2239] [cursor=pointer]
+          - treeitem "New Session" [selected] [ref=e2248] [cursor=pointer]
+        - generic [ref=e110]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e112] [cursor=pointer]
+          - treeitem "连通性自检与确认 22h" [ref=e121] [cursor=pointer]:
+            - generic [ref=e123]: 连通性自检与确认
+            - generic [ref=e124]: 22h
+          - treeitem "装箱单走查区训练任务查询 23h" [ref=e126] [cursor=pointer]:
+            - generic [ref=e128]: 装箱单走查区训练任务查询
+            - generic [ref=e129]: 23h
+          - treeitem "D76 端到端正例复跑（零 GPU 红 1d" [ref=e131] [cursor=pointer]:
+            - generic [ref=e133]: D76 端到端正例复跑（零 GPU 红
+            - generic [ref=e134]: 1d
+          - treeitem "run pl-walkthrough-r1 迭代配置构造前置校验 1d" [ref=e136] [cursor=pointer]:
+            - generic [ref=e138]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [ref=e139]: 1d
+          - treeitem "训练数据构造前校验演练 1d" [ref=e141] [cursor=pointer]:
+            - generic [ref=e143]: 训练数据构造前校验演练
+            - generic [ref=e144]: 1d
+        - treeitem "ws-pl-walkthrough" [ref=e147] [cursor=pointer]
+        - generic [ref=e153]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e155] [cursor=pointer]
+          - treeitem "删除整个工作区目录 22h" [ref=e164] [cursor=pointer]:
+            - generic [ref=e166]: 删除整个工作区目录
+            - generic [ref=e167]: 22h
+          - treeitem "构造评估服务件 for run-rh-budget 2d" [ref=e169] [cursor=pointer]:
+            - generic [ref=e171]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e172]: 2d
+          - treeitem "装箱单字段抽取新实验全流程 2d" [ref=e174] [cursor=pointer]:
+            - generic [ref=e176]: 装箱单字段抽取新实验全流程
+            - generic [ref=e177]: 2d
+        - generic [ref=e178]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=e180] [cursor=pointer]
+          - treeitem "海运单SWB数据登记与训练任务启动 9h" [ref=e189] [cursor=pointer]:
+            - generic [ref=e191]: 海运单SWB数据登记与训练任务启动
+            - generic [ref=e192]: 9h
+          - treeitem "等待发起真实训练走查指令 1d" [ref=e194] [cursor=pointer]:
+            - generic [ref=e196]: 等待发起真实训练走查指令
+            - generic [ref=e197]: 1d
+          - treeitem "汇总当前实验状态与进展 2d" [ref=e199] [cursor=pointer]:
+            - generic [ref=e201]: 汇总当前实验状态与进展
+            - generic [ref=e202]: 2d
+          - treeitem "我的训练数据放在 /data/atf/prodt 3d" [ref=e204] [cursor=pointer]:
+            - generic [ref=e206]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=e207]: 3d
+        - treeitem "a4-hotws" [ref=e210] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e218] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e226] [cursor=pointer]
+        - treeitem "sam" [ref=e234] [cursor=pointer]
+    - button "Settings" [ref=e68] [cursor=pointer]
+  - generic [ref=e2251]:
+    - banner [ref=e2253]:
+      - button "Open right sidebar" [ref=e2258] [cursor=pointer]
+    - generic [ref=e2266]:
+      - generic [ref=e2269]:
+        - generic [ref=e2270]: ATF
+        - generic [ref=e2273]:
+          - generic [ref=e2274]: Into the Unknown
+          - generic [ref=e2275]: Preview
+      - generic [ref=e2276]:
+        - button "Choose workspace" [ref=e2277] [cursor=pointer]:
+          - generic [ref=e2282]: my-zito
+        - button "Standard mode" [ref=e2287] [cursor=pointer]
+      - generic [ref=e2298]:
+        - generic [ref=e2300]:
+          - textbox "Describe the training task to advance, / commands, @ files or sessions" [active] [ref=e2301]
+          - generic [aria-hidden]: Describe the training task to advance, / commands, @ files or sessions
+        - generic [ref=e2302]:
+          - generic [ref=e2303]:
+            - button "Add files or run commands" [ref=e2304] [cursor=pointer]
+            - 'button "Access mode, current: Full access" [ref=e2309] [cursor=pointer]':
+              - generic [ref=e2313]: Full access
+          - generic [ref=e2317]:
+            - generic [ref=e2318]:
+              - button "思考 Low(低) ▾" [ref=e2321] [cursor=pointer]:
+                - generic [ref=e2322]: 思考
+                - generic [ref=e2323]: Low(低)
+                - generic [ref=e2324]: ▾
+              - button "Select model, current glm-5.3-flash" [ref=e2327] [cursor=pointer]:
+                - generic [ref=e2328]: glm-5.3-flash
+            - button "Send message" [disabled] [ref=e2331]
+  - generic [ref=e2336]:
+    - generic [ref=e2337]: ↩
+    - generic [ref=e2338]:
+      - generic [ref=e2339]: 回到上次实验：Qwen3-VL-32B · 10-24 12:22
+      - generic [ref=e2340]: default · 点击选用，发送首条消息时自动绑定
+    - button "继续这次实验" [ref=e2341] [cursor=pointer]

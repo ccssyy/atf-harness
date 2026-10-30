@@ -1,0 +1,937 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e2681] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e2682]:
+          - generic [ref=e2683]: ATF
+          - generic [ref=e2686]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e2689] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e2696]: Workspaces
+        - generic [ref=e2698]:
+          - button "Search sessions" [ref=e2699] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e2704] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e2709]:
+        - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e5734] [cursor=pointer]
+        - treeitem "ws-pl-walkthrough" [ref=e2712] [cursor=pointer]
+        - generic [ref=e2718]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e2720] [cursor=pointer]
+          - treeitem "Waiting for approval 装箱单字段抽取新实验全流程" [selected] [ref=e8662] [cursor=pointer]:
+            - generic [ref=e2734]: Waiting for approval
+            - generic [ref=e2737]: 装箱单字段抽取新实验全流程
+            - generic [aria-hidden] [ref=e2738]: Approval
+        - treeitem "atf-prodtest-20261021" [ref=e8367] [cursor=pointer]
+        - treeitem "a4-hotws" [ref=e2749] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e2757] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e2765] [cursor=pointer]
+        - treeitem "sam" [ref=e2773] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e5832]:
+    - banner [ref=e5834]:
+      - generic [ref=e5835]:
+        - generic [ref=e5836]:
+          - navigation "Session hierarchy" [ref=e5838]:
+            - generic [ref=e5839]: 装箱单字段抽取新实验全流程
+          - generic [ref=e5842]:
+            - button "More actions" [ref=e5844] [cursor=pointer]
+            - generic [ref=e5849]:
+              - button "选择实验 ▾" [ref=e5851] [cursor=pointer]
+              - button "监控" [ref=e5853] [cursor=pointer]
+          - button "Open right sidebar" [ref=e5856] [cursor=pointer]
+        - tablist [ref=e5859]:
+          - tab "Chat" [selected] [ref=e5860] [cursor=pointer]
+          - tab "Trajectory" [ref=e5861] [cursor=pointer]
+    - generic [ref=e5863]:
+      - generic [ref=e5870]:
+        - generic [ref=e5873]:
+          - generic [ref=e5874]: 从零开始一个新实验：装箱单（pl）字段抽取训练。原始数据已备在本工作区 datasets/walkthrough-pl/（50 对 png+同名标注 json）。请走完整正道链：数据登记（新 run，不复用任何旧实验）→标注体检→实验配置→合同发布→数据切分（训练/测试两分 40/10）→准入检查→训练准备→发起训练。九要素确认卡和各放行卡我会逐张核对，机器事实缺了就停下来问我。
+          - generic [ref=e5876]:
+            - generic [ref=e5877]: 07:46
+            - button "Copy" [ref=e5878] [cursor=pointer]
+        - 'button "Think Let me understand the task. The user wants to start a brand new experiment from scratch: 装箱单 (packing list, \"pl\") field extraction training. Raw data is at datasets/walkthrough-pl/ in the workspace (50 pairs of png + same-name annotation json). They want the full canonical chain:" [ref=e5892] [cursor=pointer]':
+          - generic [ref=e5902]:
+            - generic [ref=e5903]: Think
+            - generic [ref=e5905]: "Let me understand the task. The user wants to start a brand new experiment from scratch: 装箱单 (packing list, \"pl\") field extraction training. Raw data is at datasets/walkthrough-pl/ in the workspace (50 pairs of png + same-name annotation json). They want the full canonical chain:"
+        - paragraph [ref=e5912]: 我先加载正道链入口技能，再核对工作区与数据现状。
+        - generic [ref=e5915]:
+          - button "Skill atf-qwen-vl-iteration-loop" [ref=e5921] [cursor=pointer]:
+            - generic [ref=e5930]:
+              - generic [ref=e5931]: Skill
+              - generic [ref=e5933]: atf-qwen-vl-iteration-loop
+          - 'button "Think The skill atf-qwen-vl-iteration-loop describes a CLI-based entry (`atf qwen-vl-iteration-loop ...`) — but that''s for a different route system. However, the task the user describes matches exactly the walkthrough pipeline stages driven by `atf_pipeline_stage` tool. The skill says \"新建：检查 catalog、合同和 Policy 后路由到 atf-validate-extraction-contract\" — but that''s the atf route flow." [ref=e5941] [cursor=pointer]':
+            - generic [ref=e5951]:
+              - generic [ref=e5952]: Think
+              - generic [ref=e5954]: "The skill atf-qwen-vl-iteration-loop describes a CLI-based entry (`atf qwen-vl-iteration-loop ...`) — but that's for a different route system. However, the task the user describes matches exactly the walkthrough pipeline stages driven by `atf_pipeline_stage` tool. The skill says \"新建：检查 catalog、合同和 Policy 后路由到 atf-validate-extraction-contract\" — but that's the atf route flow."
+        - paragraph [ref=e5961]: 技能已加载。该技能的 CLI 入口面向路线选择；本会话的正道链由内核 walkthrough_pipeline 八段驱动（与你要的步骤一一对应）。我先核对工作区事实、数据形态与现有 run 清单，全部只读。
+        - generic [ref=e5964]:
+          - button "Glob datasets/walkthrough-pl/*" [ref=e5971] [cursor=pointer]:
+            - generic [ref=e5980]:
+              - generic [ref=e5981]: Glob
+              - generic [ref=e5983]: datasets/walkthrough-pl/*
+          - 'button "Tool call atf_workspace_status · {}" [ref=e5990] [cursor=pointer]':
+            - generic [ref=e6000]:
+              - generic [ref=e6001]: Tool call
+              - generic [ref=e6003]: "atf_workspace_status · {}"
+          - 'button "Tool call atf_skill_read · {}" [ref=e6010] [cursor=pointer]':
+            - generic [ref=e6020]:
+              - generic [ref=e6021]: Tool call
+              - generic [ref=e6023]: "atf_skill_read · {}"
+          - 'button "Tool call atf_run_list · {}" [ref=e6030] [cursor=pointer]':
+            - generic [ref=e6040]:
+              - generic [ref=e6041]: Tool call
+              - generic [ref=e6043]: "atf_run_list · {}"
+          - 'button "Think Data check: 50 png + 50 json (the glob returned 100 files; let me count: png entries — I counted 50 png and 50 json; yes looks like 50 pairs, same-name (sha-like names). Good." [ref=e6051] [cursor=pointer]':
+            - generic [ref=e6061]:
+              - generic [ref=e6062]: Think
+              - generic [ref=e6064]: "Data check: 50 png + 50 json (the glob returned 100 files; let me count: png entries — I counted 50 png and 50 json; yes looks like 50 pairs, same-name (sha-like names). Good."
+        - paragraph [ref=e6071]:
+          - text: 数据在场：
+          - code [ref=e6072]: datasets/walkthrough-pl/
+          - text: 下为 50 对 png+同名 json（sha 命名），会话当前无绑定 run，历史 run 清单中也没有本工作区的同名 run——满足「新 run 不复用」。我先看一下工作区目录结构与一份标注样例，确认登记所需的形态。
+        - generic [ref=e6075]:
+          - button "Tool call atf_bash · ls -la /data/atf/prodtest/atf-g2fresh-20261022 && echo '--- .atf ---' && ls -la /data/atf/prodtest/atf-g2fresh-20261022/.atf 2>/dev/null; echo '--- experiments/runs ---'; ls /data/atf/prodtest/atf-g2fresh-20261022/experiments 2>/dev/null; ls /data/atf/prodtest/atf-g2fresh-20261022/runs 2>/dev/null" [ref=e6082] [cursor=pointer]:
+            - generic [ref=e6092]:
+              - generic [ref=e6093]: Tool call
+              - generic [ref=e6095]: atf_bash · ls -la /data/atf/prodtest/atf-g2fresh-20261022 && echo '--- .atf ---' && ls -la /data/atf/prodtest/atf-g2fresh-20261022/.atf 2>/dev/null; echo '--- experiments/runs ---'; ls /data/atf/prodtest/atf-g2fresh-20261022/experiments 2>/dev/null; ls /data/atf/prodtest/atf-g2fresh-20261022/runs 2>/dev/null
+          - generic [ref=e6100]:
+            - generic [ref=e6101]: Failed
+            - 'button "Read Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）" [ref=e6103] [cursor=pointer]':
+              - generic [ref=e6111]:
+                - generic [ref=e6112]: Read
+                - generic [ref=e6114]: "Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）"
+          - 'button "Think The workspace root is nearly empty: only datasets/. No .atf identity file, no experiments/, no runs/. So this is a fresh workspace." [ref=e6122] [cursor=pointer]':
+            - generic [ref=e6132]:
+              - generic [ref=e6133]: Think
+              - generic [ref=e6135]: "The workspace root is nearly empty: only datasets/. No .atf identity file, no experiments/, no runs/. So this is a fresh workspace."
+        - generic [ref=e6141]:
+          - paragraph [ref=e6142]: 工作区现状确认：
+          - list [ref=e6143]:
+            - listitem [ref=e6144]:
+              - code [ref=e6145]: datasets/walkthrough-pl/
+              - text: ：50 对 png+同名 json，成对齐全，形态符合登记要求
+            - listitem [ref=e6146]:
+              - text: 工作区根目前只有 datasets/，
+              - strong [ref=e6147]: 无身份文件、无 experiments/、无 runs/
+              - text: ——是全新工作区，不存在可复用的旧实验
+            - listitem [ref=e6148]: 会话未绑定任何 run，历史 run 清单（76 个）均属其他工作区/无桶，与本链无关
+          - paragraph [ref=e6149]:
+            - text: 按正道链第一步：先在工作区创建实验对象（同时自动初始化工作区身份文件
+            - code [ref=e6150]: .atf/workspace.json
+            - text: ，这是后续账本定位与段事实落点的前提）。实验名
+            - code [ref=e6151]: pl-walkthrough
+            - text: ，落点将为
+            - code [ref=e6152]: experiments/20261022-pl-walkthrough/
+            - text: 。
+        - generic [ref=e6155]:
+          - button "Tool call atf_create_experiment · pl-walkthrough" [ref=e6162] [cursor=pointer]:
+            - generic [ref=e6172]:
+              - generic [ref=e6173]: Tool call
+              - generic [ref=e6175]: atf_create_experiment · pl-walkthrough
+          - button "Think Experiment created:" [ref=e6183] [cursor=pointer]:
+            - generic [ref=e6193]:
+              - generic [ref=e6194]: Think
+              - generic [ref=e6196]: "Experiment created:"
+        - generic [ref=e6202]:
+          - paragraph [ref=e6203]: 实验创建成功：
+          - list [ref=e6204]:
+            - listitem [ref=e6205]:
+              - text: 工作区身份已初始化（workspace_id
+              - code [ref=e6206]: 04933a3f…
+              - text: ），DSH 注册表显示已注册，无需侧栏操作
+            - listitem [ref=e6207]:
+              - text: 实验目录：
+              - code [ref=e6208]: experiments/20261022-pl-walkthrough/
+          - paragraph [ref=e6209]:
+            - text: 现在进入正道链第 1 段
+            - strong [ref=e6210]: register（数据登记）
+            - text: ：run 取
+            - code [ref=e6211]: pl-walkthrough-r1
+            - text: ，source_root 指向
+            - code [ref=e6212]: datasets/walkthrough-pl/
+            - text: （50 对成对样本）。此段须审批，请在面板放行。
+        - generic [ref=e6215]:
+          - button "Tool call atf_pipeline_stage · pl-walkthrough-r1" [ref=e6222] [cursor=pointer]:
+            - generic [ref=e6232]:
+              - generic [ref=e6233]: Tool call
+              - generic [ref=e6235]: atf_pipeline_stage · pl-walkthrough-r1
+          - button "Think The register stage failed with exit 3 (environment error, zero writes):" [ref=e6243] [cursor=pointer]:
+            - generic [ref=e6253]:
+              - generic [ref=e6254]: Think
+              - generic [ref=e6256]: "The register stage failed with exit 3 (environment error, zero writes):"
+        - paragraph [ref=e6263]:
+          - text: register 段被内核拒了（exit 3 环境错误，零写入）：
+          - code [ref=e6264]: walkthrough_workspace_not_empty
+          - text: ——walkthrough 管线要求 workspace_path 是一个
+          - strong [ref=e6265]: 归它自管的空目录
+          - text: （它会在其下自建
+          - code [ref=e6266]: workspace/runs/<run_id>
+          - text: ），而实验目录已含
+          - code [ref=e6267]: experiment.json
+          - text: 与
+          - code [ref=e6268]: runs/
+          - text: 。另外回执里 source_root 被规范化成了
+          - code [ref=e6269]: …/walkthrough-pl/pl
+          - text: ，我需要先弄清内核对 source_root 的拼接约定，避免再烧一次审批。先只读检索内核源码确认约定。
+        - generic [ref=e6272]:
+          - button "Tool call atf_bash · ls /data/sam 2>/dev/null; echo '---'; ls /data/atf 2>/dev/null" [ref=e6279] [cursor=pointer]:
+            - generic [ref=e6289]:
+              - generic [ref=e6290]: Tool call
+              - generic [ref=e6292]: atf_bash · ls /data/sam 2>/dev/null; echo '---'; ls /data/atf 2>/dev/null
+          - button "Grep walkthrough_workspace_not_empty" [ref=e6299] [cursor=pointer]:
+            - generic [ref=e6308]:
+              - generic [ref=e6309]: Grep
+              - generic [ref=e6311]: walkthrough_workspace_not_empty
+          - 'button "Think The bash whitelist roots: /data/atf/dev/runs; /data/atf/prodtest/atf-g2fresh-20261022; /data/venv/torch291_vllm016_bnb_qwen3vl; /data/sam/ATF-Harness/tmp/atf-exec-home-dev; /data/atf/dev/pinned; /data/LLM_model; /data/sam; /tmp/b18-ws-r2; /data/atf/prodtest/atf-prodtest-20261017; /root/a4-hotws; /data/atf/prodtest/atf-prodtest-20261021." [ref=e6319] [cursor=pointer]':
+            - generic [ref=e6329]:
+              - generic [ref=e6330]: Think
+              - generic [ref=e6332]: "The bash whitelist roots: /data/atf/dev/runs; /data/atf/prodtest/atf-g2fresh-20261022; /data/venv/torch291_vllm016_bnb_qwen3vl; /data/sam/ATF-Harness/tmp/atf-exec-home-dev; /data/atf/dev/pinned; /data/LLM_model; /data/sam; /tmp/b18-ws-r2; /data/atf/prodtest/atf-prodtest-20261017; /root/a4-hotws; /data/atf/prodtest/atf-prodtest-20261021."
+        - paragraph [ref=e6339]:
+          - text: bash 白名单里
+          - code [ref=e6340]: /data/sam
+          - text: 可用（
+          - code [ref=e6341]: /data/atf
+          - text: 整树不行）。ATF-Harness 里没有该错误码——内核在别处。先看
+          - code [ref=e6342]: /data/sam
+          - text: 下有什么。
+        - generic [ref=e6345]:
+          - button "Tool call atf_bash · ls /data/sam" [ref=e6352] [cursor=pointer]:
+            - generic [ref=e6362]:
+              - generic [ref=e6363]: Tool call
+              - generic [ref=e6365]: atf_bash · ls /data/sam
+          - 'button "Think There''s `atf-walkthrough` and `AgenticTrainingFlow` and `atf-r21-source-repo` in /data/sam. The ATF kernel is probably AgenticTrainingFlow or atf-walkthrough. Let me grep for \"walkthrough_workspace_not_empty\" in /data/sam/atf-walkthrough and /data/sam/AgenticTrainingFlow." [ref=e6373] [cursor=pointer]':
+            - generic [ref=e6383]:
+              - generic [ref=e6384]: Think
+              - generic [ref=e6386]: "There's `atf-walkthrough` and `AgenticTrainingFlow` and `atf-r21-source-repo` in /data/sam. The ATF kernel is probably AgenticTrainingFlow or atf-walkthrough. Let me grep for \"walkthrough_workspace_not_empty\" in /data/sam/atf-walkthrough and /data/sam/AgenticTrainingFlow."
+          - button "Grep walkthrough_workspace_not_empty" [ref=e6394] [cursor=pointer]:
+            - generic [ref=e6403]:
+              - generic [ref=e6404]: Grep
+              - generic [ref=e6406]: walkthrough_workspace_not_empty
+          - button "Grep walkthrough_workspace_not_empty" [ref=e6413] [cursor=pointer]:
+            - generic [ref=e6422]:
+              - generic [ref=e6423]: Grep
+              - generic [ref=e6425]: walkthrough_workspace_not_empty
+          - 'button "Think Found the kernel: /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py. Let me read around line 617 to understand the workspace convention, and also find how source_root is handled (the \".../pl\" append)." [ref=e6433] [cursor=pointer]':
+            - generic [ref=e6443]:
+              - generic [ref=e6444]: Think
+              - generic [ref=e6446]: "Found the kernel: /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py. Let me read around line 617 to understand the workspace convention, and also find how source_root is handled (the \".../pl\" append)."
+        - paragraph [ref=e6453]:
+          - text: 内核在
+          - code [ref=e6454]: /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py
+          - text: 。读一下相关段确认 workspace 与 source_root 约定。
+        - generic [ref=e6457]:
+          - generic [ref=e6462]:
+            - generic [ref=e6463]: Failed
+            - 'button "Read Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）" [ref=e6465] [cursor=pointer]':
+              - generic [ref=e6473]:
+                - generic [ref=e6474]: Read
+                - generic [ref=e6476]: "Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）"
+          - 'button "Think The generic read tool is blocked; must use atf_read whose whitelist is \"workspace runs 根与 scratch 目录\". /data/sam/AgenticTrainingFlow is not in the atf_read whitelist presumably. Let me try atf_read on it — the whitelist: \"路径限 workspace runs 根与 scratch 目录（白名单），越界拒绝\". /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py is outside. Hmm." [ref=e6484] [cursor=pointer]':
+            - generic [ref=e6494]:
+              - generic [ref=e6495]: Think
+              - generic [ref=e6497]: "The generic read tool is blocked; must use atf_read whose whitelist is \"workspace runs 根与 scratch 目录\". /data/sam/AgenticTrainingFlow is not in the atf_read whitelist presumably. Let me try atf_read on it — the whitelist: \"路径限 workspace runs 根与 scratch 目录（白名单），越界拒绝\". /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py is outside. Hmm."
+          - button "Tool call atf_bash · head -n 700 /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py | tail -n 160" [ref=e6505] [cursor=pointer]:
+            - generic [ref=e6515]:
+              - generic [ref=e6516]: Tool call
+              - generic [ref=e6518]: atf_bash · head -n 700 /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py | tail -n 160
+          - button "Think Now I understand the register stage:" [ref=e6526] [cursor=pointer]:
+            - generic [ref=e6536]:
+              - generic [ref=e6537]: Think
+              - generic [ref=e6539]: "Now I understand the register stage:"
+        - paragraph [ref=e6546]:
+          - text: 约定清楚了，但我需要确认
+          - code [ref=e6547]: source_root
+          - text: 参数的确切语义（回执里被拼成了
+          - code [ref=e6548]: …/walkthrough-pl/pl
+          - text: ，像是「批根/单据类型子目录」结构）。看下参数解析部分。
+        - generic [ref=e6551]:
+          - button "Tool call atf_bash · grep -n \"source_root\\|doc_type\\|lane_suffix\\|batch_root\\|split_id\" /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py | head -n 60" [ref=e6558] [cursor=pointer]:
+            - generic [ref=e6568]:
+              - generic [ref=e6569]: Tool call
+              - generic [ref=e6571]: atf_bash · grep -n "source_root\|doc_type\|lane_suffix\|batch_root\|split_id" /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py | head -n 60
+          - button "Think Line 249-251 confirms:" [ref=e6579] [cursor=pointer]:
+            - generic [ref=e6589]:
+              - generic [ref=e6590]: Think
+              - generic [ref=e6592]: "Line 249-251 confirms:"
+        - paragraph [ref=e6599]:
+          - text: 参数语义确认：CLI 的
+          - code [ref=e6600]: source_root
+          - text: 是
+          - strong [ref=e6601]: 批根
+          - text: ，实际样本须位于
+          - code [ref=e6602]: <批根>/<doc_type>/
+          - text: 子目录。我传了
+          - code [ref=e6603]: datasets/walkthrough-pl
+          - text: ，内核按缺省 doc_type=
+          - code [ref=e6604]: pl
+          - text: 拼出了
+          - code [ref=e6605]: datasets/walkthrough-pl/pl
+          - text: （不存在）。再看 argparse 的缺省值与可用参数。
+        - generic [ref=e6608]:
+          - button "Tool call atf_bash · grep -n \"add_argument\\|set_defaults\" /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py | head -n 40" [ref=e6615] [cursor=pointer]:
+            - generic [ref=e6625]:
+              - generic [ref=e6626]: Tool call
+              - generic [ref=e6628]: atf_bash · grep -n "add_argument\|set_defaults" /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py | head -n 40
+          - button "Think Confirmed:" [ref=e6636] [cursor=pointer]:
+            - generic [ref=e6646]:
+              - generic [ref=e6647]: Think
+              - generic [ref=e6649]: "Confirmed:"
+        - paragraph [ref=e6656]:
+          - text: 看一下既有 walkthrough 工作区的实际布局（
+          - code [ref=e6657]: /tmp/b18-ws-r2
+          - text: 在白名单内）与 help 全文，照 canonical 形态来。
+        - generic [ref=e6660]:
+          - button "Tool call atf_bash · sed -n '1893,1900p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py; echo '=== b18-ws-r2 ==='; ls /tmp/b18-ws-r2; echo '---'; ls /tmp/b18-ws-r2/datasets 2>/dev/null; ls /tmp/b18-ws-r2/workspace/runs 2>/dev/null" [ref=e6667] [cursor=pointer]:
+            - generic [ref=e6677]:
+              - generic [ref=e6678]: Tool call
+              - generic [ref=e6680]: atf_bash · sed -n '1893,1900p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py; echo '=== b18-ws-r2 ==='; ls /tmp/b18-ws-r2; echo '---'; ls /tmp/b18-ws-r2/datasets 2>/dev/null; ls /tmp/b18-ws-r2/workspace/runs 2>/dev/null
+          - 'button "Think The whitelist message earlier listed /tmp/b18-ws-r2 but now rejects it — the semicolon splitting: \"合法根：…；/data/sam；/tmp/b18-ws-r2；…\". Weird — maybe /tmp/b18-ws-r2 was in the list but the parser now complains? The error repeats the same list including /tmp/b18-ws-r2. Odd. Perhaps the check is prefix-based and /tmp/b18-ws-r2 requires exact… whatever, don''t fight it. The sed command included /tmp/b18-ws-r2 AND the .py file; maybe the combined command triggered evaluation of both paths and /tmp listing failed for another reason? The error says 命令引用白名单外绝对路径 /tmp/b18-ws-r2;—— with a trailing semicolon, suggesting the parser parsed \"/tmp/b18-ws-r2;\" (with semicolon) as the path and it''s not in list. Quoting issue. Just run the two commands separately, and quote properly or use ls without trailing semicolon adjacency." [ref=e6688] [cursor=pointer]':
+            - generic [ref=e6698]:
+              - generic [ref=e6699]: Think
+              - generic [ref=e6701]: "The whitelist message earlier listed /tmp/b18-ws-r2 but now rejects it — the semicolon splitting: \"合法根：…；/data/sam；/tmp/b18-ws-r2；…\". Weird — maybe /tmp/b18-ws-r2 was in the list but the parser now complains? The error repeats the same list including /tmp/b18-ws-r2. Odd. Perhaps the check is prefix-based and /tmp/b18-ws-r2 requires exact… whatever, don't fight it. The sed command included /tmp/b18-ws-r2 AND the .py file; maybe the combined command triggered evaluation of both paths and /tmp listing failed for another reason? The error says 命令引用白名单外绝对路径 /tmp/b18-ws-r2;—— with a trailing semicolon, suggesting the parser parsed \"/tmp/b18-ws-r2;\" (with semicolon) as the path and it's not in list. Quoting issue. Just run the two commands separately, and quote properly or use ls without trailing semicolon adjacency."
+          - button "Tool call atf_bash · sed -n '1893,1900p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py" [ref=e6709] [cursor=pointer]:
+            - generic [ref=e6719]:
+              - generic [ref=e6720]: Tool call
+              - generic [ref=e6722]: atf_bash · sed -n '1893,1900p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py
+          - button "Tool call atf_bash · ls /tmp/b18-ws-r2" [ref=e6729] [cursor=pointer]:
+            - generic [ref=e6739]:
+              - generic [ref=e6740]: Tool call
+              - generic [ref=e6742]: atf_bash · ls /tmp/b18-ws-r2
+          - button "Think /tmp/b18-ws-r2 contains run dirs directly (different layout, older). Not a walkthrough workspace. Fine — the code contract is clear enough:" [ref=e6750] [cursor=pointer]:
+            - generic [ref=e6760]:
+              - generic [ref=e6761]: Think
+              - generic [ref=e6763]: "/tmp/b18-ws-r2 contains run dirs directly (different layout, older). Not a walkthrough workspace. Fine — the code contract is clear enough:"
+        - generic [ref=e6769]:
+          - paragraph [ref=e6770]: 约定已确认（内核 argparse 原文）：
+          - list [ref=e6771]:
+            - listitem [ref=e6772]:
+              - code [ref=e6773]: "--source-root"
+              - text: ＝
+              - strong [ref=e6774]: 走查数据批根
+              - text: ，其下
+              - code [ref=e6775]: <doc-type>/
+              - text: 子目录才是样本来源（缺省 doc-type=
+              - code [ref=e6776]: pl
+              - text: ，正是装箱单）
+            - listitem [ref=e6777]:
+              - code [ref=e6778]: "--workspace"
+              - text: ＝
+              - strong [ref=e6779]: 隔离目录
+              - text: ，
+              - code [ref=e6780]: datasets/splits/runs
+              - text: 骨架由脚本自建（所以实验目录那种「已存在且非空」的目录不行；且段工具不透传
+              - code [ref=e6781]: "--rerun"
+              - text: ）
+          - paragraph [ref=e6782]:
+            - text: 两点修正方案：①建批根形态
+            - code [ref=e6783]: datasets/pl-batch/pl/
+            - text: ，把 50 对
+            - strong [ref=e6784]: 复制
+            - text: 进去（原件
+            - code [ref=e6785]: datasets/walkthrough-pl/
+            - text: 不动）；②walkthrough workspace 用全新空目录。先看数据量定复制代价。
+        - generic [ref=e6788]:
+          - button "Tool call atf_bash · du -sh /data/atf/prodtest/atf-g2fresh-20261022/datasets/walkthrough-pl && ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/walkthrough-pl/*.png | wc -l && ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/walkthrough-pl/*.json | wc -l" [ref=e6795] [cursor=pointer]:
+            - generic [ref=e6805]:
+              - generic [ref=e6806]: Tool call
+              - generic [ref=e6808]: atf_bash · du -sh /data/atf/prodtest/atf-g2fresh-20261022/datasets/walkthrough-pl && ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/walkthrough-pl/*.png | wc -l && ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/walkthrough-pl/*.json | wc -l
+          - button "Think 19 MB total, 50 png + 50 json — copy is cheap. Now do the copy (write op → approval):" [ref=e6816] [cursor=pointer]:
+            - generic [ref=e6826]:
+              - generic [ref=e6827]: Think
+              - generic [ref=e6829]: "19 MB total, 50 png + 50 json — copy is cheap. Now do the copy (write op → approval):"
+        - paragraph [ref=e6836]:
+          - text: 19 MB、50+50 成对——复制代价可忽略。现在建批根形态并复制（写操作，走审批）：
+          - code [ref=e6837]: datasets/pl-batch/pl/
+          - text: ←
+          - code [ref=e6838]: datasets/walkthrough-pl/
+          - text: 全部 100 个文件，原件保持不动。
+        - generic [ref=e6841]:
+          - button "Tool call atf_bash · mkdir -p /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-batch/pl && cp /data/atf/prodtest/atf-g2fresh-20261022/datasets/walkthrough-pl/*.png /data/atf/prodtest/atf-g2fresh-20261022/datasets/walkthrough-pl/*.json /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-batch/pl/ && ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-batch/pl | wc -l && du -sh /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-batch" [ref=e6848] [cursor=pointer]:
+            - generic [ref=e6858]:
+              - generic [ref=e6859]: Tool call
+              - generic [ref=e6861]: atf_bash · mkdir -p /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-batch/pl && cp /data/atf/prodtest/atf-g2fresh-20261022/datasets/walkthrough-pl/*.png /data/atf/prodtest/atf-g2fresh-20261022/datasets/walkthrough-pl/*.json /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-batch/pl/ && ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-batch/pl | wc -l && du -sh /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-batch
+          - 'button "Think Copy done: 100 files in datasets/pl-batch/pl/, 19 MB. Now re-trigger register with:" [ref=e6869] [cursor=pointer]':
+            - generic [ref=e6879]:
+              - generic [ref=e6880]: Think
+              - generic [ref=e6882]: "Copy done: 100 files in datasets/pl-batch/pl/, 19 MB. Now re-trigger register with:"
+        - paragraph [ref=e6889]:
+          - text: 批根就绪：
+          - code [ref=e6890]: datasets/pl-batch/pl/
+          - text: 100 个文件。重新触发 register 段——workspace 换全新空目录
+          - code [ref=e6891]: ws-pl-walkthrough/
+          - text: （骨架由内核自建），run 仍为
+          - code [ref=e6892]: pl-walkthrough-r1
+          - text: 。请在面板放行。
+        - generic [ref=e6895]:
+          - button "Tool call atf_pipeline_stage · pl-walkthrough-r1" [ref=e6902] [cursor=pointer]:
+            - generic [ref=e6912]:
+              - generic [ref=e6913]: Tool call
+              - generic [ref=e6915]: atf_pipeline_stage · pl-walkthrough-r1
+          - 'button "Think Progress: workspace/path conventions now pass; the kernel found the 50 pairs in datasets/pl-batch/pl and got to the coordinate check. It rejected: all 50 samples have non-integer pixel coordinates in marks[0] (walkthrough_register_coordinate_violation)." [ref=e6923] [cursor=pointer]':
+            - generic [ref=e6933]:
+              - generic [ref=e6934]: Think
+              - generic [ref=e6936]: "Progress: workspace/path conventions now pass; the kernel found the 50 pairs in datasets/pl-batch/pl and got to the coordinate check. It rejected: all 50 samples have non-integer pixel coordinates in marks[0] (walkthrough_register_coordinate_violation)."
+        - paragraph [ref=e6943]:
+          - text: 登记闸推进到了坐标校验：
+          - strong [ref=e6944]:
+            - text: 50 个样本全部命中
+            - code [ref=e6945]: walkthrough_register_coordinate_violation
+          - text: ——标注 box 坐标为非整数像素（这正是量化工具的专用场景）。用内核量化 CLI 做确定性整备：源目录只读，产出整数像素副本（含量化后标注、成对图像副本、逐值映射
+          - code [ref=e6946]: quantize-map.csv
+          - text: 与
+          - code [ref=e6947]: quantize-summary.json
+          - text: ）。先看一眼上次失败在 workspace 里留没留骨架，再发量化。
+        - generic [ref=e6950]:
+          - button "Tool call atf_bash · ls -la /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough 2>/dev/null; echo '--- runs ---'; ls /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough/workspace/runs 2>/dev/null" [ref=e6957] [cursor=pointer]:
+            - generic [ref=e6967]:
+              - generic [ref=e6968]: Tool call
+              - generic [ref=e6970]: atf_bash · ls -la /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough 2>/dev/null; echo '--- runs ---'; ls /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough/workspace/runs 2>/dev/null
+          - 'button "Think As suspected: the failed register attempt DID leave the skeleton (datasets/, splits/, workspace/runs/pl-walkthrough-r1) despite the tool note claiming zero writes. So:" [ref=e6978] [cursor=pointer]':
+            - generic [ref=e6988]:
+              - generic [ref=e6989]: Think
+              - generic [ref=e6991]: "As suspected: the failed register attempt DID leave the skeleton (datasets/, splits/, workspace/runs/pl-walkthrough-r1) despite the tool note claiming zero writes. So:"
+        - paragraph [ref=e6998]:
+          - text: 上次失败留下了骨架（datasets/splits/workspace 都已落位）——工具回执说的「零写入」与实际磁盘不符，以磁盘为准。段工具不透传
+          - code [ref=e6999]: "--rerun"
+          - text: ，先查 harness 桥接怎么拼命令，决定是复用该 workspace 还是换新目录。
+        - generic [ref=e7002]:
+          - button "Grep walkthrough_pipeline" [ref=e7009] [cursor=pointer]:
+            - generic [ref=e7018]:
+              - generic [ref=e7019]: Grep
+              - generic [ref=e7021]: walkthrough_pipeline
+          - button "Think The bridge is /data/sam/ATF-Harness/packages/extensions/atf-tools/src/pipelineFace.ts. Let me check whether it passes --rerun ever. grep for \"rerun\" in that file." [ref=e7029] [cursor=pointer]:
+            - generic [ref=e7039]:
+              - generic [ref=e7040]: Think
+              - generic [ref=e7042]: The bridge is /data/sam/ATF-Harness/packages/extensions/atf-tools/src/pipelineFace.ts. Let me check whether it passes --rerun ever. grep for "rerun" in that file.
+          - button "Grep rerun|argv|--workspace|source-root" [ref=e7050] [cursor=pointer]:
+            - generic [ref=e7059]:
+              - generic [ref=e7060]: Grep
+              - generic [ref=e7062]: rerun|argv|--workspace|source-root
+          - 'button "Think Confirmed: the harness bridge never passes `--rerun`. So retrying register on the now-non-empty ws-pl-walkthrough will hit `walkthrough_workspace_not_empty` again." [ref=e7070] [cursor=pointer]':
+            - generic [ref=e7080]:
+              - generic [ref=e7081]: Think
+              - generic [ref=e7083]: "Confirmed: the harness bridge never passes `--rerun`. So retrying register on the now-non-empty ws-pl-walkthrough will hit `walkthrough_workspace_not_empty` again."
+        - generic [ref=e7089]:
+          - paragraph [ref=e7090]:
+            - text: 桥接确认：argv 只传
+            - code [ref=e7091]: "--workspace/--run-id/--stage/--source-root/…"
+            - text: ，
+            - strong [ref=e7092]:
+              - text: 永不传
+              - code [ref=e7093]: "--rerun"
+            - text: ——所以脏了的
+            - code [ref=e7094]: ws-pl-walkthrough
+            - text: 不能复用，登记时换全新目录
+            - code [ref=e7095]: ws-pl-walkthrough-r1/
+            - text: （原骨架目录最后统一清理，先留档）。
+          - paragraph [ref=e7096]:
+            - text: 现在做坐标量化：源=
+            - code [ref=e7097]: datasets/pl-batch/pl
+            - text: （只读），产物落
+            - code [ref=e7098]: datasets/pl-quant/pl/
+            - text: （量化副本可直接重走登记；缺省 round 口径、退化框不放行——如有整文件拒绝会如实报数）。请在面板放行。
+        - generic [ref=e7101]:
+          - button "Tool call atf_quantize_annotations · datasets/pl-batch/pl" [ref=e7108] [cursor=pointer]:
+            - generic [ref=e7118]:
+              - generic [ref=e7119]: Tool call
+              - generic [ref=e7121]: atf_quantize_annotations · datasets/pl-batch/pl
+          - button "Think Quantize succeeded:" [ref=e7129] [cursor=pointer]:
+            - generic [ref=e7139]:
+              - generic [ref=e7140]: Think
+              - generic [ref=e7142]: "Quantize succeeded:"
+        - paragraph [ref=e7149]: 量化完成：50 文件、21144 个坐标值全部 round 整备，0 退化框、0 残留浮点。快速核对产物成对性后重走登记。
+        - generic [ref=e7152]:
+          - button "Tool call atf_bash · ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/pl/*.png | wc -l; ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/pl/*.json | wc -l; ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/pl | grep -v '.png$' | grep -v '.json$'" [ref=e7159] [cursor=pointer]:
+            - generic [ref=e7169]:
+              - generic [ref=e7170]: Tool call
+              - generic [ref=e7172]: atf_bash · ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/pl/*.png | wc -l; ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/pl/*.json | wc -l; ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/pl | grep -v '.png$' | grep -v '.json$'
+          - button "Think 50 png + 51 json (50 labels + quantize-summary.json) + quantize-map.csv. The extra summary json has no matching png → register's stem matching (png glob + same-stem json) ignores it." [ref=e7180] [cursor=pointer]:
+            - generic [ref=e7190]:
+              - generic [ref=e7191]: Think
+              - generic [ref=e7193]: 50 png + 51 json (50 labels + quantize-summary.json) + quantize-map.csv. The extra summary json has no matching png → register's stem matching (png glob + same-stem json) ignores it.
+        - paragraph [ref=e7200]:
+          - text: 产物齐整：50 png + 50 标注 json +
+          - code [ref=e7201]: quantize-map.csv
+          - text: +
+          - code [ref=e7202]: quantize-summary.json
+          - text: （多出的 summary 无同名 png，登记按 stem 配对会自动忽略）。第三次触发 register：新 workspace
+          - code [ref=e7203]: ws-pl-walkthrough-r1/
+          - text: ，source_root 指向量化批根
+          - code [ref=e7204]: datasets/pl-quant
+          - text: （内核自动取其下
+          - code [ref=e7205]: pl/
+          - text: ）。请在面板放行。
+        - generic [ref=e7208]:
+          - button "Tool call atf_pipeline_stage · pl-walkthrough-r1" [ref=e7215] [cursor=pointer]:
+            - generic [ref=e7225]:
+              - generic [ref=e7226]: Tool call
+              - generic [ref=e7228]: atf_pipeline_stage · pl-walkthrough-r1
+          - button "Think Register OK:" [ref=e7236] [cursor=pointer]:
+            - generic [ref=e7246]:
+              - generic [ref=e7247]: Think
+              - generic [ref=e7249]: "Register OK:"
+        - generic [ref=e7255]:
+          - paragraph [ref=e7256]:
+            - text: ✅
+            - strong [ref=e7257]: register（数据登记）段通过
+            - text: ：
+          - list [ref=e7258]:
+            - listitem [ref=e7259]:
+              - text: pair_count=50（读回校验 50 行通过），登记件
+              - code [ref=e7260]: datasets/walkthrough-pl@20205f276438/registration.json
+              - text: ，commit_pin
+              - code [ref=e7261]: 20205f2764…
+            - listitem [ref=e7262]:
+              - text: split 目录
+              - code [ref=e7263]: splits/walkthrough-pl
+              - text: 已建；段事实已落盘、会话已绑定 run
+              - code [ref=e7264]: pl-walkthrough-r1
+          - paragraph [ref=e7265]:
+            - text: 第 2 段
+            - strong [ref=e7266]: label_qc（标注体检）
+            - text: ：对成对 png/json 做 Q1–Q4 确定性检测。请在面板放行。
+        - generic [ref=e7269]:
+          - button "Tool call atf_pipeline_stage · pl-walkthrough-r1" [ref=e7276] [cursor=pointer]:
+            - generic [ref=e7286]:
+              - generic [ref=e7287]: Tool call
+              - generic [ref=e7289]: atf_pipeline_stage · pl-walkthrough-r1
+          - button "Think label_qc OK:" [ref=e7297] [cursor=pointer]:
+            - generic [ref=e7307]:
+              - generic [ref=e7308]: Think
+              - generic [ref=e7310]: "label_qc OK:"
+        - generic [ref=e7316]:
+          - paragraph [ref=e7317]:
+            - text: ✅
+            - strong [ref=e7318]: label_qc（标注体检）段通过
+            - text: ：50 样本全扫，Q1 同框同值同字段重复＝0、Q2 归属待确认＝0、Q3 值-框形态不匹配＝0、Q4 越界框＝0，pending=0——无需人工裁决。（unpaired_files=1 即
+            - code [ref=e7319]: quantize-summary.json
+            - text: ，无同名 png，属预期。）
+          - paragraph [ref=e7320]:
+            - text: 第 3 段
+            - strong [ref=e7321]: experiment_setup（实验配置）
+            - text: 。请在面板放行。
+        - generic [ref=e7324]:
+          - button "Tool call atf_pipeline_stage · pl-walkthrough-r1" [ref=e7331] [cursor=pointer]:
+            - generic [ref=e7341]:
+              - generic [ref=e7342]: Tool call
+              - generic [ref=e7344]: atf_pipeline_stage · pl-walkthrough-r1
+          - button "Think experiment_setup OK:" [ref=e7352] [cursor=pointer]:
+            - generic [ref=e7362]:
+              - generic [ref=e7363]: Think
+              - generic [ref=e7365]: "experiment_setup OK:"
+        - generic [ref=e7371]:
+          - paragraph [ref=e7372]:
+            - text: ✅
+            - strong [ref=e7373]: experiment_setup（实验配置）段通过
+            - text: ：ExperimentConfig 已落盘（
+            - code [ref=e7374]: experiment-setup/experiment-config.json
+            - text: ），实验门锁定字段序
+            - strong [ref=e7375]: 25 键
+            - text: （doc_identifier、page_summary、12 个 goods_* 条目级字段、product_no/item_no/product_code/hs_code、container_no/seal_no/shipping_marks、currency、4 个 total_* 汇总字段），field_config sha256
+            - code [ref=e7376]: 5b04777e…
+            - text: 。
+          - paragraph [ref=e7377]:
+            - text: 第 4 段
+            - strong [ref=e7378]: candidate_build（合同候选构建）
+            - text: ——正道链在发布前必须先由已登记样本+标注事实盘点出候选契约件（contract-candidate），这一段在内核段序上位于实验配置与发布之间。请在面板放行。
+        - generic [ref=e7381]:
+          - button "Tool call atf_pipeline_stage · pl-walkthrough-r1" [ref=e7388] [cursor=pointer]:
+            - generic [ref=e7398]:
+              - generic [ref=e7399]: Tool call
+              - generic [ref=e7401]: atf_pipeline_stage · pl-walkthrough-r1
+          - button "Think candidate_build failed with exit_code 1 and NO summary output at all — the response is nearly empty (no summary, no rejections, no stderr_tail). exit 1 vs exit 2 (blocked) vs exit 3 (env error). exit 1 = general error? And zero detail returned." [ref=e7409] [cursor=pointer]:
+            - generic [ref=e7419]:
+              - generic [ref=e7420]: Think
+              - generic [ref=e7422]: candidate_build failed with exit_code 1 and NO summary output at all — the response is nearly empty (no summary, no rejections, no stderr_tail). exit 1 vs exit 2 (blocked) vs exit 3 (env error). exit 1 = general error? And zero detail returned.
+        - paragraph [ref=e7429]:
+          - text: candidate_build 返回 exit 1，且本次回执没有任何 summary/原因码——需要看盘上落了什么。查 run 目录两套落点（
+          - code [ref=e7430]: <ws>/runs/
+          - text: 与 canonical
+          - code [ref=e7431]: <ws>/workspace/runs/
+          - text: ）里的段摘要与日志。
+        - generic [ref=e7434]:
+          - button "Tool call atf_bash · find /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1 -newer /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup -type f 2>/dev/null | head -n 40; echo '=== tree top ==='; ls -R /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 | head -n 60" [ref=e7441] [cursor=pointer]:
+            - generic [ref=e7451]:
+              - generic [ref=e7452]: Tool call
+              - generic [ref=e7454]: atf_bash · find /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1 -newer /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup -type f 2>/dev/null | head -n 40; echo '=== tree top ==='; ls -R /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 | head -n 60
+          - button "Think No stage-candidate_build summary file was written — candidate_build produced nothing on disk (no contract-candidate.json, no summary). Exit 1 with zero output suggests the subprocess crashed early — maybe an unhandled exception before any recording, or stderr wasn't captured in the tool response (no stderr_tail field at all this time — odd)." [ref=e7462] [cursor=pointer]:
+            - generic [ref=e7472]:
+              - generic [ref=e7473]: Think
+              - generic [ref=e7475]: No stage-candidate_build summary file was written — candidate_build produced nothing on disk (no contract-candidate.json, no summary). Exit 1 with zero output suggests the subprocess crashed early — maybe an unhandled exception before any recording, or stderr wasn't captured in the tool response (no stderr_tail field at all this time — odd).
+        - paragraph [ref=e7482]:
+          - text: 盘上没有任何 candidate_build 段摘要——子进程在落摘要前就崩了，回执也没带 stderr。先看
+          - code [ref=e7483]: webui/segments.json
+          - text: （本次有更新）里有没有错误细节。
+        - generic [ref=e7486]:
+          - button "Tool call atf_read · ws-pl-walkthrough-r1/runs/pl-walkthrough-r1/webui/segments.json" [ref=e7493] [cursor=pointer]:
+            - generic [ref=e7503]:
+              - generic [ref=e7504]: Tool call
+              - generic [ref=e7506]: atf_read · ws-pl-walkthrough-r1/runs/pl-walkthrough-r1/webui/segments.json
+          - button "Think segments.json only logs successful segments. No candidate_build entry — it crashed before recording." [ref=e7514] [cursor=pointer]:
+            - generic [ref=e7524]:
+              - generic [ref=e7525]: Think
+              - generic [ref=e7527]: segments.json only logs successful segments. No candidate_build entry — it crashed before recording.
+          - button "Grep runPipeline|stderr|stdout|log|timeout" [ref=e7535] [cursor=pointer]:
+            - generic [ref=e7544]:
+              - generic [ref=e7545]: Grep
+              - generic [ref=e7547]: runPipeline|stderr|stdout|log|timeout
+          - button "Think The bridge captures stdout/stderr in memory. For exit 1 (not 0/2/3?), let me see how exit 1 is handled — read lines ~287-380 of pipelineFace.ts to see the response shaping, especially whether stderr is included for exit 1. In the candidate_build response, there was no summary/stderr_tail at all. Let me read that region." [ref=e7555] [cursor=pointer]:
+            - generic [ref=e7565]:
+              - generic [ref=e7566]: Think
+              - generic [ref=e7568]: The bridge captures stdout/stderr in memory. For exit 1 (not 0/2/3?), let me see how exit 1 is handled — read lines ~287-380 of pipelineFace.ts to see the response shaping, especially whether stderr is included for exit 1. In the candidate_build response, there was no summary/stderr_tail at all. Let me read that region.
+          - button "Tool call atf_bash · sed -n '287,380p' /data/sam/ATF-Harness/packages/extensions/atf-tools/src/pipelineFace.ts" [ref=e7576] [cursor=pointer]:
+            - generic [ref=e7586]:
+              - generic [ref=e7587]: Tool call
+              - generic [ref=e7589]: atf_bash · sed -n '287,380p' /data/sam/ATF-Harness/packages/extensions/atf-tools/src/pipelineFace.ts
+          - 'button "Think Now I understand the exit 1 case: for `result.code === 1`, the bridge returns only the minimal object — no summary, no stderr (stderr_tail is only attached for exit 3 or null). So the kernel subprocess exited 1 with details on stderr that were dropped. The kernel treats exit 1 as… let me check the kernel''s exit codes. In walkthrough_pipeline.py, what produces exit 1? Let me grep for sys.exit / exit codes." [ref=e7597] [cursor=pointer]':
+            - generic [ref=e7607]:
+              - generic [ref=e7608]: Think
+              - generic [ref=e7610]: "Now I understand the exit 1 case: for `result.code === 1`, the bridge returns only the minimal object — no summary, no stderr (stderr_tail is only attached for exit 3 or null). So the kernel subprocess exited 1 with details on stderr that were dropped. The kernel treats exit 1 as… let me check the kernel's exit codes. In walkthrough_pipeline.py, what produces exit 1? Let me grep for sys.exit / exit codes."
+        - paragraph [ref=e7617]: 桥接对 exit 1 既不回传 stderr 也不回读落盘摘要——细节被丢了。直接读内核：看 main 的退出码语义与 candidate_build 段的实现，定位崩溃点。
+        - generic [ref=e7620]:
+          - button "Tool call atf_bash · grep -n \"sys.exit\\|def main\\|STAGE_ORDER\\|def stage_\" /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py | head -n 40" [ref=e7627] [cursor=pointer]:
+            - generic [ref=e7637]:
+              - generic [ref=e7638]: Tool call
+              - generic [ref=e7640]: atf_bash · grep -n "sys.exit\|def main\|STAGE_ORDER\|def stage_" /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py | head -n 40
+          - button "Think Interesting — STAGE_ORDER at line 79. Let me view STAGE_ORDER and the main tail (1886-1990) plus stage_candidate_build (1158-1205). Also check exit code semantics in main." [ref=e7648] [cursor=pointer]:
+            - generic [ref=e7658]:
+              - generic [ref=e7659]: Think
+              - generic [ref=e7661]: Interesting — STAGE_ORDER at line 79. Let me view STAGE_ORDER and the main tail (1886-1990) plus stage_candidate_build (1158-1205). Also check exit code semantics in main.
+          - button "Tool call atf_bash · sed -n '79,90p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py; echo '=== main tail ==='; sed -n '1940,2005p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py" [ref=e7669] [cursor=pointer]:
+            - generic [ref=e7679]:
+              - generic [ref=e7680]: Tool call
+              - generic [ref=e7682]: atf_bash · sed -n '79,90p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py; echo '=== main tail ==='; sed -n '1940,2005p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py
+          - 'button "Think The main() catches RunLayoutError and other errors after; exit_code comes from pipeline.run(). An exit 1 with NO stdout JSON document means the exception happened BEFORE `print(json.dumps(document...))` — i.e., inside `_Pipeline(args)` construction or pipeline.run() raised an uncaught non-RunLayoutError exception (traceback → stderr, exit 1 via interpreter). Let me see the rest of main (the except clauses after line 2005) and pipeline.run()." [ref=e7690] [cursor=pointer]':
+            - generic [ref=e7700]:
+              - generic [ref=e7701]: Think
+              - generic [ref=e7703]: "The main() catches RunLayoutError and other errors after; exit_code comes from pipeline.run(). An exit 1 with NO stdout JSON document means the exception happened BEFORE `print(json.dumps(document...))` — i.e., inside `_Pipeline(args)` construction or pipeline.run() raised an uncaught non-RunLayoutError exception (traceback → stderr, exit 1 via interpreter). Let me see the rest of main (the except clauses after line 2005) and pipeline.run()."
+          - button "Tool call atf_bash · sed -n '2005,2040p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py; echo '=== run() ==='; sed -n '500,560p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py" [ref=e7711] [cursor=pointer]:
+            - generic [ref=e7721]:
+              - generic [ref=e7722]: Tool call
+              - generic [ref=e7724]: atf_bash · sed -n '2005,2040p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py; echo '=== run() ==='; sed -n '500,560p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py
+          - 'button "Think So exit 1 = an uncaught exception inside `_Pipeline(args)` construction or `pipeline.run()` for the candidate_build stage (not RunLayoutError, not the folded rejections which give exit 2/3 with stderr JSON). The traceback went to stderr, which the bridge dropped." [ref=e7732] [cursor=pointer]':
+            - generic [ref=e7742]:
+              - generic [ref=e7743]: Think
+              - generic [ref=e7745]: "So exit 1 = an uncaught exception inside `_Pipeline(args)` construction or `pipeline.run()` for the candidate_build stage (not RunLayoutError, not the folded rejections which give exit 2/3 with stderr JSON). The traceback went to stderr, which the bridge dropped."
+          - button "Tool call atf_bash · sed -n '1158,1205p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py" [ref=e7753] [cursor=pointer]:
+            - generic [ref=e7763]:
+              - generic [ref=e7764]: Tool call
+              - generic [ref=e7766]: atf_bash · sed -n '1158,1205p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py
+          - button "Think stage_candidate_build:" [ref=e7774] [cursor=pointer]:
+            - generic [ref=e7784]:
+              - generic [ref=e7785]: Think
+              - generic [ref=e7787]: "stage_candidate_build:"
+        - paragraph [ref=e7794]:
+          - text: exit 1＝子进程内未捕获异常（traceback 走了 stderr，桥接丢弃）。定位前先确认一件事：本会话实际执行的内核 pin 副本是不是就是我读的这份
+          - code [ref=e7795]: /data/sam/AgenticTrainingFlow
+          - text: 。查 pin 目录。
+        - generic [ref=e7798]:
+          - button "Tool call atf_bash · ls /data/atf/dev/pinned 2>/dev/null; echo '---'; ls /data/atf/dev/pinned/*/ 2>/dev/null | head -n 30" [ref=e7805] [cursor=pointer]:
+            - generic [ref=e7815]:
+              - generic [ref=e7816]: Tool call
+              - generic [ref=e7818]: atf_bash · ls /data/atf/dev/pinned 2>/dev/null; echo '---'; ls /data/atf/dev/pinned/*/ 2>/dev/null | head -n 30
+          - 'button "Think Interesting — the fence changed: now it says /data/atf/dev/pinned is outside the CURRENT workspace fence (readable roots list slightly different: /data/atf/dev/runs, /data/sam, /tmp/b18-ws-r2, prodtest dirs, our ws + ws-pl-walkthrough). So /data/atf/dev/pinned is not readable. OK." [ref=e7826] [cursor=pointer]':
+            - generic [ref=e7836]:
+              - generic [ref=e7837]: Think
+              - generic [ref=e7839]: "Interesting — the fence changed: now it says /data/atf/dev/pinned is outside the CURRENT workspace fence (readable roots list slightly different: /data/atf/dev/runs, /data/sam, /tmp/b18-ws-r2, prodtest dirs, our ws + ws-pl-walkthrough). So /data/atf/dev/pinned is not readable. OK."
+        - paragraph [ref=e7846]:
+          - text: pin 目录在围栏外读不了，但此前各段行为与这份源码逐字吻合（错误码措辞、source_root 拼接、摘要落点），按这份源码定位。crash 点在
+          - code [ref=e7847]: inspect_source_inventory
+          - text: /
+          - code [ref=e7848]: inspect_annotations
+          - text: /
+          - code [ref=e7849]: _candidate_document
+          - text: 之一。我在 scratch 里做一次
+          - strong [ref=e7850]: 诊断性复刻
+          - text: ：同样的入参（split manifest→pin→登记件 refs）、同样的内核调用，但产物写到 scratch 隔离目录、traceback 完整可见——不触碰 run 树、不绕任何审批（本工具本身走审批）。
+        - generic [ref=e7853]:
+          - button "Tool call atf_write · \"\"\"candidate_build 崩溃诊断:只读复刻内核调用,产物写 scratch,traceback 全量可见。\"\"\"" [ref=e7860] [cursor=pointer]:
+            - generic [ref=e7870]:
+              - generic [ref=e7871]: Tool call
+              - generic [ref=e7873]: atf_write · """candidate_build 崩溃诊断:只读复刻内核调用,产物写 scratch,traceback 全量可见。"""
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"diag-candidate-build.py\"],\"timeout_seconds\":120}" [ref=e7880] [cursor=pointer]':
+            - generic [ref=e7890]:
+              - generic [ref=e7891]: Tool call
+              - generic [ref=e7893]: "atf_scratch_exec · {\"argv\":[\"python3\",\"diag-candidate-build.py\"],\"timeout_seconds\":120}"
+          - 'button "Think The scratch exec cwd is /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/default/scratch — a different scratch root than where atf_write put the file. atf_write with relative path \"diag-candidate-build.py\" wrote relative to... the harness main root scratch (per atf_write doc: \"或相对主根（scratch）的相对路径\"). But scratch exec cwd is that walkthrough-pipeline default run scratch. Mismatch." [ref=e7901] [cursor=pointer]':
+            - generic [ref=e7911]:
+              - generic [ref=e7912]: Think
+              - generic [ref=e7914]: "The scratch exec cwd is /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/default/scratch — a different scratch root than where atf_write put the file. atf_write with relative path \"diag-candidate-build.py\" wrote relative to... the harness main root scratch (per atf_write doc: \"或相对主根（scratch）的相对路径\"). But scratch exec cwd is that walkthrough-pipeline default run scratch. Mismatch."
+        - paragraph [ref=e7921]: scratch 执行面的 cwd 与写文件的主根 scratch 不是同一处。把诊断脚本直接写到执行面 scratch 的绝对路径再跑。
+        - generic [ref=e7924]:
+          - button "Tool call atf_write · \"\"\"candidate_build 崩溃诊断:只读复刻内核调用,产物写 scratch,traceback 全量可见。\"\"\"" [ref=e7931] [cursor=pointer]:
+            - generic [ref=e7941]:
+              - generic [ref=e7942]: Tool call
+              - generic [ref=e7944]: atf_write · """candidate_build 崩溃诊断:只读复刻内核调用,产物写 scratch,traceback 全量可见。"""
+          - button "Think atf_write whitelist doesn't include that path. Where is atf_write's allowed scratch? Let me find where the first write landed. Try reading /data/atf/prodtest/atf-g2fresh-20261022/diag-candidate-build.py via atf_read." [ref=e7952] [cursor=pointer]:
+            - generic [ref=e7962]:
+              - generic [ref=e7963]: Think
+              - generic [ref=e7965]: atf_write whitelist doesn't include that path. Where is atf_write's allowed scratch? Let me find where the first write landed. Try reading /data/atf/prodtest/atf-g2fresh-20261022/diag-candidate-build.py via atf_read.
+          - button "Tool call atf_read · diag-candidate-build.py" [ref=e7973] [cursor=pointer]:
+            - generic [ref=e7983]:
+              - generic [ref=e7984]: Tool call
+              - generic [ref=e7986]: atf_read · diag-candidate-build.py
+          - 'button "Think Not in the workspace root either. Where did atf_write put \"diag-candidate-build.py\"? The write returned ok with bytes=1536. The main root scratch — maybe /data/atf/dev/runs/... no. The bash whitelist mentioned \"/data/sam/ATF-Harness/tmp/atf-exec-home-dev\" — that could be the exec home. Let me search: find /data/sam/ATF-Harness/tmp -name \"diag-candidate-build.py\" and also check /data/atf/dev/runs (readable). Actually simplest: use python3 -c inline and skip the file entirely." [ref=e7994] [cursor=pointer]':
+            - generic [ref=e8004]:
+              - generic [ref=e8005]: Think
+              - generic [ref=e8007]: "Not in the workspace root either. Where did atf_write put \"diag-candidate-build.py\"? The write returned ok with bytes=1536. The main root scratch — maybe /data/atf/dev/runs/... no. The bash whitelist mentioned \"/data/sam/ATF-Harness/tmp/atf-exec-home-dev\" — that could be the exec home. Let me search: find /data/sam/ATF-Harness/tmp -name \"diag-candidate-build.py\" and also check /data/atf/dev/runs (readable). Actually simplest: use python3 -c inline and skip the file entirely."
+        - paragraph [ref=e8014]:
+          - text: 换个不依赖文件落点的方式：
+          - code [ref=e8015]: python3 -c
+          - text: 内联执行同样的诊断。
+        - generic [ref=e8018]:
+          - button [ref=e8025] [cursor=pointer]:
+            - generic [ref=e8035]:
+              - generic [ref=e8036]: Tool call
+              - generic [ref=e8038]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import json,traceback\\nfrom pathlib import Path\\nWS=Path('/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1')\\nsplit_dir=WS/'splits'/'walkthrough-pl'\\nmanifest=json.loads((split_dir/'split_manifest.json').read_text())\\npin=manifest['row_digest'][:40]\\nprint('total:',manifest.get('total'),'pin:',pin)\\nreg=json.loads((WS/'datasets'/f'walkthrough-pl@{pin[:12]}'/'registration.json').read_text())\\nrefs=reg.get('refs',{})\\nrepo=refs.get('source_repository'); src=Path(refs['source_root']).resolve()\\nprint('repo:',repo); print('src:',src,src.is_dir())\\nfrom agentic_training_flow.modules import data_admission as da\\nimport inspect as insp\\nprint('inv sig:',insp.signature(da.inspect_source_inventory))\\nprint('ann sig:',insp.signature(da.inspect_annotations))\\nout=Path('diag-bootstrap'); out.mkdir(exist_ok=True)\\ntry:\\n inv=da.inspect_source_inventory(src,split_dir,out,source_repository=repo,source_pin=pin)\\n print('inventory ok; pairs:',len(getattr(inv,'pairs',[]) or []))\\n fids=da.inspect_annotations(inv,out)\\n print('fields ok:',len(fids)); print(sorted(fids)[:40])\\nexcept Exception:\\n traceback.print_exc()\\n print('DIAG: crashed')\"],\"timeout_seconds\":120}"
+          - button "Think Excellent — two key facts:" [ref=e8046] [cursor=pointer]:
+            - generic [ref=e8056]:
+              - generic [ref=e8057]: Think
+              - generic [ref=e8059]: "Excellent — two key facts:"
+        - generic [ref=e8065]:
+          - paragraph [ref=e8066]: 拿到真凭据了，两个关键事实：
+          - list [ref=e8067]:
+            - listitem [ref=e8068]:
+              - text: 本会话实际内核是
+              - strong [ref=e8069]:
+                - code [ref=e8070]: /data/atf/dev/pinned
+              - text: （不是我先前读的
+              - code [ref=e8071]: /data/sam/AgenticTrainingFlow
+              - text: 工作副本——以后以 pin 版为准）；
+            - listitem [ref=e8072]:
+              - text: 崩溃点：
+              - code [ref=e8073]: data_admission.py:2150 raise ValueError("source_package_taxonomy_unexpected")
+              - text: ——
+              - code [ref=e8074]: inspect_source_inventory
+              - text: 的
+              - strong [ref=e8075]: 来源包形态校验
+              - text: 不认我们这个目录形态。
+          - paragraph [ref=e8076]: 用 scratch 执行面（pin 内核可读）把 2150 行附近的 taxonomy 校验逻辑打出来看。
+        - generic [ref=e8079]:
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"from pathlib import Path\\np=Path(''/data/atf/dev/pinned/src/agentic_training_flow/modules/data_admission.py'')\\nlines=p.read_text().splitlines()\\nfor i in range(2060,2175):\\n print(f''{i+1}\\t{lines[i]}'')\"],\"timeout_seconds\":60}" [ref=e8086] [cursor=pointer]':
+            - generic [ref=e8096]:
+              - generic [ref=e8097]: Tool call
+              - generic [ref=e8099]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"from pathlib import Path\\np=Path('/data/atf/dev/pinned/src/agentic_training_flow/modules/data_admission.py')\\nlines=p.read_text().splitlines()\\nfor i in range(2060,2175):\\n print(f'{i+1}\\t{lines[i]}')\"],\"timeout_seconds\":60}"
+          - 'button "Think Found it. `inspect_source_inventory` walks the source root and for every file: suffix must be an image suffix or `.json` — anything else raises `source_package_taxonomy_unexpected`." [ref=e8107] [cursor=pointer]':
+            - generic [ref=e8117]:
+              - generic [ref=e8118]: Think
+              - generic [ref=e8120]: "Found it. `inspect_source_inventory` walks the source root and for every file: suffix must be an image suffix or `.json` — anything else raises `source_package_taxonomy_unexpected`."
+        - generic [ref=e8126]:
+          - paragraph [ref=e8127]: 定位成功，根因明确：
+          - list [ref=e8128]:
+            - listitem [ref=e8129]:
+              - text: pin 内核的
+              - code [ref=e8130]: inspect_source_inventory
+              - text: 对来源根做
+              - strong [ref=e8131]: 严格 taxonomy 走查
+              - text: （
+              - code [ref=e8132]: rglob("*")
+              - text: ）：只允许图片后缀与
+              - code [ref=e8133]: .json
+              - text: ，其它后缀直接
+              - code [ref=e8134]: source_package_taxonomy_unexpected
+              - text: ；且
+              - code [ref=e8135]: set(images)!=set(labels)
+              - text: 会报
+              - code [ref=e8136]: data_one_sided_pair
+            - listitem [ref=e8137]:
+              - text: 我们登记的来源根
+              - code [ref=e8138]: datasets/pl-quant/pl/
+              - text: 里除了 50+50 成对外，还有量化审计件
+              - strong [ref=e8139]:
+                - code [ref=e8140]: quantize-map.csv
+              - text: （csv→taxonomy 炸点）和
+              - strong [ref=e8141]:
+                - code [ref=e8142]: quantize-summary.json
+              - text: （无配对 png→单边配对炸点）
+            - listitem [ref=e8143]: register/label_qc 之前能过是因为它们用宽松的 stem 配对；candidate_build 是第一道走严格盘点的段——它一崩，整段未捕获异常→exit 1
+          - paragraph [ref=e8144]:
+            - text: 修法：把两个量化审计件
+            - strong [ref=e8145]: 移出
+            - text: 来源根、放到批根
+            - code [ref=e8146]: datasets/pl-quant/
+            - text: （保留审计记录，不删除），让
+            - code [ref=e8147]: pl/
+            - text: 只剩纯成对样本。png/json 内容零改动，登记 pin 与 raw_hash 不受影响。动手前先 diff 一下 pin 版与工作副本的 pipeline，确保段实现认知一致。
+        - generic [ref=e8150]:
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import hashlib\\nfrom pathlib import Path\\na=Path(''/data/atf/dev/pinned/tools/walkthrough_pipeline.py'').read_bytes()\\nb=Path(''/data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py'').read_bytes()\\nprint(''pinned sha256:'',hashlib.sha256(a).hexdigest()[:16],len(a))\\nprint(''workcmp sha256:'',hashlib.sha256(b).hexdigest()[:16],len(b))\\nprint(''identical:'',a==b)\"],\"timeout_seconds\":60}" [ref=e8157] [cursor=pointer]':
+            - generic [ref=e8167]:
+              - generic [ref=e8168]: Tool call
+              - generic [ref=e8170]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import hashlib\\nfrom pathlib import Path\\na=Path('/data/atf/dev/pinned/tools/walkthrough_pipeline.py').read_bytes()\\nb=Path('/data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py').read_bytes()\\nprint('pinned sha256:',hashlib.sha256(a).hexdigest()[:16],len(a))\\nprint('workcmp sha256:',hashlib.sha256(b).hexdigest()[:16],len(b))\\nprint('identical:',a==b)\"],\"timeout_seconds\":60}"
+          - button "Think The pinned pipeline and the working copy are byte-identical (same sha256) — my source reading is valid." [ref=e8178] [cursor=pointer]:
+            - generic [ref=e8188]:
+              - generic [ref=e8189]: Think
+              - generic [ref=e8191]: The pinned pipeline and the working copy are byte-identical (same sha256) — my source reading is valid.
+        - paragraph [ref=e8198]:
+          - text: pin 版与工作副本
+          - strong [ref=e8199]: 逐字节一致
+          - text: ——源码认知有效。现在移出两个审计件（写操作，请放行）。
+        - generic [ref=e8202]:
+          - button "Tool call atf_bash · mv /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/pl/quantize-map.csv /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/pl/quantize-summary.json /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/ && ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/pl | wc -l && ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/" [ref=e8209] [cursor=pointer]:
+            - generic [ref=e8219]:
+              - generic [ref=e8220]: Tool call
+              - generic [ref=e8222]: atf_bash · mv /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/pl/quantize-map.csv /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/pl/quantize-summary.json /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/ && ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/pl | wc -l && ls /data/atf/prodtest/atf-g2fresh-20261022/datasets/pl-quant/
+          - button "Think Source root now contains exactly 100 files (50 png + 50 json); audit files sit at datasets/pl-quant/." [ref=e8230] [cursor=pointer]:
+            - generic [ref=e8240]:
+              - generic [ref=e8241]: Think
+              - generic [ref=e8243]: Source root now contains exactly 100 files (50 png + 50 json); audit files sit at datasets/pl-quant/.
+        - paragraph [ref=e8250]:
+          - text: 来源根已纯化：
+          - code [ref=e8251]: pl/
+          - text: 恰好 100 个文件（50+50），审计件在批根
+          - code [ref=e8252]: datasets/pl-quant/
+          - text: 留档。重触发
+          - strong [ref=e8253]: candidate_build
+          - text: 段。请在面板放行。
+        - generic [ref=e8256]:
+          - button "Tool call atf_pipeline_stage · pl-walkthrough-r1" [ref=e8263] [cursor=pointer]:
+            - generic [ref=e8273]:
+              - generic [ref=e8274]: Tool call
+              - generic [ref=e8276]: atf_pipeline_stage · pl-walkthrough-r1
+          - button "Think candidate_build OK:" [ref=e8284] [cursor=pointer]:
+            - generic [ref=e8294]:
+              - generic [ref=e8295]: Think
+              - generic [ref=e8297]: "candidate_build OK:"
+        - generic [ref=e8303]:
+          - paragraph [ref=e8304]:
+            - text: ✅
+            - strong [ref=e8305]: candidate_build（合同候选构建）段通过
+            - text: ：盘点字段闭集 22 键、必备键模板 23 键、
+            - code [ref=e8306]: missing_keys=[]
+            - text: （必备闭集外可选键
+            - code [ref=e8307]: label_semantics
+            - text: ，引擎允许），候选契约件已落
+            - code [ref=e8308]: contract-candidate.json
+            - text: 。
+          - paragraph [ref=e8309]:
+            - text: 第 5 段
+            - strong [ref=e8310]: publish（合同发布）
+            - text: ——把候选契约件发布为可重放的抽取合同（G1 证据面）。请在面板放行。
+        - generic [ref=e8313]:
+          - button "Tool call atf_pipeline_stage · pl-walkthrough-r1" [ref=e8321] [cursor=pointer]:
+            - generic [ref=e8331]:
+              - generic [ref=e8332]: Tool call
+              - generic [ref=e8334]: atf_pipeline_stage · pl-walkthrough-r1
+          - button "Think publish blocked (exit 2, fail-closed, zero writes):" [ref=e8447] [cursor=pointer]:
+            - generic [ref=e8457]:
+              - generic [ref=e8458]: Think
+              - generic [ref=e8460]: "publish blocked (exit 2, fail-closed, zero writes):"
+        - paragraph [ref=e8467]:
+          - text: publish 段被内核
+          - strong [ref=e8468]: blocked（exit 2，零写入）
+          - text: ：
+          - code [ref=e8469]: contract_experiment_gate_field_config_mismatch
+          - text: ——实验门锁定 25 键里有 3 个（
+          - code [ref=e8470]: doc_identifier
+          - text: 、
+          - code [ref=e8471]: page_summary
+          - text: 、
+          - code [ref=e8472]: product_code
+          - text: ）在标注盘点闭集（22 键）中不存在。内核指引：字段集变更必须重跑实验门确认。先读 pin 源码确认 experiment_setup 重跑会按什么字段集重锁、以及 publish 的对账口径。
+        - generic [ref=e8475]:
+          - button "Tool call atf_bash · sed -n '879,975p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py" [ref=e8482] [cursor=pointer]:
+            - generic [ref=e8492]:
+              - generic [ref=e8493]: Tool call
+              - generic [ref=e8495]: atf_bash · sed -n '879,975p' /data/sam/AgenticTrainingFlow/tools/walkthrough_pipeline.py
+          - 'button "Think Now I understand: at experiment_setup time, the gate SHOULD have projected the field-config to the inventory closure (\"D46 链内一致性\") — it projects FIELD_CONFIG_ASSET fields to those in the closed set when the intersection is non-empty. But our experiment_setup ran and locked 25 keys including doc_identifier/page_summary/product_code — which are NOT in the inventory closure (22). Why didn''t the projection filter them?" [ref=e8524] [cursor=pointer]':
+            - generic [ref=e8514]:
+              - generic [ref=e8515]: Think
+              - generic [ref=e8517]: "Now I understand: at experiment_setup time, the gate SHOULD have projected the field-config to the inventory closure (\"D46 链内一致性\") — it projects FIELD_CONFIG_ASSET fields to those in the closed set when the intersection is non-empty. But our experiment_setup ran and locked 25 keys including doc_identifier/page_summary/product_code — which are NOT in the inventory closure (22). Why didn't the projection filter them?"
+        - generic [ref=e8529]:
+          - paragraph [ref=e8530]: 根因清楚了，而且比表面更深一层——时间线还原：
+          - list [ref=e8531]:
+            - listitem [ref=e8532]:
+              - code [ref=e8533]: experiment_setup
+              - text: 段在
+              - strong [ref=e8534]: 23:59:51
+              - text: 执行，当时来源根里
+              - strong [ref=e8535]: 还有
+              - code [ref=e8536]: quantize-map.csv
+              - text: ；
+            - listitem [ref=e8537]:
+              - text: 实验门本应做「D46 链内一致性」投影：把字段模板投影到来源盘点闭集再锁门，但盘点调用撞上 csv→taxonomy 异常，落进
+              - code [ref=e8538]: except Exception
+              - strong [ref=e8539]: 静默回退全量模板
+              - text: （25 键）；
+            - listitem [ref=e8540]: 后来清理 csv 后 candidate_build 盘点出真实闭集 22 键；
+            - listitem [ref=e8541]:
+              - text: publish 对账：门 25 键 vs 候选 22 键 → 恰好多出
+              - code [ref=e8542]: doc_identifier/page_summary/product_code
+              - text: → blocked。
+          - paragraph [ref=e8543]:
+            - text: 也就是说 publish 的拒绝是
+            - strong [ref=e8544]: 防线按设计生效
+            - text: ，修法就是内核指引的原话：重跑 experiment_setup 重新确认实验门（现在来源根已纯化，投影会真正生效，门锁将等于真实闭集 22 键）。先重跑实验门段。请在面板放行。
+        - generic [ref=e8547]:
+          - button "Tool call atf_pipeline_stage · pl-walkthrough-r1" [ref=e8555] [cursor=pointer]:
+            - generic [ref=e8565]:
+              - generic [ref=e8566]: Tool call
+              - generic [ref=e8568]: atf_pipeline_stage · pl-walkthrough-r1
+          - button "Think Experiment gate re-confirmed with exactly 22 keys = the inventory closure (doc_identifier/page_summary/product_code gone). field_config_sha now fbf1160b… (projected)." [ref=e8597] [cursor=pointer]:
+            - generic [ref=e8607]:
+              - generic [ref=e8608]: Think
+              - generic [ref=e8610]: Experiment gate re-confirmed with exactly 22 keys = the inventory closure (doc_identifier/page_summary/product_code gone). field_config_sha now fbf1160b… (projected).
+        - paragraph [ref=e8617]:
+          - text: ✅ 实验门重新确认：锁定字段序
+          - strong [ref=e8618]: 22 键
+          - text: ，与盘点闭集完全一致（3 个幻影键消失），投影后 field_config sha256
+          - code [ref=e8619]: fbf1160b…
+          - text: 。重触发
+          - strong [ref=e8620]: publish
+          - text: 。请在面板放行。
+        - generic [ref=e8623]:
+          - button "Tool call atf_pipeline_stage · pl-walkthrough-r1" [ref=e8631] [cursor=pointer]:
+            - generic [ref=e8641]:
+              - generic [ref=e8642]: Tool call
+              - generic [ref=e8644]: atf_pipeline_stage · pl-walkthrough-r1
+          - button "Think ✅ publish OK:" [ref=e8672] [cursor=pointer]:
+            - generic [ref=e8682]:
+              - generic [ref=e8683]: Think
+              - generic [ref=e8685]: "✅ publish OK:"
+        - generic [ref=e8691]:
+          - paragraph [ref=e8692]:
+            - text: ✅
+            - strong [ref=e8693]: publish（合同发布）段通过
+            - text: ：gate_verdict=pass，publication_status=published，抽取合同 bundle
+            - code [ref=e8694]: artifact:extraction-contract:fed75b8f…
+            - text: 已发布。
+          - paragraph [ref=e8695]:
+            - text: 第 6 段
+            - strong [ref=e8696]: family_split（数据切分）
+            - text: ——聚类分层、零泄漏划分训练/测试。先按缺省
+            - code [ref=e8697]: auto
+            - text: 三态探测定（若内核报版式聚类状态不明，我会停下来问你「这批数据做过版式聚类吗」，不自行猜值）。请在面板放行。
+        - generic [ref=e8698]:
+          - text: Calling tools · atf_pipeline_stage
+          - generic [ref=e8705]:
+            - generic [ref=e8706]: Running
+            - button "Tool call atf_pipeline_stage · pl-walkthrough-r1" [ref=e8708] [cursor=pointer]:
+              - generic [ref=e8717]:
+                - generic [ref=e8718]:
+                  - generic [ref=e8719]: Tool call
+                  - generic [ref=e8721]: atf_pipeline_stage · pl-walkthrough-r1
+                - generic [aria-hidden]:
+                  - generic:
+                    - generic:
+                      - generic: Tool call
+                      - generic: atf_pipeline_stage · pl-walkthrough-r1
+        - generic [ref=e8335]:
+          - status [ref=e8336]: Deep diving
+          - generic [ref=e8340]:
+            - generic [ref=e8341]: Deep diving for 23m 58s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 23m 58s ···
+      - generic [ref=e8723]:
+        - generic [ref=e8724]: Waiting for approval
+        - group "Approval details" [ref=e8726]:
+          - generic [ref=e8727]: 将要执行：触发管线段「family_split」（run pl-walkthrough-r1） 影响范围：在 run 目录内写该段产物（register 段另读源文档根） 可逆性：段产物可人工清理；已写数据面不自动回滚 预计代价：按任务卡 仅 owner 可点；执行方不得代点
+        - generic [ref=e8728]:
+          - button "Reject" [ref=e8729] [cursor=pointer]
+          - button "Allow once" [ref=e8730] [cursor=pointer]

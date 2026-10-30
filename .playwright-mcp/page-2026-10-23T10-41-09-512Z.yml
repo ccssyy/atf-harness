@@ -1,0 +1,95 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e4]:
+    - generic [ref=f1e7]:
+      - generic [ref=f1e8]:
+        - button "New session" [ref=f1e9] [cursor=pointer]:
+          - generic [aria-hidden] [ref=f1e10]:
+            - generic [ref=f1e11]: ATF
+            - generic [ref=f1e14]: ATF 训练 Agent
+        - button "Collapse sidebar" [ref=f1e17] [cursor=pointer]
+      - button "New session" [ref=f1e20] [cursor=pointer]:
+        - generic [ref=f1e21]: New Session
+      - navigation "Global panels" [ref=f1e26]:
+        - button "Plugins" [ref=f1e27] [cursor=pointer]
+      - generic [ref=f1e38]:
+        - generic [ref=f1e39]:
+          - generic [ref=f1e40]: Workspaces
+          - generic [ref=f1e42]:
+            - button "Search sessions" [ref=f1e43] [cursor=pointer]
+            - textbox "Search session names"
+          - generic [ref=f1e47]:
+            - button "View options" [ref=f1e49] [cursor=pointer]
+            - button "Add workspace" [ref=f1e53] [cursor=pointer]
+        - tree "Sessions" [ref=f1e58]:
+          - treeitem "1023" [ref=f1e112] [cursor=pointer]
+          - generic [ref=f1e118]:
+            - treeitem "my-zito" [expanded] [ref=f1e120] [cursor=pointer]
+            - treeitem "New Session" [selected] [ref=f1e129] [cursor=pointer]
+            - treeitem "ping 3h" [ref=f1e133] [cursor=pointer]:
+              - generic [ref=f1e135]: ping
+              - generic [ref=f1e136]: 3h
+            - treeitem "Ping Test 8h" [ref=f1e138] [cursor=pointer]:
+              - generic [ref=f1e140]: Ping Test
+              - generic [ref=f1e141]: 8h
+            - treeitem "Ping Test 8h" [ref=f1e143] [cursor=pointer]:
+              - generic [ref=f1e145]: Ping Test
+              - generic [ref=f1e146]: 8h
+            - treeitem "ping 8h" [ref=f1e148] [cursor=pointer]:
+              - generic [ref=f1e150]: ping
+              - generic [ref=f1e151]: 8h
+            - treeitem "请用你的提问机制（ask 用户问 21h" [ref=f1e153] [cursor=pointer]:
+              - generic [ref=f1e155]: 请用你的提问机制（ask 用户问
+              - generic [ref=f1e156]: 21h
+          - treeitem "Task" [ref=f1e158] [cursor=pointer]
+      - button "Settings" [expanded] [ref=f1e68] [cursor=pointer]
+    - generic [ref=f1e77]:
+      - banner [ref=f1e165]:
+        - button "Open right sidebar" [ref=f1e170] [cursor=pointer]
+      - generic [ref=f1e83]:
+        - generic [ref=f1e86]:
+          - generic [ref=f1e87]: ATF
+          - generic [ref=f1e90]:
+            - generic [ref=f1e91]: Into the Unknown
+            - generic [ref=f1e92]: Preview
+        - generic [ref=f1e93]:
+          - button "Choose workspace" [ref=f1e94] [cursor=pointer]:
+            - generic [ref=f1e97]: my-zito
+          - button "Standard mode" [ref=f1e179] [cursor=pointer]
+        - generic [ref=f1e102]:
+          - generic [ref=f1e104]:
+            - textbox "Describe what you want to build, / commands, @ files or sessions" [ref=f1e188]
+            - generic [aria-hidden]: Describe what you want to build, / commands, @ files or sessions
+          - generic [ref=f1e106]:
+            - generic [ref=f1e107]:
+              - button "Add files or run commands" [ref=f1e189] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=f1e194] [cursor=pointer]':
+                - generic [ref=f1e198]: Full access
+            - generic [ref=f1e108]:
+              - generic [ref=f1e202]:
+                - button "思考 Low(低) ▾" [ref=f1e205] [cursor=pointer]:
+                  - generic [ref=f1e206]: 思考
+                  - generic [ref=f1e207]: Low(低)
+                  - generic [ref=f1e208]: ▾
+                - button "Select model, current GLM-5.3-Flash" [ref=f1e211] [cursor=pointer]:
+                  - generic [ref=f1e212]: GLM-5.3-Flash
+              - button "Send message" [disabled] [ref=f1e215]
+    - generic [ref=f1e221]:
+      - generic [ref=f1e222]: ↩
+      - generic [ref=f1e223]:
+        - generic [ref=f1e224]: 回到上次实验：航空运单（含主单 MAWB / 分单 HAWB） · Qwen3-VL-32B · 10-12 22:38
+        - generic [ref=f1e225]: 上次实验 · 点击选用，发送首条消息时自动绑定
+      - button "继续这次实验" [ref=f1e226] [cursor=pointer]
+  - dialog "Settings" [ref=f1e238]:
+    - navigation [ref=f1e239]:
+      - generic [ref=f1e240]: Settings
+      - generic [ref=f1e241]:
+        - button "General" [ref=f1e242] [cursor=pointer]
+        - button "Models" [ref=f1e247] [cursor=pointer]
+        - button "Built-in plugins" [ref=f1e252] [cursor=pointer]
+        - button "Agent presets" [ref=f1e261] [cursor=pointer]
+        - button "训练配置" [ref=f1e268] [cursor=pointer]
+    - generic [ref=f1e273]:
+      - button "Close" [ref=f1e275] [cursor=pointer]
+      - generic [ref=f1e358]:
+        - paragraph [ref=f1e361]: "Loading the provider directory failed: settings are unavailable in this browser"
+        - button "Retry" [ref=f1e362] [cursor=pointer]

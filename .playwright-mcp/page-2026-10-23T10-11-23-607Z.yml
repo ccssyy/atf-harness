@@ -1,0 +1,228 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - generic [ref=f1e8]:
+      - button "New session" [ref=f1e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f1e10]:
+          - generic [ref=f1e11]: ATF
+          - generic [ref=f1e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f1e17] [cursor=pointer]
+    - button "New session" [ref=f1e20] [cursor=pointer]:
+      - generic [ref=f1e21]: New Session
+    - navigation "Global panels" [ref=f1e26]:
+      - button "Plugins" [ref=f1e27] [cursor=pointer]
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]: Workspaces
+        - generic [ref=f1e42]:
+          - button "Search sessions" [ref=f1e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f1e47]:
+          - button "View options" [ref=f1e49] [cursor=pointer]
+          - button "Add workspace" [ref=f1e53] [cursor=pointer]
+      - tree "Sessions" [ref=f1e58]:
+        - generic [ref=f1e110]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=f1e112] [cursor=pointer]
+          - treeitem "Running D76 端到端正例复跑（零 GPU 红 4min" [selected] [ref=f1e648] [cursor=pointer]:
+            - generic [ref=f1e122]: Running
+            - generic [ref=f1e123]: D76 端到端正例复跑（零 GPU 红
+            - generic [ref=f1e124]: 4min
+          - treeitem "run pl-walkthrough-r1 迭代配置构造前置校验 3h" [ref=f1e126] [cursor=pointer]:
+            - generic [ref=f1e128]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [ref=f1e129]: 3h
+          - treeitem "训练数据构造前校验演练 3h" [ref=f1e131] [cursor=pointer]:
+            - generic [ref=f1e133]: 训练数据构造前校验演练
+            - generic [ref=f1e134]: 3h
+        - treeitem "ws-pl-walkthrough" [ref=f1e137] [cursor=pointer]
+        - generic [ref=f1e143]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=f1e145] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 1d" [ref=f1e154] [cursor=pointer]:
+            - generic [ref=f1e156]: 构造评估服务件 for run-rh-budget
+            - generic [ref=f1e157]: 1d
+          - treeitem "装箱单字段抽取新实验全流程 1d" [ref=f1e159] [cursor=pointer]:
+            - generic [ref=f1e161]: 装箱单字段抽取新实验全流程
+            - generic [ref=f1e162]: 1d
+        - generic [ref=f1e163]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=f1e165] [cursor=pointer]
+          - treeitem "等待发起真实训练走查指令 7h" [ref=f1e174] [cursor=pointer]:
+            - generic [ref=f1e176]: 等待发起真实训练走查指令
+            - generic [ref=f1e177]: 7h
+          - treeitem "汇总当前实验状态与进展 1d" [ref=f1e179] [cursor=pointer]:
+            - generic [ref=f1e181]: 汇总当前实验状态与进展
+            - generic [ref=f1e182]: 1d
+          - treeitem "我的训练数据放在 /data/atf/prodt 1d" [ref=f1e184] [cursor=pointer]:
+            - generic [ref=f1e186]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=f1e187]: 1d
+        - treeitem "a4-hotws" [ref=f1e190] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=f1e198] [cursor=pointer]
+        - treeitem "b18-ws" [ref=f1e206] [cursor=pointer]
+        - treeitem "sam" [ref=f1e214] [cursor=pointer]
+    - button "Settings" [ref=f1e68] [cursor=pointer]
+  - generic [ref=f1e77]:
+    - banner [ref=f1e221]:
+      - generic [ref=f1e222]:
+        - generic [ref=f1e223]:
+          - generic [ref=f1e224]:
+            - navigation "Session hierarchy" [ref=f1e225]:
+              - generic [ref=f1e226]: D76 端到端正例复跑（零 GPU 红
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f1e230]: Standard mode
+          - generic [ref=f1e237]:
+            - button "More actions" [ref=f1e239] [cursor=pointer]
+            - generic [ref=f1e244]:
+              - button "选择实验 ▾" [ref=f1e246] [cursor=pointer]
+              - button "监控" [ref=f1e248] [cursor=pointer]
+        - tablist [ref=f1e249]:
+          - tab "Chat" [selected] [ref=f1e250] [cursor=pointer]
+          - tab "Trajectory" [ref=f1e251] [cursor=pointer]
+    - generic [ref=f1e79]:
+      - generic [ref=f1e258]:
+        - generic [ref=f1e261]:
+          - generic [ref=f1e262]: D76 端到端正例复跑（零 GPU 红线：只到审批卡呈现即停，不点 Allow、不生成配置文件、不写任何文件、不起真训、不占 GPU）。先把实验 run-admit-qc-02-d76fx（run 目录 /data/atf/dev/runs/run-admit-qc-02-d76fx）绑定为当前实验，然后对其发起训练配置确认：训练卡数 nproc_per_node=4，卡位 visible_devices=4,5,6,7，其余参数按现值。九要素确认卡弹出后，把上述两个值填入对应栏位再提交确认；授权审批卡出现后立即停止并原样回报卡面两个值的呈现，不要点 Allow once、不要重试、不要发起真实训练。
+          - generic [ref=f1e264]:
+            - generic [ref=f1e265]: 18:00
+            - button "Copy" [ref=f1e266] [cursor=pointer]
+        - generic [ref=f1e271]:
+          - status [ref=f1e272]: Failed
+          - button "Failed" [disabled] [ref=f1e273]
+        - status [ref=f1e277]:
+          - generic [ref=f1e279]: This turn failedAPI key is invalid
+          - code [ref=f1e280]: AUTH
+        - generic [ref=f1e403]:
+          - generic [ref=f1e404]: 上一轮因 API key 失效失败，现重发（零 GPU 红线：只到审批卡呈现即停，不点 Allow、不生成配置文件、不写任何文件、不起真训、不占 GPU）。先把实验 run-admit-qc-02-d76fx（run 目录 /data/atf/dev/runs/run-admit-qc-02-d76fx）绑定为当前实验，然后对其发起训练配置确认：训练卡数 nproc_per_node=4，卡位 visible_devices=4,5,6,7，其余参数按现值。九要素确认卡弹出后，把上述两个值填入对应栏位再提交确认；授权审批卡出现后立即停止并原样回报卡面两个值的呈现，不要点 Allow once、不要重试、不要发起真实训练。
+          - generic [ref=f1e406]:
+            - generic [ref=f1e407]: 18:06
+            - button "Copy" [ref=f1e408] [cursor=pointer]
+        - generic [ref=f1e424]:
+          - button "Think The user wants me to:" [ref=f1e450] [cursor=pointer]:
+            - generic [ref=f1e443]:
+              - generic [ref=f1e444]: Think
+              - generic [ref=f1e446]: "The user wants me to:"
+          - 'button "Tool call atf_workspace_status · {}" [ref=f1e457] [cursor=pointer]':
+            - generic [ref=f1e467]:
+              - generic [ref=f1e468]: Tool call
+              - generic [ref=f1e470]: "atf_workspace_status · {}"
+          - 'button "Tool call atf_run_list · {}" [ref=f1e477] [cursor=pointer]':
+            - generic [ref=f1e487]:
+              - generic [ref=f1e488]: Tool call
+              - generic [ref=f1e490]: "atf_run_list · {}"
+          - 'button "Think The workspace status shows no_run_bound. The run run-admit-qc-02-d76fx exists (state: config_confirmed). The user wants to bind it as the current experiment. There''s no explicit bind tool. Perhaps atf_config_confirm with run_id binds the session? Or maybe the binding happens when calling tools with run_id." [ref=f1e529] [cursor=pointer]':
+            - generic [ref=f1e509]:
+              - generic [ref=f1e510]: Think
+              - generic [ref=f1e512]: "The workspace status shows no_run_bound. The run run-admit-qc-02-d76fx exists (state: config_confirmed). The user wants to bind it as the current experiment. There's no explicit bind tool. Perhaps atf_config_confirm with run_id binds the session? Or maybe the binding happens when calling tools with run_id."
+        - paragraph [ref=f1e535]:
+          - text: 当前会话尚未绑定 run（
+          - code [ref=f1e536]: no_run_bound
+          - text: ），且 run 清单里确认存在
+          - code [ref=f1e537]: run-admit-qc-02-d76fx
+          - text: （状态 config_confirmed）。现在对该实验发起九要素训练配置确认，先把两个目标值作为显式覆盖填入：
+        - generic [ref=f1e538]:
+          - text: Calling tools · present
+          - generic [ref=f1e545]:
+            - generic [ref=f1e546]: Running
+            - button "Tool call atf_config_confirm · present" [ref=f1e548] [cursor=pointer]:
+              - generic [ref=f1e557]:
+                - generic [ref=f1e558]:
+                  - generic [ref=f1e559]: Tool call
+                  - generic [ref=f1e561]: atf_config_confirm · present
+                - generic [aria-hidden]:
+                  - generic:
+                    - generic:
+                      - generic: Tool call
+                      - generic: atf_config_confirm · present
+        - generic [ref=f1e412]:
+          - status [ref=f1e413]: Deep diving
+          - generic [ref=f1e417]:
+            - generic [ref=f1e418]: Deep diving for 4m 24s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 4m 24s ···
+      - region "九要素训练配置确认 — run-admit-qc-02-d76fx" [ref=f1e655]:
+        - generic [ref=f1e656]: 训练配置
+        - generic [ref=f1e658]:
+          - heading "九要素训练配置确认 — run-admit-qc-02-d76fx" [level=3] [ref=f1e659]
+          - paragraph [ref=f1e660]: "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。 本轮改参：nproc_per_node, visible_devices, gradient_accumulation_steps；accum 随派生更新=64（gb=256 不变） 卡数护栏：卡数基线回退：训练卡数 4 低于基线参照 8 且非用户显式降档（owner 偏置：训练默认拉满、训练时长优先）——已回退为 8 TokenBudget（三要素）: 单样本 token 预算 max_total_tokens 可编辑 9000 [惯例基线（owner 2026-10-22）] 训练截断 cutoff cutoff_len 只读 9000 [= 预算] 推理窗口 max_model_len 只读 12800 [独立取值]"
+          - generic [ref=f1e661]:
+            - generic [ref=f1e662]:
+              - generic [ref=f1e663]: learning_rate
+              - textbox "learning_rate 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）" [ref=f1e664]: "1e-4"
+              - generic [ref=f1e665]: 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）
+            - generic [ref=f1e666]:
+              - generic [ref=f1e667]: nproc_per_node
+              - textbox "nproc_per_node [1, 可用卡数 8]" [ref=f1e668]: "4"
+              - generic [ref=f1e669]: "[1, 可用卡数 8]"
+            - generic [ref=f1e670]:
+              - generic [ref=f1e671]: visible_devices
+              - textbox "visible_devices 逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）" [ref=f1e672]: 4,5,6,7
+              - generic [ref=f1e673]: 逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）
+            - generic [ref=f1e674]:
+              - generic [ref=f1e675]: base_model_path
+              - textbox "base_model_path" [ref=f1e676]: /data/LLM_model/Qwen3-VL-32B-Instruct
+            - generic [ref=f1e677]:
+              - generic [ref=f1e678]: num_train_epochs
+              - textbox "num_train_epochs 域 [1, 10] 整数" [ref=f1e679]: "3"
+              - generic [ref=f1e680]: 域 [1, 10] 整数
+            - generic [ref=f1e681]:
+              - generic [ref=f1e682]: per_device_train_batch_size
+              - textbox "per_device_train_batch_size" [ref=f1e683]: "1"
+            - generic [ref=f1e684]:
+              - generic [ref=f1e685]: gradient_accumulation_steps
+              - textbox "gradient_accumulation_steps" [ref=f1e686]: "64"
+            - generic [ref=f1e687]:
+              - generic [ref=f1e688]: cutoff_len
+              - textbox "cutoff_len ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）" [ref=f1e689]: "9000"
+              - generic [ref=f1e690]: ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）
+            - generic [ref=f1e691]:
+              - generic [ref=f1e692]: deepspeed
+              - textbox "deepspeed" [ref=f1e693]: ds_z3_offload_config.json
+            - generic [ref=f1e694]:
+              - generic [ref=f1e695]: lora_rank
+              - 'textbox "lora_rank 档位 {16, 32, 64, 128}（alpha=2×rank 联动）" [ref=f1e696]': "32"
+              - generic [ref=f1e697]: "档位 {16, 32, 64, 128}（alpha=2×rank 联动）"
+            - generic [ref=f1e698]:
+              - generic [ref=f1e699]: lora_alpha
+              - textbox "lora_alpha" [ref=f1e700]: "64"
+            - generic [ref=f1e701]:
+              - generic [ref=f1e702]: dataset_keys
+              - textbox "dataset_keys" [ref=f1e703]: （由登记面推导）
+            - generic [ref=f1e704]:
+              - generic [ref=f1e705]: max_total_tokens
+              - textbox "max_total_tokens 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）" [ref=f1e706]: "9000"
+              - generic [ref=f1e707]: 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）
+            - generic [ref=f1e708]:
+              - generic [ref=f1e709]: 最小像素
+              - textbox "最小像素 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）" [ref=f1e710]: "65536"
+              - generic [ref=f1e711]: 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）
+            - generic [ref=f1e712]:
+              - generic [ref=f1e713]: 最大像素
+              - 'textbox "最大像素 两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）" [ref=f1e714]': "802816"
+              - generic [ref=f1e715]: "两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）"
+            - generic [ref=f1e716]:
+              - generic [ref=f1e717]: negative_ratio_target
+              - textbox "negative_ratio_target 构造带 [0.02, 0.05]" [ref=f1e718]: 0.02,0.05
+              - generic [ref=f1e719]: 构造带 [0.02, 0.05]
+            - generic [ref=f1e720]:
+              - generic [ref=f1e721]: token_budget_sync_reason
+              - textbox "token_budget_sync_reason" [ref=f1e722]:
+                - /placeholder: 预算与 cutoff 不等时的不同步理由（不等必填；相等留空）——同步请在 cutoff_len 框直接填预算值（用户动作）
+        - generic [ref=f1e723]:
+          - status [ref=f1e724]
+          - generic [ref=f1e725]:
+            - button "Cancel" [ref=f1e726] [cursor=pointer]
+            - button "确认并继续" [ref=f1e727] [cursor=pointer]
+  - generic [ref=f1e346]:
+    - tablist [ref=f1e348]:
+      - tab "Start" [selected] [ref=f1e349]
+      - button "Split" [ref=f1e357] [cursor=pointer]
+      - generic [ref=f1e360]:
+        - button "Fullscreen" [ref=f1e361] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=f1e364] [cursor=pointer]
+    - generic [ref=f1e371]:
+      - button "Workspace files Browse files in this session's workspace" [ref=f1e378] [cursor=pointer]:
+        - generic [ref=f1e383]:
+          - generic [ref=f1e384]: Workspace files
+          - generic [ref=f1e385]: Browse files in this session's workspace
+      - generic [ref=f1e388]:
+        - button "New terminal Run commands in the Session workspace" [ref=f1e389] [cursor=pointer]
+        - generic:
+          - generic:
+            - generic [aria-hidden]: New terminal
+            - button "Choose shell" [ref=f1e391] [cursor=pointer]
+          - generic [aria-hidden]: Run commands in the Session workspace

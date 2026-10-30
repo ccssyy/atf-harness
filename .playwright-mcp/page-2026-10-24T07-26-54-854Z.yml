@@ -1,0 +1,202 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e86] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e87]:
+          - generic [ref=e88]: ATF
+          - generic [ref=e91]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e101]: Workspaces
+        - generic [ref=e103]:
+          - button "Search sessions" [ref=e104] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e109] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e114]:
+        - treeitem "1023" [ref=e117] [cursor=pointer]
+        - generic [ref=e123]:
+          - treeitem "my-zito" [expanded] [ref=e125] [cursor=pointer]
+          - treeitem "Running 海运单单据抽取模型训练流程启动 now" [selected] [ref=e1192] [cursor=pointer]:
+            - generic [ref=e502]: Running
+            - generic [ref=e503]: 海运单单据抽取模型训练流程启动
+            - generic [ref=e601]: now
+          - treeitem "D76 卡位卡面验收测试 3h" [ref=e134] [cursor=pointer]:
+            - generic [ref=e136]: D76 卡位卡面验收测试
+            - generic [ref=e137]: 3h
+          - treeitem "ping 1d" [ref=e139] [cursor=pointer]:
+            - generic [ref=e141]: ping
+            - generic [ref=e142]: 1d
+          - treeitem "Ping Test 1d" [ref=e144] [cursor=pointer]:
+            - generic [ref=e146]: Ping Test
+            - generic [ref=e147]: 1d
+          - treeitem "Ping Test 1d" [ref=e149] [cursor=pointer]:
+            - generic [ref=e151]: Ping Test
+            - generic [ref=e152]: 1d
+          - treeitem "ping 1d" [ref=e1199] [cursor=pointer]:
+            - generic [ref=e1201]: ping
+            - generic [ref=e1202]: 1d
+          - button "Show 1 more sessions" [ref=e1203] [cursor=pointer]
+        - treeitem "Task" [ref=e160] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e504]:
+    - banner [ref=e506]:
+      - generic [ref=e507]:
+        - generic [ref=e508]:
+          - generic [ref=e602]:
+            - navigation "Session hierarchy" [ref=e603]:
+              - generic [ref=e604]: 海运单单据抽取模型训练流程启动
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e608]: Standard mode
+          - generic [ref=e615]:
+            - button "More actions" [ref=e617] [cursor=pointer]
+            - generic [ref=e622]:
+              - button "选择实验 ▾" [ref=e624] [cursor=pointer]
+              - button "监控" [ref=e626] [cursor=pointer]
+          - button "Open right sidebar" [ref=e511] [cursor=pointer]
+        - tablist [ref=e627]:
+          - tab "Chat" [selected] [ref=e628] [cursor=pointer]
+          - tab "Trajectory" [ref=e629] [cursor=pointer]
+    - generic [ref=e515]:
+      - generic [ref=e633]:
+        - navigation "Turn navigation" [ref=e987] [cursor=pointer]:
+          - generic [ref=e989]:
+            - button "Jump to turn 1" [ref=e990]
+            - button "Jump to turn 2" [ref=e991]
+            - button "Jump to turn 3" [ref=e1204]
+        - generic [ref=e636]:
+          - generic [ref=e639]:
+            - generic [ref=e640]: 我想用海运单（SWB）数据训练一个字段抽取模型，请从登记开始走完整流程直到训练启动：源数据 /data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb（50 对页级 png+json），字段配置 /data/atf/prodtest/atf-prodtest-20261021/field-config-swb.json，底座模型 /data/LLM_model/Qwen3-VL-32B-Instruct，run 名 u1-accept-swb。
+            - generic [ref=e642]:
+              - generic [ref=e643]: 15:21
+              - button "Copy" [ref=e644] [cursor=pointer]
+          - generic [ref=e915]:
+            - status [ref=e916]: Completed
+            - button "Completed in 1m 14s" [ref=e917] [cursor=pointer]
+          - generic [ref=e925]:
+            - paragraph [ref=e926]: 工具白名单读不到源目录里的字段配置，无法替你判断 lane。需要你确认一个参数再重跑 register：
+            - paragraph [ref=e927]:
+              - strong [ref=e928]: 这批 SWB 数据的训练 lane 是哪个？
+            - list [ref=e929]:
+              - listitem [ref=e930]:
+                - code [ref=e931]: goods
+                - text: —— 只训条目级字段（货物明细行）
+              - listitem [ref=e932]:
+                - code [ref=e933]: non_goods
+                - text: —— 只训单据级字段（单号、日期、收发货人等）
+              - listitem [ref=e934]:
+                - code [ref=e935]: mixed
+                - text: —— 两类字段都要（海运单通常两类都有）
+            - paragraph [ref=e936]:
+              - text: 如果 field-config-swb.json 里同时含
+              - code [ref=e937]: "group: goods"
+              - text: 和
+              - code [ref=e938]: "group: non_goods"
+              - text: 的字段，选
+              - code [ref=e939]: mixed
+              - text: 即可。确认后我就带着 lane 后缀继续完整流程（register → label_qc → experiment_setup → family_split → admission → training_prep，底座
+              - code [ref=e940]: /data/LLM_model/Qwen3-VL-32B-Instruct
+              - text: ）。
+          - generic [ref=e944]:
+            - button "Copy" [ref=e945] [cursor=pointer]
+            - generic [ref=e949]:
+              - button "Good response" [ref=e950] [cursor=pointer]
+              - button "Bad response" [ref=e953] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e956] [cursor=pointer]
+            - generic [ref=e962]:
+              - button "Usage 119K tok" [ref=e964] [cursor=pointer]
+              - generic [ref=e970]: 15:22
+          - generic [ref=e994]:
+            - generic [ref=e995]: lane 用 mixed。
+            - generic [ref=e997]:
+              - generic [ref=e998]: 15:23
+              - button "Copy" [ref=e999] [cursor=pointer]
+          - generic [ref=e1134]:
+            - status [ref=e1135]: Completed
+            - button "Completed in 2m 32s" [ref=e1136] [cursor=pointer]
+          - generic [ref=e1144]:
+            - paragraph [ref=e1145]:
+              - text: 落点目录
+              - code [ref=e1146]: workspace/runs/u1-accept-swb
+              - text: 已存在——里面是一个 bootstrap 预建的空骨架（只有目录结构和 register summary，无真实产物），状态为 pending。
+            - paragraph [ref=e1147]:
+              - text: 内核建议两种走法，但本工具面没有暴露
+              - code [ref=e1148]: "--rerun"
+              - text: 参数，所以：
+            - list [ref=e1149]:
+              - listitem [ref=e1150]:
+                - strong [ref=e1151]: 换新 run 标识
+                - text: （首选，零删除）：比如
+                - code [ref=e1152]: u1-accept-swb-2
+                - text: ，与既有目录并存；
+              - listitem [ref=e1153]:
+                - strong [ref=e1154]: 清掉空骨架后用原名重跑
+                - text: ：需要你确认那个骨架目录可以删除。
+            - paragraph [ref=e1155]:
+              - text: 你要哪种？如果选 2，请确认“可以删除
+              - code [ref=e1156]: workspace/runs/u1-accept-swb
+              - text: 骨架目录”，我就清空后按原 run 名
+              - code [ref=e1157]: u1-accept-swb
+              - text: 继续走完整流程。
+          - generic [ref=e1161]:
+            - button "Copy" [ref=e1162] [cursor=pointer]
+            - generic [ref=e1166]:
+              - button "Good response" [ref=e1167] [cursor=pointer]
+              - button "Bad response" [ref=e1170] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e1173] [cursor=pointer]
+            - generic [ref=e1179]:
+              - button "Usage 116K tok" [ref=e1181] [cursor=pointer]
+              - generic [ref=e1187]: 15:26
+          - generic [ref=e1207]:
+            - generic [ref=e1208]: 选 2：确认可以删除 workspace/runs/u1-accept-swb 骨架目录，清空后按原 run 名 u1-accept-swb 继续走完整流程。
+            - generic [ref=e1210]:
+              - generic [ref=e1211]: 15:26
+              - button "Copy" [ref=e1212] [cursor=pointer]
+          - generic [ref=e1216]:
+            - status [ref=e1217]: Deep diving
+            - generic [ref=e1221]:
+              - generic [ref=e1222]: Deep diving for 1s ···
+              - generic [aria-hidden]:
+                - generic: Deep diving for 1s ···
+      - generic [ref=e550]:
+        - generic [ref=e551]:
+          - generic [ref=e553]:
+            - textbox "Message or run a task, / commands, @ files or sessions" [active] [ref=e656]
+            - generic [aria-hidden]: Message or run a task, / commands, @ files or sessions
+          - generic [ref=e555]:
+            - generic [ref=e556]:
+              - button "Add files or run commands" [ref=e557] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e562] [cursor=pointer]':
+                - generic [ref=e566]: Full access
+            - generic [ref=e570]:
+              - generic [ref=e571]:
+                - button "思考 Low(低) ▾" [ref=e574] [cursor=pointer]:
+                  - generic [ref=e575]: 思考
+                  - generic [ref=e576]: Low(低)
+                  - generic [ref=e577]: ▾
+                - button "Select model, current GLM-5.3-Flash" [ref=e580] [cursor=pointer]:
+                  - generic [ref=e581]: GLM-5.3-Flash
+              - button "Stop generating" [ref=e1224] [cursor=pointer]
+        - generic [ref=e659]:
+          - generic [ref=e660]:
+            - generic [ref=e819]:
+              - button "2 turns 11 steps · 43 tok/s" [ref=e1190] [cursor=pointer]:
+                - generic [ref=e826]: 2 turns 11 steps·43 tok/s
+              - button "235K tok · Cache hit 89%" [ref=e1191] [cursor=pointer]:
+                - generic [ref=e833]: 235K tok·Cache hit 89%
+            - generic [ref=e662]:
+              - button "新建训练" [ref=e663] [cursor=pointer]
+              - button "查状态" [disabled] [ref=e664]
+              - button "继续上次" [disabled] [ref=e665]
+              - button "对比两轮" [disabled] [ref=e666]
+              - button "走完闭环" [ref=e667] [cursor=pointer]
+              - button "联合训练" [disabled] [ref=e668]
+              - button "badcase 可视化" [ref=e669] [cursor=pointer]
+              - button "发起训练" [ref=e670] [cursor=pointer]
+          - button "2% of context used" [ref=e835] [cursor=pointer]:
+            - generic [ref=e839]: 2%

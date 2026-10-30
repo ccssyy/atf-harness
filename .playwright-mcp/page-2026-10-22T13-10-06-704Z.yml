@@ -1,0 +1,86 @@
+- generic [ref=f3e4]:
+  - generic [ref=f3e7]:
+    - generic [ref=f3e8]:
+      - button "New session" [ref=f3e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f3e10]:
+          - generic [ref=f3e11]: ATF
+          - generic [ref=f3e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f3e17] [cursor=pointer]
+    - button "New session" [ref=f3e20] [cursor=pointer]:
+      - generic [ref=f3e21]: New Session
+    - navigation "Global panels" [ref=f3e26]:
+      - button "Plugins" [ref=f3e27] [cursor=pointer]
+    - generic [ref=f3e38]:
+      - generic [ref=f3e39]:
+        - generic [ref=f3e40]: Workspaces
+        - generic [ref=f3e42]:
+          - button "Search sessions" [ref=f3e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f3e47]:
+          - button "View options" [ref=f3e49] [cursor=pointer]
+          - button "Add workspace" [ref=f3e53] [cursor=pointer]
+      - tree "Sessions" [ref=f3e58]:
+        - generic [ref=f3e110]:
+          - treeitem "b5-walkthrough" [expanded] [ref=f3e112] [cursor=pointer]
+          - treeitem "Waiting for approval 请为 run-b5-rec 呈现九要素配置" [selected] [ref=f3e307] [cursor=pointer]:
+            - generic [ref=f3e122]: Waiting for approval
+            - generic [ref=f3e128]: 请为 run-b5-rec 呈现九要素配置
+            - generic [aria-hidden] [ref=f3e129]: Approval
+          - treeitem "Untitled 2min" [ref=f3e310] [cursor=pointer]:
+            - generic [ref=f3e133]: Untitled
+            - generic [ref=f3e134]: 2min
+          - treeitem "你好，请只回复“在”一个字 10min" [ref=f3e311] [cursor=pointer]:
+            - generic [ref=f3e138]: 你好，请只回复“在”一个字
+            - generic [ref=f3e139]: 10min
+    - button "Settings" [ref=f3e68] [cursor=pointer]
+  - generic [ref=f3e140]:
+    - banner [ref=f3e142]:
+      - generic [ref=f3e143]:
+        - generic [ref=f3e144]:
+          - generic [ref=f3e145]:
+            - navigation "Session hierarchy" [ref=f3e146]:
+              - generic [ref=f3e147]: 请为 run-b5-rec 呈现九要素配置
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f3e151]: Standard mode
+          - generic [ref=f3e158]:
+            - button "More actions" [ref=f3e160] [cursor=pointer]
+            - generic [ref=f3e165]:
+              - button "选择实验 ▾" [ref=f3e167] [cursor=pointer]
+              - button "监控" [ref=f3e169] [cursor=pointer]
+          - button "Open right sidebar" [ref=f3e172] [cursor=pointer]
+        - tablist [ref=f3e175]:
+          - tab "Chat" [selected] [ref=f3e176] [cursor=pointer]
+          - tab "Trajectory" [ref=f3e177] [cursor=pointer]
+    - generic [ref=f3e179]:
+      - generic [ref=f3e186]:
+        - generic [ref=f3e189]:
+          - generic [ref=f3e190]: 请为 run-b5-rec 呈现九要素配置确认卡
+          - generic [ref=f3e192]:
+            - generic [ref=f3e193]: 21:09
+            - button "Copy" [ref=f3e194] [cursor=pointer]
+        - generic [ref=f3e198]:
+          - text: Calling tools · present
+          - generic [ref=f3e205]:
+            - generic [ref=f3e206]: Running
+            - button "Tool call atf_config_confirm · present" [ref=f3e208] [cursor=pointer]:
+              - generic [ref=f3e217]:
+                - generic [ref=f3e218]:
+                  - generic [ref=f3e219]: Tool call
+                  - generic [ref=f3e221]: atf_config_confirm · present
+                - generic [aria-hidden]:
+                  - generic:
+                    - generic:
+                      - generic: Tool call
+                      - generic: atf_config_confirm · present
+        - generic [ref=f3e222]:
+          - status [ref=f3e223]: Deep diving
+          - generic [ref=f3e227]:
+            - generic [ref=f3e228]: Deep diving for 1m 6s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 1m 6s ···
+      - generic [ref=f3e313]:
+        - generic [ref=f3e314]: Waiting for approval
+        - group "Approval details" [ref=f3e316]:
+          - generic [ref=f3e317]: "将要执行：确认训练配置并落快照（九要素训练配置确认 — run run-b5-rec） 影响范围：写 run 配置快照（确认值全部键＋TokenBudget 三要素） 可逆性：可逆（可改参后重新确认） 预计代价：按任务卡 learning_rate: 2e-4（来自登记 ◆） nproc_per_node: 8（来自登记 ◆） base_model_path: /data/LLM_model/Qwen3-VL-32B-Instruct（来自登记 ◆） num_train_epochs: 3（来自登记 ◆） per_device_train_batch_size: 2（来自登记 ◆） gradient_accumulation_steps: 16（来自登记 ◆） cutoff_len: 9000（来自登记 ◆） deepspeed: ds_z3_offload_config.json（来自登记 ◆） lora_rank: 32（来自登记 ◆） lora_alpha: 64（来自登记 ◆） dataset_keys: （由登记面推导）（已用缺省 ⚠） max_total_tokens: 9000（来自登记 ◆） max_model_len: 12800（来自登记 ◆） image_min_pixels: 65536（来自登记 ◆） image_max_pixels: 802816（需确认 ?） negative_ratio_target: 0.02,0.05（已用缺省 ⚠） TokenBudget（三要素）: 单样本 token 预算 max_total_tokens 可编辑 9000 [惯例基线（owner 2026-10-22）] 训练截断 cutoff cutoff_len 只读 9000 [= 预算] 推理窗口 max_model_len 只读 12800 [独立取值] 九要素确认卡（双段式：改参在表单卡改值提交；不改直接提交表单，再于审批卡点 Allow once） 最大像素已变更——将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）"
+        - generic [ref=f3e318]:
+          - button "Reject" [ref=f3e319] [cursor=pointer]
+          - button "Allow once" [ref=f3e320] [cursor=pointer]

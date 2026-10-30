@@ -440,10 +440,10 @@ export const fieldGroupsOf = (path: string): GroupingProposalGroup[] | null => {
   return buckets.size === 0 ? null : [...buckets].map(([name, ids]) => ({ name, fields: ids }));
 };
 
-/** D163：登记输入件（register 段落盘的分组来源与版式簇形态）。 */
-export const REGISTRATION_INPUTS_FILE = "registration-inputs.json";
+/** D163：运行输入账本（register 段落盘的四类输入出处与形态）。 */
+export const REGISTRATION_INPUTS_FILE = "inputs.json";
 
-/** 登记输入件路径（run/config/ 下，与内核落点一致）。 */
+/** 输入账本路径（run/config/ 下，与内核落点一致）。 */
 export const registrationInputsPathOf = (runDir: string): string =>
   join(runDir, "config", REGISTRATION_INPUTS_FILE);
 

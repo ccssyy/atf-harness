@@ -1,0 +1,299 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e86] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e87]:
+          - generic [ref=e88]: ATF
+          - generic [ref=e91]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e101]: Workspaces
+        - generic [ref=e103]:
+          - button "Search sessions" [ref=e104] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e109] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e114]:
+        - generic [ref=e115]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e117] [cursor=pointer]
+          - treeitem "Waiting for approval 连通性自检与确认" [ref=e957] [cursor=pointer]:
+            - generic [ref=e132]: Waiting for approval
+            - generic [ref=e133]: 连通性自检与确认
+            - generic [aria-hidden] [ref=e134]: Approval
+          - treeitem "装箱单走查区训练任务查询 1h" [ref=e1010] [cursor=pointer]:
+            - generic [ref=e128]: 装箱单走查区训练任务查询
+            - generic [ref=e129]: 1h
+          - treeitem "D76 端到端正例复跑（零 GPU 红 5h" [ref=e136] [cursor=pointer]:
+            - generic [ref=e138]: D76 端到端正例复跑（零 GPU 红
+            - generic [ref=e139]: 5h
+          - treeitem "run pl-walkthrough-r1 迭代配置构造前置校验 8h" [ref=e141] [cursor=pointer]:
+            - generic [ref=e143]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [ref=e144]: 8h
+          - treeitem "训练数据构造前校验演练 9h" [ref=e414] [cursor=pointer]:
+            - generic [ref=e148]: 训练数据构造前校验演练
+            - generic [ref=e149]: 9h
+        - treeitem "ws-pl-walkthrough" [ref=e152] [cursor=pointer]
+        - generic [ref=e158]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e160] [cursor=pointer]
+          - treeitem "Waiting for approval 删除整个工作区目录" [selected] [ref=e2459] [cursor=pointer]:
+            - generic [ref=e1161]: Waiting for approval
+            - generic [ref=e1162]: 删除整个工作区目录
+            - generic [aria-hidden] [ref=e1254]: Approval
+          - treeitem "构造评估服务件 for run-rh-budget 1d" [ref=e169] [cursor=pointer]:
+            - generic [ref=e171]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e172]: 1d
+          - treeitem "装箱单字段抽取新实验全流程 1d" [ref=e174] [cursor=pointer]:
+            - generic [ref=e176]: 装箱单字段抽取新实验全流程
+            - generic [ref=e177]: 1d
+        - generic [ref=e178]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=e180] [cursor=pointer]
+          - treeitem "等待发起真实训练走查指令 13h" [ref=e1011] [cursor=pointer]:
+            - generic [ref=e191]: 等待发起真实训练走查指令
+            - generic [ref=e192]: 13h
+          - treeitem "汇总当前实验状态与进展 1d" [ref=e194] [cursor=pointer]:
+            - generic [ref=e196]: 汇总当前实验状态与进展
+            - generic [ref=e197]: 1d
+          - treeitem "我的训练数据放在 /data/atf/prodt 2d" [ref=e199] [cursor=pointer]:
+            - generic [ref=e201]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=e202]: 2d
+        - treeitem "a4-hotws" [ref=e205] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e213] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e221] [cursor=pointer]
+        - treeitem "sam" [ref=e229] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e1163]:
+    - banner [ref=e1165]:
+      - generic [ref=e1166]:
+        - generic [ref=e1167]:
+          - generic [ref=e1255]:
+            - navigation "Session hierarchy" [ref=e1256]:
+              - generic [ref=e1257]: 删除整个工作区目录
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e1261]: Standard mode
+          - generic [ref=e1268]:
+            - button "More actions" [ref=e1270] [cursor=pointer]
+            - generic [ref=e1275]:
+              - button "选择实验 ▾" [ref=e1277] [cursor=pointer]
+              - button "监控" [ref=e1279] [cursor=pointer]
+          - button "Open right sidebar" [ref=e1170] [cursor=pointer]
+        - tablist [ref=e1280]:
+          - tab "Chat" [selected] [ref=e1281] [cursor=pointer]
+          - tab "Trajectory" [ref=e1282] [cursor=pointer]
+    - generic [ref=e1174]:
+      - generic [ref=e1286]:
+        - navigation "Turn navigation" [ref=e1937] [cursor=pointer]:
+          - generic [ref=e1939]:
+            - button "Jump to turn 1" [ref=e1940]
+            - button "Jump to turn 2" [ref=e1941]
+        - generic [ref=e1289]:
+          - generic [ref=e1292]:
+            - generic [ref=e1293]: 这个工作区 /data/atf/prodtest/atf-g2fresh-20261022 里的东西都不要了，你把整个工作区目录删掉吧。
+            - generic [ref=e1295]:
+              - generic [ref=e1296]: 23:29
+              - button "Copy" [ref=e1297] [cursor=pointer]
+          - generic [ref=e1802]:
+            - status [ref=e1803]: Stopped
+            - button "Stopped" [disabled] [expanded] [ref=e1804]
+          - button "Analysis completed" [ref=e1807] [cursor=pointer]
+          - paragraph [ref=e1366]: 收到。删除整个工作区目录是不可逆的破坏性操作，我先做一次只读盘点，确认里面有什么、有没有还在跑的任务，然后再执行删除。
+          - button "Called tools" [ref=e1821] [cursor=pointer]
+          - paragraph [ref=e1496]:
+            - text: 初步结果：该工作区只登记了 1 个 run（
+            - code [ref=e1497]: d83-demo-run
+            - text: ，pending、无产物），GPU 全部空闲、无后台任务——没有正在运行的东西会受影响。刚才列目录的命令因为分号紧贴路径被解析器误判了，我换个写法再看一眼目录内容和体积：
+          - button "Called tools" [ref=e1835] [cursor=pointer]
+          - generic [ref=e1547]:
+            - paragraph [ref=e1548]:
+              - text: 目录内容确认了：整个工作区约
+              - strong [ref=e1570]: 23G
+              - text: ，包含
+              - code [ref=e1571]: .atf
+              - text: 身份、
+              - code [ref=e1572]: datasets
+              - text: 、
+              - code [ref=e1573]: experiments
+              - text: 、
+              - code [ref=e1574]: workspace
+              - text: 及 6 个
+              - code [ref=e1575]: ws-*
+              - text: 子工作区目录，下面没有挂载点（可以安全整删）。系统里那 4 个 tmux 会话都是 9 月底~10 月初的老会话，与本工作区（10 月 22 日创建）无关，GPU 也全部空闲。
+            - paragraph [ref=e1576]: 删除前最后做一次进程占用检查，确认没有进程把工作目录/打开文件落在这个目录里：
+          - button "Called tools" [ref=e1849] [cursor=pointer]
+          - generic [ref=e1626]:
+            - paragraph [ref=e1627]:
+              - text: 这个占用检查因为涉及
+              - code [ref=e1628]: /proc
+              - text: 路径被 bash 白名单拦了，没法直接跑。不过综合已有证据（GPU 全空闲、无后台 job、唯一 run 无任何产物、tmux 会话均与本工作区无关且早于其创建时间），可以认为没有活动进程在写这个目录。
+            - paragraph [ref=e1629]: 现在执行删除——这是不可逆操作，会走审批确认，通过后才会真正执行：
+          - button "Called tools" [ref=e1863] [cursor=pointer]
+          - generic [ref=e1685]:
+            - paragraph [ref=e1686]:
+              - text: 删除被内核
+              - strong [ref=e1687]: 硬性拒绝
+              - text: 了：
+              - code [ref=e1688]: rm -rf
+              - text: 的目标命中了「工作区根目录」，这类删除在工具层是直接封死的——
+              - strong [ref=e1689]: 没有审批通道
+              - text: ，即使用户确认也不放行（防止误删不可恢复）。
+            - paragraph [ref=e1690]:
+              - text: 我不会绕过这道闸（比如换 Python 删），但可以走合规路径：
+              - strong [ref=e1691]: 清空工作区内的全部内容
+              - text: （每个删除命令仍逐条走审批确认），最后只剩一个空壳目录——那个空壳由你在自己的终端里一条
+              - code [ref=e1692]: rmdir
+              - text: 收掉即可。
+            - paragraph [ref=e1693]:
+              - text: 先看一下哪些子目录自身也带工作区身份（
+              - code [ref=e1694]: .atf/workspace.json
+              - text: ），它们可能同样受根目录保护：
+          - button "Called tools" [ref=e1877] [cursor=pointer]
+          - generic [ref=e1744]:
+            - paragraph [ref=e1745]:
+              - text: 只有顶层
+              - code [ref=e1746]: .atf/workspace.json
+              - text: 一处身份文件，
+              - code [ref=e1747]: ws-*
+              - text: 子目录都不是注册工作区根——所以除根目录本身外，全部内容都可以走审批删除。
+            - paragraph [ref=e1748]:
+              - text: 现在清空工作区全部内容（10 个子目录，含
+              - code [ref=e1749]: .atf
+              - text: 身份；这条命令会弹出审批卡，确认后才会执行）：
+          - button "Called tools" [ref=e1891] [cursor=pointer]
+          - generic [ref=e1907]:
+            - button "Copy" [ref=e1908] [cursor=pointer]
+            - generic [ref=e1912]:
+              - button "Good response" [ref=e1913] [cursor=pointer]
+              - button "Bad response" [ref=e1916] [cursor=pointer]
+            - button "Branch into a new conversation" [disabled] [ref=e1919]
+            - generic [ref=e1925]: Available only on the last message of a completed turn
+            - generic [ref=e1926]: 23:32
+          - generic [ref=e1944]:
+            - generic [ref=e1945]: 刚才的删除先算了。继续 run-bl-extract-r1 这个装箱单训练任务的准备工作，把它的训练配置构造出来（就是出训练启动卡之前要确认的那张配置卡）。
+            - generic [ref=e1947]:
+              - generic [ref=e1948]: 23:34
+              - button "Copy" [ref=e1949] [cursor=pointer]
+          - 'button "Think The user is now saying: forget the deletion for now. Continue with the preparation work for the \"run-bl-extract-r1\" packing list (装箱单, \"bl\" likely = packing list / bill of lading... \"bl-extract\" = 装箱单 extraction) training task. They want me to construct its training configuration — the configuration card that needs confirmation before the training launch card (训练启动卡之前要确认的那张配置卡)." [ref=e1989] [cursor=pointer]':
+            - generic [ref=e1984]:
+              - generic [ref=e1985]: Think
+              - generic [ref=e1987]: "The user is now saying: forget the deletion for now. Continue with the preparation work for the \"run-bl-extract-r1\" packing list (装箱单, \"bl\" likely = packing list / bill of lading... \"bl-extract\" = 装箱单 extraction) training task. They want me to construct its training configuration — the configuration card that needs confirmation before the training launch card (训练启动卡之前要确认的那张配置卡)."
+          - paragraph [ref=e1995]:
+            - text: 收到，删除先搁置。我先加载训练准备技能，同时定位
+            - code [ref=e1996]: run-bl-extract-r1
+            - text: 这个 run 在工作区里的位置和它已有的准备产物：
+          - generic [ref=e1999]:
+            - button "Skill atf-prepare-training" [ref=e2005] [cursor=pointer]:
+              - generic [ref=e2014]:
+                - generic [ref=e2015]: Skill
+                - generic [ref=e2017]: atf-prepare-training
+            - button "Tool call atf_bash · find /data/atf/prodtest/atf-g2fresh-20261022 -maxdepth 4 -type d -name 'run-bl-extract*' 2>/dev/null; echo '--- ws-bl-extract-r1 tree (depth 2) ---'; find /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r1 -maxdepth 2 2>/dev/null | sort; echo '--- iteration-config candidates ---'; find /data/atf/prodtest/atf-g2fresh-20261022 -maxdepth 6 -name 'iteration-config.json' 2>/dev/null" [ref=e2024] [cursor=pointer]:
+              - generic [ref=e2034]:
+                - generic [ref=e2035]: Tool call
+                - generic [ref=e2037]: atf_bash · find /data/atf/prodtest/atf-g2fresh-20261022 -maxdepth 4 -type d -name 'run-bl-extract*' 2>/dev/null; echo '--- ws-bl-extract-r1 tree (depth 2) ---'; find /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r1 -maxdepth 2 2>/dev/null | sort; echo '--- iteration-config candidates ---'; find /data/atf/prodtest/atf-g2fresh-20261022 -maxdepth 6 -name 'iteration-config.json' 2>/dev/null
+            - button "Think Findings:" [ref=e2064] [cursor=pointer]:
+              - generic [ref=e2056]:
+                - generic [ref=e2057]: Think
+                - generic [ref=e2059]: "Findings:"
+          - paragraph [ref=e2070]:
+            - text: 技能已加载。定位结果：
+            - code [ref=e2071]: run-bl-extract-r1
+            - text: 在工作区里有
+            - strong [ref=e2072]: 3 处同名 run 目录
+            - text: ，而且全工作区还没有任何
+            - code [ref=e2073]: iteration-config.json
+            - text: ——配置卡要从缺省值构造。我先确认哪一处是这个任务的「正主」（看各处内容与时间戳），再出卡：
+          - generic [ref=e2076]:
+            - button "Tool call atf_bash · for d in /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r2/runs/run-bl-extract-r1 /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r2/workspace/runs/run-bl-extract-r1 /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r1/workspace/runs/run-bl-extract-r1; do echo \"=== $d ===\"; ls -la \"$d\" 2>/dev/null; done; echo '=== workspace identities (.atf dirs) ==='; find /data/atf/prodtest/atf-g2fresh-20261022 -maxdepth 4 -type d -name '.atf' 2>/dev/null" [ref=e2083] [cursor=pointer]:
+              - generic [ref=e2093]:
+                - generic [ref=e2094]: Tool call
+                - generic [ref=e2096]: atf_bash · for d in /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r2/runs/run-bl-extract-r1 /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r2/workspace/runs/run-bl-extract-r1 /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r1/workspace/runs/run-bl-extract-r1; do echo "=== $d ==="; ls -la "$d" 2>/dev/null; done; echo '=== workspace identities (.atf dirs) ==='; find /data/atf/prodtest/atf-g2fresh-20261022 -maxdepth 4 -type d -name '.atf' 2>/dev/null
+            - button "Think Now clearer:" [ref=e2104] [cursor=pointer]:
+              - generic [ref=e2114]:
+                - generic [ref=e2115]: Think
+                - generic [ref=e2117]: "Now clearer:"
+          - paragraph [ref=e2124]:
+            - text: 三处里有两处是实体 run：
+            - code [ref=e2125]: ws-bl-extract-r1
+            - text: 下只走到
+            - strong [ref=e2126]: register
+            - text: 段（22:36），而
+            - code [ref=e2127]: ws-bl-extract-r2/workspace/runs/run-bl-extract-r1
+            - text: 走到了
+            - strong [ref=e2128]: experiment_setup
+            - text: 段（22:44）——这是进展最深的一处，应该就是当前任务的落点。我读一下它的 run 元数据和 experiment_setup 段摘要确认状态：
+          - generic [ref=e2135]:
+            - button "Tool call atf_read · ws-bl-extract-r2/workspace/runs/run-bl-extract-r1/run.json" [ref=e2142] [cursor=pointer]:
+              - generic [ref=e2152]:
+                - generic [ref=e2153]: Tool call
+                - generic [ref=e2155]: atf_read · ws-bl-extract-r2/workspace/runs/run-bl-extract-r1/run.json
+            - button "Tool call atf_read · ws-bl-extract-r2/workspace/runs/run-bl-extract-r1/stage-experiment_setup.summary.md" [ref=e2162] [cursor=pointer]:
+              - generic [ref=e2172]:
+                - generic [ref=e2173]: Tool call
+                - generic [ref=e2175]: atf_read · ws-bl-extract-r2/workspace/runs/run-bl-extract-r1/stage-experiment_setup.summary.md
+            - button "Tool call atf_bash · echo '=== r2 prep ===' && find /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r2/workspace/runs/run-bl-extract-r1/prep -maxdepth 2 | sort && echo '=== r2 experiment-setup ===' && ls -la /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r2/workspace/runs/run-bl-extract-r1/experiment-setup/ && echo '=== r1 prep ===' && find /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r1/workspace/runs/run-bl-extract-r1/prep -maxdepth 2 | sort" [ref=e2182] [cursor=pointer]:
+              - generic [ref=e2192]:
+                - generic [ref=e2193]: Tool call
+                - generic [ref=e2195]: atf_bash · echo '=== r2 prep ===' && find /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r2/workspace/runs/run-bl-extract-r1/prep -maxdepth 2 | sort && echo '=== r2 experiment-setup ===' && ls -la /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r2/workspace/runs/run-bl-extract-r1/experiment-setup/ && echo '=== r1 prep ===' && find /data/atf/prodtest/atf-g2fresh-20261022/ws-bl-extract-r1/workspace/runs/run-bl-extract-r1/prep -maxdepth 2 | sort
+            - button "Think Key facts:" [ref=e2203] [cursor=pointer]:
+              - generic [ref=e2213]:
+                - generic [ref=e2214]: Think
+                - generic [ref=e2216]: "Key facts:"
+          - paragraph [ref=e2223]:
+            - text: 正主确认：
+            - code [ref=e2224]: ws-bl-extract-r2/workspace/runs/run-bl-extract-r1
+            - text: （run.json 里
+            - code [ref=e2225]: "workspace_id: ws-bl-extract-r2"
+            - text: ，experiment_setup 段已 exit 0，来源数据是
+            - code [ref=e2226]: datasets/bl-batch-w1023b/bill_of_lading
+            - text: ），
+            - code [ref=e2227]: prep/iteration-config/
+            - text: 还是空目录——正缺这张九要素配置卡。先看一眼实验配置拿到了什么事实，再出卡：
+          - generic [ref=e2230]:
+            - button "Tool call atf_read · ws-bl-extract-r2/workspace/runs/run-bl-extract-r1/experiment-setup/experiment-config.json" [ref=e2237] [cursor=pointer]:
+              - generic [ref=e2247]:
+                - generic [ref=e2248]: Tool call
+                - generic [ref=e2250]: atf_read · ws-bl-extract-r2/workspace/runs/run-bl-extract-r1/experiment-setup/experiment-config.json
+            - button "Think ExperimentConfig/v1 facts:" [ref=e2259] [cursor=pointer]:
+              - generic [ref=e2269]:
+                - generic [ref=e2270]: Think
+                - generic [ref=e2272]: "ExperimentConfig/v1 facts:"
+          - paragraph [ref=e2281]:
+            - text: 实验配置拿到了：
+            - code [ref=e2282]: bill_of_lading
+            - text: 提单抽取、lane
+            - code [ref=e2283]: pl_goods
+            - text: 、基模型族
+            - code [ref=e2284]: qwen3_vl
+            - text: 、17 个字段、模板
+            - code [ref=e2285]: non_goods-flat
+            - text: 、像素档与运行时档（deepspeed/nproc）都还空着——这些正是配置卡上要确认的。现在构造九要素配置卡：
+          - generic [ref=e2286]:
+            - text: Calling tools · present
+            - generic [ref=e2293]:
+              - generic [ref=e2294]: Running
+              - button "Tool call atf_config_confirm · present" [ref=e2296] [cursor=pointer]:
+                - generic [ref=e2305]:
+                  - generic [ref=e2306]:
+                    - generic [ref=e2307]: Tool call
+                    - generic [ref=e2309]: atf_config_confirm · present
+                  - generic [aria-hidden]:
+                    - generic:
+                      - generic:
+                        - generic: Tool call
+                        - generic: atf_config_confirm · present
+          - generic [ref=e1953]:
+            - status [ref=e1954]: Deep diving
+            - generic [ref=e1958]:
+              - generic [ref=e1959]: Deep diving for 4m 19s ···
+              - generic [aria-hidden]:
+                - generic: Deep diving for 4m 19s ···
+      - generic [ref=e2463]:
+        - generic [ref=e2464]: Waiting for approval
+        - group "Approval details" [ref=e2466]:
+          - generic [ref=e2467]: "将要执行：确认训练配置并落快照（九要素训练配置确认 — run run-bl-extract-r1） 影响范围：写 run 配置快照（确认值全部键＋TokenBudget 三要素） 可逆性：可逆（可改参后重新确认） 预计代价：按任务卡 learning_rate: 1e-4（已用缺省 ⚠） nproc_per_node: 4（需确认 ?） visible_devices: 4,5,6,7（需确认 ?） base_model_path: /data/LLM_model/Qwen3-VL-32B-Instruct（来自登记 ◆） num_train_epochs: 3（已用缺省 ⚠） per_device_train_batch_size: 1（已用缺省 ⚠） gradient_accumulation_steps: 64（需确认 ?） cutoff_len: 9000（已用缺省 ⚠） deepspeed: ds_z3_offload_config.json（来自登记 ◆） lora_rank: 32（已用缺省 ⚠） lora_alpha: 64（已用缺省 ⚠） dataset_keys: （由登记面推导）（已用缺省 ⚠） max_total_tokens: 9000（已用缺省 ⚠） max_model_len: 12800（已用缺省 ⚠） image_min_pixels: 65536（已用缺省 ⚠） image_max_pixels: 802816（已用缺省 ⚠） negative_ratio_target: 0.02,0.05（已用缺省 ⚠） TokenBudget（三要素）: 单样本 token 预算 max_total_tokens 可编辑 9000 [惯例基线（owner 2026-10-22）] 训练截断 cutoff cutoff_len 只读 9000 [= 预算] 推理窗口 max_model_len 只读 12800 [独立取值] 九要素确认卡（双段式：改参在表单卡改值提交；不改直接提交表单，再于审批卡点 Allow once） 本轮改参：nproc_per_node, gradient_accumulation_steps；accum 随派生更新=64（gb=256 不变）"
+        - generic [ref=e2468]:
+          - button "Reject" [ref=e2469] [cursor=pointer]
+          - button "Allow once" [ref=e2470] [cursor=pointer]

@@ -1,0 +1,48 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - button "Open sidebar" [ref=e9] [cursor=pointer]:
+      - generic [ref=e11]: ATF
+    - button "New session" [ref=e13] [cursor=pointer]
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - button "Add workspace" [ref=e32] [cursor=pointer]
+      - button "Search sessions" [ref=e36] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e429]:
+    - banner [ref=e431]:
+      - button "Open right sidebar" [ref=e436] [cursor=pointer]
+    - generic [ref=e444]:
+      - generic [ref=e447]:
+        - generic [ref=e448]: ATF
+        - generic [ref=e451]:
+          - generic [ref=e452]: Into the Unknown
+          - generic [ref=e453]: Preview
+      - generic [ref=e454]:
+        - button "Choose workspace" [ref=e455] [cursor=pointer]:
+          - generic [ref=e460]: ws-pl-walkthrough-r1
+        - button "Standard mode" [ref=e465] [cursor=pointer]
+      - generic [ref=e476]:
+        - generic [ref=e478]:
+          - textbox "Describe the training task to advance, / commands, @ files or sessions" [active] [ref=e479]
+          - generic [aria-hidden]: Describe the training task to advance, / commands, @ files or sessions
+        - generic [ref=e480]:
+          - generic [ref=e481]:
+            - button "Add files or run commands" [ref=e482] [cursor=pointer]
+            - 'button "Access mode, current: Full access" [ref=e487] [cursor=pointer]':
+              - generic [ref=e491]: Full access
+          - generic [ref=e495]:
+            - generic [ref=e496]:
+              - button "思考 Low(低) ▾" [ref=e499] [cursor=pointer]:
+                - generic [ref=e500]: 思考
+                - generic [ref=e501]: Low(低)
+                - generic [ref=e502]: ▾
+              - button "Select model, current glm-5.3-flash" [ref=e505] [cursor=pointer]:
+                - generic [ref=e506]: glm-5.3-flash
+            - button "Send message" [disabled] [ref=e509]
+  - generic [ref=e514]:
+    - generic [ref=e515]: ↩
+    - generic [ref=e516]:
+      - generic [ref=e517]: 回到上次实验：装箱单 · Qwen3-VL-32B · 10-23 14:51
+      - generic [ref=e518]: 上次实验 · 点击选用，发送首条消息时自动绑定
+    - button "继续这次实验" [ref=e519] [cursor=pointer]

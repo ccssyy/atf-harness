@@ -1,0 +1,494 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e7]:
+      - button "Open sidebar" [ref=e9] [cursor=pointer]:
+        - generic [ref=e11]: ATF
+      - button "New session" [ref=e13] [cursor=pointer]
+      - navigation "Global panels" [ref=e18]:
+        - button "Plugins" [ref=e19] [cursor=pointer]
+      - generic [ref=e29]:
+        - button "Add workspace" [ref=e32] [cursor=pointer]
+        - button "Search sessions" [ref=e36] [cursor=pointer]
+      - button "Settings" [ref=e46] [cursor=pointer]
+    - generic [ref=e54]:
+      - banner [ref=e87]:
+        - generic [ref=e88]:
+          - generic [ref=e89]:
+            - generic:
+              - navigation "Session hierarchy":
+                - generic: 汇总当前实验状态与进展
+            - generic [ref=e92]:
+              - button "More actions" [ref=e94] [cursor=pointer]
+              - generic [ref=e99]:
+                - button "装箱单 · Qwen3-VL-32B · 10-21 21:02 · 异常 ▾ atf-prodtest" [ref=e101] [cursor=pointer]:
+                  - generic [ref=e102]: 装箱单 · Qwen3-VL-32B · 10-21 21:02 · 异常 ▾
+                  - generic "atf-prodtest-20261021" [ref=e105]: atf-prodtest
+                - button "监控" [ref=e106] [cursor=pointer]
+          - tablist [ref=e107]:
+            - tab "Chat" [selected] [ref=e108] [cursor=pointer]
+            - tab "Trajectory" [ref=e109] [cursor=pointer]
+      - generic [ref=e56]:
+        - generic [ref=e116]:
+          - button "Load earlier" [ref=e118] [cursor=pointer]
+          - generic [ref=e121]:
+            - generic [ref=e122]: 训练已干净完成（6/6 步、末步 loss 0.2707、checkpoint-6 已落盘、GPU 已释放）。接下来做一次 mini 评估：用本轮联合训练最新的 checkpoint-6，评估集用全部 50 页 walkthrough 数据（不是 10 页测试集——50 页里含训练页，我知情且确认，外部资产确认通道可走）；并发 4 起步。走正道评估链，出确认卡我来放行。
+            - generic [ref=e124]:
+              - generic [ref=e125]: 01:26
+              - button "Copy" [ref=e126] [cursor=pointer]
+          - generic [ref=e131]:
+            - status [ref=e132]: Completed
+            - button "Completed in 19m 36s" [ref=e133] [cursor=pointer]
+          - generic [ref=e141]:
+            - heading "评估链被实例配置问题挡住——根因已闭环，需要你授权两处修复" [level=1] [ref=e142]
+            - heading "已就绪的部分" [level=2] [ref=e143]
+            - list [ref=e144]:
+              - listitem [ref=e145]:
+                - strong [ref=e146]: 50 页评估资产
+                - text: ：已构建并通过冻结锚校验（推导逻辑对既有 10 页 L1 资产
+                - strong [ref=e147]: 逐页深等复现
+                - text: 才落盘）；50 页 / 2643 个标注框 / 0 非矩形 / 全部字段 ∈ 训练字段集，落位
+                - code [ref=e148]: walkthrough-m12-real/eval-assets-50/
+                - text: （含 images 链接，双路径解析兼容）
+              - listitem [ref=e149]:
+                - strong [ref=e150]: EvalServiceConfig
+                - text: ：已按上轮同参数写好（AWQ base、端口 8200、TP1、0.85、12800、seqs8、训练像素对 65536/802816、ckpt-6 挂载、max_lora_rank 32）
+              - listitem [ref=e151]:
+                - strong [ref=e152]: checkpoint-6
+                - text: ：固定编号路径确认；端口 8200/5002 空闲；GPU 空闲
+            - heading "卡点（fail-closed，非机器事实问题）" [level=2] [ref=e153]
+            - paragraph [ref=e154]:
+              - code [ref=e155]: atf_evaluate
+              - text: 链的
+              - strong [ref=e156]: 内核 journal 步
+              - text: 崩溃，连锁根因：
+            - list [ref=e157]:
+              - listitem [ref=e158]:
+                - text: 内核 journal 把 run 身份解析到
+                - code [ref=e159]: /root/.atf/config.json
+                - text: 的
+                - code [ref=e160]: workspace_root
+                - text: =
+                - strong [ref=e161]:
+                  - code [ref=e162]: /data/sam/DocCheckTraining/atf-workspace
+                - text: （9 月 4 日的过期实例配置）；
+              - listitem [ref=e163]:
+                - text: 那里存在同名
+                - strong [ref=e164]: 旧布局
+                - text: run（无 run.json）→ 触发 RunLayout 防分裂保护「旧布局同名 run 在场，请换 run-id」；
+              - listitem [ref=e165]:
+                - text: 本实验真正的 canonical 树（
+                - code [ref=e166]: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02
+                - text: ）是 walkthrough 时代产物，
+                - strong [ref=e167]: 缺 run.json
+                - text: （早于 RunLayout/v1 契约）——即使把 workspace 指过去，也会撞另一闸「canonical 占用但缺合法 run.json」。
+            - paragraph [ref=e168]:
+              - text: 本次尝试的 service 产物已写了一半（dev 树
+              - code [ref=e169]: eval/6-20261021/service/
+              - text: ），但链路整体未闭合，我不会带病续跑。
+            - heading "提请你授权的修复（两处写，都在我的沙箱外）" [level=2] [ref=e170]
+            - list [ref=e171]:
+              - listitem [ref=e172]:
+                - strong [ref=e173]: 给 canonical 树补写 run.json
+                - text: （按当前契约五键，让它成为合法 canonical）：
+                - list [ref=e174]:
+                  - listitem [ref=e175]:
+                    - text: 路径：
+                    - code [ref=e176]: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/run.json
+                  - listitem [ref=e177]:
+                    - text: 内容：
+                    - code [ref=e178]: "layout_version: \"RunLayout/v1\""
+                    - text: 、
+                    - code [ref=e179]: "workspace_id: \"atf-prodtest-20261021\""
+                    - text: 、
+                    - code [ref=e180]: "run_id: \"run-admit-qc-02\""
+                    - text: 、
+                    - code [ref=e181]: "created_at: \"2026-10-20T15:32:41Z\""
+                    - text: （run 真实创建时刻，取自 stage 摘要）、
+                    - code [ref=e182]: dirs
+                    - text: ：契约骨架 9 项＋追加闭集 8 项（webui/prep/prep/iteration-config/prep/variants/launch/training/eval/analysis/publish + analysis/journal 等，共 17 项——已逐项对照 pin 内契约常量）
+              - listitem [ref=e183]:
+                - strong [ref=e184]:
+                  - text: 修正
+                  - code [ref=e185]: /root/.atf/config.json
+                  - text: 的
+                  - code [ref=e186]: workspace_root
+                - text: →
+                - code [ref=e187]: /data/atf/prodtest/atf-prodtest-20261021
+                - text: （其余键 awq_base/key_dir 等一律不动；这正是 canonical 公式
+                - code [ref=e188]: <workspace>/workspace/runs/<run_id>
+                - text: 的归属根）
+            - paragraph [ref=e189]:
+              - text: 之后我会清掉 dev 树里那次失败残留的
+              - code [ref=e190]: eval/6-20261021/
+              - text: （在我的可写域内），重推
+              - code [ref=e191]: atf_evaluate start
+              - text: ——确认卡会照常出，你来放行。
+            - paragraph [ref=e192]:
+              - strong [ref=e193]: 备选
+              - text: ：这两处你也可以自己改或交 owner 处理；另一个「让内核在别处新建空 run 骨架当 journal 宿主」的方案我不推荐（制造第三个身份孪生，正是防分裂条款要避免的）。
+            - paragraph [ref=e194]: 改不改、谁来改，你定；授权我就动手。
+          - generic [ref=e198]:
+            - button "Copy" [ref=e199] [cursor=pointer]
+            - generic [ref=e203]:
+              - button "Good response" [ref=e204] [cursor=pointer]
+              - button "Bad response" [ref=e207] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e210] [cursor=pointer]
+            - generic [ref=e216]:
+              - button "Usage 11.7M tok" [ref=e218] [cursor=pointer]
+              - generic [ref=e224]: 01:46
+          - generic [ref=e227]:
+            - generic [ref=e228]: 授权执行你提的方案：①按你核对过的 RunLayout 契约为 run-admit-qc-02 物化正典 run.json（created_at 取 stage 摘要、dirs 17 项闭集）；②把 /root/.atf/config.json 的 workspace_root 改为 /data/atf/prodtest/atf-prodtest-20261021（其余键不动）；③清掉失败残留的 eval/6-20261021 后重推 atf_evaluate start，确认卡我来放行。不采纳第三骨架方案。
+            - generic [ref=e230]:
+              - generic [ref=e231]: 01:47
+              - button "Copy" [ref=e232] [cursor=pointer]
+          - generic [ref=e237]:
+            - status [ref=e238]: Completed
+            - button "Completed in 5m 24s" [ref=e239] [cursor=pointer]
+          - generic [ref=e247]:
+            - heading "✅ 三步授权全部执行完毕，第 6 轮评估已在跑" [level=1] [ref=e248]
+            - heading "执行回执" [level=2] [ref=e249]
+            - list [ref=e250]:
+              - listitem [ref=e251]:
+                - strong [ref=e252]: run.json 物化
+                - text: ✓ — 值全部取自 pin 内核契约常量（零转写），落盘前经内核
+                - code [ref=e253]: _declared_dirs
+                - text: 自校验通过；
+                - code [ref=e254]: create_run
+                - text: 现已幂等返回正典路径。一处更正：两闭集合并实为
+                - strong [ref=e255]: 9+9=18 项
+                - text: （上条消息我说 17，口误，以契约常量为准）
+              - listitem [ref=e256]:
+                - strong [ref=e257]: 实例配置修正
+                - text: ✓ —
+                - code [ref=e258]: /root/.atf/config.json
+                - text: 仅改
+                - code [ref=e259]: workspace_root
+                - text: （文本级替换），其余键逐项核对未动；备份在
+                - code [ref=e260]: config.json.bak-20261022
+              - listitem [ref=e261]:
+                - strong [ref=e262]: 残留清理 + 重推
+                - text: ✓ —
+                - code [ref=e263]: eval/6-20261021/
+                - text: 旧残留已清，重推后同名轮目录干净重建
+            - heading "第 6 轮评估当前状态（round 6-20261021）" [level=2] [ref=e264]
+            - list [ref=e265]:
+              - listitem [ref=e266]:
+                - strong [ref=e267]: 链路全通过
+                - text: ：field_config 自动继承训练记录且 sha 逐字匹配（
+                - code [ref=e268]: 5b04777e2c35
+                - text: ）✓、prompt mode0（训练缺省）✓、外部资产通道接受（50 页，external_confirmed）✓、并发 4＋理由入账 ✓
+              - listitem [ref=e269]:
+                - strong [ref=e270]: EVAL_RELEASE 已落账
+                - text: （approval_id
+                - code [ref=e271]: faca13c95f…
+                - text: ）
+              - listitem [ref=e272]:
+                - strong [ref=e273]: 服务正在启动
+                - text: ：进度账显示
+                - code [ref=e274]: launching → initializing
+                - text: （进程存活、探活未过——首次就绪约 4.5 分钟量级），之后 staging ckpt-6 → 50 页推理（并发 4）→ 回灌
+              - listitem [ref=e275]:
+                - text: tmux 会话
+                - code [ref=e276]: dev-atf-eval-run-admit-qc-02
+                - text: ；服务口径
+                - code [ref=e277]: run-admit-qc-02_ckpt6
+                - text: "@ 8200"
+            - paragraph [ref=e278]:
+              - text: 一个提醒：status 面此刻投影的是
+              - strong [ref=e279]: 第 4 轮旧指标
+              - text: （F1 0.2991，10 页那轮），别被它带偏——第 6 轮（50 页）才是本轮真值，完成后以
+              - code [ref=e280]: eval/6-20261021/eval/metrics_summary.json
+              - text: 为准。
+            - paragraph [ref=e281]: 跑完我把 50 页指标、与 10 页测试集口径的差异说明、四件套状态一起汇总给你；届时 badcase 分析和模型发布的前置也就齐了。你歇会儿，我盯着。
+          - generic [ref=e285]:
+            - button "Copy" [ref=e286] [cursor=pointer]
+            - generic [ref=e290]:
+              - button "Good response" [ref=e291] [cursor=pointer]
+              - button "Bad response" [ref=e294] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e297] [cursor=pointer]
+            - generic [ref=e303]:
+              - button "Usage 1.7M tok" [ref=e305] [cursor=pointer]
+              - generic [ref=e311]: 01:52
+          - generic [ref=e314]:
+            - generic [ref=e315]: 评估已在后台跑，等它就好。趁这个窗口做一个发布确认闸的负例验证：在 run-admit-qc-02 的 runs 树内重做一次合同发布，但这次不带实验配置确认（experiment_config 参数留空）——预期是被发布闸拒绝，报 experiment_config_confirmation_required，且不落任何发布产物。这是闸的负例验证：不要绕过、不要替我补配置、被拒即算通过。
+            - generic [ref=e317]:
+              - generic [ref=e318]: 01:52
+              - button "Copy" [ref=e319] [cursor=pointer]
+          - generic [ref=e324]:
+            - status [ref=e325]: Completed
+            - button "Completed in 4m 22s" [ref=e326] [cursor=pointer]
+          - generic [ref=e334]:
+            - heading "✅ 发布闸负例验证：PASS（被拒即通过，四点证据齐）" [level=1] [ref=e335]
+            - table [ref=e337]:
+              - rowgroup [ref=e338]:
+                - row [ref=e339]:
+                  - columnheader "验证点" [ref=e340]
+                  - columnheader "结果" [ref=e341]
+              - rowgroup [ref=e342]:
+                - row [ref=e343]:
+                  - cell "闸管辖权（阳性对照，防假通过）" [ref=e344]
+                  - cell [ref=e345]:
+                    - text: ✓
+                    - code [ref=e346]: run_root_containing
+                    - text: 解析到正典 run 根——闸确实激活（顺带实证了昨天物化的 run.json 已按 canonical 身份生效）
+                - row [ref=e347]:
+                  - cell "触闸错误码" [ref=e348]
+                  - cell [ref=e349]:
+                    - text: ✓ 逐字命中
+                    - code [ref=e350]: experiment_config_confirmation_required
+                    - text: （附 2026-09-06 复盘原文指引）
+                - row [ref=e351]:
+                  - cell "发布是否返回" [ref=e352]
+                  - cell "✓ 未返回——发布被拦，无任何契约产物" [ref=e353]
+                - row [ref=e354]:
+                  - cell "零写入" [ref=e355]
+                  - cell [ref=e356]:
+                    - text: ✓ 前后快照 271 个文件逐一 sha256 比对
+                    - strong [ref=e357]: 完全一致
+                    - text: ，diff 为空（确认件/确认报告/发布目录全未动）
+            - heading "一个验证设计的如实说明" [level=2] [ref=e358]
+            - paragraph [ref=e359]:
+              - text: 我最终是在
+              - strong [ref=e360]: 领域闸函数
+              - text: （
+              - code [ref=e361]: run_extraction_contract_publication
+              - text: ）上打的这一枪，而不是管线
+              - code [ref=e362]: publish
+              - text: 段——原因有二，读管线源码时确认的：
+            - list [ref=e363]:
+              - listitem [ref=e364]:
+                - text: 管线段有自己的
+                - code [ref=e365]: _prereq
+                - text: 前置门，缺 experiment_config 时会先报
+                - strong [ref=e366]: prereq block
+                - text: （另一个码），你点名的错误码在领域闸里；
+              - listitem [ref=e367]:
+                - text: 管线段在走到该闸
+                - strong [ref=e368]: 之前
+                - text: 就会写 confirmation-report.md 和 contract-user-confirmation.json——用管线跑负例会弄脏 run 树，违背「不落任何产物」。
+            - paragraph [ref=e369]: 所以直接命闸＝验证你点名的那道闸本身，不是绕过。若你后续想要「管线段级」的负例（预期 prereq block），那是另一个用例，说一声我就补。
+            - heading "顺带：评估进展" [level=2] [ref=e370]
+            - paragraph [ref=e371]:
+              - text: 第 6 轮服务已于 170 秒时
+              - strong [ref=e372]: health 就绪
+              - text: ，现在进入 staging → 50 页推理（并发 4）阶段。跑完我汇总指标。
+          - generic [ref=e376]:
+            - button "Copy" [ref=e377] [cursor=pointer]
+            - generic [ref=e381]:
+              - button "Good response" [ref=e382] [cursor=pointer]
+              - button "Bad response" [ref=e385] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e388] [cursor=pointer]
+            - generic [ref=e394]:
+              - button "Usage 3.4M tok" [ref=e396] [cursor=pointer]
+              - generic [ref=e402]: 01:56
+          - generic [ref=e405]:
+            - generic [ref=e406]: 第 6 轮评估已完成（50 页全量、metrics 已落盘）。请收尾：①汇总 50 页指标（P/R/F1、TP/FP/FN、data_diagnostics 诊断块、与第 4 轮 10 页口径的差异说明）；②按规程停掉本次评估服务（定位本 run 的 vllm，TERM）；③确认 GPU 释放、无 Worker 残留。
+            - generic [ref=e408]:
+              - generic [ref=e409]: 02:23
+              - button "Copy" [ref=e410] [cursor=pointer]
+          - generic [ref=e415]:
+            - status [ref=e416]: Completed
+            - button "Completed in 1m 31s" [ref=e417] [cursor=pointer]
+          - generic [ref=e425]:
+            - heading "第 6 轮评估收尾完成" [level=1] [ref=e426]
+            - heading "① 50 页指标（round 6-20261021，ckpt-6，mode0，并发 4）" [level=2] [ref=e427]
+            - paragraph [ref=e428]:
+              - strong [ref=e429]: 主口径（micro，GT 与预测均投影到 25 个训练字段）
+            - table [ref=e431]:
+              - rowgroup [ref=e432]:
+                - row [ref=e433]:
+                  - columnheader "指标" [ref=e434]
+                  - columnheader "第 6 轮（50 页）" [ref=e435]
+                  - columnheader "第 4 轮（10 页）" [ref=e436]
+              - rowgroup [ref=e437]:
+                - row [ref=e438]:
+                  - cell "Precision" [ref=e439]
+                  - cell [ref=e440]:
+                    - strong [ref=e441]: "0.2599"
+                  - cell "0.2212" [ref=e442]
+                - row [ref=e443]:
+                  - cell "Recall" [ref=e444]
+                  - cell [ref=e445]:
+                    - strong [ref=e446]: "0.5108"
+                  - cell "0.4618" [ref=e447]
+                - row [ref=e448]:
+                  - cell [ref=e449]:
+                    - strong [ref=e450]: F1
+                  - cell [ref=e451]:
+                    - strong [ref=e452]: "0.3445"
+                  - cell "0.2991" [ref=e453]
+                - row [ref=e454]:
+                  - cell "TP / FP / FN" [ref=e455]
+                  - cell [ref=e456]:
+                    - strong [ref=e457]: 1350 / 3844 / 1293
+                  - cell "296 / 1042 / 345" [ref=e458]
+                - row [ref=e459]:
+                  - cell "整页全对率" [ref=e460]
+                  - cell "0.0" [ref=e461]
+                  - cell "0.0" [ref=e462]
+                - row [ref=e463]:
+                  - cell "单据级 macro F1" [ref=e464]
+                  - cell "0.3978（P 0.3238 / R 0.5691）" [ref=e465]
+                  - cell "0.3143" [ref=e466]
+                - row [ref=e467]:
+                  - cell "旧全字段口径 F1（legacy）" [ref=e468]
+                  - cell "0.3396" [ref=e469]
+                  - cell "0.2967" [ref=e470]
+            - paragraph [ref=e471]:
+              - strong [ref=e472]: data_diagnostics 诊断块
+            - list [ref=e473]:
+              - listitem [ref=e474]:
+                - code [ref=e475]: gold_fields_out_of_scope
+                - text: ：
+                - strong [ref=e476]: "0"
+                - text: （GT 全部落在训练字段集内——50 页资产按训练 22 字段词表构建的预期验证）
+              - listitem [ref=e477]:
+                - code [ref=e478]: pred_fields_out_of_scope
+                - text: ：
+                - strong [ref=e479]: 19 个字段 / 114 个值
+                - text: （address、po_no、invoice_date、volume_cbm 等——第 4 轮仅 2 字段/16 值；50 页语料版式更多样，模型多报了训练未要求的键，按口径忽略不计分，属异常证据留档）
+              - listitem [ref=e480]:
+                - code [ref=e481]: zero_positive_fields
+                - text: ：
+                - strong [ref=e482]: "3"
+                - text: （doc_identifier、page_summary、product_code）——较第 4 轮的 7 个收敛：currency、goods_amount、price_of_goods、total_amount 在 50 页规模下出现了稀疏正例（各 1–2 个）
+            - paragraph [ref=e483]:
+              - strong [ref=e484]: 与第 4 轮口径差异（重要，防误读）
+            - list [ref=e485]:
+              - listitem [ref=e486]:
+                - strong [ref=e487]: 两轮不可比（not_comparable）
+                - text: ：第 4 轮 = 10 页留出 test 分区；第 6 轮 = 50 页全量（
+                - strong [ref=e488]: 含 40 页训练页
+                - text: ，你已知情确认的外部资产通道）。F1 0.2991→0.3445 是
+                - strong [ref=e489]: 总体变化
+                - text: ，不能解读为模型提升——训练页预期偏高。
+              - listitem [ref=e490]:
+                - text: zero_positive 集合变化与 pred 外字段激增都源于
+                - strong [ref=e491]: 总体扩张
+                - text: ，不是模型行为变化。
+              - listitem [ref=e492]: 本轮价值：全量语料上的观察基线 + badcase 候选池扩容（供下一轮 L3 审阅），真实的泛化判断仍须回到留出分区同口径回归。
+            - heading "② 服务停止（按规程）" [level=2] [ref=e493]
+            - list [ref=e494]:
+              - listitem [ref=e495]:
+                - text: 定位：receipt
+                - code [ref=e496]: owner.pid
+                - text: 与进程表
+                - strong [ref=e497]: 双确认单进程
+                - text: ——pid 93887，cmdline 逐项吻合（vllm serve AWQ base ＋ lora 模块
+                - code [ref=e498]: run-admit-qc-02_ckpt6
+                - text: ＝ 源 checkpoint-6，端口 8200，TP1）
+              - listitem [ref=e499]:
+                - text: 动作：
+                - code [ref=e500]: SIGTERM
+                - text: → 8 秒内进程退出 ✓（receipt 本身
+                - code [ref=e501]: "no_auto_stop: true"
+                - text: ，属人工收尾而非自动停）
+            - heading "③ 释放核验" [level=2] [ref=e502]
+            - list [ref=e503]:
+              - listitem [ref=e504]:
+                - strong [ref=e505]: GPU
+                - text: ：8 卡全部空闲，util 0%、0 MiB 占用（GPU1 的 8431MiB 为 10/20 起既有的无主残留，与本轮无关）
+              - listitem [ref=e506]:
+                - strong [ref=e507]: 进程
+                - text: ：无任何 vllm/eval worker 残留
+              - listitem [ref=e508]:
+                - strong [ref=e509]: 端口
+                - text: ：8200 已释放
+              - listitem [ref=e510]:
+                - strong [ref=e511]: tmux
+                - text: ：
+                - code [ref=e512]: dev-atf-eval-run-admit-qc-02
+                - text: 会话已随编排结束消失，无残留
+            - paragraph [ref=e513]:
+              - text: 产物位：
+              - code [ref=e514]: eval/6-20261021/orch/eval/
+              - text: （metrics_summary / raw_predictions / badcases / indexes 四件套齐）。后续如需 badcase 审阅链（atf_analyze_badcases）或 checkpoint 发布，前置事实都已就位，随时说。
+          - generic [ref=e518]:
+            - button "Copy" [ref=e519] [cursor=pointer]
+            - generic [ref=e523]:
+              - button "Good response" [ref=e524] [cursor=pointer]
+              - button "Bad response" [ref=e527] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e530] [cursor=pointer]
+            - generic [ref=e536]:
+              - button "Usage 1.6M tok" [ref=e538] [cursor=pointer]
+              - generic [ref=e544]: 02:24
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - generic [ref=e81]:
+              - textbox "Message the ATF training agent, / commands, @ files or sessions" [ref=e545]
+              - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+            - generic [ref=e83]:
+              - generic [ref=e84]:
+                - button "Add files or run commands" [ref=e546] [cursor=pointer]
+                - 'button "Access mode, current: Full access" [ref=e551] [cursor=pointer]'
+              - generic [ref=e85]:
+                - generic [ref=e558]:
+                  - button "思考 Max(最高) ▾" [ref=e561] [cursor=pointer]:
+                    - generic [ref=e562]: 思考
+                    - generic [ref=e563]: Max(最高)
+                    - generic [ref=e564]: ▾
+                  - button "Select model, current glm-5.3-flash" [ref=e567] [cursor=pointer]
+                - button "Send message" [disabled] [ref=e573]
+          - generic [ref=e576]:
+            - generic [ref=e577]:
+              - generic [ref=e578]:
+                - button "7 turns 187 steps · 46 tok/s" [ref=e580] [cursor=pointer]:
+                  - generic [ref=e585]: 7 turns 187 steps·46 tok/s
+                - button "24.6M tok · Cache hit 98%" [ref=e587] [cursor=pointer]:
+                  - generic [ref=e592]: 24.6M tok·Cache hit 98%
+              - generic [ref=e594]:
+                - button "新建训练" [ref=e595] [cursor=pointer]
+                - button "查状态" [ref=e596] [cursor=pointer]
+                - button "继续训练：装箱单" [ref=e597] [cursor=pointer]
+                - button "对比两轮" [ref=e598] [cursor=pointer]
+                - button "走完闭环" [ref=e599] [cursor=pointer]
+                - button "联合训练" [ref=e600] [cursor=pointer]
+                - button "badcase 可视化" [ref=e601] [cursor=pointer]
+                - button "发起训练" [ref=e602] [cursor=pointer]
+            - button "22% of context used" [ref=e604] [cursor=pointer]:
+              - generic [ref=e608]: 22%
+    - generic [ref=e613]:
+      - tablist [ref=e615]:
+        - tab "训练监控 Close" [selected] [ref=e616] [cursor=pointer]:
+          - generic [ref=e617]: 训练监控
+          - button "Close" [ref=e619]
+        - button "New tab" [ref=e623] [cursor=pointer]
+        - generic "Not enough width to split, widen the sidebar" [ref=e625]:
+          - button "Split" [disabled] [ref=e626]
+        - generic [ref=e629]:
+          - button "Fullscreen" [ref=e630] [cursor=pointer]
+          - button "Collapse right sidebar" [ref=e633] [cursor=pointer]
+      - generic [ref=e636]: 监控已关闭——点顶栏「监控」按钮重新打开
+  - dialog "Select Workspace Directory" [ref=e643]:
+    - generic [ref=e644]:
+      - generic [ref=e645]:
+        - heading "Select Workspace Directory" [level=2] [ref=e646]
+        - textbox "Edit path" [active] [ref=e742]: /root/
+      - list [ref=e657]:
+        - listitem [ref=e658]:
+          - button "a4-hotws" [ref=e659] [cursor=pointer]
+        - listitem [ref=e665]:
+          - button "atf-state" [ref=e666] [cursor=pointer]
+        - listitem [ref=e672]:
+          - button "bin" [ref=e673] [cursor=pointer]
+        - listitem [ref=e679]:
+          - button "buildinfo" [ref=e680] [cursor=pointer]
+        - listitem [ref=e686]:
+          - button "coding-brain" [ref=e687] [cursor=pointer]
+        - listitem [ref=e693]:
+          - button "Downloads" [ref=e694] [cursor=pointer]
+        - listitem [ref=e700]:
+          - button "fix2-ws" [ref=e701] [cursor=pointer]
+        - listitem [ref=e707]:
+          - button "metric_save" [ref=e708] [cursor=pointer]
+        - listitem [ref=e714]:
+          - button "output" [ref=e715] [cursor=pointer]
+        - listitem [ref=e721]:
+          - button "runs" [ref=e722] [cursor=pointer]
+        - listitem [ref=e728]:
+          - button "skills" [ref=e729] [cursor=pointer]
+      - generic [ref=e735]:
+        - button [disabled] [ref=e736]
+        - button "Show hidden files" [ref=e739] [cursor=pointer]
+        - button "Cancel" [ref=e740] [cursor=pointer]
+        - button "Open" [disabled] [ref=e741]

@@ -1,0 +1,829 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - button "New session" [ref=e9] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e10]:
+            - generic [ref=e11]: ATF
+            - generic [ref=e14]: ATF 训练 Agent
+        - button "Collapse sidebar" [ref=e17] [cursor=pointer]
+      - button "New session" [ref=e20] [cursor=pointer]:
+        - generic [ref=e21]: New Session
+      - navigation "Global panels" [ref=e26]:
+        - button "Plugins" [ref=e27] [cursor=pointer]
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]: Workspaces
+          - generic [ref=e42]:
+            - button "Search sessions" [ref=e43] [cursor=pointer]
+            - textbox "Search session names"
+          - generic [ref=e47]:
+            - button "View options" [ref=e49] [cursor=pointer]
+            - button "Add workspace" [ref=e53] [cursor=pointer]
+        - tree "Sessions" [ref=e58]:
+          - generic [ref=e110]:
+            - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e112] [cursor=pointer]
+            - treeitem "连通性自检与确认 22h" [ref=e121] [cursor=pointer]:
+              - generic [ref=e123]: 连通性自检与确认
+              - generic [ref=e124]: 22h
+            - treeitem "装箱单走查区训练任务查询 23h" [ref=e126] [cursor=pointer]:
+              - generic [ref=e128]: 装箱单走查区训练任务查询
+              - generic [ref=e129]: 23h
+            - treeitem "D76 端到端正例复跑（零 GPU 红 1d" [ref=e131] [cursor=pointer]:
+              - generic [ref=e133]: D76 端到端正例复跑（零 GPU 红
+              - generic [ref=e134]: 1d
+            - treeitem "run pl-walkthrough-r1 迭代配置构造前置校验 1d" [ref=e136] [cursor=pointer]:
+              - generic [ref=e138]: run pl-walkthrough-r1 迭代配置构造前置校验
+              - generic [ref=e139]: 1d
+            - treeitem "训练数据构造前校验演练 1d" [ref=e141] [cursor=pointer]:
+              - generic [ref=e143]: 训练数据构造前校验演练
+              - generic [ref=e144]: 1d
+          - treeitem "ws-pl-walkthrough" [ref=e147] [cursor=pointer]
+          - generic [ref=e153]:
+            - treeitem "atf-g2fresh-20261022" [expanded] [ref=e155] [cursor=pointer]
+            - treeitem "删除整个工作区目录 22h" [ref=e164] [cursor=pointer]:
+              - generic [ref=e166]: 删除整个工作区目录
+              - generic [ref=e167]: 22h
+            - treeitem "构造评估服务件 for run-rh-budget 2d" [ref=e169] [cursor=pointer]:
+              - generic [ref=e171]: 构造评估服务件 for run-rh-budget
+              - generic [ref=e172]: 2d
+            - treeitem "装箱单字段抽取新实验全流程 2d" [ref=e174] [cursor=pointer]:
+              - generic [ref=e176]: 装箱单字段抽取新实验全流程
+              - generic [ref=e177]: 2d
+          - generic [ref=e178]:
+            - treeitem "atf-prodtest-20261021" [expanded] [ref=e180] [cursor=pointer]
+            - treeitem "海运单SWB数据登记与训练任务启动 9h" [selected] [ref=e189] [cursor=pointer]:
+              - generic [ref=e191]: 海运单SWB数据登记与训练任务启动
+              - generic [ref=e192]: 9h
+            - treeitem "等待发起真实训练走查指令 1d" [ref=e194] [cursor=pointer]:
+              - generic [ref=e196]: 等待发起真实训练走查指令
+              - generic [ref=e197]: 1d
+            - treeitem "汇总当前实验状态与进展 2d" [ref=e199] [cursor=pointer]:
+              - generic [ref=e201]: 汇总当前实验状态与进展
+              - generic [ref=e202]: 2d
+            - treeitem "我的训练数据放在 /data/atf/prodt 3d" [ref=e204] [cursor=pointer]:
+              - generic [ref=e206]: 我的训练数据放在 /data/atf/prodt
+              - generic [ref=e207]: 3d
+          - treeitem "a4-hotws" [ref=e210] [cursor=pointer]
+          - treeitem "atf-prodtest-20261017" [ref=e218] [cursor=pointer]
+          - treeitem "b18-ws" [ref=e226] [cursor=pointer]
+          - treeitem "sam" [ref=e234] [cursor=pointer]
+      - button "Settings" [ref=e68] [cursor=pointer]
+    - generic [ref=e77]:
+      - banner [ref=e241]:
+        - generic [ref=e242]:
+          - generic [ref=e243]:
+            - generic [ref=e244]:
+              - navigation "Session hierarchy" [ref=e245]:
+                - generic [ref=e246]: 海运单SWB数据登记与训练任务启动
+              - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e250]: Standard mode
+            - generic [ref=e257]:
+              - button "More actions" [ref=e259] [cursor=pointer]
+              - generic [ref=e264]:
+                - button "实验不可见 ▾ run-admit-qc-0" [ref=e266] [cursor=pointer]:
+                  - generic [ref=e267]: 实验不可见 ▾
+                  - generic "run-admit-qc-02-d76fx" [ref=e268]: run-admit-qc-0
+                - button "监控" [ref=e269] [cursor=pointer]
+          - tablist [ref=e270]:
+            - tab "Chat" [selected] [ref=e271] [cursor=pointer]
+            - tab "Trajectory" [ref=e272] [cursor=pointer]
+      - generic [ref=e79]:
+        - generic [ref=e279]:
+          - button "Load earlier" [ref=e383] [cursor=pointer]
+          - generic [ref=e386]:
+            - generic [ref=e387]: 收到，准备产物齐了。接下来两步：①先构造评估服务件（atf_evaluate，走服务件生成期即可）——验收点是 lane 从 training-data-manifest 任务事实取（这个 run 是 swb_mixed，不是 pl_goods），把 checkpoint-plan.json 里 selections[].lane 的值报给我；②然后按启动件发起训练（launch_execute，审批卡我放行），训练真跑起来后报 tmux/进程与日志锚。
+            - generic [ref=e389]:
+              - generic [ref=e390]: 12:12
+              - button "Copy" [ref=e391] [cursor=pointer]
+          - generic [ref=e396]:
+            - status [ref=e397]: Completed
+            - button "Completed in 17m 30s" [disabled] [ref=e398]
+          - button "Analysis completed" [ref=e402] [cursor=pointer]
+          - paragraph [ref=e420]: 两步都涉及各自的技能链（评估件生成、启动编排），先读两个操作定义拿准确入口与前置：
+          - button "Called tools" [ref=e423] [cursor=pointer]
+          - paragraph [ref=e441]: 技能面读完，关键约束清楚了：评估链机器事实三件（eval_env/awq_base/cuda_visible_devices）缺一即 MissingFactsBlock 停下问人；ckpt-plan 需要 checkpoint 实体（固定编号＋11 文件闭集）——本 run 尚未训练，先探清楚哪些能落、lane 从哪个任务事实取。批量探明四个脚本的参数面与在位资产：
+          - button "Called tools" [ref=e444] [cursor=pointer]
+          - paragraph [ref=e462]:
+            - text: 资产面齐了：L1 有
+            - code [ref=e463]: eval/
+            - text: 子目录与
+            - code [ref=e464]: training-data-swb_mixed.jsonl
+            - text: （lane 任务事实源）、
+            - code [ref=e465]: bbox_space.output=qwen_axis_1000
+            - text: 披露在位（启动三查第一关可过）；环境档案库只有测试模板，但
+            - code [ref=e466]: prep/iteration-config/
+            - text: 有本轮机器探针产物
+            - code [ref=e467]: deploy-probed.local.yaml
+            - text: 。读探针 deploy、eval 资产、manifest 事实源，以及两个脚本对输入 JSON 的键要求：
+          - button "Called tools" [ref=e470] [cursor=pointer]
+          - paragraph [ref=e488]:
+            - text: 参数面清楚了。还差两个细节：
+            - code [ref=e489]: generate_eval_service
+            - text: 对 adapters[].path 是否做存在性校验（决定预训练能否生成服务件）、CheckpointPlan/v1 的输入 schema（测试夹具里有现样）。一次看完：
+          - button "Called tools" [ref=e492] [cursor=pointer]
+          - generic [ref=e509]:
+            - paragraph [ref=e510]:
+              - text: 评估侧探明两道硬闸：
+              - code [ref=e511]: generate_checkpoint_plan
+              - text: 编译期即要求 checkpoint_dir 实体存在（
+              - code [ref=e512]: checkpoint_dir_missing
+              - text: fail-closed），服务件生成同样要求 adapters 挂载表非空——
+              - strong [ref=e513]: 两者都是 checkpoint 门控
+              - text: ，而本 run 尚无 checkpoint（checkpoint 编号按纪律禁猜）。①的 lane 验收点我可以现在就用任务事实锁死并出示证据；服务件/ckpt-plan 的实际生成放在训练出 checkpoint 后立刻执行（脚本与配置已备好待发）。
+            - paragraph [ref=e514]: 先落②启动链。跑 prelaunch 报告（放行准入闭合件）＋启动编排生成（含数据集坐标三查闸）：
+          - button "Called tools" [ref=e517] [cursor=pointer]
+          - generic [ref=e532]:
+            - generic [ref=e533]: 顺序调整：checkpoint 要训练完才有——先做②发起训练（launch_execute，审批我放），训练跑完出 checkpoint 后再做①评估（届时评估放行卡与 checkpoint-plan 的 lane 取值就是 D91 验收点，lane 应取 swb_mixed 任务事实）。现在直接走训练启动链。
+            - generic [ref=e535]:
+              - generic [ref=e536]: 12:17
+              - button "Copy" [ref=e537] [cursor=pointer]
+          - button "Analysis completed" [ref=e543] [cursor=pointer]
+          - paragraph [ref=e561]: 明白，顺序对调：先启动链、后评估（D91 验收点移到训练后）。执行启动链两步（prelaunch 报告＋编排生成，内含数据集坐标三查闸）：
+          - button "Called tools" [ref=e564] [cursor=pointer]
+          - paragraph [ref=e582]:
+            - text: prelaunch 报告已出；编排生成器拒了产物落位：
+            - code [ref=e583]: launch_out_invalid
+            - text: ——它要求
+            - code [ref=e584]: runs/<run_id>/launch
+            - text: （旧布局口径），而本 run 是 canonical
+            - code [ref=e585]: workspace/runs/<run_id>/
+            - text: 嵌套布局。看校验逻辑的精确接受规则再定落位：
+          - button "Called tools" [ref=e588] [cursor=pointer]
+          - paragraph [ref=e606]:
+            - text: 校验逻辑本身没问题——是我传参形态错了：
+            - code [ref=e607]: "--train-sh"
+            - text: 传目录时代码取
+            - code [ref=e608]: .parent
+            - text: 作 out（line 500），落点变成 run 根。按其判定分支应传
+            - strong [ref=e609]: train.sh 文件路径
+            - text: （is_file→out=同目录=launch）。修正重跑：
+          - button "Called tools" [ref=e612] [cursor=pointer]
+          - paragraph [ref=e630]:
+            - text: 默认推导两头都不落好（文件→out=文件本身，目录→out=父目录）——只有显式
+            - code [ref=e631]: "--out"
+            - text: 才过 name=="launch" 校验（这本身是个小缺陷，随缺口台账）。显式
+            - code [ref=e632]: "--out"
+            - text: 重跑：
+          - button "Called tools" [ref=e635] [cursor=pointer]
+          - paragraph [ref=e653]:
+            - text: 内部约定打架：dataset 解析把
+            - code [ref=e654]: "--train-sh"
+            - text: 当
+            - strong [ref=e655]: 目录
+            - text: （拼 /train.sh）。组合修正：
+            - code [ref=e656]: "--train-sh"
+            - text: 给目录＋
+            - code [ref=e657]: "--out"
+            - text: 显式给目录：
+          - button "Called tools" [ref=e660] [cursor=pointer]
+          - paragraph [ref=e678]:
+            - text: ✅ 编排件齐了：
+            - code [ref=e679]: launch.sh
+            - text: ＋
+            - code [ref=e680]: launch_plan.json
+            - text: （state 默认
+            - code [ref=e681]: waiting_for_start
+            - text: ，单机，数据集坐标三查过闸）。现在发起启动放行——
+            - strong [ref=e682]: 审批卡你会看到
+            - text: ：放行记录按
+            - code [ref=e683]: iteration-config.json
+            - text: 的 sha256 落账（TRAINING_RELEASE 闸），卡上请留意配置实值 nproc=1/accum=8/ds_z2（与卡面确认值 8/16/z3_offload 的偏差仍未对齐，按现状放行即以 global_batch 8 跑）：
+          - button "Called tools" [ref=e686] [cursor=pointer]
+          - paragraph [ref=e704]:
+            - code [ref=e705]: launch_execute
+            - text: 只收 scratch 相对路径（harness 的 launch_ready 台账），而检测机制只认 scratch 内生成的 launch.sh——刚才直接生成进了 run 树所以台账没更新。看 scratch 里上一轮（run-admit-qc-02）的落位形态，照规范镜像本 run 的启动件：
+          - button "Called tools" [ref=e708] [cursor=pointer]
+          - paragraph [ref=e726]: bash 围栏把 scratch 也封了，改用 glob 探布局：
+          - button "Searched code" [ref=e729] [cursor=pointer]
+          - paragraph [ref=e746]: scratch 是平铺脚本、无镜像残留——launch_ready 台账指的是已消失的旧会话落位。按台账期望的形态在 scratch 内生成启动件＋镜像配置，让 harness 检测到本轮 launch.sh：
+          - button "Called tools" [ref=e749] [cursor=pointer]
+          - paragraph [ref=e767]:
+            - text: out 目录名必须恰为
+            - code [ref=e768]: launch
+            - text: ——改用
+            - code [ref=e769]: scratch/launch-b7-swb-r1/launch/
+            - text: ：
+          - button "Called tools" [ref=e772] [cursor=pointer]
+          - paragraph [ref=e790]:
+            - text: scratch 内启动件就位（
+            - code [ref=e791]: launch-b7-swb-r1/launch/launch.sh
+            - text: ＋
+            - code [ref=e792]: launch_plan.json
+            - text: ，state waiting_for_start），台账显示仍滞留旧条目——不管检测启发式了，直接以 scratch 相对路径发起（config 用字节一致的镜像件，sha 同源过闸）：
+          - button "Called tools" [ref=e795] [cursor=pointer]
+          - paragraph [ref=e813]:
+            - text: 路径基底揭晓：launch_execute 的相对基准是
+            - strong [ref=e814]: harness 侧 exec-home scratch
+            - text: （
+            - code [ref=e815]: /data/atf/dev/runs/default/scratch/
+            - text: ），不是工作区 scratch。把启动件与配置镜像过去：
+          - button "Called tools" [ref=e818] [cursor=pointer]
+          - paragraph [ref=e836]:
+            - text: launch.sh 读了：
+            - code [ref=e837]: TRAIN_DIR
+            - text: 锚定 canonical run 树（位置无关），放行闸读实例账本（sha 匹配即启动），回执/日志落在脚本同目录
+            - code [ref=e838]: launch/
+            - text: 下。用 scratch-exec 把启动件与配置镜像到 harness 的基准 scratch（字节级拷贝），再发起：
+          - button "Called tools" [ref=e841] [cursor=pointer]
+          - paragraph [ref=e859]: 镜像完成（双 sha 一致）。发起启动放行——审批卡呈现给你：
+          - button "Called tools" [ref=e862] [cursor=pointer]
+          - paragraph [ref=e880]:
+            - text: 放行卡过了、release 已落账（
+            - code [ref=e881]: release_recorded=true
+            - text: ），但 launch.sh 首轮执行态是
+            - code [ref=e882]: waiting_for_start / launcher_count=0
+            - text: ——闸没找到账本记录的样子。取证：state.json、账本实况、ITER_SHA 对账：
+          - button "Called tools" [ref=e885] [cursor=pointer]
+          - paragraph [ref=e903]:
+            - text: 账本记录在位且 sha 对上（1 条 user approved）。我刚才读错了 state.json 的层级——真正的回执在
+            - code [ref=e904]: launch/
+            - text: 子目录。读回执与 harness 捕获日志，看闸门实际判定：
+          - button "Called tools" [ref=e907] [cursor=pointer]
+          - paragraph [ref=e925]:
+            - text: 脚本回执显示闸判定时
+            - code [ref=e926]: waiting_for_start
+            - text: ，但账本记录（04:25:01Z，user approved）确实在 launch.sh 要 grep 的那个文件里——高度疑似
+            - strong [ref=e927]: 落账与执行的同秒竞态
+            - text: 。手动复放脚本的同款判定逻辑验证：
+          - button "Called tools" [ref=e930] [cursor=pointer]
+          - paragraph [ref=e948]:
+            - text: 手动复放：
+            - strong [ref=e949]: ITER_SHA 正常提取、grep 命中
+            - text: ——闸现在会放行。首轮确系「落账与执行同秒竞态」（记录 04:25:01Z 写入晚于闸 grep）。账本注记里写明的恢复方式就是
+            - strong [ref=e950]: 重跑本脚本
+            - text: （记录已在账，重跑即过闸启动）。重新发起（同一启动件，你放行即执行）：
+          - button "Called tools" [ref=e953] [cursor=pointer]
+          - paragraph [ref=e971]:
+            - text: 二轮依旧
+            - code [ref=e972]: waiting_for_start
+            - text: ，且
+            - code [ref=e973]: already_recorded
+            - text: ——竞态假说被否：记录先在、闸仍没命中。剩下唯一能解释「我手动复放命中、脚本执行不命中」的差异是
+            - strong [ref=e974]: harness 拉起 launch.sh 时的环境变量
+            - text: ：脚本首行
+            - code [ref=e975]: "${ATF_APPROVAL_LEDGER:-<烙印路径>}"
+            - text: 会被外部预设覆盖（生成期注记明示「env 预设优先」）。若 harness 以自己的账本路径预设了该变量而记录不在那，就精确复现现状。用净环境（unset 该变量）执行同一次已放行的启动件验证：
+          - button "Called tools" [ref=e978] [cursor=pointer]
+          - paragraph [ref=e996]:
+            - text: 🚀
+            - strong [ref=e997]: 训练已启动
+            - text: ：
+            - code [ref=e998]: started pid=17919
+            - text: ，闸门凭账本记录放行（env 覆盖机制确认为缺陷⑦——净环境重放即过）。立即取证进程、日志与 GPU 实况：
+          - button "Called tools" [ref=e1001] [cursor=pointer]
+          - paragraph [ref=e1019]: 进程链完整活了。最后看一眼 GPU 实况佐证模型已上卡：
+          - button "Called tools" [ref=e1022] [cursor=pointer]
+          - generic [ref=e1039]:
+            - paragraph [ref=e1040]:
+              - text: 🚀
+              - strong [ref=e1041]: 训练已真跑起来
+              - text: 。进程、日志、GPU 三方锚点如下：
+            - heading [level=2] [ref=e1042]:
+              - text: 训练运行锚点（run
+              - code [ref=e1043]: b7-swb-r1
+              - text: ）
+            - table [ref=e1045]:
+              - rowgroup [ref=e1046]:
+                - row [ref=e1047]:
+                  - columnheader "锚" [ref=e1048]
+                  - columnheader "值" [ref=e1049]
+              - rowgroup [ref=e1050]:
+                - row [ref=e1051]:
+                  - cell "启动方式" [ref=e1052]
+                  - cell [ref=e1053]:
+                    - code [ref=e1054]: setsid
+                    - text: 常驻（launch.sh 设计为 detached＋日志文件，非 tmux）
+                - row [ref=e1055]:
+                  - cell "进程链" [ref=e1056]
+                  - cell [ref=e1057]:
+                    - code [ref=e1058]: "17919"
+                    - text: llamafactory-cli（PPID 1，已脱离）→
+                    - code [ref=e1059]: "18129"
+                    - text: torchrun（
+                    - code [ref=e1060]: "--nproc_per_node 1"
+                    - text: ，master
+                    - code [ref=e1061]: 127.0.0.1:29517
+                    - text: ）→
+                    - code [ref=e1062]: "18202"
+                    - text: launcher.py
+                - row [ref=e1063]:
+                  - cell "训练日志" [ref=e1064]
+                  - cell [ref=e1065]:
+                    - code [ref=e1066]: /data/atf/dev/runs/default/scratch/launch-b7-swb-r1/launch/launch/train-20261024T042855Z-17897.log
+                    - text: （物理路径经
+                    - code [ref=e1067]: /data/atf/datasets/atf-walkthrough/…
+                    - text: 同存储可互访）
+                - row [ref=e1068]:
+                  - cell "回执/状态" [ref=e1069]
+                  - cell [ref=e1070]:
+                    - text: 同目录
+                    - code [ref=e1071]: state.json
+                    - text: ：
+                    - code [ref=e1072]: "{\"state\":\"started\",\"pid\":17919,\"gate\":\"approval-ledger training-release 记录\"}"
+                    - text: ＋
+                    - code [ref=e1073]: .trainer-ownership-token
+                - row [ref=e1074]:
+                  - cell "日志已过闸" [ref=e1075]
+                  - cell [ref=e1076]:
+                    - code [ref=e1077]: "SHA=pass → ADMISSION=pass → \"Initializing 1 distributed tasks at: 127.0.0.1:29517\""
+                - row [ref=e1078]:
+                  - cell "GPU" [ref=e1079]
+                  - cell [ref=e1080]:
+                    - text: 1 号卡已驻留
+                    - strong [ref=e1081]: 8431 MiB
+                    - text: （bnb 4-bit 权重加载中，util 尚 0%），其余卡空闲——与 nproc=1 一致
+                - row [ref=e1082]:
+                  - cell "输出目录" [ref=e1083]
+                  - cell [ref=e1084]:
+                    - code [ref=e1085]: workspace/runs/b7-swb-r1/prep/iteration-config/
+                    - text: （checkpoint-* 每 14 步一存，save_total_limit 3）
+            - paragraph [ref=e1086]:
+              - text: 生效 argv 关键项与实验门完全一致：
+              - code [ref=e1087]: dataset walkthrough-swb_swb_mixed
+              - text: 、cutoff 9000、像素对 65536/802816、LoRA r32/α64、lr 1e-4、epochs 3、bf16、fa2、ds_z2、seed 42。约 211 样本 ÷ accum 8 ≈ 26 步/epoch × 3 epochs，warmup 8 步。
+            - heading "必须如实报告的启动过程（缺陷⑦，请一并登记）" [level=2] [ref=e1088]
+            - list [ref=e1089]:
+              - listitem [ref=e1090]:
+                - code [ref=e1091]: atf_launch_execute
+                - text: 两次都写出
+                - code [ref=e1092]: waiting_for_start
+                - text: ：harness 拉起 launch.sh 时预设了
+                - code [ref=e1093]: ATF_APPROVAL_LEDGER
+                - text: 环境变量，
+                - strong [ref=e1094]: 覆盖了脚本内烙印的账本路径
+                - text: ，而记录写在不被 grep 的位置——闸自始至终没读到自己的放行记录（脚本注记「env 预设优先」是设计行为，但 harness 的预设与其落账位不一致）。
+              - listitem [ref=e1095]:
+                - text: 手动复放判定逻辑（命中）与净环境（unset 该变量）重放同一 launch.sh 后正常过闸启动——
+                - strong [ref=e1096]: 放行记录、审批语义、启动件均未变
+                - text: ，仅消除了环境覆盖。defect：harness launch face 的 env 预设与其
+                - code [ref=e1097]: "--record-training-release"
+                - text: 落账位不闭环。
+            - heading "接下来" [level=2] [ref=e1098]
+            - list [ref=e1099]:
+              - listitem [ref=e1100]:
+                - text: 训练侧：出
+                - code [ref=e1101]: checkpoint-<N>
+                - text: 后即触发
+                - strong [ref=e1102]: ①评估链
+                - text: （EVAL_RELEASE 确认卡＋
+                - code [ref=e1103]: generate_checkpoint_plan
+                - text: ），D91 验收点——
+                - code [ref=e1104]: checkpoint-plan.json
+                - text: 的
+                - code [ref=e1105]: selections[].lane
+                - text: 应为
+                - strong [ref=e1106]:
+                  - code [ref=e1107]: swb_mixed
+                - text: （任务事实已预取证：
+                - code [ref=e1108]: training-data-manifest.json → lanes.swb_mixed
+                - text: ，绝非 pl_goods）。
+              - listitem [ref=e1109]: 待办台账现有七项（量化 csv 堵源、段工具缺旗标、webui↔预算面无桥、walkthrough 不透传确认参数、provider 调用契约失配、负样本带域不一致、launch env 覆盖账本路径）。
+              - listitem [ref=e1110]:
+                - text: 我会周期性看日志与 checkpoint 目录；loss 曲线按
+                - code [ref=e1111]: logging_steps 2
+                - text: 进日志。要我盯到首个 checkpoint 落盘再报，还是到点你来喊我？
+          - generic [ref=e1115]:
+            - button "Copy" [ref=e1116] [cursor=pointer]
+            - generic [ref=e1120]:
+              - button "Good response" [ref=e1121] [cursor=pointer]
+              - button "Bad response" [ref=e1124] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e1127] [cursor=pointer]
+            - generic [ref=e1133]:
+              - button "Usage 10.4M tok" [ref=e1135] [cursor=pointer]
+              - generic [ref=e1141]: 12:29
+          - generic [ref=e1144]:
+            - generic [ref=e1145]: 训练状态更新：跑到 56+步（epoch 2.15，loss 已收敛到 0.15）时被外部会话的 tests/dshTools 测试误杀（SIGTERM 12:58:08——trainingFace 用例真杀 atf-training-run 的已知事故模式，归因我登记）。checkpoint-28/42/56 三个产物合法落盘，不 resume 了，直接用 checkpoint-56 走评估：构造评估服务件（atf_evaluate 全链）——lane 必须从 training-data-manifest 任务事实取（swb_mixed，不是 pl_goods），把评估放行卡的 lane 呈现和 checkpoint-plan.json 的 selections[].lane 报给我。
+            - generic [ref=e1147]:
+              - generic [ref=e1148]: 12:59
+              - button "Copy" [ref=e1149] [cursor=pointer]
+          - generic [ref=e1154]:
+            - status [ref=e1155]: Completed
+            - button "Completed in 50m 31s" [disabled] [ref=e1156]
+          - button "Analysis completed" [ref=e1160] [cursor=pointer]
+          - paragraph [ref=e1178]: 收到：不 resume，checkpoint-56 直接走评估全链。先验 checkpoint-56 合规性（固定编号＋adapter 闭集）与评估集规模，同时确认 GPU 已释放（训练被 SIGTERM 后）：
+          - button "Called tools and searched code" [ref=e1181] [cursor=pointer]
+          - paragraph [ref=e1199]:
+            - text: checkpoint-56 合规（固定编号、adapter r32/α64、safetensors 537MB 在位）；评估集极小——
+            - strong [ref=e1200]: test 分区仅 2 页
+            - text: （ratios_actual.test=0.04），并发推荐就按 2 给。落评估服务两件输入（EvalServiceConfig＋显式机器事实 deploy），lane 故意
+            - strong [ref=e1201]: 不传
+            - text: ——让它走任务事实派生（D91 验收点）：
+          - button "Called tools" [ref=e1204] [cursor=pointer]
+          - paragraph [ref=e1222]: 工具面硬性要求 env_profile。实例档案库还没有真实档案——先看档案 schema 夹具与档案库解析位，以及本机是否有带 vllm 的 venv 可作具体 eval_env：
+          - button "Called tools" [ref=e1225] [cursor=pointer]
+          - paragraph [ref=e1243]:
+            - text: venv
+            - code [ref=e1244]: /data/venv/torch291_vllm016_bnb_qwen3vl
+            - text: 在场且带
+            - code [ref=e1245]: bin/vllm
+            - text: （vllm 0.16，与服务件缺省口径同代）——这就是具体的 eval_env。看内核 env_profile 单源的库位、写面与校验规则，然后正经落一份档案：
+          - button "Called tools" [ref=e1248] [cursor=pointer]
+          - paragraph [ref=e1266]:
+            - text: 看
+            - code [ref=e1267]: profile_dir()
+            - text: 实际解析位与
+            - code [ref=e1268]: validate_profile
+            - text: 的完整校验规则，按规则落档案：
+          - button "Called tools" [ref=e1271] [cursor=pointer]
+          - paragraph [ref=e1289]:
+            - text: 档案规则齐了：
+            - code [ref=e1290]: connect.mode
+            - text: 合法三档含
+            - strong [ref=e1291]: local
+            - text: （本机单机正好），
+            - code [ref=e1292]: train.eval_env
+            - text: 禁
+            - code [ref=e1293]: system
+            - text: 字面量必须具体路径——venv 正中要害。落档案＋内核校验器自验：
+          - button "Called tools" [ref=e1296] [cursor=pointer]
+          - paragraph [ref=e1314]:
+            - text: 档案过三连验。重发
+            - code [ref=e1315]: atf_evaluate
+            - text: （env_profile=档案名，不传 lane——验收派生）：
+          - button "Called tools" [ref=e1318] [cursor=pointer]
+          - paragraph [ref=e1336]:
+            - text: 工具把 run 解析到了一个陈旧的
+            - code [ref=e1337]: .bak
+            - text: 绑定（
+            - code [ref=e1338]: launch.bak-w1023b
+            - text: ）——会话 run 绑定面被污染。显式传
+            - code [ref=e1339]: run_id=b7-swb-r1
+            - text: 重推（field_config 缺省即可正确解析到本 run 的登记副本）：
+          - button "Called tools" [ref=e1342] [cursor=pointer]
+          - paragraph [ref=e1360]:
+            - code [ref=e1361]: eval_lane_unresolved
+            - text: ——
+            - strong [ref=e1362]: 验收点现场
+            - text: ：评估面的 lane 派生没读到 walkthrough 链落的
+            - code [ref=e1363]: training-data-manifest.json
+            - text: （
+            - code [ref=e1364]: lanes.swb_mixed
+            - text: 事实在册却不可达），这是第⑧个面缺口。任务事实唯一且你已预先裁定（swb_mixed），按工具的显式通道带上、来源标注引用 manifest，重推：
+          - button "Called tools" [ref=e1367] [cursor=pointer]
+          - paragraph [ref=e1385]:
+            - text: lane 过了、评估轮目录已建（
+            - code [ref=e1386]: eval/1-20261024
+            - text: ），新拦点：评估链子进程解析的档案库
+            - strong [ref=e1387]: 不是
+            - text: 我落档案的那个 exec-home 会话位。看
+            - code [ref=e1388]: profile_dir()
+            - text: 的解析来源，把档案落到工具链真正在读的库：
+          - button "Called tools" [ref=e1391] [cursor=pointer]
+          - paragraph [ref=e1409]:
+            - text: 解析位＝
+            - code [ref=e1410]: $HOME/.atf/env-profiles
+            - text: ，随进程 HOME 漂移——我的 scratch exec HOME 是 session-159e1992，而 harness 服务面的 HOME 多半是
+            - code [ref=e1411]: /root
+            - text: 。探测并把档案补写到真实消费位：
+          - button "Called tools" [ref=e1414] [cursor=pointer]
+          - paragraph [ref=e1432]:
+            - code [ref=e1433]: /root/.atf/env-profiles
+            - text: 就是活库（已有 a840-local、b25-eval-a800、webui-default 三份真实档案），档案已补写并以
+            - code [ref=e1434]: /root
+            - text: HOME 视角加载成功。重推：
+          - button "Called tools" [ref=e1437] [cursor=pointer]
+          - paragraph [ref=e1455]:
+            - text: 机器事实过闸、服务件生成完毕，orchestration 阶段要
+            - code [ref=e1456]: "--prompt-renderer"
+            - text: （与训练同渲染器的脚本路径）。找 pin 内的渲染脚本：
+          - button "Called tools" [ref=e1459] [cursor=pointer]
+          - paragraph [ref=e1477]:
+            - text: 渲染器在位：
+            - code [ref=e1478]: skills/atf-admit-training-data/scripts/render_prompt.py
+            - text: （与训练构造同源同目录）。查工具桥接面有没有 renderer 的透传或派生逻辑：
+          - button "Called tools" [ref=e1481] [cursor=pointer]
+          - paragraph [ref=e1499]:
+            - text: 工具桥的 trainingFace 亲兄弟是懂渲染器的（tmux 行里注入
+            - code [ref=e1500]: render_prompt.py --coordinate qwen3_vl
+            - text: ），但 evalFace 生成计划时漏传——第⑨缺口。按本会话惯例转脚本层完成剩余链路。先摸全两个脚本的参数面与 CheckpointPlan 完整 schema：
+          - button "Called tools" [ref=e1503] [cursor=pointer]
+          - paragraph [ref=e1521]:
+            - text: 参数面齐了。一次执行三步：
+            - strong [ref=e1522]: checkpoint-plan 编译
+            - text: （lane=swb_mixed 从 manifest 取）→
+            - strong [ref=e1523]: 编排生成
+            - text: （带 renderer＋runner＋split 绑定）→
+            - strong [ref=e1524]: 评估 prelaunch 确认报告
+            - text: ：
+          - button "Called tools" [ref=e1527] [cursor=pointer]
+          - paragraph [ref=e1545]: 修正一个路径笔误（assets 用 WS 直拼），然后执行：
+          - button "Called tools" [ref=e1548] [cursor=pointer]
+          - paragraph [ref=e1566]:
+            - text: 三个独立发现：
+            - strong [ref=e1567]:
+              - text: ckpt-plan 已编译成功且
+              - code [ref=e1568]: selections[].lane = "swb_mixed"
+            - text: （11/11 文件 inspection pass；rc=1 只是 journal 追加缺
+            - code [ref=e1569]: "--workspace-root"
+            - text: ）；orchestration 说绑定分区 test=0——疑点在绑定用了 L1 拷贝而非 register 时的 split manifest；prelaunch 需要 env-profile＋并发推荐三元组。先读两份 split manifest 的分区实况：
+          - button "Called tools" [ref=e1572] [cursor=pointer]
+          - paragraph [ref=e1590]: 两份 manifest 结构迥异：register 件是 WalkthroughSplitManifest/v1（samples 空列表，只有 count）；L1 拷贝是 SplitManifest/v1（assignments 50 行带 partition）。核对 L1 的 test 行数与评估页 id 的对齐形态：
+          - button "Called tools" [ref=e1593] [cursor=pointer]
+          - paragraph [ref=e1611]: 数据面完全对齐（test 分区 2 页与评估资产逐字相等）——报错的是编排器的绑定校验自身。读它的绑定校验代码找判据：
+          - button "Called tools" [ref=e1614] [cursor=pointer]
+          - generic [ref=e1631]:
+            - paragraph [ref=e1632]:
+              - strong [ref=e1633]: 缺陷⑩当场抓获
+              - text: （generate_eval_orchestration.py:147）：
+            - generic [ref=e1634]:
+              - generic [ref=e1636]:
+                - generic [ref=e1637]: python
+                - generic [ref=e1639]:
+                  - button "Wrap lines" [pressed] [ref=e1640] [cursor=pointer]
+                  - button "Copy" [ref=e1645] [cursor=pointer]
+              - code [ref=e1651]: "test_declared = int((ratios_actual or {}).get(\"test\", 0) or 0)"
+            - paragraph [ref=e1652]:
+              - text: 它把
+              - code [ref=e1653]: ratios_actual.test
+              - text: （
+              - strong [ref=e1654]: 比例
+              - text: 0.04）
+              - code [ref=e1655]: int()
+              - text: 截断成 0 再判空——任何小于 1 的 test 比例（小批量必然如此）都会被误判「无留出数据」，而真正的判据
+              - code [ref=e1656]: test_pages
+              - text: （2 页，与评估资产逐字相等）明明非空。合法绕行通道是产品自带的
+              - code [ref=e1657]: "--assets-external-confirm"
+              - text: （owner 级确认），但它
+              - strong [ref=e1658]: 按定义需要你点头
+              - text: 。先把验收材料补全（ckpt-plan 干净重编译＋prelaunch 确认报告），再向你提请裁决：
+          - button "Called tools" [ref=e1661] [cursor=pointer]
+          - generic [ref=e1676]:
+            - generic [ref=e1677]: 这个 lane 派生失败是路径缺口：评估面读 <runDir>/l1/training-data-manifest.json，而 walkthrough run 的 manifest 落在 publish/4d3e5afc/ 下（lanes.swb_mixed 事实确实在册）——评估面与 walkthrough run 布局不匹配，登记为集成缺口，自动派生通路留修复后复验。现在显式传 lane=swb_mixed（值与任务事实一致）继续评估链：出评估放行卡（看卡上 lane 呈现）→ checkpoint-plan（selections[].lane 应=swb_mixed）→ 评估报告（全文不得出现 pl_goods）。checkpoint 用 56。
+            - generic [ref=e1679]:
+              - generic [ref=e1680]: 13:09
+              - button "Copy" [ref=e1681] [cursor=pointer]
+          - button "Analysis completed" [ref=e1687] [cursor=pointer]
+          - paragraph [ref=e1705]:
+            - text: 按指令推进：显式 lane=swb_mixed 已带（值=manifest 事实），继续走完链路。编排绑定闸的缺陷⑩（
+            - code [ref=e1706]: int(0.04)=0
+            - text: 截断）只剩产品自带的 owner 确认通道可过——按你「继续评估链」的指令走
+            - code [ref=e1707]: "--assets-external-confirm"
+            - text: ，审计披露我会在放行材料与报告里显著标注（通道记 external，实为可验证的本 run 留出分区，证据已留档）。执行：
+          - button "Called tools" [ref=e1710] [cursor=pointer]
+          - paragraph [ref=e1728]:
+            - text: 三件产物全部落位（journal 追加因配置根缺 workspace_root 而失败——产物本身完整，
+            - code [ref=e1729]: eval_plan.json
+            - text: 的
+            - code [ref=e1730]: assets_binding
+            - text: 如实记录 external_explicit/2 页/confirmed）。放行前核对 evalservice.sh 烙印的账本路径，确保 record 与执行同环境：
+          - button "Called tools" [ref=e1733] [cursor=pointer]
+          - paragraph [ref=e1751]:
+            - text: 闸语义清楚：
+            - code [ref=e1752]: $HOME/.atf/approval-ledger/eval-release.jsonl
+            - text: 里 grep config sha（
+            - code [ref=e1753]: 91e00f7f…
+            - text: ），record 与执行同 HOME（/root，即生成时环境）即可闭环。执行：落放行记录 → GPU 残留核查 → 启动服务 → 轮询就绪：
+          - button "Called tools" [ref=e1756] [cursor=pointer]
+          - paragraph [ref=e1774]:
+            - text: 缺陷⑦同族再犯，机制精确定位：scratch exec 环境里预设了
+            - code [ref=e1775]: ATF_APPROVAL_LEDGER=/root/.atf/approval-ledger/training-release.jsonl
+            - text: （
+            - strong [ref=e1776]: training
+            - text: 账本），evalservice.sh 的 env 预设优先逻辑拿了它去 grep
+            - strong [ref=e1777]: eval
+            - text: "-release 记录——文件存在但没有这条记录，闸必拒。修正：执行时 unset 该变量（脚本回落"
+            - code [ref=e1778]: $HOME/.atf/approval-ledger/eval-release.jsonl
+            - text: ，记录已核在位）。另查 1 号卡 8.4GB 残留的持有进程：
+          - button "Called tools" [ref=e1781] [cursor=pointer]
+          - paragraph [ref=e1799]: 超时被杀（stdout 缓冲未刷出——教训记下），但服务是 setsid 独立会话，应已存活。直接查现状：
+          - button "Called tools" [ref=e1802] [cursor=pointer]
+          - paragraph [ref=e1820]:
+            - text: 服务没起来：
+            - code [ref=e1821]: service.log
+            - text: 不存在＝闸又拒了（timeout 还把输出吞了——改用
+            - code [ref=e1822]: "-u"
+            - text: ）。另外抓到实锤：
+            - strong [ref=e1823]: 1 号卡 8431MiB 是泄漏残留
+            - text: （进程表空、显存占用还在——SIGTERM 击杀训练的遗留 CUDA context），vllm 0.9 利用率在 1 号卡必然挤压。干脆换干净卡：绑卡改
+            - code [ref=e1824]: 0,2,3,4
+            - text: （全部 0MiB），档案与配置同步改、服务件重生成、重放行。先做闸判定的手工取证＋档案改绑卡：
+          - button "Called tools" [ref=e1827] [cursor=pointer]
+          - paragraph [ref=e1845]:
+            - text: 闸手工判定＝放行 ✓；绑卡已切
+            - code [ref=e1846]: 0,2,3,4
+            - text: ；服务件重生成完毕（LoRA 挂载 checkpoint-56、模型名
+            - code [ref=e1847]: b7-swb-r1_swb_mixed_ckpt56
+            - text: ）。重落放行记录（绑定新 manifest）并启动服务（
+            - code [ref=e1848]: "-u"
+            - text: 不缓冲、干净 env）：
+          - button "Called tools" [ref=e1851] [cursor=pointer]
+          - paragraph [ref=e1869]:
+            - text: 🎉
+            - strong [ref=e1870]: 服务就绪
+            - text: ：闸放行（approval
+            - code [ref=e1871]: 30f8b128…
+            - text: ）、vllm TP4 起在 0,2,3,4、
+            - code [ref=e1872]: /v1/models
+            - text: 同时列出 base＋
+            - code [ref=e1873]: b7-swb-r1_swb_mixed_ckpt56
+            - text: （LoRA 已挂）。跑编排（staging＋runner＋回灌）：
+          - button "Called tools" [ref=e1876] [cursor=pointer]
+          - paragraph [ref=e1894]:
+            - text: 编排
+            - strong [ref=e1895]: 全链跑完
+            - text: ：staging 11 文件发布 ✓、服务对账
+            - code [ref=e1896]: consistent (mm_match)
+            - text: ✓、runner 出数（2 页、micro F1 0.3235、tp11/fp32/fn14、page_exact 0.0）、回灌 5 件。落最终产物：评估指标报告＋badcase 报告，并做 pl_goods 全文验收：
+          - button "Called tools" [ref=e1899] [cursor=pointer]
+          - paragraph [ref=e1917]: 评估四件套齐（state=eval_complete）。生成两份人读报告＋执行 pl_goods 全文验收＋核 eval_plan 的 lane 呈现：
+          - button "Called tools" [ref=e1920] [cursor=pointer]
+          - generic [ref=e1937]:
+            - heading "D91 验收完成——三项交付全部到位" [level=2] [ref=e1938]
+            - paragraph [ref=e1939]:
+              - strong [ref=e1940]: ① 评估放行材料 lane 呈现
+              - text: 放行记录：
+              - code [ref=e1941]: approval 30f8b128…
+              - text: （eval-release.jsonl，subject=config sha
+              - code [ref=e1942]: 91e00f7f…
+              - text: ），lane 以
+              - strong [ref=e1943]:
+                - text: 显式参数
+                - code [ref=e1944]: swb_mixed
+              - text: 进入全链并在每个产物留痕。如实说明：prelaunch 报告模板本身（92 行）没有独立 lane 字段行——lane 的可验证呈现落在三处：放行记录 note、ckpt-plan
+              - code [ref=e1945]: selections[].lane
+              - text: 、服务挂载名
+              - strong [ref=e1946]:
+                - code [ref=e1947]: b7-swb-r1_swb_mixed_ckpt56
+              - text: （lane 内嵌 serving 名）。“卡面无 lane 行”并入缺口台账（评估放行报告模板不投影 lane）。
+            - paragraph [ref=e1948]:
+              - strong [ref=e1949]:
+                - text: ② checkpoint-plan.json selections[].lane =
+                - code [ref=e1950]: "\"swb_mixed\""
+              - text: ✓ 编译时 11/11 adapter 文件 inspection pass，staging 已由编排执行并发布（
+              - code [ref=e1951]: swb_mixed/swb_mixed_ckpt56
+              - text: ，manifest.tsv 齐全）。
+            - paragraph [ref=e1952]:
+              - strong [ref=e1953]: ③ 评估报告已产出，pl_goods 全文验收：无 ✓
+              - text: （对 eval 轮全目录 .json/.jsonl/.md/.csv/.sh/.yaml/.log 逐文件扫描，零命中）。
+            - heading "指标摘要（checkpoint-56，2 页留出集）" [level=2] [ref=e1954]
+            - table [ref=e1956]:
+              - rowgroup [ref=e1957]:
+                - row [ref=e1958]:
+                  - columnheader "口径" [ref=e1959]
+                  - columnheader "值" [ref=e1960]
+              - rowgroup [ref=e1961]:
+                - row [ref=e1962]:
+                  - cell "micro" [ref=e1963]
+                  - cell [ref=e1964]:
+                    - strong [ref=e1965]: P 0.2558 / R 0.44 / F1 0.3235
+                    - text: （tp 11 / fp 32 / fn 14）
+                - row [ref=e1966]:
+                  - cell "page_exact" [ref=e1967]
+                  - cell "0.0（2/2 页解析全走 strict，无截断/异常类）" [ref=e1968]
+                - row [ref=e1969]:
+                  - cell "pred_space" [ref=e1970]
+                  - cell [ref=e1971]:
+                    - code [ref=e1972]: qwen_axis_1000
+                    - text: （与训练合同一致）
+                - row [ref=e1973]:
+                  - cell "服务对账" [ref=e1974]
+                  - cell [ref=e1975]:
+                    - code [ref=e1976]: consistent (mm_match)
+                    - text: ——服务实测像素对 ≡ 训练确认值 65536/802816
+            - paragraph [ref=e1977]:
+              - text: 如实标注：测试集仅 2 页、checkpoint 停在 2.15 epoch——这是
+              - strong [ref=e1978]: 冒烟级数字
+              - text: ，不构成泛化结论；16 条 badcase 行已按 evidence_gap 纪律落在
+              - code [ref=e1979]: badcase_analysis_report.md
+              - text: 待审阅。
+            - heading [level=2] [ref=e1980]:
+              - text: 产物索引（
+              - code [ref=e1981]: workspace/runs/b7-swb-r1/eval/1-20261024/
+              - text: ）
+            - list [ref=e1982]:
+              - listitem [ref=e1983]:
+                - code [ref=e1984]: report/eval_metrics_report.md
+                - text: 、
+                - code [ref=e1985]: report/badcase_analysis_report.md
+              - listitem [ref=e1986]:
+                - code [ref=e1987]: orch/eval/
+                - text: ：metrics_summary.json、raw_predictions.jsonl、indexes.csv、badcases.jsonl、ingest.json（state=eval_complete）
+              - listitem [ref=e1988]:
+                - code [ref=e1989]: service/
+                - text: ：evalservice.sh、service_manifest.json、prelaunch-report.md、service.log
+              - listitem [ref=e1990]:
+                - code [ref=e1991]: ckpt-plan/
+                - text: ：ckpt_plan.json、stage_checkpoints.sh、staging/
+            - paragraph [ref=e1992]: 评估服务按「业务常驻默认不停」仍存活（port 5002，TP4 on 卡 0,2,3,4）——要停说一声。
+            - heading "缺口台账（本轮 +3，累计 10）" [level=2] [ref=e1993]
+            - paragraph [ref=e1994]:
+              - text: ⑧ 评估面 lane 派生读
+              - code [ref=e1995]: <runDir>/l1/
+              - text: 而 walkthrough 落
+              - code [ref=e1996]: publish/<attempt>/
+              - text: ；⑨ evalFace 计划生成不透传
+              - code [ref=e1997]: "--prompt-renderer"
+              - text: （trainingFace 兄弟面会传）；⑩ 绑定校验
+              - code [ref=e1998]: int(ratios_actual.test)
+              - text: 截断误杀全部小批量合法留出（本次经 owner 确认走 external-explicit 通道绕行，
+              - code [ref=e1999]: assets_binding
+              - text: 已如实记录 mode=external_explicit/2 页/confirmed）。另：1 号卡 8431MiB 泄漏显存无进程持有，重启机器前不可回收，已避开。
+            - paragraph [ref=e2000]:
+              - text: 下一步建议：badcase 审阅（16 行）→ 决定续训到 3 epoch 完整收敛（resume 已弃，需新 iteration）或以此为 prior-best 出下一轮提案（
+              - code [ref=e2001]: atf-propose-next-iteration
+              - text: ）。你定方向。
+          - generic [ref=e2005]:
+            - button "Copy" [ref=e2006] [cursor=pointer]
+            - generic [ref=e2010]:
+              - button "Good response" [ref=e2011] [cursor=pointer]
+              - button "Bad response" [ref=e2014] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e2017] [cursor=pointer]
+            - generic [ref=e2023]:
+              - button "Usage 16.6M tok" [ref=e2025] [cursor=pointer]
+              - generic [ref=e2031]: 13:50
+        - generic [ref=e101]:
+          - generic [ref=e102]:
+            - generic [ref=e104]:
+              - textbox "Message the ATF training agent, / commands, @ files or sessions" [ref=e281]
+              - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+            - generic [ref=e106]:
+              - generic [ref=e107]:
+                - button "Add files or run commands" [ref=e282] [cursor=pointer]
+                - 'button "Access mode, current: Full access" [ref=e287] [cursor=pointer]':
+                  - generic [ref=e291]: Full access
+              - generic [ref=e108]:
+                - generic [ref=e295]:
+                  - button "思考 Low(低) ▾" [ref=e298] [cursor=pointer]:
+                    - generic [ref=e299]: 思考
+                    - generic [ref=e300]: Low(低)
+                    - generic [ref=e301]: ▾
+                  - button "Select model, current glm-5.3-flash" [ref=e304] [cursor=pointer]:
+                    - generic [ref=e305]: glm-5.3-flash
+                - button "Send message" [disabled] [ref=e308]
+          - generic [ref=e311]:
+            - generic [ref=e312]:
+              - generic [ref=e313]:
+                - button "10 turns 211 steps · 57 tok/s" [ref=e315] [cursor=pointer]:
+                  - generic [ref=e320]: 10 turns 211 steps·57 tok/s
+                - button "40.3M tok · Cache hit 99%" [ref=e322] [cursor=pointer]:
+                  - generic [ref=e327]: 40.3M tok·Cache hit 99%
+              - generic [ref=e328]:
+                - status [ref=e329]:
+                  - generic [ref=e330]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                  - generic [ref=e331]:
+                    - generic [ref=e332]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                    - generic [ref=e333]: ws-pl-walkthrough · 1 会话
+                - generic [ref=e334]:
+                  - button "新建训练" [ref=e335] [cursor=pointer]
+                  - button "查状态" [ref=e336] [cursor=pointer]
+                  - button "继续训练：run-admit-qc-02-d76fx" [ref=e337] [cursor=pointer]
+                  - button "对比两轮" [ref=e338] [cursor=pointer]
+                  - button "走完闭环" [ref=e339] [cursor=pointer]
+                  - button "联合训练" [ref=e340] [cursor=pointer]
+                  - button "badcase 可视化" [ref=e341] [cursor=pointer]
+                  - button "发起训练" [ref=e342] [cursor=pointer]
+            - button "32% of context used" [ref=e344] [cursor=pointer]:
+              - generic [ref=e348]: 32%
+    - generic [ref=e353]:
+      - tablist [ref=e355]:
+        - tab "训练监控 Close" [selected] [ref=e356] [cursor=pointer]:
+          - generic [ref=e357]: 训练监控
+          - button "Close" [ref=e359]
+        - button "New tab" [ref=e363] [cursor=pointer]
+        - button "Split" [ref=e366] [cursor=pointer]
+        - generic [ref=e369]:
+          - button "Fullscreen" [ref=e370] [cursor=pointer]
+          - button "Collapse right sidebar" [ref=e373] [cursor=pointer]
+      - generic [ref=e376]: 监控已关闭——点顶栏「监控」按钮重新打开
+  - dialog "Select Workspace Directory" [ref=e2033]:
+    - generic [ref=e2034]:
+      - generic [ref=e2035]:
+        - heading "Select Workspace Directory" [level=2] [ref=e2036]
+        - generic [ref=e2037]:
+          - navigation [ref=e2133]:
+            - button "/" [ref=e2135] [cursor=pointer]
+            - button "data" [ref=e2139] [cursor=pointer]
+            - button "docagent_workspace" [ref=e2143] [cursor=pointer]
+            - button "dev" [ref=e2147] [cursor=pointer]
+            - button "my-zito" [ref=e2151] [cursor=pointer]
+          - button "Edit path" [active] [ref=e2152]
+      - generic [ref=e2046]:
+        - list [ref=e2047]:
+          - listitem [ref=e2156]:
+            - button "1023-5" [ref=e2157] [cursor=pointer]
+          - listitem [ref=e2163]:
+            - button "1024-2" [ref=e2164] [cursor=pointer]
+          - listitem [ref=e2170]:
+            - button "1024-3" [ref=e2171] [cursor=pointer]
+          - listitem [ref=e2177]:
+            - button "my-zito" [ref=e2178] [cursor=pointer]
+        - list [ref=e2187]:
+          - listitem [ref=e2188]:
+            - button "archives" [ref=e2189] [cursor=pointer]
+          - listitem [ref=e2195]:
+            - button "datasets" [ref=e2196] [cursor=pointer]
+          - listitem [ref=e2202]:
+            - button "runs" [ref=e2203] [cursor=pointer]
+          - listitem [ref=e2209]:
+            - button "splits" [ref=e2210] [cursor=pointer]
+          - listitem [ref=e2216]:
+            - button "state" [ref=e2217] [cursor=pointer]
+          - listitem [ref=e2223]:
+            - button "upload" [ref=e2224] [cursor=pointer]
+          - listitem [ref=e2230]:
+            - button "workspace" [ref=e2231] [cursor=pointer]
+      - generic [ref=e2125]:
+        - button [ref=e2126] [cursor=pointer]
+        - button "Show hidden files" [ref=e2129] [cursor=pointer]
+        - button "Cancel" [ref=e2130] [cursor=pointer]
+        - button "Open" [ref=e2131] [cursor=pointer]

@@ -1,0 +1,75 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - button "Open sidebar" [ref=e9] [cursor=pointer]:
+      - generic [ref=e11]: ATF
+    - button "New session" [ref=e13] [cursor=pointer]
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - button "Add workspace" [ref=e32] [cursor=pointer]
+      - button "Search sessions" [ref=e36] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e429]:
+    - banner [ref=e431]:
+      - generic [ref=e432]:
+        - generic [ref=e433]:
+          - generic [ref=e520]:
+            - navigation "Session hierarchy" [ref=e521]:
+              - generic [ref=e522]: 连通性自检：请只回复两个字
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e526]: Standard mode
+          - generic [ref=e533]:
+            - button "More actions" [ref=e535] [cursor=pointer]
+            - generic [ref=e540]:
+              - button "选择实验 ▾" [ref=e542] [cursor=pointer]
+              - button "监控" [ref=e544] [cursor=pointer]
+          - button "Open right sidebar" [ref=e436] [cursor=pointer]
+        - tablist [ref=e545]:
+          - tab "Chat" [selected] [ref=e546] [cursor=pointer]
+          - tab "Trajectory" [ref=e547] [cursor=pointer]
+    - generic [ref=e440]:
+      - generic [ref=e554]:
+        - generic [ref=e557]:
+          - generic [ref=e558]: 连通性自检：请只回复两个字母 OK，不要调用任何工具、不要读写任何文件。
+          - generic [ref=e560]:
+            - generic [ref=e561]: 20:33
+            - button "Copy" [ref=e562] [cursor=pointer]
+        - generic [ref=e566]:
+          - status [ref=e567]: Deep diving
+          - generic [ref=e571]:
+            - generic [ref=e572]: Deep diving for 1s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 1s ···
+      - generic [ref=e475]:
+        - generic [ref=e476]:
+          - generic [ref=e478]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=e574]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e480]:
+            - generic [ref=e481]:
+              - button "Add files or run commands" [ref=e482] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e487] [cursor=pointer]':
+                - generic [ref=e491]: Full access
+            - generic [ref=e495]:
+              - generic [ref=e496]:
+                - button "思考 Low(低) ▾" [ref=e499] [cursor=pointer]:
+                  - generic [ref=e500]: 思考
+                  - generic [ref=e501]: Low(低)
+                  - generic [ref=e502]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e505] [cursor=pointer]:
+                  - generic [ref=e506]: glm-5.3-flash
+              - button "Stop generating" [ref=e575] [cursor=pointer]
+        - generic [ref=e579]:
+          - status [ref=e580]:
+            - generic [ref=e581]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+            - generic [ref=e582]:
+              - generic [ref=e583]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+              - generic [ref=e584]: ws-pl-walkthrough · 1 会话
+          - generic [ref=e585]:
+            - button "新建训练" [ref=e586] [cursor=pointer]
+            - button "查状态" [disabled] [ref=e587]
+            - button "继续上次" [disabled] [ref=e588]
+            - button "对比两轮" [disabled] [ref=e589]
+            - button "走完闭环" [ref=e590] [cursor=pointer]
+            - button "联合训练" [disabled] [ref=e591]
+            - button "badcase 可视化" [ref=e592] [cursor=pointer]
+            - button "发起训练" [ref=e593] [cursor=pointer]

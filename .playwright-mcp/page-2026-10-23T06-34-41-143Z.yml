@@ -1,0 +1,157 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - generic [ref=f1e8]:
+      - button "New session" [ref=f1e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f1e10]:
+          - generic [ref=f1e11]: ATF
+          - generic [ref=f1e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f1e17] [cursor=pointer]
+    - button "New session" [ref=f1e20] [cursor=pointer]:
+      - generic [ref=f1e21]: New Session
+    - navigation "Global panels" [ref=f1e26]:
+      - button "Plugins" [ref=f1e27] [cursor=pointer]
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]: Workspaces
+        - generic [ref=f1e42]:
+          - button "Search sessions" [ref=f1e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f1e47]:
+          - button "View options" [ref=f1e49] [cursor=pointer]
+          - button "Add workspace" [ref=f1e53] [cursor=pointer]
+      - tree "Sessions" [ref=f1e58]:
+        - generic [ref=f1e110]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=f1e112] [cursor=pointer]
+          - treeitem "Waiting for approval run pl-walkthrough-r1 迭代配置构造前置校验" [selected] [ref=f1e2682] [cursor=pointer]:
+            - generic [ref=f1e1494]: Waiting for approval
+            - generic [ref=f1e1495]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [aria-hidden] [ref=f1e1594]: Approval
+          - treeitem "训练数据构造前校验演练 12min" [ref=f1e2685] [cursor=pointer]:
+            - generic [ref=f1e128]: 训练数据构造前校验演练
+            - generic [ref=f1e129]: 12min
+        - treeitem "ws-pl-walkthrough" [ref=f1e132] [cursor=pointer]
+        - generic [ref=f1e138]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=f1e140] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 21h" [ref=f1e149] [cursor=pointer]:
+            - generic [ref=f1e151]: 构造评估服务件 for run-rh-budget
+            - generic [ref=f1e152]: 21h
+          - treeitem "装箱单字段抽取新实验全流程 23h" [ref=f1e154] [cursor=pointer]:
+            - generic [ref=f1e156]: 装箱单字段抽取新实验全流程
+            - generic [ref=f1e157]: 23h
+        - generic [ref=f1e158]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=f1e160] [cursor=pointer]
+          - treeitem "等待发起真实训练走查指令 4h" [ref=f1e1674] [cursor=pointer]:
+            - generic [ref=f1e171]: 等待发起真实训练走查指令
+            - generic [ref=f1e172]: 4h
+          - treeitem "汇总当前实验状态与进展 1d" [ref=f1e174] [cursor=pointer]:
+            - generic [ref=f1e176]: 汇总当前实验状态与进展
+            - generic [ref=f1e177]: 1d
+          - treeitem "我的训练数据放在 /data/atf/prodt 1d" [ref=f1e179] [cursor=pointer]:
+            - generic [ref=f1e181]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=f1e182]: 1d
+        - treeitem "a4-hotws" [ref=f1e185] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=f1e193] [cursor=pointer]
+        - treeitem "b18-ws" [ref=f1e201] [cursor=pointer]
+        - treeitem "sam" [ref=f1e209] [cursor=pointer]
+    - button "Settings" [ref=f1e68] [cursor=pointer]
+  - generic [ref=f1e1497]:
+    - banner [ref=f1e1499]:
+      - generic [ref=f1e1500]:
+        - generic [ref=f1e1501]:
+          - generic [ref=f1e1596]:
+            - navigation "Session hierarchy" [ref=f1e1597]:
+              - generic [ref=f1e1598]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f1e1602]: Standard mode
+          - generic [ref=f1e1609]:
+            - button "More actions" [ref=f1e1611] [cursor=pointer]
+            - generic [ref=f1e1616]:
+              - button "装箱单 · Qwen3-VL-32B · 10-20 23:49 · 空闲 ▾" [ref=f1e2492] [cursor=pointer]
+              - button "监控" [ref=f1e1620] [cursor=pointer]
+          - button "Open right sidebar" [ref=f1e1504] [cursor=pointer]
+        - tablist [ref=f1e1621]:
+          - tab "Chat" [selected] [ref=f1e1622] [cursor=pointer]
+          - tab "Trajectory" [ref=f1e1623] [cursor=pointer]
+    - generic [ref=f1e1508]:
+      - generic [ref=f1e1627]:
+        - navigation "Turn navigation" [ref=f1e2531] [cursor=pointer]:
+          - generic [ref=f1e2533]:
+            - button "Jump to turn 1" [ref=f1e2534]
+            - button "Jump to turn 2" [ref=f1e2535]
+        - generic [ref=f1e1630]:
+          - generic [ref=f1e1633]:
+            - generic [ref=f1e1634]: 对 run pl-walkthrough-r1 发起迭代配置构造的前置校验（不真跑构造、不写任何文件）。受控执行通道直调 pin 单源脚本 /data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_iteration_config.py，参数如下（原样传，不要增删改）：--run-id pl-walkthrough-r1 --variants-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/variants --field-config /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/experiment-setup/field-config.json --l1-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/publish/a52ace93 --base-model /data/LLM_model/Qwen3-VL-32B-Instruct --run-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1 --out-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --output-dir /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/training --deploy /data/atf/dev/pinned/tools/walkthrough_assets/deploy.local.yaml。约束：不传任何豁免或绕过参数；被拒即停止，把工具返回内容原样记录进回复，不要重试、不要补救、不要写任何文件、不要弹确认卡。
+            - generic [ref=f1e1636]:
+              - generic [ref=f1e1637]: 14:26
+              - button "Copy" [ref=f1e1638] [cursor=pointer]
+          - generic [ref=f1e1801]:
+            - status [ref=f1e1802]: Completed
+            - button "Completed in 1m 52s" [ref=f1e1803] [cursor=pointer]
+          - generic [ref=f1e1746]:
+            - paragraph [ref=f1e1747]: 按约束执行完毕，脚本被拒，已停止。受控执行通道返回内容原样记录如下（未重试、未补救、未写任何文件、未弹确认卡）：
+            - generic [ref=f1e1748]:
+              - generic [ref=f1e1750]:
+                - generic [ref=f1e1751]: json
+                - generic [ref=f1e1753]:
+                  - button "Wrap lines" [pressed] [ref=f1e1754] [cursor=pointer]
+                  - button "Copy" [ref=f1e1759] [cursor=pointer]
+              - code [ref=f1e1765]:
+                - generic [ref=f1e1766]: "{"
+                - generic [ref=f1e1767]: "\"ok\": true,"
+                - generic [ref=f1e1768]: "\"exit_code\": 2,"
+                - generic [ref=f1e1769]: "\"timed_out\": false,"
+                - generic [ref=f1e1770]: "\"stdout\": \"{\\\"error\\\": \\\"预算文件缺失，先确认实验配置——run 缺 token 预算文件（token_budget.json），构造被拒。下一步：先走实验配置确认（九要素确认卡）落 TokenBudget 三要素（预算/训练截断/推理窗口）后重推构造\\\"}\","
+                - generic [ref=f1e1771]: "\"stdout_truncated\": false,"
+                - generic [ref=f1e1772]: "\"stderr_tail\": \"\","
+                - generic [ref=f1e1773]: "\"duration_ms\": 100,"
+                - generic [ref=f1e1774]: "\"note\": \"预算文件缺失，先确认实验配置——run 缺 token 预算文件（token_budget.json），构造被拒。下一步：先走实验配置确认（九要素确认卡）落 TokenBudget 三要素（预算/训练截断/推理窗口）后重推构造\""
+                - generic [ref=f1e1775]: "}"
+            - paragraph [ref=f1e1776]:
+              - text: 结论：前置校验被拒（exit 2），拒绝原因为 run 缺 token 预算文件（
+              - code [ref=f1e1807]: token_budget.json
+              - text: ）。脚本返回中附带的下一步指引（走九要素确认卡后重推）仅为原文记录，按你的约束我未采取任何后续动作。
+          - generic [ref=f1e1811]:
+            - button "Copy" [ref=f1e1812] [cursor=pointer]
+            - generic [ref=f1e1816]:
+              - button "Good response" [ref=f1e1817] [cursor=pointer]
+              - button "Bad response" [ref=f1e1820] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e1823] [cursor=pointer]
+            - generic [ref=f1e1829]:
+              - button "Usage 45.9K tok" [ref=f1e1831] [cursor=pointer]
+              - generic [ref=f1e1837]: 14:28
+          - generic [ref=f1e2538]:
+            - generic [ref=f1e2539]: D76 端到端正例（零 GPU 红线：只到配置生成即停，不调 atf_launch_execute、不起真训、不占 GPU、不写 run 目录以外的文件）。对当前实验 run-admit-qc-02-d76fx（run 目录 /data/atf/dev/runs/run-admit-qc-02-d76fx）发起训练配置构造：训练卡数 nproc_per_node=4，卡位 visible_devices=4-7，其余参数按现值。九要素确认卡弹出后，把上述两个值填入对应栏位再提交确认；确认链走完后迭代配置（prep/iteration-config/iteration-config.json）生成即停止，不要重试、不要发起真实训练。
+            - generic [ref=f1e2541]:
+              - generic [ref=f1e2542]: 14:31
+              - button "Copy" [ref=f1e2543] [cursor=pointer]
+          - generic [ref=f1e2557]:
+            - text: Calling tools · present
+            - generic [ref=f1e2559]:
+              - button "Think Let me parse the user's request carefully." [ref=f1e2586] [cursor=pointer]:
+                - generic [ref=f1e2578]:
+                  - generic [ref=f1e2579]: Think
+                  - generic [ref=f1e2581]: Let me parse the user's request carefully.
+              - generic [ref=f1e2591]:
+                - generic [ref=f1e2592]: Running
+                - button "Tool call atf_config_confirm · present" [ref=f1e2594] [cursor=pointer]:
+                  - generic [ref=f1e2603]:
+                    - generic [ref=f1e2604]:
+                      - generic [ref=f1e2605]: Tool call
+                      - generic [ref=f1e2607]: atf_config_confirm · present
+                    - generic [aria-hidden]:
+                      - generic:
+                        - generic:
+                          - generic: Tool call
+                          - generic: atf_config_confirm · present
+          - generic [ref=f1e2547]:
+            - status [ref=f1e2548]: Deep diving
+            - generic [ref=f1e2552]:
+              - generic [ref=f1e2553]: Deep diving for 3m 11s ···
+              - generic [aria-hidden]:
+                - generic: Deep diving for 3m 11s ···
+      - generic [ref=f1e2687]:
+        - generic [ref=f1e2688]: Waiting for approval
+        - group "Approval details" [ref=f1e2690]:
+          - generic [ref=f1e2691]: "将要执行：确认训练配置并落快照（九要素训练配置确认 — run run-admit-qc-02-d76fx） 影响范围：写 run 配置快照（确认值全部键＋TokenBudget 三要素） 可逆性：可逆（可改参后重新确认） 预计代价：按任务卡 learning_rate: 1e-4（来自登记 ◆） nproc_per_node: 4（需确认 ?） visible_devices: 4-7（需确认 ?） base_model_path: /data/LLM_model/Qwen3-VL-32B-Instruct（来自登记 ◆） num_train_epochs: 3（来自登记 ◆） per_device_train_batch_size: 1（来自登记 ◆） gradient_accumulation_steps: 64（需确认 ?） cutoff_len: 9000（来自登记 ◆） deepspeed: ds_z3_offload_config.json（来自登记 ◆） lora_rank: 32（来自登记 ◆） lora_alpha: 64（来自登记 ◆） dataset_keys: （由登记面推导）（已用缺省 ⚠） max_total_tokens: 9000（已用缺省 ⚠） max_model_len: 12800（已用缺省 ⚠） image_min_pixels: 65536（已用缺省 ⚠） image_max_pixels: 802816（已用缺省 ⚠） negative_ratio_target: 0.02,0.05（已用缺省 ⚠） TokenBudget（三要素）: 单样本 token 预算 max_total_tokens 可编辑 9000 [惯例基线（owner 2026-10-22）] 训练截断 cutoff cutoff_len 只读 9000 [= 预算] 推理窗口 max_model_len 只读 12800 [独立取值] 九要素确认卡（双段式：改参在表单卡改值提交；不改直接提交表单，再于审批卡点 Allow once） 本轮改参：nproc_per_node, gradient_accumulation_steps；accum 随派生更新=64（gb=256 不变）"
+        - generic [ref=f1e2692]:
+          - button "Reject" [ref=f1e2693] [cursor=pointer]
+          - button "Allow once" [ref=f1e2694] [cursor=pointer]

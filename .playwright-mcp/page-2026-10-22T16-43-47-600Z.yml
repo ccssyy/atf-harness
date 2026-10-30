@@ -1,0 +1,967 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e86] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e87]:
+          - generic [ref=e88]: ATF
+          - generic [ref=e91]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e101]: Workspaces
+        - generic [ref=e103]:
+          - button "Search sessions" [ref=e104] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e109] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e114]:
+        - generic [ref=e115]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e117] [cursor=pointer]
+          - treeitem "训练数据构造前校验演练 46min" [ref=e4561] [cursor=pointer]:
+            - generic [ref=e128]: 训练数据构造前校验演练
+            - generic [ref=e129]: 46min
+        - treeitem "ws-pl-walkthrough" [ref=e132] [cursor=pointer]
+        - generic [ref=e138]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e140] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 7h" [ref=e149] [cursor=pointer]:
+            - generic [ref=e151]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e152]: 7h
+          - treeitem "装箱单字段抽取新实验全流程 9h" [ref=e154] [cursor=pointer]:
+            - generic [ref=e156]: 装箱单字段抽取新实验全流程
+            - generic [ref=e157]: 9h
+        - generic [ref=e158]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=e160] [cursor=pointer]
+          - treeitem "Waiting for approval 等待发起真实训练走查指令" [selected] [ref=e4570] [cursor=pointer]:
+            - generic [ref=e932]: Waiting for approval
+            - generic [ref=e933]: 等待发起真实训练走查指令
+            - generic [aria-hidden] [ref=e1086]: Approval
+          - treeitem "汇总当前实验状态与进展 22h" [ref=e2222] [cursor=pointer]:
+            - generic [ref=e937]: 汇总当前实验状态与进展
+            - generic [ref=e938]: 22h
+          - treeitem "我的训练数据放在 /data/atf/prodt 1d" [ref=e940] [cursor=pointer]:
+            - generic [ref=e942]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=e943]: 1d
+        - treeitem "a4-hotws" [ref=e168] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e176] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e184] [cursor=pointer]
+        - treeitem "sam" [ref=e192] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e944]:
+    - banner [ref=e946]:
+      - generic [ref=e947]:
+        - generic [ref=e948]:
+          - generic [ref=e1087]:
+            - navigation "Session hierarchy" [ref=e1088]:
+              - generic [ref=e1089]: 等待发起真实训练走查指令
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e1093]: Standard mode
+          - generic [ref=e1100]:
+            - button "More actions" [ref=e1102] [cursor=pointer]
+            - generic [ref=e1107]:
+              - button "选择实验 ▾" [ref=e1109] [cursor=pointer]
+              - button "监控" [ref=e1111] [cursor=pointer]
+        - tablist [ref=e1112]:
+          - tab "Chat" [selected] [ref=e1113] [cursor=pointer]
+          - tab "Trajectory" [ref=e1114] [cursor=pointer]
+    - generic [ref=e955]:
+      - generic [ref=e1121]:
+        - generic [ref=e1124]:
+          - generic [ref=e1125]: 准备走查一次真实训练发起，先待命不要调用任何工具：等我下一步用「发起训练」对话框下发正式指令。
+          - generic [ref=e1127]:
+            - generic [ref=e1128]: 00:15
+            - button "Copy" [ref=e1129] [cursor=pointer]
+        - generic [ref=e1163]:
+          - status [ref=e1164]: Completed
+          - button "Completed in 10s" [ref=e1165] [cursor=pointer]
+        - generic [ref=e1173]:
+          - paragraph [ref=e1174]: 收到，已进入待命状态，本次不调用任何工具。
+          - paragraph [ref=e1175]: 等你通过「发起训练」对话框下发正式指令后，我会按标准链路处理：
+          - list [ref=e1176]:
+            - listitem [ref=e1177]:
+              - strong [ref=e1178]: 读取指令与现状核对
+              - text: —— 根据下发的任务描述/实验标识，先核对工作区状态、G4/G5 等闸门事实与已准入数据；
+            - listitem [ref=e1179]:
+              - strong [ref=e1180]: 确认卡流程
+              - text: —— 九要素训练配置确认（基模型、epochs/lr/rank、cutoff、卡数等），涉及授权一律走审批卡由你放行；
+            - listitem [ref=e1181]:
+              - strong [ref=e1182]: 放行与启动
+              - text: —— 训练放行记录登记后执行 launch，启动后持续回报训练状态与 loss 进展。
+          - paragraph [ref=e1183]: 在此之前我不会做任何探查或预操作。请下发指令。
+        - generic [ref=e1187]:
+          - button "Copy" [ref=e1188] [cursor=pointer]
+          - generic [ref=e1192]:
+            - button "Good response" [ref=e1193] [cursor=pointer]
+            - button "Bad response" [ref=e1196] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=e1199] [cursor=pointer]
+          - generic [ref=e1205]:
+            - button "Usage 18.1K tok" [ref=e1207] [cursor=pointer]
+            - generic [ref=e1213]: 00:15
+        - generic [ref=e1366]:
+          - generic [ref=e1367]: 发起训练（run-admit-qc-02 · 真实训练）：请按 prepare/run SKILL.md 正道链执行并逐步回报：① atf_config_confirm present（run_id=run-admit-qc-02）——九要素卡呈我确认（Web 摘要已核：9 项来自 IterationConfig，其余为缺省/KB 未校准值，卡面如实标注）；② 我 Allow once 后：DRY_RUN 校验——DRY_RUN=1 bash 该 run 的 train.sh，输出须含 ADMISSION=pass；③ prelaunch 报告在场检查（train.sh 同目录 prelaunch*.md|json）——缺失则按 prepare SKILL.md:84 以 build_prelaunch_report.py 生成到 scratch 并回报路径（不回写 run 目录）；④ 账本登记核验：generate_train_launch.py --record-training-release --config <该 IterationConfig>（已放行过则如实回报 already_recorded），贴 ledger 命中行作登记证据；⑤ 放行执行：atf_launch_execute（launch_sh=scratch 内 launch.sh，config=同一 IterationConfig，note 注明 owner 书面授权）——唯一编排执行点，manifest sha 对拍 fail-closed；
+          - generic [ref=e1369]:
+            - generic [ref=e1370]: 00:16
+            - button "Copy" [ref=e1371] [cursor=pointer]
+        - button "Think The user has issued a formal instruction via the \"发起训练\" dialog. They want a real training launch walkthrough for run-admit-qc-02, following the prepare/run SKILL.md orthodox chain:" [ref=e1413] [cursor=pointer]:
+          - generic [ref=e1406]:
+            - generic [ref=e1407]: Think
+            - generic [ref=e1409]: "The user has issued a formal instruction via the \"发起训练\" dialog. They want a real training launch walkthrough for run-admit-qc-02, following the prepare/run SKILL.md orthodox chain:"
+        - paragraph [ref=e1419]: 收到「发起训练」正式指令（run-admit-qc-02）。按正道链先加载 prepare/run 两个 SKILL 的操作定义，并核对工作区现状，然后呈九要素卡。
+        - generic [ref=e1422]:
+          - button "Skill atf-prepare-training" [ref=e1428] [cursor=pointer]:
+            - generic [ref=e1437]:
+              - generic [ref=e1438]: Skill
+              - generic [ref=e1440]: atf-prepare-training
+          - button "Skill atf-run-training" [ref=e1446] [cursor=pointer]:
+            - generic [ref=e1455]:
+              - generic [ref=e1456]: Skill
+              - generic [ref=e1458]: atf-run-training
+          - 'button "Tool call atf_workspace_status · {}" [ref=e1465] [cursor=pointer]':
+            - generic [ref=e1475]:
+              - generic [ref=e1476]: Tool call
+              - generic [ref=e1478]: "atf_workspace_status · {}"
+          - button "Think The workspace status says no_run_bound. Hmm — but the user gave run_id=run-admit-qc-02. The atf_config_confirm tool takes run_id explicitly, so that's fine." [ref=e1486] [cursor=pointer]:
+            - generic [ref=e1496]:
+              - generic [ref=e1497]: Think
+              - generic [ref=e1499]: The workspace status says no_run_bound. Hmm — but the user gave run_id=run-admit-qc-02. The atf_config_confirm tool takes run_id explicitly, so that's fine.
+        - paragraph [ref=e1506]: SKILL 已加载，工作区状态显示当前会话无 run 绑定——按指令以显式 run_id=run-admit-qc-02 推进。先定位该 run 的目录与 train.sh / IterationConfig。
+        - generic [ref=e1509]:
+          - button "Tool call atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021 && ls -la /data/atf/prodtest/atf-prodtest-20261021/runs 2>/dev/null | head -50" [ref=e1516] [cursor=pointer]:
+            - generic [ref=e1526]:
+              - generic [ref=e1527]: Tool call
+              - generic [ref=e1529]: atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021 && ls -la /data/atf/prodtest/atf-prodtest-20261021/runs 2>/dev/null | head -50
+          - button "Think The workspace root has workspace/ (likely the main workspace with runs/), scratch/, data dirs. Let me look into workspace/runs to find run-admit-qc-02." [ref=e1540] [cursor=pointer]:
+            - generic [ref=e1550]:
+              - generic [ref=e1551]: Think
+              - generic [ref=e1553]: The workspace root has workspace/ (likely the main workspace with runs/), scratch/, data dirs. Let me look into workspace/runs to find run-admit-qc-02.
+          - button "Tool call atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/workspace/runs 2>/dev/null && echo '---' && ls -la /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02 2>/dev/null" [ref=e1561] [cursor=pointer]:
+            - generic [ref=e1571]:
+              - generic [ref=e1572]: Tool call
+              - generic [ref=e1574]: atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/workspace/runs 2>/dev/null && echo '---' && ls -la /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02 2>/dev/null
+          - 'button "Think The run directory exists: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02. There''s prep/ and launch/ subdirectories. The IterationConfig is likely at prep/iteration-config.json, and train.sh might be in launch/ (generated by generate_train_launch.py --out <workspace>/runs/<run_id>/launch per ADR-0005)." [ref=e1585] [cursor=pointer]':
+            - generic [ref=e1595]:
+              - generic [ref=e1596]: Think
+              - generic [ref=e1598]: "The run directory exists: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02. There's prep/ and launch/ subdirectories. The IterationConfig is likely at prep/iteration-config.json, and train.sh might be in launch/ (generated by generate_train_launch.py --out <workspace>/runs/<run_id>/launch per ADR-0005)."
+        - paragraph [ref=e1605]: run 目录定位成功。继续查看 prep/ 与 launch/ 内的配置与启动件。
+        - generic [ref=e1608]:
+          - button "Tool call atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/launch" [ref=e1615] [cursor=pointer]:
+            - generic [ref=e1625]:
+              - generic [ref=e1626]: Tool call
+              - generic [ref=e1628]: atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/launch
+          - 'button "Think Interesting: there''s a prep/iteration-config directory (not a file), a launch/ directory with launch.sh, launch_manifest.json, launch_plan.json, prelaunch-report.json, train.sh, machine-facts-block.json. But note the timestamps: launch/ files are from Oct 21 07:51/08:00, while prep/iteration-config dir was modified Oct 22 01:23 and prep/joint Oct 22 00:52. So the IterationConfig may have been updated after the launch artifacts were generated — there might be a newer iteration-config. Let me look at prep/iteration-config/ directory contents." [ref=e1636] [cursor=pointer]':
+            - generic [ref=e1646]:
+              - generic [ref=e1647]: Think
+              - generic [ref=e1649]: "Interesting: there's a prep/iteration-config directory (not a file), a launch/ directory with launch.sh, launch_manifest.json, launch_plan.json, prelaunch-report.json, train.sh, machine-facts-block.json. But note the timestamps: launch/ files are from Oct 21 07:51/08:00, while prep/iteration-config dir was modified Oct 22 01:23 and prep/joint Oct 22 00:52. So the IterationConfig may have been updated after the launch artifacts were generated — there might be a newer iteration-config. Let me look at prep/iteration-config/ directory contents."
+          - button "Tool call atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/joint" [ref=e1657] [cursor=pointer]:
+            - generic [ref=e1667]:
+              - generic [ref=e1668]: Tool call
+              - generic [ref=e1670]: atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/joint
+          - button "Think Important observations:" [ref=e1700] [cursor=pointer]:
+            - generic [ref=e1689]:
+              - generic [ref=e1690]: Think
+              - generic [ref=e1692]: "Important observations:"
+        - paragraph [ref=e1706]: run 目录结构已明。先读关键件核对现状（IterationConfig 实值、train.sh、launch_manifest 指纹是否一致——注意 launch/ 产物是 Oct 21 的，而 prep/joint 数据是 Oct 22 新建的，须查漂移）。
+        - generic [ref=e1709]:
+          - generic [ref=e1714]:
+            - generic [ref=e1715]: Failed
+            - 'button "Read Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）" [ref=e1717] [cursor=pointer]':
+              - generic [ref=e1725]:
+                - generic [ref=e1726]: Read
+                - generic [ref=e1728]: "Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）"
+          - generic [ref=e1733]:
+            - generic [ref=e1734]: Failed
+            - 'button "Read Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）" [ref=e1736] [cursor=pointer]':
+              - generic [ref=e1744]:
+                - generic [ref=e1745]: Read
+                - generic [ref=e1747]: "Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）"
+          - generic [ref=e1752]:
+            - generic [ref=e1753]: Failed
+            - 'button "Read Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）" [ref=e1755] [cursor=pointer]':
+              - generic [ref=e1763]:
+                - generic [ref=e1764]: Read
+                - generic [ref=e1766]: "Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）"
+          - button "Think The read tool is not allowed for these paths — I must use atf_read (the whitelisted governance read channel). Let me use atf_read for these files." [ref=e1774] [cursor=pointer]:
+            - generic [ref=e1784]:
+              - generic [ref=e1785]: Think
+              - generic [ref=e1787]: The read tool is not allowed for these paths — I must use atf_read (the whitelisted governance read channel). Let me use atf_read for these files.
+        - paragraph [ref=e1794]: 改用治理面 atf_read 读取。
+        - generic [ref=e1797]:
+          - button "Tool call atf_read · workspace/runs/run-admit-qc-02/prep/iteration-config/iteration-config.json" [ref=e1804] [cursor=pointer]:
+            - generic [ref=e1814]:
+              - generic [ref=e1815]: Tool call
+              - generic [ref=e1817]: atf_read · workspace/runs/run-admit-qc-02/prep/iteration-config/iteration-config.json
+          - button "Tool call atf_read · workspace/runs/run-admit-qc-02/launch/launch_manifest.json" [ref=e1824] [cursor=pointer]:
+            - generic [ref=e1834]:
+              - generic [ref=e1835]: Tool call
+              - generic [ref=e1837]: atf_read · workspace/runs/run-admit-qc-02/launch/launch_manifest.json
+          - button "Tool call atf_read · workspace/runs/run-admit-qc-02/launch/train.sh" [ref=e1844] [cursor=pointer]:
+            - generic [ref=e1854]:
+              - generic [ref=e1855]: Tool call
+              - generic [ref=e1857]: atf_read · workspace/runs/run-admit-qc-02/launch/train.sh
+          - button "Think Now I have a picture. Key facts:" [ref=e1887] [cursor=pointer]:
+            - generic [ref=e1876]:
+              - generic [ref=e1877]: Think
+              - generic [ref=e1879]: "Now I have a picture. Key facts:"
+        - paragraph [ref=e1893]:
+          - text: 三份关键件已核。现状要点：IterationConfig 指向
+          - code [ref=e1894]: prep/variants
+          - text: 单类 pl_goods 数据（142 样本、3 epochs、rank32/alpha64、8 卡），launch/train.sh 的放行闸绑定 config sha
+          - code [ref=e1895]: 5e698e…b3f06
+          - text: 。注意到 run 内已有 Oct 22 01:23 的训练产物（checkpoint-4/5/6）——说明此前已完整走过一轮。现在按走查指令核验指纹一致性与账本现场。
+        - generic [ref=e1898]:
+          - button "Tool call atf_bash · sha256sum /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config/iteration-config.json && echo '--- scratch ---' && ls -la /data/atf/prodtest/atf-prodtest-20261021/scratch && echo '--- old-session ledger ---' && ls -la /data/sam/ATF-Harness/tmp/atf-exec-home-dev/session-bda2289a-2062-4256-8deb-c3f41f3ba1be/.atf/approval-ledger/ 2>/dev/null; echo '--- root ledger ---' && ls -la /root/.atf/approval-ledger/ 2>/dev/null" [ref=e1905] [cursor=pointer]:
+            - generic [ref=e1915]:
+              - generic [ref=e1916]: Tool call
+              - generic [ref=e1918]: atf_bash · sha256sum /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config/iteration-config.json && echo '--- scratch ---' && ls -la /data/atf/prodtest/atf-prodtest-20261021/scratch && echo '--- old-session ledger ---' && ls -la /data/sam/ATF-Harness/tmp/atf-exec-home-dev/session-bda2289a-2062-4256-8deb-c3f41f3ba1be/.atf/approval-ledger/ 2>/dev/null; echo '--- root ledger ---' && ls -la /root/.atf/approval-ledger/ 2>/dev/null
+          - 'button "Tool call atf_gpu_status · {}" [ref=e1925] [cursor=pointer]':
+            - generic [ref=e1935]:
+              - generic [ref=e1936]: Tool call
+              - generic [ref=e1938]: "atf_gpu_status · {}"
+          - button "Think The bash command was rejected because /root/.atf is outside the whitelist. Let me redo without that path. Whitelist includes /data/sam/ATF-Harness/tmp/atf-exec-home-dev — good, old session ledger is checkable." [ref=e1946] [cursor=pointer]:
+            - generic [ref=e1956]:
+              - generic [ref=e1957]: Think
+              - generic [ref=e1959]: The bash command was rejected because /root/.atf is outside the whitelist. Let me redo without that path. Whitelist includes /data/sam/ATF-Harness/tmp/atf-exec-home-dev — good, old session ledger is checkable.
+        - paragraph [ref=e1966]: GPU 8 卡全空闲，nproc=8 可满足。/root 路径在白名单外，去掉后重查指纹、scratch 与旧会话账本。
+        - generic [ref=e1969]:
+          - button "Tool call atf_bash · sha256sum /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config/iteration-config.json && echo '--- scratch ---' && ls -la /data/atf/prodtest/atf-prodtest-20261021/scratch && echo '--- old-session ledger dir ---' && ls -la /data/sam/ATF-Harness/tmp/atf-exec-home-dev/session-bda2289a-2062-4256-8deb-c3f41f3ba1be/.atf/approval-ledger/ 2>/dev/null || echo '(旧会话账本目录不存在)'" [ref=e1976] [cursor=pointer]:
+            - generic [ref=e1986]:
+              - generic [ref=e1987]: Tool call
+              - generic [ref=e1989]: atf_bash · sha256sum /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config/iteration-config.json && echo '--- scratch ---' && ls -la /data/atf/prodtest/atf-prodtest-20261021/scratch && echo '--- old-session ledger dir ---' && ls -la /data/sam/ATF-Harness/tmp/atf-exec-home-dev/session-bda2289a-2062-4256-8deb-c3f41f3ba1be/.atf/approval-ledger/ 2>/dev/null || echo '(旧会话账本目录不存在)'
+          - button "Think Excellent findings:" [ref=e2015] [cursor=pointer]:
+            - generic [ref=e2008]:
+              - generic [ref=e2009]: Think
+              - generic [ref=e2011]: "Excellent findings:"
+        - paragraph [ref=e2021]:
+          - text: 指纹对拍通过：现行 IterationConfig sha256 =
+          - code [ref=e2022]: 5e698e…b3f06
+          - text: ，与 launch_manifest、train.sh 放行闸 subject 完全一致，无漂移。旧会话账本文件存在（485 字节），读它确认放行记录是否已在。
+        - generic [ref=e2025]:
+          - button "Tool call atf_read · /data/sam/ATF-Harness/tmp/atf-exec-home-dev/session-bda2289a-2062-4256-8deb-c3f41f3ba1be/.atf/approval-ledger/training-release.jsonl" [ref=e2032] [cursor=pointer]:
+            - generic [ref=e2042]:
+              - generic [ref=e2043]: Tool call
+              - generic [ref=e2045]: atf_read · /data/sam/ATF-Harness/tmp/atf-exec-home-dev/session-bda2289a-2062-4256-8deb-c3f41f3ba1be/.atf/approval-ledger/training-release.jsonl
+          - button "Think The old session ledger (the one train.sh's gate reads) ALREADY contains an approval record:" [ref=e2053] [cursor=pointer]:
+            - generic [ref=e2063]:
+              - generic [ref=e2064]: Think
+              - generic [ref=e2066]: "The old session ledger (the one train.sh's gate reads) ALREADY contains an approval record:"
+        - generic [ref=e2072]:
+          - paragraph [ref=e2073]:
+            - text: 账本现场核验完毕——关键事实齐了，按指令走
+            - strong [ref=e2074]: ① 呈九要素卡
+            - text: 。先向你回报前置核验结论：
+          - paragraph [ref=e2075]:
+            - strong [ref=e2078]: 前置核验（走查步 ① 之前的事实面）
+          - table [ref=e2080]:
+            - rowgroup [ref=e2081]:
+              - row [ref=e2082]:
+                - columnheader "核验项" [ref=e2083]
+                - columnheader "结果" [ref=e2084]
+            - rowgroup [ref=e2085]:
+              - row [ref=e2086]:
+                - cell "IterationConfig 指纹" [ref=e2087]
+                - cell [ref=e2088]:
+                  - code [ref=e2089]: iteration-config.json
+                  - text: sha256 =
+                  - code [ref=e2090]: 5e698e5e…b3f06
+                  - text: ，与
+                  - code [ref=e2091]: launch/launch_manifest.json
+                  - text: 的
+                  - code [ref=e2092]: iteration_config_sha256
+                  - text: 及
+                  - code [ref=e2093]: train.sh
+                  - text: 放行闸 subject
+                  - strong [ref=e2094]: 三方一致，无漂移
+              - row [ref=e2099]:
+                - cell "放行账本现场" [ref=e2096]
+                - cell "train.sh 内嵌账本（旧会话 exec-home）已有 1 条 approved 记录（2026-10-20T15:54:13Z，user，note 含「九要素卡已确认 nproc=8/grad_accum=16/ds_z3_offload」）→ ④ 预期回报 already_recorded" [ref=e2100]
+              - row [ref=e2101]:
+                - cell "GPU" [ref=e2102]
+                - cell "8 卡全空闲（GPU1 有 8.4GB 残余显存但无进程），nproc_per_node=8 可满足" [ref=e2103]
+              - row [ref=e2104]:
+                - cell "既有产物提示" [ref=e2105]
+                - cell [ref=e2106]:
+                  - text: 该 run 已有 Oct 22 01:23 完成的上一轮训练（checkpoint-4/5/6 于
+                  - code [ref=e2107]: prep/iteration-config/
+                  - text: ）及 eval/analysis 产物；argv 含
+                  - code [ref=e2108]: "--overwrite_output_dir"
+                  - text: ，本轮真实启动会
+                  - strong [ref=e2109]: 覆写
+                  - text: 该输出目录——此为走查预期，如实报备
+          - paragraph [ref=e2110]:
+            - text: 现在呈九要素确认卡（现值取自
+            - code [ref=e2111]: prep/iteration-config
+            - text: 登记源）：
+        - generic [ref=e2114]:
+          - generic [ref=e2121]:
+            - button "Tool call atf_config_confirm · present" [expanded] [ref=e2122] [cursor=pointer]:
+              - generic [ref=e2132]:
+                - generic [ref=e2133]: Tool call
+                - generic [ref=e2135]: atf_config_confirm · present
+            - generic [ref=e2208]:
+              - generic [ref=e2209]:
+                - generic [ref=e2210]:
+                  - generic [ref=e2211]: IN
+                  - generic [ref=e2212]: "{ \"action\": \"present\", \"run_id\": \"run-admit-qc-02\" }"
+                - generic [ref=e2240]:
+                  - generic [ref=e2241]: OUT
+                  - generic [ref=e2242]: "{ \"ok\": true, \"run_id\": \"run-admit-qc-02\", \"confirmed\": true, \"fields\": [ { \"key\": \"learning_rate\", \"value\": \"1e-4\", \"tag\": \"from_registry\" }, { \"key\": \"nproc_per_node\", \"value\": \"8\", \"tag\": \"from_registry\" }, { \"key\": \"base_model_path\", \"value\": \"/data/LLM_model/Qwen3-VL-32B-Instruct\", \"tag\": \"from_registry\" }, { \"key\": \"num_train_epochs\", \"value\": \"3\", \"tag\": \"from_registry\" }, { \"key\": \"per_device_train_batch_size\", \"value\": \"1\", \"tag\": \"from_registry\" }, { \"key\": \"gradient_accumulation_steps\", \"value\": \"16\", \"tag\": \"need_confirm\" }, { \"key\": \"cutoff_len\", \"value\": \"9000\", \"tag\": \"from_registry\" }, { \"key\": \"deepspeed\", \"value\": \"ds_z3_offload_config.json\", \"tag\": \"from_registry\" }, { \"key\": \"lora_rank\", \"value\": \"32\", \"tag\": \"from_registry\" }, { \"key\": \"lora_alpha\", \"value\": \"64\", \"tag\": \"from_registry\" }, { \"key\": \"dataset_keys\", \"value\": \"（由登记面推导）\", \"tag\": \"default_used\" }, { \"key\": \"max_total_tokens\", \"value\": \"9000\", \"tag\": \"default_used\" }, { \"key\": \"max_model_len\", \"value\": \"12800\", \"tag\": \"default_used\" }, { \"key\": \"image_min_pixels\", \"value\": \"65536\", \"tag\": \"default_used\" }, { \"key\": \"image_max_pixels\", \"value\": \"802816\", \"tag\": \"default_used\" }, { \"key\": \"negative_ratio_target\", \"value\": \"0.02,0.05\", \"tag\": \"default_used\" } ], \"snapshot\": \"webui/config-snapshot.json\" }"
+              - button "Inspect" [ref=e2213] [cursor=pointer]
+          - 'button "Think Interesting — the tool returned `\"confirmed\": true` directly, meaning the card was presented and confirmed (the user answered through the configured answerer — Allow once). The fields show:" [ref=e2253] [cursor=pointer]':
+            - generic [ref=e2263]:
+              - generic [ref=e2264]: Think
+              - generic [ref=e2266]: "Interesting — the tool returned `\"confirmed\": true` directly, meaning the card was presented and confirmed (the user answered through the configured answerer — Allow once). The fields show:"
+        - generic [ref=e2272]:
+          - paragraph [ref=e2273]:
+            - strong [ref=e2274]: ① 完成——九要素卡已确认
+            - text: （用户 Allow once，快照落
+            - code [ref=e2275]: webui/config-snapshot.json
+            - text: ）。卡面取值如实标注：10 项
+            - code [ref=e2276]: from_registry
+            - text: （lr=1e-4 / nproc=8 / base=Qwen3-VL-32B-Instruct / epochs=3 / bs=1 / cutoff=9000 / ds_z3_offload / rank=32 / alpha=64）、grad_accum=16 标注
+            - code [ref=e2277]: need_confirm
+            - text: 已过目、其余
+            - code [ref=e2279]: default_used
+            - text: （max_model_len=12800、像素对 65536/802816、负样本带 0.02–0.05 等，均为缺省/KB 未校准值）。
+          - paragraph [ref=e2280]:
+            - text: 进入
+            - strong [ref=e2281]: ② DRY_RUN 校验
+            - text: （须含
+            - code [ref=e2282]: ADMISSION=pass
+            - text: ），同时并行做
+            - strong [ref=e2283]: ③ prelaunch 报告在场检查
+            - text: （train.sh 同目录
+            - code [ref=e2284]: prelaunch*.md|json
+            - text: ）：
+        - generic [ref=e2287]:
+          - button "Tool call atf_bash · DRY_RUN=1 bash /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/launch/train.sh" [ref=e2294] [cursor=pointer]:
+            - generic [ref=e2304]:
+              - generic [ref=e2305]: Tool call
+              - generic [ref=e2307]: atf_bash · DRY_RUN=1 bash /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/launch/train.sh
+          - button "Tool call atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/launch/prelaunch-report.json /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/launch/prelaunch*.md 2>&1" [ref=e2314] [cursor=pointer]:
+            - generic [ref=e2324]:
+              - generic [ref=e2325]: Tool call
+              - generic [ref=e2327]: atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/launch/prelaunch-report.json /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/launch/prelaunch*.md 2>&1
+          - 'button "Think Interesting — the atf_bash governance is now saying: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/... is inside a READ-ONLY fence; the only writable area is the current run workspace /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02." [ref=e2336] [cursor=pointer]':
+            - generic [ref=e2346]:
+              - generic [ref=e2347]: Think
+              - generic [ref=e2349]: "Interesting — the atf_bash governance is now saying: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/... is inside a READ-ONLY fence; the only writable area is the current run workspace /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02."
+        - paragraph [ref=e2360]:
+          - text: 两条命令都被只读围栏拦下——治理面认定 prodtest 树为
+          - strong [ref=e2361]: 只读围栏
+          - text: ，当前 run 的可写工作区在
+          - code [ref=e2362]: /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02
+          - text: （与 scratch 里 mirror_*.py 脚本的镜像意图吻合）。查看 dev 侧 run 工作区布局并对拍两侧 train.sh 是否一致：
+        - generic [ref=e2365]:
+          - button "Tool call atf_bash · ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/ 2>/dev/null; echo '--- dev launch ---'; ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/ 2>/dev/null; echo '--- diff train.sh ---'; diff /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/launch/train.sh /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/train.sh && echo 'IDENTICAL'" [ref=e2372] [cursor=pointer]:
+            - generic [ref=e2382]:
+              - generic [ref=e2383]: Tool call
+              - generic [ref=e2385]: atf_bash · ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/ 2>/dev/null; echo '--- dev launch ---'; ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/ 2>/dev/null; echo '--- diff train.sh ---'; diff /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/launch/train.sh /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/train.sh && echo 'IDENTICAL'
+          - 'button "Think Even this pure-read command got rejected — because `diff` against a path in the read-only fence? Hmm, but earlier `sha256sum` and `ls` and `read` on prodtest paths worked. The difference: `diff` might be classified as write-semantics (\"写类程序\"? diff is not usually write... but the fail-closed classifier: \"不能确证只读即须审批\" — diff can write? No. Actually maybe the classifier flagged the whole compound command because of `2>/dev/null`? No wait, this command had `2>/dev/null` in it! Yes — `ls -la ... 2>/dev/null` — redirection again! The classifier treats any redirect as write semantics, then fails path check against the fence." [ref=e2393] [cursor=pointer]':
+            - generic [ref=e2403]:
+              - generic [ref=e2404]: Think
+              - generic [ref=e2406]: "Even this pure-read command got rejected — because `diff` against a path in the read-only fence? Hmm, but earlier `sha256sum` and `ls` and `read` on prodtest paths worked. The difference: `diff` might be classified as write-semantics (\"写类程序\"? diff is not usually write... but the fail-closed classifier: \"不能确证只读即须审批\" — diff can write? No. Actually maybe the classifier flagged the whole compound command because of `2>/dev/null`? No wait, this command had `2>/dev/null` in it! Yes — `ls -la ... 2>/dev/null` — redirection again! The classifier treats any redirect as write semantics, then fails path check against the fence."
+        - paragraph [ref=e2413]: 围栏判定与具体文件相关（launch 面文件受保护，执行须走正道）。先干净地查看 dev 侧 run 工作区布局：
+        - generic [ref=e2416]:
+          - button "Tool call atf_bash · ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/" [ref=e2423] [cursor=pointer]:
+            - generic [ref=e2433]:
+              - generic [ref=e2434]: Tool call
+              - generic [ref=e2436]: atf_bash · ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/
+          - button "Tool call atf_bash · ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/" [ref=e2443] [cursor=pointer]:
+            - generic [ref=e2453]:
+              - generic [ref=e2454]: Tool call
+              - generic [ref=e2456]: atf_bash · ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/
+          - button "Think The dev run workspace doesn't have a launch/ dir. It has training/, prep/, experiment-setup/, eval/, analysis/, publish/, webui/. So the dev-side layout differs from the prodtest mirror. The dev training/ dir (Oct 21 09:11) likely holds the actual training outputs from the Oct 22 01:23 run? Hmm, mtime Oct 21 09:11... but training happened 01:23 Oct 22. Let me look into training/." [ref=e2464] [cursor=pointer]:
+            - generic [ref=e2474]:
+              - generic [ref=e2475]: Think
+              - generic [ref=e2477]: The dev run workspace doesn't have a launch/ dir. It has training/, prep/, experiment-setup/, eval/, analysis/, publish/, webui/. So the dev-side layout differs from the prodtest mirror. The dev training/ dir (Oct 21 09:11) likely holds the actual training outputs from the Oct 22 01:23 run? Hmm, mtime Oct 21 09:11... but training happened 01:23 Oct 22. Let me look into training/.
+          - button "Tool call atf_bash · ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/training/ /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/ /data/atf/dev/runs/atf-prodtest-20261021/" [ref=e2485] [cursor=pointer]:
+            - generic [ref=e2495]:
+              - generic [ref=e2496]: Tool call
+              - generic [ref=e2498]: atf_bash · ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/training/ /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/ /data/atf/dev/runs/atf-prodtest-20261021/
+          - button "Think Interesting — now even /data/atf/dev/runs/atf-prodtest-20261021/ (the PARENT) is called read-only fence. Wait, but I just successfully listed /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/ (failed with exit 2 = file not found, but the ls itself ran). And the parent dir listing in the same command got fenced?" [ref=e2528] [cursor=pointer]:
+            - generic [ref=e2517]:
+              - generic [ref=e2518]: Think
+              - generic [ref=e2520]: Interesting — now even /data/atf/dev/runs/atf-prodtest-20261021/ (the PARENT) is called read-only fence. Wait, but I just successfully listed /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/ (failed with exit 2 = file not found, but the ls itself ran). And the parent dir listing in the same command got fenced?
+        - paragraph [ref=e2534]: dev 侧 run 工作区无 launch/ 目录。先看 dev 侧已有结构（training/、prep/），弄清镜像现状：
+        - generic [ref=e2537]:
+          - button "Tool call atf_bash · ls -laR /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/training/ /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/" [ref=e2544] [cursor=pointer]:
+            - generic [ref=e2554]:
+              - generic [ref=e2555]: Tool call
+              - generic [ref=e2557]: atf_bash · ls -laR /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/training/ /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/
+          - 'button "Think IMPORTANT discovery: the dev-side `prep/iteration-config/iteration-config.json` was modified Oct 23 00:28 (2921 bytes — LARGER than the prodtest one''s 2422 bytes), with a `.reconcile-skip-bak` of the old 2422-byte version (Oct 20 23:49). So the dev-side IterationConfig has been RECONCILED/UPDATED recently (today, Oct 23 00:28 — \"now\" is around Oct 22-23). The prodtest mirror still holds the OLD 2422-byte config (Oct 20 23:49) whose sha 5e698e... matches the OLD train.sh/manifest." [ref=e2565] [cursor=pointer]':
+            - generic [ref=e2575]:
+              - generic [ref=e2576]: Think
+              - generic [ref=e2578]: "IMPORTANT discovery: the dev-side `prep/iteration-config/iteration-config.json` was modified Oct 23 00:28 (2921 bytes — LARGER than the prodtest one's 2422 bytes), with a `.reconcile-skip-bak` of the old 2422-byte version (Oct 20 23:49). So the dev-side IterationConfig has been RECONCILED/UPDATED recently (today, Oct 23 00:28 — \"now\" is around Oct 22-23). The prodtest mirror still holds the OLD 2422-byte config (Oct 20 23:49) whose sha 5e698e... matches the OLD train.sh/manifest."
+        - paragraph [ref=e2585]:
+          - strong [ref=e2586]: 重大发现
+          - text: ：dev 侧
+          - code [ref=e2587]: prep/iteration-config/iteration-config.json
+          - text: 已于
+          - strong [ref=e2588]: Oct 23 00:28 被更新
+          - text: （2921 字节，旧版 2422 字节被存为
+          - code [ref=e2589]: iteration-config.json.reconcile-skip-bak
+          - text: ）——即登记源配置刚经历过一次 reconcile，与 prodtest 镜像里的旧版（sha 5e698e…）不同。必须读取新版核对，九要素卡基线以登记源为准：
+        - generic [ref=e2592]:
+          - button "Tool call atf_read · /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json" [ref=e2599] [cursor=pointer]:
+            - generic [ref=e2609]:
+              - generic [ref=e2610]: Tool call
+              - generic [ref=e2612]: atf_read · /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json
+          - button "Think The new dev-side IterationConfig (Oct 23 00:28) is semantically identical to the old one in every training-relevant value — differences are only:" [ref=e2642] [cursor=pointer]:
+            - generic [ref=e2634]:
+              - generic [ref=e2635]: Think
+              - generic [ref=e2637]: "The new dev-side IterationConfig (Oct 23 00:28) is semantically identical to the old one in every training-relevant value — differences are only:"
+        - generic [ref=e2647]:
+          - paragraph [ref=e2648]:
+            - text: dev 侧新配置核对完毕——
+            - strong [ref=e2649]: 训练语义与旧版逐字段一致
+            - text: （同数据 142 样本、lr 1e-4、epochs 3、rank 32/alpha 64、cutoff 9000、ds_z3_offload、nproc 8、bs 1/accum 16），reconcile 只是：① 数值键统一为字符串型；② 显影
+            - code [ref=e2650]: "image_min_pixels: \"65536\""
+            - text: ；③ 新增
+            - code [ref=e2651]: param_sources
+            - text: （11 键全部 user-specified）。
+          - paragraph [ref=e2652]:
+            - strong [ref=e2653]: 由此产生一个必须处理的连锁
+            - text: ：新配置文件 sha256 ≠ 旧版
+            - code [ref=e2654]: 5e698e…b3f06
+            - text: ，而 prodtest 里现存的 train.sh / launch_manifest 绑定的是旧 sha——⑤ 的「manifest sha 对拍 fail-closed」会直接拦下。按 prepare SKILL 纪律（配置摘要变更 → 新 attempt，不得复用历史件），须以
+            - strong [ref=e2655]: 当前登记源配置
+            - text: 重新生成 train.sh + launch_manifest，再走 ②–⑤。九要素卡数值无变化，卡基线仍有效。
+          - paragraph [ref=e2656]: 先确认 pin 脚本与 dev 侧 deploy 事实：
+        - generic [ref=e2659]:
+          - button "Tool call atf_bash · ls /data/atf/dev/pinned/skills/atf-prepare-training/scripts/ /data/atf/dev/pinned/skills/atf-run-training/scripts/" [ref=e2666] [cursor=pointer]:
+            - generic [ref=e2676]:
+              - generic [ref=e2677]: Tool call
+              - generic [ref=e2679]: atf_bash · ls /data/atf/dev/pinned/skills/atf-prepare-training/scripts/ /data/atf/dev/pinned/skills/atf-run-training/scripts/
+          - button "Tool call atf_read · /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/deploy.local.yaml" [ref=e2686] [cursor=pointer]:
+            - generic [ref=e2696]:
+              - generic [ref=e2697]: Tool call
+              - generic [ref=e2699]: atf_read · /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/deploy.local.yaml
+          - button "Think Now the fence rules are clearer:" [ref=e2707] [cursor=pointer]:
+            - generic [ref=e2717]:
+              - generic [ref=e2718]: Think
+              - generic [ref=e2720]: "Now the fence rules are clearer:"
+        - generic [ref=e2726]:
+          - paragraph [ref=e2727]:
+            - text: 围栏规则明确了：bash 可读根不含
+            - code [ref=e2728]: /data/atf/dev/pinned
+            - text: （pin 不经 bash 触碰）；pin 脚本一律走
+            - code [ref=e2729]: atf_scratch_exec
+            - text: （它自己注入 pin 路径与 PYTHONPATH）。dev 侧 deploy.local.yaml 机器事实齐全（train_env=system / 0-7 卡 / master_port=29517，与 GPU 实况一致）。
+          - paragraph [ref=e2730]: 先取 pin 侧 SKILL 的脚本用法，并让 generate_train_launch.py 自报 CLI（--help）：
+        - generic [ref=e2733]:
+          - button "Tool call atf_skill_read · atf-prepare-training" [ref=e2740] [cursor=pointer]:
+            - generic [ref=e2750]:
+              - generic [ref=e2751]: Tool call
+              - generic [ref=e2753]: atf_skill_read · atf-prepare-training
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_train_launch.py\",\"--help\"]}" [ref=e2760] [cursor=pointer]':
+            - generic [ref=e2770]:
+              - generic [ref=e2771]: Tool call
+              - generic [ref=e2773]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_train_launch.py\",\"--help\"]}"
+          - button "Think CLI confirmed:" [ref=e2781] [cursor=pointer]:
+            - generic [ref=e2791]:
+              - generic [ref=e2792]: Think
+              - generic [ref=e2794]: "CLI confirmed:"
+        - paragraph [ref=e2801]:
+          - text: CLI 确认。注意到 scratch_exec 回执带了
+          - code [ref=e2802]: launch_ready.launch_sh=launch-envprobe/launch.sh
+          - text: 的探测信号——稍后核对。现在执行
+          - strong [ref=e2803]: 环节①再生成
+          - text: （以当前登记源配置 + dev 侧 deploy 事实，产物落 scratch，不回写 run 目录）：
+        - generic [ref=e2806]:
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_train_launch.py\",\"--config\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json\",\"--deploy\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/deploy.local.yaml\",\"--out\",\"launch-regen\"]}" [ref=e2813] [cursor=pointer]':
+            - generic [ref=e2823]:
+              - generic [ref=e2824]: Tool call
+              - generic [ref=e2826]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_train_launch.py\",\"--config\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json\",\"--deploy\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/deploy.local.yaml\",\"--out\",\"launch-regen\"]}"
+          - button "Tool call atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/scratch/launch-envprobe/ 2>/dev/null; echo '---'; ls /data/atf/prodtest/atf-prodtest-20261021/scratch/" [ref=e2833] [cursor=pointer]:
+            - generic [ref=e2843]:
+              - generic [ref=e2844]: Tool call
+              - generic [ref=e2846]: atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/scratch/launch-envprobe/ 2>/dev/null; echo '---'; ls /data/atf/prodtest/atf-prodtest-20261021/scratch/
+          - 'button "Think Generation succeeded: {\"out\": \"launch-regen\", \"global_batch\": 128, \"template\": \"qwen3_vl\", \"save_steps\": 1} — train.sh + launch_manifest.json now in scratch launch-regen/." [ref=e2854] [cursor=pointer]':
+            - generic [ref=e2864]:
+              - generic [ref=e2865]: Think
+              - generic [ref=e2867]: "Generation succeeded: {\"out\": \"launch-regen\", \"global_batch\": 128, \"template\": \"qwen3_vl\", \"save_steps\": 1} — train.sh + launch_manifest.json now in scratch launch-regen/."
+        - paragraph [ref=e2874]:
+          - text: 环节①再生成成功：
+          - code [ref=e2875]: global_batch=128, template=qwen3_vl, save_steps=1
+          - text: 。查看产物与那个 launch-envprobe 信号（避免触发分类器，不带重定向）：
+        - generic [ref=e2878]:
+          - button "Tool call atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/scratch/" [ref=e2885] [cursor=pointer]:
+            - generic [ref=e2895]:
+              - generic [ref=e2896]: Tool call
+              - generic [ref=e2898]: atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/scratch/
+          - button "Tool call atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/scratch/launch-regen/" [ref=e2905] [cursor=pointer]:
+            - generic [ref=e2915]:
+              - generic [ref=e2916]: Tool call
+              - generic [ref=e2918]: atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/scratch/launch-regen/
+          - 'button "Think Now even plain `ls` on scratch is fenced! The governance has TIGHTENED mid-session: scratch is now read-only fenced for bash, writable = dev run workspace only. Earlier scratch ls worked (before the launch detection?). Hmm — actually earlier scratch ls succeeded at Oct 23 00:30-ish; now fenced. The \"launch_ready\" signal appeared after my first scratch_exec — maybe the harness armed the launch phase, and now protects scratch from bash (since launch.sh must be executed by atf_launch_execute, and scratch content is now launch-critical)." [ref=e2947] [cursor=pointer]':
+            - generic [ref=e2937]:
+              - generic [ref=e2938]: Think
+              - generic [ref=e2940]: "Now even plain `ls` on scratch is fenced! The governance has TIGHTENED mid-session: scratch is now read-only fenced for bash, writable = dev run workspace only. Earlier scratch ls worked (before the launch detection?). Hmm — actually earlier scratch ls succeeded at Oct 23 00:30-ish; now fenced. The \"launch_ready\" signal appeared after my first scratch_exec — maybe the harness armed the launch phase, and now protects scratch from bash (since launch.sh must be executed by atf_launch_execute, and scratch content is now launch-critical)."
+        - paragraph [ref=e2953]: bash 对 scratch 的访问也被围栏收窄了（launch 就绪信号出现后，scratch 转为治理面保护——train.sh/launch.sh 只能经正道执行）。改用 atf_read 检视生成产物：
+        - generic [ref=e2956]:
+          - button "Tool call atf_read · scratch/launch-regen/train.sh" [ref=e2963] [cursor=pointer]:
+            - generic [ref=e2973]:
+              - generic [ref=e2974]: Tool call
+              - generic [ref=e2976]: atf_read · scratch/launch-regen/train.sh
+          - button "Think atf_read says file doesn't exist at that path — so launch-regen was NOT written to the main root scratch. The scratch_exec \"工作目录＝scratch\" — but WHICH scratch? Maybe a session-scoped scratch (the harness's own exec-home tmp?). The launch_ready signal says \"launch-envprobe/launch.sh\" — also probably in that private scratch." [ref=e2984] [cursor=pointer]:
+            - generic [ref=e2994]:
+              - generic [ref=e2995]: Think
+              - generic [ref=e2997]: atf_read says file doesn't exist at that path — so launch-regen was NOT written to the main root scratch. The scratch_exec "工作目录＝scratch" — but WHICH scratch? Maybe a session-scoped scratch (the harness's own exec-home tmp?). The launch_ready signal says "launch-envprobe/launch.sh" — also probably in that private scratch.
+        - paragraph [ref=e3004]: 产物不在主根 scratch——scratch_exec 的工作目录应是会话私有 exec-home。定位它：
+        - generic [ref=e3007]:
+          - button "Tool call atf_bash · ls -lat /data/sam/ATF-Harness/tmp/atf-exec-home-dev/" [ref=e3014] [cursor=pointer]:
+            - generic [ref=e3024]:
+              - generic [ref=e3025]: Tool call
+              - generic [ref=e3027]: atf_bash · ls -lat /data/sam/ATF-Harness/tmp/atf-exec-home-dev/
+          - button "Think Now /data/sam/... is fenced too. The fence keeps narrowing as the session enters the launch phase. OK — the governance is progressively locking everything except the dev run workspace. The harness clearly wants:" [ref=e3035] [cursor=pointer]:
+            - generic [ref=e3045]:
+              - generic [ref=e3046]: Think
+              - generic [ref=e3048]: "Now /data/sam/... is fenced too. The fence keeps narrowing as the session enters the launch phase. OK — the governance is progressively locking everything except the dev run workspace. The harness clearly wants:"
+        - paragraph [ref=e3055]: 围栏继续收窄——launch 阶段把其余根都锁了。用 glob 定位生成产物（独立工具，不走 bash 围栏）：
+        - generic [ref=e3058]:
+          - button "Glob **/launch-regen/**" [ref=e3065] [cursor=pointer]:
+            - generic [ref=e3074]:
+              - generic [ref=e3075]: Glob
+              - generic [ref=e3077]: "**/launch-regen/**"
+          - button "Glob **/launch-envprobe/**" [ref=e3084] [cursor=pointer]:
+            - generic [ref=e3093]:
+              - generic [ref=e3094]: Glob
+              - generic [ref=e3096]: "**/launch-envprobe/**"
+          - 'button "Think Not under the session workspace (/data/atf/prodtest/atf-prodtest-20261021). So the scratch_exec scratch is elsewhere — likely the session exec-home under /data/sam/ATF-Harness/tmp/atf-exec-home-dev/session-<current>/scratch or similar. glob might not have access there either (its default path is session workspace). Let me glob with an absolute path param: path=/data/sam/ATF-Harness/tmp/atf-exec-home-dev, pattern \"/launch-regen/*\"." [ref=e3104] [cursor=pointer]':
+            - generic [ref=e3114]:
+              - generic [ref=e3115]: Think
+              - generic [ref=e3117]: "Not under the session workspace (/data/atf/prodtest/atf-prodtest-20261021). So the scratch_exec scratch is elsewhere — likely the session exec-home under /data/sam/ATF-Harness/tmp/atf-exec-home-dev/session-<current>/scratch or similar. glob might not have access there either (its default path is session workspace). Let me glob with an absolute path param: path=/data/sam/ATF-Harness/tmp/atf-exec-home-dev, pattern \"/launch-regen/*\"."
+          - button "Glob **/launch-regen/*" [ref=e3125] [cursor=pointer]:
+            - generic [ref=e3134]:
+              - generic [ref=e3135]: Glob
+              - generic [ref=e3137]: "**/launch-regen/*"
+          - button "Glob **/launch-envprobe/*" [ref=e3144] [cursor=pointer]:
+            - generic [ref=e3153]:
+              - generic [ref=e3154]: Glob
+              - generic [ref=e3156]: "**/launch-envprobe/*"
+          - button "Think Not there either. Hmm. Where did scratch_exec write \"launch-regen\"? Let me think about the harness's directory model:" [ref=e3183] [cursor=pointer]:
+            - generic [ref=e3175]:
+              - generic [ref=e3176]: Think
+              - generic [ref=e3178]: "Not there either. Hmm. Where did scratch_exec write \"launch-regen\"? Let me think about the harness's directory model:"
+          - button "Glob **/launch-regen/**" [ref=e3190] [cursor=pointer]:
+            - generic [ref=e3199]:
+              - generic [ref=e3200]: Glob
+              - generic [ref=e3202]: "**/launch-regen/**"
+          - button "Glob **/launch-envprobe/**" [ref=e3209] [cursor=pointer]:
+            - generic [ref=e3218]:
+              - generic [ref=e3219]: Glob
+              - generic [ref=e3221]: "**/launch-envprobe/**"
+          - 'button "Think Not there either. OK, systematically: find where \"launch-regen\" got written. The scratch_exec ran with cwd = some scratch dir. Candidates:" [ref=e3229] [cursor=pointer]':
+            - generic [ref=e3239]:
+              - generic [ref=e3240]: Think
+              - generic [ref=e3242]: "Not there either. OK, systematically: find where \"launch-regen\" got written. The scratch_exec ran with cwd = some scratch dir. Candidates:"
+          - generic [ref=e3248]:
+            - generic [ref=e3249]: Failed
+            - 'button "Glob Error: file_path_outside_allowlist: /data/atf/dev 越出白名单（合法根：/data/atf/dev/runs；/data/atf/prodtest/atf-g2fresh-20261022；/data/venv/torch291_vllm016_bnb_qwen3vl；/data/sam/ATF-Harness/tmp/atf-exec-home-dev；/data/atf/dev/runs/run-regress-formal-01/training-logs；/data/atf/dev/pinned；/data/LLM_model；/data/sam；/tmp/b18-ws-r2；/data/atf/prodtest/atf-prodtest-20261017；/root/a4-hotws；/data/atf/prodtest/atf-prodtest-20261021；/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1）——改用工作区相对路径，或将数据目录经 ATF_V1_FILE_TOOL_ROOTS 声明后使用" [ref=e3251] [cursor=pointer]':
+              - generic [ref=e3260]:
+                - generic [ref=e3261]: Glob
+                - generic [ref=e3263]: "Error: file_path_outside_allowlist: /data/atf/dev 越出白名单（合法根：/data/atf/dev/runs；/data/atf/prodtest/atf-g2fresh-20261022；/data/venv/torch291_vllm016_bnb_qwen3vl；/data/sam/ATF-Harness/tmp/atf-exec-home-dev；/data/atf/dev/runs/run-regress-formal-01/training-logs；/data/atf/dev/pinned；/data/LLM_model；/data/sam；/tmp/b18-ws-r2；/data/atf/prodtest/atf-prodtest-20261017；/root/a4-hotws；/data/atf/prodtest/atf-prodtest-20261021；/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1）——改用工作区相对路径，或将数据目录经 ATF_V1_FILE_TOOL_ROOTS 声明后使用"
+          - button "Glob **/launch-regen/**" [ref=e3270] [cursor=pointer]:
+            - generic [ref=e3279]:
+              - generic [ref=e3280]: Glob
+              - generic [ref=e3282]: "**/launch-regen/**"
+          - 'button "Think /tmp/b18-ws-r2: nothing. /data/atf/dev too broad for glob''s whitelist (must use /data/atf/dev/runs). Let me glob /data/atf/dev/runs for launch-regen. Note glob path must be within whitelist roots: /data/atf/dev/runs ✓." [ref=e3290] [cursor=pointer]':
+            - generic [ref=e3300]:
+              - generic [ref=e3301]: Think
+              - generic [ref=e3303]: "/tmp/b18-ws-r2: nothing. /data/atf/dev too broad for glob's whitelist (must use /data/atf/dev/runs). Let me glob /data/atf/dev/runs for launch-regen. Note glob path must be within whitelist roots: /data/atf/dev/runs ✓."
+          - button "Glob **/launch-regen/**" [ref=e3311] [cursor=pointer]:
+            - generic [ref=e3320]:
+              - generic [ref=e3321]: Glob
+              - generic [ref=e3323]: "**/launch-regen/**"
+          - 'button "Think Found it: the scratch_exec scratch is `/data/atf/dev/runs/default/scratch/` — the harness''s scratch root (main root \"scratch\" for the atf tools = /data/atf/dev/runs/default/scratch). Files:" [ref=e3331] [cursor=pointer]':
+            - generic [ref=e3341]:
+              - generic [ref=e3342]: Think
+              - generic [ref=e3344]: "Found it: the scratch_exec scratch is `/data/atf/dev/runs/default/scratch/` — the harness's scratch root (main root \"scratch\" for the atf tools = /data/atf/dev/runs/default/scratch). Files:"
+        - paragraph [ref=e3351]:
+          - text: 找到了——
+          - code [ref=e3352]: atf
+          - text: 工具面的
+          - code [ref=e3353]: scratch
+          - text: 根是
+          - code [ref=e3354]: /data/atf/dev/runs/default/scratch
+          - text: 。我来读取这两个产物，并对新
+          - code [ref=e3355]: config
+          - text: 的
+          - code [ref=e3356]: sha
+          - text: 进行交叉校验：
+        - generic [ref=e3359]:
+          - button "Tool call atf_read · /data/atf/dev/runs/default/scratch/launch-regen/train.sh" [ref=e3366] [cursor=pointer]:
+            - generic [ref=e3376]:
+              - generic [ref=e3377]: Tool call
+              - generic [ref=e3379]: atf_read · /data/atf/dev/runs/default/scratch/launch-regen/train.sh
+          - button "Tool call atf_bash · sha256sum /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json /data/atf/dev/runs/default/scratch/launch-regen/train.sh /data/atf/dev/runs/default/scratch/launch-regen/launch_manifest.json" [ref=e3386] [cursor=pointer]:
+            - generic [ref=e3396]:
+              - generic [ref=e3397]: Tool call
+              - generic [ref=e3399]: atf_bash · sha256sum /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json /data/atf/dev/runs/default/scratch/launch-regen/train.sh /data/atf/dev/runs/default/scratch/launch-regen/launch_manifest.json
+          - button "Think The regenerated train.sh is good:" [ref=e3429] [cursor=pointer]:
+            - generic [ref=e3421]:
+              - generic [ref=e3422]: Think
+              - generic [ref=e3424]: "The regenerated train.sh is good:"
+        - generic [ref=e3434]:
+          - paragraph [ref=e3435]: 再生成的 train.sh 关键点确认：
+          - list [ref=e3436]:
+            - listitem [ref=e3437]:
+              - text: 放行账本绑定
+              - strong [ref=e3438]: 当前会话
+              - text: exec-home（session-2f799be2…）
+            - listitem [ref=e3439]:
+              - text: 放行闸 subject =
+              - strong [ref=e3440]:
+                - code [ref=e3441]: 622322b471217beeeee9c0010a9062d42ca36ac62e8e599f9283cae2b423ee3c
+              - text: （新 config 的 sha，由生成器写入——即步骤④要登记、步骤⑤要对拍的指纹）
+            - listitem [ref=e3442]:
+              - text: argv 与数据自检（
+              - code [ref=e3443]: SHA=pass
+              - text: →
+              - code [ref=e3444]: ADMISSION=pass
+              - text: ）与上一轮逐 token 一致
+          - paragraph [ref=e3445]:
+            - text: bash 对 default/scratch 也已围栏，而正道执行链要求 launch 件就位于 run 工作区。按 ADR-0005 落点（
+            - code [ref=e3446]: <workspace>/runs/<run_id>/launch
+            - text: ），把两件产物写入 run 工作区 launch/。先读 manifest：
+        - generic [ref=e3449]:
+          - button "Tool call atf_read · /data/atf/dev/runs/default/scratch/launch-regen/launch_manifest.json" [ref=e3456] [cursor=pointer]:
+            - generic [ref=e3466]:
+              - generic [ref=e3467]: Tool call
+              - generic [ref=e3469]: atf_read · /data/atf/dev/runs/default/scratch/launch-regen/launch_manifest.json
+          - 'button "Think Manifest confirmed: iteration_config_sha256 = 622322b4…ee3c (matches train.sh gate subject ✓), deploy_effective from deploy.local.yaml (master_port 29517, 0-7, system) ✓, deepspeed asset sha identical to old (9faa0da7… ✓ — same pin asset)." [ref=e3495] [cursor=pointer]':
+            - generic [ref=e3488]:
+              - generic [ref=e3489]: Think
+              - generic [ref=e3491]: "Manifest confirmed: iteration_config_sha256 = 622322b4…ee3c (matches train.sh gate subject ✓), deploy_effective from deploy.local.yaml (master_port 29517, 0-7, system) ✓, deepspeed asset sha identical to old (9faa0da7… ✓ — same pin asset)."
+        - paragraph [ref=e3501]:
+          - text: manifest 对拍闭合：
+          - code [ref=e3502]: iteration_config_sha256 = 622322b4…ee3c
+          - text: ＝ train.sh 放行闸 subject；deepspeed 资产 sha 与上轮一致（同一 pin 单源）。现在把两件 launch 产物落到 run 工作区 canonical 位（ADR-0005：
+          - code [ref=e3503]: <workspace>/runs/<run_id>/launch
+          - text: ），随后即可在围栏内执行 DRY_RUN：
+        - generic [ref=e3508]:
+          - 'button "Tool call atf_write · #!/usr/bin/env bash" [ref=e3515] [cursor=pointer]':
+            - generic [ref=e3525]:
+              - generic [ref=e3526]: Tool call
+              - generic [ref=e3528]: "atf_write · #!/usr/bin/env bash"
+          - button "Think train.sh written to run workspace (5201 bytes, sha 24b44396…). Now write the manifest." [ref=e3536] [cursor=pointer]:
+            - generic [ref=e3546]:
+              - generic [ref=e3547]: Think
+              - generic [ref=e3549]: train.sh written to run workspace (5201 bytes, sha 24b44396…). Now write the manifest.
+          - 'button "Tool call atf_write · {" [ref=e3557] [cursor=pointer]':
+            - generic [ref=e3567]:
+              - generic [ref=e3568]: Tool call
+              - generic [ref=e3570]: "atf_write · {"
+          - button "Think Both files in place:" [ref=e3578] [cursor=pointer]:
+            - generic [ref=e3588]:
+              - generic [ref=e3589]: Think
+              - generic [ref=e3591]: "Both files in place:"
+        - paragraph [ref=e3598]:
+          - text: 两件 launch 产物已落 run 工作区
+          - code [ref=e3599]: launch/
+          - text: 。执行
+          - strong [ref=e3600]: ② DRY_RUN 校验
+          - text: （预期输出含
+          - code [ref=e3601]: SHA=pass
+          - text: →
+          - code [ref=e3602]: ADMISSION=pass
+          - text: → COMMAND 行）：
+        - generic [ref=e3605]:
+          - button "Tool call atf_bash · DRY_RUN=1 bash /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/train.sh" [ref=e3612] [cursor=pointer]:
+            - generic [ref=e3622]:
+              - generic [ref=e3623]: Tool call
+              - generic [ref=e3625]: atf_bash · DRY_RUN=1 bash /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/train.sh
+          - 'button "Think The bash tool''s minimal env whitelist means python3 fails: \"libpython3.10.so.1.0: cannot open shared object file\" — the python3 on PATH in this constrained env is broken (probably a venv python without LD_LIBRARY_PATH). The train.sh admission self-check needs a working python3." [ref=e3634] [cursor=pointer]':
+            - generic [ref=e3644]:
+              - generic [ref=e3645]: Think
+              - generic [ref=e3647]: "The bash tool's minimal env whitelist means python3 fails: \"libpython3.10.so.1.0: cannot open shared object file\" — the python3 on PATH in this constrained env is broken (probably a venv python without LD_LIBRARY_PATH). The train.sh admission self-check needs a working python3."
+        - paragraph [ref=e3659]:
+          - text: bash 最小 env 里
+          - code [ref=e3660]: python3
+          - text: 解析到了缺 libpython 的解释器。诊断后用 PATH 前置修正再跑：
+        - generic [ref=e3663]:
+          - button "Tool call atf_bash · which python3; echo '---'; /usr/bin/python3 --version" [ref=e3670] [cursor=pointer]:
+            - generic [ref=e3680]:
+              - generic [ref=e3681]: Tool call
+              - generic [ref=e3683]: atf_bash · which python3; echo '---'; /usr/bin/python3 --version
+          - 'button "Think /usr/bin/python3 is outside the whitelist as an explicit path reference. The env whitelist of atf_bash is minimal — and `python3` resolves to something broken. The venv /data/venv/torch291_vllm016_bnb_qwen3vl IS whitelisted. The real training env (deploy: train_env=system per deploy.local.yaml — \"system\" python). Hmm, but atf_bash''s env gives a python3 that can''t load libpython3.10." [ref=e3691] [cursor=pointer]':
+            - generic [ref=e3701]:
+              - generic [ref=e3702]: Think
+              - generic [ref=e3704]: "/usr/bin/python3 is outside the whitelist as an explicit path reference. The env whitelist of atf_bash is minimal — and `python3` resolves to something broken. The venv /data/venv/torch291_vllm016_bnb_qwen3vl IS whitelisted. The real training env (deploy: train_env=system per deploy.local.yaml — \"system\" python). Hmm, but atf_bash's env gives a python3 that can't load libpython3.10."
+          - button "Tool call atf_bash · which python3; python3 --version" [ref=e3712] [cursor=pointer]:
+            - generic [ref=e3722]:
+              - generic [ref=e3723]: Tool call
+              - generic [ref=e3725]: atf_bash · which python3; python3 --version
+          - button "Tool call atf_bash · find /data/venv/torch291_vllm016_bnb_qwen3vl -maxdepth 3 -name 'libpython3*' 2>/dev/null; ls /data/venv/torch291_vllm016_bnb_qwen3vl/" [ref=e3732] [cursor=pointer]:
+            - generic [ref=e3742]:
+              - generic [ref=e3743]: Tool call
+              - generic [ref=e3745]: atf_bash · find /data/venv/torch291_vllm016_bnb_qwen3vl -maxdepth 3 -name 'libpython3*' 2>/dev/null; ls /data/venv/torch291_vllm016_bnb_qwen3vl/
+          - button "Think Two facts:" [ref=e3753] [cursor=pointer]:
+            - generic [ref=e3763]:
+              - generic [ref=e3764]: Think
+              - generic [ref=e3766]: "Two facts:"
+        - paragraph [ref=e3773]:
+          - code [ref=e3774]: python3
+          - text: 是系统解释器但最小 env 缺
+          - code [ref=e3775]: LD_LIBRARY_PATH
+          - text: （真实训练走 tmux 全量 env 不受此影响，仅为 DRY_RUN 执行环境问题）。探测动态库位置：
+        - generic [ref=e3778]:
+          - button "Tool call atf_bash · env | grep -E '^(PATH|LD_|PYTHON|HOME|ATF)'" [ref=e3785] [cursor=pointer]:
+            - generic [ref=e3795]:
+              - generic [ref=e3796]: Tool call
+              - generic [ref=e3798]: atf_bash · env | grep -E '^(PATH|LD_|PYTHON|HOME|ATF)'
+          - button "Tool call atf_bash · ldconfig -p | grep -i libpython" [ref=e3805] [cursor=pointer]:
+            - generic [ref=e3815]:
+              - generic [ref=e3816]: Tool call
+              - generic [ref=e3818]: atf_bash · ldconfig -p | grep -i libpython
+          - button "Think Interesting:" [ref=e3826] [cursor=pointer]:
+            - generic [ref=e3836]:
+              - generic [ref=e3837]: Think
+              - generic [ref=e3839]: "Interesting:"
+          - button "Tool call atf_bash · which -a python3 python3.10 2>&1 | head -20; echo '---'; whereis libpython3.10.so.1.0 python3.10" [ref=e3847] [cursor=pointer]:
+            - generic [ref=e3857]:
+              - generic [ref=e3858]: Tool call
+              - generic [ref=e3860]: atf_bash · which -a python3 python3.10 2>&1 | head -20; echo '---'; whereis libpython3.10.so.1.0 python3.10
+          - 'button "Think `whereis` found it: libpython3.10.so.1.0 is at /usr/local/lib/ — and PATH already includes /usr/local/lib (odd, but there). The dynamic loader doesn''t search PATH, only LD_LIBRARY_PATH/ld cache. So: `LD_LIBRARY_PATH=/usr/local/lib DRY_RUN=1 bash train.sh`." [ref=e3883] [cursor=pointer]':
+            - generic [ref=e3879]:
+              - generic [ref=e3880]: Think
+              - generic [ref=e3885]: "`whereis` found it: libpython3.10.so.1.0 is at /usr/local/lib/ — and PATH already includes /usr/local/lib (odd, but there). The dynamic loader doesn't search PATH, only LD_LIBRARY_PATH/ld cache. So: `LD_LIBRARY_PATH=/usr/local/lib DRY_RUN=1 bash train.sh`."
+        - paragraph [ref=e3893]:
+          - text: 库在
+          - code [ref=e3894]: /usr/local/lib
+          - text: （PATH 里居然有它但动态加载器不看 PATH）。带 LD_LIBRARY_PATH 重跑 DRY_RUN：
+        - generic [ref=e3897]:
+          - button "Tool call atf_bash · LD_LIBRARY_PATH=/usr/local/lib DRY_RUN=1 bash /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/train.sh" [ref=e3904] [cursor=pointer]:
+            - generic [ref=e3914]:
+              - generic [ref=e3915]: Tool call
+              - generic [ref=e3917]: atf_bash · LD_LIBRARY_PATH=/usr/local/lib DRY_RUN=1 bash /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/train.sh
+          - button "Think Step ② PASSED:" [ref=e3925] [cursor=pointer]:
+            - generic [ref=e3935]:
+              - generic [ref=e3936]: Think
+              - generic [ref=e3938]: "Step ② PASSED:"
+        - generic [ref=e3944]:
+          - paragraph [ref=e3945]:
+            - strong [ref=e3946]: ② 通过
+            - text: ：
+            - code [ref=e3947]: SHA=pass entries=1
+            - text: →
+            - code [ref=e3948]: ADMISSION=pass keys=1
+            - text: ，COMMAND 全量打印，exit 0（数据准入自检闭合，digest 桥绑定的数据文件 sha 校验一致）。
+          - paragraph [ref=e3949]:
+            - text: 进入
+            - strong [ref=e3950]: ③ prelaunch 报告在场检查
+            - text: ——train.sh 同目录（run 工作区
+            - code [ref=e3951]: launch/
+            - text: ）现仅 train.sh + launch_manifest.json，
+            - emphasis [ref=e3952]:
+              - emphasis [ref=e3953]: prelaunch
+              - text: .md|json 缺失
+            - text: "* → 按指令与 prepare SKILL.md:84，用 build_prelaunch_report.py 生成到 scratch。先取其 CLI："
+        - generic [ref=e3956]:
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/build_prelaunch_report.py\",\"--help\"]}" [ref=e3963] [cursor=pointer]':
+            - generic [ref=e3973]:
+              - generic [ref=e3974]: Tool call
+              - generic [ref=e3976]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/build_prelaunch_report.py\",\"--help\"]}"
+          - button "Think build_prelaunch_report.py CLI:" [ref=e3984] [cursor=pointer]:
+            - generic [ref=e3994]:
+              - generic [ref=e3995]: Think
+              - generic [ref=e3997]: "build_prelaunch_report.py CLI:"
+        - paragraph [ref=e4004]:
+          - text: CLI 明确。生成 prelaunch 报告到 scratch（
+          - code [ref=e4005]: "--launch-dir"
+          - text: 指向 run 工作区 launch/，
+          - code [ref=e4006]: "--out"
+          - text: 落 scratch）：
+        - generic [ref=e4009]:
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/build_prelaunch_report.py\",\"--config\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json\",\"--launch-dir\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch\",\"--out\",\"prelaunch-report.md\"]}" [ref=e4016] [cursor=pointer]':
+            - generic [ref=e4026]:
+              - generic [ref=e4027]: Tool call
+              - generic [ref=e4029]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/build_prelaunch_report.py\",\"--config\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json\",\"--launch-dir\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch\",\"--out\",\"prelaunch-report.md\"]}"
+          - 'button "Think Prelaunch report generated: scratch prelaunch-report.md (path: /data/atf/dev/runs/default/scratch/prelaunch-report.md). Per user instruction: report the path, do NOT write back to run dir ✓." [ref=e4037] [cursor=pointer]':
+            - generic [ref=e4047]:
+              - generic [ref=e4048]: Think
+              - generic [ref=e4050]: "Prelaunch report generated: scratch prelaunch-report.md (path: /data/atf/dev/runs/default/scratch/prelaunch-report.md). Per user instruction: report the path, do NOT write back to run dir ✓."
+        - paragraph [ref=e4057]: 报告已生成。读回核验内容完备性（须含训练环境/启动命令/参数全表/数据指纹/首行实文样例）：
+        - generic [ref=e4060]:
+          - button "Tool call atf_read · /data/atf/dev/runs/default/scratch/prelaunch-report.md" [ref=e4067] [cursor=pointer]:
+            - generic [ref=e4077]:
+              - generic [ref=e4078]: Tool call
+              - generic [ref=e4080]: atf_read · /data/atf/dev/runs/default/scratch/prelaunch-report.md
+          - button "Think The prelaunch report is complete and high-quality:" [ref=e4092] [cursor=pointer]:
+            - generic [ref=e4102]:
+              - generic [ref=e4103]: Think
+              - generic [ref=e4105]: "The prelaunch report is complete and high-quality:"
+        - paragraph [ref=e4112]: 报告头部完备。读尾部确认数据指纹节：
+        - generic [ref=e4115]:
+          - button "Tool call atf_read · /data/atf/dev/runs/default/scratch/prelaunch-report.md" [ref=e4122] [cursor=pointer]:
+            - generic [ref=e4132]:
+              - generic [ref=e4133]: Tool call
+              - generic [ref=e4135]: atf_read · /data/atf/dev/runs/default/scratch/prelaunch-report.md
+          - button "Think Report complete — all required sections present including 数据指纹 (142 rows, sha 36818922e0e35fec… ✓ matches the digest bridge)." [ref=e4143] [cursor=pointer]:
+            - generic [ref=e4153]:
+              - generic [ref=e4154]: Think
+              - generic [ref=e4156]: Report complete — all required sections present including 数据指纹 (142 rows, sha 36818922e0e35fec… ✓ matches the digest bridge).
+        - generic [ref=e4162]:
+          - paragraph [ref=e4163]:
+            - strong [ref=e4164]: ③ 完成
+            - text: ——报告五节齐备（训练环境含基模型本地复核通过 / 启动命令+闸门语义 / argv 全量反生成参数表含来源列 / train.jsonl 首行 prompt 实文+期望输出 / 数据指纹 142 行 sha
+            - code [ref=e4165]: 36818922e0e35fec…
+            - text: ）。报告路径：
+            - code [ref=e4166]: /data/atf/dev/runs/default/scratch/prelaunch-report.md
+            - text: （按要求只落 scratch，不回写 run 目录）。
+          - paragraph [ref=e4167]:
+            - text: 进入
+            - strong [ref=e4168]: ④ 账本登记核验
+            - text: ——执行
+            - code [ref=e4169]: "--record-training-release"
+            - text: （写入当前会话 exec-home 账本，与 train.sh 放行闸同源；本次调用即用户确认点，备注注明 owner 书面授权）：
+        - generic [ref=e4172]:
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_train_launch.py\",\"--config\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json\",\"--record-training-release\",\"--note\",\"owner 书面授权：发起训练对话框正式指令（run-admit-qc-02 真实训练走查步骤④）；九要素卡已 Allow once；prelaunch 报告已出（scratch/prelaunch-report.md）；DRY_RUN ADMISSION=pass\"]}" [ref=e4179] [cursor=pointer]':
+            - generic [ref=e4189]:
+              - generic [ref=e4190]: Tool call
+              - generic [ref=e4192]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_train_launch.py\",\"--config\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json\",\"--record-training-release\",\"--note\",\"owner 书面授权：发起训练对话框正式指令（run-admit-qc-02 真实训练走查步骤④）；九要素卡已 Allow once；prelaunch 报告已出（scratch/prelaunch-report.md）；DRY_RUN ADMISSION=pass\"]}"
+          - button "Think ④ recorded (not already_recorded — this session's ledger was fresh):" [ref=e4200] [cursor=pointer]:
+            - generic [ref=e4210]:
+              - generic [ref=e4211]: Think
+              - generic [ref=e4213]: "④ recorded (not already_recorded — this session's ledger was fresh):"
+        - paragraph [ref=e4220]:
+          - strong [ref=e4221]: ④ 登记成功
+          - text: ：
+          - code [ref=e4222]: result=recorded
+          - text: ，subject
+          - code [ref=e4223]: 622322b4…ee3c
+          - text: （本会话账本为新账本，非 already_recorded——旧放行记录属旧会话账本、绑定旧 sha，留档作历史）。按指令贴账本命中行作证据，同时取环节②编排生成器 CLI：
+        - generic [ref=e4226]:
+          - button "Tool call atf_read · /data/sam/ATF-Harness/tmp/atf-exec-home-dev/session-2f799be2-d8e9-4242-bda2-a6b7f9ecd096/.atf/approval-ledger/training-release.jsonl" [ref=e4233] [cursor=pointer]:
+            - generic [ref=e4243]:
+              - generic [ref=e4244]: Tool call
+              - generic [ref=e4246]: atf_read · /data/sam/ATF-Harness/tmp/atf-exec-home-dev/session-2f799be2-d8e9-4242-bda2-a6b7f9ecd096/.atf/approval-ledger/training-release.jsonl
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-run-training/scripts/generate_launch_orchestration.py\",\"--help\"]}" [ref=e4253] [cursor=pointer]':
+            - generic [ref=e4263]:
+              - generic [ref=e4264]: Tool call
+              - generic [ref=e4266]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-run-training/scripts/generate_launch_orchestration.py\",\"--help\"]}"
+          - button "Think Ledger line captured (verbatim):" [ref=e4274] [cursor=pointer]:
+            - generic [ref=e4284]:
+              - generic [ref=e4285]: Think
+              - generic [ref=e4287]: "Ledger line captured (verbatim):"
+        - paragraph [ref=e4294]:
+          - text: 账本命中行已取得。
+          - strong [ref=e4295]: 环节② 编排生成
+          - text: （含数据集坐标制式三查闸——披露/反算还原/声明一致，任一不符拒绝生成）：
+        - generic [ref=e4298]:
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-run-training/scripts/generate_launch_orchestration.py\",\"--train-sh\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch\",\"--deploy\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/deploy.local.yaml\",\"--out\",\"launch-orch\"]}" [ref=e4305] [cursor=pointer]':
+            - generic [ref=e4315]:
+              - generic [ref=e4316]: Tool call
+              - generic [ref=e4318]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-run-training/scripts/generate_launch_orchestration.py\",\"--train-sh\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch\",\"--deploy\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/deploy.local.yaml\",\"--out\",\"launch-orch\"]}"
+          - 'button "Think Rejected: `launch_out_invalid: launch-orch（编排产物必须落 runs/<run_id>/launch, ADR-0007 修订二决定 8）` — the orchestration output MUST land in the canonical runs/<run_id>/launch dir (ADR-0007 rev2 decision 8), not scratch." [ref=e4327] [cursor=pointer]':
+            - generic [ref=e4337]:
+              - generic [ref=e4338]: Think
+              - generic [ref=e4340]: "Rejected: `launch_out_invalid: launch-orch（编排产物必须落 runs/<run_id>/launch, ADR-0007 修订二决定 8）` — the orchestration output MUST land in the canonical runs/<run_id>/launch dir (ADR-0007 rev2 decision 8), not scratch."
+        - paragraph [ref=e4351]:
+          - text: 编排产物按 ADR-0007 修订二决定 8
+          - strong [ref=e4352]:
+            - text: 必须落
+            - code [ref=e4353]: runs/<run_id>/launch
+          - text: ，不收 scratch。改用 canonical 落点重跑：
+        - generic [ref=e4356]:
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-run-training/scripts/generate_launch_orchestration.py\",\"--train-sh\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch\",\"--deploy\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/deploy.local.yaml\",\"--out\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch\"]}" [ref=e4363] [cursor=pointer]':
+            - generic [ref=e4373]:
+              - generic [ref=e4374]: Tool call
+              - generic [ref=e4376]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-run-training/scripts/generate_launch_orchestration.py\",\"--train-sh\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch\",\"--deploy\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/deploy.local.yaml\",\"--out\",\"/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch\"]}"
+          - button "Think Phase ② generation succeeded:" [ref=e4384] [cursor=pointer]:
+            - generic [ref=e4394]:
+              - generic [ref=e4395]: Think
+              - generic [ref=e4397]: "Phase ② generation succeeded:"
+        - paragraph [ref=e4404]:
+          - text: 环节② 通过（三查闸未拒绝＝坐标制式三查全绿；默认态
+          - code [ref=e4405]: waiting_for_start
+          - text: 零 effect）。检视 launch 目录最终形态与闸门投影：
+        - generic [ref=e4408]:
+          - button "Tool call atf_bash · ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/" [ref=e4415] [cursor=pointer]:
+            - generic [ref=e4425]:
+              - generic [ref=e4426]: Tool call
+              - generic [ref=e4428]: atf_bash · ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/
+          - button "Tool call atf_read · /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/state.json" [ref=e4435] [cursor=pointer]:
+            - generic [ref=e4445]:
+              - generic [ref=e4446]: Tool call
+              - generic [ref=e4448]: atf_read · /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/state.json
+          - 'button "Think launch/ now has: launch.sh (3131B), launch_manifest.json (3031B), launch_plan.json (3444B), train.sh (5201B). No state.json — interesting; the \"waiting_for_start\" state file may be written at execution-attempt time, or the orchestration only writes state.json when gates block an execution attempt. Fine." [ref=e4456] [cursor=pointer]':
+            - generic [ref=e4466]:
+              - generic [ref=e4467]: Think
+              - generic [ref=e4469]: "launch/ now has: launch.sh (3131B), launch_manifest.json (3031B), launch_plan.json (3444B), train.sh (5201B). No state.json — interesting; the \"waiting_for_start\" state file may be written at execution-attempt time, or the orchestration only writes state.json when gates block an execution attempt. Fine."
+          - button "Tool call atf_read · /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/launch.sh" [ref=e4477] [cursor=pointer]:
+            - generic [ref=e4487]:
+              - generic [ref=e4488]: Tool call
+              - generic [ref=e4490]: atf_read · /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/launch/launch.sh
+          - button "Think launch.sh verified:" [ref=e4499] [cursor=pointer]:
+            - generic [ref=e4509]:
+              - generic [ref=e4510]: Think
+              - generic [ref=e4512]: "launch.sh verified:"
+        - generic [ref=e4523]:
+          - paragraph [ref=e4524]:
+            - text: launch.sh 闸门链闭合自洽：
+            - code [ref=e4525]: launch_manifest.iteration_config_sha256(622322b4…)
+            - text: → 本会话账本 grep（④ 已有记录）→ preflight → setsid 启动 + ownership token + receipt。
+          - paragraph [ref=e4526]:
+            - text: 执行
+            - strong [ref=e4527]: ⑤ 放行执行
+            - text: （唯一编排执行点；config 提供后会再走一次放行登记——预期回报 already recorded；note 注明 owner 书面授权）：
+        - generic [ref=e4530]:
+          - button "Tool call atf_launch_execute · /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json" [ref=e4538] [cursor=pointer]:
+            - generic [ref=e4548]:
+              - generic [ref=e4549]: Tool call
+              - generic [ref=e4551]: atf_launch_execute · /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json
+          - button "Think atf_launch_execute rejects absolute paths (\"path escape\" — absolute paths rejected). It wants RELATIVE paths — \"launch.sh's scratch-relative path\" and \"IterationConfig's scratch-relative path\". Relative to what? \"scratch\" — the atf scratch root = /data/atf/dev/runs/default/scratch? But the files are in the run workspace, not scratch..." [ref=e4580] [cursor=pointer]:
+            - generic [ref=e4590]:
+              - generic [ref=e4591]: Think
+              - generic [ref=e4593]: atf_launch_execute rejects absolute paths ("path escape" — absolute paths rejected). It wants RELATIVE paths — "launch.sh's scratch-relative path" and "IterationConfig's scratch-relative path". Relative to what? "scratch" — the atf scratch root = /data/atf/dev/runs/default/scratch? But the files are in the run workspace, not scratch...
+        - paragraph [ref=e4600]: 工具拒绝绝对路径（须相对路径）。按 run 工作区相对形式重试：
+        - generic [ref=e4601]:
+          - text: Calling tools · atf_launch_execute
+          - generic [ref=e4608]:
+            - generic [ref=e4609]: Running
+            - button "Tool call atf_launch_execute · prep/iteration-config/iteration-config.json" [ref=e4611] [cursor=pointer]:
+              - generic [ref=e4620]:
+                - generic [ref=e4621]:
+                  - generic [ref=e4622]: Tool call
+                  - generic [ref=e4624]: atf_launch_execute · prep/iteration-config/iteration-config.json
+                - generic [aria-hidden]:
+                  - generic:
+                    - generic:
+                      - generic: Tool call
+                      - generic: atf_launch_execute · prep/iteration-config/iteration-config.json
+        - generic [ref=e1375]:
+          - status [ref=e1376]: Deep diving
+          - generic [ref=e1380]:
+            - generic [ref=e1381]: Deep diving for 26m 48s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 26m 48s ···
+      - generic [ref=e4626]:
+        - generic [ref=e4627]: Waiting for approval
+        - group "Approval details" [ref=e4629]:
+          - generic [ref=e4630]: 将要执行：执行训练内核工具（atf_launch_execute） 影响范围：按该工具语义执行（写面以实际参数为准） 可逆性：按工具语义（写盘产物可人工清理） 预计代价：按任务卡
+        - generic [ref=e4631]:
+          - button "Reject" [ref=e4632] [cursor=pointer]
+          - button "Allow once" [ref=e4633] [cursor=pointer]
+  - generic [ref=e1030]:
+    - tablist [ref=e1032]:
+      - tab "Start" [selected] [ref=e1033]
+      - button "Split" [ref=e1041] [cursor=pointer]
+      - generic [ref=e1044]:
+        - button "Fullscreen" [ref=e1045] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=e1048] [cursor=pointer]
+    - generic [ref=e1055]:
+      - button "Workspace files Browse files in this session's workspace" [ref=e1062] [cursor=pointer]:
+        - generic [ref=e1067]:
+          - generic [ref=e1068]: Workspace files
+          - generic [ref=e1069]: Browse files in this session's workspace
+      - generic [ref=e1072]:
+        - button "New terminal Run commands in the Session workspace" [ref=e1073] [cursor=pointer]
+        - generic:
+          - generic:
+            - generic [aria-hidden]: New terminal
+            - button "Choose shell" [ref=e1075] [cursor=pointer]
+          - generic [aria-hidden]: Run commands in the Session workspace

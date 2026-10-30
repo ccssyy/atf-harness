@@ -1,0 +1,387 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - button "Open sidebar" [ref=e9] [cursor=pointer]:
+      - generic [ref=e11]: ATF
+    - button "New session" [ref=e13] [cursor=pointer]
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - button "Add workspace" [ref=e32] [cursor=pointer]
+      - button "Search sessions" [ref=e36] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e54]:
+    - banner [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - generic:
+            - navigation "Session hierarchy":
+              - generic: 汇总当前实验状态与进展
+          - generic [ref=e163]:
+            - button "More actions" [ref=e165] [cursor=pointer]
+            - generic [ref=e170]:
+              - button "atf-prodtest-20261021 · 10-20 · 空闲 ▾ atf-prodtest" [ref=e1379] [cursor=pointer]:
+                - generic [ref=e173]: atf-prodtest-20261021 · 10-20 · 空闲 ▾
+                - generic "atf-prodtest-20261021" [ref=e1382]: atf-prodtest
+              - button "监控" [ref=e174] [cursor=pointer]
+        - tablist [ref=e175]:
+          - tab "Chat" [selected] [ref=e176] [cursor=pointer]
+          - tab "Trajectory" [ref=e177] [cursor=pointer]
+    - generic [ref=e56]:
+      - generic [ref=e184]:
+        - generic [ref=e187]:
+          - generic [ref=e188]: 帮我看一下当前实验的整体状态和最近的进展，简单汇总即可。
+          - generic [ref=e190]:
+            - generic [ref=e191]: 00:35
+            - button "Copy" [ref=e192] [cursor=pointer]
+        - generic [ref=e426]:
+          - status [ref=e427]: Completed
+          - button "Completed in 3m 6s" [ref=e428] [cursor=pointer]
+        - generic [ref=e436]:
+          - heading "当前实验状态汇总" [level=1] [ref=e437]
+          - paragraph [ref=e438]:
+            - strong [ref=e439]:
+              - text: 总体：当前没有正在跑的训练/评估（8 卡 GPU 全部空闲），最近一轮工作集中在
+              - code [ref=e440]: atf-prodtest-20261021
+              - text: 实验簇（10/20–10/21）。
+            - text: 本会话尚未绑定 run，以下是从状态面与产物读出的情况。
+          - heading "最近进展（时间线）" [level=2] [ref=e441]
+          - table [ref=e443]:
+            - rowgroup [ref=e444]:
+              - row [ref=e445]:
+                - columnheader "时间" [ref=e446]
+                - columnheader "事件" [ref=e447]
+            - rowgroup [ref=e448]:
+              - row [ref=e449]:
+                - cell "10/20 晚" [ref=e450]
+                - cell [ref=e451]:
+                  - code [ref=e452]: run-admit-qc-01
+                  - text: 完成配置确认与诊断（未进入训练）
+              - row [ref=e453]:
+                - cell "10/21 凌晨" [ref=e454]
+                - cell [ref=e455]:
+                  - strong [ref=e456]:
+                    - code [ref=e457]: run-admit-qc-02
+                    - text: 训练完成（ckpt-6，验收通过）
+                  - text: ，随后完成正式评估 + badcase 分析报告
+              - row [ref=e458]:
+                - cell "10/21 中午" [ref=e459]
+                - cell [ref=e460]:
+                  - code [ref=e461]: run-admit-qc-02
+                  - text: 有两次训练失败通知（12:53/13:13，疑为重试/后续触发）
+              - row [ref=e462]:
+                - cell "10/21 13:19" [ref=e463]
+                - cell [ref=e464]:
+                  - text: 变体实验
+                  - strong [ref=e465]:
+                    - code [ref=e466]: run-admit-qc-02-eval-h5
+                    - text: 训练完成
+              - row [ref=e467]:
+                - cell "10/21 21:07" [ref=e468]
+                - cell [ref=e469]:
+                  - text: eval-h5 完成第 2 轮正式评估；
+                  - code [ref=e470]: prep/variants/
+                  - text: 生成了 142 行变体数据报告
+          - heading "关键指标（同口径 10 页 formal eval，goods lane）" [level=2] [ref=e471]
+          - list [ref=e472]:
+            - listitem [ref=e473]:
+              - strong [ref=e474]: run-admit-qc-02（ckpt6）
+              - text: ：micro
+              - strong [ref=e475]: F1 = 0.2991
+              - text: （P 0.2212 / R 0.4618，TP 296 / FP 1042 / FN 345），整页全对率 0
+            - listitem [ref=e476]:
+              - strong [ref=e477]: run-admit-qc-02-eval-h5（ckpt6）
+              - text: ：micro
+              - strong [ref=e478]: F1 = 0.2416
+              - text: （P 0.1908 / R 0.3292）——低于主 run，h5 变体这轮没有带来提升
+            - listitem [ref=e479]: 两轮共有 7 个零正例字段（currency、total_amount、doc_identifier 等）在测试集无标注正例，若属漏标需先修 GT
+          - heading "数据侧" [level=2] [ref=e480]
+          - paragraph [ref=e481]:
+            - code [ref=e482]: prep/variants/variants_report.json
+            - text: ：基线 40 行 → 产出 142 行（mode0 40 + targeted 102）；bbox 从 original_pixel 换算到 qwen_axis_1000，4528 个框全量反算核对通过；mode1/mode5 增广因未过实验门确认卡而显式跳过（未静默生成）。
+          - heading "待办 / 风险点" [level=2] [ref=e483]
+          - list [ref=e484]:
+            - listitem [ref=e485]:
+              - strong [ref=e486]: Badcase 行级审阅未闭合
+              - text: ：110 条错误事件 0 条已审、23 个错误簇 0 个机制闭合——分析报告（
+              - button "report.md" [ref=e487] [cursor=pointer]
+              - text: ）明确下一步是先补簇级机制审阅，再谈训练动作。
+            - listitem [ref=e491]: 未做 baseline 对比回归（阶段 7），本轮 F1 仅为观察值；run-admit-qc-02 未见正式发布（仅 checkpoint-6 说明文档）。
+            - listitem [ref=e492]: 中午两次 training_failed 通知的根因未核查，如需要我可以深入看日志。
+          - paragraph [ref=e493]: 需要我接着做哪一项？比如深入 badcase 簇审阅、对比 h5 变体为何掉点，或核查那两次训练失败。
+        - generic [ref=e497]:
+          - button "Copy" [ref=e498] [cursor=pointer]
+          - generic [ref=e502]:
+            - button "Good response" [ref=e503] [cursor=pointer]
+            - button "Bad response" [ref=e506] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=e509] [cursor=pointer]
+          - generic [ref=e515]:
+            - button "Usage 458K tok" [ref=e517] [cursor=pointer]
+            - generic [ref=e523]: 00:39
+      - generic [ref=e78]:
+        - generic [ref=e79]:
+          - generic [ref=e81]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [ref=e204]:
+              - paragraph [ref=e529]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e83]:
+            - generic [ref=e84]:
+              - button "Add files or run commands" [ref=e111] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e116] [cursor=pointer]'
+            - generic [ref=e85]:
+              - generic [ref=e124]:
+                - button "思考 Max(最高) ▾" [ref=e127] [cursor=pointer]:
+                  - generic [ref=e128]: 思考
+                  - generic [ref=e129]: Max(最高)
+                  - generic [ref=e130]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e133] [cursor=pointer]
+              - button "Send message" [disabled] [ref=e524]
+        - generic [ref=e207]:
+          - generic [ref=e208]:
+            - generic [ref=e398]:
+              - button "1 turns 14 steps · 47 tok/s" [ref=e526] [cursor=pointer]:
+                - generic [ref=e405]: 1 turns 14 steps·47 tok/s
+              - button "458K tok · Cache hit 91%" [ref=e527] [cursor=pointer]:
+                - generic [ref=e412]: 458K tok·Cache hit 91%
+            - generic [ref=e210]:
+              - button "新建训练" [ref=e211] [cursor=pointer]
+              - button "查状态" [ref=e212] [cursor=pointer]
+              - button "继续训练：atf-prodtest-20261021" [ref=e1383] [cursor=pointer]
+              - button "对比两轮" [ref=e214] [cursor=pointer]
+              - button "走完闭环" [ref=e215] [cursor=pointer]
+              - button "联合训练" [ref=e216] [cursor=pointer]
+              - button "badcase 可视化" [ref=e217] [cursor=pointer]
+              - button "发起训练" [ref=e218] [cursor=pointer]
+          - button "4% of context used" [ref=e528] [cursor=pointer]:
+            - generic [ref=e418]: 4%
+  - generic [ref=e1152]:
+    - tablist [ref=e1154]:
+      - tab "训练监控 Close" [selected] [ref=e1155] [cursor=pointer]:
+        - generic [ref=e1156]: 训练监控
+        - button "Close" [ref=e1158]
+      - button "New tab" [ref=e1162] [cursor=pointer]
+      - generic "Not enough width to split, widen the sidebar" [ref=e1164]:
+        - button "Split" [disabled] [ref=e1165]
+      - generic [ref=e1168]:
+        - button "Fullscreen" [ref=e1169] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=e1172] [cursor=pointer]
+    - generic [ref=e1178]:
+      - generic [ref=e1179]:
+        - generic [ref=e1180]:
+          - generic [ref=e1181]: 运行监控
+          - generic "atf-prodtest-20261021 · run-admit-qc-01" [ref=e1338]: 装箱单 · Qwen3-VL-32B · 10-20 22:57
+          - generic [ref=e1184]: 空闲
+        - generic [ref=e1187]:
+          - combobox "选择 run" [ref=e1188]:
+            - option "casea-run-joint"
+            - option "a22b-walk2"
+            - option "a22b-walk3"
+            - option "a22b-walk4"
+            - option "a22b-e14b"
+            - option "a22b-e14b2"
+            - option "a22b-walk5"
+            - option "run-admit-qc-01" [selected]
+            - option "run-admit-qc-02"
+            - option "a3smoke1017"
+            - option "bw-live-1"
+            - option "c2e9-deep-demo"
+            - option "cr_ci_smoke_r1_replay"
+            - option "d3-kdirect-1019"
+            - option "d3-kdirect-b"
+            - option "default"
+            - option "evalcard-smoke"
+            - option "goods4doc-iter1"
+            - option "run-p-probe-sim"
+            - option "run-q-manual"
+            - option "run-q-smoke"
+            - option "run-regress-formal-01"
+            - option "run-regress-formal-02"
+            - option "run-regress-formal-03"
+            - option "run-regress-large-pl"
+            - option "train-obs-smoke-21105"
+            - option "train-obs-smoke-875d6a22"
+            - option "train-obs-smoke-95511"
+            - option "train-obs-smoke-95770"
+            - option "train-obs-smoke-96135"
+            - option "train-obs-smoke-9a4ba234"
+            - option "train-obs-smoke-r1"
+            - option "train-obs-smoke-r10"
+            - option "train-obs-smoke-r11"
+            - option "train-obs-smoke-r12"
+            - option "train-obs-smoke-r13"
+            - option "train-obs-smoke-r14"
+            - option "train-obs-smoke-r15"
+            - option "train-obs-smoke-r16"
+            - option "train-obs-smoke-r17"
+            - option "train-obs-smoke-r2"
+            - option "train-obs-smoke-r3"
+            - option "train-obs-smoke-r4"
+            - option "train-obs-smoke-r5"
+            - option "train-obs-smoke-r6"
+            - option "train-obs-smoke-r7"
+            - option "train-obs-smoke-r8"
+            - option "train-obs-smoke-r9"
+            - option "walkthrough-b10-rerun"
+            - option "walkthrough-b11-rerun"
+            - option "walkthrough-f10-rerun"
+            - option "walkthrough-m12-real"
+            - option "a11cancel1017"
+            - option "a12cancel1018"
+            - option "c2e5-card-flash"
+            - option "c2e5-card-flashx"
+            - option "c2e5-card-glm53"
+            - option "c3b-card-eleven"
+            - option "c3b-card-final"
+            - option "c3b-card-twelve"
+            - option "a1domprobe1"
+            - option "a1mx-53-a"
+            - option "a1mx-flash-a"
+            - option "a1mx-flash-b"
+            - option "a1mx-flash-b2"
+            - option "a1mx-flashx-a"
+            - option "a1probe1017a"
+            - option "a1probe1017b"
+            - option "a31-ready-run"
+            - option "goods4doc-joint-20261017"
+            - option "run-admit-qc-02-eval-h5"
+          - button "全部" [ref=e1189] [cursor=pointer]
+      - generic [ref=e1190]: 全部实例（只读视图）——点选只预览，不改变本会话绑定
+      - generic [ref=e1193]:
+        - generic [ref=e1194]:
+          - generic "数据登记：已完成" [ref=e1339]: 数据登记
+          - generic "标注体检：已完成" [ref=e1340]: 标注体检
+          - generic "实验配置：已完成" [ref=e1341]: 实验配置
+          - generic "契约发布：已完成" [ref=e1342]: 契约发布
+          - generic "数据切分：已完成" [ref=e1343]: 数据切分
+          - generic "准入检查：已完成" [ref=e1344]: 准入检查
+          - generic "训练执行：等待完成" [ref=e1345]: 训练执行
+          - generic "评估与可视化：等待完成" [ref=e1346]: 评估与可视化
+        - generic [ref=e1219]:
+          - generic [ref=e1220]:
+            - generic [ref=e1221]: 步进
+            - generic [ref=e1222]: —
+          - generic [ref=e1223]:
+            - generic [ref=e1224]: Loss
+            - generic [ref=e1225]: —
+          - generic [ref=e1226]:
+            - generic [ref=e1227]: 指标 F1
+            - generic [ref=e1228]: —
+          - generic [ref=e1229]:
+            - generic [ref=e1230]: 显存
+            - generic [ref=e1231]: 8G/640G
+        - generic [ref=e1347]:
+          - generic [ref=e1348]:
+            - generic [ref=e1349]: 运行环境
+            - generic [ref=e1350]: 权限档位：Full access
+          - generic [ref=e1351]:
+            - generic [ref=e1352]:
+              - generic [ref=e1353]: 基模型
+              - generic "Qwen3-VL-32B-Instruct" [ref=e1354]
+            - generic [ref=e1355]:
+              - generic [ref=e1356]: 数据集
+              - generic "walkthrough-pl_pl_goods" [ref=e1357]
+            - generic [ref=e1358]:
+              - generic [ref=e1359]: 并行
+              - generic "ds_z2_config.json" [ref=e1360]
+            - generic [ref=e1361]:
+              - generic [ref=e1362]: 通道
+              - generic "pl_goods" [ref=e1363]
+        - generic [ref=e1232]:
+          - generic [ref=e1233]:
+            - generic [ref=e1234]: Loss 曲线
+            - generic [ref=e1235]:
+              - button "原始" [ref=e1236] [cursor=pointer]
+              - button "平滑" [ref=e1237] [cursor=pointer]
+          - generic [ref=e1238]: 等待首个 loss 点
+        - generic [ref=e1241]:
+          - generic [ref=e1242]:
+            - generic [ref=e1243]: GPU
+            - generic [ref=e1244]: 忙 0/8 · 8G/640G · 绑 0,1,2,3,4,5,6,7
+          - generic [ref=e1245]:
+            - generic [ref=e1246]:
+              - generic [ref=e1247]:
+                - generic [ref=e1248]: "0"
+                - generic [ref=e1249]: 0%
+              - generic [ref=e1252]:
+                - generic [ref=e1253]: 0G/80G
+                - generic [ref=e1254]: 25° 56W
+            - generic [ref=e1255]:
+              - generic [ref=e1256]:
+                - generic [ref=e1257]: "1"
+                - generic [ref=e1258]: 0%
+              - generic [ref=e1262]:
+                - generic [ref=e1263]: 8G/80G
+                - generic [ref=e1264]: 25° 57W
+            - generic [ref=e1265]:
+              - generic [ref=e1266]:
+                - generic [ref=e1267]: "2"
+                - generic [ref=e1268]: 0%
+              - generic [ref=e1271]:
+                - generic [ref=e1272]: 0G/80G
+                - generic [ref=e1273]: 26° 76W
+            - generic [ref=e1274]:
+              - generic [ref=e1275]:
+                - generic [ref=e1276]: "3"
+                - generic [ref=e1277]: 0%
+              - generic [ref=e1280]:
+                - generic [ref=e1281]: 0G/80G
+                - generic [ref=e1282]: 26° 71W
+            - generic [ref=e1283]:
+              - generic [ref=e1284]:
+                - generic [ref=e1285]: "4"
+                - generic [ref=e1286]: 0%
+              - generic [ref=e1289]:
+                - generic [ref=e1290]: 0G/80G
+                - generic [ref=e1291]: 26° 67W
+            - generic [ref=e1292]:
+              - generic [ref=e1293]:
+                - generic [ref=e1294]: "5"
+                - generic [ref=e1295]: 0%
+              - generic [ref=e1298]:
+                - generic [ref=e1299]: 0G/80G
+                - generic [ref=e1300]: 25° 65W
+            - generic [ref=e1301]:
+              - generic [ref=e1302]:
+                - generic [ref=e1303]: "6"
+                - generic [ref=e1304]: 0%
+              - generic [ref=e1307]:
+                - generic [ref=e1308]: 0G/80G
+                - generic [ref=e1309]: 25° 64W
+            - generic [ref=e1310]:
+              - generic [ref=e1311]:
+                - generic [ref=e1312]: "7"
+                - generic [ref=e1313]: 0%
+              - generic [ref=e1316]:
+                - generic [ref=e1317]: 0G/80G
+                - generic [ref=e1318]: 26° 65W
+          - button "展开进程与历史曲线 ▾" [ref=e1320] [cursor=pointer]
+        - generic [ref=e1321]:
+          - generic [ref=e1322]:
+            - generic [ref=e1323]: 训练产物
+            - generic [ref=e1324]: 点击在右栏直接查看
+          - generic [ref=e1325]:
+            - generic "打开 split-manifest.json" [ref=e1364] [cursor=pointer]:
+              - generic [ref=e1365]: SP
+              - generic [ref=e1366]: split-manifest.json
+              - generic [ref=e1367]: 数据切分
+              - generic [ref=e1368]: ›
+            - generic "打开 契约件（含 digest）" [ref=e1369] [cursor=pointer]:
+              - generic [ref=e1370]: ··
+              - generic [ref=e1371]: 契约件（含 digest）
+              - generic [ref=e1372]: 产物
+              - generic [ref=e1373]: ›
+            - generic "打开 launch manifest（sha 索引）" [ref=e1374] [cursor=pointer]:
+              - generic [ref=e1375]: ··
+              - generic [ref=e1376]: launch manifest（sha 索引）
+              - generic [ref=e1377]: 产物
+              - generic [ref=e1378]: ›
+        - generic [ref=e1326]:
+          - generic [ref=e1327]:
+            - generic [ref=e1328]: 训练日志
+            - generic [ref=e1329]: 最后 40 行 · 悬停暂停
+          - generic [ref=e1330]: （暂无训练日志——训练启动后自动采集）
+        - generic [ref=e1331]:
+          - generic [ref=e1332]:
+            - generic [ref=e1333]: 评估对比
+            - generic [ref=e1334]: 最近两轮评估并排
+          - generic [ref=e1335]: （不足两轮——对比需 ≥2 个 eval 轮次，当前 0 轮）
+        - generic [ref=e1336]: 内核 real · v0.7.23b3

@@ -1,0 +1,158 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - button "Open sidebar" [ref=e9] [cursor=pointer]:
+      - generic [ref=e11]: ATF
+    - button "New session" [ref=e13] [cursor=pointer]
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - button "Add workspace" [ref=e32] [cursor=pointer]
+      - button "Search sessions" [ref=e36] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e791]:
+    - banner [ref=e793]:
+      - generic [ref=e794]:
+        - generic [ref=e795]:
+          - generic [ref=e876]:
+            - navigation "Session hierarchy" [ref=e877]:
+              - generic [ref=e878]: 装箱单字段抽取新实验全流程
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e882]: Standard mode
+          - generic [ref=e889]:
+            - button "More actions" [ref=e891] [cursor=pointer]
+            - generic [ref=e896]:
+              - button "选择实验 ▾" [ref=e898] [cursor=pointer]
+              - button "监控" [ref=e900] [cursor=pointer]
+          - button "Open right sidebar" [ref=e798] [cursor=pointer]
+        - tablist [ref=e901]:
+          - tab "Chat" [selected] [ref=e902] [cursor=pointer]
+          - tab "Trajectory" [ref=e903] [cursor=pointer]
+    - generic [ref=e802]:
+      - generic [ref=e910]:
+        - generic [ref=e913]:
+          - generic [ref=e914]: 从零开始一个新实验：装箱单（pl）字段抽取训练。原始数据已备在本工作区 datasets/walkthrough-pl/（50 对 png+同名标注 json）。请走完整正道链：数据登记（新 run，不复用任何旧实验）→标注体检→实验配置→合同发布→数据切分（训练/测试两分 40/10）→准入检查→训练准备→发起训练。九要素确认卡和各放行卡我会逐张核对，机器事实缺了就停下来问我。
+          - generic [ref=e916]:
+            - generic [ref=e917]: 07:46
+            - button "Copy" [ref=e918] [cursor=pointer]
+        - 'button "Think Let me understand the task. The user wants to start a brand new experiment from scratch: 装箱单 (packing list, \"pl\") field extraction training. Raw data is at datasets/walkthrough-pl/ in the workspace (50 pairs of png + same-name annotation json). They want the full canonical chain:" [ref=e972] [cursor=pointer]':
+          - generic [ref=e966]:
+            - generic [ref=e967]: Think
+            - generic [ref=e969]: "Let me understand the task. The user wants to start a brand new experiment from scratch: 装箱单 (packing list, \"pl\") field extraction training. Raw data is at datasets/walkthrough-pl/ in the workspace (50 pairs of png + same-name annotation json). They want the full canonical chain:"
+        - paragraph [ref=e978]: 我先加载正道链入口技能，再核对工作区与数据现状。
+        - generic [ref=e981]:
+          - button "Skill atf-qwen-vl-iteration-loop" [ref=e987] [cursor=pointer]:
+            - generic [ref=e996]:
+              - generic [ref=e997]: Skill
+              - generic [ref=e999]: atf-qwen-vl-iteration-loop
+          - 'button "Think The skill atf-qwen-vl-iteration-loop describes a CLI-based entry (`atf qwen-vl-iteration-loop ...`) — but that''s for a different route system. However, the task the user describes matches exactly the walkthrough pipeline stages driven by `atf_pipeline_stage` tool. The skill says \"新建：检查 catalog、合同和 Policy 后路由到 atf-validate-extraction-contract\" — but that''s the atf route flow." [ref=e1007] [cursor=pointer]':
+            - generic [ref=e1017]:
+              - generic [ref=e1018]: Think
+              - generic [ref=e1020]: "The skill atf-qwen-vl-iteration-loop describes a CLI-based entry (`atf qwen-vl-iteration-loop ...`) — but that's for a different route system. However, the task the user describes matches exactly the walkthrough pipeline stages driven by `atf_pipeline_stage` tool. The skill says \"新建：检查 catalog、合同和 Policy 后路由到 atf-validate-extraction-contract\" — but that's the atf route flow."
+        - paragraph [ref=e1027]: 技能已加载。该技能的 CLI 入口面向路线选择；本会话的正道链由内核 walkthrough_pipeline 八段驱动（与你要的步骤一一对应）。我先核对工作区事实、数据形态与现有 run 清单，全部只读。
+        - generic [ref=e1030]:
+          - button "Glob datasets/walkthrough-pl/*" [ref=e1037] [cursor=pointer]:
+            - generic [ref=e1046]:
+              - generic [ref=e1047]: Glob
+              - generic [ref=e1049]: datasets/walkthrough-pl/*
+          - 'button "Tool call atf_workspace_status · {}" [ref=e1056] [cursor=pointer]':
+            - generic [ref=e1066]:
+              - generic [ref=e1067]: Tool call
+              - generic [ref=e1069]: "atf_workspace_status · {}"
+          - 'button "Tool call atf_skill_read · {}" [ref=e1076] [cursor=pointer]':
+            - generic [ref=e1086]:
+              - generic [ref=e1087]: Tool call
+              - generic [ref=e1089]: "atf_skill_read · {}"
+          - 'button "Tool call atf_run_list · {}" [ref=e1096] [cursor=pointer]':
+            - generic [ref=e1106]:
+              - generic [ref=e1107]: Tool call
+              - generic [ref=e1109]: "atf_run_list · {}"
+          - 'button "Think Data check: 50 png + 50 json (the glob returned 100 files; let me count: png entries — I counted 50 png and 50 json; yes looks like 50 pairs, same-name (sha-like names). Good." [ref=e1155] [cursor=pointer]':
+            - generic [ref=e1128]:
+              - generic [ref=e1129]: Think
+              - generic [ref=e1131]: "Data check: 50 png + 50 json (the glob returned 100 files; let me count: png entries — I counted 50 png and 50 json; yes looks like 50 pairs, same-name (sha-like names). Good."
+        - paragraph [ref=e1161]:
+          - text: 数据在场：
+          - code [ref=e1162]: datasets/walkthrough-pl/
+          - text: 下为 50 对 png+同名 json（sha 命名），会话当前无绑定 run，历史 run 清单中也没有本工作区的同名 run——满足「新 run 不复用」。我先看一下工作区目录结构与一份标注样例，确认登记所需的形态。
+        - generic [ref=e1165]:
+          - button "Tool call atf_bash · ls -la /data/atf/prodtest/atf-g2fresh-20261022 && echo '--- .atf ---' && ls -la /data/atf/prodtest/atf-g2fresh-20261022/.atf 2>/dev/null; echo '--- experiments/runs ---'; ls /data/atf/prodtest/atf-g2fresh-20261022/experiments 2>/dev/null; ls /data/atf/prodtest/atf-g2fresh-20261022/runs 2>/dev/null" [ref=e1172] [cursor=pointer]:
+            - generic [ref=e1182]:
+              - generic [ref=e1183]: Tool call
+              - generic [ref=e1185]: atf_bash · ls -la /data/atf/prodtest/atf-g2fresh-20261022 && echo '--- .atf ---' && ls -la /data/atf/prodtest/atf-g2fresh-20261022/.atf 2>/dev/null; echo '--- experiments/runs ---'; ls /data/atf/prodtest/atf-g2fresh-20261022/experiments 2>/dev/null; ls /data/atf/prodtest/atf-g2fresh-20261022/runs 2>/dev/null
+          - generic [ref=e1190]:
+            - generic [ref=e1191]: Failed
+            - 'button "Read Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）" [ref=e1193] [cursor=pointer]':
+              - generic [ref=e1201]:
+                - generic [ref=e1202]: Read
+                - generic [ref=e1204]: "Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）"
+          - 'button "Think The workspace root is nearly empty: only datasets/. No .atf identity file, no experiments/, no runs/. So this is a fresh workspace." [ref=e1232] [cursor=pointer]':
+            - generic [ref=e1223]:
+              - generic [ref=e1224]: Think
+              - generic [ref=e1226]: "The workspace root is nearly empty: only datasets/. No .atf identity file, no experiments/, no runs/. So this is a fresh workspace."
+        - generic [ref=e1237]:
+          - paragraph [ref=e1238]: 工作区现状确认：
+          - list [ref=e1239]:
+            - listitem [ref=e1240]:
+              - code [ref=e1241]: datasets/walkthrough-pl/
+              - text: ：50 对 png+同名 json，成对齐全，形态符合登记要求
+            - listitem [ref=e1242]:
+              - text: 工作区根目前只有 datasets/，
+              - strong [ref=e1243]: 无身份文件、无 experiments/、无 runs/
+              - text: ——是全新工作区，不存在可复用的旧实验
+            - listitem [ref=e1244]: 会话未绑定任何 run，历史 run 清单（76 个）均属其他工作区/无桶，与本链无关
+          - paragraph [ref=e1245]:
+            - text: 按正道链第一步：先在工作区创建实验对象（同时自动初始化工作区身份文件
+            - code [ref=e1246]: .atf/workspace.json
+            - text: ，这是后续账本定位与段事实落点的前提）。实验名
+            - code [ref=e1247]: pl-walkthrough
+            - text: ，落点将为
+            - code [ref=e1248]: experiments/20261022-pl-walkthrough/
+            - text: 。
+        - generic [ref=e1249]:
+          - text: Analyzing the request
+          - button "Tool call atf_create_experiment · pl-walkthrough" [ref=e1259] [cursor=pointer]:
+            - generic [ref=e1269]:
+              - generic [ref=e1270]: Tool call
+              - generic [ref=e1272]: atf_create_experiment · pl-walkthrough
+        - generic [ref=e922]:
+          - status [ref=e923]: Deep diving
+          - generic [ref=e927]:
+            - generic [ref=e928]: Deep diving for 3m 10s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 3m 10s ···
+      - generic [ref=e837]:
+        - generic [ref=e838]:
+          - generic [ref=e840]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [ref=e930]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e842]:
+            - generic [ref=e843]:
+              - button "Add files or run commands" [ref=e844] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e849] [cursor=pointer]':
+                - generic [ref=e853]: Full access
+            - generic [ref=e857]:
+              - generic [ref=e858]:
+                - button "思考 Max(最高) ▾" [ref=e861] [cursor=pointer]:
+                  - generic [ref=e862]: 思考
+                  - generic [ref=e863]: Max(最高)
+                  - generic [ref=e864]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e867] [cursor=pointer]:
+                  - generic [ref=e868]: glm-5.3-flash
+              - button "Stop generating" [ref=e931] [cursor=pointer]
+        - generic [ref=e933]:
+          - generic [ref=e934]:
+            - generic [ref=e1133]:
+              - button "1 turns 4 steps · 58 tok/s" [ref=e1282] [cursor=pointer]:
+                - generic [ref=e1140]: 1 turns 4 steps·58 tok/s
+              - button "121K tok · Cache hit 68%" [ref=e1283] [cursor=pointer]:
+                - generic [ref=e1147]: 121K tok·Cache hit 68%
+            - generic [ref=e936]:
+              - button "新建训练" [ref=e937] [cursor=pointer]
+              - button "查状态" [disabled] [ref=e938]
+              - button "继续上次" [disabled] [ref=e939]
+              - button "对比两轮" [disabled] [ref=e940]
+              - button "走完闭环" [ref=e941] [cursor=pointer]
+              - button "联合训练" [disabled] [ref=e942]
+              - button "badcase 可视化" [ref=e943] [cursor=pointer]
+              - button "发起训练" [ref=e944] [cursor=pointer]
+          - button "4% of context used" [ref=e1284] [cursor=pointer]:
+            - generic [ref=e1153]: 4%

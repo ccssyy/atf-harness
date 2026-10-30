@@ -1,0 +1,452 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e10]:
+          - generic [ref=e11]: ATF
+          - generic [ref=e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e17] [cursor=pointer]
+    - button "New session" [ref=e20] [cursor=pointer]:
+      - generic [ref=e21]: New Session
+    - navigation "Global panels" [ref=e26]:
+      - button "Plugins" [ref=e27] [cursor=pointer]
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]: Workspaces
+        - generic [ref=e42]:
+          - button "Search sessions" [ref=e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e47]:
+          - button "View options" [ref=e49] [cursor=pointer]
+          - button "Add workspace" [ref=e53] [cursor=pointer]
+      - tree "Sessions" [ref=e58]:
+        - generic [ref=e2237]:
+          - treeitem "my-zito" [expanded] [ref=e2239] [cursor=pointer]
+          - treeitem "u1-accept-swb 训练准备九要素确认 12min" [selected] [ref=e9739] [cursor=pointer]:
+            - generic [ref=e2250]: u1-accept-swb 训练准备九要素确认
+            - generic [ref=e2348]: 12min
+        - generic [ref=e110]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e112] [cursor=pointer]
+          - treeitem "连通性自检与确认 1d" [ref=e7139] [cursor=pointer]:
+            - generic [ref=e123]: 连通性自检与确认
+            - generic [ref=e124]: 1d
+          - treeitem "装箱单走查区训练任务查询 1d" [ref=e2934] [cursor=pointer]:
+            - generic [ref=e128]: 装箱单走查区训练任务查询
+            - generic [ref=e129]: 1d
+          - treeitem "D76 端到端正例复跑（零 GPU 红 1d" [ref=e131] [cursor=pointer]:
+            - generic [ref=e133]: D76 端到端正例复跑（零 GPU 红
+            - generic [ref=e134]: 1d
+          - treeitem "run pl-walkthrough-r1 迭代配置构造前置校验 1d" [ref=e136] [cursor=pointer]:
+            - generic [ref=e138]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [ref=e139]: 1d
+          - treeitem "训练数据构造前校验演练 1d" [ref=e141] [cursor=pointer]:
+            - generic [ref=e143]: 训练数据构造前校验演练
+            - generic [ref=e144]: 1d
+        - treeitem "ws-pl-walkthrough" [ref=e147] [cursor=pointer]
+        - generic [ref=e153]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e155] [cursor=pointer]
+          - treeitem "删除整个工作区目录 1d" [ref=e8022] [cursor=pointer]:
+            - generic [ref=e166]: 删除整个工作区目录
+            - generic [ref=e167]: 1d
+          - treeitem "构造评估服务件 for run-rh-budget 2d" [ref=e169] [cursor=pointer]:
+            - generic [ref=e171]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e172]: 2d
+          - treeitem "装箱单字段抽取新实验全流程 2d" [ref=e174] [cursor=pointer]:
+            - generic [ref=e176]: 装箱单字段抽取新实验全流程
+            - generic [ref=e177]: 2d
+        - generic [ref=e178]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=e180] [cursor=pointer]
+          - treeitem "海运单SWB数据登记与训练任务启动 10h" [ref=e7061] [cursor=pointer]:
+            - generic [ref=e191]: 海运单SWB数据登记与训练任务启动
+            - generic [ref=e192]: 10h
+          - treeitem "等待发起真实训练走查指令 1d" [ref=e194] [cursor=pointer]:
+            - generic [ref=e196]: 等待发起真实训练走查指令
+            - generic [ref=e197]: 1d
+          - treeitem "汇总当前实验状态与进展 2d" [ref=e199] [cursor=pointer]:
+            - generic [ref=e201]: 汇总当前实验状态与进展
+            - generic [ref=e202]: 2d
+          - treeitem "我的训练数据放在 /data/atf/prodt 3d" [ref=e204] [cursor=pointer]:
+            - generic [ref=e206]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=e207]: 3d
+        - treeitem "a4-hotws" [ref=e210] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e218] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e226] [cursor=pointer]
+        - treeitem "sam" [ref=e234] [cursor=pointer]
+    - button "Settings" [ref=e68] [cursor=pointer]
+  - generic [ref=e2251]:
+    - banner [ref=e2253]:
+      - generic [ref=e2254]:
+        - generic [ref=e2255]:
+          - generic [ref=e2349]:
+            - navigation "Session hierarchy" [ref=e2350]:
+              - generic [ref=e2351]: u1-accept-swb 训练准备九要素确认
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e2355]: Standard mode
+          - generic [ref=e2362]:
+            - button "More actions" [ref=e2364] [cursor=pointer]
+            - generic [ref=e2369]:
+              - button "选择实验 ▾" [ref=e2371] [cursor=pointer]
+              - button "监控" [ref=e2373] [cursor=pointer]
+          - button "Open right sidebar" [ref=e2258] [cursor=pointer]
+        - tablist [ref=e2374]:
+          - tab "Chat" [selected] [ref=e2375] [cursor=pointer]
+          - tab "Trajectory" [ref=e2376] [cursor=pointer]
+    - generic [ref=e2262]:
+      - generic [ref=e2380]:
+        - navigation "Turn navigation" [ref=e7140] [cursor=pointer]:
+          - generic [ref=e7142]:
+            - button "Jump to turn 1" [ref=e7143]
+            - button "Jump to turn 2" [ref=e7144]
+            - button "Jump to turn 3" [ref=e8650]
+        - generic [ref=e2383]:
+          - generic [ref=e2386]:
+            - generic [ref=e2387]: 继续 run u1-accept-swb（工作区 /data/docagent_workspace/dev/my-zito）的训练准备。先重出九要素确认卡：卡数 8、卡位 0-7、单卡 batch 改 2（梯度累积按 global batch 256 派生应为 16）、像素对 65,536／1,605,632、预算三件 9000／9000／12800，其余按已确认值。前面的段不重跑，从九要素确认开始往后走。
+            - generic [ref=e2389]:
+              - generic [ref=e2390]: 22:21
+              - button "Copy" [ref=e2391] [cursor=pointer]
+          - generic [ref=e7063]:
+            - status [ref=e7064]: Completed
+            - button "Completed in 43m 58s" [ref=e7065] [cursor=pointer]
+          - generic [ref=e7008]:
+            - paragraph [ref=e7009]: 训练已启动并确认进料。全链收口汇报：
+            - heading "u1-accept-swb 训练准备 → 启动 完成汇总" [level=2] [ref=e7010]
+            - paragraph [ref=e7011]:
+              - strong [ref=e7012]: 九要素确认卡（已确认落盘）
+            - list [ref=e7013]:
+              - listitem [ref=e7014]:
+                - text: 卡数 8｜卡位 0-7｜单卡 batch
+                - strong [ref=e7015]: 1→2
+                - text: ｜梯度累积
+                - strong [ref=e7016]: 32→16
+                - text: （global batch 8×2×16=
+                - strong [ref=e7017]: "256"
+                - text: ，与你的派生一致）
+              - listitem [ref=e7018]: 像素对 65,536／1,605,632｜预算三件 9,000／9,000／12,800（预算≤cutoff≤max_model_len 校验通过）
+              - listitem [ref=e7019]: 其余按已确认值：lr 1e-4｜3 epochs｜lora 32/64｜ds_z3_offload｜warmup 0.1｜负样本带 0.02,0.05
+              - listitem [ref=e7020]:
+                - text: 八个改参键溯源全部落账
+                - code [ref=e7021]: user_confirmed(ref=stage:training_overrides)
+            - paragraph [ref=e7022]:
+              - strong [ref=e7023]: 从确认卡往后的链路
+            - list [ref=e7024]:
+              - listitem [ref=e7025]:
+                - strong [ref=e7026]: training_prep 段重跑通过
+                - text: ：变体 211 行（mode0 48＋targeted 163，完整性拒绝 0），token 门禁经内置 CPU 计量脚本放行，坐标换算 50/50 就绪
+              - listitem [ref=e7027]:
+                - strong [ref=e7028]: IterationConfig 再生
+                - text: ：段命令不走 overrides 声明面（曾按内置约定产出 nproc 1／accum 128，已按 next_step 经 scratch 显式注入纠正）
+              - listitem [ref=e7029]:
+                - strong [ref=e7030]: 环节①②产物再生
+                - text: ：train.sh＋launch_manifest（global_batch 256）＋LaunchPlan／launch.sh，数据集坐标制式三查闸通过
+              - listitem [ref=e7031]:
+                - strong [ref=e7032]: 启动前报告
+                - text: ：
+                - button "prelaunch-report.md" [ref=e7069] [cursor=pointer]
+                - text: （参数全量反生成逐项过目＋prompt 实文样例）
+              - listitem [ref=e7033]:
+                - strong [ref=e7034]: 放行与执行
+                - text: ：你在确认卡放行（记录入账本），经
+                - code [ref=e7035]: atf_run_training
+                - text: 放行账本闭合后 tmux 常驻启动
+            - paragraph [ref=e7036]:
+              - strong [ref=e7037]: 当前任务卡
+            - generic [ref=e7038]:
+              - generic [ref=e7040]:
+                - generic [ref=e7041]: Code block
+                - generic [ref=e7043]:
+                  - button "Wrap lines" [pressed] [ref=e7044] [cursor=pointer]
+                  - button "Copy" [ref=e7049] [cursor=pointer]
+              - code [ref=e7055]: 训练任务卡 — run u1-accept-swb ✓ 数据登记 ✓ 标注体检 ✓ 实验配置 ✓ 候选构造 ✓ 契约发布 ✓ 数据切分 ✓ 准入检查 ✓ 训练准备 （8/8） 训练进程：运行中（tmux dev-atf-training-run-u1-accept-swb） loss 点数：0（探活已确认进料：SHA=pass／ADMISSION=pass，进程存活）
+            - paragraph [ref=e7056]:
+              - strong [ref=e7057]: 环境事实
+              - text: ：单机 8×A800-80GB 绑 0-7｜master_port 29517｜train_env system｜基模型
+              - code [ref=e7073]: /data/LLM_model/Qwen3-VL-32B-Instruct
+              - text: 本地复核通过｜QLoRA 4bit bnb
+            - paragraph [ref=e7074]:
+              - strong [ref=e7075]: 过程修正（两点，均已闭合）
+            - list [ref=e7076]:
+              - listitem [ref=e7077]:
+                - text: 生成面账本读位曾错绑
+                - code [ref=e7078]: /root/.atf
+                - text: ，与 harness 记录位（会话 exec-home 账本）错开——已统一重生成到 exec-home 绑定，闸与放行记录同源；错位期间首次拉起为零效果退出（
+                - code [ref=e7079]: launcher_count=0
+                - text: ），无脏效应
+              - listitem [ref=e7080]:
+                - text: 执行根与真实 run 树分离：launch.sh 入口镜像至执行根（字节级一致），
+                - code [ref=e7081]: TRAIN_DIR
+                - text: 硬编码指向真实 run 树，训练产物与 checkpoint 全部落
+                - button "workspace/runs/u1-accept-swb" [ref=e7082] [cursor=pointer]
+            - paragraph [ref=e7087]:
+              - strong [ref=e7088]: 下一步
+              - text: ：训练推进期我会周期查 status 呈现任务卡；完成后 checkpoint 落在
+              - code [ref=e7089]: prep/iteration-config/checkpoint-*
+              - text: ，届时走评估链（四件套已就绪：eval 资产在
+              - code [ref=e7090]: publish/4d3e5afc/eval/
+              - text: ）。
+          - generic [ref=e7094]:
+            - button "Copy" [ref=e7095] [cursor=pointer]
+            - generic [ref=e7099]:
+              - button "Good response" [ref=e7100] [cursor=pointer]
+              - button "Bad response" [ref=e7103] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e7106] [cursor=pointer]
+            - generic [ref=e7112]:
+              - button "Usage 6.9M tok" [ref=e7114] [cursor=pointer]
+              - generic [ref=e7120]: 23:05
+          - generic [ref=e7147]:
+            - generic [ref=e7148]: 训练跑完了，接着做评估：用最后那个 checkpoint 起服务、跑测试集，把评估报告给我。 需要我确认的地方一项一项问我。
+            - generic [ref=e7150]:
+              - generic [ref=e7151]: 23:36
+              - button "Copy" [ref=e7152] [cursor=pointer]
+          - generic [ref=e8589]:
+            - status [ref=e8590]: Completed
+            - button "Completed in 9m 32s" [ref=e8591] [cursor=pointer]
+          - generic [ref=e8541]:
+            - paragraph [ref=e8542]:
+              - text: 服务确认报告已生成且全部对账 ✓（
+              - button "service-prelaunch-report.md" [ref=e8595] [cursor=pointer]
+              - text: ）。编排一步被 pin 侧一个格式问题拦住：内核把
+              - code [ref=e8543]: ratios_actual.test=0.04
+              - text: （比例）整型化成 0 判成“无留出”——
+              - strong [ref=e8544]: 上一轮 b7-swb-r1 的评估遇到同一情况，走的正是外部显式确认通道
+              - text: （其 eval_plan 留痕
+              - code [ref=e8545]: "mode: external_explicit, external_confirmed: true"
+              - text: ）。
+            - paragraph [ref=e8546]: 按你的要求，逐项列确认单：
+            - heading "评估确认单（逐项）" [level=2] [ref=e8547]
+            - paragraph [ref=e8548]:
+              - strong [ref=e8549]: ① 评估资产来源（唯一需要你拍板的）
+            - list [ref=e8550]:
+              - listitem [ref=e8551]:
+                - text: 绑定 test 分区的自动通道被上述 pin 侧
+                - code [ref=e8552]: int(0.04)=0
+                - text: 拦截
+              - listitem [ref=e8553]:
+                - text: 拟改走
+                - strong [ref=e8554]: 外部显式通道（owner 级确认）
+                - text: ：评估输入＝本 run 的 L1 test 资产
+                - button "publish/4d3e5afc/eval/" [ref=e8599] [cursor=pointer]
+                - text: （
+                - strong [ref=e8555]: 2 页
+                - text: ，与 split-manifest test 分区同源同产物，image sha256 即页 id 可回溯）
+              - listitem [ref=e8556]:
+                - text: 与上一轮评估形态完全一致 →
+                - strong [ref=e8557]: 是否确认？
+            - paragraph [ref=e8558]:
+              - strong [ref=e8559]: ② 被评 checkpoint
+            - list [ref=e8560]:
+              - listitem [ref=e8561]:
+                - code [ref=e8562]: checkpoint-3
+                - text: （最后编号；完成核验
+                - strong [ref=e8563]: pass
+                - text: ：global_step 3/3、train_loss 0.5924，凭据
+                - button "train-completion-check.json" [ref=e8604] [cursor=pointer]
+                - text: ）
+            - paragraph [ref=e8564]:
+              - strong [ref=e8565]: ③ 服务参数
+              - text: （vllm serve，编排自起，不停任何既有服务）
+            - list [ref=e8566]:
+              - listitem [ref=e8567]:
+                - text: 端口
+                - strong [ref=e8568]: "29765"
+                - text: （档案 b7-swb-eval-local）｜绑卡
+                - strong [ref=e8569]: 0,2,3,4
+                - text: （TP=4，与 owner 偏置及档案绑卡一致 ✓）
+              - listitem [ref=e8570]:
+                - text: gpu_mem_util
+                - strong [ref=e8571]: "0.9"
+                - text: ｜max_model_len
+                - strong [ref=e8572]: "12800"
+                - text: （=TokenBudget）｜max_num_seqs
+                - strong [ref=e8573]: "16"
+                - text: ／batched_tokens
+                - strong [ref=e8574]: "16384"
+              - listitem [ref=e8575]:
+                - text: mm 像素对
+                - strong [ref=e8576]: 65536／1,605,632
+                - text: ——自动派生自训练确认值，对账 ✓
+              - listitem [ref=e8577]:
+                - text: AWQ base
+                - code [ref=e8578]: Qwen3-VL-32B-Instruct-AWQ
+                - text: ｜LoRA rank 32｜temperature=0
+            - paragraph [ref=e8579]:
+              - strong [ref=e8580]: ④ 推理并发
+              - text: ：runner 并发
+              - strong [ref=e8581]: "2"
+              - text: （测试集仅 2 页，单波全覆盖，≤ 服务容量 16）
+            - paragraph [ref=e8582]:
+              - strong [ref=e8583]: ⑤ 评估口径
+              - text: ：mode0（与训练一致）｜lane mixed｜field-config 继承训练（14 字段平铺）
+            - paragraph [ref=e8584]:
+              - text: ——逐项回复（如「①确认，其余照单」或指出要改的项）。收到确认后我带
+              - code [ref=e8609]: assets_external_confirm
+              - text: 重推，链上还会出放行确认卡（＝EVAL_RELEASE 落账本），你点放行即起服务跑测试集，完成后给你评估报告＋badcase 报告。
+          - generic [ref=e8613]:
+            - button "Copy" [ref=e8614] [cursor=pointer]
+            - generic [ref=e8618]:
+              - button "Good response" [ref=e8619] [cursor=pointer]
+              - button "Bad response" [ref=e8622] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e8625] [cursor=pointer]
+            - generic [ref=e8631]:
+              - button "Usage 3.5M tok" [ref=e8633] [cursor=pointer]
+              - generic [ref=e8639]: 23:46
+          - generic [ref=e8653]:
+            - generic [ref=e8654]: ①确认，其余照单。继续。
+            - generic [ref=e8656]:
+              - generic [ref=e8657]: 23:46
+              - button "Copy" [ref=e8658] [cursor=pointer]
+          - generic [ref=e9741]:
+            - status [ref=e9742]: Completed
+            - button "Completed in 12m 44s" [ref=e9743] [cursor=pointer]
+          - generic [ref=e9751]:
+            - paragraph [ref=e9752]: 评估闭环完成。两份人读报告已落 run 树：
+            - heading "评估结果 — u1-accept-swb / checkpoint-3" [level=2] [ref=e9753]
+            - paragraph [ref=e9754]:
+              - text: 📄
+              - strong [ref=e9755]:
+                - button "eval_metrics_report.md" [ref=e9756] [cursor=pointer]
+              - text: （指标完整报告） 📄
+              - strong [ref=e9760]:
+                - button "badcase_analysis_report.md" [ref=e9761] [cursor=pointer]
+              - text: （badcase 证据账本，9 行）
+            - heading "总体（test 2 页｜mode0｜exact 口径，bbox 不计分）" [level=3] [ref=e9765]
+            - table [ref=e9767]:
+              - rowgroup [ref=e9768]:
+                - row [ref=e9769]:
+                  - columnheader "指标" [ref=e9770]
+                  - columnheader "值" [ref=e9771]
+              - rowgroup [ref=e9772]:
+                - row [ref=e9773]:
+                  - cell [ref=e9774]:
+                    - strong [ref=e9775]: micro F1
+                  - cell [ref=e9776]:
+                    - strong [ref=e9777]: "0.7308"
+                    - text: （P 0.7037／R 0.76；tp 19／fp 8／fn 6）
+                - row [ref=e9778]:
+                  - cell "单据级 macro F1" [ref=e9779]
+                  - cell "0.6667（页均 F1 中位 0.833，最差 0.5）" [ref=e9780]
+                - row [ref=e9781]:
+                  - cell "页级完整率" [ref=e9782]
+                  - cell "0/2" [ref=e9783]
+                - row [ref=e9784]:
+                  - cell "推理质量" [ref=e9785]
+                  - cell "2/2 页 stop、strict JSON 解析零失败、零 unit 失败" [ref=e9786]
+            - heading "字段分布" [level=3] [ref=e9787]
+            - list [ref=e9788]:
+              - listitem [ref=e9789]:
+                - strong [ref=e9790]: 满分
+                - text: ：container_no（5/5）、goods_gross_weight、goods_measurement、hs_code
+              - listitem [ref=e9791]:
+                - strong [ref=e9792]: 中段
+                - text: ：seal_no 0.80｜goods_carton 0.7273（
+                - code [ref=e9793]: "\"1,010 CTNS OF\""
+                - text: 多带一个 OF 的近失）｜goods_name 0.5（把品名后的整段货描信息都圈了进去）
+              - listitem [ref=e9794]:
+                - strong [ref=e9795]: 失分集中
+                - text: ：shipping_marks
+                - strong [ref=e9796]: "0"
+                - text: （两页全失——近失形态：GT
+                - code [ref=e9797]: PACKING SHIFT 19675-021
+                - text: vs Pred
+                - code [ref=e9798]: PACKING 19675-021
+                - text: ，差一个词即整值不匹配）；误检显著（fp 8 > fn 6）
+              - listitem [ref=e9799]:
+                - strong [ref=e9800]: 疑似 GT 漏标信号
+                - text: （zero-positive 字段多报）：goods_quantity 报了
+                - code [ref=e9801]: 4743 CARTONS
+                - text: 、total_gross_weight 报了
+                - code [ref=e9802]: 21,765.500
+                - text: 而 GT 为空——诊断块提示「若属漏标请先修 GT，否则按误报计」
+            - heading "边界（如实声明）" [level=3] [ref=e9803]
+            - list [ref=e9804]:
+              - listitem [ref=e9805]:
+                - strong [ref=e9806]: 无对照轮
+                - text: ：孤立观察值，不构成与 prior-best 的比较结论
+              - listitem [ref=e9807]:
+                - strong [ref=e9808]: 样本量=2 页
+                - text: ：字段级数字统计上脆弱，只作方向性证据
+              - listitem [ref=e9809]:
+                - text: badcase 9 行全部
+                - code [ref=e9810]: evidence_gap
+                - text: 待审阅——按报告纪律不预填根因
+              - listitem [ref=e9811]: 服务对账一致（mm 像素对=训练确认值，pid 117506）；pred 空间闸 qwen_axis_1000 ✓
+            - paragraph [ref=e9812]:
+              - strong [ref=e9813]: 注意
+              - text: ：评估服务还在跑（端口 29765，占 0,2,3,4 四卡）——要停随时说。
+            - paragraph [ref=e9814]:
+              - strong [ref=e9815]: 可选下一步
+              - text: ：① badcase L3 审阅链（atf_analyze_badcases，GT/Pred 叠图 viewer＋逐簇审阅）②发布该 checkpoint（atf_publish_model）③针对 shipping_marks 圈选过长的下一轮迭代。要哪个说一声。
+          - generic [ref=e9819]:
+            - button "Copy" [ref=e9820] [cursor=pointer]
+            - generic [ref=e9824]:
+              - button "Good response" [ref=e9825] [cursor=pointer]
+              - button "Bad response" [ref=e9828] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e9831] [cursor=pointer]
+            - generic [ref=e9837]:
+              - button "Usage 4.5M tok" [ref=e9839] [cursor=pointer]
+              - generic [ref=e9845]: 23:59
+      - generic [ref=e2297]:
+        - generic [ref=e2298]:
+          - generic [ref=e2300]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [ref=e2403]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e2302]:
+            - generic [ref=e2303]:
+              - button "Add files or run commands" [ref=e2304] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e2309] [cursor=pointer]':
+                - generic [ref=e2313]: Full access
+            - generic [ref=e2317]:
+              - generic [ref=e2318]:
+                - button "思考 Low(低) ▾" [ref=e2321] [cursor=pointer]:
+                  - generic [ref=e2322]: 思考
+                  - generic [ref=e2323]: Low(低)
+                  - generic [ref=e2324]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e2327] [cursor=pointer]:
+                  - generic [ref=e2328]: glm-5.3-flash
+              - button "Send message" [disabled] [ref=e9846]
+        - generic [ref=e2406]:
+          - generic [ref=e2407]:
+            - generic [ref=e2702]:
+              - button "3 turns 136 steps · 53 tok/s" [ref=e9848] [cursor=pointer]:
+                - generic [ref=e2709]: 3 turns 136 steps·53 tok/s
+              - button "14.8M tok · Cache hit 98%" [ref=e9849] [cursor=pointer]:
+                - generic [ref=e2716]: 14.8M tok·Cache hit 98%
+            - generic [ref=e2408]:
+              - generic "展开训练任务进度（八段明细）" [ref=e2928] [cursor=pointer]:
+                - generic [ref=e2930]: 8/8
+                - generic [ref=e2931]: 已完成
+              - generic [ref=e7125]:
+                - generic "点击关闭（海运单 · Qwen3-VL-32B · 10-24 22:42（my-zito））" [ref=e9314] [cursor=pointer]:
+                  - generic [ref=e9316]:
+                    - generic [ref=e9317]: 评估服务初始化中 · 探活未过,编排所启服务进程存活 · 已等待 211s
+                    - generic [ref=e9318]: 海运单 · Qwen3-VL-32B · 10-24 22:42（my-zito）
+                  - generic [ref=e9319]: ×
+                - generic "点击关闭（海运单 · Qwen3-VL-32B · 10-24 22:42（my-zito））" [ref=e9446] [cursor=pointer]:
+                  - generic [ref=e9448]:
+                    - generic [ref=e9449]: 评估服务就绪 · health 探测通过 · 已等待 221s
+                    - generic [ref=e9450]: 海运单 · Qwen3-VL-32B · 10-24 22:42（my-zito）
+                  - generic [ref=e9451]: ×
+                - generic "点击关闭（海运单 · Qwen3-VL-32B · 10-24 22:42（my-zito））" [ref=e9199] [cursor=pointer]:
+                  - generic [ref=e7128]:
+                    - generic [ref=e7129]: 训练已结束
+                    - generic [ref=e7130]: 海运单 · Qwen3-VL-32B · 10-24 22:42（my-zito）
+                  - generic [ref=e7131]: ×
+                - generic "点击关闭（海运单 · Qwen3-VL-32B · 10-24 22:42（my-zito））" [ref=e9452] [cursor=pointer]:
+                  - generic [ref=e9454]:
+                    - generic [ref=e9455]: 训练已结束
+                    - generic [ref=e9456]: 海运单 · Qwen3-VL-32B · 10-24 22:42（my-zito）
+                  - generic [ref=e9457]: ×
+              - status [ref=e2409]:
+                - generic [ref=e2410]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                - generic [ref=e2411]:
+                  - generic [ref=e2412]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                  - generic [ref=e2413]: ws-pl-walkthrough · 1 会话
+              - generic [ref=e2414]:
+                - button "新建训练" [ref=e2415] [cursor=pointer]
+                - button "查状态" [disabled] [ref=e2416]
+                - button "继续上次" [disabled] [ref=e2417]
+                - button "对比两轮" [disabled] [ref=e2418]
+                - button "走完闭环" [ref=e2419] [cursor=pointer]
+                - button "联合训练" [disabled] [ref=e2420]
+                - button "badcase 可视化" [ref=e2421] [cursor=pointer]
+                - button "发起训练" [ref=e2422] [cursor=pointer]
+          - button "18% of context used" [ref=e9850] [cursor=pointer]:
+            - generic [ref=e2722]: 18%

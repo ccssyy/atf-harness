@@ -1,0 +1,164 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e86] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e87]:
+          - generic [ref=e88]: ATF
+          - generic [ref=e91]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e101]: Workspaces
+        - generic [ref=e103]:
+          - button "Search sessions" [ref=e104] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e109] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e114]:
+        - generic [ref=e115]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e117] [cursor=pointer]
+          - treeitem "训练数据构造前校验演练 19min" [ref=e1079] [cursor=pointer]:
+            - generic [ref=e128]: 训练数据构造前校验演练
+            - generic [ref=e129]: 19min
+        - treeitem "ws-pl-walkthrough" [ref=e132] [cursor=pointer]
+        - generic [ref=e138]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e140] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 7h" [ref=e149] [cursor=pointer]:
+            - generic [ref=e151]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e152]: 7h
+          - treeitem "装箱单字段抽取新实验全流程 9h" [ref=e154] [cursor=pointer]:
+            - generic [ref=e156]: 装箱单字段抽取新实验全流程
+            - generic [ref=e157]: 9h
+        - generic [ref=e158]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=e160] [cursor=pointer]
+          - treeitem "等待发起真实训练走查指令 now" [selected] [ref=e1161] [cursor=pointer]:
+            - generic [ref=e933]: 等待发起真实训练走查指令
+            - generic [ref=e1086]: now
+          - treeitem "汇总当前实验状态与进展 21h" [ref=e935] [cursor=pointer]:
+            - generic [ref=e937]: 汇总当前实验状态与进展
+            - generic [ref=e938]: 21h
+          - treeitem "我的训练数据放在 /data/atf/prodt 1d" [ref=e940] [cursor=pointer]:
+            - generic [ref=e942]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=e943]: 1d
+        - treeitem "a4-hotws" [ref=e168] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e176] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e184] [cursor=pointer]
+        - treeitem "sam" [ref=e192] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e944]:
+    - banner [ref=e946]:
+      - generic [ref=e947]:
+        - generic [ref=e948]:
+          - generic [ref=e1087]:
+            - navigation "Session hierarchy" [ref=e1088]:
+              - generic [ref=e1089]: 等待发起真实训练走查指令
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e1093]: Standard mode
+          - generic [ref=e1100]:
+            - button "More actions" [ref=e1102] [cursor=pointer]
+            - generic [ref=e1107]:
+              - button "选择实验 ▾" [ref=e1109] [cursor=pointer]
+              - button "监控" [ref=e1111] [cursor=pointer]
+        - tablist [ref=e1112]:
+          - tab "Chat" [selected] [ref=e1113] [cursor=pointer]
+          - tab "Trajectory" [ref=e1114] [cursor=pointer]
+    - generic [ref=e955]:
+      - generic [ref=e1121]:
+        - generic [ref=e1124]:
+          - generic [ref=e1125]: 准备走查一次真实训练发起，先待命不要调用任何工具：等我下一步用「发起训练」对话框下发正式指令。
+          - generic [ref=e1127]:
+            - generic [ref=e1128]: 00:15
+            - button "Copy" [ref=e1129] [cursor=pointer]
+        - generic [ref=e1163]:
+          - status [ref=e1164]: Completed
+          - button "Completed in 10s" [ref=e1165] [cursor=pointer]
+        - generic [ref=e1173]:
+          - paragraph [ref=e1174]: 收到，已进入待命状态，本次不调用任何工具。
+          - paragraph [ref=e1175]: 等你通过「发起训练」对话框下发正式指令后，我会按标准链路处理：
+          - list [ref=e1176]:
+            - listitem [ref=e1177]:
+              - strong [ref=e1178]: 读取指令与现状核对
+              - text: —— 根据下发的任务描述/实验标识，先核对工作区状态、G4/G5 等闸门事实与已准入数据；
+            - listitem [ref=e1179]:
+              - strong [ref=e1180]: 确认卡流程
+              - text: —— 九要素训练配置确认（基模型、epochs/lr/rank、cutoff、卡数等），涉及授权一律走审批卡由你放行；
+            - listitem [ref=e1181]:
+              - strong [ref=e1182]: 放行与启动
+              - text: —— 训练放行记录登记后执行 launch，启动后持续回报训练状态与 loss 进展。
+          - paragraph [ref=e1183]: 在此之前我不会做任何探查或预操作。请下发指令。
+        - generic [ref=e1187]:
+          - button "Copy" [ref=e1188] [cursor=pointer]
+          - generic [ref=e1192]:
+            - button "Good response" [ref=e1193] [cursor=pointer]
+            - button "Bad response" [ref=e1196] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=e1199] [cursor=pointer]
+          - generic [ref=e1205]:
+            - button "Usage 18.1K tok" [ref=e1207] [cursor=pointer]
+            - generic [ref=e1213]: 00:15
+      - generic [ref=e990]:
+        - generic [ref=e991]:
+          - generic [ref=e993]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=e1141]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e995]:
+            - generic [ref=e996]:
+              - button "Add files or run commands" [ref=e997] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e1002] [cursor=pointer]':
+                - generic [ref=e1006]: Full access
+            - generic [ref=e1010]:
+              - generic [ref=e1011]:
+                - button "思考 Low(低) ▾" [ref=e1014] [cursor=pointer]:
+                  - generic [ref=e1015]: 思考
+                  - generic [ref=e1016]: Low(低)
+                  - generic [ref=e1017]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e1020] [cursor=pointer]:
+                  - generic [ref=e1021]: glm-5.3-flash
+              - button "Send message" [disabled] [ref=e1214]
+        - generic [ref=e1144]:
+          - generic [ref=e1145]:
+            - generic [ref=e1216]:
+              - button "1 turns 1 steps · 51 tok/s" [ref=e1218] [cursor=pointer]:
+                - generic [ref=e1223]: 1 turns 1 steps·51 tok/s
+              - button "18.1K tok · Cache hit 0%" [ref=e1225] [cursor=pointer]:
+                - generic [ref=e1230]: 18.1K tok·Cache hit 0%
+            - generic [ref=e1146]:
+              - status [ref=e1147]:
+                - generic [ref=e1148]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                - generic [ref=e1149]:
+                  - generic [ref=e1150]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                  - generic [ref=e1151]: ws-pl-walkthrough · 1 会话
+              - generic [ref=e1152]:
+                - button "新建训练" [ref=e1153] [cursor=pointer]
+                - button "查状态" [disabled] [ref=e1154]
+                - button "继续上次" [disabled] [ref=e1155]
+                - button "对比两轮" [disabled] [ref=e1156]
+                - button "走完闭环" [ref=e1157] [cursor=pointer]
+                - button "联合训练" [disabled] [ref=e1158]
+                - button "badcase 可视化" [ref=e1159] [cursor=pointer]
+                - button "发起训练" [ref=e1160] [cursor=pointer]
+          - button "2% of context used" [ref=e1232] [cursor=pointer]:
+            - generic [ref=e1236]: 2%
+  - generic [ref=e1030]:
+    - tablist [ref=e1032]:
+      - tab "Start" [selected] [ref=e1033]
+      - button "Split" [ref=e1041] [cursor=pointer]
+      - generic [ref=e1044]:
+        - button "Fullscreen" [ref=e1045] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=e1048] [cursor=pointer]
+        - tooltip "Collapse sidebar"
+    - generic [ref=e1055]:
+      - button "Workspace files Browse files in this session's workspace" [ref=e1062] [cursor=pointer]:
+        - generic [ref=e1067]:
+          - generic [ref=e1068]: Workspace files
+          - generic [ref=e1069]: Browse files in this session's workspace
+      - generic [ref=e1072]:
+        - button "New terminal Run commands in the Session workspace" [ref=e1073] [cursor=pointer]
+        - generic:
+          - generic:
+            - generic [aria-hidden]: New terminal
+            - button "Choose shell" [ref=e1075] [cursor=pointer]
+          - generic [aria-hidden]: Run commands in the Session workspace

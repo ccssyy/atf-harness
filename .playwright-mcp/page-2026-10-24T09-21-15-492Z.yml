@@ -1,0 +1,282 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e10]:
+          - generic [ref=e11]: ATF
+          - generic [ref=e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e17] [cursor=pointer]
+    - button "New session" [ref=e20] [cursor=pointer]:
+      - generic [ref=e21]: New Session
+    - navigation "Global panels" [ref=e26]:
+      - button "Plugins" [ref=e27] [cursor=pointer]
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]: Workspaces
+        - generic [ref=e42]:
+          - button "Search sessions" [ref=e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e47]:
+          - button "View options" [ref=e49] [cursor=pointer]
+          - button "Add workspace" [ref=e53] [cursor=pointer]
+      - tree "Sessions" [ref=e58]:
+        - treeitem "1023" [ref=e112] [cursor=pointer]
+        - generic [ref=e118]:
+          - treeitem "my-zito" [expanded] [ref=e120] [cursor=pointer]
+          - treeitem "Running D76 卡位卡面验收测试 now" [selected] [ref=e3888] [cursor=pointer]:
+            - generic [ref=e135]: Running
+            - generic [ref=e136]: D76 卡位卡面验收测试
+            - generic [ref=e137]: now
+          - treeitem "海运单单据抽取模型训练流程启动 2min" [ref=e3524] [cursor=pointer]:
+            - generic [ref=e131]: 海运单单据抽取模型训练流程启动
+            - generic [ref=e132]: 2min
+          - treeitem "ping 1d" [ref=e139] [cursor=pointer]:
+            - generic [ref=e141]: ping
+            - generic [ref=e142]: 1d
+          - treeitem "Ping Test 1d" [ref=e144] [cursor=pointer]:
+            - generic [ref=e146]: Ping Test
+            - generic [ref=e147]: 1d
+          - treeitem "Ping Test 1d" [ref=e149] [cursor=pointer]:
+            - generic [ref=e151]: Ping Test
+            - generic [ref=e152]: 1d
+          - treeitem "ping 1d" [ref=e3895] [cursor=pointer]:
+            - generic [ref=e3897]: ping
+            - generic [ref=e3898]: 1d
+          - button "Show 1 more sessions" [ref=e3899] [cursor=pointer]
+        - treeitem "Task" [ref=e155] [cursor=pointer]
+    - button "Settings" [ref=e68] [cursor=pointer]
+  - generic [ref=e3542]:
+    - banner [ref=e3544]:
+      - generic [ref=e3545]:
+        - generic [ref=e3546]:
+          - generic [ref=e3547]:
+            - navigation "Session hierarchy" [ref=e3548]:
+              - generic [ref=e3549]: D76 卡位卡面验收测试
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e3553]: Standard mode
+          - generic [ref=e3560]:
+            - button "More actions" [ref=e3562] [cursor=pointer]
+            - generic [ref=e3567]:
+              - button "选择实验 ▾" [ref=e3569] [cursor=pointer]
+              - button "监控" [ref=e3571] [cursor=pointer]
+          - button "Open right sidebar" [ref=e3574] [cursor=pointer]
+        - tablist [ref=e3577]:
+          - tab "Chat" [selected] [ref=e3578] [cursor=pointer]
+          - tab "Trajectory" [ref=e3579] [cursor=pointer]
+    - generic [ref=e3581]:
+      - generic [ref=e3585]:
+        - navigation "Turn navigation" [ref=e3586] [cursor=pointer]:
+          - generic [ref=e3588]:
+            - button "Jump to turn 1" [ref=e3589]
+            - button "Jump to turn 2" [ref=e3590]
+            - button "Jump to turn 3" [ref=e3591]
+            - button "Jump to turn 4" [ref=e3592]
+            - button "Jump to turn 5" [ref=e3900]
+        - generic [ref=e3595]:
+          - generic [ref=e3598]:
+            - generic [ref=e3599]: D76 卡位卡面验收（零 GPU 红线：只到九要素确认卡呈现即停，不提交表单、不生成配置、不写任何文件、不起真训、不占 GPU）。对实验 awb_r1（run 目录 /data/atf/uat/runs/awb_r1）发起训练配置确认：训练卡数 nproc_per_node=4，卡位 visible_devices=4,5,6,7，其余参数按现值。九要素确认卡弹出后立即停止，让我在界面上查看卡位栏（visible_devices 栏）的呈现；不要提交、不要重试。
+            - generic [ref=e3601]:
+              - generic [ref=e3602]: 10/23 18:49
+              - button "Copy" [ref=e3603] [cursor=pointer]
+          - generic [ref=e3608]:
+            - status [ref=e3609]: Completed
+            - button "Completed in 2m 4s" [ref=e3610] [cursor=pointer]
+          - generic [ref=e3618]:
+            - paragraph [ref=e3619]: 九要素确认卡请求已被取消，本轮到此停止。
+            - paragraph [ref=e3620]: 按您的红线要求，我未做任何后续动作：未提交表单、未生成配置、未写文件、未起训练、未占 GPU。
+            - paragraph [ref=e3621]:
+              - text: 如需继续验收 D76 卡位卡面（
+              - code [ref=e3622]: nproc_per_node=4
+              - text: 、
+              - code [ref=e3623]: visible_devices=4,5,6,7
+              - text: ，其余按现值），请告诉我，我再重新发起
+              - code [ref=e3624]: atf_config_confirm
+              - text: present，让卡面弹出后停在界面上供您查看 visible_devices 栏。
+          - generic [ref=e3628]:
+            - button "Copy" [ref=e3629] [cursor=pointer]
+            - generic [ref=e3633]:
+              - button "Good response" [ref=e3634] [cursor=pointer]
+              - button "Bad response" [ref=e3637] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e3640] [cursor=pointer]
+            - generic [ref=e3646]:
+              - button "Usage 28.7K tok" [ref=e3648] [cursor=pointer]
+              - generic [ref=e3654]: 10/23 18:51
+          - generic [ref=e3657]:
+            - generic [ref=e3658]: 帮我查一下现在工作区里有哪些训练 run，列个清单。
+            - generic [ref=e3660]:
+              - generic [ref=e3661]: 10/23 23:56
+              - button "Copy" [ref=e3662] [cursor=pointer]
+          - generic [ref=e3667]:
+            - status [ref=e3668]: Completed
+            - button "Completed in 12s" [ref=e3669] [cursor=pointer]
+          - generic [ref=e3677]:
+            - paragraph [ref=e3678]: 当前工作区（/data/docagent_workspace/dev/my-zito）内的 runs 目录为空：
+            - table [ref=e3680]:
+              - rowgroup [ref=e3681]:
+                - row [ref=e3682]:
+                  - columnheader "#" [ref=e3683]
+                  - columnheader "run_id" [ref=e3684]
+                  - columnheader "状态" [ref=e3685]
+              - rowgroup [ref=e3686]:
+                - row [ref=e3687]:
+                  - cell "—" [ref=e3688]
+                  - cell "（无）" [ref=e3689]
+                  - cell "—" [ref=e3690]
+            - paragraph [ref=e3691]:
+              - text: 清单共
+              - strong [ref=e3692]: 0 条
+              - text: —— 本会话归属的工作区下没有任何训练 run。
+            - paragraph [ref=e3693]:
+              - text: 需要说明的是：之前您提到的
+              - code [ref=e3694]: awb_r1
+              - text: （/data/atf/uat/runs/awb_r1）不在当前工作区作用域内，所以没出现在这个缺省清单里。如果想看跨任务（含 awb_r1 所在工作区）的 run 清单，需要以扩大作用域方式重新枚举（会触发一次审批确认）——需要的话告诉我即可。
+          - generic [ref=e3698]:
+            - button "Copy" [ref=e3699] [cursor=pointer]
+            - generic [ref=e3703]:
+              - button "Good response" [ref=e3704] [cursor=pointer]
+              - button "Bad response" [ref=e3707] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e3710] [cursor=pointer]
+            - generic [ref=e3716]:
+              - button "Usage 30.5K tok" [ref=e3718] [cursor=pointer]
+              - generic [ref=e3724]: 10/23 23:56
+          - generic [ref=e3727]:
+            - generic [ref=e3728]: 继续 D76 卡面验收（零 GPU 红线：只到九要素确认卡呈现即停，不提交表单、不生成配置、不写任何文件、不起真训、不占 GPU）。对实验 awb_r1（run 目录 /data/atf/uat/runs/awb_r1）发起训练配置确认：训练卡数 nproc_per_node=4，卡位 visible_devices=4,5,6,7，其余参数按现值。九要素确认卡弹出后立即停止，不要提交、不要重试。
+            - generic [ref=e3730]:
+              - generic [ref=e3731]: 10/23 23:57
+              - button "Copy" [ref=e3732] [cursor=pointer]
+          - generic [ref=e3737]:
+            - status [ref=e3738]: Completed
+            - button "Completed in 4s" [ref=e3739] [cursor=pointer]
+          - generic [ref=e3745]:
+            - generic [ref=e3746]: 继续 D76 卡面回归（零 GPU 红线：只到九要素确认卡呈现即停，不提交表单、不生成配置、不写任何文件、不起真训、不占 GPU）。对实验 awb_r1（run 目录 /data/atf/uat/runs/awb_r1）发起训练配置确认，这次是负例：训练卡数 nproc_per_node=8，卡位 visible_devices=4,5,6,7（二者不匹配）。九要素确认卡弹出后立即停止，不要提交、不要重试，我要在界面上看卡位栏红字。
+            - generic [ref=e3748]:
+              - generic [ref=e3749]: 11:29
+              - button "Copy" [ref=e3750] [cursor=pointer]
+          - generic [ref=e3755]:
+            - status [ref=e3756]: Completed
+            - button "Completed in 1m 52s" [ref=e3757] [cursor=pointer]
+          - generic [ref=e3765]:
+            - paragraph [ref=e3766]: 本轮负例卡面请求已被取消，到此停止。
+            - paragraph [ref=e3767]: 说明一下情况：工具调用在审批面板被取消，九要素确认卡未能呈现到界面上，因此您没有看到卡位栏红字。按纪律我不重试、不用其它方式代偿。
+            - paragraph [ref=e3768]:
+              - text: 另注意：上一轮 D76 首次卡面请求的结果也未被记录（调用被中断、结果未知）。如果您仍要做 D76 的正例/负例卡面回归，请在界面上放行
+              - code [ref=e3769]: atf_config_confirm
+              - text: 的审批请求（这次取消发生在审批面板，卡面本身未弹出），我随时可以重新发起：
+            - list [ref=e3770]:
+              - listitem [ref=e3771]:
+                - text: 正例：
+                - code [ref=e3772]: nproc_per_node=4
+                - text: ，
+                - code [ref=e3773]: visible_devices=4,5,6,7
+              - listitem [ref=e3774]:
+                - text: 负例：
+                - code [ref=e3775]: nproc_per_node=8
+                - text: ，
+                - code [ref=e3776]: visible_devices=4,5,6,7
+                - text: （不匹配 → 预期卡面红字禁确认）
+            - paragraph [ref=e3777]: 两条红线均未触碰：无提交、无配置生成、无文件写入、无训练、无 GPU 占用。
+          - generic [ref=e3781]:
+            - button "Copy" [ref=e3782] [cursor=pointer]
+            - generic [ref=e3786]:
+              - button "Good response" [ref=e3787] [cursor=pointer]
+              - button "Bad response" [ref=e3790] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e3793] [cursor=pointer]
+            - generic [ref=e3799]:
+              - button "Usage 33.2K tok" [ref=e3801] [cursor=pointer]
+              - generic [ref=e3807]: 11:31
+          - generic [ref=e3903]:
+            - generic [ref=e3904]: 我想启动一个新的训练任务界面回归复验（零 GPU 红线：只到九要素确认卡红字呈现即停，不提交、不生成配置、不写文件、不占 GPU）。对 run u1-accept-swb 发起训练配置确认负例：训练卡数 nproc_per_node=8，卡位 visible_devices=4,5,6,7（二者不匹配）。九要素确认卡弹出后我要在界面上看卡位栏红字，看完即取消。
+            - generic [ref=e3906]:
+              - generic [ref=e3907]: 17:20
+              - button "Copy" [ref=e3908] [cursor=pointer]
+          - generic [ref=e3912]:
+            - text: Calling tools · present
+            - generic [ref=e3914]:
+              - generic [ref=e3915]: "Tool added: atf_training_preflight"
+              - generic [ref=e3929]:
+                - generic [ref=e3930]: Running
+                - button "Tool call atf_config_confirm · present" [ref=e3932] [cursor=pointer]:
+                  - generic [ref=e3941]:
+                    - generic [ref=e3942]:
+                      - generic [ref=e3943]: Tool call
+                      - generic [ref=e3945]: atf_config_confirm · present
+                    - generic [aria-hidden]:
+                      - generic:
+                        - generic:
+                          - generic: Tool call
+                          - generic: atf_config_confirm · present
+          - generic [ref=e3946]:
+            - status [ref=e3947]: Deep diving
+            - generic [ref=e3951]:
+              - generic [ref=e3952]: Deep diving for 30s ···
+              - generic [aria-hidden]:
+                - generic: Deep diving for 30s ···
+      - region "九要素训练配置确认 — u1-accept-swb" [ref=e3955]:
+        - generic [ref=e3956]: 训练配置
+        - generic [ref=e3958]:
+          - heading "九要素训练配置确认 — u1-accept-swb" [level=3] [ref=e3959]
+          - paragraph [ref=e3960]: "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。 数据集键（实算，只读）：实算值未产出（IterationConfig 缺席） 卡数护栏：卡数基线回退：训练卡数 2 低于基线参照 8 且非用户显式降档（owner 偏置：训练默认拉满、训练时长优先）——已回退为 8 TokenBudget（三要素）: 单样本 token 预算 max_total_tokens 可编辑 9000 [惯例基线（owner 2026-10-22）] 训练截断 cutoff cutoff_len 只读 9000 [= 预算] 推理窗口 max_model_len 只读 12800 [独立取值] 卡位个数（2 张：5,6）与训练卡数 nproc_per_node（8）不一致——两者须相等，请改齐后提交"
+          - generic [ref=e3961]:
+            - generic [ref=e3962]:
+              - generic [ref=e3963]: learning_rate
+              - textbox "learning_rate 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）" [ref=e3964]: "1e-4"
+              - generic [ref=e3965]: 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）
+            - generic [ref=e3966]:
+              - generic [ref=e3967]: nproc_per_node
+              - textbox "nproc_per_node [1, 可用卡数 8]" [ref=e3968]: "8"
+              - generic [ref=e3969]: "[1, 可用卡数 8]"
+            - generic [ref=e3970]:
+              - generic [ref=e3971]: visible_devices
+              - textbox "visible_devices 逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）" [ref=e3972]: 5,6
+              - generic [ref=e3973]: 逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）
+            - generic [ref=e3974]:
+              - generic [ref=e3975]: base_model_path
+              - textbox "base_model_path" [ref=e3976]: /data/LLM_model/Qwen3-VL-32B-Instruct
+            - generic [ref=e3977]:
+              - generic [ref=e3978]: num_train_epochs
+              - textbox "num_train_epochs 域 [1, 10] 整数" [ref=e3979]: "3"
+              - generic [ref=e3980]: 域 [1, 10] 整数
+            - generic [ref=e3981]:
+              - generic [ref=e3982]: per_device_train_batch_size
+              - textbox "per_device_train_batch_size" [ref=e3983]: "1"
+            - generic [ref=e3984]:
+              - generic [ref=e3985]: gradient_accumulation_steps
+              - textbox "gradient_accumulation_steps" [ref=e3986]: "32"
+            - generic [ref=e3987]:
+              - generic [ref=e3988]: cutoff_len
+              - textbox "cutoff_len ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）" [ref=e3989]: "9000"
+              - generic [ref=e3990]: ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）
+            - generic [ref=e3991]:
+              - generic [ref=e3992]: deepspeed
+              - textbox "deepspeed" [ref=e3993]: ds_z2_config.json
+            - generic [ref=e3994]:
+              - generic [ref=e3995]: lora_rank
+              - 'textbox "lora_rank 档位 {16, 32, 64, 128}（alpha=2×rank 联动）" [ref=e3996]': "32"
+              - generic [ref=e3997]: "档位 {16, 32, 64, 128}（alpha=2×rank 联动）"
+            - generic [ref=e3998]:
+              - generic [ref=e3999]: lora_alpha
+              - textbox "lora_alpha" [ref=e4000]: "64"
+            - generic [ref=e4001]:
+              - generic [ref=e4002]: max_total_tokens
+              - textbox "max_total_tokens 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）" [ref=e4003]: "9000"
+              - generic [ref=e4004]: 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）
+            - generic [ref=e4005]:
+              - generic [ref=e4006]: 最小像素
+              - textbox "最小像素 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）" [ref=e4007]: "65536"
+              - generic [ref=e4008]: 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）
+            - generic [ref=e4009]:
+              - generic [ref=e4010]: 最大像素
+              - 'textbox "最大像素 两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）" [ref=e4011]': "802816"
+              - generic [ref=e4012]: "两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）"
+            - generic [ref=e4013]:
+              - generic [ref=e4014]: negative_ratio_target
+              - textbox "negative_ratio_target 构造带 [0.02, 0.05]" [ref=e4015]: 0.02,0.05
+              - generic [ref=e4016]: 构造带 [0.02, 0.05]
+            - generic [ref=e4017]:
+              - generic [ref=e4018]: token_budget_sync_reason
+              - textbox "token_budget_sync_reason" [ref=e4019]:
+                - /placeholder: 预算与 cutoff 不等时的不同步理由（不等必填；相等留空）——同步请在 cutoff_len 框直接填预算值（用户动作）
+        - generic [ref=e4020]:
+          - status [ref=e4021]
+          - generic [ref=e4022]:
+            - button "Cancel" [ref=e4023] [cursor=pointer]
+            - button "确认并继续" [ref=e4024] [cursor=pointer]

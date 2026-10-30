@@ -1,0 +1,81 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e10]:
+          - generic [ref=e11]: ATF
+          - generic [ref=e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e17] [cursor=pointer]
+    - button "New session" [ref=e20] [cursor=pointer]:
+      - generic [ref=e21]: New Session
+    - navigation "Global panels" [ref=e26]:
+      - button "Plugins" [ref=e27] [cursor=pointer]
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]: Workspaces
+        - generic [ref=e42]:
+          - button "Search sessions" [ref=e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e47]:
+          - button "View options" [ref=e49] [cursor=pointer]
+          - button "Add workspace" [ref=e53] [cursor=pointer]
+      - tree "Sessions" [ref=e58]:
+        - generic [ref=e110]:
+          - treeitem "ws-pl-walkthrough-r1 Workspace actions for ws-pl-walkthrough-r1 New session in ws-pl-walkthrough-r1" [expanded] [ref=e358] [cursor=pointer]:
+            - generic [ref=e118]: ws-pl-walkthrough-r1
+            - generic [ref=e362]:
+              - button "Workspace actions for ws-pl-walkthrough-r1" [ref=e364]
+              - button "New session in ws-pl-walkthrough-r1" [ref=e369]
+          - treeitem "New Session" [selected] [ref=e373] [cursor=pointer]
+        - treeitem "ws-pl-walkthrough" [ref=e122] [cursor=pointer]
+        - generic [ref=e128]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e130] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 6h" [ref=e139] [cursor=pointer]:
+            - generic [ref=e141]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e142]: 6h
+          - treeitem "装箱单字段抽取新实验全流程 8h" [ref=e144] [cursor=pointer]:
+            - generic [ref=e146]: 装箱单字段抽取新实验全流程
+            - generic [ref=e147]: 8h
+        - treeitem "atf-prodtest-20261021" [ref=e150] [cursor=pointer]
+        - treeitem "a4-hotws" [ref=e158] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e166] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e174] [cursor=pointer]
+        - treeitem "sam" [ref=e182] [cursor=pointer]
+    - button "Settings" [ref=e68] [cursor=pointer]
+  - generic [ref=e376]:
+    - banner [ref=e378]:
+      - button "Open right sidebar" [ref=e383] [cursor=pointer]
+    - generic [ref=e391]:
+      - generic [ref=e394]:
+        - generic [ref=e395]: ATF
+        - generic [ref=e398]:
+          - generic [ref=e399]: Into the Unknown
+          - generic [ref=e400]: Preview
+      - generic [ref=e401]:
+        - button "Choose workspace" [ref=e402] [cursor=pointer]:
+          - generic [ref=e407]: ws-pl-walkthrough-r1
+        - button "Standard mode" [ref=e412] [cursor=pointer]
+      - generic [ref=e423]:
+        - generic [ref=e425]:
+          - textbox "Describe the training task to advance, / commands, @ files or sessions" [active] [ref=e426]
+          - generic [aria-hidden]: Describe the training task to advance, / commands, @ files or sessions
+        - generic [ref=e427]:
+          - generic [ref=e428]:
+            - button "Add files or run commands" [ref=e429] [cursor=pointer]
+            - 'button "Access mode, current: Full access" [ref=e434] [cursor=pointer]':
+              - generic [ref=e438]: Full access
+          - generic [ref=e442]:
+            - generic [ref=e443]:
+              - button "思考 Low(低) ▾" [ref=e446] [cursor=pointer]:
+                - generic [ref=e447]: 思考
+                - generic [ref=e448]: Low(低)
+                - generic [ref=e449]: ▾
+              - button "Select model, current glm-5.3-flash" [ref=e452] [cursor=pointer]:
+                - generic [ref=e453]: glm-5.3-flash
+            - button "Send message" [disabled] [ref=e456]
+  - generic [ref=e461]:
+    - generic [ref=e462]: ↩
+    - generic [ref=e463]:
+      - generic [ref=e464]: 回到上次实验：实验 budget
+      - generic [ref=e465]: 上次实验 · 点击选用，发送首条消息时自动绑定
+    - button "继续这次实验" [ref=e466] [cursor=pointer]

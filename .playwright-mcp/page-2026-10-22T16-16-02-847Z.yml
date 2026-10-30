@@ -1,0 +1,296 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e86] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e87]:
+          - generic [ref=e88]: ATF
+          - generic [ref=e91]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e101]: Workspaces
+        - generic [ref=e103]:
+          - button "Search sessions" [ref=e104] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e109] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e114]:
+        - generic [ref=e115]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e117] [cursor=pointer]
+          - treeitem "训练数据构造前校验演练 19min" [ref=e1079] [cursor=pointer]:
+            - generic [ref=e128]: 训练数据构造前校验演练
+            - generic [ref=e129]: 19min
+        - treeitem "ws-pl-walkthrough" [ref=e132] [cursor=pointer]
+        - generic [ref=e138]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e140] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 7h" [ref=e149] [cursor=pointer]:
+            - generic [ref=e151]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e152]: 7h
+          - treeitem "装箱单字段抽取新实验全流程 9h" [ref=e154] [cursor=pointer]:
+            - generic [ref=e156]: 装箱单字段抽取新实验全流程
+            - generic [ref=e157]: 9h
+        - generic [ref=e158]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=e160] [cursor=pointer]
+          - treeitem "等待发起真实训练走查指令 now" [selected] [ref=e1161] [cursor=pointer]:
+            - generic [ref=e933]: 等待发起真实训练走查指令
+            - generic [ref=e1086]: now
+          - treeitem "汇总当前实验状态与进展 21h" [ref=e935] [cursor=pointer]:
+            - generic [ref=e937]: 汇总当前实验状态与进展
+            - generic [ref=e938]: 21h
+          - treeitem "我的训练数据放在 /data/atf/prodt 1d" [ref=e940] [cursor=pointer]:
+            - generic [ref=e942]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=e943]: 1d
+        - treeitem "a4-hotws" [ref=e168] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e176] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e184] [cursor=pointer]
+        - treeitem "sam" [ref=e192] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e944]:
+    - banner [ref=e946]:
+      - generic [ref=e947]:
+        - generic [ref=e948]:
+          - generic [ref=e1087]:
+            - navigation "Session hierarchy" [ref=e1088]:
+              - generic [ref=e1089]: 等待发起真实训练走查指令
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e1093]: Standard mode
+          - generic [ref=e1100]:
+            - button "More actions" [ref=e1102] [cursor=pointer]
+            - generic [ref=e1107]:
+              - button "选择实验 ▾" [ref=e1109] [cursor=pointer]
+              - button "监控" [ref=e1111] [cursor=pointer]
+        - tablist [ref=e1112]:
+          - tab "Chat" [selected] [ref=e1113] [cursor=pointer]
+          - tab "Trajectory" [ref=e1114] [cursor=pointer]
+    - generic [ref=e955]:
+      - generic [ref=e1121]:
+        - generic [ref=e1124]:
+          - generic [ref=e1125]: 准备走查一次真实训练发起，先待命不要调用任何工具：等我下一步用「发起训练」对话框下发正式指令。
+          - generic [ref=e1127]:
+            - generic [ref=e1128]: 00:15
+            - button "Copy" [ref=e1129] [cursor=pointer]
+        - generic [ref=e1163]:
+          - status [ref=e1164]: Completed
+          - button "Completed in 10s" [ref=e1165] [cursor=pointer]
+        - generic [ref=e1173]:
+          - paragraph [ref=e1174]: 收到，已进入待命状态，本次不调用任何工具。
+          - paragraph [ref=e1175]: 等你通过「发起训练」对话框下发正式指令后，我会按标准链路处理：
+          - list [ref=e1176]:
+            - listitem [ref=e1177]:
+              - strong [ref=e1178]: 读取指令与现状核对
+              - text: —— 根据下发的任务描述/实验标识，先核对工作区状态、G4/G5 等闸门事实与已准入数据；
+            - listitem [ref=e1179]:
+              - strong [ref=e1180]: 确认卡流程
+              - text: —— 九要素训练配置确认（基模型、epochs/lr/rank、cutoff、卡数等），涉及授权一律走审批卡由你放行；
+            - listitem [ref=e1181]:
+              - strong [ref=e1182]: 放行与启动
+              - text: —— 训练放行记录登记后执行 launch，启动后持续回报训练状态与 loss 进展。
+          - paragraph [ref=e1183]: 在此之前我不会做任何探查或预操作。请下发指令。
+        - generic [ref=e1187]:
+          - button "Copy" [ref=e1188] [cursor=pointer]
+          - generic [ref=e1192]:
+            - button "Good response" [ref=e1193] [cursor=pointer]
+            - button "Bad response" [ref=e1196] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=e1199] [cursor=pointer]
+          - generic [ref=e1205]:
+            - button "Usage 18.1K tok" [ref=e1207] [cursor=pointer]
+            - generic [ref=e1213]: 00:15
+      - generic [ref=e990]:
+        - generic [ref=e991]:
+          - generic [ref=e993]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [ref=e1141]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e995]:
+            - generic [ref=e996]:
+              - button "Add files or run commands" [ref=e997] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e1002] [cursor=pointer]':
+                - generic [ref=e1006]: Full access
+            - generic [ref=e1010]:
+              - generic [ref=e1011]:
+                - button "思考 Low(低) ▾" [ref=e1014] [cursor=pointer]:
+                  - generic [ref=e1015]: 思考
+                  - generic [ref=e1016]: Low(低)
+                  - generic [ref=e1017]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e1020] [cursor=pointer]:
+                  - generic [ref=e1021]: glm-5.3-flash
+              - button "Send message" [disabled] [ref=e1214]
+        - generic [ref=e1144]:
+          - generic [ref=e1145]:
+            - generic [ref=e1216]:
+              - button "1 turns 1 steps · 51 tok/s" [ref=e1218] [cursor=pointer]:
+                - generic [ref=e1223]: 1 turns 1 steps·51 tok/s
+              - button "18.1K tok · Cache hit 0%" [ref=e1225] [cursor=pointer]:
+                - generic [ref=e1230]: 18.1K tok·Cache hit 0%
+            - generic [ref=e1146]:
+              - status [ref=e1147]:
+                - generic [ref=e1148]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                - generic [ref=e1149]:
+                  - generic [ref=e1150]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                  - generic [ref=e1151]: ws-pl-walkthrough · 1 会话
+              - generic [ref=e1152]:
+                - button "新建训练" [ref=e1153] [cursor=pointer]
+                - button "查状态" [disabled] [ref=e1154]
+                - button "继续上次" [disabled] [ref=e1155]
+                - button "对比两轮" [disabled] [ref=e1156]
+                - button "走完闭环" [ref=e1157] [cursor=pointer]
+                - button "联合训练" [disabled] [ref=e1158]
+                - button "badcase 可视化" [ref=e1159] [cursor=pointer]
+                - button "发起训练" [active] [ref=e1160] [cursor=pointer]
+              - generic [ref=e1238]:
+                - generic [ref=e1239]:
+                  - generic [ref=e1240]: 发起训练
+                  - combobox [ref=e1241]:
+                    - option "a22b-e14b" [selected]
+                    - option "a22b-e14b2"
+                    - option "run-admit-qc-01"
+                    - option "run-admit-qc-02"
+                    - option "pl-walkthrough-r1"
+                    - option "a3smoke1017"
+                    - option "bw-live-1"
+                    - option "cr_ci_smoke_r1_replay"
+                    - option "goods4doc-iter1"
+                    - option "run-q-manual"
+                    - option "run-q-smoke"
+                    - option "run-regress-formal-01"
+                    - option "run-regress-formal-02"
+                    - option "run-regress-formal-03"
+                    - option "run-regress-large-pl"
+                    - option "walkthrough-b10-rerun"
+                    - option "walkthrough-b11-rerun"
+                    - option "walkthrough-f10-rerun"
+                    - option "walkthrough-m12-real"
+                    - option "a31-ready-run"
+                    - option "run-admit-qc-02-eval-h5"
+                  - button "×" [ref=e1242] [cursor=pointer]
+                - generic [ref=e1243]:
+                  - generic [ref=e1244]:
+                    - generic [ref=e1245]: train.sh：在场 ✓
+                    - generic [ref=e1246]: prelaunch 报告：缺席（链内按 SKILL.md:84 生成）
+                    - generic [ref=e1247]: 配置快照：未确认（确认卡后落盘）
+                  - generic [ref=e1248]:
+                    - generic [ref=e1249] [cursor=pointer]:
+                      - radio "DRY_RUN 验收（缺省——确认卡→DRY_RUN 校验→账本核验后止步，不开真训）" [checked] [ref=e1250]
+                      - text: DRY_RUN 验收（缺省——确认卡→DRY_RUN 校验→账本核验后止步，不开真训）
+                    - generic [ref=e1251] [cursor=pointer]:
+                      - radio "真实训练（须 owner 单独书面点头；单卡 ≤180min 授权轴）" [ref=e1252]
+                      - text: 真实训练（须 owner 单独书面点头；单卡 ≤180min 授权轴）
+                  - generic [ref=e1253]:
+                    - generic [ref=e1254]:
+                      - generic [ref=e1255]: IterationConfig 摘要（四件套：含义＋值＋来源标注＋可改）
+                      - generic [ref=e1256]: 改法：消息/卡面回复如「lr 改 2e-4」
+                    - generic [ref=e1257]:
+                      - generic "学习率（LoRA 微调优化步长）｜来源：来自 IterationConfig" [ref=e1258]: learning_rate
+                      - generic [ref=e1259]: "1e-4"
+                      - generic [ref=e1260]: 来自 IterationConfig
+                      - generic "学习率（LoRA 微调优化步长）｜来源：来自 IterationConfig" [ref=e1261]: 学习率（LoRA 微调优化步长）
+                    - generic [ref=e1262]:
+                      - generic "训练卡数（单机并行进程数＝GPU 数——默认拉满可用卡，训练时长优先；降档仅用户明确要求）｜来源：来自 IterationConfig" [ref=e1263]: nproc_per_node
+                      - generic [ref=e1264]: "1"
+                      - generic [ref=e1265]: 来自 IterationConfig
+                      - generic "训练卡数（单机并行进程数＝GPU 数——默认拉满可用卡，训练时长优先；降档仅用户明确要求）｜来源：来自 IterationConfig" [ref=e1266]: 训练卡数（单机并行进程数＝GPU 数——默认拉满可用卡，训练时长优先；降档仅用户明确要求）
+                    - generic [ref=e1267]:
+                      - generic "基模型路径（本地绝对路径——默认＝模型库位置下 Qwen3-VL-32B-Instruct，owner 偏置锚点；家族名/HF id 无效）｜来源：已用缺省（未经确认）" [ref=e1268]: base_model_path
+                      - generic [ref=e1270]: 缺省/KB 未校准 ⚠
+                      - generic "基模型路径（本地绝对路径——默认＝模型库位置下 Qwen3-VL-32B-Instruct，owner 偏置锚点；家族名/HF id 无效）｜来源：已用缺省（未经确认）" [ref=e1271]: 基模型路径（本地绝对路径——默认＝模型库位置下 Qwen3-VL-32B-Instruct，owner 偏置锚点；家族名/HF id 无效）
+                    - generic [ref=e1272]:
+                      - generic "训练轮数（全量数据过几遍）｜来源：来自 IterationConfig" [ref=e1273]: num_train_epochs
+                      - generic [ref=e1274]: "3"
+                      - generic [ref=e1275]: 来自 IterationConfig
+                      - generic "训练轮数（全量数据过几遍）｜来源：来自 IterationConfig" [ref=e1276]: 训练轮数（全量数据过几遍）
+                    - generic [ref=e1277]:
+                      - generic "单卡 batch（每次前向的样本数）｜来源：来自 IterationConfig" [ref=e1278]: per_device_train_batch_size
+                      - generic [ref=e1279]: "1"
+                      - generic [ref=e1280]: 来自 IterationConfig
+                      - generic "单卡 batch（每次前向的样本数）｜来源：来自 IterationConfig" [ref=e1281]: 单卡 batch（每次前向的样本数）
+                    - generic [ref=e1282]:
+                      - generic "梯度累积（累积几步做一次更新；等效 batch＝单卡 batch×累积）｜来源：来自 IterationConfig" [ref=e1283]: gradient_accumulation_steps
+                      - generic [ref=e1284]: "8"
+                      - generic [ref=e1285]: 来自 IterationConfig
+                      - generic "梯度累积（累积几步做一次更新；等效 batch＝单卡 batch×累积）｜来源：来自 IterationConfig" [ref=e1286]: 梯度累积（累积几步做一次更新；等效 batch＝单卡 batch×累积）
+                    - generic [ref=e1287]:
+                      - generic "训练截断（训练序列最大 token 数——只在训练时生效且会截断，禁当数据筛选阈值；与预算 max_total_tokens 同步或填理由）｜来源：来自 IterationConfig" [ref=e1288]: cutoff_len
+                      - generic [ref=e1289]: "9000"
+                      - generic [ref=e1290]: 来自 IterationConfig
+                      - generic "训练截断（训练序列最大 token 数——只在训练时生效且会截断，禁当数据筛选阈值；与预算 max_total_tokens 同步或填理由）｜来源：来自 IterationConfig" [ref=e1291]: 训练截断（训练序列最大 token 数——只在训练时生效且会截断，禁当数据筛选阈值；与预算 max_total_tokens 同步或填理由）
+                    - generic [ref=e1292]:
+                      - generic "DeepSpeed 分布式配置（显存/卸载策略）｜来源：来自 IterationConfig" [ref=e1293]: deepspeed
+                      - generic [ref=e1294]: ds_z2_config.json
+                      - generic [ref=e1295]: 来自 IterationConfig
+                      - generic "DeepSpeed 分布式配置（显存/卸载策略）｜来源：来自 IterationConfig" [ref=e1296]: DeepSpeed 分布式配置（显存/卸载策略）
+                    - generic [ref=e1297]:
+                      - generic "LoRA 秩（容量/参数量）｜来源：来自 IterationConfig" [ref=e1298]: lora_rank
+                      - generic [ref=e1299]: "32"
+                      - generic [ref=e1300]: 来自 IterationConfig
+                      - generic "LoRA 秩（容量/参数量）｜来源：来自 IterationConfig" [ref=e1301]: LoRA 秩（容量/参数量）
+                    - generic [ref=e1302]:
+                      - generic "LoRA alpha（缩放系数，与 rank 成对）｜来源：来自 IterationConfig" [ref=e1303]: lora_alpha
+                      - generic [ref=e1304]: "64"
+                      - generic [ref=e1305]: 来自 IterationConfig
+                      - generic "LoRA alpha（缩放系数，与 rank 成对）｜来源：来自 IterationConfig" [ref=e1306]: LoRA alpha（缩放系数，与 rank 成对）
+                    - generic [ref=e1307]:
+                      - generic "数据集键（登记面推导的 variants 条目）｜来源：已用缺省（未经确认）" [ref=e1308]: dataset_keys
+                      - generic [ref=e1309]: （由登记面推导）
+                      - generic [ref=e1310]: 缺省/KB 未校准 ⚠
+                      - generic "数据集键（登记面推导的 variants 条目）｜来源：已用缺省（未经确认）" [ref=e1311]: 数据集键（登记面推导的 variants 条目）
+                    - generic [ref=e1312]:
+                      - generic "单样本 token 预算（数据构造期准入闸门——超限样本构造期拒绝而非截断；须 ≤ cutoff_len 且 ≤ max_model_len）｜来源：已用缺省（未经确认）" [ref=e1313]: max_total_tokens
+                      - generic [ref=e1314]: "9000"
+                      - generic [ref=e1315]: 缺省/KB 未校准 ⚠
+                      - generic "单样本 token 预算（数据构造期准入闸门——超限样本构造期拒绝而非截断；须 ≤ cutoff_len 且 ≤ max_model_len）｜来源：已用缺省（未经确认）" [ref=e1316]: 单样本 token 预算（数据构造期准入闸门——超限样本构造期拒绝而非截断；须 ≤ cutoff_len 且 ≤ max_model_len）
+                    - generic [ref=e1317]:
+                      - generic "推理窗口（vLLM 部署上下文配置，独立取值非 cutoff 推导——预算须 ≤ 本值，余量给生成）｜来源：已用缺省（未经确认）" [ref=e1318]: max_model_len
+                      - generic [ref=e1319]: "12800"
+                      - generic [ref=e1320]: 缺省/KB 未校准 ⚠
+                      - generic "推理窗口（vLLM 部署上下文配置，独立取值非 cutoff 推导——预算须 ≤ 本值，余量给生成）｜来源：已用缺省（未经确认）" [ref=e1321]: 推理窗口（vLLM 部署上下文配置，独立取值非 cutoff 推导——预算须 ≤ 本值，余量给生成）
+                    - generic [ref=e1322]:
+                      - generic "像素下限（训练/评估必须同一对值，评估服务只引用训练确认值）｜来源：KB 建议·未校准（未经确认不进生效配置）" [ref=e1323]: image_min_pixels
+                      - generic [ref=e1324]: "65536"
+                      - generic [ref=e1325]: 缺省/KB 未校准 ⚠
+                      - generic "像素下限（训练/评估必须同一对值，评估服务只引用训练确认值）｜来源：KB 建议·未校准（未经确认不进生效配置）" [ref=e1326]: 像素下限（训练/评估必须同一对值，评估服务只引用训练确认值）
+                    - generic [ref=e1327]:
+                      - generic "像素上限（与像素下限成对确认）｜来源：KB 建议·未校准（未经确认不进生效配置）" [ref=e1328]: image_max_pixels
+                      - generic [ref=e1329]: "802816"
+                      - generic [ref=e1330]: 缺省/KB 未校准 ⚠
+                      - generic "像素上限（与像素下限成对确认）｜来源：KB 建议·未校准（未经确认不进生效配置）" [ref=e1331]: 像素上限（与像素下限成对确认）
+                    - generic [ref=e1332]:
+                      - generic "负样本目标带（构造期配比目标）｜来源：KB 建议·未校准（未经确认不进生效配置）" [ref=e1333]: negative_ratio_target
+                      - generic [ref=e1334]: 0.02,0.05
+                      - generic [ref=e1335]: 缺省/KB 未校准 ⚠
+                      - generic "负样本目标带（构造期配比目标）｜来源：KB 建议·未校准（未经确认不进生效配置）" [ref=e1336]: 负样本目标带（构造期配比目标）
+                    - generic [ref=e1337]:
+                      - generic [ref=e1338]: TokenBudget 三要素（预算可编辑；cutoff/推理窗口只读——预算须 ≤ 两者，训练/推理两栈独立取值）
+                      - generic [ref=e1340]: 单样本 token 预算 max_total_tokens 可编辑 9000 [惯例基线（owner 2026-10-22）]
+                      - generic [ref=e1342]: 训练截断 cutoff cutoff_len 只读 9000 [= 预算]
+                      - generic [ref=e1344]: 推理窗口 max_model_len 只读 12800 [独立取值]
+                      - generic [ref=e1346]:
+                        - generic [ref=e1347]: 视觉像素对（最小/最大像素可改——构造/训练/推理同一对值）
+                        - generic [ref=e1349]: 最小像素 可编辑 65,536 [默认]
+                        - generic [ref=e1351]: 最大像素 可编辑 802,816 [默认]（候选 1,605,632）
+                  - generic [ref=e1353]:
+                    - button "生成发起消息（进 chat 正道链）" [ref=e1354] [cursor=pointer]
+                    - generic [ref=e1355]: 消息进 chat 后走确认卡批准/驳回（M2 内嵌通道）；批准≠放行真训——真训另有闸。
+          - button "2% of context used" [ref=e1232] [cursor=pointer]:
+            - generic [ref=e1236]: 2%
+  - generic [ref=e1030]:
+    - tablist [ref=e1032]:
+      - tab "Start" [selected] [ref=e1033]
+      - button "Split" [ref=e1041] [cursor=pointer]
+      - generic [ref=e1044]:
+        - button "Fullscreen" [ref=e1045] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=e1048] [cursor=pointer]
+    - generic [ref=e1055]:
+      - button "Workspace files Browse files in this session's workspace" [ref=e1062] [cursor=pointer]:
+        - generic [ref=e1067]:
+          - generic [ref=e1068]: Workspace files
+          - generic [ref=e1069]: Browse files in this session's workspace
+      - generic [ref=e1072]:
+        - button "New terminal Run commands in the Session workspace" [ref=e1073] [cursor=pointer]
+        - generic:
+          - generic:
+            - generic [aria-hidden]: New terminal
+            - button "Choose shell" [ref=e1075] [cursor=pointer]
+          - generic [aria-hidden]: Run commands in the Session workspace

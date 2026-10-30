@@ -1,0 +1,417 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - generic [ref=f1e8]:
+      - button "New session" [ref=f1e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f1e10]:
+          - generic [ref=f1e11]: ATF
+          - generic [ref=f1e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f1e17] [cursor=pointer]
+    - button "New session" [ref=f1e20] [cursor=pointer]:
+      - generic [ref=f1e21]: New Session
+    - navigation "Global panels" [ref=f1e26]:
+      - button "Plugins" [ref=f1e27] [cursor=pointer]
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]: Workspaces
+        - generic [ref=f1e42]:
+          - button "Search sessions" [ref=f1e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f1e47]:
+          - button "View options" [ref=f1e49] [cursor=pointer]
+          - button "Add workspace" [ref=f1e53] [cursor=pointer]
+      - tree "Sessions" [ref=f1e58]:
+        - treeitem "1023" [ref=f1e112] [cursor=pointer]
+        - generic [ref=f1e118]:
+          - treeitem "my-zito" [expanded] [ref=f1e120] [cursor=pointer]
+          - treeitem "Running 海运单单据抽取模型训练流程启动 2min" [selected] [ref=f1e1164] [cursor=pointer]:
+            - generic [ref=f1e130]: Running
+            - generic [ref=f1e131]: 海运单单据抽取模型训练流程启动
+            - generic [ref=f1e132]: 2min
+          - treeitem "D76 卡位卡面验收测试 1h" [ref=f1e134] [cursor=pointer]:
+            - generic [ref=f1e136]: D76 卡位卡面验收测试
+            - generic [ref=f1e137]: 1h
+          - treeitem "ping 1d" [ref=f1e139] [cursor=pointer]:
+            - generic [ref=f1e141]: ping
+            - generic [ref=f1e142]: 1d
+          - treeitem "Ping Test 1d" [ref=f1e144] [cursor=pointer]:
+            - generic [ref=f1e146]: Ping Test
+            - generic [ref=f1e147]: 1d
+          - treeitem "Ping Test 1d" [ref=f1e149] [cursor=pointer]:
+            - generic [ref=f1e151]: Ping Test
+            - generic [ref=f1e152]: 1d
+          - treeitem "ping 1d" [ref=f1e898] [cursor=pointer]:
+            - generic [ref=f1e900]: ping
+            - generic [ref=f1e901]: 1d
+          - button "Show 1 more sessions" [ref=f1e902] [cursor=pointer]
+        - treeitem "Task" [ref=f1e155] [cursor=pointer]
+    - button "Settings" [ref=f1e68] [cursor=pointer]
+  - generic [ref=f1e77]:
+    - banner [ref=f1e162]:
+      - generic [ref=f1e163]:
+        - generic [ref=f1e164]:
+          - generic [ref=f1e165]:
+            - navigation "Session hierarchy" [ref=f1e166]:
+              - generic [ref=f1e167]: 海运单单据抽取模型训练流程启动
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f1e171]: Standard mode
+          - generic [ref=f1e178]:
+            - button "More actions" [ref=f1e180] [cursor=pointer]
+            - generic [ref=f1e185]:
+              - button "选择实验 ▾" [ref=f1e187] [cursor=pointer]
+              - button "监控" [ref=f1e189] [cursor=pointer]
+          - button "Open right sidebar" [ref=f1e192] [cursor=pointer]
+        - tablist [ref=f1e195]:
+          - tab "Chat" [selected] [ref=f1e196] [cursor=pointer]
+          - tab "Trajectory" [ref=f1e197] [cursor=pointer]
+    - generic [ref=f1e79]:
+      - generic [ref=f1e201]:
+        - navigation "Turn navigation" [ref=f1e202] [cursor=pointer]:
+          - generic [ref=f1e204]:
+            - button "Load and jump to turn 1" [ref=f1e205]
+            - button "Load and jump to turn 2" [ref=f1e206]
+            - button "Load and jump to turn 3" [ref=f1e207]
+            - button "Load and jump to turn 4" [ref=f1e208]
+            - button "Load and jump to turn 5" [ref=f1e209]
+            - button "Load and jump to turn 6" [ref=f1e210]
+            - button "Load and jump to turn 7" [ref=f1e211]
+            - button "Load and jump to turn 8" [ref=f1e212]
+            - button "Jump to turn 9" [ref=f1e213]
+            - button "Jump to turn 10" [ref=f1e214]
+            - button "Jump to turn 11" [ref=f1e215]
+            - button "Jump to turn 12" [ref=f1e216]
+            - button "Jump to turn 13" [ref=f1e903]
+        - generic [ref=f1e219]:
+          - button "Load earlier" [ref=f1e221] [cursor=pointer]
+          - generic [ref=f1e224]:
+            - generic [ref=f1e225]: 继续把 u1-accept-swb 这个 run 走到能启动训练：先做训练预检，把缺什么按三态清单列出来（missing / 可自动执行 / 需我确认）；可自动执行的项经审批卡一键执行，需要我确认的我来填。然后重跑 training_prep 直到放行条件就绪。训练环境 llamafactory 已在实例内装好。
+            - generic [ref=f1e227]:
+              - generic [ref=f1e228]: 16:55
+              - button "Copy" [ref=f1e229] [cursor=pointer]
+          - generic [ref=f1e234]:
+            - status [ref=f1e235]: Stopped
+            - button "Stopped" [disabled] [expanded] [ref=f1e236]
+          - button "Called tools" [ref=f1e240] [cursor=pointer]
+          - paragraph [ref=f1e258]: 预检这次出了报告但被截断。看它是否落盘、以及两个 runs 布局的内容：
+          - button "Called tools" [ref=f1e261] [cursor=pointer]
+          - paragraph [ref=f1e279]:
+            - text: 落点有两个布局：内核 run 树在
+            - code [ref=f1e280]: workspace/runs/u1-accept-swb
+            - text: ，预检默认解析
+            - code [ref=f1e281]: <workspace>/runs
+            - text: 。把 workspace_path 指到内核 run 根重跑预检：
+          - button "Called tools" [ref=f1e284] [cursor=pointer]
+          - paragraph [ref=f1e302]: 预检报告没落盘（只在 stdout 被截断）。用 scratch 执行环境直接定位并运行内核预检脚本，把报告写到 scratch：
+          - button "Called tools and wrote files" [ref=f1e305] [cursor=pointer]
+          - paragraph [ref=f1e323]: 找到独立预检入口。带齐参数跑只读预检，报告落盘避免截断：
+          - button "Called tools" [ref=f1e326] [cursor=pointer]
+          - group [ref=f1e341]:
+            - status [ref=f1e343] [cursor=pointer]:
+              - generic [ref=f1e344]: Retried model request (4/5) · 4s
+          - button "Called tools" [ref=f1e349] [cursor=pointer]
+          - generic [ref=f1e366]:
+            - paragraph [ref=f1e367]: 预检报告完整拿到。三态清单如下：
+            - heading "训练预检三态清单（run u1-accept-swb）" [level=2] [ref=f1e368]
+            - paragraph [ref=f1e369]:
+              - strong [ref=f1e370]: ✅ 已闭合（无需动作）
+              - text: ：source_pairs（50 对在位）、field_config（run 内实验门登记副本）、lane_facts（mixed）
+            - paragraph [ref=f1e371]:
+              - strong [ref=f1e372]: 🟡 可自动执行（1 项）
+            - table [ref=f1e374]:
+              - rowgroup [ref=f1e375]:
+                - row [ref=f1e376]:
+                  - columnheader "项" [ref=f1e377]
+                  - columnheader "说明" [ref=f1e378]
+                  - columnheader "动作" [ref=f1e379]
+              - rowgroup [ref=f1e380]:
+                - row [ref=f1e381]:
+                  - cell [ref=f1e382]:
+                    - code [ref=f1e383]: token_provider
+                  - cell [ref=f1e384]:
+                    - text: 未显式指定；内核内置 CPU 计量脚本可用（零第三方依赖，保守上偏估算）：
+                    - code [ref=f1e385]: token_meter_cpu.py
+                  - cell "经审批卡一键执行——后续 training_prep 显式携带该 provider" [ref=f1e386]
+            - paragraph [ref=f1e387]:
+              - strong [ref=f1e388]: 🔴 missing（2 项，有依赖序）
+            - table [ref=f1e390]:
+              - rowgroup [ref=f1e391]:
+                - row [ref=f1e392]:
+                  - columnheader "项" [ref=f1e393]
+                  - columnheader "说明" [ref=f1e394]
+                  - columnheader "动作" [ref=f1e395]
+              - rowgroup [ref=f1e396]:
+                - row [ref=f1e397]:
+                  - cell [ref=f1e398]:
+                    - code [ref=f1e399]: token_budget
+                  - cell "预算未落盘且实验门预算值未确认（构造上限与视觉像素对须成组确认）" [ref=f1e400]
+                  - cell [ref=f1e401]:
+                    - strong [ref=f1e402]: 需要你填
+                    - text: ——九要素确认卡
+                - row [ref=f1e403]:
+                  - cell [ref=f1e404]:
+                    - code [ref=f1e405]: coordinate_pending
+                  - cell [ref=f1e406]:
+                    - text: 50 张图坐标换算 pending（
+                    - code [ref=f1e407]: pixel_budget_missing
+                    - text: ×50），依赖 token 预算
+                  - cell "预算落盘后自动整批重试（可自动执行，排在确认之后）" [ref=f1e408]
+            - paragraph [ref=f1e409]:
+              - strong [ref=f1e410]: 🔵 需你确认（1 项）
+            - table [ref=f1e412]:
+              - rowgroup [ref=f1e413]:
+                - row [ref=f1e414]:
+                  - columnheader "项" [ref=f1e415]
+                  - columnheader "说明" [ref=f1e416]
+              - rowgroup [ref=f1e417]:
+                - row [ref=f1e418]:
+                  - cell [ref=f1e419]:
+                    - code [ref=f1e420]: grouping_preset
+                  - cell "分组预设为 agent 建议：preset=B（2 组·单据级 vs 条目级）——分组方式影响每图样本形态，须业务确认（维持或改选 A：3 组·按单据层级）" [ref=f1e421]
+            - paragraph [ref=f1e422]: 依赖链：token_budget（你确认）→ coordinate_pending（自动重试）→ training_prep 放行。
+            - paragraph [ref=f1e423]: 现在呈九要素确认卡，请逐键填写（预算三要素区注意两条不变式：预算不超截断、预算与截断不等须给同步理由）：
+          - button "Called tools" [ref=f1e426] [cursor=pointer]
+          - generic [ref=f1e443]:
+            - paragraph [ref=f1e444]:
+              - text: 确认卡已提交（预算三要素：cutoff 9000 / max_total_tokens 9000 / max_model_len 12800；像素对 65536/802816；机器事实 nproc=2、卡 5,6；accum 派生 128、global batch 256）。快照已落
+              - code [ref=f1e445]: webui/config-snapshot.json
+              - text: 。
+            - paragraph [ref=f1e446]:
+              - text: 现在带
+              - code [ref=f1e447]: "--apply"
+              - text: 重跑预检（审批卡放行后执行可派生项：预算落盘＋坐标整批重试）：
+          - button "Called tools" [ref=f1e450] [cursor=pointer]
+          - paragraph [ref=f1e468]: apply 无盘上动作——token_provider 只是接线项（training_prep 时显式传即可）；预算仍显示未确认。检查预算与实验门确认记录落点、以及 llamafactory 环境：
+          - button "Called tools" [ref=f1e471] [cursor=pointer]
+          - paragraph [ref=f1e489]: llamafactory 0.9.4.dev0 已在系统 python3 可用（此前报缺应是装好之前）。确认卡值已入会话事实，直接重跑 training_prep——带内置 CPU token provider 与坐标重试：
+          - button "Called tools" [ref=f1e492] [cursor=pointer]
+          - paragraph [ref=f1e510]:
+            - text: 预算还是没落盘——确认卡快照落在 harness 侧
+            - code [ref=f1e511]: webui/config-snapshot.json
+            - text: ，内核 run 树没收到。看快照内容与内核的预算落盘入口：
+          - button "Called tools" [ref=f1e514] [cursor=pointer]
+          - paragraph [ref=f1e532]:
+            - text: 实验门
+            - code [ref=f1e533]: token_gate
+            - text: 三键仍是 null——确认卡的值没回流到实验门产物。查 walkthrough 管线里预算落盘的逻辑：
+          - button "Called tools" [ref=f1e536] [cursor=pointer]
+          - paragraph [ref=f1e554]:
+            - text: 落盘逻辑找到了：training_prep 会从
+            - code [ref=f1e555]: experiment-config.json
+            - text: 的
+            - code [ref=f1e556]: construction.token_gate
+            - text: （已确认三键）写预算文件。查 token_gate 是怎么在实验门被填的：
+          - button "Called tools" [ref=f1e559] [cursor=pointer]
+          - paragraph [ref=f1e577]:
+            - text: 合法落盘路径确认：
+            - code [ref=f1e578]: build_experiment_setup.py
+            - text: 接受
+            - code [ref=f1e579]: "--max-total-tokens/--image-min-pixels/--image-max-pixels"
+            - text: 显式值（source=user_specified），这正是九要素卡已确认的值。看它的完整 CLI 后按用户已确认值重产实验门配置：
+          - button "Called tools" [ref=f1e582] [cursor=pointer]
+          - generic [ref=f1e598]:
+            - button "Copy" [ref=f1e599] [cursor=pointer]
+            - generic [ref=f1e603]:
+              - button "Good response" [ref=f1e604] [cursor=pointer]
+              - button "Bad response" [ref=f1e607] [cursor=pointer]
+            - button "Branch into a new conversation" [disabled] [ref=f1e610]
+            - generic [ref=f1e616]: Available only on the last message of a completed turn
+            - generic [ref=f1e617]: 17:17
+          - generic [ref=f1e621]:
+            - generic [ref=f1e622]: 已停止。现在请只做一件事（不再执行任何工具调用、不跑任何脚本、不写任何文件）：用一段话总结当前 run u1-accept-swb 的状态——哪些段已过、training_prep 卡在哪、你观察到的预算管道断点。
+            - generic [ref=f1e624]:
+              - generic [ref=f1e625]: 17:18
+              - button "Copy" [ref=f1e626] [cursor=pointer]
+          - generic [ref=f1e631]:
+            - status [ref=f1e632]: Completed
+            - button "Completed in 14s" [disabled] [ref=f1e633]
+          - paragraph [ref=f1e640]:
+            - text: run u1-accept-swb 当前状态：数据面已全部闭合——register（50 对，pin e87478…）→ label_qc（Q1–Q4 零问题）→ experiment_setup（14 字段锁定、分组 B、负样本带 0.02–0.05）→ candidate_build（契约候选 23 键齐）→ publish（契约包已发布、G1 pass）→ family_split（自动补版式聚类、G2/G3 pass）→ admission（G4 pass）均已通过；卡在最后一段
+            - strong [ref=f1e641]: training_prep
+            - text: ，它要求先有
+            - code [ref=f1e642]: prep/token_budget.json
+            - text: 预算文件才能跑构造（build_training_variants 报
+            - code [ref=f1e643]: token_budget_missing
+            - text: ），50 张图的坐标换算也因此全部 pending（每张都是
+            - code [ref=f1e644]: pixel_budget_missing
+            - text: ）。预算管道断点在于：
+            - strong [ref=f1e645]:
+              - text: 九要素确认卡提交后，快照只落在 harness 侧的
+              - code [ref=f1e646]: webui/config-snapshot.json
+              - text: （且不在我找的落点），而内核侧的落盘链是「experiment-config.json 的
+              - code [ref=f1e647]: construction.token_gate
+              - text: 三键（max_total_tokens / image_min_pixels / image_max_pixels）→ training_prep 段据此写
+              - code [ref=f1e648]: prep/token_budget.json
+              - text: 」——当前 run 里
+              - code [ref=f1e649]: experiment-setup/experiment-config.json
+              - text: 的 token_gate 三键全是 null（登记时无预算确认，来源标
+              - code [ref=f1e650]: unspecified
+              - text: ），确认卡的值没有任何通道回流到这里，于是 training_prep 每次重跑都读不到门值、预算文件永远写不出来、构造被拒
+            - text: ；我在源码里确认的合法补法是：用
+            - code [ref=f1e651]: build_experiment_setup.py
+            - text: 带上用户已确认的三键显式值（9000 / 65536 / 802816，来源即标 user_specified）重产实验门配置，再重推 training_prep，预算与坐标换算即可依序闭合——另外两件小事已就绪：llamafactory 0.9.4.dev0 已在系统 python3 可用（此前 env_missing 报错已过时），token 计量用内核内置 CPU 脚本
+            - code [ref=f1e652]: token_meter_cpu.py
+            - text: 显式传入即可。
+          - generic [ref=f1e656]:
+            - button "Copy" [ref=f1e657] [cursor=pointer]
+            - generic [ref=f1e661]:
+              - button "Good response" [ref=f1e662] [cursor=pointer]
+              - button "Bad response" [ref=f1e665] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e668] [cursor=pointer]
+            - generic [ref=f1e674]:
+              - button "Usage 85.2K tok" [ref=f1e676] [cursor=pointer]
+              - generic [ref=f1e682]: 17:18
+          - generic [ref=f1e685]:
+            - generic [ref=f1e686]: 继续 u1-accept-swb：实例已升级（预检 schema 与确认卡落点已修复）。现在重新走九要素确认，改训练卡数为 8 张：nproc_per_node=8、visible_devices=0-7（八卡全用）、per_device_train_batch_size=1（accum 按 gb=256 派生应为 32），deepspeed 维持现值，预算三要素 max_total_tokens=9000、cutoff_len=9000、max_model_len=12800，像素对 image_min_pixels=65536、image_max_pixels=1605632。workspace_path 用 /data/docagent_workspace/dev/my-zito/workspace（真实 run 树所在）。预检卡和审批卡需要放行的我会在面板上点。
+            - generic [ref=f1e688]:
+              - generic [ref=f1e689]: 18:28
+              - button "Copy" [ref=f1e690] [cursor=pointer]
+          - generic [ref=f1e695]:
+            - status [ref=f1e696]: Completed
+            - button "Completed in 5m 43s" [ref=f1e697] [cursor=pointer]
+          - generic [ref=f1e705]:
+            - paragraph [ref=f1e706]: training_prep 段的审批未获放行（面板拒绝了本次请求）——流程已停，零写入。
+            - paragraph [ref=f1e707]: 按你说的“预检卡和审批卡需要放行的我会在面板上点”，这次可能是面板还没点或误触。需要的话我重推同一段 training_prep（参数不变：token_provider=内置 CPU 计量脚本、retry_coordinate_pending=true、预算走确认快照），你在面板放行即可。
+          - generic [ref=f1e711]:
+            - button "Copy" [ref=f1e712] [cursor=pointer]
+            - generic [ref=f1e716]:
+              - button "Good response" [ref=f1e717] [cursor=pointer]
+              - button "Bad response" [ref=f1e720] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e723] [cursor=pointer]
+            - generic [ref=f1e729]:
+              - button "Usage 530K tok" [ref=f1e731] [cursor=pointer]
+              - generic [ref=f1e737]: 18:34
+          - generic [ref=f1e740]:
+            - generic [ref=f1e741]: 刚才的 training_prep 我拒了——顺序不对：training_prep 的预算子步只认 experiment-setup/experiment-config.json 里的 construction.token_gate（内核单源，现在还是 null），确认快照不是它的读点。正确顺序：先用 atf_pipeline_stage 触发 experiment_setup 段（workspace_path=/data/docagent_workspace/dev/my-zito/workspace、run_id=u1-accept-swb），不显式传三参——工具会从 run 目录 webui/config-snapshot.json 自动兜底带出 max_total_tokens=9000、image_min_pixels=65536、image_max_pixels=1605632（审批卡上预算三参行来源应标「确认快照」），分组维持 grouping_preset=B、负样本带 0.02,0.05、lane 按登记现状。放行后实验门 token_gate 三键更新为用户确认值，然后再重跑预检（带 workspace_path）——token_budget 项应变为可自动执行，我在预检卡上勾 apply，apply 审批放行后预算落盘＋50 张坐标整批重试，最后才是 training_prep。按这个顺序走。
+            - generic [ref=f1e743]:
+              - generic [ref=f1e744]: 18:34
+              - button "Copy" [ref=f1e745] [cursor=pointer]
+          - generic [ref=f1e750]:
+            - status [ref=f1e751]: Completed
+            - button "Completed in 2m 20s" [ref=f1e752] [cursor=pointer]
+          - generic [ref=f1e760]:
+            - paragraph [ref=f1e761]:
+              - text: 情况明确了：内核段链把
+              - code [ref=f1e762]: datasets/
+              - text: 、
+              - code [ref=f1e763]: splits/
+              - text: 解析在 workspace 根下——register 时根是
+              - code [ref=f1e764]: /data/docagent_workspace/dev/my-zito
+              - text: （登记件、split 都落在那层），而你现在指定的新根
+              - code [ref=f1e765]: /data/docagent_workspace/dev/my-zito/workspace
+              - text: 下没有这两个视图，所以 experiment_setup 找不到上游
+              - code [ref=f1e766]: commit_pin
+              - text: （run 树内的 register 摘要里确实有
+              - code [ref=f1e767]: "commit_pin: e8747891…"
+              - text: ，登记件绝对路径也在）。
+            - paragraph [ref=f1e768]: 修复方式是最小管道补齐：在新根下建两个符号链接（单源不复制）：
+            - generic [ref=f1e769]:
+              - generic [ref=f1e771]:
+                - generic [ref=f1e772]: Code block
+                - generic [ref=f1e774]:
+                  - button "Wrap lines" [pressed] [ref=f1e775] [cursor=pointer]
+                  - button "Copy" [ref=f1e780] [cursor=pointer]
+              - code [ref=f1e786]: ln -sfn ../datasets /data/docagent_workspace/dev/my-zito/workspace/datasets ln -sfn ../splits /data/docagent_workspace/dev/my-zito/workspace/splits
+            - paragraph [ref=f1e787]:
+              - text: 写围栏要求经你确认才能落：
+              - strong [ref=f1e788]: 确认由我执行这两条 ln 命令吗？
+              - text: （或者你自己在终端跑一下也行。）链接就位后我按你定的顺序继续：experiment_setup（快照兜底三参）→ 预检（你勾 apply）→ training_prep。
+          - generic [ref=f1e792]:
+            - button "Copy" [ref=f1e793] [cursor=pointer]
+            - generic [ref=f1e797]:
+              - button "Good response" [ref=f1e798] [cursor=pointer]
+              - button "Bad response" [ref=f1e801] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=f1e804] [cursor=pointer]
+            - generic [ref=f1e810]:
+              - button "Usage 658K tok" [ref=f1e812] [cursor=pointer]
+              - generic [ref=f1e818]: 18:36
+          - generic [ref=f1e906]:
+            - generic [ref=f1e907]: 软链方案否决——不做任何 ln/镜像/移件（红线）。刚才卡住的根因是落点口径：上次八段 register/experiment_setup 用的 workspace 根就是 /data/docagent_workspace/dev/my-zito（datasets/、splits/ 都在那层，run 树按内核 canonical 布局落 <root>/workspace/runs/u1-accept-swb），我上一条话术把 workspace_path 传成了它的 workspace/ 子目录才导致 datasets 找不到。实例刚又升级了（run 落点解析已对齐 canonical 布局）。现在重来：atf_pipeline_stage 触发 experiment_setup 段，workspace_path=/data/docagent_workspace/dev/my-zito、run_id=u1-accept-swb，不显式传预算三参（工具从 canonical run 树的 webui/config-snapshot.json 兜底带出 9000/65536/1605632，卡上标确认快照），分组 grouping_preset=B、负样本带 0.02,0.05。放行后我核对 experiment-config 的 token_gate 三键，然后重跑预检（同 workspace_path）→ 我在预检卡勾 apply → apply 审批放行 → 预算落盘＋坐标整批重试 → training_prep。
+            - generic [ref=f1e909]:
+              - generic [ref=f1e910]: 18:43
+              - button "Copy" [ref=f1e911] [cursor=pointer]
+          - generic [ref=f1e930]:
+            - button "Tool call atf_pipeline_stage · B" [ref=f1e938] [cursor=pointer]:
+              - generic [ref=f1e948]:
+                - generic [ref=f1e949]: Tool call
+                - generic [ref=f1e951]: atf_pipeline_stage · B
+            - button "Think experiment_setup ok, canonical layout, config_snapshot sources for the three params. Now verify token_gate in experiment-config.json (user said they'd核对了 — I'll verify too), then rerun preflight with same workspace_path." [ref=f1e977] [cursor=pointer]:
+              - generic [ref=f1e987]:
+                - generic [ref=f1e988]: Think
+                - generic [ref=f1e990]: experiment_setup ok, canonical layout, config_snapshot sources for the three params. Now verify token_gate in experiment-config.json (user said they'd核对了 — I'll verify too), then rerun preflight with same workspace_path.
+          - paragraph [ref=f1e997]: experiment_setup ✓（canonical 布局、三参来源=确认快照）。核对 token_gate 三键：
+          - generic [ref=f1e1000]:
+            - button "Tool call atf_read · workspace/runs/u1-accept-swb/experiment-setup/experiment-config.json" [ref=f1e1007] [cursor=pointer]:
+              - generic [ref=f1e1017]:
+                - generic [ref=f1e1018]: Tool call
+                - generic [ref=f1e1020]: atf_read · workspace/runs/u1-accept-swb/experiment-setup/experiment-config.json
+            - button "Think token_gate三键已更新：9000 / 65536 / 1605632，来源 user_specified（确认快照带出）。重跑预检（只读），token_budget 应变 derivable。" [ref=f1e1028] [cursor=pointer]:
+              - generic [ref=f1e1038]:
+                - generic [ref=f1e1039]: Think
+                - generic [ref=f1e1041]: token_gate三键已更新：9000 / 65536 / 1605632，来源 user_specified（确认快照带出）。重跑预检（只读），token_budget 应变 derivable。
+          - paragraph [ref=f1e1048]: token_gate 三键已更新：max_total_tokens=9000 / min=65536 / max=1605632。重跑预检：
+          - generic [ref=f1e1051]:
+            - button "Tool call atf_training_preflight · u1-accept-swb" [ref=f1e1058] [cursor=pointer]:
+              - generic [ref=f1e1068]:
+                - generic [ref=f1e1069]: Tool call
+                - generic [ref=f1e1071]: atf_training_preflight · u1-accept-swb
+            - 'button "Think Odd: run_dir resolved to /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb (NOT the canonical workspace/runs/u1-accept-swb). The preflight saw a different run dir (the harness-layout dir with only webui bindings) — hence field_config missing, lane_facts missing, grouping_preset \"experiment configuration not present\", token_budget still missing (it looked at the wrong run tree!)." [ref=f1e1098] [cursor=pointer]':
+              - generic [ref=f1e1090]:
+                - generic [ref=f1e1091]: Think
+                - generic [ref=f1e1093]: "Odd: run_dir resolved to /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb (NOT the canonical workspace/runs/u1-accept-swb). The preflight saw a different run dir (the harness-layout dir with only webui bindings) — hence field_config missing, lane_facts missing, grouping_preset \"experiment configuration not present\", token_budget still missing (it looked at the wrong run tree!)."
+          - paragraph [ref=f1e1104]:
+            - text: 预检这次把 run_dir 解析到了
+            - code [ref=f1e1105]: /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb
+            - text: （harness 布局那棵只绑定了 webui 的假树）——升级只对齐了管线段解析，预检解析器还没对齐。改传
+            - code [ref=f1e1106]: workspace/
+            - text: 子目录（上次 10:28 那次就是它正确解析到 canonical 树）：
+          - generic [ref=f1e1107]:
+            - text: Analyzing the request
+            - button "Tool call atf_training_preflight · u1-accept-swb" [ref=f1e1117] [cursor=pointer]:
+              - generic [ref=f1e1127]:
+                - generic [ref=f1e1128]: Tool call
+                - generic [ref=f1e1130]: atf_training_preflight · u1-accept-swb
+          - generic [ref=f1e915]:
+            - status [ref=f1e916]: Deep diving
+            - generic [ref=f1e920]:
+              - generic [ref=f1e921]: Deep diving for 2m 15s ···
+              - generic [aria-hidden]:
+                - generic: Deep diving for 2m 15s ···
+      - generic [ref=f1e101]:
+        - generic [ref=f1e102]:
+          - generic [ref=f1e104]:
+            - textbox "Message or run a task, / commands, @ files or sessions" [ref=f1e819]
+            - generic [aria-hidden]: Message or run a task, / commands, @ files or sessions
+          - generic [ref=f1e106]:
+            - generic [ref=f1e107]:
+              - button "Add files or run commands" [ref=f1e820] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=f1e825] [cursor=pointer]':
+                - generic [ref=f1e829]: Full access
+            - generic [ref=f1e108]:
+              - generic [ref=f1e833]:
+                - button "思考 High(高) ▾" [ref=f1e836] [cursor=pointer]:
+                  - generic [ref=f1e837]: 思考
+                  - generic [ref=f1e838]: High(高)
+                  - generic [ref=f1e839]: ▾
+                - button "Select model, current GLM-5.3-Flash" [ref=f1e842] [cursor=pointer]:
+                  - generic [ref=f1e843]: GLM-5.3-Flash
+              - button "Stop generating" [ref=f1e923] [cursor=pointer]
+        - generic [ref=f1e849]:
+          - generic [ref=f1e850]:
+            - generic [ref=f1e851]:
+              - button "13 turns 119 steps · 44 tok/s" [ref=f1e1170] [cursor=pointer]:
+                - generic [ref=f1e858]: 13 turns 119 steps·44 tok/s
+              - button "6.8M tok · Cache hit 95%" [ref=f1e1171] [cursor=pointer]:
+                - generic [ref=f1e865]: 6.8M tok·Cache hit 95%
+            - generic [ref=f1e866]:
+              - generic "展开训练任务进度（八段明细）" [ref=f1e867] [cursor=pointer]:
+                - generic [ref=f1e869]: 8/8
+                - generic [ref=f1e870]: 已完成
+              - generic [ref=f1e871]:
+                - button "新建训练" [ref=f1e872] [cursor=pointer]
+                - button "查状态" [disabled] [ref=f1e873]
+                - button "继续上次" [disabled] [ref=f1e874]
+                - button "对比两轮" [disabled] [ref=f1e875]
+                - button "走完闭环" [ref=f1e876] [cursor=pointer]
+                - button "联合训练" [disabled] [ref=f1e877]
+                - button "badcase 可视化" [ref=f1e878] [cursor=pointer]
+                - button "发起训练" [ref=f1e879] [cursor=pointer]
+          - button "10% of context used" [ref=f1e969] [cursor=pointer]:
+            - generic [ref=f1e885]: 10%

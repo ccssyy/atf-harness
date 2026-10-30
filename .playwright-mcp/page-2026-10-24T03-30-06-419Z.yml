@@ -1,0 +1,304 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - button "New session" [ref=e86] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e87]:
+            - generic [ref=e88]: ATF
+            - generic [ref=e91]: ATF 训练 Agent
+        - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+      - button "New session" [ref=e13] [cursor=pointer]:
+        - generic [ref=e14]: New Session
+      - navigation "Global panels" [ref=e18]:
+        - button "Plugins" [ref=e19] [cursor=pointer]
+      - generic [ref=e29]:
+        - generic [ref=e30]:
+          - generic [ref=e101]: Workspaces
+          - generic [ref=e103]:
+            - button "Search sessions" [ref=e104] [cursor=pointer]
+            - textbox "Search session names"
+          - generic [ref=e31]:
+            - button "View options" [ref=e109] [cursor=pointer]
+            - button "Add workspace" [ref=e32] [cursor=pointer]
+        - tree "Sessions" [ref=e114]:
+          - treeitem "1023" [ref=e117] [cursor=pointer]
+          - generic [ref=e123]:
+            - treeitem "my-zito" [expanded] [ref=e125] [cursor=pointer]
+            - treeitem "Running D76 卡位卡面验收测试 now" [selected] [ref=e610] [cursor=pointer]:
+              - generic [ref=e135]: Running
+              - generic [ref=e136]: D76 卡位卡面验收测试
+              - generic [ref=e137]: now
+            - treeitem "ping 20h" [ref=e139] [cursor=pointer]:
+              - generic [ref=e141]: ping
+              - generic [ref=e142]: 20h
+            - treeitem "Ping Test 1d" [ref=e144] [cursor=pointer]:
+              - generic [ref=e146]: Ping Test
+              - generic [ref=e147]: 1d
+            - treeitem "Ping Test 1d" [ref=e149] [cursor=pointer]:
+              - generic [ref=e151]: Ping Test
+              - generic [ref=e152]: 1d
+            - treeitem "ping 1d" [ref=e154] [cursor=pointer]:
+              - generic [ref=e156]: ping
+              - generic [ref=e157]: 1d
+            - treeitem "请用你的提问机制（ask 用户问 1d" [ref=e617] [cursor=pointer]:
+              - generic [ref=e619]: 请用你的提问机制（ask 用户问
+              - generic [ref=e620]: 1d
+          - treeitem "Task" [ref=e160] [cursor=pointer]
+      - button "Settings" [expanded] [ref=e46] [cursor=pointer]
+    - generic [ref=e54]:
+      - banner [ref=e168]:
+        - generic [ref=e169]:
+          - generic [ref=e170]:
+            - generic [ref=e171]:
+              - navigation "Session hierarchy" [ref=e172]:
+                - generic [ref=e173]: D76 卡位卡面验收测试
+              - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e177]: Standard mode
+            - generic [ref=e184]:
+              - button "More actions" [ref=e186] [cursor=pointer]
+              - generic [ref=e191]:
+                - button "选择实验 ▾" [ref=e193] [cursor=pointer]
+                - button "监控" [ref=e195] [cursor=pointer]
+            - button "Open right sidebar" [ref=e198] [cursor=pointer]
+          - tablist [ref=e201]:
+            - tab "Chat" [selected] [ref=e202] [cursor=pointer]
+            - tab "Trajectory" [ref=e203] [cursor=pointer]
+      - generic [ref=e56]:
+        - generic [ref=e207]:
+          - navigation "Turn navigation" [ref=e208] [cursor=pointer]:
+            - generic [ref=e210]:
+              - button "Jump to turn 1" [ref=e211]
+              - button "Jump to turn 2" [ref=e212]
+              - button "Jump to turn 3" [ref=e213]
+              - button "Jump to turn 4" [ref=e621]
+          - generic [ref=e216]:
+            - generic [ref=e219]:
+              - generic [ref=e220]: D76 卡位卡面验收（零 GPU 红线：只到九要素确认卡呈现即停，不提交表单、不生成配置、不写任何文件、不起真训、不占 GPU）。对实验 awb_r1（run 目录 /data/atf/uat/runs/awb_r1）发起训练配置确认：训练卡数 nproc_per_node=4，卡位 visible_devices=4,5,6,7，其余参数按现值。九要素确认卡弹出后立即停止，让我在界面上查看卡位栏（visible_devices 栏）的呈现；不要提交、不要重试。
+              - generic [ref=e222]:
+                - generic [ref=e223]: 10/23 18:49
+                - button "Copy" [ref=e224] [cursor=pointer]
+            - generic [ref=e229]:
+              - status [ref=e230]: Completed
+              - button "Completed in 2m 4s" [ref=e231] [cursor=pointer]
+            - generic [ref=e239]:
+              - paragraph [ref=e240]: 九要素确认卡请求已被取消，本轮到此停止。
+              - paragraph [ref=e241]: 按您的红线要求，我未做任何后续动作：未提交表单、未生成配置、未写文件、未起训练、未占 GPU。
+              - paragraph [ref=e242]:
+                - text: 如需继续验收 D76 卡位卡面（
+                - code [ref=e243]: nproc_per_node=4
+                - text: 、
+                - code [ref=e244]: visible_devices=4,5,6,7
+                - text: ，其余按现值），请告诉我，我再重新发起
+                - code [ref=e245]: atf_config_confirm
+                - text: present，让卡面弹出后停在界面上供您查看 visible_devices 栏。
+            - generic [ref=e249]:
+              - button "Copy" [ref=e250] [cursor=pointer]
+              - generic [ref=e254]:
+                - button "Good response" [ref=e255] [cursor=pointer]
+                - button "Bad response" [ref=e258] [cursor=pointer]
+              - button "Branch into a new conversation" [ref=e261] [cursor=pointer]
+              - generic [ref=e267]:
+                - button "Usage 28.7K tok" [ref=e269] [cursor=pointer]
+                - generic [ref=e275]: 10/23 18:51
+            - generic [ref=e278]:
+              - generic [ref=e279]: 帮我查一下现在工作区里有哪些训练 run，列个清单。
+              - generic [ref=e281]:
+                - generic [ref=e282]: 10/23 23:56
+                - button "Copy" [ref=e283] [cursor=pointer]
+            - generic [ref=e288]:
+              - status [ref=e289]: Completed
+              - button "Completed in 12s" [ref=e290] [cursor=pointer]
+            - generic [ref=e298]:
+              - paragraph [ref=e299]: 当前工作区（/data/docagent_workspace/dev/my-zito）内的 runs 目录为空：
+              - table [ref=e301]:
+                - rowgroup [ref=e302]:
+                  - row [ref=e303]:
+                    - columnheader "#" [ref=e304]
+                    - columnheader "run_id" [ref=e305]
+                    - columnheader "状态" [ref=e306]
+                - rowgroup [ref=e307]:
+                  - row [ref=e308]:
+                    - cell "—" [ref=e309]
+                    - cell "（无）" [ref=e310]
+                    - cell "—" [ref=e311]
+              - paragraph [ref=e312]:
+                - text: 清单共
+                - strong [ref=e313]: 0 条
+                - text: —— 本会话归属的工作区下没有任何训练 run。
+              - paragraph [ref=e314]:
+                - text: 需要说明的是：之前您提到的
+                - code [ref=e315]: awb_r1
+                - text: （/data/atf/uat/runs/awb_r1）不在当前工作区作用域内，所以没出现在这个缺省清单里。如果想看跨任务（含 awb_r1 所在工作区）的 run 清单，需要以扩大作用域方式重新枚举（会触发一次审批确认）——需要的话告诉我即可。
+            - generic [ref=e319]:
+              - button "Copy" [ref=e320] [cursor=pointer]
+              - generic [ref=e324]:
+                - button "Good response" [ref=e325] [cursor=pointer]
+                - button "Bad response" [ref=e328] [cursor=pointer]
+              - button "Branch into a new conversation" [ref=e331] [cursor=pointer]
+              - generic [ref=e337]:
+                - button "Usage 30.5K tok" [ref=e339] [cursor=pointer]
+                - generic [ref=e345]: 10/23 23:56
+            - generic [ref=e348]:
+              - generic [ref=e349]: 继续 D76 卡面验收（零 GPU 红线：只到九要素确认卡呈现即停，不提交表单、不生成配置、不写任何文件、不起真训、不占 GPU）。对实验 awb_r1（run 目录 /data/atf/uat/runs/awb_r1）发起训练配置确认：训练卡数 nproc_per_node=4，卡位 visible_devices=4,5,6,7，其余参数按现值。九要素确认卡弹出后立即停止，不要提交、不要重试。
+              - generic [ref=e351]:
+                - generic [ref=e352]: 10/23 23:57
+                - button "Copy" [ref=e353] [cursor=pointer]
+            - generic [ref=e358]:
+              - status [ref=e359]: Completed
+              - button "Completed in 4s" [ref=e360] [cursor=pointer]
+            - generic [ref=e624]:
+              - generic [ref=e625]: 继续 D76 卡面回归（零 GPU 红线：只到九要素确认卡呈现即停，不提交表单、不生成配置、不写任何文件、不起真训、不占 GPU）。对实验 awb_r1（run 目录 /data/atf/uat/runs/awb_r1）发起训练配置确认，这次是负例：训练卡数 nproc_per_node=8，卡位 visible_devices=4,5,6,7（二者不匹配）。九要素确认卡弹出后立即停止，不要提交、不要重试，我要在界面上看卡位栏红字。
+              - generic [ref=e627]:
+                - generic [ref=e628]: 11:29
+                - button "Copy" [ref=e629] [cursor=pointer]
+            - generic [ref=e643]:
+              - text: Calling tools · present
+              - generic [ref=e645]:
+                - 'button "Think User wants a negative case: nproc 8 with only 4 visible devices, expecting red-text validation on card. The previous call was interrupted with unknown outcome. Present with overrides nproc_per_node=8. This is a form card present — presenting a card doesn''t commit. Retry is acceptable since user explicitly re-requests." [ref=e653] [cursor=pointer]':
+                  - generic [ref=e663]:
+                    - generic [ref=e664]: Think
+                    - generic [ref=e666]: "User wants a negative case: nproc 8 with only 4 visible devices, expecting red-text validation on card. The previous call was interrupted with unknown outcome. Present with overrides nproc_per_node=8. This is a form card present — presenting a card doesn't commit. Retry is acceptable since user explicitly re-requests."
+                - generic [ref=e672]:
+                  - generic [ref=e673]: Running
+                  - button "Tool call atf_config_confirm · present" [ref=e675] [cursor=pointer]:
+                    - generic [ref=e684]:
+                      - generic [ref=e685]:
+                        - generic [ref=e686]: Tool call
+                        - generic [ref=e688]: atf_config_confirm · present
+                      - generic [aria-hidden]:
+                        - generic:
+                          - generic:
+                            - generic: Tool call
+                            - generic: atf_config_confirm · present
+            - generic [ref=e633]:
+              - status [ref=e634]: Deep diving
+              - generic [ref=e638]:
+                - generic [ref=e639]: Deep diving for 36s ···
+                - generic [aria-hidden]:
+                  - generic: Deep diving for 36s ···
+        - region "九要素训练配置确认 — awb_r1" [ref=e690]:
+          - generic [ref=e691]: 训练配置
+          - generic [ref=e693]:
+            - heading "九要素训练配置确认 — awb_r1" [level=3] [ref=e694]
+            - paragraph [ref=e695]: "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。 数据集键（实算，只读）：（由登记面推导） TokenBudget（三要素）: 单样本 token 预算 max_total_tokens 可编辑 9000 [惯例基线（owner 2026-10-22）] 训练截断 cutoff cutoff_len 只读 9000 [= 预算] 推理窗口 max_model_len 只读 12800 [独立取值] 卡位个数（4 张：4,5,6,7）与训练卡数 nproc_per_node（8）不一致——两者须相等，请改齐后提交"
+            - generic [ref=e696]:
+              - generic [ref=e697]:
+                - generic [ref=e698]: learning_rate
+                - textbox "learning_rate 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）" [ref=e699]: "1e-4"
+                - generic [ref=e700]: 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）
+              - generic [ref=e701]:
+                - generic [ref=e702]: nproc_per_node
+                - textbox "nproc_per_node [1, 可用卡数 8]" [ref=e703]: "8"
+                - generic [ref=e704]: "[1, 可用卡数 8]"
+              - generic [ref=e705]:
+                - generic [ref=e706]: visible_devices
+                - textbox "visible_devices 逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）" [ref=e707]: 4,5,6,7
+                - generic [ref=e708]: 逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）
+              - generic [ref=e709]:
+                - generic [ref=e710]: base_model_path
+                - textbox "base_model_path" [ref=e711]: /data/LLM_model/Qwen3-VL-32B-Instruct
+              - generic [ref=e712]:
+                - generic [ref=e713]: num_train_epochs
+                - textbox "num_train_epochs 域 [1, 10] 整数" [ref=e714]: "3"
+                - generic [ref=e715]: 域 [1, 10] 整数
+              - generic [ref=e716]:
+                - generic [ref=e717]: per_device_train_batch_size
+                - textbox "per_device_train_batch_size" [ref=e718]: "1"
+              - generic [ref=e719]:
+                - generic [ref=e720]: gradient_accumulation_steps
+                - textbox "gradient_accumulation_steps" [ref=e721]: "32"
+              - generic [ref=e722]:
+                - generic [ref=e723]: cutoff_len
+                - textbox "cutoff_len ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）" [ref=e724]: "9000"
+                - generic [ref=e725]: ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）
+              - generic [ref=e726]:
+                - generic [ref=e727]: deepspeed
+                - textbox "deepspeed" [ref=e728]: ds_z3_offload_config.json
+              - generic [ref=e729]:
+                - generic [ref=e730]: lora_rank
+                - 'textbox "lora_rank 档位 {16, 32, 64, 128}（alpha=2×rank 联动）" [ref=e731]': "32"
+                - generic [ref=e732]: "档位 {16, 32, 64, 128}（alpha=2×rank 联动）"
+              - generic [ref=e733]:
+                - generic [ref=e734]: lora_alpha
+                - textbox "lora_alpha" [ref=e735]: "64"
+              - generic [ref=e736]:
+                - generic [ref=e737]: max_total_tokens
+                - textbox "max_total_tokens 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）" [ref=e738]: "9000"
+                - generic [ref=e739]: 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）
+              - generic [ref=e740]:
+                - generic [ref=e741]: 最小像素
+                - textbox "最小像素 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）" [ref=e742]: "800000"
+                - generic [ref=e743]: 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）
+              - generic [ref=e744]:
+                - generic [ref=e745]: 最大像素
+                - 'textbox "最大像素 两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）" [ref=e746]': "1600000"
+                - generic [ref=e747]: "两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）"
+              - generic [ref=e748]:
+                - generic [ref=e749]: negative_ratio_target
+                - textbox "negative_ratio_target 构造带 [0.02, 0.05]" [ref=e750]: "0"
+                - generic [ref=e751]: 构造带 [0.02, 0.05]
+              - generic [ref=e752]:
+                - generic [ref=e753]: token_budget_sync_reason
+                - textbox "token_budget_sync_reason" [ref=e754]:
+                  - /placeholder: 预算与 cutoff 不等时的不同步理由（不等必填；相等留空）——同步请在 cutoff_len 框直接填预算值（用户动作）
+          - generic [ref=e755]:
+            - status [ref=e756]
+            - generic [ref=e757]:
+              - button "Cancel" [ref=e758] [cursor=pointer]
+              - button "确认并继续" [ref=e759] [cursor=pointer]
+  - dialog "Settings" [ref=e434]:
+    - navigation [ref=e435]:
+      - generic [ref=e436]: Settings
+      - generic [ref=e437]:
+        - button "General" [ref=e438] [cursor=pointer]
+        - button "Models" [ref=e443] [cursor=pointer]
+        - button "Built-in plugins" [ref=e448] [cursor=pointer]
+        - button "Agent presets" [ref=e457] [cursor=pointer]
+        - button "训练配置" [ref=e464] [cursor=pointer]
+    - generic [ref=e469]:
+      - button "Close" [ref=e471] [cursor=pointer]
+      - generic [ref=e568]:
+        - heading "Models" [level=2] [ref=e569]
+        - paragraph [ref=e570]: Enter your API keys to use models from the following providers.
+        - list [ref=e571]:
+          - listitem [ref=e572]:
+            - generic [ref=e573]:
+              - generic [ref=e574]:
+                - generic [ref=e575]: DeepSeek
+                - img "API key missing" [ref=e576]
+              - button "Edit DeepSeek (deepseek-official)" [ref=e578] [cursor=pointer]: Edit
+          - listitem [ref=e579]:
+            - generic [ref=e580]:
+              - generic [ref=e581]:
+                - generic [ref=e582]: zai-coding-cn
+                - img "API key configured" [ref=e583]
+              - generic [ref=e584]:
+                - button "Edit zai-coding-cn" [ref=e585] [cursor=pointer]: Edit
+                - button "Delete zai-coding-cn" [ref=e586] [cursor=pointer]: Delete
+          - listitem [ref=e587]:
+            - generic [ref=e588]:
+              - generic [ref=e589]:
+                - generic [ref=e590]: GLM（ATF 授权线）
+                - generic [ref=e591]: Custom
+                - img "API key configured" [ref=e592]
+              - generic [ref=e593]:
+                - button "Edit GLM（ATF 授权线） (glm-atf)" [ref=e594] [cursor=pointer]: Edit
+                - button "Delete GLM（ATF 授权线） (glm-atf)" [ref=e595] [cursor=pointer]: Delete
+            - generic [ref=e597]:
+              - generic [ref=e598]: 默认思考等级（per-model）
+              - generic [ref=e599]: 每个模型未手动切档时的补位档（新会话按此延用）；取值链：会话最近切换 → 此处默认档 → 目录顺位最低档。
+              - generic [ref=e600]:
+                - generic [ref=e601]: glm-5.3-flash
+                - combobox "为 glm-5.3-flash 设置默认思考等级（未手动切档时生效）" [ref=e602]:
+                  - option "未设置（按顺位最低档）" [disabled] [selected]
+                  - option "Low(低)"
+                  - option "High(高)"
+                  - option "Max(最高)"
+              - generic [ref=e603]:
+                - generic [ref=e604]: glm-5.3
+                - combobox "为 glm-5.3 设置默认思考等级（未手动切档时生效）" [ref=e605]:
+                  - option "未设置（按顺位最低档）" [disabled] [selected]
+                  - option "Off(关)"
+                  - option "Low(低)"
+                  - option "High(高)"
+                  - option "Max(最高)"
+        - button "Add model provider" [ref=e608] [cursor=pointer]

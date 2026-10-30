@@ -1,0 +1,60 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - button "Open sidebar" [ref=e9] [cursor=pointer]:
+      - generic [ref=e11]: ATF
+    - button "New session" [ref=e13] [cursor=pointer]
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - button "Add workspace" [ref=e32] [cursor=pointer]
+      - button "Search sessions" [ref=e36] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e3964]:
+    - banner [ref=e3966]
+    - generic [ref=e3979]:
+      - generic [ref=e3982]:
+        - generic [ref=e3983]: ATF
+        - generic [ref=e3986]:
+          - generic [ref=e3987]: Into the Unknown
+          - generic [ref=e3988]: Preview
+      - generic [ref=e3989]:
+        - button "Choose workspace" [ref=e3990] [cursor=pointer]:
+          - generic [ref=e3995]: atf-g2fresh-20261022
+        - button "Standard mode" [ref=e4000] [cursor=pointer]
+      - generic [ref=e4011]:
+        - generic [ref=e4013]:
+          - textbox "Describe the training task to advance, / commands, @ files or sessions" [ref=e4014]
+          - generic [aria-hidden]: Describe the training task to advance, / commands, @ files or sessions
+        - generic [ref=e4015]:
+          - generic [ref=e4016]:
+            - button "Add files or run commands" [ref=e4017] [cursor=pointer]
+            - 'button "Access mode, current: Full access" [ref=e4022] [cursor=pointer]'
+          - generic [ref=e4030]:
+            - generic [ref=e4031]:
+              - button "思考 Low(低) ▾" [ref=e4034] [cursor=pointer]:
+                - generic [ref=e4035]: 思考
+                - generic [ref=e4036]: Low(低)
+                - generic [ref=e4037]: ▾
+              - button "Select model, current glm-5.3-flash" [ref=e4040] [cursor=pointer]
+            - button "Send message" [disabled] [ref=e4044]
+  - generic [ref=e4052]:
+    - tablist [ref=e4054]:
+      - tab "Start" [selected] [ref=e4055]
+      - generic "Not enough width to split, widen the sidebar" [ref=e4062]:
+        - button "Split" [disabled] [ref=e4063]
+      - generic [ref=e4066]:
+        - button "Fullscreen" [ref=e4067] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=e4070] [cursor=pointer]
+        - tooltip "Collapse sidebar"
+    - generic [ref=e4077]:
+      - button "Workspace files Browse files in this session's workspace" [ref=e4084] [cursor=pointer]:
+        - generic [ref=e4089]:
+          - generic [ref=e4090]: Workspace files
+          - generic [ref=e4091]: Browse files in this session's workspace
+      - generic [ref=e4094]:
+        - button "New terminal Run commands in the Session workspace" [ref=e4095] [cursor=pointer]
+        - generic:
+          - generic:
+            - generic [aria-hidden]: New terminal
+            - button "Choose shell" [ref=e4097] [cursor=pointer]
+          - generic [aria-hidden]: Run commands in the Session workspace

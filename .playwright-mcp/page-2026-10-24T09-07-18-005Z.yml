@@ -1,0 +1,653 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e10]:
+          - generic [ref=e11]: ATF
+          - generic [ref=e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e17] [cursor=pointer]
+    - button "New session" [ref=e20] [cursor=pointer]:
+      - generic [ref=e21]: New Session
+    - navigation "Global panels" [ref=e26]:
+      - button "Plugins" [ref=e27] [cursor=pointer]
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]: Workspaces
+        - generic [ref=e42]:
+          - button "Search sessions" [ref=e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e47]:
+          - button "View options" [ref=e49] [cursor=pointer]
+          - button "Add workspace" [ref=e53] [cursor=pointer]
+      - tree "Sessions" [ref=e58]:
+        - treeitem "1023" [ref=e112] [cursor=pointer]
+        - generic [ref=e118]:
+          - treeitem "my-zito" [expanded] [ref=e120] [cursor=pointer]
+          - treeitem "Running 海运单单据抽取模型训练流程启动 8min" [selected] [ref=e1832] [cursor=pointer]:
+            - generic [ref=e130]: Running
+            - generic [ref=e131]: 海运单单据抽取模型训练流程启动
+            - generic [ref=e132]: 8min
+          - treeitem "D76 卡位卡面验收测试 5h" [ref=e134] [cursor=pointer]:
+            - generic [ref=e136]: D76 卡位卡面验收测试
+            - generic [ref=e137]: 5h
+          - treeitem "ping 1d" [ref=e139] [cursor=pointer]:
+            - generic [ref=e141]: ping
+            - generic [ref=e142]: 1d
+          - treeitem "Ping Test 1d" [ref=e144] [cursor=pointer]:
+            - generic [ref=e146]: Ping Test
+            - generic [ref=e147]: 1d
+          - treeitem "Ping Test 1d" [ref=e149] [cursor=pointer]:
+            - generic [ref=e151]: Ping Test
+            - generic [ref=e152]: 1d
+          - treeitem "ping 1d" [ref=e784] [cursor=pointer]:
+            - generic [ref=e786]: ping
+            - generic [ref=e787]: 1d
+          - button "Show 1 more sessions" [ref=e788] [cursor=pointer]
+        - treeitem "Task" [ref=e155] [cursor=pointer]
+    - button "Settings" [ref=e68] [cursor=pointer]
+  - generic [ref=e77]:
+    - banner [ref=e162]:
+      - generic [ref=e163]:
+        - generic [ref=e164]:
+          - generic [ref=e165]:
+            - navigation "Session hierarchy" [ref=e166]:
+              - generic [ref=e167]: 海运单单据抽取模型训练流程启动
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e171]: Standard mode
+          - generic [ref=e178]:
+            - button "More actions" [ref=e180] [cursor=pointer]
+            - generic [ref=e185]:
+              - button "选择实验 ▾" [ref=e187] [cursor=pointer]
+              - button "监控" [ref=e189] [cursor=pointer]
+          - button "Open right sidebar" [ref=e192] [cursor=pointer]
+        - tablist [ref=e195]:
+          - tab "Chat" [selected] [ref=e196] [cursor=pointer]
+          - tab "Trajectory" [ref=e197] [cursor=pointer]
+    - generic [ref=e79]:
+      - generic [ref=e201]:
+        - navigation "Turn navigation" [ref=e202] [cursor=pointer]:
+          - generic [ref=e204]:
+            - button "Jump to turn 1" [ref=e205]
+            - button "Jump to turn 2" [ref=e206]
+            - button "Jump to turn 3" [ref=e207]
+            - button "Jump to turn 4" [ref=e208]
+            - button "Jump to turn 5" [ref=e209]
+            - button "Jump to turn 6" [ref=e210]
+            - button "Jump to turn 7" [ref=e211]
+            - button "Jump to turn 8" [ref=e212]
+            - button "Jump to turn 9" [ref=e789]
+        - generic [ref=e215]:
+          - button "Load earlier" [ref=e217] [cursor=pointer]
+          - generic [ref=e220]:
+            - generic [ref=e221]: 我想用海运单（SWB）数据训练一个字段抽取模型，请从登记开始走完整流程直到训练启动：源数据 /data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb（50 对页级 png+json），字段配置 /data/atf/prodtest/atf-prodtest-20261021/field-config-swb.json，底座模型 /data/LLM_model/Qwen3-VL-32B-Instruct，run 名 u1-accept-swb。
+            - generic [ref=e223]:
+              - generic [ref=e224]: 15:21
+              - button "Copy" [ref=e225] [cursor=pointer]
+          - generic [ref=e230]:
+            - status [ref=e231]: Completed
+            - button "Completed in 1m 14s" [ref=e232] [cursor=pointer]
+          - generic [ref=e240]:
+            - paragraph [ref=e241]: 工具白名单读不到源目录里的字段配置，无法替你判断 lane。需要你确认一个参数再重跑 register：
+            - paragraph [ref=e242]:
+              - strong [ref=e243]: 这批 SWB 数据的训练 lane 是哪个？
+            - list [ref=e244]:
+              - listitem [ref=e245]:
+                - code [ref=e246]: goods
+                - text: —— 只训条目级字段（货物明细行）
+              - listitem [ref=e247]:
+                - code [ref=e248]: non_goods
+                - text: —— 只训单据级字段（单号、日期、收发货人等）
+              - listitem [ref=e249]:
+                - code [ref=e250]: mixed
+                - text: —— 两类字段都要（海运单通常两类都有）
+            - paragraph [ref=e251]:
+              - text: 如果 field-config-swb.json 里同时含
+              - code [ref=e252]: "group: goods"
+              - text: 和
+              - code [ref=e253]: "group: non_goods"
+              - text: 的字段，选
+              - code [ref=e254]: mixed
+              - text: 即可。确认后我就带着 lane 后缀继续完整流程（register → label_qc → experiment_setup → family_split → admission → training_prep，底座
+              - code [ref=e255]: /data/LLM_model/Qwen3-VL-32B-Instruct
+              - text: ）。
+          - generic [ref=e259]:
+            - button "Copy" [ref=e260] [cursor=pointer]
+            - generic [ref=e264]:
+              - button "Good response" [ref=e265] [cursor=pointer]
+              - button "Bad response" [ref=e268] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e271] [cursor=pointer]
+            - generic [ref=e277]:
+              - button "Usage 119K tok" [ref=e279] [cursor=pointer]
+              - generic [ref=e285]: 15:22
+          - generic [ref=e288]:
+            - generic [ref=e289]: lane 用 mixed。
+            - generic [ref=e291]:
+              - generic [ref=e292]: 15:23
+              - button "Copy" [ref=e293] [cursor=pointer]
+          - generic [ref=e298]:
+            - status [ref=e299]: Completed
+            - button "Completed in 2m 32s" [ref=e300] [cursor=pointer]
+          - generic [ref=e308]:
+            - paragraph [ref=e309]:
+              - text: 落点目录
+              - code [ref=e310]: workspace/runs/u1-accept-swb
+              - text: 已存在——里面是一个 bootstrap 预建的空骨架（只有目录结构和 register summary，无真实产物），状态为 pending。
+            - paragraph [ref=e311]:
+              - text: 内核建议两种走法，但本工具面没有暴露
+              - code [ref=e312]: "--rerun"
+              - text: 参数，所以：
+            - list [ref=e313]:
+              - listitem [ref=e314]:
+                - strong [ref=e315]: 换新 run 标识
+                - text: （首选，零删除）：比如
+                - code [ref=e316]: u1-accept-swb-2
+                - text: ，与既有目录并存；
+              - listitem [ref=e317]:
+                - strong [ref=e318]: 清掉空骨架后用原名重跑
+                - text: ：需要你确认那个骨架目录可以删除。
+            - paragraph [ref=e319]:
+              - text: 你要哪种？如果选 2，请确认“可以删除
+              - code [ref=e320]: workspace/runs/u1-accept-swb
+              - text: 骨架目录”，我就清空后按原 run 名
+              - code [ref=e321]: u1-accept-swb
+              - text: 继续走完整流程。
+          - generic [ref=e325]:
+            - button "Copy" [ref=e326] [cursor=pointer]
+            - generic [ref=e330]:
+              - button "Good response" [ref=e331] [cursor=pointer]
+              - button "Bad response" [ref=e334] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e337] [cursor=pointer]
+            - generic [ref=e343]:
+              - button "Usage 116K tok" [ref=e345] [cursor=pointer]
+              - generic [ref=e351]: 15:26
+          - generic [ref=e354]:
+            - generic [ref=e355]: 选 2：确认可以删除 workspace/runs/u1-accept-swb 骨架目录，清空后按原 run 名 u1-accept-swb 继续走完整流程。
+            - generic [ref=e357]:
+              - generic [ref=e358]: 15:26
+              - button "Copy" [ref=e359] [cursor=pointer]
+          - generic [ref=e364]:
+            - status [ref=e365]: Completed
+            - button "Completed in 7m 29s" [ref=e366] [cursor=pointer]
+          - generic [ref=e374]:
+            - paragraph [ref=e375]: family_split 段需要审批，但本次审批未获放行（面板拒绝了该请求）。流程已停在此处，零写入。
+            - paragraph [ref=e376]: 请在审批面板重新放行（或告诉我你拒绝的原因，比如想调整分组/划分参数），我就重推 family_split 继续走。
+          - generic [ref=e380]:
+            - button "Copy" [ref=e381] [cursor=pointer]
+            - generic [ref=e385]:
+              - button "Good response" [ref=e386] [cursor=pointer]
+              - button "Bad response" [ref=e389] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e392] [cursor=pointer]
+            - generic [ref=e398]:
+              - button "Usage 184K tok" [ref=e400] [cursor=pointer]
+              - generic [ref=e406]: 15:34
+          - generic [ref=e409]:
+            - generic [ref=e410]: 刚才误点了拒绝，不是有意的。请重推 family_split 继续走完整个流程。
+            - generic [ref=e412]:
+              - generic [ref=e413]: 15:34
+              - button "Copy" [ref=e414] [cursor=pointer]
+          - generic [ref=e419]:
+            - status [ref=e420]: Completed
+            - button "Completed in 52s" [ref=e421] [cursor=pointer]
+          - generic [ref=e429]:
+            - paragraph [ref=e430]: family_split 被挡住了：内核检测到这 50 页数据只有 1:1 占位簇（每页一个 cluster），没有真正的版式聚类 manifest，按“未聚类”处理。
+            - paragraph [ref=e431]:
+              - text: 先问你一句：
+              - strong [ref=e432]: 这批 SWB 数据之前做过版式聚类（按版式分好组）吗？
+            - list [ref=e433]:
+              - listitem [ref=e434]: 没做过 → 我让内核自动补聚类（确定性聚类并产出 manifest，按簇分层切分）；
+              - listitem [ref=e435]: 做过、证据在别处 → 告诉我聚类证据所在的位置。
+            - paragraph [ref=e436]: 确认后我继续走。
+          - generic [ref=e440]:
+            - button "Copy" [ref=e441] [cursor=pointer]
+            - generic [ref=e445]:
+              - button "Good response" [ref=e446] [cursor=pointer]
+              - button "Bad response" [ref=e449] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e452] [cursor=pointer]
+            - generic [ref=e458]:
+              - button "Usage 57.3K tok" [ref=e460] [cursor=pointer]
+              - generic [ref=e466]: 15:35
+          - generic [ref=e469]:
+            - generic [ref=e470]: 没做过版式聚类，请让内核自动补聚类（on）继续。
+            - generic [ref=e472]:
+              - generic [ref=e473]: 15:36
+              - button "Copy" [ref=e474] [cursor=pointer]
+          - generic [ref=e479]:
+            - status [ref=e480]: Completed
+            - button "Completed in 9m 7s" [ref=e481] [cursor=pointer]
+          - generic [ref=e489]:
+            - paragraph [ref=e490]: 你在确认卡上点了取消——按纪律本轮停止，不重试、不绕道。
+            - paragraph [ref=e491]:
+              - strong [ref=e492]: 当前进度
+              - text: ：register ✓ → label_qc ✓ → experiment_setup ✓ → candidate_build ✓ → publish ✓（契约包已发布，G1–G4 全 pass）→ family_split ✓ → admission ✓ →
+              - strong [ref=e493]: training_prep 被挡
+              - text: 。
+            - paragraph [ref=e494]: training_prep 剩三件事：
+            - list [ref=e495]:
+              - listitem [ref=e496]:
+                - strong [ref=e497]: 预算值确认
+                - text: （刚才取消的那张卡）：九要素确认卡——构造上限与视觉像素对成组确认，token 预算落盘后构造与训练准备才会放行。这是唯一需要你逐键过目的环节，随时说“继续确认配置”我就重呈。
+              - listitem [ref=e498]:
+                - strong [ref=e499]: 50 张图坐标换算 pending
+                - text: ：可派生项，确认卡之后带 retry 参数重跑 training_prep 即可。
+              - listitem [ref=e500]:
+                - strong [ref=e501]: token 计量 provider
+                - text: ：需要一个 CPU-only 的 token 审计脚本路径（
+                - code [ref=e502]: token_provider
+                - text: ）；如果你有实例内置 provider 脚本请给我路径，或者告诉我允许走内核豁免通道（仅限演示链）。
+            - paragraph [ref=e503]:
+              - text: 另外两处环境事实请你确认：训练 venv 是否为
+              - code [ref=e504]: /data/venv/torch291_vllm016_bnb_qwen3vl
+              - text: （内核报
+              - code [ref=e505]: env_missing:llamafactory
+              - text: ，需要在目标 venv 具备该包，或经环境档案显式指定）？
+            - paragraph [ref=e506]: 你决定后告诉我：继续呈确认卡、还是先解决 provider / 环境问题。
+          - generic [ref=e510]:
+            - button "Copy" [ref=e511] [cursor=pointer]
+            - generic [ref=e515]:
+              - button "Good response" [ref=e516] [cursor=pointer]
+              - button "Bad response" [ref=e519] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e522] [cursor=pointer]
+            - generic [ref=e528]:
+              - button "Usage 955K tok" [ref=e530] [cursor=pointer]
+              - generic [ref=e536]: 15:45
+          - generic [ref=e539]:
+            - generic [ref=e540]: 验收测试到此终止，停止所有操作。谢谢，请勿再执行任何工具调用。
+            - generic [ref=e542]:
+              - generic [ref=e543]: 15:46
+              - button "Copy" [ref=e544] [cursor=pointer]
+          - generic [ref=e549]:
+            - status [ref=e550]: Completed
+            - button "Completed in 9s" [disabled] [ref=e551]
+          - generic [ref=e557]:
+            - paragraph [ref=e558]: 收到，验收测试到此终止，所有操作已停止。
+            - paragraph [ref=e559]:
+              - strong [ref=e560]: 最终状态留档
+              - text: ：
+            - list [ref=e561]:
+              - listitem [ref=e562]:
+                - text: run
+                - code [ref=e563]: u1-accept-swb
+                - text: （workspace
+                - code [ref=e564]: /data/docagent_workspace/dev/my-zito
+                - text: ）已完成段：register → label_qc → experiment_setup → candidate_build → publish → family_split（含自动版式聚类）→ admission，G1–G4 四闸全部 pass；
+              - listitem [ref=e565]: 停止点：training_prep（待办：九要素预算确认、50 张图坐标换算重试、token provider、llamafactory 环境）；
+              - listitem [ref=e566]:
+                - text: 训练未启动、无真实 effect；未清理项：
+                - code [ref=e567]: /data/atf/uat/runs/my-zito/u1-accept-swb
+                - text: 符号链接（指向 workspace 内 run 目录）。
+            - paragraph [ref=e568]: 谢谢配合，随时可以继续。
+          - generic [ref=e572]:
+            - button "Copy" [ref=e573] [cursor=pointer]
+            - generic [ref=e577]:
+              - button "Good response" [ref=e578] [cursor=pointer]
+              - button "Bad response" [ref=e581] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e584] [cursor=pointer]
+            - generic [ref=e590]:
+              - button "Usage 51.6K tok" [ref=e592] [cursor=pointer]
+              - generic [ref=e598]: 15:46
+          - generic [ref=e601]:
+            - generic [ref=e602]: 这是界面回归测试（零 GPU 红线：只到九要素确认卡呈现即停，不提交、不生成配置、不写文件、不占 GPU）。对 run u1-accept-swb 发起训练配置确认负例：训练卡数 nproc_per_node=8，卡位 visible_devices=4,5,6,7（二者不匹配）。九要素确认卡弹出后立即停止，我要在界面上看卡位栏红字。
+            - generic [ref=e604]:
+              - generic [ref=e605]: 15:50
+              - button "Copy" [ref=e606] [cursor=pointer]
+          - generic [ref=e611]:
+            - status [ref=e612]: Completed
+            - button "Completed in 2m 44s" [ref=e613] [cursor=pointer]
+          - generic [ref=e621]:
+            - paragraph [ref=e622]: 九要素确认卡已按负例参数发起（nproc_per_node=8 vs visible_devices=4,5,6,7 不匹配），卡面呈现后随即被关闭（本次取消即测试的“立即停止”动作）。操作到此为止：未提交、未生成配置、未写文件、未占 GPU。
+            - paragraph [ref=e623]: 卡位栏红字是否正确显示（预算/卡数不一致的禁确认提示）请你在界面上核对。若红字未出现或内容不符，告诉我现象，我再发起下一次负例。
+          - generic [ref=e627]:
+            - button "Copy" [ref=e628] [cursor=pointer]
+            - generic [ref=e632]:
+              - button "Good response" [ref=e633] [cursor=pointer]
+              - button "Bad response" [ref=e636] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e639] [cursor=pointer]
+            - generic [ref=e645]:
+              - button "Usage 104K tok" [ref=e647] [cursor=pointer]
+              - generic [ref=e653]: 15:52
+          - generic [ref=e656]:
+            - generic [ref=e657]: D76 红字已取证（截图），回归测试全部结束。请彻底停止，不再执行任何操作。
+            - generic [ref=e659]:
+              - generic [ref=e660]: 15:53
+              - button "Copy" [ref=e661] [cursor=pointer]
+          - generic [ref=e666]:
+            - status [ref=e667]: Completed
+            - button "Completed in 7s" [disabled] [ref=e668]
+          - generic [ref=e674]:
+            - paragraph [ref=e675]: 回归测试全部结束确认。D76 红字已取证，本会话不再执行任何工具调用。
+            - paragraph [ref=e676]:
+              - text: 最终状态：run
+              - code [ref=e677]: u1-accept-swb
+              - text: 停在 training_prep 前（G1–G4 pass，训练未启动、无 GPU 占用）；九要素确认卡负例（nproc=8 vs visible_devices=4,5,6,7）已呈现并关闭，红字取证完成。
+            - paragraph [ref=e678]: 谢谢，测试收工。
+          - generic [ref=e682]:
+            - button "Copy" [ref=e683] [cursor=pointer]
+            - generic [ref=e687]:
+              - button "Good response" [ref=e688] [cursor=pointer]
+              - button "Bad response" [ref=e691] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e694] [cursor=pointer]
+            - generic [ref=e700]:
+              - button "Usage 52.2K tok" [ref=e702] [cursor=pointer]
+              - generic [ref=e708]: 15:53
+          - generic [ref=e792]:
+            - generic [ref=e793]: 继续把 u1-accept-swb 这个 run 走到能启动训练：先做训练预检，把缺什么按三态清单列出来（missing / 可自动执行 / 需我确认）；可自动执行的项经审批卡一键执行，需要我确认的我来填。然后重跑 training_prep 直到放行条件就绪。训练环境 llamafactory 已在实例内装好。
+            - generic [ref=e795]:
+              - generic [ref=e796]: 16:55
+              - button "Copy" [ref=e797] [cursor=pointer]
+          - generic [ref=e813]:
+            - 'button "Think The user wants to resume: run training preflight, present three-state list (missing/derivable/needs_confirm), apply derivable items via approval card, user fills confirmations, then re-run training_prep until launch-ready." [ref=e821] [cursor=pointer]':
+              - generic [ref=e831]:
+                - generic [ref=e832]: Think
+                - generic [ref=e834]: "The user wants to resume: run training preflight, present three-state list (missing/derivable/needs_confirm), apply derivable items via approval card, user fills confirmations, then re-run training_prep until launch-ready."
+            - button "Tool call atf_training_preflight · u1-accept-swb" [ref=e842] [cursor=pointer]:
+              - generic [ref=e852]:
+                - generic [ref=e853]: Tool call
+                - generic [ref=e855]: atf_training_preflight · u1-accept-swb
+            - 'button "Think Preflight ran and produced a report but harness says stdout truncated/unparseable and stderr tail empty. The report exists: TrainingPreflight/v1 at run_dir /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb. Interesting: run_dir points to /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb (workspace-root runs layout), while pipeline wrote to /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb. Earlier atf_pipeline_stage reported run_dir as /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb too, but actual artifacts landed in workspace/runs. Let me check both paths and read the preflight report if it was written." [ref=e863] [cursor=pointer]':
+              - generic [ref=e873]:
+                - generic [ref=e874]: Think
+                - generic [ref=e876]: "Preflight ran and produced a report but harness says stdout truncated/unparseable and stderr tail empty. The report exists: TrainingPreflight/v1 at run_dir /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb. Interesting: run_dir points to /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb (workspace-root runs layout), while pipeline wrote to /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb. Earlier atf_pipeline_stage reported run_dir as /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb too, but actual artifacts landed in workspace/runs. Let me check both paths and read the preflight report if it was written."
+          - paragraph [ref=e883]: 预检这次出了报告但被截断。看它是否落盘、以及两个 runs 布局的内容：
+          - generic [ref=e886]:
+            - button "Tool call atf_bash · ls /data/docagent_workspace/dev/my-zito/runs/ 2>/dev/null && find /data/docagent_workspace/dev/my-zito/runs -maxdepth 3 -name \"*preflight*\" -newer /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb/run.json 2>/dev/null && find /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb -maxdepth 3 -name \"*preflight*\" 2>/dev/null" [ref=e893] [cursor=pointer]:
+              - generic [ref=e903]:
+                - generic [ref=e904]: Tool call
+                - generic [ref=e906]: atf_bash · ls /data/docagent_workspace/dev/my-zito/runs/ 2>/dev/null && find /data/docagent_workspace/dev/my-zito/runs -maxdepth 3 -name "*preflight*" -newer /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb/run.json 2>/dev/null && find /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb -maxdepth 3 -name "*preflight*" 2>/dev/null
+            - button "Tool call atf_bash · ls /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb/ && find /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb -maxdepth 4 | head -40" [ref=e913] [cursor=pointer]:
+              - generic [ref=e923]:
+                - generic [ref=e924]: Tool call
+                - generic [ref=e926]: atf_bash · ls /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb/ && find /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb -maxdepth 4 | head -40
+            - button "Think The workspace-root runs/u1-accept-swb only has webui bindings (from earlier attempts), not the pipeline artifacts. The real run dir is workspace/runs/u1-accept-swb. The preflight ran against run_dir=/data/docagent_workspace/dev/my-zito/runs/u1-accept-swb — wrong dir, hence source_pairs missing." [ref=e937] [cursor=pointer]:
+              - generic [ref=e947]:
+                - generic [ref=e948]: Think
+                - generic [ref=e950]: The workspace-root runs/u1-accept-swb only has webui bindings (from earlier attempts), not the pipeline artifacts. The real run dir is workspace/runs/u1-accept-swb. The preflight ran against run_dir=/data/docagent_workspace/dev/my-zito/runs/u1-accept-swb — wrong dir, hence source_pairs missing.
+          - paragraph [ref=e958]:
+            - text: 落点有两个布局：内核 run 树在
+            - code [ref=e959]: workspace/runs/u1-accept-swb
+            - text: ，预检默认解析
+            - code [ref=e960]: <workspace>/runs
+            - text: 。把 workspace_path 指到内核 run 根重跑预检：
+          - generic [ref=e963]:
+            - button "Tool call atf_training_preflight · u1-accept-swb" [ref=e970] [cursor=pointer]:
+              - generic [ref=e980]:
+                - generic [ref=e981]: Tool call
+                - generic [ref=e983]: atf_training_preflight · u1-accept-swb
+            - button "Think Preflight against correct run dir now. It found source_pairs missing because no --source-root passed. The preflight tool doesn't accept source_root. The kernel preflight script reads the run facts presumably; source root is in the registration. Maybe preflight reads run facts — but run.json is at workspace/runs/u1-accept-swb/run.json. It ran but reports source_pairs missing... Possibly because preflight requires the source root from facts (registered). Maybe the run.json facts contain it. Check run.json and whether preflight wrote a report file despite exit 1. Also read prep/ dir status." [ref=e991] [cursor=pointer]:
+              - generic [ref=e1001]:
+                - generic [ref=e1002]: Think
+                - generic [ref=e1004]: Preflight against correct run dir now. It found source_pairs missing because no --source-root passed. The preflight tool doesn't accept source_root. The kernel preflight script reads the run facts presumably; source root is in the registration. Maybe preflight reads run facts — but run.json is at workspace/runs/u1-accept-swb/run.json. It ran but reports source_pairs missing... Possibly because preflight requires the source root from facts (registered). Maybe the run.json facts contain it. Check run.json and whether preflight wrote a report file despite exit 1. Also read prep/ dir status.
+            - button "Tool call atf_bash · find /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb -maxdepth 2 -name \"*preflight*\" && head -c 1500 /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb/run.json" [ref=e1012] [cursor=pointer]:
+              - generic [ref=e1022]:
+                - generic [ref=e1023]: Tool call
+                - generic [ref=e1025]: atf_bash · find /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb -maxdepth 2 -name "*preflight*" && head -c 1500 /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb/run.json
+            - button "Think No preflight report file in the run tree (find returned nothing), and run.json has no source facts. The preflight fails exit 1 presumably because of the missing items and the harness requires a \"valid report\" — report JSON is emitted on stdout but harness failed to parse (truncated? stdout 上限截断). The report exists but stdout was truncated at capture." [ref=e1033] [cursor=pointer]:
+              - generic [ref=e1043]:
+                - generic [ref=e1044]: Think
+                - generic [ref=e1046]: No preflight report file in the run tree (find returned nothing), and run.json has no source facts. The preflight fails exit 1 presumably because of the missing items and the harness requires a "valid report" — report JSON is emitted on stdout but harness failed to parse (truncated? stdout 上限截断). The report exists but stdout was truncated at capture.
+          - paragraph [ref=e1053]: 预检报告没落盘（只在 stdout 被截断）。用 scratch 执行环境直接定位并运行内核预检脚本，把报告写到 scratch：
+          - generic [ref=e1056]:
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import agentic_training_flow, pathlib; p=pathlib.Path(agentic_training_flow.__file__).parent; print(p); import subprocess; print(''\\n''.join(str(x) for x in p.rglob(''*preflight*'') if x.is_file())[:2000])\"]}" [ref=e1063] [cursor=pointer]':
+              - generic [ref=e1073]:
+                - generic [ref=e1074]: Tool call
+                - generic [ref=e1076]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import agentic_training_flow, pathlib; p=pathlib.Path(agentic_training_flow.__file__).parent; print(p); import subprocess; print('\\n'.join(str(x) for x in p.rglob('*preflight*') if x.is_file())[:2000])\"]}"
+            - generic [ref=e1081]:
+              - generic [ref=e1082]: Failed
+              - 'button "Write Error: file_path_outside_allowlist: vendor write 通道已单轨封闭——改用 atf_write（白名单治理面）" [ref=e1084] [cursor=pointer]':
+                - generic [ref=e1093]:
+                  - generic [ref=e1094]: Write
+                  - generic [ref=e1096]: "Error: file_path_outside_allowlist: vendor write 通道已单轨封闭——改用 atf_write（白名单治理面）"
+            - button "Tool call atf_write · import pathlib" [ref=e1103] [cursor=pointer]:
+              - generic [ref=e1113]:
+                - generic [ref=e1114]: Tool call
+                - generic [ref=e1116]: atf_write · import pathlib
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"find_preflight.py\"]}" [ref=e1123] [cursor=pointer]':
+              - generic [ref=e1133]:
+                - generic [ref=e1134]: Tool call
+                - generic [ref=e1136]: "atf_scratch_exec · {\"argv\":[\"python3\",\"find_preflight.py\"]}"
+            - button "Think scratch cwd is /data/atf/uat/runs/default/scratch but atf_write wrote to a different root (relative \"find_preflight.py\" resolved to harness main root scratch?). The write said path \"find_preflight.py\" — resolved somewhere. Find where it wrote." [ref=e1144] [cursor=pointer]:
+              - generic [ref=e1154]:
+                - generic [ref=e1155]: Think
+                - generic [ref=e1157]: scratch cwd is /data/atf/uat/runs/default/scratch but atf_write wrote to a different root (relative "find_preflight.py" resolved to harness main root scratch?). The write said path "find_preflight.py" — resolved somewhere. Find where it wrote.
+            - button "Tool call atf_bash · find /data/atf/uat/runs -maxdepth 3 -name \"find_preflight.py\" 2>/dev/null; ls /data/atf/uat/runs/default/scratch 2>/dev/null | head" [ref=e1165] [cursor=pointer]:
+              - generic [ref=e1175]:
+                - generic [ref=e1176]: Tool call
+                - generic [ref=e1178]: atf_bash · find /data/atf/uat/runs -maxdepth 3 -name "find_preflight.py" 2>/dev/null; ls /data/atf/uat/runs/default/scratch 2>/dev/null | head
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/uat/runs/find_preflight.py\"]}" [ref=e1185] [cursor=pointer]':
+              - generic [ref=e1195]:
+                - generic [ref=e1196]: Tool call
+                - generic [ref=e1198]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/uat/runs/find_preflight.py\"]}"
+            - 'button "Think Preflight is a module adapter, not a standalone script. The harness tool wraps it. The tool failed because the report on stdout was truncated (\"stdout has upper-limit truncation\"). The tool requires parseable full JSON. The report has many items; likely long. Workaround: call the adapter myself in scratch_exec and dump report to a file. Let me inspect the adapter to find the entry function and CLI signature." [ref=e1209] [cursor=pointer]':
+              - generic [ref=e1219]:
+                - generic [ref=e1220]: Think
+                - generic [ref=e1222]: "Preflight is a module adapter, not a standalone script. The harness tool wraps it. The tool failed because the report on stdout was truncated (\"stdout has upper-limit truncation\"). The tool requires parseable full JSON. The report has many items; likely long. Workaround: call the adapter myself in scratch_exec and dump report to a file. Let me inspect the adapter to find the entry function and CLI signature."
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import sys; src=open(''/data/atf/uat/pinned/src/agentic_training_flow/adapters/training/preflight.py'').read(); print(src[:6000])\"]}" [ref=e1230] [cursor=pointer]':
+              - generic [ref=e1240]:
+                - generic [ref=e1241]: Tool call
+                - generic [ref=e1243]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import sys; src=open('/data/atf/uat/pinned/src/agentic_training_flow/adapters/training/preflight.py').read(); print(src[:6000])\"]}"
+            - button "Think This is a different preflight (invocation-level). The harness tool atf_training_preflight wraps a different \"预检脚本\" (TrainingPreflight/v1 schema with items list). Find the actual preflight script the harness runs — search pinned skills dir for preflight script producing TrainingPreflight/v1." [ref=e1251] [cursor=pointer]:
+              - generic [ref=e1261]:
+                - generic [ref=e1262]: Think
+                - generic [ref=e1264]: This is a different preflight (invocation-level). The harness tool atf_training_preflight wraps a different "预检脚本" (TrainingPreflight/v1 schema with items list). Find the actual preflight script the harness runs — search pinned skills dir for preflight script producing TrainingPreflight/v1.
+            - button "Tool call atf_bash · grep -rl \"TrainingPreflight/v1\" /data/atf/uat/pinned/src/agentic_training_flow | head; grep -rn \"def main\\|argparse\" /data/atf/uat/pinned/src/agentic_training_flow/skills/*.py 2>/dev/null | grep -i pre | head" [ref=e1272] [cursor=pointer]:
+              - generic [ref=e1282]:
+                - generic [ref=e1283]: Tool call
+                - generic [ref=e1285]: atf_bash · grep -rl "TrainingPreflight/v1" /data/atf/uat/pinned/src/agentic_training_flow | head; grep -rn "def main\|argparse" /data/atf/uat/pinned/src/agentic_training_flow/skills/*.py 2>/dev/null | grep -i pre | head
+            - button "Tool call atf_write · import subprocess" [ref=e1292] [cursor=pointer]:
+              - generic [ref=e1302]:
+                - generic [ref=e1303]: Tool call
+                - generic [ref=e1305]: atf_write · import subprocess
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/uat/runs/find_preflight2.py\"]}" [ref=e1312] [cursor=pointer]':
+              - generic [ref=e1322]:
+                - generic [ref=e1323]: Tool call
+                - generic [ref=e1325]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/uat/runs/find_preflight2.py\"]}"
+            - button "Think Not in src. The script may live in a skills dir under /data/atf/uat/pinned/skills or the harness checkout at /data/sam/ATF-Harness-uat. The atf-tools description says scripts take <kernelDir>/skills/. Search wider." [ref=e1336] [cursor=pointer]:
+              - generic [ref=e1346]:
+                - generic [ref=e1347]: Think
+                - generic [ref=e1349]: Not in src. The script may live in a skills dir under /data/atf/uat/pinned/skills or the harness checkout at /data/sam/ATF-Harness-uat. The atf-tools description says scripts take <kernelDir>/skills/. Search wider.
+            - button "Tool call atf_write · import subprocess" [ref=e1357] [cursor=pointer]:
+              - generic [ref=e1367]:
+                - generic [ref=e1368]: Tool call
+                - generic [ref=e1370]: atf_write · import subprocess
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/uat/runs/find_preflight3.py\"]}" [ref=e1380] [cursor=pointer]':
+              - generic [ref=e1390]:
+                - generic [ref=e1391]: Tool call
+                - generic [ref=e1393]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/uat/runs/find_preflight3.py\"]}"
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/uat/pinned/tools/training_preflight.py\",\"--help\"]}" [ref=e1400] [cursor=pointer]':
+              - generic [ref=e1410]:
+                - generic [ref=e1411]: Tool call
+                - generic [ref=e1413]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/uat/pinned/tools/training_preflight.py\",\"--help\"]}"
+            - button "Think The preflight script accepts run-dir, source-root, field-config, token-provider, base-model, apply. Run it directly with all params, output to file to avoid stdout truncation:" [ref=e1421] [cursor=pointer]:
+              - generic [ref=e1431]:
+                - generic [ref=e1432]: Think
+                - generic [ref=e1434]: "The preflight script accepts run-dir, source-root, field-config, token-provider, base-model, apply. Run it directly with all params, output to file to avoid stdout truncation:"
+          - paragraph [ref=e1441]: 找到独立预检入口。带齐参数跑只读预检，报告落盘避免截断：
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/uat/pinned/tools/training_preflight.py\",\"--run-dir\",\"/data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb\",\"--source-root\",\"/data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb\",\"--base-model\",\"/data/LLM_model/Qwen3-VL-32B-Instruct\",\"--out\",\"/data/atf/uat/runs/default/scratch/preflight-u1-accept-swb.json\"]}" [ref=e1451] [cursor=pointer]':
+            - generic [ref=e1461]:
+              - generic [ref=e1462]: Tool call
+              - generic [ref=e1464]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/uat/pinned/tools/training_preflight.py\",\"--run-dir\",\"/data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb\",\"--source-root\",\"/data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb\",\"--base-model\",\"/data/LLM_model/Qwen3-VL-32B-Instruct\",\"--out\",\"/data/atf/uat/runs/default/scratch/preflight-u1-accept-swb.json\"]}"
+          - group [ref=e1467]:
+            - status [ref=e1469] [cursor=pointer]:
+              - generic [ref=e1470]: Retried model request (4/5) · 4s
+          - generic [ref=e1475]:
+            - button "Think No --out flag. Write a wrapper that invokes its main() with args and dumps report JSON to file." [ref=e1483] [cursor=pointer]:
+              - generic [ref=e1493]:
+                - generic [ref=e1494]: Think
+                - generic [ref=e1496]: No --out flag. Write a wrapper that invokes its main() with args and dumps report JSON to file.
+            - button "Tool call atf_write · import json" [ref=e1504] [cursor=pointer]:
+              - generic [ref=e1514]:
+                - generic [ref=e1515]: Tool call
+                - generic [ref=e1517]: atf_write · import json
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/uat/runs/run_preflight_capture.py\"]}" [ref=e1524] [cursor=pointer]':
+              - generic [ref=e1534]:
+                - generic [ref=e1535]: Tool call
+                - generic [ref=e1537]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/uat/runs/run_preflight_capture.py\"]}"
+            - button "Tool call atf_read · /data/atf/uat/runs/default/scratch/preflight-u1-accept-swb.json" [ref=e1544] [cursor=pointer]:
+              - generic [ref=e1554]:
+                - generic [ref=e1555]: Tool call
+                - generic [ref=e1557]: atf_read · /data/atf/uat/runs/default/scratch/preflight-u1-accept-swb.json
+            - button "Think Full three-state list obtained:" [ref=e1565] [cursor=pointer]:
+              - generic [ref=e1575]:
+                - generic [ref=e1576]: Think
+                - generic [ref=e1578]: "Full three-state list obtained:"
+          - generic [ref=e1584]:
+            - paragraph [ref=e1585]: 预检报告完整拿到。三态清单如下：
+            - heading "训练预检三态清单（run u1-accept-swb）" [level=2] [ref=e1586]
+            - paragraph [ref=e1587]:
+              - strong [ref=e1588]: ✅ 已闭合（无需动作）
+              - text: ：source_pairs（50 对在位）、field_config（run 内实验门登记副本）、lane_facts（mixed）
+            - paragraph [ref=e1589]:
+              - strong [ref=e1590]: 🟡 可自动执行（1 项）
+            - table [ref=e1592]:
+              - rowgroup [ref=e1593]:
+                - row [ref=e1594]:
+                  - columnheader "项" [ref=e1595]
+                  - columnheader "说明" [ref=e1596]
+                  - columnheader "动作" [ref=e1597]
+              - rowgroup [ref=e1598]:
+                - row [ref=e1599]:
+                  - cell [ref=e1600]:
+                    - code [ref=e1601]: token_provider
+                  - cell [ref=e1602]:
+                    - text: 未显式指定；内核内置 CPU 计量脚本可用（零第三方依赖，保守上偏估算）：
+                    - code [ref=e1603]: token_meter_cpu.py
+                  - cell "经审批卡一键执行——后续 training_prep 显式携带该 provider" [ref=e1604]
+            - paragraph [ref=e1605]:
+              - strong [ref=e1606]: 🔴 missing（2 项，有依赖序）
+            - table [ref=e1608]:
+              - rowgroup [ref=e1609]:
+                - row [ref=e1610]:
+                  - columnheader "项" [ref=e1611]
+                  - columnheader "说明" [ref=e1612]
+                  - columnheader "动作" [ref=e1613]
+              - rowgroup [ref=e1614]:
+                - row [ref=e1615]:
+                  - cell [ref=e1616]:
+                    - code [ref=e1617]: token_budget
+                  - cell "预算未落盘且实验门预算值未确认（构造上限与视觉像素对须成组确认）" [ref=e1618]
+                  - cell [ref=e1619]:
+                    - strong [ref=e1620]: 需要你填
+                    - text: ——九要素确认卡
+                - row [ref=e1621]:
+                  - cell [ref=e1622]:
+                    - code [ref=e1623]: coordinate_pending
+                  - cell [ref=e1624]:
+                    - text: 50 张图坐标换算 pending（
+                    - code [ref=e1625]: pixel_budget_missing
+                    - text: ×50），依赖 token 预算
+                  - cell "预算落盘后自动整批重试（可自动执行，排在确认之后）" [ref=e1626]
+            - paragraph [ref=e1627]:
+              - strong [ref=e1628]: 🔵 需你确认（1 项）
+            - table [ref=e1630]:
+              - rowgroup [ref=e1631]:
+                - row [ref=e1632]:
+                  - columnheader "项" [ref=e1633]
+                  - columnheader "说明" [ref=e1634]
+              - rowgroup [ref=e1635]:
+                - row [ref=e1636]:
+                  - cell [ref=e1637]:
+                    - code [ref=e1638]: grouping_preset
+                  - cell "分组预设为 agent 建议：preset=B（2 组·单据级 vs 条目级）——分组方式影响每图样本形态，须业务确认（维持或改选 A：3 组·按单据层级）" [ref=e1639]
+            - paragraph [ref=e1640]: 依赖链：token_budget（你确认）→ coordinate_pending（自动重试）→ training_prep 放行。
+            - paragraph [ref=e1641]: 现在呈九要素确认卡，请逐键填写（预算三要素区注意两条不变式：预算不超截断、预算与截断不等须给同步理由）：
+          - generic [ref=e1642]:
+            - text: Calling tools · present
+            - generic [ref=e1644]:
+              - button "Tool call atf_config_confirm · present" [ref=e1652] [cursor=pointer]:
+                - generic [ref=e1662]:
+                  - generic [ref=e1663]: Tool call
+                  - generic [ref=e1665]: atf_config_confirm · present
+              - button "Tool call atf_config_confirm · present" [ref=e1747] [cursor=pointer]:
+                - generic [ref=e1757]:
+                  - generic [ref=e1758]: Tool call
+                  - generic [ref=e1760]: atf_config_confirm · present
+              - 'button "Think Still the same error even after nproc=4 override: \"global batch derivation failed (bs=1×nproc=3): grad_accum_not_divisible:256 % (bs 1 × nproc 3) = 1 ≠ 0\". It keeps using nproc=3 from somewhere (machine default? previous card snapshot?). Something has nproc_per_node=3 in a pending card or baseline, and grad_accum=256 target... 256 % 3 = 1. My override to 4 didn''t take effect (still shows nproc=3) — maybe the key name is different (e.g. \"nproc_per_node\" vs something else in overrides schema). The IterationConfig key per skill doc: nproc/nnodes in training section. Try edits with the actual key: maybe \"nproc_per_node\" isn''t consumed in present overrides; try \"nproc\"." [ref=e1842] [cursor=pointer]':
+                - generic [ref=e1852]:
+                  - generic [ref=e1853]: Think
+                  - generic [ref=e1855]: "Still the same error even after nproc=4 override: \"global batch derivation failed (bs=1×nproc=3): grad_accum_not_divisible:256 % (bs 1 × nproc 3) = 1 ≠ 0\". It keeps using nproc=3 from somewhere (machine default? previous card snapshot?). Something has nproc_per_node=3 in a pending card or baseline, and grad_accum=256 target... 256 % 3 = 1. My override to 4 didn't take effect (still shows nproc=3) — maybe the key name is different (e.g. \"nproc_per_node\" vs something else in overrides schema). The IterationConfig key per skill doc: nproc/nnodes in training section. Try edits with the actual key: maybe \"nproc_per_node\" isn't consumed in present overrides; try \"nproc\"."
+              - generic [ref=e1861]:
+                - generic [ref=e1862]: Running
+                - button "Tool call atf_config_confirm · present" [ref=e1864] [cursor=pointer]:
+                  - generic [ref=e1873]:
+                    - generic [ref=e1874]:
+                      - generic [ref=e1875]: Tool call
+                      - generic [ref=e1877]: atf_config_confirm · present
+                    - generic [aria-hidden]:
+                      - generic:
+                        - generic:
+                          - generic: Tool call
+                          - generic: atf_config_confirm · present
+          - generic [ref=e801]:
+            - status [ref=e802]: Deep diving
+            - generic [ref=e806]:
+              - generic [ref=e807]: Deep diving for 11m 18s ···
+              - generic [aria-hidden]:
+                - generic: Deep diving for 11m 18s ···
+      - region "九要素训练配置确认 — u1-accept-swb" [ref=e1879]:
+        - generic [ref=e1880]: 训练配置
+        - generic [ref=e1882]:
+          - heading "九要素训练配置确认 — u1-accept-swb" [level=3] [ref=e1883]
+          - paragraph [ref=e1884]: "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。 数据集键（实算，只读）：实算值未产出（IterationConfig 缺席） TokenBudget（三要素）: 单样本 token 预算 max_total_tokens 可编辑 9000 [惯例基线（owner 2026-10-22）] 训练截断 cutoff cutoff_len 只读 9000 [= 预算] 推理窗口 max_model_len 只读 12800 [独立取值]"
+          - generic [ref=e1885]:
+            - generic [ref=e1886]:
+              - generic [ref=e1887]: learning_rate
+              - textbox "learning_rate 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）" [ref=e1888]: "1e-4"
+              - generic [ref=e1889]: 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）
+            - generic [ref=e1890]:
+              - generic [ref=e1891]: nproc_per_node
+              - textbox "nproc_per_node [1, 可用卡数 8]" [ref=e1892]: "4"
+              - generic [ref=e1893]: "[1, 可用卡数 8]"
+            - generic [ref=e1894]:
+              - generic [ref=e1895]: visible_devices
+              - textbox "visible_devices 逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）" [ref=e1896]
+              - generic [ref=e1897]: 逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）
+            - generic [ref=e1898]:
+              - generic [ref=e1899]: base_model_path
+              - textbox "base_model_path" [ref=e1900]: /data/LLM_model/Qwen3-VL-32B-Instruct
+            - generic [ref=e1901]:
+              - generic [ref=e1902]: num_train_epochs
+              - textbox "num_train_epochs 域 [1, 10] 整数" [ref=e1903]: "3"
+              - generic [ref=e1904]: 域 [1, 10] 整数
+            - generic [ref=e1905]:
+              - generic [ref=e1906]: per_device_train_batch_size
+              - textbox "per_device_train_batch_size" [ref=e1907]: "1"
+            - generic [ref=e1908]:
+              - generic [ref=e1909]: gradient_accumulation_steps
+              - textbox "gradient_accumulation_steps" [ref=e1910]: "32"
+            - generic [ref=e1911]:
+              - generic [ref=e1912]: cutoff_len
+              - textbox "cutoff_len ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）" [ref=e1913]: "9000"
+              - generic [ref=e1914]: ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）
+            - generic [ref=e1915]:
+              - generic [ref=e1916]: deepspeed
+              - textbox "deepspeed" [ref=e1917]: ds_z3_offload_config.json
+            - generic [ref=e1918]:
+              - generic [ref=e1919]: lora_rank
+              - 'textbox "lora_rank 档位 {16, 32, 64, 128}（alpha=2×rank 联动）" [ref=e1920]': "32"
+              - generic [ref=e1921]: "档位 {16, 32, 64, 128}（alpha=2×rank 联动）"
+            - generic [ref=e1922]:
+              - generic [ref=e1923]: lora_alpha
+              - textbox "lora_alpha" [ref=e1924]: "64"
+            - generic [ref=e1925]:
+              - generic [ref=e1926]: max_total_tokens
+              - textbox "max_total_tokens 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）" [ref=e1927]: "9000"
+              - generic [ref=e1928]: 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）
+            - generic [ref=e1929]:
+              - generic [ref=e1930]: 最小像素
+              - textbox "最小像素 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）" [ref=e1931]: "65536"
+              - generic [ref=e1932]: 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）
+            - generic [ref=e1933]:
+              - generic [ref=e1934]: 最大像素
+              - 'textbox "最大像素 两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）" [ref=e1935]': "802816"
+              - generic [ref=e1936]: "两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）"
+            - generic [ref=e1937]:
+              - generic [ref=e1938]: negative_ratio_target
+              - textbox "negative_ratio_target 构造带 [0.02, 0.05]" [ref=e1939]: 0.02,0.05
+              - generic [ref=e1940]: 构造带 [0.02, 0.05]
+            - generic [ref=e1941]:
+              - generic [ref=e1942]: token_budget_sync_reason
+              - textbox "token_budget_sync_reason" [ref=e1943]:
+                - /placeholder: 预算与 cutoff 不等时的不同步理由（不等必填；相等留空）——同步请在 cutoff_len 框直接填预算值（用户动作）
+        - generic [ref=e1944]:
+          - status [ref=e1945]
+          - generic [ref=e1946]:
+            - button "Cancel" [ref=e1947] [cursor=pointer]
+            - button "确认并继续" [ref=e1948] [cursor=pointer]

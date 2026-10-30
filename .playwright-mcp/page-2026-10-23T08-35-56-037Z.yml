@@ -1,0 +1,138 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - button "New session" [ref=e9] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e10]:
+            - generic [ref=e11]: ATF
+            - generic [ref=e14]: ATF 训练 Agent
+        - button "Collapse sidebar" [ref=e17] [cursor=pointer]
+      - button "New session" [ref=e20] [cursor=pointer]:
+        - generic [ref=e21]: New Session
+      - navigation "Global panels" [ref=e26]:
+        - button "Plugins" [ref=e27] [cursor=pointer]
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]: Workspaces
+          - generic [ref=e42]:
+            - button "Search sessions" [ref=e43] [cursor=pointer]
+            - textbox "Search session names"
+          - generic [ref=e47]:
+            - button "View options" [ref=e49] [cursor=pointer]
+            - button "Add workspace" [ref=e53] [cursor=pointer]
+        - tree "Sessions" [ref=e58]:
+          - generic [ref=e110]:
+            - treeitem "my-zito" [expanded] [ref=e112] [cursor=pointer]
+            - treeitem "New Session" [selected] [ref=e121] [cursor=pointer]
+            - treeitem "ping 1h" [ref=e125] [cursor=pointer]:
+              - generic [ref=e127]: ping
+              - generic [ref=e128]: 1h
+            - treeitem "Ping Test 6h" [ref=e130] [cursor=pointer]:
+              - generic [ref=e132]: Ping Test
+              - generic [ref=e133]: 6h
+            - treeitem "Ping Test 6h" [ref=e135] [cursor=pointer]:
+              - generic [ref=e137]: Ping Test
+              - generic [ref=e138]: 6h
+            - treeitem "ping 6h" [ref=e140] [cursor=pointer]:
+              - generic [ref=e142]: ping
+              - generic [ref=e143]: 6h
+            - treeitem "请用你的提问机制（ask 用户问 19h" [ref=e145] [cursor=pointer]:
+              - generic [ref=e147]: 请用你的提问机制（ask 用户问
+              - generic [ref=e148]: 19h
+          - treeitem "Task" [ref=e150] [cursor=pointer]
+      - button "Settings" [expanded] [ref=e68] [cursor=pointer]
+    - generic [ref=e77]:
+      - banner [ref=e157]:
+        - button "Open right sidebar" [ref=e162] [cursor=pointer]
+      - generic [ref=e83]:
+        - generic [ref=e86]:
+          - generic [ref=e87]: ATF
+          - generic [ref=e90]:
+            - generic [ref=e91]: Into the Unknown
+            - generic [ref=e92]: Preview
+        - generic [ref=e93]:
+          - button "Choose workspace" [ref=e94] [cursor=pointer]:
+            - generic [ref=e97]: my-zito
+          - button "Standard mode" [ref=e171] [cursor=pointer]
+        - generic [ref=e102]:
+          - generic [ref=e104]:
+            - textbox "Describe what you want to build, / commands, @ files or sessions" [ref=e180]
+            - generic [aria-hidden]: Describe what you want to build, / commands, @ files or sessions
+          - generic [ref=e106]:
+            - generic [ref=e107]:
+              - button "Add files or run commands" [ref=e181] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e186] [cursor=pointer]':
+                - generic [ref=e190]: Full access
+            - generic [ref=e108]:
+              - generic [ref=e194]:
+                - button "思考 Low(低) ▾" [ref=e197] [cursor=pointer]:
+                  - generic [ref=e198]: 思考
+                  - generic [ref=e199]: Low(低)
+                  - generic [ref=e200]: ▾
+                - button "Select model, current GLM-5.3-Flash" [ref=e203] [cursor=pointer]:
+                  - generic [ref=e204]: GLM-5.3-Flash
+              - button "Send message" [disabled] [ref=e207]
+    - generic [ref=e213]:
+      - generic [ref=e214]: ↩
+      - generic [ref=e215]:
+        - generic [ref=e216]: 回到上次实验：航空运单（含主单 MAWB / 分单 HAWB） · Qwen3-VL-32B · 10-12 22:38
+        - generic [ref=e217]: 上次实验 · 点击选用，发送首条消息时自动绑定
+      - button "继续这次实验" [ref=e218] [cursor=pointer]
+  - dialog "Settings" [ref=e230]:
+    - navigation [ref=e231]:
+      - generic [ref=e232]: Settings
+      - generic [ref=e233]:
+        - button "General" [active] [ref=e234] [cursor=pointer]
+        - button "Models" [ref=e239] [cursor=pointer]
+        - button "Built-in plugins" [ref=e244] [cursor=pointer]
+        - button "Agent presets" [ref=e253] [cursor=pointer]
+        - button "训练配置" [ref=e260] [cursor=pointer]
+    - generic [ref=e265]:
+      - button "Close" [ref=e267] [cursor=pointer]
+      - generic [ref=e275]:
+        - generic [ref=e276]:
+          - generic [ref=e277]: Language
+          - button "English" [ref=e280] [cursor=pointer]
+        - generic [ref=e283]:
+          - generic [ref=e284]: Appearance
+          - generic [ref=e285]:
+            - button "Light" [ref=e286] [cursor=pointer]
+            - button "Dark" [ref=e293] [cursor=pointer]
+            - button "System" [pressed] [ref=e296] [cursor=pointer]
+        - generic [ref=e299]:
+          - generic [ref=e300]:
+            - generic [ref=e301]: Font size
+            - generic [ref=e302]: Only affects conversation content
+          - generic [ref=e303]:
+            - generic [ref=e304]:
+              - generic [ref=e305]: "14"
+              - generic [ref=e306]:
+                - button "Increase font size" [ref=e307] [cursor=pointer]
+                - button "Decrease font size" [ref=e310] [cursor=pointer]
+            - generic [ref=e313]: px
+        - generic [ref=e314]:
+          - generic [ref=e315]:
+            - generic [ref=e316]: Work details
+            - generic [ref=e317]: Choose how much detail to show for tool calls
+          - button "Detailed" [ref=e319] [cursor=pointer]
+        - generic [ref=e322]:
+          - generic [ref=e323]:
+            - generic [ref=e324]: Show coding view
+            - generic [ref=e325]: Shows trajectory, code diffs, and all Agent presets
+          - switch "Show coding view" [checked] [ref=e326] [cursor=pointer]
+        - generic [ref=e328]:
+          - generic [ref=e329]:
+            - generic [ref=e330]: Keyboard shortcuts
+            - paragraph [ref=e331]: View and edit available shortcuts and input actions
+          - button "Edit shortcuts" [ref=e332] [cursor=pointer]
+        - generic [ref=e333]:
+          - generic [ref=e334]:
+            - generic [ref=e335]: Send behavior while busy
+            - generic [ref=e336]: What Enter and the Send button do while the agent is running; Cmd/Ctrl+Enter uses the other behavior
+          - button "Queue" [ref=e338] [cursor=pointer]
+        - generic [ref=e341]:
+          - generic [ref=e342]:
+            - generic [ref=e343]: Performance & usage
+            - generic [ref=e344]: Choose how much performance and usage information to show
+          - button "Detailed" [ref=e346] [cursor=pointer]
+        - generic [ref=e349]: "Current version: 0.2.0-rc.2"

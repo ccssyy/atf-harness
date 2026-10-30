@@ -1,0 +1,69 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - button "Open sidebar" [ref=e9] [cursor=pointer]:
+      - generic [ref=e11]: ATF
+    - button "New session" [ref=e13] [cursor=pointer]
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - button "Add workspace" [ref=e32] [cursor=pointer]
+      - button "Search sessions" [ref=e36] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e791]:
+    - banner [ref=e793]:
+      - generic [ref=e794]:
+        - generic [ref=e795]:
+          - generic [ref=e876]:
+            - navigation "Session hierarchy" [ref=e877]:
+              - generic [ref=e878]: 从零开始一个新实验：装箱单
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e882]: Standard mode
+          - generic [ref=e889]:
+            - button "More actions" [ref=e891] [cursor=pointer]
+            - generic [ref=e896]:
+              - button "选择实验 ▾" [ref=e898] [cursor=pointer]
+              - button "监控" [ref=e900] [cursor=pointer]
+          - button "Open right sidebar" [ref=e798] [cursor=pointer]
+        - tablist [ref=e901]:
+          - tab "Chat" [selected] [ref=e902] [cursor=pointer]
+          - tab "Trajectory" [ref=e903] [cursor=pointer]
+    - generic [ref=e802]:
+      - generic [ref=e910]:
+        - generic [ref=e913]:
+          - generic [ref=e914]: 从零开始一个新实验：装箱单（pl）字段抽取训练。原始数据已备在本工作区 datasets/walkthrough-pl/（50 对 png+同名标注 json）。请走完整正道链：数据登记（新 run，不复用任何旧实验）→标注体检→实验配置→合同发布→数据切分（训练/测试两分 40/10）→准入检查→训练准备→发起训练。九要素确认卡和各放行卡我会逐张核对，机器事实缺了就停下来问我。
+          - generic [ref=e916]:
+            - generic [ref=e917]: 07:46
+            - button "Copy" [ref=e918] [cursor=pointer]
+        - generic [ref=e922]:
+          - status [ref=e923]: Deep diving
+          - generic [ref=e927]:
+            - generic [ref=e928]: Deep diving for 1s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 1s ···
+      - generic [ref=e837]:
+        - generic [ref=e838]:
+          - generic [ref=e840]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=e930]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e842]:
+            - generic [ref=e843]:
+              - button "Add files or run commands" [ref=e844] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e849] [cursor=pointer]':
+                - generic [ref=e853]: Full access
+            - generic [ref=e857]:
+              - generic [ref=e858]:
+                - button "思考 Max(最高) ▾" [ref=e861] [cursor=pointer]:
+                  - generic [ref=e862]: 思考
+                  - generic [ref=e863]: Max(最高)
+                  - generic [ref=e864]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e867] [cursor=pointer]:
+                  - generic [ref=e868]: glm-5.3-flash
+              - button "Stop generating" [ref=e931] [cursor=pointer]
+        - generic [ref=e936]:
+          - button "新建训练" [ref=e937] [cursor=pointer]
+          - button "查状态" [disabled] [ref=e938]
+          - button "继续上次" [disabled] [ref=e939]
+          - button "对比两轮" [disabled] [ref=e940]
+          - button "走完闭环" [ref=e941] [cursor=pointer]
+          - button "联合训练" [disabled] [ref=e942]
+          - button "badcase 可视化" [ref=e943] [cursor=pointer]
+          - button "发起训练" [ref=e944] [cursor=pointer]

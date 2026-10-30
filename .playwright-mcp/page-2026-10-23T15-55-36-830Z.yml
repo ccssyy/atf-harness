@@ -1,0 +1,196 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - button "New session" [ref=e86] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e87]:
+            - generic [ref=e88]: ATF
+            - generic [ref=e91]: ATF 训练 Agent
+        - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+      - button "New session" [ref=e13] [cursor=pointer]:
+        - generic [ref=e14]: New Session
+      - navigation "Global panels" [ref=e18]:
+        - button "Plugins" [ref=e19] [cursor=pointer]
+      - generic [ref=e29]:
+        - generic [ref=e30]:
+          - generic [ref=e101]: Workspaces
+          - generic [ref=e103]:
+            - button "Search sessions" [ref=e104] [cursor=pointer]
+            - textbox "Search session names"
+          - generic [ref=e31]:
+            - button "View options" [ref=e109] [cursor=pointer]
+            - button "Add workspace" [ref=e32] [cursor=pointer]
+        - tree "Sessions" [ref=e114]:
+          - treeitem "1023" [ref=e117] [cursor=pointer]
+          - generic [ref=e123]:
+            - treeitem "my-zito" [expanded] [ref=e125] [cursor=pointer]
+            - treeitem "D76 卡位卡面验收测试 5h" [selected] [ref=e134] [cursor=pointer]:
+              - generic [ref=e136]: D76 卡位卡面验收测试
+              - generic [ref=e137]: 5h
+            - treeitem "ping 8h" [ref=e139] [cursor=pointer]:
+              - generic [ref=e141]: ping
+              - generic [ref=e142]: 8h
+            - treeitem "Ping Test 13h" [ref=e144] [cursor=pointer]:
+              - generic [ref=e146]: Ping Test
+              - generic [ref=e147]: 13h
+            - treeitem "Ping Test 13h" [ref=e149] [cursor=pointer]:
+              - generic [ref=e151]: Ping Test
+              - generic [ref=e152]: 13h
+            - treeitem "ping 14h" [ref=e154] [cursor=pointer]:
+              - generic [ref=e156]: ping
+              - generic [ref=e157]: 14h
+            - button "Show 1 more sessions" [ref=e158] [cursor=pointer]
+          - treeitem "Task" [ref=e160] [cursor=pointer]
+      - button "Settings" [expanded] [ref=e46] [cursor=pointer]
+    - generic [ref=e54]:
+      - banner [ref=e168]:
+        - generic [ref=e169]:
+          - generic [ref=e170]:
+            - generic [ref=e171]:
+              - navigation "Session hierarchy" [ref=e172]:
+                - generic [ref=e173]: D76 卡位卡面验收测试
+              - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e177]: Standard mode
+            - generic [ref=e184]:
+              - button "More actions" [ref=e186] [cursor=pointer]
+              - generic [ref=e191]:
+                - button "选择实验 ▾" [ref=e193] [cursor=pointer]
+                - button "监控" [ref=e195] [cursor=pointer]
+            - button "Open right sidebar" [ref=e198] [cursor=pointer]
+          - tablist [ref=e201]:
+            - tab "Chat" [selected] [ref=e202] [cursor=pointer]
+            - tab "Trajectory" [ref=e203] [cursor=pointer]
+      - generic [ref=e56]:
+        - generic [ref=e210]:
+          - generic [ref=e213]:
+            - generic [ref=e214]: D76 卡位卡面验收（零 GPU 红线：只到九要素确认卡呈现即停，不提交表单、不生成配置、不写任何文件、不起真训、不占 GPU）。对实验 awb_r1（run 目录 /data/atf/uat/runs/awb_r1）发起训练配置确认：训练卡数 nproc_per_node=4，卡位 visible_devices=4,5,6,7，其余参数按现值。九要素确认卡弹出后立即停止，让我在界面上查看卡位栏（visible_devices 栏）的呈现；不要提交、不要重试。
+            - generic [ref=e216]:
+              - generic [ref=e217]: 18:49
+              - button "Copy" [ref=e218] [cursor=pointer]
+          - generic [ref=e223]:
+            - status [ref=e224]: Completed
+            - button "Completed in 2m 4s" [ref=e225] [cursor=pointer]
+          - generic [ref=e233]:
+            - paragraph [ref=e234]: 九要素确认卡请求已被取消，本轮到此停止。
+            - paragraph [ref=e235]: 按您的红线要求，我未做任何后续动作：未提交表单、未生成配置、未写文件、未起训练、未占 GPU。
+            - paragraph [ref=e236]:
+              - text: 如需继续验收 D76 卡位卡面（
+              - code [ref=e237]: nproc_per_node=4
+              - text: 、
+              - code [ref=e238]: visible_devices=4,5,6,7
+              - text: ，其余按现值），请告诉我，我再重新发起
+              - code [ref=e239]: atf_config_confirm
+              - text: present，让卡面弹出后停在界面上供您查看 visible_devices 栏。
+          - generic [ref=e243]:
+            - button "Copy" [ref=e244] [cursor=pointer]
+            - generic [ref=e248]:
+              - button "Good response" [ref=e249] [cursor=pointer]
+              - button "Bad response" [ref=e252] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e255] [cursor=pointer]
+            - generic [ref=e261]:
+              - button "Usage 28.7K tok" [ref=e263] [cursor=pointer]
+              - generic [ref=e269]: 18:51
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - generic [ref=e81]:
+              - textbox "Message or run a task, / commands, @ files or sessions" [ref=e270]
+              - generic [aria-hidden]: Message or run a task, / commands, @ files or sessions
+            - generic [ref=e83]:
+              - generic [ref=e84]:
+                - button "Add files or run commands" [ref=e271] [cursor=pointer]
+                - 'button "Access mode, current: Full access" [ref=e276] [cursor=pointer]':
+                  - generic [ref=e280]: Full access
+              - generic [ref=e85]:
+                - generic [ref=e284]:
+                  - button "思考 Low(低) ▾" [ref=e287] [cursor=pointer]:
+                    - generic [ref=e288]: 思考
+                    - generic [ref=e289]: Low(低)
+                    - generic [ref=e290]: ▾
+                  - button "Select model, current GLM-5.3-Flash" [ref=e293] [cursor=pointer]:
+                    - generic [ref=e294]: GLM-5.3-Flash
+                - button "Send message" [disabled] [ref=e297]
+          - generic [ref=e300]:
+            - generic [ref=e301]:
+              - generic [ref=e302]:
+                - button "1 turns 2 steps · 57 tok/s" [ref=e304] [cursor=pointer]:
+                  - generic [ref=e309]: 1 turns 2 steps·57 tok/s
+                - button "28.7K tok · Cache hit 50%" [ref=e311] [cursor=pointer]:
+                  - generic [ref=e316]: 28.7K tok·Cache hit 50%
+              - generic [ref=e318]:
+                - button "新建训练" [ref=e319] [cursor=pointer]
+                - button "查状态" [disabled] [ref=e320]
+                - button "继续上次" [disabled] [ref=e321]
+                - button "对比两轮" [disabled] [ref=e322]
+                - button "走完闭环" [ref=e323] [cursor=pointer]
+                - button "联合训练" [disabled] [ref=e324]
+                - button "badcase 可视化" [ref=e325] [cursor=pointer]
+                - button "发起训练" [ref=e326] [cursor=pointer]
+            - button "1% of context used" [ref=e328] [cursor=pointer]:
+              - generic [ref=e332]: 1%
+  - dialog "Settings" [ref=e340]:
+    - navigation [ref=e341]:
+      - generic [ref=e342]: Settings
+      - generic [ref=e343]:
+        - button "General" [active] [ref=e344] [cursor=pointer]
+        - button "Models" [ref=e349] [cursor=pointer]
+        - button "Built-in plugins" [ref=e354] [cursor=pointer]
+        - button "Agent presets" [ref=e363] [cursor=pointer]
+        - button "训练配置" [ref=e370] [cursor=pointer]
+    - generic [ref=e375]:
+      - button "Close" [ref=e377] [cursor=pointer]
+      - generic [ref=e385]:
+        - generic [ref=e386]:
+          - generic [ref=e387]:
+            - generic [ref=e388]: Permission
+            - generic [ref=e389]: Choose the default permission mode for new sessions
+          - button "Full access" [ref=e391] [cursor=pointer]
+        - generic [ref=e394]:
+          - generic [ref=e395]: Language
+          - button "English" [ref=e398] [cursor=pointer]
+        - generic [ref=e401]:
+          - generic [ref=e402]: Appearance
+          - generic [ref=e403]:
+            - button "Light" [ref=e404] [cursor=pointer]
+            - button "Dark" [ref=e411] [cursor=pointer]
+            - button "System" [pressed] [ref=e414] [cursor=pointer]
+        - generic [ref=e417]:
+          - generic [ref=e418]:
+            - generic [ref=e419]: Font size
+            - generic [ref=e420]: Only affects conversation content
+          - generic [ref=e421]:
+            - generic [ref=e422]:
+              - generic [ref=e423]: "14"
+              - generic [ref=e424]:
+                - button "Increase font size" [ref=e425] [cursor=pointer]
+                - button "Decrease font size" [ref=e428] [cursor=pointer]
+            - generic [ref=e431]: px
+        - generic [ref=e432]:
+          - generic [ref=e433]:
+            - generic [ref=e434]: Work details
+            - generic [ref=e435]: Choose how much detail to show for tool calls
+          - button "Detailed" [ref=e437] [cursor=pointer]
+        - generic [ref=e440]:
+          - generic [ref=e441]:
+            - generic [ref=e442]: Show coding view
+            - generic [ref=e443]: Shows trajectory, code diffs, and all Agent presets
+          - switch "Show coding view" [checked] [ref=e444] [cursor=pointer]
+        - generic [ref=e446]:
+          - generic [ref=e447]:
+            - generic [ref=e448]: Keyboard shortcuts
+            - paragraph [ref=e449]: View and edit available shortcuts and input actions
+          - button "Edit shortcuts" [ref=e450] [cursor=pointer]
+        - generic [ref=e451]:
+          - generic [ref=e452]:
+            - generic [ref=e453]: Send behavior while busy
+            - generic [ref=e454]: What Enter and the Send button do while the agent is running; Cmd/Ctrl+Enter uses the other behavior
+          - button "Queue" [ref=e456] [cursor=pointer]
+        - generic [ref=e459]:
+          - generic [ref=e460]:
+            - generic [ref=e461]: Performance & usage
+            - generic [ref=e462]: Choose how much performance and usage information to show
+          - button "Detailed" [ref=e464] [cursor=pointer]
+        - generic [ref=e467]:
+          - generic [ref=e468]:
+            - generic [ref=e469]: Upload Session Log when using the official model API
+            - generic [ref=e470]: Help improve DeepSeek models and products.
+          - switch "Upload Session Log when using the official model API" [checked] [ref=e471] [cursor=pointer]
+        - generic [ref=e473]: "Current version: 0.2.0-rc.2"

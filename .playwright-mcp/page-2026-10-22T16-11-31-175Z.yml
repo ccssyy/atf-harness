@@ -1,0 +1,87 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e86] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e87]:
+          - generic [ref=e88]: ATF
+          - generic [ref=e91]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e101]: Workspaces
+        - generic [ref=e103]:
+          - button "Search sessions" [ref=e104] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e109] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e114]:
+        - generic [ref=e115]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e117] [cursor=pointer]
+          - treeitem "训练数据构造前校验演练 14min" [ref=e778] [cursor=pointer]:
+            - generic [ref=e128]: 训练数据构造前校验演练
+            - generic [ref=e129]: 14min
+        - treeitem "ws-pl-walkthrough" [ref=e132] [cursor=pointer]
+        - generic [ref=e138]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e140] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 7h" [ref=e149] [cursor=pointer]:
+            - generic [ref=e151]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e152]: 7h
+          - treeitem "装箱单字段抽取新实验全流程 9h" [ref=e154] [cursor=pointer]:
+            - generic [ref=e156]: 装箱单字段抽取新实验全流程
+            - generic [ref=e157]: 9h
+        - generic [ref=e158]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=e160] [cursor=pointer]
+          - treeitem "New Session" [selected] [ref=e931] [cursor=pointer]
+          - treeitem "汇总当前实验状态与进展 21h" [ref=e935] [cursor=pointer]:
+            - generic [ref=e937]: 汇总当前实验状态与进展
+            - generic [ref=e938]: 21h
+          - treeitem "我的训练数据放在 /data/atf/prodt 1d" [ref=e940] [cursor=pointer]:
+            - generic [ref=e942]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=e943]: 1d
+        - treeitem "a4-hotws" [ref=e168] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e176] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e184] [cursor=pointer]
+        - treeitem "sam" [ref=e192] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e944]:
+    - banner [ref=e946]:
+      - button "Open right sidebar" [ref=e951] [cursor=pointer]
+    - generic [ref=e959]:
+      - generic [ref=e962]:
+        - generic [ref=e963]: ATF
+        - generic [ref=e966]:
+          - generic [ref=e967]: Into the Unknown
+          - generic [ref=e968]: Preview
+      - generic [ref=e969]:
+        - button "Choose workspace" [ref=e970] [cursor=pointer]:
+          - generic [ref=e975]: atf-prodtest-20261021
+        - button "Standard mode" [ref=e980] [cursor=pointer]
+      - generic [ref=e991]:
+        - generic [ref=e993]:
+          - textbox "Describe the training task to advance, / commands, @ files or sessions" [active] [ref=e994]
+          - generic [aria-hidden]: Describe the training task to advance, / commands, @ files or sessions
+        - generic [ref=e995]:
+          - generic [ref=e996]:
+            - button "Add files or run commands" [ref=e997] [cursor=pointer]
+            - 'button "Access mode, current: Full access" [ref=e1002] [cursor=pointer]':
+              - generic [ref=e1006]: Full access
+          - generic [ref=e1010]:
+            - generic [ref=e1011]:
+              - button "思考 Low(低) ▾" [ref=e1014] [cursor=pointer]:
+                - generic [ref=e1015]: 思考
+                - generic [ref=e1016]: Low(低)
+                - generic [ref=e1017]: ▾
+              - button "Select model, current glm-5.3-flash" [ref=e1020] [cursor=pointer]:
+                - generic [ref=e1021]: glm-5.3-flash
+            - button "Send message" [disabled] [ref=e1024]
+  - generic [ref=e864]:
+    - generic [ref=e865]: ↩
+    - generic [ref=e866]:
+      - generic [ref=e867]: 回到上次实验：实验 budget
+      - generic [ref=e868]: 上次实验 · 点击选用，发送首条消息时自动绑定
+    - button "继续这次实验" [ref=e869] [cursor=pointer]

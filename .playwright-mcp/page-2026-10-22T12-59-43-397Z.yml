@@ -1,0 +1,130 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - generic [ref=f1e8]:
+      - button "New session" [ref=f1e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f1e10]:
+          - generic [ref=f1e11]: ATF
+          - generic [ref=f1e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f1e17] [cursor=pointer]
+    - button "New session" [ref=f1e20] [cursor=pointer]:
+      - generic [ref=f1e21]: New Session
+    - navigation "Global panels" [ref=f1e26]:
+      - button "Plugins" [ref=f1e27] [cursor=pointer]
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]: Workspaces
+        - generic [ref=f1e42]:
+          - button "Search sessions" [ref=f1e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f1e47]:
+          - button "View options" [ref=f1e49] [cursor=pointer]
+          - button "Add workspace" [ref=f1e53] [cursor=pointer]
+      - tree "Sessions" [ref=f1e58]:
+        - generic [ref=f1e110]:
+          - treeitem "b5-walkthrough" [expanded] [ref=f1e112] [cursor=pointer]
+          - treeitem "你好，请只回复“在”一个字 now" [selected] [ref=f1e324] [cursor=pointer]:
+            - generic [ref=f1e123]: 你好，请只回复“在”一个字
+            - generic [ref=f1e240]: now
+    - button "Settings" [ref=f1e68] [cursor=pointer]
+  - generic [ref=f1e77]:
+    - banner [ref=f1e125]:
+      - generic [ref=f1e126]:
+        - generic [ref=f1e127]:
+          - generic [ref=f1e241]:
+            - navigation "Session hierarchy" [ref=f1e242]:
+              - generic [ref=f1e243]: 你好，请只回复“在”一个字
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f1e247]: Standard mode
+          - generic [ref=f1e254]:
+            - button "More actions" [ref=f1e256] [cursor=pointer]
+            - generic [ref=f1e261]:
+              - button "选择实验 ▾" [ref=f1e263] [cursor=pointer]
+              - button "监控" [ref=f1e265] [cursor=pointer]
+        - tablist [ref=f1e266]:
+          - tab "Chat" [selected] [ref=f1e267] [cursor=pointer]
+          - tab "Trajectory" [ref=f1e268] [cursor=pointer]
+    - generic [ref=f1e79]:
+      - generic [ref=f1e275]:
+        - generic [ref=f1e278]:
+          - generic [ref=f1e279]: 你好，请只回复“在”一个字，不要做任何其他操作。
+          - generic [ref=f1e281]:
+            - generic [ref=f1e282]: 20:59
+            - button "Copy" [ref=f1e283] [cursor=pointer]
+        - generic [ref=f1e326]:
+          - status [ref=f1e327]: Failed
+          - button "Failed" [disabled] [expanded] [ref=f1e328]
+        - group [ref=f1e289]:
+          - status [ref=f1e291] [cursor=pointer]:
+            - generic [ref=f1e292]: Retried model request (5/5) · 9s
+        - status [ref=f1e332]:
+          - generic [ref=f1e334]: "This turn failed429: {\"code\":\"1113\",\"message\":\"余额不足或无可用资源包,请充值。\"}"
+          - code [ref=f1e335]: RATE_LIMIT
+      - generic [ref=f1e101]:
+        - generic [ref=f1e102]:
+          - generic [ref=f1e104]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=f1e303]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=f1e106]:
+            - generic [ref=f1e107]:
+              - button "Add files or run commands" [ref=f1e144] [cursor=pointer]
+              - 'button "Access mode, current: Workspace write" [ref=f1e149] [cursor=pointer]':
+                - generic [ref=f1e155]: Workspace write
+            - generic [ref=f1e108]:
+              - generic [ref=f1e159]:
+                - button "思考 Max(最高) ▾" [ref=f1e162] [cursor=pointer]:
+                  - generic [ref=f1e163]: 思考
+                  - generic [ref=f1e164]: Max(最高)
+                  - generic [ref=f1e165]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=f1e168] [cursor=pointer]:
+                  - generic [ref=f1e169]: glm-5.3-flash
+              - button "Send message" [disabled] [ref=f1e336]
+        - generic [ref=f1e306]:
+          - generic [ref=f1e307]:
+            - generic [ref=f1e338]: 1 turns 1 steps
+            - generic [ref=f1e309]:
+              - button "新建训练" [ref=f1e310] [cursor=pointer]
+              - button "查状态" [disabled] [ref=f1e311]
+              - button "继续上次" [disabled] [ref=f1e312]
+              - button "对比两轮" [disabled] [ref=f1e313]
+              - button "走完闭环" [ref=f1e314] [cursor=pointer]
+              - button "联合训练" [disabled] [ref=f1e315]
+              - button "badcase 可视化" [ref=f1e316] [cursor=pointer]
+              - button "发起训练" [ref=f1e317] [cursor=pointer]
+          - button "0% of context used" [ref=f1e319] [cursor=pointer]:
+            - generic [ref=f1e323]: 0%
+  - generic [ref=f1e346]:
+    - tablist [ref=f1e348]:
+      - tab [ref=f1e349] [cursor=pointer]:
+        - generic [ref=f1e350]: Start
+        - button "Close"
+      - tab "训练监控 Close" [selected] [ref=f1e357] [cursor=pointer]:
+        - generic [ref=f1e358]: 训练监控
+        - button "Close" [ref=f1e360]
+      - button "Split" [ref=f1e365] [cursor=pointer]
+      - generic [ref=f1e368]:
+        - button "Fullscreen" [ref=f1e369] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=f1e372] [cursor=pointer]
+    - generic [ref=f1e378]:
+      - generic [ref=f1e379]:
+        - generic [ref=f1e380]:
+          - generic [ref=f1e381]: 运行监控
+          - generic [ref=f1e382]: 未关联训练
+        - generic [ref=f1e385]:
+          - button "选择实验 ▾" [ref=f1e386] [cursor=pointer]:
+            - text: 选择实验
+            - generic [ref=f1e387]: ▾
+          - button "全部" [ref=f1e388] [cursor=pointer]
+      - generic [ref=f1e389]:
+        - generic [ref=f1e390]: 未选择实验
+        - button "继续上次：实验 b5-rec" [ref=f1e392] [cursor=pointer]
+        - generic [ref=f1e393]:
+          - generic [ref=f1e394]: 最近实验
+          - button "实验 b5-rec 空闲" [ref=f1e395] [cursor=pointer]:
+            - generic [ref=f1e396]: 实验 b5-rec
+            - generic [ref=f1e397]: 空闲
+          - button "实验 -norec 空闲" [ref=f1e398] [cursor=pointer]:
+            - generic [ref=f1e399]: 实验 -norec
+            - generic [ref=f1e400]: 空闲
+        - generic [ref=f1e401]:
+          - button "新建实验" [ref=f1e402] [cursor=pointer]
+          - button "查看全部实验（只读）" [ref=f1e403] [cursor=pointer]
+        - generic [ref=f1e404]: 机器 GPU：8 卡 · 忙 0（只读，机器级）

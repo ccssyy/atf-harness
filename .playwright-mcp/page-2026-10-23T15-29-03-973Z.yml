@@ -1,0 +1,103 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e86] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e87]:
+          - generic [ref=e88]: ATF
+          - generic [ref=e91]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e101]: Workspaces
+        - generic [ref=e103]:
+          - button "Search sessions" [ref=e104] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e109] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e114]:
+        - generic [ref=e115]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e117] [cursor=pointer]
+          - treeitem "Waiting for approval 连通性自检与确认" [ref=e957] [cursor=pointer]:
+            - generic [ref=e132]: Waiting for approval
+            - generic [ref=e133]: 连通性自检与确认
+            - generic [aria-hidden] [ref=e134]: Approval
+          - treeitem "装箱单走查区训练任务查询 1h" [ref=e1010] [cursor=pointer]:
+            - generic [ref=e128]: 装箱单走查区训练任务查询
+            - generic [ref=e129]: 1h
+          - treeitem "D76 端到端正例复跑（零 GPU 红 5h" [ref=e136] [cursor=pointer]:
+            - generic [ref=e138]: D76 端到端正例复跑（零 GPU 红
+            - generic [ref=e139]: 5h
+          - treeitem "run pl-walkthrough-r1 迭代配置构造前置校验 8h" [ref=e141] [cursor=pointer]:
+            - generic [ref=e143]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [ref=e144]: 8h
+          - treeitem "训练数据构造前校验演练 9h" [ref=e414] [cursor=pointer]:
+            - generic [ref=e148]: 训练数据构造前校验演练
+            - generic [ref=e149]: 9h
+        - treeitem "ws-pl-walkthrough" [ref=e152] [cursor=pointer]
+        - generic [ref=e158]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e160] [cursor=pointer]
+          - treeitem "New Session" [selected] [ref=e1160] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 1d" [ref=e169] [cursor=pointer]:
+            - generic [ref=e171]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e172]: 1d
+          - treeitem "装箱单字段抽取新实验全流程 1d" [ref=e174] [cursor=pointer]:
+            - generic [ref=e176]: 装箱单字段抽取新实验全流程
+            - generic [ref=e177]: 1d
+        - generic [ref=e178]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=e180] [cursor=pointer]
+          - treeitem "等待发起真实训练走查指令 13h" [ref=e1011] [cursor=pointer]:
+            - generic [ref=e191]: 等待发起真实训练走查指令
+            - generic [ref=e192]: 13h
+          - treeitem "汇总当前实验状态与进展 1d" [ref=e194] [cursor=pointer]:
+            - generic [ref=e196]: 汇总当前实验状态与进展
+            - generic [ref=e197]: 1d
+          - treeitem "我的训练数据放在 /data/atf/prodt 2d" [ref=e199] [cursor=pointer]:
+            - generic [ref=e201]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=e202]: 2d
+        - treeitem "a4-hotws" [ref=e205] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e213] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e221] [cursor=pointer]
+        - treeitem "sam" [ref=e229] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e1163]:
+    - banner [ref=e1165]:
+      - button "Open right sidebar" [ref=e1170] [cursor=pointer]
+    - generic [ref=e1178]:
+      - generic [ref=e1181]:
+        - generic [ref=e1182]: ATF
+        - generic [ref=e1185]:
+          - generic [ref=e1186]: Into the Unknown
+          - generic [ref=e1187]: Preview
+      - generic [ref=e1188]:
+        - button "Choose workspace" [ref=e1189] [cursor=pointer]:
+          - generic [ref=e1194]: atf-g2fresh-20261022
+        - button "Standard mode" [ref=e1199] [cursor=pointer]
+      - generic [ref=e1210]:
+        - generic [ref=e1212]:
+          - textbox "Describe the training task to advance, / commands, @ files or sessions" [active] [ref=e1213]
+          - generic [aria-hidden]: Describe the training task to advance, / commands, @ files or sessions
+        - generic [ref=e1214]:
+          - generic [ref=e1215]:
+            - button "Add files or run commands" [ref=e1216] [cursor=pointer]
+            - 'button "Access mode, current: Full access" [ref=e1221] [cursor=pointer]':
+              - generic [ref=e1225]: Full access
+          - generic [ref=e1229]:
+            - generic [ref=e1230]:
+              - button "思考 Low(低) ▾" [ref=e1233] [cursor=pointer]:
+                - generic [ref=e1234]: 思考
+                - generic [ref=e1235]: Low(低)
+                - generic [ref=e1236]: ▾
+              - button "Select model, current glm-5.3-flash" [ref=e1239] [cursor=pointer]:
+                - generic [ref=e1240]: glm-5.3-flash
+            - button "Send message" [disabled] [ref=e1243]
+  - generic [ref=e1097]:
+    - generic [ref=e1098]: ↩
+    - generic [ref=e1099]:
+      - generic [ref=e1100]: 回到上次实验：装箱单 · Qwen3-VL-32B · 10-23 14:51
+      - generic [ref=e1101]: 上次实验 · 点击选用，发送首条消息时自动绑定
+    - button "继续这次实验" [ref=e1102] [cursor=pointer]

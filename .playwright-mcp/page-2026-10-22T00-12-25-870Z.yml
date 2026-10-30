@@ -1,0 +1,131 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e2681] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e2682]:
+          - generic [ref=e2683]: ATF
+          - generic [ref=e2686]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e2689] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e2696]: Workspaces
+        - generic [ref=e2698]:
+          - button "Search sessions" [ref=e2699] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e2704] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e2709]:
+        - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e5734] [cursor=pointer]
+        - treeitem "ws-pl-walkthrough" [ref=e2712] [cursor=pointer]
+        - generic [ref=e2718]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e2720] [cursor=pointer]
+          - treeitem "装箱单字段抽取新实验全流程 24min" [selected] [ref=e8739] [cursor=pointer]:
+            - generic [ref=e2737]: 装箱单字段抽取新实验全流程
+            - generic [ref=e2738]: 24min
+        - treeitem "atf-prodtest-20261021" [ref=e8367] [cursor=pointer]
+        - treeitem "a4-hotws" [ref=e2749] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e2757] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e2765] [cursor=pointer]
+        - treeitem "sam" [ref=e2773] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e5832]:
+    - banner [ref=e5834]:
+      - generic [ref=e5835]:
+        - generic [ref=e5836]:
+          - navigation "Session hierarchy" [ref=e5838]:
+            - generic [ref=e5839]: 装箱单字段抽取新实验全流程
+          - generic [ref=e5842]:
+            - button "More actions" [ref=e5844] [cursor=pointer]
+            - generic [ref=e5849]:
+              - button "选择实验 ▾" [ref=e5851] [cursor=pointer]
+              - button "监控" [ref=e5853] [cursor=pointer]
+          - button "Open right sidebar" [ref=e5856] [cursor=pointer]
+        - tablist [ref=e5859]:
+          - tab "Chat" [selected] [ref=e5860] [cursor=pointer]
+          - tab "Trajectory" [ref=e5861] [cursor=pointer]
+    - generic [ref=e5863]:
+      - generic [ref=e5870]:
+        - generic [ref=e5873]:
+          - generic [ref=e5874]: 从零开始一个新实验：装箱单（pl）字段抽取训练。原始数据已备在本工作区 datasets/walkthrough-pl/（50 对 png+同名标注 json）。请走完整正道链：数据登记（新 run，不复用任何旧实验）→标注体检→实验配置→合同发布→数据切分（训练/测试两分 40/10）→准入检查→训练准备→发起训练。九要素确认卡和各放行卡我会逐张核对，机器事实缺了就停下来问我。
+          - generic [ref=e5876]:
+            - generic [ref=e5877]: 07:46
+            - button "Copy" [ref=e5878] [cursor=pointer]
+        - generic [ref=e8741]:
+          - status [ref=e8742]: Completed
+          - button "Completed in 24m 31s" [ref=e8743] [cursor=pointer]
+        - generic [ref=e8751]:
+          - paragraph [ref=e8752]:
+            - text: family_split 段如预期
+            - strong [ref=e8753]: 停下问你
+            - text: （blocked，零写入）。内核检测原话：
+          - blockquote [ref=e8754]:
+            - paragraph [ref=e8755]: 这批数据没有找到版式分组信息（共 50 页，0 页带分组），因此没有继续切分。如果数据确实分过组：请提供带分组信息的数据文件；如果没分过组：可以改为先分组、再切分。
+          - paragraph [ref=e8756]:
+            - text: 补充检测细节：登记清单里 50 页的
+            - code [ref=e8757]: cluster_id
+            - text: 全是
+            - code [ref=e8758]: cluster-<样本名>
+            - text: 的
+            - strong [ref=e8759]: 1:1 占位
+            - text: （逐页一个簇，不是真实版式分组），也没有 StyleClusterManifest。
+          - paragraph [ref=e8760]:
+            - text: 所以需要你裁决一句话：
+            - strong [ref=e8761]: 这批 50 页装箱单数据，做过版式聚类吗？
+          - list [ref=e8762]:
+            - listitem [ref=e8763]:
+              - strong [ref=e8764]: 没做过
+              - text: （从证据看大概率是这种）→ 我让内核先确定性补簇（自动聚类并产出 StyleClusterManifest），再按簇分层做训练/测试切分；
+            - listitem [ref=e8765]:
+              - strong [ref=e8766]: 确实做过
+              - text: 、分组证据在别的文件/目录里 → 请把那份分组数据指给我，我核对后按既有分组分层。
+          - paragraph [ref=e8767]: 你确认后我继续推进（切分→准入→训练准备→发起训练）。
+        - generic [ref=e8771]:
+          - button "Copy" [ref=e8772] [cursor=pointer]
+          - generic [ref=e8776]:
+            - button "Good response" [ref=e8777] [cursor=pointer]
+            - button "Bad response" [ref=e8780] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=e8783] [cursor=pointer]
+          - generic [ref=e8789]:
+            - button "Usage 3.5M tok" [ref=e8791] [cursor=pointer]
+            - generic [ref=e8797]: 08:10
+      - generic [ref=e8371]:
+        - generic [ref=e8372]:
+          - generic [ref=e8374]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [ref=e8375]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e8376]:
+            - generic [ref=e8377]:
+              - button "Add files or run commands" [ref=e8378] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e8383] [cursor=pointer]'
+            - generic [ref=e8390]:
+              - generic [ref=e8391]:
+                - button "思考 Max(最高) ▾" [ref=e8394] [cursor=pointer]:
+                  - generic [ref=e8395]: 思考
+                  - generic [ref=e8396]: Max(最高)
+                  - generic [ref=e8397]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e8400] [cursor=pointer]:
+                  - generic [ref=e8401]: glm-5.3-flash
+              - button "Send message" [disabled] [ref=e8798]
+        - generic [ref=e8407]:
+          - generic [ref=e8408]:
+            - generic [ref=e8409]:
+              - button "1 turns 50 steps · 57 tok/s" [ref=e8800] [cursor=pointer]:
+                - generic [ref=e8416]: 1 turns 50 steps·57 tok/s
+              - button "3.5M tok · Cache hit 97%" [ref=e8801] [cursor=pointer]:
+                - generic [ref=e8423]: 3.5M tok·Cache hit 97%
+            - generic [ref=e8425]:
+              - button "新建训练" [ref=e8426] [cursor=pointer]
+              - button "查状态" [disabled] [ref=e8427]
+              - button "继续上次" [disabled] [ref=e8428]
+              - button "对比两轮" [disabled] [ref=e8429]
+              - button "走完闭环" [ref=e8430] [cursor=pointer]
+              - button "联合训练" [disabled] [ref=e8431]
+              - button "badcase 可视化" [ref=e8432] [cursor=pointer]
+              - button "发起训练" [ref=e8433] [cursor=pointer]
+          - button "10% of context used" [ref=e8586] [cursor=pointer]:
+            - generic [ref=e8439]: 10%

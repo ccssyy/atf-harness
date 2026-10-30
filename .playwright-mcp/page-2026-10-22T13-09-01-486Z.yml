@@ -1,0 +1,148 @@
+- generic [ref=f3e4]:
+  - generic [ref=f3e7]:
+    - generic [ref=f3e8]:
+      - button "New session" [ref=f3e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f3e10]:
+          - generic [ref=f3e11]: ATF
+          - generic [ref=f3e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f3e17] [cursor=pointer]
+    - button "New session" [ref=f3e20] [cursor=pointer]:
+      - generic [ref=f3e21]: New Session
+    - navigation "Global panels" [ref=f3e26]:
+      - button "Plugins" [ref=f3e27] [cursor=pointer]
+    - generic [ref=f3e38]:
+      - generic [ref=f3e39]:
+        - generic [ref=f3e40]: Workspaces
+        - generic [ref=f3e42]:
+          - button "Search sessions" [ref=f3e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f3e47]:
+          - button "View options" [ref=f3e49] [cursor=pointer]
+          - button "Add workspace" [ref=f3e53] [cursor=pointer]
+      - tree "Sessions" [ref=f3e58]:
+        - generic [ref=f3e110]:
+          - treeitem "b5-walkthrough" [expanded] [ref=f3e112] [cursor=pointer]
+          - treeitem "Running 请为 run-b5-rec 呈现九要素配置 now" [selected] [ref=f3e121] [cursor=pointer]:
+            - generic [ref=f3e122]: Running
+            - generic [ref=f3e128]: 请为 run-b5-rec 呈现九要素配置
+            - generic [ref=f3e129]: now
+          - treeitem "Untitled 1min" [ref=f3e131] [cursor=pointer]:
+            - generic [ref=f3e133]: Untitled
+            - generic [ref=f3e134]: 1min
+          - treeitem "你好，请只回复“在”一个字 9min" [ref=f3e136] [cursor=pointer]:
+            - generic [ref=f3e138]: 你好，请只回复“在”一个字
+            - generic [ref=f3e139]: 9min
+    - button "Settings" [ref=f3e68] [cursor=pointer]
+  - generic [ref=f3e140]:
+    - banner [ref=f3e142]:
+      - generic [ref=f3e143]:
+        - generic [ref=f3e144]:
+          - generic [ref=f3e145]:
+            - navigation "Session hierarchy" [ref=f3e146]:
+              - generic [ref=f3e147]: 请为 run-b5-rec 呈现九要素配置
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f3e151]: Standard mode
+          - generic [ref=f3e158]:
+            - button "More actions" [ref=f3e160] [cursor=pointer]
+            - generic [ref=f3e165]:
+              - button "选择实验 ▾" [ref=f3e167] [cursor=pointer]
+              - button "监控" [ref=f3e169] [cursor=pointer]
+          - button "Open right sidebar" [ref=f3e172] [cursor=pointer]
+        - tablist [ref=f3e175]:
+          - tab "Chat" [selected] [ref=f3e176] [cursor=pointer]
+          - tab "Trajectory" [ref=f3e177] [cursor=pointer]
+    - generic [ref=f3e179]:
+      - generic [ref=f3e186]:
+        - generic [ref=f3e189]:
+          - generic [ref=f3e190]: 请为 run-b5-rec 呈现九要素配置确认卡
+          - generic [ref=f3e192]:
+            - generic [ref=f3e193]: 21:09
+            - button "Copy" [ref=f3e194] [cursor=pointer]
+        - generic [ref=f3e198]:
+          - text: Calling tools · present
+          - generic [ref=f3e205]:
+            - generic [ref=f3e206]: Running
+            - button "Tool call atf_config_confirm · present" [ref=f3e208] [cursor=pointer]:
+              - generic [ref=f3e217]:
+                - generic [ref=f3e218]:
+                  - generic [ref=f3e219]: Tool call
+                  - generic [ref=f3e221]: atf_config_confirm · present
+                - generic [aria-hidden]:
+                  - generic:
+                    - generic:
+                      - generic: Tool call
+                      - generic: atf_config_confirm · present
+        - generic [ref=f3e222]:
+          - status [ref=f3e223]: Deep diving
+          - generic [ref=f3e227]:
+            - generic [ref=f3e228]: Deep diving for 1s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 1s ···
+      - region "九要素训练配置确认 — run-b5-rec" [ref=f3e233]:
+        - generic [ref=f3e234]: 训练配置
+        - generic [ref=f3e236]:
+          - heading "九要素训练配置确认 — run-b5-rec" [level=3] [ref=f3e237]
+          - paragraph [ref=f3e238]: "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。 TokenBudget（三要素）: 单样本 token 预算 max_total_tokens 可编辑 9000 [惯例基线（owner 2026-10-22）] 训练截断 cutoff cutoff_len 只读 9000 [= 预算] 推理窗口 max_model_len 只读 12800 [独立取值]"
+          - generic [ref=f3e239]:
+            - generic [ref=f3e240]:
+              - generic [ref=f3e241]: learning_rate
+              - textbox "learning_rate 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）" [ref=f3e242]: "2e-4"
+              - generic [ref=f3e243]: 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）
+            - generic [ref=f3e244]:
+              - generic [ref=f3e245]: nproc_per_node
+              - textbox "nproc_per_node [1, 可用卡数 8]" [ref=f3e246]: "8"
+              - generic [ref=f3e247]: "[1, 可用卡数 8]"
+            - generic [ref=f3e248]:
+              - generic [ref=f3e249]: base_model_path
+              - textbox "base_model_path" [ref=f3e250]: /data/LLM_model/Qwen3-VL-32B-Instruct
+            - generic [ref=f3e251]:
+              - generic [ref=f3e252]: num_train_epochs
+              - textbox "num_train_epochs 域 [1, 10] 整数" [ref=f3e253]: "3"
+              - generic [ref=f3e254]: 域 [1, 10] 整数
+            - generic [ref=f3e255]:
+              - generic [ref=f3e256]: per_device_train_batch_size
+              - textbox "per_device_train_batch_size" [ref=f3e257]: "2"
+            - generic [ref=f3e258]:
+              - generic [ref=f3e259]: gradient_accumulation_steps
+              - textbox "gradient_accumulation_steps" [ref=f3e260]: "16"
+            - generic [ref=f3e261]:
+              - generic [ref=f3e262]: cutoff_len
+              - textbox "cutoff_len ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）" [ref=f3e263]: "9000"
+              - generic [ref=f3e264]: ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）
+            - generic [ref=f3e265]:
+              - generic [ref=f3e266]: deepspeed
+              - textbox "deepspeed" [ref=f3e267]: ds_z3_offload_config.json
+            - generic [ref=f3e268]:
+              - generic [ref=f3e269]: lora_rank
+              - 'textbox "lora_rank 档位 {16, 32, 64, 128}（alpha=2×rank 联动）" [ref=f3e270]': "32"
+              - generic [ref=f3e271]: "档位 {16, 32, 64, 128}（alpha=2×rank 联动）"
+            - generic [ref=f3e272]:
+              - generic [ref=f3e273]: lora_alpha
+              - textbox "lora_alpha" [ref=f3e274]: "64"
+            - generic [ref=f3e275]:
+              - generic [ref=f3e276]: dataset_keys
+              - textbox "dataset_keys" [ref=f3e277]: （由登记面推导）
+            - generic [ref=f3e278]:
+              - generic [ref=f3e279]: max_total_tokens
+              - textbox "max_total_tokens 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）" [ref=f3e280]: "9000"
+              - generic [ref=f3e281]: 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）
+            - generic [ref=f3e282]:
+              - generic [ref=f3e283]: 最小像素
+              - textbox "最小像素 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）" [ref=f3e284]: "65536"
+              - generic [ref=f3e285]: 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）
+            - generic [ref=f3e286]:
+              - generic [ref=f3e287]: 最大像素
+              - 'textbox "最大像素 两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）" [ref=f3e288]': "1605632"
+              - generic [ref=f3e289]: "两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）"
+            - generic [ref=f3e290]:
+              - generic [ref=f3e291]: negative_ratio_target
+              - textbox "negative_ratio_target 构造带 [0.02, 0.05]" [ref=f3e292]: 0.02,0.05
+              - generic [ref=f3e293]: 构造带 [0.02, 0.05]
+            - generic [ref=f3e294]:
+              - generic [ref=f3e295]: token_budget_sync_reason
+              - textbox "token_budget_sync_reason" [ref=f3e296]:
+                - /placeholder: 预算与 cutoff 不等时的不同步理由（不等必填；相等留空）——同步请在 cutoff_len 框直接填预算值（用户动作）
+        - generic [ref=f3e297]:
+          - status [ref=f3e298]
+          - generic [ref=f3e299]:
+            - button "Cancel" [ref=f3e300] [cursor=pointer]
+            - button "确认并继续" [ref=f3e301] [cursor=pointer]

@@ -1,0 +1,246 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - generic [ref=f1e8]:
+      - button "New session" [ref=f1e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f1e10]:
+          - generic [ref=f1e11]: ATF
+          - generic [ref=f1e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f1e17] [cursor=pointer]
+    - button "New session" [ref=f1e20] [cursor=pointer]:
+      - generic [ref=f1e21]: New Session
+    - navigation "Global panels" [ref=f1e26]:
+      - button "Plugins" [ref=f1e27] [cursor=pointer]
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]: Workspaces
+        - generic [ref=f1e42]:
+          - button "Search sessions" [ref=f1e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f1e47]:
+          - button "View options" [ref=f1e49] [cursor=pointer]
+          - button "Add workspace" [ref=f1e53] [cursor=pointer]
+      - tree "Sessions" [ref=f1e58]:
+        - generic [ref=f1e110]:
+          - treeitem "b5-walkthrough" [expanded] [ref=f1e112] [cursor=pointer]
+          - treeitem "你好，请只回复“在”一个字 now" [selected] [ref=f1e324] [cursor=pointer]:
+            - generic [ref=f1e123]: 你好，请只回复“在”一个字
+            - generic [ref=f1e240]: now
+    - button "Settings" [ref=f1e68] [cursor=pointer]
+  - generic [ref=f1e77]:
+    - banner [ref=f1e125]:
+      - generic [ref=f1e126]:
+        - generic [ref=f1e127]:
+          - generic [ref=f1e241]:
+            - navigation "Session hierarchy" [ref=f1e242]:
+              - generic [ref=f1e243]: 你好，请只回复“在”一个字
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f1e247]: Standard mode
+          - generic [ref=f1e254]:
+            - button "More actions" [ref=f1e256] [cursor=pointer]
+            - generic [ref=f1e261]:
+              - button "选择实验 ▾" [ref=f1e263] [cursor=pointer]
+              - button "监控" [ref=f1e265] [cursor=pointer]
+        - tablist [ref=f1e266]:
+          - tab "Chat" [selected] [ref=f1e267] [cursor=pointer]
+          - tab "Trajectory" [ref=f1e268] [cursor=pointer]
+    - generic [ref=f1e79]:
+      - generic [ref=f1e275]:
+        - generic [ref=f1e278]:
+          - generic [ref=f1e279]: 你好，请只回复“在”一个字，不要做任何其他操作。
+          - generic [ref=f1e281]:
+            - generic [ref=f1e282]: 20:59
+            - button "Copy" [ref=f1e283] [cursor=pointer]
+        - generic [ref=f1e326]:
+          - status [ref=f1e327]: Failed
+          - button "Failed" [disabled] [expanded] [ref=f1e328]
+        - group [ref=f1e289]:
+          - status [ref=f1e291] [cursor=pointer]:
+            - generic [ref=f1e292]: Retried model request (5/5) · 9s
+        - status [ref=f1e332]:
+          - generic [ref=f1e334]: "This turn failed429: {\"code\":\"1113\",\"message\":\"余额不足或无可用资源包,请充值。\"}"
+          - code [ref=f1e335]: RATE_LIMIT
+      - generic [ref=f1e101]:
+        - generic [ref=f1e102]:
+          - generic [ref=f1e104]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [ref=f1e303]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=f1e106]:
+            - generic [ref=f1e107]:
+              - button "Add files or run commands" [ref=f1e144] [cursor=pointer]
+              - 'button "Access mode, current: Workspace write" [ref=f1e149] [cursor=pointer]':
+                - generic [ref=f1e155]: Workspace write
+            - generic [ref=f1e108]:
+              - generic [ref=f1e159]:
+                - button "思考 Max(最高) ▾" [ref=f1e162] [cursor=pointer]:
+                  - generic [ref=f1e163]: 思考
+                  - generic [ref=f1e164]: Max(最高)
+                  - generic [ref=f1e165]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=f1e168] [cursor=pointer]:
+                  - generic [ref=f1e169]: glm-5.3-flash
+              - button "Send message" [disabled] [ref=f1e336]
+        - generic [ref=f1e306]:
+          - generic [ref=f1e307]:
+            - generic [ref=f1e338]: 1 turns 1 steps
+            - generic [ref=f1e308]:
+              - generic [ref=f1e309]:
+                - button "新建训练" [ref=f1e310] [cursor=pointer]
+                - button "查状态" [disabled] [ref=f1e311]
+                - button "继续上次" [disabled] [ref=f1e312]
+                - button "对比两轮" [disabled] [ref=f1e313]
+                - button "走完闭环" [ref=f1e314] [cursor=pointer]
+                - button "联合训练" [disabled] [ref=f1e315]
+                - button "badcase 可视化" [ref=f1e316] [cursor=pointer]
+                - button "发起训练" [active] [ref=f1e317] [cursor=pointer]
+              - generic [ref=f1e406]:
+                - generic [ref=f1e407]:
+                  - generic [ref=f1e408]: 发起训练
+                  - combobox [ref=f1e409]:
+                    - option "run-b5-norec"
+                    - option "run-b5-rec" [selected]
+                  - button "×" [ref=f1e410] [cursor=pointer]
+                - generic [ref=f1e411]:
+                  - generic [ref=f1e412]:
+                    - generic [ref=f1e413]: train.sh：缺席（需先走 prepare 链）
+                    - generic [ref=f1e414]: prelaunch 报告：缺席（链内按 SKILL.md:84 生成）
+                    - generic [ref=f1e415]: 配置快照：已确认 ✓
+                  - generic [ref=f1e416]:
+                    - generic [ref=f1e417] [cursor=pointer]:
+                      - radio "DRY_RUN 验收（缺省——确认卡→DRY_RUN 校验→账本核验后止步，不开真训）" [checked] [ref=f1e418]
+                      - text: DRY_RUN 验收（缺省——确认卡→DRY_RUN 校验→账本核验后止步，不开真训）
+                    - generic [ref=f1e419] [cursor=pointer]:
+                      - radio "真实训练（须 owner 单独书面点头；单卡 ≤180min 授权轴）" [ref=f1e420]
+                      - text: 真实训练（须 owner 单独书面点头；单卡 ≤180min 授权轴）
+                  - generic [ref=f1e421]:
+                    - generic [ref=f1e422]:
+                      - generic [ref=f1e423]: IterationConfig 摘要（四件套：含义＋值＋来源标注＋可改）
+                      - generic [ref=f1e424]: 改法：消息/卡面回复如「lr 改 2e-4」
+                    - generic [ref=f1e425]:
+                      - generic "学习率（LoRA 微调优化步长）｜来源：来自 IterationConfig" [ref=f1e426]: learning_rate
+                      - generic [ref=f1e427]: "2e-4"
+                      - generic [ref=f1e428]: 来自 IterationConfig
+                      - generic "学习率（LoRA 微调优化步长）｜来源：来自 IterationConfig" [ref=f1e429]: 学习率（LoRA 微调优化步长）
+                    - generic [ref=f1e430]:
+                      - generic "训练卡数（单机并行进程数＝GPU 数——默认拉满可用卡，训练时长优先；降档仅用户明确要求）｜来源：来自 IterationConfig" [ref=f1e431]: nproc_per_node
+                      - generic [ref=f1e432]: "8"
+                      - generic [ref=f1e433]: 来自 IterationConfig
+                      - generic "训练卡数（单机并行进程数＝GPU 数——默认拉满可用卡，训练时长优先；降档仅用户明确要求）｜来源：来自 IterationConfig" [ref=f1e434]: 训练卡数（单机并行进程数＝GPU 数——默认拉满可用卡，训练时长优先；降档仅用户明确要求）
+                    - generic [ref=f1e435]:
+                      - generic "基模型路径（本地绝对路径——默认＝模型库位置下 Qwen3-VL-32B-Instruct，owner 偏置锚点；家族名/HF id 无效）｜来源：已用缺省（未经确认）" [ref=f1e436]: base_model_path
+                      - generic [ref=f1e438]: 缺省/KB 未校准 ⚠
+                      - generic "基模型路径（本地绝对路径——默认＝模型库位置下 Qwen3-VL-32B-Instruct，owner 偏置锚点；家族名/HF id 无效）｜来源：已用缺省（未经确认）" [ref=f1e439]: 基模型路径（本地绝对路径——默认＝模型库位置下 Qwen3-VL-32B-Instruct，owner 偏置锚点；家族名/HF id 无效）
+                    - generic [ref=f1e440]:
+                      - generic "训练轮数（全量数据过几遍）｜来源：来自 IterationConfig" [ref=f1e441]: num_train_epochs
+                      - generic [ref=f1e442]: "3"
+                      - generic [ref=f1e443]: 来自 IterationConfig
+                      - generic "训练轮数（全量数据过几遍）｜来源：来自 IterationConfig" [ref=f1e444]: 训练轮数（全量数据过几遍）
+                    - generic [ref=f1e445]:
+                      - generic "单卡 batch（每次前向的样本数）｜来源：来自 IterationConfig" [ref=f1e446]: per_device_train_batch_size
+                      - generic [ref=f1e447]: "2"
+                      - generic [ref=f1e448]: 来自 IterationConfig
+                      - generic "单卡 batch（每次前向的样本数）｜来源：来自 IterationConfig" [ref=f1e449]: 单卡 batch（每次前向的样本数）
+                    - generic [ref=f1e450]:
+                      - generic "梯度累积（累积几步做一次更新；等效 batch＝单卡 batch×累积）｜来源：已用缺省（未经确认）" [ref=f1e451]: gradient_accumulation_steps
+                      - generic [ref=f1e452]: "8"
+                      - generic [ref=f1e453]: 缺省/KB 未校准 ⚠
+                      - generic "梯度累积（累积几步做一次更新；等效 batch＝单卡 batch×累积）｜来源：已用缺省（未经确认）" [ref=f1e454]: 梯度累积（累积几步做一次更新；等效 batch＝单卡 batch×累积）
+                    - generic [ref=f1e455]:
+                      - generic "训练截断（训练序列最大 token 数——只在训练时生效且会截断，禁当数据筛选阈值；与预算 max_total_tokens 同步或填理由）｜来源：来自 IterationConfig" [ref=f1e456]: cutoff_len
+                      - generic [ref=f1e457]: "9000"
+                      - generic [ref=f1e458]: 来自 IterationConfig
+                      - generic "训练截断（训练序列最大 token 数——只在训练时生效且会截断，禁当数据筛选阈值；与预算 max_total_tokens 同步或填理由）｜来源：来自 IterationConfig" [ref=f1e459]: 训练截断（训练序列最大 token 数——只在训练时生效且会截断，禁当数据筛选阈值；与预算 max_total_tokens 同步或填理由）
+                    - generic [ref=f1e460]:
+                      - generic "DeepSpeed 分布式配置（显存/卸载策略）｜来源：已用缺省（未经确认）" [ref=f1e461]: deepspeed
+                      - generic [ref=f1e462]: ds_z2_config.json
+                      - generic [ref=f1e463]: 缺省/KB 未校准 ⚠
+                      - generic "DeepSpeed 分布式配置（显存/卸载策略）｜来源：已用缺省（未经确认）" [ref=f1e464]: DeepSpeed 分布式配置（显存/卸载策略）
+                    - generic [ref=f1e465]:
+                      - generic "LoRA 秩（容量/参数量）｜来源：来自 IterationConfig" [ref=f1e466]: lora_rank
+                      - generic [ref=f1e467]: "32"
+                      - generic [ref=f1e468]: 来自 IterationConfig
+                      - generic "LoRA 秩（容量/参数量）｜来源：来自 IterationConfig" [ref=f1e469]: LoRA 秩（容量/参数量）
+                    - generic [ref=f1e470]:
+                      - generic "LoRA alpha（缩放系数，与 rank 成对）｜来源：来自 IterationConfig" [ref=f1e471]: lora_alpha
+                      - generic [ref=f1e472]: "64"
+                      - generic [ref=f1e473]: 来自 IterationConfig
+                      - generic "LoRA alpha（缩放系数，与 rank 成对）｜来源：来自 IterationConfig" [ref=f1e474]: LoRA alpha（缩放系数，与 rank 成对）
+                    - generic [ref=f1e475]:
+                      - generic "数据集键（登记面推导的 variants 条目）｜来源：已用缺省（未经确认）" [ref=f1e476]: dataset_keys
+                      - generic [ref=f1e477]: （由登记面推导）
+                      - generic [ref=f1e478]: 缺省/KB 未校准 ⚠
+                      - generic "数据集键（登记面推导的 variants 条目）｜来源：已用缺省（未经确认）" [ref=f1e479]: 数据集键（登记面推导的 variants 条目）
+                    - generic [ref=f1e480]:
+                      - generic "单样本 token 预算（数据构造期准入闸门——超限样本构造期拒绝而非截断；须 ≤ cutoff_len 且 ≤ max_model_len）｜来源：来自 IterationConfig" [ref=f1e481]: max_total_tokens
+                      - generic [ref=f1e482]: "9000"
+                      - generic [ref=f1e483]: 来自 IterationConfig
+                      - generic "单样本 token 预算（数据构造期准入闸门——超限样本构造期拒绝而非截断；须 ≤ cutoff_len 且 ≤ max_model_len）｜来源：来自 IterationConfig" [ref=f1e484]: 单样本 token 预算（数据构造期准入闸门——超限样本构造期拒绝而非截断；须 ≤ cutoff_len 且 ≤ max_model_len）
+                    - generic [ref=f1e485]:
+                      - generic "推理窗口（vLLM 部署上下文配置，独立取值非 cutoff 推导——预算须 ≤ 本值，余量给生成）｜来源：来自 IterationConfig" [ref=f1e486]: max_model_len
+                      - generic [ref=f1e487]: "12800"
+                      - generic [ref=f1e488]: 来自 IterationConfig
+                      - generic "推理窗口（vLLM 部署上下文配置，独立取值非 cutoff 推导——预算须 ≤ 本值，余量给生成）｜来源：来自 IterationConfig" [ref=f1e489]: 推理窗口（vLLM 部署上下文配置，独立取值非 cutoff 推导——预算须 ≤ 本值，余量给生成）
+                    - generic [ref=f1e490]:
+                      - generic "像素下限（训练/评估必须同一对值，评估服务只引用训练确认值）｜来源：来自 IterationConfig" [ref=f1e491]: image_min_pixels
+                      - generic [ref=f1e492]: "65536"
+                      - generic [ref=f1e493]: 来自 IterationConfig
+                      - generic "像素下限（训练/评估必须同一对值，评估服务只引用训练确认值）｜来源：来自 IterationConfig" [ref=f1e494]: 像素下限（训练/评估必须同一对值，评估服务只引用训练确认值）
+                    - generic [ref=f1e495]:
+                      - generic "像素上限（与像素下限成对确认）｜来源：来自 IterationConfig" [ref=f1e496]: image_max_pixels
+                      - generic [ref=f1e497]: "802816"
+                      - generic [ref=f1e498]: 来自 IterationConfig
+                      - generic "像素上限（与像素下限成对确认）｜来源：来自 IterationConfig" [ref=f1e499]: 像素上限（与像素下限成对确认）
+                    - generic [ref=f1e500]:
+                      - generic "负样本目标带（构造期配比目标）｜来源：KB 建议·未校准（未经确认不进生效配置）" [ref=f1e501]: negative_ratio_target
+                      - generic [ref=f1e502]: 0.02,0.05
+                      - generic [ref=f1e503]: 缺省/KB 未校准 ⚠
+                      - generic "负样本目标带（构造期配比目标）｜来源：KB 建议·未校准（未经确认不进生效配置）" [ref=f1e504]: 负样本目标带（构造期配比目标）
+                    - generic [ref=f1e505]:
+                      - generic [ref=f1e506]: TokenBudget 三要素（预算可编辑；cutoff/推理窗口只读——预算须 ≤ 两者，训练/推理两栈独立取值）
+                      - generic [ref=f1e508]: 单样本 token 预算 max_total_tokens 可编辑 9000 [惯例基线（owner 2026-10-22）]
+                      - generic [ref=f1e510]: 训练截断 cutoff cutoff_len 只读 9000 [= 预算]
+                      - generic [ref=f1e512]: 推理窗口 max_model_len 只读 12800 [独立取值]
+                      - generic [ref=f1e514]:
+                        - generic [ref=f1e515]: 视觉像素对（最小/最大像素可改——构造/训练/推理同一对值）
+                        - generic [ref=f1e517]: 最小像素 可编辑 65,536 [默认]
+                        - generic [ref=f1e519]: 最大像素 可编辑 802,816 [默认]（候选 1,605,632）
+                        - generic [ref=f1e524]: Agent 推荐：1,605,632 —— p95长边3240,量子4.4px,1605632超预算页0.3%
+                  - generic [ref=f1e521]:
+                    - button "生成发起消息（进 chat 正道链）" [ref=f1e522] [cursor=pointer]
+                    - generic [ref=f1e523]: 消息进 chat 后走确认卡批准/驳回（M2 内嵌通道）；批准≠放行真训——真训另有闸。
+          - button "0% of context used" [ref=f1e319] [cursor=pointer]:
+            - generic [ref=f1e323]: 0%
+  - generic [ref=f1e346]:
+    - tablist [ref=f1e348]:
+      - tab [ref=f1e349] [cursor=pointer]:
+        - generic [ref=f1e350]: Start
+        - button "Close"
+      - tab "训练监控 Close" [selected] [ref=f1e357] [cursor=pointer]:
+        - generic [ref=f1e358]: 训练监控
+        - button "Close" [ref=f1e360]
+      - button "Split" [ref=f1e365] [cursor=pointer]
+      - generic [ref=f1e368]:
+        - button "Fullscreen" [ref=f1e369] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=f1e372] [cursor=pointer]
+    - generic [ref=f1e378]:
+      - generic [ref=f1e379]:
+        - generic [ref=f1e380]:
+          - generic [ref=f1e381]: 运行监控
+          - generic [ref=f1e382]: 未关联训练
+        - generic [ref=f1e385]:
+          - button "选择实验 ▾" [ref=f1e386] [cursor=pointer]:
+            - text: 选择实验
+            - generic [ref=f1e387]: ▾
+          - button "全部" [ref=f1e388] [cursor=pointer]
+      - generic [ref=f1e389]:
+        - generic [ref=f1e390]: 未选择实验
+        - button "继续上次：实验 b5-rec" [ref=f1e392] [cursor=pointer]
+        - generic [ref=f1e393]:
+          - generic [ref=f1e394]: 最近实验
+          - button "实验 b5-rec 空闲" [ref=f1e395] [cursor=pointer]:
+            - generic [ref=f1e396]: 实验 b5-rec
+            - generic [ref=f1e397]: 空闲
+          - button "实验 -norec 空闲" [ref=f1e398] [cursor=pointer]:
+            - generic [ref=f1e399]: 实验 -norec
+            - generic [ref=f1e400]: 空闲
+        - generic [ref=f1e401]:
+          - button "新建实验" [ref=f1e402] [cursor=pointer]
+          - button "查看全部实验（只读）" [ref=f1e403] [cursor=pointer]
+        - generic [ref=f1e404]: 机器 GPU：8 卡 · 忙 0（只读，机器级）

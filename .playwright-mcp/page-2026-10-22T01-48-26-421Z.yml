@@ -1,0 +1,841 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - button "Open sidebar" [ref=f1e9] [cursor=pointer]:
+      - generic [ref=f1e11]: ATF
+    - button "New session" [ref=f1e13] [cursor=pointer]
+    - navigation "Global panels" [ref=f1e18]:
+      - button "Plugins" [ref=f1e19] [cursor=pointer]
+    - generic [ref=f1e29]:
+      - button "Add workspace" [ref=f1e32] [cursor=pointer]
+      - button "Search sessions" [ref=f1e36] [cursor=pointer]
+    - button "Settings" [ref=f1e46] [cursor=pointer]
+  - generic [ref=f1e54]:
+    - banner [ref=f1e87]:
+      - generic [ref=f1e88]:
+        - generic [ref=f1e89]:
+          - generic [ref=f1e90]:
+            - navigation "Session hierarchy" [ref=f1e91]:
+              - generic [ref=f1e92]: 装箱单字段抽取新实验全流程
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f1e96]: Standard mode
+          - generic [ref=f1e103]:
+            - button "More actions" [ref=f1e105] [cursor=pointer]
+            - generic [ref=f1e110]:
+              - button "选择实验 ▾" [ref=f1e112] [cursor=pointer]
+              - button "监控" [ref=f1e114] [cursor=pointer]
+          - button "Open right sidebar" [ref=f1e117] [cursor=pointer]
+        - tablist [ref=f1e120]:
+          - tab "Chat" [selected] [ref=f1e121] [cursor=pointer]
+          - tab "Trajectory" [ref=f1e122] [cursor=pointer]
+    - generic [ref=f1e56]:
+      - generic [ref=f1e129]:
+        - button "Load earlier" [ref=f1e131] [cursor=pointer]
+        - generic [ref=f1e134]:
+          - generic [ref=f1e135]: 这批数据没做过版式聚类（占位簇是登记期占位）。授权按内核指引用自动分组重跑切分（auto_style_cluster=on），划分按训练/测试两分 40/10。继续推进后续段。
+          - generic [ref=f1e137]:
+            - generic [ref=f1e138]: 08:13
+            - button "Copy" [ref=f1e139] [cursor=pointer]
+        - generic [ref=f1e144]:
+          - status [ref=f1e145]: Completed
+          - button "Completed in 25m 7s" [disabled] [ref=f1e146]
+        - button "Analysis completed" [ref=f1e150] [cursor=pointer]
+        - paragraph [ref=f1e168]:
+          - text: 收到：未做过版式聚类，授权内核自动补簇后按簇分层切分。重触发
+          - strong [ref=f1e169]: family_split
+          - text: （auto_style_cluster=on）。请在面板放行。
+        - button "Called tools" [ref=f1e172] [cursor=pointer]
+        - paragraph [ref=f1e190]:
+          - text: family_split 二次 blocked：内核按授权开了自动补簇并尝试按 8:2 目标（test 目标 10 页）分配，但
+          - strong [ref=f1e191]: 补出的版式簇都太小（每簇 <5 页），守恒护栏拒绝留测试集
+          - text: （
+          - code [ref=f1e192]: split_partition_empty:test:target:10
+          - text: ）。内核给出三条路（合并小类／全部训练／每小类留 1 页测试）。先读守卫逻辑，弄清各选项的真实划分效果再拿给你选。
+        - button "Called tools" [ref=f1e195] [cursor=pointer]
+        - paragraph [ref=f1e213]:
+          - text: 内核的三态文案是
+          - strong [ref=f1e214]: 固定模板
+          - text: （
+          - code [ref=f1e215]: _USER_MESSAGE_SMALL_CLUSTERS
+          - text: ），「每类不足 5 页」未必反映真实簇形。守恒护栏的真实拒绝点是：按簇整簇分配（零泄漏）下 test 分区落到 0 页（目标 10）。可用杠杆是
+          - code [ref=f1e216]: allow_small_cluster_test
+          - text: （每簇按 max(1, 20%) 留测）。在给用户选项前，先看这次失败有没有留下聚类证据、真实簇形是什么——有真实数字才好决策。
+        - button "Called tools" [ref=f1e219] [cursor=pointer]
+        - paragraph [ref=f1e237]:
+          - text: 失败轮在发布区留下了
+          - code [ref=f1e238]: style-cluster-manifest.json
+          - text: ——读它拿真实簇形。
+        - button "Called tools" [ref=f1e241] [cursor=pointer]
+        - paragraph [ref=f1e259]: 单行 JSON 被截断，用脚本统计簇分布。
+        - button "Called tools" [ref=f1e262] [cursor=pointer]
+        - paragraph [ref=f1e280]:
+          - text: 真实簇形拿到了：
+          - strong [ref=f1e281]: 44 簇
+          - text: ——40 个单页簇、2 个双页簇、2 个三页簇（模板文案「每类不足 5 页」属实）。在下结论前核对
+          - code [ref=f1e282]: small_cluster_policy=allow_test
+          - text: 在分配面的真实语义（每簇留测是强制还是上限），避免拍脑袋。
+        - button "Called tools" [ref=f1e285] [cursor=pointer]
+        - paragraph [ref=f1e303]:
+          - code [ref=f1e304]: allow_test
+          - text: 的真实语义核实了（data_admission.py:1435-1445、1872-1880）：每簇 test 目标 = max(1, round(簇大小×0.2))。代入我们的簇形算一下：40 个单页簇各留 1 页测试、2 个双页簇各 1、2 个三页簇各 1 →
+          - strong [ref=f1e305]: test=44 / train=6，完全倒挂
+          - text: ——对我们这种单页簇占 80% 的数据，这个开关会产出比 blocked 更糟的「合法废split」。再确认一下切分策略是否有别的可选项。
+        - button "Called tools" [ref=f1e308] [cursor=pointer]
+        - generic [ref=f1e325]:
+          - paragraph [ref=f1e326]:
+            - text: family_split 停在第三种blocked，这次我把三条路的
+            - strong [ref=f1e327]: 精确算术结果
+            - text: 都核完了（读了 pin 内核分配器
+            - code [ref=f1e328]: data_admission.py:1420-1445
+            - text: 、守恒护栏
+            - code [ref=f1e329]: 1817-1830
+            - text: 、策略定义
+            - code [ref=f1e330]: walkthrough_pipeline.py:1325-1332
+            - text: ），必须停下来交给你裁定。
+          - heading [level=2] [ref=f1e331]:
+            - text: 真实簇形（来自本轮补簇产物
+            - code [ref=f1e332]: style-cluster-manifest.json
+            - text: ）
+          - list [ref=f1e333]:
+            - listitem [ref=f1e334]:
+              - text: 50 页 →
+              - strong [ref=f1e335]: 44 个版式簇
+              - text: ：40 个单页簇、2 个双页簇、2 个三页簇（合计多页簇仅 4 个 10 页）
+            - listitem [ref=f1e336]:
+              - text: 切分策略是内核硬编码的「按簇分层 8:2」（
+              - code [ref=f1e337]: "target_ratios {train:0.8, test:0.2}"
+              - text: ，段工具无比例参数）；分配粒度=整簇，任何簇不得跨区（零泄漏）
+          - heading "三条路在你这份数据上的精确结果" [level=2] [ref=f1e338]
+          - table [ref=f1e340]:
+            - rowgroup [ref=f1e341]:
+              - row [ref=f1e342]:
+                - columnheader "内核路径" [ref=f1e343]
+                - columnheader "算术结果" [ref=f1e344]
+                - columnheader "结论" [ref=f1e345]
+            - rowgroup [ref=f1e346]:
+              - row [ref=f1e347]:
+                - cell "strict（现状）" [ref=f1e348]
+                - cell [ref=f1e349]:
+                  - text: 每簇 <5 页全部豁免测试 → 50/0 → 护栏
+                  - code [ref=f1e350]: split_partition_empty:test
+                - cell "❌ 已blocked" [ref=f1e351]
+              - row [ref=f1e352]:
+                - cell "allow_test（每小类留1页）" [ref=f1e353]
+                - cell [ref=f1e354]:
+                  - text: 每簇 test=max(1, round(簇大小×0.2))：单页簇整页入测 →
+                  - strong [ref=f1e355]: test=44 / train=6 倒挂
+                  - text: ；随后护栏比例偏差 |44−10|=34 > 容差 12.5 →
+                  - code [ref=f1e356]: split_ratio_deviation
+                  - text: 必blocked
+                - cell "❌ 必blocked，即使通过也是废split" [ref=f1e357]
+              - row [ref=f1e358]:
+                - cell "合并小类" [ref=f1e359]
+                - cell "40/44 簇是独版单页，无相近可合，内核也无外露合并参数" [ref=f1e360]
+                - cell "❌ 不可行" [ref=f1e361]
+          - paragraph [ref=f1e362]:
+            - strong [ref=f1e363]: 根子
+            - text: ：这批 50 页几乎是 50 种独版版式，而 walkthrough 切分器的分配公式（<5 页豁免/每簇强制 1 页测试/比例护栏）在「全小簇」数据上产不出任何带测试集的合法划分。页级 40/10 本来数学上可行（test=4 个多页簇整簇 10 页，train=40 个单页簇，零跨区零泄漏），但内核分配器没有这个策略变体，我也无权改 pin 内核。
+          - heading "你的选项" [level=2] [ref=f1e364]
+          - list [ref=f1e365]:
+            - listitem [ref=f1e366]:
+              - strong [ref=f1e367]: A（最正道）
+              - text: ：补充/替换数据，让至少几个主要版式各凑齐 ≥5 页（如每模板 10 页×5 模板）→ 40/10 一步到位、零泄漏、全链不用改。链在切分段挂起等你。
+            - listitem [ref=f1e368]:
+              - strong [ref=f1e369]: B（降级放行）
+              - text: ：内核支持「全部训练」模式（护栏显式豁免、如实记录无测试集），但
+              - strong [ref=f1e370]: 段工具不透传该旗标
+              - text: ——若你明确授权，我只能经 scratch 执行面用等价 CLI 参数跑该段（须你点头的两项代价：①绕开段工具参数面，属流程破例；②没有 held-out 测试集，后续正式评估无测试资产可用，只能外部评估或跳过评估）。
+            - listitem [ref=f1e371]:
+              - strong [ref=f1e372]: C（owner 级改策略）
+              - text: ：给内核切分器加「页级 40/10、整簇不跨区」策略变体，或给段工具加旗标透传——超出我权限，需你裁定后另立任务。
+          - paragraph [ref=f1e373]: 选 A/B/C，或给我别的指示。
+        - generic [ref=f1e376]:
+          - generic [ref=f1e377]: 更正前面的授权：拿到真实簇形（44 簇、40 个单例）后，「每小类留 1 页」会落成 test≈44/train≈6，不可用。改走「合并相近小类」：这 50 页是同一版式家族的装箱单，按整族并成一簇（50 页一簇）提供聚类证据，再按 strict 8:2 分层切分——预期恰好 40/10。合并是数据面动作，我确认这样做；产物（StyleClusterManifest/分配清单）落 run 的发布区留档可审计。
+          - generic [ref=f1e379]:
+            - generic [ref=f1e380]: 08:20
+            - button "Copy" [ref=f1e381] [cursor=pointer]
+        - button "Analysis completed" [ref=f1e387] [cursor=pointer]
+        - paragraph [ref=f1e405]:
+          - text: 收到更正与明确授权：按数据面动作把 50 页整族并成一簇、以 owner 聚类证据接入，再走 strict 8:2。执行前我先读 pin 内核的两处消费代码，确认三件事：①检测面从哪些路径发现 owner manifest；②切分分层到底吃 manifest assignments 还是 CSV 列；③manifest 的 schema/摘要校验要求——确保产物可审计、且
+          - strong [ref=f1e406]: 不覆盖
+          - text: 上一轮内核自产的 44 簇 manifest（那是要留档的证据）。
+        - button "Called tools" [ref=f1e409] [cursor=pointer]
+        - generic [ref=f1e426]:
+          - paragraph [ref=f1e427]: 检测面单源读完，关键事实：
+          - list [ref=f1e428]:
+            - listitem [ref=f1e429]:
+              - strong [ref=f1e430]:
+                - text: 页级簇证据的单源是
+                - code [ref=f1e431]: global_assignment.csv
+                - text: 的
+                - code [ref=f1e432]: cluster_id
+                - text: 列
+              - text: （与准入同一实现），manifest 只能在「真实簇证据」在场时作辅证——整份
+              - code [ref=f1e433]: cluster-<stem>
+              - text: 占位时「即便 manifest 在场也不据此复用」。所以 owner 合并必须落到 CSV 的 cluster 列，单写 manifest 无效。
+            - listitem [ref=f1e434]:
+              - text: manifest 识别面＝split 目录与 run 目录内
+              - code [ref=f1e435]: "*style-cluster-manifest.json"
+              - text: （rglob）。
+          - paragraph [ref=f1e436]: 还需确认 build_family_split 在「已聚类」分支怎么消费簇证据（是否校验 manifest↔CSV 一致、多 manifest 是否歧义），以及上一轮 auto 聚类有没有回写过 CSV。先查 CSV 现状，再读消费代码。
+        - button "Called tools" [ref=f1e439] [cursor=pointer]
+        - paragraph [ref=f1e457]:
+          - text: CSV 未被上轮改写（仍是占位、split=unassigned）——blocked 零写入成立。但发现关键约束：
+          - code [ref=f1e458]: split_manifest.json
+          - text: 里钉了
+          - code [ref=f1e459]: assignment_csv_sha256
+          - text: （CSV 的 sha256）与
+          - code [ref=f1e460]: row_digest
+          - text: （=commit_pin）。改 CSV 前必须查清谁消费这两个校验值、以及已聚类分支的簇证据摄入逻辑。
+        - button "Called tools" [ref=f1e463] [cursor=pointer]
+        - paragraph [ref=f1e481]:
+          - code [ref=f1e482]: assignment_csv_sha256
+          - text: 只在登记段写入、无人复读校验；
+          - code [ref=f1e483]: row_digest
+          - text: 唯一消费点=取前 40 位当 commit_pin 定位登记件——
+          - strong [ref=f1e484]: 载重，不可改
+          - text: 。也就是说：CSV 的 cluster 列是唯一可注入点，且改后不破坏任何链上校验，但
+          - code [ref=f1e485]: split_manifest.json
+          - text: 里的旧 sha 会失配——这点我会在 owner 证据件里如实留痕，不悄悄改登记事实。最后读 build_family_split 的「已聚类」摄入逻辑，确认分层到底吃 CSV 列还是 manifest。
+        - button "Called tools" [ref=f1e488] [cursor=pointer]
+        - generic [ref=f1e505]:
+          - paragraph [ref=f1e506]:
+            - text: 消费链闭合确认，机制完全清楚了（
+            - code [ref=f1e507]: data_admission.py:1508-1547
+            - text: ）：
+          - list [ref=f1e508]:
+            - listitem [ref=f1e509]:
+              - text: 分层吃的簇证据就是
+              - strong [ref=f1e510]:
+                - code [ref=f1e511]: inventory.pairs[].cluster_id
+                - text: ← CSV cluster 列
+              - text: ；只有「缺失/占位 且 auto_style_cluster=on」才触发内核自聚类覆盖
+            - listitem [ref=f1e512]:
+              - text: 把 50 行 cluster_id 改成一个共享非占位 id 后：
+              - code [ref=f1e513]: missing_clusters=False
+              - text: 、
+              - code [ref=f1e514]: assignment_is_placeholder=False
+              - text: →
+              - strong [ref=f1e515]: 任何模式都不复聚
+              - text: ，按簇分层退化为「单簇 50 页」→ strict 每簇 test 目标=max(1, round(50×0.2))=
+              - strong [ref=f1e516]: "10"
+              - text: ，整簇内按稳定序取 10 页测试、40 页训练 →
+              - strong [ref=f1e517]: 恰好 40/10
+            - listitem [ref=f1e518]: 泄漏审计维度是 component/pixel/document/family（逐页独占），单簇跨分区不触发任何泄漏位；护栏 test=10/target=10 零偏差 ✓
+          - paragraph [ref=f1e519]:
+            - text: 执行方案（按你的授权）：①CSV cluster 列 50 行 → 单一 owner 簇 id（其余 8 列逐字节不动）；②owner 版
+            - code [ref=f1e520]: StyleClusterManifest/v1
+            - text: 落
+            - code [ref=f1e521]: run/publish/owner-family-merge/
+            - text: （含裁定依据、授权来源、原/新 CSV sha、与 44 簇 auto 产物的关系——auto 件原样留档不覆盖；
+            - code [ref=f1e522]: split_manifest.json
+            - text: 的
+            - code [ref=f1e523]: assignment_csv_sha256
+            - text: 指向原 CSV 一事如实写明，row_digest/commit_pin 载重不动）；③默认 strict 重跑切分。开始改 CSV（写操作，请放行）。
+        - button "Called tools" [ref=f1e526] [cursor=pointer]
+        - paragraph [ref=f1e544]: bash 面的 python3 缺 libpython 起不来——换 scratch 执行面（其 python3 可用，同样走审批）执行同一编辑脚本。
+        - button "Called tools" [ref=f1e547] [cursor=pointer]
+        - paragraph [ref=f1e565]:
+          - text: CSV 合并完成：50 行 → 单一 owner 簇 id，原 sha
+          - code [ref=f1e566]: 399b9666…
+          - text: （与登记件记录一致）→ 新 sha
+          - code [ref=f1e567]: c2601009…
+          - text: 。现在生成 owner 版聚类证据件（含完整裁定留痕）落到 run 发布区。
+        - button "Called tools" [ref=f1e570] [cursor=pointer]
+        - paragraph [ref=f1e588]:
+          - text: owner 证据件落位（sha
+          - code [ref=f1e589]: f9e3868c…
+          - text: ，50 指派/1 簇）。重触发
+          - strong [ref=f1e590]: family_split
+          - text: （缺省 auto——检测面现在应为 already_clustered：CSV 全部同簇非占位 + manifest 在场；按既有簇 strict 分层，不再复聚）。请在面板放行。
+        - button "Called tools" [ref=f1e593] [cursor=pointer]
+        - paragraph [ref=f1e611]:
+          - text: 三态检测完全按预期生效（already_clustered、不复聚、effective_auto=false），但撞上
+          - strong [ref=f1e612]: 不可变证据冲突
+          - text: ：上一轮 blocked 的 44 簇尝试在内容寻址发布区
+          - code [ref=f1e613]: publish/a52ace93/
+          - text: 里留下了部分 G2 证据（
+          - code [ref=f1e614]: raw-g2-gate.json
+          - text: ），本轮同候选同工作区重算出
+          - strong [ref=f1e615]: 不同
+          - text: 证据内容——不可变写保护拒绝静默覆盖（这正是它防「跨语义复用」的设计目的）。先确认冲突文件与不可变写语义，再做有审计的退役。
+        - button "Called tools" [ref=f1e618] [cursor=pointer]
+        - paragraph [ref=f1e636]:
+          - text: 冲突源确认：
+          - code [ref=f1e637]: raw-g2-gate.json
+          - text: （上轮 44 簇尝试在分配护栏拒绝
+          - strong [ref=f1e638]: 前
+          - text: 已写下的 G2 证据；其 inventory artifact_ref 含簇信息→本轮内容必然不同）。预判本轮还可能重写哪些不可变件，把同工作区内所有此类文件名先列出来，一次性做有审计的退役。
+        - button "Called tools" [ref=f1e641] [cursor=pointer]
+        - paragraph [ref=f1e659]:
+          - text: 本轮会重写的不可变件里只有
+          - code [ref=f1e660]: raw-g2-gate.json
+          - text: 有旧内容（split-manifest/leakage-audit 等上轮未写出；44 簇
+          - code [ref=f1e661]: style-cluster-manifest.json
+          - text: 在已聚类分支不会被动——正好完整留档）。执行有审计退役：把旧 G2 证据移入
+          - code [ref=f1e662]: publish/owner-family-merge/superseded/
+          - text: ，并在 owner 证据件里补记这条处置（写操作，请放行）。
+        - button "Called tools" [ref=f1e665] [cursor=pointer]
+        - paragraph [ref=f1e683]:
+          - text: 退役完成（旧件 sha
+          - code [ref=f1e684]: 53b42c84…
+          - text: 归档，owner 证据件更新为
+          - code [ref=f1e685]: 6c74765d…
+          - text: ）。重触发
+          - strong [ref=f1e686]: family_split
+          - text: 。请在面板放行。
+        - button "Called tools" [ref=f1e689] [cursor=pointer]
+        - paragraph [ref=f1e707]:
+          - text: ✅
+          - strong [ref=f1e708]: family_split 段通过
+          - text: ：三态 already_clustered（未复聚），同轮 G1–G4 四闸全 pass（extraction-contract / source-identity / split-integrity / training-data）。现在核验实际划分页数是否恰为 40/10。
+        - button "Called tools" [ref=f1e711] [cursor=pointer]
+        - generic [ref=f1e728]:
+          - paragraph [ref=f1e729]:
+            - text: ✅✅
+            - strong [ref=f1e730]: 切分核验：恰好 40/10
+          - list [ref=f1e731]:
+            - listitem [ref=f1e732]:
+              - code [ref=f1e733]: "partition_counts: {train: 40, test: 10}"
+              - text: ，
+              - code [ref=f1e734]: "ratios_actual: {train: 0.8, test: 0.2}"
+              - text: ，分层偏差
+              - code [ref=f1e735]: "[]"
+              - text: （零偏差），排除页 0
+            - listitem [ref=f1e736]: split_authority=cluster_stratified；分配清单 50 行全落位；测试集 10 页（1c48c5…、3c671f…、420928…、4738c8…、5fa18f…、821526…、a2d697…、ac68d4…、b01b70…、f813a5…）
+          - paragraph [ref=f1e737]:
+            - text: 第 7 段
+            - strong [ref=f1e738]: admission（数据准入检查）
+            - text: ——把已裁决标签、无泄漏 split 与合同事实编译为可重放的训练数据准入（G1–G4 收口）。请在面板放行。
+        - button "Called tools" [ref=f1e741] [cursor=pointer]
+        - generic [ref=f1e758]:
+          - paragraph [ref=f1e759]:
+            - text: ✅
+            - strong [ref=f1e760]: admission（数据准入）段通过
+            - text: ：G1 extraction-contract-valid / G2 source-identity-valid / G3 split-integrity-valid / G4 training-data-valid 全部 pass，训练数据准入闭合。
+          - paragraph [ref=f1e761]:
+            - text: 第 8 段
+            - strong [ref=f1e762]: training_prep（训练准备）
+            - text: 需要 base_model 本地路径（含 config.json 的绝对目录）。按 owner 裁定锚点（2026-10-12：确认卡基模型默认＝模型库下 Qwen3-VL-32B-Instruct），先核机器事实再触发。
+        - button "Called tools" [ref=f1e765] [cursor=pointer]
+        - paragraph [ref=f1e783]: 围栏收紧了（run 工作区绑定后 bash 可读面变窄）。改用 scratch 执行面核验模型目录机器事实。
+        - button "Called tools" [ref=f1e786] [cursor=pointer]
+        - paragraph [ref=f1e804]:
+          - text: 机器事实核实：
+          - code [ref=f1e805]: /data/LLM_model/Qwen3-VL-32B-Instruct
+          - text: （model_type=qwen3_vl，含 config.json 与 safetensors）在位——与 owner 锚点一致。触发
+          - strong [ref=f1e806]: training_prep
+          - text: （base_model_path 如上，卡面会呈该值供你核对）。请在面板放行。
+        - button "Called tools" [ref=f1e809] [cursor=pointer]
+        - generic [ref=f1e826]:
+          - paragraph [ref=f1e827]:
+            - text: ✅
+            - strong [ref=f1e828]: training_prep（训练准备）段通过
+            - text: ——四个子步全绿：
+          - list [ref=f1e829]:
+            - listitem [ref=f1e830]:
+              - code [ref=f1e831]: field_risk_signals
+              - text: ：可视通道 disabled；风险 Top5 字段 goods_pallet(4.5)、item_no(4.0)、hs_code(3.0)、currency(2.0)、goods_amount(2.0)，定向增强 11 字段
+            - listitem [ref=f1e832]:
+              - code [ref=f1e833]: build_training_variants
+              - text: ：
+              - strong [ref=f1e834]: 基行 40（只用 train 分区）→ 产 143 行
+              - text: （mode0×40 + 定向×103），完整性拒绝 0
+            - listitem [ref=f1e835]:
+              - code [ref=f1e836]: generate_iteration_config
+              - text: ：
+              - code [ref=f1e837]: prep/iteration-config/iteration-config.json
+              - text: （dataset key
+              - code [ref=f1e838]: walkthrough-pl_pl_goods
+              - text: ）
+            - listitem [ref=f1e839]:
+              - code [ref=f1e840]: generate_train_launch
+              - text: ：launch 产物落 run 树，global_batch=8、template=qwen3_vl、save_steps=9
+          - paragraph [ref=f1e841]:
+            - text: 八段全部走完。发起训练前按合同走
+            - strong [ref=f1e842]: 九要素确认卡
+            - text: 。先读 launch 产物与 IterationConfig 实值，把卡面基线备准。
+        - button "Called tools" [ref=f1e845] [cursor=pointer]
+        - paragraph [ref=f1e863]:
+          - text: launch 产物齐备（
+          - code [ref=f1e864]: train.sh
+          - text: +
+          - code [ref=f1e865]: launch_manifest.json
+          - text: ），IterationConfig 实值已取到（lane=pl_goods，基模型=Qwen3-VL-32B-Instruct，rank 32/alpha 64，lr 1e-4，epochs 3，cutoff 9000，global_batch 8，nproc=1，samples 143）。发起训练前还差两件事：GPU 机器事实（供你核对卡数取值）和九要素确认卡。先查 GPU。
+        - button "Called tools" [ref=f1e868] [cursor=pointer]
+        - paragraph [ref=f1e886]:
+          - text: GPU 机器事实：
+          - strong [ref=f1e887]: 8×80GB 全空闲
+          - text: （GPU1 有 8.4GB 残留显存但无计算进程，不构成占用）。机器事实齐备，现在呈
+          - strong [ref=f1e888]: 九要素训练配置确认卡
+          - text: ——基线取 run 的 IterationConfig 实值（walkthrough 生成），你逐键核对，可直接提交或改参。
+        - button "Called tools" [ref=f1e891] [cursor=pointer]
+        - generic [ref=f1e908]:
+          - paragraph [ref=f1e909]:
+            - text: 九要素卡已确认放行（confirmed=true，快照已落
+            - code [ref=f1e910]: webui/config-snapshot.json
+            - text: ）。卡面终值与 IterationConfig 基线的差异都来自部署登记面且经你确认：
+            - strong [ref=f1e911]: nproc 1→8（按 owner 卡数偏置拉满）、grad_accum 8→16、deepspeed ds_z2→ds_z3_offload、max_total_tokens 65536
+            - text: ；其余不变（lr 1e-4、epochs 3、bs 1、cutoff 9000、rank 32/alpha 64、像素 65536/802816、负样本带 0.02–0.05）。
+          - paragraph [ref=f1e912]:
+            - text: 最后一步发起训练。先读
+            - code [ref=f1e913]: train.sh
+            - text: 与
+            - code [ref=f1e914]: launch_manifest.json
+            - text: ，确认 TRAINING_RELEASE 闸与启动编排形态，再走放行执行点。
+        - button "Called tools" [ref=f1e917] [cursor=pointer]
+        - paragraph [ref=f1e935]:
+          - text: train.sh 有一个
+          - strong [ref=f1e936]: 必须处理的错位
+          - text: ：它生成于九要素确认
+          - strong [ref=f1e937]: 之前
+          - text: ，写死的是旧值（NPROC=1、grad_accum=8、ds_z2），而你在卡上确认的是登记面值（NPROC=8、grad_accum=16、ds_z3_offload）；且其放行闸校验的 subject sha=旧 IterationConfig 摘要。按合同「先重生成 launch 产物再放行执行」推进前，读 prepare/run-training 两个技能的操作定义，确认再生成与放行登记的正规入口。
+        - button "Called tools" [ref=f1e940] [cursor=pointer]
+        - paragraph [ref=f1e958]:
+          - text: 合同要点拿到了：
+          - code [ref=f1e959]: 不手改 train.sh
+          - text: 、放行前
+          - strong [ref=f1e960]: 必须产出 prelaunch 报告
+          - text: 、放行记录由
+          - code [ref=f1e961]: "--record-training-release"
+          - text: 写入且 agent 不得代签、
+          - code [ref=f1e962]: atf_launch_execute
+          - text: 是登记+执行点。正规路径：①把确认卡终值物化进 IterationConfig（三处：nproc 8 / accum 16 / ds_z3_offload）；②用
+          - code [ref=f1e963]: generate_train_launch.py --config <同一 config>
+          - text: 重生成 launch 件；③
+          - code [ref=f1e964]: build_prelaunch_report.py
+          - text: 出授权报告；④
+          - code [ref=f1e965]: atf_launch_execute(launch_sh, config)
+          - text: 登记放行并执行。先看两个脚本的真实 CLI 形参，避免猜参。
+        - button "Called tools" [ref=f1e968] [cursor=pointer]
+        - paragraph [ref=f1e986]: CLI 形参确认。①先把九要素确认终值物化进 IterationConfig（三处定向编辑；文件本会话已读过）。
+        - button "Called tools" [ref=f1e989] [cursor=pointer]
+        - paragraph [ref=f1e1007]:
+          - text: 配置已物化（新 sha
+          - code [ref=f1e1008]: 62b8b442…
+          - text: ）。②重生成 launch 件（不带
+          - code [ref=f1e1009]: "--record-training-release"
+          - text: ——放行登记由
+          - code [ref=f1e1010]: atf_launch_execute
+          - text: 的确认卡走，agent 不代签）。请在面板放行。
+        - button "Called tools" [ref=f1e1013] [cursor=pointer]
+        - paragraph [ref=f1e1031]:
+          - text: 生成器 fail-closed：deploy-probed.local.yaml 缺
+          - code [ref=f1e1032]: master_port
+          - text: 键。这不是「世界缺事实」——本 run 自己的
+          - code [ref=f1e1033]: launch_manifest.json
+          - text: （00:32 生成）就记录着生效值
+          - code [ref=f1e1034]: "master_port: 29517"
+          - text: ，早版 train.sh 同值。先看两份 deploy 文件，把这个在案事实补进 deploy 再重跑。
+        - button "Called tools" [ref=f1e1037] [cursor=pointer]
+        - paragraph [ref=f1e1055]:
+          - text: 两份 deploy 文件的语义清楚了：探测草稿
+          - strong [ref=f1e1056]: 故意不代决业务键
+          - text: （master_port/awq_base 留给下游确认制），且探测建议里
+          - code [ref=f1e1057]: "cuda_visible_devices: 0,2,3,4,5,6,7"
+          - text: ——
+          - strong [ref=f1e1058]: 排除了 GPU1
+          - text: （探测时它有 8.4GB 残留显存）。这里出现一个真正的分叉，按你的规则停下来问。先查一下 29517 端口占用。
+        - button "Called tools" [ref=f1e1061] [cursor=pointer]
+        - generic [ref=f1e1078]:
+          - paragraph [ref=f1e1079]:
+            - text: 停在训练发起前的
+            - strong [ref=f1e1080]: 机器事实确认
+            - text: ，两件事需要你一句裁定：
+          - paragraph [ref=f1e1081]:
+            - strong [ref=f1e1082]: ① master_port
+            - text: ：本 run 在案生效值
+            - strong [ref=f1e1083]: "29517"
+            - text: （
+            - code [ref=f1e1084]: launch_manifest.json
+            - text: 与早版 train.sh 同值），当前端口无占用——建议沿用。探测草稿按设计不代决此键，需显式补进 deploy。
+          - paragraph [ref=f1e1085]:
+            - strong [ref=f1e1086]: ② 绑卡与卡数（真分叉）
+            - text: ：
+          - table [ref=f1e1088]:
+            - rowgroup [ref=f1e1089]:
+              - row [ref=f1e1090]:
+                - columnheader "方案" [ref=f1e1091]
+                - columnheader "CUDA_VISIBLE_DEVICES" [ref=f1e1092]
+                - columnheader "nproc" [ref=f1e1093]
+                - columnheader "与九要素卡关系" [ref=f1e1094]
+                - columnheader "说明" [ref=f1e1095]
+            - rowgroup [ref=f1e1096]:
+              - row [ref=f1e1097]:
+                - cell [ref=f1e1098]:
+                  - strong [ref=f1e1099]: A（建议）
+                - cell "0,1,2,3,4,5,6,7" [ref=f1e1100]
+                - cell [ref=f1e1101]:
+                  - strong [ref=f1e1102]: "8"
+                - cell "一致" [ref=f1e1103]
+                - cell [ref=f1e1104]:
+                  - text: GPU1 有 8431MiB
+                  - strong [ref=f1e1105]: 残留显存但无计算进程
+                  - text: （归属判定＝空闲）；可用约 72.7GB，bnb 4-bit＋ZeRO-3 offload 通常充裕。风险：残留是计划外变量，若 GPU1 训练中 OOM 再降档
+              - row [ref=f1e1106]:
+                - cell "B" [ref=f1e1107]
+                - cell "0,2,3,4,5,6,7" [ref=f1e1108]
+                - cell [ref=f1e1109]:
+                  - strong [ref=f1e1110]: "7"
+                - cell "需改你已确认的 nproc=8" [ref=f1e1111]
+                - cell "探测建议的保守案（探测时点按显存阈值回避 GPU1）" [ref=f1e1112]
+          - paragraph [ref=f1e1113]:
+            - text: 裁定后我立即：补齐 deploy（master_port＋绑卡）→ 重生成 train.sh/manifest → 出
+            - strong [ref=f1e1114]: prelaunch 授权报告
+            - text: （argv 全量投影＋数据指纹＋prompt 实文样例）→
+            - code [ref=f1e1115]: atf_launch_execute
+            - text: 放行登记并启动训练。
+        - generic [ref=f1e1119]:
+          - button "Copy" [ref=f1e1120] [cursor=pointer]
+          - generic [ref=f1e1124]:
+            - button "Good response" [ref=f1e1125] [cursor=pointer]
+            - button "Bad response" [ref=f1e1128] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e1131] [cursor=pointer]
+          - generic [ref=f1e1137]:
+            - button "Usage 6.9M tok" [ref=f1e1139] [cursor=pointer]
+            - generic [ref=f1e1145]: 08:38
+        - generic [ref=f1e1148]:
+          - generic [ref=f1e1149]: 裁定：master_port 沿用在案值 29517（launch_manifest 与早版 train.sh 同值、当前端口空闲）；绑卡用 0,1,2,3,4,5,6,7 全八卡、nproc=8 按确认卡值不动——GPU1 那 8.4GB 是无计算进程的残留显存，前两轮真实训练同形态照跑，不构成占用。补齐 deploy 后继续：重生成 launch 件→prelaunch 报告→atf_launch_execute 放行执行。
+          - generic [ref=f1e1151]:
+            - generic [ref=f1e1152]: 08:40
+            - button "Copy" [ref=f1e1153] [cursor=pointer]
+        - generic [ref=f1e1158]:
+          - status [ref=f1e1159]: Completed
+          - button "Completed in 6m 12s" [ref=f1e1160] [cursor=pointer]
+        - generic [ref=f1e1168]:
+          - paragraph [ref=f1e1169]: 训练已确认起跑。全链收官报告：
+          - heading [level=2] [ref=f1e1170]:
+            - text: 正道链执行总表 — run
+            - code [ref=f1e1171]: pl-walkthrough-r1
+          - table [ref=f1e1173]:
+            - rowgroup [ref=f1e1174]:
+              - row [ref=f1e1175]:
+                - columnheader "#" [ref=f1e1176]
+                - columnheader "段" [ref=f1e1177]
+                - columnheader "结果" [ref=f1e1178]
+                - columnheader "关键凭据" [ref=f1e1179]
+            - rowgroup [ref=f1e1180]:
+              - row [ref=f1e1181]:
+                - cell "1" [ref=f1e1182]
+                - cell "register 数据登记" [ref=f1e1183]
+                - cell "✅" [ref=f1e1184]
+                - cell [ref=f1e1185]:
+                  - text: 50 对成对样本（坐标量化 round 整备后），commit_pin
+                  - code [ref=f1e1186]: 20205f2764…
+              - row [ref=f1e1187]:
+                - cell "2" [ref=f1e1188]
+                - cell "label_qc 标注体检" [ref=f1e1189]
+                - cell "✅" [ref=f1e1190]
+                - cell "Q1–Q4 全 0，pending=0，无需人工裁决" [ref=f1e1191]
+              - row [ref=f1e1192]:
+                - cell "3" [ref=f1e1193]
+                - cell "experiment_setup 实验配置" [ref=f1e1194]
+                - cell "✅" [ref=f1e1195]
+                - cell "实验门锁定 22 键（与盘点闭集一致，投影生效）" [ref=f1e1196]
+              - row [ref=f1e1197]:
+                - cell "4" [ref=f1e1198]
+                - cell "candidate_build 候选构建" [ref=f1e1199]
+                - cell "✅" [ref=f1e1200]
+                - cell "字段闭集 22/必备 23，missing=[]" [ref=f1e1201]
+              - row [ref=f1e1202]:
+                - cell "5" [ref=f1e1203]
+                - cell "publish 合同发布" [ref=f1e1204]
+                - cell "✅" [ref=f1e1205]
+                - cell [ref=f1e1206]:
+                  - text: gate pass，bundle
+                  - code [ref=f1e1207]: artifact:extraction-contract:fed75b8f…
+              - row [ref=f1e1208]:
+                - cell "6" [ref=f1e1209]
+                - cell "family_split 数据切分" [ref=f1e1210]
+                - cell "✅" [ref=f1e1211]
+                - cell [ref=f1e1212]:
+                  - strong [ref=f1e1213]: train 40 / test 10 恰确
+                  - text: ，ratios_actual 0.8/0.2，分层偏差 []，G1–G4 pass
+              - row [ref=f1e1214]:
+                - cell "7" [ref=f1e1215]
+                - cell "admission 准入检查" [ref=f1e1216]
+                - cell "✅" [ref=f1e1217]
+                - cell "四闸全 pass，训练数据准入闭合" [ref=f1e1218]
+              - row [ref=f1e1219]:
+                - cell "8" [ref=f1e1220]
+                - cell "training_prep → launch" [ref=f1e1221]
+                - cell "✅" [ref=f1e1222]
+                - cell "143 行变体（40 基行＋103 定向），train.sh 生成、prelaunch 报告闭合" [ref=f1e1223]
+          - heading "发起训练（经你逐卡放行）" [level=2] [ref=f1e1224]
+          - list [ref=f1e1225]:
+            - listitem [ref=f1e1226]:
+              - strong [ref=f1e1227]: 九要素卡
+              - text: 确认：nproc=8、accum=16、ds_z3_offload、lr 1e-4、epochs 3、rank 32/α64、cutoff 9000、bnb 4-bit、像素 65536/802816
+            - listitem [ref=f1e1228]:
+              - strong [ref=f1e1229]: 机器事实
+              - text: 按你裁定补齐：port 29517（在案值、空闲）、全八卡 0-7（GPU1 残留显存无进程，照跑）
+            - listitem [ref=f1e1230]:
+              - strong [ref=f1e1231]: TRAINING_RELEASE
+              - text: 已登记（subject
+              - code [ref=f1e1232]: 62b8b442…
+              - text: ），train.sh 内置闸核验通过
+            - listitem [ref=f1e1233]:
+              - text: 日志实证：
+              - code [ref=f1e1234]: SHA=pass / ADMISSION=pass → 8 distributed tasks @ 29517, world size 8, bf16
+              - text: ，tokenizer/基模型加载中——
+              - strong [ref=f1e1235]: pid 30976，loss 进料已挂接
+              - text: （
+              - code [ref=f1e1236]: loss-series.json
+              - text: ）
+          - heading "留痕与遗留（如实交代，处置听你）" [level=2] [ref=f1e1237]
+          - list [ref=f1e1238]:
+            - listitem [ref=f1e1239]:
+              - code [ref=f1e1240]: datasets/walkthrough-pl/
+              - text: 原件未动；
+              - code [ref=f1e1241]: datasets/pl-batch/
+              - text: （复制）与
+              - code [ref=f1e1242]: datasets/pl-quant/
+              - text: （量化版＋合并审计件）为链上事实源，
+              - strong [ref=f1e1243]: 勿删
+            - listitem [ref=f1e1244]:
+              - code [ref=f1e1245]: publish/owner-family-merge/
+              - text: （owner 裁定证据件＋退役的 44 簇 G2 证据）与
+              - code [ref=f1e1246]: publish/a52ace93/
+              - text: （44 簇 auto manifest 原样保留）已按审计要求留档
+            - listitem [ref=f1e1247]:
+              - text: 两处废弃壳：
+              - code [ref=f1e1248]: experiments/20261022-pl-walkthrough/
+              - text: （早期误建，链未用）与
+              - code [ref=f1e1249]: ws-pl-walkthrough/
+              - text: （首次 register 失败残留骨架）——要清理说一声
+            - listitem [ref=f1e1250]:
+              - text: 九要素卡里的
+              - code [ref=f1e1251]: max_total_tokens 65536
+              - text: 是评估侧键，留到 checkpoint 评估阶段（atf_evaluate）再确认
+          - paragraph [ref=f1e1252]:
+            - text: 后续：训练推进期可随时让我
+            - code [ref=f1e1253]: status
+            - text: 查看任务卡与 ckpt；跑完后走评估→badcase 分析的下一环。
+        - generic [ref=f1e1257]:
+          - button "Copy" [ref=f1e1258] [cursor=pointer]
+          - generic [ref=f1e1262]:
+            - button "Good response" [ref=f1e1263] [cursor=pointer]
+            - button "Bad response" [ref=f1e1266] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e1269] [cursor=pointer]
+          - generic [ref=f1e1275]:
+            - button "Usage 3.3M tok" [ref=f1e1277] [cursor=pointer]
+            - generic [ref=f1e1283]: 08:46
+        - generic [ref=f1e1356]:
+          - generic [ref=f1e1357]: 坏消息：09:14 那次实例重启（为装载 harness 修复）的 SIGINT 沿进程组误杀了训练——pid 30976 已死、GPU 已清、无 checkpoint 产生（数据/config/launch/放行登记全部在位无损）。harness 侧已修复 spawn 脱离进程组并重启生效。请重推 atf_launch_execute（放行登记对同一 config sha 幂等）把训练重新拉起；如有双启请示照实答。
+          - generic [ref=f1e1359]:
+            - generic [ref=f1e1360]: 09:19
+            - button "Copy" [ref=f1e1361] [cursor=pointer]
+        - generic [ref=f1e1524]:
+          - status [ref=f1e1525]: Completed
+          - button "Completed in 3m 22s" [ref=f1e1526] [cursor=pointer]
+        - generic [ref=f1e1534]:
+          - paragraph [ref=f1e1535]:
+            - text: 重启拉起完成，双启问题照实答：
+            - strong [ref=f1e1536]: 无双启
+            - text: 。
+          - heading "重启结果" [level=2] [ref=f1e1537]
+          - table [ref=f1e1539]:
+            - rowgroup [ref=f1e1540]:
+              - row [ref=f1e1541]:
+                - columnheader "项" [ref=f1e1542]
+                - columnheader "事实" [ref=f1e1543]
+            - rowgroup [ref=f1e1544]:
+              - row [ref=f1e1545]:
+                - cell "放行登记" [ref=f1e1546]
+                - cell [ref=f1e1547]:
+                  - code [ref=f1e1548]: "release_result: already_recorded"
+                  - text: ——同 sha
+                  - code [ref=f1e1549]: 62b8b442…
+                  - text: 幂等命中，
+                  - strong [ref=f1e1550]: 未产生第二条放行记录
+              - row [ref=f1e1551]:
+                - cell "新进程" [ref=f1e1552]
+                - cell [ref=f1e1553]:
+                  - text: pid
+                  - strong [ref=f1e1554]: "73778"
+                  - text: （旧 30976 重推前已确认死亡，GPU 已清）
+              - row [ref=f1e1555]:
+                - cell "新日志" [ref=f1e1556]
+                - cell [ref=f1e1557]:
+                  - button "harness-launch-2026-10-22T01-20-43-386Z.log" [ref=f1e1558] [cursor=pointer]
+              - row [ref=f1e1562]:
+                - cell "闸门实证" [ref=f1e1563]
+                - cell [ref=f1e1564]:
+                  - code [ref=f1e1565]: SHA=pass / ADMISSION=pass
+                  - text: →
+                  - code [ref=f1e1566]: Initializing 8 distributed tasks at 127.0.0.1:29517
+                  - text: ，world size 8、rank 0-7 全上、bf16、DeepSpeed Z3-offload NCCL 初始化完成
+              - row [ref=f1e1567]:
+                - cell "起跑形态" [ref=f1e1568]
+                - cell [ref=f1e1569]:
+                  - text: 与被杀前一次完全同形（tokenizer/基模型加载中），loss 进料已挂接
+                  - code [ref=f1e1570]: loss-series.json
+          - paragraph [ref=f1e1571]:
+            - text: 启动前置核验（重推前取证）：pid 30976
+            - code [ref=f1e1572]: /proc
+            - text: 不存在、
+            - code [ref=f1e1573]: prep/iteration-config/
+            - text: 无 checkpoint、GPU 0-7 全空闲——
+            - strong [ref=f1e1574]: 不存在新旧并存的双跑窗口
+            - text: 。
+          - paragraph [ref=f1e1575]:
+            - text: 训练从头跑（无 checkpoint 可续，143 行 × 3 epochs，save_steps=1/save_total_limit=3，很快会开始落
+            - code [ref=f1e1576]: checkpoint-*
+            - text: ）。推进期随时可让我查 status；出现异常我按合同即停即报。
+        - generic [ref=f1e1580]:
+          - button "Copy" [ref=f1e1581] [cursor=pointer]
+          - generic [ref=f1e1585]:
+            - button "Good response" [ref=f1e1586] [cursor=pointer]
+            - button "Bad response" [ref=f1e1589] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e1592] [cursor=pointer]
+          - generic [ref=f1e1598]:
+            - button "Usage 837K tok" [ref=f1e1600] [cursor=pointer]
+            - generic [ref=f1e1606]: 09:22
+        - generic [ref=f1e1609]:
+          - generic [ref=f1e1610]: 训练已干净完成：6/6 步·train_runtime 611.8s·train_loss 0.3984·checkpoint-4/5/6 落盘·GPU 释放·日志零 Traceback（Figure saved＝干净收尾）。但 D50 的完成锚没自动落——launch 链 run 在同步器里从未置 active（无 tmux 证据、日志在 scratch 不在 runsRoot），终态 tick 没跑。请在 run 的 canonical 树补落 training/completion.json（经 scratch 执行面，值：status=ok、exit_code=0、checkpoint=checkpoint-6、started/finished 取日志在案时刻），并在消息里写明依据（trainer_log 6/6=100%＋干净收尾证据）——这是训练完成事实的产品面记录，我确认。落完我核对 UI 链。
+          - generic [ref=f1e1612]:
+            - generic [ref=f1e1613]: 09:46
+            - button "Copy" [ref=f1e1614] [cursor=pointer]
+        - generic [ref=f1e1825]:
+          - status [ref=f1e1826]: Completed
+          - button "Completed in 1m 22s" [ref=f1e1827] [cursor=pointer]
+        - generic [ref=f1e1779]:
+          - paragraph [ref=f1e1780]:
+            - text: ✅
+            - strong [ref=f1e1781]: D50 完成锚已补落
+            - text: ：
+            - button "training/completion.json" [ref=f1e1831] [cursor=pointer]
+            - text: （sha256
+            - code [ref=f1e1782]: 82baec29…
+            - text: ）
+          - heading "记录正文（供你核 UI 链）" [level=2] [ref=f1e1783]
+          - generic [ref=f1e1784]:
+            - generic [ref=f1e1786]:
+              - generic [ref=f1e1787]: json
+              - generic [ref=f1e1789]:
+                - button "Wrap lines" [pressed] [ref=f1e1790] [cursor=pointer]
+                - button "Copy" [ref=f1e1795] [cursor=pointer]
+            - code [ref=f1e1801]:
+              - generic [ref=f1e1802]: "{"
+              - generic [ref=f1e1803]: "\"run_id\": \"pl-walkthrough-r1\","
+              - generic [ref=f1e1804]: "\"status\": \"ok\","
+              - generic [ref=f1e1805]: "\"exit_code\": 0,"
+              - generic [ref=f1e1806]: "\"checkpoint\": \"checkpoint-6\","
+              - generic [ref=f1e1807]: "\"started\": \"2026-10-22 09:20:59\","
+              - generic [ref=f1e1808]: "\"finished\": \"2026-10-22 09:34:14\""
+              - generic [ref=f1e1809]: "}"
+          - heading "依据（日志在案原文，逐字）" [level=2] [ref=f1e1810]
+          - list [ref=f1e1811]:
+            - listitem [ref=f1e1812]:
+              - strong [ref=f1e1813]: 完成度
+              - text: ：
+              - code [ref=f1e1836]: 100%|██████████| 6/6 [10:11<00:00, 101.97s/it]
+              - text: —— 6/6 步＝100%
+            - listitem [ref=f1e1837]:
+              - strong [ref=f1e1838]: trainer 终值
+              - text: ：
+              - code [ref=f1e1839]: "{'train_runtime': 611.8211, 'train_samples_per_second': 0.701, 'train_steps_per_second': 0.01, 'train_loss': 0.3983508050441742, 'epoch': 3.0}"
+              - text: ；metrics 表
+              - code [ref=f1e1840]: train_loss=0.3984 / train_runtime=0:10:11.82
+            - listitem [ref=f1e1841]:
+              - strong [ref=f1e1842]: 干净收尾
+              - text: ：
+              - code [ref=f1e1843]: "Figure saved at: …/training_loss.png"
+              - text: ；全日志（1051 行）
+              - strong [ref=f1e1844]: Traceback 计数＝0
+            - listitem [ref=f1e1845]:
+              - strong [ref=f1e1846]: checkpoint 实盘
+              - text: ：checkpoint-4/5/6 在盘（各含
+              - code [ref=f1e1847]: adapter_model.safetensors
+              - text: ＋
+              - code [ref=f1e1848]: adapter_config.json
+              - text: ；checkpoint-3 因 save_total_limit 自动清理）
+            - listitem [ref=f1e1849]:
+              - strong [ref=f1e1850]: 时刻锚
+              - text: ：started＝launcher 初始化行
+              - code [ref=f1e1851]: "[INFO|2026-10-22 09:20:59] … Initializing 8 distributed tasks"
+              - text: ；finished＝末帧
+              - code [ref=f1e1852]: 09:34:14
+              - text: （日志为机器本地时区，文件内已注明口径）
+            - listitem [ref=f1e1853]:
+              - strong [ref=f1e1854]: 指纹链
+              - text: ：log sha256、train.sh sha、IterationConfig sha（
+              - code [ref=f1e1855]: 62b8b442…
+              - text: ＝放行 subject）、pid 73778、重启沿革（首次 pid 30976 被 09:14 SIGINT 误杀无产出）——全部入
+              - code [ref=f1e1856]: evidence
+              - text: /
+              - code [ref=f1e1857]: restart_lineage
+              - text: 字段留档
+          - paragraph [ref=f1e1858]:
+            - text: 文件同时如实记录了补落缘由：launch 链同步器未置 active、终态 tick 未跑，经你会话确认由 agent 落产品面记录。你核对 UI 链吧；下一步就是 checkpoint-6 的评估（九要素卡里
+            - code [ref=f1e1859]: max_total_tokens 65536
+            - text: 那枚评估侧键到时确认），随时开。
+        - generic [ref=f1e1863]:
+          - button "Copy" [ref=f1e1864] [cursor=pointer]
+          - generic [ref=f1e1868]:
+            - button "Good response" [ref=f1e1869] [cursor=pointer]
+            - button "Bad response" [ref=f1e1872] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e1875] [cursor=pointer]
+          - generic [ref=f1e1881]:
+            - button "Usage 648K tok" [ref=f1e1883] [cursor=pointer]
+            - generic [ref=f1e1889]: 09:47
+      - generic [ref=f1e78]:
+        - generic [ref=f1e79]:
+          - generic [ref=f1e81]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=f1e1284]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=f1e83]:
+            - generic [ref=f1e84]:
+              - button "Add files or run commands" [ref=f1e1285] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=f1e1290] [cursor=pointer]':
+                - generic [ref=f1e1294]: Full access
+            - generic [ref=f1e85]:
+              - generic [ref=f1e1298]:
+                - button "思考 Max(最高) ▾" [ref=f1e1301] [cursor=pointer]:
+                  - generic [ref=f1e1302]: 思考
+                  - generic [ref=f1e1303]: Max(最高)
+                  - generic [ref=f1e1304]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=f1e1307] [cursor=pointer]:
+                  - generic [ref=f1e1308]: glm-5.3-flash
+              - button "Send message" [disabled] [ref=f1e1890]
+        - generic [ref=f1e1314]:
+          - generic [ref=f1e1315]:
+            - generic [ref=f1e1316]:
+              - button "5 turns 121 steps · 55 tok/s" [ref=f1e1892] [cursor=pointer]:
+                - generic [ref=f1e1323]: 5 turns 121 steps·55 tok/s
+              - button "15.2M tok · Cache hit 99%" [ref=f1e1893] [cursor=pointer]:
+                - generic [ref=f1e1330]: 15.2M tok·Cache hit 99%
+            - generic [ref=f1e1331]:
+              - generic "展开训练任务进度（八段明细）" [ref=f1e1332] [cursor=pointer]:
+                - generic [ref=f1e1334]: 3/8
+                - generic [ref=f1e1335]: 已完成
+              - generic [ref=f1e1816]:
+                - generic "点击关闭（ws-pl-walkthrough · 10-22（ws-pl-walkthrough））" [ref=f1e1894] [cursor=pointer]:
+                  - generic [ref=f1e1896]:
+                    - generic [ref=f1e1897]: 训练已结束
+                    - generic [ref=f1e1898]: ws-pl-walkthrough · 10-22（ws-pl-walkthrough）
+                  - generic [ref=f1e1899]: ×
+                - generic "点击关闭（ws-pl-walkthrough · 10-22（ws-pl-walkthrough））" [ref=f1e1900] [cursor=pointer]:
+                  - generic [ref=f1e1902]:
+                    - generic [ref=f1e1903]: 训练已结束
+                    - generic [ref=f1e1904]: ws-pl-walkthrough · 10-22（ws-pl-walkthrough）
+                  - generic [ref=f1e1905]: ×
+                - generic "点击关闭（ws-pl-walkthrough · 10-22（ws-pl-walkthrough））" [ref=f1e1906] [cursor=pointer]:
+                  - generic [ref=f1e1908]:
+                    - generic [ref=f1e1909]: 训练已结束
+                    - generic [ref=f1e1910]: ws-pl-walkthrough · 10-22（ws-pl-walkthrough）
+                  - generic [ref=f1e1911]: ×
+                - generic "点击关闭（ws-pl-walkthrough · 10-22（ws-pl-walkthrough））" [ref=f1e1912] [cursor=pointer]:
+                  - generic [ref=f1e1914]:
+                    - generic [ref=f1e1915]: 训练已结束
+                    - generic [ref=f1e1916]: ws-pl-walkthrough · 10-22（ws-pl-walkthrough）
+                  - generic [ref=f1e1917]: ×
+              - generic [ref=f1e1336]:
+                - button "新建训练" [ref=f1e1337] [cursor=pointer]
+                - button "查状态" [disabled] [ref=f1e1338]
+                - button "继续上次" [disabled] [ref=f1e1339]
+                - button "对比两轮" [disabled] [ref=f1e1340]
+                - button "走完闭环" [ref=f1e1341] [cursor=pointer]
+                - button "联合训练" [disabled] [ref=f1e1342]
+                - button "badcase 可视化" [ref=f1e1343] [cursor=pointer]
+                - button "发起训练" [ref=f1e1344] [cursor=pointer]
+          - button "21% of context used" [ref=f1e1823] [cursor=pointer]:
+            - generic [ref=f1e1350]: 21%

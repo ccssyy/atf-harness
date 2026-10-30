@@ -1,0 +1,55 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - button "New session" [ref=e9] [cursor=pointer]:
+          - generic [ref=e17]:
+            - generic [ref=e18]: DSH Local Build
+            - generic [ref=e19]: 0.2.0-rc.2-639ed01-dirty
+        - button "Collapse sidebar" [ref=e20] [cursor=pointer]
+      - button "New session" [ref=e23] [cursor=pointer]:
+        - generic [ref=e24]: New Session
+      - navigation "Global panels" [ref=e29]:
+        - button "Plugins" [ref=e30] [cursor=pointer]
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Workspaces
+          - generic [ref=e45]:
+            - button "Search sessions" [ref=e46] [cursor=pointer]
+            - textbox "Search session names"
+          - generic [ref=e50]:
+            - button "View options" [ref=e52] [cursor=pointer]
+            - button "Add workspace" [ref=e56] [cursor=pointer]
+        - tree "Sessions" [ref=e61]:
+          - generic [ref=e62]: No sessions yet
+      - button "Settings" [ref=e71] [cursor=pointer]
+    - generic [ref=e80]:
+      - generic:
+        - banner
+      - generic [ref=e86]:
+        - generic [ref=e94]:
+          - generic [ref=e95]: Into the Unknown
+          - generic [ref=e96]: Preview
+        - generic [ref=e97]:
+          - button "Choose workspace" [ref=e98] [cursor=pointer]
+          - button "Standard mode" [ref=e116] [cursor=pointer]
+        - generic [ref=e106] [cursor=pointer]:
+          - generic [ref=e108]:
+            - textbox "Choose workspace" [ref=e109]
+            - generic [aria-hidden]: Choose a workspace to start ATF training
+          - generic [ref=e110]:
+            - generic [ref=e111]:
+              - button "Add files or run commands" [disabled]
+            - generic [ref=e112]:
+              - button "Send message" [disabled]
+  - dialog "Select Workspace Directory" [ref=e155]:
+    - generic [ref=e156]:
+      - generic [ref=e157]:
+        - heading "Select Workspace Directory" [level=2] [ref=e158]
+        - textbox "Edit path" [active] [ref=e177]: /tmp/b5-walkthrough/home/
+      - list [ref=e169]
+      - generic [ref=e170]:
+        - button [disabled] [ref=e171]
+        - button "Show hidden files" [ref=e174] [cursor=pointer]
+        - button "Cancel" [ref=e175] [cursor=pointer]
+        - button "Open" [disabled] [ref=e176]

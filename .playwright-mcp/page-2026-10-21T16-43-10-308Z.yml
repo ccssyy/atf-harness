@@ -1,0 +1,1034 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e7]:
+      - button "Open sidebar" [ref=e9] [cursor=pointer]:
+        - generic [ref=e11]: ATF
+      - button "New session" [ref=e13] [cursor=pointer]
+      - navigation "Global panels" [ref=e18]:
+        - button "Plugins" [ref=e19] [cursor=pointer]
+      - generic [ref=e29]:
+        - button "Add workspace" [ref=e32] [cursor=pointer]
+        - button "Search sessions" [ref=e36] [cursor=pointer]
+      - button "Settings" [ref=e46] [cursor=pointer]
+    - generic [ref=e54]:
+      - banner [ref=e87]:
+        - generic [ref=e88]:
+          - generic [ref=e89]:
+            - generic:
+              - navigation "Session hierarchy":
+                - generic: 汇总当前实验状态与进展
+            - generic [ref=e163]:
+              - button "More actions" [ref=e165] [cursor=pointer]
+              - generic [ref=e170]:
+                - button "装箱单 · Qwen3-VL-32B · 10-21 21:02 · 异常 ▾ atf-prodtest" [ref=e1992] [cursor=pointer]:
+                  - generic [ref=e173]: 装箱单 · Qwen3-VL-32B · 10-21 21:02 · 异常 ▾
+                  - generic "atf-prodtest-20261021" [ref=e1382]: atf-prodtest
+                - button "监控" [ref=e174] [cursor=pointer]
+          - tablist [ref=e175]:
+            - tab "Chat" [selected] [ref=e176] [cursor=pointer]
+            - tab "Trajectory" [ref=e177] [cursor=pointer]
+      - generic [ref=e56]:
+        - generic [ref=e184]:
+          - generic [ref=e187]:
+            - generic [ref=e188]: 帮我看一下当前实验的整体状态和最近的进展，简单汇总即可。
+            - generic [ref=e190]:
+              - generic [ref=e191]: 00:35
+              - button "Copy" [ref=e192] [cursor=pointer]
+          - generic [ref=e426]:
+            - status [ref=e427]: Completed
+            - button "Completed in 3m 6s" [ref=e428] [cursor=pointer]
+          - generic [ref=e436]:
+            - heading "当前实验状态汇总" [level=1] [ref=e437]
+            - paragraph [ref=e438]:
+              - strong [ref=e439]:
+                - text: 总体：当前没有正在跑的训练/评估（8 卡 GPU 全部空闲），最近一轮工作集中在
+                - code [ref=e440]: atf-prodtest-20261021
+                - text: 实验簇（10/20–10/21）。
+              - text: 本会话尚未绑定 run，以下是从状态面与产物读出的情况。
+            - heading "最近进展（时间线）" [level=2] [ref=e441]
+            - table [ref=e443]:
+              - rowgroup [ref=e444]:
+                - row [ref=e445]:
+                  - columnheader "时间" [ref=e446]
+                  - columnheader "事件" [ref=e447]
+              - rowgroup [ref=e448]:
+                - row [ref=e449]:
+                  - cell "10/20 晚" [ref=e450]
+                  - cell [ref=e451]:
+                    - code [ref=e452]: run-admit-qc-01
+                    - text: 完成配置确认与诊断（未进入训练）
+                - row [ref=e453]:
+                  - cell "10/21 凌晨" [ref=e454]
+                  - cell [ref=e455]:
+                    - strong [ref=e456]:
+                      - code [ref=e457]: run-admit-qc-02
+                      - text: 训练完成（ckpt-6，验收通过）
+                    - text: ，随后完成正式评估 + badcase 分析报告
+                - row [ref=e458]:
+                  - cell "10/21 中午" [ref=e459]
+                  - cell [ref=e460]:
+                    - code [ref=e461]: run-admit-qc-02
+                    - text: 有两次训练失败通知（12:53/13:13，疑为重试/后续触发）
+                - row [ref=e462]:
+                  - cell "10/21 13:19" [ref=e463]
+                  - cell [ref=e464]:
+                    - text: 变体实验
+                    - strong [ref=e465]:
+                      - code [ref=e466]: run-admit-qc-02-eval-h5
+                      - text: 训练完成
+                - row [ref=e467]:
+                  - cell "10/21 21:07" [ref=e468]
+                  - cell [ref=e469]:
+                    - text: eval-h5 完成第 2 轮正式评估；
+                    - code [ref=e470]: prep/variants/
+                    - text: 生成了 142 行变体数据报告
+            - heading "关键指标（同口径 10 页 formal eval，goods lane）" [level=2] [ref=e471]
+            - list [ref=e472]:
+              - listitem [ref=e473]:
+                - strong [ref=e474]: run-admit-qc-02（ckpt6）
+                - text: ：micro
+                - strong [ref=e475]: F1 = 0.2991
+                - text: （P 0.2212 / R 0.4618，TP 296 / FP 1042 / FN 345），整页全对率 0
+              - listitem [ref=e476]:
+                - strong [ref=e477]: run-admit-qc-02-eval-h5（ckpt6）
+                - text: ：micro
+                - strong [ref=e478]: F1 = 0.2416
+                - text: （P 0.1908 / R 0.3292）——低于主 run，h5 变体这轮没有带来提升
+              - listitem [ref=e479]: 两轮共有 7 个零正例字段（currency、total_amount、doc_identifier 等）在测试集无标注正例，若属漏标需先修 GT
+            - heading "数据侧" [level=2] [ref=e480]
+            - paragraph [ref=e481]:
+              - code [ref=e482]: prep/variants/variants_report.json
+              - text: ：基线 40 行 → 产出 142 行（mode0 40 + targeted 102）；bbox 从 original_pixel 换算到 qwen_axis_1000，4528 个框全量反算核对通过；mode1/mode5 增广因未过实验门确认卡而显式跳过（未静默生成）。
+            - heading "待办 / 风险点" [level=2] [ref=e483]
+            - list [ref=e484]:
+              - listitem [ref=e485]:
+                - strong [ref=e486]: Badcase 行级审阅未闭合
+                - text: ：110 条错误事件 0 条已审、23 个错误簇 0 个机制闭合——分析报告（
+                - button "report.md" [ref=e487] [cursor=pointer]
+                - text: ）明确下一步是先补簇级机制审阅，再谈训练动作。
+              - listitem [ref=e491]: 未做 baseline 对比回归（阶段 7），本轮 F1 仅为观察值；run-admit-qc-02 未见正式发布（仅 checkpoint-6 说明文档）。
+              - listitem [ref=e492]: 中午两次 training_failed 通知的根因未核查，如需要我可以深入看日志。
+            - paragraph [ref=e493]: 需要我接着做哪一项？比如深入 badcase 簇审阅、对比 h5 变体为何掉点，或核查那两次训练失败。
+          - generic [ref=e497]:
+            - button "Copy" [ref=e498] [cursor=pointer]
+            - generic [ref=e502]:
+              - button "Good response" [ref=e503] [cursor=pointer]
+              - button "Bad response" [ref=e506] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e509] [cursor=pointer]
+            - generic [ref=e515]:
+              - button "Usage 458K tok" [ref=e517] [cursor=pointer]
+              - generic [ref=e523]: 00:39
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - generic [ref=e81]:
+              - textbox "Message the ATF training agent, / commands, @ files or sessions" [ref=e204]:
+                - paragraph [ref=e529]
+              - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+            - generic [ref=e83]:
+              - generic [ref=e84]:
+                - button "Add files or run commands" [ref=e111] [cursor=pointer]
+                - 'button "Access mode, current: Full access" [ref=e116] [cursor=pointer]'
+              - generic [ref=e85]:
+                - generic [ref=e124]:
+                  - button "思考 Max(最高) ▾" [ref=e127] [cursor=pointer]:
+                    - generic [ref=e128]: 思考
+                    - generic [ref=e129]: Max(最高)
+                    - generic [ref=e130]: ▾
+                  - button "Select model, current glm-5.3-flash" [ref=e133] [cursor=pointer]
+                - button "Send message" [disabled] [ref=e524]
+          - generic [ref=e207]:
+            - generic [ref=e208]:
+              - generic [ref=e398]:
+                - button "1 turns 14 steps · 47 tok/s" [ref=e526] [cursor=pointer]:
+                  - generic [ref=e405]: 1 turns 14 steps·47 tok/s
+                - button "458K tok · Cache hit 91%" [ref=e527] [cursor=pointer]:
+                  - generic [ref=e412]: 458K tok·Cache hit 91%
+              - generic [ref=e210]:
+                - button "新建训练" [ref=e211] [cursor=pointer]
+                - button "查状态" [ref=e212] [cursor=pointer]
+                - button "继续训练：装箱单" [ref=e1993] [cursor=pointer]
+                - button "对比两轮" [ref=e214] [cursor=pointer]
+                - button "走完闭环" [ref=e215] [cursor=pointer]
+                - button "联合训练" [ref=e216] [cursor=pointer]
+                - button "badcase 可视化" [ref=e217] [cursor=pointer]
+                - button "发起训练" [ref=e218] [cursor=pointer]
+            - button "4% of context used" [ref=e528] [cursor=pointer]:
+              - generic [ref=e418]: 4%
+    - generic [ref=e1152]:
+      - tablist [ref=e1154]:
+        - tab "训练监控 Close" [selected] [ref=e1155] [cursor=pointer]:
+          - generic [ref=e1156]: 训练监控
+          - button "Close" [ref=e1158]
+        - button "New tab" [ref=e1162] [cursor=pointer]
+        - generic "Not enough width to split, widen the sidebar" [ref=e1164]:
+          - button "Split" [disabled] [ref=e1165]
+        - generic [ref=e1168]:
+          - button "Fullscreen" [ref=e1169] [cursor=pointer]
+          - button "Collapse right sidebar" [ref=e1172] [cursor=pointer]
+      - generic [ref=e1178]:
+        - generic [ref=e1179]:
+          - generic [ref=e1180]:
+            - generic [ref=e1181]: 运行监控
+            - generic "atf-prodtest-20261021 · run-admit-qc-02" [ref=e1994]: 装箱单 · Qwen3-VL-32B · 10-20 23:49
+            - generic [ref=e1184]: 异常
+          - generic [ref=e1187]:
+            - combobox "选择 run" [ref=e1188]:
+              - option "casea-run-joint"
+              - option "a22b-walk2"
+              - option "a22b-walk3"
+              - option "a22b-walk4"
+              - option "a22b-e14b"
+              - option "a22b-e14b2"
+              - option "a22b-walk5"
+              - option "run-admit-qc-01"
+              - option "run-admit-qc-02" [selected]
+              - option "a3smoke1017"
+              - option "bw-live-1"
+              - option "c2e9-deep-demo"
+              - option "cr_ci_smoke_r1_replay"
+              - option "d3-kdirect-1019"
+              - option "d3-kdirect-b"
+              - option "default"
+              - option "evalcard-smoke"
+              - option "goods4doc-iter1"
+              - option "run-p-probe-sim"
+              - option "run-q-manual"
+              - option "run-q-smoke"
+              - option "run-regress-formal-01"
+              - option "run-regress-formal-02"
+              - option "run-regress-formal-03"
+              - option "run-regress-large-pl"
+              - option "train-obs-smoke-21105"
+              - option "train-obs-smoke-875d6a22"
+              - option "train-obs-smoke-95511"
+              - option "train-obs-smoke-95770"
+              - option "train-obs-smoke-96135"
+              - option "train-obs-smoke-9a4ba234"
+              - option "train-obs-smoke-r1"
+              - option "train-obs-smoke-r10"
+              - option "train-obs-smoke-r11"
+              - option "train-obs-smoke-r12"
+              - option "train-obs-smoke-r13"
+              - option "train-obs-smoke-r14"
+              - option "train-obs-smoke-r15"
+              - option "train-obs-smoke-r16"
+              - option "train-obs-smoke-r17"
+              - option "train-obs-smoke-r2"
+              - option "train-obs-smoke-r3"
+              - option "train-obs-smoke-r4"
+              - option "train-obs-smoke-r5"
+              - option "train-obs-smoke-r6"
+              - option "train-obs-smoke-r7"
+              - option "train-obs-smoke-r8"
+              - option "train-obs-smoke-r9"
+              - option "walkthrough-b10-rerun"
+              - option "walkthrough-b11-rerun"
+              - option "walkthrough-f10-rerun"
+              - option "walkthrough-m12-real"
+              - option "a11cancel1017"
+              - option "a12cancel1018"
+              - option "c2e5-card-flash"
+              - option "c2e5-card-flashx"
+              - option "c2e5-card-glm53"
+              - option "c3b-card-eleven"
+              - option "c3b-card-final"
+              - option "c3b-card-twelve"
+              - option "a1domprobe1"
+              - option "a1mx-53-a"
+              - option "a1mx-flash-a"
+              - option "a1mx-flash-b"
+              - option "a1mx-flash-b2"
+              - option "a1mx-flashx-a"
+              - option "a1probe1017a"
+              - option "a1probe1017b"
+              - option "a31-ready-run"
+              - option "goods4doc-joint-20261017"
+              - option "run-admit-qc-02-eval-h5"
+            - button "全部" [ref=e1189] [cursor=pointer]
+        - generic [ref=e1190]: 全部实例（只读视图）——点选只预览，不改变本会话绑定
+        - generic [ref=e1193]:
+          - generic [ref=e1194]:
+            - generic "数据登记：已完成" [ref=e1339]: 数据登记
+            - generic "标注体检：已完成" [ref=e1340]: 标注体检
+            - generic "实验配置：已完成" [ref=e1341]: 实验配置
+            - generic "契约发布：已完成" [ref=e1342]: 契约发布
+            - generic "数据切分：已完成" [ref=e1343]: 数据切分
+            - generic "准入检查：已完成" [ref=e1344]: 准入检查
+            - generic "训练执行：失败/中断——可查看训练日志定位" [ref=e1995]: 训练执行
+            - generic "评估与可视化：等待完成" [ref=e1346]: 评估与可视化
+          - generic [ref=e1219]:
+            - generic [ref=e1220]:
+              - generic [ref=e1221]: 步进
+              - generic [ref=e1222]: —
+            - generic [ref=e1223]:
+              - generic [ref=e1224]: Loss
+              - generic [ref=e1225]: —
+            - generic [ref=e1226]:
+              - generic [ref=e1227]: 指标 F1
+              - generic [ref=e1228]: —
+            - generic [ref=e1229]:
+              - generic [ref=e1230]: 显存
+              - generic [ref=e1231]: 8G/640G
+          - generic [ref=e1347]:
+            - generic [ref=e1348]:
+              - generic [ref=e1349]: 运行环境
+              - generic [ref=e1350]: 权限档位：Full access
+            - generic [ref=e1351]:
+              - generic [ref=e1352]:
+                - generic [ref=e1353]: 基模型
+                - generic "Qwen3-VL-32B-Instruct" [ref=e1354]
+              - generic [ref=e1355]:
+                - generic [ref=e1356]: 数据集
+                - generic "walkthrough-pl_pl_goods" [ref=e1357]
+              - generic [ref=e1358]:
+                - generic [ref=e1359]: 并行
+                - generic "ds_z3_offload_config.json" [ref=e1996]
+              - generic [ref=e1361]:
+                - generic [ref=e1362]: 通道
+                - generic "pl_goods" [ref=e1363]
+          - generic [ref=e1232]:
+            - generic [ref=e1233]:
+              - generic [ref=e1234]: Loss 曲线
+              - generic [ref=e1235]:
+                - button "原始" [ref=e1236] [cursor=pointer]
+                - button "平滑" [ref=e1237] [cursor=pointer]
+            - generic [ref=e1238]: 等待首个 loss 点
+          - generic [ref=e1241]:
+            - generic [ref=e1242]:
+              - generic [ref=e1243]: GPU
+              - generic [ref=e1244]: 忙 0/8 · 8G/640G · 绑 0,1,2,3,4,5,6,7
+            - generic [ref=e1245]:
+              - generic [ref=e1246]:
+                - generic [ref=e1247]:
+                  - generic [ref=e1248]: "0"
+                  - generic [ref=e1249]: 0%
+                - generic [ref=e1252]:
+                  - generic [ref=e1253]: 0G/80G
+                  - generic [ref=e1254]: 25° 56W
+              - generic [ref=e1255]:
+                - generic [ref=e1256]:
+                  - generic [ref=e1257]: "1"
+                  - generic [ref=e1258]: 0%
+                - generic [ref=e1262]:
+                  - generic [ref=e1263]: 8G/80G
+                  - generic [ref=e1264]: 25° 58W
+              - generic [ref=e1265]:
+                - generic [ref=e1266]:
+                  - generic [ref=e1267]: "2"
+                  - generic [ref=e1268]: 0%
+                - generic [ref=e1271]:
+                  - generic [ref=e1272]: 0G/80G
+                  - generic [ref=e1273]: 26° 58W
+              - generic [ref=e1274]:
+                - generic [ref=e1275]:
+                  - generic [ref=e1276]: "3"
+                  - generic [ref=e1277]: 0%
+                - generic [ref=e1280]:
+                  - generic [ref=e1281]: 0G/80G
+                  - generic [ref=e1282]: 26° 72W
+              - generic [ref=e1283]:
+                - generic [ref=e1284]:
+                  - generic [ref=e1285]: "4"
+                  - generic [ref=e1286]: 0%
+                - generic [ref=e1289]:
+                  - generic [ref=e1290]: 0G/80G
+                  - generic [ref=e1291]: 26° 74W
+              - generic [ref=e1292]:
+                - generic [ref=e1293]:
+                  - generic [ref=e1294]: "5"
+                  - generic [ref=e1295]: 0%
+                - generic [ref=e1298]:
+                  - generic [ref=e1299]: 0G/80G
+                  - generic [ref=e1300]: 25° 65W
+              - generic [ref=e1301]:
+                - generic [ref=e1302]:
+                  - generic [ref=e1303]: "6"
+                  - generic [ref=e1304]: 0%
+                - generic [ref=e1307]:
+                  - generic [ref=e1308]: 0G/80G
+                  - generic [ref=e1309]: 24° 60W
+              - generic [ref=e1310]:
+                - generic [ref=e1311]:
+                  - generic [ref=e1312]: "7"
+                  - generic [ref=e1313]: 0%
+                - generic [ref=e1316]:
+                  - generic [ref=e1317]: 0G/80G
+                  - generic [ref=e1318]: 27° 74W
+            - button "展开进程与历史曲线 ▾" [ref=e1320] [cursor=pointer]
+          - generic [ref=e1321]:
+            - generic [ref=e1322]:
+              - generic [ref=e1323]: 训练产物
+              - generic [ref=e1324]: 点击在右栏直接查看
+            - generic [ref=e1325]:
+              - generic "打开 split-manifest.json" [ref=e1364] [cursor=pointer]:
+                - generic [ref=e1365]: SP
+                - generic [ref=e1366]: split-manifest.json
+                - generic [ref=e1367]: 数据切分
+                - generic [ref=e1368]: ›
+              - generic "打开 契约件（含 digest）" [ref=e1369] [cursor=pointer]:
+                - generic [ref=e1370]: ··
+                - generic [ref=e1371]: 契约件（含 digest）
+                - generic [ref=e1372]: 产物
+                - generic [ref=e1373]: ›
+              - generic "打开 launch manifest（sha 索引）" [ref=e1374] [cursor=pointer]:
+                - generic [ref=e1375]: ··
+                - generic [ref=e1376]: launch manifest（sha 索引）
+                - generic [ref=e1377]: 产物
+                - generic [ref=e1378]: ›
+          - generic [ref=e1326]:
+            - generic [ref=e1327]:
+              - generic [ref=e1328]: 训练日志
+              - generic [ref=e1329]: 最后 40 行 · 3 小时前 · 悬停暂停
+            - generic [ref=e1330]:
+              - generic [ref=e1997]: saved in /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02
+              - generic [ref=e1998]: /prep/iteration-config/checkpoint-5/chat_template.jinja
+              - generic [ref=e1999]: "[INFO|tokenization_utils_base.py:2590] 2026-10-21 20:52:14,951 >> tokenizer conf"
+              - generic [ref=e2000]: ig file saved in /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-adm
+              - generic [ref=e2001]: it-qc-02/prep/iteration-config/checkpoint-5/tokenizer_config.json
+              - generic [ref=e2002]: "[INFO|tokenization_utils_base.py:2599] 2026-10-21 20:52:14,952 >> Special tokens"
+              - generic [ref=e2003]: file saved in /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit
+              - generic [ref=e2004]: "-qc-02/prep/iteration-config/checkpoint-5/special_tokens_map.json"
+              - generic [ref=e2005]: /usr/local/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:48
+              - generic [ref=e2006]: "07: UserWarning: No device id is provided via `init_process_group` or `barrier `"
+              - generic [ref=e2007]: . Using the current device set by the user.
+              - generic [ref=e2008]: "warnings.warn( # warn only once"
+              - generic [ref=e2009]: "[2026-10-21 20:52:15,279] [INFO] [logging.py:107:log_dist] [Rank 0] [Torch] Chec"
+              - generic [ref=e2010]: kpoint global_step5 is about to be saved!
+              - generic [ref=e2011]: "[2026-10-21 20:52:15,456] [INFO] [logging.py:107:log_dist] [Rank 0] Saving model"
+              - generic [ref=e2012]: "checkpoint: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-q"
+              - generic [ref=e2013]: c-02/prep/iteration-config/checkpoint-5/global_step5/zero_pp_rank_0_mp_rank_00_m
+              - generic [ref=e2014]: odel_states.pt
+              - generic [ref=e2015]: "[2026-10-21 20:52:15,456] [INFO] [torch_checkpoint_engine.py:21:save] [Torch] Sa"
+              - generic [ref=e2016]: ving /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/pre
+              - generic [ref=e2017]: p/iteration-config/checkpoint-5/global_step5/zero_pp_rank_0_mp_rank_00_model_sta
+              - generic [ref=e2018]: tes.pt...
+              - generic [ref=e2019]: "[2026-10-21 20:52:16,546] [INFO] [torch_checkpoint_engine.py:23:save] [Torch] Sa"
+              - generic [ref=e2020]: ved /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep
+              - generic [ref=e2021]: /iteration-config/checkpoint-5/global_step5/zero_pp_rank_0_mp_rank_00_model_stat
+              - generic [ref=e2022]: es.pt.
+              - generic [ref=e2023]: "[2026-10-21 20:52:16,554] [INFO] [torch_checkpoint_engine.py:21:save] [Torch] Sa"
+              - generic [ref=e2024]: ving /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/pre
+              - generic [ref=e2025]: p/iteration-config/checkpoint-5/global_step5/bf16_zero_pp_rank_0_mp_rank_00_opti
+              - generic [ref=e2026]: m_states.pt...
+              - generic [ref=e2027]: "[2026-10-21 20:52:17,150] [INFO] [torch_checkpoint_engine.py:23:save] [Torch] Sa"
+              - generic [ref=e2028]: ved /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep
+              - generic [ref=e2029]: /iteration-config/checkpoint-5/global_step5/bf16_zero_pp_rank_0_mp_rank_00_optim
+              - generic [ref=e2030]: _states.pt.
+              - generic [ref=e2031]: "[2026-10-21 20:52:17,151] [INFO] [engine.py:3701:_save_zero_checkpoint] zero che"
+              - generic [ref=e2032]: ckpoint saved /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-
+              - generic [ref=e2033]: qc-02/prep/iteration-config/checkpoint-5/global_step5/bf16_zero_pp_rank_0_mp_ran
+              - generic [ref=e2034]: k_00_optim_states.pt
+              - generic [ref=e2035]: "[2026-10-21 20:52:17,199] [INFO] [torch_checkpoint_engine.py:33:commit] [Torch]"
+              - generic [ref=e2036]: Checkpoint global_step5 is ready now!
+          - generic [ref=e1331]:
+            - generic [ref=e1332]:
+              - generic [ref=e1333]: 评估对比
+              - generic [ref=e1334]: 最近两轮评估并排
+            - generic [ref=e1335]: （不足两轮——对比需 ≥2 个 eval 轮次，当前 0 轮）
+          - generic [ref=e1336]: 内核 real · v0.7.23b3
+  - dialog "选择实验" [ref=e1384]:
+    - generic [ref=e1385]:
+      - generic [ref=e1386]: 当前实验
+      - button "×" [ref=e1387] [cursor=pointer]
+    - generic [ref=e1388]:
+      - generic [ref=e1389]: 本会话
+      - generic [ref=e1390]:
+        - button "● 装箱单 · Qwen3-VL-32B · 10-21 21:02 atf-prodtest-20261021 · run-admit-qc-02 异常" [disabled] [ref=e2037]:
+          - generic [ref=e1392]: ●
+          - generic [ref=e1393]:
+            - generic [ref=e1394]: 装箱单 · Qwen3-VL-32B · 10-21 21:02
+            - generic [ref=e1395]: atf-prodtest-20261021 · run-admit-qc-02
+          - generic [ref=e1396]: 异常
+        - button "✎" [ref=e1397] [cursor=pointer]
+    - generic [ref=e1398]:
+      - generic [ref=e1399]: 最近实验
+      - button "○ 实验 261021 atf-prodtest-20261021" [ref=e1401] [cursor=pointer]:
+        - generic [ref=e1402]: ○
+        - generic [ref=e1403]:
+          - generic [ref=e1404]: 实验 261021
+          - generic [ref=e1405]: atf-prodtest-20261021
+      - button "○ 装箱单 · Qwen3-VL-32B · 10-20 23:49 atf-prodtest-20261021 · run-admit-qc-02-eval-h5 空闲" [ref=e1407] [cursor=pointer]:
+        - generic [ref=e1408]: ○
+        - generic [ref=e1409]:
+          - generic [ref=e1410]: 装箱单 · Qwen3-VL-32B · 10-20 23:49
+          - generic [ref=e1411]: atf-prodtest-20261021 · run-admit-qc-02-eval-h5
+        - generic [ref=e1412]: 空闲
+    - generic [ref=e2038]:
+      - generic [ref=e2039]: 本工作区其他
+      - button "○ atf-prodtest-20261021 · 10-20 atf-prodtest-20261021 · run-admit-qc-01 空闲" [ref=e2041] [cursor=pointer]:
+        - generic [ref=e2042]: ○
+        - generic [ref=e2043]:
+          - generic [ref=e2044]: atf-prodtest-20261021 · 10-20
+          - generic [ref=e2045]: atf-prodtest-20261021 · run-admit-qc-01
+        - generic [ref=e2046]: 空闲
+    - generic [ref=e1420]:
+      - generic [ref=e1421]: 全部实例（只读）
+      - generic [ref=e1422]:
+        - button "○ atf-prodtest-20261017 · 10-17 atf-prodtest-20261017 · casea-run-joint 空闲" [ref=e1423] [cursor=pointer]:
+          - generic [ref=e1424]: ○
+          - generic [ref=e1425]:
+            - generic [ref=e1426]: atf-prodtest-20261017 · 10-17
+            - generic [ref=e1427]: atf-prodtest-20261017 · casea-run-joint
+          - generic [ref=e1428]: 空闲
+        - button "设为当前" [ref=e1429] [cursor=pointer]
+      - generic [ref=e1430]:
+        - button "○ atf-prodtest-20261017 · 10-18 atf-prodtest-20261017 · a22b-walk2 空闲" [ref=e1431] [cursor=pointer]:
+          - generic [ref=e1432]: ○
+          - generic [ref=e1433]:
+            - generic [ref=e1434]: atf-prodtest-20261017 · 10-18
+            - generic [ref=e1435]: atf-prodtest-20261017 · a22b-walk2
+          - generic [ref=e1436]: 空闲
+        - button "设为当前" [ref=e1437] [cursor=pointer]
+      - generic [ref=e1438]:
+        - button "○ 装箱单 · 10-18 07:23 atf-prodtest-20261017 · a22b-walk3 空闲" [ref=e1439] [cursor=pointer]:
+          - generic [ref=e1440]: ○
+          - generic [ref=e1441]:
+            - generic [ref=e1442]: 装箱单 · 10-18 07:23
+            - generic [ref=e1443]: atf-prodtest-20261017 · a22b-walk3
+          - generic [ref=e1444]: 空闲
+        - button "设为当前" [ref=e1445] [cursor=pointer]
+      - generic [ref=e1446]:
+        - button "○ atf-prodtest-20261017 · 10-18 atf-prodtest-20261017 · a22b-walk4 空闲" [ref=e1447] [cursor=pointer]:
+          - generic [ref=e1448]: ○
+          - generic [ref=e1449]:
+            - generic [ref=e1450]: atf-prodtest-20261017 · 10-18
+            - generic [ref=e1451]: atf-prodtest-20261017 · a22b-walk4
+          - generic [ref=e1452]: 空闲
+        - button "设为当前" [ref=e1453] [cursor=pointer]
+      - generic [ref=e1454]:
+        - button "○ 装箱单 · Qwen3-VL-32B · 10-18 22:16 atf-prodtest-20261017 · a22b-e14b 空闲" [ref=e1455] [cursor=pointer]:
+          - generic [ref=e1456]: ○
+          - generic [ref=e1457]:
+            - generic [ref=e1458]: 装箱单 · Qwen3-VL-32B · 10-18 22:16
+            - generic [ref=e1459]: atf-prodtest-20261017 · a22b-e14b
+          - generic [ref=e1460]: 空闲
+        - button "设为当前" [ref=e1461] [cursor=pointer]
+      - generic [ref=e1462]:
+        - button "○ 装箱单 · Qwen3-VL-32B · 10-18 23:54 atf-prodtest-20261017 · a22b-e14b2 空闲" [ref=e1463] [cursor=pointer]:
+          - generic [ref=e1464]: ○
+          - generic [ref=e1465]:
+            - generic [ref=e1466]: 装箱单 · Qwen3-VL-32B · 10-18 23:54
+            - generic [ref=e1467]: atf-prodtest-20261017 · a22b-e14b2
+          - generic [ref=e1468]: 空闲
+        - button "设为当前" [ref=e1469] [cursor=pointer]
+      - generic [ref=e1470]:
+        - button "○ 装箱单 · 10-18 08:02 atf-prodtest-20261017 · a22b-walk5 空闲" [ref=e1471] [cursor=pointer]:
+          - generic [ref=e1472]: ○
+          - generic [ref=e1473]:
+            - generic [ref=e1474]: 装箱单 · 10-18 08:02
+            - generic [ref=e1475]: atf-prodtest-20261017 · a22b-walk5
+          - generic [ref=e1476]: 空闲
+        - button "设为当前" [ref=e1477] [cursor=pointer]
+      - generic [ref=e1478]:
+        - button "○ 装箱单 · Qwen3-VL-32B · 10-20 22:57 atf-prodtest-20261021 · run-admit-qc-01 空闲" [ref=e1479] [cursor=pointer]:
+          - generic [ref=e1480]: ○
+          - generic [ref=e1481]:
+            - generic [ref=e1482]: 装箱单 · Qwen3-VL-32B · 10-20 22:57
+            - generic [ref=e1483]: atf-prodtest-20261021 · run-admit-qc-01
+          - generic [ref=e1484]: 空闲
+        - button "设为当前" [ref=e1485] [cursor=pointer]
+      - generic [ref=e1486]:
+        - button "○ 装箱单 · Qwen3-VL-32B · 10-20 23:49 atf-prodtest-20261021 · run-admit-qc-02 异常" [ref=e1487] [cursor=pointer]:
+          - generic [ref=e1488]: ○
+          - generic [ref=e1489]:
+            - generic [ref=e1490]: 装箱单 · Qwen3-VL-32B · 10-20 23:49
+            - generic [ref=e1491]: atf-prodtest-20261021 · run-admit-qc-02
+          - generic [ref=e1492]: 异常
+        - button "设为当前" [ref=e1493] [cursor=pointer]
+      - generic [ref=e1494]:
+        - button "○ Qwen3-VL-32B · 10-17 21:36 a4-hotws · a3smoke1017 异常" [ref=e1495] [cursor=pointer]:
+          - generic [ref=e1496]: ○
+          - generic [ref=e1497]:
+            - generic [ref=e1498]: Qwen3-VL-32B · 10-17 21:36
+            - generic [ref=e1499]: a4-hotws · a3smoke1017
+          - generic [ref=e1500]: 异常
+        - button "设为当前" [ref=e1501] [cursor=pointer]
+      - generic [ref=e1502]:
+        - button "○ Qwen3-VL-32B · 10-12 21:39 sam · bw-live-1 异常" [ref=e1503] [cursor=pointer]:
+          - generic [ref=e1504]: ○
+          - generic [ref=e1505]:
+            - generic [ref=e1506]: Qwen3-VL-32B · 10-12 21:39
+            - generic [ref=e1507]: sam · bw-live-1
+          - generic [ref=e1508]: 异常
+        - button "设为当前" [ref=e1509] [cursor=pointer]
+      - generic [ref=e1510]:
+        - button "○ 实验 p-demo c2e9-deep-demo 空闲" [ref=e1511] [cursor=pointer]:
+          - generic [ref=e1512]: ○
+          - generic [ref=e1513]:
+            - generic [ref=e1514]: 实验 p-demo
+            - generic [ref=e1515]: c2e9-deep-demo
+          - generic [ref=e1516]: 空闲
+        - button "设为当前" [ref=e1517] [cursor=pointer]
+      - generic [ref=e1518]:
+        - button "○ Qwen3-VL-32B · 10-21 12:29 cr_ci_smoke_r1_replay 异常" [ref=e1519] [cursor=pointer]:
+          - generic [ref=e1520]: ○
+          - generic [ref=e1521]:
+            - generic [ref=e1522]: Qwen3-VL-32B · 10-21 12:29
+            - generic [ref=e1523]: cr_ci_smoke_r1_replay
+          - generic [ref=e1524]: 异常
+        - button "设为当前" [ref=e1525] [cursor=pointer]
+      - generic [ref=e1526]:
+        - button "○ 实验 t-1019 d3-kdirect-1019 空闲" [ref=e1527] [cursor=pointer]:
+          - generic [ref=e1528]: ○
+          - generic [ref=e1529]:
+            - generic [ref=e1530]: 实验 t-1019
+            - generic [ref=e1531]: d3-kdirect-1019
+          - generic [ref=e1532]: 空闲
+        - button "设为当前" [ref=e1533] [cursor=pointer]
+      - generic [ref=e1534]:
+        - button "○ 装箱单 · 10-19 16:34 d3-kdirect-b 空闲" [ref=e1535] [cursor=pointer]:
+          - generic [ref=e1536]: ○
+          - generic [ref=e1537]:
+            - generic [ref=e1538]: 装箱单 · 10-19 16:34
+            - generic [ref=e1539]: d3-kdirect-b
+          - generic [ref=e1540]: 空闲
+        - button "设为当前" [ref=e1541] [cursor=pointer]
+      - generic [ref=e1542]:
+        - button "○ 实验 efault default 空闲" [ref=e1543] [cursor=pointer]:
+          - generic [ref=e1544]: ○
+          - generic [ref=e1545]:
+            - generic [ref=e1546]: 实验 efault
+            - generic [ref=e1547]: default
+          - generic [ref=e1548]: 空闲
+        - button "设为当前" [ref=e1549] [cursor=pointer]
+      - generic [ref=e1550]:
+        - button "○ Qwen2.5-VL-32B · 10-16 07:55 evalcard-smoke 空闲" [ref=e1551] [cursor=pointer]:
+          - generic [ref=e1552]: ○
+          - generic [ref=e1553]:
+            - generic [ref=e1554]: Qwen2.5-VL-32B · 10-16 07:55
+            - generic [ref=e1555]: evalcard-smoke
+          - generic [ref=e1556]: 空闲
+        - button "设为当前" [ref=e1557] [cursor=pointer]
+      - generic [ref=e1558]:
+        - button "○ Qwen3-VL-32B · 10-17 13:05 atf-prodtest-20261017 · goods4doc-iter1 空闲" [ref=e1559] [cursor=pointer]:
+          - generic [ref=e1560]: ○
+          - generic [ref=e1561]:
+            - generic [ref=e1562]: Qwen3-VL-32B · 10-17 13:05
+            - generic [ref=e1563]: atf-prodtest-20261017 · goods4doc-iter1
+          - generic [ref=e1564]: 空闲
+        - button "设为当前" [ref=e1565] [cursor=pointer]
+      - generic [ref=e1566]:
+        - button "○ 实验 be-sim run-p-probe-sim 空闲" [ref=e1567] [cursor=pointer]:
+          - generic [ref=e1568]: ○
+          - generic [ref=e1569]:
+            - generic [ref=e1570]: 实验 be-sim
+            - generic [ref=e1571]: run-p-probe-sim
+          - generic [ref=e1572]: 空闲
+        - button "设为当前" [ref=e1573] [cursor=pointer]
+      - generic [ref=e1574]:
+        - button "○ sam · 10-10 sam · run-q-manual 空闲" [ref=e1575] [cursor=pointer]:
+          - generic [ref=e1576]: ○
+          - generic [ref=e1577]:
+            - generic [ref=e1578]: sam · 10-10
+            - generic [ref=e1579]: sam · run-q-manual
+          - generic [ref=e1580]: 空闲
+        - button "设为当前" [ref=e1581] [cursor=pointer]
+      - generic [ref=e1582]:
+        - button "○ sam · 10-10 sam · run-q-smoke 空闲" [ref=e1583] [cursor=pointer]:
+          - generic [ref=e1584]: ○
+          - generic [ref=e1585]:
+            - generic [ref=e1586]: sam · 10-10
+            - generic [ref=e1587]: sam · run-q-smoke
+          - generic [ref=e1588]: 空闲
+        - button "设为当前" [ref=e1589] [cursor=pointer]
+      - generic [ref=e1590]:
+        - button "○ Qwen3-VL-32B · 10-12 14:14 sam · run-regress-formal-01 空闲" [ref=e1591] [cursor=pointer]:
+          - generic [ref=e1592]: ○
+          - generic [ref=e1593]:
+            - generic [ref=e1594]: Qwen3-VL-32B · 10-12 14:14
+            - generic [ref=e1595]: sam · run-regress-formal-01
+          - generic [ref=e1596]: 空闲
+        - button "设为当前" [ref=e1597] [cursor=pointer]
+      - generic [ref=e1598]:
+        - button "○ Qwen3-VL-32B · 10-02 20:49 run-regress-formal-02 空闲" [ref=e1599] [cursor=pointer]:
+          - generic [ref=e1600]: ○
+          - generic [ref=e1601]:
+            - generic [ref=e1602]: Qwen3-VL-32B · 10-02 20:49
+            - generic [ref=e1603]: run-regress-formal-02
+          - generic [ref=e1604]: 空闲
+        - button "设为当前" [ref=e1605] [cursor=pointer]
+      - generic [ref=e1606]:
+        - button "○ 装箱单 · Qwen3-VL-32B · 10-07 20:10 run-regress-formal-03 空闲" [ref=e1607] [cursor=pointer]:
+          - generic [ref=e1608]: ○
+          - generic [ref=e1609]:
+            - generic [ref=e1610]: 装箱单 · Qwen3-VL-32B · 10-07 20:10
+            - generic [ref=e1611]: run-regress-formal-03
+          - generic [ref=e1612]: 空闲
+        - button "设为当前" [ref=e1613] [cursor=pointer]
+      - generic [ref=e1614]:
+        - button "○ 装箱单 · Qwen3-VL-32B · 10-11 00:11 sam · run-regress-large-pl 空闲" [ref=e1615] [cursor=pointer]:
+          - generic [ref=e1616]: ○
+          - generic [ref=e1617]:
+            - generic [ref=e1618]: 装箱单 · Qwen3-VL-32B · 10-11 00:11
+            - generic [ref=e1619]: sam · run-regress-large-pl
+          - generic [ref=e1620]: 空闲
+        - button "设为当前" [ref=e1621] [cursor=pointer]
+      - generic [ref=e1622]:
+        - button "○ 实验 -21105 train-obs-smoke-21105 空闲" [ref=e1623] [cursor=pointer]:
+          - generic [ref=e1624]: ○
+          - generic [ref=e1625]:
+            - generic [ref=e1626]: 实验 -21105
+            - generic [ref=e1627]: train-obs-smoke-21105
+          - generic [ref=e1628]: 空闲
+        - button "设为当前" [ref=e1629] [cursor=pointer]
+      - generic [ref=e1630]:
+        - button "○ 实验 5d6a22 train-obs-smoke-875d6a22 空闲" [ref=e1631] [cursor=pointer]:
+          - generic [ref=e1632]: ○
+          - generic [ref=e1633]:
+            - generic [ref=e1634]: 实验 5d6a22
+            - generic [ref=e1635]: train-obs-smoke-875d6a22
+          - generic [ref=e1636]: 空闲
+        - button "设为当前" [ref=e1637] [cursor=pointer]
+      - generic [ref=e1638]:
+        - button "○ 实验 -95511 train-obs-smoke-95511 空闲" [ref=e1639] [cursor=pointer]:
+          - generic [ref=e1640]: ○
+          - generic [ref=e1641]:
+            - generic [ref=e1642]: 实验 -95511
+            - generic [ref=e1643]: train-obs-smoke-95511
+          - generic [ref=e1644]: 空闲
+        - button "设为当前" [ref=e1645] [cursor=pointer]
+      - generic [ref=e1646]:
+        - button "○ 实验 -95770 train-obs-smoke-95770 空闲" [ref=e1647] [cursor=pointer]:
+          - generic [ref=e1648]: ○
+          - generic [ref=e1649]:
+            - generic [ref=e1650]: 实验 -95770
+            - generic [ref=e1651]: train-obs-smoke-95770
+          - generic [ref=e1652]: 空闲
+        - button "设为当前" [ref=e1653] [cursor=pointer]
+      - generic [ref=e1654]:
+        - button "○ 实验 -96135 train-obs-smoke-96135 空闲" [ref=e1655] [cursor=pointer]:
+          - generic [ref=e1656]: ○
+          - generic [ref=e1657]:
+            - generic [ref=e1658]: 实验 -96135
+            - generic [ref=e1659]: train-obs-smoke-96135
+          - generic [ref=e1660]: 空闲
+        - button "设为当前" [ref=e1661] [cursor=pointer]
+      - generic [ref=e1662]:
+        - button "○ 实验 4ba234 train-obs-smoke-9a4ba234 空闲" [ref=e1663] [cursor=pointer]:
+          - generic [ref=e1664]: ○
+          - generic [ref=e1665]:
+            - generic [ref=e1666]: 实验 4ba234
+            - generic [ref=e1667]: train-obs-smoke-9a4ba234
+          - generic [ref=e1668]: 空闲
+        - button "设为当前" [ref=e1669] [cursor=pointer]
+      - generic [ref=e1670]:
+        - button "○ 实验 oke-r1 train-obs-smoke-r1 空闲" [ref=e1671] [cursor=pointer]:
+          - generic [ref=e1672]: ○
+          - generic [ref=e1673]:
+            - generic [ref=e1674]: 实验 oke-r1
+            - generic [ref=e1675]: train-obs-smoke-r1
+          - generic [ref=e1676]: 空闲
+        - button "设为当前" [ref=e1677] [cursor=pointer]
+      - generic [ref=e1678]:
+        - button "○ 实验 ke-r10 train-obs-smoke-r10 空闲" [ref=e1679] [cursor=pointer]:
+          - generic [ref=e1680]: ○
+          - generic [ref=e1681]:
+            - generic [ref=e1682]: 实验 ke-r10
+            - generic [ref=e1683]: train-obs-smoke-r10
+          - generic [ref=e1684]: 空闲
+        - button "设为当前" [ref=e1685] [cursor=pointer]
+      - generic [ref=e1686]:
+        - button "○ 实验 ke-r11 train-obs-smoke-r11 空闲" [ref=e1687] [cursor=pointer]:
+          - generic [ref=e1688]: ○
+          - generic [ref=e1689]:
+            - generic [ref=e1690]: 实验 ke-r11
+            - generic [ref=e1691]: train-obs-smoke-r11
+          - generic [ref=e1692]: 空闲
+        - button "设为当前" [ref=e1693] [cursor=pointer]
+      - generic [ref=e1694]:
+        - button "○ 实验 ke-r12 train-obs-smoke-r12 空闲" [ref=e1695] [cursor=pointer]:
+          - generic [ref=e1696]: ○
+          - generic [ref=e1697]:
+            - generic [ref=e1698]: 实验 ke-r12
+            - generic [ref=e1699]: train-obs-smoke-r12
+          - generic [ref=e1700]: 空闲
+        - button "设为当前" [ref=e1701] [cursor=pointer]
+      - generic [ref=e1702]:
+        - button "○ 实验 ke-r13 train-obs-smoke-r13 空闲" [ref=e1703] [cursor=pointer]:
+          - generic [ref=e1704]: ○
+          - generic [ref=e1705]:
+            - generic [ref=e1706]: 实验 ke-r13
+            - generic [ref=e1707]: train-obs-smoke-r13
+          - generic [ref=e1708]: 空闲
+        - button "设为当前" [ref=e1709] [cursor=pointer]
+      - generic [ref=e1710]:
+        - button "○ 实验 ke-r14 train-obs-smoke-r14 空闲" [ref=e1711] [cursor=pointer]:
+          - generic [ref=e1712]: ○
+          - generic [ref=e1713]:
+            - generic [ref=e1714]: 实验 ke-r14
+            - generic [ref=e1715]: train-obs-smoke-r14
+          - generic [ref=e1716]: 空闲
+        - button "设为当前" [ref=e1717] [cursor=pointer]
+      - generic [ref=e1718]:
+        - button "○ 实验 ke-r15 train-obs-smoke-r15 空闲" [ref=e1719] [cursor=pointer]:
+          - generic [ref=e1720]: ○
+          - generic [ref=e1721]:
+            - generic [ref=e1722]: 实验 ke-r15
+            - generic [ref=e1723]: train-obs-smoke-r15
+          - generic [ref=e1724]: 空闲
+        - button "设为当前" [ref=e1725] [cursor=pointer]
+      - generic [ref=e1726]:
+        - button "○ 实验 ke-r16 train-obs-smoke-r16 空闲" [ref=e1727] [cursor=pointer]:
+          - generic [ref=e1728]: ○
+          - generic [ref=e1729]:
+            - generic [ref=e1730]: 实验 ke-r16
+            - generic [ref=e1731]: train-obs-smoke-r16
+          - generic [ref=e1732]: 空闲
+        - button "设为当前" [ref=e1733] [cursor=pointer]
+      - generic [ref=e1734]:
+        - button "○ 实验 ke-r17 train-obs-smoke-r17 空闲" [ref=e1735] [cursor=pointer]:
+          - generic [ref=e1736]: ○
+          - generic [ref=e1737]:
+            - generic [ref=e1738]: 实验 ke-r17
+            - generic [ref=e1739]: train-obs-smoke-r17
+          - generic [ref=e1740]: 空闲
+        - button "设为当前" [ref=e1741] [cursor=pointer]
+      - generic [ref=e1742]:
+        - button "○ 实验 oke-r2 train-obs-smoke-r2 空闲" [ref=e1743] [cursor=pointer]:
+          - generic [ref=e1744]: ○
+          - generic [ref=e1745]:
+            - generic [ref=e1746]: 实验 oke-r2
+            - generic [ref=e1747]: train-obs-smoke-r2
+          - generic [ref=e1748]: 空闲
+        - button "设为当前" [ref=e1749] [cursor=pointer]
+      - generic [ref=e1750]:
+        - button "○ 实验 oke-r3 train-obs-smoke-r3 空闲" [ref=e1751] [cursor=pointer]:
+          - generic [ref=e1752]: ○
+          - generic [ref=e1753]:
+            - generic [ref=e1754]: 实验 oke-r3
+            - generic [ref=e1755]: train-obs-smoke-r3
+          - generic [ref=e1756]: 空闲
+        - button "设为当前" [ref=e1757] [cursor=pointer]
+      - generic [ref=e1758]:
+        - button "○ 实验 oke-r4 train-obs-smoke-r4 空闲" [ref=e1759] [cursor=pointer]:
+          - generic [ref=e1760]: ○
+          - generic [ref=e1761]:
+            - generic [ref=e1762]: 实验 oke-r4
+            - generic [ref=e1763]: train-obs-smoke-r4
+          - generic [ref=e1764]: 空闲
+        - button "设为当前" [ref=e1765] [cursor=pointer]
+      - generic [ref=e1766]:
+        - button "○ 实验 oke-r5 train-obs-smoke-r5 空闲" [ref=e1767] [cursor=pointer]:
+          - generic [ref=e1768]: ○
+          - generic [ref=e1769]:
+            - generic [ref=e1770]: 实验 oke-r5
+            - generic [ref=e1771]: train-obs-smoke-r5
+          - generic [ref=e1772]: 空闲
+        - button "设为当前" [ref=e1773] [cursor=pointer]
+      - generic [ref=e1774]:
+        - button "○ 实验 oke-r6 train-obs-smoke-r6 空闲" [ref=e1775] [cursor=pointer]:
+          - generic [ref=e1776]: ○
+          - generic [ref=e1777]:
+            - generic [ref=e1778]: 实验 oke-r6
+            - generic [ref=e1779]: train-obs-smoke-r6
+          - generic [ref=e1780]: 空闲
+        - button "设为当前" [ref=e1781] [cursor=pointer]
+      - generic [ref=e1782]:
+        - button "○ 实验 oke-r7 train-obs-smoke-r7 空闲" [ref=e1783] [cursor=pointer]:
+          - generic [ref=e1784]: ○
+          - generic [ref=e1785]:
+            - generic [ref=e1786]: 实验 oke-r7
+            - generic [ref=e1787]: train-obs-smoke-r7
+          - generic [ref=e1788]: 空闲
+        - button "设为当前" [ref=e1789] [cursor=pointer]
+      - generic [ref=e1790]:
+        - button "○ 实验 oke-r8 train-obs-smoke-r8 空闲" [ref=e1791] [cursor=pointer]:
+          - generic [ref=e1792]: ○
+          - generic [ref=e1793]:
+            - generic [ref=e1794]: 实验 oke-r8
+            - generic [ref=e1795]: train-obs-smoke-r8
+          - generic [ref=e1796]: 空闲
+        - button "设为当前" [ref=e1797] [cursor=pointer]
+      - generic [ref=e1798]:
+        - button "○ 实验 oke-r9 train-obs-smoke-r9 空闲" [ref=e1799] [cursor=pointer]:
+          - generic [ref=e1800]: ○
+          - generic [ref=e1801]:
+            - generic [ref=e1802]: 实验 oke-r9
+            - generic [ref=e1803]: train-obs-smoke-r9
+          - generic [ref=e1804]: 空闲
+        - button "设为当前" [ref=e1805] [cursor=pointer]
+      - generic [ref=e1806]:
+        - button "○ 装箱单 · qwen3_vl · 09-28 18:08 walkthrough-b10-rerun 空闲" [ref=e1807] [cursor=pointer]:
+          - generic [ref=e1808]: ○
+          - generic [ref=e1809]:
+            - generic [ref=e1810]: 装箱单 · qwen3_vl · 09-28 18:08
+            - generic [ref=e1811]: walkthrough-b10-rerun
+          - generic [ref=e1812]: 空闲
+        - button "设为当前" [ref=e1813] [cursor=pointer]
+      - generic [ref=e1814]:
+        - button "○ 装箱单 · qwen3_vl · 10-03 08:40 walkthrough-b11-rerun 空闲" [ref=e1815] [cursor=pointer]:
+          - generic [ref=e1816]: ○
+          - generic [ref=e1817]:
+            - generic [ref=e1818]: 装箱单 · qwen3_vl · 10-03 08:40
+            - generic [ref=e1819]: walkthrough-b11-rerun
+          - generic [ref=e1820]: 空闲
+        - button "设为当前" [ref=e1821] [cursor=pointer]
+      - generic [ref=e1822]:
+        - button "○ 装箱单 · qwen3_vl · 09-28 15:01 walkthrough-f10-rerun 空闲" [ref=e1823] [cursor=pointer]:
+          - generic [ref=e1824]: ○
+          - generic [ref=e1825]:
+            - generic [ref=e1826]: 装箱单 · qwen3_vl · 09-28 15:01
+            - generic [ref=e1827]: walkthrough-f10-rerun
+          - generic [ref=e1828]: 空闲
+        - button "设为当前" [ref=e1829] [cursor=pointer]
+      - generic [ref=e1830]:
+        - button "○ qwen3_vl · 09-30 17:58 walkthrough-m12-real 空闲" [ref=e1831] [cursor=pointer]:
+          - generic [ref=e1832]: ○
+          - generic [ref=e1833]:
+            - generic [ref=e1834]: qwen3_vl · 09-30 17:58
+            - generic [ref=e1835]: walkthrough-m12-real
+          - generic [ref=e1836]: 空闲
+        - button "设为当前" [ref=e1837] [cursor=pointer]
+      - generic [ref=e1838]:
+        - button "○ a4-hotws · 10-18 a4-hotws · a11cancel1017 空闲" [ref=e1839] [cursor=pointer]:
+          - generic [ref=e1840]: ○
+          - generic [ref=e1841]:
+            - generic [ref=e1842]: a4-hotws · 10-18
+            - generic [ref=e1843]: a4-hotws · a11cancel1017
+          - generic [ref=e1844]: 空闲
+        - button "设为当前" [ref=e1845] [cursor=pointer]
+      - generic [ref=e1846]:
+        - button "○ a4-hotws · 10-18 a4-hotws · a12cancel1018 空闲" [ref=e1847] [cursor=pointer]:
+          - generic [ref=e1848]: ○
+          - generic [ref=e1849]:
+            - generic [ref=e1850]: a4-hotws · 10-18
+            - generic [ref=e1851]: a4-hotws · a12cancel1018
+          - generic [ref=e1852]: 空闲
+        - button "设为当前" [ref=e1853] [cursor=pointer]
+      - generic [ref=e1854]:
+        - button "○ a4-hotws · 10-18 a4-hotws · c2e5-card-flash 空闲" [ref=e1855] [cursor=pointer]:
+          - generic [ref=e1856]: ○
+          - generic [ref=e1857]:
+            - generic [ref=e1858]: a4-hotws · 10-18
+            - generic [ref=e1859]: a4-hotws · c2e5-card-flash
+          - generic [ref=e1860]: 空闲
+        - button "设为当前" [ref=e1861] [cursor=pointer]
+      - generic [ref=e1862]:
+        - button "○ a4-hotws · 10-18 a4-hotws · c2e5-card-flashx 空闲" [ref=e1863] [cursor=pointer]:
+          - generic [ref=e1864]: ○
+          - generic [ref=e1865]:
+            - generic [ref=e1866]: a4-hotws · 10-18
+            - generic [ref=e1867]: a4-hotws · c2e5-card-flashx
+          - generic [ref=e1868]: 空闲
+        - button "设为当前" [ref=e1869] [cursor=pointer]
+      - generic [ref=e1870]:
+        - button "○ a4-hotws · 10-18 a4-hotws · c2e5-card-glm53 空闲" [ref=e1871] [cursor=pointer]:
+          - generic [ref=e1872]: ○
+          - generic [ref=e1873]:
+            - generic [ref=e1874]: a4-hotws · 10-18
+            - generic [ref=e1875]: a4-hotws · c2e5-card-glm53
+          - generic [ref=e1876]: 空闲
+        - button "设为当前" [ref=e1877] [cursor=pointer]
+      - generic [ref=e1878]:
+        - button "○ a4-hotws · 10-19 a4-hotws · c3b-card-eleven 空闲" [ref=e1879] [cursor=pointer]:
+          - generic [ref=e1880]: ○
+          - generic [ref=e1881]:
+            - generic [ref=e1882]: a4-hotws · 10-19
+            - generic [ref=e1883]: a4-hotws · c3b-card-eleven
+          - generic [ref=e1884]: 空闲
+        - button "设为当前" [ref=e1885] [cursor=pointer]
+      - generic [ref=e1886]:
+        - button "○ a4-hotws · 10-19 a4-hotws · c3b-card-final 空闲" [ref=e1887] [cursor=pointer]:
+          - generic [ref=e1888]: ○
+          - generic [ref=e1889]:
+            - generic [ref=e1890]: a4-hotws · 10-19
+            - generic [ref=e1891]: a4-hotws · c3b-card-final
+          - generic [ref=e1892]: 空闲
+        - button "设为当前" [ref=e1893] [cursor=pointer]
+      - generic [ref=e1894]:
+        - button "○ a4-hotws · 10-19 a4-hotws · c3b-card-twelve 空闲" [ref=e1895] [cursor=pointer]:
+          - generic [ref=e1896]: ○
+          - generic [ref=e1897]:
+            - generic [ref=e1898]: a4-hotws · 10-19
+            - generic [ref=e1899]: a4-hotws · c3b-card-twelve
+          - generic [ref=e1900]: 空闲
+        - button "设为当前" [ref=e1901] [cursor=pointer]
+      - generic [ref=e1902]:
+        - button "○ atf-prodtest-20261017 · 10-17 atf-prodtest-20261017 · a1domprobe1 空闲" [ref=e1903] [cursor=pointer]:
+          - generic [ref=e1904]: ○
+          - generic [ref=e1905]:
+            - generic [ref=e1906]: atf-prodtest-20261017 · 10-17
+            - generic [ref=e1907]: atf-prodtest-20261017 · a1domprobe1
+          - generic [ref=e1908]: 空闲
+        - button "设为当前" [ref=e1909] [cursor=pointer]
+      - generic [ref=e1910]:
+        - button "○ atf-prodtest-20261017 · 10-17 atf-prodtest-20261017 · a1mx-53-a 空闲" [ref=e1911] [cursor=pointer]:
+          - generic [ref=e1912]: ○
+          - generic [ref=e1913]:
+            - generic [ref=e1914]: atf-prodtest-20261017 · 10-17
+            - generic [ref=e1915]: atf-prodtest-20261017 · a1mx-53-a
+          - generic [ref=e1916]: 空闲
+        - button "设为当前" [ref=e1917] [cursor=pointer]
+      - generic [ref=e1918]:
+        - button "○ atf-prodtest-20261017 · 10-17 atf-prodtest-20261017 · a1mx-flash-a 空闲" [ref=e1919] [cursor=pointer]:
+          - generic [ref=e1920]: ○
+          - generic [ref=e1921]:
+            - generic [ref=e1922]: atf-prodtest-20261017 · 10-17
+            - generic [ref=e1923]: atf-prodtest-20261017 · a1mx-flash-a
+          - generic [ref=e1924]: 空闲
+        - button "设为当前" [ref=e1925] [cursor=pointer]
+      - generic [ref=e1926]:
+        - button "○ atf-prodtest-20261017 · 10-17 atf-prodtest-20261017 · a1mx-flash-b 空闲" [ref=e1927] [cursor=pointer]:
+          - generic [ref=e1928]: ○
+          - generic [ref=e1929]:
+            - generic [ref=e1930]: atf-prodtest-20261017 · 10-17
+            - generic [ref=e1931]: atf-prodtest-20261017 · a1mx-flash-b
+          - generic [ref=e1932]: 空闲
+        - button "设为当前" [ref=e1933] [cursor=pointer]
+      - generic [ref=e1934]:
+        - button "○ atf-prodtest-20261017 · 10-17 atf-prodtest-20261017 · a1mx-flash-b2 空闲" [ref=e1935] [cursor=pointer]:
+          - generic [ref=e1936]: ○
+          - generic [ref=e1937]:
+            - generic [ref=e1938]: atf-prodtest-20261017 · 10-17
+            - generic [ref=e1939]: atf-prodtest-20261017 · a1mx-flash-b2
+          - generic [ref=e1940]: 空闲
+        - button "设为当前" [ref=e1941] [cursor=pointer]
+      - generic [ref=e1942]:
+        - button "○ atf-prodtest-20261017 · 10-17 atf-prodtest-20261017 · a1mx-flashx-a 空闲" [ref=e1943] [cursor=pointer]:
+          - generic [ref=e1944]: ○
+          - generic [ref=e1945]:
+            - generic [ref=e1946]: atf-prodtest-20261017 · 10-17
+            - generic [ref=e1947]: atf-prodtest-20261017 · a1mx-flashx-a
+          - generic [ref=e1948]: 空闲
+        - button "设为当前" [ref=e1949] [cursor=pointer]
+      - generic [ref=e1950]:
+        - button "○ atf-prodtest-20261017 · 10-17 atf-prodtest-20261017 · a1probe1017a 空闲" [ref=e1951] [cursor=pointer]:
+          - generic [ref=e1952]: ○
+          - generic [ref=e1953]:
+            - generic [ref=e1954]: atf-prodtest-20261017 · 10-17
+            - generic [ref=e1955]: atf-prodtest-20261017 · a1probe1017a
+          - generic [ref=e1956]: 空闲
+        - button "设为当前" [ref=e1957] [cursor=pointer]
+      - generic [ref=e1958]:
+        - button "○ atf-prodtest-20261017 · 10-17 atf-prodtest-20261017 · a1probe1017b 空闲" [ref=e1959] [cursor=pointer]:
+          - generic [ref=e1960]: ○
+          - generic [ref=e1961]:
+            - generic [ref=e1962]: atf-prodtest-20261017 · 10-17
+            - generic [ref=e1963]: atf-prodtest-20261017 · a1probe1017b
+          - generic [ref=e1964]: 空闲
+        - button "设为当前" [ref=e1965] [cursor=pointer]
+      - generic [ref=e1966]:
+        - button "○ atf-prodtest-20261017 · 10-17 atf-prodtest-20261017 · a31-ready-run 空闲" [ref=e1967] [cursor=pointer]:
+          - generic [ref=e1968]: ○
+          - generic [ref=e1969]:
+            - generic [ref=e1970]: atf-prodtest-20261017 · 10-17
+            - generic [ref=e1971]: atf-prodtest-20261017 · a31-ready-run
+          - generic [ref=e1972]: 空闲
+        - button "设为当前" [ref=e1973] [cursor=pointer]
+      - generic [ref=e1974]:
+        - button "○ atf-prodtest-20261017 · 10-17 atf-prodtest-20261017 · goods4doc-joint-20261017 空闲" [ref=e1975] [cursor=pointer]:
+          - generic [ref=e1976]: ○
+          - generic [ref=e1977]:
+            - generic [ref=e1978]: atf-prodtest-20261017 · 10-17
+            - generic [ref=e1979]: atf-prodtest-20261017 · goods4doc-joint-20261017
+          - generic [ref=e1980]: 空闲
+        - button "设为当前" [ref=e1981] [cursor=pointer]
+      - generic [ref=e1982]:
+        - button "○ 装箱单 · Qwen3-VL-32B · 10-20 23:49 atf-prodtest-20261021 · run-admit-qc-02-eval-h5 空闲" [ref=e1983] [cursor=pointer]:
+          - generic [ref=e1984]: ○
+          - generic [ref=e1985]:
+            - generic [ref=e1986]: 装箱单 · Qwen3-VL-32B · 10-20 23:49
+            - generic [ref=e1987]: atf-prodtest-20261021 · run-admit-qc-02-eval-h5
+          - generic [ref=e1988]: 空闲
+        - button "设为当前" [ref=e1989] [cursor=pointer]
+    - button "解除绑定" [ref=e1991] [cursor=pointer]

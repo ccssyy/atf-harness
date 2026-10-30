@@ -1,0 +1,334 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e86] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e87]:
+          - generic [ref=e88]: ATF
+          - generic [ref=e91]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e101]: Workspaces
+        - generic [ref=e103]:
+          - button "Search sessions" [ref=e104] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e109] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e114]:
+        - generic [ref=e115]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e117] [cursor=pointer]
+          - treeitem "训练数据构造前校验演练 58min" [ref=e5403] [cursor=pointer]:
+            - generic [ref=e128]: 训练数据构造前校验演练
+            - generic [ref=e129]: 58min
+        - treeitem "ws-pl-walkthrough" [ref=e132] [cursor=pointer]
+        - generic [ref=e138]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e140] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 8h" [ref=e4965] [cursor=pointer]:
+            - generic [ref=e151]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e152]: 8h
+          - treeitem "装箱单字段抽取新实验全流程 10h" [ref=e5221] [cursor=pointer]:
+            - generic [ref=e156]: 装箱单字段抽取新实验全流程
+            - generic [ref=e157]: 10h
+        - generic [ref=e158]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=e160] [cursor=pointer]
+          - treeitem "等待发起真实训练走查指令 38min" [selected] [ref=e6289] [cursor=pointer]:
+            - generic [ref=e933]: 等待发起真实训练走查指令
+            - generic [ref=e1086]: 38min
+          - treeitem "汇总当前实验状态与进展 22h" [ref=e2222] [cursor=pointer]:
+            - generic [ref=e937]: 汇总当前实验状态与进展
+            - generic [ref=e938]: 22h
+          - treeitem "我的训练数据放在 /data/atf/prodt 1d" [ref=e940] [cursor=pointer]:
+            - generic [ref=e942]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=e943]: 1d
+        - treeitem "a4-hotws" [ref=e168] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e176] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e184] [cursor=pointer]
+        - treeitem "sam" [ref=e192] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e944]:
+    - banner [ref=e946]:
+      - generic [ref=e947]:
+        - generic [ref=e948]:
+          - generic [ref=e1087]:
+            - navigation "Session hierarchy" [ref=e1088]:
+              - generic [ref=e1089]: 等待发起真实训练走查指令
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e1093]: Standard mode
+          - generic [ref=e1100]:
+            - button "More actions" [ref=e1102] [cursor=pointer]
+            - generic [ref=e1107]:
+              - button "选择实验 ▾" [ref=e1109] [cursor=pointer]
+              - button "监控" [ref=e1111] [cursor=pointer]
+        - tablist [ref=e1112]:
+          - tab "Chat" [selected] [ref=e1113] [cursor=pointer]
+          - tab "Trajectory" [ref=e1114] [cursor=pointer]
+    - generic [ref=e955]:
+      - generic [ref=e1121]:
+        - generic [ref=e1124]:
+          - generic [ref=e1125]: 准备走查一次真实训练发起，先待命不要调用任何工具：等我下一步用「发起训练」对话框下发正式指令。
+          - generic [ref=e1127]:
+            - generic [ref=e1128]: 00:15
+            - button "Copy" [ref=e1129] [cursor=pointer]
+        - generic [ref=e1163]:
+          - status [ref=e1164]: Completed
+          - button "Completed in 10s" [ref=e1165] [cursor=pointer]
+        - generic [ref=e1173]:
+          - paragraph [ref=e1174]: 收到，已进入待命状态，本次不调用任何工具。
+          - paragraph [ref=e1175]: 等你通过「发起训练」对话框下发正式指令后，我会按标准链路处理：
+          - list [ref=e1176]:
+            - listitem [ref=e1177]:
+              - strong [ref=e1178]: 读取指令与现状核对
+              - text: —— 根据下发的任务描述/实验标识，先核对工作区状态、G4/G5 等闸门事实与已准入数据；
+            - listitem [ref=e1179]:
+              - strong [ref=e1180]: 确认卡流程
+              - text: —— 九要素训练配置确认（基模型、epochs/lr/rank、cutoff、卡数等），涉及授权一律走审批卡由你放行；
+            - listitem [ref=e1181]:
+              - strong [ref=e1182]: 放行与启动
+              - text: —— 训练放行记录登记后执行 launch，启动后持续回报训练状态与 loss 进展。
+          - paragraph [ref=e1183]: 在此之前我不会做任何探查或预操作。请下发指令。
+        - generic [ref=e1187]:
+          - button "Copy" [ref=e1188] [cursor=pointer]
+          - generic [ref=e1192]:
+            - button "Good response" [ref=e1193] [cursor=pointer]
+            - button "Bad response" [ref=e1196] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=e1199] [cursor=pointer]
+          - generic [ref=e1205]:
+            - button "Usage 18.1K tok" [ref=e1207] [cursor=pointer]
+            - generic [ref=e1213]: 00:15
+        - generic [ref=e1366]:
+          - generic [ref=e1367]: 发起训练（run-admit-qc-02 · 真实训练）：请按 prepare/run SKILL.md 正道链执行并逐步回报：① atf_config_confirm present（run_id=run-admit-qc-02）——九要素卡呈我确认（Web 摘要已核：9 项来自 IterationConfig，其余为缺省/KB 未校准值，卡面如实标注）；② 我 Allow once 后：DRY_RUN 校验——DRY_RUN=1 bash 该 run 的 train.sh，输出须含 ADMISSION=pass；③ prelaunch 报告在场检查（train.sh 同目录 prelaunch*.md|json）——缺失则按 prepare SKILL.md:84 以 build_prelaunch_report.py 生成到 scratch 并回报路径（不回写 run 目录）；④ 账本登记核验：generate_train_launch.py --record-training-release --config <该 IterationConfig>（已放行过则如实回报 already_recorded），贴 ledger 命中行作登记证据；⑤ 放行执行：atf_launch_execute（launch_sh=scratch 内 launch.sh，config=同一 IterationConfig，note 注明 owner 书面授权）——唯一编排执行点，manifest sha 对拍 fail-closed；
+          - generic [ref=e1369]:
+            - generic [ref=e1370]: 00:16
+            - button "Copy" [ref=e1371] [cursor=pointer]
+        - generic [ref=e6291]:
+          - status [ref=e6292]: Completed
+          - button "Completed in 38m 15s" [ref=e6293] [cursor=pointer]
+        - generic [ref=e5590]:
+          - paragraph [ref=e5591]:
+            - text: trainer_log.jsonl 尚未落盘（32B 模型加载+预处理中，8 worker 各 ~18GB RAM 满负荷）——属正常启动时序。走查五步已全部走完，交
+            - strong [ref=e5592]: 逐步回报总账
+            - text: ：
+          - separator [ref=e5593]
+          - heading "发起训练走查回报（run-admit-qc-02 · 真实训练）" [level=2] [ref=e5594]
+          - table [ref=e5596]:
+            - rowgroup [ref=e5597]:
+              - row [ref=e5598]:
+                - columnheader "步骤" [ref=e5599]
+                - columnheader "状态" [ref=e5600]
+                - columnheader "关键证据" [ref=e5601]
+            - rowgroup [ref=e5602]:
+              - row [ref=e5603]:
+                - cell "① 九要素卡" [ref=e5604]
+                - cell "✅ Allow once" [ref=e5605]
+                - cell [ref=e5606]:
+                  - text: 10 项
+                  - code [ref=e5607]: from_registry
+                  - text: + grad_accum
+                  - code [ref=e5608]: need_confirm
+                  - text: 已过目 + 缺省项如实标注；快照
+                  - code [ref=e5609]: webui/config-snapshot.json
+              - row [ref=e5610]:
+                - cell "② DRY_RUN 校验" [ref=e5611]
+                - cell "✅" [ref=e5612]
+                - cell [ref=e5613]:
+                  - code [ref=e5614]: SHA=pass entries=1
+                  - text: →
+                  - strong [ref=e5615]:
+                    - code [ref=e5616]: ADMISSION=pass keys=1
+                  - text: ，COMMAND 全量打印，exit 0
+              - row [ref=e5617]:
+                - cell "③ prelaunch 报告" [ref=e5618]
+                - cell "✅" [ref=e5619]
+                - cell [ref=e5620]:
+                  - text: train.sh 同目录缺失 → 按 SKILL.md:84 生成至
+                  - strong [ref=e5621]:
+                    - code [ref=e5622]: /data/atf/dev/runs/default/scratch/prelaunch-report.md
+                  - text: （五节齐备：环境含基模型本地复核通过/命令/argv 全量参数表含来源列/首行实文样例/数据指纹 142 行）；未回写 run 目录
+              - row [ref=e5623]:
+                - cell "④ 账本登记" [ref=e5624]
+                - cell [ref=e5625]:
+                  - text: ✅
+                  - code [ref=e5626]: recorded
+                  - text: （非 already）+ 补登
+                - cell [ref=e5627]:
+                  - text: 账本命中行：
+                  - code [ref=e5628]: "{\"decided_at\":\"2026-10-22T16:41:13Z\",\"decided_by\":\"user\",\"decision\":\"approved\",\"gate\":\"training_release\",\"note\":\"owner 书面授权：发起训练对话框正式指令（run-admit-qc-02 真实训练走查步骤④）…\",\"subject_sha256\":\"622322b4…ee3c\"}"
+                  - text: ；后补登至
+                  - code [ref=e5629]: /root/.atf
+                  - text: 实例账本（见偏差②）
+              - row [ref=e5630]:
+                - cell "⑤ 放行执行" [ref=e5631]
+                - cell "✅ 实质生效" [ref=e5632]
+                - cell [ref=e5633]:
+                  - code [ref=e5634]: release_result=already_recorded
+                  - text: （无重复签发）；
+                  - strong [ref=e5635]: 真实训练已起跑
+                  - text: ：llamafactory-cli(19121)→torchrun(19312)→8×launcher(19388–95)，GPU 0-7 全常驻，argv 与确认配置逐字一致
+          - paragraph [ref=e5636]:
+            - strong [ref=e5637]: 指纹链闭合
+            - text: ：
+            - code [ref=e5638]: IterationConfig sha 622322b4…
+            - text: ＝ launch_manifest ＝ train.sh 放行闸 ＝ 账本 subject ＝ launch.sh 执行闸，五方一致；
+            - code [ref=e5639]: train_sh_sha256 24b44396…
+            - text: 、
+            - code [ref=e5640]: train_manifest_sha256 98ec97f4…
+            - text: 经 LaunchPlan 生成器背书字节级保真；数据集坐标制式三查闸 pass（抽样 57 行 seed42 留痕）。
+          - heading "走查中发现的 4 项偏差与处置（全部如实留痕）" [level=2] [ref=e5641]
+          - list [ref=e5642]:
+            - listitem [ref=e5643]:
+              - strong [ref=e5644]: 登记源配置已被 reconcile
+              - text: （Oct 23 00:28，dev 侧新增
+              - code [ref=e5645]: param_sources
+              - text: + 字符串型归一 +
+              - code [ref=e5646]: image_min_pixels
+              - text: 显影，训练语义零变化）→ 旧 launch 件 sha 失配，按 SKILL 纪律以当前登记源
+              - strong [ref=e5647]: 重生成
+              - text: 环节①②（坐标三查闸重过）。
+            - listitem [ref=e5648]:
+              - strong [ref=e5649]: 账本双读位
+              - text: ：生成面写会话 tmp 账本，harness 执行面注入
+              - code [ref=e5650]: /root/.atf
+              - text: 实例账本 → 首次执行稳定投影
+              - code [ref=e5651]: waiting_for_start
+              - text: （fail-closed 正确行为）；经同一 sanction 脚本
+              - strong [ref=e6297]: 补登
+              - text: （同 subject、备注注明双写缘由，非新增授权）。
+            - listitem [ref=e6298]:
+              - strong [ref=e6299]: launch.sh line 46 quirk
+              - text: ：
+              - code [ref=e6300]: bash train.sh --dry-run-argv
+              - text: 该参数 train.sh 不识别，闸门通过后即 exec 真训练并阻塞 → harness 超时杀掉 launch.sh 外壳，
+              - strong [ref=e6301]: 训练进程树存活
+              - text: （已核实仅此一套，无双跑）。代价：receipt(state.json/ownership token/train log) 未按 line 50 路径落盘，state.json 显示的
+              - code [ref=e6302]: waiting_for_start
+              - text: 为陈旧投影——权威事实以进程表+GPU 常驻为准。
+            - listitem [ref=e6303]:
+              - strong [ref=e6304]: 执行面围栏
+              - text: （launch 阶段 bash 只读写收紧）→ launch 件按 ADR-0007 落 canonical
+              - code [ref=e6305]: runs/<run_id>/launch/
+              - text: ，执行副本落 scratch（
+              - code [ref=e6306]: TRAIN_DIR
+              - text: 绝对常量保证真实执行仍走 canonical 件）。
+          - heading "当前训练状态与预期" [level=2] [ref=e6307]
+          - list [ref=e6308]:
+            - listitem [ref=e6309]:
+              - text: 数据：
+              - code [ref=e6310]: walkthrough-pl_pl_goods
+              - text: 142 样本 | global batch 128 | 2 步/epoch × 3 epochs =
+              - strong [ref=e6311]: 6 步
+              - text: "| save_steps=1、save_total_limit=3 → 预期产 checkpoint-4/5/6"
+            - listitem [ref=e6312]:
+              - text: 输出：
+              - code [ref=e6313]: prep/iteration-config/
+              - text: （含
+              - code [ref=e6314]: "--overwrite_output_dir"
+              - text: ，将覆写上一轮产物——走查预期，已报备）
+            - listitem [ref=e6315]:
+              - text: 进度源：
+              - code [ref=e6316]: trainer_log.jsonl
+              - text: （训练器启动后落盘）+ checkpoint 目录；GPU 显存 ~5.5GB/卡（GPU1 14GB）符合 4bit LoRA + Z3-offload 形态
+            - listitem [ref=e6317]: loss 监控：harness 已挂 loss-series ingest（其日志源为空，以 trainer_log 为准）
+          - paragraph [ref=e6318]:
+            - strong [ref=e6319]: 下一步建议
+            - text: ：我持续盯
+            - code [ref=e6320]: trainer_log.jsonl
+            - text: /checkpoint 直到 6 步跑完（参照上一轮约 15–20 分钟），完成后可按指令接训练完成核验（
+            - code [ref=e6321]: build_train_completion_check.py
+            - text: ）与评估/发布链。是否继续监控并回报训练完结？
+        - generic [ref=e6325]:
+          - button "Copy" [ref=e6326] [cursor=pointer]
+          - generic [ref=e6330]:
+            - button "Good response" [ref=e6331] [cursor=pointer]
+            - button "Bad response" [ref=e6334] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=e6337] [cursor=pointer]
+          - generic [ref=e6343]:
+            - button "Usage 5.6M tok" [ref=e6345] [cursor=pointer]
+            - generic [ref=e6351]: 00:55
+      - generic [ref=e990]:
+        - generic [ref=e991]:
+          - generic [ref=e993]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [ref=e1141]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e995]:
+            - generic [ref=e996]:
+              - button "Add files or run commands" [ref=e997] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e1002] [cursor=pointer]':
+                - generic [ref=e1006]: Full access
+            - generic [ref=e1010]:
+              - generic [ref=e1011]:
+                - button "思考 Low(低) ▾" [ref=e1014] [cursor=pointer]:
+                  - generic [ref=e1015]: 思考
+                  - generic [ref=e1016]: Low(低)
+                  - generic [ref=e1017]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e1020] [cursor=pointer]:
+                  - generic [ref=e1021]: glm-5.3-flash
+              - button "Send message" [disabled] [ref=e6352]
+        - generic [ref=e1144]:
+          - generic [ref=e1145]:
+            - generic [ref=e1216]:
+              - button "2 turns 66 steps · 53 tok/s" [ref=e6354] [cursor=pointer]:
+                - generic [ref=e1223]: 2 turns 66 steps·53 tok/s
+              - button "5.7M tok · Cache hit 97%" [ref=e6355] [cursor=pointer]:
+                - generic [ref=e1230]: 5.7M tok·Cache hit 97%
+            - generic [ref=e1146]:
+              - status [ref=e1147]:
+                - generic [ref=e1148]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                - generic [ref=e1149]:
+                  - generic [ref=e1150]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                  - generic [ref=e1151]: ws-pl-walkthrough · 1 会话
+              - generic [ref=e1152]:
+                - button "新建训练" [ref=e1153] [cursor=pointer]
+                - button "查状态" [disabled] [ref=e1154]
+                - button "继续上次" [disabled] [ref=e1155]
+                - button "对比两轮" [disabled] [ref=e1156]
+                - button "走完闭环" [ref=e1157] [cursor=pointer]
+                - button "联合训练" [disabled] [ref=e1158]
+                - button "badcase 可视化" [ref=e1159] [cursor=pointer]
+                - button "发起训练" [ref=e1160] [cursor=pointer]
+          - button "14% of context used" [ref=e5654] [cursor=pointer]:
+            - generic [ref=e1236]: 14%
+  - generic [ref=e5258]:
+    - tablist [ref=e5260]:
+      - tab [ref=e5261] [cursor=pointer]:
+        - generic [ref=e5262]: Start
+        - button "Close"
+      - tab "训练监控 Close" [selected] [ref=e5269] [cursor=pointer]:
+        - generic [ref=e5270]: 训练监控
+        - button "Close" [ref=e5272]
+      - button "Split" [ref=e5277] [cursor=pointer]
+      - generic [ref=e5280]:
+        - button "Fullscreen" [ref=e5281] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=e5284] [cursor=pointer]
+    - generic [ref=e5290]:
+      - generic [ref=e5291]:
+        - generic [ref=e5292]:
+          - generic [ref=e5293]: 运行监控
+          - generic [ref=e5294]: 未关联训练
+        - generic [ref=e5297]:
+          - button "选择实验 ▾" [ref=e5298] [cursor=pointer]:
+            - text: 选择实验
+            - generic [ref=e5299]: ▾
+          - button "全部" [active] [ref=e5300] [cursor=pointer]
+      - generic [ref=e5301]:
+        - generic [ref=e5302]: 未选择实验
+        - button "继续上次：实验 budget" [ref=e5304] [cursor=pointer]
+        - generic [ref=e5305]:
+          - generic [ref=e5306]: 最近实验
+          - button "实验 budget 空闲" [ref=e5307] [cursor=pointer]:
+            - generic [ref=e5308]: 实验 budget
+            - generic [ref=e5309]: 空闲
+          - button "atf-g2fresh-20261022 · 10-22 atf-g2fresh-20261022 空闲" [ref=e5310] [cursor=pointer]:
+            - generic [ref=e5311]: atf-g2fresh-20261022 · 10-22
+            - generic [ref=e5312]: atf-g2fresh-20261022
+            - generic [ref=e5313]: 空闲
+          - button "实验 efault 空闲" [ref=e5314] [cursor=pointer]:
+            - generic [ref=e5315]: 实验 efault
+            - generic [ref=e5316]: 空闲
+        - generic [ref=e5317]:
+          - button "新建实验" [ref=e5318] [cursor=pointer]
+          - button "查看全部实验（只读）" [ref=e5319] [cursor=pointer]
+        - generic [ref=e5320]: 机器 GPU：8 卡 · 忙 8（只读，机器级）

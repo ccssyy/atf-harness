@@ -1,0 +1,277 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - button "Open sidebar" [ref=f1e9] [cursor=pointer]:
+      - generic [ref=f1e11]: ATF
+    - button "New session" [ref=f1e13] [cursor=pointer]
+    - navigation "Global panels" [ref=f1e18]:
+      - button "Plugins" [ref=f1e19] [cursor=pointer]
+    - generic [ref=f1e29]:
+      - button "Add workspace" [ref=f1e32] [cursor=pointer]
+      - button "Search sessions" [ref=f1e36] [cursor=pointer]
+    - button "Settings" [ref=f1e46] [cursor=pointer]
+  - generic [ref=f1e54]:
+    - banner [ref=f1e87]:
+      - generic [ref=f1e88]:
+        - generic [ref=f1e89]:
+          - generic:
+            - navigation "Session hierarchy":
+              - generic: 汇总当前实验状态与进展
+          - generic [ref=f1e92]:
+            - button "More actions" [ref=f1e94] [cursor=pointer]
+            - generic [ref=f1e99]:
+              - button "装箱单 · Qwen3-VL-32B · 10-21 21:02 · 异常 ▾ atf-prodtest" [ref=f1e101] [cursor=pointer]:
+                - generic [ref=f1e102]: 装箱单 · Qwen3-VL-32B · 10-21 21:02 · 异常 ▾
+                - generic "atf-prodtest-20261021" [ref=f1e105]: atf-prodtest
+              - button "监控" [ref=f1e106] [cursor=pointer]
+        - tablist [ref=f1e107]:
+          - tab "Chat" [selected] [ref=f1e108] [cursor=pointer]
+          - tab "Trajectory" [ref=f1e109] [cursor=pointer]
+    - generic [ref=f1e56]:
+      - generic [ref=f1e116]:
+        - button "Load earlier" [ref=f1e118] [cursor=pointer]
+        - generic [ref=f1e121]:
+          - generic [ref=f1e122]: 帮我看一下当前实验的整体状态和最近的进展，简单汇总即可。
+          - generic [ref=f1e124]:
+            - generic [ref=f1e125]: 00:35
+            - button "Copy" [ref=f1e126] [cursor=pointer]
+        - generic [ref=f1e131]:
+          - status [ref=f1e132]: Completed
+          - button "Completed in 3m 6s" [ref=f1e133] [cursor=pointer]
+        - generic [ref=f1e141]:
+          - heading "当前实验状态汇总" [level=1] [ref=f1e142]
+          - paragraph [ref=f1e143]:
+            - strong [ref=f1e144]:
+              - text: 总体：当前没有正在跑的训练/评估（8 卡 GPU 全部空闲），最近一轮工作集中在
+              - code [ref=f1e145]: atf-prodtest-20261021
+              - text: 实验簇（10/20–10/21）。
+            - text: 本会话尚未绑定 run，以下是从状态面与产物读出的情况。
+          - heading "最近进展（时间线）" [level=2] [ref=f1e146]
+          - table [ref=f1e148]:
+            - rowgroup [ref=f1e149]:
+              - row [ref=f1e150]:
+                - columnheader "时间" [ref=f1e151]
+                - columnheader "事件" [ref=f1e152]
+            - rowgroup [ref=f1e153]:
+              - row [ref=f1e154]:
+                - cell "10/20 晚" [ref=f1e155]
+                - cell [ref=f1e156]:
+                  - code [ref=f1e157]: run-admit-qc-01
+                  - text: 完成配置确认与诊断（未进入训练）
+              - row [ref=f1e158]:
+                - cell "10/21 凌晨" [ref=f1e159]
+                - cell [ref=f1e160]:
+                  - strong [ref=f1e161]:
+                    - code [ref=f1e162]: run-admit-qc-02
+                    - text: 训练完成（ckpt-6，验收通过）
+                  - text: ，随后完成正式评估 + badcase 分析报告
+              - row [ref=f1e163]:
+                - cell "10/21 中午" [ref=f1e164]
+                - cell [ref=f1e165]:
+                  - code [ref=f1e166]: run-admit-qc-02
+                  - text: 有两次训练失败通知（12:53/13:13，疑为重试/后续触发）
+              - row [ref=f1e167]:
+                - cell "10/21 13:19" [ref=f1e168]
+                - cell [ref=f1e169]:
+                  - text: 变体实验
+                  - strong [ref=f1e170]:
+                    - code [ref=f1e171]: run-admit-qc-02-eval-h5
+                    - text: 训练完成
+              - row [ref=f1e172]:
+                - cell "10/21 21:07" [ref=f1e173]
+                - cell [ref=f1e174]:
+                  - text: eval-h5 完成第 2 轮正式评估；
+                  - code [ref=f1e175]: prep/variants/
+                  - text: 生成了 142 行变体数据报告
+          - heading "关键指标（同口径 10 页 formal eval，goods lane）" [level=2] [ref=f1e176]
+          - list [ref=f1e177]:
+            - listitem [ref=f1e178]:
+              - strong [ref=f1e179]: run-admit-qc-02（ckpt6）
+              - text: ：micro
+              - strong [ref=f1e180]: F1 = 0.2991
+              - text: （P 0.2212 / R 0.4618，TP 296 / FP 1042 / FN 345），整页全对率 0
+            - listitem [ref=f1e181]:
+              - strong [ref=f1e182]: run-admit-qc-02-eval-h5（ckpt6）
+              - text: ：micro
+              - strong [ref=f1e183]: F1 = 0.2416
+              - text: （P 0.1908 / R 0.3292）——低于主 run，h5 变体这轮没有带来提升
+            - listitem [ref=f1e184]: 两轮共有 7 个零正例字段（currency、total_amount、doc_identifier 等）在测试集无标注正例，若属漏标需先修 GT
+          - heading "数据侧" [level=2] [ref=f1e185]
+          - paragraph [ref=f1e186]:
+            - code [ref=f1e187]: prep/variants/variants_report.json
+            - text: ：基线 40 行 → 产出 142 行（mode0 40 + targeted 102）；bbox 从 original_pixel 换算到 qwen_axis_1000，4528 个框全量反算核对通过；mode1/mode5 增广因未过实验门确认卡而显式跳过（未静默生成）。
+          - heading "待办 / 风险点" [level=2] [ref=f1e188]
+          - list [ref=f1e189]:
+            - listitem [ref=f1e190]:
+              - strong [ref=f1e191]: Badcase 行级审阅未闭合
+              - text: ：110 条错误事件 0 条已审、23 个错误簇 0 个机制闭合——分析报告（
+              - button "report.md" [ref=f1e192] [cursor=pointer]
+              - text: ）明确下一步是先补簇级机制审阅，再谈训练动作。
+            - listitem [ref=f1e196]: 未做 baseline 对比回归（阶段 7），本轮 F1 仅为观察值；run-admit-qc-02 未见正式发布（仅 checkpoint-6 说明文档）。
+            - listitem [ref=f1e197]: 中午两次 training_failed 通知的根因未核查，如需要我可以深入看日志。
+          - paragraph [ref=f1e198]: 需要我接着做哪一项？比如深入 badcase 簇审阅、对比 h5 变体为何掉点，或核查那两次训练失败。
+        - generic [ref=f1e202]:
+          - button "Copy" [ref=f1e203] [cursor=pointer]
+          - generic [ref=f1e207]:
+            - button "Good response" [ref=f1e208] [cursor=pointer]
+            - button "Bad response" [ref=f1e211] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e214] [cursor=pointer]
+          - generic [ref=f1e220]:
+            - button "Usage 458K tok" [ref=f1e222] [cursor=pointer]
+            - generic [ref=f1e228]: 00:39
+        - generic [ref=f1e231]:
+          - generic [ref=f1e232]: "发起联合训练（1 类：pl → run run-admit-qc-02）： 请用 atf_joint_train 工具一次完成联合数据构建与训练启动（一个入口，不要拆成单类两步）： datasets：[{\"run_id\":\"run-admit-qc-02\",\"doc_type\":\"pl\"}] field_specs：{\"schema_version\":\"FieldSpec/v1\",\"doc_type\":\"pl\",\"document_zh\":\"装箱单\",\"fields\":[{\"field_id\":\"goods_quantity\",\"zh\":\"数量\",\"group\":\"goods\",\"definition\":\"提取商品条目的数量值\",\"locators\":[\"QTY\"]},{\"field_id\":\"goods_name\",\"zh\":\"货名\",\"group\":\"goods\",\"definition\":\"提取商品名称/描述\",\"locators\":[\"DESCRIPTION\"]},{\"field_id\":\"goods_carton\",\"zh\":\"箱数\",\"group\":\"goods\",\"definition\":\"提取箱/纸箱数量\",\"locators\":[\"CTNS\"]},{\"field_id\":\"goods_gross_weight\",\"zh\":\"毛重\",\"group\":\"goods\",\"definition\":\"提取条目毛重\",\"locators\":[\"G.W.\"]},{\"field_id\":\"goods_net_weight\",\"zh\":\"净重\",\"group\":\"goods\",\"definition\":\"提取条目净重\",\"locators\":[\"N.W.\"]},{\"field_id\":\"goods_parcel\",\"zh\":\"包裹数\",\"group\":\"goods\",\"definition\":\"提取包裹件数\",\"locators\":[\"PARCEL\"]},{\"field_id\":\"goods_pallet\",\"zh\":\"托盘数\",\"group\":\"goods\",\"definition\":\"提取托盘数量\",\"locators\":[\"PALLET\"]},{\"field_id\":\"goods_weight\",\"zh\":\"重量\",\"group\":\"goods\",\"definition\":\"提取泛化的重量值\",\"locators\":[\"WEIGHT\"]},{\"field_id\":\"goods_qty_title_unit\",\"zh\":\"数量单位\",\"group\":\"goods\",\"definition\":\"提取数量单位行\",\"locators\":[\"UNIT\"]},{\"field_id\":\"goods_amount\",\"zh\":\"金额\",\"group\":\"goods\",\"definition\":\"提取金额值\",\"locators\":[\"AMOUNT\"]},{\"field_id\":\"price_of_goods\",\"zh\":\"货价\",\"group\":\"goods\",\"definition\":\"提取单价\",\"locators\":[\"PRICE\"]},{\"field_id\":\"product_no\",\"zh\":\"货号\",\"group\":\"goods\",\"definition\":\"提取产品编号\",\"locators\":[\"ART NO\"]},{\"field_id\":\"item_no\",\"zh\":\"条目号\",\"group\":\"goods\",\"definition\":\"提取条目序号\",\"locators\":[\"ITEM\"]},{\"field_id\":\"hs_code\",\"zh\":\"HS 编码\",\"group\":\"goods\",\"definition\":\"提取海关编码\",\"locators\":[\"HS\"]},{\"field_id\":\"container_no\",\"zh\":\"柜号\",\"group\":\"goods\",\"definition\":\"提取集装箱号\",\"locators\":[\"CONTAINER\"]},{\"field_id\":\"seal_no\",\"zh\":\"封号\",\"group\":\"goods\",\"definition\":\"提取铅封号\",\"locators\":[\"SEAL\"]},{\"field_id\":\"shipping_marks\",\"zh\":\"唛头\",\"group\":\"goods\",\"definition\":\"提取唛头文本\",\"locators\":[\"MARKS\"]},{\"field_id\":\"currency\",\"zh\":\"币种\",\"group\":\"goods\",\"definition\":\"提取币种标识\",\"locators\":[\"USD\",\"CURRENCY\"]},{\"field_id\":\"total_gross_weight\",\"zh\":\"总毛重\",\"group\":\"goods\",\"definition\":\"提取总毛重值\",\"locators\":[\"TOTAL GROSS\"]},{\"field_id\":\"total_net_weight\",\"zh\":\"总净重\",\"group\":\"goods\",\"definition\":\"提取总净重值\",\"locators\":[\"TOTAL NET\"]},{\"field_id\":\"total_qty\",\"zh\":\"总数量\",\"group\":\"goods\",\"definition\":\"提取总数量值\",\"locators\":[\"TOTAL QTY\"]},{\"field_id\":\"total_amount\",\"zh\":\"总金额\",\"group\":\"goods\",\"definition\":\"提取总金额值\",\"locators\":[\"TOTAL AMOUNT\"]}]} oversample：省略（全部类型 1 倍） seed：42 字段数核对：pl 22。 我会在确认卡上核对类型／各类字段数／预计行数／合并倍率后放行。"
+          - generic [ref=f1e234]:
+            - generic [ref=f1e235]: 00:46
+            - button "Copy" [ref=f1e236] [cursor=pointer]
+        - generic [ref=f1e241]:
+          - status [ref=f1e242]: Completed
+          - button "Completed in 17m 25s" [ref=f1e243] [cursor=pointer]
+        - generic [ref=f1e251]:
+          - heading "联合训练发起结果：数据构建成功，训练段被已知缺陷挡住（等待修复部署）" [level=1] [ref=f1e252]
+          - heading "✅ 已完成：联合数据集构建（审批已消耗）" [level=2] [ref=f1e253]
+          - list [ref=f1e254]:
+            - listitem [ref=f1e255]:
+              - text: 落点
+              - code [ref=f1e256]: …/workspace/runs/run-admit-qc-02/prep/joint/
+              - text: ：
+              - code [ref=f1e257]: train.jsonl
+              - text: （
+              - strong [ref=f1e258]: 142 行
+              - text: ）、
+              - code [ref=f1e259]: joint-dataset-plan.json
+              - text: 、
+              - code [ref=f1e260]: merge_manifest.json
+              - text: 、
+              - code [ref=f1e261]: field-specs/pl.json
+              - text: （
+              - strong [ref=f1e262]: 22 字段
+              - text: ，与你给的清单逐字一致）、
+              - code [ref=f1e263]: harness-oversample.json
+            - listitem [ref=f1e264]:
+              - text: 1 类 × 1 倍 →
+              - strong [ref=f1e265]: 透传
+              - text: （
+              - code [ref=f1e266]: "oversample_passthrough: true"
+              - text: ），合并 sha256
+              - code [ref=f1e267]: 36818922e0…
+              - text: 与源
+              - code [ref=f1e268]: prep/variants
+              - text: 数据
+              - strong [ref=f1e269]: 完全一致
+              - text: ——只有 1 类且 1 倍时，联合数据与原训练数据字节级相同
+            - listitem [ref=f1e270]: seed 42、基座族 qwen3_vl 已入 plan
+          - heading "❌ 未启动：训练段 F7 对账拒绝（根因＝产品缺陷，修复正在进行中）" [level=2] [ref=f1e271]
+          - paragraph [ref=f1e272]: 证据链：
+          - list [ref=f1e273]:
+            - listitem [ref=f1e274]:
+              - text: joint 训练段的 F7 闸用正则从 train.sh 提取九要素确认值；对账基线（iteration-config training 段）7 个键
+              - strong [ref=f1e275]: 全部报「生成面缺失」
+              - text: ，fail-closed 拒绝——不静默换算，行为本身正确。
+            - listitem [ref=f1e276]:
+              - text: 真实原因：生成器渲染 train.sh 用行尾
+              - code [ref=f1e277]: \
+              - text: 续行格式，
+              - strong [ref=f1e278]: 运行中服务的旧正则对这种格式零提取
+              - text: （我用 node 实测：现 train.sh 提取为空；该正则与真实生成器输出不兼容是结构性缺陷）。
+            - listitem [ref=f1e279]:
+              - strong [ref=f1e280]: 该缺陷的修复今天 01:01 刚写入源码
+              - text: （
+              - code [ref=f1e281]: trainShReconcile.ts
+              - text: 正则加
+              - code [ref=f1e282]: \
+              - text: 容忍，测试注释标注「2026-10-22 门2 幕4 修复锚」，工作树未提交）——
+              - strong [ref=f1e283]: 此刻正有 vitest 在跑验证
+              - text: （trainingFace/jointTrain/autoTraining 三件套，仍在运行）。
+            - listitem [ref=f1e284]:
+              - text: 但 GUI 服务进程是
+              - strong [ref=f1e285]: 00:19
+              - text: 启动的，早于修复 42 分钟；tsx 直跑 TS、模块启动时加载——
+              - strong [ref=f1e286]: 运行中的服务仍是旧代码
+              - text: 。
+          - heading "我停手的原因（未做任何绕行）" [level=2] [ref=f1e287]
+          - list [ref=f1e288]:
+            - listitem [ref=f1e289]:
+              - text: 手改 train.sh＝修改生成物，明令禁止；换
+              - code [ref=f1e290]: atf_run_training
+              - text: 入口违背你「一个入口」的要求，且同一 F7 闸也接在它上面（同样旧代码）；重启 GUI 服务会断开你当前页面、且他人验证还在跑——这三件事都需要你拍板，我没有擅自执行。
+          - heading "请你决定" [level=2] [ref=f1e291]
+          - list [ref=f1e292]:
+            - listitem [ref=f1e293]:
+              - strong [ref=f1e294]: 推荐
+              - text: ：等 vitest 验证通过（应该就在这几分钟）→ 重启 3080 服务让修复生效 → 我
+              - strong [ref=f1e295]:
+                - text: 原样重推
+                - code [ref=f1e296]: atf_joint_train
+              - text: （数据已在位，重推只需补训练段，会再出一次确认卡给你放行）。重启由你/修复方执行，或你明确授权我来。
+            - listitem [ref=f1e297]:
+              - text: 顺带确认一个语义点：本次联合构建与上一轮训练数据
+              - strong [ref=f1e298]: 字节相同
+              - text: （1 类 1 倍透传）。如果你本意是「同数据在 joint 链上重放」那没问题；如果预期是「新数据/新字段」，请告诉我差异点，先修数据再重推。
+          - paragraph [ref=f1e299]: 要我现在做什么，等你一句话。
+        - generic [ref=f1e303]:
+          - button "Copy" [ref=f1e304] [cursor=pointer]
+          - generic [ref=f1e308]:
+            - button "Good response" [ref=f1e309] [cursor=pointer]
+            - button "Bad response" [ref=f1e312] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e315] [cursor=pointer]
+          - generic [ref=f1e321]:
+            - button "Usage 5.3M tok" [ref=f1e323] [cursor=pointer]
+            - generic [ref=f1e329]: 01:04
+        - generic [ref=f1e429]:
+          - generic [ref=f1e430]: 对账闸的解析缺陷已在服务端修复并重启生效（正则现在能读生成器的续行格式）。请继续刚才的联合训练链：同一份数据（1 类 pl、142 行、1 倍透传、seed 42）重放即可，这是我本意；不要改 train.sh、不要换入口，重推 atf_joint_train 走完训练。
+          - generic [ref=f1e432]:
+            - generic [ref=f1e433]: 01:06
+            - button "Copy" [ref=f1e434] [cursor=pointer]
+        - generic [ref=f1e438]:
+          - status [ref=f1e439]: Deep diving
+          - generic [ref=f1e443]:
+            - generic [ref=f1e444]: Deep diving for 1s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 1s ···
+      - generic [ref=f1e78]:
+        - generic [ref=f1e79]:
+          - generic [ref=f1e81]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=f1e330]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=f1e83]:
+            - generic [ref=f1e84]:
+              - button "Add files or run commands" [ref=f1e331] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=f1e336] [cursor=pointer]'
+            - generic [ref=f1e85]:
+              - generic [ref=f1e343]:
+                - button "思考 Max(最高) ▾" [ref=f1e346] [cursor=pointer]:
+                  - generic [ref=f1e347]: 思考
+                  - generic [ref=f1e348]: Max(最高)
+                  - generic [ref=f1e349]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=f1e352] [cursor=pointer]
+              - button "Stop generating" [ref=f1e446] [cursor=pointer]
+        - generic [ref=f1e361]:
+          - generic [ref=f1e362]:
+            - generic [ref=f1e363]:
+              - button "2 turns 81 steps · 47 tok/s" [ref=f1e365] [cursor=pointer]:
+                - generic [ref=f1e370]: 2 turns 81 steps·47 tok/s
+              - button "5.8M tok · Cache hit 98%" [ref=f1e372] [cursor=pointer]:
+                - generic [ref=f1e377]: 5.8M tok·Cache hit 98%
+            - generic [ref=f1e379]:
+              - button "新建训练" [ref=f1e380] [cursor=pointer]
+              - button "查状态" [ref=f1e381] [cursor=pointer]
+              - button "继续训练：装箱单" [ref=f1e382] [cursor=pointer]
+              - button "对比两轮" [ref=f1e383] [cursor=pointer]
+              - button "走完闭环" [ref=f1e384] [cursor=pointer]
+              - button "联合训练" [ref=f1e385] [cursor=pointer]
+              - button "badcase 可视化" [ref=f1e386] [cursor=pointer]
+              - button "发起训练" [ref=f1e387] [cursor=pointer]
+          - button "11% of context used" [ref=f1e389] [cursor=pointer]:
+            - generic [ref=f1e393]: 11%
+  - generic [ref=f1e398]:
+    - tablist [ref=f1e400]:
+      - tab "训练监控 Close" [selected] [ref=f1e401] [cursor=pointer]:
+        - generic [ref=f1e402]: 训练监控
+        - button "Close" [ref=f1e404]
+      - button "New tab" [ref=f1e408] [cursor=pointer]
+      - generic "Not enough width to split, widen the sidebar" [ref=f1e410]:
+        - button "Split" [disabled] [ref=f1e411]
+      - generic [ref=f1e414]:
+        - button "Fullscreen" [ref=f1e415] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=f1e418] [cursor=pointer]
+    - generic [ref=f1e421]: 监控已关闭——点顶栏「监控」按钮重新打开

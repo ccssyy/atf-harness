@@ -1,0 +1,146 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e86] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e87]:
+          - generic [ref=e88]: ATF
+          - generic [ref=e91]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e101]: Workspaces
+        - generic [ref=e103]:
+          - button "Search sessions" [ref=e104] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e109] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e114]:
+        - generic [ref=e115]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e117] [cursor=pointer]
+          - treeitem "D76 端到端正例复跑（零 GPU 红 now" [selected] [ref=e943] [cursor=pointer]:
+            - generic [ref=e801]: D76 端到端正例复跑（零 GPU 红
+            - generic [ref=e944]: now
+          - treeitem "run pl-walkthrough-r1 迭代配置构造前置校验 3h" [ref=e126] [cursor=pointer]:
+            - generic [ref=e128]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [ref=e129]: 3h
+          - treeitem "训练数据构造前校验演练 3h" [ref=e131] [cursor=pointer]:
+            - generic [ref=e133]: 训练数据构造前校验演练
+            - generic [ref=e134]: 3h
+        - treeitem "ws-pl-walkthrough" [ref=e137] [cursor=pointer]
+        - generic [ref=e143]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e145] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 1d" [ref=e154] [cursor=pointer]:
+            - generic [ref=e156]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e157]: 1d
+          - treeitem "装箱单字段抽取新实验全流程 1d" [ref=e159] [cursor=pointer]:
+            - generic [ref=e161]: 装箱单字段抽取新实验全流程
+            - generic [ref=e162]: 1d
+        - generic [ref=e163]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=e165] [cursor=pointer]
+          - treeitem "等待发起真实训练走查指令 7h" [ref=e174] [cursor=pointer]:
+            - generic [ref=e176]: 等待发起真实训练走查指令
+            - generic [ref=e177]: 7h
+          - treeitem "汇总当前实验状态与进展 1d" [ref=e179] [cursor=pointer]:
+            - generic [ref=e181]: 汇总当前实验状态与进展
+            - generic [ref=e182]: 1d
+          - treeitem "我的训练数据放在 /data/atf/prodt 1d" [ref=e184] [cursor=pointer]:
+            - generic [ref=e186]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=e187]: 1d
+        - treeitem "a4-hotws" [ref=e190] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e198] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e206] [cursor=pointer]
+        - treeitem "sam" [ref=e214] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e802]:
+    - banner [ref=e804]:
+      - generic [ref=e805]:
+        - generic [ref=e806]:
+          - generic [ref=e945]:
+            - navigation "Session hierarchy" [ref=e946]:
+              - generic [ref=e947]: D76 端到端正例复跑（零 GPU 红
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e951]: Standard mode
+          - generic [ref=e958]:
+            - button "More actions" [ref=e960] [cursor=pointer]
+            - generic [ref=e965]:
+              - button "选择实验 ▾" [ref=e967] [cursor=pointer]
+              - button "监控" [ref=e969] [cursor=pointer]
+        - tablist [ref=e970]:
+          - tab "Chat" [selected] [ref=e971] [cursor=pointer]
+          - tab "Trajectory" [ref=e972] [cursor=pointer]
+    - generic [ref=e813]:
+      - generic [ref=e979]:
+        - generic [ref=e982]:
+          - generic [ref=e983]: D76 端到端正例复跑（零 GPU 红线：只到审批卡呈现即停，不点 Allow、不生成配置文件、不写任何文件、不起真训、不占 GPU）。先把实验 run-admit-qc-02-d76fx（run 目录 /data/atf/dev/runs/run-admit-qc-02-d76fx）绑定为当前实验，然后对其发起训练配置确认：训练卡数 nproc_per_node=4，卡位 visible_devices=4,5,6,7，其余参数按现值。九要素确认卡弹出后，把上述两个值填入对应栏位再提交确认；授权审批卡出现后立即停止并原样回报卡面两个值的呈现，不要点 Allow once、不要重试、不要发起真实训练。
+          - generic [ref=e985]:
+            - generic [ref=e986]: 18:00
+            - button "Copy" [ref=e987] [cursor=pointer]
+        - generic [ref=e992]:
+          - status [ref=e993]: Failed
+          - button "Failed" [disabled] [ref=e994]
+        - status [ref=e998]:
+          - generic [ref=e1000]: This turn failedAPI key is invalid
+          - code [ref=e1001]: AUTH
+      - generic [ref=e848]:
+        - generic [ref=e849]:
+          - generic [ref=e851]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=e1002]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e853]:
+            - generic [ref=e854]:
+              - button "Add files or run commands" [ref=e855] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e860] [cursor=pointer]':
+                - generic [ref=e864]: Full access
+            - generic [ref=e868]:
+              - generic [ref=e869]:
+                - button "思考 Low(低) ▾" [ref=e872] [cursor=pointer]:
+                  - generic [ref=e873]: 思考
+                  - generic [ref=e874]: Low(低)
+                  - generic [ref=e875]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e878] [cursor=pointer]:
+                  - generic [ref=e879]: glm-5.3-flash
+              - button "Send message" [disabled] [ref=e882]
+        - generic [ref=e1004]:
+          - generic [ref=e1005]:
+            - generic [ref=e1006]: 1 turns 1 steps
+            - generic [ref=e1014]:
+              - status [ref=e1015]:
+                - generic [ref=e1016]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                - generic [ref=e1017]:
+                  - generic [ref=e1018]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                  - generic [ref=e1019]: ws-pl-walkthrough · 1 会话
+              - generic [ref=e1020]:
+                - button "新建训练" [ref=e1021] [cursor=pointer]
+                - button "查状态" [disabled] [ref=e1022]
+                - button "继续上次" [disabled] [ref=e1023]
+                - button "对比两轮" [disabled] [ref=e1024]
+                - button "走完闭环" [ref=e1025] [cursor=pointer]
+                - button "联合训练" [disabled] [ref=e1026]
+                - button "badcase 可视化" [ref=e1027] [cursor=pointer]
+                - button "发起训练" [ref=e1028] [cursor=pointer]
+          - button "0% of context used" [ref=e1030] [cursor=pointer]:
+            - generic [ref=e1034]: 0%
+  - generic [ref=e894]:
+    - tablist [ref=e896]:
+      - tab "Start" [selected] [ref=e897]
+      - button "Split" [ref=e905] [cursor=pointer]
+      - generic [ref=e908]:
+        - button "Fullscreen" [ref=e909] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=e912] [cursor=pointer]
+        - tooltip "Collapse sidebar"
+    - generic [ref=e919]:
+      - button "Workspace files Browse files in this session's workspace" [ref=e926] [cursor=pointer]:
+        - generic [ref=e931]:
+          - generic [ref=e932]: Workspace files
+          - generic [ref=e933]: Browse files in this session's workspace
+      - generic [ref=e936]:
+        - button "New terminal Run commands in the Session workspace" [ref=e937] [cursor=pointer]
+        - generic:
+          - generic:
+            - generic [aria-hidden]: New terminal
+            - button "Choose shell" [ref=e939] [cursor=pointer]
+          - generic [aria-hidden]: Run commands in the Session workspace

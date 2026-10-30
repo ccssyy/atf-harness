@@ -1,0 +1,123 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - button "Open sidebar" [ref=e9] [cursor=pointer]:
+      - generic [ref=e11]: ATF
+    - button "New session" [ref=e13] [cursor=pointer]
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - button "Add workspace" [ref=e32] [cursor=pointer]
+      - button "Search sessions" [ref=e36] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e54]:
+    - banner [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - generic [ref=e150]:
+            - navigation "Session hierarchy" [ref=e151]:
+              - generic [ref=e152]: 汇总当前实验状态与进展
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e156]: Standard mode
+          - generic [ref=e163]:
+            - button "More actions" [ref=e165] [cursor=pointer]
+            - generic [ref=e170]:
+              - button "实验不可见 ▾" [ref=e172] [cursor=pointer]
+              - button "监控" [ref=e174] [cursor=pointer]
+          - button "Open right sidebar" [ref=e92] [cursor=pointer]
+        - tablist [ref=e175]:
+          - tab "Chat" [selected] [ref=e176] [cursor=pointer]
+          - tab "Trajectory" [ref=e177] [cursor=pointer]
+    - generic [ref=e56]:
+      - generic [ref=e184]:
+        - generic [ref=e187]:
+          - generic [ref=e188]: 帮我看一下当前实验的整体状态和最近的进展，简单汇总即可。
+          - generic [ref=e190]:
+            - generic [ref=e191]: 00:35
+            - button "Copy" [ref=e192] [cursor=pointer]
+        - generic [ref=e221]:
+          - 'button "Think The user asks in Chinese: \"帮我看一下当前实验的整体状态和最近的进展，简单汇总即可。\" (Help me look at the current experiment''s overall status and recent progress, just a simple summary.)" [ref=e229] [cursor=pointer]':
+            - generic [ref=e239]:
+              - generic [ref=e240]: Think
+              - generic [ref=e242]: "The user asks in Chinese: \"帮我看一下当前实验的整体状态和最近的进展，简单汇总即可。\" (Help me look at the current experiment's overall status and recent progress, just a simple summary.)"
+          - button "Skill atf-qwen-vl-iteration-loop" [ref=e249] [cursor=pointer]:
+            - generic [ref=e258]:
+              - generic [ref=e259]: Skill
+              - generic [ref=e261]: atf-qwen-vl-iteration-loop
+          - 'button "Think The skill is loaded. The user wants a simple summary of the current experiment''s overall status and recent progress. Per the skill, I should read the current facts of the workspace. Let me use `atf_workspace_status` to get the current run identifier and admitted facts, and `atf_run_list` to enumerate runs. These are read-only tools I can call in parallel." [ref=e269] [cursor=pointer]':
+            - generic [ref=e279]:
+              - generic [ref=e280]: Think
+              - generic [ref=e282]: "The skill is loaded. The user wants a simple summary of the current experiment's overall status and recent progress. Per the skill, I should read the current facts of the workspace. Let me use `atf_workspace_status` to get the current run identifier and admitted facts, and `atf_run_list` to enumerate runs. These are read-only tools I can call in parallel."
+          - 'button "Tool call atf_workspace_status · {}" [ref=e290] [cursor=pointer]':
+            - generic [ref=e300]:
+              - generic [ref=e301]: Tool call
+              - generic [ref=e303]: "atf_workspace_status · {}"
+          - 'button "Tool call atf_run_list · {}" [ref=e310] [cursor=pointer]':
+            - generic [ref=e320]:
+              - generic [ref=e321]: Tool call
+              - generic [ref=e323]: "atf_run_list · {}"
+          - 'button "Think The workspace status returns `no_run_bound` — this session has no run bound. The run list shows 76 runs, many are smoke/probe runs. The working directory is /data/atf/prodtest/atf-prodtest-20261021." [ref=e331] [cursor=pointer]':
+            - generic [ref=e341]:
+              - generic [ref=e342]: Think
+              - generic [ref=e344]: "The workspace status returns `no_run_bound` — this session has no run bound. The run list shows 76 runs, many are smoke/probe runs. The working directory is /data/atf/prodtest/atf-prodtest-20261021."
+        - paragraph [ref=e351]: 当前会话还没有绑定 run，我先看一下工作目录里的实际内容再汇总。
+        - generic [ref=e352]:
+          - text: Analyzing the request · The user says
+          - generic [ref=e354]:
+            - button "Tool call atf_bash · pwd && ls -la" [ref=e361] [cursor=pointer]:
+              - generic [ref=e371]:
+                - generic [ref=e372]: Tool call
+                - generic [ref=e374]: atf_bash · pwd && ls -la
+            - generic [ref=e380]:
+              - generic [ref=e381]: Running
+              - button "Think The actual cwd is /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs (interesting — differs from what the prompt said). The most recently modified directories (Oct 20-22) are:" [ref=e383] [cursor=pointer]:
+                - generic [ref=e392]:
+                  - generic [ref=e393]:
+                    - generic [ref=e394]: Think
+                    - generic [ref=e396]: "The actual cwd is /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs (interesting — differs from what the prompt said). The most recently modified directories (Oct 20-22) are:"
+                  - generic [aria-hidden]:
+                    - generic:
+                      - generic:
+                        - generic: Think
+                        - generic: "The actual cwd is /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs (interesting — differs from what the prompt said). The most recently modified directories (Oct 20-22) are:"
+        - generic [ref=e196]:
+          - status [ref=e197]: Deep diving
+          - generic [ref=e201]:
+            - generic [ref=e202]: Deep diving for 32s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 32s ···
+      - generic [ref=e78]:
+        - generic [ref=e79]:
+          - generic [ref=e81]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=e204]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=e83]:
+            - generic [ref=e84]:
+              - button "Add files or run commands" [ref=e111] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e116] [cursor=pointer]':
+                - generic [ref=e120]: Full access
+            - generic [ref=e85]:
+              - generic [ref=e124]:
+                - button "思考 Max(最高) ▾" [ref=e127] [cursor=pointer]:
+                  - generic [ref=e128]: 思考
+                  - generic [ref=e129]: Max(最高)
+                  - generic [ref=e130]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e133] [cursor=pointer]:
+                  - generic [ref=e134]: glm-5.3-flash
+              - button "Stop generating" [ref=e205] [cursor=pointer]
+        - generic [ref=e207]:
+          - generic [ref=e208]:
+            - generic [ref=e398]:
+              - button "1 turns 3 steps · 50 tok/s" [ref=e400] [cursor=pointer]:
+                - generic [ref=e405]: 1 turns 3 steps·50 tok/s
+              - button "64.5K tok · Cache hit 61%" [ref=e407] [cursor=pointer]:
+                - generic [ref=e412]: 64.5K tok·Cache hit 61%
+            - generic [ref=e210]:
+              - button "新建训练" [ref=e211] [cursor=pointer]
+              - button "查状态" [ref=e212] [cursor=pointer]
+              - button "继续训练：实验 261021" [ref=e213] [cursor=pointer]
+              - button "对比两轮" [ref=e214] [cursor=pointer]
+              - button "走完闭环" [ref=e215] [cursor=pointer]
+              - button "联合训练" [ref=e216] [cursor=pointer]
+              - button "badcase 可视化" [ref=e217] [cursor=pointer]
+              - button "发起训练" [ref=e218] [cursor=pointer]
+          - button "2% of context used" [ref=e414] [cursor=pointer]:
+            - generic [ref=e418]: 2%

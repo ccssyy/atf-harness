@@ -16,7 +16,7 @@
  * 落点纪律：卡面输入态一律 `<run>/runtime/webui/`（与 config-snapshot／pending-confirm
  * 同域），不进 `analysis/decisions/`（那是内核 DecisionGate 的判定账，语义不同层）。
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { ChoiceAskQuestion, FormAskService } from "./confirmFace.js";
@@ -97,6 +97,28 @@ const writeLedger = (
 };
 
 /** 构造参数是否还有缺口（缺口＝必须问人，或必须由 agent 明确代决）。 */
+
+/** D163：读登记账本 inputs.json 的分组出处（缺席/坏行按"没有分组依据"呈现）。 */
+const groupingCardLeadOf = (runDir: string): string => {
+  try {
+    const parsed = JSON.parse(readFileSync(join(runDir, "config", "inputs.json"), "utf8")) as {
+      grouping?: { source?: unknown; quote?: unknown; group_count?: unknown };
+    };
+    const g = parsed.grouping ?? {};
+    const source = typeof g.source === "string" ? g.source : "absent";
+    const quote = typeof g.quote === "string" && g.quote.trim() !== "" ? g.quote.trim() : "";
+    const n = typeof g.group_count === "number" ? g.group_count : 0;
+    if (source === "user_supplied") {
+      return quote !== "" ? `分组按你说的「${quote}」走（${n} 组）` : `分组按你给的配置走（${n} 组）`;
+    }
+    if (source === "agent_written") return "这套分组是助手写进配置的，还没经你确认";
+    if (source === "degenerate") return "字段是一字段一组，没形成业务分组";
+    return "当前没有分组依据";
+  } catch {
+    return "当前没有分组依据";
+  }
+};
+
 export const constructionGapOf = (state: ConstructionParamsState): boolean =>
   state.groupingConfirm !== true || state.mode5Random === undefined;
 
@@ -171,10 +193,10 @@ export const decideConstructionParams = async (input: {
   if (needGrouping) {
     questions.push({
       id: `construction-grouping-${input.runId}`,
-      question: "分组生成沿用默认（按数据事实分组）还是改成一图一条？",
+      question: `分组生成沿用默认（${groupingCardLeadOf(input.runDir ?? "")}）还是改成一图一条？`,
       header: "分组",
       detail: [
-        "默认（推荐）：按数据事实分组，每图每组各出一条样本；组数已按标准压到常规区间。",
+        "默认（推荐）：按当前分组依据生成，每图每组各出一条样本；组数已按标准压到常规区间。",
         "一图一条：每张图只出一条样本，字段照样全部带上，样本数＝图数。",
         "不改也行——本轮会按默认生成，这里只是让你知道默认值是什么、并能当场改。",
       ].join("\n"),

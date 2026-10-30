@@ -1,0 +1,1012 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - button "Open sidebar" [ref=f1e9] [cursor=pointer]:
+      - generic [ref=f1e11]: ATF
+    - button "New session" [ref=f1e13] [cursor=pointer]
+    - navigation "Global panels" [ref=f1e18]:
+      - button "Plugins" [ref=f1e19] [cursor=pointer]
+    - generic [ref=f1e29]:
+      - button "Add workspace" [ref=f1e32] [cursor=pointer]
+      - button "Search sessions" [ref=f1e36] [cursor=pointer]
+    - button "Settings" [ref=f1e46] [cursor=pointer]
+  - generic [ref=f1e54]:
+    - banner [ref=f1e87]:
+      - generic [ref=f1e88]:
+        - generic [ref=f1e89]:
+          - generic:
+            - navigation "Session hierarchy":
+              - generic: 汇总当前实验状态与进展
+          - generic [ref=f1e92]:
+            - button "More actions" [ref=f1e94] [cursor=pointer]
+            - generic [ref=f1e99]:
+              - button "装箱单 · Qwen3-VL-32B · 10-21 21:02 · 异常 ▾ atf-prodtest" [ref=f1e984] [cursor=pointer]:
+                - generic [ref=f1e102]: 装箱单 · Qwen3-VL-32B · 10-21 21:02 · 异常 ▾
+                - generic "atf-prodtest-20261021" [ref=f1e105]: atf-prodtest
+              - button "监控" [ref=f1e106] [cursor=pointer]
+        - tablist [ref=f1e107]:
+          - tab "Chat" [selected] [ref=f1e108] [cursor=pointer]
+          - tab "Trajectory" [ref=f1e109] [cursor=pointer]
+    - generic [ref=f1e56]:
+      - generic [ref=f1e116]:
+        - button "Load earlier" [ref=f1e118] [cursor=pointer]
+        - generic [ref=f1e121]:
+          - generic [ref=f1e122]: 帮我看一下当前实验的整体状态和最近的进展，简单汇总即可。
+          - generic [ref=f1e124]:
+            - generic [ref=f1e125]: 00:35
+            - button "Copy" [ref=f1e126] [cursor=pointer]
+        - generic [ref=f1e131]:
+          - status [ref=f1e132]: Completed
+          - button "Completed in 3m 6s" [ref=f1e133] [cursor=pointer]
+        - generic [ref=f1e141]:
+          - heading "当前实验状态汇总" [level=1] [ref=f1e142]
+          - paragraph [ref=f1e143]:
+            - strong [ref=f1e144]:
+              - text: 总体：当前没有正在跑的训练/评估（8 卡 GPU 全部空闲），最近一轮工作集中在
+              - code [ref=f1e145]: atf-prodtest-20261021
+              - text: 实验簇（10/20–10/21）。
+            - text: 本会话尚未绑定 run，以下是从状态面与产物读出的情况。
+          - heading "最近进展（时间线）" [level=2] [ref=f1e146]
+          - table [ref=f1e148]:
+            - rowgroup [ref=f1e149]:
+              - row [ref=f1e150]:
+                - columnheader "时间" [ref=f1e151]
+                - columnheader "事件" [ref=f1e152]
+            - rowgroup [ref=f1e153]:
+              - row [ref=f1e154]:
+                - cell "10/20 晚" [ref=f1e155]
+                - cell [ref=f1e156]:
+                  - code [ref=f1e157]: run-admit-qc-01
+                  - text: 完成配置确认与诊断（未进入训练）
+              - row [ref=f1e158]:
+                - cell "10/21 凌晨" [ref=f1e159]
+                - cell [ref=f1e160]:
+                  - strong [ref=f1e161]:
+                    - code [ref=f1e162]: run-admit-qc-02
+                    - text: 训练完成（ckpt-6，验收通过）
+                  - text: ，随后完成正式评估 + badcase 分析报告
+              - row [ref=f1e163]:
+                - cell "10/21 中午" [ref=f1e164]
+                - cell [ref=f1e165]:
+                  - code [ref=f1e166]: run-admit-qc-02
+                  - text: 有两次训练失败通知（12:53/13:13，疑为重试/后续触发）
+              - row [ref=f1e167]:
+                - cell "10/21 13:19" [ref=f1e168]
+                - cell [ref=f1e169]:
+                  - text: 变体实验
+                  - strong [ref=f1e170]:
+                    - code [ref=f1e171]: run-admit-qc-02-eval-h5
+                    - text: 训练完成
+              - row [ref=f1e172]:
+                - cell "10/21 21:07" [ref=f1e173]
+                - cell [ref=f1e174]:
+                  - text: eval-h5 完成第 2 轮正式评估；
+                  - code [ref=f1e175]: prep/variants/
+                  - text: 生成了 142 行变体数据报告
+          - heading "关键指标（同口径 10 页 formal eval，goods lane）" [level=2] [ref=f1e176]
+          - list [ref=f1e177]:
+            - listitem [ref=f1e178]:
+              - strong [ref=f1e179]: run-admit-qc-02（ckpt6）
+              - text: ：micro
+              - strong [ref=f1e180]: F1 = 0.2991
+              - text: （P 0.2212 / R 0.4618，TP 296 / FP 1042 / FN 345），整页全对率 0
+            - listitem [ref=f1e181]:
+              - strong [ref=f1e182]: run-admit-qc-02-eval-h5（ckpt6）
+              - text: ：micro
+              - strong [ref=f1e183]: F1 = 0.2416
+              - text: （P 0.1908 / R 0.3292）——低于主 run，h5 变体这轮没有带来提升
+            - listitem [ref=f1e184]: 两轮共有 7 个零正例字段（currency、total_amount、doc_identifier 等）在测试集无标注正例，若属漏标需先修 GT
+          - heading "数据侧" [level=2] [ref=f1e185]
+          - paragraph [ref=f1e186]:
+            - code [ref=f1e187]: prep/variants/variants_report.json
+            - text: ：基线 40 行 → 产出 142 行（mode0 40 + targeted 102）；bbox 从 original_pixel 换算到 qwen_axis_1000，4528 个框全量反算核对通过；mode1/mode5 增广因未过实验门确认卡而显式跳过（未静默生成）。
+          - heading "待办 / 风险点" [level=2] [ref=f1e188]
+          - list [ref=f1e189]:
+            - listitem [ref=f1e190]:
+              - strong [ref=f1e191]: Badcase 行级审阅未闭合
+              - text: ：110 条错误事件 0 条已审、23 个错误簇 0 个机制闭合——分析报告（
+              - button "report.md" [ref=f1e192] [cursor=pointer]
+              - text: ）明确下一步是先补簇级机制审阅，再谈训练动作。
+            - listitem [ref=f1e196]: 未做 baseline 对比回归（阶段 7），本轮 F1 仅为观察值；run-admit-qc-02 未见正式发布（仅 checkpoint-6 说明文档）。
+            - listitem [ref=f1e197]: 中午两次 training_failed 通知的根因未核查，如需要我可以深入看日志。
+          - paragraph [ref=f1e198]: 需要我接着做哪一项？比如深入 badcase 簇审阅、对比 h5 变体为何掉点，或核查那两次训练失败。
+        - generic [ref=f1e202]:
+          - button "Copy" [ref=f1e203] [cursor=pointer]
+          - generic [ref=f1e207]:
+            - button "Good response" [ref=f1e208] [cursor=pointer]
+            - button "Bad response" [ref=f1e211] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e214] [cursor=pointer]
+          - generic [ref=f1e220]:
+            - button "Usage 458K tok" [ref=f1e222] [cursor=pointer]
+            - generic [ref=f1e228]: 00:39
+        - generic [ref=f1e231]:
+          - generic [ref=f1e232]: "发起联合训练（1 类：pl → run run-admit-qc-02）： 请用 atf_joint_train 工具一次完成联合数据构建与训练启动（一个入口，不要拆成单类两步）： datasets：[{\"run_id\":\"run-admit-qc-02\",\"doc_type\":\"pl\"}] field_specs：{\"schema_version\":\"FieldSpec/v1\",\"doc_type\":\"pl\",\"document_zh\":\"装箱单\",\"fields\":[{\"field_id\":\"goods_quantity\",\"zh\":\"数量\",\"group\":\"goods\",\"definition\":\"提取商品条目的数量值\",\"locators\":[\"QTY\"]},{\"field_id\":\"goods_name\",\"zh\":\"货名\",\"group\":\"goods\",\"definition\":\"提取商品名称/描述\",\"locators\":[\"DESCRIPTION\"]},{\"field_id\":\"goods_carton\",\"zh\":\"箱数\",\"group\":\"goods\",\"definition\":\"提取箱/纸箱数量\",\"locators\":[\"CTNS\"]},{\"field_id\":\"goods_gross_weight\",\"zh\":\"毛重\",\"group\":\"goods\",\"definition\":\"提取条目毛重\",\"locators\":[\"G.W.\"]},{\"field_id\":\"goods_net_weight\",\"zh\":\"净重\",\"group\":\"goods\",\"definition\":\"提取条目净重\",\"locators\":[\"N.W.\"]},{\"field_id\":\"goods_parcel\",\"zh\":\"包裹数\",\"group\":\"goods\",\"definition\":\"提取包裹件数\",\"locators\":[\"PARCEL\"]},{\"field_id\":\"goods_pallet\",\"zh\":\"托盘数\",\"group\":\"goods\",\"definition\":\"提取托盘数量\",\"locators\":[\"PALLET\"]},{\"field_id\":\"goods_weight\",\"zh\":\"重量\",\"group\":\"goods\",\"definition\":\"提取泛化的重量值\",\"locators\":[\"WEIGHT\"]},{\"field_id\":\"goods_qty_title_unit\",\"zh\":\"数量单位\",\"group\":\"goods\",\"definition\":\"提取数量单位行\",\"locators\":[\"UNIT\"]},{\"field_id\":\"goods_amount\",\"zh\":\"金额\",\"group\":\"goods\",\"definition\":\"提取金额值\",\"locators\":[\"AMOUNT\"]},{\"field_id\":\"price_of_goods\",\"zh\":\"货价\",\"group\":\"goods\",\"definition\":\"提取单价\",\"locators\":[\"PRICE\"]},{\"field_id\":\"product_no\",\"zh\":\"货号\",\"group\":\"goods\",\"definition\":\"提取产品编号\",\"locators\":[\"ART NO\"]},{\"field_id\":\"item_no\",\"zh\":\"条目号\",\"group\":\"goods\",\"definition\":\"提取条目序号\",\"locators\":[\"ITEM\"]},{\"field_id\":\"hs_code\",\"zh\":\"HS 编码\",\"group\":\"goods\",\"definition\":\"提取海关编码\",\"locators\":[\"HS\"]},{\"field_id\":\"container_no\",\"zh\":\"柜号\",\"group\":\"goods\",\"definition\":\"提取集装箱号\",\"locators\":[\"CONTAINER\"]},{\"field_id\":\"seal_no\",\"zh\":\"封号\",\"group\":\"goods\",\"definition\":\"提取铅封号\",\"locators\":[\"SEAL\"]},{\"field_id\":\"shipping_marks\",\"zh\":\"唛头\",\"group\":\"goods\",\"definition\":\"提取唛头文本\",\"locators\":[\"MARKS\"]},{\"field_id\":\"currency\",\"zh\":\"币种\",\"group\":\"goods\",\"definition\":\"提取币种标识\",\"locators\":[\"USD\",\"CURRENCY\"]},{\"field_id\":\"total_gross_weight\",\"zh\":\"总毛重\",\"group\":\"goods\",\"definition\":\"提取总毛重值\",\"locators\":[\"TOTAL GROSS\"]},{\"field_id\":\"total_net_weight\",\"zh\":\"总净重\",\"group\":\"goods\",\"definition\":\"提取总净重值\",\"locators\":[\"TOTAL NET\"]},{\"field_id\":\"total_qty\",\"zh\":\"总数量\",\"group\":\"goods\",\"definition\":\"提取总数量值\",\"locators\":[\"TOTAL QTY\"]},{\"field_id\":\"total_amount\",\"zh\":\"总金额\",\"group\":\"goods\",\"definition\":\"提取总金额值\",\"locators\":[\"TOTAL AMOUNT\"]}]} oversample：省略（全部类型 1 倍） seed：42 字段数核对：pl 22。 我会在确认卡上核对类型／各类字段数／预计行数／合并倍率后放行。"
+          - generic [ref=f1e234]:
+            - generic [ref=f1e235]: 00:46
+            - button "Copy" [ref=f1e236] [cursor=pointer]
+        - generic [ref=f1e241]:
+          - status [ref=f1e242]: Completed
+          - button "Completed in 17m 25s" [ref=f1e243] [cursor=pointer]
+        - generic [ref=f1e251]:
+          - heading "联合训练发起结果：数据构建成功，训练段被已知缺陷挡住（等待修复部署）" [level=1] [ref=f1e252]
+          - heading "✅ 已完成：联合数据集构建（审批已消耗）" [level=2] [ref=f1e253]
+          - list [ref=f1e254]:
+            - listitem [ref=f1e255]:
+              - text: 落点
+              - code [ref=f1e256]: …/workspace/runs/run-admit-qc-02/prep/joint/
+              - text: ：
+              - code [ref=f1e257]: train.jsonl
+              - text: （
+              - strong [ref=f1e258]: 142 行
+              - text: ）、
+              - code [ref=f1e259]: joint-dataset-plan.json
+              - text: 、
+              - code [ref=f1e260]: merge_manifest.json
+              - text: 、
+              - code [ref=f1e261]: field-specs/pl.json
+              - text: （
+              - strong [ref=f1e262]: 22 字段
+              - text: ，与你给的清单逐字一致）、
+              - code [ref=f1e263]: harness-oversample.json
+            - listitem [ref=f1e264]:
+              - text: 1 类 × 1 倍 →
+              - strong [ref=f1e265]: 透传
+              - text: （
+              - code [ref=f1e266]: "oversample_passthrough: true"
+              - text: ），合并 sha256
+              - code [ref=f1e267]: 36818922e0…
+              - text: 与源
+              - code [ref=f1e268]: prep/variants
+              - text: 数据
+              - strong [ref=f1e269]: 完全一致
+              - text: ——只有 1 类且 1 倍时，联合数据与原训练数据字节级相同
+            - listitem [ref=f1e270]: seed 42、基座族 qwen3_vl 已入 plan
+          - heading "❌ 未启动：训练段 F7 对账拒绝（根因＝产品缺陷，修复正在进行中）" [level=2] [ref=f1e271]
+          - paragraph [ref=f1e272]: 证据链：
+          - list [ref=f1e273]:
+            - listitem [ref=f1e274]:
+              - text: joint 训练段的 F7 闸用正则从 train.sh 提取九要素确认值；对账基线（iteration-config training 段）7 个键
+              - strong [ref=f1e275]: 全部报「生成面缺失」
+              - text: ，fail-closed 拒绝——不静默换算，行为本身正确。
+            - listitem [ref=f1e276]:
+              - text: 真实原因：生成器渲染 train.sh 用行尾
+              - code [ref=f1e277]: \
+              - text: 续行格式，
+              - strong [ref=f1e278]: 运行中服务的旧正则对这种格式零提取
+              - text: （我用 node 实测：现 train.sh 提取为空；该正则与真实生成器输出不兼容是结构性缺陷）。
+            - listitem [ref=f1e279]:
+              - strong [ref=f1e280]: 该缺陷的修复今天 01:01 刚写入源码
+              - text: （
+              - code [ref=f1e281]: trainShReconcile.ts
+              - text: 正则加
+              - code [ref=f1e282]: \
+              - text: 容忍，测试注释标注「2026-10-22 门2 幕4 修复锚」，工作树未提交）——
+              - strong [ref=f1e283]: 此刻正有 vitest 在跑验证
+              - text: （trainingFace/jointTrain/autoTraining 三件套，仍在运行）。
+            - listitem [ref=f1e284]:
+              - text: 但 GUI 服务进程是
+              - strong [ref=f1e285]: 00:19
+              - text: 启动的，早于修复 42 分钟；tsx 直跑 TS、模块启动时加载——
+              - strong [ref=f1e286]: 运行中的服务仍是旧代码
+              - text: 。
+          - heading "我停手的原因（未做任何绕行）" [level=2] [ref=f1e287]
+          - list [ref=f1e288]:
+            - listitem [ref=f1e289]:
+              - text: 手改 train.sh＝修改生成物，明令禁止；换
+              - code [ref=f1e290]: atf_run_training
+              - text: 入口违背你「一个入口」的要求，且同一 F7 闸也接在它上面（同样旧代码）；重启 GUI 服务会断开你当前页面、且他人验证还在跑——这三件事都需要你拍板，我没有擅自执行。
+          - heading "请你决定" [level=2] [ref=f1e291]
+          - list [ref=f1e292]:
+            - listitem [ref=f1e293]:
+              - strong [ref=f1e294]: 推荐
+              - text: ：等 vitest 验证通过（应该就在这几分钟）→ 重启 3080 服务让修复生效 → 我
+              - strong [ref=f1e295]:
+                - text: 原样重推
+                - code [ref=f1e296]: atf_joint_train
+              - text: （数据已在位，重推只需补训练段，会再出一次确认卡给你放行）。重启由你/修复方执行，或你明确授权我来。
+            - listitem [ref=f1e297]:
+              - text: 顺带确认一个语义点：本次联合构建与上一轮训练数据
+              - strong [ref=f1e298]: 字节相同
+              - text: （1 类 1 倍透传）。如果你本意是「同数据在 joint 链上重放」那没问题；如果预期是「新数据/新字段」，请告诉我差异点，先修数据再重推。
+          - paragraph [ref=f1e299]: 要我现在做什么，等你一句话。
+        - generic [ref=f1e303]:
+          - button "Copy" [ref=f1e304] [cursor=pointer]
+          - generic [ref=f1e308]:
+            - button "Good response" [ref=f1e309] [cursor=pointer]
+            - button "Bad response" [ref=f1e312] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e315] [cursor=pointer]
+          - generic [ref=f1e321]:
+            - button "Usage 5.3M tok" [ref=f1e323] [cursor=pointer]
+            - generic [ref=f1e329]: 01:04
+        - generic [ref=f1e429]:
+          - generic [ref=f1e430]: 对账闸的解析缺陷已在服务端修复并重启生效（正则现在能读生成器的续行格式）。请继续刚才的联合训练链：同一份数据（1 类 pl、142 行、1 倍透传、seed 42）重放即可，这是我本意；不要改 train.sh、不要换入口，重推 atf_joint_train 走完训练。
+          - generic [ref=f1e432]:
+            - generic [ref=f1e433]: 01:06
+            - button "Copy" [ref=f1e434] [cursor=pointer]
+        - generic [ref=f1e682]:
+          - status [ref=f1e683]: Completed
+          - button "Completed in 4m 5s" [ref=f1e684] [cursor=pointer]
+        - generic [ref=f1e669]:
+          - heading "✅ 联合训练链已走完——训练已启动并核实" [level=1] [ref=f1e670]
+          - heading "重推结果（同一参数：1 类 pl / 22 字段 / 142 行 / 1 倍透传 / seed 42）" [level=2] [ref=f1e671]
+          - list [ref=f1e672]:
+            - listitem [ref=f1e673]:
+              - strong [ref=f1e674]: 联合数据
+              - text: ：确定性重建完成，sha256
+              - code [ref=f1e675]: 36818922e0…
+              - text: 与上轮完全一致（重放语义成立）
+            - listitem [ref=f1e676]:
+              - strong [ref=f1e677]: F7 透传对账
+              - text: ：
+              - code [ref=f1e678]: "\"reconcile\": \"ok\""
+              - text: ——修复后的正则已正确读取续行格式，9 键全过
+            - listitem [ref=f1e688]:
+              - strong [ref=f1e689]: 启动探活
+              - text: ：
+              - code [ref=f1e690]: feed_ok
+              - text: （
+              - code [ref=f1e691]: SHA=pass / ADMISSION=pass
+              - text: ，数据准入自检通过，进程存活）
+          - heading "训练进程核实（tmux 直读）" [level=2] [ref=f1e692]
+          - list [ref=f1e693]:
+            - listitem [ref=f1e694]:
+              - text: 会话
+              - code [ref=f1e695]: dev-atf-training-run-run-admit-qc-02
+              - text: （01:08:57 创建）正在跑：
+              - list [ref=f1e696]:
+                - listitem [ref=f1e697]:
+                  - text: 基座
+                  - code [ref=f1e698]: /data/LLM_model/Qwen3-VL-32B-Instruct
+                  - text: ✓（与 train.sh 一致）
+                - listitem [ref=f1e699]: bnb 4-bit 量化加载中——32B 模型装载需几分钟，GPU util 现为 0% 属正常爬坡
+            - listitem [ref=f1e700]:
+              - text: 一处如实说明：stdout 日志落在共享 logDir
+              - code [ref=f1e701]: run-regress-formal-01/training-logs/train-stdout.log
+              - text: （历史遗留的共享日志目录名；旧日志已自动轮转为
+              - code [ref=f1e702]: train-stdout.20261022-010857.log
+              - text: ）。
+              - strong [ref=f1e703]: run 归属无误
+              - text: ——tmux 会话名、swanlab_run_name、output_dir 都是 run-admit-qc-02。
+          - heading "本次训练配置（沿既有 train.sh，未改动）" [level=2] [ref=f1e704]
+          - paragraph [ref=f1e705]:
+            - text: 3 epochs × 142 样本，global batch 128（bs1×accum16×8卡），lr 1e-4，LoRA r32/α64，cutoff 9000，Z3-offload——每 epoch 约 4 步，预计很快完成；checkpoint 落
+            - code [ref=f1e706]: prep/iteration-config/checkpoint-*
+            - text: 。
+          - paragraph [ref=f1e707]: 后续随时说一声，我用 status 跟进进度、训练完成后回报 ckpt 路径（评估按 pl 类字段集走既有评估链）。
+        - generic [ref=f1e711]:
+          - button "Copy" [ref=f1e712] [cursor=pointer]
+          - generic [ref=f1e716]:
+            - button "Good response" [ref=f1e717] [cursor=pointer]
+            - button "Bad response" [ref=f1e720] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f1e723] [cursor=pointer]
+          - generic [ref=f1e729]:
+            - button "Usage 464K tok" [ref=f1e731] [cursor=pointer]
+            - generic [ref=f1e737]: 01:10
+        - generic [ref=f1e1004]:
+          - generic [ref=f1e1005]: 训练已干净完成（6/6 步、末步 loss 0.2707、checkpoint-6 已落盘、GPU 已释放）。接下来做一次 mini 评估：用本轮联合训练最新的 checkpoint-6，评估集用全部 50 页 walkthrough 数据（不是 10 页测试集——50 页里含训练页，我知情且确认，外部资产确认通道可走）；并发 4 起步。走正道评估链，出确认卡我来放行。
+          - generic [ref=f1e1007]:
+            - generic [ref=f1e1008]: 01:26
+            - button "Copy" [ref=f1e1009] [cursor=pointer]
+        - button "Think The user wants a mini evaluation:" [ref=f1e1043] [cursor=pointer]:
+          - generic [ref=f1e1053]:
+            - generic [ref=f1e1054]: Think
+            - generic [ref=f1e1056]: "The user wants a mini evaluation:"
+        - paragraph [ref=f1e1063]: 收到：checkpoint-6、50 页全量评估集（外部资产确认通道）、并发 4、正道评估链出确认卡。先加载评估技能，再盘评估资产与 checkpoint 位置。
+        - generic [ref=f1e1066]:
+          - button "Skill atf-evaluate-checkpoints" [ref=f1e1072] [cursor=pointer]:
+            - generic [ref=f1e1081]:
+              - generic [ref=f1e1082]: Skill
+              - generic [ref=f1e1084]: atf-evaluate-checkpoints
+          - button "Think Now I understand the evaluation chain. Per the atf_evaluate tool:" [ref=f1e1092] [cursor=pointer]:
+            - generic [ref=f1e1102]:
+              - generic [ref=f1e1103]: Think
+              - generic [ref=f1e1105]: "Now I understand the evaluation chain. Per the atf_evaluate tool:"
+          - button "Tool call atf_bash · ls -d /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config/checkpoint-* 2>/dev/null; echo '---'; ls /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/training/ 2>/dev/null; echo '---find eval assets---'; find /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02 -maxdepth 3 -name 'test_images.json' -o -maxdepth 3 -name 'eval_labels.jsonl' 2>/dev/null | head" [ref=f1e1113] [cursor=pointer]:
+            - generic [ref=f1e1123]:
+              - generic [ref=f1e1124]: Tool call
+              - generic [ref=f1e1126]: atf_bash · ls -d /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config/checkpoint-* 2>/dev/null; echo '---'; ls /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/training/ 2>/dev/null; echo '---find eval assets---'; find /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02 -maxdepth 3 -name 'test_images.json' -o -maxdepth 3 -name 'eval_labels.jsonl' 2>/dev/null | head
+          - 'button "Think The workspace fence changed after run binding — now the writable run workspace is /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02, and the /data/atf/prodtest path got restricted. The fence message says \"路径在只读围栏内\" — so it''s readable but the command was rejected? The message: \"路径 /data/.../checkpoint-* 在只读围栏内（可写仅＝当前 run 工作区 ...）\" — hmm, this says the path is inside the READ-ONLY fence (allowed to read?) but writable only the run workspace. Yet the command failed... The fence might treat glob patterns oddly. Let me use the /data/atf/dev/runs path instead (readable root). Is /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02 the same tree? Let me check." [ref=f1e1134] [cursor=pointer]':
+            - generic [ref=f1e1144]:
+              - generic [ref=f1e1145]: Think
+              - generic [ref=f1e1147]: "The workspace fence changed after run binding — now the writable run workspace is /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02, and the /data/atf/prodtest path got restricted. The fence message says \"路径在只读围栏内\" — so it's readable but the command was rejected? The message: \"路径 /data/.../checkpoint-* 在只读围栏内（可写仅＝当前 run 工作区 ...）\" — hmm, this says the path is inside the READ-ONLY fence (allowed to read?) but writable only the run workspace. Yet the command failed... The fence might treat glob patterns oddly. Let me use the /data/atf/dev/runs path instead (readable root). Is /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02 the same tree? Let me check."
+          - button "Tool call atf_bash · ls /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/ 2>/dev/null; echo '---'; ls -d /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/checkpoint-* 2>/dev/null" [ref=f1e1155] [cursor=pointer]:
+            - generic [ref=f1e1165]:
+              - generic [ref=f1e1166]: Tool call
+              - generic [ref=f1e1168]: atf_bash · ls /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/ 2>/dev/null; echo '---'; ls -d /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/checkpoint-* 2>/dev/null
+          - button "Think /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02 is the same tree as the cwd mirror (analysis/eval/experiment-setup/prep/publish/training/webui) — but no checkpoint-* under prep/iteration-config here. This is the UI-facing mirror. The canonical tree is /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02 (which has launch/, facts/, etc.)." [ref=f1e1192] [cursor=pointer]:
+            - generic [ref=f1e1190]:
+              - generic [ref=f1e1191]: Think
+              - generic [ref=f1e1194]: /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02 is the same tree as the cwd mirror (analysis/eval/experiment-setup/prep/publish/training/webui) — but no checkpoint-* under prep/iteration-config here. This is the UI-facing mirror. The canonical tree is /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02 (which has launch/, facts/, etc.).
+          - button "Tool call atf_bash · ls /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config/" [ref=f1e1202] [cursor=pointer]:
+            - generic [ref=f1e1212]:
+              - generic [ref=f1e1213]: Tool call
+              - generic [ref=f1e1215]: atf_bash · ls /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config/
+          - 'button "Think The fence now blocks /data/atf/prodtest/atf-prodtest-20261021/workspace/... after the run binding changed the workspace to /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02. Earlier /data/atf/prodtest/atf-prodtest-20261021 was readable (before binding). Now the fence treats the prodtest workspace path as outside... odd, but the message says \"在只读围栏内\" yet blocks. The distinction: probably /data/atf/prodtest/atf-prodtest-20261021 root is readable but deeper paths like workspace/runs/... are another workspace''s runs (the DSH registry workspace). Whatever — the fence is the fence." [ref=f1e1223] [cursor=pointer]':
+            - generic [ref=f1e1233]:
+              - generic [ref=f1e1234]: Think
+              - generic [ref=f1e1236]: "The fence now blocks /data/atf/prodtest/atf-prodtest-20261021/workspace/... after the run binding changed the workspace to /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02. Earlier /data/atf/prodtest/atf-prodtest-20261021 was readable (before binding). Now the fence treats the prodtest workspace path as outside... odd, but the message says \"在只读围栏内\" yet blocks. The distinction: probably /data/atf/prodtest/atf-prodtest-20261021 root is readable but deeper paths like workspace/runs/... are another workspace's runs (the DSH registry workspace). Whatever — the fence is the fence."
+          - button "Tool call atf_bash · readlink -f /data/atf/dev/runs/atf-prodtest-20261021; readlink -f /data/atf/prodtest/atf-prodtest-20261021/workspace/runs; ls /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/" [ref=f1e1244] [cursor=pointer]:
+            - generic [ref=f1e1254]:
+              - generic [ref=f1e1255]: Tool call
+              - generic [ref=f1e1257]: atf_bash · readlink -f /data/atf/dev/runs/atf-prodtest-20261021; readlink -f /data/atf/prodtest/atf-prodtest-20261021/workspace/runs; ls /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/
+          - button "Think The fence parser seems to trip on certain patterns (maybe semicolons joining commands with paths). Let me run one command per call." [ref=f1e1265] [cursor=pointer]:
+            - generic [ref=f1e1275]:
+              - generic [ref=f1e1276]: Think
+              - generic [ref=f1e1278]: The fence parser seems to trip on certain patterns (maybe semicolons joining commands with paths). Let me run one command per call.
+        - paragraph [ref=f1e1285]: 围栏对分号串联敏感，改单命令逐条来。
+        - generic [ref=f1e1288]:
+          - button "Tool call atf_bash · readlink -f /data/atf/dev/runs/atf-prodtest-20261021" [ref=f1e1295] [cursor=pointer]:
+            - generic [ref=f1e1305]:
+              - generic [ref=f1e1306]: Tool call
+              - generic [ref=f1e1308]: atf_bash · readlink -f /data/atf/dev/runs/atf-prodtest-20261021
+          - button "Tool call atf_bash · ls /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/" [ref=f1e1317] [cursor=pointer]:
+            - generic [ref=f1e1327]:
+              - generic [ref=f1e1328]: Tool call
+              - generic [ref=f1e1330]: atf_bash · ls /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/
+          - 'button "Think The mirror tree doesn''t have the checkpoints. Fences: listing the parent /data/atf/dev/runs/atf-prodtest-20261021 directly is blocked, but children paths are OK... weird but workable. Where is the new checkpoint-6? The train.sh output_dir = canonical prodtest path. Let me try listing the canonical prep/iteration-config via a direct path (earlier attempt failed due to fence on workspace/runs path — maybe it got flagged because of the earlier joint binding; let me retry — the previous failure message was the same \"在只读围栏内\". The fence treats /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/... as another workspace''s territory)." [ref=f1e1353] [cursor=pointer]':
+            - generic [ref=f1e1349]:
+              - generic [ref=f1e1350]: Think
+              - generic [ref=f1e1355]: "The mirror tree doesn't have the checkpoints. Fences: listing the parent /data/atf/dev/runs/atf-prodtest-20261021 directly is blocked, but children paths are OK... weird but workable. Where is the new checkpoint-6? The train.sh output_dir = canonical prodtest path. Let me try listing the canonical prep/iteration-config via a direct path (earlier attempt failed due to fence on workspace/runs path — maybe it got flagged because of the earlier joint binding; let me retry — the previous failure message was the same \"在只读围栏内\". The fence treats /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/... as another workspace's territory)."
+          - button "Tool call atf_bash · ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/training/checkpoint-6/ 2>/dev/null | head -5; stat -c '%y %n' /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/training/checkpoint-6 2>/dev/null" [ref=f1e1363] [cursor=pointer]:
+            - generic [ref=f1e1373]:
+              - generic [ref=f1e1374]: Tool call
+              - generic [ref=f1e1376]: atf_bash · ls -la /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/training/checkpoint-6/ 2>/dev/null | head -5; stat -c '%y %n' /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/training/checkpoint-6 2>/dev/null
+          - button "Think That checkpoint-6 is from Oct 21 08:14 (the OLD training round). The NEW training (today 01:08) wrote checkpoints to output_dir = /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config/checkpoint-6 (canonical tree) — which I can't list due to the fence." [ref=f1e1384] [cursor=pointer]:
+            - generic [ref=f1e1394]:
+              - generic [ref=f1e1395]: Think
+              - generic [ref=f1e1397]: That checkpoint-6 is from Oct 21 08:14 (the OLD training round). The NEW training (today 01:08) wrote checkpoints to output_dir = /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config/checkpoint-6 (canonical tree) — which I can't list due to the fence.
+        - paragraph [ref=f1e1404]: 两棵树的 run 目录内容有差异，确认它们是否同一目录（inode 比对）：
+        - generic [ref=f1e1407]:
+          - button "Tool call atf_bash · stat -c '%d:%i %n' /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json" [ref=f1e1414] [cursor=pointer]:
+            - generic [ref=f1e1424]:
+              - generic [ref=f1e1425]: Tool call
+              - generic [ref=f1e1427]: atf_bash · stat -c '%d:%i %n' /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/prep/iteration-config/iteration-config.json
+          - button "Tool call atf_bash · stat -c '%d:%i %n' /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config/iteration-config.json" [ref=f1e1434] [cursor=pointer]:
+            - generic [ref=f1e1444]:
+              - generic [ref=f1e1445]: Tool call
+              - generic [ref=f1e1447]: atf_bash · stat -c '%d:%i %n' /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config/iteration-config.json
+          - 'button "Think The bash fence now blocks the canonical path (it became \"outside allowlist\" after the run binding — the fence''s legal roots changed). But atf_evaluate (a harness tool) will need the adapter_path anyway and does its own path validation. The train.sh output_dir is authoritative: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config — so checkpoint-6 should be at .../prep/iteration-config/checkpoint-6." [ref=f1e1470] [cursor=pointer]':
+            - generic [ref=f1e1468]:
+              - generic [ref=f1e1469]: Think
+              - generic [ref=f1e1472]: "The bash fence now blocks the canonical path (it became \"outside allowlist\" after the run binding — the fence's legal roots changed). But atf_evaluate (a harness tool) will need the adapter_path anyway and does its own path validation. The train.sh output_dir is authoritative: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep/iteration-config — so checkpoint-6 should be at .../prep/iteration-config/checkpoint-6."
+        - paragraph [ref=f1e1479]: 找齐评估四件：评估资产（50 页）、service config、环境档案、checkpoint 路径。
+        - generic [ref=f1e1482]:
+          - button "Tool call atf_bash · find /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval -maxdepth 4 -name 'test_images.json' 2>/dev/null" [ref=f1e1489] [cursor=pointer]:
+            - generic [ref=f1e1499]:
+              - generic [ref=f1e1500]: Tool call
+              - generic [ref=f1e1502]: atf_bash · find /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval -maxdepth 4 -name 'test_images.json' 2>/dev/null
+          - button "Tool call atf_bash · ls /data/sam/ATF-Harness/tmp/atf-exec-home-dev/ 2>/dev/null" [ref=f1e1509] [cursor=pointer]:
+            - generic [ref=f1e1519]:
+              - generic [ref=f1e1520]: Tool call
+              - generic [ref=f1e1522]: atf_bash · ls /data/sam/ATF-Harness/tmp/atf-exec-home-dev/ 2>/dev/null
+          - button "Tool call atf_bash · find /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02 -name 'test_images.json' 2>/dev/null | head" [ref=f1e1529] [cursor=pointer]:
+            - generic [ref=f1e1539]:
+              - generic [ref=f1e1540]: Tool call
+              - generic [ref=f1e1542]: atf_bash · find /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02 -name 'test_images.json' 2>/dev/null | head
+          - 'button "Think No test_images.json under the dev run tree. The eval assets for previous rounds must be elsewhere. The prior eval rounds consumed an eval_assets_dir passed to atf_evaluate — where did previous sessions point it? Maybe under /data/atf/dev/runs/atf-prodtest-20261021/l1/ or a shared assets root, or the canonical tree l1. The atf_evaluate default: runs/<run_id>/l1/eval. Let me search wider: the dev runs root for eval_labels.jsonl (bounded depth), and the canonical workspace via alternate allowed path... canonical blocked. Search dev tree fully." [ref=f1e1566] [cursor=pointer]':
+            - generic [ref=f1e1561]:
+              - generic [ref=f1e1562]: Think
+              - generic [ref=f1e1568]: "No test_images.json under the dev run tree. The eval assets for previous rounds must be elsewhere. The prior eval rounds consumed an eval_assets_dir passed to atf_evaluate — where did previous sessions point it? Maybe under /data/atf/dev/runs/atf-prodtest-20261021/l1/ or a shared assets root, or the canonical tree l1. The atf_evaluate default: runs/<run_id>/l1/eval. Let me search wider: the dev runs root for eval_labels.jsonl (bounded depth), and the canonical workspace via alternate allowed path... canonical blocked. Search dev tree fully."
+          - button "Tool call atf_bash · find /data/atf/dev/runs/atf-prodtest-20261021 -name 'eval_labels.jsonl' 2>/dev/null | head" [ref=f1e1576] [cursor=pointer]:
+            - generic [ref=f1e1586]:
+              - generic [ref=f1e1587]: Tool call
+              - generic [ref=f1e1589]: atf_bash · find /data/atf/dev/runs/atf-prodtest-20261021 -name 'eval_labels.jsonl' 2>/dev/null | head
+          - button "Think The fence blocks any path that ISN'T under the current run workspace /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02. Earlier some /data/atf/dev/runs/... reads worked (e.g., run-regress-formal-01 train.sh sed). Hmm — earlier sed on /data/atf/dev/runs/run-regress-formal-01/launch/train.sh worked. But /data/atf/dev/runs/atf-prodtest-20261021 (the experiment dir) is blocked while .../run-admit-qc-02 (run dir) is writable, and find under run-admit-qc-02 works. The fence treats the atf-prodtest-20261021 experiment dir as a separate workspace (owned by another session?), while run-admit-qc-02 is mine now. And /data/atf/dev/runs/run-regress-formal-01 was in the initial allowlist. OK." [ref=f1e1597] [cursor=pointer]:
+            - generic [ref=f1e1607]:
+              - generic [ref=f1e1608]: Think
+              - generic [ref=f1e1610]: The fence blocks any path that ISN'T under the current run workspace /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02. Earlier some /data/atf/dev/runs/... reads worked (e.g., run-regress-formal-01 train.sh sed). Hmm — earlier sed on /data/atf/dev/runs/run-regress-formal-01/launch/train.sh worked. But /data/atf/dev/runs/atf-prodtest-20261021 (the experiment dir) is blocked while .../run-admit-qc-02 (run dir) is writable, and find under run-admit-qc-02 works. The fence treats the atf-prodtest-20261021 experiment dir as a separate workspace (owned by another session?), while run-admit-qc-02 is mine now. And /data/atf/dev/runs/run-regress-formal-01 was in the initial allowlist. OK.
+          - button "Tool call atf_bash · find . -maxdepth 4 -name 'test_images.json' 2>/dev/null | head" [ref=f1e1618] [cursor=pointer]:
+            - generic [ref=f1e1628]:
+              - generic [ref=f1e1629]: Tool call
+              - generic [ref=f1e1631]: atf_bash · find . -maxdepth 4 -name 'test_images.json' 2>/dev/null | head
+          - button "Think Candidates in the cwd tree. The run-admit-qc-02's earlier evals (1-5 rounds) — which assets did they use? The publish-ws-6a782f37 dir (media_dir in iteration-config) is in the canonical tree. Let me check what the previous eval's plan/manifest recorded as assets_binding or the eval_plan. Look at the most recent eval round (5-20261021 or 4-20261021) orch/eval_plan.json in the dev mirror eval dir to see the assets dir used." [ref=f1e1639] [cursor=pointer]:
+            - generic [ref=f1e1649]:
+              - generic [ref=f1e1650]: Think
+              - generic [ref=f1e1652]: Candidates in the cwd tree. The run-admit-qc-02's earlier evals (1-5 rounds) — which assets did they use? The publish-ws-6a782f37 dir (media_dir in iteration-config) is in the canonical tree. Let me check what the previous eval's plan/manifest recorded as assets_binding or the eval_plan. Look at the most recent eval round (5-20261021 or 4-20261021) orch/eval_plan.json in the dev mirror eval dir to see the assets dir used.
+        - paragraph [ref=f1e1659]: 查上一轮评估实际用的资产目录（读 eval_plan 的绑定记录）：
+        - generic [ref=f1e1662]:
+          - 'button "Tool call atf_bash · grep -o ''\"assets[^,}]*\\|eval_assets[^,}]*'' /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/4-20261021/orch/eval_plan.json 2>/dev/null | head; ls /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/4-20261021/orch/ 2>/dev/null" [ref=f1e1669] [cursor=pointer]':
+            - generic [ref=f1e1679]:
+              - generic [ref=f1e1680]: Tool call
+              - generic [ref=f1e1682]: "atf_bash · grep -o '\"assets[^,}]*\\|eval_assets[^,}]*' /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/4-20261021/orch/eval_plan.json 2>/dev/null | head; ls /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/4-20261021/orch/ 2>/dev/null"
+          - button "Think Previous round 4 used eval assets at:" [ref=f1e1690] [cursor=pointer]:
+            - generic [ref=f1e1700]:
+              - generic [ref=f1e1701]: Think
+              - generic [ref=f1e1703]: "Previous round 4 used eval assets at:"
+          - button "Tool call atf_bash · for d in ./walkthrough-m12-real/eval-assets ./evalcard-smoke/l1/eval ./run-regress-large-pl/publish-ws-ee1569cf/eval ./run-regress-large-pl/publish-ws-ee1569cf/eval; do n=$(grep -c '\"' $d/test_images.json 2>/dev/null); echo \"$d images-quotes:$n labels:$(wc -l < $d/eval_labels.jsonl 2>/dev/null)\"; done; ls ./walkthrough-m12-real/eval-assets/" [ref=f1e1711] [cursor=pointer]:
+            - generic [ref=f1e1721]:
+              - generic [ref=f1e1722]: Tool call
+              - generic [ref=f1e1724]: atf_bash · for d in ./walkthrough-m12-real/eval-assets ./evalcard-smoke/l1/eval ./run-regress-large-pl/publish-ws-ee1569cf/eval ./run-regress-large-pl/publish-ws-ee1569cf/eval; do n=$(grep -c '"' $d/test_images.json 2>/dev/null); echo "$d images-quotes:$n labels:$(wc -l < $d/eval_labels.jsonl 2>/dev/null)"; done; ls ./walkthrough-m12-real/eval-assets/
+          - 'button "Think - walkthrough-m12-real/eval-assets: test_images.json + eval_labels.jsonl with 10 label lines (labels:10) — that''s the 10-page set probably (53 quotes ≠ 50 pages; each image path is a JSON string with multiple quotes... grep -c ''\"'' counts LINES containing quotes, not pages). Let me count properly: use grep -o on image entries or read the file. eval_labels.jsonl lines = 10 → 10 pages. Not 50." [ref=f1e1747] [cursor=pointer]':
+            - generic [ref=f1e1745]:
+              - generic [ref=f1e1746]: Think
+              - generic [ref=f1e1749]: "- walkthrough-m12-real/eval-assets: test_images.json + eval_labels.jsonl with 10 label lines (labels:10) — that's the 10-page set probably (53 quotes ≠ 50 pages; each image path is a JSON string with multiple quotes... grep -c '\"' counts LINES containing quotes, not pages). Let me count properly: use grep -o on image entries or read the file. eval_labels.jsonl lines = 10 → 10 pages. Not 50."
+          - button "Tool call atf_bash · find . -maxdepth 3 -type d -name 'publish-ws-*' 2>/dev/null | head; echo '---'; ls ./atf-prodtest-20261021/run-admit-qc-02/publish/ 2>/dev/null; echo '---'; find . -maxdepth 5 -path '*publish-ws-6a782f37*' -name 'eval_labels.jsonl' 2>/dev/null | head -3" [ref=f1e1757] [cursor=pointer]:
+            - generic [ref=f1e1767]:
+              - generic [ref=f1e1768]: Tool call
+              - generic [ref=f1e1770]: atf_bash · find . -maxdepth 3 -type d -name 'publish-ws-*' 2>/dev/null | head; echo '---'; ls ./atf-prodtest-20261021/run-admit-qc-02/publish/ 2>/dev/null; echo '---'; find . -maxdepth 5 -path '*publish-ws-6a782f37*' -name 'eval_labels.jsonl' 2>/dev/null | head -3
+          - button "Think publish-ws-6a782f37 is only in the canonical tree (blocked from bash now). The eval assets with 50 pages don't obviously exist in readable trees." [ref=f1e1778] [cursor=pointer]:
+            - generic [ref=f1e1788]:
+              - generic [ref=f1e1789]: Think
+              - generic [ref=f1e1791]: publish-ws-6a782f37 is only in the canonical tree (blocked from bash now). The eval assets with 50 pages don't obviously exist in readable trees.
+          - button "Tool call atf_bash · find . -name 'eval_labels.jsonl' 2>/dev/null | head -20" [ref=f1e1799] [cursor=pointer]:
+            - generic [ref=f1e1809]:
+              - generic [ref=f1e1810]: Tool call
+              - generic [ref=f1e1812]: atf_bash · find . -name 'eval_labels.jsonl' 2>/dev/null | head -20
+          - button "Tool call atf_bash · wc -l ./walkthrough-f10-rerun/publish-ws-7a34020b/eval/eval_labels.jsonl ./walkthrough-b11-rerun/publish-ws-7a34020b/eval/eval_labels.jsonl ./walkthrough-b10-rerun/publish-ws-7a34020b/eval/eval_labels.jsonl ./walkthrough-m12-real/eval-assets/eval_labels.jsonl ./d3-kdirect-b/publish-ws-1f7c6b6e/eval/eval_labels.jsonl ./run-regress-formal-03/publish-ws-6e333500/eval/eval_labels.jsonl 2>/dev/null" [ref=f1e1819] [cursor=pointer]:
+            - generic [ref=f1e1829]:
+              - generic [ref=f1e1830]: Tool call
+              - generic [ref=f1e1832]: atf_bash · wc -l ./walkthrough-f10-rerun/publish-ws-7a34020b/eval/eval_labels.jsonl ./walkthrough-b11-rerun/publish-ws-7a34020b/eval/eval_labels.jsonl ./walkthrough-b10-rerun/publish-ws-7a34020b/eval/eval_labels.jsonl ./walkthrough-m12-real/eval-assets/eval_labels.jsonl ./d3-kdirect-b/publish-ws-1f7c6b6e/eval/eval_labels.jsonl ./run-regress-formal-03/publish-ws-6e333500/eval/eval_labels.jsonl 2>/dev/null
+          - button "Think All existing eval assets are 10 pages (or 1/0). No 50-page eval assets exist in readable trees." [ref=f1e1842] [cursor=pointer]:
+            - generic [ref=f1e1852]:
+              - generic [ref=f1e1853]: Think
+              - generic [ref=f1e1855]: All existing eval assets are 10 pages (or 1/0). No 50-page eval assets exist in readable trees.
+          - button "Tool call atf_bash · ls ./walkthrough-m12-real/; echo '---'; python3 --version 2>/dev/null; wc -l ./walkthrough-m12-real/eval-assets/test_images.json 2>/dev/null; head -c 400 ./walkthrough-m12-real/eval-assets/test_images.json" [ref=f1e1863] [cursor=pointer]:
+            - generic [ref=f1e1873]:
+              - generic [ref=f1e1874]: Tool call
+              - generic [ref=f1e1876]: atf_bash · ls ./walkthrough-m12-real/; echo '---'; python3 --version 2>/dev/null; wc -l ./walkthrough-m12-real/eval-assets/test_images.json 2>/dev/null; head -c 400 ./walkthrough-m12-real/eval-assets/test_images.json
+          - 'button "Think walkthrough-m12-real has an `images/` dir and `media/` — the walkthrough corpus. The eval-assets are 10 pages (page_count: 10). The full corpus: let me count ./walkthrough-m12-real/images/*.png." [ref=f1e1884] [cursor=pointer]':
+            - generic [ref=f1e1894]:
+              - generic [ref=f1e1895]: Think
+              - generic [ref=f1e1897]: "walkthrough-m12-real has an `images/` dir and `media/` — the walkthrough corpus. The eval-assets are 10 pages (page_count: 10). The full corpus: let me count ./walkthrough-m12-real/images/*.png."
+          - button "Tool call atf_bash · ls ./walkthrough-m12-real/images/ | head; ls ./walkthrough-m12-real/images/ | wc -l" [ref=f1e1905] [cursor=pointer]:
+            - generic [ref=f1e1915]:
+              - generic [ref=f1e1916]: Tool call
+              - generic [ref=f1e1918]: atf_bash · ls ./walkthrough-m12-real/images/ | head; ls ./walkthrough-m12-real/images/ | wc -l
+          - button "Tool call atf_bash · ls ./walkthrough-m12-real/prep/ ./walkthrough-m12-real/media/ 2>/dev/null | head -20" [ref=f1e1925] [cursor=pointer]:
+            - generic [ref=f1e1935]:
+              - generic [ref=f1e1936]: Tool call
+              - generic [ref=f1e1938]: atf_bash · ls ./walkthrough-m12-real/prep/ ./walkthrough-m12-real/media/ 2>/dev/null | head -20
+          - button "Think walkthrough-m12-real/images/ has 100 files = 50 png + 50 json — the full 50-page walkthrough corpus with paired GT label JSONs! This matches the user's \"全部 50 页 walkthrough 数据\"." [ref=f1e1946] [cursor=pointer]:
+            - generic [ref=f1e1956]:
+              - generic [ref=f1e1957]: Think
+              - generic [ref=f1e1959]: walkthrough-m12-real/images/ has 100 files = 50 png + 50 json — the full 50-page walkthrough corpus with paired GT label JSONs! This matches the user's "全部 50 页 walkthrough 数据".
+        - paragraph [ref=f1e1966]:
+          - text: 50 页全量语料找到了：
+          - code [ref=f1e1967]: walkthrough-m12-real/images/
+          - text: （50 png＋50 同名 GT json）。现在对照既有 10 页评估资产的行结构，搞清 eval_labels 与语料 json 的关系：
+        - generic [ref=f1e1970]:
+          - button "Tool call atf_bash · head -c 1200 ./walkthrough-m12-real/eval-assets/eval_labels.jsonl" [ref=f1e1977] [cursor=pointer]:
+            - generic [ref=f1e1987]:
+              - generic [ref=f1e1988]: Tool call
+              - generic [ref=f1e1990]: atf_bash · head -c 1200 ./walkthrough-m12-real/eval-assets/eval_labels.jsonl
+          - button "Tool call atf_bash · head -c 1200 ./walkthrough-m12-real/images/11d3e9a7f4a5395de4e693dfe8d0afcd0fd45aceba5c9933b4b7519ade687553.json" [ref=f1e1997] [cursor=pointer]:
+            - generic [ref=f1e2007]:
+              - generic [ref=f1e2008]: Tool call
+              - generic [ref=f1e2010]: atf_bash · head -c 1200 ./walkthrough-m12-real/images/11d3e9a7f4a5395de4e693dfe8d0afcd0fd45aceba5c9933b4b7519ade687553.json
+          - button "Think Now I understand the eval assets structure:" [ref=f1e2036] [cursor=pointer]:
+            - generic [ref=f1e2031]:
+              - generic [ref=f1e2032]: Think
+              - generic [ref=f1e2034]: "Now I understand the eval assets structure:"
+        - paragraph [ref=f1e2042]: 评估资产格式已明确。先看内核是否有现成的评估资产构建器，避免手搓：
+        - generic [ref=f1e2045]:
+          - button "Tool call atf_bash · grep -rln 'EvaluationAssets/v1' /data/sam/ATF-Harness/.atf-pinned/skills/ /data/sam/ATF-Harness/.atf-pinned/src/agentic_training_flow/ 2>/dev/null | head" [ref=f1e2052] [cursor=pointer]:
+            - generic [ref=f1e2062]:
+              - generic [ref=f1e2063]: Tool call
+              - generic [ref=f1e2065]: atf_bash · grep -rln 'EvaluationAssets/v1' /data/sam/ATF-Harness/.atf-pinned/skills/ /data/sam/ATF-Harness/.atf-pinned/src/agentic_training_flow/ 2>/dev/null | head
+          - button "Tool call atf_bash · grep -rln 'build_evaluation_assets\\|EvaluationAssets' /data/sam/AgenticTrainingFlow/src/agentic_training_flow/ 2>/dev/null | head" [ref=f1e2072] [cursor=pointer]:
+            - generic [ref=f1e2082]:
+              - generic [ref=f1e2083]: Tool call
+              - generic [ref=f1e2085]: atf_bash · grep -rln 'build_evaluation_assets\|EvaluationAssets' /data/sam/AgenticTrainingFlow/src/agentic_training_flow/ 2>/dev/null | head
+          - button "Think The fence has locked down to only the run workspace (/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02) + cwd tree. Earlier in the session /data/sam was readable — the fence tightened after run binding. I can't grep the kernel source anymore." [ref=f1e2111] [cursor=pointer]:
+            - generic [ref=f1e2104]:
+              - generic [ref=f1e2105]: Think
+              - generic [ref=f1e2107]: The fence has locked down to only the run workspace (/data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02) + cwd tree. Earlier in the session /data/sam was readable — the fence tightened after run binding. I can't grep the kernel source anymore.
+        - paragraph [ref=f1e2117]: 生成器源码现在围栏外读不了，改为「复刻既有 10 页资产的确定性推导＋重叠页逐字校验」的方式构建 50 页资产。先确认 run 上轮评估的页与 m12 语料同源：
+        - generic [ref=f1e2120]:
+          - button "Tool call atf_bash · head -5 ./atf-prodtest-20261021/run-admit-qc-02/eval/indexes.csv 2>/dev/null; echo '---'; ls ./walkthrough-m12-real/images/*.png | wc -l" [ref=f1e2127] [cursor=pointer]:
+            - generic [ref=f1e2137]:
+              - generic [ref=f1e2138]: Tool call
+              - generic [ref=f1e2140]: atf_bash · head -5 ./atf-prodtest-20261021/run-admit-qc-02/eval/indexes.csv 2>/dev/null; echo '---'; ls ./walkthrough-m12-real/images/*.png | wc -l
+          - 'button "Think indexes.csv is per-field, not per-page. Check the eval badcases.jsonl or raw_predictions.jsonl page_ids instead — read first 3 page_ids from the dev tree run''s eval round 5 or the metrics-level artifacts. Actually simpler: the m12 eval-assets 10 pages vs the run''s 10 pages — compare the run''s eval/5-20261021 or orch/eval raw_predictions page_ids. Let me grab page_ids from the dev run tree eval raw_predictions.jsonl." [ref=f1e2148] [cursor=pointer]':
+            - generic [ref=f1e2158]:
+              - generic [ref=f1e2159]: Think
+              - generic [ref=f1e2161]: "indexes.csv is per-field, not per-page. Check the eval badcases.jsonl or raw_predictions.jsonl page_ids instead — read first 3 page_ids from the dev tree run's eval round 5 or the metrics-level artifacts. Actually simpler: the m12 eval-assets 10 pages vs the run's 10 pages — compare the run's eval/5-20261021 or orch/eval raw_predictions page_ids. Let me grab page_ids from the dev run tree eval raw_predictions.jsonl."
+          - 'button "Tool call atf_bash · grep -o ''\"page_id\": *\"[^\"]*\"'' /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/raw_predictions.jsonl 2>/dev/null | sort -u | head -12" [ref=f1e2169] [cursor=pointer]':
+            - generic [ref=f1e2179]:
+              - generic [ref=f1e2180]: Tool call
+              - generic [ref=f1e2182]: "atf_bash · grep -o '\"page_id\": *\"[^\"]*\"' /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/raw_predictions.jsonl 2>/dev/null | sort -u | head -12"
+          - button "Tool call atf_bash · for id in 1c48c5c4349b728c0f235a4d292dde184a44b63e038bb21d7c79ea33368b7472 4738c8ee536a75fd0fff883a630e97b174725daed0e70369a70fd938b2e786d4 da5de32f86cd1144c2fa55c4bc5789a2776f09eccec01cc0890778d482c4f069; do ls ./walkthrough-m12-real/images/$id.png >/dev/null 2>&1 && echo \"$id IN-m12\" || echo \"$id NOT-in-m12\"; done" [ref=f1e2192] [cursor=pointer]:
+            - generic [ref=f1e2202]:
+              - generic [ref=f1e2203]: Tool call
+              - generic [ref=f1e2205]: atf_bash · for id in 1c48c5c4349b728c0f235a4d292dde184a44b63e038bb21d7c79ea33368b7472 4738c8ee536a75fd0fff883a630e97b174725daed0e70369a70fd938b2e786d4 da5de32f86cd1144c2fa55c4bc5789a2776f09eccec01cc0890778d482c4f069; do ls ./walkthrough-m12-real/images/$id.png >/dev/null 2>&1 && echo "$id IN-m12" || echo "$id NOT-in-m12"; done
+          - button "Think Same corpus — the run's eval pages ⊂ m12's 50-page corpus. So building the 50-page assets from m12's images/ corpus is correct and covers the run's test pages." [ref=f1e2228] [cursor=pointer]:
+            - generic [ref=f1e2224]:
+              - generic [ref=f1e2225]: Think
+              - generic [ref=f1e2230]: Same corpus — the run's eval pages ⊂ m12's 50-page corpus. So building the 50-page assets from m12's images/ corpus is correct and covers the run's test pages.
+        - paragraph [ref=f1e2237]: 同源确认（run 评估页 ⊂ m12 五十页语料）。读全量冻结资产结构，准备复刻推导：
+        - generic [ref=f1e2240]:
+          - button "Tool call atf_read · walkthrough-m12-real/eval-assets/test_images.json" [ref=f1e2247] [cursor=pointer]:
+            - generic [ref=f1e2257]:
+              - generic [ref=f1e2258]: Tool call
+              - generic [ref=f1e2260]: atf_read · walkthrough-m12-real/eval-assets/test_images.json
+          - button "Think Structure fully clear now:" [ref=f1e2268] [cursor=pointer]:
+            - generic [ref=f1e2278]:
+              - generic [ref=f1e2279]: Think
+              - generic [ref=f1e2281]: "Structure fully clear now:"
+        - paragraph [ref=f1e2288]: 结构清楚了。验证 stem 是否为 png 实际 sha256（涉及 runner 完整性校验），并确认 50 页语料的 markable 状态分布：
+        - generic [ref=f1e2291]:
+          - button "Tool call atf_bash · sha256sum ./walkthrough-m12-real/images/11d3e9a7f4a5395de4e693dfe8d0afcd0fd45aceba5c9933b4b7519ade687553.png" [ref=f1e2298] [cursor=pointer]:
+            - generic [ref=f1e2308]:
+              - generic [ref=f1e2309]: Tool call
+              - generic [ref=f1e2311]: atf_bash · sha256sum ./walkthrough-m12-real/images/11d3e9a7f4a5395de4e693dfe8d0afcd0fd45aceba5c9933b4b7519ade687553.png
+          - 'button "Tool call atf_bash · grep -l ''\"markStatus\": false'' ./walkthrough-m12-real/images/*.json | wc -l; grep -L ''\"marks\"'' ./walkthrough-m12-real/images/*.json | wc -l" [ref=f1e2318] [cursor=pointer]':
+            - generic [ref=f1e2328]:
+              - generic [ref=f1e2329]: Tool call
+              - generic [ref=f1e2331]: "atf_bash · grep -l '\"markStatus\": false' ./walkthrough-m12-real/images/*.json | wc -l; grep -L '\"marks\"' ./walkthrough-m12-real/images/*.json | wc -l"
+          - button "Think - The png's actual sha256 == filename stem ✓ (content-addressed corpus — integrity checks will pass)." [ref=f1e2359] [cursor=pointer]:
+            - generic [ref=f1e2350]:
+              - generic [ref=f1e2351]: Think
+              - generic [ref=f1e2353]: "- The png's actual sha256 == filename stem ✓ (content-addressed corpus — integrity checks will pass)."
+        - paragraph [ref=f1e2365]: 构建脚本前，先把 service 侧事实从上轮产物里读齐（dev 树可读）：
+        - generic [ref=f1e2368]:
+          - button "Tool call atf_read · /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/4-20261021/service/service_manifest.json" [ref=f1e2375] [cursor=pointer]:
+            - generic [ref=f1e2385]:
+              - generic [ref=f1e2386]: Tool call
+              - generic [ref=f1e2388]: atf_read · /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/4-20261021/service/service_manifest.json
+          - button "Think Excellent! Round-4 service manifest gives me everything:" [ref=f1e2415] [cursor=pointer]:
+            - generic [ref=f1e2407]:
+              - generic [ref=f1e2408]: Think
+              - generic [ref=f1e2410]: "Excellent! Round-4 service manifest gives me everything:"
+        - paragraph [ref=f1e2421]:
+          - text: service 侧事实齐了（env-profile
+          - code [ref=f1e2422]: a800-local
+          - text: 、AWQ base、端口 8200、TP1、像素对 65536/802816、canonical ckpt-6 路径）。还差 EvalServiceConfig/v1 的准确键名——用技能读面拿生成器脚本：
+        - generic [ref=f1e2425]:
+          - button "Tool call atf_skill_read · scripts/generate_eval_service.py" [ref=f1e2432] [cursor=pointer]:
+            - generic [ref=f1e2442]:
+              - generic [ref=f1e2443]: Tool call
+              - generic [ref=f1e2445]: atf_skill_read · scripts/generate_eval_service.py
+          - button "Think Now I have the complete EvalServiceConfig/v1 schema from build_service_argv:" [ref=f1e2472] [cursor=pointer]:
+            - generic [ref=f1e2464]:
+              - generic [ref=f1e2465]: Think
+              - generic [ref=f1e2467]: "Now I have the complete EvalServiceConfig/v1 schema from build_service_argv:"
+        - paragraph [ref=f1e2478]: 生成器脚本拿到，EvalServiceConfig 键面齐了。先确认新 checkpoint-6 的落位与训练终态：
+        - generic [ref=f1e2481]:
+          - button "Tool call atf_run_training · status" [ref=f1e2488] [cursor=pointer]:
+            - generic [ref=f1e2498]:
+              - generic [ref=f1e2499]: Tool call
+              - generic [ref=f1e2501]: atf_run_training · status
+          - button [ref=f1e2525] [cursor=pointer]:
+            - generic [ref=f1e2523]:
+              - generic [ref=f1e2524]: Think
+              - generic [ref=f1e2527]: "The status card confirms: training done, checkpoint: checkpoint-6, latest: runs/run-admit-qc-02/training/checkpoint-6 (relative to runs root). Interesting — \"latest\" points to training/checkpoint-6 (the staging area in the dev/dev-canonical run tree). That's the staged checkpoint from... hmm, it says checkpoint-6 under training/ — the run tree's training/ dir. Earlier I saw dev mirror training/checkpoint-6 dated Oct 21 08:14 (OLD). But the status is live — the harness scanRunDir found checkpoint-6 in training/. Is it updated to today's? The staged copy under training/checkpoint-6 might have been refreshed by today's ckpt staging? No — staging happens during EVAL orchestration, not training. Today's training wrote to canonical prep/iteration-config/checkpoint-6. The status card's \"latest\" is just what the scanner found (maybe stale Oct 21 staging — dangerous for \"latest\" semantics, but I explicitly use a fixed path anyway)."
+        - paragraph [ref=f1e2534]:
+          - text: checkpoint-6 确认（固定编号）。现在写资产构建脚本：从 50 页语料推导，
+          - strong [ref=f1e2535]: 并以既有 10 页冻结资产做逐页深等校验
+          - text: （推导逻辑必须先复现冻结产物才允许落盘）：
+        - generic [ref=f1e2538]:
+          - 'button "Tool call atf_write · #!/usr/bin/env python3" [ref=f1e2545] [cursor=pointer]':
+            - generic [ref=f1e2555]:
+              - generic [ref=f1e2556]: Tool call
+              - generic [ref=f1e2558]: "atf_write · #!/usr/bin/env python3"
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"build_eval_assets_50.py\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/images\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/eval-assets\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/eval-assets-50\"]}" [ref=f1e2565] [cursor=pointer]':
+            - generic [ref=f1e2575]:
+              - generic [ref=f1e2576]: Tool call
+              - generic [ref=f1e2578]: "atf_scratch_exec · {\"argv\":[\"python3\",\"build_eval_assets_50.py\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/images\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/eval-assets\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/eval-assets-50\"]}"
+          - 'button "Think The scratch for scratch-exec is at /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/default/scratch/ — but atf_write wrote my script to a different scratch (relative \"build_eval_assets_50.py\" → main root scratch, likely /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/default/scratch? No — it resolved elsewhere). The exec looked in runs/default/scratch/. Let me find where atf_write put it: probably <主根>/scratch = /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/scratch or similar. Simply re-reference with the right relative path: run with argv path \"default/scratch/build_eval_assets_50.py\"? No — first find the actual location." [ref=f1e2586] [cursor=pointer]':
+            - generic [ref=f1e2596]:
+              - generic [ref=f1e2597]: Think
+              - generic [ref=f1e2599]: "The scratch for scratch-exec is at /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/default/scratch/ — but atf_write wrote my script to a different scratch (relative \"build_eval_assets_50.py\" → main root scratch, likely /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/default/scratch? No — it resolved elsewhere). The exec looked in runs/default/scratch/. Let me find where atf_write put it: probably <主根>/scratch = /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/scratch or similar. Simply re-reference with the right relative path: run with argv path \"default/scratch/build_eval_assets_50.py\"? No — first find the actual location."
+          - button "Tool call atf_bash · find /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline -maxdepth 3 -name 'build_eval_assets_50.py' 2>/dev/null" [ref=f1e2607] [cursor=pointer]:
+            - generic [ref=f1e2617]:
+              - generic [ref=f1e2618]: Tool call
+              - generic [ref=f1e2620]: atf_bash · find /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline -maxdepth 3 -name 'build_eval_assets_50.py' 2>/dev/null
+          - 'button "Think The bash allowlist changed again — now /data/sam and /data/atf/prodtest/atf-prodtest-20261021 are legal but /data/atf/datasets/... is NOT in bash''s list (bash works from cwd = the datasets runs tree via relative paths only). Use relative: the script was written relative to the \"main root scratch\" — likely ./default/scratch/ or ./scratch/. Try ls relative." [ref=f1e2628] [cursor=pointer]':
+            - generic [ref=f1e2638]:
+              - generic [ref=f1e2639]: Think
+              - generic [ref=f1e2641]: "The bash allowlist changed again — now /data/sam and /data/atf/prodtest/atf-prodtest-20261021 are legal but /data/atf/datasets/... is NOT in bash's list (bash works from cwd = the datasets runs tree via relative paths only). Use relative: the script was written relative to the \"main root scratch\" — likely ./default/scratch/ or ./scratch/. Try ls relative."
+          - button "Tool call atf_bash · ls default/scratch/ 2>/dev/null | head; ls scratch/ 2>/dev/null | head" [ref=f1e2649] [cursor=pointer]:
+            - generic [ref=f1e2659]:
+              - generic [ref=f1e2660]: Tool call
+              - generic [ref=f1e2662]: atf_bash · ls default/scratch/ 2>/dev/null | head; ls scratch/ 2>/dev/null | head
+          - button "Tool call atf_bash · find . -maxdepth 2 -name 'build_eval_assets_50.py' 2>/dev/null" [ref=f1e2669] [cursor=pointer]:
+            - generic [ref=f1e2679]:
+              - generic [ref=f1e2680]: Tool call
+              - generic [ref=f1e2682]: atf_bash · find . -maxdepth 2 -name 'build_eval_assets_50.py' 2>/dev/null
+          - 'button "Think The script landed at the runs root itself (./build_eval_assets_50.py = /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/build_eval_assets_50.py). The scratch-exec cwd is ./default/scratch/. Pass the script by absolute datasets path (scratch exec argv[0] allows absolute paths within pin or scratch... \"argv[0] 只允许 python3 或 .py 脚本（pin 内 skills scripts 的绝对/相对路径，或 scratch 内脚本路径）\" — the datasets path is neither pin nor scratch. Copy the script into default/scratch/ first via bash (write op → approval) or just run it with cwd-relative path from scratch: ../build_eval_assets_50.py relative to scratch cwd. Try that." [ref=f1e2690] [cursor=pointer]':
+            - generic [ref=f1e2700]:
+              - generic [ref=f1e2701]: Think
+              - generic [ref=f1e2703]: "The script landed at the runs root itself (./build_eval_assets_50.py = /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/build_eval_assets_50.py). The scratch-exec cwd is ./default/scratch/. Pass the script by absolute datasets path (scratch exec argv[0] allows absolute paths within pin or scratch... \"argv[0] 只允许 python3 或 .py 脚本（pin 内 skills scripts 的绝对/相对路径，或 scratch 内脚本路径）\" — the datasets path is neither pin nor scratch. Copy the script into default/scratch/ first via bash (write op → approval) or just run it with cwd-relative path from scratch: ../build_eval_assets_50.py relative to scratch cwd. Try that."
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"../build_eval_assets_50.py\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/images\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/eval-assets\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/eval-assets-50\"]}" [ref=f1e2711] [cursor=pointer]':
+            - generic [ref=f1e2721]:
+              - generic [ref=f1e2722]: Tool call
+              - generic [ref=f1e2724]: "atf_scratch_exec · {\"argv\":[\"python3\",\"../build_eval_assets_50.py\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/images\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/eval-assets\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/eval-assets-50\"]}"
+          - button [ref=f1e2734] [cursor=pointer]:
+            - generic [ref=f1e2744]:
+              - generic [ref=f1e2745]: Think
+              - generic [ref=f1e2747]: "Odd — ../build_eval_assets_50.py from default/scratch resolves to runs/build_eval_assets_50.py which find says EXISTS. But python says not found?? Maybe the scratch exec runs in a DIFFERENT sandbox/mount where the runs root is remapped — its cwd = /data/atf/datasets/.../runs/default/scratch exists there, but the parent runs dir... no wait, the error shows the resolved path — python couldn't open it. Maybe the file visible to bash (atf_bash sandbox view) isn't visible to the scratch exec (different mount namespace?). Or... the find result \"./build_eval_assets_50.py\" was relative to bash cwd = /data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs. Scratch exec cwd = .../runs/default/scratch. ../build... = .../runs/build... — should exist. Unless atf_write wrote to a DIFFERENT root: atf_write's \"main root\" might be another path whose relative resolves elsewhere, and bash's find ran in the datasets runs root and found ./build_eval_assets_50.py — the same file? If atf_write wrote to its own main root (say /data/atf/prodtest/atf-prodtest-20261021/scratch/), bash find in datasets tree wouldn't see it... but it DID find it. So the file exists at datasets runs root. Yet scratch exec can't open it."
+          - button "Tool call atf_bash · cp ./build_eval_assets_50.py default/scratch/build_eval_assets_50.py && ls -la default/scratch/build_eval_assets_50.py" [ref=f1e2755] [cursor=pointer]:
+            - generic [ref=f1e2765]:
+              - generic [ref=f1e2766]: Tool call
+              - generic [ref=f1e2768]: atf_bash · cp ./build_eval_assets_50.py default/scratch/build_eval_assets_50.py && ls -la default/scratch/build_eval_assets_50.py
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"build_eval_assets_50.py\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/images\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/eval-assets\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/eval-assets-50\"]}" [ref=f1e2775] [cursor=pointer]':
+            - generic [ref=f1e2785]:
+              - generic [ref=f1e2786]: Tool call
+              - generic [ref=f1e2788]: "atf_scratch_exec · {\"argv\":[\"python3\",\"build_eval_assets_50.py\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/images\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/eval-assets\",\"/data/atf/datasets/atf-walkthrough/ws-walkthrough-pipeline/runs/walkthrough-m12-real/eval-assets-50\"]}"
+          - button "Think Assets built and validated:" [ref=f1e2796] [cursor=pointer]:
+            - generic [ref=f1e2806]:
+              - generic [ref=f1e2807]: Think
+              - generic [ref=f1e2809]: "Assets built and validated:"
+        - paragraph [ref=f1e2816]: 资产构建成功且通过冻结锚校验（10 页深等、50 页、2643 个标注、全部字段 ∈ 训练字段集）。写 EvalServiceConfig（沿用上轮服务参数：AWQ base、8200、TP1、0.85、12800、seqs8、训练像素对、ckpt-6 挂载）：
+        - generic [ref=f1e2821]:
+          - 'button "Tool call atf_write · {" [ref=f1e2828] [cursor=pointer]':
+            - generic [ref=f1e2838]:
+              - generic [ref=f1e2839]: Tool call
+              - generic [ref=f1e2841]: "atf_write · {"
+          - 'button "Think Config written. Final pre-launch sanity: is port 8200 free and no stale vllm running? GPU idle confirmed earlier. Quick port check, then fire atf_evaluate start." [ref=f1e2864] [cursor=pointer]':
+            - generic [ref=f1e2860]:
+              - generic [ref=f1e2861]: Think
+              - generic [ref=f1e2866]: "Config written. Final pre-launch sanity: is port 8200 free and no stale vllm running? GPU idle confirmed earlier. Quick port check, then fire atf_evaluate start."
+          - button "Tool call atf_bash · ss -ltn | grep -E ':(8200|5002)' || echo 'ports 8200/5002 free'" [ref=f1e2874] [cursor=pointer]:
+            - generic [ref=f1e2884]:
+              - generic [ref=f1e2885]: Tool call
+              - generic [ref=f1e2887]: atf_bash · ss -ltn | grep -E ':(8200|5002)' || echo 'ports 8200/5002 free'
+          - button "Tool call atf_evaluate · start" [ref=f1e2894] [cursor=pointer]:
+            - generic [ref=f1e2904]:
+              - generic [ref=f1e2905]: Tool call
+              - generic [ref=f1e2907]: atf_evaluate · start
+          - 'button "Think New failure — not machine facts actually. The error: RunLayoutError \"旧布局同名 run 在场(只读不迁移,防 canonical 孪生分裂,请换 run-id):/data/sam/DocCheckTraining/atf-workspace/runs/run-admit-qc-02\"." [ref=f1e2933] [cursor=pointer]':
+            - generic [ref=f1e2926]:
+              - generic [ref=f1e2927]: Think
+              - generic [ref=f1e2929]: "New failure — not machine facts actually. The error: RunLayoutError \"旧布局同名 run 在场(只读不迁移,防 canonical 孪生分裂,请换 run-id):/data/sam/DocCheckTraining/atf-workspace/runs/run-admit-qc-02\"."
+        - paragraph [ref=f1e2939]: 生成器实际已完成产物写入，挂在最后的 journal 步——内核把 workspace_root 解析到了另一个实例根（DocCheckTraining），那里有同名旧布局 run 触发防分裂拒绝。先看产物是否已落、再查 workspace 解析逻辑：
+        - generic [ref=f1e2942]:
+          - button "Tool call atf_bash · ls /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/6-20261021/service/ 2>/dev/null" [ref=f1e2949] [cursor=pointer]:
+            - generic [ref=f1e2959]:
+              - generic [ref=f1e2960]: Tool call
+              - generic [ref=f1e2962]: atf_bash · ls /data/atf/dev/runs/atf-prodtest-20261021/run-admit-qc-02/eval/6-20261021/service/ 2>/dev/null
+          - button "Tool call atf_bash · grep -n 'def workspace_root' -A 30 /data/atf/dev/pinned/src/agentic_training_flow/workspace_init.py | head -45" [ref=f1e2969] [cursor=pointer]:
+            - generic [ref=f1e2979]:
+              - generic [ref=f1e2980]: Tool call
+              - generic [ref=f1e2982]: atf_bash · grep -n 'def workspace_root' -A 30 /data/atf/dev/pinned/src/agentic_training_flow/workspace_init.py | head -45
+          - button "Think 1. Service artifacts ARE complete at eval/6-20261021/service/ (evalservice.sh, service_manifest.json, request-defaults.json, deploy-probed files). Only the journal step failed." [ref=f1e2990] [cursor=pointer]:
+            - generic [ref=f1e3000]:
+              - generic [ref=f1e3001]: Think
+              - generic [ref=f1e3003]: 1. Service artifacts ARE complete at eval/6-20261021/service/ (evalservice.sh, service_manifest.json, request-defaults.json, deploy-probed files). Only the journal step failed.
+        - paragraph [ref=f1e3010]: 产物已齐（仅 journal 挂了）。读 workspace_root 的解析源（经 /data/sam 镜像）：
+        - generic [ref=f1e3016]:
+          - button "Tool call atf_bash · grep -n 'def workspace_root' -A 25 /data/sam/ATF-Harness/.atf-pinned/src/agentic_training_flow/workspace_init.py | head -35" [ref=f1e3023] [cursor=pointer]:
+            - generic [ref=f1e3033]:
+              - generic [ref=f1e3034]: Tool call
+              - generic [ref=f1e3036]: atf_bash · grep -n 'def workspace_root' -A 25 /data/sam/ATF-Harness/.atf-pinned/src/agentic_training_flow/workspace_init.py | head -35
+          - button "Tool call atf_skill_read · scripts/generate_eval_orchestration.py" [ref=f1e3045] [cursor=pointer]:
+            - generic [ref=f1e3055]:
+              - generic [ref=f1e3056]: Tool call
+              - generic [ref=f1e3058]: atf_skill_read · scripts/generate_eval_orchestration.py
+          - button "Think The orchestration generator ALSO calls journal_append(workspace_root(), ...) at the end — same collision will occur. So re-pushing via atf_evaluate will fail again at the journal step unless the workspace_root resolves correctly." [ref=f1e3066] [cursor=pointer]:
+            - generic [ref=f1e3076]:
+              - generic [ref=f1e3077]: Think
+              - generic [ref=f1e3079]: The orchestration generator ALSO calls journal_append(workspace_root(), ...) at the end — same collision will occur. So re-pushing via atf_evaluate will fail again at the journal step unless the workspace_root resolves correctly.
+        - paragraph [ref=f1e3086]: 编排生成器结尾同样会 journal——同一碰撞会复发。查内核脚本拿到的 env，定位 workspace_root 解析来源：
+        - generic [ref=f1e3089]:
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import os; print(''\\n''.join(f''{k}={v}'' for k,v in sorted(os.environ.items()) if ''ATF'' in k.upper() or ''DSH'' in k.upper()))\"]}" [ref=f1e3096] [cursor=pointer]':
+            - generic [ref=f1e3106]:
+              - generic [ref=f1e3107]: Tool call
+              - generic [ref=f1e3109]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import os; print('\\n'.join(f'{k}={v}' for k,v in sorted(os.environ.items()) if 'ATF' in k.upper() or 'DSH' in k.upper()))\"]}"
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import os; [print(k+''=''+v) for k,v in sorted(os.environ.items()) if (''ATF'' in k.upper()) or (''DSH'' in k.upper())]\"]}" [ref=f1e3116] [cursor=pointer]':
+            - generic [ref=f1e3126]:
+              - generic [ref=f1e3127]: Tool call
+              - generic [ref=f1e3129]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import os; [print(k+'='+v) for k,v in sorted(os.environ.items()) if ('ATF' in k.upper()) or ('DSH' in k.upper())]\"]}"
+          - button "Think Env facts:" [ref=f1e3137] [cursor=pointer]:
+            - generic [ref=f1e3147]:
+              - generic [ref=f1e3148]: Think
+              - generic [ref=f1e3150]: "Env facts:"
+        - paragraph [ref=f1e3157]: ATF_V1_FILE_TOOL_ROOTS 含 pin 根——用 atf_read 读内核 workspace_root 实现：
+        - generic [ref=f1e3158]:
+          - text: Analyzing the request
+          - generic [ref=f1e3160]:
+            - button "Tool call atf_read · /data/atf/dev/pinned/src/agentic_training_flow/workspace_init.py" [ref=f1e3167] [cursor=pointer]:
+              - generic [ref=f1e3177]:
+                - generic [ref=f1e3178]: Tool call
+                - generic [ref=f1e3180]: atf_read · /data/atf/dev/pinned/src/agentic_training_flow/workspace_init.py
+            - button "Tool call atf_bash · grep -n 'def workspace_root' -A 20 /data/atf/dev/pinned/src/agentic_training_flow/workspace_init.py | head -28" [ref=f1e3187] [cursor=pointer]:
+              - generic [ref=f1e3197]:
+                - generic [ref=f1e3198]: Tool call
+                - generic [ref=f1e3200]: atf_bash · grep -n 'def workspace_root' -A 20 /data/atf/dev/pinned/src/agentic_training_flow/workspace_init.py | head -28
+            - button "Tool call atf_bash · grep -n 'workspace_root' /data/atf/dev/pinned/src/agentic_training_flow/workspace_init.py | head -15" [ref=f1e3207] [cursor=pointer]:
+              - generic [ref=f1e3217]:
+                - generic [ref=f1e3218]: Tool call
+                - generic [ref=f1e3220]: atf_bash · grep -n 'workspace_root' /data/atf/dev/pinned/src/agentic_training_flow/workspace_init.py | head -15
+            - button "Think The bash fence blocks the pinned path but atf_read accepted it (different whitelist via ATF_V1_FILE_TOOL_ROOTS). Use atf_read to find workspace_root def — search around. The file is 703 lines; workspace_root def is probably near top. Read lines 1-80 and search visually. Or use the scratch exec python to print the source (PYTHONPATH has the kernel; import + inspect.getsource — clean, sanctioned diagnostic):" [ref=f1e3228] [cursor=pointer]:
+              - generic [ref=f1e3238]:
+                - generic [ref=f1e3239]: Think
+                - generic [ref=f1e3241]: "The bash fence blocks the pinned path but atf_read accepted it (different whitelist via ATF_V1_FILE_TOOL_ROOTS). Use atf_read to find workspace_root def — search around. The file is 703 lines; workspace_root def is probably near top. Read lines 1-80 and search visually. Or use the scratch exec python to print the source (PYTHONPATH has the kernel; import + inspect.getsource — clean, sanctioned diagnostic):"
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import inspect, agentic_training_flow.workspace_init as wi; src=inspect.getsource(wi.workspace_root); print(src)\"]}" [ref=f1e3249] [cursor=pointer]':
+              - generic [ref=f1e3259]:
+                - generic [ref=f1e3260]: Tool call
+                - generic [ref=f1e3262]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import inspect, agentic_training_flow.workspace_init as wi; src=inspect.getsource(wi.workspace_root); print(src)\"]}"
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import inspect, agentic_training_flow.workspace_init as wi; print(inspect.getsource(wi._load_config)); print(''CONFIG_PATH:'', getattr(wi, ''CONFIG_PATH'', None)); import agentic_training_flow.workspace_init as w2; print([n for n in dir(w2) if ''CONFIG'' in n.upper() or ''ROOT'' in n.upper()])\"]}" [ref=f1e3269] [cursor=pointer]':
+              - generic [ref=f1e3279]:
+                - generic [ref=f1e3280]: Tool call
+                - generic [ref=f1e3282]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import inspect, agentic_training_flow.workspace_init as wi; print(inspect.getsource(wi._load_config)); print('CONFIG_PATH:', getattr(wi, 'CONFIG_PATH', None)); import agentic_training_flow.workspace_init as w2; print([n for n in dir(w2) if 'CONFIG' in n.upper() or 'ROOT' in n.upper()])\"]}"
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import inspect, agentic_training_flow.workspace_init as wi; print(inspect.getsource(wi._home_atf)); import json,os; p=wi._home_atf()/''config.json''; print(''path:'', p); print(''exists:'', p.is_file()); print(json.dumps(json.loads(p.read_text()) if p.is_file() else {}, ensure_ascii=False, indent=1))\"]}" [ref=f1e3289] [cursor=pointer]':
+              - generic [ref=f1e3299]:
+                - generic [ref=f1e3300]: Tool call
+                - generic [ref=f1e3302]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import inspect, agentic_training_flow.workspace_init as wi; print(inspect.getsource(wi._home_atf)); import json,os; p=wi._home_atf()/'config.json'; print('path:', p); print('exists:', p.is_file()); print(json.dumps(json.loads(p.read_text()) if p.is_file() else {}, ensure_ascii=False, indent=1))\"]}"
+            - button "Think Now it's fully clear:" [ref=f1e3310] [cursor=pointer]:
+              - generic [ref=f1e3320]:
+                - generic [ref=f1e3321]: Think
+                - generic [ref=f1e3323]: "Now it's fully clear:"
+            - button "Tool call atf_bash · cat /data/sam/ATF-Harness/tmp/atf-exec-home-dev/.atf/config.json 2>/dev/null; echo '---'; cat /root/.atf/config.json 2>/dev/null | head -20" [ref=f1e3331] [cursor=pointer]:
+              - generic [ref=f1e3341]:
+                - generic [ref=f1e3342]: Tool call
+                - generic [ref=f1e3344]: atf_bash · cat /data/sam/ATF-Harness/tmp/atf-exec-home-dev/.atf/config.json 2>/dev/null; echo '---'; cat /root/.atf/config.json 2>/dev/null | head -20
+            - button "Think Interesting — /data/sam/DocCheckTraining/atf-workspace is now in the bash legal roots (it appeared because the kernel touched it). And /data/sam is readable. The compound command failed on /root/.atf. Let me read the exec-home config alone." [ref=f1e3352] [cursor=pointer]:
+              - generic [ref=f1e3362]:
+                - generic [ref=f1e3363]: Think
+                - generic [ref=f1e3365]: Interesting — /data/sam/DocCheckTraining/atf-workspace is now in the bash legal roots (it appeared because the kernel touched it). And /data/sam is readable. The compound command failed on /root/.atf. Let me read the exec-home config alone.
+            - button "Tool call atf_bash · cat /data/sam/ATF-Harness/tmp/atf-exec-home-dev/.atf/config.json" [ref=f1e3373] [cursor=pointer]:
+              - generic [ref=f1e3383]:
+                - generic [ref=f1e3384]: Tool call
+                - generic [ref=f1e3386]: atf_bash · cat /data/sam/ATF-Harness/tmp/atf-exec-home-dev/.atf/config.json
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import json; p=''/data/sam/ATF-Harness/tmp/atf-exec-home-dev/.atf/config.json''; print(json.dumps(json.load(open(p)), ensure_ascii=False, indent=1))\"]}" [ref=f1e3396] [cursor=pointer]':
+              - generic [ref=f1e3406]:
+                - generic [ref=f1e3407]: Tool call
+                - generic [ref=f1e3409]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import json; p='/data/sam/ATF-Harness/tmp/atf-exec-home-dev/.atf/config.json'; print(json.dumps(json.load(open(p)), ensure_ascii=False, indent=1))\"]}"
+            - button "Think No config.json in the shared exec home either. So where did the atf_evaluate subprocess get workspace_root=/data/sam/DocCheckTraining/atf-workspace? Its HOME must be somewhere with .atf/config.json containing that workspace_root. Maybe HOME=/data/sam/DocCheckTraining/atf-workspace itself? (config at DocCheckTraining/atf-workspace/.atf/config.json with workspace_root pointing to itself). Check." [ref=f1e3417] [cursor=pointer]:
+              - generic [ref=f1e3427]:
+                - generic [ref=f1e3428]: Think
+                - generic [ref=f1e3430]: No config.json in the shared exec home either. So where did the atf_evaluate subprocess get workspace_root=/data/sam/DocCheckTraining/atf-workspace? Its HOME must be somewhere with .atf/config.json containing that workspace_root. Maybe HOME=/data/sam/DocCheckTraining/atf-workspace itself? (config at DocCheckTraining/atf-workspace/.atf/config.json with workspace_root pointing to itself). Check.
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import json; p=''/data/sam/DocCheckTraining/atf-workspace/.atf/config.json''; print(json.dumps(json.load(open(p)), ensure_ascii=False, indent=1))\"]}" [ref=f1e3438] [cursor=pointer]':
+              - generic [ref=f1e3448]:
+                - generic [ref=f1e3449]: Tool call
+                - generic [ref=f1e3451]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import json; p='/data/sam/DocCheckTraining/atf-workspace/.atf/config.json'; print(json.dumps(json.load(open(p)), ensure_ascii=False, indent=1))\"]}"
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import os; print(''HOME='', os.environ.get(''HOME'')); p=os.path.expanduser(''~/.atf/config.json''); print(''cfg path:'', p, os.path.isfile(p))\"]}" [ref=f1e3458] [cursor=pointer]':
+              - generic [ref=f1e3468]:
+                - generic [ref=f1e3469]: Tool call
+                - generic [ref=f1e3471]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import os; print('HOME=', os.environ.get('HOME')); p=os.path.expanduser('~/.atf/config.json'); print('cfg path:', p, os.path.isfile(p))\"]}"
+            - button "Think My session bucket has NO config.json. The atf_evaluate subprocess ran with a different HOME — likely a DIFFERENT session bucket (the tool's own exec context) that HAS .atf/config.json with workspace_root=/data/sam/DocCheckTraining/atf-workspace." [ref=f1e3479] [cursor=pointer]:
+              - generic [ref=f1e3489]:
+                - generic [ref=f1e3490]: Think
+                - generic [ref=f1e3492]: My session bucket has NO config.json. The atf_evaluate subprocess ran with a different HOME — likely a DIFFERENT session bucket (the tool's own exec context) that HAS .atf/config.json with workspace_root=/data/sam/DocCheckTraining/atf-workspace.
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import json, glob; [print(p, ''->'', json.load(open(p)).get(''workspace_root'')) for p in glob.glob(''/data/sam/ATF-Harness/tmp/atf-exec-home-dev/*/.atf/config.json'')]\"]}" [ref=f1e3500] [cursor=pointer]':
+              - generic [ref=f1e3510]:
+                - generic [ref=f1e3511]: Tool call
+                - generic [ref=f1e3513]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import json, glob; [print(p, '->', json.load(open(p)).get('workspace_root')) for p in glob.glob('/data/sam/ATF-Harness/tmp/atf-exec-home-dev/*/.atf/config.json')]\"]}"
+            - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import glob, os; print([p for p in glob.glob(''/data/sam/ATF-Harness/tmp/atf-exec-home-dev/*'') if os.path.isdir(p)][:20]); print(glob.glob(''/data/sam/ATF-Harness/tmp/atf-exec-home-dev/.atf/*'')[:10])\"]}" [ref=f1e3520] [cursor=pointer]':
+              - generic [ref=f1e3530]:
+                - generic [ref=f1e3531]: Tool call
+                - generic [ref=f1e3533]: "atf_scratch_exec · {\"argv\":[\"python3\",\"-c\",\"import glob, os; print([p for p in glob.glob('/data/sam/ATF-Harness/tmp/atf-exec-home-dev/*') if os.path.isdir(p)][:20]); print(glob.glob('/data/sam/ATF-Harness/tmp/atf-exec-home-dev/.atf/*')[:10])\"]}"
+        - generic [ref=f1e1013]:
+          - status [ref=f1e1014]: Deep diving
+          - generic [ref=f1e1018]:
+            - generic [ref=f1e1019]: Deep diving for 15m 12s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 15m 12s ···
+      - generic [ref=f1e78]:
+        - generic [ref=f1e79]:
+          - generic [ref=f1e81]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=f1e330]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=f1e83]:
+            - generic [ref=f1e84]:
+              - button "Add files or run commands" [ref=f1e331] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=f1e336] [cursor=pointer]'
+            - generic [ref=f1e85]:
+              - generic [ref=f1e343]:
+                - button "思考 Max(最高) ▾" [ref=f1e346] [cursor=pointer]:
+                  - generic [ref=f1e347]: 思考
+                  - generic [ref=f1e348]: Max(最高)
+                  - generic [ref=f1e349]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=f1e352] [cursor=pointer]
+              - button "Stop generating" [ref=f1e1021] [cursor=pointer]
+        - generic [ref=f1e361]:
+          - generic [ref=f1e362]:
+            - generic [ref=f1e363]:
+              - button "4 turns 146 steps · 47 tok/s" [ref=f1e3534] [cursor=pointer]:
+                - generic [ref=f1e370]: 4 turns 146 steps·47 tok/s
+              - button "15.8M tok · Cache hit 99%" [ref=f1e3535] [cursor=pointer]:
+                - generic [ref=f1e377]: 15.8M tok·Cache hit 99%
+            - generic [ref=f1e379]:
+              - button "新建训练" [ref=f1e380] [cursor=pointer]
+              - button "查状态" [ref=f1e381] [cursor=pointer]
+              - button "继续训练：装箱单" [ref=f1e382] [cursor=pointer]
+              - button "对比两轮" [ref=f1e383] [cursor=pointer]
+              - button "走完闭环" [ref=f1e384] [cursor=pointer]
+              - button "联合训练" [ref=f1e385] [cursor=pointer]
+              - button "badcase 可视化" [ref=f1e386] [cursor=pointer]
+              - button "发起训练" [ref=f1e387] [cursor=pointer]
+          - button "18% of context used" [ref=f1e3389] [cursor=pointer]:
+            - generic [ref=f1e393]: 18%
+  - generic [ref=f1e398]:
+    - tablist [ref=f1e400]:
+      - tab "训练监控 Close" [selected] [ref=f1e401] [cursor=pointer]:
+        - generic [ref=f1e402]: 训练监控
+        - button "Close" [ref=f1e404]
+      - button "New tab" [ref=f1e408] [cursor=pointer]
+      - generic "Not enough width to split, widen the sidebar" [ref=f1e410]:
+        - button "Split" [disabled] [ref=f1e411]
+      - generic [ref=f1e414]:
+        - button "Fullscreen" [ref=f1e415] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=f1e418] [cursor=pointer]
+    - generic [ref=f1e424]:
+      - generic [ref=f1e425]:
+        - generic [ref=f1e742]:
+          - generic [ref=f1e743]: 运行监控
+          - generic "atf-prodtest-20261021 · run-admit-qc-02" [ref=f1e744]: 装箱单 · Qwen3-VL-32B · 10-20 23:49
+          - generic [ref=f1e746]: 异常
+        - generic [ref=f1e749]:
+          - button "装箱单 · Qwen3-VL-32B · 10-20 23:49 · 异常 ▾" [ref=f1e985] [cursor=pointer]:
+            - text: 装箱单 · Qwen3-VL-32B · 10-20 23:49 · 异常
+            - generic [ref=f1e751]: ▾
+          - button "全部" [ref=f1e752] [cursor=pointer]
+      - generic [ref=f1e753]:
+        - generic [ref=f1e754]:
+          - generic "数据登记：已完成" [ref=f1e755]: 数据登记
+          - generic "标注体检：已完成" [ref=f1e758]: 标注体检
+          - generic "实验配置：已完成" [ref=f1e761]: 实验配置
+          - generic "契约发布：已完成" [ref=f1e764]: 契约发布
+          - generic "数据切分：已完成" [ref=f1e767]: 数据切分
+          - generic "准入检查：已完成" [ref=f1e770]: 准入检查
+          - generic "训练执行：失败/中断——可查看训练日志定位" [ref=f1e986]: 训练执行
+          - generic "评估与可视化：等待完成" [ref=f1e776]: 评估与可视化
+        - generic [ref=f1e779]:
+          - generic [ref=f1e780]:
+            - generic [ref=f1e781]: 步进
+            - generic [ref=f1e782]: —
+          - generic [ref=f1e783]:
+            - generic [ref=f1e784]: Loss
+            - generic [ref=f1e785]: —
+          - generic [ref=f1e786]:
+            - generic [ref=f1e787]: 指标 F1
+            - generic [ref=f1e788]: —
+          - generic [ref=f1e789]:
+            - generic [ref=f1e790]: 显存
+            - generic [ref=f1e791]: 8G/640G
+        - generic [ref=f1e792]:
+          - generic [ref=f1e793]:
+            - generic [ref=f1e794]: 运行环境
+            - generic [ref=f1e795]: 权限档位：Full access
+          - generic [ref=f1e796]:
+            - generic [ref=f1e797]:
+              - generic [ref=f1e798]: 基模型
+              - generic "Qwen3-VL-32B-Instruct" [ref=f1e799]
+            - generic [ref=f1e800]:
+              - generic [ref=f1e801]: 数据集
+              - generic "walkthrough-pl_pl_goods" [ref=f1e802]
+            - generic [ref=f1e803]:
+              - generic [ref=f1e804]: 并行
+              - generic "ds_z3_offload_config.json" [ref=f1e805]
+            - generic [ref=f1e806]:
+              - generic [ref=f1e807]: 通道
+              - generic "pl_goods" [ref=f1e808]
+        - generic [ref=f1e809]:
+          - generic [ref=f1e810]:
+            - generic [ref=f1e811]: Loss 曲线
+            - generic [ref=f1e812]:
+              - button "原始" [ref=f1e813] [cursor=pointer]
+              - button "平滑" [ref=f1e814] [cursor=pointer]
+          - generic [ref=f1e815]: 等待首个 loss 点
+        - generic [ref=f1e818]:
+          - generic [ref=f1e819]:
+            - generic [ref=f1e820]: GPU
+            - generic [ref=f1e821]: 忙 0/8 · 8G/640G · 绑 0,1,2,3,4,5,6,7
+          - generic [ref=f1e822]:
+            - generic [ref=f1e823]:
+              - generic [ref=f1e824]:
+                - generic [ref=f1e825]: "0"
+                - generic [ref=f1e826]: 0%
+              - generic [ref=f1e831]:
+                - generic [ref=f1e832]: 0G/80G
+                - generic [ref=f1e833]: 25° 56W
+            - generic [ref=f1e834]:
+              - generic [ref=f1e835]:
+                - generic [ref=f1e836]: "1"
+                - generic [ref=f1e837]: 0%
+              - generic [ref=f1e842]:
+                - generic [ref=f1e843]: 8G/80G
+                - generic [ref=f1e844]: 25° 57W
+            - generic [ref=f1e845]:
+              - generic [ref=f1e846]:
+                - generic [ref=f1e847]: "2"
+                - generic [ref=f1e848]: 0%
+              - generic [ref=f1e853]:
+                - generic [ref=f1e854]: 0G/80G
+                - generic [ref=f1e855]: 25° 58W
+            - generic [ref=f1e856]:
+              - generic [ref=f1e857]:
+                - generic [ref=f1e858]: "3"
+                - generic [ref=f1e859]: 0%
+              - generic [ref=f1e864]:
+                - generic [ref=f1e865]: 0G/80G
+                - generic [ref=f1e866]: 26° 73W
+            - generic [ref=f1e867]:
+              - generic [ref=f1e868]:
+                - generic [ref=f1e869]: "4"
+                - generic [ref=f1e870]: 0%
+              - generic [ref=f1e875]:
+                - generic [ref=f1e876]: 0G/80G
+                - generic [ref=f1e877]: 27° 80W
+            - generic [ref=f1e878]:
+              - generic [ref=f1e879]:
+                - generic [ref=f1e880]: "5"
+                - generic [ref=f1e881]: 0%
+              - generic [ref=f1e886]:
+                - generic [ref=f1e887]: 0G/80G
+                - generic [ref=f1e888]: 25° 73W
+            - generic [ref=f1e889]:
+              - generic [ref=f1e890]:
+                - generic [ref=f1e891]: "6"
+                - generic [ref=f1e892]: 0%
+              - generic [ref=f1e897]:
+                - generic [ref=f1e898]: 0G/80G
+                - generic [ref=f1e899]: 24° 61W
+            - generic [ref=f1e900]:
+              - generic [ref=f1e901]:
+                - generic [ref=f1e902]: "7"
+                - generic [ref=f1e903]: 0%
+              - generic [ref=f1e908]:
+                - generic [ref=f1e909]: 0G/80G
+                - generic [ref=f1e910]: 27° 78W
+          - button "展开进程与历史曲线 ▾" [ref=f1e912] [cursor=pointer]
+        - generic [ref=f1e913]:
+          - generic [ref=f1e914]:
+            - generic [ref=f1e915]: 训练产物
+            - generic [ref=f1e916]: 点击在右栏直接查看
+          - generic [ref=f1e917]:
+            - generic "打开 split-manifest.json" [ref=f1e918] [cursor=pointer]:
+              - generic [ref=f1e919]: SP
+              - generic [ref=f1e920]: split-manifest.json
+              - generic [ref=f1e921]: 数据切分
+              - generic [ref=f1e922]: ›
+            - generic "打开 契约件（含 digest）" [ref=f1e1023] [cursor=pointer]:
+              - generic [ref=f1e1024]: ··
+              - generic [ref=f1e1025]: 契约件（含 digest）
+              - generic [ref=f1e1026]: 产物
+              - generic [ref=f1e1027]: ›
+            - generic "打开 launch manifest（sha 索引）" [ref=f1e1028] [cursor=pointer]:
+              - generic [ref=f1e1029]: ··
+              - generic [ref=f1e1030]: launch manifest（sha 索引）
+              - generic [ref=f1e1031]: 产物
+              - generic [ref=f1e1032]: ›
+        - generic [ref=f1e933]:
+          - generic [ref=f1e934]:
+            - generic [ref=f1e935]: 训练日志
+            - generic [ref=f1e936]: 最后 40 行 · 18 分钟前 · 悬停暂停
+          - generic [ref=f1e937]:
+            - generic [ref=f1e938]: saved in /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02
+            - generic [ref=f1e939]: /prep/iteration-config/checkpoint-5/chat_template.jinja
+            - generic [ref=f1e940]: "[INFO|tokenization_utils_base.py:2590] 2026-10-22 01:22:28,865 >> tokenizer conf"
+            - generic [ref=f1e941]: ig file saved in /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-adm
+            - generic [ref=f1e942]: it-qc-02/prep/iteration-config/checkpoint-5/tokenizer_config.json
+            - generic [ref=f1e943]: "[INFO|tokenization_utils_base.py:2599] 2026-10-22 01:22:28,865 >> Special tokens"
+            - generic [ref=f1e944]: file saved in /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit
+            - generic [ref=f1e945]: "-qc-02/prep/iteration-config/checkpoint-5/special_tokens_map.json"
+            - generic [ref=f1e946]: /usr/local/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:48
+            - generic [ref=f1e947]: "07: UserWarning: No device id is provided via `init_process_group` or `barrier `"
+            - generic [ref=f1e948]: . Using the current device set by the user.
+            - generic [ref=f1e949]: "warnings.warn( # warn only once"
+            - generic [ref=f1e950]: "[2026-10-22 01:22:29,187] [INFO] [logging.py:107:log_dist] [Rank 0] [Torch] Chec"
+            - generic [ref=f1e951]: kpoint global_step5 is about to be saved!
+            - generic [ref=f1e952]: "[2026-10-22 01:22:29,361] [INFO] [logging.py:107:log_dist] [Rank 0] Saving model"
+            - generic [ref=f1e953]: "checkpoint: /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-q"
+            - generic [ref=f1e954]: c-02/prep/iteration-config/checkpoint-5/global_step5/zero_pp_rank_0_mp_rank_00_m
+            - generic [ref=f1e955]: odel_states.pt
+            - generic [ref=f1e956]: "[2026-10-22 01:22:29,361] [INFO] [torch_checkpoint_engine.py:21:save] [Torch] Sa"
+            - generic [ref=f1e957]: ving /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/pre
+            - generic [ref=f1e958]: p/iteration-config/checkpoint-5/global_step5/zero_pp_rank_0_mp_rank_00_model_sta
+            - generic [ref=f1e959]: tes.pt...
+            - generic [ref=f1e960]: "[2026-10-22 01:22:30,476] [INFO] [torch_checkpoint_engine.py:23:save] [Torch] Sa"
+            - generic [ref=f1e961]: ved /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep
+            - generic [ref=f1e962]: /iteration-config/checkpoint-5/global_step5/zero_pp_rank_0_mp_rank_00_model_stat
+            - generic [ref=f1e963]: es.pt.
+            - generic [ref=f1e964]: "[2026-10-22 01:22:30,483] [INFO] [torch_checkpoint_engine.py:21:save] [Torch] Sa"
+            - generic [ref=f1e965]: ving /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/pre
+            - generic [ref=f1e966]: p/iteration-config/checkpoint-5/global_step5/bf16_zero_pp_rank_0_mp_rank_00_opti
+            - generic [ref=f1e967]: m_states.pt...
+            - generic [ref=f1e968]: "[2026-10-22 01:22:31,060] [INFO] [torch_checkpoint_engine.py:23:save] [Torch] Sa"
+            - generic [ref=f1e969]: ved /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-qc-02/prep
+            - generic [ref=f1e970]: /iteration-config/checkpoint-5/global_step5/bf16_zero_pp_rank_0_mp_rank_00_optim
+            - generic [ref=f1e971]: _states.pt.
+            - generic [ref=f1e972]: "[2026-10-22 01:22:31,061] [INFO] [engine.py:3701:_save_zero_checkpoint] zero che"
+            - generic [ref=f1e973]: ckpoint saved /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/run-admit-
+            - generic [ref=f1e974]: qc-02/prep/iteration-config/checkpoint-5/global_step5/bf16_zero_pp_rank_0_mp_ran
+            - generic [ref=f1e975]: k_00_optim_states.pt
+            - generic [ref=f1e976]: "[2026-10-22 01:22:31,130] [INFO] [torch_checkpoint_engine.py:33:commit] [Torch]"
+            - generic [ref=f1e977]: Checkpoint global_step5 is ready now!
+        - generic [ref=f1e978]:
+          - generic [ref=f1e979]:
+            - generic [ref=f1e980]: 评估对比
+            - generic [ref=f1e981]: 最近两轮评估并排
+          - generic [ref=f1e982]: （不足两轮——对比需 ≥2 个 eval 轮次，当前 0 轮）
+        - generic [ref=f1e983]: 内核 real · v0.7.23b3

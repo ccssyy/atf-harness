@@ -1,0 +1,43 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - generic [ref=f1e8]:
+      - button "New session" [ref=f1e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f1e10]:
+          - generic [ref=f1e11]: ATF
+          - generic [ref=f1e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f1e17] [cursor=pointer]
+    - button "New session" [ref=f1e20] [cursor=pointer]:
+      - generic [ref=f1e21]: New Session
+    - navigation "Global panels" [ref=f1e26]:
+      - button "Plugins" [ref=f1e27] [cursor=pointer]
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]: Workspaces
+        - generic [ref=f1e42]:
+          - button "Search sessions" [ref=f1e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f1e47]:
+          - button "View options" [ref=f1e49] [cursor=pointer]
+          - button "Add workspace" [ref=f1e53] [cursor=pointer]
+      - tree "Sessions" [ref=f1e58]:
+        - generic [ref=f1e59]: No sessions yet
+    - button "Settings" [ref=f1e68] [cursor=pointer]
+  - generic [ref=f1e77]:
+    - generic:
+      - banner
+    - generic [ref=f1e83]:
+      - generic [ref=f1e86]:
+        - generic [ref=f1e87]: ATF
+        - generic [ref=f1e90]:
+          - generic [ref=f1e91]: Into the Unknown
+          - generic [ref=f1e92]: Preview
+      - button "Choose workspace" [ref=f1e94] [cursor=pointer]
+      - generic [ref=f1e102] [cursor=pointer]:
+        - generic [ref=f1e104]:
+          - textbox "Choose workspace" [ref=f1e105]
+          - generic [aria-hidden]: Choose a workspace to start
+        - generic [ref=f1e106]:
+          - generic [ref=f1e107]:
+            - button "Add files or run commands" [disabled]
+          - generic [ref=f1e108]:
+            - button "Send message" [disabled]

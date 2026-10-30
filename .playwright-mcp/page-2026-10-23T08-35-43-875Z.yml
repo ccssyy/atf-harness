@@ -1,0 +1,88 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - button "New session" [ref=e9] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e10]:
+            - generic [ref=e11]: ATF
+            - generic [ref=e14]: ATF 训练 Agent
+        - button "Collapse sidebar" [ref=e17] [cursor=pointer]
+      - button "New session" [ref=e20] [cursor=pointer]:
+        - generic [ref=e21]: New Session
+      - navigation "Global panels" [ref=e26]:
+        - button "Plugins" [ref=e27] [cursor=pointer]
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]: Workspaces
+          - generic [ref=e42]:
+            - button "Search sessions" [ref=e43] [cursor=pointer]
+            - textbox "Search session names"
+          - generic [ref=e47]:
+            - button "View options" [ref=e49] [cursor=pointer]
+            - button "Add workspace" [ref=e53] [cursor=pointer]
+        - tree "Sessions" [ref=e58]:
+          - generic [ref=e110]:
+            - treeitem "my-zito" [expanded] [ref=e112] [cursor=pointer]
+            - treeitem "New Session" [selected] [ref=e121] [cursor=pointer]
+            - treeitem "ping 1h" [ref=e125] [cursor=pointer]:
+              - generic [ref=e127]: ping
+              - generic [ref=e128]: 1h
+            - treeitem "Ping Test 6h" [ref=e130] [cursor=pointer]:
+              - generic [ref=e132]: Ping Test
+              - generic [ref=e133]: 6h
+            - treeitem "Ping Test 6h" [ref=e135] [cursor=pointer]:
+              - generic [ref=e137]: Ping Test
+              - generic [ref=e138]: 6h
+            - treeitem "ping 6h" [ref=e140] [cursor=pointer]:
+              - generic [ref=e142]: ping
+              - generic [ref=e143]: 6h
+            - treeitem "请用你的提问机制（ask 用户问 19h" [ref=e145] [cursor=pointer]:
+              - generic [ref=e147]: 请用你的提问机制（ask 用户问
+              - generic [ref=e148]: 19h
+          - treeitem "Task" [ref=e150] [cursor=pointer]
+      - button "Settings" [ref=e68] [cursor=pointer]
+    - generic [ref=e77]:
+      - banner [ref=e157]:
+        - button "Open right sidebar" [ref=e162] [cursor=pointer]
+      - generic [ref=e83]:
+        - generic [ref=e86]:
+          - generic [ref=e87]: ATF
+          - generic [ref=e90]:
+            - generic [ref=e91]: Into the Unknown
+            - generic [ref=e92]: Preview
+        - generic [ref=e93]:
+          - button "Choose workspace" [ref=e94] [cursor=pointer]:
+            - generic [ref=e97]: my-zito
+          - button "Standard mode" [ref=e171] [cursor=pointer]
+        - generic [ref=e102]:
+          - generic [ref=e104]:
+            - textbox "Describe what you want to build, / commands, @ files or sessions" [ref=e180]
+            - generic [aria-hidden]: Describe what you want to build, / commands, @ files or sessions
+          - generic [ref=e106]:
+            - generic [ref=e107]:
+              - button "Add files or run commands" [ref=e181] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e186] [cursor=pointer]':
+                - generic [ref=e190]: Full access
+            - generic [ref=e108]:
+              - generic [ref=e194]:
+                - button "思考 Low(低) ▾" [ref=e197] [cursor=pointer]:
+                  - generic [ref=e198]: 思考
+                  - generic [ref=e199]: Low(低)
+                  - generic [ref=e200]: ▾
+                - button "Select model, current GLM-5.3-Flash" [ref=e203] [cursor=pointer]:
+                  - generic [ref=e204]: GLM-5.3-Flash
+              - button "Send message" [disabled] [ref=e207]
+    - generic [ref=e213]:
+      - generic [ref=e214]: ↩
+      - generic [ref=e215]:
+        - generic [ref=e216]: 回到上次实验：航空运单（含主单 MAWB / 分单 HAWB） · Qwen3-VL-32B · 10-12 22:38
+        - generic [ref=e217]: 上次实验 · 点击选用，发送首条消息时自动绑定
+      - button "继续这次实验" [ref=e218] [cursor=pointer]
+  - dialog "Preview Notice" [ref=e220]:
+    - generic [ref=e221]:
+      - heading "Preview Notice" [active] [level=2] [ref=e222]
+      - generic [ref=e223]:
+        - generic [ref=e224]:
+          - paragraph [ref=e225]: DeepSeek Harness 0.2 is still in preview, and many areas need continued improvement and refinement. We welcome feedback and suggestions from all developers and users. The new desktop app now targets a broad range of users, while developer-related advanced features can be enabled in the settings. DeepSeek Harness’s product features and plugin APIs are expected to continue rapid iteration and evolution, and will gradually stabilize over time.
+          - paragraph [ref=e226]: We look forward to exploring the limits of intelligence together with users and developers around the world, building on open-source, reusable, and composable infrastructure. We welcome everyone to bring their ideas to life with DeepSeek Harness and participate in the community to enrich the plugin ecosystem.
+        - button "Continue" [ref=e228] [cursor=pointer]

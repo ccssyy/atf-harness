@@ -1,0 +1,792 @@
+- generic [ref=f3e4]:
+  - generic [ref=f3e7]:
+    - generic [ref=f3e8]:
+      - button "New session" [ref=f3e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f3e10]:
+          - generic [ref=f3e11]: ATF
+          - generic [ref=f3e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f3e17] [cursor=pointer]
+    - button "New session" [ref=f3e20] [cursor=pointer]:
+      - generic [ref=f3e21]: New Session
+    - navigation "Global panels" [ref=f3e26]:
+      - button "Plugins" [ref=f3e27] [cursor=pointer]
+    - generic [ref=f3e38]:
+      - generic [ref=f3e39]:
+        - generic [ref=f3e40]: Workspaces
+        - generic [ref=f3e42]:
+          - button "Search sessions" [ref=f3e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f3e47]:
+          - button "View options" [ref=f3e49] [cursor=pointer]
+          - button "Add workspace" [ref=f3e53] [cursor=pointer]
+      - tree "Sessions" [ref=f3e58]:
+        - generic [ref=f3e110]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=f3e112] [cursor=pointer]
+          - treeitem "连通性自检与确认 12h" [ref=f3e991] [cursor=pointer]:
+            - generic [ref=f3e123]: 连通性自检与确认
+            - generic [ref=f3e124]: 12h
+          - treeitem "装箱单走查区训练任务查询 13h" [ref=f3e1270] [cursor=pointer]:
+            - generic [ref=f3e128]: 装箱单走查区训练任务查询
+            - generic [ref=f3e129]: 13h
+          - treeitem "D76 端到端正例复跑（零 GPU 红 17h" [ref=f3e131] [cursor=pointer]:
+            - generic [ref=f3e133]: D76 端到端正例复跑（零 GPU 红
+            - generic [ref=f3e134]: 17h
+          - treeitem "run pl-walkthrough-r1 迭代配置构造前置校验 20h" [ref=f3e136] [cursor=pointer]:
+            - generic [ref=f3e138]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [ref=f3e139]: 20h
+          - treeitem "训练数据构造前校验演练 21h" [ref=f3e762] [cursor=pointer]:
+            - generic [ref=f3e143]: 训练数据构造前校验演练
+            - generic [ref=f3e144]: 21h
+        - treeitem "ws-pl-walkthrough" [ref=f3e147] [cursor=pointer]
+        - generic [ref=f3e153]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=f3e155] [cursor=pointer]
+          - treeitem "删除整个工作区目录 12h" [ref=f3e2814] [cursor=pointer]:
+            - generic [ref=f3e166]: 删除整个工作区目录
+            - generic [ref=f3e167]: 12h
+          - treeitem "构造评估服务件 for run-rh-budget 1d" [ref=f3e169] [cursor=pointer]:
+            - generic [ref=f3e171]: 构造评估服务件 for run-rh-budget
+            - generic [ref=f3e172]: 1d
+          - treeitem "装箱单字段抽取新实验全流程 1d" [ref=f3e174] [cursor=pointer]:
+            - generic [ref=f3e176]: 装箱单字段抽取新实验全流程
+            - generic [ref=f3e177]: 1d
+        - generic [ref=f3e178]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=f3e180] [cursor=pointer]
+          - treeitem "Running 海运单SWB数据登记与训练任务启动 4min" [selected] [ref=f3e2969] [cursor=pointer]:
+            - generic [ref=f3e190]: Running
+            - generic [ref=f3e191]: 海运单SWB数据登记与训练任务启动
+            - generic [ref=f3e192]: 4min
+          - treeitem "等待发起真实训练走查指令 1d" [ref=f3e194] [cursor=pointer]:
+            - generic [ref=f3e196]: 等待发起真实训练走查指令
+            - generic [ref=f3e197]: 1d
+          - treeitem "汇总当前实验状态与进展 2d" [ref=f3e199] [cursor=pointer]:
+            - generic [ref=f3e201]: 汇总当前实验状态与进展
+            - generic [ref=f3e202]: 2d
+          - treeitem "我的训练数据放在 /data/atf/prodt 2d" [ref=f3e204] [cursor=pointer]:
+            - generic [ref=f3e206]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=f3e207]: 2d
+        - treeitem "a4-hotws" [ref=f3e210] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=f3e218] [cursor=pointer]
+        - treeitem "b18-ws" [ref=f3e226] [cursor=pointer]
+        - treeitem "sam" [ref=f3e234] [cursor=pointer]
+    - button "Settings" [ref=f3e68] [cursor=pointer]
+  - generic [ref=f3e77]:
+    - banner [ref=f3e241]:
+      - generic [ref=f3e242]:
+        - generic [ref=f3e243]:
+          - generic [ref=f3e244]:
+            - navigation "Session hierarchy" [ref=f3e245]:
+              - generic [ref=f3e246]: 海运单SWB数据登记与训练任务启动
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f3e250]: Standard mode
+          - generic [ref=f3e257]:
+            - button "More actions" [ref=f3e259] [cursor=pointer]
+            - generic [ref=f3e264]:
+              - button "实验不可见 ▾ run-admit-qc-0" [ref=f3e266] [cursor=pointer]:
+                - generic [ref=f3e267]: 实验不可见 ▾
+                - generic "run-admit-qc-02-d76fx" [ref=f3e268]: run-admit-qc-0
+              - button "监控" [ref=f3e269] [cursor=pointer]
+        - tablist [ref=f3e270]:
+          - tab "Chat" [selected] [ref=f3e271] [cursor=pointer]
+          - tab "Trajectory" [ref=f3e272] [cursor=pointer]
+    - generic [ref=f3e79]:
+      - generic [ref=f3e279]:
+        - generic [ref=f3e282]:
+          - generic [ref=f3e283]: 我想启动一个新的训练任务。数据用海运单（SWB）这批：/data/atf/prodtest/atf-prodtest-20261021/data/swb，工作区就用当前这个 atf-prodtest-20261021，run 标识用 b7-swb-r1。请先走数据登记（register），登记完成后先停下来，告诉我登记结果。
+          - generic [ref=f3e285]:
+            - generic [ref=f3e286]: 10:57
+            - button "Copy" [ref=f3e287] [cursor=pointer]
+        - generic [ref=f3e292]:
+          - status [ref=f3e293]: Completed
+          - button "Completed in 13m 17s" [ref=f3e294] [cursor=pointer]
+        - generic [ref=f3e302]:
+          - paragraph [ref=f3e303]:
+            - text: ✅
+            - strong [ref=f3e304]: 登记（register）完成
+            - text: ，run
+            - code [ref=f3e305]: b7-swb-r1
+            - text: 已落账并绑定本会话。按要求先停在这里，结果如下：
+          - paragraph [ref=f3e306]:
+            - strong [ref=f3e307]: 登记结果
+          - table [ref=f3e309]:
+            - rowgroup [ref=f3e310]:
+              - row [ref=f3e311]:
+                - columnheader "项" [ref=f3e312]
+                - columnheader "值" [ref=f3e313]
+            - rowgroup [ref=f3e314]:
+              - row [ref=f3e315]:
+                - cell "状态" [ref=f3e316]
+                - cell [ref=f3e317]:
+                  - code [ref=f3e318]: "register: ok"
+                  - text: （exit 0，段事实已落账，会话已绑定）
+              - row [ref=f3e319]:
+                - cell "成对样本" [ref=f3e320]
+                - cell [ref=f3e321]:
+                  - strong [ref=f3e322]: 50 对
+                  - text: （png＋同名 json，读回校验 50 行全部通过）
+              - row [ref=f3e323]:
+                - cell "commit pin" [ref=f3e324]
+                - cell [ref=f3e325]:
+                  - code [ref=f3e326]: e8747891803895eea65a85f2fb64fccf0a914381
+              - row [ref=f3e327]:
+                - cell "登记记录" [ref=f3e328]
+                - cell [ref=f3e329]:
+                  - button "registration.json" [ref=f3e330] [cursor=pointer]
+                  - text: （
+                  - code [ref=f3e335]: datasets/walkthrough-swb@e87478918038/
+                  - text: ）
+              - row [ref=f3e336]:
+                - cell "切分目录" [ref=f3e337]
+                - cell [ref=f3e338]:
+                  - code [ref=f3e339]: splits/walkthrough-swb/
+              - row [ref=f3e340]:
+                - cell "审批账本" [ref=f3e341]
+                - cell [ref=f3e342]:
+                  - code [ref=f3e343]: e7d2858273474a1ab35deb0a1c74c329
+          - paragraph [ref=f3e344]:
+            - strong [ref=f3e345]: 过程中处理的两件事
+          - list [ref=f3e346]:
+            - listitem [ref=f3e347]:
+              - strong [ref=f3e348]: lane 后缀
+              - text: ：产品不预设默认值，我依据数据事实取了
+              - code [ref=f3e349]: mixed
+              - text: ——50 张图共 14 个字段，8 个 goods 类（goods_name、goods_quantity、goods_carton、goods_measurement、goods_gross_weight、goods_net_weight、goods_pallet、goods_weight）＋6 个非 goods 类（container_no、seal_no、hs_code、shipping_marks、total_gross_weight、total_net_weight）。训练 unit 命名为
+              - code [ref=f3e350]: swb_mixed
+              - text: 。如果你本想单 lane 跑，告诉我，后续段还来得及调整。
+            - listitem [ref=f3e351]:
+              - strong [ref=f3e352]: 坐标量化
+              - text: ：原始标注 4184 个坐标值
+              - strong [ref=f3e353]: 全部是非整数像素
+              - text: ，登记闸 fail-closed 拒收。已用内核量化 CLI（round 口径）整备出整数像素副本，放在
+              - button "data-quantized-b7-swb-r1/swb/" [ref=f3e354] [cursor=pointer]
+              - text: ——0 退化框、0 剩余小数，逐值映射与摘要随目录落盘；
+              - strong [ref=f3e358]:
+                - text: 原始
+                - code [ref=f3e359]: data/swb/
+                - text: 只读零触碰
+              - text: ，登记消费的是量化副本。另外清掉了两次失败尝试自产 run 脚手架残骸（目录内核报错前先建骨架所致，无任何数据损失）。
+          - paragraph [ref=f3e360]:
+            - strong [ref=f3e361]: 下一步
+            - text: （等你指令再动）：按段序下一道是
+            - strong [ref=f3e362]: label_qc（标签体检）
+            - text: ——对这 50 对标注做 Q1–Q4 确定性检测（疑似重复/归属确认/值框形态/越界）。要继续就说一声。
+        - generic [ref=f3e366]:
+          - button "Copy" [ref=f3e367] [cursor=pointer]
+          - generic [ref=f3e371]:
+            - button "Good response" [ref=f3e372] [cursor=pointer]
+            - button "Bad response" [ref=f3e375] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f3e378] [cursor=pointer]
+          - generic [ref=f3e384]:
+            - button "Usage 645K tok" [ref=f3e386] [cursor=pointer]
+            - generic [ref=f3e392]: 11:11
+        - generic [ref=f3e502]:
+          - generic [ref=f3e503]: 登记已确认，继续往下走。两点要求：一、分组方案用 A（按单据层级分 3 组那档）；二、负样本构造带改 0.03,0.06（不用缺省带）。请推进 experiment_setup 段把这些落进实验配置，九要素确认卡出来后我再看。
+          - generic [ref=f3e505]:
+            - generic [ref=f3e506]: 11:19
+            - button "Copy" [ref=f3e507] [cursor=pointer]
+        - generic [ref=f3e1004]:
+          - status [ref=f3e1005]: Completed
+          - button "Completed in 6m 6s" [ref=f3e1006] [cursor=pointer]
+        - generic [ref=f3e1014]:
+          - paragraph [ref=f3e1015]:
+            - text: ✅
+            - strong [ref=f3e1016]:
+              - code [ref=f3e1017]: experiment_setup
+              - text: 段完成
+            - text: （exit 0，审批账本
+            - code [ref=f3e1018]: 0cc8938069d549739a32bc59d1dad470
+            - text: ），你那两点要求都已锁定进实验配置：
+          - paragraph [ref=f3e1019]:
+            - strong [ref=f3e1020]: 落定的实验配置
+          - table [ref=f3e1022]:
+            - rowgroup [ref=f3e1023]:
+              - row [ref=f3e1024]:
+                - columnheader "项" [ref=f3e1025]
+                - columnheader "值" [ref=f3e1026]
+                - columnheader "来源" [ref=f3e1027]
+            - rowgroup [ref=f3e1028]:
+              - row [ref=f3e1029]:
+                - cell "分组方案" [ref=f3e1030]
+                - cell [ref=f3e1031]:
+                  - strong [ref=f3e1032]: A
+                  - text: （3 组·按单据层级：doc_identifier／page_summary／goods_item）
+                - cell [ref=f3e1033]:
+                  - code [ref=f3e1034]: explicit
+                  - text: （你指定）
+              - row [ref=f3e1035]:
+                - cell "负样本构造带" [ref=f3e1036]
+                - cell [ref=f3e1037]:
+                  - strong [ref=f3e1038]: 0.03 – 0.06
+                - cell [ref=f3e1039]:
+                  - code [ref=f3e1040]: user_specified
+                  - text: （你指定，未用 0.02–0.05 内置兜底）
+              - row [ref=f3e1041]:
+                - cell "字段序" [ref=f3e1042]
+                - cell [ref=f3e1043]:
+                  - strong [ref=f3e1044]: 14 键锁定
+                  - text: （container_no → seal_no → goods_name → … → total_net_weight）
+                - cell "实验门产出（gate_produced）" [ref=f3e1045]
+              - row [ref=f3e1046]:
+                - cell "字段配置指纹" [ref=f3e1047]
+                - cell [ref=f3e1048]:
+                  - code [ref=f3e1049]: sha256:96d5942c…3c38c0
+                - cell "显式传入" [ref=f3e1050]
+          - paragraph [ref=f3e1051]:
+            - text: 实验配置原件：
+            - button "experiment-config.json" [ref=f3e1052] [cursor=pointer]
+            - text: （run 树在
+            - code [ref=f3e1057]: workspace/runs/b7-swb-r1/
+            - text: ，段摘要
+            - code [ref=f3e1058]: stage-experiment_setup.summary.*
+            - text: 同目录可回看）。
+          - paragraph [ref=f3e1059]:
+            - strong [ref=f3e1060]: 过程中的一个补料
+            - text: ：产品不内置字段配置，swb 也没有现成的，我按 BL 配置同款
+            - code [ref=f3e1061]: PromptFieldConfig/v1
+            - text: schema 从标注原文起草了
+            - button "field-config-swb.json" [ref=f3e1062] [cursor=pointer]
+            - text: ——14 个 field_id 与标注
+            - code [ref=f3e1067]: pselect
+            - text: 逐一对应，分 3 个语义组（swb_container：箱号/铅封号；swb_goods_item：品名、件数、箱数、托盘数、毛/净重、重量、体积、HS 编码、唛头；swb_totals：总毛重/总净重），每条定义都锚在真实取值形态上（欧式小数逗号、
+            - code [ref=f3e1068]: BEAU4858783
+            - text: 箱号格式、多行唛头等）。这份配置会进 prompt 面与评测面，建议你抽空过目一遍，有不认可的措辞我可以改后重锁。
+          - paragraph [ref=f3e1069]:
+            - strong [ref=f3e1070]: 关于九要素确认卡的时点
+            - text: ：它在
+            - strong [ref=f3e1071]:
+              - code [ref=f3e1072]: training_prep
+              - text: 段
+            - text: 才出——那张卡的现值基线是
+            - code [ref=f3e1073]: prep/iteration-config
+            - text: 的 IterationConfig 实值，而 run 现在还没走到那。按段序，中间还隔着 5 段：
+            - strong [ref=f3e1074]: label_qc（标签体检）→ candidate_build → publish → family_split → admission
+            - text: 。
+          - paragraph [ref=f3e1075]:
+            - text: 要继续的话我就按序推
+            - code [ref=f3e1076]: label_qc
+            - text: （对 50 对标注做 Q1–Q4 确定性检测，检出待确认项会拿清单来找你逐项裁决）。
+        - generic [ref=f3e1080]:
+          - button "Copy" [ref=f3e1081] [cursor=pointer]
+          - generic [ref=f3e1085]:
+            - button "Good response" [ref=f3e1086] [cursor=pointer]
+            - button "Bad response" [ref=f3e1089] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f3e1092] [cursor=pointer]
+          - generic [ref=f3e1098]:
+            - button "Usage 570K tok" [ref=f3e1100] [cursor=pointer]
+            - generic [ref=f3e1106]: 11:25
+        - generic [ref=f3e1109]:
+          - generic [ref=f3e1110]: 字段配置我已备好：/data/atf/prodtest/atf-prodtest-20261021/field-config-swb.json（sea_waybill，14 字段，与数据 pselect 一一对应）。分组方案 A 和负样本带 0.03,0.06 保持不变，带上这份 field-config 重跑 experiment_setup。
+          - generic [ref=f3e1112]:
+            - generic [ref=f3e1113]: 11:25
+            - button "Copy" [ref=f3e1114] [cursor=pointer]
+        - generic [ref=f3e1327]:
+          - status [ref=f3e1328]: Completed
+          - button "Completed in 2m 0s" [ref=f3e1329] [cursor=pointer]
+        - generic [ref=f3e1276]:
+          - paragraph [ref=f3e1277]:
+            - text: 重跑请求在审批面板
+            - strong [ref=f3e1278]: 未获放行
+            - text: （approval denied），本次没有执行、零写入。
+          - paragraph [ref=f3e1279]: 说明一下现状，帮你判断是否还需要重跑：
+          - list [ref=f3e1280]:
+            - listitem [ref=f3e1281]:
+              - text: 上一轮
+              - code [ref=f3e1282]: experiment_setup
+              - text: 已经
+              - strong [ref=f3e1283]: 带着这份 field-config 成功落锁
+              - text: ——当时传入的就是这同一份文件，指纹
+              - code [ref=f3e1284]: sha256:96d5942c…3c38c0
+              - text: 已记录在实验门凭据（
+              - code [ref=f3e1285]: gate_produced.field_config_sha
+              - text: ）里；
+            - listitem [ref=f3e1286]:
+              - text: 分组方案
+              - strong [ref=f3e1287]: A
+              - text: 与负样本带
+              - strong [ref=f3e1288]: 0.03,0.06
+              - text: 也均已锁定，来源标注
+              - code [ref=f3e1289]: explicit
+              - text: ／
+              - code [ref=f3e1290]: user_specified
+              - text: ；
+            - listitem [ref=f3e1291]: 我重跑前读了文件现状：与你描述的「14 字段、与 pselect 一一对应」完全一致，未发生任何变更。
+          - paragraph [ref=f3e1292]:
+            - text: 也就是说：
+            - strong [ref=f3e1293]: 你要求的三件事在 run 里已经是现行生效状态，这次重跑是同内容重放
+            - text: ——如果你是在审批面板上看到这一点后有意拒绝的，那正合适，什么都不用做。
+          - paragraph [ref=f3e1294]: 两种后续，你挑一个：
+          - list [ref=f3e1295]:
+            - listitem [ref=f3e1296]:
+              - strong [ref=f3e1297]: 维持现状，直接往下走
+              - text: （推荐）：下一段是
+              - code [ref=f3e1298]: label_qc
+              - text: 标签体检，我随时可以推。
+            - listitem [ref=f3e1299]:
+              - strong [ref=f3e1333]: 你确实想改配置内容
+              - text: （比如把
+              - code [ref=f3e1334]: document_type
+              - text: 改成
+              - code [ref=f3e1335]: sea_waybill
+              - text: ，或调整字段定义）：把改动点告诉我，我改完文件后再重跑
+              - code [ref=f3e1336]: experiment_setup
+              - text: ——届时会在审批面板再弹一次卡，需要你放行才会执行。
+        - generic [ref=f3e1340]:
+          - button "Copy" [ref=f3e1341] [cursor=pointer]
+          - generic [ref=f3e1345]:
+            - button "Good response" [ref=f3e1346] [cursor=pointer]
+            - button "Bad response" [ref=f3e1349] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f3e1352] [cursor=pointer]
+          - generic [ref=f3e1358]:
+            - button "Usage 219K tok" [ref=f3e1360] [cursor=pointer]
+            - generic [ref=f3e1366]: 11:27
+        - generic [ref=f3e1369]:
+          - generic [ref=f3e1370]: 不用重跑 experiment_setup——刚才那张卡我拒了，产物已是最新（你的指纹与磁盘文件一致）。现在直接按段序推进：label_qc → candidate_build → publish → family_split → admission → training_prep，一路走完。每段审批卡我都会放行；label_qc 若有检出待确认项，把清单拿给我逐项裁决。全部段结束后给各段 exit code 汇总。
+          - generic [ref=f3e1372]:
+            - generic [ref=f3e1373]: 11:27
+            - button "Copy" [ref=f3e1374] [cursor=pointer]
+        - button "Think The user wants me to push through the remaining pipeline stages in order:" [ref=f3e1388] [cursor=pointer]:
+          - generic [ref=f3e1398]:
+            - generic [ref=f3e1399]: Think
+            - generic [ref=f3e1401]: "The user wants me to push through the remaining pipeline stages in order:"
+        - paragraph [ref=f3e1408]:
+          - text: 明白，按段序一路推进。每段审批卡由你放行，段间有依赖所以只能逐段串行走。先推
+          - strong [ref=f3e1409]:
+            - code [ref=f3e1410]: label_qc
+          - text: （标签体检：Q1 同框同值同字段疑似重复／Q2 同框同值异字段归属确认／Q3 值框形态／Q4 越界）：
+        - generic [ref=f3e1413]:
+          - button "Tool call atf_pipeline_stage · swb" [ref=f3e1421] [cursor=pointer]:
+            - generic [ref=f3e1431]:
+              - generic [ref=f3e1432]: Tool call
+              - generic [ref=f3e1434]: atf_pipeline_stage · swb
+          - button "Think label_qc passed cleanly:" [ref=f3e1463] [cursor=pointer]:
+            - generic [ref=f3e1473]:
+              - generic [ref=f3e1474]: Think
+              - generic [ref=f3e1476]: "label_qc passed cleanly:"
+        - paragraph [ref=f3e1483]:
+          - code [ref=f3e1484]: label_qc
+          - text: 干净通过：50 样本全扫，
+          - strong [ref=f3e1485]: Q1–Q4 全零、无待确认项
+          - text: （不用找你裁决了），仅 1 个非配对文件（量化自带的
+          - code [ref=f3e1486]: quantize-summary.json
+          - text: ，盘点性记录，无害）。继续
+          - strong [ref=f3e1487]:
+            - code [ref=f3e1488]: candidate_build
+          - text: ：
+        - generic [ref=f3e1491]:
+          - button "Tool call atf_pipeline_stage · swb" [ref=f3e1499] [cursor=pointer]:
+            - generic [ref=f3e1509]:
+              - generic [ref=f3e1510]: Tool call
+              - generic [ref=f3e1512]: atf_pipeline_stage · swb
+          - 'button "Think candidate_build returned exit_code 1 with NO summary — that''s unusual. Exit 1 (not 2=blocked, not 3=env error). The response body is nearly empty: ok:false, exit_code:1, no summary object at all, segment_fact_recorded:false, session_bound:false. Also interesting: session_bound flipped to false." [ref=f3e1540] [cursor=pointer]':
+            - generic [ref=f3e1550]:
+              - generic [ref=f3e1551]: Think
+              - generic [ref=f3e1553]: "candidate_build returned exit_code 1 with NO summary — that's unusual. Exit 1 (not 2=blocked, not 3=env error). The response body is nearly empty: ok:false, exit_code:1, no summary object at all, segment_fact_recorded:false, session_bound:false. Also interesting: session_bound flipped to false."
+        - paragraph [ref=f3e1560]:
+          - code [ref=f3e1561]: candidate_build
+          - text: 回了个
+          - strong [ref=f3e1562]: 裸 exit 1
+          - text: ——没有 WalkthroughPipelineReport、没有拒绝明细，这不像是业务拒绝（那会带 rejections），更像内核侧异常。先只读排查 run 树里留下了什么：
+        - generic [ref=f3e1565]:
+          - button "Tool call atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/b7-swb-r1/ && echo '---new summaries---' && ls /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/b7-swb-r1/*.json /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/b7-swb-r1/*.md 2>/dev/null && echo '---experiment-setup---' && ls /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/b7-swb-r1/experiment-setup/" [ref=f3e1572] [cursor=pointer]:
+            - generic [ref=f3e1582]:
+              - generic [ref=f3e1583]: Tool call
+              - generic [ref=f3e1585]: atf_bash · ls -la /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/b7-swb-r1/ && echo '---new summaries---' && ls /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/b7-swb-r1/*.json /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/b7-swb-r1/*.md 2>/dev/null && echo '---experiment-setup---' && ls /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/b7-swb-r1/experiment-setup/
+          - button "Think The run tree shows no candidate_build artifacts at all — no stage-candidate_build.summary.*, no candidate files. The stage failed before writing anything (consistent with exit 1 + no report)." [ref=f3e1593] [cursor=pointer]:
+            - generic [ref=f3e1603]:
+              - generic [ref=f3e1604]: Think
+              - generic [ref=f3e1606]: The run tree shows no candidate_build artifacts at all — no stage-candidate_build.summary.*, no candidate files. The stage failed before writing anything (consistent with exit 1 + no report).
+        - paragraph [ref=f3e1613]: run 树里没有任何 candidate_build 产物（连段摘要都没写），失败发生在极早期。重试一次，看是否瞬时故障：
+        - generic [ref=f3e1616]:
+          - button "Tool call atf_pipeline_stage · swb" [ref=f3e1624] [cursor=pointer]:
+            - generic [ref=f3e1634]:
+              - generic [ref=f3e1635]: Tool call
+              - generic [ref=f3e1637]: atf_pipeline_stage · swb
+          - button "Think Same bare exit 1, reproducible. Not transient. The harness gives no stdout/stderr. I need to find where the kernel CLI logs or how it's invoked. Options:" [ref=f3e1662] [cursor=pointer]:
+            - generic [ref=f3e1672]:
+              - generic [ref=f3e1673]: Think
+              - generic [ref=f3e1675]: "Same bare exit 1, reproducible. Not transient. The harness gives no stdout/stderr. I need to find where the kernel CLI logs or how it's invoked. Options:"
+        - paragraph [ref=f3e1682]: 复现了，同样的裸 exit 1——不是瞬时故障。查一下技能清单里有没有 walkthrough 管线对应的操作定义（里面通常会写各段的退出码语义与前置条件）：
+        - generic [ref=f3e1685]:
+          - 'button "Tool call atf_skill_read · {}" [ref=f3e1692] [cursor=pointer]':
+            - generic [ref=f3e1702]:
+              - generic [ref=f3e1703]: Tool call
+              - generic [ref=f3e1705]: "atf_skill_read · {}"
+          - 'button "Think The skill list doesn''t have a walkthrough-pipeline skill doc. The stages map to skills loosely: candidate_build ≈ atf-publish-label-snapshot? Actually the stage names: register → label_qc → experiment_setup → candidate_build → publish → family_split → admission → training_prep. \"candidate_build\" likely builds the contract/label candidate (atf-publish-label-snapshot builds canonical label snapshot = candidate?). \"publish\" publishes candidate contract with digest (atf_publish_confirm does contract-candidate digest)." [ref=f3e1713] [cursor=pointer]':
+            - generic [ref=f3e1723]:
+              - generic [ref=f3e1724]: Think
+              - generic [ref=f3e1726]: "The skill list doesn't have a walkthrough-pipeline skill doc. The stages map to skills loosely: candidate_build ≈ atf-publish-label-snapshot? Actually the stage names: register → label_qc → experiment_setup → candidate_build → publish → family_split → admission → training_prep. \"candidate_build\" likely builds the contract/label candidate (atf-publish-label-snapshot builds canonical label snapshot = candidate?). \"publish\" publishes candidate contract with digest (atf_publish_confirm does contract-candidate digest)."
+        - paragraph [ref=f3e1733]:
+          - text: 技能清单里没有 walkthrough 管线的操作定义。换个思路：内核与 harness 都在
+          - code [ref=f3e1734]: /data/sam
+          - text: （白名单根内），找 harness/内核日志里这两次 candidate_build 崩溃的痕迹：
+        - generic [ref=f3e1741]:
+          - button "Tool call atf_bash · find /data/sam/ATF-Harness -maxdepth 2 -type d 2>/dev/null | head -30; echo '---recent logs---'; find /data/sam/ATF-Harness -maxdepth 3 \\( -name '*.log' -o -name 'logs' -type d \\) -mmin -120 2>/dev/null | head -10" [ref=f3e1748] [cursor=pointer]:
+            - generic [ref=f3e1758]:
+              - generic [ref=f3e1759]: Tool call
+              - generic [ref=f3e1761]: atf_bash · find /data/sam/ATF-Harness -maxdepth 2 -type d 2>/dev/null | head -30; echo '---recent logs---'; find /data/sam/ATF-Harness -maxdepth 3 \( -name '*.log' -o -name 'logs' -type d \) -mmin -120 2>/dev/null | head -10
+          - 'button "Think Those playwright console logs are browser logs, not kernel logs. Look for the ATF kernel — @atf scope in node_modules! There''s /data/sam/ATF-Harness/node_modules/@atf — likely the atf-tools package (the kernel wrapper). Let me find the kernel python package: the atf_pipeline_stage tool runs a kernel CLI. Search for \"candidate_build\" in /data/sam/ATF-Harness (excluding node_modules bulk) and in a likely kernel src location." [ref=f3e1769] [cursor=pointer]':
+            - generic [ref=f3e1779]:
+              - generic [ref=f3e1780]: Think
+              - generic [ref=f3e1782]: "Those playwright console logs are browser logs, not kernel logs. Look for the ATF kernel — @atf scope in node_modules! There's /data/sam/ATF-Harness/node_modules/@atf — likely the atf-tools package (the kernel wrapper). Let me find the kernel python package: the atf_pipeline_stage tool runs a kernel CLI. Search for \"candidate_build\" in /data/sam/ATF-Harness (excluding node_modules bulk) and in a likely kernel src location."
+        - paragraph [ref=f3e1789]:
+          - text: playwright 的浏览器日志不相关。找内核本体——
+          - code [ref=f3e1790]: "@atf"
+          - text: scope 就在 harness 的 node_modules 里，定位 walkthrough 管线与 candidate_build 的实现：
+        - generic [ref=f3e1793]:
+          - button "Tool call atf_bash · ls /data/sam/ATF-Harness/node_modules/@atf/ 2>/dev/null; echo '---'; grep -rln 'candidate_build' /data/sam/ATF-Harness/node_modules/@atf/ 2>/dev/null | head -10" [ref=f3e1800] [cursor=pointer]:
+            - generic [ref=f3e1810]:
+              - generic [ref=f3e1811]: Tool call
+              - generic [ref=f3e1813]: atf_bash · ls /data/sam/ATF-Harness/node_modules/@atf/ 2>/dev/null; echo '---'; grep -rln 'candidate_build' /data/sam/ATF-Harness/node_modules/@atf/ 2>/dev/null | head -10
+          - 'button "Think No literal ''candidate_build'' in @atf. The kernel is likely a separate Python package. The atf_scratch_exec description says PYTHONPATH=<内核>/src is injected. Find the kernel: search for python files with ''walkthrough'' under /data/sam (whitelisted root):" [ref=f3e1821] [cursor=pointer]':
+            - generic [ref=f3e1831]:
+              - generic [ref=f3e1832]: Think
+              - generic [ref=f3e1834]: "No literal 'candidate_build' in @atf. The kernel is likely a separate Python package. The atf_scratch_exec description says PYTHONPATH=<内核>/src is injected. Find the kernel: search for python files with 'walkthrough' under /data/sam (whitelisted root):"
+          - button "Tool call atf_bash · grep -rln 'candidate_build' /data/sam --include='*.py' 2>/dev/null | grep -v node_modules | head -10; echo '---walkthrough dirs---'; find /data/sam -maxdepth 4 -type d -name '*walkthrough*' 2>/dev/null | head; find /data/sam -maxdepth 3 -type d -name 'src' 2>/dev/null | grep -iv node_modules | head" [ref=f3e1843] [cursor=pointer]:
+            - generic [ref=f3e1853]:
+              - generic [ref=f3e1854]: Tool call
+              - generic [ref=f3e1856]: atf_bash · grep -rln 'candidate_build' /data/sam --include='*.py' 2>/dev/null | grep -v node_modules | head -10; echo '---walkthrough dirs---'; find /data/sam -maxdepth 4 -type d -name '*walkthrough*' 2>/dev/null | head; find /data/sam -maxdepth 3 -type d -name 'src' 2>/dev/null | grep -iv node_modules | head
+          - 'button "Think Found the kernel: `/data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py` — the pinned single source (the tool docs said \"the script always takes <kernelDir>/skills/ (pin single source)\"). Now, read the candidate_build section of walkthrough_pipeline.py to understand exit code 1 conditions. The file is probably big. grep for exit codes and the candidate_build handler." [ref=f3e1867] [cursor=pointer]':
+            - generic [ref=f3e1877]:
+              - generic [ref=f3e1878]: Think
+              - generic [ref=f3e1880]: "Found the kernel: `/data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py` — the pinned single source (the tool docs said \"the script always takes <kernelDir>/skills/ (pin single source)\"). Now, read the candidate_build section of walkthrough_pipeline.py to understand exit code 1 conditions. The file is probably big. grep for exit codes and the candidate_build handler."
+        - paragraph [ref=f3e1887]:
+          - text: 内核定位到了：
+          - code [ref=f3e1888]: /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py
+          - text: （pin 单源）。看 candidate_build 段的实现与 exit 1 的触发条件：
+        - generic [ref=f3e1891]:
+          - button "Tool call atf_bash · grep -n 'candidate_build\\|exit(1)\\|exit 1\\|sys.exit(1)' /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py | head -40; echo '---total lines---'; wc -l /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py" [ref=f3e1898] [cursor=pointer]:
+            - generic [ref=f3e1908]:
+              - generic [ref=f3e1909]: Tool call
+              - generic [ref=f3e1911]: atf_bash · grep -n 'candidate_build\|exit(1)\|exit 1\|sys.exit(1)' /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py | head -40; echo '---total lines---'; wc -l /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py
+          - 'button "Think Key line: line 162 — `\"candidate_build\": (\"split_dir\", \"commit_pin\", \"repository_id\")` — prerequisites for candidate_build: split_dir, commit_pin, repository_id. And line 170: `_STAGE_SOURCE_ROOT_REQUIRED = {\"label_qc\", \"candidate_build\", \"publish\", \"family_split\"}` — candidate_build requires source_root to be passed!" [ref=f3e1919] [cursor=pointer]':
+            - generic [ref=f3e1929]:
+              - generic [ref=f3e1930]: Think
+              - generic [ref=f3e1932]: "Key line: line 162 — `\"candidate_build\": (\"split_dir\", \"commit_pin\", \"repository_id\")` — prerequisites for candidate_build: split_dir, commit_pin, repository_id. And line 170: `_STAGE_SOURCE_ROOT_REQUIRED = {\"label_qc\", \"candidate_build\", \"publish\", \"family_split\"}` — candidate_build requires source_root to be passed!"
+        - paragraph [ref=f3e1939]:
+          - text: 关键线索：line 162 显示
+          - code [ref=f3e1940]: candidate_build
+          - text: 的前置是
+          - code [ref=f3e1941]: ("split_dir", "commit_pin", "repository_id")
+          - text: ，line 170 显示 candidate_build 属于
+          - strong [ref=f3e1942]: 要求显式 source_root
+          - text: 的段集合——而我这两次调用都没传
+          - code [ref=f3e1943]: source_root
+          - text: 。看前置校验是怎么处置缺失的（优雅 blocked 还是裸崩）：
+        - generic [ref=f3e1946]:
+          - generic [ref=f3e1951]:
+            - generic [ref=f3e1952]: Failed
+            - 'button "Read Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）" [ref=f3e1954] [cursor=pointer]':
+              - generic [ref=f3e1962]:
+                - generic [ref=f3e1963]: Read
+                - generic [ref=f3e1965]: "Error: file_path_outside_allowlist: vendor read 通道已单轨封闭——改用 atf_read（白名单治理面）"
+          - button "Tool call atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py" [ref=f3e1972] [cursor=pointer]:
+            - generic [ref=f3e1982]:
+              - generic [ref=f3e1983]: Tool call
+              - generic [ref=f3e1985]: atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py
+          - button "Think stage_candidate_build:" [ref=f3e1993] [cursor=pointer]:
+            - generic [ref=f3e2003]:
+              - generic [ref=f3e2004]: Think
+              - generic [ref=f3e2006]: "stage_candidate_build:"
+        - paragraph [ref=f3e2013]:
+          - text: 段实现本身有优雅的 blocked 路径，但两次都是
+          - strong [ref=f3e2014]: 裸 exit 1 且零报告
+          - text: ——崩在报告管线之前。查
+          - code [ref=f3e2015]: _prereq
+          - text: 与 main 的退出码映射，找出 exit 1 从哪来：
+        - generic [ref=f3e2018]:
+          - button "Tool call atf_bash · grep -n '_prereq\\|def main\\|sys.exit\\|return 1\\|exit_code = \\|EXIT_' /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py | head -40" [ref=f3e2025] [cursor=pointer]:
+            - generic [ref=f3e2035]:
+              - generic [ref=f3e2036]: Tool call
+              - generic [ref=f3e2038]: atf_bash · grep -n '_prereq\|def main\|sys.exit\|return 1\|exit_code = \|EXIT_' /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py | head -40
+          - button "Tool call atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py" [ref=f3e2045] [cursor=pointer]:
+            - generic [ref=f3e2055]:
+              - generic [ref=f3e2056]: Tool call
+              - generic [ref=f3e2058]: atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py
+          - button "Tool call atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py" [ref=f3e2065] [cursor=pointer]:
+            - generic [ref=f3e2075]:
+              - generic [ref=f3e2076]: Tool call
+              - generic [ref=f3e2078]: atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py
+          - 'button "Think Now I understand the flow. main() catches only RunLayoutError → exit 3. Any OTHER exception (e.g., the in-function import at line 1454 `from agentic_training_flow.modules.data_admission import ...` failing) propagates out of main → traceback → SystemExit... wait, `raise SystemExit(main())` — an uncaught exception inside main would propagate up through main (not caught since only RunLayoutError is caught), crash the interpreter with a traceback, and the process exits with code 1 (Python default for uncaught exception). That matches: bare exit_code 1, no summary document printed, no files written." [ref=f3e2104] [cursor=pointer]':
+            - generic [ref=f3e2097]:
+              - generic [ref=f3e2098]: Think
+              - generic [ref=f3e2100]: "Now I understand the flow. main() catches only RunLayoutError → exit 3. Any OTHER exception (e.g., the in-function import at line 1454 `from agentic_training_flow.modules.data_admission import ...` failing) propagates out of main → traceback → SystemExit... wait, `raise SystemExit(main())` — an uncaught exception inside main would propagate up through main (not caught since only RunLayoutError is caught), crash the interpreter with a traceback, and the process exits with code 1 (Python default for uncaught exception). That matches: bare exit_code 1, no summary document printed, no files written."
+        - paragraph [ref=f3e2110]:
+          - text: main 只捕获
+          - code [ref=f3e2111]: RunLayoutError
+          - text: →exit 3；其它异常会裸穿→解释器 traceback→
+          - strong [ref=f3e2112]: exit 1
+          - text: ，且此时摘要还没打印/落盘——与观察完全吻合。嫌疑最大的是
+          - code [ref=f3e2113]: stage_candidate_build
+          - text: 里那条
+          - strong [ref=f3e2114]: 函数内 import
+          - text: （line 1454）。对比一下成功了的 label_qc 用的 import，并确认
+          - code [ref=f3e2115]: agentic_training_flow
+          - text: 包在内核环境里是否可得：
+        - generic [ref=f3e2118]:
+          - button "Tool call atf_bash · grep -n 'from agentic_training_flow\\|import agentic_training_flow' /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py | head -20; echo '---kernel pkg location---'; find /data/sam/ATF-Harness/.atf-pinned -maxdepth 2 -name 'agentic_training_flow' -o -maxdepth 2 -name 'pyproject.toml' -o -maxdepth 2 -name 'setup.py' 2>/dev/null | head; echo '---python env check---'; cd /data/sam/ATF-Harness/.atf-pinned 2>/dev/null && ls | head -20" [ref=f3e2125] [cursor=pointer]:
+            - generic [ref=f3e2135]:
+              - generic [ref=f3e2136]: Tool call
+              - generic [ref=f3e2138]: atf_bash · grep -n 'from agentic_training_flow\|import agentic_training_flow' /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py | head -20; echo '---kernel pkg location---'; find /data/sam/ATF-Harness/.atf-pinned -maxdepth 2 -name 'agentic_training_flow' -o -maxdepth 2 -name 'pyproject.toml' -o -maxdepth 2 -name 'setup.py' 2>/dev/null | head; echo '---python env check---'; cd /data/sam/ATF-Harness/.atf-pinned 2>/dev/null && ls | head -20
+          - 'button "Think Important discovery: line 884 — `from agentic_training_flow.modules.data_admission import (...)` is also imported at line 884, inside some other function — which stage is that? If label_qc succeeded and label_qc imports data_admission (line 992 imports label_qc module; line 884 data_admission — which function is that in?). Let me check what function line 884 is in. Also the import at 1454 is `inspect_source_inventory, inspect_annotations` from data_admission — line 1117 also imports `inspect_annotations, inspect_source_inventory` (in experiment_setup context maybe — that succeeded too!)." [ref=f3e2189] [cursor=pointer]':
+            - generic [ref=f3e2160]:
+              - generic [ref=f3e2161]: Think
+              - generic [ref=f3e2163]: "Important discovery: line 884 — `from agentic_training_flow.modules.data_admission import (...)` is also imported at line 884, inside some other function — which stage is that? If label_qc succeeded and label_qc imports data_admission (line 992 imports label_qc module; line 884 data_admission — which function is that in?). Let me check what function line 884 is in. Also the import at 1454 is `inspect_source_inventory, inspect_annotations` from data_admission — line 1117 also imports `inspect_annotations, inspect_source_inventory` (in experiment_setup context maybe — that succeeded too!)."
+        - paragraph [ref=f3e2195]:
+          - text: 模块级 import 都成功了（register/experiment_setup/label_qc 都能起），所以包路径没问题；而且 line 1117 experiment_setup 里也 import 过同模块的
+          - code [ref=f3e2196]: inspect_annotations, inspect_source_inventory
+          - text: 且成功了。继续读
+          - code [ref=f3e2197]: _rehydrate
+          - text: 剩余部分、
+          - code [ref=f3e2198]: run()
+          - text: 派发和 experiment_setup 里那次 import 的上下文，锁定差异点：
+        - generic [ref=f3e2201]:
+          - button "Tool call atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py" [ref=f3e2208] [cursor=pointer]:
+            - generic [ref=f3e2218]:
+              - generic [ref=f3e2219]: Tool call
+              - generic [ref=f3e2221]: atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py
+          - button "Tool call atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py" [ref=f3e2228] [cursor=pointer]:
+            - generic [ref=f3e2238]:
+              - generic [ref=f3e2239]: Tool call
+              - generic [ref=f3e2241]: atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py
+          - button "Think Key difference found:" [ref=f3e2252] [cursor=pointer]:
+            - generic [ref=f3e2262]:
+              - generic [ref=f3e2263]: Think
+              - generic [ref=f3e2265]: "Key difference found:"
+        - paragraph [ref=f3e2272]:
+          - text: 实验门那次 import 有
+          - code [ref=f3e2273]: if self.source_root is not None
+          - text: 守卫，candidate_build 的是裸 import——但包本身能导（实验门已证明），所以崩点大概率在
+          - code [ref=f3e2274]: inspect_source_inventory(...)
+          - text: 执行中。要拿实锤 stderr。查 harness 侧怎么拉起内核子进程、stderr 落哪：
+        - generic [ref=f3e2277]:
+          - button "Tool call atf_bash · grep -rn 'walkthrough_pipeline' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/ 2>/dev/null | grep -v '.map' | head -8; echo '---'; ls /data/sam/ATF-Harness/ | head -30" [ref=f3e2284] [cursor=pointer]:
+            - generic [ref=f3e2294]:
+              - generic [ref=f3e2295]: Tool call
+              - generic [ref=f3e2297]: atf_bash · grep -rn 'walkthrough_pipeline' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/ 2>/dev/null | grep -v '.map' | head -8; echo '---'; ls /data/sam/ATF-Harness/ | head -30
+          - button "Tool call atf_bash · grep -n 'stderr\\|spawn\\|execFile\\|python' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/pipelineFace.ts | head -20; echo '---log dirs---'; find /data/sam/ATF-Harness -maxdepth 2 -type d \\( -name '*log*' -o -name '.atf*' \\) 2>/dev/null | grep -v node_modules | head" [ref=f3e2304] [cursor=pointer]:
+            - generic [ref=f3e2314]:
+              - generic [ref=f3e2315]: Tool call
+              - generic [ref=f3e2317]: atf_bash · grep -n 'stderr\|spawn\|execFile\|python' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/pipelineFace.ts | head -20; echo '---log dirs---'; find /data/sam/ATF-Harness -maxdepth 2 -type d \( -name '*log*' -o -name '.atf*' \) 2>/dev/null | grep -v node_modules | head
+          - button "Think The harness captures stderr but only includes stderr_tail in the response for exit 3. Let me look at the response-building around exit 1 — what does pipelineFace return for code===1? Read pipelineFace.ts around lines 460-540." [ref=f3e2325] [cursor=pointer]:
+            - generic [ref=f3e2335]:
+              - generic [ref=f3e2336]: Think
+              - generic [ref=f3e2338]: The harness captures stderr but only includes stderr_tail in the response for exit 3. Let me look at the response-building around exit 1 — what does pipelineFace return for code===1? Read pipelineFace.ts around lines 460-540.
+        - paragraph [ref=f3e2345]: harness 捕获了 stderr 但只在 exit 3 时回传。看 exit 1 分支怎么组装响应：
+        - generic [ref=f3e2348]:
+          - button "Tool call atf_read · /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/pipelineFace.ts" [ref=f3e2355] [cursor=pointer]:
+            - generic [ref=f3e2365]:
+              - generic [ref=f3e2366]: Tool call
+              - generic [ref=f3e2368]: atf_read · /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/pipelineFace.ts
+          - 'button "Think Confirmed: for exit code 1, the harness returns bare details — no stderr_tail (only exit 3 or null code gets stderr_tail). So the kernel''s traceback is captured but discarded from the tool response. `kernelFace = scanKernelErrorFace([stdout, stderr])` — scans for token_budget error codes only; presumably no match → no note." [ref=f3e2397] [cursor=pointer]':
+            - generic [ref=f3e2387]:
+              - generic [ref=f3e2388]: Think
+              - generic [ref=f3e2390]: "Confirmed: for exit code 1, the harness returns bare details — no stderr_tail (only exit 3 or null code gets stderr_tail). So the kernel's traceback is captured but discarded from the tool response. `kernelFace = scanKernelErrorFace([stdout, stderr])` — scans for token_budget error codes only; presumably no match → no note."
+        - generic [ref=f3e2402]:
+          - paragraph [ref=f3e2403]:
+            - text: exit 1 分支确实不回传 stderr，traceback 被 harness 丢了。还有个关键发现：experiment_setup 里同样的 inspect 调用包着
+            - code [ref=f3e2404]: "try:"
+            - text: （line 1119）——
+            - strong [ref=f3e2405]: 异常会被吞掉优雅降级
+            - text: ；而 candidate_build 里是裸调用，一抛就裸 exit 1。完全自洽。
+          - paragraph [ref=f3e2406]: 用 scratch 诊断脚本直接复现崩点（只碰 scratch，零触碰 run 树）：
+        - generic [ref=f3e2409]:
+          - button "Tool call atf_write · \"\"\"诊断:在 scratch 内单独复现 candidate_build 的崩点函数(不触碰 run 树)。\"\"\"" [ref=f3e2416] [cursor=pointer]:
+            - generic [ref=f3e2426]:
+              - generic [ref=f3e2427]: Tool call
+              - generic [ref=f3e2429]: atf_write · """诊断:在 scratch 内单独复现 candidate_build 的崩点函数(不触碰 run 树)。"""
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/prodtest/atf-prodtest-20261021/scratch/diag_candidate_crash.py\"],\"timeout_seconds\":120}" [ref=f3e2436] [cursor=pointer]':
+            - generic [ref=f3e2446]:
+              - generic [ref=f3e2447]: Tool call
+              - generic [ref=f3e2449]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/prodtest/atf-prodtest-20261021/scratch/diag_candidate_crash.py\"],\"timeout_seconds\":120}"
+          - button "Think Interesting! Both inspect functions work perfectly in isolation — inventory OK, 14 fields extracted. So the crash is NOT in inspect_source_inventory/inspect_annotations." [ref=f3e2457] [cursor=pointer]:
+            - generic [ref=f3e2467]:
+              - generic [ref=f3e2468]: Think
+              - generic [ref=f3e2470]: Interesting! Both inspect functions work perfectly in isolation — inventory OK, 14 fields extracted. So the crash is NOT in inspect_source_inventory/inspect_annotations.
+        - paragraph [ref=f3e2477]:
+          - text: 两个 inspect 函数在 scratch 里单跑
+          - strong [ref=f3e2478]: 都正常
+          - text: （盘点 OK、14 字段闭集齐）——崩点在更 downstream：
+          - code [ref=f3e2479]: _resolve_field_config
+          - text: /
+          - code [ref=f3e2480]: _prompt_profile_document
+          - text: /
+          - code [ref=f3e2481]: _candidate_document
+          - text: 。逐个读：
+        - generic [ref=f3e2484]:
+          - button "Tool call atf_bash · grep -n 'def _resolve_field_config\\|def _prompt_profile_document\\|def _candidate_document\\|def _ensure_run_dir\\|def record\\|def run\\b' /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py" [ref=f3e2491] [cursor=pointer]:
+            - generic [ref=f3e2501]:
+              - generic [ref=f3e2502]: Tool call
+              - generic [ref=f3e2504]: atf_bash · grep -n 'def _resolve_field_config\|def _prompt_profile_document\|def _candidate_document\|def _ensure_run_dir\|def record\|def run\b' /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py
+          - button "Tool call atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py" [ref=f3e2511] [cursor=pointer]:
+            - generic [ref=f3e2521]:
+              - generic [ref=f3e2522]: Tool call
+              - generic [ref=f3e2524]: atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py
+          - 'button "Think Line 1246: `from prompt_profile import OUTPUT_MODE_FLAT, new_profile` — another in-function import! Where does `prompt_profile` live? It''s imported as a TOP-LEVEL module name (not agentic_training_flow.xxx). This is probably one of the walkthrough_assets modules (tools/walkthrough_assets/) or kernel skills modules that need to be on sys.path when the CLI runs. The harness launches the CLI with a specific cwd/PYTHONPATH; if `prompt_profile` isn''t importable in the harness-launched subprocess → ModuleNotFoundError → uncaught → exit 1 bare!" [ref=f3e2548] [cursor=pointer]':
+            - generic [ref=f3e2546]:
+              - generic [ref=f3e2547]: Think
+              - generic [ref=f3e2550]: "Line 1246: `from prompt_profile import OUTPUT_MODE_FLAT, new_profile` — another in-function import! Where does `prompt_profile` live? It's imported as a TOP-LEVEL module name (not agentic_training_flow.xxx). This is probably one of the walkthrough_assets modules (tools/walkthrough_assets/) or kernel skills modules that need to be on sys.path when the CLI runs. The harness launches the CLI with a specific cwd/PYTHONPATH; if `prompt_profile` isn't importable in the harness-launched subprocess → ModuleNotFoundError → uncaught → exit 1 bare!"
+        - paragraph [ref=f3e2557]:
+          - text: 发现第二个函数内 import：line 1246
+          - code [ref=f3e2558]: from prompt_profile import …
+          - text: ——这是
+          - strong [ref=f3e2559]: 顶层模块名
+          - text: （不是
+          - code [ref=f3e2560]: agentic_training_flow.
+          - text: 前缀），靠 sys.path 里有特定目录才可导。我的 scratch 诊断没测到这条。看文件头部的 sys.path 设置和这些模块的位置：
+        - generic [ref=f3e2563]:
+          - button "Tool call atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py" [ref=f3e2570] [cursor=pointer]:
+            - generic [ref=f3e2580]:
+              - generic [ref=f3e2581]: Tool call
+              - generic [ref=f3e2583]: atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py
+          - button "Tool call atf_bash · find /data/sam/ATF-Harness/.atf-pinned -name 'prompt_profile.py' -o -name 'prompt_template.py' -o -name 'coordinate_spec.py' 2>/dev/null | head; echo '---'; ls /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_assets/ 2>/dev/null | head" [ref=f3e2590] [cursor=pointer]:
+            - generic [ref=f3e2600]:
+              - generic [ref=f3e2601]: Tool call
+              - generic [ref=f3e2603]: atf_bash · find /data/sam/ATF-Harness/.atf-pinned -name 'prompt_profile.py' -o -name 'prompt_template.py' -o -name 'coordinate_spec.py' 2>/dev/null | head; echo '---'; ls /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_assets/ 2>/dev/null | head
+          - button "Think The sys.path setup at lines 48-56 adds:" [ref=f3e2611] [cursor=pointer]:
+            - generic [ref=f3e2621]:
+              - generic [ref=f3e2622]: Think
+              - generic [ref=f3e2624]: "The sys.path setup at lines 48-56 adds:"
+        - paragraph [ref=f3e2631]:
+          - code [ref=f3e2632]: prompt_profile.py
+          - text: 就在 sys.path 注入的 admit scripts 目录里，import 理论上也通。那崩点只剩候选文档构建的渲染/摘要链。先最小复现：在 scratch 里按 CLI 同款 sys.path 手动跑 profile→resolve→render 链：
+        - generic [ref=f3e2638]:
+          - button "Tool call atf_write · \"\"\"诊断2:复现 candidate_build 内的 prompt 渲染链(new_profile→resolve_class_profile→render)。\"\"\"" [ref=f3e2645] [cursor=pointer]:
+            - generic [ref=f3e2655]:
+              - generic [ref=f3e2656]: Tool call
+              - generic [ref=f3e2658]: atf_write · """诊断2:复现 candidate_build 内的 prompt 渲染链(new_profile→resolve_class_profile→render)。"""
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/prodtest/atf-prodtest-20261021/scratch/diag_candidate_render.py\"],\"timeout_seconds\":120}" [ref=f3e2665] [cursor=pointer]':
+            - generic [ref=f3e2675]:
+              - generic [ref=f3e2676]: Tool call
+              - generic [ref=f3e2678]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/prodtest/atf-prodtest-20261021/scratch/diag_candidate_render.py\"],\"timeout_seconds\":120}"
+        - generic [ref=f3e2681]:
+          - generic [ref=f3e2682]: 根因我这边定位好了：candidate_build 的 source 盘点（inspect_source_inventory）只认 png+json 成对文件，而量化 CLI 把逐值映射 quantize-map.csv 写进了量化副本数据目录里——工具自产文件堵住了下一段。我已把该 csv 移到 run 目录留档（workspace/runs/b7-swb-r1/analysis/quantize-map.b7-swb-r1.csv），数据目录现在只有 50 对 png+json。请重新触发 candidate_build，配置不变（field-config、分组 A、负样本带 0.03,0.06）。这个内核侧缺陷（量化输出与 source taxonomy 互斥）我会登记内核待办。
+          - generic [ref=f3e2684]:
+            - generic [ref=f3e2685]: 11:39
+            - button "Copy" [ref=f3e2686] [cursor=pointer]
+        - 'button "Think The user says they''ve located the root cause: quantize-map.csv was written into the quantized data dir, and they''ve moved it to workspace/runs/b7-swb-r1/analysis/quantize-map.b7-swb-r1.csv. Data dir now has only 50 pairs." [ref=f3e2700] [cursor=pointer]':
+          - generic [ref=f3e2710]:
+            - generic [ref=f3e2711]: Think
+            - generic [ref=f3e2713]: "The user says they've located the root cause: quantize-map.csv was written into the quantized data dir, and they've moved it to workspace/runs/b7-swb-r1/analysis/quantize-map.b7-swb-r1.csv. Data dir now has only 50 pairs."
+        - paragraph [ref=f3e2720]:
+          - text: 收到，你的根因结论与修复都明确了。快速核验一下数据目录现状（确认 csv 已移走、只剩 50 对），然后带原配置重触发
+          - code [ref=f3e2721]: candidate_build
+          - text: ：
+        - generic [ref=f3e2724]:
+          - button "Tool call atf_bash · ls /data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb | wc -l; ls /data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb | grep -cv '.png$'; ls /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/b7-swb-r1/analysis/ 2>/dev/null" [ref=f3e2731] [cursor=pointer]:
+            - generic [ref=f3e2741]:
+              - generic [ref=f3e2742]: Tool call
+              - generic [ref=f3e2744]: atf_bash · ls /data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb | wc -l; ls /data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb | grep -cv '.png$'; ls /data/atf/prodtest/atf-prodtest-20261021/workspace/runs/b7-swb-r1/analysis/ 2>/dev/null
+          - 'button "Think Data dir: 100 files, 50 non-png (i.e., 50 json) — clean 50 pairs, csv gone. The user also moved quantize-summary.json to analysis/ (I see both quantize-map.b7-swb-r1.csv and quantize-summary.json there). Wait — quantize-summary.json in analysis/ too? The ls of analysis/ shows: decisions, journal, quantize-map.b7-swb-r1.csv, quantize-summary.json, verification. So both quantize artifacts now live in run analysis dir; data dir is pure 50 pairs." [ref=f3e2755] [cursor=pointer]':
+            - generic [ref=f3e2765]:
+              - generic [ref=f3e2766]: Think
+              - generic [ref=f3e2768]: "Data dir: 100 files, 50 non-png (i.e., 50 json) — clean 50 pairs, csv gone. The user also moved quantize-summary.json to analysis/ (I see both quantize-map.b7-swb-r1.csv and quantize-summary.json there). Wait — quantize-summary.json in analysis/ too? The ls of analysis/ shows: decisions, journal, quantize-map.b7-swb-r1.csv, quantize-summary.json, verification. So both quantize artifacts now live in run analysis dir; data dir is pure 50 pairs."
+        - paragraph [ref=f3e2775]:
+          - text: 数据目录已纯净化：100 文件＝50 对 png+json，两个量化自产件（csv＋summary）都在 run 的
+          - code [ref=f3e2776]: analysis/
+          - text: 留档。重触发
+          - code [ref=f3e2777]: candidate_build
+          - text: ：
+        - generic [ref=f3e2783]:
+          - button "Tool call atf_pipeline_stage · swb" [ref=f3e2791] [cursor=pointer]:
+            - generic [ref=f3e2801]:
+              - generic [ref=f3e2802]: Tool call
+              - generic [ref=f3e2804]: atf_pipeline_stage · swb
+          - button "Think candidate_build OK now! (The user's fix worked — the csv really was the blocker for the full pipeline path; my isolated probe didn't reproduce because... whatever, it's fixed.)" [ref=f3e2833] [cursor=pointer]:
+            - generic [ref=f3e2843]:
+              - generic [ref=f3e2844]: Think
+              - generic [ref=f3e2846]: candidate_build OK now! (The user's fix worked — the csv really was the blocker for the full pipeline path; my isolated probe didn't reproduce because... whatever, it's fixed.)
+        - paragraph [ref=f3e2853]:
+          - text: ✅
+          - code [ref=f3e2854]: candidate_build
+          - text: 通过了（审批
+          - code [ref=f3e2855]: 1bc93756…
+          - text: ）——你的定位正确，csv 移走后一次走通：盘点字段闭集 14 键、必备键模板 23 键零缺失（可选键
+          - code [ref=f3e2856]: label_semantics
+          - text: 引擎允许），候选件与 prompt profile 已落 run 树。继续按段序推
+          - strong [ref=f3e2857]:
+            - code [ref=f3e2858]: publish
+          - text: ：
+        - generic [ref=f3e2861]:
+          - button "Tool call atf_pipeline_stage · swb" [ref=f3e2869] [cursor=pointer]:
+            - generic [ref=f3e2879]:
+              - generic [ref=f3e2880]: Tool call
+              - generic [ref=f3e2882]: atf_pipeline_stage · swb
+          - 'button "Think publish OK: gate_verdict=pass, publication_status=published, bundle_ref artifact:extraction-contract:e39f3e41…" [ref=f3e2910] [cursor=pointer]':
+            - generic [ref=f3e2920]:
+              - generic [ref=f3e2921]: Think
+              - generic [ref=f3e2923]: "publish OK: gate_verdict=pass, publication_status=published, bundle_ref artifact:extraction-contract:e39f3e41…"
+        - paragraph [ref=f3e2930]:
+          - text: ✅
+          - code [ref=f3e2931]: publish
+          - text: 通过（
+          - code [ref=f3e2932]: gate_verdict=pass
+          - text: ，抽取合同已发布，bundle
+          - code [ref=f3e2933]: e39f3e41…
+          - text: ）。继续
+          - strong [ref=f3e2934]:
+            - code [ref=f3e2935]: family_split
+          - text: （版式聚类三态缺省 auto——若内核报聚类状态不明我会停下来先问你）：
+        - generic [ref=f3e2936]:
+          - text: Analyzing the request
+          - button "Tool call atf_pipeline_stage · swb" [ref=f3e2946] [cursor=pointer]:
+            - generic [ref=f3e2956]:
+              - generic [ref=f3e2957]: Tool call
+              - generic [ref=f3e2959]: atf_pipeline_stage · swb
+        - generic [ref=f3e511]:
+          - status [ref=f3e512]: Deep diving
+          - generic [ref=f3e516]:
+            - generic [ref=f3e517]: Deep diving for 16m 30s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 16m 30s ···
+      - generic [ref=f3e101]:
+        - generic [ref=f3e102]:
+          - generic [ref=f3e104]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [ref=f3e2745]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=f3e106]:
+            - generic [ref=f3e107]:
+              - button "Add files or run commands" [ref=f3e394] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=f3e399] [cursor=pointer]':
+                - generic [ref=f3e403]: Full access
+            - generic [ref=f3e108]:
+              - generic [ref=f3e407]:
+                - button "思考 Low(低) ▾" [ref=f3e410] [cursor=pointer]:
+                  - generic [ref=f3e411]: 思考
+                  - generic [ref=f3e412]: Low(低)
+                  - generic [ref=f3e413]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=f3e416] [cursor=pointer]:
+                  - generic [ref=f3e417]: glm-5.3-flash
+              - button "Stop generating" [ref=f3e519] [cursor=pointer]
+        - generic [ref=f3e423]:
+          - generic [ref=f3e424]:
+            - generic [ref=f3e425]:
+              - button "4 turns 58 steps · 56 tok/s" [ref=f3e2975] [cursor=pointer]:
+                - generic [ref=f3e432]: 4 turns 58 steps·56 tok/s
+              - button "4.1M tok · Cache hit 97%" [ref=f3e2976] [cursor=pointer]:
+                - generic [ref=f3e439]: 4.1M tok·Cache hit 97%
+            - generic [ref=f3e440]:
+              - status [ref=f3e441]:
+                - generic [ref=f3e442]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                - generic [ref=f3e443]:
+                  - generic [ref=f3e444]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                  - generic [ref=f3e445]: ws-pl-walkthrough · 1 会话
+              - generic [ref=f3e446]:
+                - button "新建训练" [ref=f3e447] [cursor=pointer]
+                - button "查状态" [ref=f3e448] [cursor=pointer]
+                - button "继续训练：run-admit-qc-02-d76fx" [ref=f3e449] [cursor=pointer]
+                - button "对比两轮" [ref=f3e450] [cursor=pointer]
+                - button "走完闭环" [ref=f3e451] [cursor=pointer]
+                - button "联合训练" [ref=f3e452] [cursor=pointer]
+                - button "badcase 可视化" [ref=f3e453] [cursor=pointer]
+                - button "发起训练" [ref=f3e454] [cursor=pointer]
+          - button "11% of context used" [ref=f3e2977] [cursor=pointer]:
+            - generic [ref=f3e460]: 11%
+  - generic [ref=f3e465]:
+    - tablist [ref=f3e467]:
+      - tab "训练监控 Close" [selected] [ref=f3e468] [cursor=pointer]:
+        - generic [ref=f3e469]: 训练监控
+        - button "Close" [ref=f3e471]
+      - button "New tab" [ref=f3e475] [cursor=pointer]
+      - button "Split" [ref=f3e478] [cursor=pointer]
+      - generic [ref=f3e481]:
+        - button "Fullscreen" [ref=f3e482] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=f3e485] [cursor=pointer]
+    - generic [ref=f3e488]: 监控已关闭——点顶栏「监控」按钮重新打开

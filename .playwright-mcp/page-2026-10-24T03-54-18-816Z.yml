@@ -1,0 +1,835 @@
+- generic [ref=f3e4]:
+  - generic [ref=f3e7]:
+    - generic [ref=f3e8]:
+      - button "New session" [ref=f3e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f3e10]:
+          - generic [ref=f3e11]: ATF
+          - generic [ref=f3e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f3e17] [cursor=pointer]
+    - button "New session" [ref=f3e20] [cursor=pointer]:
+      - generic [ref=f3e21]: New Session
+    - navigation "Global panels" [ref=f3e26]:
+      - button "Plugins" [ref=f3e27] [cursor=pointer]
+    - generic [ref=f3e38]:
+      - generic [ref=f3e39]:
+        - generic [ref=f3e40]: Workspaces
+        - generic [ref=f3e42]:
+          - button "Search sessions" [ref=f3e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f3e47]:
+          - button "View options" [ref=f3e49] [cursor=pointer]
+          - button "Add workspace" [ref=f3e53] [cursor=pointer]
+      - tree "Sessions" [ref=f3e58]:
+        - generic [ref=f3e110]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=f3e112] [cursor=pointer]
+          - treeitem "连通性自检与确认 12h" [ref=f3e991] [cursor=pointer]:
+            - generic [ref=f3e123]: 连通性自检与确认
+            - generic [ref=f3e124]: 12h
+          - treeitem "装箱单走查区训练任务查询 13h" [ref=f3e1270] [cursor=pointer]:
+            - generic [ref=f3e128]: 装箱单走查区训练任务查询
+            - generic [ref=f3e129]: 13h
+          - treeitem "D76 端到端正例复跑（零 GPU 红 17h" [ref=f3e131] [cursor=pointer]:
+            - generic [ref=f3e133]: D76 端到端正例复跑（零 GPU 红
+            - generic [ref=f3e134]: 17h
+          - treeitem "run pl-walkthrough-r1 迭代配置构造前置校验 21h" [ref=f3e3981] [cursor=pointer]:
+            - generic [ref=f3e138]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [ref=f3e139]: 21h
+          - treeitem "训练数据构造前校验演练 21h" [ref=f3e762] [cursor=pointer]:
+            - generic [ref=f3e143]: 训练数据构造前校验演练
+            - generic [ref=f3e144]: 21h
+        - treeitem "ws-pl-walkthrough" [ref=f3e147] [cursor=pointer]
+        - generic [ref=f3e153]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=f3e155] [cursor=pointer]
+          - treeitem "删除整个工作区目录 12h" [ref=f3e2814] [cursor=pointer]:
+            - generic [ref=f3e166]: 删除整个工作区目录
+            - generic [ref=f3e167]: 12h
+          - treeitem "构造评估服务件 for run-rh-budget 1d" [ref=f3e169] [cursor=pointer]:
+            - generic [ref=f3e171]: 构造评估服务件 for run-rh-budget
+            - generic [ref=f3e172]: 1d
+          - treeitem "装箱单字段抽取新实验全流程 1d" [ref=f3e174] [cursor=pointer]:
+            - generic [ref=f3e176]: 装箱单字段抽取新实验全流程
+            - generic [ref=f3e177]: 1d
+        - generic [ref=f3e178]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=f3e180] [cursor=pointer]
+          - treeitem "Running 海运单SWB数据登记与训练任务启动 7min" [selected] [ref=f3e3982] [cursor=pointer]:
+            - generic [ref=f3e190]: Running
+            - generic [ref=f3e191]: 海运单SWB数据登记与训练任务启动
+            - generic [ref=f3e192]: 7min
+          - treeitem "等待发起真实训练走查指令 1d" [ref=f3e194] [cursor=pointer]:
+            - generic [ref=f3e196]: 等待发起真实训练走查指令
+            - generic [ref=f3e197]: 1d
+          - treeitem "汇总当前实验状态与进展 2d" [ref=f3e199] [cursor=pointer]:
+            - generic [ref=f3e201]: 汇总当前实验状态与进展
+            - generic [ref=f3e202]: 2d
+          - treeitem "我的训练数据放在 /data/atf/prodt 2d" [ref=f3e204] [cursor=pointer]:
+            - generic [ref=f3e206]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=f3e207]: 2d
+        - treeitem "a4-hotws" [ref=f3e210] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=f3e218] [cursor=pointer]
+        - treeitem "b18-ws" [ref=f3e226] [cursor=pointer]
+        - treeitem "sam" [ref=f3e234] [cursor=pointer]
+    - button "Settings" [ref=f3e68] [cursor=pointer]
+  - generic [ref=f3e77]:
+    - banner [ref=f3e241]:
+      - generic [ref=f3e242]:
+        - generic [ref=f3e243]:
+          - generic [ref=f3e244]:
+            - navigation "Session hierarchy" [ref=f3e245]:
+              - generic [ref=f3e246]: 海运单SWB数据登记与训练任务启动
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f3e250]: Standard mode
+          - generic [ref=f3e257]:
+            - button "More actions" [ref=f3e259] [cursor=pointer]
+            - generic [ref=f3e264]:
+              - button "实验不可见 ▾ run-admit-qc-0" [ref=f3e266] [cursor=pointer]:
+                - generic [ref=f3e267]: 实验不可见 ▾
+                - generic "run-admit-qc-02-d76fx" [ref=f3e268]: run-admit-qc-0
+              - button "监控" [ref=f3e269] [cursor=pointer]
+        - tablist [ref=f3e270]:
+          - tab "Chat" [selected] [ref=f3e271] [cursor=pointer]
+          - tab "Trajectory" [ref=f3e272] [cursor=pointer]
+    - generic [ref=f3e79]:
+      - generic [ref=f3e279]:
+        - generic [ref=f3e282]:
+          - generic [ref=f3e283]: 我想启动一个新的训练任务。数据用海运单（SWB）这批：/data/atf/prodtest/atf-prodtest-20261021/data/swb，工作区就用当前这个 atf-prodtest-20261021，run 标识用 b7-swb-r1。请先走数据登记（register），登记完成后先停下来，告诉我登记结果。
+          - generic [ref=f3e285]:
+            - generic [ref=f3e286]: 10:57
+            - button "Copy" [ref=f3e287] [cursor=pointer]
+        - generic [ref=f3e292]:
+          - status [ref=f3e293]: Completed
+          - button "Completed in 13m 17s" [ref=f3e294] [cursor=pointer]
+        - generic [ref=f3e302]:
+          - paragraph [ref=f3e303]:
+            - text: ✅
+            - strong [ref=f3e304]: 登记（register）完成
+            - text: ，run
+            - code [ref=f3e305]: b7-swb-r1
+            - text: 已落账并绑定本会话。按要求先停在这里，结果如下：
+          - paragraph [ref=f3e306]:
+            - strong [ref=f3e307]: 登记结果
+          - table [ref=f3e309]:
+            - rowgroup [ref=f3e310]:
+              - row [ref=f3e311]:
+                - columnheader "项" [ref=f3e312]
+                - columnheader "值" [ref=f3e313]
+            - rowgroup [ref=f3e314]:
+              - row [ref=f3e315]:
+                - cell "状态" [ref=f3e316]
+                - cell [ref=f3e317]:
+                  - code [ref=f3e318]: "register: ok"
+                  - text: （exit 0，段事实已落账，会话已绑定）
+              - row [ref=f3e319]:
+                - cell "成对样本" [ref=f3e320]
+                - cell [ref=f3e321]:
+                  - strong [ref=f3e322]: 50 对
+                  - text: （png＋同名 json，读回校验 50 行全部通过）
+              - row [ref=f3e323]:
+                - cell "commit pin" [ref=f3e324]
+                - cell [ref=f3e325]:
+                  - code [ref=f3e326]: e8747891803895eea65a85f2fb64fccf0a914381
+              - row [ref=f3e327]:
+                - cell "登记记录" [ref=f3e328]
+                - cell [ref=f3e329]:
+                  - button "registration.json" [ref=f3e330] [cursor=pointer]
+                  - text: （
+                  - code [ref=f3e335]: datasets/walkthrough-swb@e87478918038/
+                  - text: ）
+              - row [ref=f3e336]:
+                - cell "切分目录" [ref=f3e337]
+                - cell [ref=f3e338]:
+                  - code [ref=f3e339]: splits/walkthrough-swb/
+              - row [ref=f3e340]:
+                - cell "审批账本" [ref=f3e341]
+                - cell [ref=f3e342]:
+                  - code [ref=f3e343]: e7d2858273474a1ab35deb0a1c74c329
+          - paragraph [ref=f3e344]:
+            - strong [ref=f3e345]: 过程中处理的两件事
+          - list [ref=f3e346]:
+            - listitem [ref=f3e347]:
+              - strong [ref=f3e348]: lane 后缀
+              - text: ：产品不预设默认值，我依据数据事实取了
+              - code [ref=f3e349]: mixed
+              - text: ——50 张图共 14 个字段，8 个 goods 类（goods_name、goods_quantity、goods_carton、goods_measurement、goods_gross_weight、goods_net_weight、goods_pallet、goods_weight）＋6 个非 goods 类（container_no、seal_no、hs_code、shipping_marks、total_gross_weight、total_net_weight）。训练 unit 命名为
+              - code [ref=f3e350]: swb_mixed
+              - text: 。如果你本想单 lane 跑，告诉我，后续段还来得及调整。
+            - listitem [ref=f3e351]:
+              - strong [ref=f3e352]: 坐标量化
+              - text: ：原始标注 4184 个坐标值
+              - strong [ref=f3e353]: 全部是非整数像素
+              - text: ，登记闸 fail-closed 拒收。已用内核量化 CLI（round 口径）整备出整数像素副本，放在
+              - button "data-quantized-b7-swb-r1/swb/" [ref=f3e354] [cursor=pointer]
+              - text: ——0 退化框、0 剩余小数，逐值映射与摘要随目录落盘；
+              - strong [ref=f3e358]:
+                - text: 原始
+                - code [ref=f3e359]: data/swb/
+                - text: 只读零触碰
+              - text: ，登记消费的是量化副本。另外清掉了两次失败尝试自产 run 脚手架残骸（目录内核报错前先建骨架所致，无任何数据损失）。
+          - paragraph [ref=f3e360]:
+            - strong [ref=f3e361]: 下一步
+            - text: （等你指令再动）：按段序下一道是
+            - strong [ref=f3e362]: label_qc（标签体检）
+            - text: ——对这 50 对标注做 Q1–Q4 确定性检测（疑似重复/归属确认/值框形态/越界）。要继续就说一声。
+        - generic [ref=f3e366]:
+          - button "Copy" [ref=f3e367] [cursor=pointer]
+          - generic [ref=f3e371]:
+            - button "Good response" [ref=f3e372] [cursor=pointer]
+            - button "Bad response" [ref=f3e375] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f3e378] [cursor=pointer]
+          - generic [ref=f3e384]:
+            - button "Usage 645K tok" [ref=f3e386] [cursor=pointer]
+            - generic [ref=f3e392]: 11:11
+        - generic [ref=f3e502]:
+          - generic [ref=f3e503]: 登记已确认，继续往下走。两点要求：一、分组方案用 A（按单据层级分 3 组那档）；二、负样本构造带改 0.03,0.06（不用缺省带）。请推进 experiment_setup 段把这些落进实验配置，九要素确认卡出来后我再看。
+          - generic [ref=f3e505]:
+            - generic [ref=f3e506]: 11:19
+            - button "Copy" [ref=f3e507] [cursor=pointer]
+        - generic [ref=f3e1004]:
+          - status [ref=f3e1005]: Completed
+          - button "Completed in 6m 6s" [ref=f3e1006] [cursor=pointer]
+        - generic [ref=f3e1014]:
+          - paragraph [ref=f3e1015]:
+            - text: ✅
+            - strong [ref=f3e1016]:
+              - code [ref=f3e1017]: experiment_setup
+              - text: 段完成
+            - text: （exit 0，审批账本
+            - code [ref=f3e1018]: 0cc8938069d549739a32bc59d1dad470
+            - text: ），你那两点要求都已锁定进实验配置：
+          - paragraph [ref=f3e1019]:
+            - strong [ref=f3e1020]: 落定的实验配置
+          - table [ref=f3e1022]:
+            - rowgroup [ref=f3e1023]:
+              - row [ref=f3e1024]:
+                - columnheader "项" [ref=f3e1025]
+                - columnheader "值" [ref=f3e1026]
+                - columnheader "来源" [ref=f3e1027]
+            - rowgroup [ref=f3e1028]:
+              - row [ref=f3e1029]:
+                - cell "分组方案" [ref=f3e1030]
+                - cell [ref=f3e1031]:
+                  - strong [ref=f3e1032]: A
+                  - text: （3 组·按单据层级：doc_identifier／page_summary／goods_item）
+                - cell [ref=f3e1033]:
+                  - code [ref=f3e1034]: explicit
+                  - text: （你指定）
+              - row [ref=f3e1035]:
+                - cell "负样本构造带" [ref=f3e1036]
+                - cell [ref=f3e1037]:
+                  - strong [ref=f3e1038]: 0.03 – 0.06
+                - cell [ref=f3e1039]:
+                  - code [ref=f3e1040]: user_specified
+                  - text: （你指定，未用 0.02–0.05 内置兜底）
+              - row [ref=f3e1041]:
+                - cell "字段序" [ref=f3e1042]
+                - cell [ref=f3e1043]:
+                  - strong [ref=f3e1044]: 14 键锁定
+                  - text: （container_no → seal_no → goods_name → … → total_net_weight）
+                - cell "实验门产出（gate_produced）" [ref=f3e1045]
+              - row [ref=f3e1046]:
+                - cell "字段配置指纹" [ref=f3e1047]
+                - cell [ref=f3e1048]:
+                  - code [ref=f3e1049]: sha256:96d5942c…3c38c0
+                - cell "显式传入" [ref=f3e1050]
+          - paragraph [ref=f3e1051]:
+            - text: 实验配置原件：
+            - button "experiment-config.json" [ref=f3e1052] [cursor=pointer]
+            - text: （run 树在
+            - code [ref=f3e1057]: workspace/runs/b7-swb-r1/
+            - text: ，段摘要
+            - code [ref=f3e1058]: stage-experiment_setup.summary.*
+            - text: 同目录可回看）。
+          - paragraph [ref=f3e1059]:
+            - strong [ref=f3e1060]: 过程中的一个补料
+            - text: ：产品不内置字段配置，swb 也没有现成的，我按 BL 配置同款
+            - code [ref=f3e1061]: PromptFieldConfig/v1
+            - text: schema 从标注原文起草了
+            - button "field-config-swb.json" [ref=f3e1062] [cursor=pointer]
+            - text: ——14 个 field_id 与标注
+            - code [ref=f3e1067]: pselect
+            - text: 逐一对应，分 3 个语义组（swb_container：箱号/铅封号；swb_goods_item：品名、件数、箱数、托盘数、毛/净重、重量、体积、HS 编码、唛头；swb_totals：总毛重/总净重），每条定义都锚在真实取值形态上（欧式小数逗号、
+            - code [ref=f3e1068]: BEAU4858783
+            - text: 箱号格式、多行唛头等）。这份配置会进 prompt 面与评测面，建议你抽空过目一遍，有不认可的措辞我可以改后重锁。
+          - paragraph [ref=f3e1069]:
+            - strong [ref=f3e1070]: 关于九要素确认卡的时点
+            - text: ：它在
+            - strong [ref=f3e1071]:
+              - code [ref=f3e1072]: training_prep
+              - text: 段
+            - text: 才出——那张卡的现值基线是
+            - code [ref=f3e1073]: prep/iteration-config
+            - text: 的 IterationConfig 实值，而 run 现在还没走到那。按段序，中间还隔着 5 段：
+            - strong [ref=f3e1074]: label_qc（标签体检）→ candidate_build → publish → family_split → admission
+            - text: 。
+          - paragraph [ref=f3e1075]:
+            - text: 要继续的话我就按序推
+            - code [ref=f3e1076]: label_qc
+            - text: （对 50 对标注做 Q1–Q4 确定性检测，检出待确认项会拿清单来找你逐项裁决）。
+        - generic [ref=f3e1080]:
+          - button "Copy" [ref=f3e1081] [cursor=pointer]
+          - generic [ref=f3e1085]:
+            - button "Good response" [ref=f3e1086] [cursor=pointer]
+            - button "Bad response" [ref=f3e1089] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f3e1092] [cursor=pointer]
+          - generic [ref=f3e1098]:
+            - button "Usage 570K tok" [ref=f3e1100] [cursor=pointer]
+            - generic [ref=f3e1106]: 11:25
+        - generic [ref=f3e1109]:
+          - generic [ref=f3e1110]: 字段配置我已备好：/data/atf/prodtest/atf-prodtest-20261021/field-config-swb.json（sea_waybill，14 字段，与数据 pselect 一一对应）。分组方案 A 和负样本带 0.03,0.06 保持不变，带上这份 field-config 重跑 experiment_setup。
+          - generic [ref=f3e1112]:
+            - generic [ref=f3e1113]: 11:25
+            - button "Copy" [ref=f3e1114] [cursor=pointer]
+        - generic [ref=f3e1327]:
+          - status [ref=f3e1328]: Completed
+          - button "Completed in 2m 0s" [ref=f3e1329] [cursor=pointer]
+        - generic [ref=f3e1276]:
+          - paragraph [ref=f3e1277]:
+            - text: 重跑请求在审批面板
+            - strong [ref=f3e1278]: 未获放行
+            - text: （approval denied），本次没有执行、零写入。
+          - paragraph [ref=f3e1279]: 说明一下现状，帮你判断是否还需要重跑：
+          - list [ref=f3e1280]:
+            - listitem [ref=f3e1281]:
+              - text: 上一轮
+              - code [ref=f3e1282]: experiment_setup
+              - text: 已经
+              - strong [ref=f3e1283]: 带着这份 field-config 成功落锁
+              - text: ——当时传入的就是这同一份文件，指纹
+              - code [ref=f3e1284]: sha256:96d5942c…3c38c0
+              - text: 已记录在实验门凭据（
+              - code [ref=f3e1285]: gate_produced.field_config_sha
+              - text: ）里；
+            - listitem [ref=f3e1286]:
+              - text: 分组方案
+              - strong [ref=f3e1287]: A
+              - text: 与负样本带
+              - strong [ref=f3e1288]: 0.03,0.06
+              - text: 也均已锁定，来源标注
+              - code [ref=f3e1289]: explicit
+              - text: ／
+              - code [ref=f3e1290]: user_specified
+              - text: ；
+            - listitem [ref=f3e1291]: 我重跑前读了文件现状：与你描述的「14 字段、与 pselect 一一对应」完全一致，未发生任何变更。
+          - paragraph [ref=f3e1292]:
+            - text: 也就是说：
+            - strong [ref=f3e1293]: 你要求的三件事在 run 里已经是现行生效状态，这次重跑是同内容重放
+            - text: ——如果你是在审批面板上看到这一点后有意拒绝的，那正合适，什么都不用做。
+          - paragraph [ref=f3e1294]: 两种后续，你挑一个：
+          - list [ref=f3e1295]:
+            - listitem [ref=f3e1296]:
+              - strong [ref=f3e1297]: 维持现状，直接往下走
+              - text: （推荐）：下一段是
+              - code [ref=f3e1298]: label_qc
+              - text: 标签体检，我随时可以推。
+            - listitem [ref=f3e1299]:
+              - strong [ref=f3e1333]: 你确实想改配置内容
+              - text: （比如把
+              - code [ref=f3e1334]: document_type
+              - text: 改成
+              - code [ref=f3e1335]: sea_waybill
+              - text: ，或调整字段定义）：把改动点告诉我，我改完文件后再重跑
+              - code [ref=f3e1336]: experiment_setup
+              - text: ——届时会在审批面板再弹一次卡，需要你放行才会执行。
+        - generic [ref=f3e1340]:
+          - button "Copy" [ref=f3e1341] [cursor=pointer]
+          - generic [ref=f3e1345]:
+            - button "Good response" [ref=f3e1346] [cursor=pointer]
+            - button "Bad response" [ref=f3e1349] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f3e1352] [cursor=pointer]
+          - generic [ref=f3e1358]:
+            - button "Usage 219K tok" [ref=f3e1360] [cursor=pointer]
+            - generic [ref=f3e1366]: 11:27
+        - generic [ref=f3e1369]:
+          - generic [ref=f3e1370]: 不用重跑 experiment_setup——刚才那张卡我拒了，产物已是最新（你的指纹与磁盘文件一致）。现在直接按段序推进：label_qc → candidate_build → publish → family_split → admission → training_prep，一路走完。每段审批卡我都会放行；label_qc 若有检出待确认项，把清单拿给我逐项裁决。全部段结束后给各段 exit code 汇总。
+          - generic [ref=f3e1372]:
+            - generic [ref=f3e1373]: 11:27
+            - button "Copy" [ref=f3e1374] [cursor=pointer]
+        - generic [ref=f3e2980]:
+          - status [ref=f3e2981]: Completed
+          - button "Completed in 16m 47s" [disabled] [ref=f3e2982]
+        - button "Analysis completed" [ref=f3e2985] [cursor=pointer]
+        - paragraph [ref=f3e1408]:
+          - text: 明白，按段序一路推进。每段审批卡由你放行，段间有依赖所以只能逐段串行走。先推
+          - strong [ref=f3e1409]:
+            - code [ref=f3e1410]: label_qc
+          - text: （标签体检：Q1 同框同值同字段疑似重复／Q2 同框同值异字段归属确认／Q3 值框形态／Q4 越界）：
+        - button "Called tools" [ref=f3e2999] [cursor=pointer]
+        - paragraph [ref=f3e1483]:
+          - code [ref=f3e1484]: label_qc
+          - text: 干净通过：50 样本全扫，
+          - strong [ref=f3e1485]: Q1–Q4 全零、无待确认项
+          - text: （不用找你裁决了），仅 1 个非配对文件（量化自带的
+          - code [ref=f3e1486]: quantize-summary.json
+          - text: ，盘点性记录，无害）。继续
+          - strong [ref=f3e1487]:
+            - code [ref=f3e1488]: candidate_build
+          - text: ：
+        - button "Called tools" [ref=f3e3013] [cursor=pointer]
+        - paragraph [ref=f3e1560]:
+          - code [ref=f3e1561]: candidate_build
+          - text: 回了个
+          - strong [ref=f3e1562]: 裸 exit 1
+          - text: ——没有 WalkthroughPipelineReport、没有拒绝明细，这不像是业务拒绝（那会带 rejections），更像内核侧异常。先只读排查 run 树里留下了什么：
+        - button "Called tools" [ref=f3e3027] [cursor=pointer]
+        - paragraph [ref=f3e1613]: run 树里没有任何 candidate_build 产物（连段摘要都没写），失败发生在极早期。重试一次，看是否瞬时故障：
+        - button "Called tools" [ref=f3e3041] [cursor=pointer]
+        - paragraph [ref=f3e1682]: 复现了，同样的裸 exit 1——不是瞬时故障。查一下技能清单里有没有 walkthrough 管线对应的操作定义（里面通常会写各段的退出码语义与前置条件）：
+        - button "Called tools" [ref=f3e3055] [cursor=pointer]
+        - paragraph [ref=f3e1733]:
+          - text: 技能清单里没有 walkthrough 管线的操作定义。换个思路：内核与 harness 都在
+          - code [ref=f3e1734]: /data/sam
+          - text: （白名单根内），找 harness/内核日志里这两次 candidate_build 崩溃的痕迹：
+        - button "Called tools" [ref=f3e3069] [cursor=pointer]
+        - paragraph [ref=f3e1789]:
+          - text: playwright 的浏览器日志不相关。找内核本体——
+          - code [ref=f3e1790]: "@atf"
+          - text: scope 就在 harness 的 node_modules 里，定位 walkthrough 管线与 candidate_build 的实现：
+        - button "Called tools" [ref=f3e3083] [cursor=pointer]
+        - paragraph [ref=f3e1887]:
+          - text: 内核定位到了：
+          - code [ref=f3e1888]: /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py
+          - text: （pin 单源）。看 candidate_build 段的实现与 exit 1 的触发条件：
+        - button "Called tools" [ref=f3e3097] [cursor=pointer]
+        - paragraph [ref=f3e1939]:
+          - text: 关键线索：line 162 显示
+          - code [ref=f3e1940]: candidate_build
+          - text: 的前置是
+          - code [ref=f3e1941]: ("split_dir", "commit_pin", "repository_id")
+          - text: ，line 170 显示 candidate_build 属于
+          - strong [ref=f3e1942]: 要求显式 source_root
+          - text: 的段集合——而我这两次调用都没传
+          - code [ref=f3e1943]: source_root
+          - text: 。看前置校验是怎么处置缺失的（优雅 blocked 还是裸崩）：
+        - button "Read files and called tools" [ref=f3e3111] [cursor=pointer]
+        - paragraph [ref=f3e2013]:
+          - text: 段实现本身有优雅的 blocked 路径，但两次都是
+          - strong [ref=f3e2014]: 裸 exit 1 且零报告
+          - text: ——崩在报告管线之前。查
+          - code [ref=f3e2015]: _prereq
+          - text: 与 main 的退出码映射，找出 exit 1 从哪来：
+        - button "Called tools" [ref=f3e3123] [cursor=pointer]
+        - paragraph [ref=f3e2110]:
+          - text: main 只捕获
+          - code [ref=f3e2111]: RunLayoutError
+          - text: →exit 3；其它异常会裸穿→解释器 traceback→
+          - strong [ref=f3e2112]: exit 1
+          - text: ，且此时摘要还没打印/落盘——与观察完全吻合。嫌疑最大的是
+          - code [ref=f3e2113]: stage_candidate_build
+          - text: 里那条
+          - strong [ref=f3e2114]: 函数内 import
+          - text: （line 1454）。对比一下成功了的 label_qc 用的 import，并确认
+          - code [ref=f3e2115]: agentic_training_flow
+          - text: 包在内核环境里是否可得：
+        - button "Called tools" [ref=f3e3137] [cursor=pointer]
+        - paragraph [ref=f3e2195]:
+          - text: 模块级 import 都成功了（register/experiment_setup/label_qc 都能起），所以包路径没问题；而且 line 1117 experiment_setup 里也 import 过同模块的
+          - code [ref=f3e2196]: inspect_annotations, inspect_source_inventory
+          - text: 且成功了。继续读
+          - code [ref=f3e2197]: _rehydrate
+          - text: 剩余部分、
+          - code [ref=f3e2198]: run()
+          - text: 派发和 experiment_setup 里那次 import 的上下文，锁定差异点：
+        - button "Called tools" [ref=f3e3151] [cursor=pointer]
+        - paragraph [ref=f3e2272]:
+          - text: 实验门那次 import 有
+          - code [ref=f3e2273]: if self.source_root is not None
+          - text: 守卫，candidate_build 的是裸 import——但包本身能导（实验门已证明），所以崩点大概率在
+          - code [ref=f3e2274]: inspect_source_inventory(...)
+          - text: 执行中。要拿实锤 stderr。查 harness 侧怎么拉起内核子进程、stderr 落哪：
+        - button "Called tools" [ref=f3e3165] [cursor=pointer]
+        - paragraph [ref=f3e2345]: harness 捕获了 stderr 但只在 exit 3 时回传。看 exit 1 分支怎么组装响应：
+        - button "Called tools" [ref=f3e3179] [cursor=pointer]
+        - generic [ref=f3e2402]:
+          - paragraph [ref=f3e2403]:
+            - text: exit 1 分支确实不回传 stderr，traceback 被 harness 丢了。还有个关键发现：experiment_setup 里同样的 inspect 调用包着
+            - code [ref=f3e2404]: "try:"
+            - text: （line 1119）——
+            - strong [ref=f3e2405]: 异常会被吞掉优雅降级
+            - text: ；而 candidate_build 里是裸调用，一抛就裸 exit 1。完全自洽。
+          - paragraph [ref=f3e2406]: 用 scratch 诊断脚本直接复现崩点（只碰 scratch，零触碰 run 树）：
+        - button "Called tools" [ref=f3e3193] [cursor=pointer]
+        - paragraph [ref=f3e2477]:
+          - text: 两个 inspect 函数在 scratch 里单跑
+          - strong [ref=f3e2478]: 都正常
+          - text: （盘点 OK、14 字段闭集齐）——崩点在更 downstream：
+          - code [ref=f3e2479]: _resolve_field_config
+          - text: /
+          - code [ref=f3e2480]: _prompt_profile_document
+          - text: /
+          - code [ref=f3e2481]: _candidate_document
+          - text: 。逐个读：
+        - button "Called tools" [ref=f3e3207] [cursor=pointer]
+        - paragraph [ref=f3e2557]:
+          - text: 发现第二个函数内 import：line 1246
+          - code [ref=f3e2558]: from prompt_profile import …
+          - text: ——这是
+          - strong [ref=f3e2559]: 顶层模块名
+          - text: （不是
+          - code [ref=f3e2560]: agentic_training_flow.
+          - text: 前缀），靠 sys.path 里有特定目录才可导。我的 scratch 诊断没测到这条。看文件头部的 sys.path 设置和这些模块的位置：
+        - button "Called tools" [ref=f3e3221] [cursor=pointer]
+        - paragraph [ref=f3e2631]:
+          - code [ref=f3e2632]: prompt_profile.py
+          - text: 就在 sys.path 注入的 admit scripts 目录里，import 理论上也通。那崩点只剩候选文档构建的渲染/摘要链。先最小复现：在 scratch 里按 CLI 同款 sys.path 手动跑 profile→resolve→render 链：
+        - button "Called tools" [ref=f3e3235] [cursor=pointer]
+        - generic [ref=f3e2681]:
+          - generic [ref=f3e2682]: 根因我这边定位好了：candidate_build 的 source 盘点（inspect_source_inventory）只认 png+json 成对文件，而量化 CLI 把逐值映射 quantize-map.csv 写进了量化副本数据目录里——工具自产文件堵住了下一段。我已把该 csv 移到 run 目录留档（workspace/runs/b7-swb-r1/analysis/quantize-map.b7-swb-r1.csv），数据目录现在只有 50 对 png+json。请重新触发 candidate_build，配置不变（field-config、分组 A、负样本带 0.03,0.06）。这个内核侧缺陷（量化输出与 source taxonomy 互斥）我会登记内核待办。
+          - generic [ref=f3e2684]:
+            - generic [ref=f3e2685]: 11:39
+            - button "Copy" [ref=f3e2686] [cursor=pointer]
+        - button "Analysis completed" [ref=f3e3249] [cursor=pointer]
+        - paragraph [ref=f3e2720]:
+          - text: 收到，你的根因结论与修复都明确了。快速核验一下数据目录现状（确认 csv 已移走、只剩 50 对），然后带原配置重触发
+          - code [ref=f3e2721]: candidate_build
+          - text: ：
+        - button "Called tools" [ref=f3e3263] [cursor=pointer]
+        - paragraph [ref=f3e2775]:
+          - text: 数据目录已纯净化：100 文件＝50 对 png+json，两个量化自产件（csv＋summary）都在 run 的
+          - code [ref=f3e2776]: analysis/
+          - text: 留档。重触发
+          - code [ref=f3e2777]: candidate_build
+          - text: ：
+        - button "Called tools" [ref=f3e3277] [cursor=pointer]
+        - paragraph [ref=f3e2853]:
+          - text: ✅
+          - code [ref=f3e2854]: candidate_build
+          - text: 通过了（审批
+          - code [ref=f3e2855]: 1bc93756…
+          - text: ）——你的定位正确，csv 移走后一次走通：盘点字段闭集 14 键、必备键模板 23 键零缺失（可选键
+          - code [ref=f3e2856]: label_semantics
+          - text: 引擎允许），候选件与 prompt profile 已落 run 树。继续按段序推
+          - strong [ref=f3e2857]:
+            - code [ref=f3e2858]: publish
+          - text: ：
+        - button "Called tools" [ref=f3e3291] [cursor=pointer]
+        - paragraph [ref=f3e2930]:
+          - text: ✅
+          - code [ref=f3e2931]: publish
+          - text: 通过（
+          - code [ref=f3e2932]: gate_verdict=pass
+          - text: ，抽取合同已发布，bundle
+          - code [ref=f3e2933]: e39f3e41…
+          - text: ）。继续
+          - strong [ref=f3e2934]:
+            - code [ref=f3e2935]: family_split
+          - text: （版式聚类三态缺省 auto——若内核报聚类状态不明我会停下来先问你）：
+        - button "Called tools" [ref=f3e3305] [cursor=pointer]
+        - generic [ref=f3e3322]:
+          - paragraph [ref=f3e3323]:
+            - code [ref=f3e3324]: family_split
+            - text: 在版式聚类这一步被闸停了（blocked，零写入），按规程我必须先问你、不能替你猜：
+          - paragraph [ref=f3e3325]:
+            - strong [ref=f3e3326]: 内核检测到的事实
+            - text: ：这批 50 页每页都带
+            - code [ref=f3e3327]: cluster_id
+            - text: ，但全部是
+            - code [ref=f3e3328]: cluster-<文件名>
+            - text: 的
+            - strong [ref=f3e3329]: 1:1 占位簇
+            - text: ——owner 口径认定这不是真实的版式聚类证据，所以按「未聚类」处理，不自动往下切。
+          - paragraph [ref=f3e3330]:
+            - strong [ref=f3e3331]: 所以要先问你一句：这批海运单数据，之前做过版式聚类（按版式分过组）吗？
+          - list [ref=f3e3332]:
+            - listitem [ref=f3e3333]:
+              - strong [ref=f3e3334]: 没做过
+              - text: （我推测大概率是这种——文件都是 sha 命名的散页）：我让内核
+              - strong [ref=f3e3335]: 确定性补一版式聚类
+              - text: （按版式归簇、产出
+              - code [ref=f3e3336]: StyleClusterManifest/v1
+              - text: ，切分时按簇分层，保证 train/test 无同版式泄漏），然后重跑
+              - code [ref=f3e3337]: family_split
+              - text: 。
+            - listitem [ref=f3e3338]:
+              - strong [ref=f3e3339]: 做过
+              - text: （分组证据在别的目录/文件里）：把那份分组数据的位置告诉我，我核对了证据再直接分层。
+          - paragraph [ref=f3e3340]:
+            - text: 你回一句「没做过」或给出分组证据位置，我就继续往下走（后续还有
+            - code [ref=f3e3341]: admission
+            - text: 、
+            - code [ref=f3e3342]: training_prep
+            - text: 两段）。
+        - generic [ref=f3e3346]:
+          - button "Copy" [ref=f3e3347] [cursor=pointer]
+          - generic [ref=f3e3351]:
+            - button "Good response" [ref=f3e3352] [cursor=pointer]
+            - button "Bad response" [ref=f3e3355] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=f3e3358] [cursor=pointer]
+          - generic [ref=f3e3364]:
+            - button "Usage 2.8M tok" [ref=f3e3366] [cursor=pointer]
+            - generic [ref=f3e3372]: 11:44
+        - generic [ref=f3e3385]:
+          - generic [ref=f3e3386]: 没做过版式聚类（这批是 sha 命名的散页）。让内核确定性补一版式聚类（--auto-style-cluster on，产出 StyleClusterManifest/v1）然后继续切分，后面段照旧推进。
+          - generic [ref=f3e3388]:
+            - generic [ref=f3e3389]: 11:46
+            - button "Copy" [ref=f3e3390] [cursor=pointer]
+        - 'button "Think User confirmed: no style clustering was done. Use auto_style_cluster=on for family_split, then continue with admission → training_prep." [ref=f3e3417] [cursor=pointer]':
+          - generic [ref=f3e3427]:
+            - generic [ref=f3e3428]: Think
+            - generic [ref=f3e3430]: "User confirmed: no style clustering was done. Use auto_style_cluster=on for family_split, then continue with admission → training_prep."
+        - paragraph [ref=f3e3437]:
+          - text: 好，带上「未聚类→内核补簇」重跑
+          - code [ref=f3e3438]: family_split
+          - text: ：
+        - generic [ref=f3e3441]:
+          - button "Tool call atf_pipeline_stage · on" [ref=f3e3449] [cursor=pointer]:
+            - generic [ref=f3e3459]:
+              - generic [ref=f3e3460]: Tool call
+              - generic [ref=f3e3462]: atf_pipeline_stage · on
+          - 'button "Think family_split OK: 内核补簇完成，四道闸全 pass（extraction-contract-valid / source-identity-valid / split-integrity-valid / training-data-valid），l1_dir = publish/4d3e5afc。" [ref=f3e3490] [cursor=pointer]':
+            - generic [ref=f3e3500]:
+              - generic [ref=f3e3501]: Think
+              - generic [ref=f3e3503]: "family_split OK: 内核补簇完成，四道闸全 pass（extraction-contract-valid / source-identity-valid / split-integrity-valid / training-data-valid），l1_dir = publish/4d3e5afc。"
+        - paragraph [ref=f3e3510]:
+          - text: ✅
+          - code [ref=f3e3511]: family_split
+          - text: 通过（内核已确定性补簇并产出 manifest，四道完整性闸全 pass，L1 产物在
+          - code [ref=f3e3512]: publish/4d3e5afc/
+          - text: ）。继续
+          - strong [ref=f3e3513]:
+            - code [ref=f3e3514]: admission
+          - text: ，同时顺手核验
+          - code [ref=f3e3515]: training_prep
+          - text: 要用的基座模型路径（九要素卡缺省锚点＝模型库下的 Qwen3-VL-32B-Instruct）：
+        - generic [ref=f3e3518]:
+          - button "Tool call atf_pipeline_stage · swb" [ref=f3e3526] [cursor=pointer]:
+            - generic [ref=f3e3536]:
+              - generic [ref=f3e3537]: Tool call
+              - generic [ref=f3e3539]: atf_pipeline_stage · swb
+          - button "Tool call atf_bash · ls /data/LLM_model/Qwen3-VL-32B-Instruct/config.json 2>/dev/null && echo 'config.json OK' || ls /data/LLM_model/ | head -20" [ref=f3e3573] [cursor=pointer]:
+            - generic [ref=f3e3554]:
+              - generic [ref=f3e3555]: Tool call
+              - generic [ref=f3e3557]: atf_bash · ls /data/LLM_model/Qwen3-VL-32B-Instruct/config.json 2>/dev/null && echo 'config.json OK' || ls /data/LLM_model/ | head -20
+          - button "Think admission passed — all four gates pass." [ref=f3e3593] [cursor=pointer]:
+            - generic [ref=f3e3603]:
+              - generic [ref=f3e3604]: Think
+              - generic [ref=f3e3606]: admission passed — all four gates pass.
+        - generic [ref=f3e3612]:
+          - paragraph [ref=f3e3613]:
+            - text: ✅
+            - code [ref=f3e3614]: admission
+            - text: 通过——四道完整性闸（G1–G4 对应的 extraction-contract / source-identity / split-integrity / training-data）全部 pass，数据正式准入。
+          - paragraph [ref=f3e3615]:
+            - text: 模型路径在 bash 围栏外读不到，改用
+            - code [ref=f3e3616]: atf_hello
+            - text: 探针核对本机模型清单，然后带基座模型推最后一段
+            - strong [ref=f3e3617]:
+              - code [ref=f3e3618]: training_prep
+            - text: ：
+        - generic [ref=f3e3621]:
+          - 'button "Tool call atf_hello · {}" [ref=f3e3628] [cursor=pointer]':
+            - generic [ref=f3e3638]:
+              - generic [ref=f3e3639]: Tool call
+              - generic [ref=f3e3641]: "atf_hello · {}"
+          - 'button "Think Model list confirmed: Qwen3-VL-32B-Instruct is in /data/LLM_model. Now fire training_prep with base_model_path=/data/LLM_model/Qwen3-VL-32B-Instruct (owner anchor default for the nine-element card; user can amend on the card)." [ref=f3e3649] [cursor=pointer]':
+            - generic [ref=f3e3659]:
+              - generic [ref=f3e3660]: Think
+              - generic [ref=f3e3662]: "Model list confirmed: Qwen3-VL-32B-Instruct is in /data/LLM_model. Now fire training_prep with base_model_path=/data/LLM_model/Qwen3-VL-32B-Instruct (owner anchor default for the nine-element card; user can amend on the card)."
+        - paragraph [ref=f3e3669]:
+          - text: 模型在位（
+          - code [ref=f3e3670]: Qwen3-VL-32B-Instruct
+          - text: 就在
+          - code [ref=f3e3671]: /data/LLM_model
+          - text: ）。推
+          - strong [ref=f3e3672]:
+            - code [ref=f3e3673]: training_prep
+          - text: ，基座取确认卡缺省锚点（owner 裁定的模型库 Qwen3-VL-32B-Instruct）——九要素确认卡出来后你可改任何参数：
+        - generic [ref=f3e3676]:
+          - button "Tool call atf_pipeline_stage · /data/LLM_model/Qwen3-VL-32B-Instruct" [ref=f3e3684] [cursor=pointer]:
+            - generic [ref=f3e3694]:
+              - generic [ref=f3e3695]: Tool call
+              - generic [ref=f3e3697]: atf_pipeline_stage · /data/LLM_model/Qwen3-VL-32B-Instruct
+          - button "Think training_prep blocked with several interlocking issues:" [ref=f3e3740] [cursor=pointer]:
+            - generic [ref=f3e3733]:
+              - generic [ref=f3e3734]: Think
+              - generic [ref=f3e3736]: "training_prep blocked with several interlocking issues:"
+        - paragraph [ref=f3e3746]:
+          - code [ref=f3e3747]: training_prep
+          - text: 被 blocked（零产物），卡点有三个，互相咬合：①实验门 token 预算未确认落盘（九要素确认卡的职责面）；②token 计量 provider 缺席→训练变体构造被拦→
+          - code [ref=f3e3748]: train.jsonl
+          - text: 缺→迭代配置生成失败；③50 张图坐标换算 pending。先读
+          - code [ref=f3e3749]: atf-prepare-training
+          - text: 技能的操作定义，找 sanctioned 的处理路径：
+        - generic [ref=f3e3752]:
+          - button "Tool call atf_skill_read · atf-prepare-training" [ref=f3e3759] [cursor=pointer]:
+            - generic [ref=f3e3769]:
+              - generic [ref=f3e3770]: Tool call
+              - generic [ref=f3e3772]: atf_skill_read · atf-prepare-training
+          - button "Think The atf-prepare-training skill explains the flow but doesn't directly mention the token provider script. The training_prep blocked on:" [ref=f3e3780] [cursor=pointer]:
+            - generic [ref=f3e3790]:
+              - generic [ref=f3e3791]: Think
+              - generic [ref=f3e3793]: "The atf-prepare-training skill explains the flow but doesn't directly mention the token provider script. The training_prep blocked on:"
+        - paragraph [ref=f3e3800]: 技能文档确认了链路，但 token provider 的旗标没暴露在段工具上。查 harness 段驱动实际给内核传了哪些参（token/坐标重试相关是否接线）：
+        - generic [ref=f3e3803]:
+          - button "Tool call atf_bash · grep -n 'token\\|coordinate\\|retry' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/pipelineFace.ts | head -20; echo '---argv build---'; grep -n 'args.push\\|push(' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/pipelineFace.ts | head -40" [ref=f3e3810] [cursor=pointer]:
+            - generic [ref=f3e3820]:
+              - generic [ref=f3e3821]: Tool call
+              - generic [ref=f3e3823]: atf_bash · grep -n 'token\|coordinate\|retry' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/pipelineFace.ts | head -20; echo '---argv build---'; grep -n 'args.push\|push(' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/pipelineFace.ts | head -40
+          - 'button "Think Confirmed: the harness''s stage driver does NOT pass --token-provider, --allow-token-gate-skip, or --retry-coordinate-pending. So training_prep via atf_pipeline_stage will always hit token_gate_provider_required in this kernel version — UNLESS the token gate is satisfied by the experiment gate''s confirmed budget (ExperimentConfig token_gate section)." [ref=f3e3831] [cursor=pointer]':
+            - generic [ref=f3e3841]:
+              - generic [ref=f3e3842]: Think
+              - generic [ref=f3e3844]: "Confirmed: the harness's stage driver does NOT pass --token-provider, --allow-token-gate-skip, or --retry-coordinate-pending. So training_prep via atf_pipeline_stage will always hit token_gate_provider_required in this kernel version — UNLESS the token gate is satisfied by the experiment gate's confirmed budget (ExperimentConfig token_gate section)."
+        - paragraph [ref=f3e3851]:
+          - text: 段驱动确实没接 token/坐标重试旗标。看内核自带的 token 门测试（
+          - code [ref=f3e3852]: test_walkthrough_token_gate_explicit.py
+          - text: ），找 provider 的 sanctioned 形态：
+        - generic [ref=f3e3855]:
+          - button "Tool call atf_bash · grep -n 'token.provider\\|token-provider\\|token_provider' /data/sam/ATF-Harness/.atf-pinned/tests/tools/test_walkthrough_token_gate_explicit.py | head -15; echo '---provider scripts in repo---'; find /data/sam/ATF-Harness/.atf-pinned -name '*token*' -name '*.py' 2>/dev/null | grep -v test | head; echo '---fixtures---'; grep -rn 'token-provider\\|token_provider' /data/sam/ATF-Harness/.atf-pinned/tests/tools/test_walkthrough_token_gate_explicit.py | grep -oE '\"[^\"]*provider[^\"]*\"' | sort -u | head" [ref=f3e3862] [cursor=pointer]:
+            - generic [ref=f3e3872]:
+              - generic [ref=f3e3873]: Tool call
+              - generic [ref=f3e3875]: atf_bash · grep -n 'token.provider\|token-provider\|token_provider' /data/sam/ATF-Harness/.atf-pinned/tests/tools/test_walkthrough_token_gate_explicit.py | head -15; echo '---provider scripts in repo---'; find /data/sam/ATF-Harness/.atf-pinned -name '*token*' -name '*.py' 2>/dev/null | grep -v test | head; echo '---fixtures---'; grep -rn 'token-provider\|token_provider' /data/sam/ATF-Harness/.atf-pinned/tests/tools/test_walkthrough_token_gate_explicit.py | grep -oE '"[^"]*provider[^"]*"' | sort -u | head
+          - 'button "Think Found it: `/data/sam/ATF-Harness/.atf-pinned/skills/atf-admit-training-data/scripts/token_audit_provider.py` — the production token audit provider script (CPU-only tokenizer audit). The test also shows a stub provider shape (reads jsonl line in, adds total_tokens, echoes)." [ref=f3e3900] [cursor=pointer]':
+            - generic [ref=f3e3897]:
+              - generic [ref=f3e3898]: Think
+              - generic [ref=f3e3902]: "Found it: `/data/sam/ATF-Harness/.atf-pinned/skills/atf-admit-training-data/scripts/token_audit_provider.py` — the production token audit provider script (CPU-only tokenizer audit). The test also shows a stub provider shape (reads jsonl line in, adds total_tokens, echoes)."
+        - paragraph [ref=f3e3909]:
+          - text: 生产形态的 provider 就在 pin 里：
+          - code [ref=f3e3910]: skills/atf-admit-training-data/scripts/token_audit_provider.py
+          - text: 。看内核 training_prep 里 token 门的放行条件，确认「九要素卡确认后 provider 是否还必需」：
+        - generic [ref=f3e3913]:
+          - button "Tool call atf_bash · grep -n 'token_gate_provider_required\\|allow-token-gate-skip\\|allow_token_gate_skip\\|ATF_ALLOW_TOKEN_GATE_SKIP\\|debug-skip-token-gate\\|debug_skip_token_gate' /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py | head -20" [ref=f3e3920] [cursor=pointer]:
+            - generic [ref=f3e3930]:
+              - generic [ref=f3e3931]: Tool call
+              - generic [ref=f3e3933]: atf_bash · grep -n 'token_gate_provider_required\|allow-token-gate-skip\|allow_token_gate_skip\|ATF_ALLOW_TOKEN_GATE_SKIP\|debug-skip-token-gate\|debug_skip_token_gate' /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py | head -20
+          - button "Tool call atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py" [ref=f3e3940] [cursor=pointer]:
+            - generic [ref=f3e3950]:
+              - generic [ref=f3e3951]: Tool call
+              - generic [ref=f3e3953]: atf_read · /data/sam/ATF-Harness/.atf-pinned/tools/walkthrough_pipeline.py
+          - 'button "Think Confirmed: the token gate has 3 branches and the harness stage driver passes NEITHER --token-provider NOR --allow-token-gate-skip. So re-running training_prep via atf_pipeline_stage will deterministically hit branch ③ (token_gate_provider_required) again regardless of budget confirmation. Budget confirmation (九要素卡) resolves the \"实验门预算值未确认\" rejection and the pixel-pair (coordinate transforms) — but NOT the token provider." [ref=f3e3983] [cursor=pointer]':
+            - generic [ref=f3e3972]:
+              - generic [ref=f3e3973]: Think
+              - generic [ref=f3e3975]: "Confirmed: the token gate has 3 branches and the harness stage driver passes NEITHER --token-provider NOR --allow-token-gate-skip. So re-running training_prep via atf_pipeline_stage will deterministically hit branch ③ (token_gate_provider_required) again regardless of budget confirmation. Budget confirmation (九要素卡) resolves the \"实验门预算值未确认\" rejection and the pixel-pair (coordinate transforms) — but NOT the token provider."
+        - paragraph [ref=f3e3989]: token 门是纯 args 驱动的三分支，段工具两个旗标都没传。查一下 harness 其它面有没有接 provider 的通道：
+        - generic [ref=f3e3992]:
+          - button "Tool call atf_bash · grep -rn 'token_audit_provider\\|token-provider\\|token_provider' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/*.ts 2>/dev/null | grep -v '.map' | head -10; echo '---config confirm face---'; grep -rn 'token_budget\\|pixel\\|cutoff' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/configConfirmFace.ts 2>/dev/null | head -10; ls /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/ | head -30" [ref=f3e3999] [cursor=pointer]:
+            - generic [ref=f3e4009]:
+              - generic [ref=f3e4010]: Tool call
+              - generic [ref=f3e4012]: atf_bash · grep -rn 'token_audit_provider\|token-provider\|token_provider' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/*.ts 2>/dev/null | grep -v '.map' | head -10; echo '---config confirm face---'; grep -rn 'token_budget\|pixel\|cutoff' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/configConfirmFace.ts 2>/dev/null | head -10; ls /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/ | head -30
+          - button "Think No token-provider wiring anywhere in the harness faces. Let me check confirmFace.ts (the atf_config_confirm implementation) to see what it does on confirm — does it only write config-snapshot, or does it also patch the run's ExperimentConfig token_gate (budget + pixel pair)?" [ref=f3e4020] [cursor=pointer]:
+            - generic [ref=f3e4030]:
+              - generic [ref=f3e4031]: Think
+              - generic [ref=f3e4033]: No token-provider wiring anywhere in the harness faces. Let me check confirmFace.ts (the atf_config_confirm implementation) to see what it does on confirm — does it only write config-snapshot, or does it also patch the run's ExperimentConfig token_gate (budget + pixel pair)?
+        - paragraph [ref=f3e4040]:
+          - text: 看
+          - code [ref=f3e4041]: confirmFace.ts
+          - text: （atf_config_confirm 的实现）确认卡放行后到底落什么：
+        - generic [ref=f3e4044]:
+          - button "Tool call atf_bash · grep -n 'token_budget\\|token_gate\\|pixel\\|image_max_pixels\\|confirm\\|snapshot' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/confirmFace.ts | head -30" [ref=f3e4051] [cursor=pointer]:
+            - generic [ref=f3e4061]:
+              - generic [ref=f3e4062]: Tool call
+              - generic [ref=f3e4064]: atf_bash · grep -n 'token_budget\|token_gate\|pixel\|image_max_pixels\|confirm\|snapshot' /data/sam/ATF-Harness/node_modules/@atf/dsh-atf-tools/src/confirmFace.ts | head -30
+          - button "Think The confirm card writes a config snapshot into the run tree (webui/pending-confirm.json → config-snapshot on Allow). It manages the nine elements incl. pixel pair and budget rows. But nothing about the token provider." [ref=f3e4072] [cursor=pointer]:
+            - generic [ref=f3e4082]:
+              - generic [ref=f3e4083]: Think
+              - generic [ref=f3e4085]: The confirm card writes a config snapshot into the run tree (webui/pending-confirm.json → config-snapshot on Allow). It manages the nine elements incl. pixel pair and budget rows. But nothing about the token provider.
+        - generic [ref=f3e4091]:
+          - paragraph [ref=f3e4092]:
+            - text: harness 全部工具面都没有接 token provider 通道——这是个真实的集成缺口（段驱动没把内核的
+            - code [ref=f3e4093]: "--token-provider"
+            - text: /
+            - code [ref=f3e4094]: "--allow-token-gate-skip"
+            - text: /
+            - code [ref=f3e4095]: "--retry-coordinate-pending"
+            - text: 旗标暴露出来）。按规程我不能绕开受治理的段工具直调内核 CLI。
+          - paragraph [ref=f3e4096]:
+            - text: 先把
+            - strong [ref=f3e4097]: 能走的一步
+            - text: 走掉：三个卡点里「实验门预算未确认＋像素对未定」这一组，正是九要素确认卡的职责面——预算确认落盘后，坐标换算（等像素两档）才有输入。现在把卡呈出来给你审：
+        - generic [ref=f3e4098]:
+          - text: Calling tools · present
+          - generic [ref=f3e4105]:
+            - generic [ref=f3e4106]: Running
+            - button "Tool call atf_config_confirm · present" [ref=f3e4108] [cursor=pointer]:
+              - generic [ref=f3e4117]:
+                - generic [ref=f3e4118]:
+                  - generic [ref=f3e4119]: Tool call
+                  - generic [ref=f3e4121]: atf_config_confirm · present
+                - generic [aria-hidden]:
+                  - generic:
+                    - generic:
+                      - generic: Tool call
+                      - generic: atf_config_confirm · present
+        - generic [ref=f3e3394]:
+          - status [ref=f3e3395]: Deep diving
+          - generic [ref=f3e3399]:
+            - generic [ref=f3e3400]: Deep diving for 7m 21s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 7m 21s ···
+      - region "九要素训练配置确认 — b7-swb-r1" [ref=f3e4123]:
+        - generic [ref=f3e4124]: 训练配置
+        - generic [ref=f3e4126]:
+          - heading "九要素训练配置确认 — b7-swb-r1" [level=3] [ref=f3e4127]
+          - paragraph [ref=f3e4128]: "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。 数据集键（实算，只读）：实算值未产出（IterationConfig 缺席） TokenBudget（三要素）: 单样本 token 预算 max_total_tokens 可编辑 9000 [惯例基线（owner 2026-10-22）] 训练截断 cutoff cutoff_len 只读 9000 [= 预算] 推理窗口 max_model_len 只读 12800 [独立取值]"
+          - generic [ref=f3e4129]:
+            - generic [ref=f3e4130]:
+              - generic [ref=f3e4131]: learning_rate
+              - textbox "learning_rate 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）" [ref=f3e4132]: "1e-4"
+              - generic [ref=f3e4133]: 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）
+            - generic [ref=f3e4134]:
+              - generic [ref=f3e4135]: nproc_per_node
+              - textbox "nproc_per_node [1, 可用卡数 8]" [ref=f3e4136]: "8"
+              - generic [ref=f3e4137]: "[1, 可用卡数 8]"
+            - generic [ref=f3e4138]:
+              - generic [ref=f3e4139]: visible_devices
+              - textbox "visible_devices 逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）" [ref=f3e4140]
+              - generic [ref=f3e4141]: 逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）
+            - generic [ref=f3e4142]:
+              - generic [ref=f3e4143]: base_model_path
+              - textbox "base_model_path" [ref=f3e4144]: /data/LLM_model/Qwen3-VL-32B-Instruct
+            - generic [ref=f3e4145]:
+              - generic [ref=f3e4146]: num_train_epochs
+              - textbox "num_train_epochs 域 [1, 10] 整数" [ref=f3e4147]: "3"
+              - generic [ref=f3e4148]: 域 [1, 10] 整数
+            - generic [ref=f3e4149]:
+              - generic [ref=f3e4150]: per_device_train_batch_size
+              - textbox "per_device_train_batch_size" [ref=f3e4151]: "1"
+            - generic [ref=f3e4152]:
+              - generic [ref=f3e4153]: gradient_accumulation_steps
+              - textbox "gradient_accumulation_steps" [ref=f3e4154]: "16"
+            - generic [ref=f3e4155]:
+              - generic [ref=f3e4156]: cutoff_len
+              - textbox "cutoff_len ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）" [ref=f3e4157]: "9000"
+              - generic [ref=f3e4158]: ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）
+            - generic [ref=f3e4159]:
+              - generic [ref=f3e4160]: deepspeed
+              - textbox "deepspeed" [ref=f3e4161]: ds_z3_offload_config.json
+            - generic [ref=f3e4162]:
+              - generic [ref=f3e4163]: lora_rank
+              - 'textbox "lora_rank 档位 {16, 32, 64, 128}（alpha=2×rank 联动）" [ref=f3e4164]': "32"
+              - generic [ref=f3e4165]: "档位 {16, 32, 64, 128}（alpha=2×rank 联动）"
+            - generic [ref=f3e4166]:
+              - generic [ref=f3e4167]: lora_alpha
+              - textbox "lora_alpha" [ref=f3e4168]: "64"
+            - generic [ref=f3e4169]:
+              - generic [ref=f3e4170]: max_total_tokens
+              - textbox "max_total_tokens 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）" [ref=f3e4171]: "9000"
+              - generic [ref=f3e4172]: 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）
+            - generic [ref=f3e4173]:
+              - generic [ref=f3e4174]: 最小像素
+              - textbox "最小像素 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）" [ref=f3e4175]: "65536"
+              - generic [ref=f3e4176]: 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）
+            - generic [ref=f3e4177]:
+              - generic [ref=f3e4178]: 最大像素
+              - 'textbox "最大像素 两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）" [ref=f3e4179]': "802816"
+              - generic [ref=f3e4180]: "两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）"
+            - generic [ref=f3e4181]:
+              - generic [ref=f3e4182]: negative_ratio_target
+              - textbox "negative_ratio_target 构造带 [0.02, 0.05]" [ref=f3e4183]: 0.02,0.05
+              - generic [ref=f3e4184]: 构造带 [0.02, 0.05]
+            - generic [ref=f3e4185]:
+              - generic [ref=f3e4186]: token_budget_sync_reason
+              - textbox "token_budget_sync_reason" [ref=f3e4187]:
+                - /placeholder: 预算与 cutoff 不等时的不同步理由（不等必填；相等留空）——同步请在 cutoff_len 框直接填预算值（用户动作）
+        - generic [ref=f3e4188]:
+          - status [ref=f3e4189]
+          - generic [ref=f3e4190]:
+            - button "Cancel" [ref=f3e4191] [cursor=pointer]
+            - button "确认并继续" [ref=f3e4192] [cursor=pointer]
+  - generic [ref=f3e465]:
+    - tablist [ref=f3e467]:
+      - tab "训练监控 Close" [selected] [ref=f3e468] [cursor=pointer]:
+        - generic [ref=f3e469]: 训练监控
+        - button "Close" [ref=f3e471]
+      - button "New tab" [ref=f3e475] [cursor=pointer]
+      - button "Split" [ref=f3e478] [cursor=pointer]
+      - generic [ref=f3e481]:
+        - button "Fullscreen" [ref=f3e482] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=f3e485] [cursor=pointer]
+    - generic [ref=f3e488]: 监控已关闭——点顶栏「监控」按钮重新打开

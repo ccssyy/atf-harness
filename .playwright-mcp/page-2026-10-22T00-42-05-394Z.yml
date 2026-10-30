@@ -1,0 +1,690 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e2681] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e2682]:
+          - generic [ref=e2683]: ATF
+          - generic [ref=e2686]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e2689] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e2696]: Workspaces
+        - generic [ref=e2698]:
+          - button "Search sessions" [ref=e2699] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e2704] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e2709]:
+        - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e5734] [cursor=pointer]
+        - treeitem "ws-pl-walkthrough" [ref=e2712] [cursor=pointer]
+        - generic [ref=e2718]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e2720] [cursor=pointer]
+          - treeitem "Waiting for approval 装箱单字段抽取新实验全流程" [selected] [ref=e12403] [cursor=pointer]:
+            - generic [ref=e2734]: Waiting for approval
+            - generic [ref=e2737]: 装箱单字段抽取新实验全流程
+            - generic [aria-hidden] [ref=e2738]: Approval
+        - treeitem "atf-prodtest-20261021" [ref=e8367] [cursor=pointer]
+        - treeitem "a4-hotws" [ref=e2749] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e2757] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e2765] [cursor=pointer]
+        - treeitem "sam" [ref=e2773] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e5832]:
+    - banner [ref=e5834]:
+      - generic [ref=e5835]:
+        - generic [ref=e5836]:
+          - navigation "Session hierarchy" [ref=e5838]:
+            - generic [ref=e5839]: 装箱单字段抽取新实验全流程
+          - generic [ref=e5842]:
+            - button "More actions" [ref=e5844] [cursor=pointer]
+            - generic [ref=e5849]:
+              - button "选择实验 ▾" [ref=e5851] [cursor=pointer]
+              - button "监控" [ref=e5853] [cursor=pointer]
+          - button "Open right sidebar" [ref=e5856] [cursor=pointer]
+        - tablist [ref=e5859]:
+          - tab "Chat" [selected] [ref=e5860] [cursor=pointer]
+          - tab "Trajectory" [ref=e5861] [cursor=pointer]
+    - generic [ref=e5863]:
+      - generic [ref=e5870]:
+        - generic [ref=e5873]:
+          - generic [ref=e5874]: 从零开始一个新实验：装箱单（pl）字段抽取训练。原始数据已备在本工作区 datasets/walkthrough-pl/（50 对 png+同名标注 json）。请走完整正道链：数据登记（新 run，不复用任何旧实验）→标注体检→实验配置→合同发布→数据切分（训练/测试两分 40/10）→准入检查→训练准备→发起训练。九要素确认卡和各放行卡我会逐张核对，机器事实缺了就停下来问我。
+          - generic [ref=e5876]:
+            - generic [ref=e5877]: 07:46
+            - button "Copy" [ref=e5878] [cursor=pointer]
+        - generic [ref=e8741]:
+          - status [ref=e8742]: Completed
+          - button "Completed in 24m 31s" [ref=e8743] [cursor=pointer]
+        - generic [ref=e8751]:
+          - paragraph [ref=e8752]:
+            - text: family_split 段如预期
+            - strong [ref=e8753]: 停下问你
+            - text: （blocked，零写入）。内核检测原话：
+          - blockquote [ref=e8754]:
+            - paragraph [ref=e8755]: 这批数据没有找到版式分组信息（共 50 页，0 页带分组），因此没有继续切分。如果数据确实分过组：请提供带分组信息的数据文件；如果没分过组：可以改为先分组、再切分。
+          - paragraph [ref=e8756]:
+            - text: 补充检测细节：登记清单里 50 页的
+            - code [ref=e8757]: cluster_id
+            - text: 全是
+            - code [ref=e8758]: cluster-<样本名>
+            - text: 的
+            - strong [ref=e8759]: 1:1 占位
+            - text: （逐页一个簇，不是真实版式分组），也没有 StyleClusterManifest。
+          - paragraph [ref=e8760]:
+            - text: 所以需要你裁决一句话：
+            - strong [ref=e8761]: 这批 50 页装箱单数据，做过版式聚类吗？
+          - list [ref=e8762]:
+            - listitem [ref=e8763]:
+              - strong [ref=e8764]: 没做过
+              - text: （从证据看大概率是这种）→ 我让内核先确定性补簇（自动聚类并产出 StyleClusterManifest），再按簇分层做训练/测试切分；
+            - listitem [ref=e8765]:
+              - strong [ref=e8766]: 确实做过
+              - text: 、分组证据在别的文件/目录里 → 请把那份分组数据指给我，我核对后按既有分组分层。
+          - paragraph [ref=e8767]: 你确认后我继续推进（切分→准入→训练准备→发起训练）。
+        - generic [ref=e8771]:
+          - button "Copy" [ref=e8772] [cursor=pointer]
+          - generic [ref=e8776]:
+            - button "Good response" [ref=e8777] [cursor=pointer]
+            - button "Bad response" [ref=e8780] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=e8783] [cursor=pointer]
+          - generic [ref=e8789]:
+            - button "Usage 3.5M tok" [ref=e8791] [cursor=pointer]
+            - generic [ref=e8797]: 08:10
+        - generic [ref=e8810]:
+          - generic [ref=e8811]: 这批数据没做过版式聚类（占位簇是登记期占位）。授权按内核指引用自动分组重跑切分（auto_style_cluster=on），划分按训练/测试两分 40/10。继续推进后续段。
+          - generic [ref=e8813]:
+            - generic [ref=e8814]: 08:13
+            - button "Copy" [ref=e8815] [cursor=pointer]
+        - generic [ref=e11520]:
+          - status [ref=e11521]: Completed
+          - button "Completed in 25m 7s" [disabled] [ref=e11522]
+        - button "Analysis completed" [ref=e11525] [cursor=pointer]
+        - paragraph [ref=e8862]:
+          - text: 收到：未做过版式聚类，授权内核自动补簇后按簇分层切分。重触发
+          - strong [ref=e8863]: family_split
+          - text: （auto_style_cluster=on）。请在面板放行。
+        - button "Called tools" [ref=e11539] [cursor=pointer]
+        - paragraph [ref=e8933]:
+          - text: family_split 二次 blocked：内核按授权开了自动补簇并尝试按 8:2 目标（test 目标 10 页）分配，但
+          - strong [ref=e8934]: 补出的版式簇都太小（每簇 <5 页），守恒护栏拒绝留测试集
+          - text: （
+          - code [ref=e8935]: split_partition_empty:test:target:10
+          - text: ）。内核给出三条路（合并小类／全部训练／每小类留 1 页测试）。先读守卫逻辑，弄清各选项的真实划分效果再拿给你选。
+        - button "Called tools" [ref=e11553] [cursor=pointer]
+        - paragraph [ref=e9125]:
+          - text: 内核的三态文案是
+          - strong [ref=e9126]: 固定模板
+          - text: （
+          - code [ref=e9127]: _USER_MESSAGE_SMALL_CLUSTERS
+          - text: ），「每类不足 5 页」未必反映真实簇形。守恒护栏的真实拒绝点是：按簇整簇分配（零泄漏）下 test 分区落到 0 页（目标 10）。可用杠杆是
+          - code [ref=e9128]: allow_small_cluster_test
+          - text: （每簇按 max(1, 20%) 留测）。在给用户选项前，先看这次失败有没有留下聚类证据、真实簇形是什么——有真实数字才好决策。
+        - button "Called tools" [ref=e11567] [cursor=pointer]
+        - paragraph [ref=e9180]:
+          - text: 失败轮在发布区留下了
+          - code [ref=e9181]: style-cluster-manifest.json
+          - text: ——读它拿真实簇形。
+        - button "Called tools" [ref=e11581] [cursor=pointer]
+        - paragraph [ref=e9235]: 单行 JSON 被截断，用脚本统计簇分布。
+        - button "Called tools" [ref=e11595] [cursor=pointer]
+        - paragraph [ref=e9286]:
+          - text: 真实簇形拿到了：
+          - strong [ref=e9287]: 44 簇
+          - text: ——40 个单页簇、2 个双页簇、2 个三页簇（模板文案「每类不足 5 页」属实）。在下结论前核对
+          - code [ref=e9288]: small_cluster_policy=allow_test
+          - text: 在分配面的真实语义（每簇留测是强制还是上限），避免拍脑袋。
+        - button "Called tools" [ref=e11609] [cursor=pointer]
+        - paragraph [ref=e9366]:
+          - code [ref=e9367]: allow_test
+          - text: 的真实语义核实了（data_admission.py:1435-1445、1872-1880）：每簇 test 目标 = max(1, round(簇大小×0.2))。代入我们的簇形算一下：40 个单页簇各留 1 页测试、2 个双页簇各 1、2 个三页簇各 1 →
+          - strong [ref=e9369]: test=44 / train=6，完全倒挂
+          - text: ——对我们这种单页簇占 80% 的数据，这个开关会产出比 blocked 更糟的「合法废split」。再确认一下切分策略是否有别的可选项。
+        - button "Called tools" [ref=e11623] [cursor=pointer]
+        - generic [ref=e9501]:
+          - paragraph [ref=e9502]:
+            - text: family_split 停在第三种blocked，这次我把三条路的
+            - strong [ref=e9503]: 精确算术结果
+            - text: 都核完了（读了 pin 内核分配器
+            - code [ref=e9504]: data_admission.py:1420-1445
+            - text: 、守恒护栏
+            - code [ref=e9505]: 1817-1830
+            - text: 、策略定义
+            - code [ref=e9506]: walkthrough_pipeline.py:1325-1332
+            - text: ），必须停下来交给你裁定。
+          - heading [level=2] [ref=e9507]:
+            - text: 真实簇形（来自本轮补簇产物
+            - code [ref=e9508]: style-cluster-manifest.json
+            - text: ）
+          - list [ref=e9509]:
+            - listitem [ref=e9510]:
+              - text: 50 页 →
+              - strong [ref=e9511]: 44 个版式簇
+              - text: ：40 个单页簇、2 个双页簇、2 个三页簇（合计多页簇仅 4 个 10 页）
+            - listitem [ref=e9512]:
+              - text: 切分策略是内核硬编码的「按簇分层 8:2」（
+              - code [ref=e9513]: "target_ratios {train:0.8, test:0.2}"
+              - text: ，段工具无比例参数）；分配粒度=整簇，任何簇不得跨区（零泄漏）
+          - heading "三条路在你这份数据上的精确结果" [level=2] [ref=e9514]
+          - table [ref=e9516]:
+            - rowgroup [ref=e9517]:
+              - row [ref=e9518]:
+                - columnheader "内核路径" [ref=e9519]
+                - columnheader "算术结果" [ref=e9520]
+                - columnheader "结论" [ref=e9521]
+            - rowgroup [ref=e9522]:
+              - row [ref=e9523]:
+                - cell "strict（现状）" [ref=e9524]
+                - cell [ref=e9525]:
+                  - text: 每簇 <5 页全部豁免测试 → 50/0 → 护栏
+                  - code [ref=e9526]: split_partition_empty:test
+                - cell "❌ 已blocked" [ref=e9527]
+              - row [ref=e9528]:
+                - cell "allow_test（每小类留1页）" [ref=e9529]
+                - cell [ref=e9530]:
+                  - text: 每簇 test=max(1, round(簇大小×0.2))：单页簇整页入测 →
+                  - strong [ref=e9531]: test=44 / train=6 倒挂
+                  - text: ；随后护栏比例偏差 |44−10|=34 > 容差 12.5 →
+                  - code [ref=e9532]: split_ratio_deviation
+                  - text: 必blocked
+                - cell "❌ 必blocked，即使通过也是废split" [ref=e9533]
+              - row [ref=e9534]:
+                - cell "合并小类" [ref=e9535]
+                - cell "40/44 簇是独版单页，无相近可合，内核也无外露合并参数" [ref=e9536]
+                - cell "❌ 不可行" [ref=e9537]
+          - paragraph [ref=e9538]:
+            - strong [ref=e9539]: 根子
+            - text: ：这批 50 页几乎是 50 种独版版式，而 walkthrough 切分器的分配公式（<5 页豁免/每簇强制 1 页测试/比例护栏）在「全小簇」数据上产不出任何带测试集的合法划分。页级 40/10 本来数学上可行（test=4 个多页簇整簇 10 页，train=40 个单页簇，零跨区零泄漏），但内核分配器没有这个策略变体，我也无权改 pin 内核。
+          - heading "你的选项" [level=2] [ref=e9540]
+          - list [ref=e9541]:
+            - listitem [ref=e9542]:
+              - strong [ref=e9543]: A（最正道）
+              - text: ：补充/替换数据，让至少几个主要版式各凑齐 ≥5 页（如每模板 10 页×5 模板）→ 40/10 一步到位、零泄漏、全链不用改。链在切分段挂起等你。
+            - listitem [ref=e9544]:
+              - strong [ref=e9545]: B（降级放行）
+              - text: ：内核支持「全部训练」模式（护栏显式豁免、如实记录无测试集），但
+              - strong [ref=e9546]: 段工具不透传该旗标
+              - text: ——若你明确授权，我只能经 scratch 执行面用等价 CLI 参数跑该段（须你点头的两项代价：①绕开段工具参数面，属流程破例；②没有 held-out 测试集，后续正式评估无测试资产可用，只能外部评估或跳过评估）。
+            - listitem [ref=e9547]:
+              - strong [ref=e9548]: C（owner 级改策略）
+              - text: ：给内核切分器加「页级 40/10、整簇不跨区」策略变体，或给段工具加旗标透传——超出我权限，需你裁定后另立任务。
+          - paragraph [ref=e9549]: 选 A/B/C，或给我别的指示。
+        - generic [ref=e9553]:
+          - generic [ref=e9554]: 更正前面的授权：拿到真实簇形（44 簇、40 个单例）后，「每小类留 1 页」会落成 test≈44/train≈6，不可用。改走「合并相近小类」：这 50 页是同一版式家族的装箱单，按整族并成一簇（50 页一簇）提供聚类证据，再按 strict 8:2 分层切分——预期恰好 40/10。合并是数据面动作，我确认这样做；产物（StyleClusterManifest/分配清单）落 run 的发布区留档可审计。
+          - generic [ref=e9556]:
+            - generic [ref=e9557]: 08:20
+            - button "Copy" [ref=e9558] [cursor=pointer]
+        - button "Analysis completed" [ref=e11637] [cursor=pointer]
+        - paragraph [ref=e9599]:
+          - text: 收到更正与明确授权：按数据面动作把 50 页整族并成一簇、以 owner 聚类证据接入，再走 strict 8:2。执行前我先读 pin 内核的两处消费代码，确认三件事：①检测面从哪些路径发现 owner manifest；②切分分层到底吃 manifest assignments 还是 CSV 列；③manifest 的 schema/摘要校验要求——确保产物可审计、且
+          - strong [ref=e9600]: 不覆盖
+          - text: 上一轮内核自产的 44 簇 manifest（那是要留档的证据）。
+        - button "Called tools" [ref=e11651] [cursor=pointer]
+        - generic [ref=e9658]:
+          - paragraph [ref=e9659]: 检测面单源读完，关键事实：
+          - list [ref=e9660]:
+            - listitem [ref=e9661]:
+              - strong [ref=e9662]:
+                - text: 页级簇证据的单源是
+                - code [ref=e9663]: global_assignment.csv
+                - text: 的
+                - code [ref=e9664]: cluster_id
+                - text: 列
+              - text: （与准入同一实现），manifest 只能在「真实簇证据」在场时作辅证——整份
+              - code [ref=e9665]: cluster-<stem>
+              - text: 占位时「即便 manifest 在场也不据此复用」。所以 owner 合并必须落到 CSV 的 cluster 列，单写 manifest 无效。
+            - listitem [ref=e9666]:
+              - text: manifest 识别面＝split 目录与 run 目录内
+              - code [ref=e9667]: "*style-cluster-manifest.json"
+              - text: （rglob）。
+          - paragraph [ref=e9668]: 还需确认 build_family_split 在「已聚类」分支怎么消费簇证据（是否校验 manifest↔CSV 一致、多 manifest 是否歧义），以及上一轮 auto 聚类有没有回写过 CSV。先查 CSV 现状，再读消费代码。
+        - button "Called tools" [ref=e11665] [cursor=pointer]
+        - paragraph [ref=e9719]:
+          - text: CSV 未被上轮改写（仍是占位、split=unassigned）——blocked 零写入成立。但发现关键约束：
+          - code [ref=e9720]: split_manifest.json
+          - text: 里钉了
+          - code [ref=e9721]: assignment_csv_sha256
+          - text: （CSV 的 sha256）与
+          - code [ref=e9722]: row_digest
+          - text: （=commit_pin）。改 CSV 前必须查清谁消费这两个校验值、以及已聚类分支的簇证据摄入逻辑。
+        - button "Called tools" [ref=e11679] [cursor=pointer]
+        - paragraph [ref=e9777]:
+          - code [ref=e9778]: assignment_csv_sha256
+          - text: 只在登记段写入、无人复读校验；
+          - code [ref=e9779]: row_digest
+          - text: 唯一消费点=取前 40 位当 commit_pin 定位登记件——
+          - strong [ref=e9780]: 载重，不可改
+          - text: 。也就是说：CSV 的 cluster 列是唯一可注入点，且改后不破坏任何链上校验，但
+          - code [ref=e9781]: split_manifest.json
+          - text: 里的旧 sha 会失配——这点我会在 owner 证据件里如实留痕，不悄悄改登记事实。最后读 build_family_split 的「已聚类」摄入逻辑，确认分层到底吃 CSV 列还是 manifest。
+        - button "Called tools" [ref=e11693] [cursor=pointer]
+        - generic [ref=e9919]:
+          - paragraph [ref=e9920]:
+            - text: 消费链闭合确认，机制完全清楚了（
+            - code [ref=e9921]: data_admission.py:1508-1547
+            - text: ）：
+          - list [ref=e9922]:
+            - listitem [ref=e9923]:
+              - text: 分层吃的簇证据就是
+              - strong [ref=e9924]:
+                - code [ref=e9925]: inventory.pairs[].cluster_id
+                - text: ← CSV cluster 列
+              - text: ；只有「缺失/占位 且 auto_style_cluster=on」才触发内核自聚类覆盖
+            - listitem [ref=e9926]:
+              - text: 把 50 行 cluster_id 改成一个共享非占位 id 后：
+              - code [ref=e9927]: missing_clusters=False
+              - text: 、
+              - code [ref=e9928]: assignment_is_placeholder=False
+              - text: →
+              - strong [ref=e9929]: 任何模式都不复聚
+              - text: ，按簇分层退化为「单簇 50 页」→ strict 每簇 test 目标=max(1, round(50×0.2))=
+              - strong [ref=e9930]: "10"
+              - text: ，整簇内按稳定序取 10 页测试、40 页训练 →
+              - strong [ref=e9931]: 恰好 40/10
+            - listitem [ref=e9932]: 泄漏审计维度是 component/pixel/document/family（逐页独占），单簇跨分区不触发任何泄漏位；护栏 test=10/target=10 零偏差 ✓
+          - paragraph [ref=e9933]:
+            - text: 执行方案（按你的授权）：①CSV cluster 列 50 行 → 单一 owner 簇 id（其余 8 列逐字节不动）；②owner 版
+            - code [ref=e9934]: StyleClusterManifest/v1
+            - text: 落
+            - code [ref=e9935]: run/publish/owner-family-merge/
+            - text: （含裁定依据、授权来源、原/新 CSV sha、与 44 簇 auto 产物的关系——auto 件原样留档不覆盖；
+            - code [ref=e9936]: split_manifest.json
+            - text: 的
+            - code [ref=e9937]: assignment_csv_sha256
+            - text: 指向原 CSV 一事如实写明，row_digest/commit_pin 载重不动）；③默认 strict 重跑切分。开始改 CSV（写操作，请放行）。
+        - button "Called tools" [ref=e11707] [cursor=pointer]
+        - paragraph [ref=e9996]: bash 面的 python3 缺 libpython 起不来——换 scratch 执行面（其 python3 可用，同样走审批）执行同一编辑脚本。
+        - button "Called tools" [ref=e11721] [cursor=pointer]
+        - paragraph [ref=e10047]:
+          - text: CSV 合并完成：50 行 → 单一 owner 簇 id，原 sha
+          - code [ref=e10048]: 399b9666…
+          - text: （与登记件记录一致）→ 新 sha
+          - code [ref=e10049]: c2601009…
+          - text: 。现在生成 owner 版聚类证据件（含完整裁定留痕）落到 run 发布区。
+        - button "Called tools" [ref=e11735] [cursor=pointer]
+        - paragraph [ref=e10100]:
+          - text: owner 证据件落位（sha
+          - code [ref=e10101]: f9e3868c…
+          - text: ，50 指派/1 簇）。重触发
+          - strong [ref=e10102]: family_split
+          - text: （缺省 auto——检测面现在应为 already_clustered：CSV 全部同簇非占位 + manifest 在场；按既有簇 strict 分层，不再复聚）。请在面板放行。
+        - button "Called tools" [ref=e11749] [cursor=pointer]
+        - paragraph [ref=e10172]:
+          - text: 三态检测完全按预期生效（already_clustered、不复聚、effective_auto=false），但撞上
+          - strong [ref=e10173]: 不可变证据冲突
+          - text: ：上一轮 blocked 的 44 簇尝试在内容寻址发布区
+          - code [ref=e10174]: publish/a52ace93/
+          - text: 里留下了部分 G2 证据（
+          - code [ref=e10175]: raw-g2-gate.json
+          - text: ），本轮同候选同工作区重算出
+          - strong [ref=e10176]: 不同
+          - text: 证据内容——不可变写保护拒绝静默覆盖（这正是它防「跨语义复用」的设计目的）。先确认冲突文件与不可变写语义，再做有审计的退役。
+        - button "Called tools" [ref=e11763] [cursor=pointer]
+        - paragraph [ref=e10247]:
+          - text: 冲突源确认：
+          - code [ref=e10248]: raw-g2-gate.json
+          - text: （上轮 44 簇尝试在分配护栏拒绝
+          - strong [ref=e10249]: 前
+          - text: 已写下的 G2 证据；其 inventory artifact_ref 含簇信息→本轮内容必然不同）。预判本轮还可能重写哪些不可变件，把同工作区内所有此类文件名先列出来，一次性做有审计的退役。
+        - button "Called tools" [ref=e11777] [cursor=pointer]
+        - paragraph [ref=e10351]:
+          - text: 本轮会重写的不可变件里只有
+          - code [ref=e10352]: raw-g2-gate.json
+          - text: 有旧内容（split-manifest/leakage-audit 等上轮未写出；44 簇
+          - code [ref=e10353]: style-cluster-manifest.json
+          - text: 在已聚类分支不会被动——正好完整留档）。执行有审计退役：把旧 G2 证据移入
+          - code [ref=e10354]: publish/owner-family-merge/superseded/
+          - text: ，并在 owner 证据件里补记这条处置（写操作，请放行）。
+        - button "Called tools" [ref=e11791] [cursor=pointer]
+        - paragraph [ref=e10405]:
+          - text: 退役完成（旧件 sha
+          - code [ref=e10406]: 53b42c84…
+          - text: 归档，owner 证据件更新为
+          - code [ref=e10407]: 6c74765d…
+          - text: ）。重触发
+          - strong [ref=e10408]: family_split
+          - text: 。请在面板放行。
+        - button "Called tools" [ref=e11805] [cursor=pointer]
+        - paragraph [ref=e10480]:
+          - text: ✅
+          - strong [ref=e10481]: family_split 段通过
+          - text: ：三态 already_clustered（未复聚），同轮 G1–G4 四闸全 pass（extraction-contract / source-identity / split-integrity / training-data）。现在核验实际划分页数是否恰为 40/10。
+        - button "Called tools" [ref=e11819] [cursor=pointer]
+        - generic [ref=e10531]:
+          - paragraph [ref=e10532]:
+            - text: ✅✅
+            - strong [ref=e10533]: 切分核验：恰好 40/10
+          - list [ref=e10534]:
+            - listitem [ref=e10535]:
+              - code [ref=e10536]: "partition_counts: {train: 40, test: 10}"
+              - text: ，
+              - code [ref=e10537]: "ratios_actual: {train: 0.8, test: 0.2}"
+              - text: ，分层偏差
+              - code [ref=e10538]: "[]"
+              - text: （零偏差），排除页 0
+            - listitem [ref=e10539]: split_authority=cluster_stratified；分配清单 50 行全落位；测试集 10 页（1c48c5…、3c671f…、420928…、4738c8…、5fa18f…、821526…、a2d697…、ac68d4…、b01b70…、f813a5…）
+          - paragraph [ref=e10540]:
+            - text: 第 7 段
+            - strong [ref=e10541]: admission（数据准入检查）
+            - text: ——把已裁决标签、无泄漏 split 与合同事实编译为可重放的训练数据准入（G1–G4 收口）。请在面板放行。
+        - button "Called tools" [ref=e11833] [cursor=pointer]
+        - generic [ref=e10612]:
+          - paragraph [ref=e10613]:
+            - text: ✅
+            - strong [ref=e10614]: admission（数据准入）段通过
+            - text: ：G1 extraction-contract-valid / G2 source-identity-valid / G3 split-integrity-valid / G4 training-data-valid 全部 pass，训练数据准入闭合。
+          - paragraph [ref=e10615]:
+            - text: 第 8 段
+            - strong [ref=e10616]: training_prep（训练准备）
+            - text: 需要 base_model 本地路径（含 config.json 的绝对目录）。按 owner 裁定锚点（2026-10-12：确认卡基模型默认＝模型库下 Qwen3-VL-32B-Instruct），先核机器事实再触发。
+        - button "Called tools" [ref=e11847] [cursor=pointer]
+        - paragraph [ref=e10667]: 围栏收紧了（run 工作区绑定后 bash 可读面变窄）。改用 scratch 执行面核验模型目录机器事实。
+        - button "Called tools" [ref=e11861] [cursor=pointer]
+        - paragraph [ref=e10718]:
+          - text: 机器事实核实：
+          - code [ref=e10719]: /data/LLM_model/Qwen3-VL-32B-Instruct
+          - text: （model_type=qwen3_vl，含 config.json 与 safetensors）在位——与 owner 锚点一致。触发
+          - strong [ref=e10720]: training_prep
+          - text: （base_model_path 如上，卡面会呈该值供你核对）。请在面板放行。
+        - button "Called tools" [ref=e11875] [cursor=pointer]
+        - generic [ref=e10788]:
+          - paragraph [ref=e10789]:
+            - text: ✅
+            - strong [ref=e10790]: training_prep（训练准备）段通过
+            - text: ——四个子步全绿：
+          - list [ref=e10791]:
+            - listitem [ref=e10792]:
+              - code [ref=e10793]: field_risk_signals
+              - text: ：可视通道 disabled；风险 Top5 字段 goods_pallet(4.5)、item_no(4.0)、hs_code(3.0)、currency(2.0)、goods_amount(2.0)，定向增强 11 字段
+            - listitem [ref=e10794]:
+              - code [ref=e10795]: build_training_variants
+              - text: ：
+              - strong [ref=e10796]: 基行 40（只用 train 分区）→ 产 143 行
+              - text: （mode0×40 + 定向×103），完整性拒绝 0
+            - listitem [ref=e10797]:
+              - code [ref=e10798]: generate_iteration_config
+              - text: ：
+              - code [ref=e10799]: prep/iteration-config/iteration-config.json
+              - text: （dataset key
+              - code [ref=e10800]: walkthrough-pl_pl_goods
+              - text: ）
+            - listitem [ref=e10801]:
+              - code [ref=e10802]: generate_train_launch
+              - text: ：launch 产物落 run 树，global_batch=8、template=qwen3_vl、save_steps=9
+          - paragraph [ref=e10803]:
+            - text: 八段全部走完。发起训练前按合同走
+            - strong [ref=e10804]: 九要素确认卡
+            - text: 。先读 launch 产物与 IterationConfig 实值，把卡面基线备准。
+        - button "Called tools" [ref=e11889] [cursor=pointer]
+        - paragraph [ref=e10880]:
+          - text: launch 产物齐备（
+          - code [ref=e10881]: train.sh
+          - text: +
+          - code [ref=e10882]: launch_manifest.json
+          - text: ），IterationConfig 实值已取到（lane=pl_goods，基模型=Qwen3-VL-32B-Instruct，rank 32/alpha 64，lr 1e-4，epochs 3，cutoff 9000，global_batch 8，nproc=1，samples 143）。发起训练前还差两件事：GPU 机器事实（供你核对卡数取值）和九要素确认卡。先查 GPU。
+        - button "Called tools" [ref=e11903] [cursor=pointer]
+        - paragraph [ref=e10933]:
+          - text: GPU 机器事实：
+          - strong [ref=e10934]: 8×80GB 全空闲
+          - text: （GPU1 有 8.4GB 残留显存但无计算进程，不构成占用）。机器事实齐备，现在呈
+          - strong [ref=e10935]: 九要素训练配置确认卡
+          - text: ——基线取 run 的 IterationConfig 实值（walkthrough 生成），你逐键核对，可直接提交或改参。
+        - button "Called tools" [ref=e11917] [cursor=pointer]
+        - generic [ref=e11073]:
+          - paragraph [ref=e11074]:
+            - text: 九要素卡已确认放行（confirmed=true，快照已落
+            - code [ref=e11075]: webui/config-snapshot.json
+            - text: ）。卡面终值与 IterationConfig 基线的差异都来自部署登记面且经你确认：
+            - strong [ref=e11076]: nproc 1→8（按 owner 卡数偏置拉满）、grad_accum 8→16、deepspeed ds_z2→ds_z3_offload、max_total_tokens 65536
+            - text: ；其余不变（lr 1e-4、epochs 3、bs 1、cutoff 9000、rank 32/alpha 64、像素 65536/802816、负样本带 0.02–0.05）。
+          - paragraph [ref=e11077]:
+            - text: 最后一步发起训练。先读
+            - code [ref=e11078]: train.sh
+            - text: 与
+            - code [ref=e11079]: launch_manifest.json
+            - text: ，确认 TRAINING_RELEASE 闸与启动编排形态，再走放行执行点。
+        - button "Called tools" [ref=e11931] [cursor=pointer]
+        - paragraph [ref=e11160]:
+          - text: train.sh 有一个
+          - strong [ref=e11161]: 必须处理的错位
+          - text: ：它生成于九要素确认
+          - strong [ref=e11162]: 之前
+          - text: ，写死的是旧值（NPROC=1、grad_accum=8、ds_z2），而你在卡上确认的是登记面值（NPROC=8、grad_accum=16、ds_z3_offload）；且其放行闸校验的 subject sha=旧 IterationConfig 摘要。按合同「先重生成 launch 产物再放行执行」推进前，读 prepare/run-training 两个技能的操作定义，确认再生成与放行登记的正规入口。
+        - button "Called tools" [ref=e11945] [cursor=pointer]
+        - paragraph [ref=e11222]:
+          - text: 合同要点拿到了：
+          - code [ref=e11223]: 不手改 train.sh
+          - text: 、放行前
+          - strong [ref=e11224]: 必须产出 prelaunch 报告
+          - text: 、放行记录由
+          - code [ref=e11225]: "--record-training-release"
+          - text: 写入且 agent 不得代签、
+          - code [ref=e11226]: atf_launch_execute
+          - text: 是登记+执行点。正规路径：①把确认卡终值物化进 IterationConfig（三处：nproc 8 / accum 16 / ds_z3_offload）；②用
+          - code [ref=e11227]: generate_train_launch.py --config <同一 config>
+          - text: 重生成 launch 件；③
+          - code [ref=e11228]: build_prelaunch_report.py
+          - text: 出授权报告；④
+          - code [ref=e11229]: atf_launch_execute(launch_sh, config)
+          - text: 登记放行并执行。先看两个脚本的真实 CLI 形参，避免猜参。
+        - button "Called tools" [ref=e11959] [cursor=pointer]
+        - paragraph [ref=e11280]: CLI 形参确认。①先把九要素确认终值物化进 IterationConfig（三处定向编辑；文件本会话已读过）。
+        - button "Called tools" [ref=e11973] [cursor=pointer]
+        - paragraph [ref=e11331]:
+          - text: 配置已物化（新 sha
+          - code [ref=e11332]: 62b8b442…
+          - text: ）。②重生成 launch 件（不带
+          - code [ref=e11333]: "--record-training-release"
+          - text: ——放行登记由
+          - code [ref=e11334]: atf_launch_execute
+          - text: 的确认卡走，agent 不代签）。请在面板放行。
+        - button "Called tools" [ref=e11987] [cursor=pointer]
+        - paragraph [ref=e11392]:
+          - text: 生成器 fail-closed：deploy-probed.local.yaml 缺
+          - code [ref=e11393]: master_port
+          - text: 键。这不是「世界缺事实」——本 run 自己的
+          - code [ref=e11394]: launch_manifest.json
+          - text: （00:32 生成）就记录着生效值
+          - code [ref=e11395]: "master_port: 29517"
+          - text: ，早版 train.sh 同值。先看两份 deploy 文件，把这个在案事实补进 deploy 再重跑。
+        - button "Called tools" [ref=e12001] [cursor=pointer]
+        - paragraph [ref=e11466]:
+          - text: 两份 deploy 文件的语义清楚了：探测草稿
+          - strong [ref=e11467]: 故意不代决业务键
+          - text: （master_port/awq_base 留给下游确认制），且探测建议里
+          - code [ref=e11468]: "cuda_visible_devices: 0,2,3,4,5,6,7"
+          - text: ——
+          - strong [ref=e11469]: 排除了 GPU1
+          - text: （探测时它有 8.4GB 残留显存）。这里出现一个真正的分叉，按你的规则停下来问。先查一下 29517 端口占用。
+        - button "Called tools" [ref=e12015] [cursor=pointer]
+        - generic [ref=e12032]:
+          - paragraph [ref=e12033]:
+            - text: 停在训练发起前的
+            - strong [ref=e12034]: 机器事实确认
+            - text: ，两件事需要你一句裁定：
+          - paragraph [ref=e12035]:
+            - strong [ref=e12036]: ① master_port
+            - text: ：本 run 在案生效值
+            - strong [ref=e12037]: "29517"
+            - text: （
+            - code [ref=e12038]: launch_manifest.json
+            - text: 与早版 train.sh 同值），当前端口无占用——建议沿用。探测草稿按设计不代决此键，需显式补进 deploy。
+          - paragraph [ref=e12039]:
+            - strong [ref=e12040]: ② 绑卡与卡数（真分叉）
+            - text: ：
+          - table [ref=e12042]:
+            - rowgroup [ref=e12043]:
+              - row [ref=e12044]:
+                - columnheader "方案" [ref=e12045]
+                - columnheader "CUDA_VISIBLE_DEVICES" [ref=e12046]
+                - columnheader "nproc" [ref=e12047]
+                - columnheader "与九要素卡关系" [ref=e12048]
+                - columnheader "说明" [ref=e12049]
+            - rowgroup [ref=e12050]:
+              - row [ref=e12051]:
+                - cell [ref=e12052]:
+                  - strong [ref=e12053]: A（建议）
+                - cell "0,1,2,3,4,5,6,7" [ref=e12054]
+                - cell [ref=e12055]:
+                  - strong [ref=e12056]: "8"
+                - cell "一致" [ref=e12057]
+                - cell [ref=e12058]:
+                  - text: GPU1 有 8431MiB
+                  - strong [ref=e12059]: 残留显存但无计算进程
+                  - text: （归属判定＝空闲）；可用约 72.7GB，bnb 4-bit＋ZeRO-3 offload 通常充裕。风险：残留是计划外变量，若 GPU1 训练中 OOM 再降档
+              - row [ref=e12060]:
+                - cell "B" [ref=e12061]
+                - cell "0,2,3,4,5,6,7" [ref=e12062]
+                - cell [ref=e12063]:
+                  - strong [ref=e12064]: "7"
+                - cell "需改你已确认的 nproc=8" [ref=e12065]
+                - cell "探测建议的保守案（探测时点按显存阈值回避 GPU1）" [ref=e12066]
+          - paragraph [ref=e12067]:
+            - text: 裁定后我立即：补齐 deploy（master_port＋绑卡）→ 重生成 train.sh/manifest → 出
+            - strong [ref=e12068]: prelaunch 授权报告
+            - text: （argv 全量投影＋数据指纹＋prompt 实文样例）→
+            - code [ref=e12069]: atf_launch_execute
+            - text: 放行登记并启动训练。
+        - generic [ref=e12073]:
+          - button "Copy" [ref=e12074] [cursor=pointer]
+          - generic [ref=e12078]:
+            - button "Good response" [ref=e12079] [cursor=pointer]
+            - button "Bad response" [ref=e12082] [cursor=pointer]
+          - button "Branch into a new conversation" [ref=e12085] [cursor=pointer]
+          - generic [ref=e12091]:
+            - button "Usage 6.9M tok" [ref=e12093] [cursor=pointer]
+            - generic [ref=e12099]: 08:38
+        - generic [ref=e12112]:
+          - generic [ref=e12113]: 裁定：master_port 沿用在案值 29517（launch_manifest 与早版 train.sh 同值、当前端口空闲）；绑卡用 0,1,2,3,4,5,6,7 全八卡、nproc=8 按确认卡值不动——GPU1 那 8.4GB 是无计算进程的残留显存，前两轮真实训练同形态照跑，不构成占用。补齐 deploy 后继续：重生成 launch 件→prelaunch 报告→atf_launch_execute 放行执行。
+          - generic [ref=e12115]:
+            - generic [ref=e12116]: 08:40
+            - button "Copy" [ref=e12117] [cursor=pointer]
+        - button "Think User ruling received:" [ref=e12141] [cursor=pointer]:
+          - generic [ref=e12151]:
+            - generic [ref=e12152]: Think
+            - generic [ref=e12154]: "User ruling received:"
+        - paragraph [ref=e12161]: 收到裁定：port 29517 沿用、全八卡 0-7、nproc=8。①补齐 deploy（注明裁定出处）。
+        - generic [ref=e12164]:
+          - 'button "Tool call atf_edit · # 2026-10-22 owner 裁定补齐:绑卡全八卡(GPU1 8431MiB 为无计算进程残留显存,前两轮真实训练同形态);master_port 沿用在案生效值(launch_manifest 与早版 train.sh 同值 29517,当前端口空闲)" [ref=e12171] [cursor=pointer]':
+            - generic [ref=e12181]:
+              - generic [ref=e12182]: Tool call
+              - generic [ref=e12184]: "atf_edit · # 2026-10-22 owner 裁定补齐:绑卡全八卡(GPU1 8431MiB 为无计算进程残留显存,前两轮真实训练同形态);master_port 沿用在案生效值(launch_manifest 与早版 train.sh 同值 29517,当前端口空闲)"
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_train_launch.py\",\"--config\",\"/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/iteration-config/iteration-config.json\",\"--deploy\",\"/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/iteration-config/deploy-probed.local.yaml\",\"--out\",\"/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch\"],\"timeout_seconds\":120}" [ref=e12191] [cursor=pointer]':
+            - generic [ref=e12201]:
+              - generic [ref=e12202]: Tool call
+              - generic [ref=e12204]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/generate_train_launch.py\",\"--config\",\"/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/iteration-config/iteration-config.json\",\"--deploy\",\"/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/iteration-config/deploy-probed.local.yaml\",\"--out\",\"/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch\"],\"timeout_seconds\":120}"
+          - 'button "Think Launch regenerated: global_batch=128 (1×8×16), save_steps=1 (derived: ceil(143/128)=2 steps/epoch → half epoch ceil=1). train.sh + launch_manifest.json rewritten." [ref=e12212] [cursor=pointer]':
+            - generic [ref=e12222]:
+              - generic [ref=e12223]: Think
+              - generic [ref=e12225]: "Launch regenerated: global_batch=128 (1×8×16), save_steps=1 (derived: ceil(143/128)=2 steps/epoch → half epoch ceil=1). train.sh + launch_manifest.json rewritten."
+        - paragraph [ref=e12232]: ✅ launch 件重生成成功：global_batch=128（1×8×16）、save_steps=1（按新步长推导）。快速核对新 train.sh 关键值与放行闸 subject，然后出 prelaunch 报告。
+        - generic [ref=e12235]:
+          - button "Tool call atf_bash · grep -n \"NPROC_PER_NODE\\|CUDA_VISIBLE_DEVICES\\|MASTER_PORT\\|gradient_accumulation_steps\\|ds_z3_offload\\|subject_sha256\\|num_train_epochs\\|learning_rate\" /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/train.sh | head -n 20" [ref=e12242] [cursor=pointer]:
+            - generic [ref=e12252]:
+              - generic [ref=e12253]: Tool call
+              - generic [ref=e12255]: atf_bash · grep -n "NPROC_PER_NODE\|CUDA_VISIBLE_DEVICES\|MASTER_PORT\|gradient_accumulation_steps\|ds_z3_offload\|subject_sha256\|num_train_epochs\|learning_rate" /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/train.sh | head -n 20
+          - button "Think Odd fence behavior — the path IS under the workspace root but the fence now treats \"current run workspace\" as /data/atf/dev/runs/atf-g2fresh-20261022/pl-walkthrough-r1 (a DEV runs bucket path?!) for writes, and read fence complains... weird transitory state. Earlier greps on this exact tree worked. Use atf_read (the file tool) which has been reading these files fine." [ref=e12263] [cursor=pointer]:
+            - generic [ref=e12273]:
+              - generic [ref=e12274]: Think
+              - generic [ref=e12276]: Odd fence behavior — the path IS under the workspace root but the fence now treats "current run workspace" as /data/atf/dev/runs/atf-g2fresh-20261022/pl-walkthrough-r1 (a DEV runs bucket path?!) for writes, and read fence complains... weird transitory state. Earlier greps on this exact tree worked. Use atf_read (the file tool) which has been reading these files fine.
+        - paragraph [ref=e12283]: 围栏又抖了——用 atf_read 通道（此前一直可读该树）。
+        - generic [ref=e12286]:
+          - button "Tool call atf_read · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/train.sh" [ref=e12293] [cursor=pointer]:
+            - generic [ref=e12303]:
+              - generic [ref=e12304]: Tool call
+              - generic [ref=e12306]: atf_read · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/train.sh
+          - button "Think train.sh header verified:" [ref=e12315] [cursor=pointer]:
+            - generic [ref=e12325]:
+              - generic [ref=e12326]: Think
+              - generic [ref=e12328]: "train.sh header verified:"
+          - button "Tool call atf_read · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/train.sh" [ref=e12338] [cursor=pointer]:
+            - generic [ref=e12348]:
+              - generic [ref=e12349]: Tool call
+              - generic [ref=e12351]: atf_read · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/train.sh
+          - button "Tool call atf_read · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/train.sh" [ref=e12358] [cursor=pointer]:
+            - generic [ref=e12368]:
+              - generic [ref=e12369]: Tool call
+              - generic [ref=e12371]: atf_read · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/train.sh
+          - button "Think New train.sh fully verified:" [ref=e12379] [cursor=pointer]:
+            - generic [ref=e12389]:
+              - generic [ref=e12390]: Think
+              - generic [ref=e12392]: "New train.sh fully verified:"
+        - paragraph [ref=e12399]:
+          - text: 新 train.sh 全部对上：grad_accum=16、ds_z3_offload、warmup/save 按新步长推导为 1、放行闸 subject=
+          - code [ref=e12400]: 62b8b442…
+          - text: （与物化后 IterationConfig 一致）。③生成 prelaunch 授权报告。
+        - generic [ref=e12408]:
+          - 'button "Tool call atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/build_prelaunch_report.py\",\"--config\",\"/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/iteration-config/iteration-config.json\",\"--launch-dir\",\"/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch\",\"--out\",\"/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/prelaunch-report.md\"],\"timeout_seconds\":120}" [ref=e12415] [cursor=pointer]':
+            - generic [ref=e12425]:
+              - generic [ref=e12426]: Tool call
+              - generic [ref=e12428]: "atf_scratch_exec · {\"argv\":[\"python3\",\"/data/atf/dev/pinned/skills/atf-prepare-training/scripts/build_prelaunch_report.py\",\"--config\",\"/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/iteration-config/iteration-config.json\",\"--launch-dir\",\"/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch\",\"--out\",\"/data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/prelaunch-report.md\"],\"timeout_seconds\":120}"
+          - button "Tool call atf_read · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/prelaunch-report.md" [ref=e12435] [cursor=pointer]:
+            - generic [ref=e12445]:
+              - generic [ref=e12446]: Tool call
+              - generic [ref=e12448]: atf_read · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/prelaunch-report.md
+          - button "Think Prelaunch report generated (223 lines; I've seen the bulk). Read the tail (200-223) for the data fingerprint section, then present the report + atf_launch_execute." [ref=e12456] [cursor=pointer]:
+            - generic [ref=e12466]:
+              - generic [ref=e12467]: Think
+              - generic [ref=e12469]: Prelaunch report generated (223 lines; I've seen the bulk). Read the tail (200-223) for the data fingerprint section, then present the report + atf_launch_execute.
+          - button "Tool call atf_read · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/prelaunch-report.md" [ref=e12477] [cursor=pointer]:
+            - generic [ref=e12487]:
+              - generic [ref=e12488]: Tool call
+              - generic [ref=e12490]: atf_read · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/launch/prelaunch-report.md
+          - 'button "Think Prelaunch report complete: env (8卡/port 29517/基模型复核通过), launch command, full argv table, real prompt+expected output sample, data fingerprint (143 rows, sha 6d3e9cf1…)." [ref=e12498] [cursor=pointer]':
+            - generic [ref=e12508]:
+              - generic [ref=e12509]: Think
+              - generic [ref=e12511]: "Prelaunch report complete: env (8卡/port 29517/基模型复核通过), launch command, full argv table, real prompt+expected output sample, data fingerprint (143 rows, sha 6d3e9cf1…)."
+        - generic [ref=e12517]:
+          - paragraph [ref=e12518]: Prelaunch 报告闭合（授权材料齐备）：
+          - list [ref=e12519]:
+            - listitem [ref=e12520]:
+              - strong [ref=e12521]: 环境
+              - text: ：单机 8 卡、绑卡 0-7、port 29517、宿主机/system；基模型本地复核
+              - strong [ref=e12522]: 通过
+            - listitem [ref=e12523]:
+              - strong [ref=e12524]: 参数
+              - text: ：argv 全量反生成——与你确认的九要素卡一致（lr 1e-4、epochs 3、rank 32/α64、accum 16、ds_z3_offload、cutoff 9000、像素 65536/802816）；派生 global_batch=128、warmup=1、save_steps=1；量化 bnb 4-bit、视觉塔冻结
+            - listitem [ref=e12525]:
+              - strong [ref=e12526]: 数据指纹
+              - text: ：
+              - code [ref=e12527]: walkthrough-pl_pl_goods
+              - text: 143 行，sha
+              - code [ref=e12528]: 6d3e9cf1…
+              - text: ；prompt 实文样例（22 字段 mode0 平铺抽取）与期望输出（真实标注值）在报告内可查——
+              - button "prelaunch-report.md" [ref=e12529] [cursor=pointer]
+          - paragraph [ref=e12533]:
+            - text: 现在走
+            - strong [ref=e12534]: atf_launch_execute
+            - text: ：登记 TRAINING_RELEASE 放行记录（subject=
+            - code [ref=e12535]: 62b8b442…
+            - text: ，即你确认的这份 config）→ 执行 train.sh。danger 级放行卡，请核对面板。
+        - generic [ref=e12536]:
+          - text: Calling tools · atf_launch_execute
+          - generic [ref=e12543]:
+            - generic [ref=e12544]: Running
+            - button "Tool call atf_launch_execute · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/iteration-config/iteration-config.json" [ref=e12546] [cursor=pointer]:
+              - generic [ref=e12555]:
+                - generic [ref=e12556]:
+                  - generic [ref=e12557]: Tool call
+                  - generic [ref=e12559]: atf_launch_execute · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/iteration-config/iteration-config.json
+                - generic [aria-hidden]:
+                  - generic:
+                    - generic:
+                      - generic: Tool call
+                      - generic: atf_launch_execute · ws-pl-walkthrough-r1/workspace/runs/pl-walkthrough-r1/prep/iteration-config/iteration-config.json
+        - generic [ref=e12121]:
+          - status [ref=e12122]: Deep diving
+          - generic [ref=e12126]:
+            - generic [ref=e12127]: Deep diving for 1m 27s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 1m 27s ···
+      - generic [ref=e12561]:
+        - generic [ref=e12562]: Waiting for approval
+        - group "Approval details" [ref=e12564]:
+          - generic [ref=e12565]: 将要执行：执行训练内核工具（atf_launch_execute） 影响范围：按该工具语义执行（写面以实际参数为准） 可逆性：按工具语义（写盘产物可人工清理） 预计代价：按任务卡
+        - generic [ref=e12566]:
+          - button "Reject" [ref=e12567] [cursor=pointer]
+          - button "Allow once" [ref=e12568] [cursor=pointer]

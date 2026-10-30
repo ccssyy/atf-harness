@@ -1,0 +1,188 @@
+- generic [ref=f1e4]:
+  - generic [ref=f1e7]:
+    - generic [ref=f1e8]:
+      - button "New session" [ref=f1e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f1e10]:
+          - generic [ref=f1e11]: ATF
+          - generic [ref=f1e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f1e17] [cursor=pointer]
+    - button "New session" [ref=f1e20] [cursor=pointer]:
+      - generic [ref=f1e21]: New Session
+    - navigation "Global panels" [ref=f1e26]:
+      - button "Plugins" [ref=f1e27] [cursor=pointer]
+    - generic [ref=f1e38]:
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]: Workspaces
+        - generic [ref=f1e42]:
+          - button "Search sessions" [ref=f1e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f1e47]:
+          - button "View options" [ref=f1e49] [cursor=pointer]
+          - button "Add workspace" [ref=f1e53] [cursor=pointer]
+      - tree "Sessions" [ref=f1e58]:
+        - generic [ref=f1e110]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=f1e112] [cursor=pointer]
+          - treeitem "Running D76 端到端正例复跑（零 GPU 红 1min" [selected] [ref=f1e449] [cursor=pointer]:
+            - generic [ref=f1e122]: Running
+            - generic [ref=f1e123]: D76 端到端正例复跑（零 GPU 红
+            - generic [ref=f1e124]: 1min
+          - treeitem "run pl-walkthrough-r1 迭代配置构造前置校验 3h" [ref=f1e126] [cursor=pointer]:
+            - generic [ref=f1e128]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [ref=f1e129]: 3h
+          - treeitem "训练数据构造前校验演练 3h" [ref=f1e131] [cursor=pointer]:
+            - generic [ref=f1e133]: 训练数据构造前校验演练
+            - generic [ref=f1e134]: 3h
+        - treeitem "ws-pl-walkthrough" [ref=f1e137] [cursor=pointer]
+        - generic [ref=f1e143]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=f1e145] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 1d" [ref=f1e154] [cursor=pointer]:
+            - generic [ref=f1e156]: 构造评估服务件 for run-rh-budget
+            - generic [ref=f1e157]: 1d
+          - treeitem "装箱单字段抽取新实验全流程 1d" [ref=f1e159] [cursor=pointer]:
+            - generic [ref=f1e161]: 装箱单字段抽取新实验全流程
+            - generic [ref=f1e162]: 1d
+        - generic [ref=f1e163]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=f1e165] [cursor=pointer]
+          - treeitem "等待发起真实训练走查指令 7h" [ref=f1e174] [cursor=pointer]:
+            - generic [ref=f1e176]: 等待发起真实训练走查指令
+            - generic [ref=f1e177]: 7h
+          - treeitem "汇总当前实验状态与进展 1d" [ref=f1e179] [cursor=pointer]:
+            - generic [ref=f1e181]: 汇总当前实验状态与进展
+            - generic [ref=f1e182]: 1d
+          - treeitem "我的训练数据放在 /data/atf/prodt 1d" [ref=f1e184] [cursor=pointer]:
+            - generic [ref=f1e186]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=f1e187]: 1d
+        - treeitem "a4-hotws" [ref=f1e190] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=f1e198] [cursor=pointer]
+        - treeitem "b18-ws" [ref=f1e206] [cursor=pointer]
+        - treeitem "sam" [ref=f1e214] [cursor=pointer]
+    - button "Settings" [ref=f1e68] [cursor=pointer]
+  - generic [ref=f1e77]:
+    - banner [ref=f1e221]:
+      - generic [ref=f1e222]:
+        - generic [ref=f1e223]:
+          - generic [ref=f1e224]:
+            - navigation "Session hierarchy" [ref=f1e225]:
+              - generic [ref=f1e226]: D76 端到端正例复跑（零 GPU 红
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f1e230]: Standard mode
+          - generic [ref=f1e237]:
+            - button "More actions" [ref=f1e239] [cursor=pointer]
+            - generic [ref=f1e244]:
+              - button "选择实验 ▾" [ref=f1e246] [cursor=pointer]
+              - button "监控" [ref=f1e248] [cursor=pointer]
+        - tablist [ref=f1e249]:
+          - tab "Chat" [selected] [ref=f1e250] [cursor=pointer]
+          - tab "Trajectory" [ref=f1e251] [cursor=pointer]
+    - generic [ref=f1e79]:
+      - generic [ref=f1e258]:
+        - generic [ref=f1e261]:
+          - generic [ref=f1e262]: D76 端到端正例复跑（零 GPU 红线：只到审批卡呈现即停，不点 Allow、不生成配置文件、不写任何文件、不起真训、不占 GPU）。先把实验 run-admit-qc-02-d76fx（run 目录 /data/atf/dev/runs/run-admit-qc-02-d76fx）绑定为当前实验，然后对其发起训练配置确认：训练卡数 nproc_per_node=4，卡位 visible_devices=4,5,6,7，其余参数按现值。九要素确认卡弹出后，把上述两个值填入对应栏位再提交确认；授权审批卡出现后立即停止并原样回报卡面两个值的呈现，不要点 Allow once、不要重试、不要发起真实训练。
+          - generic [ref=f1e264]:
+            - generic [ref=f1e265]: 18:00
+            - button "Copy" [ref=f1e266] [cursor=pointer]
+        - generic [ref=f1e271]:
+          - status [ref=f1e272]: Failed
+          - button "Failed" [disabled] [ref=f1e273]
+        - status [ref=f1e277]:
+          - generic [ref=f1e279]: This turn failedAPI key is invalid
+          - code [ref=f1e280]: AUTH
+        - generic [ref=f1e403]:
+          - generic [ref=f1e404]: 上一轮因 API key 失效失败，现重发（零 GPU 红线：只到审批卡呈现即停，不点 Allow、不生成配置文件、不写任何文件、不起真训、不占 GPU）。先把实验 run-admit-qc-02-d76fx（run 目录 /data/atf/dev/runs/run-admit-qc-02-d76fx）绑定为当前实验，然后对其发起训练配置确认：训练卡数 nproc_per_node=4，卡位 visible_devices=4,5,6,7，其余参数按现值。九要素确认卡弹出后，把上述两个值填入对应栏位再提交确认；授权审批卡出现后立即停止并原样回报卡面两个值的呈现，不要点 Allow once、不要重试、不要发起真实训练。
+          - generic [ref=f1e406]:
+            - generic [ref=f1e407]: 18:06
+            - button "Copy" [ref=f1e408] [cursor=pointer]
+        - generic [ref=f1e422]:
+          - text: Analyzing the request · The visible_devices key — is it a valid key? The nine
+          - generic [ref=f1e424]:
+            - button "Think The user wants me to:" [ref=f1e450] [cursor=pointer]:
+              - generic [ref=f1e443]:
+                - generic [ref=f1e444]: Think
+                - generic [ref=f1e446]: "The user wants me to:"
+            - 'button "Tool call atf_workspace_status · {}" [ref=f1e457] [cursor=pointer]':
+              - generic [ref=f1e467]:
+                - generic [ref=f1e468]: Tool call
+                - generic [ref=f1e470]: "atf_workspace_status · {}"
+            - 'button "Tool call atf_run_list · {}" [ref=f1e477] [cursor=pointer]':
+              - generic [ref=f1e487]:
+                - generic [ref=f1e488]: Tool call
+                - generic [ref=f1e490]: "atf_run_list · {}"
+            - generic [ref=f1e496]:
+              - generic [ref=f1e497]: Running
+              - 'button "Think So: present (construct card, current values baseline) → amend with edits {nproc_per_node:\"4\", visible_devices:\"4,5,6,7\"} → clamp → approval card appears → STOP, report the two values as presented." [ref=f1e499] [cursor=pointer]':
+                - generic [ref=f1e508]:
+                  - generic [ref=f1e509]:
+                    - generic [ref=f1e510]: Think
+                    - generic [ref=f1e512]: "So: present (construct card, current values baseline) → amend with edits {nproc_per_node:\"4\", visible_devices:\"4,5,6,7\"} → clamp → approval card appears → STOP, report the two values as presented."
+                  - generic [aria-hidden]:
+                    - generic:
+                      - generic:
+                        - generic: Think
+                        - generic: "So: present (construct card, current values baseline) → amend with edits {nproc_per_node:\"4\", visible_devices:\"4,5,6,7\"} → clamp → approval card appears → STOP, report the two values as presented."
+        - generic [ref=f1e412]:
+          - status [ref=f1e413]: Deep diving
+          - generic [ref=f1e417]:
+            - generic [ref=f1e418]: Deep diving for 1m 49s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 1m 49s ···
+      - generic [ref=f1e101]:
+        - generic [ref=f1e102]:
+          - generic [ref=f1e104]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=f1e281]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=f1e106]:
+            - generic [ref=f1e107]:
+              - button "Add files or run commands" [ref=f1e282] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=f1e287] [cursor=pointer]':
+                - generic [ref=f1e291]: Full access
+            - generic [ref=f1e108]:
+              - generic [ref=f1e295]:
+                - button "思考 Low(低) ▾" [ref=f1e298] [cursor=pointer]:
+                  - generic [ref=f1e299]: 思考
+                  - generic [ref=f1e300]: Low(低)
+                  - generic [ref=f1e301]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=f1e304] [cursor=pointer]:
+                  - generic [ref=f1e305]: glm-5.3-flash
+              - button "Stop generating" [ref=f1e420] [cursor=pointer]
+        - generic [ref=f1e311]:
+          - generic [ref=f1e312]:
+            - generic [ref=f1e313]:
+              - button "2 turns 2 steps · 39 tok/s" [ref=f1e514] [cursor=pointer]:
+                - generic [ref=f1e519]: 2 turns 2 steps·39 tok/s
+              - button "21.1K tok · Cache hit 0%" [ref=f1e521] [cursor=pointer]:
+                - generic [ref=f1e526]: 21.1K tok·Cache hit 0%
+            - generic [ref=f1e321]:
+              - status [ref=f1e322]:
+                - generic [ref=f1e323]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                - generic [ref=f1e324]:
+                  - generic [ref=f1e325]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                  - generic [ref=f1e326]: ws-pl-walkthrough · 1 会话
+              - generic [ref=f1e327]:
+                - button "新建训练" [ref=f1e328] [cursor=pointer]
+                - button "查状态" [disabled] [ref=f1e329]
+                - button "继续上次" [disabled] [ref=f1e330]
+                - button "对比两轮" [disabled] [ref=f1e331]
+                - button "走完闭环" [ref=f1e332] [cursor=pointer]
+                - button "联合训练" [disabled] [ref=f1e333]
+                - button "badcase 可视化" [ref=f1e334] [cursor=pointer]
+                - button "发起训练" [ref=f1e335] [cursor=pointer]
+          - button "2% of context used" [ref=f1e527] [cursor=pointer]:
+            - generic [ref=f1e341]: 2%
+  - generic [ref=f1e346]:
+    - tablist [ref=f1e348]:
+      - tab "Start" [selected] [ref=f1e349]
+      - button "Split" [ref=f1e357] [cursor=pointer]
+      - generic [ref=f1e360]:
+        - button "Fullscreen" [ref=f1e361] [cursor=pointer]
+        - button "Collapse right sidebar" [ref=f1e364] [cursor=pointer]
+    - generic [ref=f1e371]:
+      - button "Workspace files Browse files in this session's workspace" [ref=f1e378] [cursor=pointer]:
+        - generic [ref=f1e383]:
+          - generic [ref=f1e384]: Workspace files
+          - generic [ref=f1e385]: Browse files in this session's workspace
+      - generic [ref=f1e388]:
+        - button "New terminal Run commands in the Session workspace" [ref=f1e389] [cursor=pointer]
+        - generic:
+          - generic:
+            - generic [aria-hidden]: New terminal
+            - button "Choose shell" [ref=f1e391] [cursor=pointer]
+          - generic [aria-hidden]: Run commands in the Session workspace

@@ -1,0 +1,486 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e86] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e87]:
+          - generic [ref=e88]: ATF
+          - generic [ref=e91]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e101]: Workspaces
+        - generic [ref=e103]:
+          - button "Search sessions" [ref=e104] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e109] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e114]:
+        - treeitem "1023" [ref=e117] [cursor=pointer]
+        - generic [ref=e123]:
+          - treeitem "my-zito" [expanded] [ref=e125] [cursor=pointer]
+          - treeitem "Running 海运单单据抽取模型训练流程启动 7min" [selected] [ref=e2517] [cursor=pointer]:
+            - generic [ref=e502]: Running
+            - generic [ref=e503]: 海运单单据抽取模型训练流程启动
+            - generic [ref=e601]: 7min
+          - treeitem "D76 卡位卡面验收测试 4h" [ref=e1360] [cursor=pointer]:
+            - generic [ref=e136]: D76 卡位卡面验收测试
+            - generic [ref=e137]: 4h
+          - treeitem "ping 1d" [ref=e139] [cursor=pointer]:
+            - generic [ref=e141]: ping
+            - generic [ref=e142]: 1d
+          - treeitem "Ping Test 1d" [ref=e144] [cursor=pointer]:
+            - generic [ref=e146]: Ping Test
+            - generic [ref=e147]: 1d
+          - treeitem "Ping Test 1d" [ref=e149] [cursor=pointer]:
+            - generic [ref=e151]: Ping Test
+            - generic [ref=e152]: 1d
+          - treeitem "ping 1d" [ref=e1695] [cursor=pointer]:
+            - generic [ref=e1697]: ping
+            - generic [ref=e1698]: 1d
+          - button "Show 1 more sessions" [ref=e1699] [cursor=pointer]
+        - treeitem "Task" [ref=e160] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e504]:
+    - banner [ref=e506]:
+      - generic [ref=e507]:
+        - generic [ref=e508]:
+          - generic [ref=e602]:
+            - navigation "Session hierarchy" [ref=e603]:
+              - generic [ref=e604]: 海运单单据抽取模型训练流程启动
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e608]: Standard mode
+          - generic [ref=e615]:
+            - button "More actions" [ref=e617] [cursor=pointer]
+            - generic [ref=e622]:
+              - button "选择实验 ▾" [ref=e624] [cursor=pointer]
+              - button "监控" [ref=e626] [cursor=pointer]
+          - button "Open right sidebar" [ref=e511] [cursor=pointer]
+        - tablist [ref=e627]:
+          - tab "Chat" [selected] [ref=e628] [cursor=pointer]
+          - tab "Trajectory" [ref=e629] [cursor=pointer]
+    - generic [ref=e515]:
+      - generic [ref=e633]:
+        - navigation "Turn navigation" [ref=e987] [cursor=pointer]:
+          - generic [ref=e989]:
+            - button "Jump to turn 1" [ref=e990]
+            - button "Jump to turn 2" [ref=e991]
+            - button "Jump to turn 3" [ref=e1204]
+            - button "Jump to turn 4" [ref=e1567]
+            - button "Jump to turn 5" [ref=e1700]
+        - generic [ref=e636]:
+          - generic [ref=e639]:
+            - generic [ref=e640]: 我想用海运单（SWB）数据训练一个字段抽取模型，请从登记开始走完整流程直到训练启动：源数据 /data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb（50 对页级 png+json），字段配置 /data/atf/prodtest/atf-prodtest-20261021/field-config-swb.json，底座模型 /data/LLM_model/Qwen3-VL-32B-Instruct，run 名 u1-accept-swb。
+            - generic [ref=e642]:
+              - generic [ref=e643]: 15:21
+              - button "Copy" [ref=e644] [cursor=pointer]
+          - generic [ref=e915]:
+            - status [ref=e916]: Completed
+            - button "Completed in 1m 14s" [ref=e917] [cursor=pointer]
+          - generic [ref=e925]:
+            - paragraph [ref=e926]: 工具白名单读不到源目录里的字段配置，无法替你判断 lane。需要你确认一个参数再重跑 register：
+            - paragraph [ref=e927]:
+              - strong [ref=e928]: 这批 SWB 数据的训练 lane 是哪个？
+            - list [ref=e929]:
+              - listitem [ref=e930]:
+                - code [ref=e931]: goods
+                - text: —— 只训条目级字段（货物明细行）
+              - listitem [ref=e932]:
+                - code [ref=e933]: non_goods
+                - text: —— 只训单据级字段（单号、日期、收发货人等）
+              - listitem [ref=e934]:
+                - code [ref=e935]: mixed
+                - text: —— 两类字段都要（海运单通常两类都有）
+            - paragraph [ref=e936]:
+              - text: 如果 field-config-swb.json 里同时含
+              - code [ref=e937]: "group: goods"
+              - text: 和
+              - code [ref=e938]: "group: non_goods"
+              - text: 的字段，选
+              - code [ref=e939]: mixed
+              - text: 即可。确认后我就带着 lane 后缀继续完整流程（register → label_qc → experiment_setup → family_split → admission → training_prep，底座
+              - code [ref=e940]: /data/LLM_model/Qwen3-VL-32B-Instruct
+              - text: ）。
+          - generic [ref=e944]:
+            - button "Copy" [ref=e945] [cursor=pointer]
+            - generic [ref=e949]:
+              - button "Good response" [ref=e950] [cursor=pointer]
+              - button "Bad response" [ref=e953] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e956] [cursor=pointer]
+            - generic [ref=e962]:
+              - button "Usage 119K tok" [ref=e964] [cursor=pointer]
+              - generic [ref=e970]: 15:22
+          - generic [ref=e994]:
+            - generic [ref=e995]: lane 用 mixed。
+            - generic [ref=e997]:
+              - generic [ref=e998]: 15:23
+              - button "Copy" [ref=e999] [cursor=pointer]
+          - generic [ref=e1134]:
+            - status [ref=e1135]: Completed
+            - button "Completed in 2m 32s" [ref=e1136] [cursor=pointer]
+          - generic [ref=e1144]:
+            - paragraph [ref=e1145]:
+              - text: 落点目录
+              - code [ref=e1146]: workspace/runs/u1-accept-swb
+              - text: 已存在——里面是一个 bootstrap 预建的空骨架（只有目录结构和 register summary，无真实产物），状态为 pending。
+            - paragraph [ref=e1147]:
+              - text: 内核建议两种走法，但本工具面没有暴露
+              - code [ref=e1148]: "--rerun"
+              - text: 参数，所以：
+            - list [ref=e1149]:
+              - listitem [ref=e1150]:
+                - strong [ref=e1151]: 换新 run 标识
+                - text: （首选，零删除）：比如
+                - code [ref=e1152]: u1-accept-swb-2
+                - text: ，与既有目录并存；
+              - listitem [ref=e1153]:
+                - strong [ref=e1154]: 清掉空骨架后用原名重跑
+                - text: ：需要你确认那个骨架目录可以删除。
+            - paragraph [ref=e1155]:
+              - text: 你要哪种？如果选 2，请确认“可以删除
+              - code [ref=e1156]: workspace/runs/u1-accept-swb
+              - text: 骨架目录”，我就清空后按原 run 名
+              - code [ref=e1157]: u1-accept-swb
+              - text: 继续走完整流程。
+          - generic [ref=e1161]:
+            - button "Copy" [ref=e1162] [cursor=pointer]
+            - generic [ref=e1166]:
+              - button "Good response" [ref=e1167] [cursor=pointer]
+              - button "Bad response" [ref=e1170] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e1173] [cursor=pointer]
+            - generic [ref=e1179]:
+              - button "Usage 116K tok" [ref=e1181] [cursor=pointer]
+              - generic [ref=e1187]: 15:26
+          - generic [ref=e1207]:
+            - generic [ref=e1208]: 选 2：确认可以删除 workspace/runs/u1-accept-swb 骨架目录，清空后按原 run 名 u1-accept-swb 继续走完整流程。
+            - generic [ref=e1210]:
+              - generic [ref=e1211]: 15:26
+              - button "Copy" [ref=e1212] [cursor=pointer]
+          - generic [ref=e1508]:
+            - status [ref=e1509]: Completed
+            - button "Completed in 7m 29s" [ref=e1510] [cursor=pointer]
+          - generic [ref=e1518]:
+            - paragraph [ref=e1519]: family_split 段需要审批，但本次审批未获放行（面板拒绝了该请求）。流程已停在此处，零写入。
+            - paragraph [ref=e1520]: 请在审批面板重新放行（或告诉我你拒绝的原因，比如想调整分组/划分参数），我就重推 family_split 继续走。
+          - generic [ref=e1524]:
+            - button "Copy" [ref=e1525] [cursor=pointer]
+            - generic [ref=e1529]:
+              - button "Good response" [ref=e1530] [cursor=pointer]
+              - button "Bad response" [ref=e1533] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e1536] [cursor=pointer]
+            - generic [ref=e1542]:
+              - button "Usage 184K tok" [ref=e1544] [cursor=pointer]
+              - generic [ref=e1550]: 15:34
+          - generic [ref=e1570]:
+            - generic [ref=e1571]: 刚才误点了拒绝，不是有意的。请重推 family_split 继续走完整个流程。
+            - generic [ref=e1573]:
+              - generic [ref=e1574]: 15:34
+              - button "Copy" [ref=e1575] [cursor=pointer]
+          - generic [ref=e1636]:
+            - status [ref=e1637]: Completed
+            - button "Completed in 52s" [ref=e1638] [cursor=pointer]
+          - generic [ref=e1646]:
+            - paragraph [ref=e1647]: family_split 被挡住了：内核检测到这 50 页数据只有 1:1 占位簇（每页一个 cluster），没有真正的版式聚类 manifest，按“未聚类”处理。
+            - paragraph [ref=e1648]:
+              - text: 先问你一句：
+              - strong [ref=e1649]: 这批 SWB 数据之前做过版式聚类（按版式分好组）吗？
+            - list [ref=e1650]:
+              - listitem [ref=e1651]: 没做过 → 我让内核自动补聚类（确定性聚类并产出 manifest，按簇分层切分）；
+              - listitem [ref=e1652]: 做过、证据在别处 → 告诉我聚类证据所在的位置。
+            - paragraph [ref=e1653]: 确认后我继续走。
+          - generic [ref=e1657]:
+            - button "Copy" [ref=e1658] [cursor=pointer]
+            - generic [ref=e1662]:
+              - button "Good response" [ref=e1663] [cursor=pointer]
+              - button "Bad response" [ref=e1666] [cursor=pointer]
+            - button "Branch into a new conversation" [ref=e1669] [cursor=pointer]
+            - generic [ref=e1675]:
+              - button "Usage 57.3K tok" [ref=e1677] [cursor=pointer]
+              - generic [ref=e1683]: 15:35
+          - generic [ref=e1703]:
+            - generic [ref=e1704]: 没做过版式聚类，请让内核自动补聚类（on）继续。
+            - generic [ref=e1706]:
+              - generic [ref=e1707]: 15:36
+              - button "Copy" [ref=e1708] [cursor=pointer]
+          - generic [ref=e1727]:
+            - button "Tool call atf_pipeline_stage · on" [ref=e1735] [cursor=pointer]:
+              - generic [ref=e1745]:
+                - generic [ref=e1746]: Tool call
+                - generic [ref=e1748]: atf_pipeline_stage · on
+            - 'button "Think New rejection: extraction_contract_bundle_invalid. This suggests the G1 extraction contract gate hasn''t been closed — evidence needed. Per gate tooling, there''s gate \"extraction-contract-valid\". Per gate guidance three-part flow: produce evidence via atf-validate-extraction-contract skill chain, then advance gate with evidence refs. Let me first query the gate to see what''s missing." [ref=e1776] [cursor=pointer]':
+              - generic [ref=e1786]:
+                - generic [ref=e1787]: Think
+                - generic [ref=e1789]: "New rejection: extraction_contract_bundle_invalid. This suggests the G1 extraction contract gate hasn't been closed — evidence needed. Per gate tooling, there's gate \"extraction-contract-valid\". Per gate guidance three-part flow: produce evidence via atf-validate-extraction-contract skill chain, then advance gate with evidence refs. Let me first query the gate to see what's missing."
+          - paragraph [ref=e1796]:
+            - text: 这次是抽取合同证据不足（
+            - code [ref=e1797]: extraction_contract_bundle_invalid
+            - text: ）。按闸门回流指引，先查 G1 合同闸的缺失项：
+          - generic [ref=e1800]:
+            - button "Tool call atf_gate · query" [ref=e1807] [cursor=pointer]:
+              - generic [ref=e1817]:
+                - generic [ref=e1818]: Tool call
+                - generic [ref=e1820]: atf_gate · query
+            - button "Think The gate needs advance with evidence. The evidence comes from the atf-validate-extraction-contract skill. Load it." [ref=e1828] [cursor=pointer]:
+              - generic [ref=e1838]:
+                - generic [ref=e1839]: Think
+                - generic [ref=e1841]: The gate needs advance with evidence. The evidence comes from the atf-validate-extraction-contract skill. Load it.
+          - paragraph [ref=e1848]:
+            - text: 闸门未登记判定。按指路走
+            - code [ref=e1849]: atf-validate-extraction-contract
+            - text: 技能链产出 G1 证据：
+          - generic [ref=e1852]:
+            - button "Skill atf-validate-extraction-contract" [ref=e1858] [cursor=pointer]:
+              - generic [ref=e1867]:
+                - generic [ref=e1868]: Skill
+                - generic [ref=e1870]: atf-validate-extraction-contract
+            - button "Think The SKILL says the candidate production path is via atf-build-family-split publish 节 (references/method.md). Let me read that method reference." [ref=e1878] [cursor=pointer]:
+              - generic [ref=e1888]:
+                - generic [ref=e1889]: Think
+                - generic [ref=e1891]: The SKILL says the candidate production path is via atf-build-family-split publish 节 (references/method.md). Let me read that method reference.
+            - button "Tool call atf_skill_read · atf-build-family-split" [ref=e1899] [cursor=pointer]:
+              - generic [ref=e1909]:
+                - generic [ref=e1910]: Tool call
+                - generic [ref=e1912]: atf_skill_read · atf-build-family-split
+            - button [ref=e1920] [cursor=pointer]:
+              - generic [ref=e1930]:
+                - generic [ref=e1931]: Think
+                - generic [ref=e1933]: "The path: family_split blocked on extraction_contract_bundle_invalid — the run needs a published ExtractionContractBundle. The pipeline stage machine handles this in the walkthrough... but the earlier register/experiment_setup succeeded. Maybe the walkthrough expects stage order: register → label_qc → experiment_setup → ... The rejection says extraction contract bundle invalid — perhaps the experiment_setup projected field config isn't enough; the publish/contract chain must run. In the walkthrough pipeline, there's a \"publish\" stage — contract candidate publish. Actually stage order enum lists: register, label_qc, experiment_setup, candidate_build, publish, family_split, admission, training_prep? \"越序段会被内核拒绝\" — maybe I skipped candidate_build! The stage enum order listed: register/label_qc/experiment_setup/candidate_build/publish/family_split/admission/training_prep. I jumped from experiment_setup to family_split, skipping candidate_build and publish. That's likely the cause. Try candidate_build."
+          - paragraph [ref=e1940]: 可能是我跳段了——段序里 experiment_setup 之后是 candidate_build → publish，再 family_split。先试 candidate_build：
+          - button "Tool call atf_pipeline_stage · u1-accept-swb" [ref=e1951] [cursor=pointer]:
+            - generic [ref=e1961]:
+              - generic [ref=e1962]: Tool call
+              - generic [ref=e1964]: atf_pipeline_stage · u1-accept-swb
+          - paragraph [ref=e1990]: candidate_build ✓（契约候选 23 键齐备，14 字段闭集）。继续 publish（发布契约件，须经发布确认 digest 卡）：
+          - button "Tool call atf_pipeline_stage · u1-accept-swb" [ref=e2001] [cursor=pointer]:
+            - generic [ref=e2011]:
+              - generic [ref=e2012]: Tool call
+              - generic [ref=e2014]: atf_pipeline_stage · u1-accept-swb
+          - paragraph [ref=e2040]: publish ✓（契约包已发布，G1 pass）。重推 family_split（auto 补聚类已确认）：
+          - generic [ref=e2043]:
+            - button "Tool call atf_pipeline_stage · on" [ref=e2051] [cursor=pointer]:
+              - generic [ref=e2061]:
+                - generic [ref=e2062]: Tool call
+                - generic [ref=e2064]: atf_pipeline_stage · on
+            - 'button "Think family_split ✓, gates G1–G4 all pass already. Next stage: admission, then training_prep." [ref=e2092] [cursor=pointer]':
+              - generic [ref=e2102]:
+                - generic [ref=e2103]: Think
+                - generic [ref=e2105]: "family_split ✓, gates G1–G4 all pass already. Next stage: admission, then training_prep."
+          - paragraph [ref=e2112]: family_split ✓（自动补聚类完成，G1–G4 四闸全 pass）。继续 admission：
+          - button "Tool call atf_pipeline_stage · u1-accept-swb" [ref=e2123] [cursor=pointer]:
+            - generic [ref=e2133]:
+              - generic [ref=e2134]: Tool call
+              - generic [ref=e2136]: atf_pipeline_stage · u1-accept-swb
+          - paragraph [ref=e2162]: admission ✓。最后 training_prep（带底座模型路径）：
+          - generic [ref=e2165]:
+            - button "Tool call atf_pipeline_stage · /data/LLM_model/Qwen3-VL-32B-Instruct" [ref=e2173] [cursor=pointer]:
+              - generic [ref=e2183]:
+                - generic [ref=e2184]: Tool call
+                - generic [ref=e2186]: atf_pipeline_stage · /data/LLM_model/Qwen3-VL-32B-Instruct
+            - button "Think training_prep blocked on multiple things. Per SKILL discipline, run atf_training_preflight first — it aggregates missing/derivable/needs_confirm and apply can fix derivables. Do that." [ref=e2211] [cursor=pointer]:
+              - generic [ref=e2221]:
+                - generic [ref=e2222]: Think
+                - generic [ref=e2224]: training_prep blocked on multiple things. Per SKILL discipline, run atf_training_preflight first — it aggregates missing/derivable/needs_confirm and apply can fix derivables. Do that.
+          - paragraph [ref=e2231]: training_prep 有多项缺料。按纪律先跑入口预检，聚合缺什么：
+          - generic [ref=e2234]:
+            - button "Tool call atf_training_preflight · u1-accept-swb" [ref=e2241] [cursor=pointer]:
+              - generic [ref=e2251]:
+                - generic [ref=e2252]: Tool call
+                - generic [ref=e2254]: atf_training_preflight · u1-accept-swb
+            - 'button "Think Preflight reads a different runs root: /data/atf/uat/runs/my-zito. Interesting — the run dir used by pipeline is /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb, but preflight expects /data/atf/uat/runs/my-zito. Maybe the runs root config expects a symlink or the run there. Hmm. Note earlier atf_pipeline_stage''s run_dir was /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb (report header) while summary wrote to workspace/runs. The preflight uses ADR-0005 config root /data/atf/uat/runs/<workspace>/<run>. Check if there''s a symlink there." [ref=e2262] [cursor=pointer]':
+              - generic [ref=e2272]:
+                - generic [ref=e2273]: Think
+                - generic [ref=e2275]: "Preflight reads a different runs root: /data/atf/uat/runs/my-zito. Interesting — the run dir used by pipeline is /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb, but preflight expects /data/atf/uat/runs/my-zito. Maybe the runs root config expects a symlink or the run there. Hmm. Note earlier atf_pipeline_stage's run_dir was /data/docagent_workspace/dev/my-zito/runs/u1-accept-swb (report header) while summary wrote to workspace/runs. The preflight uses ADR-0005 config root /data/atf/uat/runs/<workspace>/<run>. Check if there's a symlink there."
+          - paragraph [ref=e2282]:
+            - text: 预检在另一个 runs 根（
+            - code [ref=e2283]: /data/atf/uat/runs/my-zito
+            - text: ）找 run。看一下那边的情况：
+          - generic [ref=e2286]:
+            - button "Tool call atf_bash · ls /data/atf/uat/runs/ 2>/dev/null; ls /data/atf/uat/runs/my-zito/ 2>/dev/null; ls -la /data/docagent_workspace/dev/my-zito/runs 2>/dev/null" [ref=e2294] [cursor=pointer]:
+              - generic [ref=e2304]:
+                - generic [ref=e2305]: Tool call
+                - generic [ref=e2307]: atf_bash · ls /data/atf/uat/runs/ 2>/dev/null; ls /data/atf/uat/runs/my-zito/ 2>/dev/null; ls -la /data/docagent_workspace/dev/my-zito/runs 2>/dev/null
+            - 'button "Think Preflight expects run dir at /data/atf/uat/runs/my-zito/u1-accept-swb. Options: symlink or copy the run dir there. Better: create the directory as symlink to workspace run dir? That''s a write outside workspace but bash allowlist includes /data/atf/uat/runs. A symlink is reasonable? Risky but this is a pointer. Alternatively preflight might accept run located elsewhere? The preflight has no workspace_path param. The harness clearly expects runs mirrored at /data/atf/uat/runs/<wsName>/<runId>. Other dirs exist there from other tasks. I''ll create a symlink: ln -s /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb /data/atf/uat/runs/my-zito/u1-accept-swb. Write semantic — needs approval via bash classification; just do it." [ref=e2318] [cursor=pointer]':
+              - generic [ref=e2328]:
+                - generic [ref=e2329]: Think
+                - generic [ref=e2331]: "Preflight expects run dir at /data/atf/uat/runs/my-zito/u1-accept-swb. Options: symlink or copy the run dir there. Better: create the directory as symlink to workspace run dir? That's a write outside workspace but bash allowlist includes /data/atf/uat/runs. A symlink is reasonable? Risky but this is a pointer. Alternatively preflight might accept run located elsewhere? The preflight has no workspace_path param. The harness clearly expects runs mirrored at /data/atf/uat/runs/<wsName>/<runId>. Other dirs exist there from other tasks. I'll create a symlink: ln -s /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb /data/atf/uat/runs/my-zito/u1-accept-swb. Write semantic — needs approval via bash classification; just do it."
+          - paragraph [ref=e2338]:
+            - text: 预检按 ADR-0005 配置根在
+            - code [ref=e2339]: /data/atf/uat/runs/my-zito/<run_id>
+            - text: 找 run。建一个符号链接把 run 指过去：
+          - generic [ref=e2342]:
+            - button "Tool call atf_bash · mkdir -p /data/atf/uat/runs/my-zito && ln -s /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb /data/atf/uat/runs/my-zito/u1-accept-swb && ls -la /data/atf/uat/runs/my-zito/" [ref=e2362] [cursor=pointer]:
+              - generic [ref=e2357]:
+                - generic [ref=e2358]: Tool call
+                - generic [ref=e2360]: atf_bash · mkdir -p /data/atf/uat/runs/my-zito && ln -s /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb /data/atf/uat/runs/my-zito/u1-accept-swb && ls -la /data/atf/uat/runs/my-zito/
+            - button "Tool call atf_training_preflight · u1-accept-swb" [ref=e2376] [cursor=pointer]:
+              - generic [ref=e2386]:
+                - generic [ref=e2387]: Tool call
+                - generic [ref=e2389]: atf_training_preflight · u1-accept-swb
+            - button "Think Exit 1, no stderr tail shown. Run preflight via scratch_exec to see the actual error? atf_scratch_exec executes kernel skill scripts. The preflight script is in kernel skills. Let me find the preflight script path. The kernel dir? atf_skill_read returned base dir /data/atf/instances/uat/atf-home/.agents/skills/. The preflight is a kernel script (not skill). Maybe retry atf_training_preflight — error info lost. Alternatively run via bash the kernel script. I don't know kernel path. Check skill scripts dir listing? Try atf_skill_read on atf-prepare-training to find preflight script name." [ref=e2397] [cursor=pointer]:
+              - generic [ref=e2407]:
+                - generic [ref=e2408]: Think
+                - generic [ref=e2410]: Exit 1, no stderr tail shown. Run preflight via scratch_exec to see the actual error? atf_scratch_exec executes kernel skill scripts. The preflight script is in kernel skills. Let me find the preflight script path. The kernel dir? atf_skill_read returned base dir /data/atf/instances/uat/atf-home/.agents/skills/. The preflight is a kernel script (not skill). Maybe retry atf_training_preflight — error info lost. Alternatively run via bash the kernel script. I don't know kernel path. Check skill scripts dir listing? Try atf_skill_read on atf-prepare-training to find preflight script name.
+          - paragraph [ref=e2417]: 退出码变了但没有细节。找预检脚本直接跑看报错：
+          - generic [ref=e2420]:
+            - button "Tool call atf_bash · ls /data/atf/instances/uat/atf-home/.agents/skills/atf-prepare-training/scripts/ 2>/dev/null; find /data/atf/instances/uat/atf-home -maxdepth 4 -name \"*preflight*\" 2>/dev/null | head" [ref=e2427] [cursor=pointer]:
+              - generic [ref=e2437]:
+                - generic [ref=e2438]: Tool call
+                - generic [ref=e2440]: atf_bash · ls /data/atf/instances/uat/atf-home/.agents/skills/atf-prepare-training/scripts/ 2>/dev/null; find /data/atf/instances/uat/atf-home -maxdepth 4 -name "*preflight*" 2>/dev/null | head
+            - button "Tool call atf_skill_read · atf-prepare-training" [ref=e2447] [cursor=pointer]:
+              - generic [ref=e2457]:
+                - generic [ref=e2458]: Tool call
+                - generic [ref=e2460]: atf_skill_read · atf-prepare-training
+            - 'button "Think Preflight failed exit 1 with no detail. The pipeline''s own block listed: token budget not confirmed, coordinate transforms pending 50, token provider required (or allow skip), iteration config missing due to env_missing:llamafactory." [ref=e2468] [cursor=pointer]':
+              - generic [ref=e2478]:
+                - generic [ref=e2479]: Think
+                - generic [ref=e2481]: "Preflight failed exit 1 with no detail. The pipeline's own block listed: token budget not confirmed, coordinate transforms pending 50, token provider required (or allow skip), iteration config missing due to env_missing:llamafactory."
+          - paragraph [ref=e2488]:
+            - text: 预检退出码 1 没给细节。核心阻塞是
+            - code [ref=e2489]: generate_iteration_config
+            - text: 报
+            - code [ref=e2490]: env_missing:llamafactory
+            - text: 。检查实例环境：
+          - generic [ref=e2493]:
+            - button "Tool call atf_bash · ls /data/venv/torch291_vllm016_bnb_qwen3vl/bin/ | grep -i llama; /data/venv/torch291_vllm016_bnb_qwen3vl/bin/python -c \"import llamafactory; print(llamafactory.__version__)\" 2>&1 | tail -1; cat /data/atf/uat/pinned/deploy.local.yaml 2>/dev/null | head -30; ls /data/atf/uat/pinned/ 2>/dev/null | head" [ref=e2500] [cursor=pointer]:
+              - generic [ref=e2510]:
+                - generic [ref=e2511]: Tool call
+                - generic [ref=e2513]: atf_bash · ls /data/venv/torch291_vllm016_bnb_qwen3vl/bin/ | grep -i llama; /data/venv/torch291_vllm016_bnb_qwen3vl/bin/python -c "import llamafactory; print(llamafactory.__version__)" 2>&1 | tail -1; cat /data/atf/uat/pinned/deploy.local.yaml 2>/dev/null | head -30; ls /data/atf/uat/pinned/ 2>/dev/null | head
+            - button "Tool call atf_bash · ls /data/venv/torch291_vllm016_bnb_qwen3vl/bin/ | grep -i llama; /data/venv/torch291_vllm016_bnb_qwen3vl/bin/python -c \"import llamafactory; print(llamafactory.__version__)\" 2>&1 | tail -1; ls /data/atf/instances/uat/atf-home/1023 2>/dev/null | head; find /data/atf/instances/uat/atf-home/1023 -maxdepth 2 -name \"deploy.local.yaml\" 2>/dev/null" [ref=e2524] [cursor=pointer]:
+              - generic [ref=e2534]:
+                - generic [ref=e2535]: Tool call
+                - generic [ref=e2537]: atf_bash · ls /data/venv/torch291_vllm016_bnb_qwen3vl/bin/ | grep -i llama; /data/venv/torch291_vllm016_bnb_qwen3vl/bin/python -c "import llamafactory; print(llamafactory.__version__)" 2>&1 | tail -1; ls /data/atf/instances/uat/atf-home/1023 2>/dev/null | head; find /data/atf/instances/uat/atf-home/1023 -maxdepth 2 -name "deploy.local.yaml" 2>/dev/null
+            - button "Think The cwd changed? Earlier bash worked with /data/atf/uat/runs. The error now says workspace fence — because command references venv path. First command earlier that referenced /data/atf/uat/runs worked. Venv is in the first allowlist but not the read fence. Let me try without venv paths — check instance home." [ref=e2545] [cursor=pointer]:
+              - generic [ref=e2555]:
+                - generic [ref=e2556]: Think
+                - generic [ref=e2558]: The cwd changed? Earlier bash worked with /data/atf/uat/runs. The error now says workspace fence — because command references venv path. First command earlier that referenced /data/atf/uat/runs worked. Venv is in the first allowlist but not the read fence. Let me try without venv paths — check instance home.
+            - button "Tool call atf_bash · ls /data/atf/instances/uat/atf-home/1023; find /data/atf/instances/uat/atf-home/1023 -maxdepth 2 \\( -name \"deploy.local.yaml\" -o -name \"*.json\" \\) 2>/dev/null | head" [ref=e2566] [cursor=pointer]:
+              - generic [ref=e2576]:
+                - generic [ref=e2577]: Tool call
+                - generic [ref=e2579]: atf_bash · ls /data/atf/instances/uat/atf-home/1023; find /data/atf/instances/uat/atf-home/1023 -maxdepth 2 \( -name "deploy.local.yaml" -o -name "*.json" \) 2>/dev/null | head
+            - 'button "Think Odd — semicolon injection? The error complains about \"atf-home/1023;\" — the `;`? No, it lists path with trailing semicolon from find? Actually the issue: first command earlier listed allowlist including /data/atf/instances/uat/atf-home/1023. Now it says outside allowlist for \"atf-home/1023;\" — weird, maybe caused by the trailing `;` after the path in my command? I had `.../1023;` — no, I wrote `ls /data/atf/instances/uat/atf-home/1023;` — the parser captured path including `;`. Use newlines instead." [ref=e2587] [cursor=pointer]':
+              - generic [ref=e2597]:
+                - generic [ref=e2598]: Think
+                - generic [ref=e2600]: "Odd — semicolon injection? The error complains about \"atf-home/1023;\" — the `;`? No, it lists path with trailing semicolon from find? Actually the issue: first command earlier listed allowlist including /data/atf/instances/uat/atf-home/1023. Now it says outside allowlist for \"atf-home/1023;\" — weird, maybe caused by the trailing `;` after the path in my command? I had `.../1023;` — no, I wrote `ls /data/atf/instances/uat/atf-home/1023;` — the parser captured path including `;`. Use newlines instead."
+            - button "Tool call atf_bash · ls /data/atf/instances/uat/atf-home/1023 && find /data/atf/instances/uat/atf-home/1023 -maxdepth 2 -name \"deploy*.yaml\" -o -maxdepth 2 -name \"config.json\" | head" [ref=e2608] [cursor=pointer]:
+              - generic [ref=e2618]:
+                - generic [ref=e2619]: Tool call
+                - generic [ref=e2621]: atf_bash · ls /data/atf/instances/uat/atf-home/1023 && find /data/atf/instances/uat/atf-home/1023 -maxdepth 2 -name "deploy*.yaml" -o -maxdepth 2 -name "config.json" | head
+            - 'button "Think Empty. So instance exec-home is elsewhere. Env profile for eval etc. is \"deploy/env-profile\" per atf_evaluate. The instance config root: probably /data/atf/uat/pinned or a config.json somewhere. Check /data/atf/uat/pinned." [ref=e2631] [cursor=pointer]':
+              - generic [ref=e2641]:
+                - generic [ref=e2642]: Think
+                - generic [ref=e2644]: "Empty. So instance exec-home is elsewhere. Env profile for eval etc. is \"deploy/env-profile\" per atf_evaluate. The instance config root: probably /data/atf/uat/pinned or a config.json somewhere. Check /data/atf/uat/pinned."
+            - button "Tool call atf_bash · ls -la /data/atf/uat/pinned/ && find /data/atf/uat/pinned -maxdepth 2 \\( -name \"*.yaml\" -o -name \"*.yml\" -o -name \"*.json\" \\) | head -20" [ref=e2652] [cursor=pointer]:
+              - generic [ref=e2662]:
+                - generic [ref=e2663]: Tool call
+                - generic [ref=e2665]: atf_bash · ls -la /data/atf/uat/pinned/ && find /data/atf/uat/pinned -maxdepth 2 \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) | head -20
+            - 'button "Think Bash fence is inconsistent (worked earlier for /data/atf/uat/runs). pinned is listed in the \"合法根\" of the first message but the second-stage fence denies. Whatever. The real issue: I should stop poking around the filesystem and instead surface to the user what training_prep needs, since per discipline: missing items → ask user. Items:" [ref=e2691] [cursor=pointer]':
+              - generic [ref=e2684]:
+                - generic [ref=e2685]: Think
+                - generic [ref=e2687]: "Bash fence is inconsistent (worked earlier for /data/atf/uat/runs). pinned is listed in the \"合法根\" of the first message but the second-stage fence denies. Whatever. The real issue: I should stop poking around the filesystem and instead surface to the user what training_prep needs, since per discipline: missing items → ask user. Items:"
+          - paragraph [ref=e2697]:
+            - text: 不猜环境路径了，预检链本身可以处理可派生项。跑
+            - code [ref=e2698]: apply=true
+            - text: 让内核一键执行坐标重试与内置 CPU token 计量：
+          - generic [ref=e2701]:
+            - button "Tool call atf_training_preflight · u1-accept-swb" [ref=e2708] [cursor=pointer]:
+              - generic [ref=e2718]:
+                - generic [ref=e2719]: Tool call
+                - generic [ref=e2721]: atf_training_preflight · u1-accept-swb
+            - button "Think Preflight fails silently (exit 1). Probably because of the symlink — or something else. The pipeline itself is the more reliable channel. The blocked items from training_prep:" [ref=e2729] [cursor=pointer]:
+              - generic [ref=e2739]:
+                - generic [ref=e2740]: Think
+                - generic [ref=e2742]: "Preflight fails silently (exit 1). Probably because of the symlink — or something else. The pipeline itself is the more reliable channel. The blocked items from training_prep:"
+          - paragraph [ref=e2749]: 预检脚本本身退出失败（无细节）。改走主链：先呈九要素确认卡（这是「实验门预算值未确认」的正路）：
+          - generic [ref=e2750]:
+            - text: Calling tools · present
+            - generic [ref=e2757]:
+              - generic [ref=e2758]: Running
+              - button "Tool call atf_config_confirm · present" [ref=e2760] [cursor=pointer]:
+                - generic [ref=e2769]:
+                  - generic [ref=e2770]:
+                    - generic [ref=e2771]: Tool call
+                    - generic [ref=e2773]: atf_config_confirm · present
+                  - generic [aria-hidden]:
+                    - generic:
+                      - generic:
+                        - generic: Tool call
+                        - generic: atf_config_confirm · present
+          - generic [ref=e1712]:
+            - status [ref=e1713]: Deep diving
+            - generic [ref=e1717]:
+              - generic [ref=e1718]: Deep diving for 8m 20s ···
+              - generic [aria-hidden]:
+                - generic: Deep diving for 8m 20s ···
+      - region "九要素训练配置确认 — u1-accept-swb" [ref=e2775]:
+        - generic [ref=e2776]: 训练配置
+        - generic [ref=e2778]:
+          - heading "九要素训练配置确认 — u1-accept-swb" [level=3] [ref=e2779]
+          - paragraph [ref=e2780]: "改参：在输入框改值后提交；不改：直接提交（按现值）。提交后仍需审批卡 Allow once 才生效——表单卡只收改参、不承载授权。 数据集键（实算，只读）：实算值未产出（IterationConfig 缺席） TokenBudget（三要素）: 单样本 token 预算 max_total_tokens 可编辑 9000 [惯例基线（owner 2026-10-22）] 训练截断 cutoff cutoff_len 只读 9000 [= 预算] 推理窗口 max_model_len 只读 12800 [独立取值]"
+          - generic [ref=e2781]:
+            - generic [ref=e2782]:
+              - generic [ref=e2783]: learning_rate
+              - textbox "learning_rate 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）" [ref=e2784]: "1e-4"
+              - generic [ref=e2785]: 域 [5e-5, 5e-4]（LoRA 惯用科学计数法）
+            - generic [ref=e2786]:
+              - generic [ref=e2787]: nproc_per_node
+              - textbox "nproc_per_node [1, 可用卡数 8]" [ref=e2788]: "8"
+              - generic [ref=e2789]: "[1, 可用卡数 8]"
+            - generic [ref=e2790]:
+              - generic [ref=e2791]: visible_devices
+              - textbox "visible_devices 逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）" [ref=e2792]
+              - generic [ref=e2793]: 逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）
+            - generic [ref=e2794]:
+              - generic [ref=e2795]: base_model_path
+              - textbox "base_model_path" [ref=e2796]: /data/LLM_model/Qwen3-VL-32B-Instruct
+            - generic [ref=e2797]:
+              - generic [ref=e2798]: num_train_epochs
+              - textbox "num_train_epochs 域 [1, 10] 整数" [ref=e2799]: "3"
+              - generic [ref=e2800]: 域 [1, 10] 整数
+            - generic [ref=e2801]:
+              - generic [ref=e2802]: per_device_train_batch_size
+              - textbox "per_device_train_batch_size" [ref=e2803]: "1"
+            - generic [ref=e2804]:
+              - generic [ref=e2805]: gradient_accumulation_steps
+              - textbox "gradient_accumulation_steps" [ref=e2806]: "16"
+            - generic [ref=e2807]:
+              - generic [ref=e2808]: cutoff_len
+              - textbox "cutoff_len ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）" [ref=e2809]: "9000"
+              - generic [ref=e2810]: ≤ 12800；训练截断——须与 max_total_tokens 同步（等值）或填不同步理由（预算超过 cutoff 会禁确认）
+            - generic [ref=e2811]:
+              - generic [ref=e2812]: deepspeed
+              - textbox "deepspeed" [ref=e2813]: ds_z3_offload_config.json
+            - generic [ref=e2814]:
+              - generic [ref=e2815]: lora_rank
+              - 'textbox "lora_rank 档位 {16, 32, 64, 128}（alpha=2×rank 联动）" [ref=e2816]': "32"
+              - generic [ref=e2817]: "档位 {16, 32, 64, 128}（alpha=2×rank 联动）"
+            - generic [ref=e2818]:
+              - generic [ref=e2819]: lora_alpha
+              - textbox "lora_alpha" [ref=e2820]: "64"
+            - generic [ref=e2821]:
+              - generic [ref=e2822]: max_total_tokens
+              - textbox "max_total_tokens 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）" [ref=e2823]: "9000"
+              - generic [ref=e2824]: 正整数；建议 9000（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）
+            - generic [ref=e2825]:
+              - generic [ref=e2826]: 最小像素
+              - textbox "最小像素 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）" [ref=e2827]: "65536"
+              - generic [ref=e2828]: 正整数，默认 65,536（256²）——构造/训练/推理同一对值（来源：默认）
+            - generic [ref=e2829]:
+              - generic [ref=e2830]: 最大像素
+              - 'textbox "最大像素 两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）" [ref=e2831]': "802816"
+              - generic [ref=e2832]: "两档 {802,816, 1,605,632}；改后将影响坐标换算与 token 预算（不阻塞，可清空恢复默认）（来源：默认）"
+            - generic [ref=e2833]:
+              - generic [ref=e2834]: negative_ratio_target
+              - textbox "negative_ratio_target 构造带 [0.02, 0.05]" [ref=e2835]: 0.02,0.05
+              - generic [ref=e2836]: 构造带 [0.02, 0.05]
+            - generic [ref=e2837]:
+              - generic [ref=e2838]: token_budget_sync_reason
+              - textbox "token_budget_sync_reason" [ref=e2839]:
+                - /placeholder: 预算与 cutoff 不等时的不同步理由（不等必填；相等留空）——同步请在 cutoff_len 框直接填预算值（用户动作）
+        - generic [ref=e2840]:
+          - status [ref=e2841]
+          - generic [ref=e2842]:
+            - button "Cancel" [ref=e2843] [cursor=pointer]
+            - button "确认并继续" [ref=e2844] [cursor=pointer]

@@ -1,0 +1,220 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e10]:
+          - generic [ref=e11]: ATF
+          - generic [ref=e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e17] [cursor=pointer]
+    - button "New session" [ref=e20] [cursor=pointer]:
+      - generic [ref=e21]: New Session
+    - navigation "Global panels" [ref=e26]:
+      - button "Plugins" [ref=e27] [cursor=pointer]
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]: Workspaces
+        - generic [ref=e42]:
+          - button "Search sessions" [ref=e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e47]:
+          - button "View options" [ref=e49] [cursor=pointer]
+          - button "Add workspace" [ref=e53] [cursor=pointer]
+      - tree "Sessions" [ref=e58]:
+        - generic [ref=e2237]:
+          - treeitem "my-zito" [expanded] [ref=e2239] [cursor=pointer]
+          - treeitem "Waiting for approval u1-accept-swb 训练准备九要素确认" [selected] [ref=e3008] [cursor=pointer]:
+            - generic [ref=e2249]: Waiting for approval
+            - generic [ref=e2250]: u1-accept-swb 训练准备九要素确认
+            - generic [aria-hidden] [ref=e2348]: Approval
+        - generic [ref=e110]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e112] [cursor=pointer]
+          - treeitem "连通性自检与确认 23h" [ref=e2833] [cursor=pointer]:
+            - generic [ref=e123]: 连通性自检与确认
+            - generic [ref=e124]: 23h
+          - treeitem "装箱单走查区训练任务查询 1d" [ref=e2934] [cursor=pointer]:
+            - generic [ref=e128]: 装箱单走查区训练任务查询
+            - generic [ref=e129]: 1d
+          - treeitem "D76 端到端正例复跑（零 GPU 红 1d" [ref=e131] [cursor=pointer]:
+            - generic [ref=e133]: D76 端到端正例复跑（零 GPU 红
+            - generic [ref=e134]: 1d
+          - treeitem "run pl-walkthrough-r1 迭代配置构造前置校验 1d" [ref=e136] [cursor=pointer]:
+            - generic [ref=e138]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [ref=e139]: 1d
+          - treeitem "训练数据构造前校验演练 1d" [ref=e141] [cursor=pointer]:
+            - generic [ref=e143]: 训练数据构造前校验演练
+            - generic [ref=e144]: 1d
+        - treeitem "ws-pl-walkthrough" [ref=e147] [cursor=pointer]
+        - generic [ref=e153]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e155] [cursor=pointer]
+          - treeitem "删除整个工作区目录 22h" [ref=e164] [cursor=pointer]:
+            - generic [ref=e166]: 删除整个工作区目录
+            - generic [ref=e167]: 22h
+          - treeitem "构造评估服务件 for run-rh-budget 2d" [ref=e169] [cursor=pointer]:
+            - generic [ref=e171]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e172]: 2d
+          - treeitem "装箱单字段抽取新实验全流程 2d" [ref=e174] [cursor=pointer]:
+            - generic [ref=e176]: 装箱单字段抽取新实验全流程
+            - generic [ref=e177]: 2d
+        - generic [ref=e178]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=e180] [cursor=pointer]
+          - treeitem "海运单SWB数据登记与训练任务启动 9h" [ref=e189] [cursor=pointer]:
+            - generic [ref=e191]: 海运单SWB数据登记与训练任务启动
+            - generic [ref=e192]: 9h
+          - treeitem "等待发起真实训练走查指令 1d" [ref=e194] [cursor=pointer]:
+            - generic [ref=e196]: 等待发起真实训练走查指令
+            - generic [ref=e197]: 1d
+          - treeitem "汇总当前实验状态与进展 2d" [ref=e199] [cursor=pointer]:
+            - generic [ref=e201]: 汇总当前实验状态与进展
+            - generic [ref=e202]: 2d
+          - treeitem "我的训练数据放在 /data/atf/prodt 3d" [ref=e204] [cursor=pointer]:
+            - generic [ref=e206]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=e207]: 3d
+        - treeitem "a4-hotws" [ref=e210] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e218] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e226] [cursor=pointer]
+        - treeitem "sam" [ref=e234] [cursor=pointer]
+    - button "Settings" [ref=e68] [cursor=pointer]
+  - generic [ref=e2251]:
+    - banner [ref=e2253]:
+      - generic [ref=e2254]:
+        - generic [ref=e2255]:
+          - generic [ref=e2349]:
+            - navigation "Session hierarchy" [ref=e2350]:
+              - generic [ref=e2351]: u1-accept-swb 训练准备九要素确认
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e2355]: Standard mode
+          - generic [ref=e2362]:
+            - button "More actions" [ref=e2364] [cursor=pointer]
+            - generic [ref=e2369]:
+              - button "选择实验 ▾" [ref=e2371] [cursor=pointer]
+              - button "监控" [ref=e2373] [cursor=pointer]
+          - button "Open right sidebar" [ref=e2258] [cursor=pointer]
+        - tablist [ref=e2374]:
+          - tab "Chat" [selected] [ref=e2375] [cursor=pointer]
+          - tab "Trajectory" [ref=e2376] [cursor=pointer]
+    - generic [ref=e2262]:
+      - generic [ref=e2383]:
+        - generic [ref=e2386]:
+          - generic [ref=e2387]: 继续 run u1-accept-swb（工作区 /data/docagent_workspace/dev/my-zito）的训练准备。先重出九要素确认卡：卡数 8、卡位 0-7、单卡 batch 改 2（梯度累积按 global batch 256 派生应为 16）、像素对 65,536／1,605,632、预算三件 9000／9000／12800，其余按已确认值。前面的段不重跑，从九要素确认开始往后走。
+          - generic [ref=e2389]:
+            - generic [ref=e2390]: 22:21
+            - button "Copy" [ref=e2391] [cursor=pointer]
+        - generic [ref=e2428]:
+          - button "Think The user wants to continue training preparation for run u1-accept-swb in workspace /data/docagent_workspace/dev/my-zito. They want me to re-present the nine-element confirmation card with:" [ref=e2453] [cursor=pointer]:
+            - generic [ref=e2447]:
+              - generic [ref=e2448]: Think
+              - generic [ref=e2450]: "The user wants to continue training preparation for run u1-accept-swb in workspace /data/docagent_workspace/dev/my-zito. They want me to re-present the nine-element confirmation card with:"
+          - button "Skill atf-prepare-training" [ref=e2459] [cursor=pointer]:
+            - generic [ref=e2468]:
+              - generic [ref=e2469]: Skill
+              - generic [ref=e2471]: atf-prepare-training
+          - 'button "Tool call atf_workspace_status · {}" [ref=e2478] [cursor=pointer]':
+            - generic [ref=e2488]:
+              - generic [ref=e2489]: Tool call
+              - generic [ref=e2491]: "atf_workspace_status · {}"
+          - button "Think The workspace status shows no run bound in this session. The run is u1-accept-swb in workspace /data/docagent_workspace/dev/my-zito. Let me verify the run exists by listing runs or checking the directory." [ref=e2499] [cursor=pointer]:
+            - generic [ref=e2509]:
+              - generic [ref=e2510]: Think
+              - generic [ref=e2512]: The workspace status shows no run bound in this session. The run is u1-accept-swb in workspace /data/docagent_workspace/dev/my-zito. Let me verify the run exists by listing runs or checking the directory.
+          - 'button "Tool call atf_run_list · {}" [ref=e2520] [cursor=pointer]':
+            - generic [ref=e2530]:
+              - generic [ref=e2531]: Tool call
+              - generic [ref=e2533]: "atf_run_list · {}"
+          - button "Think Run u1-accept-swb exists with state config_confirmed, artifacts include contract-candidate.json, launch/train.sh, webui/config-snapshot.json. So a previous confirmation exists. The user wants to re-present the nine-element card with changes:" [ref=e2541] [cursor=pointer]:
+            - generic [ref=e2551]:
+              - generic [ref=e2552]: Think
+              - generic [ref=e2554]: "Run u1-accept-swb exists with state config_confirmed, artifacts include contract-candidate.json, launch/train.sh, webui/config-snapshot.json. So a previous confirmation exists. The user wants to re-present the nine-element card with changes:"
+          - button "Tool call atf_read · runs/u1-accept-swb/webui/config-snapshot.json" [ref=e2562] [cursor=pointer]:
+            - generic [ref=e2572]:
+              - generic [ref=e2573]: Tool call
+              - generic [ref=e2575]: atf_read · runs/u1-accept-swb/webui/config-snapshot.json
+          - button "Think Odd — atf_run_list listed webui/config-snapshot.json as an artifact but atf_read says file missing. Maybe the path layout differs (e.g., runs under workspace root vs workspace/runs). Let me check with glob to find the actual file." [ref=e2583] [cursor=pointer]:
+            - generic [ref=e2593]:
+              - generic [ref=e2594]: Think
+              - generic [ref=e2596]: Odd — atf_run_list listed webui/config-snapshot.json as an artifact but atf_read says file missing. Maybe the path layout differs (e.g., runs under workspace root vs workspace/runs). Let me check with glob to find the actual file.
+          - button "Glob **/u1-accept-swb/**/*.json" [ref=e2604] [cursor=pointer]:
+            - generic [ref=e2613]:
+              - generic [ref=e2614]: Glob
+              - generic [ref=e2616]: "**/u1-accept-swb/**/*.json"
+          - button "Think The actual layout is /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb/ (there's a nested workspace/ directory). Let me read the config-snapshot.json and the iteration-config.json to know current confirmed values." [ref=e2624] [cursor=pointer]:
+            - generic [ref=e2634]:
+              - generic [ref=e2635]: Think
+              - generic [ref=e2637]: The actual layout is /data/docagent_workspace/dev/my-zito/workspace/runs/u1-accept-swb/ (there's a nested workspace/ directory). Let me read the config-snapshot.json and the iteration-config.json to know current confirmed values.
+          - button "Tool call atf_read · workspace/runs/u1-accept-swb/webui/config-snapshot.json" [ref=e2645] [cursor=pointer]:
+            - generic [ref=e2655]:
+              - generic [ref=e2656]: Tool call
+              - generic [ref=e2658]: atf_read · workspace/runs/u1-accept-swb/webui/config-snapshot.json
+          - button "Tool call atf_read · workspace/runs/u1-accept-swb/prep/iteration-config/iteration-config.json" [ref=e2665] [cursor=pointer]:
+            - generic [ref=e2675]:
+              - generic [ref=e2676]: Tool call
+              - generic [ref=e2678]: atf_read · workspace/runs/u1-accept-swb/prep/iteration-config/iteration-config.json
+          - button "Think Current state:" [ref=e2723] [cursor=pointer]:
+            - generic [ref=e2697]:
+              - generic [ref=e2698]: Think
+              - generic [ref=e2700]: "Current state:"
+        - paragraph [ref=e2729]:
+          - text: 工作区与 run 状态已核对：
+          - code [ref=e2730]: u1-accept-swb
+          - text: 处于
+          - code [ref=e2731]: config_confirmed
+          - text: ，既有确认快照在
+          - code [ref=e2732]: workspace/runs/u1-accept-swb/webui/config-snapshot.json
+          - text: 。对照你的改参：卡数 8、卡位 0-7、像素对 65536/1605632、预算三件 9000/9000/12800 均与已确认值一致；实际变更点是
+          - strong [ref=e2733]: 单卡 batch 1→2、梯度累积 32→16（256/(8×2)=16）
+          - text: 。现在应用改参并重出九要素确认卡：
+        - generic [ref=e2736]:
+          - button "Tool call atf_config_confirm · amend" [ref=e2744] [cursor=pointer]:
+            - generic [ref=e2754]:
+              - generic [ref=e2755]: Tool call
+              - generic [ref=e2757]: atf_config_confirm · amend
+          - 'button "Think The card has been re-presented via the DSH-native question card form (per tool description: \"第一段改参收集——工具内部直接以 DSH 原生问题卡 form intent 表单卡向用户呈确认键逐键输入框\"). The tool returned ok:true with fields — but has the user actually confirmed yet? The response says \"confirmed\": true and \"amend\": \"已按结构化改参重呈\". Hmm, \"confirmed\": true here seems to indicate the amend was applied. The card is now presented to the user as a form card awaiting their input/submission." [ref=e2859] [cursor=pointer]':
+            - generic [ref=e2869]:
+              - generic [ref=e2870]: Think
+              - generic [ref=e2872]: "The card has been re-presented via the DSH-native question card form (per tool description: \"第一段改参收集——工具内部直接以 DSH 原生问题卡 form intent 表单卡向用户呈确认键逐键输入框\"). The tool returned ok:true with fields — but has the user actually confirmed yet? The response says \"confirmed\": true and \"amend\": \"已按结构化改参重呈\". Hmm, \"confirmed\": true here seems to indicate the amend was applied. The card is now presented to the user as a form card awaiting their input/submission."
+        - paragraph [ref=e2879]: 改参已应用并重呈确认卡。核对一下落盘快照与预检状态，再向你汇报卡面：
+        - generic [ref=e2882]:
+          - button "Tool call atf_read · workspace/runs/u1-accept-swb/webui/config-snapshot.json" [ref=e2889] [cursor=pointer]:
+            - generic [ref=e2899]:
+              - generic [ref=e2900]: Tool call
+              - generic [ref=e2902]: atf_read · workspace/runs/u1-accept-swb/webui/config-snapshot.json
+          - button "Think The snapshot now reflects the amended values:" [ref=e2935] [cursor=pointer]:
+            - generic [ref=e2921]:
+              - generic [ref=e2922]: Think
+              - generic [ref=e2924]: "The snapshot now reflects the amended values:"
+        - paragraph [ref=e2941]: 快照已按你的改参落盘。先跑一次只读预检，确认从确认卡往后没有缺料，再触发 training_prep 段：
+        - generic [ref=e2944]:
+          - button "Tool call atf_training_preflight · u1-accept-swb" [ref=e2952] [cursor=pointer]:
+            - generic [ref=e2962]:
+              - generic [ref=e2963]: Tool call
+              - generic [ref=e2965]: atf_training_preflight · u1-accept-swb
+          - button "Think Preflight results:" [ref=e3018] [cursor=pointer]:
+            - generic [ref=e3028]:
+              - generic [ref=e3029]: Think
+              - generic [ref=e3031]: "Preflight results:"
+        - paragraph [ref=e3038]: 预检结果符合预期：三项待处理都只与已完成的更早段相关（source_pairs→register、token_provider→预算已产出、grouping_preset→实验门已消费），不阻断从确认卡往后的重跑。现在触发 training_prep 段——不显式传 training_overrides，让内核从刚落盘的确认快照构造（bs 2／accum 16／nproc 8 即从这条路进入）：
+        - generic [ref=e3039]:
+          - text: Calling tools · atf_pipeline_stage
+          - generic [ref=e3046]:
+            - generic [ref=e3047]: Running
+            - button "Tool call atf_pipeline_stage · /data/LLM_model/Qwen3-VL-32B-Instruct" [ref=e3049] [cursor=pointer]:
+              - generic [ref=e3058]:
+                - generic [ref=e3059]:
+                  - generic [ref=e3060]: Tool call
+                  - generic [ref=e3062]: atf_pipeline_stage · /data/LLM_model/Qwen3-VL-32B-Instruct
+                - generic [aria-hidden]:
+                  - generic:
+                    - generic:
+                      - generic: Tool call
+                      - generic: atf_pipeline_stage · /data/LLM_model/Qwen3-VL-32B-Instruct
+        - generic [ref=e2395]:
+          - status [ref=e2396]: Deep diving
+          - generic [ref=e2400]:
+            - generic [ref=e2401]: Deep diving for 10m 45s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 10m 45s ···
+      - generic [ref=e3064]:
+        - generic [ref=e3065]: Waiting for approval
+        - group "Approval details" [ref=e3067]:
+          - generic [ref=e3068]: 将要执行：触发管线段「training_prep」（run u1-accept-swb） 影响范围：在 run 目录内写该段产物（register 段另读源文档根） 可逆性：段产物可人工清理；已写数据面不自动回滚 预计代价：按任务卡 训练参数覆盖（training_prep）：per_device_train_batch_size=2（确认快照）／gradient_accumulation_steps=16（确认快照）／nproc_per_node=8（确认快照）／num_train_epochs=3（确认快照）／learning_rate=1e-4（确认快照）／lora_rank=32（确认快照）／lora_alpha=64（确认快照）／deepspeed=ds_z3_offload_config.json（确认快照） 仅 owner 可点；执行方不得代点
+        - generic [ref=e3069]:
+          - button "Reject" [ref=e3070] [cursor=pointer]
+          - button "Allow once" [ref=e3071] [cursor=pointer]

@@ -1,0 +1,81 @@
+- generic [ref=f2e4]:
+  - generic [ref=f2e7]:
+    - generic [ref=f2e8]:
+      - button "New session" [ref=f2e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f2e10]:
+          - generic [ref=f2e11]: ATF
+          - generic [ref=f2e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f2e17] [cursor=pointer]
+    - button "New session" [ref=f2e20] [cursor=pointer]:
+      - generic [ref=f2e21]: New Session
+    - navigation "Global panels" [ref=f2e26]:
+      - button "Plugins" [ref=f2e27] [cursor=pointer]
+    - generic [ref=f2e38]:
+      - generic [ref=f2e39]:
+        - generic [ref=f2e40]: Workspaces
+        - generic [ref=f2e42]:
+          - button "Search sessions" [ref=f2e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f2e47]:
+          - button "View options" [ref=f2e49] [cursor=pointer]
+          - button "Add workspace" [ref=f2e53] [cursor=pointer]
+      - tree "Sessions" [ref=f2e58]:
+        - generic [ref=f2e110]:
+          - treeitem "b5-walkthrough" [expanded] [ref=f2e112] [cursor=pointer]
+          - treeitem "Untitled now" [selected] [ref=f2e121] [cursor=pointer]:
+            - generic [ref=f2e123]: Untitled
+            - generic [ref=f2e124]: now
+          - treeitem "你好，请只回复“在”一个字 8min" [ref=f2e126] [cursor=pointer]:
+            - generic [ref=f2e128]: 你好，请只回复“在”一个字
+            - generic [ref=f2e129]: 8min
+    - button "Settings" [ref=f2e68] [cursor=pointer]
+  - generic [ref=f2e130]:
+    - banner [ref=f2e132]:
+      - generic [ref=f2e133]:
+        - generic [ref=f2e134]:
+          - generic [ref=f2e135]:
+            - navigation "Session hierarchy" [ref=f2e136]:
+              - generic [ref=f2e137]: b5-walkthrough
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f2e141]: Standard mode
+          - generic [ref=f2e148]:
+            - button "More actions" [ref=f2e150] [cursor=pointer]
+            - generic [ref=f2e155]:
+              - button "选择实验 ▾" [ref=f2e157] [cursor=pointer]
+              - button "监控" [ref=f2e159] [cursor=pointer]
+          - button "Open right sidebar" [ref=f2e162] [cursor=pointer]
+        - tablist [ref=f2e165]:
+          - tab "Chat" [selected] [ref=f2e166] [cursor=pointer]
+          - tab "Trajectory" [ref=f2e167] [cursor=pointer]
+    - generic [ref=f2e169]:
+      - generic [ref=f2e176]:
+        - generic [ref=f2e178]:
+          - status [ref=f2e179]: Failed
+          - button "Failed" [disabled] [ref=f2e180]
+        - status [ref=f2e184]:
+          - generic [ref=f2e186]: This turn failedprovider "faux" model "faux-card" does not support reasoning effort "max"
+          - code [ref=f2e187]: UNSUPPORTED_REASONING_EFFORT
+      - generic [ref=f2e193]:
+        - generic [ref=f2e194]:
+          - generic [ref=f2e196]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=f2e197]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=f2e198]:
+            - generic [ref=f2e199]:
+              - button "Add files or run commands" [ref=f2e200] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=f2e205] [cursor=pointer]':
+                - generic [ref=f2e209]: Full access
+            - generic [ref=f2e213]:
+              - button "Select model, current faux-card" [ref=f2e217] [cursor=pointer]:
+                - generic [ref=f2e218]: faux-card
+              - button "Send message" [disabled] [ref=f2e221]
+        - generic [ref=f2e225]:
+          - generic [ref=f2e226]: 1 turns 1 steps
+          - generic [ref=f2e235]:
+            - button "新建训练" [ref=f2e236] [cursor=pointer]
+            - button "查状态" [disabled] [ref=f2e237]
+            - button "继续上次" [disabled] [ref=f2e238]
+            - button "对比两轮" [disabled] [ref=f2e239]
+            - button "走完闭环" [ref=f2e240] [cursor=pointer]
+            - button "联合训练" [disabled] [ref=f2e241]
+            - button "badcase 可视化" [ref=f2e242] [cursor=pointer]
+            - button "发起训练" [ref=f2e243] [cursor=pointer]

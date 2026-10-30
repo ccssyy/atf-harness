@@ -1,0 +1,95 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - button "New session" [ref=e86] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e87]:
+            - generic [ref=e88]: ATF
+            - generic [ref=e91]: ATF 训练 Agent
+        - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+      - button "New session" [ref=e13] [cursor=pointer]:
+        - generic [ref=e14]: New Session
+      - navigation "Global panels" [ref=e18]:
+        - button "Plugins" [ref=e19] [cursor=pointer]
+      - generic [ref=e29]:
+        - generic [ref=e30]:
+          - generic [ref=e101]: Workspaces
+          - generic [ref=e103]:
+            - button "Search sessions" [ref=e104] [cursor=pointer]
+            - textbox "Search session names"
+          - generic [ref=e31]:
+            - button "View options" [ref=e109] [cursor=pointer]
+            - button "Add workspace" [ref=e32] [cursor=pointer]
+        - tree "Sessions" [ref=e114]:
+          - treeitem "1023" [ref=e117] [cursor=pointer]
+          - generic [ref=e123]:
+            - treeitem "my-zito" [expanded] [ref=e125] [cursor=pointer]
+            - treeitem "New Session" [selected] [ref=e134] [cursor=pointer]
+            - treeitem "ping 3h" [ref=e138] [cursor=pointer]:
+              - generic [ref=e140]: ping
+              - generic [ref=e141]: 3h
+            - treeitem "Ping Test 8h" [ref=e143] [cursor=pointer]:
+              - generic [ref=e145]: Ping Test
+              - generic [ref=e146]: 8h
+            - treeitem "Ping Test 8h" [ref=e148] [cursor=pointer]:
+              - generic [ref=e150]: Ping Test
+              - generic [ref=e151]: 8h
+            - treeitem "ping 8h" [ref=e153] [cursor=pointer]:
+              - generic [ref=e155]: ping
+              - generic [ref=e156]: 8h
+            - treeitem "请用你的提问机制（ask 用户问 21h" [ref=e158] [cursor=pointer]:
+              - generic [ref=e160]: 请用你的提问机制（ask 用户问
+              - generic [ref=e161]: 21h
+          - treeitem "Task" [ref=e163] [cursor=pointer]
+      - button "Settings" [expanded] [ref=e46] [cursor=pointer]
+    - generic [ref=e54]:
+      - banner [ref=e171]:
+        - button "Open right sidebar" [ref=e176] [cursor=pointer]
+      - generic [ref=e60]:
+        - generic [ref=e63]:
+          - generic [ref=e64]: ATF
+          - generic [ref=e67]:
+            - generic [ref=e68]: Into the Unknown
+            - generic [ref=e69]: Preview
+        - generic [ref=e70]:
+          - button "Choose workspace" [ref=e71] [cursor=pointer]:
+            - generic [ref=e74]: my-zito
+          - button "Standard mode" [ref=e185] [cursor=pointer]
+        - generic [ref=e79]:
+          - generic [ref=e81]:
+            - textbox "Describe what you want to build, / commands, @ files or sessions" [ref=e194]
+            - generic [aria-hidden]: Describe what you want to build, / commands, @ files or sessions
+          - generic [ref=e83]:
+            - generic [ref=e84]:
+              - button "Add files or run commands" [ref=e195] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e200] [cursor=pointer]':
+                - generic [ref=e204]: Full access
+            - generic [ref=e85]:
+              - generic [ref=e208]:
+                - button "思考 Low(低) ▾" [ref=e211] [cursor=pointer]:
+                  - generic [ref=e212]: 思考
+                  - generic [ref=e213]: Low(低)
+                  - generic [ref=e214]: ▾
+                - button "Select model, current GLM-5.3-Flash" [ref=e217] [cursor=pointer]:
+                  - generic [ref=e218]: GLM-5.3-Flash
+              - button "Send message" [disabled] [ref=e221]
+    - generic [ref=e227]:
+      - generic [ref=e228]: ↩
+      - generic [ref=e229]:
+        - generic [ref=e230]: 回到上次实验：航空运单（含主单 MAWB / 分单 HAWB） · Qwen3-VL-32B · 10-12 22:38
+        - generic [ref=e231]: 上次实验 · 点击选用，发送首条消息时自动绑定
+      - button "继续这次实验" [ref=e232] [cursor=pointer]
+  - dialog "Settings" [ref=e245]:
+    - navigation [ref=e246]:
+      - generic [ref=e247]: Settings
+      - generic [ref=e248]:
+        - button "General" [ref=e249] [cursor=pointer]
+        - button "Models" [active] [ref=e254] [cursor=pointer]
+        - button "Built-in plugins" [ref=e259] [cursor=pointer]
+        - button "Agent presets" [ref=e268] [cursor=pointer]
+        - button "训练配置" [ref=e275] [cursor=pointer]
+    - generic [ref=e280]:
+      - button "Close" [ref=e282] [cursor=pointer]
+      - generic [ref=e365]:
+        - paragraph [ref=e366]: "Loading the provider directory failed: settings are unavailable in this browser"
+        - button "Retry" [ref=e367] [cursor=pointer]

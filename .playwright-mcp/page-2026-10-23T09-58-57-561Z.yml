@@ -1,0 +1,93 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e86] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e87]:
+          - generic [ref=e88]: ATF
+          - generic [ref=e91]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e101]: Workspaces
+        - generic [ref=e103]:
+          - button "Search sessions" [ref=e104] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e109] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e114]:
+        - generic [ref=e115]:
+          - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=e117] [cursor=pointer]
+          - treeitem "New Session" [selected] [ref=e799] [cursor=pointer]
+          - treeitem "run pl-walkthrough-r1 迭代配置构造前置校验 3h" [ref=e126] [cursor=pointer]:
+            - generic [ref=e128]: run pl-walkthrough-r1 迭代配置构造前置校验
+            - generic [ref=e129]: 3h
+          - treeitem "训练数据构造前校验演练 3h" [ref=e131] [cursor=pointer]:
+            - generic [ref=e133]: 训练数据构造前校验演练
+            - generic [ref=e134]: 3h
+        - treeitem "ws-pl-walkthrough" [ref=e137] [cursor=pointer]
+        - generic [ref=e143]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=e145] [cursor=pointer]
+          - treeitem "构造评估服务件 for run-rh-budget 1d" [ref=e154] [cursor=pointer]:
+            - generic [ref=e156]: 构造评估服务件 for run-rh-budget
+            - generic [ref=e157]: 1d
+          - treeitem "装箱单字段抽取新实验全流程 1d" [ref=e159] [cursor=pointer]:
+            - generic [ref=e161]: 装箱单字段抽取新实验全流程
+            - generic [ref=e162]: 1d
+        - generic [ref=e163]:
+          - treeitem "atf-prodtest-20261021" [expanded] [ref=e165] [cursor=pointer]
+          - treeitem "等待发起真实训练走查指令 7h" [ref=e174] [cursor=pointer]:
+            - generic [ref=e176]: 等待发起真实训练走查指令
+            - generic [ref=e177]: 7h
+          - treeitem "汇总当前实验状态与进展 1d" [ref=e179] [cursor=pointer]:
+            - generic [ref=e181]: 汇总当前实验状态与进展
+            - generic [ref=e182]: 1d
+          - treeitem "我的训练数据放在 /data/atf/prodt 1d" [ref=e184] [cursor=pointer]:
+            - generic [ref=e186]: 我的训练数据放在 /data/atf/prodt
+            - generic [ref=e187]: 1d
+        - treeitem "a4-hotws" [ref=e190] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=e198] [cursor=pointer]
+        - treeitem "b18-ws" [ref=e206] [cursor=pointer]
+        - treeitem "sam" [ref=e214] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e802]:
+    - banner [ref=e804]:
+      - button "Open right sidebar" [ref=e809] [cursor=pointer]
+    - generic [ref=e817]:
+      - generic [ref=e820]:
+        - generic [ref=e821]: ATF
+        - generic [ref=e824]:
+          - generic [ref=e825]: Into the Unknown
+          - generic [ref=e826]: Preview
+      - generic [ref=e827]:
+        - button "Choose workspace" [ref=e828] [cursor=pointer]:
+          - generic [ref=e833]: ws-pl-walkthrough-r1
+        - button "Standard mode" [ref=e838] [cursor=pointer]
+      - generic [ref=e849]:
+        - generic [ref=e851]:
+          - textbox "Describe the training task to advance, / commands, @ files or sessions" [active] [ref=e852]
+          - generic [aria-hidden]: Describe the training task to advance, / commands, @ files or sessions
+        - generic [ref=e853]:
+          - generic [ref=e854]:
+            - button "Add files or run commands" [ref=e855] [cursor=pointer]
+            - 'button "Access mode, current: Full access" [ref=e860] [cursor=pointer]':
+              - generic [ref=e864]: Full access
+          - generic [ref=e868]:
+            - generic [ref=e869]:
+              - button "思考 Low(低) ▾" [ref=e872] [cursor=pointer]:
+                - generic [ref=e873]: 思考
+                - generic [ref=e874]: Low(低)
+                - generic [ref=e875]: ▾
+              - button "Select model, current glm-5.3-flash" [ref=e878] [cursor=pointer]:
+                - generic [ref=e879]: glm-5.3-flash
+            - button "Send message" [disabled] [ref=e882]
+  - generic [ref=e887]:
+    - generic [ref=e888]: ↩
+    - generic [ref=e889]:
+      - generic [ref=e890]: 回到上次实验：装箱单 · Qwen3-VL-32B · 10-23 14:51
+      - generic [ref=e891]: 上次实验 · 点击选用，发送首条消息时自动绑定
+    - button "继续这次实验" [ref=e892] [cursor=pointer]

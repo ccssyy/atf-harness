@@ -1,0 +1,154 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "New session" [ref=e86] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e87]:
+          - generic [ref=e88]: ATF
+          - generic [ref=e91]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=e94] [cursor=pointer]
+    - button "New session" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: New Session
+    - navigation "Global panels" [ref=e18]:
+      - button "Plugins" [ref=e19] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e101]: Workspaces
+        - generic [ref=e103]:
+          - button "Search sessions" [ref=e104] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=e31]:
+          - button "View options" [ref=e109] [cursor=pointer]
+          - button "Add workspace" [ref=e32] [cursor=pointer]
+      - tree "Sessions" [ref=e114]:
+        - treeitem "1023" [ref=e117] [cursor=pointer]
+        - generic [ref=e123]:
+          - treeitem "my-zito" [expanded] [ref=e125] [cursor=pointer]
+          - treeitem "Running 海运单单据抽取模型训练流程启动 now" [selected] [ref=e904] [cursor=pointer]:
+            - generic [ref=e502]: Running
+            - generic [ref=e503]: 海运单单据抽取模型训练流程启动
+            - generic [ref=e601]: now
+          - treeitem "D76 卡位卡面验收测试 3h" [ref=e134] [cursor=pointer]:
+            - generic [ref=e136]: D76 卡位卡面验收测试
+            - generic [ref=e137]: 3h
+          - treeitem "ping 1d" [ref=e139] [cursor=pointer]:
+            - generic [ref=e141]: ping
+            - generic [ref=e142]: 1d
+          - treeitem "Ping Test 1d" [ref=e144] [cursor=pointer]:
+            - generic [ref=e146]: Ping Test
+            - generic [ref=e147]: 1d
+          - treeitem "Ping Test 1d" [ref=e149] [cursor=pointer]:
+            - generic [ref=e151]: Ping Test
+            - generic [ref=e152]: 1d
+          - treeitem "ping 1d" [ref=e154] [cursor=pointer]:
+            - generic [ref=e156]: ping
+            - generic [ref=e157]: 1d
+          - button "Show 1 more sessions" [ref=e158] [cursor=pointer]
+        - treeitem "Task" [ref=e160] [cursor=pointer]
+    - button "Settings" [ref=e46] [cursor=pointer]
+  - generic [ref=e504]:
+    - banner [ref=e506]:
+      - generic [ref=e507]:
+        - generic [ref=e508]:
+          - generic [ref=e602]:
+            - navigation "Session hierarchy" [ref=e603]:
+              - generic [ref=e604]: 海运单单据抽取模型训练流程启动
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=e608]: Standard mode
+          - generic [ref=e615]:
+            - button "More actions" [ref=e617] [cursor=pointer]
+            - generic [ref=e622]:
+              - button "选择实验 ▾" [ref=e624] [cursor=pointer]
+              - button "监控" [ref=e626] [cursor=pointer]
+          - button "Open right sidebar" [ref=e511] [cursor=pointer]
+        - tablist [ref=e627]:
+          - tab "Chat" [selected] [ref=e628] [cursor=pointer]
+          - tab "Trajectory" [ref=e629] [cursor=pointer]
+    - generic [ref=e515]:
+      - generic [ref=e636]:
+        - generic [ref=e639]:
+          - generic [ref=e640]: 我想用海运单（SWB）数据训练一个字段抽取模型，请从登记开始走完整流程直到训练启动：源数据 /data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb（50 对页级 png+json），字段配置 /data/atf/prodtest/atf-prodtest-20261021/field-config-swb.json，底座模型 /data/LLM_model/Qwen3-VL-32B-Instruct，run 名 u1-accept-swb。
+          - generic [ref=e642]:
+            - generic [ref=e643]: 15:21
+            - button "Copy" [ref=e644] [cursor=pointer]
+        - generic [ref=e676]:
+          - button "Think Let me load the iteration loop skill first." [ref=e684] [cursor=pointer]:
+            - generic [ref=e694]:
+              - generic [ref=e695]: Think
+              - generic [ref=e697]: Let me load the iteration loop skill first.
+          - button "Skill atf-qwen-vl-iteration-loop" [ref=e704] [cursor=pointer]:
+            - generic [ref=e713]:
+              - generic [ref=e714]: Skill
+              - generic [ref=e716]: atf-qwen-vl-iteration-loop
+          - 'button "Think The skill catalog suggests atf-qwen-vl-iteration-loop for natural language new training. But the actual execution path in this environment is the pipeline stage tools: register → label_qc → experiment_setup → family_split → admission → training_prep → candidate_build → publish... Order: register, label_qc, experiment_setup, family_split, publish, candidate_build, admission, training_prep? The stage enum: register/label_qc/experiment_setup/candidate_build/publish/family_split/admission/training_prep. \"越序段会被内核拒绝（blocked）——按段序逐段触发\". I need workspace_path and run_id. Workspace is current working directory /data/docagent_workspace/dev/my-zito presumably. Let me check workspace status first, and also need a workspace directory. The user gave run name u1-accept-swb." [ref=e724] [cursor=pointer]':
+            - generic [ref=e734]:
+              - generic [ref=e735]: Think
+              - generic [ref=e737]: "The skill catalog suggests atf-qwen-vl-iteration-loop for natural language new training. But the actual execution path in this environment is the pipeline stage tools: register → label_qc → experiment_setup → family_split → admission → training_prep → candidate_build → publish... Order: register, label_qc, experiment_setup, family_split, publish, candidate_build, admission, training_prep? The stage enum: register/label_qc/experiment_setup/candidate_build/publish/family_split/admission/training_prep. \"越序段会被内核拒绝（blocked）——按段序逐段触发\". I need workspace_path and run_id. Workspace is current working directory /data/docagent_workspace/dev/my-zito presumably. Let me check workspace status first, and also need a workspace directory. The user gave run name u1-accept-swb."
+        - paragraph [ref=e744]: 我先看一下工作区状态，然后按段序走 walkthrough pipeline：register → label_qc → experiment_setup → … → training_prep。
+        - generic [ref=e747]:
+          - 'button "Tool call atf_workspace_status · {}" [ref=e754] [cursor=pointer]':
+            - generic [ref=e764]:
+              - generic [ref=e765]: Tool call
+              - generic [ref=e767]: "atf_workspace_status · {}"
+          - button "Think Workspace is registered. Check the source dir and field config exist quickly, then trigger register stage. Register needs source_root. run_id = u1-accept-swb." [ref=e775] [cursor=pointer]:
+            - generic [ref=e785]:
+              - generic [ref=e786]: Think
+              - generic [ref=e788]: Workspace is registered. Check the source dir and field config exist quickly, then trigger register stage. Register needs source_root. run_id = u1-accept-swb.
+        - paragraph [ref=e795]: 工作区已注册。先确认源数据与字段配置在场：
+        - generic [ref=e798]:
+          - button "Tool call atf_bash · ls /data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb | head -5; ls /data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb | wc -l; ls /data/atf/prodtest/atf-prodtest-20261021/field-config-swb.json" [ref=e805] [cursor=pointer]:
+            - generic [ref=e815]:
+              - generic [ref=e816]: Tool call
+              - generic [ref=e818]: atf_bash · ls /data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb | head -5; ls /data/atf/prodtest/atf-prodtest-20261021/data-quantized-b7-swb-r1/swb | wc -l; ls /data/atf/prodtest/atf-prodtest-20261021/field-config-swb.json
+          - button "Think Source root outside bash allowlist, but atf_pipeline_stage may accept it as parameter (it's a kernel path). Let's just trigger register directly — the kernel handles the path. workspace_path=/data/docagent_workspace/dev/my-zito, run_id=u1-accept-swb, source_root=the given path, field_config, doc_type swb." [ref=e850] [cursor=pointer]:
+            - generic [ref=e860]:
+              - generic [ref=e861]: Think
+              - generic [ref=e863]: Source root outside bash allowlist, but atf_pipeline_stage may accept it as parameter (it's a kernel path). Let's just trigger register directly — the kernel handles the path. workspace_path=/data/docagent_workspace/dev/my-zito, run_id=u1-accept-swb, source_root=the given path, field_config, doc_type swb.
+        - paragraph [ref=e870]: bash 白名单不含该源目录，但内核管线可以直接消费该路径。直接触发 register 段：
+        - generic [ref=e871]:
+          - text: Analyzing the request
+          - button "Tool call atf_pipeline_stage · swb" [ref=e881] [cursor=pointer]:
+            - generic [ref=e891]:
+              - generic [ref=e892]: Tool call
+              - generic [ref=e894]: atf_pipeline_stage · swb
+        - generic [ref=e648]:
+          - status [ref=e649]: Deep diving
+          - generic [ref=e653]:
+            - generic [ref=e654]: Deep diving for 56s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 56s ···
+      - generic [ref=e550]:
+        - generic [ref=e551]:
+          - generic [ref=e553]:
+            - textbox "Message or run a task, / commands, @ files or sessions" [ref=e656]
+            - generic [aria-hidden]: Message or run a task, / commands, @ files or sessions
+          - generic [ref=e555]:
+            - generic [ref=e556]:
+              - button "Add files or run commands" [ref=e557] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e562] [cursor=pointer]':
+                - generic [ref=e566]: Full access
+            - generic [ref=e570]:
+              - generic [ref=e571]:
+                - button "思考 Low(低) ▾" [ref=e574] [cursor=pointer]:
+                  - generic [ref=e575]: 思考
+                  - generic [ref=e576]: Low(低)
+                  - generic [ref=e577]: ▾
+                - button "Select model, current GLM-5.3-Flash" [ref=e580] [cursor=pointer]:
+                  - generic [ref=e581]: GLM-5.3-Flash
+              - button "Stop generating" [ref=e657] [cursor=pointer]
+        - generic [ref=e659]:
+          - generic [ref=e660]:
+            - generic [ref=e819]:
+              - button "1 turns 4 steps · 45 tok/s" [ref=e910] [cursor=pointer]:
+                - generic [ref=e826]: 1 turns 4 steps·45 tok/s
+              - button "76.1K tok · Cache hit 73%" [ref=e911] [cursor=pointer]:
+                - generic [ref=e833]: 76.1K tok·Cache hit 73%
+            - generic [ref=e662]:
+              - button "新建训练" [ref=e663] [cursor=pointer]
+              - button "查状态" [disabled] [ref=e664]
+              - button "继续上次" [disabled] [ref=e665]
+              - button "对比两轮" [disabled] [ref=e666]
+              - button "走完闭环" [ref=e667] [cursor=pointer]
+              - button "联合训练" [disabled] [ref=e668]
+              - button "badcase 可视化" [ref=e669] [cursor=pointer]
+              - button "发起训练" [ref=e670] [cursor=pointer]
+          - button "2% of context used" [ref=e835] [cursor=pointer]:
+            - generic [ref=e839]: 2%

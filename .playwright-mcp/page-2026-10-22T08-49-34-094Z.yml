@@ -1,0 +1,138 @@
+- generic [ref=f5e4]:
+  - generic [ref=f5e7]:
+    - generic [ref=f5e8]:
+      - button "New session" [ref=f5e9] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f5e10]:
+          - generic [ref=f5e11]: ATF
+          - generic [ref=f5e14]: ATF 训练 Agent
+      - button "Collapse sidebar" [ref=f5e17] [cursor=pointer]
+    - button "New session" [ref=f5e20] [cursor=pointer]:
+      - generic [ref=f5e21]: New Session
+    - navigation "Global panels" [ref=f5e26]:
+      - button "Plugins" [ref=f5e27] [cursor=pointer]
+    - generic [ref=f5e38]:
+      - generic [ref=f5e39]:
+        - generic [ref=f5e40]: Workspaces
+        - generic [ref=f5e42]:
+          - button "Search sessions" [ref=f5e43] [cursor=pointer]
+          - textbox "Search session names"
+        - generic [ref=f5e47]:
+          - button "View options" [ref=f5e49] [cursor=pointer]
+          - button "Add workspace" [ref=f5e53] [cursor=pointer]
+      - tree "Sessions" [ref=f5e58]:
+        - treeitem "ws-pl-walkthrough-r1" [expanded] [ref=f5e112] [cursor=pointer]
+        - treeitem "ws-pl-walkthrough" [ref=f5e122] [cursor=pointer]
+        - generic [ref=f5e128]:
+          - treeitem "atf-g2fresh-20261022" [expanded] [ref=f5e130] [cursor=pointer]
+          - treeitem "Running 构造评估服务件 for run-rh-budget now" [selected] [ref=f5e2183] [cursor=pointer]:
+            - generic [ref=f5e2001]: Running
+            - generic [ref=f5e2002]: 构造评估服务件 for run-rh-budget
+            - generic [ref=f5e2104]: now
+          - treeitem "装箱单字段抽取新实验全流程 2h" [ref=f5e2184] [cursor=pointer]:
+            - generic [ref=f5e145]: 装箱单字段抽取新实验全流程
+            - generic [ref=f5e146]: 2h
+        - treeitem "atf-prodtest-20261021" [ref=f5e2003] [cursor=pointer]
+        - treeitem "a4-hotws" [ref=f5e157] [cursor=pointer]
+        - treeitem "atf-prodtest-20261017" [ref=f5e165] [cursor=pointer]
+        - treeitem "b18-ws" [ref=f5e173] [cursor=pointer]
+        - treeitem "sam" [ref=f5e181] [cursor=pointer]
+    - button "Settings" [ref=f5e68] [cursor=pointer]
+  - generic [ref=f5e2004]:
+    - banner [ref=f5e2006]:
+      - generic [ref=f5e2007]:
+        - generic [ref=f5e2008]:
+          - generic [ref=f5e2105]:
+            - navigation "Session hierarchy" [ref=f5e2106]:
+              - generic [ref=f5e2107]: 构造评估服务件 for run-rh-budget
+            - generic "Work with code, files, and information. Suitable for most tasks, with search, editing, terminal commands, and other tools available as needed." [ref=f5e2111]: Standard mode
+          - generic [ref=f5e2118]:
+            - button "More actions" [ref=f5e2120] [cursor=pointer]
+            - generic [ref=f5e2125]:
+              - button "实验 budget · 空闲 ▾" [ref=f5e2127] [cursor=pointer]
+              - button "监控" [ref=f5e2131] [cursor=pointer]
+          - button "Open right sidebar" [ref=f5e2011] [cursor=pointer]
+        - tablist [ref=f5e2132]:
+          - tab "Chat" [selected] [ref=f5e2133] [cursor=pointer]
+          - tab "Trajectory" [ref=f5e2134] [cursor=pointer]
+    - generic [ref=f5e2015]:
+      - generic [ref=f5e2141]:
+        - generic [ref=f5e2144]:
+          - generic [ref=f5e2145]: 请对实验 run-rh-budget 发起评估的服务件构造（只到服务件生成，不真跑评估）。直接调用 atf_evaluate 工具，参数如下：action=start，run_id=run-rh-budget，adapter_path=/data/atf/dev/runs/run-rh-budget/models/checkpoint-100，eval_assets_dir=/data/atf/dev/runs/run-rh-budget/eval-assets，service_config=/data/atf/dev/runs/run-rh-budget/eval-assets/service-config.json，field_config=/data/atf/dev/runs/run-rh-budget/eval-assets/field-config.json，env_profile=a800-local，assets_external_confirm=true。请原样传这些参数，不要改路径。
+          - generic [ref=f5e2147]:
+            - generic [ref=f5e2148]: 16:48
+            - button "Copy" [ref=f5e2149] [cursor=pointer]
+        - generic [ref=f5e2185]:
+          - text: Analyzing the request · However
+          - generic [ref=f5e2187]:
+            - button "Think The user is asking me to initiate an evaluation service construction for experiment run-rh-budget, only up to service artifact generation (not actually running the evaluation). They've given me exact parameters to pass to atf_evaluate:" [ref=f5e2195] [cursor=pointer]:
+              - generic [ref=f5e2205]:
+                - generic [ref=f5e2206]: Think
+                - generic [ref=f5e2208]: "The user is asking me to initiate an evaluation service construction for experiment run-rh-budget, only up to service artifact generation (not actually running the evaluation). They've given me exact parameters to pass to atf_evaluate:"
+            - button "Tool call atf_evaluate · start" [ref=f5e2216] [cursor=pointer]:
+              - generic [ref=f5e2226]:
+                - generic [ref=f5e2227]: Tool call
+                - generic [ref=f5e2229]: atf_evaluate · start
+            - generic [ref=f5e2235]:
+              - generic [ref=f5e2236]: Running
+              - button "Think But wait — should I immediately call atf_config_confirm? The user asked specifically for evaluation service construction with specific parameters. The budget file is missing. The guidance says to first do the config confirmation card. The atf_config_confirm tool requires action and run_id." [ref=f5e2238] [cursor=pointer]:
+                - generic [ref=f5e2247]:
+                  - generic [ref=f5e2248]:
+                    - generic [ref=f5e2249]: Think
+                    - generic [ref=f5e2251]: But wait — should I immediately call atf_config_confirm? The user asked specifically for evaluation service construction with specific parameters. The budget file is missing. The guidance says to first do the config confirmation card. The atf_config_confirm tool requires action and run_id.
+                  - generic [aria-hidden]:
+                    - generic:
+                      - generic:
+                        - generic: Think
+                        - generic: But wait — should I immediately call atf_config_confirm? The user asked specifically for evaluation service construction with specific parameters. The budget file is missing. The guidance says to first do the config confirmation card. The atf_config_confirm tool requires action and run_id.
+        - generic [ref=f5e2153]:
+          - status [ref=f5e2154]: Deep diving
+          - generic [ref=f5e2158]:
+            - generic [ref=f5e2159]: Deep diving for 59s ···
+            - generic [aria-hidden]:
+              - generic: Deep diving for 59s ···
+      - generic [ref=f5e2050]:
+        - generic [ref=f5e2051]:
+          - generic [ref=f5e2053]:
+            - textbox "Message the ATF training agent, / commands, @ files or sessions" [active] [ref=f5e2161]
+            - generic [aria-hidden]: Message the ATF training agent, / commands, @ files or sessions
+          - generic [ref=f5e2055]:
+            - generic [ref=f5e2056]:
+              - button "Add files or run commands" [ref=f5e2057] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=f5e2062] [cursor=pointer]':
+                - generic [ref=f5e2066]: Full access
+            - generic [ref=f5e2070]:
+              - generic [ref=f5e2071]:
+                - button "思考 Low(低) ▾" [ref=f5e2074] [cursor=pointer]:
+                  - generic [ref=f5e2075]: 思考
+                  - generic [ref=f5e2076]: Low(低)
+                  - generic [ref=f5e2077]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=f5e2080] [cursor=pointer]:
+                  - generic [ref=f5e2081]: glm-5.3-flash
+              - button "Stop generating" [ref=f5e2162] [cursor=pointer]
+        - generic [ref=f5e2164]:
+          - generic [ref=f5e2165]:
+            - generic [ref=f5e2253]:
+              - button "1 turns 1 steps · 46 tok/s" [ref=f5e2255] [cursor=pointer]:
+                - generic [ref=f5e2260]: 1 turns 1 steps·46 tok/s
+              - button "19.3K tok · Cache hit 0%" [ref=f5e2262] [cursor=pointer]:
+                - generic [ref=f5e2267]: 19.3K tok·Cache hit 0%
+            - generic [ref=f5e2166]:
+              - status [ref=f5e2167]:
+                - generic [ref=f5e2168]: 工作区目录已丢失（1）——可用 atf_rebind_workspace 重新定位
+                - generic [ref=f5e2169]:
+                  - generic [ref=f5e2170]: /data/atf/prodtest/atf-g2fresh-20261022/ws-pl-walkthrough
+                  - generic [ref=f5e2171]: ws-pl-walkthrough · 1 会话
+              - generic [ref=f5e2172]:
+                - button "新建训练" [ref=f5e2173] [cursor=pointer]
+                - button "查状态" [ref=f5e2174] [cursor=pointer]
+                - button "继续训练：实验 budget" [ref=f5e2175] [cursor=pointer]
+                - button "对比两轮" [ref=f5e2176] [cursor=pointer]
+                - button "走完闭环" [ref=f5e2177] [cursor=pointer]
+                - button "联合训练" [ref=f5e2178] [cursor=pointer]
+                - button "badcase 可视化" [ref=f5e2179] [cursor=pointer]
+                - button "发起训练" [ref=f5e2180] [cursor=pointer]
+          - button "2% of context used" [ref=f5e2269] [cursor=pointer]:
+            - generic [ref=f5e2273]: 2%
+  - generic [ref=f5e2088]:
+    - generic [aria-hidden]:
+      - generic: Start

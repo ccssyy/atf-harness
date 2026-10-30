@@ -1,0 +1,52 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e7]:
+      - button "Open sidebar" [ref=e9] [cursor=pointer]:
+        - generic [ref=e11]: ATF
+      - button "New session" [ref=e13] [cursor=pointer]
+      - navigation "Global panels" [ref=e18]:
+        - button "Plugins" [ref=e19] [cursor=pointer]
+      - generic [ref=e29]:
+        - button "Add workspace" [ref=e32] [cursor=pointer]
+        - button "Search sessions" [ref=e36] [cursor=pointer]
+      - button "Settings" [ref=e46] [cursor=pointer]
+    - generic [ref=e2461]:
+      - banner [ref=e2463]:
+        - button "Open right sidebar" [ref=e2468] [cursor=pointer]
+      - generic [ref=e2476]:
+        - generic [ref=e2479]:
+          - generic [ref=e2480]: ATF
+          - generic [ref=e2483]:
+            - generic [ref=e2484]: Into the Unknown
+            - generic [ref=e2485]: Preview
+        - generic [ref=e2486]:
+          - button "Choose workspace" [expanded] [active] [ref=e2487] [cursor=pointer]:
+            - generic [ref=e2492]: ws-pl-walkthrough
+          - button "Standard mode" [ref=e2497] [cursor=pointer]
+        - generic [ref=e2508]:
+          - generic [ref=e2510]:
+            - textbox "Describe the training task to advance, / commands, @ files or sessions" [ref=e2511]
+            - generic [aria-hidden]: Describe the training task to advance, / commands, @ files or sessions
+          - generic [ref=e2512]:
+            - generic [ref=e2513]:
+              - button "Add files or run commands" [ref=e2514] [cursor=pointer]
+              - 'button "Access mode, current: Full access" [ref=e2519] [cursor=pointer]':
+                - generic [ref=e2523]: Full access
+            - generic [ref=e2527]:
+              - generic [ref=e2528]:
+                - button "思考 Max(最高) ▾" [ref=e2531] [cursor=pointer]:
+                  - generic [ref=e2532]: 思考
+                  - generic [ref=e2533]: Max(最高)
+                  - generic [ref=e2534]: ▾
+                - button "Select model, current glm-5.3-flash" [ref=e2537] [cursor=pointer]:
+                  - generic [ref=e2538]: glm-5.3-flash
+              - button "Send message" [disabled] [ref=e2541]
+  - menu [ref=e2546]:
+    - menuitem "ws-pl-walkthrough" [ref=e2548] [cursor=pointer]
+    - menuitem "atf-g2fresh-20261022" [ref=e2556] [cursor=pointer]
+    - menuitem "atf-prodtest-20261021" [ref=e2562] [cursor=pointer]
+    - menuitem "a4-hotws" [ref=e2568] [cursor=pointer]
+    - menuitem "atf-prodtest-20261017" [ref=e2574] [cursor=pointer]
+    - menuitem "b18-ws" [ref=e2580] [cursor=pointer]
+    - menuitem "sam" [ref=e2586] [cursor=pointer]
+    - menuitem "Add workspace…" [ref=e2592] [cursor=pointer]
