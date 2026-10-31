@@ -1799,7 +1799,10 @@ export const buildPipelineTool = (
       `base_model_path 仅 training_prep 段必填（本地模型目录绝对路径，含 config.json；模型家族名（如 qwen3_vl）不可当路径用——` +
       `缺参/非绝对路径在审批卡前快败，指路 ATF_MODEL_ROOT 可用模型清单；其它段忽略该参）。` +
       `family_split 段另支持 auto_style_cluster 三态（缺省 auto，其它段忽略该参）：` +
-      `auto＝先检测——已聚类则不复聚；未聚类/状态不明会拒绝并指路。` +
+      `auto＝先检测——已聚类则不复聚；未聚类/占位簇自动补齐版式聚类后按簇分层` +
+      `（D168：版式聚类好的数据是后续步骤的必要强制条件；聚类无法形成有效分组时 blocked 并给出路）。` +
+      `family_split 的 blocked 回执 user_message 是给人看的话术，原样转述用户；` +
+      `数据划分一律走产品内置规则，禁止根据内部码自行发明划分方案。` +
       `experiment_setup 段另支持 grouping_proposal 分组建议（候选制）：` +
       `{schema_version:"GroupingProposal/v1",candidates:[{name,recommended,groups:[{name,fields}],reason}]}——` +
       `候选名是卡面标题、recommended 有且仅一个为 true、groups 逐组给组名与字段列表、reason 给候选理由；` +
@@ -1865,10 +1868,12 @@ export const buildPipelineTool = (
         enum: [...AUTO_STYLE_CLUSTER_VALUES],
         description:
           "版式聚类三态（仅 family_split 段有意义，其它段忽略该参）：auto＝先检测（缺省）——已聚类则不复聚；" +
-          "未聚类/状态不明会拒绝并指路。on＝显式开启内核自动补簇（问明未聚类后用）。off＝不再聚（问明已聚类后用）。" +
-          "收到版式聚类状态类拒绝（style_cluster_state_not_clustered／style_cluster_state_ambiguous／" +
-          "style_cluster_declared_but_absent）时，必须先问用户「这批数据做过版式聚类吗？」，" +
-          "确认后再传 on 或 off 重跑；禁止在 auto 被拒后自行猜一个值重跑。" +
+          "未聚类/占位簇自动补齐版式聚类后按簇分层（D168：版式聚类好的数据是后续必要强制条件；" +
+          "聚类无法形成有效分组时 blocked 并给出路＝确认合并相近小类或补充各版式样本，此时如实转述用户）。" +
+          "on＝显式开启内核自动补簇。off＝声明已聚类（与事实矛盾会被拒）。" +
+          "每页图片是独立样本：同份文档多页分跨 train/test 是版式簇内等比的正确行为，不是数据泄露；" +
+          "泄露仅指像素重复副本跨集。禁止以「同份文档不泄露」为由自行发明划分方案。" +
+          "family_split 的 blocked 回执 user_message 原样转述用户；" +
           "对用户表述用业务语言：问「这批数据是否已经按版式分好组」，不要念枚举值",
       },
       style_clusters_source: {
