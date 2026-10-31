@@ -18,7 +18,7 @@ import {
   configChoiceValuesOf,
   DEEPSPEED_CHOICES,
 } from "../../src/webui/configConfirm.js";
-import { configFormFieldsOf, buildConfigChoiceQuestions, editsFromFormAnswers } from "../../packages/extensions/atf-tools/src/confirmFace.js";
+import { configFormFieldsOf, buildConfigChoiceQuestions, editsFromFormAnswers, domainHintOf } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 
 describe("六区块（标题业务话＋键序单源）", () => {
   it("区块标题恰为六个业务话，且不含内部键名", () => {
@@ -64,15 +64,12 @@ describe("决策卡（options 形态；自由输入留在选项组末尾）", ()
       expect((question.options ?? []).length).toBeGreaterThan(0);
     }
   });
-  it("multiSelect 用量非零：卡位多选（卡 0…卡 7），选两张＝回传 0,1", () => {
-    const devices = questions.find((question) => question.id === "config-choice-visible-devices");
-    expect(devices?.multiSelect).toBe(true);
-    expect(devices?.options.map((option) => option.label)).toEqual(["卡 0", "卡 1", "卡 2", "卡 3", "卡 4", "卡 5", "卡 6", "卡 7"]);
-    const edits = editsFromFormAnswers(
-      { answers: [{ id: "config-choice-visible-devices", selected: ["卡 0", "卡 1"] }] },
-      picks,
-    );
-    expect(edits["visible_devices"]).toBe("0,1");
+  it("b39 卡位归位：决策卡不再出卡位题（卡号＝开集录入，留在表单卡文本框）", () => {
+    expect(questions.find((question) => question.id === "config-choice-visible-devices")).toBeUndefined();
+    // 录入卡仍收 visible_devices（域提示带本机可用卡数事实）
+    const hint = domainHintOf("visible_devices", 8);
+    expect(hint).toContain("本机可用卡 0-7");
+    expect(hint).toContain("a-b 区间");
   });
   it("deepspeed 必须下拉：7 档闭集选项，值全部落在内核闭集内，label 是业务话", () => {
     const deepspeed = questions.find((question) => question.id === "config-choice-deepspeed");
@@ -83,10 +80,12 @@ describe("决策卡（options 形态；自由输入留在选项组末尾）", ()
     // 立选项里不出现内部文件名（零内部码字样）
     for (const option of deepspeed?.options ?? []) expect(option.label).not.toMatch(/\.json$/);
   });
-  it("未探测到卡数＝不编造卡位域（该题不生成，其余决策题照办）", () => {
+  it("未探测到卡数＝不编造卡位域（录入卡提示走通用话术，其余决策题照办）", () => {
     const gpuUnknown = buildConfigChoiceQuestions(fields, null);
     expect(gpuUnknown.questions.find((question) => question.id === "config-choice-visible-devices")).toBeUndefined();
     expect(gpuUnknown.questions.length).toBeGreaterThan(0);
+    const hint = domainHintOf("visible_devices", null);
+    expect(hint).toContain("逗号分隔卡号或 a-b 区间");
   });
   it("自由输入（选项组末尾 custom）：裸值＝本问取值；key=value 形态＝逐键取值", () => {
     const bare = editsFromFormAnswers({ answers: [{ id: "config-choice-deepspeed", selected: [], custom: "ds_z3_offload" }] }, picks);

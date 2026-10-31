@@ -261,27 +261,13 @@ export const buildConfigChoiceQuestions = (
   };
   const currentOf = (key: string): string => (fields.find((field) => field.key === key)?.value ?? "").trim();
 
-  // A 运行环境：卡位（多选——个数须等于训练卡数，二者同区块相邻）
-  if (gpuCount !== null && Number.isInteger(gpuCount) && gpuCount > 0) {
-    // 选项 label 是用户面、value 是卡号（回传面）——两者同表，解析器不改写
-    const gpuPairs = Array.from({ length: gpuCount }, (_, index) => ({ label: `卡 ${String(index)}`, value: String(index) }));
-    const options = gpuPairs.map((pair, index) =>
-      index === 0
-        ? { label: pair.label, description: "可多选；一张都不选＝全部可见卡（回退部署缺省）" }
-        : { label: pair.label });
-    push(
-      {
-        id: "config-choice-visible-devices",
-        header: "运行环境",
-        question: "占哪几张卡？",
-        detail: `可多选。卡位个数须与训练卡数一致；不选＝全部可见卡（回退部署缺省）。` +
-          `${currentOf("visible_devices") === "" ? "" : `现值：${currentOf("visible_devices")}`}`,
-        options,
-        multiSelect: true,
-      },
-      { questionId: "config-choice-visible-devices", key: "visible_devices", multiSelect: true, options: gpuPairs },
-    );
-  }
+  // A 运行环境：卡位（b39 改判：从 multiSelect 选项组撤出，归录入卡文本输入框）
+  // 理由（Harness 归位）：卡号是开集录入值（a-b 区间/逗号列举），不是闭集决策——
+  // owner 2026-10-26 决策卡只收闭集，把录入伪装成 8 个复选框＝形态错位
+  // （T7 实证：机器卡数变化即选项失效；a-b 区间无法表达；驱动器与人手都要逐个点）。
+  // 归位后：visible_devices 只在录入卡出现（现值预填、格式提示「逗号分隔或 a-b 区间」），
+  // 校验单源不变（visibleDevicesViolationsOf——卡位个数与训练卡数一致的判定照旧）。
+  // gpuCount 仍探测（录入卡 detail 提示「本机可用卡 0-(N-1)」，不猜域）。
 
   // C 长度与预算：像素上限（两档闭集）
   const pixelOptions = configChoiceValuesOf("image_max_pixels");
@@ -371,7 +357,10 @@ export const domainHintOf = (key: string, gpuCount: number | null): string | und
       return gpuCount !== null ? `[1, 可用卡数 ${gpuCount}]` : "须为本机可用卡数内（机器事实）";
     case "visible_devices":
       // D76 卡位入卡：域提示与内核侧键语义逐字一致（逗号/a-b 段、0–7、个数=nproc；留空回退 deploy）。
-      return "逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）";
+      // b39：决策卡撤出后此处是卡位唯一入口——补本机可用卡数事实（不猜域）。
+      return gpuCount !== null && Number.isInteger(gpuCount) && gpuCount > 0
+        ? `本机可用卡 0-${gpuCount - 1}；逗号分隔卡号或 a-b 区间（如 0-3）；不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）`
+        : "逗号分隔卡号或 a-b 区间（如 4,5,6,7 或 4-7）；卡号 0–7、不重复；个数须与训练卡数一致；留空＝全部可见卡（deploy 缺省）";
     case "max_total_tokens":
       // 批次 R H1-2：建议值单源 9000（惯例基线 owner 2026-10-22——65536 域参考值退役）。
       return `正整数；建议 ${TRAINING_PIN_CONSTANTS.max_total_tokens}（单样本 token 上限，超长单据构造期截断/拒绝；与 cutoff/max_model_len 的关系由三要素校验拦）`;
@@ -639,7 +628,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const configTool = defineTool({
     name: "atf_config_confirm",
     description:
-      "本次训练方案确认卡：action=present 构造/重呈本次训练方案卡（overrides 传显式覆盖值）；action=amend 应用结构化改参（edits 传键值对象）后重呈。合并版双段式编排（present/amend 同链）：第一段改参收集——决策类（卡位/像素上限/LoRA 容量/显存策略）走原生选项卡（可多选处开 multiSelect，自由输入走选项组末尾「其他」），录入类走原生 form intent 表单卡逐键输入框（现值预填＋clamp 域提示；max_model_len 只读不入输入框；标签带六区块业务标题），卡面附 TokenBudget 三要素区（预算/训练截断/推理窗口三行＋两条不变式校验：预算超 cutoff 或超 max_model_len 即红字禁确认；预算与 cutoff 不等须同步（用户动作不自动）或填不同步理由），用户改值/直接提交即回结构化 key=value；第二段授权——有改动走确定性 clamp（越界回退域边界＋可读说明），最终授权一律走审批卡 Allow once（账本留痕不变）；审批卡 Reject → 回表单卡（带上次值）循环，用户关闭表单卡＝取消（结构化拒绝）。问题卡只收集改参、不承载授权（审批≠请示，闸门语义不迁移）；用户在聊天里的改参话术由 agent 语义理解后转 edits 结构化参数（自由文本永不直达生成面）。现值基线＝已确认快照（runtime/webui/config-snapshot.json，v2 存量 webui/ 只读兼容）＞run 的 IterationConfig 实值（config/iteration-config，v2 存量 prep/iteration-config 只读兼容——登记源，卡面与 Web 摘要同源）＞缺省。人工档（预设非 atf-training 或权限档非 danger-full-access）：审批面板 Allow once 确认后 config-snapshot 落盘。训练自动驾驶（Agent 预设 atf-training ＋ 权限档 danger-full-access 两轴齐备）：present 免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend（同样免阻塞）。" +
+      "本次训练方案确认卡：action=present 构造/重呈本次训练方案卡（overrides 传显式覆盖值）；action=amend 应用结构化改参（edits 传键值对象）后重呈。合并版双段式编排（present/amend 同链）：第一段改参收集——决策类（卡位/像素上限/LoRA 容量/显存策略）走原生选项卡（可多选处开 multiSelect，自由输入走选项组末尾「其他」），录入类走原生 form intent 表单卡逐键输入框（现值预填＋clamp 域提示；max_model_len 只读不入输入框；标签带六区块业务标题），卡面附 TokenBudget 三要素区（预算/训练截断/推理窗口三行＋两条不变式校验：预算超 cutoff 或超 max_model_len 即红字禁确认；预算与 cutoff 不等须同步（用户动作不自动）或填不同步理由），用户改值/直接提交即回结构化 key=value；第二段授权——有改动走确定性 clamp（越界回退域边界＋可读说明），最终授权一律走审批卡 Allow once（账本留痕不变）；审批卡 Reject → 回表单卡（带上次值）循环，用户关闭表单卡＝取消（结构化拒绝）。问题卡只收集改参、不承载授权（审批≠请示，闸门语义不迁移）；用户在聊天里的改参话术由 agent 语义理解后转 edits 结构化参数（自由文本永不直达生成面）。现值基线＝已确认快照（runtime/webui/config-snapshot.json，v2 存量 webui/ 只读兼容）＞run 的 IterationConfig 实值（config/iteration-config，v2 存量 prep/iteration-config 只读兼容——登记源，卡面与 Web 摘要同源）＞缺省。【确认后时序硬规则】快照落盘后必须重新触发 training_prep 段——快照兜底（显式参数＞确认快照＞派生＞缺省）只在训练准备段工具触发时读取，确认的新值要重触发才会进 iteration-config；禁止拿确认前生成的旧 iteration-config 直接调 atf_joint_train——那会用旧参数（旧卡数/旧卡位）生成 launch 件绑错卡（T7 实证：快照已落 4 卡 0-3，iteration-config 仍是确认前旧值 1 卡）。人工档（预设非 atf-training 或权限档非 danger-full-access）：审批面板 Allow once 确认后 config-snapshot 落盘。训练自动驾驶（Agent 预设 atf-training ＋ 权限档 danger-full-access 两轴齐备）：present 免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend（同样免阻塞）。" +
       "全自动档 agent 参数推荐（recommend 参数，本档专属）：训练提交前基于任务描述＋数据集统计（样本数/长度分布/模态）＋经验锚点给出 epochs/lr/rank/cutoff/负样本带推荐值并附 reason（理由）。经验锚点（owner 手工训练经验，参考知识非硬规则）：样本 2万–3万 → 3 epochs；4万以上 → 2 epochs；小样本（<1万）宜多轮并防过拟合（配早停观察）。护栏：epochs∈[1,10] 整数、lr∈[5e-5,5e-4]、lora_rank∈{16,32,64,128}（alpha=2×rank 联动）、cutoff≤12800、像素两档∈{802816,1605632}（单源）、负样本构造带∈[0.02,0.05]（F2 R1 终裁——空对象构造配额）、bs 正整数、nproc∈[1,可用卡数]——越界推荐被拦截并回退固定建议（不静默修正），拦截事实进通报；推荐缺失同样回退。lora_alpha 不单独推荐（随 rank 联动）。" +
       "基模型锚点（owner 裁定 2026-10-12 §九）：确认卡基模型字段默认值＝模型库位置下的 Qwen3-VL-32B-Instruct（owner 偏置锚点，非查表推导；卡上可改，改动经防线①本地复核）。评估侧继续锚定 -AWQ 变体（现状不变）。" +
       "卡数偏置（owner 裁定 2026-10-11）：训练卡数默认拉满本机可用卡（nproc_per_node=机器事实可用卡数），训练时长优先；代价（显存/时长）如实呈现给用户，不作降档依据；降档仅在用户任务上下文明确要求时采纳。卡数维度无成文锚点——不编造「数据规模→卡数」映射、不查表推荐，卡数只来自机器事实与用户显式要求；自动档默认低于可用卡的 nproc 推荐会被护栏回退拉满。",
