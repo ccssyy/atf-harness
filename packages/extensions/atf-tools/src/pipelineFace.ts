@@ -1814,7 +1814,14 @@ export const buildPipelineTool = (
       // 于是确认与建议永远到不了内核（真机实证：模型自述「未带任何覆盖参数」）。
       // 这里把「不传的后果」写进工具描述——系统知识不靠用户提示词承载。
       `【构造参数必须作为工具参数显式传入，只在回复文字里说明不会被采纳】experiment_setup 段另有三个` +
-      `确认／建议参数：grouping_confirm（确认当前分组方案；不传＝未确认，本轮不生成分组样本）、` +
+      `确认／建议参数：grouping_confirm（确认当前分组方案；不传＝未确认，本轮不生成分组样本。` +
+      `【分组确认时序硬规则】分组确认必须走分组卡：第一次触发 experiment_setup 不带 grouping_confirm、` +
+      `只带 grouping_proposal（候选含带风险信号依据的 reason），卡上呈现候选让用户选定后，` +
+      `重跑 experiment_setup 才带 grouping_confirm=true——两次触发是设计内流程，不是浪费。` +
+      `禁止在触发 experiment_setup 之前用聊天文字问分组并当作用户确认：` +
+      `聊天确认不落分组卡账本，实验门来源只能标 agent_inferred，` +
+      `且分组候选没有字段风险信号支撑（问了也白问）。若用户在聊天里主动说了分组意愿，` +
+      `如实转成 grouping_proposal 候选走卡，让用户在卡上正式确认）、` +
       `mode5_random（随机子集增强的倍数；不传＝未确认，本轮不生成增强样本）、` +
       `targeted_advice（重点字段组合建议：必带字段／字段数区间／理由／出处，格式 ` +
       `{schema_version:"TargetedRulesAdvice/v1",suggested_carry_fields:[…],suggested_min_fields,suggested_max_fields,` +
@@ -1926,9 +1933,13 @@ export const buildPipelineTool = (
       grouping_confirm: {
         type: "boolean",
         description:
-          "确认当前分组方案为选定方案（仅 experiment_setup 段有意义，其它段忽略）：" +
-          "确认后内核按分组逐组各生成一条样本；不给＝未确认，本轮不生成分组样本（卡面明示）。" +
-          "分组必须用户确认——agent 给出的只是候选，不得默认成立",
+          "确认当前分组方案为选定方案（仅 experiment_setup 段有意义）：确认后内核按分组逐组各生成一条样本；" +
+          "不给＝未确认，本轮不生成分组样本（卡面明示）。分组必须用户确认——agent 给出的只是候选，不得默认成立。" +
+          "【时序硬规则】分组确认必须走分组卡：第一次触发 experiment_setup 只带 grouping_proposal（不带本参），" +
+          "卡上让用户选定后，重跑 experiment_setup 才带 grouping_confirm=true——两次触发是设计内流程，不是浪费。" +
+          "禁止在触发 experiment_setup 之前用聊天文字确认分组并当作用户已确认：聊天确认不落分组卡账本，" +
+          "实验门来源只能标助手推断，且候选没有字段风险信号支撑（问了也白问）。" +
+          "用户在聊天里主动说了分组意愿时，如实转成 grouping_proposal 候选走卡，让用户在卡上正式确认",
       },
       mode5_random: {
         type: "number",
