@@ -216,8 +216,24 @@ export const createExperimentInWorkspace = (workspacePath: string, experimentNam
   if (identityExists) {
     identity = readWorkspaceIdentity(canonical) as WorkspaceIdentity;
   } else {
+    // D170:身份文件缺席时先按路径收编注册表正典 id——不自造 uuid（自造会让
+    // rebind 按 id 查注册表必然落空，web 重启后的会话绑定恢复链断）。
+    let adoptedId: string | null = null;
+    try {
+      const registry = readRegistryFile(registryPathOf(dshHome ?? resolveDshHome()));
+      if (registry !== null) {
+        for (const [recordId, record] of Object.entries(registryWorkspacesTable(registry))) {
+          if (String(record["path"] ?? "") === canonical) {
+            adoptedId = recordId;
+            break;
+          }
+        }
+      }
+    } catch {
+      // 注册表缺席/形态异常按无记录处理——维持自造路径（与既有行为一致）
+    }
     identity = {
-      id: randomUUID(),
+      id: adoptedId ?? randomUUID(),
       name: basenameOf(canonical),
       experiments: [],
       createdAt,
@@ -318,7 +334,7 @@ export const rebindWorkspaceToPath = (newWorkspacePath: string, dshHome: string,
   const record = findRecordById(registry, identity.id);
   if (record === null) {
     throw new Error(
-      `注册表按 id 无记录（id=${identity.id}）——该工作区尚未注册：请先在 WebUI「添加工作区」选择该目录建立记录，或按收编操作序列建记录后再 rebind`,
+      `注册表按 id 无记录（id=${identity.id}）——该工作区尚未注册：请先在 WebUI「添加工作区」选择该目录建立记录，或按收编操作序列建记录后再 rebind。若该目录在 WebUI 已可选（注册表已有其路径记录），则多为 .atf/workspace.json 身份 id 与注册表记录 id 不一致（D170：内核延迟自建身份文件会自造 uuid）——对照注册表记录的 id 修正身份文件后重试`,
     );
   }
 
