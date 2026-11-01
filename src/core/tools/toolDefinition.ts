@@ -108,6 +108,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       type: "object",
       required: [],
       properties: {
+        run_id: { type: "string", optional: true, description: "可选：显式指定目标 run（如 run-bl-ci-mix-01）。会话未绑定 run（如 web 重启后绑定丢失）时必须携带；带显式 run_id 的调用同时恢复会话绑定（D170）。" },
         dataset_id: {
           type: "string",
           optional: true,
@@ -401,6 +402,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       type: "object",
       required: ["dataset_id", "actor", "report_digest", "decisions"],
       properties: {
+        run_id: { type: "string", optional: true, description: "可选：显式指定目标 run（如 run-bl-ci-mix-01）。会话未绑定 run（如 web 重启后绑定丢失）时必须携带；带显式 run_id 的调用同时恢复会话绑定（D170）。" },
         dataset_id: {
           type: "string",
           description: "注册标识符：取自登记结果或体检报告；非文件路径、不含 @",
@@ -489,6 +491,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       type: "object",
       required: ["gate", "action"],
       properties: {
+        run_id: { type: "string", optional: true, description: "可选：显式指定目标 run（如 run-bl-ci-mix-01）。会话未绑定 run（如 web 重启后绑定丢失）时必须携带；带显式 run_id 的调用同时恢复会话绑定（D170）。" },
         gate: { type: "string" },
         action: { enum: ["query", "advance"] },
         evidence_refs: { ...STRING_ARRAY, optional: true },
