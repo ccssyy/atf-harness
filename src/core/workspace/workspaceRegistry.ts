@@ -331,11 +331,31 @@ export const rebindWorkspaceToPath = (newWorkspacePath: string, dshHome: string,
   if (registry === null) {
     throw new Error(`DSH 注册表不存在: ${registryPath}（DSH_HOME=${dshHome}）——确认实例家在位或 env 指向正确`);
   }
-  const record = findRecordById(registry, identity.id);
+  let record = findRecordById(registry, identity.id);
   if (record === null) {
-    throw new Error(
-      `注册表按 id 无记录（id=${identity.id}）——该工作区尚未注册：请先在 WebUI「添加工作区」选择该目录建立记录，或按收编操作序列建记录后再 rebind。若该目录在 WebUI 已可选（注册表已有其路径记录），则多为 .atf/workspace.json 身份 id 与注册表记录 id 不一致（D170：内核延迟自建身份文件会自造 uuid）——对照注册表记录的 id 修正身份文件后重试`,
-    );
+    // D170v2 §3.3:身份 id 与注册表不一致时**就地收编**——按路径找注册表正典记录,
+    // 改写身份文件 id 为正典 id(单源=注册表;不再要求用户/agent 手工改文件)。
+    // 找不到同路径记录才是真未注册,维持原指路。
+    let adopted: { id: string; path: string } | null = null;
+    for (const [recordId, raw] of Object.entries(registryWorkspacesTable(registry))) {
+      if (String(raw["path"] ?? "") === canonical) {
+        adopted = { id: recordId, path: String(raw["path"] ?? "") };
+        break;
+      }
+    }
+    if (adopted !== null) {
+      const identityPath = join(newWorkspacePath, ".atf", "workspace.json");
+      const patchedIdentity = { ...identity, id: adopted.id };
+      writeFileSync(identityPath, JSON.stringify(patchedIdentity, null, 2) + "\n", { mode: 0o644 });
+      record = findRecordById(registry, adopted.id);
+      if (record === null) {
+        throw new Error(`注册表收编后仍无记录（id=${adopted.id}）——注册表状态异常，请检查 ${registryPath}`);
+      }
+    } else {
+      throw new Error(
+        `注册表按 id 无记录（id=${identity.id}）且注册表中也无路径 ${canonical} 的记录——该工作区尚未注册：请先在 WebUI「添加工作区」选择该目录建立记录，或按收编操作序列建记录后再 rebind`,
+      );
+    }
   }
 
   const nowIso = now.toISOString();
