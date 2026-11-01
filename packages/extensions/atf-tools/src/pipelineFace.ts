@@ -3043,9 +3043,34 @@ let visualSummary: Record<string, unknown> | undefined;
         if (promptSvc !== undefined && typeof promptSvc.ask === "function"
             && !fieldCardAskedRuns.has(args.run_id)) {
           try {
+            // P0-3b(2026-11-01 owner 纠正):schema 自带 template＝材料内嵌抽取说明——
+            // 深解析件 field_config_draft.json 的 template.present 为真时,材料面
+            // 如实呈现"材料里带抽取说明",不再按"没有"推荐内置模板。
+            let p03bHint: string | null = null;
+            try {
+              const wsRoot = typeof args.workspace_path === "string" && args.workspace_path !== ""
+                ? args.workspace_path
+                : null;
+              if (wsRoot !== null) {
+                const dsRoot = join(wsRoot, "datasets");
+                for (const entry of existsSync(dsRoot) ? readdirSync(dsRoot) : []) {
+                  const draftPath = join(dsRoot, entry, "field_config_draft.json");
+                  if (!existsSync(draftPath)) continue;
+                  const draft = JSON.parse(readFileSync(draftPath, "utf8")) as {
+                    template?: { present?: boolean; locator?: string } | null;
+                  };
+                  if (draft?.template?.present === true) {
+                    p03bHint = `字段配置里自带的 template（${draft.template.locator ?? "template"}）`;
+                    break;
+                  }
+                }
+              }
+            } catch {
+              // 深解析件缺席/不可读——按没有材料处理(与原行为一致)
+            }
             const promptSummary = await askPromptChoice(
               { runId: args.run_id, runDir }, { agent: exec.agent, signal: exec.signal },
-              promptSvc, null,
+              promptSvc, p03bHint,
             );
             writeInputsPromptChoice(runDir, promptSummary);
             promptChoiceSummary = promptSummary;
