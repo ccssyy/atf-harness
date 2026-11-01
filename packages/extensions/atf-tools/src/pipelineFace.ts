@@ -1951,6 +1951,9 @@ export const buildPipelineTool = (
           "用户在聊天里主动说了分组意愿时，如实转成 grouping_proposal 候选走卡，让用户在卡上正式确认",
       },
       mode5_random: {
+        // D170v2/P1(汇报义务——owner 2026-11-01):倍数由你给建议时必须同时给理由
+        // (数据量/字段难度/token 预算任一依据),并在卡面/对话向用户转述理由;
+        // 只给数字不给理由=履职缺失。缺建议时如实不传(引擎按难度与预算推荐)。
         type: "number",
         description:
           "随机子集增强的倍数（仅 experiment_setup 段有意义，其它段忽略；0=不启用）：倍数＝产出总量相对" +
@@ -1969,6 +1972,8 @@ export const buildPipelineTool = (
           "可直接给对象，无需自行落盘",
       },
       targeted_advice: {
+        // D170v2/P1:targeted 建议须带计划(目标字段优先序+行数依据),构造器
+        // 缺计划时按 1 倍兜底是 fail-closed,不是你省略计划的理由。
         type: "object",
         additionalProperties: true,
         description:
