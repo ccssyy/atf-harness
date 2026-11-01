@@ -580,7 +580,11 @@ export const fieldNamesOfFieldConfig = (path: string): ReadonlyMap<string, strin
 export const groupingCandidateDescriptionOf = (candidate: GroupingProposalCandidate): string => {
   const groups = candidate.groups.map((group) => `${group.name} × ${String(group.fields.length)} 个字段`).join("、");
   const head = `${String(candidate.groups.length)} 组：${groups}`;
-  return candidate.reason === "" ? head : `${head}；理由：${candidate.reason}`;
+  // P0-2（owner 2026-11-01：分组不能只 1 组）：单组全字段候选＝mode1 与 mode0 逐条
+  // 等价（训练增益等同不分组）——卡面强制披露退化事实，防静默选中。
+  const degenerate = candidate.groups.length === 1 ? "；⚠ 单组含全部字段：分组样本与全字段样本逐条等价（等同不分组），建议按字段语义分组" : "";
+  const tail = candidate.reason === "" ? "" : `；理由：${candidate.reason}`;
+  return `${head}${tail}${degenerate}`;
 };
 
 /** 分组表（markdown：分组｜字段数｜字段），供 agent 原样贴到对话——两档共用同一张表。 */

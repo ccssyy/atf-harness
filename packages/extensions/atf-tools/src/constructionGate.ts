@@ -32,6 +32,9 @@ import type { ExecSessionFace, ServiceCtxFace } from "./trainingPreset.js";
 export interface ConstructionParamsState {
   readonly groupingConfirm: boolean;
   readonly mode5Random: number | undefined;
+  /** D170v2/P0-2：视觉通道用户决策（enabled=宿主看图；disabled=用户显式确认不看；
+   * 缺省=未决策——完全权限档构造闸必问，杜绝静默 disabled）。 */
+  readonly visualChannel?: "enabled" | "disabled";
 }
 
 /** 决策闸结论：解析后的构造参数＋谁定的＋为什么。 */
@@ -48,6 +51,10 @@ export interface ConstructionDecision extends ConstructionParamsState {
 /** 分组两态（要不要按分组生成——组构成由内核按字段配置产出，本问只收意愿）。 */
 const GROUPING_YES = "要（按分组生成）";
 const GROUPING_NO = "不要（一图一条）";
+
+/** 视觉通道两态（owner 裁定 b38/SKILL:169：宿主看图首选，disabled 须用户确认）。 */
+const VISUAL_YES = "看图（推荐）";
+const VISUAL_NO = "本次不看图";
 
 /** 增强倍数档位（值→文案单源；内核只认数字，不认文案）。 */
 const AUGMENT_OPTIONS: ReadonlyArray<{ label: string; value: number }> = [
@@ -198,6 +205,9 @@ export const decideConstructionParams = async (input: {
   // 只问真缺的（已确认的不重复问）：agent 传了分组候选／已确认分组时，只剩增强这一个决策点。
   const needGrouping = input.state.groupingConfirm !== true;
   const needAugment = input.state.mode5Random === undefined;
+  // P0-2（owner 裁定：视觉通道无默认态、宿主看图首选）：未决策必问——disabled
+  // 只能来自用户显式确认，agent 不得静默落账。
+  const needVisual = input.state.visualChannel === undefined;
   const questions: ChoiceAskQuestion[] = [];
   if (needGrouping) {
     questions.push({
@@ -212,6 +222,23 @@ export const decideConstructionParams = async (input: {
       options: [
         { label: GROUPING_YES, description: "样本更多，覆盖同一张图的多种字段组合" },
         { label: GROUPING_NO, description: "样本数＝图数，最稳" },
+      ],
+      multiSelect: false,
+    });
+  }
+  if (needVisual) {
+    questions.push({
+      id: `construction-visual-${input.runId}`,
+      question: "构造前的字段风险评分要看图吗？",
+      header: "看图",
+      detail: [
+        "看图（推荐）：先出一份看图清单（按版式分组抽样＋离群页），逐页看图后带判读结论继续——字段风险评分会含视觉信号（印章/手写/多行/多值），重点字段排序更准。",
+        "本次不看图：确认接受仅用标注统计评分（出现率/密度等）——重点字段排序可能偏保守，报告会如实标注「未看图」。",
+        "不看图不会阻断构造；想看图但页数多时可以分批看。",
+      ].join("\n"),
+      options: [
+        { label: VISUAL_YES, description: "先出看图清单，逐页看图后带结论构造（推荐）" },
+        { label: VISUAL_NO, description: "确认接受仅数据信号评分，报告如实标注" },
       ],
       multiSelect: false,
     });
@@ -246,6 +273,13 @@ export const decideConstructionParams = async (input: {
     const augmentText = [...(augmentAnswer?.selected ?? [])].join("") || (augmentAnswer?.custom ?? "");
     const groupingConfirm = groupingFromText(groupingText) ?? input.state.groupingConfirm;
     const mode5Random = augmentFromText(augmentText) ?? input.state.mode5Random;
+    const visualAnswer = needVisual ? byId.get(`construction-visual-${input.runId}`) : undefined;
+    const visualText = [...(visualAnswer?.selected ?? [])].join("") || (visualAnswer?.custom ?? "");
+    const visualChannel: "enabled" | "disabled" | undefined = visualText.includes("不看图")
+      ? "disabled"
+      : visualText.includes("看图") || needVisual
+        ? "enabled"
+        : input.state.visualChannel;
     const ledgerPath = writeLedger(input.runDir, "construction-choice.json", {
       schema: "ConstructionChoice/v1",
       run_id: input.runId,
@@ -253,15 +287,17 @@ export const decideConstructionParams = async (input: {
       decided_by: "user",
       grouping_confirm: groupingConfirm,
       mode5_random: mode5Random ?? null,
-      answers: { grouping: groupingText, augment: augmentText },
+      visual_channel: visualChannel ?? null,
+      answers: { grouping: groupingText, augment: augmentText, visual: visualText },
     });
     const augmentLine = mode5Random === undefined || mode5Random === 0 ? "不增强" : `${String(mode5Random)} 倍`;
     return {
       groupingConfirm,
       mode5Random,
+      visualChannel,
       asked: true,
       decided_by: "user",
-      note: `你在卡上选定：分组＝${groupingConfirm ? "按分组生成" : "一图一条"}；增强＝${augmentLine}`,
+      note: `你在卡上选定：分组＝${groupingConfirm ? "按分组生成" : "一图一条"}；增强＝${augmentLine}；看图＝${visualChannel === "disabled" ? "本次不看（已确认）" : "看图"}`,
       ledgerPath,
     };
   } catch (cause) {
