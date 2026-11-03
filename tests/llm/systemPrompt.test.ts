@@ -73,6 +73,11 @@ describe("系统提示内容要求（指令 §2.1 六条抽检＋§2.2 负面断
     );
   });
 
+  it("升级求助约定在位（#18：单点受阻超界停下问用户，不无限自我纠正）", () => {
+    for (const keyword of ["升级求助", "连续三次尝试", "停下自我探索", "请用户裁定或补充信息", "不要替用户猜决定"]) {
+      expect(HARNESS_SYSTEM_PROMPT.includes(keyword), `缺 #18 关键词: ${keyword}`).toBe(true);
+    }
+  });
   it("长度纪律：≤1200 字（原提示 ≈400 的 3 倍上限）", () => {
     expect(HARNESS_SYSTEM_PROMPT.length).toBeLessThanOrEqual(1200);
     expect(HARNESS_SYSTEM_PROMPT.length).toBeGreaterThan(0);
