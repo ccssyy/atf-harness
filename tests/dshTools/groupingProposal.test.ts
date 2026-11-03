@@ -19,7 +19,7 @@
  *  ⑦ 用户可见面零内部词（lane／A、B 预设／批次号）；
  *  ⑧ F6：回执带 user_summary 三句话，连续失败 ≥2 升级到用户。
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -41,6 +41,23 @@ const tempRoot = (prefix: string): string => {
 afterEach(() => {
   for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
+
+/** ci-bl-1103 字段确认放行门:experiment_setup 前置——run 双形态落 field-choice。 */
+const confirmFields = (ws: string, runId: string): void => {
+  const runDir = join(ws, "runs", runId);
+  if (!existsSync(join(runDir, "run.json"))) {
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(join(runDir, "run.json"), JSON.stringify({ run_id: runId, experiment_id: "exp-ut" }), "utf-8");
+  }
+  for (const rel of ["runtime/webui", "webui"]) {
+    mkdirSync(join(runDir, rel), { recursive: true });
+    writeFileSync(
+      join(runDir, rel, "field-choice.json"),
+      JSON.stringify({ schema_version: "FieldChoice/v1", run_id: runId, confirmed_fields: ["f1"], all_fields: true, total_fields: 1, decided_at: new Date().toISOString(), source: "user_confirmed" }),
+      "utf-8",
+    );
+  }
+};
 
 const fakeExec = { agent: { session: { id: "h2-card" } }, callId: "h2-card-1", signal: undefined };
 
@@ -165,6 +182,7 @@ const seedFieldConfig = (ws: string): string => {
 describe("C2 分组四态", () => {
   it("配置自带 group → 仍出卡确认（W4：五项必问）；卡通道缺席 → 不替选、回执带分组表", async () => {
     const ws = tempRoot("c2-own-");
+    confirmFields(ws, "own");
     const fieldConfig = seedFieldConfig(ws);
     const asked: Array<Record<string, unknown>> = [];
     const result = await toolOf(ctxOf({ asked }), mockOf(MOCK_OK)).execute(
@@ -182,6 +200,7 @@ describe("C2 分组四态", () => {
 
   it("proposal：出原生选项卡（标题＝候选 name，描述＝组名×字段数＋reason），用户选定后内核拿到他选的那套", async () => {
     const ws = tempRoot("c2-card-");
+    confirmFields(ws, "pick");
     const asked: Array<Record<string, unknown>> = [];
     const result = await toolOf(ctxOf({ asked, choose: () => "全部平铺成一组" }), mockOf(MOCK_OK)).execute(
       { stage: "experiment_setup", run_id: "pick", workspace_path: ws, grouping_proposal: PROPOSAL },
@@ -221,6 +240,7 @@ describe("C2 分组四态", () => {
     // 旧口径（§8-1-A：full 档自动选定、不问）已被推翻：
     // 传候选这个动作本身就是「请人来选」，按档位静默替他选，用户连有第二套方案都不知道。
     const ws = tempRoot("c2-auto-");
+    confirmFields(ws, "auto");
     const asked: Array<Record<string, unknown>> = [];
     const result = await toolOf(ctxOf({ full: true, asked }), mockOf(MOCK_OK)).execute(
       { stage: "experiment_setup", run_id: "auto", workspace_path: ws, grouping_proposal: PROPOSAL },
@@ -256,6 +276,7 @@ describe("C2 分组四态", () => {
 
   it("none：既没候选、字段也没分组 → 平铺，回执 grouping_source=none、不假装有分组", async () => {
     const ws = tempRoot("c2-none-");
+    confirmFields(ws, "plain");
     const asked: Array<Record<string, unknown>> = [];
     const result = await toolOf(ctxOf({ asked }), mockOf(MOCK_OK)).execute(
       { stage: "experiment_setup", run_id: "plain", workspace_path: ws },
@@ -271,6 +292,7 @@ describe("C2 分组四态", () => {
 
   it("invalid（harness 侧）：候选形状不合格＝逐条 errors 原样回执，且不触发审批", async () => {
     const ws = tempRoot("c2-bad-");
+    confirmFields(ws, "bad");
     const approvals: string[] = [];
     const result = await toolOf(ctxOf({ approvals }), mockOf(MOCK_OK)).execute(
       {
@@ -292,6 +314,7 @@ describe("C2 分组四态", () => {
 
   it("invalid（内核侧）：{ok:false,errors} 的 errors 原样进回执（不压成一句话）", async () => {
     const ws = tempRoot("c2-kbad-");
+    confirmFields(ws, "kbad");
     const result = await toolOf(ctxOf({}), mockOf(MOCK_INVALID)).execute(
       { stage: "experiment_setup", run_id: "kbad", workspace_path: ws, grouping_proposal: PROPOSAL },
       fakeExec,
@@ -330,6 +353,7 @@ describe("C2 用户可见面纪律", () => {
 
     // 卡面：审批卡文案也不许出现内部词
     const ws = tempRoot("c2-words-");
+    confirmFields(ws, "words");
     const approvals: string[] = [];
     await toolOf(ctxOf({ approvals, choose: (labels) => labels[0]! }), mockOf(MOCK_OK)).execute(
       { stage: "experiment_setup", run_id: "words", workspace_path: ws, grouping_proposal: PROPOSAL },
@@ -345,6 +369,7 @@ describe("C2 用户可见面纪律", () => {
 describe("F6 回执用户面摘要（atf_pipeline_stage）", () => {
   it("成功回执带 user_summary 三句话（业务语言，不念内部段名）", async () => {
     const ws = tempRoot("f6-ok-");
+    confirmFields(ws, "sum");
     const result = await toolOf(ctxOf({}), mockOf(MOCK_OK)).execute(
       { stage: "experiment_setup", run_id: "sum", workspace_path: ws, grouping_proposal: PROPOSAL },
       fakeExec,
@@ -356,6 +381,7 @@ describe("F6 回执用户面摘要（atf_pipeline_stage）", () => {
 
   it("连续两次失败：第二次带 escalate_to_user 与 failure_count（要用户介入）", async () => {
     const ws = tempRoot("f6-fail-");
+    confirmFields(ws, "f6a");
     const bad = { schema_version: "GroupingProposal/v1", candidates: [{ name: "空", groups: [] }] };
     const first = await toolOf(ctxOf({}), mockOf(MOCK_OK)).execute(
       { stage: "experiment_setup", run_id: "f6a", workspace_path: ws, grouping_proposal: bad },

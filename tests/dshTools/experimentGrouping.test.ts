@@ -9,7 +9,7 @@
  *  ⑤ `group_plan` 空/缺 → 不崩、如实说「不分组」；
  *  ⑥ 用户面零 `A`/`B`/`preset`/`grouping_preset` 字样。
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -29,6 +29,23 @@ const tempRoot = (prefix: string): string => {
 afterEach(() => {
   for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
+
+/** ci-bl-1103 字段确认放行门:experiment_setup 前置——run 双形态落 field-choice。 */
+const confirmFields = (ws: string, runId: string): void => {
+  const runDir = join(ws, "runs", runId);
+  if (!existsSync(join(runDir, "run.json"))) {
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(join(runDir, "run.json"), JSON.stringify({ run_id: runId, experiment_id: "exp-ut" }), "utf-8");
+  }
+  for (const rel of ["runtime/webui", "webui"]) {
+    mkdirSync(join(runDir, rel), { recursive: true });
+    writeFileSync(
+      join(runDir, rel, "field-choice.json"),
+      JSON.stringify({ schema_version: "FieldChoice/v1", run_id: runId, confirmed_fields: ["f1"], all_fields: true, total_fields: 1, decided_at: new Date().toISOString(), source: "user_confirmed" }),
+      "utf-8",
+    );
+  }
+};
 
 const FIELD_CONFIG = {
   fields: [
@@ -135,6 +152,7 @@ describe("分组节接线：experiment_setup 段回执带 grouping_section", () 
 
   it("跑完 experiment_setup：回执 grouping_section 复用同一渲染（业务话、按 group_plan 列组）", async () => {
     const ws = tempRoot("grp-ws-");
+    confirmFields(ws, "grp-run");
     const runDir = join(ws, "runs", "grp-run");
     mkdirSync(join(runDir, "experiment-setup"), { recursive: true });
     writeFileSync(join(runDir, "experiment-setup", "field-config.json"), JSON.stringify(FIELD_CONFIG));

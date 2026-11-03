@@ -232,27 +232,11 @@ export const decideConstructionParams = async (input: {
       ledgerPath: null,
     };
   }
-  // 只问真缺的（已确认的不重复问）：agent 传了分组候选／已确认分组时，只剩增强这一个决策点。
-  const needGrouping = input.state.groupingConfirm !== true;
+  // ci-bl-1103(owner 裁定):必须分组——「按分组生成」是产品默认,不再问
+  // 「是否分组/一图一条」(原 GROUPING 问题撤除;用户要一图一条可后续在构造
+  // 参数显式声明)。卡面只剩真缺的增强倍数一问。
   const needAugment = input.state.mode5Random === undefined;
   const questions: ChoiceAskQuestion[] = [];
-  if (needGrouping) {
-    questions.push({
-      id: `construction-grouping-${input.runId}`,
-      question: `分组生成沿用默认（${groupingCardLeadOf(input.runDir ?? "")}）还是改成一图一条？`,
-      header: "分组",
-      detail: [
-        "默认（推荐）：按当前分组依据生成，每图每组各出一条样本；组数已按标准压到常规区间。",
-        "一图一条：每张图只出一条样本，字段照样全部带上，样本数＝图数。",
-        "不改也行——本轮会按默认生成，这里只是让你知道默认值是什么、并能当场改。",
-      ].join("\n"),
-      options: [
-        { label: GROUPING_YES, description: "样本更多，覆盖同一张图的多种字段组合" },
-        { label: GROUPING_NO, description: "样本数＝图数，最稳" },
-      ],
-      multiSelect: false,
-    });
-  }
   if (needAugment) {
     questions.push({
       id: `construction-augment-${input.runId}`,
@@ -277,11 +261,9 @@ export const decideConstructionParams = async (input: {
       signal: (input.exec as { signal?: unknown }).signal,
     });
     const byId = new Map(answers.answers.map((answer) => [answer.id, answer]));
-    const groupingAnswer = needGrouping ? byId.get(`construction-grouping-${input.runId}`) : undefined;
     const augmentAnswer = needAugment ? byId.get(`construction-augment-${input.runId}`) : undefined;
-    const groupingText = [...(groupingAnswer?.selected ?? [])].join("") || (groupingAnswer?.custom ?? "");
     const augmentText = [...(augmentAnswer?.selected ?? [])].join("") || (augmentAnswer?.custom ?? "");
-    const groupingConfirm = groupingFromText(groupingText) ?? input.state.groupingConfirm;
+    const groupingConfirm = true;
     const mode5Random = augmentFromText(augmentText) ?? input.state.mode5Random;
     const ledgerPath = writeLedger(input.runDir, "construction-choice.json", {
       schema: "ConstructionChoice/v1",
@@ -293,7 +275,7 @@ export const decideConstructionParams = async (input: {
       // 视觉通道恒 enabled（SKILL v1.16 owner 裁定:内置默认必开、无 disable、
       // 不弹卡）——键保留读侧兼容,值不再是决策面。
       visual_channel: "enabled",
-      answers: { grouping: groupingText, augment: augmentText },
+      answers: { grouping: "(产品默认:按分组生成,不问)", augment: augmentText },
     });
     const augmentLine = mode5Random === undefined || mode5Random === 0 ? "不增强" : `${String(mode5Random)} 倍`;
     return {
@@ -301,7 +283,7 @@ export const decideConstructionParams = async (input: {
       mode5Random,
       asked: true,
       decided_by: "user",
-      note: `你在卡上选定：分组＝${groupingConfirm ? "按分组生成" : "一图一条"}；增强＝${augmentLine}`,
+      note: `分组＝按分组生成（产品默认,必分组不提问）；增强＝${augmentLine}`,
       ledgerPath,
     };
   } catch (cause) {

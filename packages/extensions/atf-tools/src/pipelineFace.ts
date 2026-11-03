@@ -817,7 +817,8 @@ export const resolveGroupingFace = async (input: {
     header: input.docType !== undefined && input.docType !== "" ? `分组·${input.docType}` : "分组",
     detail: [
       `这里有 ${String(proposal.candidates.length)} 套分组，请选一套：`,
-      ...proposal.candidates.map((candidate) => `  · ${candidate.name}：${groupingCandidateDescriptionOf(candidate)}`),
+      ...proposal.candidates.map((candidate) => `  · ${candidate.name}：${groupingCandidateDescriptionOf(candidate)}${(candidate.groups.length > 3) ? "（超出建议组数区间）" : ""}`),
+      "建议 2-3 组：字段按语义聚合即可，更多组会稀释每组样本量；下列方案超 3 组的，可在输入框写「改成 N 组」或要求按 2-3 组重新设计。",
       "选完按这套分组生成训练样本，分组表会贴给你看。",
     ].join("\n"),
     options: proposal.candidates.map((candidate) => ({
@@ -959,7 +960,7 @@ export const constructionParamsApprovalLines = (input: {
   // 问题 6（owner 2026-10-28）：mode0/mode1/mode5/targeted 是工程内部叫法，
   // 一律不得出现在用户可见文案里——按「这套参数会产出什么样本」说人话。
   const partGroup = input.groupingConfirm
-    ? "分组方案：已确认（按组逐图各生成一条样本）"
+    ? "分组：按分组生成（产品默认，必分组不提问）"
     : "分组方案：未确认——**按数据事实分组默认生成**（组数按标准压到常规区间），要改直接说";
   // 未显式给倍数时不写具体数字：倍数由内核按「调用方建议 > 字段难度与预算推荐 >
   // 默认开的最低倍数」定，审批前无法确定——写死数字会与实际执行不一致。
@@ -2544,6 +2545,18 @@ export const buildPipelineTool = (
       }
       let groupingFace: GroupingFace | undefined;
       if (args.stage === "experiment_setup") {
+        // ci-bl-1103 字段确认放行门(owner 时序裁定:字段确认→分组,不得倒置):
+        // 字段清单未经用户确认(无 field-choice 落账)时实验配置不放行——agent
+        // 自拟 field_config 不构成用户决定(D-f 判据),先回字段确认环节。
+        if (!fieldChoiceConfirmed) {
+          return asToolValue({
+            ok: false,
+            stage: args.stage,
+            run_id: args.run_id,
+            error: "field_choice_unconfirmed",
+            note: "字段清单未经用户确认——先确认「抽取哪些字段」再进分组环节:重跑 register 段触发字段清单确认卡,或请用户在对话里明确字段范围后由你代传字段确认;agent 自拟的字段配置不构成用户决定",
+          });
+        }
         const fieldConfigPath = typeof args.field_config === "string" ? args.field_config.trim() : "";
         const resolvedGrouping = await resolveGroupingFace({
           ctx,

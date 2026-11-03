@@ -87,6 +87,26 @@ const candidates = (ws: string, runId: string): string[] => [
   join(ws, "workspace", "runs", runId),
   join(ws, "runs", runId),
 ];
+
+/** ci-bl-1103 字段确认放行门:experiment_setup 前置——落一份 field-choice 过门用。 */
+const confirmFields = (ws: string, runId: string): void => {
+  const runDir = candidates(ws, runId)[0] as string;
+  // F1 命中口径要求合法 run.json——测试 run 目录一并造全
+  if (!existsSync(join(runDir, "run.json"))) {
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(join(runDir, "run.json"), JSON.stringify({ run_id: runId, experiment_id: "exp-ut" }), "utf-8");
+  }
+  // 双落 v3(runtime/webui)与 v2(webui)两形态——readFieldChoice 按树形态取其一
+  for (const rel of ["runtime/webui", "webui"]) {
+    mkdirSync(join(runDir, rel), { recursive: true });
+    writeFileSync(
+      join(runDir, rel, "field-choice.json"),
+      JSON.stringify({ schema_version: "FieldChoice/v1", run_id: runId, confirmed_fields: ["f1"], all_fields: true, total_fields: 1, decided_at: new Date().toISOString(), source: "user_confirmed" }),
+      "utf-8",
+    );
+  }
+};
+
 const findUnderRun = (ws: string, runId: string, rel: string): string | undefined =>
   candidates(ws, runId).map((r) => join(r, rel)).find((p) => existsSync(p));
 
@@ -103,6 +123,7 @@ const ADVICE = {
 describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
   it("四条全给：argv 逐条带上，内联对象落 <run>/prep 后传路径", async () => {
     const ws = tempRoot("a-ws-");
+    confirmFields(ws, "a-full");
     const record: string[] = [];
     const result = await toolOf(record).execute(
       {
@@ -137,6 +158,7 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
 
   it("都不给：四条 flag 一律不下传（不设缺省、不冒充用户指定）", async () => {
     const ws = tempRoot("a-ws-");
+    confirmFields(ws, "a-none");
     const result = await toolOf().execute(
       { stage: "experiment_setup", run_id: "a-none", workspace_path: ws },
       fakeExec,
@@ -149,6 +171,7 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
 
   it("审批卡含「构造参数确认」段，未确认项明说对应 kind 不生成", async () => {
     const ws = tempRoot("a-ws-");
+    confirmFields(ws, "a-card");
     const record: string[] = [];
     await toolOf(record).execute(
       { stage: "experiment_setup", run_id: "a-card", workspace_path: ws, targeted_advice: ADVICE },
@@ -179,19 +202,21 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
 
   it("已确认与给定值：卡面标注已确认／用户指定", async () => {
     const ws = tempRoot("a-ws-");
+    confirmFields(ws, "a-card2");
     const record: string[] = [];
     await toolOf(record).execute(
       { stage: "experiment_setup", run_id: "a-card2", workspace_path: ws, grouping_confirm: true, mode5_random: 0 },
       fakeExec,
     );
     const reason = record.join("\n");
-    expect(reason).toContain("分组方案：已确认（按组逐图各生成一条样本）");
+    expect(reason).toContain("分组：按分组生成（产品默认，必分组不提问）");
     expect(reason).toContain("随机子集增强：0 倍（显式不启用）");
   });
 
   it("风险信号在场才自动带 --risk-signals（供 evidence 出处校验）", async () => {
     const ws = tempRoot("a-ws-");
     const runId = "a-risk";
+    confirmFields(ws, runId);
     const runDir = candidates(ws, runId)[0] as string;
     mkdirSync(join(runDir, "prep", "risk-signals", "do"), { recursive: true });
     writeFileSync(
@@ -212,6 +237,7 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
 describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
   it("卡上填 yes → argv 带 --targeted-accept，授权卡标已采纳", async () => {
     const ws = tempRoot("a-ws-");
+    confirmFields(ws, "a-accept");
     const record: string[] = [];
     const result = await toolWithAsk(record, "yes").execute(
       { stage: "experiment_setup", run_id: "a-accept", workspace_path: ws, targeted_advice: ADVICE },
@@ -224,6 +250,7 @@ describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
 
   it("卡上填 no → argv 不带 --targeted-accept，授权卡标保持当前值", async () => {
     const ws = tempRoot("a-ws-");
+    confirmFields(ws, "a-reject");
     const record: string[] = [];
     const result = await toolWithAsk(record, "no").execute(
       { stage: "experiment_setup", run_id: "a-reject", workspace_path: ws, targeted_advice: ADVICE },
@@ -235,6 +262,7 @@ describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
 
   it("无 userQuestions 服务 → 降级不阻塞，如实标未弹卡（不假装采纳）", async () => {
     const ws = tempRoot("a-ws-");
+    confirmFields(ws, "a-degrade");
     const record: string[] = [];
     const result = await toolOf(record).execute(
       { stage: "experiment_setup", run_id: "a-degrade", workspace_path: ws, targeted_advice: ADVICE },
@@ -246,6 +274,7 @@ describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
 
   it("没给建议 → 不弹卡、不带采纳参数", async () => {
     const ws = tempRoot("a-ws-");
+    confirmFields(ws, "a-noadvice");
     const record: string[] = [];
     const result = await toolWithAsk(record, "yes").execute(
       { stage: "experiment_setup", run_id: "a-noadvice", workspace_path: ws },
