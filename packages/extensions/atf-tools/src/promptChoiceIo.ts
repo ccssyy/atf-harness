@@ -22,6 +22,9 @@ export const writeInputsPromptChoice = (
     ...(typeof doc.prompt === "object" && doc.prompt !== null ? doc.prompt : {}),
     resolved_via: entry.resolved_via,
     decided_at: new Date().toISOString(),
+    // ci-bl-1103:用户在卡上自述的原文落账凭据(resolved_via=user_stated 时在场,
+    // agent 是否真按用户文本渲染可对账;空自述不写键)
+    ...(typeof entry.quote === "string" && entry.quote.trim() !== "" ? { quote: entry.quote.slice(0, 2000) } : {}),
   };
   try {
     // F1e(ci-bl-1103-3):落账不得 mkdir run 树——run 目录不在场即跳过(防幽灵 run 目录)。

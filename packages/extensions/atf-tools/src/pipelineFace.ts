@@ -3092,7 +3092,18 @@ let visualSummary: Record<string, unknown> | undefined;
                   .join("；")
                   .trim();
                 const known = new Set(labels.labels.map((item) => item.label));
-                const requested = typed
+                // ci-bl-1103 排除语义:用户写「除了X都训/不要X」→全部字段-排除集(排除项
+                // 须都在清单内,否则交回追问,不猜)。正面枚举(列字段名)为既有主路径。
+                const excludeMatch = typed.match(/^(?:除了?|不要|去掉|排除)\s*(.+)$/);
+                let confirmedList: string[] | null = null;
+                if (excludeMatch !== null) {
+                  const excluded = (excludeMatch[1] as string)
+                    .split(/[,，、\s]+/).map((s) => s.trim()).filter((s) => s !== "");
+                  if (excluded.length > 0 && excluded.every((name) => known.has(name))) {
+                    confirmedList = labels.labels.map((item) => item.label).filter((name) => !excluded.includes(name));
+                  }
+                }
+                const requested = confirmedList ?? typed
                   .split(/[,，、\s]+/)
                   .map((name) => name.trim())
                   .filter((name) => name !== "");
@@ -3193,7 +3204,8 @@ let visualSummary: Record<string, unknown> | undefined;
               { runId: args.run_id, runDir }, { agent: exec.agent, signal: exec.signal },
               promptSvc, p03bHint,
             );
-            writeInputsPromptChoice(runDir, promptSummary);
+            writeInputsPromptChoice(runDir, { ...promptSummary,
+              quote: typeof promptSummary.typed === "string" && promptSummary.typed !== "" && promptSummary.typed !== "(no pick)" ? promptSummary.typed : undefined });
             promptChoiceSummary = promptSummary;
             }
           } catch {
