@@ -22,6 +22,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { join } from "node:path";
 import { resolveRunSubdir } from "../../../../src/core/workspace/runLayout.js";
 
@@ -140,6 +141,9 @@ export const writeFieldChoice = (
   runDir: string,
   record: Omit<FieldChoiceRecord, "schema_version">,
 ): string => {
+  // F1e(ci-bl-1103-3):落账不得 mkdir run 树——run 目录不在场即跳过(防幽灵 run
+  // 目录);空串=未写入,调用方按无落账处理(实验门回"必问"链)。
+  if (!existsSync(runDir)) return "";
   const dir = resolveRunSubdir(runDir, "webui");
   mkdirSync(dir, { recursive: true });
   const path = join(dir, FIELD_CHOICE_FILE);

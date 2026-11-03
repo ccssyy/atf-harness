@@ -131,6 +131,9 @@ const writeInputsGrouping = (
     decided_at: new Date().toISOString(),
   };
   try {
+    // F1e(ci-bl-1103-3):落账不得 mkdir run 树——run 目录不在场即跳过(一次训练
+    // 只允许一个 run 目录,落账抢先 mkdir 会造出与真 run 并存的幽灵目录)。
+    if (!existsSync(runDir)) return;
     mkdirSync(join(runDir, "config"), { recursive: true });
     writeFileSync(path, `${JSON.stringify(doc, null, 1)}\n`, "utf8");
   } catch {
@@ -1006,7 +1009,9 @@ export const constructionParamsApprovalLines = (input: {
 export const resolvePipelineRunDir = (
   workspacePath: string,
   runId: string,
-): { runDir: string; layout: "canonical" | "legacy" } | { error: "run_dir_symlink_rejected"; note: string } => {
+  experiment?: string,
+): { runDir: string; layout: "canonical" | "legacy" }
+  | { error: "run_dir_symlink_rejected" | "run_id_ambiguous"; note: string } => {
   const symlinkRejected = (dir: string): { error: "run_dir_symlink_rejected"; note: string } | null => {
     try {
       if (lstatSync(dir).isSymbolicLink()) {
@@ -1016,6 +1021,18 @@ export const resolvePipelineRunDir = (
     return null;
   };
   const experiments = join(workspacePath, "experiments");
+  // F1(ci-bl-1103-3):命中口径对齐内核 locate_run_dir——目录存在且带 run.json
+  // (卡片落账 mkdir 出来的无 run.json 幽灵目录不算命中,防自我中毒);显式实验
+  // 优先(不猜);枚举多命中 fail-closed 报歧义,绝不按目录序挑一个。
+  const isRealRun = (dir: string): boolean => existsSync(join(dir, "run.json"));
+  if (typeof experiment === "string" && experiment.trim() !== "") {
+    const direct = join(experiments, experiment.trim(), runId);
+    if (existsSync(direct)) {
+      const rejected = symlinkRejected(direct);
+      if (rejected !== null) return rejected;
+    }
+    return { runDir: direct, layout: "canonical" };
+  }
   const expNames: string[] = [];
   try {
     for (const entry of readdirSync(experiments, { withFileTypes: true })) {
@@ -1023,14 +1040,26 @@ export const resolvePipelineRunDir = (
     }
   } catch { /* 无实验树＝纯 legacy 工作区 */ }
   // v3 全树优先于 v2 全树（同 run 在 v3/v2 并存时认 v3——不按实验名字典序偶然择一）
-  for (const v3 of [true, false]) {
-    for (const name of expNames) {
-      const candidate = v3 ? join(experiments, name, runId) : join(experiments, name, "runs", runId);
-      if (!existsSync(candidate)) continue;
-      const rejected = symlinkRejected(candidate);
-      if (rejected !== null) return rejected;
-      return { runDir: candidate, layout: "canonical" };
-    }
+  const v3Hits: string[] = [];
+  const v2Hits: string[] = [];
+  for (const name of expNames) {
+    const v3 = join(experiments, name, runId);
+    const v2 = join(experiments, name, "runs", runId);
+    if (existsSync(v3) && isRealRun(v3)) v3Hits.push(v3);
+    else if (existsSync(v2) && isRealRun(v2)) v2Hits.push(v2);
+  }
+  const hits = v3Hits.length > 0 ? v3Hits : v2Hits;
+  if (hits.length > 1) {
+    return {
+      error: "run_id_ambiguous",
+      note: `同 run_id 在多个实验下命中，拒绝猜测（请显式传 experiment）：${hits.join("；")}`,
+    };
+  }
+  if (hits.length === 1) {
+    const rejected = symlinkRejected(hits[0] as string);
+    if (rejected !== null) return rejected;
+    const v2 = v3Hits.length === 0;
+    return { runDir: hits[0] as string, layout: v2 ? "canonical" : "canonical" };
   }
   // v1 固定名桶 `<wp>/workspace/runs/<id>` 仍归 canonical 档（存量只读兼容，语义不变）；
   // `<wp>/runs/<id>`（ADR-0005 旧桶）才是 legacy。
@@ -2214,7 +2243,8 @@ export const buildPipelineTool = (
       // （内核 RunLayout v1 同口径——canonical <wp>/workspace/runs/<id>，legacy 公式兜底；
       // 软链拒）。argv 的 --workspace 仍传用户原值（workspace 根贯通内核——内核自解析
       // 落点，harness 不代传展开后的路径）。
-      const resolvedRun = resolvePipelineRunDir(workspacePath, args.run_id);
+      const resolvedRun = resolvePipelineRunDir(workspacePath, args.run_id,
+        typeof args.experiment === "string" ? args.experiment : undefined);
       if ("error" in resolvedRun) {
         return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: resolvedRun.error, note: resolvedRun.note });
       }
@@ -2932,6 +2962,16 @@ let visualSummary: Record<string, unknown> | undefined;
       let fieldChoiceSummary: Record<string, unknown> | undefined;
       let promptChoiceSummary: Record<string, unknown> | undefined;
       if (args.stage === "register" && result.code === 0) {
+        // F1d(ci-bl-1103-3):段已成功=run.json 已落盘——卡片与落账锚定执行后重解析
+        // 的真 run。执行前的外层解析在 run 未建时只能给占位路径,曾连带 mkdir 出
+        // 幽灵 run 目录(owner 裁定:一次训练只允许一个 run 目录)。
+        const afterRun = resolvePipelineRunDir(workspacePath, args.run_id,
+          typeof args.experiment === "string" ? args.experiment : undefined);
+        if ("error" in afterRun) {
+          fieldChoiceSummary = { skipped: true,
+                                 note: `run 目录解析失败，字段/prompt 落账跳过:${afterRun.note}` };
+        } else {
+        const runDir = afterRun.runDir;
         const labels = readFieldLabels(runDir);
         if (labels !== null) {
           const prior = readFieldChoice(runDir);
@@ -3090,6 +3130,7 @@ let visualSummary: Record<string, unknown> | undefined;
           } catch {
             promptChoiceSummary = { skipped: true, note: "训练 prompt 卡未确认——按内置模板缺省走，agent 追问" };
           }
+        }
         }
       }
       let summary: unknown = null;

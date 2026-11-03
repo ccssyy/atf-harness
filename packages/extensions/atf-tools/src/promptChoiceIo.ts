@@ -2,7 +2,7 @@
  * RunInputs/v1 prompt 决策的落账与读回（D163/W3 读写同源；ci-bl-1103 起补读侧——
  * prompt 决策 run 级一次，多类联合训练逐类 register 不重复弹卡）。
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 /** D163/W3：prompt 选择落账 inputs.json.prompt（resolved_via）。落账失败不阻断（fail-open 到内置缺省）。 */
@@ -24,6 +24,8 @@ export const writeInputsPromptChoice = (
     decided_at: new Date().toISOString(),
   };
   try {
+    // F1e(ci-bl-1103-3):落账不得 mkdir run 树——run 目录不在场即跳过(防幽灵 run 目录)。
+    if (!existsSync(runDir)) return;
     mkdirSync(join(runDir, "config"), { recursive: true });
     writeFileSync(path, `${JSON.stringify(doc, null, 1)}\n`, "utf8");
   } catch {
