@@ -198,8 +198,9 @@ export const buildQuantizeTool = (
       if (outDirOccupied(outResolved)) {
         return asToolValue({ ok: false, error: OUT_DIR_NOT_EMPTY, out_path: outPath, note: `输出目录非空（或已被占用）：${outPath}——换一个不存在或为空的目录` });
       }
-      // ④ 审批必经（拒绝/取消/无审批服务 → 结构化拒绝零写入）
-      const verdict = await requestApproval(ctx, exec, "atf_quantize_annotations",
+      // ④ 审批必经（拒绝/取消/无审批服务 → 结构化拒绝零写入）——
+      // dry_run=true 只报数零写盘=只读语义,免审不弹卡(真执行写盘才逐次审批)
+      const verdict = dryRun ? { ok: true } as const : await requestApproval(ctx, exec, "atf_quantize_annotations",
         buildApprovalReason({
           action: "量化标注坐标并写出副本（源目录只读）",
           target: `（源 ${basename(sourceResolved)} → 输出 ${basename(outResolved)}，mode=${mode}${dryRun ? "，dry-run 只报数" : ""}${allowDegenerate ? "，放行退化框" : ""}）`,

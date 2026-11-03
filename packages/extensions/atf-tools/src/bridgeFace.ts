@@ -23,6 +23,9 @@ import { toAtfAgentTool } from "../../../../src/agent/atfAgentTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { translateParameters, looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
+import { APPROVAL_SEMANTICS_BY_TOOL } from "../../../../src/core/tools/toolDefinition.js";
+import { permissionTierOf } from "./permissionTier.js";
+import { isTrainingAutopilot } from "./trainingPreset.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
@@ -286,7 +289,20 @@ export const buildBridgeTools = (
           // 审批前置（指令要求 2）：requiresApprovalFor 语义为唯一判定源；E8b·H3 D152——
           // 卡面三行模板＋业务动作名（零内部工具名：工具名经 requestApproval 的 toolName
           // 进审批服务记录＝日志审计面，卡面 reason 不出现）。
-          if (requiresApprovalFor(definition, args)) {
+          // 语义分类表判定(D170v2 §4.1):链内推进在训练预设+完全权限档免审
+          // (免审放行 stderr 留痕可审计,对齐 approvalExempt 的可见性纪律)。
+          const approvalContext = {
+            tier: permissionTierOf(ctx as never, exec as never),
+            trainingAutopilot: isTrainingAutopilot(ctx as never, exec as never),
+          };
+          if (
+            !requiresApprovalFor(definition, args, approvalContext)
+            && APPROVAL_SEMANTICS_BY_TOOL[definition.name] === "chain_advance"
+          ) {
+            // 免审放行留痕(§4.2 auto-allowed 可审计:stderr 告警保留,非隔离执行事实)
+            console.warn(`[approval] ${definition.name} 链内推进免审放行(训练预设+完全权限档,写 run 域内可逆)`);
+          }
+          if (requiresApprovalFor(definition, args, approvalContext)) {
             const verdict = await requestApproval(ctx, exec, definition.name,
               buildApprovalReason({
                 action: BRIDGE_ACTION_LABELS[definition.name] ?? "执行训练流程操作",

@@ -32,9 +32,63 @@ export interface ModelVisibleTool {
   parameters: SchemaNode;
 }
 
-/** 审批判定单一出口：谓词存在以其为准，否则退回基准旗标（executor 消费点唯一）。 */
-export const requiresApprovalFor = (definition: ToolDefinition, params: unknown): boolean =>
-  definition.requiresApproval !== undefined ? definition.requiresApproval(params) : definition.requires_approval;
+/**
+ * 操作语义分类（D170v2 §4.1——审批按操作语义分派,替代逐工具名枚举）。
+ * 三类闭集:
+ *   readonly      只读(query/inspect/status/list/read,无写盘)——任何档位免审;
+ *   chain_advance 链内推进(写 run 域内、可逆——八段链/裁决/准入/建实验/重绑)——
+ *                 训练预设+完全权限档免审(免审放行留痕可审计),其余档位逐次审批;
+ *   governance    治理点(不可逆/出链——训练启动/发布/删除/迁移)——任何档位逐次审批。
+ * 表是单源:工具定义引用类别,消费点(requiresApprovalFor)按类别+档位上下文判定;
+ * 未收编工具维持既有链(谓词优先,退基准旗标)——渐进收编,不一次性改全部声明。
+ */
+export type ApprovalSemanticsClass = "readonly" | "chain_advance" | "governance";
+
+/** 档位上下文(缺省=审慎侧:chain_advance 须审批)。 */
+export interface ApprovalSemanticsContext {
+  /** 权限档(permissionTierOf 单源;缺省按 guarded 处置)。 */
+  tier?: "guarded" | "full-access" | "unattended";
+  /** 训练预设自动驾驶在位(atf-training 预设;链内免审的另一必要轴)。 */
+  trainingAutopilot?: boolean;
+}
+
+/** 工具名 → 语义类别(单源表;atf_gate 的 query/advance 分派在谓词面保留)。 */
+export const APPROVAL_SEMANTICS_BY_TOOL: Readonly<Record<string, ApprovalSemanticsClass>> = {
+  // 只读面
+  atf_workspace_status: "readonly",
+  atf_fact_scan: "readonly",
+  atf_label_qc_inspect: "readonly",
+  atf_skill_read: "readonly",
+  // 链内推进(写 run 域内、可逆)
+  atf_admit_data: "chain_advance",
+  atf_label_qc_resolve: "chain_advance",
+  atf_create_experiment: "chain_advance",
+  atf_rebind_workspace: "chain_advance",
+  atf_pipeline_stage: "chain_advance",
+  // 治理点(不可逆/出链)
+  atf_launch_execute: "governance",
+};
+
+/** 语义类别+档位 → 是否须审批(单一判定规则)。 */
+const semanticsRequiresApproval = (klass: ApprovalSemanticsClass, context: ApprovalSemanticsContext | undefined): boolean => {
+  if (klass === "readonly") return false;
+  if (klass === "governance") return true;
+  // chain_advance:训练预设+完全权限档双轴齐备才免审(豁免是便利、权限是授权——
+  // 用户没给完全权限时预设不得自行放大能力;对齐 approvalExempt 双感知裁定)
+  return !(context?.tier === "full-access" && context?.trainingAutopilot === true);
+};
+
+/** 审批判定单一出口（executor/bridgeFace 消费点唯一）:语义分类表优先(带档位
+ * 上下文;atf_gate 的 query/advance 参数分派保留),未收编工具走既有链——谓词存在
+ * 以其为准，否则退回基准旗标。缺省 context=审慎侧(chain_advance 须审批)。 */
+export const requiresApprovalFor = (definition: ToolDefinition, params: unknown, context?: ApprovalSemanticsContext): boolean => {
+  // atf_gate 参数面分派(§4.1:query=只读,advance=链内推进)——其余按名查表
+  const klass = definition.name === "atf_gate"
+    ? ((typeof params === "object" && params !== null ? (params as { action?: unknown }).action : undefined) === "query" ? "readonly" : "chain_advance")
+    : APPROVAL_SEMANTICS_BY_TOOL[definition.name];
+  if (klass !== undefined) return semanticsRequiresApproval(klass, context);
+  return definition.requiresApproval !== undefined ? definition.requiresApproval(params) : definition.requires_approval;
+};
 
 /** atf_gate 审批谓词：仅 action=="advance"（推进＝状态变更）须审批；query 只读免审批。
  *  action 缺失/非法 → 按须审批处置（fail-closed，不猜只读）。 */
