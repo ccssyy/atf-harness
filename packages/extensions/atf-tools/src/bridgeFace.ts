@@ -137,9 +137,30 @@ export const allDefinitions = (): ToolDefinition[] => {
 };
 
 /** 桥接连接懒管理：插件级单连接，失败/断线丢弃、下次调用重连（M1 生命周期决策：长驻＋重连）。 */
+/** 会话工作区路径反查（ci-bl-1103 治理面分连接用）。
+ *
+ *  exec.agent.session.header.cwd（vendor 锚，与 sessionWorkspaceSlug 同源）的
+ *  basename slug 在注册工作区根（registeredWorkspaceRoots）下恰一处在场 →
+ *  返回该工作区绝对路径；取不到/不在注册表/多义 → null（调用方落 default 连接）。
+ *  注册表缺席形态不猜根（与 fileGuard 围栏同纪律）。 */
+export const workspacePathOfExec = (exec: unknown): string | null => {
+  const cwd = (exec as { agent?: { session?: { header?: { cwd?: unknown } } } })
+    ?.agent?.session?.header?.cwd;
+  const slug = sessionWorkspaceSlug(exec);
+  if (typeof cwd !== "string" || slug === null) return null;
+  const hits: string[] = [];
+  for (const root of registeredWorkspaceRoots()) {
+    const candidate = join(root, slug);
+    if (existsSync(candidate)) hits.push(candidate);
+  }
+  return hits.length === 1 ? (hits[0] as string) : null;
+};
+
 export class BridgeManager {
   private connection: AtfBridgeConnection | null = null;
   private connecting: Promise<AtfBridgeConnection> | null = null;
+  /** 工作区分连接池（ci-bl-1103 治理面）：key=工作区绝对路径。 */
+  private readonly scopedConnections = new Map<string, Promise<AtfBridgeConnection>>();
 
   constructor(
     private readonly command: readonly string[],
@@ -198,6 +219,42 @@ export class BridgeManager {
     const connection = this.connection;
     this.connection = null;
     if (connection !== null) await connection.close({ timeoutMs: 5_000 }).catch(() => undefined);
+    const scoped = Array.from(this.scopedConnections.values());
+    this.scopedConnections.clear();
+    for (const pending of scoped) {
+      pending.then((conn) => conn.close({ timeoutMs: 5_000 }).catch(() => undefined)).catch(() => undefined);
+    }
+  }
+
+  /** 治理面工作区分连接（ci-bl-1103）：同一工作区的会话共享一个 serve，
+   *  首连 bind_workspace 把内核 workspace 根定到该工作区（此后登记面/事实面
+   *  解析都落本工作区——段驱动登记的 dataset 治理面可见）。
+   *
+   *  与 bind_run 的 fail-open 不同：workspace 绑定决定数据落点，绑不上就
+   *  fail-closed 抛错（宁可拒绝不可落错根——错根即跨工作区数据事故）。
+   *  连接失败不缓存（下次调用重 spawn）；bind 成功后连接按工作区复用。 */
+  async transportForWorkspace(workspacePath: string): Promise<AtfBridgeConnection> {
+    const existing = this.scopedConnections.get(workspacePath);
+    if (existing !== undefined) return existing;
+    const pending = AtfBridgeConnection.spawn({
+      command: this.command,
+      cwd: this.cwd,
+      ...(this.childEnv !== undefined ? { env: this.childEnv } : {}),
+    }).then(async (spawned) => {
+      if (!spawned.ok) {
+        throw new Error(`atf 治理面桥 spawn 失败（${spawned.error.code}）: ${spawned.error.message}`);
+      }
+      const bound = await spawned.value.request("atf.bind_workspace", { workspace_path: workspacePath });
+      if (!bound.ok) {
+        await spawned.value.close({ timeoutMs: 5_000 }).catch(() => undefined);
+        throw new Error(`atf.bind_workspace 失败（${workspacePath}）: ${bound.error.message}`);
+      }
+      return spawned.value;
+    });
+    this.scopedConnections.set(workspacePath, pending);
+    // 失败不缓存：并发等待者共享同一 rejection，下次调用重新 spawn
+    pending.catch(() => { this.scopedConnections.delete(workspacePath); });
+    return pending;
   }
 }
 
@@ -377,7 +434,13 @@ export const buildBridgeTools = (
             if (localResult.kind === "executed") return asToolValue(localResult.result);
             return asToolValue({ error: "rejected", tool: definition.name, reason: localResult.reason, ...(localResult.detail !== undefined ? { detail: localResult.detail } : {}) });
           }
-          const bridge = await manager.transport();
+          // 治理面按会话工作区分连接（ci-bl-1103）：exec cwd 在注册工作区根内 →
+          //  该工作区的 scoped serve（首连 bind_workspace）；无 cwd/不在注册表
+          //  （CLI 单会话/测试）→ default 连接现状零变更。
+          const sessionWorkspace = workspacePathOfExec(exec);
+          const bridge = sessionWorkspace !== null
+            ? await manager.transportForWorkspace(sessionWorkspace)
+            : await manager.transport();
           const agentTool = toAtfAgentTool(definition, { bridge, scopeRefBox: { current: undefined } });
           const result = await agentTool.execute(`dsh-${exec.callId ?? "call"}`, args);
           // 选项类待确认统一走原生提问卡（#13 owner 裁定：提问卡=产品统一问询通道，
