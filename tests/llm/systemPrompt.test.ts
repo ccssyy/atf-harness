@@ -78,6 +78,11 @@ describe("系统提示内容要求（指令 §2.1 六条抽检＋§2.2 负面断
       expect(HARNESS_SYSTEM_PROMPT.includes(keyword), `缺 #18 关键词: ${keyword}`).toBe(true);
     }
   });
+  it("素材纪律约定在位（ci-bl-1103-3：声明素材缺失停下问，不找补不降级推进）", () => {
+    for (const keyword of ["素材纪律", "立即停下向用户说明缺了什么", "不去工作区外或其他目录找同名素材替代", "不先推进不依赖它的流程把缺失悬置", "相关训练链不启动"]) {
+      expect(HARNESS_SYSTEM_PROMPT.includes(keyword), `缺素材纪律关键词: ${keyword}`).toBe(true);
+    }
+  });
   it("长度纪律：≤1200 字（原提示 ≈400 的 3 倍上限）", () => {
     expect(HARNESS_SYSTEM_PROMPT.length).toBeLessThanOrEqual(1200);
     expect(HARNESS_SYSTEM_PROMPT.length).toBeGreaterThan(0);
