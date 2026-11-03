@@ -475,7 +475,10 @@ export class WebUiSessionManager {
     const spawned = await AtfBridgeConnection.spawn({
       command: [...this.deps.bridgeCommand.argv],
       ...(this.deps.bridgeCommand.cwd !== undefined ? { cwd: this.deps.bridgeCommand.cwd } : {}),
-      ...(this.deps.bridgeCommand.env !== undefined ? { env: this.deps.bridgeCommand.env } : {}),
+      // 会话身份注入（批3-2）：内核 serve 读侧回源（#7 正解，内核批2-1）的精确
+      // 匹配通道——binding.json 的 session_id 与本会话 id 同体系；env 语义＝
+      // process.env 基底之上覆盖（connection.ts），恒传不丢 PATH 等继承键。
+      env: { ...(this.deps.bridgeCommand.env ?? {}), ATF_SESSION_ID: session.id },
     });
     if (!spawned.ok) return err(`桥接 spawn/握手失败: ${spawned.error.message}`);
     session.bridge = spawned.value;
