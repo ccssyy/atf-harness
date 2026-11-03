@@ -820,8 +820,27 @@ export const resolveGroupingFace = async (input: {
   };
   try {
     const answers = await svc.ask({ questions: [question], agent: input.exec.agent, signal: input.exec.signal });
-    const selectedName = answers.answers.flatMap((answer) => [...answer.selected])[0] ?? "";
-    const chosen = proposal.candidates.find((candidate) => candidate.name === selectedName) ?? pick(proposal.recommendedIndex);
+    const firstAnswer = answers.answers[0];
+    const selectedName = firstAnswer !== undefined ? (firstAnswer.selected[0] ?? "") : "";
+    const customText = (firstAnswer?.custom ?? "").trim();
+    const chosen = proposal.candidates.find((candidate) => candidate.name === selectedName);
+    if (chosen === undefined) {
+      // 批3-3(#30 账本防污染):用户没在候选里选定(自述分组=custom 自由输入,或未选提交)
+      // ——不替选、不落账。此前静默 fallback recommended 会把 agent 的推荐落进
+      // user_selected 账本,污染内核凭据比对基准(r2 账本错位形态);自由文本
+      // 不直达生成面——把用户原话带回,组装成新候选重新出卡让用户正式选定。
+      return {
+        source: "proposal",
+        decision: "none",
+        candidate_name: null,
+        groups: [],
+        evidence,
+        payload: null,
+        note: customText !== ""
+          ? `用户自述了分组(「${customText.slice(0, 120)}」)而不是选候选——请把它组装成新的分组候选重新出分组卡让用户选定(自由文本不直达生成面);本次未下传分组、未落账`
+          : "用户未在候选里选定也未自述——不替用户选:换一组候选重新出卡,或直接问用户想怎么分;本次未下传分组、未落账",
+      };
+    }
     const chosenPayload = withChoice(chosen.name);
     // ── D-c：选定即落账（**这里就写，不等段成功**）──────────────────────────
     // 顺序是刻意的：段随后可能 blocked/异常，若等段成功再写，选择又会蒸发一次。
@@ -1949,7 +1968,7 @@ export const buildPipelineTool = (
           "卡上让用户选定后，重跑 experiment_setup 才带 grouping_confirm=true——两次触发是设计内流程，不是浪费。" +
           "禁止在触发 experiment_setup 之前用聊天文字确认分组并当作用户已确认：聊天确认不落分组卡账本，" +
           "实验门来源只能标助手推断，且候选没有字段风险信号支撑（问了也白问）。" +
-          "用户在聊天里主动说了分组意愿时，如实转成 grouping_proposal 候选走卡，让用户在卡上正式确认",
+          "【凭据制】user-confirmed 只认分组卡账本:用户在卡上选定即落 <run>/runtime/webui/grouping-choice.json,内核实验门读该回执且分组内容逐字一致才落 user-confirmed——本旗标无论何时都只落 agent-confirmed,不再构成用户确认事实。凭据在场匹配时旗标可省(内核凭据自主成立)。用户在聊天里主动说了分组意愿时，如实转成 grouping_proposal 候选走卡，让用户在卡上正式确认",
       },
       mode5_random: {
         // D170v2/P1(汇报义务——owner 2026-11-01):倍数由你给建议时必须同时给理由
