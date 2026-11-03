@@ -1902,11 +1902,13 @@ export const buildPipelineTool = (
       },
       style_clusters_source: {
         type: "string",
-        enum: ["auto", "directory", "placeholder"],
+        enum: ["auto", "directory", "placeholder", "layout"],
         description:
           "版式簇来源声明（仅 register 段有效，其它段忽略）：不给＝按目录形态判——来源目录分了多个子目录时会拒绝，" +
           "回执列出各目录页数并问明「这些子目录是按版式分的吗」；答是就传 directory 重跑（目录名即簇，切分按你的划分走），" +
           "答否就传 placeholder（目录只是批次/来源/时间组织，不参与切分分层）。" +
+          "layout=版式按标注框布局聚类（版式=布局结构，弱化文字内容与缩放——目录/自带簇过度碎片化时的布局口径通道，StyleClusterManifest 落盘可重放）；" +
+          "回执出现 layout_recluster_hint（目录划分碎片化、布局口径显著更少簇）时，把对比讲给用户听，用户认可布局口径就传 layout 重跑。" +
           "对用户表述用业务语言：问「这些子目录是按版式分的吗」，不要念枚举值",
       },
       split_id: {
