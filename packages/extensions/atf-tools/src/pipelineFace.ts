@@ -145,6 +145,7 @@ import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
+import { readInputsPromptResolvedVia, writeInputsPromptChoice } from "./promptChoiceIo.js";
 import { appendSegmentFact, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunFile, resolveRunSubdir, runFileCandidates, runSubdirCandidates } from "../../../../src/core/workspace/runLayout.js";
@@ -2612,32 +2613,6 @@ const fieldCardAskedRuns = new Set<string>();
 
 
 
-/** D163/W3：prompt 选择落账 inputs.json.prompt（resolved_via）。 */
-const writeInputsPromptChoice = (
-  runDir: string,
-  entry: Record<string, unknown>,
-): void => {
-  const path = join(runDir, "config", "inputs.json");
-  let doc: Record<string, unknown> = {};
-  try {
-    doc = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-  } catch {
-    doc = {};
-  }
-  doc.schema_version = "RunInputs/v1";
-  doc.prompt = {
-    ...(typeof doc.prompt === "object" && doc.prompt !== null ? doc.prompt : {}),
-    resolved_via: entry.resolved_via,
-    decided_at: new Date().toISOString(),
-  };
-  try {
-    mkdirSync(join(runDir, "config"), { recursive: true });
-    writeFileSync(path, `${JSON.stringify(doc, null, 1)}\n`, "utf8");
-  } catch {
-    // 落账失败不阻断（fail-open 到内置缺省）
-  }
-};
-
 /** D163/W3：prompt 确认卡——材料抽取说明 vs 产品内置模板（atf-template-v1）。
  *
  *  owner 13:2x 裁定：训练 prompt 没从材料解析出来也要问；内置默认先摆出来。
@@ -3075,6 +3050,11 @@ let visualSummary: Record<string, unknown> | undefined;
         if (promptSvc !== undefined && typeof promptSvc.ask === "function"
             && !fieldCardAskedRuns.has(args.run_id)) {
           try {
+            const priorPrompt = readInputsPromptResolvedVia(runDir);
+            if (priorPrompt !== null) {
+              // 已决(前一类 register 时确认过/深解析已落账)——run 级复用,不再弹卡
+              promptChoiceSummary = { reused: true, resolved_via: priorPrompt };
+            } else {
             // P0-3b(2026-11-01 owner 纠正):schema 自带 template＝材料内嵌抽取说明——
             // 深解析件 field_config_draft.json 的 template.present 为真时,材料面
             // 如实呈现"材料里带抽取说明",不再按"没有"推荐内置模板。
@@ -3106,6 +3086,7 @@ let visualSummary: Record<string, unknown> | undefined;
             );
             writeInputsPromptChoice(runDir, promptSummary);
             promptChoiceSummary = promptSummary;
+            }
           } catch {
             promptChoiceSummary = { skipped: true, note: "训练 prompt 卡未确认——按内置模板缺省走，agent 追问" };
           }
@@ -3397,3 +3378,4 @@ let visualSummary: Record<string, unknown> | undefined;
     },
   };
 };
+
