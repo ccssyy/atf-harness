@@ -20,8 +20,9 @@ const HARNESS_CALLER_FILES = [
   "packages/extensions/atf-tools/src/jointTrainFace.ts",
 ] as const;
 
-const anchorOf = (): Set<string> =>
-  new Set(JSON.parse(readFileSync(ANCHOR_PATH, "utf8")) as string[]);
+const anchorDocOf = (): { source_surface_sha256: string; options: string[] } =>
+  JSON.parse(readFileSync(ANCHOR_PATH, "utf8"));
+const anchorOf = (): Set<string> => new Set(anchorDocOf().options);
 
 const usedOptionsOf = (repoRoot: string): Set<string> => {
   const used = new Set<string>();
@@ -42,7 +43,13 @@ describe("#27 harness 调用参数 vs 内核 argparse 面跨仓对照", () => {
     expect(anchor.has("--stage")).toBe(true);
   });
 
-  it("harness 段驱动传参全部落在内核参数面内（锚点外传参=漂移即红）", () => {
+
+  it("锚点带摘录时的内核 surface 摘要（新鲜度握手的前提形态）", () => {
+    const doc = anchorDocOf();
+    expect(doc.options.length).toBeGreaterThan(0);
+    expect(doc.source_surface_sha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+    it("harness 段驱动传参全部落在内核参数面内（锚点外传参=漂移即红）", () => {
     const anchor = anchorOf();
     const used = usedOptionsOf(repoRoot);
     expect(used.size).toBeGreaterThan(0);

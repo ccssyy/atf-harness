@@ -50,6 +50,22 @@ else
   fail=1
 fi
 
+# 锚点新鲜度(批4 遗留收口):harness 跨仓参数锚点摘录时的内核 surface 摘要 vs 当前
+# 内核仓 surface 实文摘要——不一致=内核参数面已变而锚点未同步(#27 温床),部署前必须重摘。
+HARNESS_REPO_ROOT="$(cd "$(dirname "$ENV_FILE")/../.." && pwd)"
+ANCHOR_META="${HARNESS_REPO_ROOT}/tests/fixtures/kernel-stage-arg-surface.json"
+if [[ -f "$ANCHOR_META" && -f "${ATF_KERNEL_SOURCE}/tools/argparse_surface.json" ]]; then
+  ANCHOR_SHA="$(node -e "const d=require(process.argv[1]);console.log(d.source_surface_sha256)" "$ANCHOR_META" 2>/dev/null || true)"
+  SURFACE_SHA="$(sha256sum "${ATF_KERNEL_SOURCE}/tools/argparse_surface.json" | cut -d" " -f1)"
+  if [[ -n "$ANCHOR_SHA" && "$ANCHOR_SHA" != "$SURFACE_SHA" ]]; then
+    echo "[红] 跨仓参数锚点过期:锚点摘录 sha $ANCHOR_SHA ≠ 内核 surface 实文 sha $SURFACE_SHA" >&2
+    echo "    内核参数面已变——重摘锚点(内核 surface → tests/fixtures/kernel-stage-arg-surface.json)再部署" >&2
+    fail=1
+  else
+    echo "[绿] 跨仓参数锚点新鲜(surface sha 一致:$SURFACE_SHA)"
+  fi
+fi
+
 if [[ "$fail" -ne 0 ]]; then
   echo "单版本源自检失败——先修指针再重启（一次切换只改 ATF_KERNEL_SOURCE）" >&2
   exit 2
