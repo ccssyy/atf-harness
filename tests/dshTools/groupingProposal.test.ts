@@ -108,6 +108,7 @@ const ctxOf = (input: {
   asked?: Array<Record<string, unknown>>;
   approvals?: string[];
   choose?: (labels: string[]) => string;
+  custom?: string;
 }): { get(service: string): unknown } => ({
   get(service: string) {
     if (service === "approval") {
@@ -130,7 +131,9 @@ const ctxOf = (input: {
           input.asked?.push(request);
           const question = (request["questions"] as Array<{ id: string; options?: Array<{ label: string }> }>)[0]!;
           const labels = (question.options ?? []).map((option) => option.label);
-          return { answers: [{ id: question.id, selected: [input.choose === undefined ? labels[0]! : input.choose(labels)] }] };
+          const picked = input.choose === undefined ? labels[0]! : input.choose(labels);
+          const custom = typeof (input as { custom?: string }).custom === "string" ? (input as { custom: string }).custom : undefined;
+          return { answers: [{ id: question.id, selected: picked === "" ? [] : [picked], ...(custom !== undefined ? { custom } : {}) }] };
         },
       };
     }
@@ -398,5 +401,38 @@ describe("F6 回执用户面摘要（atf_pipeline_stage）", () => {
     expect(second["escalate_to_user"]).toBe(true);
     expect(second["failure_count"]).toBe(2);
     expect(String((second["user_summary"] as { next: string }).next)).toContain("需要你介入");
+  });
+});
+
+describe('ci-bl-1103 组数指令闭环（防循环确认）', () => {
+  it('custom「分3组」→ 结构化 regroup_request + run 级 marker 落盘 + 强指令 note', async () => {
+    const ws = tempRoot('c2-n3-');
+    confirmFields(ws, 'n3run');
+    const asked: Array<Record<string, unknown>> = [];
+    const result = await toolOf(ctxOf({ asked, choose: () => '', custom: '分3组' }), mockOf(MOCK_OK)).execute(
+      { stage: 'experiment_setup', run_id: 'n3run', workspace_path: ws, grouping_proposal: PROPOSAL },
+      fakeExec,
+    );
+    expect(asked).toHaveLength(1);
+    expect(result['grouping_decision']).toBe('regroup_request');
+    expect(JSON.stringify(result)).toContain('必须恰好3组');
+    const marker = JSON.parse(readFileSync(join(ws, 'runs', 'n3run', 'runtime', 'webui', 'grouping-request.json'), 'utf8')) as { requested_group_count: number };
+    expect(marker.requested_group_count).toBe(3);
+  });
+
+  it('marker 在场且候选组数不符 → 拒绝出卡（regroup_required），不再循环确认', async () => {
+    const ws = tempRoot('c2-n3b-');
+    confirmFields(ws, 'n3gate');
+    mkdirSync(join(ws, 'runs', 'n3gate', 'runtime', 'webui'), { recursive: true });
+    writeFileSync(join(ws, 'runs', 'n3gate', 'runtime', 'webui', 'grouping-request.json'),
+      JSON.stringify({ requested_group_count: 3, raw_text: '分3组', at: new Date().toISOString() }), 'utf-8');
+    const asked: Array<Record<string, unknown>> = [];
+    const result = await toolOf(ctxOf({ asked }), mockOf(MOCK_OK)).execute(
+      { stage: 'experiment_setup', run_id: 'n3gate', workspace_path: ws, grouping_proposal: PROPOSAL },
+      fakeExec,
+    );
+    expect(asked).toHaveLength(0);
+    expect(result['grouping_decision']).toBe('regroup_required');
+    expect(JSON.stringify(result)).toContain('拒绝出卡');
   });
 });

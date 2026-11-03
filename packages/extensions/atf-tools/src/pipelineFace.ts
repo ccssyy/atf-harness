@@ -379,7 +379,7 @@ export interface GroupingFace {
    *  字段配置自带 group ＞ **上次用户选定（账本沿用）** ＞ 完全权限档自动 ＞ 出卡候选 ＞ 平铺无分组。
    *  prior_decision 是 D-c 的落点：同一次 run 里选过一次就不再重复问。 */
   source: "user_provided" | "prior_decision" | "proposal" | "policy_auto" | "none";
-  decision: "user_selected" | "inherited" | "auto" | "none";
+  decision: "user_selected" | "inherited" | "auto" | "none" | "regroup_request" | "regroup_required";
   /** 选定候选的 name（user_provided／none 为 null）。 */
   candidate_name: string | null;
   groups: GroupingProposalGroup[];
@@ -811,6 +811,28 @@ export const resolveGroupingFace = async (input: {
       note: "选择卡通道不可用——不替你选：先问用户要哪套分组，再把选定候选单独传进来重推（本次未下传分组建议）",
     };
   }
+  // ci-bl-1103 防循环门:用户已在卡上要求 N 组(marker 在场)而本次候选组数不符
+  // → 拒绝出卡(出卡=又一轮违背意愿的确认循环),强制 agent 按 N 组重设计。
+  if (input.runDir !== undefined) {
+    try {
+      const marker = JSON.parse(readFileSync(join(input.runDir, "runtime", "webui", "grouping-request.json"), "utf8")) as { requested_group_count?: unknown };
+      const requestedCount = typeof marker.requested_group_count === "number" ? marker.requested_group_count : null;
+      if (requestedCount !== null) {
+        const mismatched = proposal.candidates.filter((candidate) => candidate.groups.length !== requestedCount);
+        if (mismatched.length === proposal.candidates.length) {
+          return {
+            source: "proposal",
+            decision: "regroup_required",
+            candidate_name: null,
+            groups: [],
+            evidence,
+            payload: null,
+            note: `用户已明确要求${String(requestedCount)}组,本次候选全部不是${String(requestedCount)}组(${proposal.candidates.map((c) => `${c.name}=${String(c.groups.length)}组`).join("、")})——拒绝出卡(否则又是违背意愿的确认循环):按${String(requestedCount)}组重新设计候选后再来`,
+          };
+        }
+      }
+    } catch { /* marker 缺席/损坏=无组数约束,照常出卡 */ }
+  }
   const question: ChoiceAskQuestion = {
     id: `grouping-${input.runId}${docTag}`,
     question: `分组方案确认 — ${input.runId}${input.docType !== undefined && input.docType !== "" ? `（${input.docType} 类）` : ""}${registrationQuote != null ? `（按你说的「${registrationQuote}」，确认或改）` : ""}`,
@@ -838,6 +860,32 @@ export const resolveGroupingFace = async (input: {
       // ——不替选、不落账。此前静默 fallback recommended 会把 agent 的推荐落进
       // user_selected 账本,污染内核凭据比对基准(r2 账本错位形态);自由文本
       // 不直达生成面——把用户原话带回,组装成新候选重新出卡让用户正式选定。
+      // ci-bl-1103 组数指令闭环:custom 是组数指令(分N组/改成N组/N组)时结构化
+      // 落 run 级 marker——用户意愿成为下一轮出卡的硬约束(防 agent 无视后带原
+      // 方案重出造成循环确认)。
+      const countMatch = customText.match(/(?:分|改成?|要|按)\s*([0-9一二三四五六七八九十]+)\s*组/);
+      if (countMatch !== null) {
+        const cnDigits: Record<string, number> = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10 };
+        const raw = countMatch[1] as string;
+        const requested = /^[0-9]+$/.test(raw) ? Number(raw) : (cnDigits[raw] ?? 0);
+        if (requested > 0 && input.runDir !== undefined) {
+          try {
+            const markerDir = join(input.runDir, "runtime", "webui");
+            mkdirSync(markerDir, { recursive: true });
+            writeFileSync(join(markerDir, "grouping-request.json"),
+              JSON.stringify({ requested_group_count: requested, raw_text: customText.slice(0, 120), at: new Date().toISOString() }, null, 1), "utf-8");
+          } catch { /* marker 落盘失败不阻断——靠 note 强指令兜底 */ }
+        }
+        return {
+          source: "proposal",
+          decision: "regroup_request",
+          candidate_name: null,
+          groups: [],
+          evidence,
+          payload: null,
+          note: `用户明确要求${String(requested)}组——下一次分组候选必须恰好${String(requested)}组(这是用户的硬性意愿,不是建议):按${String(requested)}组重新设计候选(语义聚合可合并现组),再出分组卡让用户选定;不得再带原组数方案重出`,
+        };
+      }
       return {
         source: "proposal",
         decision: "none",
@@ -851,6 +899,10 @@ export const resolveGroupingFace = async (input: {
       };
     }
     const chosenPayload = withChoice(chosen.name);
+    // ci-bl-1103:用户已选定=组数意愿已满足,清 marker(后续重跑不再受组数门约束)
+    if (input.runDir !== undefined) {
+      try { rmSync(join(input.runDir, "runtime", "webui", "grouping-request.json"), { force: true }); } catch { /* 清理失败不阻断 */ }
+    }
     // ── D-c：选定即落账（**这里就写，不等段成功**）──────────────────────────
     // 顺序是刻意的：段随后可能 blocked/异常，若等段成功再写，选择又会蒸发一次。
     // 落点 runtime/webui（卡面输入态，与 config-snapshot／pending-confirm 同域）——
