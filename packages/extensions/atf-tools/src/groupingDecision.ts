@@ -55,8 +55,11 @@ export interface GroupingDecisionRecord {
 
 /** 落点：`<run>/runtime/webui/grouping-choice.json`（v3；v2 存量树 webui/ 同名同址）。
  *  与 config-snapshot.json／pending-confirm.json 同一解析口径（resolveRunSubdir "webui"）。 */
-export const groupingDecisionPathOf = (runDir: string): string =>
-  join(resolveRunSubdir(runDir, "webui"), GROUPING_DECISION_FILE);
+export const groupingDecisionPathOf = (runDir: string, doc?: string): string =>
+  // ci-bl-1103 per-doc 化:多类联合训练每类字段分组各自落账互不覆盖;doc 缺席=
+  // 单类/存量形态(run 级单份,读侧回落兼容)。
+  join(resolveRunSubdir(runDir, "webui"),
+    doc !== undefined && doc !== "" ? `grouping-choice.${doc}.json` : GROUPING_DECISION_FILE);
 
 /**
  * 字段集合指纹——**只取字段标识的排序集合**，刻意不含 group/definition 等易变内容。
@@ -97,8 +100,12 @@ export type GroupingDecisionRead =
  * @param fieldsDigest 当前字段集合指纹（null＝当前无法定位字段配置）。
  * @returns 适用时给记录；否则给原因（`stale` 的 note 可直接上卡面）。
  */
-export const readGroupingDecision = (runDir: string, fieldsDigest: string | null): GroupingDecisionRead => {
-  const path = groupingDecisionPathOf(runDir);
+export const readGroupingDecision = (runDir: string, fieldsDigest: string | null, doc?: string): GroupingDecisionRead => {
+  const path = groupingDecisionPathOf(runDir, doc);
+  // per-doc 缺席时回落旧 run 级单份(单类存量 run 的重跑沿用不受 per-doc 化影响)
+  if (!existsSync(path) && doc !== undefined && doc !== "") {
+    return readGroupingDecision(runDir, fieldsDigest);
+  }
   if (!existsSync(path)) return { ok: false, reason: "absent", note: "" };
   let parsed: unknown;
   try {
@@ -140,10 +147,11 @@ export const readGroupingDecision = (runDir: string, fieldsDigest: string | null
 export const writeGroupingDecision = (
   runDir: string,
   record: Omit<GroupingDecisionRecord, "schema_version">,
+  doc?: string,
 ): string => {
   const dir = resolveRunSubdir(runDir, "webui");
   mkdirSync(dir, { recursive: true });
-  const path = join(dir, GROUPING_DECISION_FILE);
+  const path = groupingDecisionPathOf(runDir, doc);
   const payload: GroupingDecisionRecord = { schema_version: GROUPING_DECISION_SCHEMA, ...record };
   writeFileSync(path, `${JSON.stringify(payload, null, 1)}\n`, "utf8");
   return path;

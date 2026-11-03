@@ -78,6 +78,29 @@ export const augmentFromText = (text: string): number | undefined => {
 };
 
 /** 分组的自由输入解析：只认明确的正/负，其余 undefined（保持现值）。 */
+/** 读既有构造选择落账（ci-bl-1103 多类去重）：decided_by=user 的记录才复用
+ *  （全自动档 agent 自决落账不是用户确认,不作为复用凭据）。 */
+export const readConstructionChoice = (
+  runDir: string | null | undefined,
+): { decided_by: string; grouping_confirm: boolean; mode5_random: number | null; path: string } | null => {
+  if (runDir === null || runDir === undefined || runDir === "") return null;
+  const path = join(runDir, "runtime", "webui", "construction-choice.json");
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as {
+      decided_by?: unknown; grouping_confirm?: unknown; mode5_random?: unknown;
+    };
+    if (typeof parsed.decided_by !== "string") return null;
+    return {
+      decided_by: parsed.decided_by,
+      grouping_confirm: parsed.grouping_confirm === true,
+      mode5_random: typeof parsed.mode5_random === "number" ? parsed.mode5_random : null,
+      path,
+    };
+  } catch {
+    return null;
+  }
+};
+
 export const groupingFromText = (text: string): boolean | undefined => {
   const trimmed = text.trim();
   if (trimmed === "") return undefined;
@@ -182,6 +205,20 @@ export const decideConstructionParams = async (input: {
       decided_by: "agent",
       note: "分组与增强倍数本次由我判断（全自动档位，未向任何人确认）",
       ledgerPath,
+    };
+  }
+  // ci-bl-1103 多类去重：构造参数(分组生成模式/增强倍数)是 run 级决策——多类联合
+  // 训练逐类构造时,第二类起复用首类卡上已确认的落账,不再重复弹卡(owner 裁定
+  // 口径与 prompt 卡/字段卡同族:用户确认过一次=本 run 有效)。
+  const prior = readConstructionChoice(input.runDir);
+  if (prior !== null && prior.decided_by === "user") {
+    return {
+      groupingConfirm: prior.grouping_confirm === true,
+      mode5Random: prior.mode5_random ?? undefined,
+      asked: false,
+      decided_by: "user",
+      note: "复用本 run 卡上已确认的构造参数（多类构造不重复弹卡）",
+      ledgerPath: prior.path,
     };
   }
   // 完全权限档：审批已免，但决策输入必须问人——原生选项卡（两问一屏）。

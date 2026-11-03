@@ -656,7 +656,11 @@ export const resolveGroupingFace = async (input: {
   /** 本次是否已有「用户在字段清单卡上确认过」的记录（D-f 的判据）。
    *  缺省 undefined＝按未确认处理（宁可多问一次，不把 agent 自拟当用户决定）。 */
   fieldChoiceConfirmed?: boolean;
+  /** 单据类型（ci-bl-1103 per-doc 化）：多类联合训练每类字段分组各自落账/出卡,
+   *  卡 id 与 header 带类名（用户辨识）;缺席=单类形态（兼容）。 */
+  docType?: string;
 }): Promise<GroupingFace | { ok: false; errors: string[] }> => {
+  const docTag = input.docType !== undefined && input.docType !== "" ? `:${input.docType}` : "";
   // D163：分组来源以登记落账为准，不再靠账本反推——账本只在"卡上选过"时才有记录，
   // 用户从外部带进来的分组永远没有记录，用账本判"给没给"必然把预给的判成没给。
   const registrationGrouping = readRegistrationGrouping(input.runDir ?? "");
@@ -685,7 +689,7 @@ export const resolveGroupingFace = async (input: {
     // 正确判据是**分组自己的账本**（用户在分组卡上真的选过一套，且字段集合未变）。
     const groupingConfirmed =
       input.runDir !== undefined
-        ? readGroupingDecision(input.runDir, fieldsDigestOf(input.fieldConfigPath)).ok
+        ? readGroupingDecision(input.runDir, fieldsDigestOf(input.fieldConfigPath), input.docType).ok
         : false;
     // D163/W4（owner 13:2x）：分组**始终出卡确认**——账本选过（groupingConfirmed）
     // 时预选那套作为推荐候选（下方 priorDecision 分支会沿用并注明），配置自带时
@@ -702,7 +706,7 @@ export const resolveGroupingFace = async (input: {
   const priorDecision =
     input.runDir === undefined
       ? ({ ok: false, reason: "absent", note: "" } as const)
-      : readGroupingDecision(input.runDir, fieldsDigestOf(input.fieldConfigPath));
+      : readGroupingDecision(input.runDir, fieldsDigestOf(input.fieldConfigPath), input.docType);
   if (priorDecision.ok) {
     const record = priorDecision.record;
     return {
@@ -808,9 +812,9 @@ export const resolveGroupingFace = async (input: {
     };
   }
   const question: ChoiceAskQuestion = {
-    id: `grouping-${input.runId}`,
-    question: `分组方案确认 — ${input.runId}${registrationQuote != null ? `（按你说的「${registrationQuote}」，确认或改）` : ""}`,
-    header: "分组",
+    id: `grouping-${input.runId}${docTag}`,
+    question: `分组方案确认 — ${input.runId}${input.docType !== undefined && input.docType !== "" ? `（${input.docType} 类）` : ""}${registrationQuote != null ? `（按你说的「${registrationQuote}」，确认或改）` : ""}`,
+    header: input.docType !== undefined && input.docType !== "" ? `分组·${input.docType}` : "分组",
     detail: [
       `这里有 ${String(proposal.candidates.length)} 套分组，请选一套：`,
       ...proposal.candidates.map((candidate) => `  · ${candidate.name}：${groupingCandidateDescriptionOf(candidate)}`),
@@ -863,7 +867,7 @@ export const resolveGroupingFace = async (input: {
           field_count: chosen.groups.reduce((sum, group) => sum + group.fields.length, 0),
           decided_at: new Date().toISOString(),
           source: "user_selected",
-        });
+        }, input.docType);
       } catch (cause) {
         // 落账失败不改判选择本身（选择仍然本次生效），但必须如实说出「没存住」——
         // 静默失败＝下次又重问一遍，用户会以为系统没记住。
