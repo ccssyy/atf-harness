@@ -23,6 +23,7 @@ import { toAtfAgentTool } from "../../../../src/agent/atfAgentTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { translateParameters, looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
+import type { ChoiceAskQuestion } from "./confirmFace.js";
 import { APPROVAL_SEMANTICS_BY_TOOL } from "../../../../src/core/tools/toolDefinition.js";
 import { permissionTierOf } from "./permissionTier.js";
 import { isTrainingAutopilot } from "./trainingPreset.js";
@@ -48,6 +49,55 @@ const sessionHomeSlug = (sessionId: string): string => {
 };
 
 /** M1 指令清单里的桥接工具名（桥接契约面 ∪ 工作区治理分册）。 */
+/** 桥接返回体 pending_confirmations → 原生选项卡问题集（#13 统一交互面）。
+ *  仅收编选项类（title 非空且 options 非空）；纯信息披露（无 options）不进卡。
+ *  返回 questions（ ChoiceAskQuestion[]）与 meta（对应 title 序，答案映射基准）。 */
+export const pendingChoiceQuestionsOf = (
+  pending: readonly unknown[],
+): { questions: ChoiceAskQuestion[]; meta: Array<{ title: string }> } => {
+  const questions: ChoiceAskQuestion[] = [];
+  const meta: Array<{ title: string }> = [];
+  for (const item of pending) {
+    if (item === null || typeof item !== "object") continue;
+    const row = item as { title?: unknown; detail?: unknown; options?: unknown };
+    const title = typeof row.title === "string" && row.title !== "" ? row.title : "";
+    const options = Array.isArray(row.options)
+      ? row.options.filter((opt): opt is string => typeof opt === "string" && opt !== "")
+      : [];
+    if (title === "" || options.length === 0) continue; // 非选项类不收编
+    questions.push({
+      id: `pending-${questions.length}`,
+      question: title,
+      ...(typeof row.detail === "string" && row.detail !== "" ? { detail: row.detail } : {}),
+      options: options.map((opt) => ({ label: opt })),
+      multiSelect: false,
+    });
+    meta.push({ title });
+  }
+  return { questions, meta };
+};
+
+/** 提问卡答案 → pending_answers（title 对位；custom 自由输入非空才带）。 */
+export const pendingAnswersOf = (
+  meta: readonly { title: string }[],
+  answers: ReadonlyArray<{ id: string; selected: readonly string[]; custom?: string }>,
+): Array<{ title: string; selected: string[]; custom?: string }> =>
+  meta.map((entry, i) => {
+    const ans = answers.find((row) => row.id === `pending-${i}`);
+    const custom = ans !== undefined && typeof ans.custom === "string" && ans.custom.trim() !== "" ? ans.custom.trim() : undefined;
+    return {
+      title: entry.title,
+      selected: ans !== undefined ? [...ans.selected] : [],
+      ...(custom !== undefined ? { custom } : {}),
+    };
+  });
+/** 桥接执行结果 details 安全读取（缺席/非对象=null）。 */
+const detailsOf = (result: unknown): Record<string, unknown> | undefined => {
+  const details = (result as { details?: unknown } | null)?.details;
+  return typeof details === "object" && details !== null && !Array.isArray(details)
+    ? (details as Record<string, unknown>)
+    : undefined;
+};
 export const BRIDGE_TOOL_NAMES: readonly string[] = [
   "atf_workspace_status",
   "atf_admit_data",
@@ -330,6 +380,40 @@ export const buildBridgeTools = (
           const bridge = await manager.transport();
           const agentTool = toAtfAgentTool(definition, { bridge, scopeRefBox: { current: undefined } });
           const result = await agentTool.execute(`dsh-${exec.callId ?? "call"}`, args);
+          // 选项类待确认统一走原生提问卡（#13 owner 裁定：提问卡=产品统一问询通道，
+          // 聊天框不承载选项问询——此前 agent 拿到 pending_confirmations 后聊天转述，
+          // 两套交互并存）。仅 options 在场的选项类出卡；无 options 的纯信息披露不动；
+          // 卡通道缺席/无人值守档=现状零变更（返回体原样，聊天转述兜底）。答案结构化
+          // 回传 pending_answers，agent 按答案组装重跑参数（参数自动回填归段语义级
+          // 改造，不在此越界）。
+          const pendingAsk = detailsOf(result)?.["pending_confirmations"];
+          if (
+            Array.isArray(pendingAsk) && pendingAsk.length > 0
+            && approvalContext.tier !== "unattended"
+          ) {
+            const { questions: choiceQuestions, meta: pendingMeta } =
+              pendingChoiceQuestionsOf(pendingAsk);
+            const askSvc = ctx.get("userQuestions") as
+              | { ask(req: { questions: ChoiceAskQuestion[]; agent?: unknown; signal?: unknown }):
+                  Promise<{ answers: Array<{ id: string; selected: string[]; custom?: string }> }> }
+              | undefined;
+            if (choiceQuestions.length > 0 && askSvc !== undefined && typeof askSvc.ask === "function") {
+              try {
+                const answered = await askSvc.ask({ questions: choiceQuestions, agent: exec.agent, signal: exec.signal });
+                const pendingAnswers = pendingAnswersOf(pendingMeta, answered.answers);
+                const detailBody = detailsOf(result);
+                if (detailBody !== undefined) {
+                  detailBody["pending_answers"] = pendingAnswers;
+                  detailBody["pending_answers_note"] = "用户已在提问卡上作答（pending_answers）——按所选答案组装参数重跑对应段；不要在聊天里重复提问。";
+                }
+              } catch (cause) {
+                const detailBody = detailsOf(result);
+                if (detailBody !== undefined) {
+                  detailBody["pending_answers_note"] = `提问卡应答失败（${String(cause).slice(0, 120)}）——待确认项仍在 pending_confirmations，改在聊天中向用户转述选项。`;
+                }
+              }
+            }
+          }
           // 批㊶-M M-3 段事实轨：桥接面工具成功即登记（register/label_qc——run 归属取参数）
           const details = result.details as Record<string, unknown> | undefined;
           // D81-B（指令 §二.4）：状态面附加当前会话归属工作区身份（atf_workspace_status 显示
