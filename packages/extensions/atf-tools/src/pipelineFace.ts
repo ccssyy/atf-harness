@@ -1856,6 +1856,7 @@ export const buildPipelineTool = (
     parameters: {
       stage: { type: "string", required: true, enum: [...PIPELINE_STAGES], description: "要触发的内核管线段（八段原文，单段）" },
       run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/experiments/<exp>/<run_id>·RunLayout/v3；未指定实验归入当日「未命名实验」）" },
+      experiment: { type: "string", description: "实验名（可选；显式给定时内核把 run 归属该实验——register 建 run 与摘要落点单源。缺省不传：内核按「复用该 run 既有归属→当日未命名实验」解析。#26 r2 实锤：指定实验名但段驱动不转发→run 落 adhoc）" },
       workspace_path: { type: "string", description: "workspace 根（可选覆盖——缺省按会话 cwd→工作区身份→实例配置解析，并回显所用根与依据；显式给时必须含 .atf/workspace.json 或 datasets+splits）。注意：会话未绑定工作区时本参数**必须显式传**（绝对路径）——漏传会在段入口被拒（workspace_path_missing），白白多一轮" },
       source_root: {
         type: "string",
@@ -2140,7 +2141,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
+      args: { stage: string; run_id: string; experiment?: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -2564,6 +2565,11 @@ export const buildPipelineTool = (
       // 也显式上线解析值；E10d：allow_small_cluster_test 仅 family_split 且 true 才追加
       // 开关，缺省不出现在 argv，其它段不追加不报错）；禁拼第二套路径。
       const argv: string[] = ["--workspace", workspacePath, "--run-id", args.run_id, "--stage", args.stage];
+      // 实验名显式才透传（#26）：缺省不传——内核按「复用 run 既有归属→adhoc」解析,
+      // 不替调用方补默认(实验名是业务决策)。
+      if (typeof args.experiment === "string" && args.experiment.trim() !== "") {
+        argv.push("--experiment", args.experiment.trim());
+      }
       // 看图通道（仅候选构造段）：模型直接读图 → 交判读结果；或先只要页清单。
       // 旗标名与中间文件路径不下发给模型——工具参数即接口，模型只负责「看」和「报」。
       
