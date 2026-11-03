@@ -114,6 +114,11 @@ else
 fi
 
 # 单引号安全包装（内嵌引号/空白路径安全——'"'"' 标准转义）
+# #22 单版本源自检（批4 部署收敛）：重启前 fail-fast——三指针（kernelDir/段 CLI/bridge）
+# 不同源即拒绝启动（r2 教训：三指针三版本=删参与行为漂移温床 #8m/#21）。
+bash "${MAIN_REPO}/deploy/verify/check-kernel-single-source.sh" "${ENV_FILE}" \
+  || { echo "[instance-restart] FAIL: 单版本源自检未过（见上——先修指针再重启）" >&2; exit 2; }
+
 sq() { printf "'%s'" "${1//\'/\'\"\'\"\'}"; }
 
 # D87 键活体探针（仅 dev restart 路径调用；--env-cmd/--env-dump 不启动、不探针）：
