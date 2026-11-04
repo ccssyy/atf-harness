@@ -169,6 +169,24 @@ import { join } from "node:path";
 
 import { tmpdir } from "node:os";
 
+/** D181 机检面:prompt 卡选项表构造(纯函数)——材料/用户信号在场时
+ *  不得出现「推荐——没有材料时的缺省」标注(T10 及 UAT 二发教训的机检锚)。 */
+export const promptChoiceOptionsOf = (materialHint: string | null): ReadonlyArray<{ label: string; description: string }> => {
+  const hasMaterial = materialHint !== null;
+  const builtinDesc =
+    "产品内置抽取模板（atf-template-v1）：抽取任务描述 + 字段视图（字段名/定义/输出模式 flat|grouped）"
+    + " + 坐标声明行；支持整图平铺与分组两种输出形态，坐标空间自动匹配";
+  return hasMaterial
+    ? [
+        { label: "用材料里的抽取说明", description: "按你提供的说明构造 prompt" },
+        { label: "用产品内置模板", description: builtinDesc },
+      ]
+    : [
+        { label: "用产品内置模板", description: builtinDesc + "（推荐——没有材料时的缺省）" },
+        { label: "我自己提供", description: "在下面的输入框里贴抽取说明或说明要点" },
+      ];
+};
+
 /** 段名闭集（权威＝内核 STAGE_ORDER 八项——禁增删改序；旧六段名别名不保留）。 */
 export const PIPELINE_STAGES: readonly string[] = [
   "register",
@@ -2080,6 +2098,13 @@ export const buildPipelineTool = (
           "产出的行不计入基线。倍数不固定：显式给定 > 统计件里的建议倍数 > 默认最低倍数。" +
           "不给＝按默认最低倍数生成（这是标准构造动作），卡面会问你沿用还是改",
       },
+      prompt_material_hint: {
+        type: "string",
+        description:
+          "用户已提供抽取说明(prompt)时必传——把来源与要点摘要传入(如「用户在对话中提供的抽取说明:以航空运单字段表为准」);" +
+          "不传而材料 schema 也无 template 时,卡面按「没有抽取说明」推荐内置模板——用户明明给了还被推荐内置=违背用户已表达语义" +
+          "(T10 及其 UAT 二发教训:确认卡必须忠实用户已提供的信号)",
+      },
       mode5_advice_stats: {
         type: "object",
         additionalProperties: true,
@@ -2259,7 +2284,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; experiment?: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
+      args: { stage: string; run_id: string; experiment?: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; prompt_material_hint?: string; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -2763,15 +2788,7 @@ const askPromptChoice = async (
       question: `训练 prompt 用哪套？— ${input.runId}`,
       header: "训练prompt",
       detail,
-      options: hasMaterial
-        ? [
-            { label: "用材料里的抽取说明", description: "按你提供的说明构造 prompt" },
-            { label: "用产品内置模板", description: builtinDesc },
-          ]
-        : [
-            { label: "用产品内置模板", description: builtinDesc + "（推荐——没有材料时的缺省）" },
-            { label: "我自己提供", description: "在下面的输入框里贴抽取说明或说明要点" },
-          ],
+      options: promptChoiceOptionsOf(materialHint).slice() as Array<{ label: string; description: string }>,
       multiSelect: false,
     }],
     agent: exec.agent,
@@ -3230,9 +3247,13 @@ let visualSummary: Record<string, unknown> | undefined;
             } catch {
               // 深解析件缺席/不可读——按没有材料处理(与原行为一致)
             }
+            // D181:用户信号优先——agent 传 prompt_material_hint(用户对话/资料已指明)时,
+            // 卡面按「用户已提供」呈现,不走「没有抽取说明→推荐内置」分支(T10 二发修)
+            const agentHint = typeof args.prompt_material_hint === "string" && args.prompt_material_hint.trim() !== ""
+              ? args.prompt_material_hint.trim() : null;
             const promptSummary = await askPromptChoice(
               { runId: args.run_id, runDir }, { agent: exec.agent, signal: exec.signal },
-              promptSvc, p03bHint,
+              promptSvc, agentHint ?? p03bHint,
             );
             writeInputsPromptChoice(runDir, { ...promptSummary,
               quote: typeof promptSummary.typed === "string" && promptSummary.typed !== "" && promptSummary.typed !== "(no pick)" ? promptSummary.typed : undefined });
