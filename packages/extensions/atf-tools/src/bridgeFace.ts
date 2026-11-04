@@ -393,6 +393,35 @@ export const buildBridgeTools = (
           render: renderAsJsonText,
         },
         async execute(args: Record<string, unknown>, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+/** D184 重做:resolve 的 decisions 与用户卡面凭据账本逐项一致判定。
+ *  账本由 harness 在用户逐项裁决卡落卡后写入(runtime/webui/label-qc-decisions.json);
+ *  agent 自拟 decisions 或篡改项即不一致→走批量确认卡。 */
+const matchesLabelQcUserDecisions = async (args: Record<string, unknown>): Promise<boolean> => {
+  const runId = typeof args["run_id"] === "string" ? args["run_id"] : "";
+  const workspacePath = typeof args["workspace_path"] === "string" ? args["workspace_path"] : "";
+  const decisions = Array.isArray(args["decisions"]) ? (args["decisions"] as Array<Record<string, unknown>>) : [];
+  if (runId === "" || workspacePath === "" || decisions.length === 0) return false;
+  try {
+    const resolvedRun = resolvePipelineRunDir(workspacePath, runId);
+    if ("error" in resolvedRun) return false;
+    const ledgerPath = join(resolvedRun.runDir, "runtime", "webui", "label-qc-decisions.json");
+    if (!existsSync(ledgerPath)) return false;
+    const ledger = JSON.parse(readFileSync(ledgerPath, "utf8")) as {
+      decided_by?: unknown; decisions?: Array<{ item_id?: unknown; action?: unknown; disposition?: unknown }>;
+    };
+    if (ledger.decided_by !== "user_confirmed" || !Array.isArray(ledger.decisions)) return false;
+    if (ledger.decisions.length !== decisions.length) return false;
+    return ledger.decisions.every((entry, i) => {
+      const given = decisions[i] ?? {};
+      return String(given["item_id"] ?? "") === String(entry.item_id ?? "")
+        && String(given["action"] ?? "") === String(entry.action ?? "")
+        && String(given["disposition"] ?? "") === String(entry.disposition ?? "");
+    });
+  } catch {
+    return false;
+  }
+};
+
 /** D192 用户决定确认卡:裁决类工具(user_decision)执行前逐项呈现并停等确认。
  *  decisions 逐项(item_id/action/disposition)进卡面 markdown 表;确认=执行
  *  (卡面回执即 user_confirmed 凭据),暂停=不执行。通道缺席 fail-closed(不放行)。 */
@@ -565,9 +594,16 @@ const launchConfirmCardOf = async (
             // decisions(item/两值/agent 建议),确认才执行;暂停不执行。修复
             // chain_advance 误分类导致的完全权限免审代裁(1104-5 实锤)。
             if (APPROVAL_SEMANTICS_BY_TOOL[definition.name] === "user_decision") {
-              const confirm = await userDecisionConfirmCardOf(ctx, exec, definition.name, args);
-              if (!confirm.ok) {
-                return asToolValue({ error: "user_decision_paused", tool: definition.name, note: confirm.note });
+              // D184 重做:decisions 与用户卡面凭据账本(label-qc-decisions.json,harness
+              // 写、agent 不可伪造)逐项一致→直通(卡上逐项选择即用户决定,不再批量确认卡
+              // 重复打扰);不一致(agent 自拟/改动)→批量确认卡拦。
+              if (definition.name === "atf_label_qc_resolve" && await matchesLabelQcUserDecisions(args)) {
+                console.warn("[approval] atf_label_qc_resolve decisions 与用户卡面凭据一致,直通(不再批量确认)");
+              } else {
+                const confirm = await userDecisionConfirmCardOf(ctx, exec, definition.name, args);
+                if (!confirm.ok) {
+                  return asToolValue({ error: "user_decision_paused", tool: definition.name, note: confirm.note });
+                }
               }
             }
             if (definition.name === "atf_launch_execute" && approvalContext.tier === "full-access") {

@@ -1854,6 +1854,47 @@ const mode5DisclosureOf = (countsRaw: Record<string, unknown> | null | undefined
   return `\n（mode5＝每图 ${String(perImage)} 条随机组合，同图不重样：实产 ${String(produced)} 条，组合空间有限时少于期望，非倍率失效）`;
 };
 
+/** D184 重做:质检报告平读(datasets 布局推导+report_digest 对拍,读到 pending 明细项)。 */
+const readLabelQcReportFlat = async (
+  wsRoot: string, docType: string, receipt: Record<string, unknown>,
+): Promise<{ report_digest: string; items: Array<{ item_id: string; check_class: string; human_label: string; suggested_action: Record<string, unknown>; locator: Record<string, unknown>; candidates: Array<Record<string, unknown>> }> } | null> => {
+  const digest = String(firstResultKeyOf(receipt, "report_digest") ?? "");
+  const datasetsRoot = join(wsRoot, "datasets");
+  if (!existsSync(datasetsRoot)) return null;
+  for (const entry of readdirSync(datasetsRoot)) {
+    if (docType !== "" && !entry.includes(docType)) continue;
+    const reportPath = join(datasetsRoot, entry, "label-qc-report.json");
+    if (!existsSync(reportPath)) continue;
+    try {
+      const parsed = JSON.parse(readFileSync(reportPath, "utf8")) as Record<string, unknown>;
+      if (digest !== "" && String(parsed["report_digest"] ?? "") !== digest) continue;
+      const items = Array.isArray(parsed["items"]) ? (parsed["items"] as Array<Record<string, unknown>>) : [];
+      return {
+        report_digest: String(parsed["report_digest"] ?? ""),
+        items: items.filter((it) => it["status"] === "pending" || it["decided_by"] == null).map((it) => ({
+          item_id: String(it["item_id"] ?? ""),
+          check_class: String(it["check_class"] ?? ""),
+          human_label: String(it["human_label"] ?? ""),
+          suggested_action: (it["suggested_action"] ?? {}) as Record<string, unknown>,
+          locator: (it["locator"] ?? {}) as Record<string, unknown>,
+          candidates: Array.isArray(it["candidates"]) ? (it["candidates"] as Array<Record<string, unknown>>) : [],
+        })),
+      };
+    } catch { /* 报告不可读试下一个 */ }
+  }
+  return null;
+};
+
+/** D184 重做:建议处置人话化。 */
+const suggestedActionTextOf = (item: { suggested_action: Record<string, unknown>; candidates: Array<Record<string, unknown>> }): string => {
+  const sa = item.suggested_action;
+  const hint = String(sa["disposition_hint"] ?? sa["action_hint"] ?? "");
+  const target = sa["target_candidate_id"] !== undefined ? String(sa["target_candidate_id"]) : "";
+  const targetText = target !== "" && item.candidates.length > 0
+    ? `保留 ${String(item.candidates[0]?.["field"] ?? "")}＝「${String(item.candidates[0]?.["value"] ?? "")}」` : "";
+  return `${hint}${targetText !== "" ? `（${targetText}）` : ""}`;
+};
+
 /** D184/D188:回执 results[0].raw_response 取键（段摘要结构单源）。 */
 const firstResultKeyOf = (receipt: Record<string, unknown>, key: string): unknown => {
   const results = Array.isArray(receipt["results"]) ? (receipt["results"] as Array<Record<string, unknown>>) : [];
@@ -3604,21 +3645,84 @@ let visualSummary: Record<string, unknown> | undefined;
         const execCwd = (exec as { agent?: { session?: { header?: { cwd?: unknown } } } })?.agent?.session?.header?.cwd;
         const effectiveWs = wsRoot !== "" ? wsRoot : (typeof execCwd === "string" ? execCwd : "");
         if (stage === "label_qc" && effectiveWs !== "") {
+          // D184 重做(owner 复述定稿):逐项裁决卡——原生问题卡承载标签分析报告
+          // +处理建议,每项决定用户在卡上做(必做流程不问做不做);卡上选择=
+          // user_confirmed 凭据,落 label-qc-decisions 账本供 resolve 直通比对。
           const counts = firstResultKeyOf(receipt, "counts") as Record<string, unknown> | undefined;
-          if (counts !== undefined) {
-            const total = Number(counts["total_items"] ?? 0);
-            const pending = Number(counts["pending"] ?? 0);
-            const scanned = Number(counts["samples_scanned"] ?? 0);
-            const byClass = (counts["by_check_class"] ?? {}) as Record<string, number>;
-            const classLines = Object.entries(byClass).filter(([, n]) => n > 0)
-              .map(([cls, n]) => `- ${labelQcClassNameOf(cls)}：${String(n)} 项`).join("\n");
-            projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, {
-              conclusion: `标签质检报告：已全量扫描 ${String(scanned)} 页，` + (total > 0
-                ? `发现 ${String(total)} 项标注问题（已裁决 ${String(Number(counts["resolved"] ?? 0))} 项${pending > 0 ? `、待处理 ${String(pending)} 项` : ""}）\n${classLines}`
-                : "未发现标注冲突"),
-              stage: "label_qc",
-              next: pending > 0 ? "处理是必做流程：以上按质检报告建议逐项处理（保留建议值，依据随报告附页）；不同意某项直接在对话里说" : "质检通过，继续后续流程",
-            });
+          const pending = counts !== undefined ? Number(counts["pending"] ?? 0) : 0;
+          if (pending > 0) {
+            const qcSvc = ctx.get("userQuestions") as FormAskService | undefined;
+            const docTagQc = String(args["doc_type"] ?? "");
+            const report = await readLabelQcReportFlat(effectiveWs, docTagQc, receipt);
+            if (qcSvc !== undefined && typeof qcSvc.ask === "function" && report !== null) {
+              const questions = report.items.slice(0, pending).map((item, idx) => ({
+                id: `qc-item-${item.item_id}`,
+                question: `待裁决 ${String(idx + 1)}/${String(pending)} — ${item.human_label}`,
+                header: `标签裁决${docTagQc !== "" ? `·${docTagQc}` : ""}`,
+                detail: [
+                  `**问题**：${item.human_label}（${labelQcClassNameOf(item.check_class)}）`,
+                  ...(item.locator?.field !== undefined ? [`**字段**：${String(item.locator.field)}`] : []),
+                  ...(item.locator?.page !== undefined ? [`**样本/页**：${String(item.locator.sample ?? "")} ${String(item.locator.page ?? "")}`] : []),
+                  "**两个标注值**：",
+                  ...item.candidates.map((c, i2) => `  ${String(i2 + 1)}. ${String(c.field ?? "?")} =「${String(c.value ?? "?")}」`),
+                  "",
+                  `**建议**：${suggestedActionTextOf(item)}`,
+                  "选「按建议」直接采纳;选「维持原状」不处置该项;也可在输入框写字段名自定。",
+                ].join("\n"),
+                options: [
+                  { label: "按建议处置", description: suggestedActionTextOf(item) },
+                  { label: "维持原状", description: "不处置该项(保留两种标注,后续人工线下处理)" },
+                ],
+                multiSelect: false,
+              }));
+              try {
+                const qcAnswers = await qcSvc.ask({ questions, agent: (exec as { agent?: unknown }).agent, signal: (exec as { signal?: unknown }).signal });
+                const byId = new Map(qcAnswers.answers.map((a) => [a.id, a]));
+                const decisions = report.items.slice(0, pending).map((item) => {
+                  const answer = byId.get(`qc-item-${item.item_id}`);
+                  const picked = [...(answer?.selected ?? [])].join("") || (answer?.custom ?? "").trim();
+                  const suggested = item.suggested_action ?? {};
+                  if (picked.includes("维持原状")) {
+                    return { item_id: item.item_id, action: "reject", disposition: "keep_both_untouched", decided_by: "user_confirmed" };
+                  }
+                  return {
+                    item_id: item.item_id,
+                    action: String(suggested.action_hint ?? "accept"),
+                    disposition: String(suggested.disposition_hint ?? ""),
+                    target_candidate_id: suggested.target_candidate_id,
+                    custom: picked.includes("按建议") ? undefined : (picked !== "" ? picked : undefined),
+                    decided_by: "user_confirmed",
+                  } as Record<string, unknown>;
+                });
+                // 凭据账本(harness 写,agent 不可伪造):resolve 直通比对源
+                // 凭据账本锚 run 树(回执 run_dir 在场即用,缺席回落 workspace 根)
+                const decisionsRoot = String(receipt["run_dir"] ?? "") !== "" && existsSync(String(receipt["run_dir"]))
+                  ? String(receipt["run_dir"]) : effectiveWs;
+                const decisionsDir = join(decisionsRoot, "runtime", "webui");
+                if (existsSync(decisionsRoot)) {
+                  mkdirSync(decisionsDir, { recursive: true });
+                  writeFileSync(join(decisionsDir, "label-qc-decisions.json"), `${JSON.stringify({
+                    schema_version: "LabelQcUserDecisions/v1", decided_by: "user_confirmed",
+                    decided_at: new Date().toISOString(), report_digest: report.report_digest,
+                    decisions: decisions.map((d) => ({ item_id: d.item_id, action: d.action, disposition: d.disposition })),
+                  }, null, 1)}\n`, "utf8");
+                }
+                const nAccept = decisions.filter((d) => d.action === "accept").length;
+                receipt["label_qc_decisions"] = {
+                  decided_by: "user_confirmed", report_digest: report.report_digest, decisions,
+                  next: "以上逐项决定已由用户在卡上做出——按 decisions 原样调 atf_label_qc_resolve 提交,再用同一 run_id 重跑 label_qc",
+                };
+                projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, {
+                  conclusion: `标签裁决完成:${String(pending)} 项逐项确认(按建议 ${String(nAccept)} 项)`,
+                  stage: "label_qc",
+                  next: "提交裁决后重跑 label_qc",
+                });
+              } catch {
+                receipt["label_qc_decisions"] = { asked: false, note: "裁决卡通道异常——回执指路文案兜底" };
+              }
+            } else {
+              receipt["label_qc_decisions"] = { asked: false, note: "卡通道缺席或报告不可读——按回执指路文案走 atf_label_qc_inspect 逐项流程" };
+            }
           }
         }
         if (stage === "training_prep" && ok) {
