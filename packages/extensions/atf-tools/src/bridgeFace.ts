@@ -393,6 +393,58 @@ export const buildBridgeTools = (
           render: renderAsJsonText,
         },
         async execute(args: Record<string, unknown>, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+/** D192 用户决定确认卡:裁决类工具(user_decision)执行前逐项呈现并停等确认。
+ *  decisions 逐项(item_id/action/disposition)进卡面 markdown 表;确认=执行
+ *  (卡面回执即 user_confirmed 凭据),暂停=不执行。通道缺席 fail-closed(不放行)。 */
+const userDecisionConfirmCardOf = async (
+  ctx: { get(service: string): unknown },
+  exec: { agent?: unknown; signal?: unknown },
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<{ ok: boolean; note: string }> => {
+  const svc = ctx.get("userQuestions") as { ask?: (payload: unknown) => Promise<{ answers: Array<{ selected?: string[]; custom?: string }> }> } | undefined;
+  if (svc === undefined || typeof svc.ask !== "function") {
+    return { ok: false, note: "确认卡通道缺席——裁决类工具不放行(用户决定不可代行);稍后重试或在对话里说明处置意见" };
+  }
+  const decisions = Array.isArray(args["decisions"]) ? (args["decisions"] as Array<Record<string, unknown>>) : [];
+  if (decisions.length === 0) {
+    return { ok: true, note: "无逐项决定载荷——按工具自身校验处理" };
+  }
+  const rows = decisions.map((d, i) =>
+    `| ${String(i + 1)} | ${String(d["item_id"] ?? "?")} | ${String(d["action"] ?? "?")} | ${String(d["disposition"] ?? "")} |`).join("\n");
+  const title = toolName === "atf_label_qc_resolve" ? "标注冲突裁决确认" : "用户决定确认";
+  try {
+    const answers = await svc.ask({
+      questions: [{
+        id: `user-decision-${toolName}-${String(Date.now())}`,
+        question: `${title}——以下 ${String(decisions.length)} 项处置请确认`,
+        header: title,
+        detail: [
+          `| # | 待裁决项 | 建议处置 | 说明 |`,
+          `|---|---|---|---|`,
+          rows,
+          "",
+          "以上是 agent 的分析与建议;确认后按建议提交(你可以在输入框写字段名改为自定义处置)。",
+          "暂停则不提交,你在对话里说明想怎么改。",
+        ].join("\n"),
+        options: [
+          { label: "确认按建议提交", description: "逐项按上表处置提交并留痕" },
+          { label: "暂停，我要调整", description: "不提交;在对话里说明调整意见" },
+        ],
+        multiSelect: false,
+      }],
+      agent: exec.agent,
+      signal: exec.signal,
+    });
+    const first = answers.answers[0];
+    const picked = [...(first?.selected ?? [])].join("") || (first?.custom ?? "");
+    const confirmed = picked.includes("确认按建议提交") || (picked.trim() !== "" && !picked.includes("暂停"));
+    return { ok: confirmed, note: confirmed ? "用户已在卡上确认(留痕)" : "用户暂停——未提交,等调整意见" };
+  } catch {
+    return { ok: false, note: "确认卡通道异常——不放行" };
+  }
+};
+
 /** D186 训练启动确认卡：完全权限档下替代 DSH 审批卡（owner 2026-11-04 裁定——
  * 不弹审批卡，停下来给用户汇报完整实验准备与参数设置报告，确认后再启动）。
  * 报告数据全部只读自 run 树（variants_report/iteration-config/train.sh/prelaunch 报告）。 */
@@ -509,6 +561,15 @@ const launchConfirmCardOf = async (
             // D186(owner 2026-11-04 裁定):完全权限档下训练启动不弹审批卡——改停等
             // 「训练启动确认卡」(完整实验准备+参数报告+脚本链接),确认即用户决定
             // (审计=卡面回执+放行账本);暂停不启动。guarded 档审批卡照旧。
+            // D192:裁决决定(user_decision 类)任何档位都先过用户确认卡——逐项呈现
+            // decisions(item/两值/agent 建议),确认才执行;暂停不执行。修复
+            // chain_advance 误分类导致的完全权限免审代裁(1104-5 实锤)。
+            if (APPROVAL_SEMANTICS_BY_TOOL[definition.name] === "user_decision") {
+              const confirm = await userDecisionConfirmCardOf(ctx, exec, definition.name, args);
+              if (!confirm.ok) {
+                return asToolValue({ error: "user_decision_paused", tool: definition.name, note: confirm.note });
+              }
+            }
             if (definition.name === "atf_launch_execute" && approvalContext.tier === "full-access") {
               const launchConfirm = await launchConfirmCardOf(ctx, exec, args);
               if (!launchConfirm.ok) {

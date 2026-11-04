@@ -42,7 +42,7 @@ export interface ModelVisibleTool {
  * 表是单源:工具定义引用类别,消费点(requiresApprovalFor)按类别+档位上下文判定;
  * 未收编工具维持既有链(谓词优先,退基准旗标)——渐进收编,不一次性改全部声明。
  */
-export type ApprovalSemanticsClass = "readonly" | "chain_advance" | "governance";
+export type ApprovalSemanticsClass = "readonly" | "chain_advance" | "governance" | "user_decision";
 
 /** 档位上下文(缺省=审慎侧:chain_advance 须审批)。 */
 export interface ApprovalSemanticsContext {
@@ -61,7 +61,10 @@ export const APPROVAL_SEMANTICS_BY_TOOL: Readonly<Record<string, ApprovalSemanti
   atf_skill_read: "readonly",
   // 链内推进(写 run 域内、可逆)
   atf_admit_data: "chain_advance",
-  atf_label_qc_resolve: "chain_advance",
+  // D192(owner 2026-11-04 1104-5 实锤):裁决是用户决定不是链内推进——
+  // agent 代提交=代行(D28:user-confirmed 只认卡面回执);改 user_decision
+  // 类,任何档位都走前置确认卡,免审链不放行。
+  atf_label_qc_resolve: "user_decision",
   atf_create_experiment: "chain_advance",
   atf_rebind_workspace: "chain_advance",
   atf_pipeline_stage: "chain_advance",
