@@ -2659,10 +2659,12 @@ export const buildPipelineTool = (
       // 字段清单确认已前移到 register 段之后（owner 2026-10-28 顺序纠正：
       // 字段是登记时从标注梳理出来的，确认必须紧跟着做，不能拖到实验配置段）。
       // 这里只读账本，供回执与后续判据使用。
-      const fieldChoiceConfirmed = args.stage === "experiment_setup" && readFieldChoice(runDir) !== null;
+      // D191:字段确认 per-doc 判定(多类 run 逐类各自确认;doc_type 缺席回落 run 级)
+      const fieldChoiceDoc = typeof args.doc_type === "string" ? args.doc_type.trim() : undefined;
+      const fieldChoiceConfirmed = args.stage === "experiment_setup" && readFieldChoice(runDir, fieldChoiceDoc) !== null;
       let fieldChoiceLine = "";
       if (args.stage === "experiment_setup") {
-        const prior = readFieldChoice(runDir);
+        const prior = readFieldChoice(runDir, fieldChoiceDoc);
         if (prior !== null) {
           fieldChoiceLine = `字段清单：${String(prior.total_fields)} 个（你在登记后确认过${
             prior.all_fields ? "，全部训练" : `，训练 ${prior.confirmed_fields.join("、")}`
@@ -3116,8 +3118,11 @@ let visualSummary: Record<string, unknown> | undefined;
         const runDir = afterRun.runDir;
         const labels = readFieldLabels(runDir);
         if (labels !== null) {
-          const prior = readFieldChoice(runDir);
-          if (prior === null && fieldCardAskedRuns.has(args.run_id)) {
+          // D191:per-doc 读取与去重(多类 run 各自弹卡各自落账)
+          const registerDoc = typeof args.doc_type === "string" ? args.doc_type.trim() : undefined;
+          const registerDocTag = registerDoc !== undefined && registerDoc !== "" ? `:${registerDoc}` : "";
+          const prior = readFieldChoice(runDir, registerDoc);
+          if (prior === null && fieldCardAskedRuns.has(args.run_id + registerDocTag)) {
             // P1-3：本会话已弹过且未确认——不重弹，交给 agent 按上次回执追问。
             fieldChoiceSummary = { reused: false, asked_once: true,
                                    note: "字段清单卡本会话已弹过未确认——按上次回执向用户追问，不重复弹卡" };
@@ -3139,9 +3144,9 @@ let visualSummary: Record<string, unknown> | undefined;
                 // 但它确实在场。第二项的说明直接指过去，用户不用猜。
                 const answers = await svc.ask({
                   questions: [{
-                    id: `field-choice-${args.run_id}`,
-                    question: `这批数据的字段清单要全用它吗？— ${args.run_id}`,
-                    header: "字段清单",
+                    id: `field-choice-${args.run_id}${registerDocTag}`,
+                    question: `这批数据的字段清单要全用它吗？— ${args.run_id}${registerDoc !== undefined && registerDoc !== "" ? `（${registerDoc} 类）` : ""}`,
+                    header: registerDoc !== undefined && registerDoc !== "" ? `字段清单·${registerDoc}` : "字段清单",
                     detail: fieldChoiceDetailOf(labels, null, fieldCardSourceOf(runDir)),
                     options: [
                       {
@@ -3191,7 +3196,7 @@ let visualSummary: Record<string, unknown> | undefined;
                     total_fields: labels.label_count,
                     decided_at: new Date().toISOString(),
                     source: "user_confirmed",
-                  });
+                  }, registerDoc);
                   fieldChoiceSummary = {
                     confirmed_fields: requested,
                     all_fields: requested.length === labels.label_count,
@@ -3205,7 +3210,7 @@ let visualSummary: Record<string, unknown> | undefined;
                     total_fields: labels.label_count,
                     decided_at: new Date().toISOString(),
                     source: "user_confirmed",
-                  });
+                  }, registerDoc);
                   fieldChoiceSummary = {
                     confirmed_fields: labels.labels.map((item) => item.label),
                     all_fields: true,
@@ -3231,7 +3236,7 @@ let visualSummary: Record<string, unknown> | undefined;
               } catch {
                 // 卡被关掉/通道失败 → 不造假确认；P1-3：同 run 记一次"已问过"，
                 // 重试进段不再重弹（交给 agent 按上一次回执追问，避免卡轰炸）。
-                fieldCardAskedRuns.add(args.run_id);
+                fieldCardAskedRuns.add(args.run_id + registerDocTag);
                 fieldChoiceSummary = { confirmed_fields: [], all_fields: false, total_fields: labels.label_count, skipped: true };
               }
             }

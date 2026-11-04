@@ -89,7 +89,7 @@ const candidates = (ws: string, runId: string): string[] => [
 ];
 
 /** ci-bl-1103 字段确认放行门:experiment_setup 前置——落一份 field-choice 过门用。 */
-const confirmFields = (ws: string, runId: string): void => {
+const confirmFields = (ws: string, runId: string, doc?: string): void => {
   const runDir = candidates(ws, runId)[0] as string;
   // F1 命中口径要求合法 run.json——测试 run 目录一并造全
   if (!existsSync(join(runDir, "run.json"))) {
@@ -100,7 +100,7 @@ const confirmFields = (ws: string, runId: string): void => {
   for (const rel of ["runtime/webui", "webui"]) {
     mkdirSync(join(runDir, rel), { recursive: true });
     writeFileSync(
-      join(runDir, rel, "field-choice.json"),
+      join(runDir, rel, doc !== undefined && doc !== "" ? `field-choice.${doc}.json` : "field-choice.json"),
       JSON.stringify({ schema_version: "FieldChoice/v1", run_id: runId, confirmed_fields: ["f1"], all_fields: true, total_fields: 1, decided_at: new Date().toISOString(), source: "user_confirmed" }),
       "utf-8",
     );
@@ -216,7 +216,7 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
   it("风险信号在场才自动带 --risk-signals（供 evidence 出处校验）", async () => {
     const ws = tempRoot("a-ws-");
     const runId = "a-risk";
-    confirmFields(ws, runId);
+    confirmFields(ws, runId, "do");  // D191:段带 doc_type,账本 per-doc
     const runDir = candidates(ws, runId)[0] as string;
     mkdirSync(join(runDir, "prep", "risk-signals", "do"), { recursive: true });
     writeFileSync(
