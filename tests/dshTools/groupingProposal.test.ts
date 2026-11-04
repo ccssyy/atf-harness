@@ -257,8 +257,8 @@ describe("C2 分组四态", () => {
       (entry) => (entry["questions"] as Array<{ header?: string; options?: Array<{ label: string }> }>)[0]!,
     );
     // 决策闸先跑（段执行前），分组候选卡后跑（审批前）——顺序如实断言
-    expect(askedHeaders.map((question) => question.header)).toEqual(["增强", "分组"]);
-    expect(askedHeaders[0]!.options?.map((option) => option.label)).toEqual(["不增强", "2 倍", "3 倍"]);
+    expect(askedHeaders.map((question) => question.header)).toEqual(["随机子集增强", "分组"]);
+    expect(askedHeaders[0]!.options?.map((option) => option.label)).toEqual(["不增强", "每图 2 条", "每图 3 条"]);
     expect(result["grouping_source"]).toBe("proposal");
     expect(result["grouping_decision"]).toBe("user_selected");
     // 本次 mock 未选任何项 → 落到推荐候选（内核只认 recommended:true）
