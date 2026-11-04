@@ -2,7 +2,7 @@
  * D94-harness 护栏事实面采集（guard.test.ts 与 guard.negative.test.ts 共享——
  * 测试文件互不 import（防 describe 重放，realPeer fixture 同纪律），采集逻辑单落本件）。
  */
-import { readFileSync } from "node:fs";
+import { readFileSync , mkdirSync, writeFileSync } from "node:fs";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -104,6 +104,11 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   train_all: "--train-all",
   assignment_source: "--assignment-source",
   reuse_experiment_setup: "--reuse-experiment-setup",
+  // B2 收口补登记:批㊶-D/--split-id 与 experiment 落座;prompt_material_hint 为
+  // 非透传键(D181 段内路由,不映射内核旗标)——guard 侧哨兵跳过声明面对账
+  experiment: "--experiment",
+  split_id: "--split-id",
+  prompt_material_hint: "n/a",
   token_provider: "--token-provider",
   retry_coordinate_pending: "--retry-coordinate-pending",
   // E4-乙（改动 1）＋E5·H1 D139：training_prep 段训练参数单源桥——flag 属内核
@@ -189,7 +194,7 @@ export const collectArgvTokens = async (): Promise<string[]> => {
       stage: "register",
       run_id: "d94-register",
       workspace_path: tempRoot,
-      source_root: join(tempRoot, "src"),
+      source_root: (mkdirSync(join(tempRoot, "src"), { recursive: true }), join(tempRoot, "src")),
       doc_type: "invoice",
       lane_suffix: "goods",
       field_config: join(tempRoot, "field-config.json"),
@@ -197,6 +202,7 @@ export const collectArgvTokens = async (): Promise<string[]> => {
     {
       stage: "experiment_setup",
       run_id: "d94-setup",
+      experiment: "d94",
       workspace_path: tempRoot,
       grouping_preset: "A",
       negative_ratio_target: "0.03,0.06",
@@ -223,6 +229,13 @@ export const collectArgvTokens = async (): Promise<string[]> => {
     },
   ];
   const tokens: string[] = [];
+  // D191 字段确认闸适配:setup 段前置落盘确认记录(v3 布局 experiments/<exp>/<run>/webui)
+  const setupRunDir = join(tempRoot, "experiments", "d94", "d94-setup");
+  mkdirSync(join(setupRunDir, "webui"), { recursive: true });
+  writeFileSync(
+    join(setupRunDir, "webui", "field-choice.json"),
+    JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }),
+  );
   try {
     for (const call of calls) {
       const result = (await tool.execute(call, fakeExec)) as { summary?: { argv?: string[] } };

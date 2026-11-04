@@ -121,6 +121,9 @@ export const guardParamsFace = (snapshot: SurfaceSnapshot, facts: HarnessSurface
       out.push({ kind: "参数面", detail: `工具参数键 ${key} 无旗标映射（flagByParam 缺登记——参数面对账断链）` });
       continue;
     }
+    // 非透传哨兵（"n/a"）:工具面参数但不映射内核旗标(段内路由/装配信号——如 D181
+    // prompt_material_hint);映射完整性对账保留,仅跳过「旗标落声明面」单项。
+    if (flag === "n/a") continue;
     if (!options.has(flag) && !facts.paramFaceWaivers.has(key)) {
       out.push({ kind: "参数面", detail: `工具参数键 ${key} 映射旗标 ${flag} 不在内核声明面` });
     }
@@ -242,6 +245,7 @@ export const guardDocImplementation = (snapshot: SurfaceSnapshot, facts: Harness
     [...facts.paramFaceWaivers].map((key) => facts.flagByParam[key]).filter((flag) => flag !== undefined),
   );
   for (const flag of Object.values(facts.flagByParam)) {
+    if (flag === "n/a") continue; // 非透传哨兵——不是旗标,不入契约文档段
     if (waivedFlags.has(flag)) continue;
     if (!facts.docContractText.includes(flag)) {
       out.push({ kind: "文档实现", detail: `实现下传旗标 ${flag} 未记载于 pipelineFace 接口契约文档段（文档漂移）` });
