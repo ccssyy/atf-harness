@@ -3328,6 +3328,41 @@ let visualSummary: Record<string, unknown> | undefined;
       for (const [fieldId, zh] of fieldNamesOfFieldConfig(typeof args.field_config === "string" ? args.field_config.trim() : "")) {
         groupingFieldNames.set(fieldId, zh);
       }
+            // D174:label_qc 阻断先问用户处理方式(原生选项卡——WebUI 面此前面
+      // 只有回执指路文案,用户不被问;TUI 面有裁决循环而段路径没接)。
+      // 通道缺席/被跳过回退既有文案,不阻断回执。
+      let labelQcAction: Record<string, unknown> | undefined;
+      if (args.stage === "label_qc" && result.code === 2) {
+        const qcSvc = ctx.get("userQuestions") as FormAskService | undefined;
+        if (qcSvc !== undefined && typeof qcSvc.ask === "function") {
+          try {
+            const qcAnswers = await qcSvc.ask({
+              questions: [{
+                id: `label-qc-action-${args.run_id}`,
+                question: `检测到待裁决的标注冲突——怎么处理？（${args.run_id}）`,
+                header: "标注冲突",
+                detail: [
+                  "质检发现同项标注值冲突（同一字段两种标注值），需要逐项确认保留哪份。",
+                  "未裁决前不会生成训练数据，也不会猜测处理方式。",
+                  "开始处置＝逐项过一遍（每项二选一，可暂不处置单条）；暂不处置＝本轮停在这里，随时可回来继续。",
+                ].join("\n"),
+                options: [
+                  { label: "开始逐项处置", description: "逐项确认保留哪份标注值（质检报告带原文）" },
+                  { label: "暂不处置", description: "本轮停在裁决环节，不生成训练数据" },
+                ],
+                multiSelect: false,
+              }],
+              agent: (exec as { agent?: unknown }).agent,
+              signal: (exec as { signal?: unknown }).signal,
+            });
+            const qcFirst = qcAnswers.answers[0];
+            const qcPicked = [...(qcFirst?.selected ?? [])].join("") || (qcFirst?.custom ?? "").trim();
+            labelQcAction = { picked: qcPicked || "(no pick)", asked: true };
+          } catch {
+            labelQcAction = { asked: false, note: "问卡通道异常——按回执指路文案处理" };
+          }
+        }
+      }
       return asToolValue({
         stage: args.stage,
         run_id: args.run_id,
@@ -3520,6 +3555,7 @@ let visualSummary: Record<string, unknown> | undefined;
         ...(fieldConfigError !== null ? { field_config: fieldConfigError } : {}),
         // F14：label_qc 阻断 → 续跑指路（同 run 裁决后重跑，不得新建 run）
         ...labelQcResumeHintOf(args.stage, result.code),
+        ...(labelQcAction !== undefined ? { label_qc_action: labelQcAction } : {}),
       });
     },
   }) as unknown as { execute: (args: Record<string, unknown>, exec: unknown) => Promise<Record<string, unknown>> };
