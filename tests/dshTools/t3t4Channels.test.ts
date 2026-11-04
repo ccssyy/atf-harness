@@ -14,6 +14,13 @@ import { buildPipelineTool, resolveVisibleDevices, snapshotVisibleDevicesOf } fr
 import { TRAINING_PIN_CONSTANTS } from "../../src/core/workspace/smartDefaults.js";
 
 const MOCK = join(import.meta.dirname, "..", "fixtures", "mock_pipeline_params.mjs");
+/** D191 字段确认闸适配:setup 段前置落盘 FieldChoice/v1(用户已确认——合法通过态)。 */
+const withFieldChoice = (ws: string, runId: string): string => {
+  mkdirSync(join(ws, "runs", runId, "webui"), { recursive: true });
+  writeFileSync(join(ws, "runs", runId, "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }));
+  return ws;
+};
+
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
   const root = mkdtempSync(join(tmpdir(), "t3t4-"));
@@ -107,7 +114,7 @@ describe("T3 卡位通道（显式 > 确认快照 > 不下传）", () => {
 });
 
 describe("T4 像素对不变量（段参数通道：越界即拒，不静默纠正）", () => {
-  const base = (): Record<string, unknown> => ({ stage: "experiment_setup", run_id: "t4", workspace_path: tempRoot() });
+  const base = (): Record<string, unknown> => ({ stage: "experiment_setup", run_id: "t4", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "t4"); })() });
   it("上限不在两档闭集 → pixel_pair_max_not_in_closed_set（不 clamp）", async () => {
     const result = (await toolOf().execute(
       { ...base(), image_min_pixels: TRAINING_PIN_CONSTANTS.image_min_pixels, image_max_pixels: 1234567 },

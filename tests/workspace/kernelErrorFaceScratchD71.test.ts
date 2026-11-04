@@ -77,9 +77,8 @@ describe("D71 封口：替换单源（kernelErrorFace 纯函数）", () => {
     expect(kernelErrorEnvelopeCode('{"other": "x"}')).toBeNull();
   });
 
-  it("闭集纪律：D98 起五码，未扩未缩", () => {
-    expect([...KERNEL_ERROR_FACE_CODES].sort()).toEqual([
-      "gpu_capacity_insufficient",
+  it("闭集纪律：D98 起五码＋field_config_invalid（D19x 字段配置闸），共六码未缩", () => {
+    expect([...KERNEL_ERROR_FACE_CODES].sort()).toEqual(["field_config_invalid", "gpu_capacity_insufficient",
       "token_budget_inconsistent",
       "token_budget_missing",
       "token_gate_not_configured",

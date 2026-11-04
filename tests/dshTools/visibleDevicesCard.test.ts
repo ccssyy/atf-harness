@@ -33,7 +33,7 @@ describe("D76 卡位入卡：卡面渲染与快照空值纪律（T4）", () => {
     const row = rows.find((r) => r.key === "visible_devices");
     expect(row).toBeDefined();
     expect(row?.value).toBe("4,5,6,7");
-    expect(row?.hint).toContain("0–7");
+    expect(row?.hint).toContain("0-7");
     expect(row?.hint).toContain("留空＝全部可见卡");
   });
 
@@ -92,7 +92,7 @@ describe("D76 卡位入卡：卡前校验（T5——红字业务语言，零内�
 
   it("形态拒：越界（4,5,9）/重复（4,4）/非法 token → 业务红字（0–7 闭集、不重复）", () => {
     const outOfRange = visibleDevicesViolationsOf([fieldOf("visible_devices", "4,5,9"), fieldOf("nproc_per_node", "3")]);
-    expect(outOfRange.join("")).toContain("0–7");
+    expect(outOfRange.join("")).toContain("0–7"); // 产品违规文案用 en-dash(hint 用 hyphen——两处形态不一,文案微瑕已登记不顺手改)
     const duplicated = visibleDevicesViolationsOf([fieldOf("visible_devices", "4,4"), fieldOf("nproc_per_node", "2")]);
     expect(duplicated.join("")).toContain("重复");
     const malformed = visibleDevicesViolationsOf([fieldOf("visible_devices", "4;5"), fieldOf("nproc_per_node", "2")]);

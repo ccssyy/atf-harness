@@ -113,11 +113,6 @@ else
   [[ -f "$KEY_ENV" ]] || { echo "[instance-restart] FAIL: 密钥 env 不存在: $KEY_ENV（net-room source 链第一环）" >&2; exit 2; }
 fi
 
-# 单引号安全包装（内嵌引号/空白路径安全——'"'"' 标准转义）
-# #22 单版本源自检（批4 部署收敛）：重启前 fail-fast——三指针（kernelDir/段 CLI/bridge）
-# 不同源即拒绝启动（r2 教训：三指针三版本=删参与行为漂移温床 #8m/#21）。
-bash "${MAIN_REPO}/deploy/verify/check-kernel-single-source.sh" "${ENV_FILE}" \
-  || { echo "[instance-restart] FAIL: 单版本源自检未过（见上——先修指针再重启）" >&2; exit 2; }
 
 sq() { printf "'%s'" "${1//\'/\'\"\'\"\'}"; }
 
@@ -183,6 +178,13 @@ if [[ "$MODE" == "--env-cmd" || "$MODE" == "--env-dump" ]]; then
   printf '%s\n' "$NET_CMD"
   exit 0
 fi
+# #22 单版本源自检（批4 部署收敛）：重启前 fail-fast——三指针（kernelDir/段 CLI/bridge）
+# 不同源即拒绝启动（r2 教训：三指针三版本=删参与行为漂移温床 #8m/#21）。
+# 位置语义:在 --env-cmd/--env-dump 诊断早退之后——只读诊断通道不受启动闸拦截
+# (净化锚/预检用,零副作用);fail-fast 只管真实重启路径。
+bash "${MAIN_REPO}/deploy/verify/check-kernel-single-source.sh" "${ENV_FILE}" \
+  || { echo "[instance-restart] FAIL: 单版本源自检未过（见上——先修指针再重启）" >&2; exit 2; }
+
 
 # —— 重启（停旧 → 净室重放）——
 if [[ "$INSTANCE" == "uat" ]]; then
@@ -228,7 +230,7 @@ STOP_EOF
   else
     echo "[instance-restart] WARN: ${PORT} 尚未监听——稍后复核容器内 ${LOG}" >&2
   fi
-  # uat 便利：boot 完成打印公网带 token 完整 URL（token 每 boot 轮换——批㊶-OPSREPO T2 轮换口径）
+  # uat 便利：boot 完成打印公网带 token 完整 URL（token 口径＝env 固定,未声明退回随机——见头部 29 行现口径）
   if [[ -n "$TOK" ]]; then
     echo "[instance-restart] uat 公网访问: http://${UAT_PUBLIC_HOST}:${UAT_PUBLIC_PORT}/?token=${TOK}"
   else
