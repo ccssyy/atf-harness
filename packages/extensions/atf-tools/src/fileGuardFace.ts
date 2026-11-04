@@ -36,6 +36,19 @@ export const VENDOR_REDIRECT_TOOLS: ReadonlySet<string> = new Set(["read", "edit
 /** A7 对应名（改道指引引用）。 */
 const VENDOR_REDIRECT_TARGET: Readonly<Record<string, string>> = { read: "atf_read", edit: "atf_edit", write: "atf_write" };
 
+/** D182:裁决账本文件模式——治理面资产,文件通道不开放跨 run 考古。
+ *  改道与 vendor 单轨封闭同模式:访问走 atf_label_qc_inspect(run 参数化,
+ *  天然只在当前 run);沿用历史裁决走用户当前会话显式引用。 */
+const ADJUDICATION_FILE_RE = /label-adjudication[^/]*\.json(?:l)?$/;
+const ADJUDICATION_PATTERN_HINT = "label-adjudication";
+const adjudicationRedirectOf = (text: string): string | null =>
+  ADJUDICATION_FILE_RE.test(text) || text.includes(ADJUDICATION_PATTERN_HINT)
+    ? ("label_adjudication_ledger_redirect: 裁决账本是治理面资产——文件通道不开放跨 run 考古"
+      + "(裁决依据只认当前 run 账本与当前会话用户输入;D182 owner 语义主张)。"
+      + "当前 run 的待裁决清单用 atf_label_qc_inspect(run_id 定位)访问;"
+      + "要沿用历史裁决,请用户在对话里显式说「按上次」并由用户指明哪次(回执落 user_referenced_prior 留痕)")
+    : null;
+
 /** 路径守卫拒绝码（H 段 1.3 结构化拒绝面）。 */
 export const FILE_PATH_OUTSIDE_ALLOWLIST = "file_path_outside_allowlist";
 
@@ -119,6 +132,11 @@ export const registerPathGuard = (
       const kernelRoot = host.env?.ATF_DSH_KERNEL_DIR ?? host.env?.ATF_CLI_PATH;
       const skillsDir = typeof kernelRoot === "string" && kernelRoot !== "" ? join(resolve(kernelRoot), "skills") : null;
       for (const rawPath of pathsFromPreExecuteArgs(name, args)) {
+        // D182:裁决账本文件模式 deny+改道(glob/grep 的 pattern 含字样同样拦)
+        const adjudicationRedirect = adjudicationRedirectOf(rawPath);
+        if (adjudicationRedirect !== null) {
+          return { kind: "deny", reason: adjudicationRedirect };
+        }
         if (skillsDir !== null && rawPath.startsWith(skillsDir + "/")) continue;
         if (pathOutsideRoots(rawPath, guardRoots)) {
           return {
@@ -517,6 +535,15 @@ export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: stri
         render: (_args: unknown, value: unknown) => [{ type: "text" as const, text: JSON.stringify(value, null, 1) }],
       },
       async execute(args: Record<string, unknown>, exec: { callId?: string; agent?: unknown }) {
+        // D182:裁决账本文件模式先拦(读/写/bash 命令串四路)——治理面资产改道,
+        // 白名单判定之前(模式命中即拒,不消耗围栏/审批链)。
+        const adjudicationText = definition.name === "atf_bash"
+          ? String(args["command"] ?? "")
+          : [args["path"], args["file_path"]].filter((v) => typeof v === "string").join(" ");
+        const adjudicationRedirect = adjudicationRedirectOf(adjudicationText);
+        if (adjudicationRedirect !== null) {
+          return asToolValue({ ok: false, error: "label_adjudication_ledger_redirect", tool: definition.name, message: adjudicationRedirect });
+        }
         // #29 containment（ci-bl-1103-2 实锚）：会话绑定工作区在白名单根内时，
         // 本调用可读根收窄为该工作区——atf_bash/atf_read 跨兄弟工作区读写拒绝；
         // 无 cwd/不在白名单（CLI 单会话/测试）＝现状零变更。
