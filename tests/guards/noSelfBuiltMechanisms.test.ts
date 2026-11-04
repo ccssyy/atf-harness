@@ -72,15 +72,15 @@ describe("禁自建门禁（ADR-0019）", () => {
   it("手搓阈值样例报红且报错含修复指令", () => {
     const hits = checkText("some/new/file.ts", "const LIMIT = 24000;");
     expect(hits).toHaveLength(1);
-    expect(hits[0].message).toContain("ADR-0019 判定表 #2/#3/#4");
-    expect(hits[0].message).toContain("spill");
+    expect(hits[0]!.message).toContain("ADR-0019 判定表 #2/#3/#4");
+    expect(hits[0]!.message).toContain("spill");
   });
 
   it("手搓轮询样例报红且报错含修复指令", () => {
     const hits = checkText("some/new/file.ts", "const t = setInterval(tick, 30000);");
     expect(hits).toHaveLength(1);
-    expect(hits[0].message).toContain("ADR-0019 判定表 #5");
-    expect(hits[0].message).toContain("jobs");
+    expect(hits[0]!.message).toContain("ADR-0019 判定表 #5");
+    expect(hits[0]!.message).toContain("jobs");
   });
 
   it("白名单存量件不报红", () => {

@@ -777,9 +777,9 @@ export function renderTaskCardText(value: TrainingStatusValue): string | null {
   ].join("\n");
 }
 
-/** atf_run_training（action: start/status）——danger 必确认。 */
-export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg: TrainingToolsConfig) =>
-  defineTool({
+/** atf_run_training（action: start/status）——danger 必确认。B3 起带终态回流（D5）。 */
+export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg: TrainingToolsConfig): ReturnType<typeof defineTool> =>
+  instrumentTrainOutcome(defineTool({
     name: "atf_run_training",
     description:
       "训练本机重跑（降格定界——atf_launch_execute 为唯一编排执行点，本工具仅限「账本已放行 config 的本机重跑」）：action=start 校验 train.sh（DRY_RUN 过）→prelaunch 报告在场检查（prepare SKILL.md:84 确认制——缺失拒绝）→base_model.path 本地复核（防线③——家族名/HF id 一律拒）→端口预检→danger 卡放行→tmux 会话常驻执行＋stdout tail 进料监控（loss-series）；action=status 查询运行状态并返回八段任务卡（chat 流可见的 checklist——训练推进期请周期调用 status，把最新任务卡呈现给用户）。异常即停即报，不静默重试。" +
@@ -1151,7 +1151,7 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
           : `训练已启动（${feedNote}）——status 查询进度与 ckpt；完成回报 ckpt 路径`,
       });
     },
-  });
+  }));
 
 /** 批㊶R前置 防线③：start 面 iteration-config base_model.path 本地复核（确定性三态）。
  *  合法＝本地目录在位（config.json 缺席如实降级为 config_json_missing 拒绝——HF 本地模型
@@ -2223,10 +2223,96 @@ export const evalUserSummaryOf = (receipt: Record<string, unknown>, ok: boolean,
   }
 };
 
+// ── B3(D5 修复)：atf_run_training 终态回流——训练完成/失败主动通知,不再等用户询问 ──
+
+/** 训练工具名（失败计数键与通知来源标签同源）。 */
+const TRAIN_TOOL_NAME = "atf_run_training";
+
+/** 终态通知已投标记（会话×run 粒度——重复 status 轮询只投一次终态）。 */
+const trainTerminalNotified = new Set<string>();
+
+/** 训练回执 → 用户面三句话（业务语言；终态=start 后进程已结束的 status 形态）。 */
+const trainUserSummaryOf = (receipt: Record<string, unknown>, ok: boolean, action?: string): UserSummary => {
+  const runId = typeof receipt["run_id"] === "string" ? receipt["run_id"] : "";
+  if (!ok) {
+    return {
+      conclusion: `训练没跑成（${runId || "本 run"}）`,
+      stage: "停在启动前或执行中，前面的产物没有被改",
+      next: "失败原因已写在回执里（可直接查看）；连续两次没成功会升级给你处理",
+    };
+  }
+  if (action === "start") {
+    return {
+      conclusion: `训练已启动（${runId || "本 run"}）——进程常驻推进,不再需要你盯着`,
+      stage: "训练执行中;用 status 可随时查进度(八段任务卡)",
+      next: "训练完成或失败时会自动通知你;也可以随时问进度",
+    };
+  }
+  return {
+    conclusion: `训练状态已查询（${runId || "本 run"}）`,
+    stage: "八段任务卡已随回执呈现",
+    next: "继续等终态通知,或周期调 status 查看最新任务卡",
+  };
+};
+
+/** D5 终态判定（纯函数·可测）：status 回执「进程不活且段已推进过（done/failed 在场）」
+ * 即训练结束形态——返回用户面三句话；运行中/未启动/查询失败返回 null（不投）。 */
+export const trainTerminalNoticeOf = (value: TrainingStatusValue): UserSummary | null => {
+  const progressed = Array.isArray(value.segments)
+    && value.segments.some((seg) => seg.status === "done" || seg.status === "failed");
+  if (!progressed || value.running === true) return null;
+  return {
+    conclusion: `训练进程已结束（${value.run_id ?? "本 run"}）——结果已就绪,无需再等`,
+    stage: "训练段产物已落盘(ckpt/loss 随回执可见)",
+    next: "下一步可进评估环节(atf_evaluate);若这是意外中断,查看回执里的失败原因",
+  };
+};
+
+/** atf_run_training 外层包装：成败记数＋user_summary＋**终态回流**（D5 核心——
+ * status 返回「进程已结束(running=false)且段已推进过(有 done/failed 段)」时,
+ * 首次直投会话通知:训练完成/中断那一刻用户与 agent 即刻可见,不再靠用户询问驱动）。 */
+const instrumentTrainOutcome = <T>(tool: T): T => {
+  const inner = (tool as { execute: (args: unknown, exec: unknown) => Promise<unknown> }).execute.bind(tool);
+  (tool as unknown as { execute: (args: unknown, exec: unknown) => Promise<unknown> }).execute = async (args: unknown, exec: unknown) => {
+    const receipt = await inner(args, exec);
+    if (receipt === null || typeof receipt !== "object" || Array.isArray(receipt)) return receipt;
+    const payload = receipt as Record<string, unknown>;
+    const rawAction = (args as { action?: unknown } | null | undefined)?.action;
+    const action = typeof rawAction === "string" ? rawAction : undefined;
+    const ok = !receiptIsFailure(payload);
+    const decorated = decorateOutcome(
+      payload, sessionIdOf(exec) ?? null, TRAIN_TOOL_NAME, ok, trainUserSummaryOf(payload, ok, action),
+    );
+    const escalated = decorated.escalate_to_user === true;
+    if (escalated) {
+      decorated.user_summary = { ...decorated.user_summary, next: "连续两次没成功——需要你介入：失败原因已写在回执里；也可以直接说要改哪一项" };
+    }
+    // 终态判定与首投（D5）：纯函数判定（可测），Set 会话×run 去重只投一次
+    let terminalNotice: UserSummary | null = null;
+    if (action === "status" && ok) {
+      const statusValue = payload as unknown as TrainingStatusValue;
+      if (trainTerminalNoticeOf(statusValue) !== null) {
+        const runKey = `${sessionIdOf(exec) ?? "anon"}:${statusValue.run_id ?? ""}`;
+        if (!trainTerminalNotified.has(runKey)) {
+          trainTerminalNotified.add(runKey);
+          terminalNotice = trainTerminalNoticeOf(statusValue);
+        }
+      }
+    }
+    // L 层投影：失败升级/start 成功/终态首投 三态投递；常规 status 轮询不投（免噪声）
+    const notice = terminalNotice ?? (escalated ? decorated.user_summary : (action !== "status" ? decorated.user_summary : null));
+    if (notice) {
+      projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, notice);
+    }
+    return decorated;
+  };
+  return tool;
+};
+
 /** atf_evaluate 外层包装：所有返回出口统一记成败＋挂 user_summary；升级时直投会话通知。 */
 const instrumentEvalOutcome = <T extends { execute: (args: unknown, exec: unknown) => Promise<unknown> }>(tool: T): T => {
   const inner = tool.execute.bind(tool);
-  (tool as { execute: (args: unknown, exec: unknown) => Promise<unknown> }).execute = async (args: unknown, exec: unknown) => {
+  (tool as unknown as { execute: (args: unknown, exec: unknown) => Promise<unknown> }).execute = async (args: unknown, exec: unknown) => {
     const receipt = await inner(args, exec);
     if (receipt === null || typeof receipt !== "object" || Array.isArray(receipt)) return receipt;
     const payload = receipt as Record<string, unknown>;
