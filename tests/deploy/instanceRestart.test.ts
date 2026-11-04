@@ -119,8 +119,8 @@ describe.skipIf(!existsSync(uatDeployScript))("批㊶-OPSREPO——uat-deploy.sh
 
   it("T1 执行位置锚：SSH 专用 key＋容器目标＋容器内密钥 env；dev 容器 3080/3081 零触碰（红线）", () => {
     const src = readFileSync(uatDeployScript, "utf8");
-    expect(src).toContain('UAT_SSH_KEY="/root/.ssh/id_ed25519_a800_uat"');
-    expect(src).toContain('UAT_SSH_TARGET="root@172.18.0.20"'); // OPSREPO 改名后变量名
+    expect(src).toContain('SSH_KEY="/root/.ssh/id_ed25519_a800_uat"');
+    expect(src).toContain("resolve_uat_ssh_target"); // D148:SSH 目标动态解析(网段探测/env 声明),不再硬编码 IP
     expect(src).toContain('UAT_REMOTE_KEY_ENV="/root/.atf-harness/.env"');
     expect(src).toContain('UAT_REPO="/data/sam/ATF-Harness-uat"');
     expect(src.match(/--port\s+3080/)).toBeNull();
@@ -155,7 +155,7 @@ describe.skipIf(!existsSync(uatDeployScript))("批㊶-OPSREPO——uat-deploy.sh
   it("T2.1 轮换口径锚：无固定 token 绑定点登记（DSH_WEB_LAUNCH_TOKEN 作废）＋boot 完成打印完整公网 URL", () => {
     const src = readFileSync(uatDeployScript, "utf8");
     expect(src).toContain("DSH_WEB_LAUNCH_TOKEN");
-    expect(src).toContain("不再每 boot 轮换"); // 现口径:env 固定 token+未声明退回随机(29 行)
+    expect(src).toContain("未声明则退回每 boot 随机"); // 10-28 实测口径:env 声明即固定,未声明随机兜底(头注释权威段)
     expect(src).toContain("/?token=${NEW_TOKEN}");
     expect(src).toContain("30 天签名 cookie");
   });
