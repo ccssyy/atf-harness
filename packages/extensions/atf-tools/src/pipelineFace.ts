@@ -797,6 +797,37 @@ export const resolveGroupingFace = async (input: {
   const parsed = parseGroupingProposal(input.proposalRaw);
   if (!parsed.ok) return { ok: false, errors: parsed.errors };
   const proposal = parsed.proposal;
+  // D185(owner 2026-11-04 1104-5 实锤):字段覆盖完整性出卡前校验——候选字段并集
+  // 必须=用户在字段清单卡确认的全集(field-choice per-doc 账本);漏/多都拒并点名,
+  // 缺陷候选不上卡(此前只有内核全量校验在用户选完后拦——用户白选一次、字段集
+  // 变了再重出卡,即「先漏一个字段再重新分」循环的机制根源)。
+  if (input.runDir !== undefined) {
+    const choice = readFieldChoice(input.runDir, input.docType);
+    if (choice !== null && !choice.all_fields && choice.confirmed_fields.length > 0) {
+      const expected = new Set(choice.confirmed_fields);
+      const offered = new Set<string>();
+      for (const candidate of proposal.candidates) {
+        for (const group of candidate.groups) for (const f of group.fields) offered.add(f);
+      }
+      const missing = [...expected].filter((f) => !offered.has(f));
+      const extra = [...offered].filter((f) => !expected.has(f));
+      if (missing.length > 0 || extra.length > 0) {
+        return {
+          source: "proposal",
+          decision: "none",
+          candidate_name: null,
+          groups: [],
+          evidence: { registration_inputs: registrationInputsPathOf(input.runDir) },
+          payload: null,
+          note: "分组候选与字段清单不一致,不出卡让用户选:"
+            + (missing.length > 0 ? `漏了 ${missing.join("、")}` : "")
+            + (missing.length > 0 && extra.length > 0 ? ";" : "")
+            + (extra.length > 0 ? `多出清单外字段 ${extra.join("、")}` : "")
+            + `——按用户确认的字段全集(共 ${String(expected.size)} 个)重新设计候选再来;用户不该在缺字段的方案上做选择`,
+        };
+      }
+    }
+  }
   const pick = (index: number): GroupingProposalCandidate => proposal.candidates[index] ?? proposal.candidates[0]!;
   const evidence: Record<string, unknown> = {
     candidate_count: proposal.candidates.length,
