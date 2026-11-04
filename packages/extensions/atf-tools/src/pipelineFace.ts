@@ -2624,6 +2624,9 @@ export const buildPipelineTool = (
           ctx,
           exec,
           runId: args.run_id,
+          // D175:per-doc 接线——experiment_setup 逐类调用时卡带类名(header 分组·<doc>)
+          // 与 per-doc 账本;内核已强制该段带 doc_type(多类裸调拦截),这里透传即可。
+          docType: typeof args.doc_type === "string" ? args.doc_type.trim() : undefined,
           fieldConfigPath,
           proposalRaw: args.grouping_proposal,
           runDir,
