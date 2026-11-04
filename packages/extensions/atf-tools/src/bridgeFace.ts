@@ -4,7 +4,7 @@
  * toAtfAgentTool（src/agent/atfAgentTools.ts：参数校验 → 桥接 request → canonical
  * 校验 → 结构化 rejected 回填），本层只做 DSH defineTool 包装＋DSH 审批 seam 前置。
  */
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AtfBridgeConnection } from "../../../../src/bridge/index.js";
 import {
@@ -393,6 +393,102 @@ export const buildBridgeTools = (
           render: renderAsJsonText,
         },
         async execute(args: Record<string, unknown>, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+/** D186 训练启动确认卡：完全权限档下替代 DSH 审批卡（owner 2026-11-04 裁定——
+ * 不弹审批卡，停下来给用户汇报完整实验准备与参数设置报告，确认后再启动）。
+ * 报告数据全部只读自 run 树（variants_report/iteration-config/train.sh/prelaunch 报告）。 */
+const launchConfirmCardOf = async (
+  ctx: { get(service: string): unknown },
+  exec: { agent?: unknown; signal?: unknown },
+  args: Record<string, unknown>,
+): Promise<{ ok: boolean; note: string }> => {
+  const svc = ctx.get("userQuestions") as { ask?: (payload: unknown) => Promise<{ answers: Array<{ selected?: string[]; custom?: string }> }> } | undefined;
+  if (svc === undefined || typeof svc.ask !== "function") {
+    return { ok: true, note: "确认卡通道缺席——按既有审批轨处理" };
+  }
+  const runId = typeof args["run_id"] === "string" ? args["run_id"] : "";
+  const workspacePath = typeof args["workspace_path"] === "string" ? args["workspace_path"] : "";
+  const lines: string[] = [];
+  let paramTable = "";
+  let scriptLink = "";
+  if (runId !== "" && workspacePath !== "") {
+    const resolved = resolvePipelineRunDir(workspacePath, runId);
+    if (!("error" in resolved)) {
+      const runDir = resolved.runDir;
+      // ① 数据集组成（每类 variants_report 计数 → markdown 表）
+      lines.push("### 数据集组成");
+      const variantsRoot = join(runDir, "data", "variants");
+      if (existsSync(variantsRoot)) {
+        for (const doc of readdirSync(variantsRoot)) {
+          const reportPath = join(variantsRoot, doc, "variants_report.json");
+          if (!existsSync(reportPath)) continue;
+          try {
+            const report = JSON.parse(readFileSync(reportPath, "utf8")) as {
+              base_rows?: number; produced?: number; kind_counts?: Record<string, number>;
+            };
+            const kinds = Object.entries(report.kind_counts ?? {})
+              .map(([kind, n]) => `${kind} ${String(n)}`).join(" / ");
+            lines.push(`- **${doc}**：基线 ${String(report.base_rows ?? "?")} 行，构造 ${String(report.produced ?? "?")} 行（${kinds}）`);
+          } catch { /* 报告不可读按缺省呈现 */ }
+        }
+      } else {
+        lines.push("-（构造产物目录缺席）");
+      }
+      // ② 参数设置报告（iteration-config 关键训练参数）
+      const configCandidates = [
+        join(runDir, "config", "iteration-config", "iteration-config.json"),
+        join(runDir, "prep", "iteration-config", "iteration-config.json"),
+      ];
+      const configPath = configCandidates.find((candidate) => existsSync(candidate));
+      if (configPath !== undefined) {
+        try {
+          const config = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
+          const training = (config["training"] ?? {}) as Record<string, unknown>;
+          const keys = ["learning_rate", "num_train_epochs", "per_device_train_batch_size",
+            "global_batch_size", "optim", "lora_rank", "lora_alpha", "cutoff_len", "warmup_ratio"];
+          const rows = keys
+            .filter((key) => training[key] !== undefined || config[key] !== undefined)
+            .map((key) => `| ${key} | ${String(training[key] ?? config[key] ?? "")} |`);
+          if (rows.length > 0) paramTable = "\n### 训练参数\n\n| 参数 | 值 |\n|---|---|\n" + rows.join("\n");
+        } catch { /* 配置不可读按缺省呈现 */ }
+      }
+      // ③ 训练脚本链接（train.sh——vendor 本地文件链接原生可点击）
+      const trainSh = join(runDir, "launch", "train.sh");
+      if (existsSync(trainSh)) {
+        scriptLink = `\n\n[查看训练脚本 train.sh](${trainSh})`;
+        const prelaunch = join(runDir, "launch", "prelaunch-report.md");
+        if (existsSync(prelaunch)) {
+          scriptLink += ` ｜ [完整启动前报告](${prelaunch})`;
+        }
+      }
+    }
+  }
+  try {
+    const answers = await svc.ask({
+      questions: [{
+        id: `launch-confirm-${runId}`,
+        question: `训练启动确认 — ${runId}`,
+        header: "训练启动",
+        detail: [lines.join("\n"), paramTable,
+          "\n\n确认后将写入放行记录并启动训练；暂停则不启动，可先改参数。",
+          scriptLink].filter((part) => part !== "").join(""),
+        options: [
+          { label: "确认启动", description: "已查看上述实验准备与参数，写入放行记录并启动" },
+          { label: "暂停，我要改参数", description: "不启动；告诉我你想改什么，改完再确认" },
+        ],
+        multiSelect: false,
+      }],
+      agent: exec.agent,
+      signal: exec.signal,
+    });
+    const first = answers.answers[0];
+    const picked = [...(first?.selected ?? [])].join("") || (first?.custom ?? "");
+    const confirmed = picked.includes("确认启动");
+    return { ok: confirmed, note: confirmed ? "用户已确认启动（确认卡留痕）" : "用户暂停启动（可在对话里说想改什么参数）" };
+  } catch {
+    return { ok: true, note: "确认卡通道异常——按既有审批轨处理" };
+  }
+};
+
           // 审批前置（指令要求 2）：requiresApprovalFor 语义为唯一判定源；E8b·H3 D152——
           // 卡面三行模板＋业务动作名（零内部工具名：工具名经 requestApproval 的 toolName
           // 进审批服务记录＝日志审计面，卡面 reason 不出现）。
@@ -410,6 +506,15 @@ export const buildBridgeTools = (
             console.warn(`[approval] ${definition.name} 链内推进免审放行(训练预设+完全权限档,写 run 域内可逆)`);
           }
           if (requiresApprovalFor(definition, args, approvalContext)) {
+            // D186(owner 2026-11-04 裁定):完全权限档下训练启动不弹审批卡——改停等
+            // 「训练启动确认卡」(完整实验准备+参数报告+脚本链接),确认即用户决定
+            // (审计=卡面回执+放行账本);暂停不启动。guarded 档审批卡照旧。
+            if (definition.name === "atf_launch_execute" && approvalContext.tier === "full-access") {
+              const launchConfirm = await launchConfirmCardOf(ctx, exec, args);
+              if (!launchConfirm.ok) {
+                return asToolValue({ error: "launch_paused_by_user", tool: definition.name, note: launchConfirm.note });
+              }
+            } else {
             const verdict = await requestApproval(ctx, exec, definition.name,
               buildApprovalReason({
                 action: BRIDGE_ACTION_LABELS[definition.name] ?? "执行训练流程操作",
@@ -418,6 +523,7 @@ export const buildBridgeTools = (
                 reversible: "按操作语义（写盘产物可人工清理）",
               }));
             if (!verdict.ok) return approvalDeniedResult(definition.name, verdict.outcome);
+            }
           }
           // 执行径分派（复用面与手搓一致）：工作区治理面（scratch_exec/skill_read）走
           // WORKSPACE_TOOL_HANDLERS 本地执行；桥接契约面走 toAtfAgentTool 桥接执行径。

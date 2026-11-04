@@ -768,18 +768,25 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
           "② 显式路径：launch_sh 传 launch/launch.sh（run 树内相对）或 atf_scratch_exec 返回的 launch_ready.launch_sh",
       });
     }
-    const defaultLaunchSh = join(host.runDir, "launch", "launch.sh");
-    if (!existsSync(defaultLaunchSh)) {
+    // D186/D178 姊妹修复:内核 generate_train_launch 产 train.sh——缺省优先 train.sh,
+    // 旧 run 的 launch.sh 回退兼容(历史产物不迁移)。
+    const defaultTrainSh = join(host.runDir, "launch", "train.sh");
+    const defaultLegacySh = join(host.runDir, "launch", "launch.sh");
+    if (existsSync(defaultTrainSh)) {
+      launchShRel = "launch/train.sh";
+      launchTargetForm = "run_default";
+    } else if (existsSync(defaultLegacySh)) {
+      launchShRel = "launch/launch.sh";
+      launchTargetForm = "run_default";
+    } else {
       return rejected("launch_target_unresolved", {
         message:
-          `未给出 launch_sh，run 树内也没有默认启动件（${defaultLaunchSh} 不存在）——` +
-          "启动件须先由训练准备段产出；请先跑训练准备/启动编排生成 <run>/launch/launch.sh，或显式传 launch_sh",
+          `未给出 launch_sh，run 树内也没有默认启动件（${defaultTrainSh} 不存在）——` +
+          "启动件须先由训练准备段产出；请先跑训练准备/启动编排生成 <run>/launch/train.sh，或显式传 launch_sh",
         run_dir: host.runDir,
-        expected: defaultLaunchSh,
+        expected: defaultTrainSh,
       });
     }
-    launchShRel = "launch/launch.sh";
-    launchTargetForm = "run_default";
   }
 
   // ② config 定位：省略时按 run 树 canonical→legacy 探测（canonical 优先与内核 RunLayout
