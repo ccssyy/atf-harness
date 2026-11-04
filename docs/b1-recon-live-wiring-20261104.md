@@ -97,3 +97,28 @@ T10 真机会话（d168v2-replay，本机 zstd 全量解压 994 行/2.7MB）实�
 - **纪律依据**：调参无真实事故支撑，违反「围栏唯一合法来源是真实事故」（元规则 2）——测试期观测样本不可作为产品参数依据。
 - **B1 结论修正**：#2-#4 收编状态＝装配在场＋**原生默认保持**；水位调参从 B1 剩余动作移除。触发观察改为被动：真实长会话自然出现 `compaction/prune` 事件或溢出事故时，按事故证据定靶（届时区分水位问题/单结果管控问题/呈现面问题，不再预设）。
 - **D7 归因再修正**：318K<1M 未达水位＝设计行为；真实使用中同类直出若构成事故，属单结果管控或呈现面问题，非水位问题。
+
+---
+
+## B2 执行记录（2026-11-05）
+
+### 工作项 1：放行留账（已落地）——存量缺陷登记
+
+- **缺陷实锚**：`makeApprovalExemptAnswerer` 放行路径原只 console.warn，**零账本写入**（ADR-0019 决定 1 边界缺口；approvalLedger.ts 原只服务 training-release 面）。
+- **修复**：放行前 append `~/.atf/approval-ledger/exemptions.jsonl`（append-only：ts/tool/basis/preset）；**写账失败＝不放行**（fail-closed 转 next 人工面板）。bash/write 高频放行逐条留痕＝设计意图（批㊶-E-H 342 次弹卡教训的审计面）。
+- **测试**：tests/extensions/approvalExemptLedger.test.ts 3 锚（落账字段/逐条留痕/未命中不落账）绿。
+
+### 工作项 2：drift 对账门禁（已上线）
+
+- check-drift.py 升级：键级双向 diff＋YAML1.1 布尔键归一化（裸 off/on）＋行列表按 id 配对＋标量列表集合语义＋差异定位＋两条修复指令；退出码 0/1/2。
+- **数据归零**（11-04 事故正确收尾——补源而非绕过生成器）：chainTools 4→7 回写**产品模板**（D170v2 步3 属产品级）；zai provider/默认模型 zai-high/ui-theme 重建进 **dev.overlay**（实例差异）；dev 实例键级对账归零实锚。
+- 重启接线：instance-restart.sh 停旧前 drift 前置（dev 自动推导路径；uat env 注入；DRIFT_OVERRIDE=1 显式逃生留痕）。
+- 演练留证：偷加治理点 atf_scratch_exec 进 chainTools → 红＋精确定位到 `approvalPolicy.chainTools 枚举集不等`＋修复指令 → 还原绿。CI：tests/deploy/checkDrift.test.ts 3 锚（归零/漂移红+指令/布尔键陷阱不误报）绿。
+
+### 工作项 3：chainTools 与 D170v2 原则 4 差距评估——零改动闭合
+
+live 现状（approvalExempt.ts 实锚）已达成语义分档实质：①bash/write 类按**类**豁免（非逐名）；②atf_ 治理点永不全免且**禁前缀匹配**（防越权放大）；③D90 不可逆护栏（atf_bash 破坏性命令档位再高也逐次确认）；④训练链=「预设声明 chainTools ∧ danger-full-access」双轴齐备才免审（owner 2026-10-26 裁定已实现）。与「按操作语义（读/写/不可逆）分派」原则一致——**评估结论：符合，零改动**；chainTools 清单形态保留（配置声明面，产品文本中立性纪律）。
+
+### 过程事故登记
+
+- B2 patch 首次误写主仓 checkout（批3 在途分支污染）——发现后立即 git checkout 还原主仓、改动移入 worktree；教训：跨仓区操作先 `git -C <区> status` 确认目标分支。

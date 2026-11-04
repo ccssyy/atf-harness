@@ -179,6 +179,26 @@ if [[ "$MODE" == "--env-cmd" || "$MODE" == "--env-dump" ]]; then
   exit 0
 fi
 
+# —— B2 漂移门禁（2026-11-05 接线；2026-11-04 overlay 漂移事故的拦截点）——
+# 停旧之前先对账：实例装配产物 vs 模板+overlay 键级归一化 diff,漂移即拒绝重启。
+# 逃生口:DRIFT_OVERRIDE=1 显式放行(运维连续性优先,日志留痕——禁止静默跳过)。
+# 缺省按实例推导(dev 本地形态;uat 装配产物在远端容器,保持 env 显式注入)。
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+if [[ -z "${DEPLOYED_PATCH:-}" && "$INSTANCE" == "dev" ]]; then
+  DEPLOYED_PATCH="/data/atf/instances/dev/atf-home/profiles/web/cordis.patch.yml"
+fi
+OVERLAY_FILE="${OVERLAY_FILE:-$REPO_ROOT/deploy/instances/${INSTANCE}.overlay.yml}"
+if [[ -n "${DEPLOYED_PATCH:-}" && -f "$OVERLAY_FILE" && -f "$DEPLOYED_PATCH" ]]; then
+  if python3 "$(dirname "$0")/../profiles/web/check-drift.py" --overlay "$OVERLAY_FILE" --deployed "$DEPLOYED_PATCH"; then
+    echo "[instance-restart] 漂移对账归零"
+  elif [[ "${DRIFT_OVERRIDE:-0}" == "1" ]]; then
+    echo "[instance-restart] ⚠ 漂移未归零但 DRIFT_OVERRIDE=1 显式放行(留痕)——重启后请立即归零" >&2
+  else
+    echo "[instance-restart] FAIL: 装配漂移未归零,拒绝重启(归零或 DRIFT_OVERRIDE=1 后重试)" >&2
+    exit 2
+  fi
+fi
+
 # —— 重启（停旧 → 净室重放）——
 if [[ "$INSTANCE" == "uat" ]]; then
   # 批㊶-OPSREPO：uat 分支＝atf-uat 容器内停旧（pid 文件组杀＋cmdline 兜底＋端口释放等待）
