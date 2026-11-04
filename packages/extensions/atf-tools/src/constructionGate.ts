@@ -58,8 +58,8 @@ const GROUPING_NO = "不要（一图一条）";
 /** 增强倍数档位（值→文案单源；内核只认数字，不认文案）。 */
 const AUGMENT_OPTIONS: ReadonlyArray<{ label: string; value: number }> = [
   { label: "不增强", value: 0 },
-  { label: "2 倍", value: 2 },
-  { label: "3 倍", value: 3 },
+  { label: "每图 2 条", value: 2 },
+  { label: "每图 3 条", value: 3 },
 ];
 
 /** 自由输入解析（仅 custom 通道：用户手打「3」「三倍」「不增强」这类文字）。
@@ -288,16 +288,18 @@ export const decideConstructionParams = async (input: {
   if (needAugment) {
     questions.push({
       id: `construction-augment-${input.runId}`,
-      question: "随机子集增强沿用建议倍数（2 倍）还是要改？",
-      header: "增强",
+      // D187:语义如实——mode5_random 是「每图生成条数」不是倍数(内核整数语义);
+      // 同图不重样+组内组合空间有限时实际可少于每图条数(构造报告如实披露)。
+      question: "随机子集增强：每图生成几条随机字段组合样本？（默认按建议值 2 条）",
+      header: "随机子集增强",
       detail: [
-        "默认（推荐）：按建议值 2 倍生成——原始样本之外再生成约等量的随机子集样本。",
-        "倍数相对原始条数：2 倍＝总量约翻一倍；也可选不增强。",
-        "选了就会真的生成，不是占位；默认值同样会生成，这里只是给你改的机会。",
+        "默认（推荐）：每图 2 条——在原始样本之外，每页再生成 2 条随机字段组合样本（按分组结构抽取）。",
+        "语义是「每图条数」不是总量倍数：组内组合空间有限时实际会少于该数（同图不重复组合），构造报告会如实披露实产条数与原因。",
+        "也可选不增强（只保留原始样本与必做的重点字段增强）。",
       ].join("\n"),
       options: AUGMENT_OPTIONS.map((option) => ({
         label: option.label,
-        description: option.value === 0 ? "只保留原始样本" : `总量约 ${String(option.value)} 倍`,
+        description: option.value === 0 ? "只保留原始样本" : `每页生成约 ${String(option.value)} 条组合样本`,
       })),
       multiSelect: false,
     });

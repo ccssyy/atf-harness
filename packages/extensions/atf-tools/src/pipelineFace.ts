@@ -1812,6 +1812,32 @@ export const fieldConfigPrecheckOf = (
  * @param code - 内核退出码（2＝blocked）。
  * @returns 追加进回执的键；不命中返回空对象。
  */
+/** D187:mode5 期望 vs 实产披露——每图条数语义+不重样组合空间如实说,观感不再是「倍率没生效」。 */
+const mode5DisclosureOf = (countsRaw: Record<string, unknown> | null | undefined): string => {
+  const kindCounts = (countsRaw?.["kind_counts"] ?? {}) as Record<string, number>;
+  const exposure = (countsRaw?.["effective_exposure"] ?? {}) as Record<string, unknown>;
+  const perImage = exposure["mode5_random"];
+  const produced = kindCounts["mode5_random"];
+  if (typeof perImage !== "number" || produced === undefined) return "";
+  if (produced === 0) return "\n（mode5 未启用或未生成）";
+  return `\n（mode5＝每图 ${String(perImage)} 条随机组合，同图不重样：实产 ${String(produced)} 条，组合空间有限时少于期望，非倍率失效）`;
+};
+
+/** D184/D188:回执 results[0].raw_response 取键（段摘要结构单源）。 */
+const firstResultKeyOf = (receipt: Record<string, unknown>, key: string): unknown => {
+  const results = Array.isArray(receipt["results"]) ? (receipt["results"] as Array<Record<string, unknown>>) : [];
+  const raw = results[0]?.["raw_response"];
+  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>)[key] : undefined;
+};
+
+/** D184:质检检查类码 → 人话（卡面零内部码纪律）。 */
+const labelQcClassNameOf = (code: string): string =>
+  code === "q1_same_box_same_value_same_field" ? "同框同值同字段（重复标注）"
+  : code === "q2_same_box_same_value_diff_field" ? "同框同值不同字段（一字段两用）"
+  : code === "q3_value_box_shape_mismatch" ? "值与框形状不匹配"
+  : code === "q4_box_out_of_bounds" ? "标注框越界"
+  : code;
+
 export const labelQcResumeHintOf = (stage: string, code: number | null): Record<string, unknown> => {
   if (stage !== "label_qc" || code !== 2) return {};
   return {
@@ -3328,41 +3354,6 @@ let visualSummary: Record<string, unknown> | undefined;
       for (const [fieldId, zh] of fieldNamesOfFieldConfig(typeof args.field_config === "string" ? args.field_config.trim() : "")) {
         groupingFieldNames.set(fieldId, zh);
       }
-            // D174:label_qc 阻断先问用户处理方式(原生选项卡——WebUI 面此前面
-      // 只有回执指路文案,用户不被问;TUI 面有裁决循环而段路径没接)。
-      // 通道缺席/被跳过回退既有文案,不阻断回执。
-      let labelQcAction: Record<string, unknown> | undefined;
-      if (args.stage === "label_qc" && result.code === 2) {
-        const qcSvc = ctx.get("userQuestions") as FormAskService | undefined;
-        if (qcSvc !== undefined && typeof qcSvc.ask === "function") {
-          try {
-            const qcAnswers = await qcSvc.ask({
-              questions: [{
-                id: `label-qc-action-${args.run_id}`,
-                question: `检测到待裁决的标注冲突——怎么处理？（${args.run_id}）`,
-                header: "标注冲突",
-                detail: [
-                  "质检发现同项标注值冲突（同一字段两种标注值），需要逐项确认保留哪份。",
-                  "未裁决前不会生成训练数据，也不会猜测处理方式。",
-                  "开始处置＝逐项过一遍（每项二选一，可暂不处置单条）；暂不处置＝本轮停在这里，随时可回来继续。",
-                ].join("\n"),
-                options: [
-                  { label: "开始逐项处置", description: "逐项确认保留哪份标注值（质检报告带原文）" },
-                  { label: "暂不处置", description: "本轮停在裁决环节，不生成训练数据" },
-                ],
-                multiSelect: false,
-              }],
-              agent: (exec as { agent?: unknown }).agent,
-              signal: (exec as { signal?: unknown }).signal,
-            });
-            const qcFirst = qcAnswers.answers[0];
-            const qcPicked = [...(qcFirst?.selected ?? [])].join("") || (qcFirst?.custom ?? "").trim();
-            labelQcAction = { picked: qcPicked || "(no pick)", asked: true };
-          } catch {
-            labelQcAction = { asked: false, note: "问卡通道异常——按回执指路文案处理" };
-          }
-        }
-      }
       return asToolValue({
         stage: args.stage,
         run_id: args.run_id,
@@ -3555,7 +3546,6 @@ let visualSummary: Record<string, unknown> | undefined;
         ...(fieldConfigError !== null ? { field_config: fieldConfigError } : {}),
         // F14：label_qc 阻断 → 续跑指路（同 run 裁决后重跑，不得新建 run）
         ...labelQcResumeHintOf(args.stage, result.code),
-        ...(labelQcAction !== undefined ? { label_qc_action: labelQcAction } : {}),
       });
     },
   }) as unknown as { execute: (args: Record<string, unknown>, exec: unknown) => Promise<Record<string, unknown>> };
@@ -3567,6 +3557,54 @@ let visualSummary: Record<string, unknown> | undefined;
     execute: async (args: Record<string, unknown>, exec: unknown) => {
       const receipt = await runStage(args, exec);
       const ok = !receiptIsFailure(receipt);
+      // D184/D188:报告呈现进会话流(markdown+文件链接,不依赖 agent 转述)——
+      // label_qc 质检报告(必做流程不问句,呈现+建议即推进);
+      // training_prep 构造报告(行数组成+JSONL 样例+报告链接)。
+      try {
+        const stage = String(args["stage"] ?? "");
+        const wsRoot = typeof args["workspace_path"] === "string" ? String(args["workspace_path"]) : "";
+        const execCwd = (exec as { agent?: { session?: { header?: { cwd?: unknown } } } })?.agent?.session?.header?.cwd;
+        const effectiveWs = wsRoot !== "" ? wsRoot : (typeof execCwd === "string" ? execCwd : "");
+        if (stage === "label_qc" && effectiveWs !== "") {
+          const counts = firstResultKeyOf(receipt, "counts") as Record<string, unknown> | undefined;
+          if (counts !== undefined) {
+            const total = Number(counts["total_items"] ?? 0);
+            const pending = Number(counts["pending"] ?? 0);
+            const scanned = Number(counts["samples_scanned"] ?? 0);
+            const byClass = (counts["by_check_class"] ?? {}) as Record<string, number>;
+            const classLines = Object.entries(byClass).filter(([, n]) => n > 0)
+              .map(([cls, n]) => `- ${labelQcClassNameOf(cls)}：${String(n)} 项`).join("\n");
+            projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, {
+              conclusion: `标签质检报告：已全量扫描 ${String(scanned)} 页，` + (total > 0
+                ? `发现 ${String(total)} 项标注问题（已裁决 ${String(Number(counts["resolved"] ?? 0))} 项${pending > 0 ? `、待处理 ${String(pending)} 项` : ""}）\n${classLines}`
+                : "未发现标注冲突"),
+              stage: "label_qc",
+              next: pending > 0 ? "处理是必做流程：以上按质检报告建议逐项处理（保留建议值，依据随报告附页）；不同意某项直接在对话里说" : "质检通过，继续后续流程",
+            });
+          }
+        }
+        if (stage === "training_prep" && ok) {
+          const report = firstResultKeyOf(receipt, "construction_report") as Record<string, unknown> | undefined;
+          if (report !== undefined) {
+            const countsRaw = report["variants_counts"] as Record<string, unknown> | null | undefined;
+            const kindCounts = (countsRaw?.["kind_counts"] ?? {}) as Record<string, number>;
+            const docTag = String(args["doc_type"] ?? "");
+            const kindLines = Object.entries(kindCounts).map(([kind, n]) => `- ${kind}：${String(n)} 行`).join("\n");
+            const analysisPath = typeof report["analysis_report"] === "string" ? report["analysis_report"] : "";
+            const jsonlPath = typeof report["train_jsonl"] === "string" ? report["train_jsonl"] : "";
+            let sampleLine = "";
+            if (jsonlPath !== "") {
+              try { sampleLine = readFileSync(jsonlPath, "utf8").split("\n")[0] ?? ""; } catch { /* 样例缺席不阻断 */ }
+            }
+            projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, {
+              conclusion: `数据构造报告${docTag !== "" ? `（${docTag} 类）` : ""}：共 ${String(report["train_rows"] ?? "?")} 行训练样本\n${kindLines}` + mode5DisclosureOf(countsRaw)
+                + (sampleLine !== "" ? `\nJSONL 样例（首行截断）：\n\`${sampleLine.slice(0, 300)}\`` : ""),
+              stage: "training_prep",
+              next: analysisPath !== "" ? `[查看完整构造分析报告](${analysisPath})` : "构造完成，进入启动前检查",
+            });
+          }
+        }
+      } catch { /* 报告呈现失败不阻断段回执 */ }
       const decorated = decorateOutcome(
         receipt,
         sessionIdOfExec(exec) ?? null,
