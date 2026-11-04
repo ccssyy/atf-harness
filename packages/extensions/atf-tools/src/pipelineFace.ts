@@ -2407,6 +2407,10 @@ export const buildPipelineTool = (
         | {
             groupingConfirm: boolean;
             mode5Random: number | undefined;
+            // D177:targeted 倍率/序列长度上限(构造参数卡三问)与智能默认呈现值
+            targetedMultiplier?: number;
+            cutoffLen?: number;
+            targetedSuggested?: number;
             targetedAdvice:
               | { carry: string[]; min: number | null; max: number | null; reason: string; evidence: string[]; evidenceStatus: string }
               | undefined;
@@ -2512,6 +2516,12 @@ export const buildPipelineTool = (
               // 决策闸不再重复问「要不要分组」，只补真缺的增强倍数。
               groupingConfirm: args.grouping_proposal !== undefined ? true : constructionParams.groupingConfirm,
               mode5Random: constructionParams.mode5Random,
+              // D177:targeted 智能默认从 agent 传的 targeted_plan.multiplier 提取(缺=无信号呈现 1 倍);
+              // cutoff_len agent 显式传参时不问(该值已是确认态)
+              targetedSuggested: typeof (args.targeted_plan as Record<string, unknown> | undefined)?.["multiplier"] === "number"
+                ? Number((args.targeted_plan as Record<string, unknown>)["multiplier"])
+                : undefined,
+              cutoffLen: typeof args.cutoff_len === "number" ? args.cutoff_len : undefined,
             },
           });
           constructionParams = {
@@ -2520,6 +2530,9 @@ export const buildPipelineTool = (
             groupingConfirm:
               args.grouping_proposal !== undefined ? constructionParams.groupingConfirm : decided.groupingConfirm,
             mode5Random: decided.mode5Random,
+            targetedMultiplier: decided.targetedMultiplier,
+            cutoffLen: decided.cutoffLen,
+            targetedSuggested: decided.targetedSuggested,
           };
           constructionDecisionNote = decided.note;
           constructionDecidedBy = decided.decided_by;
@@ -2953,6 +2966,8 @@ let visualSummary: Record<string, unknown> | undefined;
       if (args.stage === "experiment_setup" && constructionParams !== undefined) {
         if (constructionParams.groupingConfirm) argv.push("--grouping-confirm");
         if (constructionParams.mode5Random !== undefined) argv.push("--mode5-random", String(constructionParams.mode5Random));
+        // D177:targeted 倍率独立通道(与 mode5 分用不同倍率,owner 2026-11-04 裁定)
+        if (constructionParams.targetedMultiplier !== undefined) argv.push("--targeted-multiplier", String(constructionParams.targetedMultiplier));
         if (constructionAdvicePaths.mode5AdviceStats !== undefined) argv.push("--mode5-advice-stats", constructionAdvicePaths.mode5AdviceStats);
         if (constructionAdvicePaths.targetedAdvice !== undefined) argv.push("--targeted-advice", constructionAdvicePaths.targetedAdvice);
         if (constructionAdvicePaths.targetedPlan !== undefined) argv.push("--targeted-plan", constructionAdvicePaths.targetedPlan);
@@ -2968,7 +2983,9 @@ let visualSummary: Record<string, unknown> | undefined;
         if (tokenParams.values.max_total_tokens !== undefined) argv.push("--max-total-tokens", String(tokenParams.values.max_total_tokens));
         // C（2026-10-26）：训练截断与推理窗口同门下传（内核 b17 argparse 新增）——
         // 缺项不追加（内核侧门内 null，预算落盘缺项才回退基线）。
-        if (tokenParams.values.cutoff_len !== undefined) argv.push("--cutoff-len", String(tokenParams.values.cutoff_len));
+        // D177:构造参数卡确认的序列长度上限优先;无卡确认回落五参确认快照
+        const effectiveCutoffLen = constructionParams?.cutoffLen ?? tokenParams.values.cutoff_len;
+        if (effectiveCutoffLen !== undefined) argv.push("--cutoff-len", String(effectiveCutoffLen));
         if (tokenParams.values.max_model_len !== undefined) argv.push("--max-model-len", String(tokenParams.values.max_model_len));
         // 问题 4（owner 2026-10-28）：像素下限固定 65536——**在拼参前拦**，不给它走到内核
         // 变成一句 pixel_pair_min_not_pinned_without_reason（那句话只说「与基线不一致」，

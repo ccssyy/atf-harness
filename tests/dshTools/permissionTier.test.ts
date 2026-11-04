@@ -134,15 +134,18 @@ describe("D90 审批面：全自动档全免，破坏性命令通道除外", () 
 
 describe("D90 提问面：完全权限档必须还能问人", () => {
   it("构造参数有缺口才触发；齐备时零打扰、零提问", async () => {
-    expect(constructionGapOf({ groupingConfirm: true, mode5Random: 2 })).toBe(false);
-    expect(constructionGapOf({ groupingConfirm: true, mode5Random: undefined })).toBe(true);
-    expect(constructionGapOf({ groupingConfirm: false, mode5Random: 0 })).toBe(true);
+    // D177:齐备口径=mode5+targeted+cutoff 三值齐(分用倍率,不共用)
+    expect(constructionGapOf({ groupingConfirm: true, mode5Random: 2, targetedMultiplier: 1.5, cutoffLen: 9000 })).toBe(false);
+    expect(constructionGapOf({ groupingConfirm: true, mode5Random: undefined, targetedMultiplier: 1.5, cutoffLen: 9000 })).toBe(true);
+    expect(constructionGapOf({ groupingConfirm: true, mode5Random: 2, targetedMultiplier: undefined, cutoffLen: 9000 })).toBe(true);
+    expect(constructionGapOf({ groupingConfirm: true, mode5Random: 2, targetedMultiplier: 1.5, cutoffLen: undefined })).toBe(true);
+    expect(constructionGapOf({ groupingConfirm: false, mode5Random: 0, targetedMultiplier: 1.5, cutoffLen: 9000 })).toBe(true);
     const asked: AskCall[] = [];
     const decision = await decideConstructionParams({
       ctx: fakeCtx({ sandbox: "danger-full-access", preset: ATF_TRAINING_PRESET }, { asked, ask: async () => ({ answers: [] }) }) as never,
       exec: exec as never,
       runId: "run-d90",
-      state: { groupingConfirm: true, mode5Random: 3 },
+      state: { groupingConfirm: true, mode5Random: 3, targetedMultiplier: 1.5, cutoffLen: 9000 },
     });
     expect(decision).toMatchObject({ asked: false, decided_by: "user", groupingConfirm: true, mode5Random: 3 });
     expect(asked).toHaveLength(0);
@@ -161,7 +164,7 @@ describe("D90 提问面：完全权限档必须还能问人", () => {
     expect(decision.note).toContain("审批卡");
   });
 
-  it("完全权限档：缺口当场出问题卡（两问一屏），答案落 runtime/webui 并标 decided_by: user", async () => {
+  it("完全权限档：缺口当场出问题卡（D177 三问一屏：mode5/targeted 分用倍率+cutoff），答案落 runtime/webui 并标 decided_by: user", async () => {
     const runDir = tempRoot("d90-run-");
     const asked: AskCall[] = [];
     const decision = await decideConstructionParams({
@@ -173,6 +176,8 @@ describe("D90 提问面：完全权限档必须还能问人", () => {
             answers: [
               { id: "construction-grouping-run-d90", selected: ["要（按分组生成）"] },
               { id: "construction-augment-run-d90", selected: ["2 倍"] },
+              { id: "construction-targeted-run-d90", selected: ["智能推导（1.5 倍）"] },
+              { id: "construction-cutoff-run-d90", selected: ["9000（基线默认）"] },
             ],
           }),
         },
@@ -180,14 +185,14 @@ describe("D90 提问面：完全权限档必须还能问人", () => {
       exec: exec as never,
       runId: "run-d90",
       runDir,
-      state: { groupingConfirm: false, mode5Random: undefined },
+      state: { groupingConfirm: false, mode5Random: undefined, targetedSuggested: 1.5 },
     });
     expect(asked).toHaveLength(1);
-    expect(asked[0]!.questions).toHaveLength(2);
-    expect(decision).toMatchObject({ asked: true, decided_by: "user", groupingConfirm: true, mode5Random: 2 });
+    expect(asked[0]!.questions).toHaveLength(3);
+    expect(decision).toMatchObject({ asked: true, decided_by: "user", groupingConfirm: true, mode5Random: 2, targetedMultiplier: 1.5, cutoffLen: 9000 });
     const ledger = join(runDir, "runtime", "webui", "construction-choice.json");
     expect(existsSync(ledger)).toBe(true);
-    expect(JSON.parse(readFileSync(ledger, "utf8"))).toMatchObject({ decided_by: "user", grouping_confirm: true, mode5_random: 2 });
+    expect(JSON.parse(readFileSync(ledger, "utf8"))).toMatchObject({ decided_by: "user", grouping_confirm: true, mode5_random: 2, targeted_multiplier: 1.5, cutoff_len: 9000 });
   });
 
   it("问题卡通道不可用：如实标为 agent（不假装用户确认过）", async () => {

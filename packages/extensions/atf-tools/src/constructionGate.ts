@@ -32,6 +32,12 @@ import type { ExecSessionFace, ServiceCtxFace } from "./trainingPreset.js";
 export interface ConstructionParamsState {
   readonly groupingConfirm: boolean;
   readonly mode5Random: number | undefined;
+  /** D177:targeted 重点字段增强倍率(与 mode5 分用不同倍率,owner 2026-11-04 裁定)。 */
+  readonly targetedMultiplier?: number;
+  /** D177:构造样本序列长度上限(构造开始前与倍率同卡确认;agent 显式传参时不问)。 */
+  readonly cutoffLen?: number;
+  /** D177:卡面呈现的智能默认(targeted 倍率推导值,缺信号时 undefined 呈现说明)。 */
+  readonly targetedSuggested?: number;
 }
 
 /** 决策闸结论：解析后的构造参数＋谁定的＋为什么。 */
@@ -77,23 +83,53 @@ export const augmentFromText = (text: string): number | undefined => {
   return undefined;
 };
 
+/** targeted 倍率解析:selected 命中智能默认 label→推导值;数字/档位文字→值;未答 undefined。 */
+const targetedFromText = (text: string, suggestedLabel: string, suggested: number | undefined): number | undefined => {
+  const trimmed = text.trim();
+  if (trimmed === "") return undefined;
+  if (trimmed === suggestedLabel) return suggested ?? 1.0;
+  if (trimmed.includes("不重点扩")) return 1.0;
+  const numMatch = trimmed.match(/(\d+(?:\.\d+)?)/);
+  if (numMatch !== null) {
+    const num = Number(numMatch[1]);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return undefined;
+};
+
+/** cutoff_len 解析:数字(选项 label 前缀或 custom);未答 undefined。 */
+const cutoffFromText = (text: string): number | undefined => {
+  const trimmed = text.trim();
+  if (trimmed === "") return undefined;
+  const numMatch = trimmed.match(/(\d{3,6})/);
+  if (numMatch !== null) {
+    const num = Number(numMatch[1]);
+    if (Number.isFinite(num) && num >= 1024 && num <= 65536) return num;
+  }
+  return undefined;
+};
+
 /** 分组的自由输入解析：只认明确的正/负，其余 undefined（保持现值）。 */
 /** 读既有构造选择落账（ci-bl-1103 多类去重）：decided_by=user 的记录才复用
  *  （全自动档 agent 自决落账不是用户确认,不作为复用凭据）。 */
 export const readConstructionChoice = (
   runDir: string | null | undefined,
-): { decided_by: string; grouping_confirm: boolean; mode5_random: number | null; path: string } | null => {
+): { decided_by: string; grouping_confirm: boolean; mode5_random: number | null; targeted_multiplier: number | null; cutoff_len: number | null; path: string } | null => {
   if (runDir === null || runDir === undefined || runDir === "") return null;
   const path = join(runDir, "runtime", "webui", "construction-choice.json");
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as {
       decided_by?: unknown; grouping_confirm?: unknown; mode5_random?: unknown;
+      targeted_multiplier?: unknown; cutoff_len?: unknown;
     };
     if (typeof parsed.decided_by !== "string") return null;
     return {
       decided_by: parsed.decided_by,
       grouping_confirm: parsed.grouping_confirm === true,
       mode5_random: typeof parsed.mode5_random === "number" ? parsed.mode5_random : null,
+      // D177:旧落账无新键返回 null(复用侧回落 undefined,不编造)
+      targeted_multiplier: typeof parsed.targeted_multiplier === "number" ? parsed.targeted_multiplier : null,
+      cutoff_len: typeof parsed.cutoff_len === "number" ? parsed.cutoff_len : null,
       path,
     };
   } catch {
@@ -152,7 +188,10 @@ const groupingCardLeadOf = (runDir: string): string => {
 };
 
 export const constructionGapOf = (state: ConstructionParamsState): boolean =>
-  state.groupingConfirm !== true || state.mode5Random === undefined;
+  // D177:mode5/targeted 倍率与 cutoff_len 任一未确认即缺口(分用倍率,不共用);
+  // groupingConfirm 判定保留(旧语义:分组未确认同样是缺口)
+  state.groupingConfirm !== true || state.mode5Random === undefined
+  || state.targetedMultiplier === undefined || state.cutoffLen === undefined;
 
 /**
  * 决策闸主体。
@@ -196,6 +235,8 @@ export const decideConstructionParams = async (input: {
       decisions: [
         { key: "grouping_confirm", value: input.state.groupingConfirm, decided_by: "agent" },
         { key: "mode5_random", value: input.state.mode5Random ?? null, decided_by: "agent" },
+        { key: "targeted_multiplier", value: input.state.targetedMultiplier ?? null, decided_by: "agent" },
+        { key: "cutoff_len", value: input.state.cutoffLen ?? null, decided_by: "agent" },
       ],
       note: "全自动档位：无人可问，按当前构造参数继续；需要复核时以此文件为准",
     });
@@ -212,12 +253,16 @@ export const decideConstructionParams = async (input: {
   // 口径与 prompt 卡/字段卡同族:用户确认过一次=本 run 有效)。
   const prior = readConstructionChoice(input.runDir);
   if (prior !== null && prior.decided_by === "user") {
+    // D177:旧落账无新键时回落 undefined(不编造)——首跑补问一次,落账后多类复用
     return {
       groupingConfirm: prior.grouping_confirm === true,
       mode5Random: prior.mode5_random ?? undefined,
+      targetedMultiplier: prior.targeted_multiplier ?? undefined,
+      cutoffLen: prior.cutoff_len ?? undefined,
+      targetedSuggested: input.state.targetedSuggested,
       asked: false,
       decided_by: "user",
-      note: "复用本 run 卡上已确认的构造参数（多类构造不重复弹卡）",
+      note: "复用本 run 卡上已确认的构造参数（多类构造不重复弹卡；新参数键缺失时补问一次）",
       ledgerPath: prior.path,
     };
   }
@@ -236,6 +281,9 @@ export const decideConstructionParams = async (input: {
   // 「是否分组/一图一条」(原 GROUPING 问题撤除;用户要一图一条可后续在构造
   // 参数显式声明)。卡面只剩真缺的增强倍数一问。
   const needAugment = input.state.mode5Random === undefined;
+  // D177:mode5(随机子集增强条数)与 targeted(重点字段倍率)分用不同值;cutoff_len 同卡确认
+  const needTargeted = input.state.targetedMultiplier === undefined;
+  const needCutoff = input.state.cutoffLen === undefined;
   const questions: ChoiceAskQuestion[] = [];
   if (needAugment) {
     questions.push({
@@ -254,6 +302,46 @@ export const decideConstructionParams = async (input: {
       multiSelect: false,
     });
   }
+  if (needTargeted) {
+    const suggested = input.state.targetedSuggested;
+    questions.push({
+      id: `construction-targeted-${input.runId}`,
+      question: suggested !== undefined
+        ? `重点字段增强倍率按智能推导 ${String(suggested)} 倍（按字段难易度）还是要改？`
+        : "重点字段增强倍率用多少？（本轮无字段风险信号，默认 1 倍=不重点扩）",
+      header: "重点字段倍率",
+      detail: [
+        "默认（推荐）：按字段难易度智能推导——低频/复杂版式/多值字段倍率更高，让重点组合获得更多样本。",
+        "与「随机子集增强」是两个独立倍率，互不挤占（你在这里改的只影响重点字段组合）。",
+        "选了就会真的生成；默认值同样生效，这里只是给你改的机会。",
+      ].join("\n"),
+      options: [
+        { label: suggested !== undefined ? `智能推导（${String(suggested)} 倍）` : "1 倍（不重点扩）", description: "按字段难易度推导的值" },
+        { label: "1.5 倍", description: "轻重点" },
+        { label: "2 倍", description: "中重点" },
+        { label: "3 倍", description: "强重点" },
+      ],
+      multiSelect: false,
+    });
+  }
+  if (needCutoff) {
+    questions.push({
+      id: `construction-cutoff-${input.runId}`,
+      question: "构造样本的序列长度上限按基线 9000 还是要改？",
+      header: "序列长度上限",
+      detail: [
+        "默认（推荐）：9000——超出上限的样本会被截断，影响长版式单据的完整抽取。",
+        "素材多长版式（提单/信用证混排页）时可上调；下调可省显存与训练时长。",
+        "确认后写入训练预算（token_budget），训练与评估同口径生效。",
+      ].join("\n"),
+      options: [
+        { label: "9000（基线默认）", description: "适配多数单据版式" },
+        { label: "12288", description: "多长版式素材" },
+        { label: "8192", description: "省显存短训" },
+      ],
+      multiSelect: false,
+    });
+  }
   try {
     const answers = await svc.ask({
       questions,
@@ -265,6 +353,14 @@ export const decideConstructionParams = async (input: {
     const augmentText = [...(augmentAnswer?.selected ?? [])].join("") || (augmentAnswer?.custom ?? "");
     const groupingConfirm = true;
     const mode5Random = augmentFromText(augmentText) ?? input.state.mode5Random;
+    // D177:targeted/cutoff 解析(selected label 或 custom;未答保持现值,不猜)
+    const targetedAnswer = needTargeted ? byId.get(`construction-targeted-${input.runId}`) : undefined;
+    const targetedText = [...(targetedAnswer?.selected ?? [])].join("") || (targetedAnswer?.custom ?? "");
+    const suggestedLabel = input.state.targetedSuggested !== undefined ? `智能推导（${String(input.state.targetedSuggested)} 倍）` : "1 倍（不重点扩）";
+    const targetedMultiplier = targetedFromText(targetedText, suggestedLabel, input.state.targetedSuggested) ?? input.state.targetedMultiplier;
+    const cutoffAnswer = needCutoff ? byId.get(`construction-cutoff-${input.runId}`) : undefined;
+    const cutoffText = [...(cutoffAnswer?.selected ?? [])].join("") || (cutoffAnswer?.custom ?? "");
+    const cutoffLen = cutoffFromText(cutoffText) ?? input.state.cutoffLen;
     const ledgerPath = writeLedger(input.runDir, "construction-choice.json", {
       schema: "ConstructionChoice/v1",
       run_id: input.runId,
@@ -272,18 +368,23 @@ export const decideConstructionParams = async (input: {
       decided_by: "user",
       grouping_confirm: groupingConfirm,
       mode5_random: mode5Random ?? null,
+      targeted_multiplier: targetedMultiplier ?? null,
+      cutoff_len: cutoffLen ?? null,
       // 视觉通道恒 enabled（SKILL v1.16 owner 裁定:内置默认必开、无 disable、
       // 不弹卡）——键保留读侧兼容,值不再是决策面。
       visual_channel: "enabled",
-      answers: { grouping: "(产品默认:按分组生成,不问)", augment: augmentText },
+      answers: { grouping: "(产品默认:按分组生成,不问)", augment: augmentText, targeted: targetedText, cutoff: cutoffText },
     });
     const augmentLine = mode5Random === undefined || mode5Random === 0 ? "不增强" : `${String(mode5Random)} 倍`;
     return {
       groupingConfirm,
       mode5Random,
+      targetedMultiplier,
+      cutoffLen,
+      targetedSuggested: input.state.targetedSuggested,
       asked: true,
       decided_by: "user",
-      note: `分组＝按分组生成（产品默认,必分组不提问）；增强＝${augmentLine}`,
+      note: `分组＝按分组生成（产品默认,必分组不提问）；随机子集增强＝${augmentLine}；重点字段倍率＝${targetedMultiplier === undefined ? "未确认" : `${String(targetedMultiplier)} 倍`}；序列长度上限＝${cutoffLen === undefined ? "未确认" : String(cutoffLen)}`,
       ledgerPath,
     };
   } catch (cause) {
