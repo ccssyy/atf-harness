@@ -243,6 +243,15 @@
     "required": null
    },
    {
+    "option": "--targeted-multiplier",
+    "dest": "targeted_multiplier",
+    "action": "store",
+    "type": "<expr:float>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--mode5-random",
     "dest": "mode5_random",
     "action": "store",
@@ -1076,6 +1085,15 @@
     "dest": "grouping_confirm",
     "action": "store_true",
     "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--targeted-multiplier",
+    "dest": "targeted_multiplier",
+    "action": "store",
+    "type": "<expr:float>",
     "choices": null,
     "default": null,
     "required": null
