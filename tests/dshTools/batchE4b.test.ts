@@ -54,6 +54,13 @@ afterEach(() => {
   for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
+/** D191 字段确认闸适配:setup 段前置落盘 FieldChoice/v1(用户已确认——合法通过态)。 */
+const withFieldChoice = (ws: string, runId: string): string => {
+  mkdirSync(join(ws, "runs", runId, "webui"), { recursive: true });
+  writeFileSync(join(ws, "runs", runId, "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }));
+  return ws;
+};
+
 const fakeExec = { agent: undefined, callId: "e4b-call", signal: undefined };
 const approvalCtx = (record: string[]): { get(service: string): unknown } => ({
   get: (service: string) =>
@@ -185,7 +192,7 @@ describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）"
   it("其它段收到 training_overrides → 忽略记 note（argv 零追加，段外传参不报错）", async () => {
     const ws = tempRoot("e4b-ws-");
     const result = await toolOf([]).execute(
-      { stage: "experiment_setup", run_id: "e4b-ignore", workspace_path: ws, training_overrides: { learning_rate: "2e-4" } },
+      { stage: "experiment_setup", run_id: "e4b-ignore", workspace_path: (() => { return withFieldChoice(ws, "e4b-ignore"); })(), training_overrides: { learning_rate: "2e-4" } },
       fakeExec,
     );
     expect((result as Record<string, unknown>)["ok"]).toBe(true);
@@ -338,11 +345,11 @@ const mockKernelDir = (): string => {
 const prelaunchToolOf = (kernel: string): DshToolLike =>
   buildPrelaunchReportTool({ get: () => undefined }, { kernelDir: kernel, timeoutMs: 30_000 }) as unknown as DshToolLike;
 
-/** 种 run 树（canonical 形态）：launch/launch.sh 在场＋config（live/legacy 形态可选）。 */
+/** 种 run 树（canonical 形态）：launch/train.sh(D178 现行产物)在场＋config（live/legacy 形态可选）。 */
 const seedRunTree = (ws: string, runId: string, configForm: "live" | "legacy", paramSources?: Record<string, unknown>): string => {
   const runDir = join(ws, "workspace", "runs", runId);
   mkdirSync(join(runDir, "launch"), { recursive: true });
-  writeFileSync(join(runDir, "launch", "launch.sh"), "#!/bin/bash\nexit 0\n");
+  writeFileSync(join(runDir, "launch", "train.sh"), "#!/bin/bash\nexit 0\n");
   const config = { schema_version: "IterationConfig/v1", training: { learning_rate: "1e-4", per_device_train_batch_size: 2 }, ...(paramSources !== undefined ? { param_sources: paramSources } : {}) };
   if (configForm === "live") {
     // live＝目录形态 prep/iteration-config/iteration-config.json（内核 RunLayout 实写位；
@@ -389,14 +396,14 @@ describe("E4b-H3 atf_prelaunch_report（只读生成/回读——材料不是闸
     expect(String(result["stderr_tail"])).toContain("param_source_invalid");
   });
 
-  it("快败面：run 不存在拒（只读不代建）／无 IterationConfig 拒并指路 training_prep／无 launch.sh 拒并指路 generate_train_launch", async () => {
+  it("快败面：run 不存在拒（只读不代建）／无 IterationConfig 拒并指路 training_prep／无 train.sh(D178 现行产物)拒并指路 training_prep", async () => {
     const tool = prelaunchToolOf(mockKernelDir());
     const absent = (await tool.execute({ run_id: "no-such", workspace_path: tempRoot("e4b-ws-") }, fakeExec)) as Record<string, unknown>;
     expect(absent["ok"]).toBe(false); // run 不存在：legacy 公式探测不在场即拒（不 mkdir）
     const ws2 = tempRoot("e4b-ws-");
     const runDir2 = join(ws2, "workspace", "runs", "e4b-noconfig");
     mkdirSync(join(runDir2, "launch"), { recursive: true });
-    writeFileSync(join(runDir2, "launch", "launch.sh"), "#!/bin/bash\n");
+    writeFileSync(join(runDir2, "launch", "train.sh"), "#!/bin/bash\n");
     const noConfig = (await tool.execute({ run_id: "e4b-noconfig", workspace_path: ws2 }, fakeExec)) as Record<string, unknown>;
     expect(noConfig["error"]).toBe("iteration_config_missing");
     expect(String(noConfig["note"])).toContain("training_prep");
@@ -406,7 +413,7 @@ describe("E4b-H3 atf_prelaunch_report（只读生成/回读——材料不是闸
     writeFileSync(join(runDir3, "prep", "iteration-config.json"), JSON.stringify({ training: {} }));
     const noLaunch = (await tool.execute({ run_id: "e4b-nolaunch", workspace_path: ws3 }, fakeExec)) as Record<string, unknown>;
     expect(noLaunch["error"]).toBe("launch_artifacts_missing");
-    expect(String(noLaunch["note"])).toContain("generate_train_launch");
+    expect(String(noLaunch["note"])).toContain("train.sh"); // D178:产物名入指路;生成归属 training_prep 段
   });
 
   it("免审批锚：全程零 approval 服务消费（ctx.get('approval') 返回 undefined 也不拒）＋幂等重跑", async () => {

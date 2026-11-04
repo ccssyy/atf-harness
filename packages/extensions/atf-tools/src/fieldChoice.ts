@@ -22,6 +22,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { join } from "node:path";
 import { resolveRunSubdir } from "../../../../src/core/workspace/runLayout.js";
 
@@ -30,6 +31,11 @@ export const FIELD_CHOICE_SCHEMA = "FieldChoice/v1";
 
 /** 账本文件名（与 config-snapshot / pending-confirm / grouping-choice 同目录）。 */
 export const FIELD_CHOICE_FILE = "field-choice.json";
+
+/** D191:per-doc 账本文件名(多类 run 逐类确认——与 grouping-choice.<doc>.json 同构;
+ *  docType 缺省回落 run 级单份,存量 run 零迁移)。 */
+export const fieldChoiceFileOf = (docType?: string): string =>
+  docType !== undefined && docType !== "" ? `field-choice.${docType}.json` : FIELD_CHOICE_FILE;
 
 /** 内核产出的字段清单文件名（`<run> 下 data/field-labels.json`）。 */
 export const FIELD_LABELS_FILE = "field-labels.json";
@@ -116,8 +122,8 @@ export const readFieldLabels = (runDir: string): FieldLabels | null => {
 };
 
 /** 读确认记录（缺席/坏行 → null）。 */
-export const readFieldChoice = (runDir: string): FieldChoiceRecord | null => {
-  const path = fieldChoicePathOf(runDir);
+export const readFieldChoice = (runDir: string, docType?: string): FieldChoiceRecord | null => {
+  const path = join(resolveRunSubdir(runDir, "webui"), fieldChoiceFileOf(docType));
   if (!existsSync(path)) return null;
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<FieldChoiceRecord> | null;
@@ -139,10 +145,14 @@ export const readFieldChoice = (runDir: string): FieldChoiceRecord | null => {
 export const writeFieldChoice = (
   runDir: string,
   record: Omit<FieldChoiceRecord, "schema_version">,
+  docType?: string,
 ): string => {
+  // F1e(ci-bl-1103-3):落账不得 mkdir run 树——run 目录不在场即跳过(防幽灵 run
+  // 目录);空串=未写入,调用方按无落账处理(实验门回"必问"链)。
+  if (!existsSync(runDir)) return "";
   const dir = resolveRunSubdir(runDir, "webui");
   mkdirSync(dir, { recursive: true });
-  const path = join(dir, FIELD_CHOICE_FILE);
+  const path = join(dir, fieldChoiceFileOf(docType));
   writeFileSync(path, `${JSON.stringify({ schema_version: FIELD_CHOICE_SCHEMA, ...record }, null, 1)}\n`, "utf8");
   return path;
 };

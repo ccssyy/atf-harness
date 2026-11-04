@@ -169,9 +169,21 @@ describe("批㊶-H 派生规则（配置声明面逐项镜像——守护测试�
   });
 
   it("声明缺席不猜：无 HOME／配置不可解析 → 仅 env 名镜像入集；train_env=system 不入派生", () => {
+    // 隔离:产品在 env 无 HOME 时回落 process.env.HOME 真实注册表(A800 有 awb 记录泄入)——
+    // 用例语义「无 HOME」须连兜底链一起隔离(临时清/恢复,勿污染同文件其他用例)
+    // 指空沙箱而非 delete:vendor 家解析链在 HOME 缺失时走 getpwuid(root=/root)仍读真注册表
+    const homeBak = process.env.HOME;
+    const emptyHome = mkdtempSync(join(tmpdir(), "fg-nohome-"));
+    process.env.HOME = emptyHome;
+    try {
     expect(deriveFileToolRoots({ env: {}, readFile: () => null, readDir: () => [] }).roots).toEqual([]);
     expect(rootsFromEnvProfileText('{"train":{"train_env":"system","eval_env":"/v"}}')).toEqual(["/v"]);
     expect(rootsFromEnvProfileText("不是 json")).toEqual([]);
+    } finally {
+      rmSync(emptyHome, { recursive: true, force: true });
+      if (homeBak !== undefined) process.env.HOME = homeBak;
+      else delete process.env.HOME;
+    }
   });
 });
 

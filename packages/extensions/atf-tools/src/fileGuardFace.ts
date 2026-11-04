@@ -36,6 +36,19 @@ export const VENDOR_REDIRECT_TOOLS: ReadonlySet<string> = new Set(["read", "edit
 /** A7 对应名（改道指引引用）。 */
 const VENDOR_REDIRECT_TARGET: Readonly<Record<string, string>> = { read: "atf_read", edit: "atf_edit", write: "atf_write" };
 
+/** D182:裁决账本文件模式——治理面资产,文件通道不开放跨 run 考古。
+ *  改道与 vendor 单轨封闭同模式:访问走 atf_label_qc_inspect(run 参数化,
+ *  天然只在当前 run);沿用历史裁决走用户当前会话显式引用。 */
+const ADJUDICATION_FILE_RE = /label-adjudication[^/]*\.json(?:l)?$/;
+const ADJUDICATION_PATTERN_HINT = "label-adjudication";
+const adjudicationRedirectOf = (text: string): string | null =>
+  ADJUDICATION_FILE_RE.test(text) || text.includes(ADJUDICATION_PATTERN_HINT)
+    ? ("label_adjudication_ledger_redirect: 裁决账本是治理面资产——文件通道不开放跨 run 考古"
+      + "(裁决依据只认当前 run 账本与当前会话用户输入;D182 owner 语义主张)。"
+      + "当前 run 的待裁决清单用 atf_label_qc_inspect(run_id 定位)访问;"
+      + "要沿用历史裁决,请用户在对话里显式说「按上次」并由用户指明哪次(回执落 user_referenced_prior 留痕)")
+    : null;
+
 /** 路径守卫拒绝码（H 段 1.3 结构化拒绝面）。 */
 export const FILE_PATH_OUTSIDE_ALLOWLIST = "file_path_outside_allowlist";
 
@@ -69,6 +82,20 @@ export const absolutePathTokensFromCommand = (command: string): string[] => {
 const insideRoot = (candidate: string, root: string): boolean => candidate === root || candidate.startsWith(root + sep);
 
 /** 白名单成员判定（与 resolveWhitelistedPath 同根集；轻量路径版——不触 fs，供命令串扫描）。 */
+/** 会话工作区 containment（#29 落地,ci-bl-1103-2 实锚）：exec 会话 cwd（DSH 注入的
+ *  working directory=会话绑定工作区）落在白名单某根内时，本调用有效根收窄为该工作区
+ *  ——跨兄弟工作区读写拒绝（白名单∩会话工作区，与内核 SessionTools 的
+ *  ATF_WORKSPACE_ROOT containment 同语义）；无 cwd/不在白名单内 → 原引用返回（CLI
+ *  单会话/测试现状零变更）。 */
+export const sessionRootsOf = (exec: unknown, roots: readonly string[]): readonly string[] => {
+  if (roots.length === 0) return roots;
+  const cwd = (exec as { agent?: { session?: { header?: { cwd?: unknown } } } })
+    ?.agent?.session?.header?.cwd;
+  if (typeof cwd !== "string" || cwd.trim() === "") return roots;
+  const wsAbs = resolve(cwd.trim());
+  return roots.some((root) => insideRoot(wsAbs, root)) ? [wsAbs] : roots;
+};
+
 export const pathOutsideRoots = (rawPath: string, roots: readonly string[]): boolean => {
   if (roots.length === 0) return true;
   const abs = isAbsolute(rawPath) ? resolve(rawPath) : resolve(join(roots[0] as string, rawPath));
@@ -91,6 +118,8 @@ export const registerPathGuard = (
   const listener: PreExecuteListener = async (exec, next) => {
     const name = typeof exec?.name === "string" ? exec.name : "";
     const args = (exec?.arguments !== null && typeof exec?.arguments === "object" ? exec.arguments : {}) as Record<string, unknown>;
+    // #29 containment：会话绑定工作区在场时本调用可读根收窄（兄弟工作区拒绝）
+    const guardRoots = sessionRootsOf(exec, host.roots);
     if (VENDOR_REDIRECT_TOOLS.has(name)) {
       return {
         kind: "deny",
@@ -98,11 +127,21 @@ export const registerPathGuard = (
       };
     }
     if (PRE_EXECUTE_GUARDED_TOOLS.has(name)) {
+      // D179:内核 skills 子树=只读合同面(SKILL.md 是 agent 应读的合同),读通道
+      // 放行(#29 收窄曾把内核根排除,agent 读技能定义被拦);写通道不在此层不受影响。
+      const kernelRoot = host.env?.ATF_DSH_KERNEL_DIR ?? host.env?.ATF_CLI_PATH;
+      const skillsDir = typeof kernelRoot === "string" && kernelRoot !== "" ? join(resolve(kernelRoot), "skills") : null;
       for (const rawPath of pathsFromPreExecuteArgs(name, args)) {
-        if (pathOutsideRoots(rawPath, host.roots)) {
+        // D182:裁决账本文件模式 deny+改道(glob/grep 的 pattern 含字样同样拦)
+        const adjudicationRedirect = adjudicationRedirectOf(rawPath);
+        if (adjudicationRedirect !== null) {
+          return { kind: "deny", reason: adjudicationRedirect };
+        }
+        if (skillsDir !== null && rawPath.startsWith(skillsDir + "/")) continue;
+        if (pathOutsideRoots(rawPath, guardRoots)) {
           return {
             kind: "deny",
-            reason: `${FILE_PATH_OUTSIDE_ALLOWLIST}: ${rawPath} 越出白名单（合法根：${host.roots.join("；")}）——改用工作区相对路径，或将数据目录经 ${"ATF_V1_FILE_TOOL_ROOTS"} 声明后使用；注意实例根外的会话工作区不进白名单（workspace_out_of_instance），工作区请建在 <ATF_INSTANCE_ROOT> 内`,
+            reason: `${FILE_PATH_OUTSIDE_ALLOWLIST}: ${rawPath} 越出白名单（合法根：${guardRoots.join("；")}${guardRoots !== host.roots ? "（已按会话工作区收窄——跨工作区访问须显式授权）" : ""}）——改用工作区相对路径，或将数据目录经 ${"ATF_V1_FILE_TOOL_ROOTS"} 声明后使用；注意实例根外的会话工作区不进白名单（workspace_out_of_instance），工作区请建在 <ATF_INSTANCE_ROOT> 内`,
           };
         }
       }
@@ -487,7 +526,6 @@ export const destructiveHardDenyGuard = (
  */
 export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: string; approvalCtx?: { get(service: string): unknown } }): unknown[] =>
   FILE_TOOL_DEFINITIONS.map((definition) => {
-    const agentTool = toFileAgentTool(definition, host);
     return defineTool({
       name: definition.name,
       description: definition.description,
@@ -497,10 +535,25 @@ export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: stri
         render: (_args: unknown, value: unknown) => [{ type: "text" as const, text: JSON.stringify(value, null, 1) }],
       },
       async execute(args: Record<string, unknown>, exec: { callId?: string; agent?: unknown }) {
+        // D182:裁决账本文件模式先拦(读/写/bash 命令串四路)——治理面资产改道,
+        // 白名单判定之前(模式命中即拒,不消耗围栏/审批链)。
+        const adjudicationText = definition.name === "atf_bash"
+          ? String(args["command"] ?? "")
+          : [args["path"], args["file_path"]].filter((v) => typeof v === "string").join(" ");
+        const adjudicationRedirect = adjudicationRedirectOf(adjudicationText);
+        if (adjudicationRedirect !== null) {
+          return asToolValue({ ok: false, error: "label_adjudication_ledger_redirect", tool: definition.name, message: adjudicationRedirect });
+        }
+        // #29 containment（ci-bl-1103-2 实锚）：会话绑定工作区在白名单根内时，
+        // 本调用可读根收窄为该工作区——atf_bash/atf_read 跨兄弟工作区读写拒绝；
+        // 无 cwd/不在白名单（CLI 单会话/测试）＝现状零变更。
+        const guardRoots = sessionRootsOf(exec, host.roots);
+        const callHost = guardRoots !== host.roots ? { ...host, roots: guardRoots as string[] } : host;
+        const agentTool = toFileAgentTool(definition, callHost);
         if (definition.name === "atf_bash") {
           // F9：附件目录（<DSH 家>/attachments——与白名单派生面⑧同源）只读开白
           const attachmentsReadOnlyRoots = [attachmentsRootOf(host.env ?? process.env)];
-          const scan = bashCommandGuard(args["command"], host.roots, { readOnlyRoots: attachmentsReadOnlyRoots });
+          const scan = bashCommandGuard(args["command"], guardRoots, { readOnlyRoots: attachmentsReadOnlyRoots });
           if (!scan.ok) {
             return asToolValue({ ok: false, error: FILE_PATH_OUTSIDE_ALLOWLIST, tool: definition.name, message: scan.message });
           }
@@ -539,7 +592,7 @@ export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: stri
           const destructive = destructiveCommandGuard(String(args["command"] ?? ""));
           if (!destructive.ok) {
             const cwdRaw = typeof args["cwd"] === "string" ? args["cwd"].trim() : "";
-            const primaryRoot = host.roots.length > 0 ? resolve(host.roots[0] as string) : process.cwd();
+            const primaryRoot = guardRoots.length > 0 ? resolve(guardRoots[0] as string) : process.cwd();
             const runsRootEnv = process.env["ATF_DSH_RUNS_ROOT"];
             const hardDeny = destructiveHardDenyGuard(destructive.paths, {
               runsRoot: runsRootEnv !== undefined && runsRootEnv.trim() !== "" ? resolve(runsRootEnv.trim()) : null,

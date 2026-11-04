@@ -122,7 +122,7 @@ describe("E3 字段与 prompt 只读呈现", () => {
   it("接线：atf_prelaunch_report 回执带只读呈现块（不改写、原样转述）", async () => {
     const { root, runDir } = seedRun();
     mkdirSync(join(runDir, "launch"), { recursive: true });
-    writeFileSync(join(runDir, "launch", "launch.sh"), "#!/bin/sh\n");
+    writeFileSync(join(runDir, "launch", "train.sh"), "#!/bin/sh\n"); // D178 现行产物
     mkdirSync(join(runDir, "prep"), { recursive: true });
     writeFileSync(join(runDir, "prep", "iteration-config.json"), JSON.stringify({ training: {} }));
     // 假内核脚本：只把报告写到 --out（本用例验的是 harness 侧读盘与呈现，不验内核报告内容）

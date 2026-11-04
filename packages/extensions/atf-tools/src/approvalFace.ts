@@ -80,7 +80,7 @@ export const approvalDeniedResult = (toolName: string, outcome: string): Record<
   const note =
     NOTE_BY_OUTCOME[outcome] ??
     // rejected／其它未知 outcome：保留通用文案（"用户未批准"语义＋行为指引不变）
-    "该动作需要用户审批（DSH 审批面板）；本次未获放行——不要绕行，向用户说明后停止或改用只读路径。";
+    "该动作需要用户审批，本次未获放行——拒绝是改道信号，不是待办：不要挂起等待或原样重试，按当前情况调整方案继续（改用只读路径、更换参数，或向用户说明后换方案）。";
   return {
     error: "approval_denied",
     tool: toolName,

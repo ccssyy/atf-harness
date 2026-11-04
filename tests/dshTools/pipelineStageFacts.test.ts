@@ -260,6 +260,8 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
     const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${OK_SCRIPT(root)}`, 30_000) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
+    mkdirSync(join(ws, "runs", "run-a", "webui"), { recursive: true });
+    writeFileSync(join(ws, "runs", "run-a", "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }));
     const result = await tool.execute({ stage: "experiment_setup", run_id: "run-a", workspace_path: ws }, execWithSession("sess-9"));
     expect(result).toMatchObject({
       stage: "experiment_setup", run_id: "run-a", ok: true, exit_code: 0,

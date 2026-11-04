@@ -58,7 +58,7 @@ export const buildPrelaunchReportTool = (
   return defineTool({
     name: "atf_prelaunch_report",
     description:
-      "生成/回读训练启动前报告（只读材料面，免审批）：定位 run 树（workspace_path＋run_id——与 atf_pipeline_stage 同值；run 不存在即拒，不代建）→ 探测 IterationConfig（config/iteration-config/iteration-config.json，v2 存量 prep/ 形态兜底）→ 调内核 build_prelaunch_report.py 在 <run>/launch/prelaunch-report.md 生成报告（需 launch 产物在场：launch.sh/launch_manifest——缺即拒并指路先跑 training_prep）→ 返回报告路径＋字节＋摘要（头部行）。" +
+      "生成/回读训练启动前报告（只读材料面，免审批）：定位 run 树（workspace_path＋run_id——与 atf_pipeline_stage 同值；run 不存在即拒，不代建）→ 探测 IterationConfig（config/iteration-config/iteration-config.json，v2 存量 prep/ 形态兜底）→ 调内核 build_prelaunch_report.py 在 <run>/launch/prelaunch-report.md 生成报告（需 launch 产物在场：train.sh/launch_manifest——缺即拒并指路先跑 training_prep）→ 返回报告路径＋字节＋摘要（头部行）。" +
       "材料不是闸：放行仍走 atf_launch_execute／atf_run_training 既有审批链；param_sources 来源串校验单源在内核脚本（b9 起接受 user_confirmed(ref=stage:training_overrides)）——本工具不设第二套来源校验，脚本裁决如实回传。报告已生成时幂等重跑（内核脚本覆盖重写）。",
     parameters: {
       run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/runs/<run_id>——与 atf_pipeline_stage 同值；run 不存在即拒）" },
@@ -86,8 +86,11 @@ export const buildPrelaunchReportTool = (
         return asToolValue({ ok: false, run_id: args.run_id, run_dir: runDir, error: "iteration_config_missing", note: "run 目录无 IterationConfig（prep/iteration-config.json 与 legacy 深层形态皆缺席）——先跑 training_prep 段生成配置" });
       }
       const launchDir = join(runDir, "launch");
-      if (!existsSync(join(launchDir, "launch.sh"))) {
-        return asToolValue({ ok: false, run_id: args.run_id, run_dir: runDir, error: "launch_artifacts_missing", note: "launch 产物缺席（<run>/launch/launch.sh 不在）——报告消费环节①产物（launch.sh/launch_manifest），先跑 generate_train_launch 生成" });
+      // D178:内核 generate_train_launch 产 train.sh(挂 TRAINING_RELEASE 闸);内核报告脚本
+      // build_prelaunch_report.py 消费 train.sh——本检查与内核命名对齐,历史 launch.sh 检查从
+      // 第一天起就与现行产物错位(ci-bl-test-1104-1 实锚:回执 train.sh vs 报告 launch.sh,agent 长时摸索)
+      if (!existsSync(join(launchDir, "train.sh"))) {
+        return asToolValue({ ok: false, run_id: args.run_id, run_dir: runDir, error: "launch_artifacts_missing", note: "launch 产物缺席（<run>/launch/train.sh 不在）——报告消费环节①产物（train.sh/launch_manifest），先跑 training_prep 段生成" });
       }
       if (!existsSync(script)) {
         return asToolValue({ ok: false, run_id: args.run_id, run_dir: runDir, error: "prelaunch_script_missing", note: `内核报告脚本不在位（${script}）——pin 未含或 kernelDir 配置漂移，不 mock 不猜` });

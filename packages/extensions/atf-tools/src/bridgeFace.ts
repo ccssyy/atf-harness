@@ -4,7 +4,7 @@
  * toAtfAgentTool（src/agent/atfAgentTools.ts：参数校验 → 桥接 request → canonical
  * 校验 → 结构化 rejected 回填），本层只做 DSH defineTool 包装＋DSH 审批 seam 前置。
  */
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AtfBridgeConnection } from "../../../../src/bridge/index.js";
 import {
@@ -23,6 +23,10 @@ import { toAtfAgentTool } from "../../../../src/agent/atfAgentTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { translateParameters, looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
+import type { ChoiceAskQuestion } from "./confirmFace.js";
+import { APPROVAL_SEMANTICS_BY_TOOL } from "../../../../src/core/tools/toolDefinition.js";
+import { permissionTierOf } from "./permissionTier.js";
+import { isTrainingAutopilot } from "./trainingPreset.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunDir, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
@@ -45,6 +49,55 @@ const sessionHomeSlug = (sessionId: string): string => {
 };
 
 /** M1 指令清单里的桥接工具名（桥接契约面 ∪ 工作区治理分册）。 */
+/** 桥接返回体 pending_confirmations → 原生选项卡问题集（#13 统一交互面）。
+ *  仅收编选项类（title 非空且 options 非空）；纯信息披露（无 options）不进卡。
+ *  返回 questions（ ChoiceAskQuestion[]）与 meta（对应 title 序，答案映射基准）。 */
+export const pendingChoiceQuestionsOf = (
+  pending: readonly unknown[],
+): { questions: ChoiceAskQuestion[]; meta: Array<{ title: string }> } => {
+  const questions: ChoiceAskQuestion[] = [];
+  const meta: Array<{ title: string }> = [];
+  for (const item of pending) {
+    if (item === null || typeof item !== "object") continue;
+    const row = item as { title?: unknown; detail?: unknown; options?: unknown };
+    const title = typeof row.title === "string" && row.title !== "" ? row.title : "";
+    const options = Array.isArray(row.options)
+      ? row.options.filter((opt): opt is string => typeof opt === "string" && opt !== "")
+      : [];
+    if (title === "" || options.length === 0) continue; // 非选项类不收编
+    questions.push({
+      id: `pending-${questions.length}`,
+      question: title,
+      ...(typeof row.detail === "string" && row.detail !== "" ? { detail: row.detail } : {}),
+      options: options.map((opt) => ({ label: opt })),
+      multiSelect: false,
+    });
+    meta.push({ title });
+  }
+  return { questions, meta };
+};
+
+/** 提问卡答案 → pending_answers（title 对位；custom 自由输入非空才带）。 */
+export const pendingAnswersOf = (
+  meta: readonly { title: string }[],
+  answers: ReadonlyArray<{ id: string; selected: readonly string[]; custom?: string }>,
+): Array<{ title: string; selected: string[]; custom?: string }> =>
+  meta.map((entry, i) => {
+    const ans = answers.find((row) => row.id === `pending-${i}`);
+    const custom = ans !== undefined && typeof ans.custom === "string" && ans.custom.trim() !== "" ? ans.custom.trim() : undefined;
+    return {
+      title: entry.title,
+      selected: ans !== undefined ? [...ans.selected] : [],
+      ...(custom !== undefined ? { custom } : {}),
+    };
+  });
+/** 桥接执行结果 details 安全读取（缺席/非对象=null）。 */
+const detailsOf = (result: unknown): Record<string, unknown> | undefined => {
+  const details = (result as { details?: unknown } | null)?.details;
+  return typeof details === "object" && details !== null && !Array.isArray(details)
+    ? (details as Record<string, unknown>)
+    : undefined;
+};
 export const BRIDGE_TOOL_NAMES: readonly string[] = [
   "atf_workspace_status",
   "atf_admit_data",
@@ -84,9 +137,30 @@ export const allDefinitions = (): ToolDefinition[] => {
 };
 
 /** 桥接连接懒管理：插件级单连接，失败/断线丢弃、下次调用重连（M1 生命周期决策：长驻＋重连）。 */
+/** 会话工作区路径反查（ci-bl-1103 治理面分连接用）。
+ *
+ *  exec.agent.session.header.cwd（vendor 锚，与 sessionWorkspaceSlug 同源）的
+ *  basename slug 在注册工作区根（registeredWorkspaceRoots）下恰一处在场 →
+ *  返回该工作区绝对路径；取不到/不在注册表/多义 → null（调用方落 default 连接）。
+ *  注册表缺席形态不猜根（与 fileGuard 围栏同纪律）。 */
+export const workspacePathOfExec = (exec: unknown): string | null => {
+  const cwd = (exec as { agent?: { session?: { header?: { cwd?: unknown } } } })
+    ?.agent?.session?.header?.cwd;
+  const slug = sessionWorkspaceSlug(exec);
+  if (typeof cwd !== "string" || slug === null) return null;
+  const hits: string[] = [];
+  for (const root of registeredWorkspaceRoots()) {
+    const candidate = join(root, slug);
+    if (existsSync(candidate)) hits.push(candidate);
+  }
+  return hits.length === 1 ? (hits[0] as string) : null;
+};
+
 export class BridgeManager {
   private connection: AtfBridgeConnection | null = null;
   private connecting: Promise<AtfBridgeConnection> | null = null;
+  /** 工作区分连接池（ci-bl-1103 治理面）：key=工作区绝对路径。 */
+  private readonly scopedConnections = new Map<string, Promise<AtfBridgeConnection>>();
 
   constructor(
     private readonly command: readonly string[],
@@ -145,6 +219,42 @@ export class BridgeManager {
     const connection = this.connection;
     this.connection = null;
     if (connection !== null) await connection.close({ timeoutMs: 5_000 }).catch(() => undefined);
+    const scoped = Array.from(this.scopedConnections.values());
+    this.scopedConnections.clear();
+    for (const pending of scoped) {
+      pending.then((conn) => conn.close({ timeoutMs: 5_000 }).catch(() => undefined)).catch(() => undefined);
+    }
+  }
+
+  /** 治理面工作区分连接（ci-bl-1103）：同一工作区的会话共享一个 serve，
+   *  首连 bind_workspace 把内核 workspace 根定到该工作区（此后登记面/事实面
+   *  解析都落本工作区——段驱动登记的 dataset 治理面可见）。
+   *
+   *  与 bind_run 的 fail-open 不同：workspace 绑定决定数据落点，绑不上就
+   *  fail-closed 抛错（宁可拒绝不可落错根——错根即跨工作区数据事故）。
+   *  连接失败不缓存（下次调用重 spawn）；bind 成功后连接按工作区复用。 */
+  async transportForWorkspace(workspacePath: string): Promise<AtfBridgeConnection> {
+    const existing = this.scopedConnections.get(workspacePath);
+    if (existing !== undefined) return existing;
+    const pending = AtfBridgeConnection.spawn({
+      command: this.command,
+      cwd: this.cwd,
+      ...(this.childEnv !== undefined ? { env: this.childEnv } : {}),
+    }).then(async (spawned) => {
+      if (!spawned.ok) {
+        throw new Error(`atf 治理面桥 spawn 失败（${spawned.error.code}）: ${spawned.error.message}`);
+      }
+      const bound = await spawned.value.request("atf.bind_workspace", { workspace_path: workspacePath });
+      if (!bound.ok) {
+        await spawned.value.close({ timeoutMs: 5_000 }).catch(() => undefined);
+        throw new Error(`atf.bind_workspace 失败（${workspacePath}）: ${bound.error.message}`);
+      }
+      return spawned.value;
+    });
+    this.scopedConnections.set(workspacePath, pending);
+    // 失败不缓存：并发等待者共享同一 rejection，下次调用重新 spawn
+    pending.catch(() => { this.scopedConnections.delete(workspacePath); });
+    return pending;
   }
 }
 
@@ -283,10 +393,225 @@ export const buildBridgeTools = (
           render: renderAsJsonText,
         },
         async execute(args: Record<string, unknown>, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
+/** D184 重做:resolve 的 decisions 与用户卡面凭据账本逐项一致判定。
+ *  账本由 harness 在用户逐项裁决卡落卡后写入(runtime/webui/label-qc-decisions.json);
+ *  agent 自拟 decisions 或篡改项即不一致→走批量确认卡。 */
+const matchesLabelQcUserDecisions = async (args: Record<string, unknown>): Promise<boolean> => {
+  const runId = typeof args["run_id"] === "string" ? args["run_id"] : "";
+  const workspacePath = typeof args["workspace_path"] === "string" ? args["workspace_path"] : "";
+  const decisions = Array.isArray(args["decisions"]) ? (args["decisions"] as Array<Record<string, unknown>>) : [];
+  if (runId === "" || workspacePath === "" || decisions.length === 0) return false;
+  try {
+    const resolvedRun = resolvePipelineRunDir(workspacePath, runId);
+    if ("error" in resolvedRun) return false;
+    const ledgerPath = join(resolvedRun.runDir, "runtime", "webui", "label-qc-decisions.json");
+    if (!existsSync(ledgerPath)) return false;
+    const ledger = JSON.parse(readFileSync(ledgerPath, "utf8")) as {
+      decided_by?: unknown; decisions?: Array<{ item_id?: unknown; action?: unknown; disposition?: unknown }>;
+    };
+    if (ledger.decided_by !== "user_confirmed" || !Array.isArray(ledger.decisions)) return false;
+    if (ledger.decisions.length !== decisions.length) return false;
+    return ledger.decisions.every((entry, i) => {
+      const given = decisions[i] ?? {};
+      return String(given["item_id"] ?? "") === String(entry.item_id ?? "")
+        && String(given["action"] ?? "") === String(entry.action ?? "")
+        && String(given["disposition"] ?? "") === String(entry.disposition ?? "");
+    });
+  } catch {
+    return false;
+  }
+};
+
+/** D192 用户决定确认卡:裁决类工具(user_decision)执行前逐项呈现并停等确认。
+ *  decisions 逐项(item_id/action/disposition)进卡面 markdown 表;确认=执行
+ *  (卡面回执即 user_confirmed 凭据),暂停=不执行。通道缺席 fail-closed(不放行)。 */
+const userDecisionConfirmCardOf = async (
+  ctx: { get(service: string): unknown },
+  exec: { agent?: unknown; signal?: unknown },
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<{ ok: boolean; note: string }> => {
+  const svc = ctx.get("userQuestions") as { ask?: (payload: unknown) => Promise<{ answers: Array<{ selected?: string[]; custom?: string }> }> } | undefined;
+  if (svc === undefined || typeof svc.ask !== "function") {
+    return { ok: false, note: "确认卡通道缺席——裁决类工具不放行(用户决定不可代行);稍后重试或在对话里说明处置意见" };
+  }
+  const decisions = Array.isArray(args["decisions"]) ? (args["decisions"] as Array<Record<string, unknown>>) : [];
+  if (decisions.length === 0) {
+    return { ok: true, note: "无逐项决定载荷——按工具自身校验处理" };
+  }
+  const rows = decisions.map((d, i) =>
+    `| ${String(i + 1)} | ${String(d["item_id"] ?? "?")} | ${String(d["action"] ?? "?")} | ${String(d["disposition"] ?? "")} |`).join("\n");
+  const title = toolName === "atf_label_qc_resolve" ? "标注冲突裁决确认" : "用户决定确认";
+  try {
+    const answers = await svc.ask({
+      questions: [{
+        id: `user-decision-${toolName}-${String(Date.now())}`,
+        question: `${title}——以下 ${String(decisions.length)} 项处置请确认`,
+        header: title,
+        detail: [
+          `| # | 待裁决项 | 建议处置 | 说明 |`,
+          `|---|---|---|---|`,
+          rows,
+          "",
+          "以上是 agent 的分析与建议;确认后按建议提交(你可以在输入框写字段名改为自定义处置)。",
+          "暂停则不提交,你在对话里说明想怎么改。",
+        ].join("\n"),
+        options: [
+          { label: "确认按建议提交", description: "逐项按上表处置提交并留痕" },
+          { label: "暂停，我要调整", description: "不提交;在对话里说明调整意见" },
+        ],
+        multiSelect: false,
+      }],
+      agent: exec.agent,
+      signal: exec.signal,
+    });
+    const first = answers.answers[0];
+    const picked = [...(first?.selected ?? [])].join("") || (first?.custom ?? "");
+    const confirmed = picked.includes("确认按建议提交") || (picked.trim() !== "" && !picked.includes("暂停"));
+    return { ok: confirmed, note: confirmed ? "用户已在卡上确认(留痕)" : "用户暂停——未提交,等调整意见" };
+  } catch {
+    return { ok: false, note: "确认卡通道异常——不放行" };
+  }
+};
+
+/** D186 训练启动确认卡：完全权限档下替代 DSH 审批卡（owner 2026-11-04 裁定——
+ * 不弹审批卡，停下来给用户汇报完整实验准备与参数设置报告，确认后再启动）。
+ * 报告数据全部只读自 run 树（variants_report/iteration-config/train.sh/prelaunch 报告）。 */
+const launchConfirmCardOf = async (
+  ctx: { get(service: string): unknown },
+  exec: { agent?: unknown; signal?: unknown },
+  args: Record<string, unknown>,
+): Promise<{ ok: boolean; note: string }> => {
+  const svc = ctx.get("userQuestions") as { ask?: (payload: unknown) => Promise<{ answers: Array<{ selected?: string[]; custom?: string }> }> } | undefined;
+  if (svc === undefined || typeof svc.ask !== "function") {
+    return { ok: true, note: "确认卡通道缺席——按既有审批轨处理" };
+  }
+  const runId = typeof args["run_id"] === "string" ? args["run_id"] : "";
+  const workspacePath = typeof args["workspace_path"] === "string" ? args["workspace_path"] : "";
+  const lines: string[] = [];
+  let paramTable = "";
+  let scriptLink = "";
+  if (runId !== "" && workspacePath !== "") {
+    const resolved = resolvePipelineRunDir(workspacePath, runId);
+    if (!("error" in resolved)) {
+      const runDir = resolved.runDir;
+      // ① 数据集组成（每类 variants_report 计数 → markdown 表）
+      lines.push("### 数据集组成");
+      const variantsRoot = join(runDir, "data", "variants");
+      if (existsSync(variantsRoot)) {
+        for (const doc of readdirSync(variantsRoot)) {
+          const reportPath = join(variantsRoot, doc, "variants_report.json");
+          if (!existsSync(reportPath)) continue;
+          try {
+            const report = JSON.parse(readFileSync(reportPath, "utf8")) as {
+              base_rows?: number; produced?: number; kind_counts?: Record<string, number>;
+            };
+            const kinds = Object.entries(report.kind_counts ?? {})
+              .map(([kind, n]) => `${kind} ${String(n)}`).join(" / ");
+            lines.push(`- **${doc}**：基线 ${String(report.base_rows ?? "?")} 行，构造 ${String(report.produced ?? "?")} 行（${kinds}）`);
+          } catch { /* 报告不可读按缺省呈现 */ }
+        }
+      } else {
+        lines.push("-（构造产物目录缺席）");
+      }
+      // ② 参数设置报告（iteration-config 关键训练参数）
+      const configCandidates = [
+        join(runDir, "config", "iteration-config", "iteration-config.json"),
+        join(runDir, "prep", "iteration-config", "iteration-config.json"),
+      ];
+      const configPath = configCandidates.find((candidate) => existsSync(candidate));
+      if (configPath !== undefined) {
+        try {
+          const config = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
+          const training = (config["training"] ?? {}) as Record<string, unknown>;
+          const keys = ["learning_rate", "num_train_epochs", "per_device_train_batch_size",
+            "global_batch_size", "optim", "lora_rank", "lora_alpha", "cutoff_len", "warmup_ratio"];
+          const rows = keys
+            .filter((key) => training[key] !== undefined || config[key] !== undefined)
+            .map((key) => `| ${key} | ${String(training[key] ?? config[key] ?? "")} |`);
+          if (rows.length > 0) paramTable = "\n### 训练参数\n\n| 参数 | 值 |\n|---|---|\n" + rows.join("\n");
+        } catch { /* 配置不可读按缺省呈现 */ }
+      }
+      // ③ 训练脚本链接（train.sh——vendor 本地文件链接原生可点击）
+      const trainSh = join(runDir, "launch", "train.sh");
+      if (existsSync(trainSh)) {
+        scriptLink = `\n\n[查看训练脚本 train.sh](${trainSh})`;
+        const prelaunch = join(runDir, "launch", "prelaunch-report.md");
+        if (existsSync(prelaunch)) {
+          scriptLink += ` ｜ [完整启动前报告](${prelaunch})`;
+        }
+      }
+    }
+  }
+  try {
+    const answers = await svc.ask({
+      questions: [{
+        id: `launch-confirm-${runId}`,
+        question: `训练启动确认 — ${runId}`,
+        header: "训练启动",
+        detail: [lines.join("\n"), paramTable,
+          "\n\n确认后将写入放行记录并启动训练；暂停则不启动，可先改参数。",
+          scriptLink].filter((part) => part !== "").join(""),
+        options: [
+          { label: "确认启动", description: "已查看上述实验准备与参数，写入放行记录并启动" },
+          { label: "暂停，我要改参数", description: "不启动；告诉我你想改什么，改完再确认" },
+        ],
+        multiSelect: false,
+      }],
+      agent: exec.agent,
+      signal: exec.signal,
+    });
+    const first = answers.answers[0];
+    const picked = [...(first?.selected ?? [])].join("") || (first?.custom ?? "");
+    const confirmed = picked.includes("确认启动");
+    return { ok: confirmed, note: confirmed ? "用户已确认启动（确认卡留痕）" : "用户暂停启动（可在对话里说想改什么参数）" };
+  } catch {
+    return { ok: true, note: "确认卡通道异常——按既有审批轨处理" };
+  }
+};
+
           // 审批前置（指令要求 2）：requiresApprovalFor 语义为唯一判定源；E8b·H3 D152——
           // 卡面三行模板＋业务动作名（零内部工具名：工具名经 requestApproval 的 toolName
           // 进审批服务记录＝日志审计面，卡面 reason 不出现）。
-          if (requiresApprovalFor(definition, args)) {
+          // 语义分类表判定(D170v2 §4.1):链内推进在训练预设+完全权限档免审
+          // (免审放行 stderr 留痕可审计,对齐 approvalExempt 的可见性纪律)。
+          const approvalContext = {
+            tier: permissionTierOf(ctx as never, exec as never),
+            trainingAutopilot: isTrainingAutopilot(ctx as never, exec as never),
+          };
+          if (
+            !requiresApprovalFor(definition, args, approvalContext)
+            && APPROVAL_SEMANTICS_BY_TOOL[definition.name] === "chain_advance"
+          ) {
+            // 免审放行留痕(§4.2 auto-allowed 可审计:stderr 告警保留,非隔离执行事实)
+            console.warn(`[approval] ${definition.name} 链内推进免审放行(训练预设+完全权限档,写 run 域内可逆)`);
+          }
+          if (requiresApprovalFor(definition, args, approvalContext)) {
+            // D186(owner 2026-11-04 裁定):完全权限档下训练启动不弹审批卡——改停等
+            // 「训练启动确认卡」(完整实验准备+参数报告+脚本链接),确认即用户决定
+            // (审计=卡面回执+放行账本);暂停不启动。guarded 档审批卡照旧。
+            // D192:裁决决定(user_decision 类)任何档位都先过用户确认卡——逐项呈现
+            // decisions(item/两值/agent 建议),确认才执行;暂停不执行。修复
+            // chain_advance 误分类导致的完全权限免审代裁(1104-5 实锤)。
+            if (APPROVAL_SEMANTICS_BY_TOOL[definition.name] === "user_decision") {
+              // D184 重做:decisions 与用户卡面凭据账本(label-qc-decisions.json,harness
+              // 写、agent 不可伪造)逐项一致→直通(卡上逐项选择即用户决定,不再批量确认卡
+              // 重复打扰);不一致(agent 自拟/改动)→批量确认卡拦。
+              if (definition.name === "atf_label_qc_resolve" && await matchesLabelQcUserDecisions(args)) {
+                console.warn("[approval] atf_label_qc_resolve decisions 与用户卡面凭据一致,直通(不再批量确认)");
+              } else {
+                const confirm = await userDecisionConfirmCardOf(ctx, exec, definition.name, args);
+                if (!confirm.ok) {
+                  return asToolValue({ error: "user_decision_paused", tool: definition.name, note: confirm.note });
+                }
+              }
+            }
+            if (definition.name === "atf_launch_execute" && approvalContext.tier === "full-access") {
+              const launchConfirm = await launchConfirmCardOf(ctx, exec, args);
+              if (!launchConfirm.ok) {
+                return asToolValue({ error: "launch_paused_by_user", tool: definition.name, note: launchConfirm.note });
+              }
+            } else {
             const verdict = await requestApproval(ctx, exec, definition.name,
               buildApprovalReason({
                 action: BRIDGE_ACTION_LABELS[definition.name] ?? "执行训练流程操作",
@@ -295,6 +620,7 @@ export const buildBridgeTools = (
                 reversible: "按操作语义（写盘产物可人工清理）",
               }));
             if (!verdict.ok) return approvalDeniedResult(definition.name, verdict.outcome);
+            }
           }
           // 执行径分派（复用面与手搓一致）：工作区治理面（scratch_exec/skill_read）走
           // WORKSPACE_TOOL_HANDLERS 本地执行；桥接契约面走 toAtfAgentTool 桥接执行径。
@@ -311,9 +637,49 @@ export const buildBridgeTools = (
             if (localResult.kind === "executed") return asToolValue(localResult.result);
             return asToolValue({ error: "rejected", tool: definition.name, reason: localResult.reason, ...(localResult.detail !== undefined ? { detail: localResult.detail } : {}) });
           }
-          const bridge = await manager.transport();
+          // 治理面按会话工作区分连接（ci-bl-1103）：exec cwd 在注册工作区根内 →
+          //  该工作区的 scoped serve（首连 bind_workspace）；无 cwd/不在注册表
+          //  （CLI 单会话/测试）→ default 连接现状零变更。
+          const sessionWorkspace = workspacePathOfExec(exec);
+          const bridge = sessionWorkspace !== null
+            ? await manager.transportForWorkspace(sessionWorkspace)
+            : await manager.transport();
           const agentTool = toAtfAgentTool(definition, { bridge, scopeRefBox: { current: undefined } });
           const result = await agentTool.execute(`dsh-${exec.callId ?? "call"}`, args);
+          // 选项类待确认统一走原生提问卡（#13 owner 裁定：提问卡=产品统一问询通道，
+          // 聊天框不承载选项问询——此前 agent 拿到 pending_confirmations 后聊天转述，
+          // 两套交互并存）。仅 options 在场的选项类出卡；无 options 的纯信息披露不动；
+          // 卡通道缺席/无人值守档=现状零变更（返回体原样，聊天转述兜底）。答案结构化
+          // 回传 pending_answers，agent 按答案组装重跑参数（参数自动回填归段语义级
+          // 改造，不在此越界）。
+          const pendingAsk = detailsOf(result)?.["pending_confirmations"];
+          if (
+            Array.isArray(pendingAsk) && pendingAsk.length > 0
+            && approvalContext.tier !== "unattended"
+          ) {
+            const { questions: choiceQuestions, meta: pendingMeta } =
+              pendingChoiceQuestionsOf(pendingAsk);
+            const askSvc = ctx.get("userQuestions") as
+              | { ask(req: { questions: ChoiceAskQuestion[]; agent?: unknown; signal?: unknown }):
+                  Promise<{ answers: Array<{ id: string; selected: string[]; custom?: string }> }> }
+              | undefined;
+            if (choiceQuestions.length > 0 && askSvc !== undefined && typeof askSvc.ask === "function") {
+              try {
+                const answered = await askSvc.ask({ questions: choiceQuestions, agent: exec.agent, signal: exec.signal });
+                const pendingAnswers = pendingAnswersOf(pendingMeta, answered.answers);
+                const detailBody = detailsOf(result);
+                if (detailBody !== undefined) {
+                  detailBody["pending_answers"] = pendingAnswers;
+                  detailBody["pending_answers_note"] = "用户已在提问卡上作答（pending_answers）——按所选答案组装参数重跑对应段；不要在聊天里重复提问。";
+                }
+              } catch (cause) {
+                const detailBody = detailsOf(result);
+                if (detailBody !== undefined) {
+                  detailBody["pending_answers_note"] = `提问卡应答失败（${String(cause).slice(0, 120)}）——待确认项仍在 pending_confirmations，改在聊天中向用户转述选项。`;
+                }
+              }
+            }
+          }
           // 批㊶-M M-3 段事实轨：桥接面工具成功即登记（register/label_qc——run 归属取参数）
           const details = result.details as Record<string, unknown> | undefined;
           // D81-B（指令 §二.4）：状态面附加当前会话归属工作区身份（atf_workspace_status 显示

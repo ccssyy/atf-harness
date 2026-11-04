@@ -74,13 +74,21 @@ const summaryArgv = (result: unknown): string[] =>
 const writeSnapshot = (runDir: string, confirmed: Record<string, string>): void => {
   mkdirSync(join(runDir, "webui"), { recursive: true });
   writeFileSync(join(runDir, "webui", "config-snapshot.json"), `${JSON.stringify({ schema_version: "ConfigSnapshot/v1", confirmed }, null, 1)}\n`, "utf8");
+  writeFileSync(join(runDir, "webui", "field-choice.json"), `${JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }, null, 1)}\n`, "utf8");
+};
+
+/** D191 字段确认闸适配:setup 段前置落盘 FieldChoice/v1(用户已确认字段——合法通过态)。 */
+const writeFieldChoice = (runDir: string): void => {
+  mkdirSync(join(runDir, "webui"), { recursive: true });
+  writeFileSync(join(runDir, "webui", "field-choice.json"), `${JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }, null, 1)}\n`, "utf8");
 };
 
 describe("E3-1 预算三参（experiment_setup 段专属）", () => {
   it("显式三参透传：argv 含三 flag 与值；返回体终值＋source=user_specified", async () => {
     const ws = tempRoot("e3-ws-");
+    writeFieldChoice(join(ws, "runs", "e3-explicit"));
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "e3-explicit", workspace_path: ws, max_total_tokens: 9000, image_min_pixels: 65536, image_max_pixels: 1605632 },
+      { stage: "experiment_setup", run_id: "e3-explicit", workspace_path: (() => { writeFieldChoice(join(ws, "runs", "e3-explicit")); return ws; })(), max_total_tokens: 9000, image_min_pixels: 65536, image_max_pixels: 1605632 },
       fakeExec,
     );
     const argv = summaryArgv(result);
@@ -120,7 +128,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     const ws = tempRoot("e3-ws-");
     writeSnapshot(join(ws, "runs", "e3-mix"), { max_total_tokens: "9000", image_min_pixels: "65536", image_max_pixels: "1605632" });
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "e3-mix", workspace_path: ws, max_total_tokens: 8000 },
+      { stage: "experiment_setup", run_id: "e3-mix", workspace_path: (() => { writeFieldChoice(join(ws, "runs", "e3-mix")); return ws; })(), max_total_tokens: 8000 },
       fakeExec,
     );
     expect((result as Record<string, unknown>)["max_total_tokens"]).toBe(8000);
@@ -133,8 +141,10 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
   });
 
   it("皆无（无参无快照）：argv 无三 flag；返回体值 null＋source=unspecified（缺省不静默）", async () => {
+    const wsNone = tempRoot("e3-ws-");
+    writeFieldChoice(join(wsNone, "runs", "e3-none"));
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "e3-none", workspace_path: tempRoot("e3-ws-") },
+      { stage: "experiment_setup", run_id: "e3-none", workspace_path: wsNone },
       fakeExec,
     );
     const argv = summaryArgv(result);
@@ -164,7 +174,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
   it("像素对只给一端（显式）：卡前快败 pixel_pair_half_given，业务文案、不进审批（零放行消耗）", async () => {
     const approvals: string[] = [];
     const result = await toolOf(approvals).execute(
-      { stage: "experiment_setup", run_id: "e3-half", workspace_path: tempRoot("e3-ws-"), image_min_pixels: 65536 },
+      { stage: "experiment_setup", run_id: "e3-half", workspace_path: (() => { const w = tempRoot("e3-ws-"); writeFieldChoice(join(w, "runs", "e3-half")); return w; })(), image_min_pixels: 65536 },
       fakeExec,
     );
     expect((result as Record<string, unknown>)["ok"]).toBe(false);
@@ -192,7 +202,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
   it("像素对两端 min≥max：卡前快败 pixel_pair_violation，文案单源 pixelPairViolationOf（业务语言）", async () => {
     const approvals: string[] = [];
     const result = await toolOf(approvals).execute(
-      { stage: "experiment_setup", run_id: "e3-minmax", workspace_path: tempRoot("e3-ws-"), image_min_pixels: 2000000, image_max_pixels: 802816 },
+      { stage: "experiment_setup", run_id: "e3-minmax", workspace_path: (() => { const w = tempRoot("e3-ws-"); writeFieldChoice(join(w, "runs", "e3-minmax")); return w; })(), image_min_pixels: 2000000, image_max_pixels: 802816 },
       fakeExec,
     );
     expect((result as Record<string, unknown>)["ok"]).toBe(false);
@@ -219,7 +229,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     writeSnapshot(join(ws, "runs", "e3-card"), { image_min_pixels: "65536", image_max_pixels: "1605632" });
     const record: string[] = [];
     await toolOf(record).execute(
-      { stage: "experiment_setup", run_id: "e3-card", workspace_path: ws, max_total_tokens: 9000 },
+      { stage: "experiment_setup", run_id: "e3-card", workspace_path: (() => { writeFieldChoice(join(ws, "runs", "e3-card")); return ws; })(), max_total_tokens: 9000 },
       fakeExec,
     );
     expect(record[0]).toContain("预算五参（实验门）");
@@ -230,7 +240,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     expect(record[0]).toContain("image_max_pixels=1605632（你在方案卡确认的）");
     const recordNone: string[] = [];
     await toolOf(recordNone).execute(
-      { stage: "experiment_setup", run_id: "e3-card-none", workspace_path: tempRoot("e3-ws-") },
+      { stage: "experiment_setup", run_id: "e3-card-none", workspace_path: (() => { const w = tempRoot("e3-ws-"); writeFieldChoice(join(w, "runs", "e3-card-none")); return w; })() },
       fakeExec,
     );
     expect(recordNone[0]).toContain("max_total_tokens=未定（未指定——内核按缺省处理）");
@@ -258,6 +268,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
   // 内核 b17 起据此落 prep/token_budget.json（不再写死基线）。
   it("显式五参透传：argv 含 --cutoff-len／--max-model-len 与值；返回体两参 source=user_specified", async () => {
     const ws = tempRoot("e3-ws-");
+    writeFieldChoice(join(ws, "runs", "e3-five"));
     const result = await toolOf().execute(
       {
         stage: "experiment_setup",
@@ -359,20 +370,17 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     expect((result as Record<string, unknown>)["run_dir"]).toBe(join(ws, "runs", "e3-legacy"));
     expect((result as Record<string, unknown>)["run_dir_layout"]).toBe("legacy");
     expect((result as Record<string, unknown>)["max_total_tokens_source"]).toBe("config_snapshot");
-    // 新建 run（三处皆不在场）：落 v3 占位 <wp>/experiments/<YYYYMMDD>-adhoc/<id>（与内核
-    // _resolve_run_target 的占位同式），layout=canonical；且**不建任何目录**（register 段 create_run 落位）
+    // 新建 run（三处皆不在场）：D191 字段确认闸先行——fresh run 未经 register 段字段确认
+    // 即拒（field_choice_unconfirmed，fail-closed）；且被拦时**不建任何目录**（ADR-0018
+    // 不造游离 run 的精神保留：确认记录与落位都归 register 段 create_run 链）。
     const fresh = await toolOf().execute(
       { stage: "experiment_setup", run_id: "e3-fresh-new", workspace_path: ws },
       fakeExec,
     );
-    const freshDir = (fresh as Record<string, unknown>)["run_dir"] as string;
-    expect(freshDir.startsWith(join(ws, "experiments"))).toBe(true);
-    expect(freshDir.endsWith(join("e3-fresh-new"))).toBe(true);
+    expect((fresh as Record<string, unknown>)["ok"]).toBe(false);
+    expect((fresh as Record<string, unknown>)["error"]).toBe("field_choice_unconfirmed");
     expect(existsSync(join(ws, "runs", "e3-fresh-new"))).toBe(false); // 不再造 legacy 桶
-    // （本用例前半段已铺过 <wp>/runs/e3-legacy，故此处只钉「新 id 不落 runs 桶」）
-    expect(existsSync(join(ws, "experiments"))).toBe(false); // 占位是纯路径，落位归 register 段 create_run
-    expect((fresh as Record<string, unknown>)["run_dir_layout"]).toBe("canonical");
-    expect((fresh as Record<string, unknown>)["max_total_tokens_source"]).toBe("unspecified");
+    expect(existsSync(join(ws, "experiments"))).toBe(false); // 被拦零目录创建
   });
 });
 

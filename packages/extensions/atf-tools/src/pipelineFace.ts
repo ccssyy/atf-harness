@@ -131,6 +131,9 @@ const writeInputsGrouping = (
     decided_at: new Date().toISOString(),
   };
   try {
+    // F1e(ci-bl-1103-3):落账不得 mkdir run 树——run 目录不在场即跳过(一次训练
+    // 只允许一个 run 目录,落账抢先 mkdir 会造出与真 run 并存的幽灵目录)。
+    if (!existsSync(runDir)) return;
     mkdirSync(join(runDir, "config"), { recursive: true });
     writeFileSync(path, `${JSON.stringify(doc, null, 1)}\n`, "utf8");
   } catch {
@@ -145,6 +148,7 @@ import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
+import { readInputsPromptResolvedVia, writeInputsPromptChoice } from "./promptChoiceIo.js";
 import { appendSegmentFact, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
 import { resolveRunFile, resolveRunSubdir, runFileCandidates, runSubdirCandidates } from "../../../../src/core/workspace/runLayout.js";
@@ -164,6 +168,24 @@ import { decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary 
 import { join } from "node:path";
 
 import { tmpdir } from "node:os";
+
+/** D181 机检面:prompt 卡选项表构造(纯函数)——材料/用户信号在场时
+ *  不得出现「推荐——没有材料时的缺省」标注(T10 及 UAT 二发教训的机检锚)。 */
+export const promptChoiceOptionsOf = (materialHint: string | null): ReadonlyArray<{ label: string; description: string }> => {
+  const hasMaterial = materialHint !== null;
+  const builtinDesc =
+    "产品内置抽取模板（atf-template-v1）：抽取任务描述 + 字段视图（字段名/定义/输出模式 flat|grouped）"
+    + " + 坐标声明行；支持整图平铺与分组两种输出形态，坐标空间自动匹配";
+  return hasMaterial
+    ? [
+        { label: "用材料里的抽取说明", description: "按你提供的说明构造 prompt" },
+        { label: "用产品内置模板", description: builtinDesc },
+      ]
+    : [
+        { label: "用产品内置模板", description: builtinDesc + "（推荐——没有材料时的缺省）" },
+        { label: "我自己提供", description: "在下面的输入框里贴抽取说明或说明要点" },
+      ];
+};
 
 /** 段名闭集（权威＝内核 STAGE_ORDER 八项——禁增删改序；旧六段名别名不保留）。 */
 export const PIPELINE_STAGES: readonly string[] = [
@@ -375,7 +397,7 @@ export interface GroupingFace {
    *  字段配置自带 group ＞ **上次用户选定（账本沿用）** ＞ 完全权限档自动 ＞ 出卡候选 ＞ 平铺无分组。
    *  prior_decision 是 D-c 的落点：同一次 run 里选过一次就不再重复问。 */
   source: "user_provided" | "prior_decision" | "proposal" | "policy_auto" | "none";
-  decision: "user_selected" | "inherited" | "auto" | "none";
+  decision: "user_selected" | "inherited" | "auto" | "none" | "regroup_request" | "regroup_required";
   /** 选定候选的 name（user_provided／none 为 null）。 */
   candidate_name: string | null;
   groups: GroupingProposalGroup[];
@@ -438,6 +460,16 @@ export const parseGroupingProposal = (
         .filter((field): field is string => typeof field === "string" && field.trim() !== "")
         .map((field) => field.trim());
       groups.push({ name: groupName, fields });
+    }
+    // D173(owner 2026-11-04):候选组数区间机检——出卡前拦截,不再只标注。
+    // >5 拒(对齐内核 GROUPING_MAX_GROUPS);1 组=平铺全字段等同没分组,
+    // 字段总数≥4(两两分组可两全)时拒;字段总数<4 豁免(与内核下限同口径)。
+    const groupCount = groupsRaw.length;
+    const totalFields = groups.reduce((sum, group) => sum + group.fields.length, 0);
+    if (groupCount > 5) {
+      errors.push(`candidates[${String(index)}] 组数 ${String(groupCount)} 超上限 5——重设为 2-3 组(优先)、最多 5 组的候选`);
+    } else if (groupCount < 2 && totalFields >= 4) {
+      errors.push(`candidates[${String(index)}] 只有 1 组(平铺全字段=没分组)——字段默认必须分组,重设为 2-3 组候选(字段总数<4 时单组豁免)`);
     }
     candidates.push({ name, groups, reason: typeof row["reason"] === "string" ? row["reason"].trim() : "" });
   }
@@ -652,7 +684,11 @@ export const resolveGroupingFace = async (input: {
   /** 本次是否已有「用户在字段清单卡上确认过」的记录（D-f 的判据）。
    *  缺省 undefined＝按未确认处理（宁可多问一次，不把 agent 自拟当用户决定）。 */
   fieldChoiceConfirmed?: boolean;
+  /** 单据类型（ci-bl-1103 per-doc 化）：多类联合训练每类字段分组各自落账/出卡,
+   *  卡 id 与 header 带类名（用户辨识）;缺席=单类形态（兼容）。 */
+  docType?: string;
 }): Promise<GroupingFace | { ok: false; errors: string[] }> => {
+  const docTag = input.docType !== undefined && input.docType !== "" ? `:${input.docType}` : "";
   // D163：分组来源以登记落账为准，不再靠账本反推——账本只在"卡上选过"时才有记录，
   // 用户从外部带进来的分组永远没有记录，用账本判"给没给"必然把预给的判成没给。
   const registrationGrouping = readRegistrationGrouping(input.runDir ?? "");
@@ -681,7 +717,7 @@ export const resolveGroupingFace = async (input: {
     // 正确判据是**分组自己的账本**（用户在分组卡上真的选过一套，且字段集合未变）。
     const groupingConfirmed =
       input.runDir !== undefined
-        ? readGroupingDecision(input.runDir, fieldsDigestOf(input.fieldConfigPath)).ok
+        ? readGroupingDecision(input.runDir, fieldsDigestOf(input.fieldConfigPath), input.docType).ok
         : false;
     // D163/W4（owner 13:2x）：分组**始终出卡确认**——账本选过（groupingConfirmed）
     // 时预选那套作为推荐候选（下方 priorDecision 分支会沿用并注明），配置自带时
@@ -698,7 +734,7 @@ export const resolveGroupingFace = async (input: {
   const priorDecision =
     input.runDir === undefined
       ? ({ ok: false, reason: "absent", note: "" } as const)
-      : readGroupingDecision(input.runDir, fieldsDigestOf(input.fieldConfigPath));
+      : readGroupingDecision(input.runDir, fieldsDigestOf(input.fieldConfigPath), input.docType);
   if (priorDecision.ok) {
     const record = priorDecision.record;
     return {
@@ -761,6 +797,37 @@ export const resolveGroupingFace = async (input: {
   const parsed = parseGroupingProposal(input.proposalRaw);
   if (!parsed.ok) return { ok: false, errors: parsed.errors };
   const proposal = parsed.proposal;
+  // D185(owner 2026-11-04 1104-5 实锤):字段覆盖完整性出卡前校验——候选字段并集
+  // 必须=用户在字段清单卡确认的全集(field-choice per-doc 账本);漏/多都拒并点名,
+  // 缺陷候选不上卡(此前只有内核全量校验在用户选完后拦——用户白选一次、字段集
+  // 变了再重出卡,即「先漏一个字段再重新分」循环的机制根源)。
+  if (input.runDir !== undefined) {
+    const choice = readFieldChoice(input.runDir, input.docType);
+    if (choice !== null && !choice.all_fields && choice.confirmed_fields.length > 0) {
+      const expected = new Set(choice.confirmed_fields);
+      const offered = new Set<string>();
+      for (const candidate of proposal.candidates) {
+        for (const group of candidate.groups) for (const f of group.fields) offered.add(f);
+      }
+      const missing = [...expected].filter((f) => !offered.has(f));
+      const extra = [...offered].filter((f) => !expected.has(f));
+      if (missing.length > 0 || extra.length > 0) {
+        return {
+          source: "proposal",
+          decision: "none",
+          candidate_name: null,
+          groups: [],
+          evidence: { registration_inputs: registrationInputsPathOf(input.runDir) },
+          payload: null,
+          note: "分组候选与字段清单不一致,不出卡让用户选:"
+            + (missing.length > 0 ? `漏了 ${missing.join("、")}` : "")
+            + (missing.length > 0 && extra.length > 0 ? ";" : "")
+            + (extra.length > 0 ? `多出清单外字段 ${extra.join("、")}` : "")
+            + `——按用户确认的字段全集(共 ${String(expected.size)} 个)重新设计候选再来;用户不该在缺字段的方案上做选择`,
+        };
+      }
+    }
+  }
   const pick = (index: number): GroupingProposalCandidate => proposal.candidates[index] ?? proposal.candidates[0]!;
   const evidence: Record<string, unknown> = {
     candidate_count: proposal.candidates.length,
@@ -803,13 +870,36 @@ export const resolveGroupingFace = async (input: {
       note: "选择卡通道不可用——不替你选：先问用户要哪套分组，再把选定候选单独传进来重推（本次未下传分组建议）",
     };
   }
+  // ci-bl-1103 防循环门:用户已在卡上要求 N 组(marker 在场)而本次候选组数不符
+  // → 拒绝出卡(出卡=又一轮违背意愿的确认循环),强制 agent 按 N 组重设计。
+  if (input.runDir !== undefined) {
+    try {
+      const marker = JSON.parse(readFileSync(join(input.runDir, "runtime", "webui", "grouping-request.json"), "utf8")) as { requested_group_count?: unknown };
+      const requestedCount = typeof marker.requested_group_count === "number" ? marker.requested_group_count : null;
+      if (requestedCount !== null) {
+        const mismatched = proposal.candidates.filter((candidate) => candidate.groups.length !== requestedCount);
+        if (mismatched.length === proposal.candidates.length) {
+          return {
+            source: "proposal",
+            decision: "regroup_required",
+            candidate_name: null,
+            groups: [],
+            evidence,
+            payload: null,
+            note: `用户已明确要求${String(requestedCount)}组,本次候选全部不是${String(requestedCount)}组(${proposal.candidates.map((c) => `${c.name}=${String(c.groups.length)}组`).join("、")})——拒绝出卡(否则又是违背意愿的确认循环):按${String(requestedCount)}组重新设计候选后再来`,
+          };
+        }
+      }
+    } catch { /* marker 缺席/损坏=无组数约束,照常出卡 */ }
+  }
   const question: ChoiceAskQuestion = {
-    id: `grouping-${input.runId}`,
-    question: `分组方案确认 — ${input.runId}${registrationQuote != null ? `（按你说的「${registrationQuote}」，确认或改）` : ""}`,
-    header: "分组",
+    id: `grouping-${input.runId}${docTag}`,
+    question: `分组方案确认 — ${input.runId}${input.docType !== undefined && input.docType !== "" ? `（${input.docType} 类）` : ""}${registrationQuote != null ? `（按你说的「${registrationQuote}」，确认或改）` : ""}`,
+    header: input.docType !== undefined && input.docType !== "" ? `分组·${input.docType}` : "分组",
     detail: [
       `这里有 ${String(proposal.candidates.length)} 套分组，请选一套：`,
-      ...proposal.candidates.map((candidate) => `  · ${candidate.name}：${groupingCandidateDescriptionOf(candidate)}`),
+      ...proposal.candidates.map((candidate) => `  · ${candidate.name}：${groupingCandidateDescriptionOf(candidate)}${(candidate.groups.length > 3) ? "（超出建议组数区间）" : ""}`),
+      "建议 2-3 组：字段按语义聚合即可，更多组会稀释每组样本量；下列方案超 3 组的，可在输入框写「改成 N 组」或要求按 2-3 组重新设计。",
       "选完按这套分组生成训练样本，分组表会贴给你看。",
     ].join("\n"),
     options: proposal.candidates.map((candidate) => ({
@@ -820,9 +910,58 @@ export const resolveGroupingFace = async (input: {
   };
   try {
     const answers = await svc.ask({ questions: [question], agent: input.exec.agent, signal: input.exec.signal });
-    const selectedName = answers.answers.flatMap((answer) => [...answer.selected])[0] ?? "";
-    const chosen = proposal.candidates.find((candidate) => candidate.name === selectedName) ?? pick(proposal.recommendedIndex);
+    const firstAnswer = answers.answers[0];
+    const selectedName = firstAnswer !== undefined ? (firstAnswer.selected[0] ?? "") : "";
+    const customText = (firstAnswer?.custom ?? "").trim();
+    const chosen = proposal.candidates.find((candidate) => candidate.name === selectedName);
+    if (chosen === undefined) {
+      // 批3-3(#30 账本防污染):用户没在候选里选定(自述分组=custom 自由输入,或未选提交)
+      // ——不替选、不落账。此前静默 fallback recommended 会把 agent 的推荐落进
+      // user_selected 账本,污染内核凭据比对基准(r2 账本错位形态);自由文本
+      // 不直达生成面——把用户原话带回,组装成新候选重新出卡让用户正式选定。
+      // ci-bl-1103 组数指令闭环:custom 是组数指令(分N组/改成N组/N组)时结构化
+      // 落 run 级 marker——用户意愿成为下一轮出卡的硬约束(防 agent 无视后带原
+      // 方案重出造成循环确认)。
+      const countMatch = customText.match(/(?:分|改成?|要|按)\s*([0-9一二三四五六七八九十]+)\s*组/);
+      if (countMatch !== null) {
+        const cnDigits: Record<string, number> = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10 };
+        const raw = countMatch[1] as string;
+        const requested = /^[0-9]+$/.test(raw) ? Number(raw) : (cnDigits[raw] ?? 0);
+        if (requested > 0 && input.runDir !== undefined) {
+          try {
+            const markerDir = join(input.runDir, "runtime", "webui");
+            mkdirSync(markerDir, { recursive: true });
+            writeFileSync(join(markerDir, "grouping-request.json"),
+              JSON.stringify({ requested_group_count: requested, raw_text: customText.slice(0, 120), at: new Date().toISOString() }, null, 1), "utf-8");
+          } catch { /* marker 落盘失败不阻断——靠 note 强指令兜底 */ }
+        }
+        return {
+          source: "proposal",
+          decision: "regroup_request",
+          candidate_name: null,
+          groups: [],
+          evidence,
+          payload: null,
+          note: `用户明确要求${String(requested)}组——下一次分组候选必须恰好${String(requested)}组(这是用户的硬性意愿,不是建议):按${String(requested)}组重新设计候选(语义聚合可合并现组),再出分组卡让用户选定;不得再带原组数方案重出`,
+        };
+      }
+      return {
+        source: "proposal",
+        decision: "none",
+        candidate_name: null,
+        groups: [],
+        evidence,
+        payload: null,
+        note: customText !== ""
+          ? `用户自述了分组(「${customText.slice(0, 120)}」)而不是选候选——请把它组装成新的分组候选重新出分组卡让用户选定(自由文本不直达生成面);本次未下传分组、未落账`
+          : "用户未在候选里选定也未自述——不替用户选:换一组候选重新出卡,或直接问用户想怎么分;本次未下传分组、未落账",
+      };
+    }
     const chosenPayload = withChoice(chosen.name);
+    // ci-bl-1103:用户已选定=组数意愿已满足,清 marker(后续重跑不再受组数门约束)
+    if (input.runDir !== undefined) {
+      try { rmSync(join(input.runDir, "runtime", "webui", "grouping-request.json"), { force: true }); } catch { /* 清理失败不阻断 */ }
+    }
     // ── D-c：选定即落账（**这里就写，不等段成功**）──────────────────────────
     // 顺序是刻意的：段随后可能 blocked/异常，若等段成功再写，选择又会蒸发一次。
     // 落点 runtime/webui（卡面输入态，与 config-snapshot／pending-confirm 同域）——
@@ -840,7 +979,7 @@ export const resolveGroupingFace = async (input: {
           field_count: chosen.groups.reduce((sum, group) => sum + group.fields.length, 0),
           decided_at: new Date().toISOString(),
           source: "user_selected",
-        });
+        }, input.docType);
       } catch (cause) {
         // 落账失败不改判选择本身（选择仍然本次生效），但必须如实说出「没存住」——
         // 静默失败＝下次又重问一遍，用户会以为系统没记住。
@@ -932,7 +1071,7 @@ export const constructionParamsApprovalLines = (input: {
   // 问题 6（owner 2026-10-28）：mode0/mode1/mode5/targeted 是工程内部叫法，
   // 一律不得出现在用户可见文案里——按「这套参数会产出什么样本」说人话。
   const partGroup = input.groupingConfirm
-    ? "分组方案：已确认（按组逐图各生成一条样本）"
+    ? "分组：按分组生成（产品默认，必分组不提问）"
     : "分组方案：未确认——**按数据事实分组默认生成**（组数按标准压到常规区间），要改直接说";
   // 未显式给倍数时不写具体数字：倍数由内核按「调用方建议 > 字段难度与预算推荐 >
   // 默认开的最低倍数」定，审批前无法确定——写死数字会与实际执行不一致。
@@ -986,7 +1125,9 @@ export const constructionParamsApprovalLines = (input: {
 export const resolvePipelineRunDir = (
   workspacePath: string,
   runId: string,
-): { runDir: string; layout: "canonical" | "legacy" } | { error: "run_dir_symlink_rejected"; note: string } => {
+  experiment?: string,
+): { runDir: string; layout: "canonical" | "legacy" }
+  | { error: "run_dir_symlink_rejected" | "run_id_ambiguous"; note: string } => {
   const symlinkRejected = (dir: string): { error: "run_dir_symlink_rejected"; note: string } | null => {
     try {
       if (lstatSync(dir).isSymbolicLink()) {
@@ -996,6 +1137,18 @@ export const resolvePipelineRunDir = (
     return null;
   };
   const experiments = join(workspacePath, "experiments");
+  // F1(ci-bl-1103-3):命中口径对齐内核 locate_run_dir——目录存在且带 run.json
+  // (卡片落账 mkdir 出来的无 run.json 幽灵目录不算命中,防自我中毒);显式实验
+  // 优先(不猜);枚举多命中 fail-closed 报歧义,绝不按目录序挑一个。
+  const isRealRun = (dir: string): boolean => existsSync(join(dir, "run.json"));
+  if (typeof experiment === "string" && experiment.trim() !== "") {
+    const direct = join(experiments, experiment.trim(), runId);
+    if (existsSync(direct)) {
+      const rejected = symlinkRejected(direct);
+      if (rejected !== null) return rejected;
+    }
+    return { runDir: direct, layout: "canonical" };
+  }
   const expNames: string[] = [];
   try {
     for (const entry of readdirSync(experiments, { withFileTypes: true })) {
@@ -1003,14 +1156,26 @@ export const resolvePipelineRunDir = (
     }
   } catch { /* 无实验树＝纯 legacy 工作区 */ }
   // v3 全树优先于 v2 全树（同 run 在 v3/v2 并存时认 v3——不按实验名字典序偶然择一）
-  for (const v3 of [true, false]) {
-    for (const name of expNames) {
-      const candidate = v3 ? join(experiments, name, runId) : join(experiments, name, "runs", runId);
-      if (!existsSync(candidate)) continue;
-      const rejected = symlinkRejected(candidate);
-      if (rejected !== null) return rejected;
-      return { runDir: candidate, layout: "canonical" };
-    }
+  const v3Hits: string[] = [];
+  const v2Hits: string[] = [];
+  for (const name of expNames) {
+    const v3 = join(experiments, name, runId);
+    const v2 = join(experiments, name, "runs", runId);
+    if (existsSync(v3) && isRealRun(v3)) v3Hits.push(v3);
+    else if (existsSync(v2) && isRealRun(v2)) v2Hits.push(v2);
+  }
+  const hits = v3Hits.length > 0 ? v3Hits : v2Hits;
+  if (hits.length > 1) {
+    return {
+      error: "run_id_ambiguous",
+      note: `同 run_id 在多个实验下命中，拒绝猜测（请显式传 experiment）：${hits.join("；")}`,
+    };
+  }
+  if (hits.length === 1) {
+    const rejected = symlinkRejected(hits[0] as string);
+    if (rejected !== null) return rejected;
+    const v2 = v3Hits.length === 0;
+    return { runDir: hits[0] as string, layout: v2 ? "canonical" : "canonical" };
   }
   // v1 固定名桶 `<wp>/workspace/runs/<id>` 仍归 canonical 档（存量只读兼容，语义不变）；
   // `<wp>/runs/<id>`（ADR-0005 旧桶）才是 legacy。
@@ -1678,6 +1843,73 @@ export const fieldConfigPrecheckOf = (
  * @param code - 内核退出码（2＝blocked）。
  * @returns 追加进回执的键；不命中返回空对象。
  */
+/** D187:mode5 期望 vs 实产披露——每图条数语义+不重样组合空间如实说,观感不再是「倍率没生效」。 */
+const mode5DisclosureOf = (countsRaw: Record<string, unknown> | null | undefined): string => {
+  const kindCounts = (countsRaw?.["kind_counts"] ?? {}) as Record<string, number>;
+  const exposure = (countsRaw?.["effective_exposure"] ?? {}) as Record<string, unknown>;
+  const perImage = exposure["mode5_random"];
+  const produced = kindCounts["mode5_random"];
+  if (typeof perImage !== "number" || produced === undefined) return "";
+  if (produced === 0) return "\n（mode5 未启用或未生成）";
+  return `\n（mode5＝每图 ${String(perImage)} 条随机组合，同图不重样：实产 ${String(produced)} 条，组合空间有限时少于期望，非倍率失效）`;
+};
+
+/** D184 重做:质检报告平读(datasets 布局推导+report_digest 对拍,读到 pending 明细项)。 */
+const readLabelQcReportFlat = async (
+  wsRoot: string, docType: string, receipt: Record<string, unknown>,
+): Promise<{ report_digest: string; items: Array<{ item_id: string; check_class: string; human_label: string; suggested_action: Record<string, unknown>; locator: Record<string, unknown>; candidates: Array<Record<string, unknown>> }> } | null> => {
+  const digest = String(firstResultKeyOf(receipt, "report_digest") ?? "");
+  const datasetsRoot = join(wsRoot, "datasets");
+  if (!existsSync(datasetsRoot)) return null;
+  for (const entry of readdirSync(datasetsRoot)) {
+    if (docType !== "" && !entry.includes(docType)) continue;
+    const reportPath = join(datasetsRoot, entry, "label-qc-report.json");
+    if (!existsSync(reportPath)) continue;
+    try {
+      const parsed = JSON.parse(readFileSync(reportPath, "utf8")) as Record<string, unknown>;
+      if (digest !== "" && String(parsed["report_digest"] ?? "") !== digest) continue;
+      const items = Array.isArray(parsed["items"]) ? (parsed["items"] as Array<Record<string, unknown>>) : [];
+      return {
+        report_digest: String(parsed["report_digest"] ?? ""),
+        items: items.filter((it) => it["status"] === "pending" || it["decided_by"] == null).map((it) => ({
+          item_id: String(it["item_id"] ?? ""),
+          check_class: String(it["check_class"] ?? ""),
+          human_label: String(it["human_label"] ?? ""),
+          suggested_action: (it["suggested_action"] ?? {}) as Record<string, unknown>,
+          locator: (it["locator"] ?? {}) as Record<string, unknown>,
+          candidates: Array.isArray(it["candidates"]) ? (it["candidates"] as Array<Record<string, unknown>>) : [],
+        })),
+      };
+    } catch { /* 报告不可读试下一个 */ }
+  }
+  return null;
+};
+
+/** D184 重做:建议处置人话化。 */
+const suggestedActionTextOf = (item: { suggested_action: Record<string, unknown>; candidates: Array<Record<string, unknown>> }): string => {
+  const sa = item.suggested_action;
+  const hint = String(sa["disposition_hint"] ?? sa["action_hint"] ?? "");
+  const target = sa["target_candidate_id"] !== undefined ? String(sa["target_candidate_id"]) : "";
+  const targetText = target !== "" && item.candidates.length > 0
+    ? `保留 ${String(item.candidates[0]?.["field"] ?? "")}＝「${String(item.candidates[0]?.["value"] ?? "")}」` : "";
+  return `${hint}${targetText !== "" ? `（${targetText}）` : ""}`;
+};
+
+/** D184/D188:回执 results[0].raw_response 取键（段摘要结构单源）。 */
+const firstResultKeyOf = (receipt: Record<string, unknown>, key: string): unknown => {
+  const results = Array.isArray(receipt["results"]) ? (receipt["results"] as Array<Record<string, unknown>>) : [];
+  const raw = results[0]?.["raw_response"];
+  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>)[key] : undefined;
+};
+
+/** D184:质检检查类码 → 人话（卡面零内部码纪律）。 */
+const labelQcClassNameOf = (code: string): string =>
+  code === "q1_same_box_same_value_same_field" ? "同框同值同字段（重复标注）"
+  : code === "q2_same_box_same_value_diff_field" ? "同框同值不同字段（一字段两用）"
+  : code === "q3_value_box_shape_mismatch" ? "值与框形状不匹配"
+  : code === "q4_box_out_of_bounds" ? "标注框越界"
+  : code;
+
 export const labelQcResumeHintOf = (stage: string, code: number | null): Record<string, unknown> => {
   if (stage !== "label_qc" || code !== 2) return {};
   return {
@@ -1856,6 +2088,7 @@ export const buildPipelineTool = (
     parameters: {
       stage: { type: "string", required: true, enum: [...PIPELINE_STAGES], description: "要触发的内核管线段（八段原文，单段）" },
       run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/experiments/<exp>/<run_id>·RunLayout/v3；未指定实验归入当日「未命名实验」）" },
+      experiment: { type: "string", description: "实验名（可选；显式给定时内核把 run 归属该实验——register 建 run 与摘要落点单源。缺省不传：内核按「复用该 run 既有归属→当日未命名实验」解析。#26 r2 实锤：指定实验名但段驱动不转发→run 落 adhoc）" },
       workspace_path: { type: "string", description: "workspace 根（可选覆盖——缺省按会话 cwd→工作区身份→实例配置解析，并回显所用根与依据；显式给时必须含 .atf/workspace.json 或 datasets+splits）。注意：会话未绑定工作区时本参数**必须显式传**（绝对路径）——漏传会在段入口被拒（workspace_path_missing），白白多一轮" },
       source_root: {
         type: "string",
@@ -1882,11 +2115,13 @@ export const buildPipelineTool = (
       },
       style_clusters_source: {
         type: "string",
-        enum: ["auto", "directory", "placeholder"],
+        enum: ["auto", "directory", "placeholder", "layout"],
         description:
           "版式簇来源声明（仅 register 段有效，其它段忽略）：不给＝按目录形态判——来源目录分了多个子目录时会拒绝，" +
           "回执列出各目录页数并问明「这些子目录是按版式分的吗」；答是就传 directory 重跑（目录名即簇，切分按你的划分走），" +
           "答否就传 placeholder（目录只是批次/来源/时间组织，不参与切分分层）。" +
+          "layout=版式按标注框布局聚类（版式=布局结构，弱化文字内容与缩放——目录/自带簇过度碎片化时的布局口径通道，StyleClusterManifest 落盘可重放）；" +
+          "回执出现 layout_recluster_hint（目录划分碎片化、布局口径显著更少簇）时，把对比讲给用户听，用户认可布局口径就传 layout 重跑。" +
           "对用户表述用业务语言：问「这些子目录是按版式分的吗」，不要念枚举值",
       },
       split_id: {
@@ -1948,7 +2183,7 @@ export const buildPipelineTool = (
           "卡上让用户选定后，重跑 experiment_setup 才带 grouping_confirm=true——两次触发是设计内流程，不是浪费。" +
           "禁止在触发 experiment_setup 之前用聊天文字确认分组并当作用户已确认：聊天确认不落分组卡账本，" +
           "实验门来源只能标助手推断，且候选没有字段风险信号支撑（问了也白问）。" +
-          "用户在聊天里主动说了分组意愿时，如实转成 grouping_proposal 候选走卡，让用户在卡上正式确认",
+          "【凭据制】user-confirmed 只认分组卡账本:用户在卡上选定即落 <run>/runtime/webui/grouping-choice.json,内核实验门读该回执且分组内容逐字一致才落 user-confirmed——本旗标无论何时都只落 agent-confirmed,不再构成用户确认事实。凭据在场匹配时旗标可省(内核凭据自主成立)。用户在聊天里主动说了分组意愿时，如实转成 grouping_proposal 候选走卡，让用户在卡上正式确认",
       },
       mode5_random: {
         // D170v2/P1(汇报义务——owner 2026-11-01):倍数由你给建议时必须同时给理由
@@ -1960,6 +2195,13 @@ export const buildPipelineTool = (
           "「基线行数」的倍数，基线行数＝每页一条全字段的行数（一页一行，即页数）；分组样本与重点字段组合样本" +
           "产出的行不计入基线。倍数不固定：显式给定 > 统计件里的建议倍数 > 默认最低倍数。" +
           "不给＝按默认最低倍数生成（这是标准构造动作），卡面会问你沿用还是改",
+      },
+      prompt_material_hint: {
+        type: "string",
+        description:
+          "用户已提供抽取说明(prompt)时必传——把来源与要点摘要传入(如「用户在对话中提供的抽取说明:以航空运单字段表为准」);" +
+          "不传而材料 schema 也无 template 时,卡面按「没有抽取说明」推荐内置模板——用户明明给了还被推荐内置=违背用户已表达语义" +
+          "(T10 及其 UAT 二发教训:确认卡必须忠实用户已提供的信号)",
       },
       mode5_advice_stats: {
         type: "object",
@@ -2140,7 +2382,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
+      args: { stage: string; run_id: string; experiment?: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; prompt_material_hint?: string; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -2191,7 +2433,8 @@ export const buildPipelineTool = (
       // （内核 RunLayout v1 同口径——canonical <wp>/workspace/runs/<id>，legacy 公式兜底；
       // 软链拒）。argv 的 --workspace 仍传用户原值（workspace 根贯通内核——内核自解析
       // 落点，harness 不代传展开后的路径）。
-      const resolvedRun = resolvePipelineRunDir(workspacePath, args.run_id);
+      const resolvedRun = resolvePipelineRunDir(workspacePath, args.run_id,
+        typeof args.experiment === "string" ? args.experiment : undefined);
       if ("error" in resolvedRun) {
         return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: resolvedRun.error, note: resolvedRun.note });
       }
@@ -2287,6 +2530,10 @@ export const buildPipelineTool = (
         | {
             groupingConfirm: boolean;
             mode5Random: number | undefined;
+            // D177:targeted 倍率/序列长度上限(构造参数卡三问)与智能默认呈现值
+            targetedMultiplier?: number;
+            cutoffLen?: number;
+            targetedSuggested?: number;
             targetedAdvice:
               | { carry: string[]; min: number | null; max: number | null; reason: string; evidence: string[]; evidenceStatus: string }
               | undefined;
@@ -2392,6 +2639,12 @@ export const buildPipelineTool = (
               // 决策闸不再重复问「要不要分组」，只补真缺的增强倍数。
               groupingConfirm: args.grouping_proposal !== undefined ? true : constructionParams.groupingConfirm,
               mode5Random: constructionParams.mode5Random,
+              // D177:targeted 智能默认从 agent 传的 targeted_plan.multiplier 提取(缺=无信号呈现 1 倍);
+              // cutoff_len agent 显式传参时不问(该值已是确认态)
+              targetedSuggested: typeof (args.targeted_plan as Record<string, unknown> | undefined)?.["multiplier"] === "number"
+                ? Number((args.targeted_plan as Record<string, unknown>)["multiplier"])
+                : undefined,
+              cutoffLen: typeof args.cutoff_len === "number" ? args.cutoff_len : undefined,
             },
           });
           constructionParams = {
@@ -2400,6 +2653,9 @@ export const buildPipelineTool = (
             groupingConfirm:
               args.grouping_proposal !== undefined ? constructionParams.groupingConfirm : decided.groupingConfirm,
             mode5Random: decided.mode5Random,
+            targetedMultiplier: decided.targetedMultiplier,
+            cutoffLen: decided.cutoffLen,
+            targetedSuggested: decided.targetedSuggested,
           };
           constructionDecisionNote = decided.note;
           constructionDecidedBy = decided.decided_by;
@@ -2475,10 +2731,12 @@ export const buildPipelineTool = (
       // 字段清单确认已前移到 register 段之后（owner 2026-10-28 顺序纠正：
       // 字段是登记时从标注梳理出来的，确认必须紧跟着做，不能拖到实验配置段）。
       // 这里只读账本，供回执与后续判据使用。
-      const fieldChoiceConfirmed = args.stage === "experiment_setup" && readFieldChoice(runDir) !== null;
+      // D191:字段确认 per-doc 判定(多类 run 逐类各自确认;doc_type 缺席回落 run 级)
+      const fieldChoiceDoc = typeof args.doc_type === "string" ? args.doc_type.trim() : undefined;
+      const fieldChoiceConfirmed = args.stage === "experiment_setup" && readFieldChoice(runDir, fieldChoiceDoc) !== null;
       let fieldChoiceLine = "";
       if (args.stage === "experiment_setup") {
-        const prior = readFieldChoice(runDir);
+        const prior = readFieldChoice(runDir, fieldChoiceDoc);
         if (prior !== null) {
           fieldChoiceLine = `字段清单：${String(prior.total_fields)} 个（你在登记后确认过${
             prior.all_fields ? "，全部训练" : `，训练 ${prior.confirmed_fields.join("、")}`
@@ -2487,11 +2745,26 @@ export const buildPipelineTool = (
       }
       let groupingFace: GroupingFace | undefined;
       if (args.stage === "experiment_setup") {
+        // ci-bl-1103 字段确认放行门(owner 时序裁定:字段确认→分组,不得倒置):
+        // 字段清单未经用户确认(无 field-choice 落账)时实验配置不放行——agent
+        // 自拟 field_config 不构成用户决定(D-f 判据),先回字段确认环节。
+        if (!fieldChoiceConfirmed) {
+          return asToolValue({
+            ok: false,
+            stage: args.stage,
+            run_id: args.run_id,
+            error: "field_choice_unconfirmed",
+            note: "字段清单未经用户确认——先确认「抽取哪些字段」再进分组环节:重跑 register 段触发字段清单确认卡,或请用户在对话里明确字段范围后由你代传字段确认;agent 自拟的字段配置不构成用户决定",
+          });
+        }
         const fieldConfigPath = typeof args.field_config === "string" ? args.field_config.trim() : "";
         const resolvedGrouping = await resolveGroupingFace({
           ctx,
           exec,
           runId: args.run_id,
+          // D175:per-doc 接线——experiment_setup 逐类调用时卡带类名(header 分组·<doc>)
+          // 与 per-doc 账本;内核已强制该段带 doc_type(多类裸调拦截),这里透传即可。
+          docType: typeof args.doc_type === "string" ? args.doc_type.trim() : undefined,
           fieldConfigPath,
           proposalRaw: args.grouping_proposal,
           runDir,
@@ -2564,6 +2837,11 @@ export const buildPipelineTool = (
       // 也显式上线解析值；E10d：allow_small_cluster_test 仅 family_split 且 true 才追加
       // 开关，缺省不出现在 argv，其它段不追加不报错）；禁拼第二套路径。
       const argv: string[] = ["--workspace", workspacePath, "--run-id", args.run_id, "--stage", args.stage];
+      // 实验名显式才透传（#26）：缺省不传——内核按「复用 run 既有归属→adhoc」解析,
+      // 不替调用方补默认(实验名是业务决策)。
+      if (typeof args.experiment === "string" && args.experiment.trim() !== "") {
+        argv.push("--experiment", args.experiment.trim());
+      }
       // 看图通道（仅候选构造段）：模型直接读图 → 交判读结果；或先只要页清单。
       // 旗标名与中间文件路径不下发给模型——工具参数即接口，模型只负责「看」和「报」。
       
@@ -2584,32 +2862,6 @@ const fieldCardSourceOf = (runDir: string): "labels" | "config" => {
 const fieldCardAskedRuns = new Set<string>();
 
 
-
-/** D163/W3：prompt 选择落账 inputs.json.prompt（resolved_via）。 */
-const writeInputsPromptChoice = (
-  runDir: string,
-  entry: Record<string, unknown>,
-): void => {
-  const path = join(runDir, "config", "inputs.json");
-  let doc: Record<string, unknown> = {};
-  try {
-    doc = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-  } catch {
-    doc = {};
-  }
-  doc.schema_version = "RunInputs/v1";
-  doc.prompt = {
-    ...(typeof doc.prompt === "object" && doc.prompt !== null ? doc.prompt : {}),
-    resolved_via: entry.resolved_via,
-    decided_at: new Date().toISOString(),
-  };
-  try {
-    mkdirSync(join(runDir, "config"), { recursive: true });
-    writeFileSync(path, `${JSON.stringify(doc, null, 1)}\n`, "utf8");
-  } catch {
-    // 落账失败不阻断（fail-open 到内置缺省）
-  }
-};
 
 /** D163/W3：prompt 确认卡——材料抽取说明 vs 产品内置模板（atf-template-v1）。
  *
@@ -2636,15 +2888,7 @@ const askPromptChoice = async (
       question: `训练 prompt 用哪套？— ${input.runId}`,
       header: "训练prompt",
       detail,
-      options: hasMaterial
-        ? [
-            { label: "用材料里的抽取说明", description: "按你提供的说明构造 prompt" },
-            { label: "用产品内置模板", description: builtinDesc },
-          ]
-        : [
-            { label: "用产品内置模板", description: builtinDesc + "（推荐——没有材料时的缺省）" },
-            { label: "我自己提供", description: "在下面的输入框里贴抽取说明或说明要点" },
-          ],
+      options: promptChoiceOptionsOf(materialHint).slice() as Array<{ label: string; description: string }>,
       multiSelect: false,
     }],
     agent: exec.agent,
@@ -2673,8 +2917,10 @@ let visualSummary: Record<string, unknown> | undefined;
           // 只导出页清单 + 看图包（整页图 + 字段局部），本步不做信号计算。
           const planPath = join(visualPrepDir, "visual-sample-plan.json");
           const bundleDir = join(visualPrepDir, "visual-bundles");
+          // D194:视觉通道 v1.16 恒开(内核 choices 收敛为 enabled)——plan_only 步
+          // (只导看图清单,本步不做信号计算)同样 enabled;disabled 旧形态撞 choices 拒绝。
           argv.push("--visual-sample-plan", planPath, "--visual-bundle-out", bundleDir,
-                    "--visual-channel", "disabled");
+                    "--visual-channel", "enabled");
           if (typeof args.visual_wave_size === "number") {
             argv.push("--visual-wave-size", String(Math.max(1, Math.trunc(args.visual_wave_size))));
           }
@@ -2839,6 +3085,8 @@ let visualSummary: Record<string, unknown> | undefined;
       if (args.stage === "experiment_setup" && constructionParams !== undefined) {
         if (constructionParams.groupingConfirm) argv.push("--grouping-confirm");
         if (constructionParams.mode5Random !== undefined) argv.push("--mode5-random", String(constructionParams.mode5Random));
+        // D177:targeted 倍率独立通道(与 mode5 分用不同倍率,owner 2026-11-04 裁定)
+        if (constructionParams.targetedMultiplier !== undefined) argv.push("--targeted-multiplier", String(constructionParams.targetedMultiplier));
         if (constructionAdvicePaths.mode5AdviceStats !== undefined) argv.push("--mode5-advice-stats", constructionAdvicePaths.mode5AdviceStats);
         if (constructionAdvicePaths.targetedAdvice !== undefined) argv.push("--targeted-advice", constructionAdvicePaths.targetedAdvice);
         if (constructionAdvicePaths.targetedPlan !== undefined) argv.push("--targeted-plan", constructionAdvicePaths.targetedPlan);
@@ -2854,7 +3102,9 @@ let visualSummary: Record<string, unknown> | undefined;
         if (tokenParams.values.max_total_tokens !== undefined) argv.push("--max-total-tokens", String(tokenParams.values.max_total_tokens));
         // C（2026-10-26）：训练截断与推理窗口同门下传（内核 b17 argparse 新增）——
         // 缺项不追加（内核侧门内 null，预算落盘缺项才回退基线）。
-        if (tokenParams.values.cutoff_len !== undefined) argv.push("--cutoff-len", String(tokenParams.values.cutoff_len));
+        // D177:构造参数卡确认的序列长度上限优先;无卡确认回落五参确认快照
+        const effectiveCutoffLen = constructionParams?.cutoffLen ?? tokenParams.values.cutoff_len;
+        if (effectiveCutoffLen !== undefined) argv.push("--cutoff-len", String(effectiveCutoffLen));
         if (tokenParams.values.max_model_len !== undefined) argv.push("--max-model-len", String(tokenParams.values.max_model_len));
         // 问题 4（owner 2026-10-28）：像素下限固定 65536——**在拼参前拦**，不给它走到内核
         // 变成一句 pixel_pair_min_not_pinned_without_reason（那句话只说「与基线不一致」，
@@ -2930,10 +3180,23 @@ let visualSummary: Record<string, unknown> | undefined;
       let fieldChoiceSummary: Record<string, unknown> | undefined;
       let promptChoiceSummary: Record<string, unknown> | undefined;
       if (args.stage === "register" && result.code === 0) {
+        // F1d(ci-bl-1103-3):段已成功=run.json 已落盘——卡片与落账锚定执行后重解析
+        // 的真 run。执行前的外层解析在 run 未建时只能给占位路径,曾连带 mkdir 出
+        // 幽灵 run 目录(owner 裁定:一次训练只允许一个 run 目录)。
+        const afterRun = resolvePipelineRunDir(workspacePath, args.run_id,
+          typeof args.experiment === "string" ? args.experiment : undefined);
+        if ("error" in afterRun) {
+          fieldChoiceSummary = { skipped: true,
+                                 note: `run 目录解析失败，字段/prompt 落账跳过:${afterRun.note}` };
+        } else {
+        const runDir = afterRun.runDir;
         const labels = readFieldLabels(runDir);
         if (labels !== null) {
-          const prior = readFieldChoice(runDir);
-          if (prior === null && fieldCardAskedRuns.has(args.run_id)) {
+          // D191:per-doc 读取与去重(多类 run 各自弹卡各自落账)
+          const registerDoc = typeof args.doc_type === "string" ? args.doc_type.trim() : undefined;
+          const registerDocTag = registerDoc !== undefined && registerDoc !== "" ? `:${registerDoc}` : "";
+          const prior = readFieldChoice(runDir, registerDoc);
+          if (prior === null && fieldCardAskedRuns.has(args.run_id + registerDocTag)) {
             // P1-3：本会话已弹过且未确认——不重弹，交给 agent 按上次回执追问。
             fieldChoiceSummary = { reused: false, asked_once: true,
                                    note: "字段清单卡本会话已弹过未确认——按上次回执向用户追问，不重复弹卡" };
@@ -2955,9 +3218,9 @@ let visualSummary: Record<string, unknown> | undefined;
                 // 但它确实在场。第二项的说明直接指过去，用户不用猜。
                 const answers = await svc.ask({
                   questions: [{
-                    id: `field-choice-${args.run_id}`,
-                    question: `这批数据的字段清单要全用它吗？— ${args.run_id}`,
-                    header: "字段清单",
+                    id: `field-choice-${args.run_id}${registerDocTag}`,
+                    question: `这批数据的字段清单要全用它吗？— ${args.run_id}${registerDoc !== undefined && registerDoc !== "" ? `（${registerDoc} 类）` : ""}`,
+                    header: registerDoc !== undefined && registerDoc !== "" ? `字段清单·${registerDoc}` : "字段清单",
                     detail: fieldChoiceDetailOf(labels, null, fieldCardSourceOf(runDir)),
                     options: [
                       {
@@ -2981,7 +3244,18 @@ let visualSummary: Record<string, unknown> | undefined;
                   .join("；")
                   .trim();
                 const known = new Set(labels.labels.map((item) => item.label));
-                const requested = typed
+                // ci-bl-1103 排除语义:用户写「除了X都训/不要X」→全部字段-排除集(排除项
+                // 须都在清单内,否则交回追问,不猜)。正面枚举(列字段名)为既有主路径。
+                const excludeMatch = typed.match(/^(?:除了?|不要|去掉|排除)\s*(.+)$/);
+                let confirmedList: string[] | null = null;
+                if (excludeMatch !== null) {
+                  const excluded = (excludeMatch[1] as string)
+                    .split(/[,，、\s]+/).map((s) => s.trim()).filter((s) => s !== "");
+                  if (excluded.length > 0 && excluded.every((name) => known.has(name))) {
+                    confirmedList = labels.labels.map((item) => item.label).filter((name) => !excluded.includes(name));
+                  }
+                }
+                const requested = confirmedList ?? typed
                   .split(/[,，、\s]+/)
                   .map((name) => name.trim())
                   .filter((name) => name !== "");
@@ -2996,7 +3270,7 @@ let visualSummary: Record<string, unknown> | undefined;
                     total_fields: labels.label_count,
                     decided_at: new Date().toISOString(),
                     source: "user_confirmed",
-                  });
+                  }, registerDoc);
                   fieldChoiceSummary = {
                     confirmed_fields: requested,
                     all_fields: requested.length === labels.label_count,
@@ -3010,7 +3284,7 @@ let visualSummary: Record<string, unknown> | undefined;
                     total_fields: labels.label_count,
                     decided_at: new Date().toISOString(),
                     source: "user_confirmed",
-                  });
+                  }, registerDoc);
                   fieldChoiceSummary = {
                     confirmed_fields: labels.labels.map((item) => item.label),
                     all_fields: true,
@@ -3036,7 +3310,7 @@ let visualSummary: Record<string, unknown> | undefined;
               } catch {
                 // 卡被关掉/通道失败 → 不造假确认；P1-3：同 run 记一次"已问过"，
                 // 重试进段不再重弹（交给 agent 按上一次回执追问，避免卡轰炸）。
-                fieldCardAskedRuns.add(args.run_id);
+                fieldCardAskedRuns.add(args.run_id + registerDocTag);
                 fieldChoiceSummary = { confirmed_fields: [], all_fields: false, total_fields: labels.label_count, skipped: true };
               }
             }
@@ -3048,6 +3322,11 @@ let visualSummary: Record<string, unknown> | undefined;
         if (promptSvc !== undefined && typeof promptSvc.ask === "function"
             && !fieldCardAskedRuns.has(args.run_id)) {
           try {
+            const priorPrompt = readInputsPromptResolvedVia(runDir);
+            if (priorPrompt !== null) {
+              // 已决(前一类 register 时确认过/深解析已落账)——run 级复用,不再弹卡
+              promptChoiceSummary = { reused: true, resolved_via: priorPrompt };
+            } else {
             // P0-3b(2026-11-01 owner 纠正):schema 自带 template＝材料内嵌抽取说明——
             // 深解析件 field_config_draft.json 的 template.present 为真时,材料面
             // 如实呈现"材料里带抽取说明",不再按"没有"推荐内置模板。
@@ -3073,15 +3352,22 @@ let visualSummary: Record<string, unknown> | undefined;
             } catch {
               // 深解析件缺席/不可读——按没有材料处理(与原行为一致)
             }
+            // D181:用户信号优先——agent 传 prompt_material_hint(用户对话/资料已指明)时,
+            // 卡面按「用户已提供」呈现,不走「没有抽取说明→推荐内置」分支(T10 二发修)
+            const agentHint = typeof args.prompt_material_hint === "string" && args.prompt_material_hint.trim() !== ""
+              ? args.prompt_material_hint.trim() : null;
             const promptSummary = await askPromptChoice(
               { runId: args.run_id, runDir }, { agent: exec.agent, signal: exec.signal },
-              promptSvc, p03bHint,
+              promptSvc, agentHint ?? p03bHint,
             );
-            writeInputsPromptChoice(runDir, promptSummary);
+            writeInputsPromptChoice(runDir, { ...promptSummary,
+              quote: typeof promptSummary.typed === "string" && promptSummary.typed !== "" && promptSummary.typed !== "(no pick)" ? promptSummary.typed : undefined });
             promptChoiceSummary = promptSummary;
+            }
           } catch {
             promptChoiceSummary = { skipped: true, note: "训练 prompt 卡未确认——按内置模板缺省走，agent 追问" };
           }
+        }
         }
       }
       let summary: unknown = null;
@@ -3350,6 +3636,117 @@ let visualSummary: Record<string, unknown> | undefined;
     execute: async (args: Record<string, unknown>, exec: unknown) => {
       const receipt = await runStage(args, exec);
       const ok = !receiptIsFailure(receipt);
+      // D184/D188:报告呈现进会话流(markdown+文件链接,不依赖 agent 转述)——
+      // label_qc 质检报告(必做流程不问句,呈现+建议即推进);
+      // training_prep 构造报告(行数组成+JSONL 样例+报告链接)。
+      try {
+        const stage = String(args["stage"] ?? "");
+        const wsRoot = typeof args["workspace_path"] === "string" ? String(args["workspace_path"]) : "";
+        const execCwd = (exec as { agent?: { session?: { header?: { cwd?: unknown } } } })?.agent?.session?.header?.cwd;
+        const effectiveWs = wsRoot !== "" ? wsRoot : (typeof execCwd === "string" ? execCwd : "");
+        if (stage === "label_qc" && effectiveWs !== "") {
+          // D184 重做(owner 复述定稿):逐项裁决卡——原生问题卡承载标签分析报告
+          // +处理建议,每项决定用户在卡上做(必做流程不问做不做);卡上选择=
+          // user_confirmed 凭据,落 label-qc-decisions 账本供 resolve 直通比对。
+          const counts = firstResultKeyOf(receipt, "counts") as Record<string, unknown> | undefined;
+          const pending = counts !== undefined ? Number(counts["pending"] ?? 0) : 0;
+          if (pending > 0) {
+            const qcSvc = ctx.get("userQuestions") as FormAskService | undefined;
+            const docTagQc = String(args["doc_type"] ?? "");
+            const report = await readLabelQcReportFlat(effectiveWs, docTagQc, receipt);
+            if (qcSvc !== undefined && typeof qcSvc.ask === "function" && report !== null) {
+              const questions = report.items.slice(0, pending).map((item, idx) => ({
+                id: `qc-item-${item.item_id}`,
+                question: `待裁决 ${String(idx + 1)}/${String(pending)} — ${item.human_label}`,
+                header: `标签裁决${docTagQc !== "" ? `·${docTagQc}` : ""}`,
+                detail: [
+                  `**问题**：${item.human_label}（${labelQcClassNameOf(item.check_class)}）`,
+                  ...(item.locator?.field !== undefined ? [`**字段**：${String(item.locator.field)}`] : []),
+                  ...(item.locator?.page !== undefined ? [`**样本/页**：${String(item.locator.sample ?? "")} ${String(item.locator.page ?? "")}`] : []),
+                  "**两个标注值**：",
+                  ...item.candidates.map((c, i2) => `  ${String(i2 + 1)}. ${String(c.field ?? "?")} =「${String(c.value ?? "?")}」`),
+                  "",
+                  `**建议**：${suggestedActionTextOf(item)}`,
+                  "选「按建议」直接采纳;选「维持原状」不处置该项;也可在输入框写字段名自定。",
+                ].join("\n"),
+                options: [
+                  { label: "按建议处置", description: suggestedActionTextOf(item) },
+                  { label: "维持原状", description: "不处置该项(保留两种标注,后续人工线下处理)" },
+                ],
+                multiSelect: false,
+              }));
+              try {
+                const qcAnswers = await qcSvc.ask({ questions, agent: (exec as { agent?: unknown }).agent, signal: (exec as { signal?: unknown }).signal });
+                const byId = new Map(qcAnswers.answers.map((a) => [a.id, a]));
+                const decisions = report.items.slice(0, pending).map((item) => {
+                  const answer = byId.get(`qc-item-${item.item_id}`);
+                  const picked = [...(answer?.selected ?? [])].join("") || (answer?.custom ?? "").trim();
+                  const suggested = item.suggested_action ?? {};
+                  if (picked.includes("维持原状")) {
+                    return { item_id: item.item_id, action: "reject", disposition: "keep_both_untouched", decided_by: "user_confirmed" };
+                  }
+                  return {
+                    item_id: item.item_id,
+                    action: String(suggested.action_hint ?? "accept"),
+                    disposition: String(suggested.disposition_hint ?? ""),
+                    target_candidate_id: suggested.target_candidate_id,
+                    custom: picked.includes("按建议") ? undefined : (picked !== "" ? picked : undefined),
+                    decided_by: "user_confirmed",
+                  } as Record<string, unknown>;
+                });
+                // 凭据账本(harness 写,agent 不可伪造):resolve 直通比对源
+                // 凭据账本锚 run 树(回执 run_dir 在场即用,缺席回落 workspace 根)
+                const decisionsRoot = String(receipt["run_dir"] ?? "") !== "" && existsSync(String(receipt["run_dir"]))
+                  ? String(receipt["run_dir"]) : effectiveWs;
+                const decisionsDir = join(decisionsRoot, "runtime", "webui");
+                if (existsSync(decisionsRoot)) {
+                  mkdirSync(decisionsDir, { recursive: true });
+                  writeFileSync(join(decisionsDir, "label-qc-decisions.json"), `${JSON.stringify({
+                    schema_version: "LabelQcUserDecisions/v1", decided_by: "user_confirmed",
+                    decided_at: new Date().toISOString(), report_digest: report.report_digest,
+                    decisions: decisions.map((d) => ({ item_id: d.item_id, action: d.action, disposition: d.disposition })),
+                  }, null, 1)}\n`, "utf8");
+                }
+                const nAccept = decisions.filter((d) => d.action === "accept").length;
+                receipt["label_qc_decisions"] = {
+                  decided_by: "user_confirmed", report_digest: report.report_digest, decisions,
+                  next: "以上逐项决定已由用户在卡上做出——按 decisions 原样调 atf_label_qc_resolve 提交,再用同一 run_id 重跑 label_qc",
+                };
+                projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, {
+                  conclusion: `标签裁决完成:${String(pending)} 项逐项确认(按建议 ${String(nAccept)} 项)`,
+                  stage: "label_qc",
+                  next: "提交裁决后重跑 label_qc",
+                });
+              } catch {
+                receipt["label_qc_decisions"] = { asked: false, note: "裁决卡通道异常——回执指路文案兜底" };
+              }
+            } else {
+              receipt["label_qc_decisions"] = { asked: false, note: "卡通道缺席或报告不可读——按回执指路文案走 atf_label_qc_inspect 逐项流程" };
+            }
+          }
+        }
+        if (stage === "training_prep" && ok) {
+          const report = firstResultKeyOf(receipt, "construction_report") as Record<string, unknown> | undefined;
+          if (report !== undefined) {
+            const countsRaw = report["variants_counts"] as Record<string, unknown> | null | undefined;
+            const kindCounts = (countsRaw?.["kind_counts"] ?? {}) as Record<string, number>;
+            const docTag = String(args["doc_type"] ?? "");
+            const kindLines = Object.entries(kindCounts).map(([kind, n]) => `- ${kind}：${String(n)} 行`).join("\n");
+            const analysisPath = typeof report["analysis_report"] === "string" ? report["analysis_report"] : "";
+            const jsonlPath = typeof report["train_jsonl"] === "string" ? report["train_jsonl"] : "";
+            let sampleLine = "";
+            if (jsonlPath !== "") {
+              try { sampleLine = readFileSync(jsonlPath, "utf8").split("\n")[0] ?? ""; } catch { /* 样例缺席不阻断 */ }
+            }
+            projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, {
+              conclusion: `数据构造报告${docTag !== "" ? `（${docTag} 类）` : ""}：共 ${String(report["train_rows"] ?? "?")} 行训练样本\n${kindLines}` + mode5DisclosureOf(countsRaw)
+                + (sampleLine !== "" ? `\nJSONL 样例（首行截断）：\n\`${sampleLine.slice(0, 300)}\`` : ""),
+              stage: "training_prep",
+              next: analysisPath !== "" ? `[查看完整构造分析报告](${analysisPath})` : "构造完成，进入启动前检查",
+            });
+          }
+        }
+      } catch { /* 报告呈现失败不阻断段回执 */ }
       const decorated = decorateOutcome(
         receipt,
         sessionIdOfExec(exec) ?? null,
@@ -3370,3 +3767,4 @@ let visualSummary: Record<string, unknown> | undefined;
     },
   };
 };
+

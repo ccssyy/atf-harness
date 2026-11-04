@@ -314,7 +314,7 @@ fi
 
 log "发版成功：uat now at ${TARGET_SHORT}（四项验证全过·atf-uat 容器 ${SSH_TARGET}）"
 if [[ -n "$NEW_TOKEN" ]]; then
-  log "公网访问（同事用完整 URL；token 每 boot 轮换——已登录浏览器凭 30 天签名 cookie 存续）:"
+  log "公网访问（同事用完整 URL；token 口径＝env 声明即固定、未声明每 boot 随机——已登录浏览器凭 30 天签名 cookie 存续）:"
   log "  http://${UAT_PUBLIC_HOST}:${UAT_PUBLIC_PORT}/?token=${NEW_TOKEN}"
 else
   log "WARN: token 未提取到——完整 URL 请查容器内 ${UAT_LOG} 的 token= 行"
