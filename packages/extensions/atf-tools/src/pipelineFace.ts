@@ -803,7 +803,10 @@ export const resolveGroupingFace = async (input: {
   // 变了再重出卡,即「先漏一个字段再重新分」循环的机制根源)。
   if (input.runDir !== undefined) {
     const choice = readFieldChoice(input.runDir, input.docType);
-    if (choice !== null && !choice.all_fields && choice.confirmed_fields.length > 0) {
+    // D196(11-05 v-round-1105 实锤):去掉 D185 的 !all_fields 条件洞——全选路径
+    // (all_fields=true)账本同样记全量清单(回显实证),跳过它=用户分组与字段契约
+    // 分叉静默落账;confirmed_fields 空数组(存量旧账本)仍跳过(length>0 防御保留)。
+    if (choice !== null && choice.confirmed_fields.length > 0) {
       const expected = new Set(choice.confirmed_fields);
       const offered = new Set<string>();
       for (const candidate of proposal.candidates) {

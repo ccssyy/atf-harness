@@ -53,7 +53,7 @@ const confirmFields = (ws: string, runId: string): void => {
     mkdirSync(join(runDir, rel), { recursive: true });
     writeFileSync(
       join(runDir, rel, "field-choice.json"),
-      JSON.stringify({ schema_version: "FieldChoice/v1", run_id: runId, confirmed_fields: ["f1"], all_fields: true, total_fields: 1, decided_at: new Date().toISOString(), source: "user_confirmed" }),
+      JSON.stringify({ schema_version: "FieldChoice/v1", run_id: runId, confirmed_fields: ["doc_identifier", "page_summary", "goods_name"], all_fields: true, total_fields: 3, decided_at: new Date().toISOString(), source: "user_confirmed" }),
       "utf-8",
     );
   }
