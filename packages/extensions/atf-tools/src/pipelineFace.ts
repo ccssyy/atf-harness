@@ -443,6 +443,16 @@ export const parseGroupingProposal = (
         .map((field) => field.trim());
       groups.push({ name: groupName, fields });
     }
+    // D173(owner 2026-11-04):候选组数区间机检——出卡前拦截,不再只标注。
+    // >5 拒(对齐内核 GROUPING_MAX_GROUPS);1 组=平铺全字段等同没分组,
+    // 字段总数≥4(两两分组可两全)时拒;字段总数<4 豁免(与内核下限同口径)。
+    const groupCount = groupsRaw.length;
+    const totalFields = groups.reduce((sum, group) => sum + group.fields.length, 0);
+    if (groupCount > 5) {
+      errors.push(`candidates[${String(index)}] 组数 ${String(groupCount)} 超上限 5——重设为 2-3 组(优先)、最多 5 组的候选`);
+    } else if (groupCount < 2 && totalFields >= 4) {
+      errors.push(`candidates[${String(index)}] 只有 1 组(平铺全字段=没分组)——字段默认必须分组,重设为 2-3 组候选(字段总数<4 时单组豁免)`);
+    }
     candidates.push({ name, groups, reason: typeof row["reason"] === "string" ? row["reason"].trim() : "" });
   }
   if (recommendedIndex < 0 && candidates.length > 0) {
