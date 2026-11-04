@@ -1,6 +1,6 @@
 {
  "note": "内核 walkthrough 段级参数闭集快照（摘自内核仓 tools/argparse_surface.json）",
- "source_surface_sha256": "99015d861bba5373ee4c270a17db226c91c021d8e3f85afebf79049db520cfe9",
+ "source_surface_sha256": "6dd9e76dd1c005342c856820cee6bd7a3da3093b2077bbc39e4b3b3a712ebbe0",
  "options": [
   "--access-mode",
   "--actor",
@@ -50,6 +50,7 @@
   "--style-clusters-source",
   "--targeted-accept",
   "--targeted-advice",
+  "--targeted-multiplier",
   "--targeted-plan",
   "--token-provider",
   "--train-all",
