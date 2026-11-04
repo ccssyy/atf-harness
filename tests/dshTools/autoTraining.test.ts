@@ -166,11 +166,11 @@ const template = readFileSync(join(repoRoot, "deploy", "profiles", "web", "cordi
   it("免审清单在 atf-tools config.approvalPolicy：显式工具名、零 atf_ 前缀、零治理点", () => {
     const block = template.slice(template.indexOf("approvalPolicy:"), template.indexOf("# —— M3 品牌定稿"));
     expect(block).toContain("preset: atf-training");
-    for (const tool of ["atf_pipeline_stage", "atf_config_confirm", "atf_training_preflight"]) {
+    for (const tool of ["atf_pipeline_stage", "atf_config_confirm", "atf_training_preflight", "atf_records_query", "atf_label_qc_resolve", "atf_admit_data", "atf_gate"]) { // D170v2 步3:链内可逆面免审扩至 7 项
       expect(block).toContain(`- ${tool}`);
     }
     // 治理点排除（既有裁定「GPU 训练启动确认任何档位阻塞」因此无需废止）
-    for (const governed of ["atf_run_training", "atf_publish_confirm", "atf_publish_model", "atf_launch_execute", "atf_joint_train", "atf_gate", "atf_admit_data", "atf_scratch_exec", "atf_quantize_annotations"]) {
+    for (const governed of ["atf_run_training", "atf_publish_confirm", "atf_publish_model", "atf_launch_execute", "atf_joint_train", "atf_scratch_exec", "atf_quantize_annotations"]) { // gate/admit 已改判链内免审(D170v2 步3)
       expect(block).not.toContain(`- ${governed}`);
       expect(block).not.toContain(governed);
     }
