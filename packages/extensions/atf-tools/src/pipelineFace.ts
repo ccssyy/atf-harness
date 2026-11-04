@@ -432,7 +432,7 @@ export const parseGroupingProposal = (
   for (const [index, entry] of (candidatesRaw ?? []).entries()) {
     const row = asRecordOf(entry);
     if (row === null) {
-      errors.push(`candidates[${String(index)}] 不是对象`);
+      errors.push(`第 ${String(index + 1)} 套候选方案格式不对（须为对象）`); // D195:用户面去机器路径,工程定位走回执结构
       continue;
     }
     const name = typeof row["name"] === "string" ? row["name"].trim() : "";
@@ -454,7 +454,7 @@ export const parseGroupingProposal = (
       if (groupName === "") errors.push(`candidates[${String(index)}].groups[${String(gi)}].name 缺失`);
       const fieldsRaw = Array.isArray(grow["fields"]) ? (grow["fields"] as unknown[]) : null;
       if (fieldsRaw === null || fieldsRaw.length === 0) {
-        errors.push(`candidates[${String(index)}].groups[${String(gi)}].fields 须为非空字符串数组`);
+        errors.push(`第 ${String(index + 1)} 套候选的第 ${String(gi + 1)} 组字段清单为空或格式不对（须为字段名列表）`);
       }
       const fields = (fieldsRaw ?? [])
         .filter((field): field is string => typeof field === "string" && field.trim() !== "")
@@ -467,9 +467,9 @@ export const parseGroupingProposal = (
     const groupCount = groupsRaw.length;
     const totalFields = groups.reduce((sum, group) => sum + group.fields.length, 0);
     if (groupCount > 5) {
-      errors.push(`candidates[${String(index)}] 组数 ${String(groupCount)} 超上限 5——重设为 2-3 组(优先)、最多 5 组的候选`);
+      errors.push(`第 ${String(index + 1)} 套候选方案分了 ${String(groupCount)} 组,超过最多 5 组的限制——请改成 2-3 组(优先)或最多 5 组重新提交`);
     } else if (groupCount < 2 && totalFields >= 4) {
-      errors.push(`candidates[${String(index)}] 只有 1 组(平铺全字段=没分组)——字段默认必须分组,重设为 2-3 组候选(字段总数<4 时单组豁免)`);
+      errors.push(`第 ${String(index + 1)} 套候选方案只有 1 组,等于没分组——字段默认必须分组,请改成 2-3 组重新提交(字段总数少于 4 个时可以不分组)`);
     }
     candidates.push({ name, groups, reason: typeof row["reason"] === "string" ? row["reason"].trim() : "" });
   }

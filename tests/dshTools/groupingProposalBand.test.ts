@@ -22,7 +22,7 @@ describe("D173 分组候选组数区间机检", () => {
       candidates: [candidateOf(6, 5)],
     });
     expect(verdict.ok).toBe(false);
-    if (!verdict.ok) expect(verdict.errors.some((e) => e.includes("超上限 5"))).toBe(true);
+    if (!verdict.ok) expect(verdict.errors.some((e) => e.includes("超过最多 5 组"))).toBe(true);
   });
 
   it("1 组（平铺全字段）拒——字段总数≥4 可两全时", () => {
