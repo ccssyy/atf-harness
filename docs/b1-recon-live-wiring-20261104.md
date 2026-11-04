@@ -68,3 +68,22 @@ T10 真机会话（d168v2-replay，本机 zstd 全量解压 994 行/2.7MB）实�
 
 - dev 容器无 zstd 二进制：远端 zstd 管道全为假阴性（本次前两轮扫描教训）；会话文件须拉本机解压或用支持多帧的解压实现；
 - Node zlib `zstdDecompressSync` 只解第一帧（流式会话文件为多帧拼接），远端统计因此失真。
+
+---
+
+## B1 配置批执行记录（2026-11-04 深夜）
+
+### 已落地并验证
+
+- dev 装配清单追加 `compaction-basic.config.thresholdRatio: 0.2`（200K 水位触发 prune/spill，默认 0.8=800K 在 GLM 1M 下不可达）；
+- 净室重启 dev 成功：新进程在听 3080（HTTP 401=token 门正常）、atf-ui 扩展装载、compaction 配置通过启动校验零报错；
+- 回滚路径：删除追加的 4 行＋重启（备份 `cordis.patch.yml.bak-b1-20261104` 在实例 profile 目录）。
+
+### 过程事故与处置（教训登记）
+
+重新生成路径（overlay→generate.py）暴露 **dev.overlay.yml 与现役装配清单多处未同步**：llm-pi-ai 缺 zai-coding-cn provider（默认模型正用它）、atf-tools 的 chainTools 停在 D170v2 步3 之前（缺 atf_label_qc_resolve/atf_admit_data/atf_gate）、agent-default-model 与现役不一致。按 overlay 行覆写语义重新生成＝回退 D170v2 免审面＋断默认模型。**已避险**：改走「备份＋最小追加」路径，D170v2 免审面与默认模型逐项验证保留。overlay 同步缺门禁是 2026-10-11 已登记已知病（overlay 头注）的再现——建议 B2 批一并装 drift 对账门禁（check-drift 强化）。
+
+### B1 剩余（下个验证窗口）
+
+- 行为级验证锚（黑盒）：驱动一个超 200K 上下文会话（大图 read_image 场景）→ 断言会话落盘出现 `compaction/prune` 事件＋上下文峰值受控；1210 场景观察 image-offload 占位重试；
+- 验证有效后把水位段升产品层模板（cordis.patch.template.yml）——当前只在 dev 实例层。
