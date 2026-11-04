@@ -2876,8 +2876,10 @@ let visualSummary: Record<string, unknown> | undefined;
           // 只导出页清单 + 看图包（整页图 + 字段局部），本步不做信号计算。
           const planPath = join(visualPrepDir, "visual-sample-plan.json");
           const bundleDir = join(visualPrepDir, "visual-bundles");
+          // D194:视觉通道 v1.16 恒开(内核 choices 收敛为 enabled)——plan_only 步
+          // (只导看图清单,本步不做信号计算)同样 enabled;disabled 旧形态撞 choices 拒绝。
           argv.push("--visual-sample-plan", planPath, "--visual-bundle-out", bundleDir,
-                    "--visual-channel", "disabled");
+                    "--visual-channel", "enabled");
           if (typeof args.visual_wave_size === "number") {
             argv.push("--visual-wave-size", String(Math.max(1, Math.trunc(args.visual_wave_size))));
           }
