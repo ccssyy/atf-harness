@@ -24,6 +24,9 @@
  * atf_joint_train／atf_gate／atf_admit_data／atf_scratch_exec）永不出现在 chainTools。
  */
 import { ATF_TRAINING_PRESET, isPresetAutopilot, type ExecSessionFace, type ServiceCtxFace } from "./trainingPreset.js";
+import { appendFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import { permissionTierOf } from "./permissionTier.js";
 
 /**
@@ -111,6 +114,28 @@ export const exemptOutcomeOf = (
 };
 
 /**
+ * 放行留账（ADR-0019 决定 1 语义层边界）：answerer 每次自动放行必须 append Approval
+ * Ledger 同目录的 exemptions.jsonl（append-only 一行一 JSON：ts/tool/basis/preset）。
+ * 写账失败＝不放行（fail-closed 转 next 人工面板）——放行无账本即越权，属边界违约。
+ * bash/write 类高频放行逐条留痕是设计意图（批㊶-E-H 342 次弹卡教训的审计面）。
+ */
+const appendExemptionRecord = async (
+  toolName: string,
+  basis: "bash-write" | "chain" | "unattended",
+  preset?: string,
+): Promise<boolean> => {
+  try {
+    const dir = join(homedir(), ".atf", "approval-ledger");
+    await mkdir(dir, { recursive: true });
+    const line = JSON.stringify({ ts: new Date().toISOString(), tool: toolName, basis, ...(preset ? { preset } : {}) }) + "\n";
+    await appendFile(join(dir, "exemptions.jsonl"), line, "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
  * answerer 工厂（approval/request waterfall 头部形态）：deps 携带 ctx 与 overlay 声明，
  * 缺省（无 ctx／无声明）＝仅 bash/write 类豁免，其余一律 next()。
  */
@@ -120,6 +145,12 @@ export const makeApprovalExemptAnswerer = (
   const hit = exemptOutcomeOf(request, deps);
   if (hit === null) return next();
   const toolName = typeof request?.toolName === "string" ? request.toolName : "";
+  // 放行留账先行(ADR-0019 决定 1)：落账失败即不放行——fail-closed,免审不得无账。
+  const recorded = await appendExemptionRecord(toolName, hit.basis, deps.policy?.preset);
+  if (!recorded) {
+    console.warn(`[atf-tools] 放行留账失败,${toolName} 转人工面板(fail-closed)`);
+    return next();
+  }
   if (hit.basis === "bash-write") warnExempt(toolName, request.reason);
   else if (hit.basis === "unattended") warnUnattendedExempt(toolName);
   else warnChainExempt(toolName, deps.policy?.preset ?? "");

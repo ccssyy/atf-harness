@@ -1,34 +1,3 @@
-# ============================================================================
-# ATF 部署模板（产品级单源）——deploy/profiles/web/cordis.patch.template.yml
-# 批㊶-H/I（2026-10-08）：审批映射双旋钮解耦＋工具单轨（A7 治理面）＋goal 产品收敛
-#   ＋品牌覆写（M3 定稿）。产品层零具体绝对路径（增补裁定：产品/实例分层）——
-#   实例差异（env 值、凭据引用、业务 provider 选择）一律走 per-instance overlay。
-#
-# 用法（实例机器上，产品仓根）：
-#   python3 deploy/profiles/web/generate.py \
-#     --overlay deploy/instances/<实例>.overlay.yml \
-#     --out <DSH_HOME>/profiles/web/cordis.patch.yml
-#   python3 deploy/profiles/web/check-drift.py \
-#     --overlay deploy/instances/<实例>.overlay.yml \
-#     --deployed <DSH_HOME>/profiles/web/cordis.patch.yml
-#
-# vendor bump 同步义务（vendor/dsh/patches/README.md 台账）：preset-standard 覆写行
-# 为 plugins 全量重述——bump 后对照 packages/bundle/web-app/presets/standard.patch.yml
-# 重同步本模板内同名行（仅保 ATF persona 定稿文案），再重生成实例文件。
-# ============================================================================
-
-# —— LLM provider（智谱 GLM；市面对齐 2026-10-15 owner 裁定）——————————————————
-# key 管理走 dsh 托管凭据存储（<DSH_HOME>/.credentials.yaml，0600；web 实例 boot env
-# 不注入 key——env 在场即凭据只读锁（credentials-local describe writable:false），
-# Models 设置页 API Key 栏会被禁用、UI 粘贴被遮蔽；env 注入只留给 CI 类显式意图）。
-# 推理档位声明（compat.thinkingFormat=zai）激活 dsh 原生模型选择器推理子菜单；
-# reasoningEfforts 照 pi-ai 目录原文（不造档位）；contextWindow/maxTokens＝目录值；
-# 模型 name＝市面表述（GLM-5.3 / GLM-5.3-Flash，端点 /models 实证在架）。
-# 批甲-FIX T1（2026-10-15，owner 三裁）：per-model 能力闭集——智谱开放文档（docs.bigmodel.cn
-# 对话补全，2026-10-15 摘录）："reasoning_effort 仅 GLM-5.2+ 支持；GLM-5.3 与 GLM-5.3-FLASH
-# 仅支持 low / high / max 档位；thinking 开启时生效、不传默认 max"。故 glm-5.3 四值（off 可关
-# ——off 声明留空值＝不送思考参数的 zai 语义位），flash 系三值（无 off——thinking 不可关，
-# 不造档位）。
 - id: llm-pi-ai
   config:
     providers:
@@ -40,153 +9,121 @@
         compat:
           thinkingFormat: zai
         models:
-          - id: glm-5.3
-            name: GLM-5.3
-            input: [text, image]
-            contextWindow: 1048576
-            maxTokens: 131072
-            reasoningEfforts:
-              "off":
-              low: low
-              high: high
-              max: max
-          - id: glm-5.3-flash
-            name: GLM-5.3-Flash
-            input: [text, image]
-            contextWindow: 1048576
-            maxTokens: 131072
-            reasoningEfforts:
-              low: low
-              high: high
-              max: max
-
+        - id: glm-5.3
+          name: GLM-5.3
+          input:
+          - text
+          - image
+          contextWindow: 1048576
+          maxTokens: 131072
+          reasoningEfforts:
+            'off': null
+            low: low
+            high: high
+            max: max
+        - id: glm-5.3-flash
+          name: GLM-5.3-Flash
+          input:
+          - text
+          - image
+          contextWindow: 1048576
+          maxTokens: 131072
+          reasoningEfforts:
+            low: low
+            high: high
+            max: max
 - id: ui-settings-general
   config:
     welcomeNoticeVersion: 2026-09-28.1
-
 - id: agent-default-model
   config:
     provider: glm-atf
     model: glm-5.3-flash
     reasoningEffort: max
-
-# —— atf_* 工具投影插件（治理面：桥接 17 方法＋只读四件＋A7 治理四件＋路径守卫
-#   ＋bash/write 免审 answerer——全部由插件装配，此处仅 insert 行）————————————
 - insert:
-    - id: atf-tools
-      name: '@atf/dsh-atf-tools'
-      config:
-        # —— 授权豁免声明（owner 2026-10-26 裁定：豁免＝便利、权限＝授权）——————————
-        # 生效条件＝「预设声明该工具 ∈ chainTools」且「用户权限档 = danger-full-access」，
-        # 两轴齐备才免审；任一缺席回落人工面板（fail-closed）。
-        # chainTools 显式列举工具名：**禁 atf_ 前缀／通配匹配**——前缀会把训练启动、
-        # 发布、评估 release 等治理点一起放掉（那是越权，不是便利）。
-        # 治理点永不在清单内：atf_run_training（真实 GPU）、atf_publish_confirm／
-        # atf_publish_model（发布）、atf_launch_execute（编排执行）、atf_joint_train、
-        # atf_gate、atf_admit_data、atf_scratch_exec，以及 atf_quantize_annotations
-        # （写操作：产 map.csv、改数据形态——owner 2026-10-26 裁定按治理点处理）——
-        # 「GPU 训练启动确认任何档位保留阻塞」的既有裁定因此无需废止。
-        # 判据：只读或链内取值类才进清单；凡改写数据/产物/算力占用的都不进。
-        approvalPolicy:
-          preset: atf-training
-          chainTools:
-            - atf_pipeline_stage
-            - atf_config_confirm
-            - atf_training_preflight
-            - atf_records_query
-
-# —— M3 品牌定稿（owner 10-06 裁定文案；vendor bump 随台账重同步）——————————
+  - id: atf-tools
+    name: '@atf/dsh-atf-tools'
+    config:
+      approvalPolicy:
+        preset: atf-training
+        chainTools:
+        - atf_pipeline_stage
+        - atf_config_confirm
+        - atf_training_preflight
+        - atf_records_query
+        - atf_label_qc_resolve
+        - atf_admit_data
+        - atf_gate
 - id: system-prompt
   config:
     includeHarnessIdentity: false
-    personaPrefix: >-
-      You are the ATF training agent (ATF 训练 Agent), powered by the {{model}} model.
-      你始终用简体中文思考和回答。思考过程（thinking／reasoning）必须是中文句子——即使引用英文术语、字段名或状态值，推理句本身仍是中文，不得用英文写推理；结论、说明、失败原因解释、审批与确认文案一律中文；字段名、参数名、文件路径、命令与代码保持原样，不翻译、不音译。
+    personaPrefix: You are the ATF training agent (ATF 训练 Agent), powered by the {{model}}
+      model. 你始终用简体中文思考和回答。思考过程（thinking／reasoning）必须是中文句子——即使引用英文术语、字段名或状态值，推理句本身仍是中文，不得用英文写推理；结论、说明、失败原因解释、审批与确认文案一律中文；字段名、参数名、文件路径、命令与代码保持原样，不翻译、不音译。
     personaSuffix: Your working directory is {{cwd}}.
-
 - id: preset-standard
   name: '@deepseek-ai/dsh-agent-preset'
   config:
     id: standard
     order: 1
     plugins:
-      - id: persona
-        name: '@deepseek-ai/dsh-persona'
+    - id: persona
+      name: '@deepseek-ai/dsh-persona'
+      config:
+        suffix: Your working directory is {{cwd}}.
+        prefix: You are the ATF training agent (ATF 训练 Agent). {{model}} is the currently
+          configured underlying model. 你始终用简体中文思考和回答——思考过程（reasoning）必须用中文句子，不得用英文推理；字段名、参数名、文件路径、命令与代码保持原样，不翻译。
+    - id: agent-instructions
+      name: '@deepseek-ai/dsh-agent-instructions'
+      config:
+        maxBytes: 65536
+    - id: tool-bash
+      name: '@deepseek-ai/dsh-tool-bash'
+      disabled: true
+    - id: tool-pwsh
+      name: '@deepseek-ai/dsh-tool-pwsh'
+      disabled: true
+    - id: tool-fs
+      name: '@deepseek-ai/dsh-tool-fs'
+    - id: tool-fs-search
+      name: '@deepseek-ai/dsh-tool-fs-search'
+      config:
+        sampleOverCapGlobResults: false
+    - id: tool-jobs
+      name: '@deepseek-ai/dsh-tool-jobs'
+    - id: skill-filesystem
+      name: '@deepseek-ai/dsh-skill-filesystem'
+    - id: tool-skill
+      name: '@deepseek-ai/dsh-tool-skill'
+    - id: tool-goal
+      name: '@deepseek-ai/dsh-tool-goal'
+      disabled: true
+    - id: command-goal
+      name: '@deepseek-ai/dsh-command-goal'
+      disabled: true
+    - id: planning
+      name: cordis:group
+      group: true
+      isolate:
+        planMode: true
+      config:
+      - id: plan-mode
+        name: '@deepseek-ai/dsh-plan-mode'
         config:
-          suffix: Your working directory is {{cwd}}.
-          prefix: You are the ATF training agent (ATF 训练 Agent). {{model}} is the currently configured underlying model. 你始终用简体中文思考和回答——思考过程（reasoning）必须用中文句子，不得用英文推理；字段名、参数名、文件路径、命令与代码保持原样，不翻译。
-      - id: agent-instructions
-        name: '@deepseek-ai/dsh-agent-instructions'
-        config:
-          maxBytes: 65536
-      # 批㊶-I 段 C 单轨：vendor bash 通道关闭——bash 能力由 A7 atf_bash 承接
-      # （白名单守卫＋命令分类＋命令串绝对路径扫描；atf-tools 插件挂载）。
-      - id: tool-bash
-        name: '@deepseek-ai/dsh-tool-bash'
-        disabled: true
-      # vendor pwsh 仅 Windows 语义（vendor 原行 !!js 条件在本部署面恒真）——Linux 恒关。
-      - id: tool-pwsh
-        name: '@deepseek-ai/dsh-tool-pwsh'
-        disabled: true
-      # vendor fs/search 保留挂载：glob/grep/read_image 经 pre-execute 白名单守卫
-      # （atf-tools 路径守卫）；read/edit/write 由守卫恒 deny 并改道 atf_read/atf_edit/atf_write。
-      - id: tool-fs
-        name: '@deepseek-ai/dsh-tool-fs'
-      - id: tool-fs-search
-        name: '@deepseek-ai/dsh-tool-fs-search'
-        config:
-          sampleOverCapGlobResults: false
-      - id: tool-jobs
-        name: '@deepseek-ai/dsh-tool-jobs'
-      - id: skill-filesystem
-        name: '@deepseek-ai/dsh-skill-filesystem'
-      - id: tool-skill
-        name: '@deepseek-ai/dsh-tool-skill'
-      # 批㊶-I 段 B：goal 产品收敛——自主多轮循环是能力面开关，须显式开启。
-      # 三行齐关（模型工具＋人类命令＋host 续轮引擎）才彻底；重开＝模板按实例
-      # 显式开启三行＋收敛 maxGoalRounds（vendor 自报 blocked ≥3 轮机制照用）。
-      # 重开时须覆写 create_goal 描述去掉"infer goal intent"推断授权，覆写不可行则维持 disabled。
-      - id: tool-goal
-        name: '@deepseek-ai/dsh-tool-goal'
-        disabled: true
-      - id: command-goal
-        name: '@deepseek-ai/dsh-command-goal'
-        disabled: true
-      - id: planning
-        name: cordis:group
-        group: true
-        isolate:
-          planMode: true
-        config:
-          - id: plan-mode
-            name: '@deepseek-ai/dsh-plan-mode'
-            config:
-              section: |
-                You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+          section: 'You are in plan mode. Stay in plan mode until exit_plan_mode succeeds
+            or the user switches the session mode. Imperative language to implement
+            changes means plan the implementation, not execute it. A user''s conversational
+            agreement — including an answer confirming something you asked — approves
+            nothing and does not end plan mode; fold the confirmed decision into the
+            plan and submit it through exit_plan_mode.
 
-
-# —— Agent 预设 atf-training 已移入 bundle 层 ——
-# 位置：packages/extensions/atf-ui/presets/atf-training.patch.yml（走 `- insert:` 声明）。
-# 原因：profile 的 cordis.patch.yml 只按 id 覆盖已有行，新增预设不会被 roster 加载，
-# 表现为「设置里看不到训练预设、段级审批仍逐次弹」。bundle 层声明才是系统预设的路径。
-
-# —— 后台作业数上限（会话护栏部分兜底：每 owner 并发作业数上限；解析/对话失控的
-#   完整护栏无宿主等价 seam——PARSE_BUDGET 随宿主消亡、CHAT_BUDGET 候选另批）——————
+            '
 - id: jobs
   name: '@deepseek-ai/dsh-jobs-local'
   config:
     maxConcurrentJobsPerOwner: 10
-
-# —— goal 续轮引擎（host 层；仅关工具不关引擎＝历史会话未完 goal 仍续——三行齐关）——
 - id: goal-round-driver
   name: '@deepseek-ai/dsh-goal-round-driver'
   disabled: true
-
-# —— 审批映射双旋钮解耦（批㊶-I 段 A；owner 裁定：任何档位下文件面都必须限在
-#   工作区内放行——"无沙箱"不等于"无边界"：文件面边界由应用层白名单守卫（恒开）
-#   承担，权限档位只决定 OS 级沙箱层有无）。——————————————————————————————
-#   ⚠ approval: never 仅限无头 CI 场景显式声明（vendor 语义＝每个审批请求一律拒绝，
-#   非免打扰）——禁止作为交互实例缺省；本模板各档 approval 恒 ask，overlay 不得改写。
 - id: permission
   name: '@deepseek-ai/dsh-permission-presets'
   config:
@@ -199,17 +136,8 @@
         sandbox: workspace-write
         approval: ask
         name: Workspace write
-      # OS 沙箱关＋应用层工作区白名单恒开＋审批独立 ask——非全文件系统放行。
       danger-full-access:
         sandbox: danger-full-access
         approval: ask
         name: Full access
-      # 批㊶-Q 第四档 `auto_training` 已退役（owner 2026-10-26 裁定）：它把「Agent 预设」
-      # （我是谁、会什么、走什么流程）错做成「权限档」（能碰多远），三重错位——语义、
-      # 归属（让用户在权限菜单选产品形态）、传导（业务流程读权限档决定＝两轴纠缠）。
-      # 训练形态改由 Agent 预设 `atf-training` 承担；权限轴回三档，语义单轴：本轴只回答
-      # 「能碰多远」，不回答「我是谁」。
-      # 切档说明：需要「训练链不再逐段确认」时，用户切到原生 danger-full-access（它本来
-      # 就有确认门）**且**会话使用 atf-training 预设——此时训练链不再逐段确认，仅保留训练
-      # 启动与发布确认。单切权限档不产生任何免确认效果（两轴齐备才生效）。
     defaultPreset: danger-full-access
