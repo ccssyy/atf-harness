@@ -114,7 +114,12 @@ export const registerPathGuard = (
       };
     }
     if (PRE_EXECUTE_GUARDED_TOOLS.has(name)) {
+      // D179:内核 skills 子树=只读合同面(SKILL.md 是 agent 应读的合同),读通道
+      // 放行(#29 收窄曾把内核根排除,agent 读技能定义被拦);写通道不在此层不受影响。
+      const kernelRoot = host.env?.ATF_DSH_KERNEL_DIR ?? host.env?.ATF_CLI_PATH;
+      const skillsDir = typeof kernelRoot === "string" && kernelRoot !== "" ? join(resolve(kernelRoot), "skills") : null;
       for (const rawPath of pathsFromPreExecuteArgs(name, args)) {
+        if (skillsDir !== null && rawPath.startsWith(skillsDir + "/")) continue;
         if (pathOutsideRoots(rawPath, guardRoots)) {
           return {
             kind: "deny",
