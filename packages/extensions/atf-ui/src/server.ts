@@ -520,7 +520,25 @@ const trainingAnchorPresent = (runDir: string): boolean =>
     join("training", "loss-series.json"),
     join("training", "adapter_model.safetensors"),
     join("training", "all_results.json"),
+    // R-1 文件锚（改进 7）：编排路径标识——launch_execute 是当前唯一真机路径,其
+    // launch_manifest.json 在场即本 run 走编排训练;waiting 态不放行零进程,由活性侧
+    // （orchestrationLogFresh 缺席）拦为非 active,不误判。
+    join("launch", "launch_manifest.json"),
   ]);
+
+/** R-1（改进 7）：编排训练日志活性——launch/train-*.log（放行 setsid 启动后才有,
+ *  训练 stdout 持续写入）任一 mtime 在窗内即活跃。waiting_for_start 态无此件=不活跃
+ *  （fail-closed）；进程死=停更超窗即翻 false。与 trainerLogFresh 同窗同语义（第三源）。 */
+const orchestrationLogFresh = (runDir: string, liveness: ScanLiveness | undefined): boolean => {
+  try {
+    const windowMs = liveness?.freshWindowMs ?? TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
+    const now = liveness?.nowMs ?? Date.now();
+    const entries = readdirSync(join(runDir, "launch")).filter((name) => name.startsWith("train-") && name.endsWith(".log"));
+    return entries.some((name) => now - statSync(join(runDir, "launch", name)).mtimeMs <= windowMs);
+  } catch {
+    return false; // launch/ 缺席或读失败＝不活跃（fail-closed）
+  }
+};
 
 const hasAny = (runDir: string, rels: readonly string[]): boolean => rels.some((rel) => existsSync(join(runDir, rel)));
 
@@ -597,15 +615,15 @@ const evalRoundAnchored = (runDir: string): boolean => {
 const trainingActiveLive = (dir: string, runId: string, liveness: ScanLiveness | undefined): boolean => {
   if (liveness?.trainingEvidence?.[runId] === true) return true;
   if (liveness?.tmuxProbeUsable === true && liveness.trainingEvidence !== undefined) {
-    return trainerLogFresh(dir, liveness); // D73：launch/setsid 无 tmux 会话既定——trainer_log 窗内新鲜即活跃
+    return trainerLogFresh(dir, liveness) || orchestrationLogFresh(dir, liveness); // D73＋R-1:setsid 无 tmux 既定——trainer_log 或编排 train-*.log 窗内新鲜即活跃
   }
-  if (trainerLogOverWindow(dir, liveness)) return false;
+  if (trainerLogOverWindow(dir, liveness) && !orchestrationLogFresh(dir, liveness)) return false; // R-1:编排路径 trainer_log 恒缺席,超窗翻面需编排 log 同停更
   const progressActive = progressFresh(
     readProgress(dir),
     liveness?.nowMs ?? Date.now(),
     liveness?.freshWindowMs ?? resolveTrainActiveWindowMs(process.env),
   );
-  return lossSeriesFresh(dir, liveness) || progressActive || trainerLogFresh(dir, liveness);
+  return lossSeriesFresh(dir, liveness) || progressActive || trainerLogFresh(dir, liveness) || orchestrationLogFresh(dir, liveness);
 };
 
 /** 单 run 目录扫描（root＋runId 双形态兼容：分桶调用方传 dirname(runDir) 作 root 或以

@@ -7,6 +7,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage, CLOSURE_MESSAGE } from "../../packages/extensions/atf-ui/src/snapshot.js";
 import { PANEL_HTML } from "../../packages/extensions/atf-ui/src/panel.js";
+import { TRAIN_ACTIVE_WINDOW_MS_DEFAULT } from "../../src/core/workspace/trainObsSync.js";
 import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveTrainActiveWindowMs, resolveViewerRequest, scanEvalRounds, scanRunDir, scanRunDirAt, scanRuns, looksLikeRun, RUN_MARKER_RELS, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
 import { tmuxHasSession, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
 import { progressFresh } from "../../src/core/workspace/runFacts.js";
@@ -384,6 +385,65 @@ describe("D73 观测环端到端（launch/setsid 形态——tmux 域零会话�
       else process.env["ATF_TMUX_TEST_SOCKET"] = prevSock;
     }
   };
+
+  // ── 切片3（R-1 消除,改进7 manifest 文件锚）：编排路径三态 ──
+  const seedOrchestrationRun = (root: string, runId: string, opts: { started: boolean; staleLog?: boolean }): string => {
+    const runDir = join(root, runId);
+    mkdirSync(join(runDir, "launch"), { recursive: true });
+    writeFileSync(join(runDir, "launch", "launch_manifest.json"), JSON.stringify({ iteration_config_sha256: "x" }));
+    if (opts.started) {
+      const mtime = opts.staleLog === true ? new Date(Date.now() - 3 * TRAIN_ACTIVE_WINDOW_MS_DEFAULT) : new Date();
+      writeFileSync(join(runDir, "launch", "train-20261105T000000Z-1.log"), "{}");
+      const logPath = join(runDir, "launch", "train-20261105T000000Z-1.log");
+      utimesSync(logPath, mtime, mtime);
+    } else {
+      // waiting_for_start 态：计划完备零进程（state.json 无 train-*.log）
+      writeFileSync(join(runDir, "launch", "state.json"), JSON.stringify({ state: "waiting_for_start", launcher_count: 0, effect_started: false }));
+    }
+    writeFileSync(join(runDir, "registration.json"), "{}");
+    return runDir;
+  };
+
+  it("R-1 编排启动态：launch_manifest＋train-*.log 窗内新鲜 → active=true（观测环跑起来,静默消除）", async () => {
+    await withDomain(async () => {
+      const root = tempRoot();
+      seedOrchestrationRun(root, "run-r1-live", { started: true });
+      const { resetTrainObsForTest } = await import("../../src/core/workspace/trainObsSync.js");
+      const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
+      resetTrainObsForTest();
+      await tickOnce({ runsRoot: root, intervalMs: 60_000 });
+      const monitor = JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as {
+        runs: Array<{ run_id: string; training: { active: boolean } }>;
+      };
+      expect(monitor.runs.find((r) => r.run_id === "run-r1-live")?.training.active).toBe(true);
+    });
+  }, 60_000);
+
+  it("R-1 waiting 态：manifest 在场但无 train-*.log（零进程） → active=false（不放行不误判活跃）", async () => {
+    await withDomain(async () => {
+      const root = tempRoot();
+      seedOrchestrationRun(root, "run-r1-wait", { started: false });
+      const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
+      await tickOnce({ runsRoot: root, intervalMs: 60_000 });
+      const monitor = JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as {
+        runs: Array<{ run_id: string; training: { active: boolean } }>;
+      };
+      expect(monitor.runs.find((r) => r.run_id === "run-r1-wait")?.training.active).toBe(false);
+    });
+  }, 60_000);
+
+  it("R-1 停更态：train-*.log mtime 超窗 → active=false（进程死翻面,fail-closed）", async () => {
+    await withDomain(async () => {
+      const root = tempRoot();
+      seedOrchestrationRun(root, "run-r1-stale", { started: true, staleLog: true });
+      const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
+      await tickOnce({ runsRoot: root, intervalMs: 60_000 });
+      const monitor = JSON.parse(readFileSync(join(root, "atf-ui", "monitor.json"), "utf8")) as {
+        runs: Array<{ run_id: string; training: { active: boolean } }>;
+      };
+      expect(monitor.runs.find((r) => r.run_id === "run-r1-stale")?.training.active).toBe(false);
+    });
+  }, 60_000);
 
   it("域零会话＋trainer_log 窗内新鲜 → active=true 且两轮后 progress.json/monitor 一致（percentage/eta_s 有值）", async () => {
     await withDomain(async () => {

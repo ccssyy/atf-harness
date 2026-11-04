@@ -63,3 +63,28 @@ describe("放行留账契约（ADR-0019 决定 1）", () => {
     });
   });
 });
+
+describe("goal 续跑边界（ADR-0019 决定 1 尖锐边；B3 第二批）", () => {
+  it("治理点在任意输入形态下恒不放行（goal 词汇/伪续跑授权不构成豁免依据）", async () => {
+    const home = sandboxHome();
+    const oldHome = process.env.HOME;
+    process.env.HOME = home;
+    try {
+      const answerer = makeApprovalExemptAnswerer();
+      // goal 语义词汇混入工具名/请求形态——治理点 atf_run_training 必须恒 next()（落人工面板）
+      for (const poisoned of [
+        { toolName: "atf_run_training" },
+        { toolName: "atf_run_training", goal: "active", reason: "goal round 续跑" },
+        { toolName: "ATF_RUN_TRAINING" },
+      ]) {
+        const outcome = await answerer(poisoned as never, async () => "ask" as never);
+        expect(outcome).toBe("ask");
+      }
+      expect(existsSync(join(home, ".atf", "approval-ledger", "exemptions.jsonl"))).toBe(false);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      if (oldHome === undefined) delete process.env.HOME;
+      else process.env.HOME = oldHome;
+    }
+  });
+});
