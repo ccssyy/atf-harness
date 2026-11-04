@@ -31,3 +31,40 @@
 ## 门禁拦截演练记录（B0 任务书完成定义·对抗项）
 
 - 见 `tests/guards/noSelfBuiltMechanisms.spec.ts` 文件头注释与 commit message：制造违规样例→红（含修复指令）→删除→绿，输出留证于本批 commit。
+
+---
+
+## 终版结论（2026-11-04 深挖补锚后，覆盖上表「待深挖」项）
+
+### 装配语义定案
+
+宿主装配是三层叠加：**dsh-base 组合**（`packages/bundle/base/cordis.patch.yml`，权威文档 `apps/cli/composition.md`）→ profile 模式层 → 用户层（dev `profiles/web/cordis.patch.yml` 只调差异项）。base 默认装配且 dev 未禁用的件＝**默认在 live**：
+
+- **#2/#3/#4 spill 三件在跑**：`spill-local`＋`spill-policy`（`maxInlineTokens: 12500`）＋`tool-result-pruner`（`thresholdChars: 8192`/head 4096/tail 1024）＋`image-offload`（图像预算拒绝→占位重试）；
+- **#11 session-checkpoint-policy 在 base 装配**——判定表「暂缓」自动满足（机制在场，D170v2 领域件并行不冲突）；
+- **session-title 在场**（`session-title-first-prompt-llm`）——10-17 盘点「来源未锚」项闭合；
+- **#10 compaction-basic 在跑但 GLM 1M 水位不可达**（providers `contextWindow: 1048576`）——与 D78「85 会话零触发」自洽。
+
+### 行为证据（关键修正：机制装配≠机制执行）
+
+T10 真机会话（d168v2-replay，本机 zstd 全量解压 994 行/2.7MB）实锚：
+
+- `tool/result` 最大 28.9K／16.7K／14.9K／12.3K／11.3K 字符，**全部超过 pruner 的 8192 阈值**；
+- 会话内 `compaction/prune` 事件 **0 条**（pruner 源码语义：修剪必落此事件＋replace 件）；
+- 根因（pruner 源码实锚）：`pruneSession` 唯一调用方＝`compaction-basic`，双触发语义——`context-overflow`（真溢出，无条件先 prune 再摘要）与 `pressure`（水位按模型窗口比例解析，1M 下不可达）。D7 的 318K 未达任何触发线，原文直出＝**设计行为**。
+
+### ADR-0019 判定表补注（两处）
+
+1. **#10 修正**：compaction-basic 不只是摘要器，还是 pruner 的常规触发器。「不主动依赖」精确化为「不依赖其**摘要输出**」；其水位触发策略属配置面，B1 可调。
+2. **#2-#4 与 #10 存在触发依赖**：希望大结果在远低于 1M 的水位被管控（D7/1210 场景），正确动作＝**降 pressure 水位**（overlay 配置），不是新接线、也不是启摘要。
+
+### B1 剩余动作（配置批＋验证，小）
+
+1. 挖 compaction-basic 的 pressure policy 配置键（`resolveTargetPolicy`/config schema）→ `deploy/profiles/web/generate.py` overlay 加目标水位（按 ATF 场景定，如 200K 量级触发 prune/spill）；
+2. 重启 dev（owner 已授权随时）；
+3. 验证锚（黑盒）：超阈值工具结果场景 → 会话落盘出现 `compaction/prune` 事件＋上下文峰值下降；1210 大图场景 → image-offload 占位重试可见。
+
+### 方法论留痕
+
+- dev 容器无 zstd 二进制：远端 zstd 管道全为假阴性（本次前两轮扫描教训）；会话文件须拉本机解压或用支持多帧的解压实现；
+- Node zlib `zstdDecompressSync` 只解第一帧（流式会话文件为多帧拼接），远端统计因此失真。
