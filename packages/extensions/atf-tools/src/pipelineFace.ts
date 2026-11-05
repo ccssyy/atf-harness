@@ -3737,6 +3737,30 @@ let visualSummary: Record<string, unknown> | undefined;
             }
           }
         }
+        // D210 终版(owner 2026-11-05 定论):智能分析是必经步(默认要做)——
+        // mode5/targeted 两个倍数建议值都来自 agent 结合图片与标签的智能分析,
+        // 各自独立不共用。视觉判读缺席=分析不完整,段完成即引导看图闭环,
+        // 不把「没看图」当正常分支沉在产物 json 里。
+        if (stage === "experiment_setup" && ok) {
+          try {
+            const runDirForAnalysis = String(receipt["run_dir"] ?? "");
+            if (runDirForAnalysis !== "" && existsSync(runDirForAnalysis)) {
+              const analysisDocType = typeof args.doc_type === "string" && args.doc_type.trim() !== "" ? args.doc_type.trim() : "do";
+              const rsPath = resolveRunFile(runDirForAnalysis, `prep/risk-signals/${analysisDocType}/field_risk_signals.json`);
+              if (existsSync(rsPath)) {
+                const rs = JSON.parse(readFileSync(rsPath, "utf8")) as { visual_channel?: { mode?: string; image_semantics?: string } };
+                const vc = rs.visual_channel ?? {};
+                if (vc.mode === "enabled" && vc.image_semantics === "pending_agent_readings") {
+                  projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, {
+                    conclusion: "智能分析不完整：agent 未看图（视觉判读缺席，风险信号仅标签层）——mode5/targeted 两个倍数建议值缺视觉依据，建议值不会在本轮出现。",
+                    stage: "experiment_setup",
+                    next: "先走看图分析（candidate_build 的 plan_only 导看图清单 → 逐页看图 → 回传判读），再重跑本段——分析完整后两个倍数建议值（各自独立）随确认卡供选",
+                  });
+                }
+              }
+            }
+          } catch { /* 分析引导失败不阻断段回执 */ }
+        }
         // D209(e2e 轮实锚,owner 反验收):版式聚类结果上用户面——簇数/单页簇/
         // 布局参考簇数只在回执 json 里沉底不算披露;切分被拦时用户更要看到
         // 「为什么拦」的聚类事实(layout_recluster_hint 全量呈现)。

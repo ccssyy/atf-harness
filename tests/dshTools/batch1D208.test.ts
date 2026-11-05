@@ -13,7 +13,8 @@ import { tmpdir } from "node:os";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildEvalTools } from "../../packages/extensions/atf-tools/src/trainingFace.js";
-import type { Tool } from "../../packages/extensions/atf-tools/src/tooling.js";
+import type { Tool } from "./toolType.js";
+
 
 const SRC = join(process.cwd(), "packages/extensions/atf-tools/src/trainingFace.ts");
 
