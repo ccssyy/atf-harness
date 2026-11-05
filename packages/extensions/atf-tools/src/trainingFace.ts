@@ -30,6 +30,7 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
 import { scanRunDir } from "../../atf-ui/src/server.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
+import { permissionTierOf } from "./permissionTier.js";
 import { isTrainingAutopilot, ATF_TRAINING_PRESET } from "./trainingPreset.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
@@ -2402,6 +2403,46 @@ export const reviewCoverageOf = (stdout: string): {
 };
 
 /** atf_evaluate / atf_analyze_badcases 构造（评估与两步链——start/status 与轻量直跑）。 */
+
+/** D208 评估放行确认卡：完全权限档下替代 DSH 审批卡（owner 2026-11-05 反验收，
+ *  沿 D186 训练启动同语义）——不弹审批卡，停等用户查看九必报项摘要并确认；
+ *  确认即用户决定（放行账本照旧落，审计＝卡面回执＋账本）；暂停不启动。
+ *  通道缺席/异常回退审批轨（fail-closed，不静默放行）。 */
+const evalReleaseConfirmCardOf = async (
+  ctx: { get(service: string): unknown },
+  exec: { agent?: unknown; signal?: unknown },
+  runId: string,
+  detailText: string,
+): Promise<{ ok: boolean; fallback: boolean; note: string }> => {
+  const svc = ctx.get("userQuestions") as { ask?: (payload: unknown) => Promise<{ answers: Array<{ selected?: string[]; custom?: string }> }> } | undefined;
+  if (svc === undefined || typeof svc.ask !== "function") {
+    return { ok: false, fallback: true, note: "确认卡通道缺席——回退审批轨" };
+  }
+  try {
+    const answers = await svc.ask({
+      questions: [{
+        id: `eval-release-${runId}`,
+        question: `评估放行确认 — ${runId}`,
+        header: "评估放行",
+        detail: `${detailText}\n\n确认后将写入放行记录并启动评估编排（起服务→评测→回灌）；暂停则不启动。`,
+        options: [
+          { label: "确认启动", description: "已查看上述评估准备与参数，写入放行记录并启动" },
+          { label: "暂停，我要改参数", description: "不启动；告诉我你想改什么，改完再确认" },
+        ],
+        multiSelect: false,
+      }],
+      agent: exec.agent,
+      signal: exec.signal,
+    });
+    const first = answers.answers[0];
+    const picked = [...(first?.selected ?? [])].join("") || (first?.custom ?? "");
+    const confirmed = picked.includes("确认启动");
+    return { ok: confirmed, fallback: false, note: confirmed ? "用户已确认放行（确认卡留痕）" : "用户暂停放行（可在对话里说想改什么）" };
+  } catch {
+    return { ok: false, fallback: true, note: "确认卡通道异常——回退审批轨" };
+  }
+};
+
 export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { runsRoot: string; logDir: string; kernelDir: string; resolveEvalRound?: EvalRoundResolver; bindRun?: (runId: string) => Promise<void>; /** D49：canonical 解析种子（与 TrainingToolsConfig 同键——canonicalRunRootsOf(cfg) 注入面；缺省注册表实例态）。 */ canonicalRoots?: readonly string[]; /** F11-2：档案清单读取面（缺省 process.env——测试注入用）。 */ env?: Readonly<Record<string, string | undefined>> }): unknown[] {
   // F11-2：env_profile 参数描述里的实例档案清单——**启动时**读一次实例 env-profiles 目录，
   // 把实际档案名与各自 eval_env 摘要写进工具描述（T 面可发现性）；目录不可得／无档案＝
@@ -2630,8 +2671,10 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 批㊶-U §五：评估卡改参收集走聊天回复、审批卡落账本（EVAL_RELEASE 账本语义不动）；
       // E5 模板四行＋确认摘要续行。D14 卡面修复：headline＝评估放行、无参数名/绝对路径、
       // cost＝占卡实况；新增口径行与字段配置来源行（信息行，不新增确认项）
-      const verdict = await requestApproval(ctx, exec, "atf_evaluate",
-        buildApprovalReason({
+      // D208（owner 2026-11-05 反验收，沿 D186 语义）：完全权限档不弹审批卡——
+      // 停等「评估放行确认卡」（问题卡载体）；确认即用户决定，放行账本照旧落。
+      // guarded 档审批卡照旧。
+      const reasonText = buildApprovalReason({
           action: "放行评估服务编排",
           target: `（run ${runId}）`,
           effect: `登记放行账本（config sha256）并启动评估编排——${evalGpuCostText(args.service_config, manifest)}`,
@@ -2651,8 +2694,19 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
           "详细报告已生成（评估轮目录内）",
           "如需调整评估数据、adapter 或服务参数，直接回复要改的项；不改直接回复「按现值确认」",
           "仅 owner 可点；执行方不得代点",
-        ].join("\n"));
-      if (!verdict.ok) return approvalDeniedResult("atf_evaluate", verdict.outcome);
+        ].join("\n");
+      if (permissionTierOf(ctx as never, exec as never) === "full-access") {
+        const card = await evalReleaseConfirmCardOf(ctx, exec, runId, reasonText);
+        if (card.fallback) {
+          const verdict = await requestApproval(ctx, exec, "atf_evaluate", reasonText);
+          if (!verdict.ok) return approvalDeniedResult("atf_evaluate", verdict.outcome);
+        } else if (!card.ok) {
+          return asToolValue({ started: false, error: "eval_release_paused_by_user", note: card.note });
+        }
+      } else {
+        const verdict = await requestApproval(ctx, exec, "atf_evaluate", reasonText);
+        if (!verdict.ok) return approvalDeniedResult("atf_evaluate", verdict.outcome);
+      }
       // D20h：放行登记带会话身份与 ui 模式（actor＝会话 id，缺失＝unattributed——不伪造 owner）；
       // 账本 approval_id 回传返回体（解析失败省略键不阻断——stderr 记一条）
       // E5·H2：账本登记子步 env 显式传（HOME＝实例根——record 写 Path.home() 推导位
