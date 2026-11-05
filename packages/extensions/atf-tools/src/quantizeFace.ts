@@ -22,6 +22,7 @@ import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
+import { permissionTierOf, approvalBypassed } from "./permissionTier.js";
 import { pathOutsideRoots } from "./fileGuardFace.js";
 
 /** 量化口径闭集（权威＝内核 --mode 枚举）。 */
@@ -200,7 +201,10 @@ export const buildQuantizeTool = (
       }
       // ④ 审批必经（拒绝/取消/无审批服务 → 结构化拒绝零写入）——
       // dry_run=true 只报数零写盘=只读语义,免审不弹卡(真执行写盘才逐次审批)
-      const verdict = dryRun ? { ok: true } as const : await requestApproval(ctx, exec, "atf_quantize_annotations",
+      // D218:chain_advance 语义——完全权限档免审放行(与桥面分类表同源)
+      const verdict = (dryRun || approvalBypassed(permissionTierOf(ctx as never, exec as never)))
+        ? ({ ok: true } as const)
+        : await requestApproval(ctx, exec, "atf_quantize_annotations",
         buildApprovalReason({
           action: "量化标注坐标并写出副本（源目录只读）",
           target: `（源 ${basename(sourceResolved)} → 输出 ${basename(outResolved)}，mode=${mode}${dryRun ? "，dry-run 只报数" : ""}${allowDegenerate ? "，放行退化框" : ""}）`,
