@@ -371,7 +371,9 @@ export const decideConstructionParams = async (input: {
     // D177:targeted/cutoff 解析(selected label 或 custom;未答保持现值,不猜)
     const targetedAnswer = needTargeted ? byId.get(`construction-targeted-${input.runId}`) : undefined;
     const targetedText = [...(targetedAnswer?.selected ?? [])].join("") || (targetedAnswer?.custom ?? "");
-    const suggestedLabel = input.state.targetedSuggested !== undefined ? `智能推导（${String(input.state.targetedSuggested)} 倍）` : "1 倍（不重点扩）";
+    const suggestedLabel = input.state.targetedSuggested !== undefined
+          ? `智能推导（${String(input.state.targetedSuggested)} 倍）`
+          : "1 倍（未经智能分析——产品默认，不猜难度；要看分析建议先完成看图分析）";
     const targetedMultiplier = targetedFromText(targetedText, suggestedLabel, input.state.targetedSuggested) ?? input.state.targetedMultiplier;
     const cutoffAnswer = needCutoff ? byId.get(`construction-cutoff-${input.runId}`) : undefined;
     const cutoffText = [...(cutoffAnswer?.selected ?? [])].join("") || (cutoffAnswer?.custom ?? "");

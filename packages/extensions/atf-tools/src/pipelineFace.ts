@@ -2640,7 +2640,24 @@ export const buildPipelineTool = (
         //   完全权限档 → 原生问题卡问人（分组要不要、增强几倍）；
         //   全自动档   → 不问人，由 agent 自决并落账 decided_by: agent；
         //   guarded 档 → 零变化（审批卡照弹、用户看得见）。
-        if (approvalBypassed(permissionTierOf(ctx, exec))) {
+        // 段序修正:构造参数卡须在智能分析完整后呈现——判读缺席/风险件 pending 时
+        // 跳过卡(内核 experiment_setup 门槛已 blocked 指引看图闭环;分析完整后
+        // 的下一次调用卡才弹,mode5/targeted 建议值才有依据)。
+        const _rsDoc = typeof args.doc_type === "string" && args.doc_type.trim() !== "" ? args.doc_type.trim() : "do";
+        let _analysisComplete = args.visual_readings !== undefined;
+        if (!_analysisComplete) {
+          for (const _rsBase of [join(runDir, "data", "risk-signals", _rsDoc), join(runDir, "prep", "risk-signals", _rsDoc)]) {
+            const _rsF = join(_rsBase, "field_risk_signals.json");
+            if (existsSync(_rsF)) {
+              try {
+                const _vc = (JSON.parse(readFileSync(_rsF, "utf8")) as { visual_channel?: { mode?: string; image_semantics?: string } }).visual_channel ?? {};
+                _analysisComplete = _vc.mode === "enabled" && _vc.image_semantics !== "pending_agent_readings";
+              } catch { _analysisComplete = false; }
+              break;
+            }
+          }
+        }
+        if (approvalBypassed(permissionTierOf(ctx, exec)) && _analysisComplete) {
           const decided = await decideConstructionParams({
             ctx,
             exec,
@@ -3007,6 +3024,14 @@ let visualSummary: Record<string, unknown> | undefined;
       if (args.stage === "register") {
         const splitId = typeof args.split_id === "string" ? args.split_id.trim() : "";
         if (splitId !== "") argv.push("--split-id", splitId);
+      }
+      // 段序修正(owner 2026-11-05):分析先于确认卡——experiment_setup 判读对象
+      // 写盘转发内核(--visual-readings→风险步 --agent-signals)。
+      if (args.stage === "experiment_setup" && args.visual_readings !== undefined) {
+        const readingsPath = join(runDir, "runtime", "webui", "visual-readings.json");
+        mkdirSync(dirname(readingsPath), { recursive: true });
+        writeFileSync(readingsPath, JSON.stringify(args.visual_readings, null, 1) + "\n", "utf8");
+        argv.push("--visual-readings", readingsPath);
       }
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");

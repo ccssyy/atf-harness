@@ -30,8 +30,13 @@ describe("批1-D210终版——视觉分析必经(training_prep 段内门槛)", 
     expect(kernel).toContain('"visual_readings_pending"');
     expect(kernel).toContain("智能分析必经:agent 还没看图");
     expect(kernel).toContain("看图清单已导出");
-    // 清单自动导出(判读缺席时,调用方无需带旗标)
-    expect(kernel).toContain('_visual_plan_path = prep_dirs["risk_signals"] / "visual-sample-plan.json"');
+    // 清单自动导出(判读缺席时,调用方无需带旗标——搬移后经 rs_dir 同路径)
+    expect(kernel).toContain('/ "visual-sample-plan.json"');
+    // 段序修正:提炼方法+experiment_setup 段首接线(分析先于确认卡)
+    expect(kernel).toContain("def _run_risk_signals_with_gate");
+    expect(kernel.indexOf("def _run_risk_signals_with_gate")).toBeLessThan(kernel.indexOf("def stage_experiment_setup"));
+    const m = kernel.indexOf("def stage_experiment_setup");
+    expect(kernel.slice(m, m + 900)).toContain("_run_risk_signals_with_gate");
     // 带判读重跑的指路
     expect(kernel).toContain("带 --agent-signals");
     // 门槛在构造步之前:block 段先于 build_training_variants 调用点
