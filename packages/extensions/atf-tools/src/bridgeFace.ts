@@ -509,6 +509,16 @@ const launchConfirmCardOf = async (
             const kinds = Object.entries(report.kind_counts ?? {})
               .map(([kind, n]) => `${kind} ${String(n)}`).join(" / ");
             lines.push(`- **${doc}**：基线 ${String(report.base_rows ?? "?")} 行，构造 ${String(report.produced ?? "?")} 行（${kinds}）`);
+            // D210(e2e 轮实锚):缺口与守护状态随计数上卡面——增强卡承诺「如实披露
+            // 实产条数与原因」,只沉在产物 json 不算披露。
+            const m5 = (report as { mode5?: { status?: string; requested_rows_total?: number; effective_rows_total?: number; shortfall_rows?: number; support_note?: string } }).mode5;
+            if (m5 !== undefined && m5.status === "completed_with_shortfall") {
+              lines.push(`  - ⚠ 增强缺口：请求 ${String(m5.requested_rows_total ?? "?")} 条、实产 ${String(m5.effective_rows_total ?? "?")} 条（差 ${String(m5.shortfall_rows ?? "?")}）——${m5.support_note ?? "字段池/尝试预算耗尽"}`);
+            }
+            const tg2 = (report as { targeted?: { advice_source?: string } | null }).targeted;
+            if (tg2 !== undefined && tg2 !== null && tg2.advice_source === "guard_unavailable") {
+              lines.push(`  - ⚠ 重点增强守护缺席（advice_source=guard_unavailable）：重点字段的选择依据未经守护校验，产出条数参考价值有限`);
+            }
           } catch { /* 报告不可读按缺省呈现 */ }
         }
       } else {
