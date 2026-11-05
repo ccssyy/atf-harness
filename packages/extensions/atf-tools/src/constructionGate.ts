@@ -38,6 +38,8 @@ export interface ConstructionParamsState {
   readonly cutoffLen?: number;
   /** D177:卡面呈现的智能默认(targeted 倍率推导值,缺信号时 undefined 呈现说明)。 */
   readonly targetedSuggested?: number;
+  /** mode5 每图条数的智能分析建议值(agent 依 mode5_advice_stats 传;缺=未经分析)。 */
+  readonly mode5Suggested?: number;
 }
 
 /** 决策闸结论：解析后的构造参数＋谁定的＋为什么。 */
@@ -290,16 +292,27 @@ export const decideConstructionParams = async (input: {
       id: `construction-augment-${input.runId}`,
       // D187:语义如实——mode5_random 是「每图生成条数」不是倍数(内核整数语义);
       // 同图不重样+组内组合空间有限时实际可少于每图条数(构造报告如实披露)。
-      question: "随机子集增强：每图生成几条随机字段组合样本？（默认按建议值 2 条）",
+      // D210 终版(owner 2026-11-05 定论):mode5/targeted 两个倍数建议值都来自
+      // agent 结合图片与标签的智能分析,各自独立——建议在场时题面与推荐项
+      // 呈现分析值;缺席时如实标『未经智能分析』(不冒充建议)。
+      question: input.state.mode5Suggested !== undefined
+        ? `随机子集增强：每图生成几条随机字段组合样本？（智能分析建议每图 ${String(input.state.mode5Suggested)} 条）`
+        : "随机子集增强：每图生成几条随机字段组合样本？（未经智能分析——产品默认 2 条）",
       header: "随机子集增强",
       detail: [
-        "默认（推荐）：每图 2 条——在原始样本之外，每页再生成 2 条随机字段组合样本（按分组结构抽取）。",
+        input.state.mode5Suggested !== undefined
+          ? `分析建议（推荐）：每图 ${String(input.state.mode5Suggested)} 条——依据字段难度与组内组合空间的智能分析（图片+标签）。`
+          : "默认：每图 2 条——未经智能分析（agent 未传建议值），这是产品默认值不是分析建议；要看分析建议先走看图分析后重跑。",
         "语义是「每图条数」不是总量倍数：组内组合空间有限时实际会少于该数（同图不重复组合），构造报告会如实披露实产条数与原因。",
         "也可选不增强（只保留原始样本与必做的重点字段增强）。",
       ].join("\n"),
       options: AUGMENT_OPTIONS.map((option) => ({
         label: option.label,
-        description: option.value === 0 ? "只保留原始样本" : `每页生成约 ${String(option.value)} 条组合样本`,
+        description: option.value === 0
+          ? "只保留原始样本"
+          : input.state.mode5Suggested === option.value
+            ? `每页生成约 ${String(option.value)} 条组合样本（智能分析建议档）`
+            : `每页生成约 ${String(option.value)} 条组合样本`,
       })),
       multiSelect: false,
     });

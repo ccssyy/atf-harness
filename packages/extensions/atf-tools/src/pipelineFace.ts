@@ -2642,6 +2642,9 @@ export const buildPipelineTool = (
               // 决策闸不再重复问「要不要分组」，只补真缺的增强倍数。
               groupingConfirm: args.grouping_proposal !== undefined ? true : constructionParams.groupingConfirm,
               mode5Random: constructionParams.mode5Random,
+              // D210 终版:mode5 建议值随 state 进卡(此前解析后被丢弃,卡面恒写死
+              // 『默认 2 条』)——两个倍数的建议值各自独立来自智能分析
+              mode5Suggested: constructionParams.mode5Suggested,
               // D177:targeted 智能默认从 agent 传的 targeted_plan.multiplier 提取(缺=无信号呈现 1 倍);
               // cutoff_len agent 显式传参时不问(该值已是确认态)
               targetedSuggested: typeof (args.targeted_plan as Record<string, unknown> | undefined)?.["multiplier"] === "number"
