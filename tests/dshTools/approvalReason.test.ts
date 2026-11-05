@@ -56,8 +56,11 @@ describe("调用点全量走模板（源面钉——禁自由文案）", () => {
       while (true) {
         const at = source.indexOf("requestApproval(", cursor);
         if (at < 0) break;
-        // 取调用点后 900 字符窗口（跨多行模板参数），reason 必须由 buildApprovalReason 构造
-        const window = source.slice(at, at + 900);
+        // 取调用点后 900 字符窗口（跨多行模板参数），reason 必须由 buildApprovalReason 构造;
+        // D208 形态:reason 前置构造为 reasonText 变量再传入(确认卡/审批轨分流共用)——
+        // 窗口不含时向上回看 2600 字符找同段构造(reasonText = buildApprovalReason——D208 分流下两调用点与构造点距离不等)
+        const window = source.slice(at, at + 900)
+          + source.slice(Math.max(0, at - 2600), at);
         expect(
           window.includes("buildApprovalReason("),
           `${file}@${at}: requestApproval 调用未走 buildApprovalReason 模板`,
