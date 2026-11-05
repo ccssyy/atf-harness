@@ -17,13 +17,25 @@ import { join } from "node:path";
 const PIPELINE = join(process.cwd(), "packages/extensions/atf-tools/src/pipelineFace.ts");
 const VARIANTS = join(process.cwd(), "../AgenticTrainingFlow/skills/atf-admit-training-data/scripts/build_training_variants.py");
 
-describe("批1-D210终版——分析必经引导(非 fail-closed)", () => {
-  it("experiment_setup 视觉 pending 引导看图闭环", () => {
+describe("批1-D210终版——视觉分析必经(training_prep 段内门槛)", () => {
+  it("harness 事后通知形态已撤(不再『跑完才教』)", () => {
     const src = readFileSync(PIPELINE, "utf8");
-    expect(src).toContain('"pending_agent_readings"');
-    expect(src).toContain("智能分析不完整：agent 未看图");
-    expect(src).toContain("两个倍数建议值（各自独立）随确认卡供选");
-    expect(src).toContain("plan_only 导看图清单");
+    expect(src).not.toContain("智能分析不完整：agent 未看图");
+  });
+  it("内核段内门槛:判读缺席→blocked(清单已导出+读图指引+带参重跑),构造不执行", () => {
+    const kernel = readFileSync(
+      join(process.cwd(), "../AgenticTrainingFlow/skills/atf-admit-training-data/scripts/walkthrough_pipeline.py"),
+      "utf8",
+    );
+    expect(kernel).toContain('"visual_readings_pending"');
+    expect(kernel).toContain("智能分析必经:agent 还没看图");
+    expect(kernel).toContain("看图清单已导出");
+    // 清单自动导出(判读缺席时,调用方无需带旗标)
+    expect(kernel).toContain('_visual_plan_path = prep_dirs["risk_signals"] / "visual-sample-plan.json"');
+    // 带判读重跑的指路
+    expect(kernel).toContain("带 --agent-signals");
+    // 门槛在构造步之前:block 段先于 build_training_variants 调用点
+    expect(kernel.indexOf('"visual_readings_pending"')).toBeLessThan(kernel.indexOf('"build_training_variants.py"'));
   });
   it("首版 fail-closed 错向已撤(内核 targeted 不再 skip+how-to-fix)", () => {
     const src = readFileSync(VARIANTS, "utf8");
