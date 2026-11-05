@@ -1899,8 +1899,17 @@ const suggestedActionTextOf = (item: { suggested_action: Record<string, unknown>
 };
 
 /** D184/D188:回执 results[0].raw_response 取键（段摘要结构单源）。 */
-const firstResultKeyOf = (receipt: Record<string, unknown>, key: string): unknown => {
-  const results = Array.isArray(receipt["results"]) ? (receipt["results"] as Array<Record<string, unknown>>) : [];
+export const firstResultKeyOf = (receipt: Record<string, unknown>, key: string): unknown => {
+  // 键位双形态(复验 11-05 实锚):段工具返回体把内核 document 包在 summary 键下
+  // (receipt.summary.results[].raw_response)——旧实现只读顶层 receipt.results,
+  // 恒 undefined,label_qc 裁决卡/质检呈现/聚类披露整条装饰链从未触发。
+  const direct = receipt["results"];
+  const nested = receipt["summary"] as Record<string, unknown> | null | undefined;
+  const results = Array.isArray(direct)
+    ? (direct as Array<Record<string, unknown>>)
+    : (nested !== null && typeof nested === "object" && Array.isArray(nested["results"])
+        ? (nested["results"] as Array<Record<string, unknown>>)
+        : []);
   const raw = results[0]?.["raw_response"];
   return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>)[key] : undefined;
 };
