@@ -2737,7 +2737,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 布局兼容）＋--prompt-renderer 生成期注入（内核 generate_eval_orchestration 在 --eval-runner
       // 在场时必填〔D58 生成期即拒〕——此前计划生成漏传、执行链 eval_orchestration.sh 才注入＝
       // B7 缺口⑬：编排计划生成直接失败。渲染器与执行链同值单源：pin 内 atf-admit-training-data）
-      const port = Number((manifest["request_defaults"] as Record<string, unknown> | undefined)?.["port"] ?? (JSON.parse(readFileSync(args.service_config, "utf8")) as Record<string, unknown>)["port"]);
+      const port = Number((manifest["request_defaults"] as Record<string, unknown> | undefined)?.["port"] ?? (JSON.parse(readFileSync(args.service_config, "utf8")) as Record<string, unknown>)["port"] ?? 8322); // D219: 双缺席兜底(manifest 无 port 键时 undefined 拼出 NaN 端口,32 请求全挂实锚)
       const orchDir = join(roundDir, "orch");
       const promptRendererPath = skill("atf-admit-training-data", "render_prompt.py");
       // H-E9b：组装单点 buildEvalOrchArgs（N=1 与 N>1 同路径两形态；N=1 逐字恒等有黄金锚）
