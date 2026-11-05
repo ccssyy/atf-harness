@@ -158,6 +158,7 @@ export const runCandidateDirs = (root: string, runId: string): string[] => {
  *  任一根命中即返回；全缺/全不合法＝null（调用方回落平铺/桶）。只读探测零写盘。 */
 export const canonicalRunDirOf = (canonicalRoots: readonly string[], runId: string): string | null => {
   if (!isValidRunId(runId)) return null;
+  let firstValid: string | null = null;
   for (const root of canonicalRoots) {
     if (typeof root !== "string" || root === "") continue;
     for (const dir of runCandidateDirs(root, runId)) {
@@ -165,13 +166,33 @@ export const canonicalRunDirOf = (canonicalRoots: readonly string[], runId: stri
       try {
         if (!existsSync(manifest)) continue;
         const parsed: unknown = JSON.parse(readFileSync(manifest, "utf8"));
-        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) return dir;
+        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+          // 同名 run 多根命中时优先「带数据槽位」的活 run（v3 data/variants 或 v2 prep/variants
+          // 下有含 train.jsonl 的单据子目录）；空壳账本目录（仅 run.json+journal）次之——
+          // 防内核侧同名壳先按注册序命中、把真实 run 挡在解析外。
+          if (firstValid === null) firstValid = dir;
+          const variantRoots = [join(dir, "data", "variants"), join(dir, "prep", "variants")];
+          let hasSlots = false;
+          for (const vr of variantRoots) {
+            try {
+              if (readdirSync(vr, { withFileTypes: true }).some(
+                (entry) => entry.isDirectory() && existsSync(join(vr, entry.name, "train.jsonl")),
+              )) {
+                hasSlots = true;
+                break;
+              }
+            } catch {
+              // 无该层＝无槽位，看下一个形态
+            }
+          }
+          if (hasSlots) return dir;
+        }
       } catch {
         // 坏 run.json＝该候选不合法，下一个
       }
     }
   }
-  return null;
+  return firstValid;
 };
 
 /** 平铺层 run 目录名清单（一级，含非 run 目录——looksLikeRun 过滤归调用方）。 */

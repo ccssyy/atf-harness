@@ -2486,8 +2486,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       if (typeof args.adapter_path !== "string" || args.adapter_path.trim() === "") {
         return asToolValue({ started: false, error: "adapter_path_missing", note: "action=start 必填 adapter_path（status 查询只按 run/轮次——无需 start 参数）" });
       }
-      if (typeof args.eval_assets_dir !== "string" || args.eval_assets_dir.trim() === "") {
-        return asToolValue({ started: false, error: "eval_assets_dir_missing", note: "action=start 必填 eval_assets_dir（status 查询只按 run/轮次——无需 start 参数）" });
+      if (!multiDoc && (typeof args.eval_assets_dir !== "string" || args.eval_assets_dir.trim() === "")) {
+        return asToolValue({ started: false, error: "eval_assets_dir_missing", note: "action=start 必填 eval_assets_dir（status 查询只按 run/轮次——无需 start 参数；多类 run 逐类输入由内核按槽位派生，故豁免）" });
       }
       if (typeof args.service_config !== "string" || args.service_config.trim() === "") {
         return asToolValue({ started: false, error: "service_config_missing", note: "action=start 必填 service_config（status 查询只按 run/轮次——无需 start 参数）" });
@@ -2615,7 +2615,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // 主动推理域，串行缺省无推荐；内核校验推荐值 ≤ max_num_seqs——harness 不设第二套）
       const reportPath = join(serviceDir, "service-prelaunch-report.md");
       const reported = await runCapture("python3", [prelaunch, "--service-dir", serviceDir, "--env-profile", envProfile, "--out", reportPath,
-        "--field-config", fieldConfigPath ?? "", "--prompt-renderer", skill("atf-admit-training-data", "render_prompt.py"),
+        ...(fieldConfigPath ? ["--field-config", fieldConfigPath] : []), "--prompt-renderer", skill("atf-admit-training-data", "render_prompt.py"),
         "--concurrency", String(concurrency),
         ...(args.concurrency !== undefined ? ["--concurrency-recommended", String(concurrency)] : []),
         ...(args.concurrency_reason !== undefined && args.concurrency_reason.trim() !== "" ? ["--concurrency-reason", args.concurrency_reason.trim()] : [])], 120_000, evalChildEnvOf());
