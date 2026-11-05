@@ -2903,12 +2903,21 @@ const askPromptChoice = async (
     .filter((value) => value.trim() !== "")
     .join("；")
     .trim();
+  const resolvedVia = hasMaterial
+    ? (picked.startsWith("用材料") ? "material" : "builtin_default")
+    : (picked.startsWith("用产品内置") ? "builtin_default" : "user_stated");
   return {
     picked: picked || "(no pick)",
     typed,
-    resolved_via: hasMaterial
-      ? (picked.startsWith("用材料") ? "material" : "builtin_default")
-      : (picked.startsWith("用产品内置") ? "builtin_default" : "user_stated"),
+    resolved_via: resolvedVia,
+    // D214(e2e 轮实锚,owner 2026-11-05 反验收):「产品内置模板」的机器语义=
+    // 不写 template——后续 experiment_setup 段不传 --prompt-template,field-config
+    // .template 保持空,构造渲染自动走 atf-template-v1 骨架(1126 现役句式:文档类型
+    // 句+平铺语义+全字段名列出+格式规范段)。真机曾把「选内置」执行成手写 217 字
+    // 短句冒充 template 覆盖,骨架全部丢失——本指令是 agent 侧唯一正确动作。
+    ...(resolvedVia === "builtin_default"
+      ? { instructions: "选产品内置＝后续 experiment_setup 段【不传】--prompt-template（field-config.template 保持空）——渲染走 atf-template-v1 骨架。禁止把任何手写模板文本写进 template 键冒充内置。" }
+      : {}),
   };
 };
 
