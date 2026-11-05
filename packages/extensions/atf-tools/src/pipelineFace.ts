@@ -3737,6 +3737,26 @@ let visualSummary: Record<string, unknown> | undefined;
             }
           }
         }
+        // D209(e2e 轮实锚,owner 反验收):版式聚类结果上用户面——簇数/单页簇/
+        // 布局参考簇数只在回执 json 里沉底不算披露;切分被拦时用户更要看到
+        // 「为什么拦」的聚类事实(layout_recluster_hint 全量呈现)。
+        if (stage === "family_split") {
+          const hint = firstResultKeyOf(receipt, "layout_recluster_hint") as Record<string, unknown> | undefined;
+          if (hint !== undefined) {
+            const hintLines = [
+              `- 目录簇数：${String(hint["source_clusters"] ?? "?")}（单页簇 ${String(hint["source_single_page_clusters"] ?? "?")}）`,
+              `- 布局口径参考簇数：${String(hint["layout_clusters"] ?? "?")}（可分层页 ${String(hint["layout_minable_pages"] ?? "?")}/${String(hint["pages"] ?? "?")}）`,
+              ...(Array.isArray(hint["how_to_fix"])
+                ? (hint["how_to_fix"] as string[]).map((fix) => `- 改法：${fix}`)
+                : []),
+            ].join("\n");
+            projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, {
+              conclusion: `版式聚类对账（目录划分碎片化，布局口径显著更少簇）：\n${hintLines}`,
+              stage: "family_split",
+              next: "版式划分权威在你——合并相近小类重切（回复确认）或维持目录口径",
+            });
+          }
+        }
         if (stage === "training_prep" && ok) {
           const report = firstResultKeyOf(receipt, "construction_report") as Record<string, unknown> | undefined;
           if (report !== undefined) {

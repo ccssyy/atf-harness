@@ -534,11 +534,27 @@ const launchConfirmCardOf = async (
         try {
           const config = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
           const training = (config["training"] ?? {}) as Record<string, unknown>;
+          // D213(e2e 轮实锚,owner 反验收):卡数与卡位入参数表——用户确认训练方案时
+          // 必须看到「占多少卡/占哪几张卡」(GPU 占用是启动确认的核心代价面)。
+          const cardBinding = (training["card_binding"] ?? {}) as Record<string, unknown>;
+          const visibleDevices = [cardBinding["visible_devices"], training["visible_devices"], config["visible_devices"]]
+            .find((v) => typeof v === "string" && v !== "");
+          const nproc = [cardBinding["nproc_per_node"], training["nproc_per_node"], config["nproc_per_node"]]
+            .find((v) => v !== undefined && v !== null);
+          const resourceKeys: Array<[string, unknown]> = [
+            ["nproc_per_node(卡数)", nproc],
+            ["visible_devices(卡位)", visibleDevices],
+          ];
           const keys = ["learning_rate", "num_train_epochs", "per_device_train_batch_size",
             "global_batch_size", "optim", "lora_rank", "lora_alpha", "cutoff_len", "warmup_ratio"];
-          const rows = keys
-            .filter((key) => training[key] !== undefined || config[key] !== undefined)
-            .map((key) => `| ${key} | ${String(training[key] ?? config[key] ?? "")} |`);
+          const rows = [
+            ...resourceKeys
+              .filter(([, v]) => v !== undefined)
+              .map(([label, v]) => `| ${label} | ${String(v)} |`),
+            ...keys
+              .filter((key) => training[key] !== undefined || config[key] !== undefined)
+              .map((key) => `| ${key} | ${String(training[key] ?? config[key] ?? "")} |`),
+          ];
           if (rows.length > 0) paramTable = "\n### 训练参数\n\n| 参数 | 值 |\n|---|---|\n" + rows.join("\n");
         } catch { /* 配置不可读按缺省呈现 */ }
       }
