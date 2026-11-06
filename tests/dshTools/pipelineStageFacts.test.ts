@@ -85,6 +85,15 @@ const BLOCKED_SCRIPT = (root: string): string =>
   );
 const ENVFAIL_SCRIPT = (root: string): string => writeScript(root, "envfail.mjs", "process.stderr.write('ModuleNotFoundError: pandas')\nprocess.exit(3)\n");
 
+/** D173 必分组(1106 晚机检):experiment_setup 用例统一带分组候选过闸。 */
+const D173_PROPOSAL = {
+  schema_version: "GroupingProposal/v1",
+  candidates: [
+    { name: "两层", recommended: true, reason: "单据头/明细分开", groups: [{ name: "单据级", fields: ["f1"] }, { name: "明细级", fields: ["f2"] }] },
+  ],
+  recommended_index: 0,
+};
+
 describe("A2.2b——段模式闭集与映射表", () => {
   it("段名闭集＝内核八段原文（顺序权威，禁增删改序；旧六段名不保留）", () => {
     expect(PIPELINE_STAGES).toEqual([
@@ -263,8 +272,8 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     mkdirSync(join(ws, "runs", "run-a", "webui"), { recursive: true });
-    writeFileSync(join(ws, "runs", "run-a", "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }));
-    const result = await tool.execute({ stage: "experiment_setup", run_id: "run-a", workspace_path: ws }, execWithSession("sess-9"));
+    writeFileSync(join(ws, "runs", "run-a", "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["f1", "f2"] }));
+    const result = await tool.execute({ stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "run-a", workspace_path: ws }, execWithSession("sess-9"));
     expect(result).toMatchObject({
       stage: "experiment_setup", run_id: "run-a", ok: true, exit_code: 0,
       segment_fact_recorded: true, session_bound: true,

@@ -41,7 +41,7 @@ const confirmFields = (ws: string, runId: string): void => {
     mkdirSync(join(runDir, rel), { recursive: true });
     writeFileSync(
       join(runDir, rel, "field-choice.json"),
-      JSON.stringify({ schema_version: "FieldChoice/v1", run_id: runId, confirmed_fields: ["f1"], all_fields: true, total_fields: 1, decided_at: new Date().toISOString(), source: "user_confirmed" }),
+      JSON.stringify({ schema_version: "FieldChoice/v1", run_id: runId, confirmed_fields: ["f1", "f2"], all_fields: true, total_fields: 1, decided_at: new Date().toISOString(), source: "user_confirmed" }),
       "utf-8",
     );
   }
@@ -78,6 +78,15 @@ const GROUPING_FIELD_GROUP = {
   decision: "pending",
   limit_source: "user_specified",
   notes: [],
+};
+
+/** D173 必分组(1106 晚机检):experiment_setup 用例统一带分组候选过闸。 */
+const D173_PROPOSAL = {
+  schema_version: "GroupingProposal/v1",
+  candidates: [
+    { name: "两层", recommended: true, reason: "单据头/明细分开", groups: [{ name: "单据级", fields: ["f1"] }, { name: "明细级", fields: ["f2"] }] },
+  ],
+  recommended_index: 0,
 };
 
 describe("分组节：三种来源", () => {
@@ -159,7 +168,7 @@ describe("分组节接线：experiment_setup 段回执带 grouping_section", () 
     writeFileSync(join(runDir, "experiment-setup", "experiment-config.json"), JSON.stringify({ grouping: GROUPING_FIELD_GROUP }));
     const record: string[] = [];
     const result = await toolOf(record).execute(
-      { stage: "experiment_setup", run_id: "grp-run", workspace_path: ws },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "grp-run", workspace_path: ws },
       { agent: { session: { id: "g" } }, callId: "g1", signal: undefined },
     );
     expect(result["ok"]).toBe(true);

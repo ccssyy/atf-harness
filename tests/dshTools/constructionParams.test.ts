@@ -101,7 +101,7 @@ const confirmFields = (ws: string, runId: string, doc?: string): void => {
     mkdirSync(join(runDir, rel), { recursive: true });
     writeFileSync(
       join(runDir, rel, doc !== undefined && doc !== "" ? `field-choice.${doc}.json` : "field-choice.json"),
-      JSON.stringify({ schema_version: "FieldChoice/v1", run_id: runId, confirmed_fields: ["f1"], all_fields: true, total_fields: 1, decided_at: new Date().toISOString(), source: "user_confirmed" }),
+      JSON.stringify({ schema_version: "FieldChoice/v1", run_id: runId, confirmed_fields: ["f1", "f2"], all_fields: true, total_fields: 1, decided_at: new Date().toISOString(), source: "user_confirmed" }),
       "utf-8",
     );
   }
@@ -120,6 +120,15 @@ const ADVICE = {
   effective: false,
 };
 
+/** D173 必分组(1106 晚机检):experiment_setup 用例统一带分组候选过闸。 */
+const D173_PROPOSAL = {
+  schema_version: "GroupingProposal/v1",
+  candidates: [
+    { name: "两层", recommended: true, reason: "单据头/明细分开", groups: [{ name: "单据级", fields: ["f1"] }, { name: "明细级", fields: ["f2"] }] },
+  ],
+  recommended_index: 0,
+};
+
 describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
   it("四条全给：argv 逐条带上，内联对象落 <run>/prep 后传路径", async () => {
     const ws = tempRoot("a-ws-");
@@ -128,6 +137,7 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
     const result = await toolOf(record).execute(
       {
         stage: "experiment_setup",
+        grouping_proposal: D173_PROPOSAL,
         run_id: "a-full",
         workspace_path: ws,
         grouping_confirm: true,
@@ -160,7 +170,7 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
     const ws = tempRoot("a-ws-");
     confirmFields(ws, "a-none");
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "a-none", workspace_path: ws },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "a-none", workspace_path: ws },
       fakeExec,
     );
     const argv = summaryArgv(result);
@@ -174,12 +184,12 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
     confirmFields(ws, "a-card");
     const record: string[] = [];
     await toolOf(record).execute(
-      { stage: "experiment_setup", run_id: "a-card", workspace_path: ws, targeted_advice: ADVICE },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "a-card", workspace_path: ws, targeted_advice: ADVICE },
       fakeExec,
     );
     const reason = record.join("\n");
     expect(reason).toContain("构造参数确认");
-    expect(reason).toContain("分组方案：未确认——**按数据事实分组默认生成**");
+    expect(reason).toContain("分组方案：待定——分组候选上卡后由用户选定（2-3 组优先，上限 5），未选定前不生成分组样本");
     // P1-5 新合同:run 无风险件(分析未完成)时倍数行不得预设「默认生成」——
     // 呈现「图像分析未完成,本轮不确认倍数」并指路看图(分析先于确认卡)。
     expect(reason).toContain("随机子集增强：**图像分析未完成——本轮不确认倍数**");
@@ -214,7 +224,7 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
     confirmFields(ws, "a-card2");
     const record: string[] = [];
     await toolOf(record).execute(
-      { stage: "experiment_setup", run_id: "a-card2", workspace_path: ws, grouping_confirm: true, mode5_random: 0 },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "a-card2", workspace_path: ws, grouping_confirm: true, mode5_random: 0 },
       fakeExec,
     );
     const reason = record.join("\n");
@@ -235,7 +245,7 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
       "utf-8",
     );
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: runId, workspace_path: ws, doc_type: "do", targeted_advice: ADVICE },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: runId, workspace_path: ws, doc_type: "do", targeted_advice: ADVICE },
       fakeExec,
     );
     const argv = summaryArgv(result);
@@ -250,7 +260,7 @@ describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
     confirmFields(ws, "a-accept");
     const record: string[] = [];
     const result = await toolWithAsk(record, "yes").execute(
-      { stage: "experiment_setup", run_id: "a-accept", workspace_path: ws, targeted_advice: ADVICE },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "a-accept", workspace_path: ws, targeted_advice: ADVICE },
       fakeExec,
     );
     const argv = summaryArgv(result);
@@ -263,7 +273,7 @@ describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
     confirmFields(ws, "a-reject");
     const record: string[] = [];
     const result = await toolWithAsk(record, "no").execute(
-      { stage: "experiment_setup", run_id: "a-reject", workspace_path: ws, targeted_advice: ADVICE },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "a-reject", workspace_path: ws, targeted_advice: ADVICE },
       fakeExec,
     );
     expect(summaryArgv(result)).not.toContain("--targeted-accept");
@@ -275,7 +285,7 @@ describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
     confirmFields(ws, "a-degrade");
     const record: string[] = [];
     const result = await toolOf(record).execute(
-      { stage: "experiment_setup", run_id: "a-degrade", workspace_path: ws, targeted_advice: ADVICE },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "a-degrade", workspace_path: ws, targeted_advice: ADVICE },
       fakeExec,
     );
     expect(summaryArgv(result)).not.toContain("--targeted-accept");
@@ -287,7 +297,7 @@ describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
     confirmFields(ws, "a-noadvice");
     const record: string[] = [];
     const result = await toolWithAsk(record, "yes").execute(
-      { stage: "experiment_setup", run_id: "a-noadvice", workspace_path: ws },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "a-noadvice", workspace_path: ws },
       fakeExec,
     );
     expect(summaryArgv(result)).not.toContain("--targeted-accept");

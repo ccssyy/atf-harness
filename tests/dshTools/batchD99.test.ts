@@ -53,7 +53,7 @@ const MOCK = join(import.meta.dirname, "..", "fixtures", "mock_pipeline_params.m
 /** D191 字段确认闸适配:setup 段前置落盘 FieldChoice/v1(用户已确认——合法通过态)。 */
 const withFieldChoice = (ws: string, runId: string): string => {
   mkdirSync(join(ws, "runs", runId, "webui"), { recursive: true });
-  writeFileSync(join(ws, "runs", runId, "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }));
+  writeFileSync(join(ws, "runs", runId, "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["f1", "f2"] }));
   return ws;
 };
 
@@ -63,11 +63,20 @@ const toolOf = (record: string[] = []): DshToolLike =>
 const summaryArgv = (result: unknown): string[] =>
   ((result as { summary?: { argv?: string[] } }).summary?.argv ?? []);
 
+/** D173 必分组(1106 晚机检):experiment_setup 用例统一带分组候选过闸。 */
+const D173_PROPOSAL = {
+  schema_version: "GroupingProposal/v1",
+  candidates: [
+    { name: "两层", recommended: true, reason: "单据头/明细分开", groups: [{ name: "单据级", fields: ["f1"] }, { name: "明细级", fields: ["f2"] }] },
+  ],
+  recommended_index: 0,
+};
+
 describe("D99——negative_ratio_target 透传（仅 experiment_setup 段）", () => {
   it("显式值透传：argv 含 --negative-ratio-target <值>；返回体值＋source=explicit", async () => {
     for (const value of ["0.03,0.06", "0.02,0.05"]) {
       const result = await toolOf().execute(
-        { stage: "experiment_setup", run_id: `d99-${value}`, workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, `d99-${value}`); })(), negative_ratio_target: value },
+        { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: `d99-${value}`, workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, `d99-${value}`); })(), negative_ratio_target: value },
         fakeExec,
       );
       expect(summaryArgv(result)).toContain("--negative-ratio-target");
@@ -79,7 +88,7 @@ describe("D99——negative_ratio_target 透传（仅 experiment_setup 段）", 
 
   it("未给 → argv 无该参＋返回体按常量带标注 kernel_default（缺省不静默）", async () => {
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "d99-absent", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d99-absent"); })() },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "d99-absent", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d99-absent"); })() },
       fakeExec,
     );
     expect(summaryArgv(result)).not.toContain("--negative-ratio-target");
@@ -90,7 +99,7 @@ describe("D99——negative_ratio_target 透传（仅 experiment_setup 段）", 
 
   it("空白串视同未给（trim 口径）——argv 不下传、返回体 kernel_default", async () => {
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "d99-blank", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d99-blank"); })(), negative_ratio_target: "  " },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "d99-blank", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d99-blank"); })(), negative_ratio_target: "  " },
       fakeExec,
     );
     expect(summaryArgv(result)).not.toContain("--negative-ratio-target");
@@ -111,7 +120,7 @@ describe("D99——negative_ratio_target 透传（仅 experiment_setup 段）", 
     for (const value of ["0.03,0.06", ""]) {
       const record: string[] = [];
       await toolOf(record).execute(
-        { stage: "experiment_setup", run_id: `d99-card-${value || "default"}`, workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, `d99-card-${value || "default"}`); })(), ...(value === "" ? {} : { negative_ratio_target: value }) },
+        { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: `d99-card-${value || "default"}`, workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, `d99-card-${value || "default"}`); })(), ...(value === "" ? {} : { negative_ratio_target: value }) },
         fakeExec,
       );
       expect(record[0]).toContain(negativeRatioApprovalLine(value));
@@ -133,6 +142,7 @@ describe("D99——negative_ratio_target 透传（仅 experiment_setup 段）", 
     const result = await toolOf().execute(
       {
         stage: "experiment_setup",
+        grouping_proposal: D173_PROPOSAL,
         run_id: "d99-with-d89",
         workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d99-with-d89"); })(),
         grouping_preset: "A",

@@ -227,6 +227,11 @@ export const registerPathGuard = (
             return { kind: "deny", reason: ref.reason };
           }
           (args as Record<string, unknown>)["file_path"] = ref.path;
+          // 复检三道(与直传路径同权):D182 裁决账本改道/白名单/缺席兜底
+          const refAdjudication = adjudicationRedirectOf(ref.path);
+          if (refAdjudication !== null) {
+            return { kind: "deny", reason: refAdjudication };
+          }
           if (pathOutsideRoots(ref.path, guardRoots)) {
             return { kind: "deny", reason: `${FILE_PATH_OUTSIDE_ALLOWLIST}: ${ref.path} 越出白名单（合法根：${guardRoots.join("；")}）——@plan 引用解析出的路径须在白名单内` };
           }
