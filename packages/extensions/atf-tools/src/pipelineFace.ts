@@ -211,10 +211,36 @@ export const STAGE_BUSINESS: Readonly<Record<string, string>> = {
   training_prep: "训练准备",
 };
 
+/** D230 补:从段回执提取内核聚类摘要行(「版式聚类结果:」前缀,首条)。
+ *  1106 晚核对发现第三处漏修载体:内核 family_split 摘要行只落 stage 文件,
+ *  stageUserSummaryOf 成功态是通用文案——用户面看不到聚类结果。 */
+const clusterDigestLineOf = (receipt: Record<string, unknown>): string | null => {
+  const results = (receipt["summary"] as { results?: unknown } | undefined)?.results;
+  if (!Array.isArray(results)) return null;
+  for (const item of results) {
+    const missing = (item as { missing?: unknown }).missing;
+    if (!Array.isArray(missing)) continue;
+    for (const line of missing) {
+      if (typeof line === "string" && line.startsWith("版式聚类结果:")) {
+        return line.slice("版式聚类结果:".length);
+      }
+    }
+  }
+  return null;
+};
+
 /** 段回执 → 用户面三句话（业务语言；成败都说清停在哪、下一步是什么）。 */
 export const stageUserSummaryOf = (receipt: Record<string, unknown>, ok: boolean, stage: string): UserSummary => {
   const stageLabel = STAGE_BUSINESS[stage] ?? "这一段";
   if (ok) {
+    const clusterDigest = stage === "family_split" ? clusterDigestLineOf(receipt) : null;
+    if (clusterDigest !== null) {
+      return {
+        conclusion: `版式划分跑完了——聚类结果:${clusterDigest}`,
+        stage: "聚类明细已随切分产物落盘,以上是簇分布结论",
+        next: "对簇数或分组有异议直接说(可调聚类重切);没问题就继续下一段",
+      };
+    }
     return {
       conclusion: `${stageLabel}跑完了`,
       stage: `${stageLabel}的产物已落到这个 run 目录`,
@@ -2673,6 +2699,12 @@ export const buildPipelineTool = (
             reason: String(rawPlan["reason"] ?? ""),
           };
         }
+        // P1-5 补:盘面统计件(内核生产者落 data/risk-signals/<doc>/mode5-advice-stats.json)
+        let mode5StatsOnDisk: { suggested_mode5_random?: unknown; suggested_basis?: { derived_multiplier?: unknown } } | null = null;
+        const mode5StatsPathOf = (rd: string, a: Record<string, unknown>): string => {
+          const doc = typeof a["doc_type"] === "string" && String(a["doc_type"]).trim() !== "" ? String(a["doc_type"]).trim() : undefined;
+          return join(resolveRunSubdir(rd, doc !== undefined ? `data/risk-signals/${doc}` : "data/risk-signals"), "mode5-advice-stats.json");
+        };
         // 统计件里的建议倍数：只用于卡面据实呈现（审批前内核还没算），
         // 不做任何决定——真值由内核按来源分档给出并随回执返回。
         const mode5SuggestedRaw = (args.mode5_advice_stats as Record<string, unknown> | undefined)
@@ -2686,14 +2718,15 @@ export const buildPipelineTool = (
         // agent 传参解析,真机 agent 没传→卡面恒「未经智能分析默认 2 条」,
         // 分析做了也白做。盘面件在场即带建议上卡(时序:首跑分析未完成不弹卡,
         // 看图重跑时统计件已产→卡面呈现分析建议)。
-        if (mode5Suggested === undefined && typeof args.doc_type === "string" && String(args.doc_type).trim() !== "") {
+        if (mode5Suggested === undefined) {
           try {
-            const statsPath = join(resolveRunSubdir(runDir, `data/risk-signals/${String(args.doc_type).trim()}`), "mode5-advice-stats.json");
-            const onDisk = JSON.parse(readFileSync(statsPath, "utf8")) as { suggested_mode5_random?: unknown };
-            if (typeof onDisk.suggested_mode5_random === "number" && Number.isFinite(onDisk.suggested_mode5_random)) {
-              mode5Suggested = Number(onDisk.suggested_mode5_random);
+            mode5StatsOnDisk = JSON.parse(readFileSync(mode5StatsPathOf(runDir, args), "utf8")) as {
+              suggested_mode5_random?: unknown; suggested_basis?: { derived_multiplier?: unknown };
+            };
+            if (typeof mode5StatsOnDisk.suggested_mode5_random === "number" && Number.isFinite(mode5StatsOnDisk.suggested_mode5_random)) {
+              mode5Suggested = Number(mode5StatsOnDisk.suggested_mode5_random);
             }
-          } catch { /* 盘面件缺席=首跑形态,保持 undefined 如实呈现 */ }
+          } catch { mode5StatsOnDisk = null; /* 盘面件缺席=首跑形态,如实呈现 */ }
         }
         constructionParams = { groupingConfirm, mode5Random, targetedAdvice, targetedPlan, mode5Suggested };
         // D90：审批免的档位（完全权限／全自动）下，「构造参数」不能再靠审批卡承载——
@@ -2719,6 +2752,13 @@ export const buildPipelineTool = (
             }
           }
         }
+        // P1-5 补:targeted 建议值(agent 传参优先→盘面统计件同源值兜底)
+        const targetedFromArg = typeof (args.targeted_plan as Record<string, unknown> | undefined)?.["multiplier"] === "number"
+          ? Number((args.targeted_plan as Record<string, unknown>)["multiplier"])
+          : undefined;
+        const targetedDerivedOnDisk = mode5StatsOnDisk !== null ? mode5StatsOnDisk.suggested_basis?.derived_multiplier : undefined;
+        const targetedSuggestedResolved = targetedFromArg
+          ?? (typeof targetedDerivedOnDisk === "number" && Number.isFinite(targetedDerivedOnDisk) ? targetedDerivedOnDisk : undefined);
         if (approvalBypassed(permissionTierOf(ctx, exec)) && _analysisComplete) {
           const decided = await decideConstructionParams({
             ctx,
@@ -2733,11 +2773,9 @@ export const buildPipelineTool = (
               // D210 终版:mode5 建议值随 state 进卡(此前解析后被丢弃,卡面恒写死
               // 『默认 2 条』)——两个倍数的建议值各自独立来自智能分析
               mode5Suggested: constructionParams.mode5Suggested,
-              // D177:targeted 智能默认从 agent 传的 targeted_plan.multiplier 提取(缺=无信号呈现 1 倍);
-              // cutoff_len agent 显式传参时不问(该值已是确认态)
-              targetedSuggested: typeof (args.targeted_plan as Record<string, unknown> | undefined)?.["multiplier"] === "number"
-                ? Number((args.targeted_plan as Record<string, unknown>)["multiplier"])
-                : undefined,
+              // D177+P1-5 补:targeted 智能默认=agent 传参优先,缺席从盘面统计件
+              // suggested_basis.derived_multiplier 同源取(targeted/mode5 共享难度推导)。
+              targetedSuggestedResolved,
               cutoffLen: typeof args.cutoff_len === "number" ? args.cutoff_len : undefined,
             },
           });
