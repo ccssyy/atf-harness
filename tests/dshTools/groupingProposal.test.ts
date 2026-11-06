@@ -36,6 +36,8 @@ const tempRoots: string[] = [];
 const tempRoot = (prefix: string): string => {
   const root = mkdtempSync(join(tmpdir(), prefix));
   tempRoots.push(root);
+  // D133:段入口拒裸目录 workspace——fixture 建已初始化形态(runs/ 标记)。
+  mkdirSync(join(root, "runs"), { recursive: true });
   return root;
 };
 afterEach(() => {
@@ -249,16 +251,16 @@ describe("C2 分组四态", () => {
       { stage: "experiment_setup", run_id: "auto", workspace_path: ws, grouping_proposal: PROPOSAL },
       fakeExec,
     );
-    // full 档也问：①分组候选卡（本次就是它在问选哪套）；
-    // ②D90 决策闸的增强倍数卡——审批在本档已免，构造参数缺口不能再靠审批卡承载，
-    //   必须当场问人（10-29 真机：零问题卡 → 分组与增强全程未确认 → 样本没多生成）。
-    expect(asked).toHaveLength(2);
+    // full 档也问分组候选卡（传候选＝请人来选，本次就是它在问选哪套）。
+    // ②D90 增强倍数卡的 ask 契约已被 45d705f2 段序修正改写:构造参数卡前有分析
+    //   完整性检查,判读缺席/风险件 pending 即跳卡(内核门槛接管指引,分析完整后
+    //   下一次调用卡才弹)——本用例 mock 无风险信号/判读,故只有分组卡这一问;
+    //   增强卡双态/选项锚在 batch1D210final(判读在场形态)。
+    expect(asked).toHaveLength(1);
     const askedHeaders = asked.map(
       (entry) => (entry["questions"] as Array<{ header?: string; options?: Array<{ label: string }> }>)[0]!,
     );
-    // 决策闸先跑（段执行前），分组候选卡后跑（审批前）——顺序如实断言
-    expect(askedHeaders.map((question) => question.header)).toEqual(["随机子集增强", "分组"]);
-    expect(askedHeaders[0]!.options?.map((option) => option.label)).toEqual(["不增强", "每图 2 条", "每图 3 条"]);
+    expect(askedHeaders.map((question) => question.header)).toEqual(["分组"]);
     expect(result["grouping_source"]).toBe("proposal");
     expect(result["grouping_decision"]).toBe("user_selected");
     // 本次 mock 未选任何项 → 落到推荐候选（内核只认 recommended:true）

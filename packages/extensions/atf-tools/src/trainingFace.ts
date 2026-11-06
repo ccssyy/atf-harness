@@ -2610,7 +2610,9 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       const evalLane = evalLaneResolved.ok ? evalLaneResolved.lane : "joint";
       // 多槽位：字段配置逐类由内核派生，harness 侧不再持有一份（禁挑一类当代表）
       const fieldConfigPath = fieldConfigResolved.ok ? fieldConfigResolved.path : undefined;
-      const caliber = fieldConfigPath !== undefined ? computeEvalCaliber(fieldConfigPath, args.eval_assets_dir, promptMode) : null;
+      // eval_assets_dir 可选(多类豁免,D198):缺省传空串——口径行显示面容错,
+      // GT 目录不可读即无 GT 数字,不阻断(运行时行为与缺省 undefined 等价且类型干净)。
+      const caliber = fieldConfigPath !== undefined ? computeEvalCaliber(fieldConfigPath, args.eval_assets_dir ?? "", promptMode) : null;
       const caliberLine = caliber !== null ? formatEvalCaliberLine(caliber) : null;
       // 评估轮号＝内核单源（resolve-eval-round：E5 复评复用判定在内核；harness 不再自建
       // maxN+1——那会每次评估新派一轮）。checkpoints 传入本次 adapter 的固定编号，
@@ -2718,6 +2720,18 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       }
       let approvalEntryId: string | undefined;
       try { approvalEntryId = JSON.parse(recorded.stdout)["approval_id"]; } catch { console.error("[atf-evaluate] 放行账本 stdout 非 JSON——返回体省略 approval_entry_id（不阻断评估启动）"); }
+      // D203: 放行后账本对账——编排闸按 service_manifest.config_sha256 查 approval-ledger，
+      // record 写的是 --config 的 subject SHA；两者不一致(service_config 在放行前被重生成)
+      // 则编排必然永久 waiting_for_start(两轮复现根因)。启动前对账，不盲启编排。
+      try {
+        const manifestSha = String((JSON.parse(readFileSync(join(serviceDir, "service_manifest.json"), "utf8")) as { config_sha256?: string }).config_sha256 ?? "");
+        const recordedSha = String((JSON.parse(recorded.stdout) as { subject_sha256?: string }).subject_sha256 ?? "");
+        if (manifestSha !== "" && recordedSha !== "" && manifestSha !== recordedSha) {
+          return asToolValue({ started: false, error: "eval_release_ledger_mismatch",
+            manifest_sha: manifestSha.slice(0, 16), recorded_sha: recordedSha.slice(0, 16),
+            note: "放行记录 SHA 与服务清单不一致（service_config 在放行前被重生成）——how_to_fix:重推 atf_evaluate start 重走确认链（九必报项→确认卡→放行→编排），不要手工补录账本" });
+        }
+      } catch (e) { console.error("[atf-evaluate] D203 账本对账异常(不阻断):", e); }
       // ④ checkpoint staging 计划（selections 由已确认的 adapter_path 编译，非猜测）
       const ckptPlanDir = join(roundDir, "ckpt-plan");
       mkdirSync(ckptPlanDir, { recursive: true });

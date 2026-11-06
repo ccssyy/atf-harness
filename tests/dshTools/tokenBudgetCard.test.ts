@@ -39,6 +39,8 @@ const tempRoot = (): string => {
   // 本文件借 register 段触发「构造段失败输出含已知码」的映射面，故批根必须在位。
   mkdirSync(join(root, "src"), { recursive: true });
   tempRoots.push(root);
+  // D133:段入口拒裸目录 workspace——fixture 建已初始化形态(runs/ 标记)。
+  mkdirSync(join(root, "runs"), { recursive: true });
   return root;
 };
 afterEach(() => {

@@ -42,6 +42,8 @@ const envPinned: string[] = [];
 const tempRoot = (): string => {
   const root = mkdtempSync(join(tmpdir(), "e10b-test-"));
   tempRoots.push(root);
+  // D133:段入口拒裸目录 workspace——fixture 建已初始化形态(runs/ 标记)。
+  mkdirSync(join(root, "runs"), { recursive: true });
   return root;
 };
 afterEach(() => {

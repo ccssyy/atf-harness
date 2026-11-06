@@ -30,6 +30,8 @@ const tempRoot = (): string => {
   // D-b 新契约：register 段要求数据批根真实存在（未传 doc_type 时只校验批根）。
   mkdirSync(join(root, "src"), { recursive: true });
   tempRoots.push(root);
+  // D133:段入口拒裸目录 workspace——fixture 建已初始化形态(runs/ 标记)。
+  mkdirSync(join(root, "runs"), { recursive: true });
   return root;
 };
 afterEach(() => {

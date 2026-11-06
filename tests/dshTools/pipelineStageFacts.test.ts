@@ -32,6 +32,8 @@ const tempRoot = (): string => {
   mkdirSync(join(root, "src", "do"), { recursive: true });
   mkdirSync(join(root, "src", "swb"), { recursive: true });
   tempRoots.push(root);
+  // D133:段入口拒裸目录 workspace——fixture 建已初始化形态(runs/ 标记)。
+  mkdirSync(join(root, "runs"), { recursive: true });
   return root;
 };
 afterEach(() => {
@@ -335,8 +337,10 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
   it("A3 回归：审批 rejected → 结构化拒绝且零写入（spawn 不发生）", async () => {
     const root = tempRoot();
     const ws = join(root, "ws");
-    mkdirSync(ws, { recursive: true });
-    // seedRun:false——本用例断言「拒绝即零写入」，夹具不得预先铺任何目录
+    mkdirSync(join(ws, ".atf"), { recursive: true });
+    writeFileSync(join(ws, ".atf", "workspace.json"), "{}\n");
+    // seedRun:false——本用例断言「拒绝即零写入」，夹具不得预先铺 run 目录
+    // (.atf/workspace.json 是 D133 合法性身件标记,非 run 写入,零写入断言不受扰)
     const tool = pipelineToolOf(approvalCtx("rejected"), `node ${OK_SCRIPT(root)}`, 30_000, { seedRun: false }) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };

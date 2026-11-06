@@ -64,7 +64,7 @@
  *   不下传；显式给且非空才追加——渲染口径用，E8 联合装配链透传面）／--auto-style-cluster 仅 family_split（三态
  *   auto|on|off，缺省 auto；其它段不下传不报错）／--grouping-preset 仅 experiment_setup
  *   （A|B，缺省 B；未给不下传——按内核缺省处理，D89）／--negative-ratio-target 仅
- *   experiment_setup（<下限,上限> 形态如 0.03,0.06；显式给才下传——内核以该值进实验门
+ *   experiment_setup（<下限,上限> 形态如 0.03,0.05；显式给才下传——内核以该值进实验门
  *   并标 user_specified，缺省按构造器常量带兜底，D99）／--train-all／--assignment-source／
  *   --reuse-experiment-setup 全局三参（内核 argparse 已声明、多段读取；给才下传，D93）。
  *   本工具下传 argv 只含上述参数，禁传内核未声明
@@ -2101,7 +2101,7 @@ export const buildPipelineTool = (
       stage: { type: "string", required: true, enum: [...PIPELINE_STAGES], description: "要触发的内核管线段（八段原文，单段）" },
       run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/experiments/<exp>/<run_id>·RunLayout/v3；未指定实验归入当日「未命名实验」）" },
       experiment: { type: "string", description: "实验名（可选；显式给定时内核把 run 归属该实验——register 建 run 与摘要落点单源。缺省不传：内核按「复用该 run 既有归属→当日未命名实验」解析。#26 r2 实锤：指定实验名但段驱动不转发→run 落 adhoc）" },
-      workspace_path: { type: "string", description: "workspace 根（可选覆盖——缺省按会话 cwd→工作区身份→实例配置解析，并回显所用根与依据；显式给时必须含 .atf/workspace.json 或 datasets+splits）。注意：会话未绑定工作区时本参数**必须显式传**（绝对路径）——漏传会在段入口被拒（workspace_path_missing），白白多一轮" },
+      workspace_path: { type: "string", description: "workspace 根（可选覆盖——缺省按会话 cwd→工作区身份→实例配置解析，并回显所用根与依据；显式给时必须是已初始化的工作区——含 .atf/workspace.json、datasets+splits、runs、experiments、workspace/runs(v1 存量) 任一标记，裸目录被 workspace_path_invalid 拒绝、不在错路径上静默建骨架）。注意：会话未绑定工作区时本参数**必须显式传**（绝对路径）——漏传会在段入口被拒（workspace_path_missing），白白多一轮" },
       source_root: {
         type: "string",
         description:
@@ -2273,7 +2273,7 @@ export const buildPipelineTool = (
         type: "string",
         description:
           "负样本目标带 <下限,上限>（仅 experiment_setup 段有意义，其它段忽略该参）：用户确认的" +
-          "负样本构造配额带（如 0.03,0.06）。显式给定时实验门以该值锁定并标注来源为用户指定；" +
+          "负样本构造配额带（如 0.03,0.05）。显式给定时实验门以该值锁定并标注来源为用户指定；" +
           "不给时按构造器内置常量带（0.02,0.05）兜底（不静默——审批卡与返回体如实标注来源）。" +
           "本次训练方案卡的 negative_ratio_target 值在本段触发时应原样带入",
       },
@@ -2405,6 +2405,18 @@ export const buildPipelineTool = (
       }
       if (!isAbsolute(workspacePath)) {
         return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "workspace_path_not_absolute", note: `workspace_path 须为绝对路径（得 ${workspacePath}）` });
+      }
+      // D133: 显式 workspace_path 合法性拦截——描述面早已声明标记集，拦截面缺位致错路径
+      // 静默建旁支骨架树(my-zito 双旁支实锚)。标记覆盖三代布局：.atf/workspace.json
+      // (产品入口)/datasets+splits(内核 init)/runs(v2 存量)/experiments(v3)。裸目录=拒。
+      const wsLooksInitialized = existsSync(join(workspacePath, ".atf", "workspace.json"))
+        || (existsSync(join(workspacePath, "datasets")) && existsSync(join(workspacePath, "splits")))
+        || existsSync(join(workspacePath, "runs"))
+        || existsSync(join(workspacePath, "experiments"))
+        || existsSync(join(workspacePath, "workspace", "runs"));
+      if (!wsLooksInitialized) {
+        return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "workspace_path_invalid",
+          note: `workspace_path 不是已初始化的 ATF 工作区（得 ${workspacePath}——.atf/workspace.json、datasets+splits、runs、experiments、workspace/runs 标记全缺）。how_to_fix:走产品入口创建/登记工作区后重试，或核对路径拼写；本工具不在裸目录上静默建骨架` });
       }
       if (args.stage === "register" && (args.source_root === undefined || args.source_root.trim() === "")) {
         return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: "source_root_missing", note: "register 段必填 source_root（源文档根绝对路径）——其余段可省略该参数。另：run 不存在时 register 段会自动创建，不要先单独调用创建实验的工具（那会多撞一次审批）" });

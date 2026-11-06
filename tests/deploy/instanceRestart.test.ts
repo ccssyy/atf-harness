@@ -80,7 +80,8 @@ describe.skipIf(!scriptReady)("批㊶-ISO-2 S3——净室重启脚本净化锚"
     expect(uat.status).toBe(0);
     const uatCmd = (uat.stdout ?? "").trim();
     expect(uatCmd.startsWith("ssh ")).toBe(true);
-    expect(uatCmd).toContain("root@172.18.0.20");
+    expect(uatCmd).toContain("root@");
+    expect(uatCmd).not.toContain("172.18.0.20"); // D165:写死 IP 退役(env 声明式指向除外)
     expect(uatCmd).toContain("id_ed25519_a800_uat");
     expect(uatCmd).toContain("deploy/instances/uat.env");
     expect(uatCmd).toContain("--port 3081");
@@ -178,7 +179,7 @@ describe.skipIf(!existsSync(uatDeployScript))("批㊶-OPSREPO——uat-deploy.sh
 describe.skipIf(!scriptReady)("批㊶-OPSREPO——instance-restart.sh uat 分支远端化锚", () => {
   it("uat 分支：SSH 通道＋pid 组杀停旧＋setsid nohup boot＋公网 URL 打印；TRUSTED_ARG 保持", () => {
     const src = readFileSync(script, "utf8");
-    expect(src).toContain('UAT_SSH_TARGET="root@172.18.0.20"');
+    expect(src).toContain("resolve_uat_ssh_target"); // D165:SSH 目标三级解析(写死 IP 退役)
     expect(src).toContain('UAT_SSH_KEY="/root/.ssh/id_ed25519_a800_uat"');
     expect(src).toContain("pid 组杀");
     expect(src).toContain("setsid nohup env ${BOOT_ENV_PREFIX}corepack pnpm dsh web");
@@ -207,5 +208,25 @@ describe.skipIf(!scriptReady)("批㊶-OPSREPO——instance-restart.sh uat 分�
     expect(devOut).toContain("corepack pnpm dsh web");
     const uatOut = envCmd("uat");
     expect(uatOut).toContain("CI=true npm_config_verify_deps_before_run=false corepack pnpm dsh web");
+  });
+});
+
+// D165 锚(追加): UAT SSH 目标三级解析——写死 IP 退役(照抄 uat-deploy.sh D148 形态)。
+describe("D165——UAT SSH 目标三级解析(硬编码 IP 退役)", () => {
+  const src = readFileSync(script, "utf8");
+  it.skipIf(!scriptReady)("写死 root@172.18.0.x 赋值已退役", () => {
+    expect(src).not.toMatch(/UAT_SSH_TARGET\s*=\s*"root@172\.18\.0\.\d+"/);
+  });
+  it.skipIf(!scriptReady)("三级解析函数在位(显式 env＞env 文件声明＞网段探测认 3081)", () => {
+    expect(src).toContain("resolve_uat_ssh_target");
+    expect(src).toContain("ATF_UAT_SSH_TARGET");
+    expect(src).toContain(":3081 ");
+  });
+  it.skipIf(!scriptReady)("SSH 失败三分归因(不再把网络层说成 env 缺失)", () => {
+    expect(src).toContain("ssh_why");
+  });
+  it.skipIf(!scriptReady)("bash 语法门", () => {
+    const r = spawnSync("bash", ["-n", script], { encoding: "utf8" });
+    expect(r.status).toBe(0);
   });
 });

@@ -18,7 +18,7 @@
 # 实例拓扑（批㊶-OPSREPO v2 定案）：
 #   dev ＝本容器 tmux 会话 atf-dsh＋3080（MAIN checkout vendor）——行为零变更（红线）；
 #   uat ＝atf-uat 独立容器（宿主 124.220.53.207）内 dsh 3081：SSH 通道
-#         root@172.18.0.20:22（专用 key id_ed25519_a800_uat），UAT 冻结 checkout vendor
+#         root@<atf-uat 容器内网IP>（三级解析：显式 env＞uat.env 声明＞网段探测；专用 key id_ed25519_a800_uat），UAT 冻结 checkout vendor
 #         （/data/sam/ATF-Harness-uat——双容器共享 /data 同路径），密钥 env 在容器内
 #         /root/.atf-harness/.env；boot 形态＝setsid＋nohup＋pid 文件（容器无 tmux；
 #         staged tmux 2.7 实测可运行但不取——装 tmux＝容器系统态变更，2026-10-16 登记）。
@@ -76,7 +76,6 @@ fi
 # 批㊶-OPSREPO：uat 分支远端常量（atf-uat 容器）——SSH 通道/容器内密钥 env/UAT 冻结
 # checkout vendor/pid 文件。dev 常量（3080/tmux atf-dsh）一字未动（红线）。
 UAT_SSH_KEY="/root/.ssh/id_ed25519_a800_uat"
-UAT_SSH_TARGET="root@172.18.0.20"
 # D87 口径注记：UAT 密钥 env＝atf-uat 容器内独立 .env（容器内路径——当前活键；不参与
 # dev 侧 KEY_ENV 解析序与活体探针，键在容器语境、本机探针无意义；boot 前容器内 [ -f ]
 # fail-closed 校验维持原样）。文件与值一字不动。
@@ -86,6 +85,44 @@ UAT_VENDOR="${UAT_REPO}/vendor/dsh/deepseek-harness"
 UAT_PID="/tmp/dsh-web-tongshi.pid"
 UAT_PUBLIC_HOST="124.220.53.207"
 UAT_PUBLIC_PORT=13081
+
+# D165:UAT SSH 目标**禁写死 IP**——照抄 uat-deploy.sh(D148)三级解析。容器在 docker
+# 默认 bridge 上重建后内网地址会变(10-29 实锚 .20→.6)，写死 IP 两轮 No route to host，
+# 且旧失败被误报成「容器内 env 缺失」(网络≠身份≠文件三层归因分离见 ssh_why)。
+# 解析序＝显式 env ＞ 实例 env 文件声明 ＞ 网段探测(认 3081 监听)。
+uat_ssh_target_static() {
+  # 静态两级(--env-cmd/--env-dump 打印形态用——零网络依赖，缺席返回非零)
+  local explicit from_env
+  explicit="${ATF_UAT_SSH_TARGET:-}"
+  if [ -n "$explicit" ]; then printf '%s' "$explicit"; return 0; fi
+  if [ -f "${ENV_FILE:-}" ]; then
+    from_env=$(grep -E '^export ATF_UAT_SSH_TARGET=' "$ENV_FILE" 2>/dev/null | tail -1 \
+      | sed -E "s/^export ATF_UAT_SSH_TARGET=['\"]?([^'\"]*)['\"]?$/\1/")
+    if [ -n "$from_env" ]; then printf '%s' "$from_env"; return 0; fi
+  fi
+  return 1
+}
+resolve_uat_ssh_target() {
+  # 全三级(restart 用)——静态两级＞网段探测
+  local ip
+  uat_ssh_target_static && return 0
+  for ip in $(seq 2 30); do
+    if ssh -i "$UAT_SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=1 \
+         "root@172.18.0.${ip}" 'ss -ltn 2>/dev/null | grep -q ":3081 "' >/dev/null 2>&1; then
+      printf 'root@172.18.0.%s' "$ip"; return 0
+    fi
+  done
+  return 1
+}
+ssh_why() {
+  case "$1" in
+    *"No route to host"*|*"Connection refused"*|*"Connection timed out"*|*"Network is unreachable"*)
+      printf '网络不可达（%s 不是存活容器的内网地址）' "${UAT_SSH_TARGET:-?}" ;;
+    *"Permission denied"*|*"Host key verification"*|*"no such identity"*)
+      printf 'SSH 身份/主机校验失败（key=%s）' "$UAT_SSH_KEY" ;;
+    *) printf 'SSH 失败：%s' "$1" ;;
+  esac
+}
 
 case "$INSTANCE" in
   dev)
@@ -108,6 +145,21 @@ if [[ "$INSTANCE" == "uat" ]]; then
   # 共享 /data——ENV_FILE 双侧同路径同视图；密钥 env 属容器内文件，重启执行前远端
   # fail-closed 校验（--env-cmd/--env-dump 仅打印/自检，不做 SSH 依赖校验）
   [[ -f "$ENV_FILE" ]] || { echo "[instance-restart] FAIL: 实例 env 不存在: $ENV_FILE" >&2; exit 2; }
+  # D165:UAT SSH 目标三级解析——restart 用全三级(可网段探测)；--env-cmd/--env-dump 只做
+  # 静态两级(零网络依赖，缺席打占位符——形态自检不依赖活容器)。写死 IP 已退役。
+  if [[ "$MODE" == "restart" ]]; then
+    if ! UAT_SSH_TARGET=$(resolve_uat_ssh_target); then
+      echo "[instance-restart] FAIL: 无法定位 atf-uat 的 SSH 目标(三级解析全败:显式 env＞${ENV_FILE} 声明＞网段探测 172.18.0.2-30 认 3081 监听)——先确认容器在跑，或在 ${ENV_FILE} 声明 export ATF_UAT_SSH_TARGET=root@<容器内网IP>" >&2
+      exit 2
+    fi
+    # 连通性前置三分归因(D165 次生伤害修复:禁把 SSH 层失败说成「容器内 env 缺失」)
+    if ! SSH_PROBE_ERR=$(ssh -i "$UAT_SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$UAT_SSH_TARGET" 'echo ok' 2>&1); then
+      echo "[instance-restart] FAIL: SSH 连不上 ${UAT_SSH_TARGET}: $(ssh_why "$SSH_PROBE_ERR")" >&2
+      exit 2
+    fi
+  else
+    UAT_SSH_TARGET=$(uat_ssh_target_static || printf 'root@<atf-uat-内网IP>')
+  fi
 else
   [[ -f "$ENV_FILE" ]] || { echo "[instance-restart] FAIL: 实例 env 不存在: $ENV_FILE" >&2; exit 2; }
   [[ -f "$KEY_ENV" ]] || { echo "[instance-restart] FAIL: 密钥 env 不存在: $KEY_ENV（net-room source 链第一环）" >&2; exit 2; }

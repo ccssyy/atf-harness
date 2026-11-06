@@ -34,6 +34,8 @@ const tempRoots: string[] = [];
 const tempRoot = (): string => {
   const root = mkdtempSync(join(tmpdir(), "d89d93-test-"));
   tempRoots.push(root);
+  // D133:段入口拒裸目录 workspace——fixture 建已初始化形态(runs/ 标记)。
+  mkdirSync(join(root, "runs"), { recursive: true });
   return root;
 };
 afterEach(() => {

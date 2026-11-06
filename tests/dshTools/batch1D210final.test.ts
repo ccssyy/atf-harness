@@ -38,7 +38,9 @@ describe("批1-D210终版——视觉分析必经(training_prep 段内门槛)", 
     const m = kernel.indexOf("def stage_experiment_setup");
     expect(kernel.slice(m, m + 900)).toContain("_run_risk_signals_with_gate");
     // 带判读重跑的指路
-    expect(kernel).toContain("带 --agent-signals");
+    // 合同演进(45d705f2+bdd07104):用户/agent 面参数名=visual_readings,harness 转发
+    // 内核 --agent-signals;指引文案须用用户面名,内核 argv 名不进用户文案。
+    expect(kernel).toContain("带 --visual-readings");
     // 门槛在构造步之前:block 段先于 build_training_variants 调用点
     expect(kernel.indexOf('"visual_readings_pending"')).toBeLessThan(kernel.indexOf('"build_training_variants.py"'));
   });
