@@ -2282,10 +2282,10 @@ export const buildPipelineTool = (
         additionalProperties: true,
         description:
           "随机子集增强建议所依据的数据规模统计（Mode5AdviceStats/v1：images／full_field_baseline_rows／可选 suggested_mode5_random）" +
-          "（仅 experiment_setup 段有意义）：给出时内核据此算建议值与理由并随卡呈现；" +
-          "建议值作为默认倍数生效（卡上可改，显式 mode5_random 覆盖）；内核只给可行域" +
-          "（预算允许哪些倍数、上限几倍）并校验，超上限按上限执行且在回执标 agent_advice_capped。" +
-          "可直接给对象，无需自行落盘",
+          "（仅 experiment_setup 段有意义）。【owner 2026-11-07 裁定】分析归你(看图判读→风险件)、" +
+          "数值映射归引擎：引擎已按你的判读风险件自动推导建议值(来源标 engine_derived,随卡呈现)——" +
+          "你不需要也不应自己编建议数值,把判读做实即可;本参仅在你有更优确定性统计时显式覆盖" +
+          "(来源标 agent_advice,超上限执行标 *_capped)。可直接给对象，无需自行落盘",
       },
       targeted_advice: {
         // D170v2/P1:targeted 建议须带计划(目标字段优先序+行数依据),构造器
