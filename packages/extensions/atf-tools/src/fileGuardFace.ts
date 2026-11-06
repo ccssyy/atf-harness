@@ -18,7 +18,7 @@
  * 白名单根＝派生集（fileRoots.ts 配置声明面镜像）＋env 附加集（ATF_V1_FILE_TOOL_ROOTS）；
  * 产品资产零具体目录（增补裁定——分层原则）。
  */
-import { existsSync, readdirSync, statSync, watchFile, unwatchFile } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, watchFile, unwatchFile } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { attachmentsRootOf, toFileAgentTool, FILE_TOOL_DEFINITIONS, type FileToolHost } from "../../../../src/agent/fileTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
@@ -100,6 +100,40 @@ export const pathOutsideRoots = (rawPath: string, roots: readonly string[]): boo
   if (roots.length === 0) return true;
   const abs = isAbsolute(rawPath) ? resolve(rawPath) : resolve(join(roots[0] as string, rawPath));
   return !roots.some((root) => insideRoot(abs, root));
+};
+
+/** read_image 的 plan 确定性引用语法:`@plan:<清单绝对路径>#<序号或页名>`。 */
+export const PLAN_REF_RE = /^@plan:(.+)#(.+)$/;
+
+/** D226 根治(1106 晚 owner 质询「文件名可确定性获取为何搞近似名」):
+ *  visual-sample-plan.json 里 path/page 本就是确定性真名,agent 手抄臆造才出错。
+ *  引用语法让 agent 永不接触文件名字符串——守卫解析出真 path 后改写参数放行,
+ *  解析失败给确定性错误(含清单页数与可用引用格式)。近似名 top3 保留为
+ *  无引用场景的最后兜底。
+ *  :param filePath: 形如 @plan:...#... 的引用;其他形态返回 ok:false,reason 空(非引用不处理)。
+ *  :return: ok:true+真路径;ok:false+原因;非引用形态 ok:false+空 reason。 */
+export const resolvePlanRef = (filePath: string): { ok: true; path: string } | { ok: false; reason: string } => {
+  const m = PLAN_REF_RE.exec(filePath);
+  if (m === null) return { ok: false, reason: "" };
+  const [, planPath, ref] = m;
+  let pages: unknown = null;
+  try {
+    const doc = JSON.parse(readFileSync(planPath, "utf8")) as { pages?: unknown };
+    pages = doc.pages ?? null;
+  } catch (error) {
+    return { ok: false, reason: `@plan 引用不可解析:清单读取失败(${String(error instanceof Error ? error.message : error)})——两条改法:①核对清单绝对路径(看图回执里有);②不用引用,直接传图片绝对路径` };
+  }
+  if (!Array.isArray(pages) || pages.length === 0) {
+    return { ok: false, reason: "@plan 引用不可解析:清单无 pages 条目——核对清单文件" };
+  }
+  const entry = /^\d+$/.test(ref)
+    ? pages[Number(ref)]
+    : pages.find((p) => typeof (p as { page?: unknown }).page === "string" && (p as { page: string }).page === ref);
+  const resolved = entry !== undefined && entry !== null ? (entry as { path?: unknown }).path : undefined;
+  if (typeof resolved !== "string" || resolved === "") {
+    return { ok: false, reason: `@plan 引用不可解析:#${ref} 不在清单(共 ${pages.length} 页;引用可用=序号 0-${pages.length - 1} 或页名)——两条改法:①核对该清单的序号/页名;②直接传图片绝对路径` };
+  }
+  return { ok: true, path: resolved };
 };
 
 /** read_image 目标缺席拒绝码。 */
@@ -184,6 +218,22 @@ export const registerPathGuard = (
             kind: "deny",
             reason: `${FILE_PATH_OUTSIDE_ALLOWLIST}: ${rawPath} 越出白名单（合法根：${guardRoots.join("；")}${guardRoots !== host.roots ? "（已按会话工作区收窄——跨工作区访问须显式授权）" : ""}）——改用工作区相对路径，或将数据目录经 ${"ATF_V1_FILE_TOOL_ROOTS"} 声明后使用；注意实例根外的会话工作区不进白名单（workspace_out_of_instance），工作区请建在 <ATF_INSTANCE_ROOT> 内`,
           };
+        }
+        // D226 根治:@plan 确定性引用——解析真名后改写参数,agent 永不手抄文件名。
+        // 改写后的真路径就地复检(白名单+缺席兜底);for 遍历的是旧参数数组,不能 continue 重取。
+        if (name === "read_image" && typeof args["file_path"] === "string" && PLAN_REF_RE.test(args["file_path"])) {
+          const ref = resolvePlanRef(String(args["file_path"]));
+          if (!ref.ok) {
+            return { kind: "deny", reason: ref.reason };
+          }
+          (args as Record<string, unknown>)["file_path"] = ref.path;
+          if (pathOutsideRoots(ref.path, guardRoots)) {
+            return { kind: "deny", reason: `${FILE_PATH_OUTSIDE_ALLOWLIST}: ${ref.path} 越出白名单（合法根：${guardRoots.join("；")}）——@plan 引用解析出的路径须在白名单内` };
+          }
+          const refAbsent = readImageAbsentHintOf(ref.path);
+          if (refAbsent !== null) {
+            return { kind: "deny", reason: refAbsent };
+          }
         }
         // D226:白名单内的 read_image 目标缺席→同目录近似名纠错(替代 vendor 裸 not found)
         if (name === "read_image") {
