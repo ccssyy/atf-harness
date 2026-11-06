@@ -62,6 +62,13 @@ const AUGMENT_OPTIONS: ReadonlyArray<{ label: string; value: number }> = [
   { label: "不增强", value: 0 },
   { label: "每图 2 条", value: 2 },
   { label: "每图 3 条", value: 3 },
+  // owner 2026-11-07(「2倍5倍上限也太小了」):档位放开到 10——可行域由预算护栏
+  // 动态定(feasible_ceiling),超上限内核按上限执行并在回执披露 capped
+  { label: "每图 4 条", value: 4 },
+  { label: "每图 5 条", value: 5 },
+  { label: "每图 6 条", value: 6 },
+  { label: "每图 8 条", value: 8 },
+  { label: "每图 10 条", value: 10 },
 ];
 
 /** 自由输入解析（仅 custom 通道：用户手打「3」「三倍」「不增强」这类文字）。
