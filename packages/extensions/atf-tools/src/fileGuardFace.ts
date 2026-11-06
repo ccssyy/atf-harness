@@ -18,7 +18,7 @@
  * 白名单根＝派生集（fileRoots.ts 配置声明面镜像）＋env 附加集（ATF_V1_FILE_TOOL_ROOTS）；
  * 产品资产零具体目录（增补裁定——分层原则）。
  */
-import { existsSync, statSync, watchFile, unwatchFile } from "node:fs";
+import { existsSync, readdirSync, statSync, watchFile, unwatchFile } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { attachmentsRootOf, toFileAgentTool, FILE_TOOL_DEFINITIONS, type FileToolHost } from "../../../../src/agent/fileTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
@@ -102,6 +102,47 @@ export const pathOutsideRoots = (rawPath: string, roots: readonly string[]): boo
   return !roots.some((root) => insideRoot(abs, root));
 };
 
+/** read_image 目标缺席拒绝码。 */
+export const READ_IMAGE_TARGET_ABSENT = "read_image_target_absent";
+
+/** D226:read_image 目标缺席时的同目录近似名候选(报错即修复指令)。
+ *  真机 11-06 实锚:看图清单文件名正确,agent 转录臆造(Air Wayb 0001 vs 真名
+ *  Air Waybill_02),vendor 裸 not found 零指引——用户看到「说不存在其实存在」。
+ *  打分=公共前缀为主+互含加成,取 top-3;目录不可读/无相似候选回落计数报文。
+ *  :param rawPath: 请求的绝对图片路径。
+ *  :return: 目标存在返回 null;缺席返回 deny reason 全文。 */
+export const readImageAbsentHintOf = (rawPath: string): string | null => {
+  const target = resolve(rawPath);
+  if (existsSync(target)) return null;
+  const dir = dirname(target);
+  const base = basename(target);
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(dir).filter((n) => /\.(png|jpe?g|webp|gif)$/i.test(n));
+  } catch {
+    return null;
+  }
+  if (entries.length === 0) return null;
+  const score = (n: string): number => {
+    let i = 0;
+    while (i < base.length && i < n.length && base[i] === n[i]) i += 1;
+    let s = i * 2;
+    if (n.includes(base.slice(0, Math.min(12, base.length)))) s += 20;
+    return s;
+  };
+  const top = entries
+    .map((n) => ({ n, s: score(n) }))
+    .sort((a, b) => b.s - a.s)
+    .slice(0, 3)
+    .filter((x) => x.s > 6);
+  const hint = top.length > 0
+    ? `同目录近似名(按相似度):${top.map((x) => x.n).join("；")}`
+    : `同目录共 ${entries.length} 个图片文件,均不相似`;
+  return `${READ_IMAGE_TARGET_ABSENT}: ${rawPath} 不存在(目录在,文件名不匹配)——${hint}。`
+    + "两条改法:①按上面近似名/ls 实名重试;②从看图清单(visual-sample-plan.json)逐字复制 page/path 字段。"
+    + "文件名含空格/#/逗号时必须逐字复制,不要凭记忆转录";
+};
+
 /**
  * pre-execute 路径守卫注册（prepend）：glob/grep/read_image 路径参数过白名单；
  * read/edit/write 恒 deny 带改道指引。越界拒绝码 file_path_outside_allowlist，
@@ -143,6 +184,13 @@ export const registerPathGuard = (
             kind: "deny",
             reason: `${FILE_PATH_OUTSIDE_ALLOWLIST}: ${rawPath} 越出白名单（合法根：${guardRoots.join("；")}${guardRoots !== host.roots ? "（已按会话工作区收窄——跨工作区访问须显式授权）" : ""}）——改用工作区相对路径，或将数据目录经 ${"ATF_V1_FILE_TOOL_ROOTS"} 声明后使用；注意实例根外的会话工作区不进白名单（workspace_out_of_instance），工作区请建在 <ATF_INSTANCE_ROOT> 内`,
           };
+        }
+        // D226:白名单内的 read_image 目标缺席→同目录近似名纠错(替代 vendor 裸 not found)
+        if (name === "read_image") {
+          const absentHint = readImageAbsentHintOf(rawPath);
+          if (absentHint !== null) {
+            return { kind: "deny", reason: absentHint };
+          }
         }
       }
     }

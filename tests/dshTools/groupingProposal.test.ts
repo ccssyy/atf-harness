@@ -194,11 +194,13 @@ describe("C2 分组四态", () => {
       { stage: "experiment_setup", run_id: "own", workspace_path: ws, field_config: fieldConfig },
       fakeExec,
     );
-    // 卡通道不可用（ctxOf 无 userQuestions）→ 不替用户选：先问用户要哪套分组
-    expect(asked).toHaveLength(0);
-    expect(argvOf(result)).not.toContain("--grouping-proposal");
+    // P1-6b 新合同:配置自带分组未确认→合成单候选**必出原生分组卡**(asked=1,
+    // 候选=配置自带分组);用户卡上确认/改,不再要求 agent 先口头问再传候选重推。
+    expect(asked).toHaveLength(1);
     expect(result["grouping_source"]).toBe("proposal");
-    expect(result["grouping_decision"]).toBe("none");
+    // P1-6b:卡上用户选定配置自带那套→decision=user_selected(凭据成立)
+    expect(result["grouping_decision"]).toBe("user_selected");
+    expect(result["grouping_candidate_name"]).toBe("配置自带分组");
     const report = String(result["grouping_report"]);
     expect(report).toContain("| 分组 | 字段数 |");
   });

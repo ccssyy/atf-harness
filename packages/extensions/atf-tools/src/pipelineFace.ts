@@ -163,7 +163,7 @@ import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
 import { fieldNameMapOf, readExperimentGrouping, renderGroupingSection } from "../../../../src/core/workspace/experimentGrouping.js";
 import { fieldsDigestOf, groupingDecisionPathOf, readGroupingDecision, writeGroupingDecision } from "./groupingDecision.js";
-import { fieldChoiceDetailOf, readFieldChoice, readFieldLabels, writeFieldChoice } from "./fieldChoice.js";
+import { fieldChoiceAnyLedgerOf, fieldChoiceDetailOf, readFieldChoice, readFieldLabels, writeFieldChoice } from "./fieldChoice.js";
 import { decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
 import { join } from "node:path";
 
@@ -689,6 +689,22 @@ export const resolveGroupingFace = async (input: {
   docType?: string;
 }): Promise<GroupingFace | { ok: false; errors: string[] }> => {
   const docTag = input.docType !== undefined && input.docType !== "" ? `:${input.docType}` : "";
+  // P1-6b:agent 没传候选而字段配置自带分组(≥2 组)时,把配置分组合成单候选
+  // 走完整出卡链——此前该形态只有审批卡上一行 note,分组确认卡永远不弹
+  // (真机 11-06 实锚:用户被迫聊天裁决「ci可以,bl也要3组」)。用户在卡上
+  // 确认=落 grouping-choice 账本=凭据成立;不确认不生效,agent 自拟仍不构成用户决定。
+  let proposalRaw: unknown = input.proposalRaw;
+  if ((proposalRaw === undefined || proposalRaw === null)
+      && typeof input.fieldConfigPath === "string" && input.fieldConfigPath !== "") {
+    const providedGroups = fieldGroupsOf(input.fieldConfigPath);
+    if (providedGroups !== null && providedGroups.length > 1) {
+      proposalRaw = {
+        schema_version: "GroupingProposal/v1",
+        candidates: [{ name: "配置自带分组", groups: providedGroups, recommended: true }],
+        recommended_index: 0,
+      };
+    }
+  }
   // D163：分组来源以登记落账为准，不再靠账本反推——账本只在"卡上选过"时才有记录，
   // 用户从外部带进来的分组永远没有记录，用账本判"给没给"必然把预给的判成没给。
   const registrationGrouping = readRegistrationGrouping(input.runDir ?? "");
@@ -754,20 +770,20 @@ export const resolveGroupingFace = async (input: {
         + `要换分组直接说，我重新出卡再选一次。`,
     };
   }
-  if (mustAskGrouping) {
+  if (mustAskGrouping && registrationSource === "degenerate") {
     return {
       source: "proposal",
       decision: "none",
       candidate_name: null,
-      groups: fieldGroupsOf(input.fieldConfigPath) ?? [],
+      groups: [],
       evidence: { registration_inputs: registrationInputsPathOf(input.runDir ?? "") },
       payload: null,
-      note: registrationSource === "degenerate"
-        ? "字段配置是一字段一组，没形成业务分组——先问用户想要的分组（或单独一图一条），再把候选传进来；不替他定"
-        : "这份分组是助手写进配置的，不是用户确认过的——先问用户要哪套分组，再把选定候选传进来",
+      note: "字段配置是一字段一组，没形成业务分组——先问用户想要的分组（或单独一图一条），再把候选传进来；不替他定",
     };
   }
-  if (input.proposalRaw === undefined || input.proposalRaw === null) {
+  // P1-6b:agent_written(助手写进配置的分组)不再提前 return——配置分组合成的
+  // 单候选已在上方注入,走 D185 字段全集校验+原生分组卡让用户确认/改。
+  if (proposalRaw === undefined || proposalRaw === null) {
     // W4（owner 13:2x）：配置自带 group 而用户没确认过 → 不静默平铺，出"待确认"卡
     // （source=proposal/decision=none＝先问用户要哪套分组；卡通道缺席也不替选）。
     const provided = fieldGroupsOf(input.fieldConfigPath);
@@ -794,7 +810,7 @@ export const resolveGroupingFace = async (input: {
       note: "本次没有分组：没有候选建议、字段也没有自带 group——全部平铺（不假装有分组）",
     };
   }
-  const parsed = parseGroupingProposal(input.proposalRaw);
+  const parsed = parseGroupingProposal(proposalRaw);
   if (!parsed.ok) return { ok: false, errors: parsed.errors };
   const proposal = parsed.proposal;
   // D185(owner 2026-11-04 1104-5 实锤):字段覆盖完整性出卡前校验——候选字段并集
@@ -1054,6 +1070,21 @@ export const negativeRatioApprovalLine = (band: string): string => {
 //  此前 harness 侧**没有任何参数通道**，模型即使分析出建议也表达不出来——这正是
 //  「为什么行数这么少」的真实原因之一（分组未确认 → mode1 不生成）。
 
+/** P1-5 卡时机断言:段头风险件是否"分析已完成"(在场且 field_scores 非空)。 */
+const mode5AnalysisReadyOf = (runDir: string, docType?: string): boolean => {
+  const rel = docType !== undefined && docType !== "" ? `data/risk-signals/${docType}` : "data/risk-signals";
+  try {
+    const doc = JSON.parse(readFileSync(join(resolveRunSubdir(runDir, rel), "field_risk_signals.json"), "utf8")) as {
+      field_scores?: unknown; visual_channel?: { image_semantics?: unknown };
+    };
+    const scores = doc.field_scores;
+    const pending = doc.visual_channel?.image_semantics === "pending_agent_readings";
+    return typeof scores === "object" && scores !== null && Object.keys(scores as object).length > 0 && !pending;
+  } catch {
+    return false;
+  }
+};
+
 /** 构造参数确认段（仅 experiment_setup 段追加）：三行如实呈现确认态与建议值。
  *
  *  「缺省不静默」：未确认一律明说对应 kind 不生成，不让缺省偷偷生效；
@@ -1081,12 +1112,17 @@ export const constructionParamsApprovalLines = (input: {
   const suggestedLabel =
     typeof input.mode5Suggested === "number" ? `（建议 ${input.mode5Suggested} 倍）` : "";
   const partM5 =
-    input.mode5Random === undefined
-      ? `随机子集增强：未确认——**按建议倍数额度默认生成**${suggestedLabel}，` +
-        "具体倍数随执行回执给出（受字段难度与预算护栏约束），要改直接说"
-      : input.mode5Random === 0
-        ? "随机子集增强：0 倍（显式不启用）"
-        : `随机子集增强：${input.mode5Random} 倍（已确认）`;
+    // P1-5:显式值(含 0=明确关停)是用户已做的决定,先于分析门槛呈现;
+    // 只有「未确认」形态才要求分析在场(分析未完成→不预设默认生成)。
+    input.mode5Random === undefined && input.analysisReady !== true
+      ? "随机子集增强：**图像分析未完成——本轮不确认倍数**（先按看图清单完成判读回填，"
+        + "分析在场后重跑本段，卡上会带建议倍数与难度依据）"
+      : input.mode5Random === undefined
+        ? `随机子集增强：未确认——**按建议倍数额度默认生成**${suggestedLabel}，` +
+          "具体倍数随执行回执给出（受字段难度与预算护栏约束），要改直接说"
+        : input.mode5Random === 0
+          ? "随机子集增强：0 倍（显式不启用）"
+          : `随机子集增强：${input.mode5Random} 倍（已确认）`;
   let partTargeted: string;
   const adv = input.targetedAdvice;
   if (adv === undefined) {
@@ -2776,8 +2812,17 @@ export const buildPipelineTool = (
       // 字段是登记时从标注梳理出来的，确认必须紧跟着做，不能拖到实验配置段）。
       // 这里只读账本，供回执与后续判据使用。
       // D191:字段确认 per-doc 判定(多类 run 逐类各自确认;doc_type 缺席回落 run 级)
+      // D224(真机 11-06 实锚):裸调(无 doc_type)回落 run 级账本恒缺席→误报
+      // field_choice_unconfirmed+假指路「重跑 register/聊天确认」——用户 15:43 已在
+      // 卡上确认 per-doc 账本,16:06 裸调仍被拦,被迫聊天二次确认。
+      // 闸语义(三态):带 doc_type→查该类账本;裸调→盘 per-doc 账本,有任何一份
+      // (=register 过且确认过)即放行交内核逐类拦截(带真因);fresh run(无任何
+      // 账本)保持 fail-closed 拦截(E3 语义:未确认不得进实验门,被拦零目录创建)。
       const fieldChoiceDoc = typeof args.doc_type === "string" ? args.doc_type.trim() : undefined;
-      const fieldChoiceConfirmed = args.stage === "experiment_setup" && readFieldChoice(runDir, fieldChoiceDoc) !== null;
+      const fieldChoiceConfirmed = args.stage === "experiment_setup"
+        && (fieldChoiceDoc !== undefined
+          ? readFieldChoice(runDir, fieldChoiceDoc) !== null
+          : fieldChoiceAnyLedgerOf(runDir));
       let fieldChoiceLine = "";
       if (args.stage === "experiment_setup") {
         const prior = readFieldChoice(runDir, fieldChoiceDoc);
@@ -2798,7 +2843,7 @@ export const buildPipelineTool = (
             stage: args.stage,
             run_id: args.run_id,
             error: "field_choice_unconfirmed",
-            note: "字段清单未经用户确认——先确认「抽取哪些字段」再进分组环节:重跑 register 段触发字段清单确认卡,或请用户在对话里明确字段范围后由你代传字段确认;agent 自拟的字段配置不构成用户决定",
+            note: `字段清单未经用户确认(doc_type=${String(fieldChoiceDoc)})——两条改法:①重跑 register 段(带同 doc_type=${String(fieldChoiceDoc)})触发字段清单确认卡;②用户在对话里明确字段范围后由你代传。多类 run 必须逐类带 doc_type 调用本段(裸调由内核拦截);agent 自拟的字段配置不构成用户决定`,
           });
         }
         const fieldConfigPath = typeof args.field_config === "string" ? args.field_config.trim() : "";
@@ -2849,7 +2894,7 @@ export const buildPipelineTool = (
         + (args.stage === "experiment_setup" ? `\n${negativeRatioApprovalLine(negativeRatioTarget)}` : "")
         // A 面：构造参数确认段（分组确认／mode5／targeted 建议）仅 experiment_setup 段呈现
         + (args.stage === "experiment_setup" && constructionParams !== undefined
-            ? `\n${constructionParamsApprovalLines({ ...constructionParams, riskSignalsProvided: constructionAdvicePaths.riskSignals !== undefined })}`
+            ? `\n${constructionParamsApprovalLines({ ...constructionParams, riskSignalsProvided: constructionAdvicePaths.riskSignals !== undefined, analysisReady: mode5AnalysisReadyOf(runDir, typeof args.doc_type === "string" ? args.doc_type.trim() : undefined) })}`
             : "")
         // D90：构造参数的来源行（用户确认／agent 代决——谁定的必须写在卡上也写在回执里）
         + (args.stage === "experiment_setup" && constructionDecisionNote !== undefined ? `\n构造参数来源：${constructionDecisionNote}` : "")
@@ -3746,14 +3791,20 @@ let visualSummary: Record<string, unknown> | undefined;
                   if (picked.includes("维持原状")) {
                     return { item_id: item.item_id, action: "reject", disposition: "keep_both_untouched", decided_by: "user_confirmed" };
                   }
-                  return {
+                  // D223(lossless 吞单):装饰链在 asToolValue 清洗之后改写回执——
+                  // decisions 夹带 undefined 键会让 vendor snapshotToolValue 拒收整张段回执
+                  // (真机 11-06 实锚:bl 裁决卡确认同毫秒回执变 ToolOutputError,agent 盲重跑)。
+                  // 源头构造即剔除 undefined 键;最终 return 另有 asToolValue 兜底。
+                  const entry: Record<string, unknown> = {
                     item_id: item.item_id,
                     action: String(suggested.action_hint ?? "accept"),
                     disposition: String(suggested.disposition_hint ?? ""),
                     target_candidate_id: suggested.target_candidate_id,
                     custom: picked.includes("按建议") ? undefined : (picked !== "" ? picked : undefined),
                     decided_by: "user_confirmed",
-                  } as Record<string, unknown>;
+                  };
+                  for (const key of Object.keys(entry)) if (entry[key] === undefined) delete entry[key];
+                  return entry;
                 });
                 // 凭据账本(harness 写,agent 不可伪造):resolve 直通比对源
                 // 凭据账本锚 run 树(回执 run_dir 在场即用,缺席回落 workspace 根)
@@ -3834,6 +3885,8 @@ let visualSummary: Record<string, unknown> | undefined;
         "atf_pipeline_stage",
         ok,
         stageUserSummaryOf(receipt, ok, String(args["stage"] ?? "")),
+        // P1-8:按段+doc 分键计数——ci 的失败不连带 bl 提前「连续两次」升级
+        `${String(args["stage"] ?? "")}:${typeof args["doc_type"] === "string" ? String(args["doc_type"]) : ""}`,
       );
       if (decorated.escalate_to_user === true) {
         const summary: UserSummary = {
@@ -3844,7 +3897,10 @@ let visualSummary: Record<string, unknown> | undefined;
         // 升级是「必须被看见」的一条：直接进会话流（不依赖 agent 转述）
         projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, summary);
       }
-      return decorated;
+      // D223(lossless 吞单):装饰链(label_qc_decisions/聚类披露/分组行/escalate 等)
+      // 在早期 asToolValue 之后改写回执,出口必须再清洗一次——否则夹带的 undefined
+      // 会让 vendor snapshotToolValue 拒收整张段回执(ToolOutputError)。
+      return asToolValue(decorated);
     },
   };
 };

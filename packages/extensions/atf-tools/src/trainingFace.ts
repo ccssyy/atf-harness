@@ -2305,7 +2305,8 @@ const instrumentTrainOutcome = <T>(tool: T): T => {
     if (notice) {
       projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, notice);
     }
-    return decorated;
+    // D223(lossless 吞单):出口统一清洗——装饰链改写夹带的 undefined 会让 vendor 拒收回执
+    return asToolValue(decorated);
   };
   return tool;
 };
@@ -2332,7 +2333,8 @@ const instrumentEvalOutcome = <T extends { execute: (args: unknown, exec: unknow
     if (!ok ? escalated : action !== "status") {
       projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, summary);
     }
-    return decorated;
+    // D223(lossless 吞单):出口统一清洗——装饰链改写夹带的 undefined 会让 vendor 拒收回执
+    return asToolValue(decorated);
   };
   return tool;
 };

@@ -27,27 +27,29 @@ const NOTICE_SUMMARY_MAX_CHARS = 120;
 /** 无会话身份时的计数档（不与其他会话混算）。 */
 const UNSCOPED_KEY = "__unscoped__";
 
-/** 计数表（进程内；键＝会话档＋工具名）。 */
+/** 计数表（进程内；键＝会话档＋工具名＋作用域）。 */
 const failureCounts = new Map<string, number>();
 
-const countKeyOf = (sessionKey: string | null, tool: string): string =>
-  `${sessionKey === null || sessionKey === "" ? UNSCOPED_KEY : sessionKey}::${tool}`;
+const countKeyOf = (sessionKey: string | null, tool: string, scope?: string): string =>
+  `${sessionKey === null || sessionKey === "" ? UNSCOPED_KEY : sessionKey}::${tool}${scope !== undefined && scope !== "" ? `::${scope}` : ""}`;
 
 /** 回执挂 `user_summary`（不改原回执的其他键；返回新对象）。 */
 export const withUserSummary: <T extends Record<string, unknown>>(receipt: T, summary: UserSummary) => T & { user_summary: UserSummary } =
   (receipt, summary) => ({ ...receipt, user_summary: summary });
 
-/** 记一次工具失败，返回该会话该工具的连续失败次数。 */
-export const recordToolFailure: (sessionKey: string | null, tool: string) => number = (sessionKey, tool) => {
-  const key = countKeyOf(sessionKey, tool);
+/** 记一次工具失败，返回该会话该工具该作用域的连续失败次数。
+ *  P1-8:scope(段+doc)分键——真机 11-06 ci 的失败按工具名累计,bl 首次失败即
+ *  被带上「连续两次」升级(跨类误伤);分键后各类各段独立计数。 */
+export const recordToolFailure: (sessionKey: string | null, tool: string, scope?: string) => number = (sessionKey, tool, scope) => {
+  const key = countKeyOf(sessionKey, tool, scope);
   const next = (failureCounts.get(key) ?? 0) + 1;
   failureCounts.set(key, next);
   return next;
 };
 
 /** 记一次工具成功（连续失败计数清零）。 */
-export const recordToolSuccess: (sessionKey: string | null, tool: string) => void = (sessionKey, tool) => {
-  failureCounts.delete(countKeyOf(sessionKey, tool));
+export const recordToolSuccess: (sessionKey: string | null, tool: string, scope?: string) => void = (sessionKey, tool, scope) => {
+  failureCounts.delete(countKeyOf(sessionKey, tool, scope));
 };
 
 /** 失败次数 → 升级字段（未达阈值＝null，回执保持原样）。 */
@@ -55,7 +57,7 @@ export const escalationOf: (count: number) => { escalate_to_user: true; failure_
   count >= ESCALATION_FAILURE_THRESHOLD ? { escalate_to_user: true, failure_count: count } : null;
 
 /** 当前连续失败次数（只读观测；无记录＝0）。 */
-export const failureCountOf = (sessionKey: string | null, tool: string): number => failureCounts.get(countKeyOf(sessionKey, tool)) ?? 0;
+export const failureCountOf = (sessionKey: string | null, tool: string, scope?: string): number => failureCounts.get(countKeyOf(sessionKey, tool, scope)) ?? 0;
 
 /** 清空计数（测试/会话结束用）。 */
 export const resetToolFailureCounts = (): void => {
@@ -92,12 +94,13 @@ export const decorateOutcome = <T extends Record<string, unknown>>(
   tool: string,
   ok: boolean,
   summary: UserSummary,
+  scope?: string,
 ): T & { user_summary: UserSummary } & { escalate_to_user?: true; failure_count?: number } => {
   if (ok) {
-    recordToolSuccess(sessionKey, tool);
+    recordToolSuccess(sessionKey, tool, scope);
     return withUserSummary(receipt, summary);
   }
-  const count = recordToolFailure(sessionKey, tool);
+  const count = recordToolFailure(sessionKey, tool, scope);
   const escalated = escalationOf(count);
   const withSummary = withUserSummary(receipt, summary);
   return escalated === null ? withSummary : { ...withSummary, ...escalated };
