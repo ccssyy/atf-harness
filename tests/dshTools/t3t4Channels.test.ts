@@ -17,7 +17,7 @@ const MOCK = join(import.meta.dirname, "..", "fixtures", "mock_pipeline_params.m
 /** D191 字段确认闸适配:setup 段前置落盘 FieldChoice/v1(用户已确认——合法通过态)。 */
 const withFieldChoice = (ws: string, runId: string): string => {
   mkdirSync(join(ws, "runs", runId, "webui"), { recursive: true });
-  writeFileSync(join(ws, "runs", runId, "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }));
+  writeFileSync(join(ws, "runs", runId, "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["f1", "f2"] }));
   return ws;
 };
 
@@ -47,6 +47,15 @@ const summaryArgv = (result: unknown): string[] => ((result as { summary?: { arg
 const writeSnapshot = (runDir: string, confirmed: Record<string, string>): void => {
   mkdirSync(join(runDir, "webui"), { recursive: true });
   writeFileSync(join(runDir, "webui", "config-snapshot.json"), `${JSON.stringify({ schema_version: "WebUiConfigSnapshot/v1", confirmed }, null, 1)}\n`, "utf8");
+};
+
+/** D173 必分组(1106 晚机检):experiment_setup 用例统一带分组候选过闸。 */
+const D173_PROPOSAL = {
+  schema_version: "GroupingProposal/v1",
+  candidates: [
+    { name: "两层", recommended: true, reason: "单据头/明细分开", groups: [{ name: "单据级", fields: ["f1"] }, { name: "明细级", fields: ["f2"] }] },
+  ],
+  recommended_index: 0,
 };
 
 describe("T3 卡位通道（显式 > 确认快照 > 不下传）", () => {
@@ -114,7 +123,7 @@ describe("T3 卡位通道（显式 > 确认快照 > 不下传）", () => {
 });
 
 describe("T4 像素对不变量（段参数通道：越界即拒，不静默纠正）", () => {
-  const base = (): Record<string, unknown> => ({ stage: "experiment_setup", run_id: "t4", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "t4"); })() });
+  const base = (): Record<string, unknown> => ({ stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "t4", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "t4"); })() });
   it("上限不在两档闭集 → pixel_pair_max_not_in_closed_set（不 clamp）", async () => {
     const result = (await toolOf().execute(
       { ...base(), image_min_pixels: TRAINING_PIN_CONSTANTS.image_min_pixels, image_max_pixels: 1234567 },

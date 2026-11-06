@@ -833,7 +833,7 @@ export const resolveGroupingFace = async (input: {
       groups: [],
       evidence: null,
       payload: null,
-      note: "本次没有分组：没有候选建议、字段也没有自带 group——全部平铺（不假装有分组）",
+      note: "没有分组输入（无候选、字段配置无分组）——按必分组规则由段闸拦截指路提候选,不静默平铺",
     };
   }
   const parsed = parseGroupingProposal(proposalRaw);
@@ -1132,7 +1132,7 @@ export const constructionParamsApprovalLines = (input: {
   // 一律不得出现在用户可见文案里——按「这套参数会产出什么样本」说人话。
   const partGroup = input.groupingConfirm
     ? "分组：按分组生成（产品默认，必分组不提问）"
-    : "分组方案：未确认——**按数据事实分组默认生成**（组数按标准压到常规区间），要改直接说";
+    : "分组方案：待定——分组候选上卡后由用户选定（2-3 组优先，上限 5），未选定前不生成分组样本";
   // 未显式给倍数时不写具体数字：倍数由内核按「调用方建议 > 字段难度与预算推荐 >
   // 默认开的最低倍数」定，审批前无法确定——写死数字会与实际执行不一致。
   const suggestedLabel =
@@ -2922,6 +2922,19 @@ export const buildPipelineTool = (
           });
         }
         groupingFace = resolvedGrouping;
+        // D173 必分组(owner 两周前裁定,1106 晚补批三):字段默认必须分组——
+        // 无候选、字段配置也无分组时不得静默平铺过闸(平铺=1 组=D173 剔除形态);
+        // 拦下指路 agent 按区间(2-3 组优先,上限 5)拟候选,用户在分组卡上选定。
+        // 用户显式要平铺(1 组)是其明确决定,可在候选里自定义为用户输入。
+        if (resolvedGrouping.source === "none") {
+          return asToolValue({
+            ok: false,
+            stage: args.stage,
+            run_id: args.run_id,
+            error: "grouping_candidates_missing",
+            note: "字段默认必须分组(2-3 组优先,上限 5)——本次既没有分组候选,字段配置也没有分组声明。两条改法:①按字段语义拟区间内分组候选(每字段恰属一组,组数 2-5)传 grouping_proposal,用户在分组卡上选定;②用户明确说了分组意愿(含要 1 组平铺)时,如实转成候选走卡,由用户在卡上确认",
+          });
+        }
       }
       // 分组节（读内核 experiment-config 的新 keys；列表形态只读 group_plan——groups 是 dict）：
       // 仅当 run 里已有一次实验配置时上卡（重跑/复用场景，用户确认要不要沿用）；

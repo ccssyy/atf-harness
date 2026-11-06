@@ -281,7 +281,7 @@ describe("C2 分组四态", () => {
     expect(argvOf(result)).toContain("--grouping-proposal");
   });
 
-  it("none：既没候选、字段也没分组 → 平铺，回执 grouping_source=none、不假装有分组", async () => {
+  it("D173 必分组:无候选无分组 → 拦截指路(grouping_candidates_missing),不静默平铺", async () => {
     const ws = tempRoot("c2-none-");
     confirmFields(ws, "plain");
     const asked: Array<Record<string, unknown>> = [];
@@ -289,12 +289,12 @@ describe("C2 分组四态", () => {
       { stage: "experiment_setup", run_id: "plain", workspace_path: ws },
       fakeExec,
     );
+    // D173 必分组:无候选无分组不再静默平铺——段闸拦截指路提候选
     expect(asked).toHaveLength(0);
-    expect(result["grouping_source"]).toBe("none");
-    expect(result["grouping_decision"]).toBe("none");
-    expect(result["grouping_report"]).toBeUndefined();
-    expect(argvOf(result)).not.toContain("--grouping-proposal");
-    expect(String(result["grouping_note"])).toContain("全部平铺");
+    expect(result["ok"]).toBe(false);
+    expect(result["error"]).toBe("grouping_candidates_missing");
+    expect(String(result["note"])).toContain("必须分组");
+    expect(String(result["note"])).toContain("2-3 组");
   });
 
   it("invalid（harness 侧）：候选形状不合格＝逐条 errors 原样回执，且不触发审批", async () => {

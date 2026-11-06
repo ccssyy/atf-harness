@@ -76,13 +76,22 @@ const summaryArgv = (result: unknown): string[] =>
 const writeSnapshot = (runDir: string, confirmed: Record<string, string>): void => {
   mkdirSync(join(runDir, "webui"), { recursive: true });
   writeFileSync(join(runDir, "webui", "config-snapshot.json"), `${JSON.stringify({ schema_version: "ConfigSnapshot/v1", confirmed }, null, 1)}\n`, "utf8");
-  writeFileSync(join(runDir, "webui", "field-choice.json"), `${JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }, null, 1)}\n`, "utf8");
+  writeFileSync(join(runDir, "webui", "field-choice.json"), `${JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["f1", "f2"] }, null, 1)}\n`, "utf8");
 };
 
 /** D191 字段确认闸适配:setup 段前置落盘 FieldChoice/v1(用户已确认字段——合法通过态)。 */
 const writeFieldChoice = (runDir: string): void => {
   mkdirSync(join(runDir, "webui"), { recursive: true });
-  writeFileSync(join(runDir, "webui", "field-choice.json"), `${JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }, null, 1)}\n`, "utf8");
+  writeFileSync(join(runDir, "webui", "field-choice.json"), `${JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["f1", "f2"] }, null, 1)}\n`, "utf8");
+};
+
+/** D173 必分组(1106 晚机检):experiment_setup 用例统一带分组候选过闸。 */
+const D173_PROPOSAL = {
+  schema_version: "GroupingProposal/v1",
+  candidates: [
+    { name: "两层", recommended: true, reason: "单据头/明细分开", groups: [{ name: "单据级", fields: ["f1"] }, { name: "明细级", fields: ["f2"] }] },
+  ],
+  recommended_index: 0,
 };
 
 describe("E3-1 预算三参（experiment_setup 段专属）", () => {
@@ -90,7 +99,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     const ws = tempRoot("e3-ws-");
     writeFieldChoice(join(ws, "runs", "e3-explicit"));
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "e3-explicit", workspace_path: (() => { writeFieldChoice(join(ws, "runs", "e3-explicit")); return ws; })(), max_total_tokens: 9000, image_min_pixels: 65536, image_max_pixels: 1605632 },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-explicit", workspace_path: (() => { writeFieldChoice(join(ws, "runs", "e3-explicit")); return ws; })(), max_total_tokens: 9000, image_min_pixels: 65536, image_max_pixels: 1605632 },
       fakeExec,
     );
     const argv = summaryArgv(result);
@@ -110,7 +119,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     const ws = tempRoot("e3-ws-");
     writeSnapshot(join(ws, "runs", "e3-snap"), { max_total_tokens: "9000", image_min_pixels: "65536", image_max_pixels: "1605632" });
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "e3-snap", workspace_path: ws },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-snap", workspace_path: ws },
       fakeExec,
     );
     const argv = summaryArgv(result);
@@ -130,7 +139,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     const ws = tempRoot("e3-ws-");
     writeSnapshot(join(ws, "runs", "e3-mix"), { max_total_tokens: "9000", image_min_pixels: "65536", image_max_pixels: "1605632" });
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "e3-mix", workspace_path: (() => { writeFieldChoice(join(ws, "runs", "e3-mix")); return ws; })(), max_total_tokens: 8000 },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-mix", workspace_path: (() => { writeFieldChoice(join(ws, "runs", "e3-mix")); return ws; })(), max_total_tokens: 8000 },
       fakeExec,
     );
     expect((result as Record<string, unknown>)["max_total_tokens"]).toBe(8000);
@@ -146,7 +155,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     const wsNone = tempRoot("e3-ws-");
     writeFieldChoice(join(wsNone, "runs", "e3-none"));
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "e3-none", workspace_path: wsNone },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-none", workspace_path: wsNone },
       fakeExec,
     );
     const argv = summaryArgv(result);
@@ -176,7 +185,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
   it("像素对只给一端（显式）：卡前快败 pixel_pair_half_given，业务文案、不进审批（零放行消耗）", async () => {
     const approvals: string[] = [];
     const result = await toolOf(approvals).execute(
-      { stage: "experiment_setup", run_id: "e3-half", workspace_path: (() => { const w = tempRoot("e3-ws-"); writeFieldChoice(join(w, "runs", "e3-half")); return w; })(), image_min_pixels: 65536 },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-half", workspace_path: (() => { const w = tempRoot("e3-ws-"); writeFieldChoice(join(w, "runs", "e3-half")); return w; })(), image_min_pixels: 65536 },
       fakeExec,
     );
     expect((result as Record<string, unknown>)["ok"]).toBe(false);
@@ -193,7 +202,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     writeSnapshot(join(ws, "runs", "e3-half-snap"), { max_total_tokens: "9000", image_min_pixels: "65536" });
     const approvals: string[] = [];
     const result = await toolOf(approvals).execute(
-      { stage: "experiment_setup", run_id: "e3-half-snap", workspace_path: ws },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-half-snap", workspace_path: ws },
       fakeExec,
     );
     expect((result as Record<string, unknown>)["ok"]).toBe(false);
@@ -204,7 +213,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
   it("像素对两端 min≥max：卡前快败 pixel_pair_violation，文案单源 pixelPairViolationOf（业务语言）", async () => {
     const approvals: string[] = [];
     const result = await toolOf(approvals).execute(
-      { stage: "experiment_setup", run_id: "e3-minmax", workspace_path: (() => { const w = tempRoot("e3-ws-"); writeFieldChoice(join(w, "runs", "e3-minmax")); return w; })(), image_min_pixels: 2000000, image_max_pixels: 802816 },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-minmax", workspace_path: (() => { const w = tempRoot("e3-ws-"); writeFieldChoice(join(w, "runs", "e3-minmax")); return w; })(), image_min_pixels: 2000000, image_max_pixels: 802816 },
       fakeExec,
     );
     expect((result as Record<string, unknown>)["ok"]).toBe(false);
@@ -218,7 +227,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
   it("显式非法值（0／负数／小数）：卡前快败 <key>_invalid（安全正整数口径）", async () => {
     for (const bad of [0, -5, 1.5]) {
       const result = await toolOf().execute(
-        { stage: "experiment_setup", run_id: `e3-bad-${String(bad).replace(/[-.]/g, "_")}`, workspace_path: tempRoot("e3-ws-"), max_total_tokens: bad },
+        { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: `e3-bad-${String(bad).replace(/[-.]/g, "_")}`, workspace_path: tempRoot("e3-ws-"), max_total_tokens: bad },
         fakeExec,
       );
       expect((result as Record<string, unknown>)["ok"]).toBe(false);
@@ -231,7 +240,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     writeSnapshot(join(ws, "runs", "e3-card"), { image_min_pixels: "65536", image_max_pixels: "1605632" });
     const record: string[] = [];
     await toolOf(record).execute(
-      { stage: "experiment_setup", run_id: "e3-card", workspace_path: (() => { writeFieldChoice(join(ws, "runs", "e3-card")); return ws; })(), max_total_tokens: 9000 },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-card", workspace_path: (() => { writeFieldChoice(join(ws, "runs", "e3-card")); return ws; })(), max_total_tokens: 9000 },
       fakeExec,
     );
     expect(record[0]).toContain("预算五参（实验门）");
@@ -242,7 +251,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     expect(record[0]).toContain("image_max_pixels=1605632（你在方案卡确认的）");
     const recordNone: string[] = [];
     await toolOf(recordNone).execute(
-      { stage: "experiment_setup", run_id: "e3-card-none", workspace_path: (() => { const w = tempRoot("e3-ws-"); writeFieldChoice(join(w, "runs", "e3-card-none")); return w; })() },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-card-none", workspace_path: (() => { const w = tempRoot("e3-ws-"); writeFieldChoice(join(w, "runs", "e3-card-none")); return w; })() },
       fakeExec,
     );
     expect(recordNone[0]).toContain("max_total_tokens=未定（未指定——内核按缺省处理）");
@@ -274,6 +283,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     const result = await toolOf().execute(
       {
         stage: "experiment_setup",
+        grouping_proposal: D173_PROPOSAL,
         run_id: "e3-five",
         workspace_path: ws,
         max_total_tokens: 9000,
@@ -305,7 +315,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
       image_max_pixels: "1605632",
     });
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "e3-five-snap", workspace_path: ws },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-five-snap", workspace_path: ws },
       fakeExec,
     );
     const argv = summaryArgv(result);
@@ -333,7 +343,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     const canonicalRun = join(ws, "workspace", "runs", "e3-canon");
     writeSnapshot(canonicalRun, { max_total_tokens: "9000", image_min_pixels: "65536", image_max_pixels: "1605632" });
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "e3-canon", workspace_path: ws },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-canon", workspace_path: ws },
       fakeExec,
     );
     expect((result as Record<string, unknown>)["ok"]).toBe(true);
@@ -353,7 +363,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     symlinkSync(realRun, join(ws, "workspace", "runs", "e3-canon-link"));
     const approvals: string[] = [];
     const result = await toolOf(approvals).execute(
-      { stage: "experiment_setup", run_id: "e3-canon-link", workspace_path: ws },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-canon-link", workspace_path: ws },
       fakeExec,
     );
     expect((result as Record<string, unknown>)["ok"]).toBe(false);
@@ -366,7 +376,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     // 存量 legacy run（<wp>/runs/<id> 已在场）：读到 legacy、layout=legacy，零破坏
     writeSnapshot(join(ws, "runs", "e3-legacy"), { max_total_tokens: "9000" });
     const result = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "e3-legacy", workspace_path: ws },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-legacy", workspace_path: ws },
       fakeExec,
     );
     expect((result as Record<string, unknown>)["run_dir"]).toBe(join(ws, "runs", "e3-legacy"));
@@ -376,7 +386,7 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     // 即拒（field_choice_unconfirmed，fail-closed）；且被拦时**不建任何目录**（ADR-0018
     // 不造游离 run 的精神保留：确认记录与落位都归 register 段 create_run 链）。
     const fresh = await toolOf().execute(
-      { stage: "experiment_setup", run_id: "e3-fresh-new", workspace_path: ws },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-fresh-new", workspace_path: ws },
       fakeExec,
     );
     expect((fresh as Record<string, unknown>)["ok"]).toBe(false);

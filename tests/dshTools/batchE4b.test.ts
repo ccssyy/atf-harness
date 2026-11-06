@@ -59,7 +59,7 @@ afterEach(() => {
 /** D191 字段确认闸适配:setup 段前置落盘 FieldChoice/v1(用户已确认——合法通过态)。 */
 const withFieldChoice = (ws: string, runId: string): string => {
   mkdirSync(join(ws, "runs", runId, "webui"), { recursive: true });
-  writeFileSync(join(ws, "runs", runId, "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }));
+  writeFileSync(join(ws, "runs", runId, "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["f1", "f2"] }));
   return ws;
 };
 
@@ -90,6 +90,15 @@ const overridesJsonOf = (result: unknown): Record<string, unknown> | null => {
 const writeSnapshot = (runDir: string, confirmed: Record<string, string>): void => {
   mkdirSync(join(runDir, "webui"), { recursive: true });
   writeFileSync(join(runDir, "webui", "config-snapshot.json"), `${JSON.stringify({ schema_version: "WebUiConfigSnapshot/v1", confirmed }, null, 1)}\n`, "utf8");
+};
+
+/** D173 必分组(1106 晚机检):experiment_setup 用例统一带分组候选过闸。 */
+const D173_PROPOSAL = {
+  schema_version: "GroupingProposal/v1",
+  candidates: [
+    { name: "两层", recommended: true, reason: "单据头/明细分开", groups: [{ name: "单据级", fields: ["f1"] }, { name: "明细级", fields: ["f2"] }] },
+  ],
+  recommended_index: 0,
 };
 
 describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）", () => {
@@ -194,7 +203,7 @@ describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）"
   it("其它段收到 training_overrides → 忽略记 note（argv 零追加，段外传参不报错）", async () => {
     const ws = tempRoot("e4b-ws-");
     const result = await toolOf([]).execute(
-      { stage: "experiment_setup", run_id: "e4b-ignore", workspace_path: (() => { return withFieldChoice(ws, "e4b-ignore"); })(), training_overrides: { learning_rate: "2e-4" } },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e4b-ignore", workspace_path: (() => { return withFieldChoice(ws, "e4b-ignore"); })(), training_overrides: { learning_rate: "2e-4" } },
       fakeExec,
     );
     expect((result as Record<string, unknown>)["ok"]).toBe(true);

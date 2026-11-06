@@ -54,7 +54,7 @@ const MOCK = join(import.meta.dirname, "..", "fixtures", "mock_pipeline_params.m
 /** D191 字段确认闸适配:setup 段前置落盘 FieldChoice/v1(用户已确认——合法通过态)。 */
 const withFieldChoice = (ws: string, runId: string): string => {
   mkdirSync(join(ws, "runs", runId, "webui"), { recursive: true });
-  writeFileSync(join(ws, "runs", runId, "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }));
+  writeFileSync(join(ws, "runs", runId, "webui", "field-choice.json"), JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["f1", "f2"] }));
   return ws;
 };
 
@@ -64,12 +64,21 @@ const toolOf = (record: string[] = []): DshToolLike =>
 const summaryArgv = (result: unknown): string[] =>
   ((result as { summary?: { argv?: string[] } }).summary?.argv ?? []);
 
+/** D173 必分组(1106 晚机检):experiment_setup 用例统一带分组候选过闸。 */
+const D173_PROPOSAL = {
+  schema_version: "GroupingProposal/v1",
+  candidates: [
+    { name: "两层", recommended: true, reason: "单据头/明细分开", groups: [{ name: "单据级", fields: ["f1"] }, { name: "明细级", fields: ["f2"] }] },
+  ],
+  recommended_index: 0,
+};
+
 describe("D89——grouping_preset 透传（experiment_setup 段）", () => {
   it("内核取值逐值透传：experiment_setup 段 argv 含 --grouping-preset <值>；返回体 source=explicit", async () => {
     // G2：harness 不再声明词表——这里用内核 argparse 实际接受的取值（测试数据）
     for (const value of ["A", "B"]) {
       const result = (await toolOf().execute(
-        { stage: "experiment_setup", run_id: `d89-${value}`, workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, `d89-${value}`); })(), grouping_preset: value },
+        { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: `d89-${value}`, workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, `d89-${value}`); })(), grouping_preset: value },
         fakeExec,
       )) as Record<string, unknown>;
       expect((result as Record<string, unknown>)["ok"]).toBe(true);
@@ -81,7 +90,7 @@ describe("D89——grouping_preset 透传（experiment_setup 段）", () => {
   });
   it("未给 → argv 无该参＋返回体标 grouping_preset=null／source=undeclared（内核无内置预设，不静默）", async () => {
     const result = (await toolOf().execute(
-      { stage: "experiment_setup", run_id: "d89-omit", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-omit"); })() },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "d89-omit", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-omit"); })() },
       fakeExec,
     )) as Record<string, unknown>;
     expect((result as Record<string, unknown>)["ok"]).toBe(true);
@@ -94,7 +103,7 @@ describe("D89——grouping_preset 透传（experiment_setup 段）", () => {
   it("空白串 → 视同未给（trim 后空串走缺省，不触框架拒收也不进 argv）", async () => {
     const approvals: string[] = [];
     const result = (await toolOf(approvals).execute(
-      { stage: "experiment_setup", run_id: "d89-blank", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-blank"); })(), grouping_preset: "  " },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "d89-blank", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-blank"); })(), grouping_preset: "  " },
       fakeExec,
     )) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
@@ -115,7 +124,7 @@ describe("D89——grouping_preset 透传（experiment_setup 段）", () => {
   it("取值集合归内核：形状合法的任意标识都透传（不再由 harness 枚举拒收）", async () => {
     const approvals: string[] = [];
     const result = (await toolOf(approvals).execute(
-      { stage: "experiment_setup", run_id: "d89-any", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-any"); })(), grouping_preset: "custom_recipe" },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "d89-any", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-any"); })(), grouping_preset: "custom_recipe" },
       fakeExec,
     )) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
@@ -130,7 +139,7 @@ describe("D89——审批卡分组方案呈现（reason 内追加一行，仅 ex
     for (const value of ["A", "B"] as const) {
       const approvals: string[] = [];
       await toolOf(approvals).execute(
-        { stage: "experiment_setup", run_id: `d89-card-${value}`, workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, `d89-card-${value}`); })(), grouping_preset: value },
+        { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: `d89-card-${value}`, workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, `d89-card-${value}`); })(), grouping_preset: value },
         fakeExec,
       );
       expect(approvals).toHaveLength(1);
@@ -144,7 +153,7 @@ describe("D89——审批卡分组方案呈现（reason 内追加一行，仅 ex
   it("未给 → 卡含「分组方案：未指定——不预设（按字段配置中的分组键走）」（缺省不静默，卡上可见）", async () => {
     const approvals: string[] = [];
     await toolOf(approvals).execute(
-      { stage: "experiment_setup", run_id: "d89-card-def", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-card-def"); })() },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "d89-card-def", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-card-def"); })() },
       fakeExec,
     );
     expect(approvals).toHaveLength(1);
@@ -191,7 +200,7 @@ describe("D89——参数面 schema 与描述红线（不写死示例）", () =>
   });
   it("G2：形状不合即拒（grouping_preset_invalid，不静默纠正不猜缺省）", async () => {
     const result = (await toolOf().execute(
-      { stage: "experiment_setup", run_id: "d89-shape", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-shape"); })(), grouping_preset: "a b" },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "d89-shape", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-shape"); })(), grouping_preset: "a b" },
       fakeExec,
     )) as Record<string, unknown>;
     expect(result["ok"]).toBe(false);
@@ -254,6 +263,7 @@ describe("D93——三参透传（train_all／assignment_source／reuse_experime
     const result = (await toolOf().execute(
       {
         stage: "experiment_setup",
+        grouping_proposal: D173_PROPOSAL,
         run_id: "d93-all",
         workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d93-all"); })(),
         grouping_preset: "A",
@@ -306,14 +316,14 @@ describe("D93——三参透传（train_all／assignment_source／reuse_experime
 describe("D108——token-provider／retry-coordinate-pending 透传（内核全局参数，给才下传）", () => {
   it("token_provider 给路径 → argv 含 --token-provider <trim 值>；缺省/空白不出现", async () => {
     const given = (await toolOf().execute(
-      { stage: "experiment_setup", run_id: "d108-tp", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d108-tp"); })(), token_provider: "/data/kernel/skills/x/token_provider.py  " },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "d108-tp", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d108-tp"); })(), token_provider: "/data/kernel/skills/x/token_provider.py  " },
       fakeExec,
     )) as Record<string, unknown>;
     expect(given["ok"]).toBe(true);
     const argv = summaryArgv(given);
     expect(argv[argv.indexOf("--token-provider") + 1]).toBe("/data/kernel/skills/x/token_provider.py");
     const blank = (await toolOf().execute(
-      { stage: "experiment_setup", run_id: "d108-tp-blank", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d108-tp-blank"); })(), token_provider: "   " },
+      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "d108-tp-blank", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d108-tp-blank"); })(), token_provider: "   " },
       fakeExec,
     )) as Record<string, unknown>;
     expect(summaryArgv(blank)).not.toContain("--token-provider");
