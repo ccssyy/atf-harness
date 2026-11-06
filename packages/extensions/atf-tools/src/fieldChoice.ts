@@ -21,7 +21,7 @@
  * @module fieldChoice
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { join } from "node:path";
 import { resolveRunSubdir } from "../../../../src/core/workspace/runLayout.js";
@@ -133,6 +133,26 @@ export const readFieldChoice = (runDir: string, docType?: string): FieldChoiceRe
   } catch {
     return null;
   }
+};
+
+/** D224:裸调(无 doc_type)时盘账——任何一份合法确认账本在场即「确认过」。
+ *  per-doc(field-choice.<doc>.json)与 run 级(field-choice.json)都算;
+ *  fresh run(无任何账本)返回 false,闸保持 fail-closed(E3 语义)。
+ *  :param runDir: run 根。
+ *  :return: 有合法账本 true;否则 false。 */
+export const fieldChoiceAnyLedgerOf = (runDir: string): boolean => {
+  const base = resolveRunSubdir(runDir, "webui");
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(base);
+  } catch {
+    return false;
+  }
+  const ledgerNames = [
+    ...entries.filter((n) => n.startsWith("field-choice.") && n.endsWith(".json")).map((n) => n.slice("field-choice.".length, -".json".length)),
+    undefined as string | undefined, // run 级单份(单类存量形态)
+  ];
+  return ledgerNames.some((doc) => readFieldChoice(runDir, doc) !== null);
 };
 
 /**

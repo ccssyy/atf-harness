@@ -180,20 +180,29 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
     const reason = record.join("\n");
     expect(reason).toContain("构造参数确认");
     expect(reason).toContain("分组方案：未确认——**按数据事实分组默认生成**");
-    // 未给倍数时不写具体数字：倍数由内核按「建议值 > 难度与预算推荐 > 默认最低倍数」定，
-    // 审批发生在内核计算之前——卡面写死数字会与实际执行不一致。
-    expect(reason).toContain("随机子集增强：未确认——**按建议倍数额度默认生成**");
-    expect(reason).toContain("具体倍数随执行回执给出");
-    expect(reason).not.toContain("默认生成（2 倍）");
+    // P1-5 新合同:run 无风险件(分析未完成)时倍数行不得预设「默认生成」——
+    // 呈现「图像分析未完成,本轮不确认倍数」并指路看图(分析先于确认卡)。
+    expect(reason).toContain("随机子集增强：**图像分析未完成——本轮不确认倍数**");
+    expect(reason).not.toContain("按建议倍数额度默认生成");
 
-    // 调用方给了建议倍数时，卡面显示该数字（据实呈现，不写死）
+    // 调用方给了建议倍数且分析在场时，卡面显示该数字（据实呈现，不写死）
     const withSuggestion = constructionParamsApprovalLines({
       groupingConfirm: false,
       mode5Random: undefined,
       mode5Suggested: 3,
       targetedAdvice: undefined,
+      analysisReady: true,
     });
     expect(withSuggestion).toContain("（建议 3 倍）");
+    // 分析未完成时即使有建议值也不出确认形态(卡时机断言)
+    const noAnalysis = constructionParamsApprovalLines({
+      groupingConfirm: false,
+      mode5Random: undefined,
+      mode5Suggested: 3,
+      targetedAdvice: undefined,
+      analysisReady: false,
+    });
+    expect(noAnalysis).not.toContain("（建议 3 倍）");
     // 建议值/理由/出处态一起上卡（建议不自动生效）
     expect(reason).toContain("goods_name");
     expect(reason).toContain("建议未自动生效");
@@ -210,6 +219,7 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
     );
     const reason = record.join("\n");
     expect(reason).toContain("分组：按分组生成（产品默认，必分组不提问）");
+    // P1-5:显式值(含 0=明确关停)是用户已做的决定,先于分析门槛呈现
     expect(reason).toContain("随机子集增强：0 倍（显式不启用）");
   });
 

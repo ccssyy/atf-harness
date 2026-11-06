@@ -190,6 +190,7 @@ describe("D-f：user_provided 只在「用户确认过」时成立", () => {
       runDir: runDirOf(),   // 无账本
     });
     expect("source" in face && face.source).toBe("proposal");
-    expect("note" in face && String(face.note)).toContain("还没在卡上确认过");
+    // P1-6b:合成候选后卡通道缺席→「不替你选」(配置自带分组也须用户卡上确认)
+    expect("note" in face && String(face.note)).toContain("不替你选");
   });
 });
