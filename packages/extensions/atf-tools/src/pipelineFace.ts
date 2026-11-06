@@ -2677,10 +2677,24 @@ export const buildPipelineTool = (
         // 不做任何决定——真值由内核按来源分档给出并随回执返回。
         const mode5SuggestedRaw = (args.mode5_advice_stats as Record<string, unknown> | undefined)
           ?.["suggested_mode5_random"];
-        const mode5Suggested =
+        let mode5Suggested =
           typeof mode5SuggestedRaw === "number" && Number.isFinite(mode5SuggestedRaw)
             ? Number(mode5SuggestedRaw)
             : undefined;
+        // P1-5 补(1106 晚 owner 质询「倍数卡还是没变」):agent 未传统计件时,从
+        // run 内核生产者落的 mode5-advice-stats.json 取建议值——此前该值只从
+        // agent 传参解析,真机 agent 没传→卡面恒「未经智能分析默认 2 条」,
+        // 分析做了也白做。盘面件在场即带建议上卡(时序:首跑分析未完成不弹卡,
+        // 看图重跑时统计件已产→卡面呈现分析建议)。
+        if (mode5Suggested === undefined && typeof args.doc_type === "string" && String(args.doc_type).trim() !== "") {
+          try {
+            const statsPath = join(resolveRunSubdir(runDir, `data/risk-signals/${String(args.doc_type).trim()}`), "mode5-advice-stats.json");
+            const onDisk = JSON.parse(readFileSync(statsPath, "utf8")) as { suggested_mode5_random?: unknown };
+            if (typeof onDisk.suggested_mode5_random === "number" && Number.isFinite(onDisk.suggested_mode5_random)) {
+              mode5Suggested = Number(onDisk.suggested_mode5_random);
+            }
+          } catch { /* 盘面件缺席=首跑形态,保持 undefined 如实呈现 */ }
+        }
         constructionParams = { groupingConfirm, mode5Random, targetedAdvice, targetedPlan, mode5Suggested };
         // D90：审批免的档位（完全权限／全自动）下，「构造参数」不能再靠审批卡承载——
         // 审批一免，卡上那几行「未确认」就没人看见（10-29 真机：八段跑完零问题卡，
