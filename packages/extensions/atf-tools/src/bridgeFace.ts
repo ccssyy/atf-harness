@@ -4,7 +4,7 @@
  * toAtfAgentTool（src/agent/atfAgentTools.ts：参数校验 → 桥接 request → canonical
  * 校验 → 结构化 rejected 回填），本层只做 DSH defineTool 包装＋DSH 审批 seam 前置。
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AtfBridgeConnection } from "../../../../src/bridge/index.js";
 import {
@@ -629,6 +629,31 @@ const launchConfirmCardOf = async (
                 const confirm = await userDecisionConfirmCardOf(ctx, exec, definition.name, args);
                 if (!confirm.ok) {
                   return asToolValue({ error: "user_decision_paused", tool: definition.name, note: confirm.note });
+                }
+                // 轮三凭据闭环:用户在确认卡上做出决定→写凭据账本(harness 写、
+                // agent 不可伪造),内核重跑 label_qc 据此放行(user_card 凭据)。
+                // 账本写法与退役前的 D184 链同形态(LabelQcUserDecisions/v1)。
+                if (definition.name === "atf_label_qc_resolve") {
+                  try {
+                    const runId = typeof args["run_id"] === "string" ? args["run_id"] : "";
+                    const wsPath = typeof args["workspace_path"] === "string" ? args["workspace_path"] : "";
+                    if (runId !== "" && wsPath !== "") {
+                      const resolvedRun = resolvePipelineRunDir(wsPath, runId);
+                      if (!("error" in resolvedRun)) {
+                        const decisionsDir = join(resolvedRun.runDir, "runtime", "webui");
+                        mkdirSync(decisionsDir, { recursive: true });
+                        writeFileSync(join(decisionsDir, "label-qc-decisions.json"),
+                          `${JSON.stringify({
+                            schema_version: "LabelQcUserDecisions/v1", decided_by: "user_confirmed",
+                            decided_at: new Date().toISOString(),
+                            decisions: (Array.isArray(args["decisions"]) ? args["decisions"] : []).map((d) => {
+                              const entry = d as Record<string, unknown>;
+                              return { item_id: entry["item_id"], action: entry["action"], disposition: entry["disposition"] };
+                            }),
+                          }, null, 1)}\n`, "utf8");
+                      }
+                    }
+                  } catch { /* 账本写失败→内核按凭据缺席拦截重跑,如实暴露 */ }
                 }
               }
             }

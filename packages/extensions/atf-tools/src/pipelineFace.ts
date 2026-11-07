@@ -3817,77 +3817,13 @@ let visualSummary: Record<string, unknown> | undefined;
             const docTagQc = String(args["doc_type"] ?? "");
             const report = await readLabelQcReportFlat(effectiveWs, docTagQc, receipt);
             if (qcSvc !== undefined && typeof qcSvc.ask === "function" && report !== null) {
-              const questions = report.items.slice(0, pending).map((item, idx) => ({
-                id: `qc-item-${item.item_id}`,
-                question: `待裁决 ${String(idx + 1)}/${String(pending)} — ${item.human_label}${questionSubjectOf(item) !== "" ? `：${questionSubjectOf(item)}` : ""}`,
-                header: `标签裁决${docTagQc !== "" ? `·${docTagQc}` : ""}`,
-                detail: [
-                  `**问题**：${item.human_label}（${labelQcClassNameOf(item.check_class)}）`,
-                  ...(item.locator?.field !== undefined ? [`**字段**：${String(item.locator.field)}`] : []),
-                  ...(item.locator?.page !== undefined ? [`**样本/页**：${String(item.locator.sample ?? "")} ${String(item.locator.page ?? "")}`] : []),
-                  "**两个标注值**：",
-                  ...item.candidates.map((c, i2) => `  ${String(i2 + 1)}. ${String(c.field ?? "?")} =「${String(c.value ?? "?")}」`),
-                  "",
-                  `**建议**：${suggestedActionTextOf(item)}`,
-                  "选「按建议」直接采纳;选「维持原状」不处置该项;也可在输入框写字段名自定。",
-                ].join("\n"),
-                options: [
-                  { label: "按建议处置", description: suggestedActionTextOf(item) },
-                  { label: "维持原状", description: "不处置该项(保留两种标注,后续人工线下处理)" },
-                ],
-                multiSelect: false,
-              }));
-              try {
-                const qcAnswers = await qcSvc.ask({ questions, agent: (exec as { agent?: unknown }).agent, signal: (exec as { signal?: unknown }).signal });
-                const byId = new Map(qcAnswers.answers.map((a) => [a.id, a]));
-                const decisions = report.items.slice(0, pending).map((item) => {
-                  const answer = byId.get(`qc-item-${item.item_id}`);
-                  const picked = [...(answer?.selected ?? [])].join("") || (answer?.custom ?? "").trim();
-                  const suggested = item.suggested_action ?? {};
-                  if (picked.includes("维持原状")) {
-                    return { item_id: item.item_id, action: "reject", disposition: "keep_both_untouched", decided_by: "user_confirmed" };
-                  }
-                  // D223(lossless 吞单):装饰链在 asToolValue 清洗之后改写回执——
-                  // decisions 夹带 undefined 键会让 vendor snapshotToolValue 拒收整张段回执
-                  // (真机 11-06 实锚:bl 裁决卡确认同毫秒回执变 ToolOutputError,agent 盲重跑)。
-                  // 源头构造即剔除 undefined 键;最终 return 另有 asToolValue 兜底。
-                  const entry: Record<string, unknown> = {
-                    item_id: item.item_id,
-                    action: String(suggested.action_hint ?? "accept"),
-                    disposition: String(suggested.disposition_hint ?? ""),
-                    target_candidate_id: suggested.target_candidate_id,
-                    custom: picked.includes("按建议") ? undefined : (picked !== "" ? picked : undefined),
-                    decided_by: "user_confirmed",
-                  };
-                  for (const key of Object.keys(entry)) if (entry[key] === undefined) delete entry[key];
-                  return entry;
-                });
-                // 凭据账本(harness 写,agent 不可伪造):resolve 直通比对源
-                // 凭据账本锚 run 树(回执 run_dir 在场即用,缺席回落 workspace 根)
-                const decisionsRoot = String(receipt["run_dir"] ?? "") !== "" && existsSync(String(receipt["run_dir"]))
-                  ? String(receipt["run_dir"]) : effectiveWs;
-                const decisionsDir = join(decisionsRoot, "runtime", "webui");
-                if (existsSync(decisionsRoot)) {
-                  mkdirSync(decisionsDir, { recursive: true });
-                  writeFileSync(join(decisionsDir, "label-qc-decisions.json"), `${JSON.stringify({
-                    schema_version: "LabelQcUserDecisions/v1", decided_by: "user_confirmed",
-                    decided_at: new Date().toISOString(), report_digest: report.report_digest,
-                    decisions: decisions.map((d) => ({ item_id: d.item_id, action: d.action, disposition: d.disposition })),
-                  }, null, 1)}\n`, "utf8");
-                }
-                const nAccept = decisions.filter((d) => d.action === "accept").length;
-                receipt["label_qc_decisions"] = {
-                  decided_by: "user_confirmed", report_digest: report.report_digest, decisions,
-                  next: "以上逐项决定已由用户在卡上做出——按 decisions 原样调 atf_label_qc_resolve 提交,再用同一 run_id 重跑 label_qc",
-                };
-                projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, {
-                  conclusion: `标签裁决完成:${String(pending)} 项逐项确认(按建议 ${String(nAccept)} 项)`,
-                  stage: "label_qc",
-                  next: "提交裁决后重跑 label_qc",
-                });
-              } catch {
-                receipt["label_qc_decisions"] = { asked: false, note: "裁决卡通道异常——回执指路文案兜底" };
-              }
+              // 轮三时序修正:检测完不立即弹裁决卡(无分析支撑的第一问退役)。
+              // 唯一确认面=atf_label_qc_resolve 执行前的 D192 确认卡(agent 看图
+              // 分析的结论随 decisions 上卡,用户确认即凭据落账);此处只指路。
+              receipt["label_qc_decisions"] = {
+                asked: false,
+                note: `待裁决 ${String(pending)} 项——先逐项看图分析(read_image 对照标注与全批惯例),形成判断与建议处置后,带 decisions 与理由调 atf_label_qc_resolve:提交前会出确认卡(你的分析上卡),用户卡上确认后凭据落 user_confirmed,再用同一 run_id 重跑本段`,
+              };
             } else {
               receipt["label_qc_decisions"] = { asked: false, note: "卡通道缺席或报告不可读——按回执指路文案走 atf_label_qc_inspect 逐项流程" };
             }
