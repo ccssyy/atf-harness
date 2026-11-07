@@ -36,7 +36,7 @@ describe("批㊶-N N-1 段序守卫（orderGuarded）", () => {
   it("evaluate 锚在场但 training 未 done → 抑制为 false（陈旧轮倒挂场景）；training done → 放行", () => {
     // D96：段序八键＝内核段名（training/evaluate 不入段序——训练完成放行抑制场景随键面退役，
     // 独立卡态不再由 orderGuarded 承载）；末段 training_prep 的前缀抑制锚同构保留（中段断链即抑制）
-    const doneMap = { register: true, label_qc: true, experiment_setup: true, candidate_build: true, publish: true, family_split: false, admission: true, training_prep: true };
+    const doneMap = { register: true, label_qc: true, experiment_setup: true, style_split: true, candidate_build: true, publish: true, family_split: false, admission: true, training_prep: true };
     expect(orderGuarded("training_prep", true, doneMap)).toBe(false);
     const doneMap2 = { ...doneMap, family_split: true };
     expect(orderGuarded("training_prep", true, doneMap2)).toBe(true);
@@ -181,7 +181,7 @@ describe("批㊶-N N-5 会话绑定＋三级作用域", () => {
     expect(scopedB).toEqual([]);
     // 全部实例视图＝全量
     expect(mon.runs).toHaveLength(2);
-    expect(SEGMENT_ORDER).toHaveLength(8);
+    expect(SEGMENT_ORDER).toHaveLength(9);
   });
 });
 

@@ -28,7 +28,7 @@ describe("D96 段清单对齐内核 STAGE_ORDER（映射表单源＋逐键相等
   it("① 五清单逐键相等：PIPELINE_STAGES＝映射表键＝SEGMENT_ORDER＝SEGMENTS 键＝SEGMENT_ORDER_KEYS", () => {
     const mappingKeys = Object.keys(SEGMENT_FACT_BY_KERNEL_STAGE);
     expect(PIPELINE_STAGES).toEqual([
-      "register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep",
+      "register", "label_qc", "experiment_setup", "style_split", "candidate_build", "publish", "family_split", "admission", "training_prep",
     ]);
     expect(mappingKeys).toEqual(PIPELINE_STAGES);
     expect(SEGMENT_ORDER).toEqual(PIPELINE_STAGES);
@@ -50,20 +50,20 @@ describe("D96 段清单对齐内核 STAGE_ORDER（映射表单源＋逐键相等
     }
   });
 
-  it("④ 快照段灯数组＝八元素键序一致；独立卡态在 scanRunDir segments 返回面承载", () => {
+  it("④ 快照段灯数组＝九元素键序一致；独立卡态在 scanRunDir segments 返回面承载", () => {
     const snap = buildMonitorSnapshot([
       {
         run_id: "run-d96",
         segments: {
-          register: true, label_qc: true, experiment_setup: true, candidate_build: true,
-          publish: true, family_split: true, admission: true, training_prep: true,
+          register: true, label_qc: true, experiment_setup: true, style_split: true,
+          candidate_build: true, publish: true, family_split: true, admission: true, training_prep: true,
           training: true, evaluate: true,
         },
         training: { active: false },
       },
     ], undefined, []);
     expect(snap.runs[0]?.segments.map((s) => s.key)).toEqual(SEGMENT_ORDER_KEYS);
-    expect(snap.runs[0]?.segments).toHaveLength(8);
+    expect(snap.runs[0]?.segments).toHaveLength(9);
     expect(snap.runs[0]?.segments.filter((s) => s.status === "done").map((s) => s.key)).toEqual(PIPELINE_STAGES);
     // 扫描面：launch/train.sh（admission 锚）在盘 → training/evaluate 独立键保留（false 态）
     const root = mkdtempSync(join(tmpdir(), "d96-scan-"));

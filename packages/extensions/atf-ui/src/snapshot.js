@@ -5,12 +5,13 @@
  */
 
 /** 管线八段（D96 owner 裁定：与内核 STAGE_ORDER 逐键相等——register/label_qc/
- *  experiment_setup/candidate_build/publish/family_split/admission/training_prep；
+ *  experiment_setup/style_split/candidate_build/publish/family_split/admission/training_prep；
  *  训练执行/评估与可视化不占段灯，作为独立卡/区块呈现）。 */
 export const SEGMENTS = [
   { key: "register", label: "数据登记" },
   { key: "label_qc", label: "标注体检" },
   { key: "experiment_setup", label: "实验配置" },
+  { key: "style_split", label: "版式聚类" },
   { key: "candidate_build", label: "候选构造" },
   { key: "publish", label: "契约发布" },
   { key: "family_split", label: "数据切分" },

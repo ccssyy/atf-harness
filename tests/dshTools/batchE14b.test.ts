@@ -111,8 +111,8 @@ describe("A-E14b——argv 断言与其它段忽略", () => {
     expect(argv).not.toContain("--base-model"); // 给参也不下传——argv 仅 training_prep 追加
     expect(given["base_model_source"]).toBeUndefined();
   });
-  it("八段闭集零变化（A2.2b 落点单源不回退）", () => {
-    expect(PIPELINE_STAGES).toEqual(["register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep"]);
+  it("九段闭集零变化（A2.2b 落点单源不回退）", () => {
+    expect(PIPELINE_STAGES).toEqual(["register", "label_qc", "experiment_setup", "style_split", "candidate_build", "publish", "family_split", "admission", "training_prep"]);
   });
 });
 

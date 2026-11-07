@@ -162,13 +162,15 @@ export const readWorkspaceIdentity = (workspacePath: string): WorkspaceIdentity 
   };
 };
 
-/** 实验目录名（YYYYMMDD-<name>）。 */
-export const experimentDirName = (now: Date, name: string): string => {
-  const y = String(now.getFullYear());
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}${m}${d}-${name}`;
-};
+/**
+ * 实验目录名（＝实验名裸名）。
+ *
+ * 轮三单源化实锚：此前 UI 建实验用「YYYYMMDD-<name>」+「runs/」中间层（v2 形态），
+ * 内核管线 RunLayout/v3 用裸名且 run 直挂实验目录——同名实验经两个入口落两个目录
+ * （真机：20261107-ci-bl-joint/ 与 ci-bl-joint/ 并存）。实验目录形态唯一权威＝内核
+ * v3：UI 建实验不再自造日期前缀与 runs 层；已建的历史形态目录只读兼容不迁移。
+ */
+export const experimentDirName = (_now: Date, name: string): string => name;
 
 export interface CreateExperimentOutcome {
   workspacePath: string;
@@ -250,7 +252,8 @@ export const createExperimentInWorkspace = (workspacePath: string, experimentNam
     );
   }
   const experimentId = randomUUID();
-  mkdirSync(join(experimentDir, "runs"), { recursive: true });
+  mkdirSync(experimentDir, { recursive: true });
+  // RunLayout/v3：run 直挂实验目录，不建 runs/ 中间层（见 experimentDirName 单源注记）。
   const meta: ExperimentMeta = {
     id: experimentId,
     name: experimentName,

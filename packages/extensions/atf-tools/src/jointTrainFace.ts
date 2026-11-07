@@ -32,7 +32,8 @@
  *   装配面（内核 assemble 槽位枚举）与 docs[] 是两个事实面（已备数据 vs 已登记清单），
  *   本工具校验两面前置，不合并不重写内核准入。
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import type { ChoiceAskQuestion, FormAskService } from "./confirmFace.js";
 import { isAbsolute, join } from "node:path";
 import { createHash } from "node:crypto";
 import { defineTool } from "@deepseek-ai/dsh-tools";
@@ -274,26 +275,72 @@ export const buildJointTrainTool = (ctx: { get(service: string): unknown }, cfg:
       }));
       const estimatedRows = classFacts.reduce((sum, c) => sum + c.rows * c.ratio, 0);
 
-      // ── ② 一张确认卡（E5 模板四行＋权属行；文案不出现 target run 与落点路径指引）──
+      // ── ② 训练启动确认卡(原生问题卡,轮三改造:审批卡面孔退役——D208 裁定形态,
+      //     完全授权档照弹=停等确认卡;构造结果与训练参数一张卡,确认时点在构造完成后)──
       const typeList = slots.map((slot) => slot.doc_type).join("、");
       const rowDetail = classFacts.map((c) => `${c.doc_type} ${formatRowCount(c.rows)}×${String(c.ratio)}`).join(" ＋ ");
-      const ratioText = classFacts.map((c) => `${c.doc_type} ×${String(c.ratio)}`).join(" · ");
-      const verdict = await requestApproval(ctx, exec, "atf_joint_train",
-        buildApprovalReason({
-          action: "联合装配并启动训练",
-          target: `（${String(slots.length)} 类：${typeList} → run ${runId}）`,
-          effect: "装配本 run 的槽位训练数据并启动该 run 训练（GPU 占用与训练产物写入——卡数/时长以启动件为准）",
-          reversible: "装配产物可人工清理；训练启动不可自动回滚",
-        }) + "\n" + [
-          "联合明细：",
-          `- 已登记单据（${registry.source === "run_json_docs" ? "run.json 单据清单" : "目录探测（legacy run）"}）：${registeredTypes.join("、")}${registry.source === "run_json_docs" ? "" : "——run 缺登记清单，按登记摘要探测"}`,
-          `- 类型：${typeList}（${String(slots.length)} 类——来自本 run 的单据槽位）`,
-          `- 各类行数（实测槽位）：${rowDetail}`,
-          `- 合并倍率：${ratioText}${ratios === null ? "（缺省全 1）" : ""}`,
-          `- seed：${String(seed)} · 基座族：${baseModelFamily}`,
-          "仅 owner 可点；执行方不得代点",
-        ].join("\n"));
-      if (!verdict.ok) return approvalDeniedResult("atf_joint_train", verdict.outcome);
+      // 「合并倍率」概念退役(轮三实锚:缺省全 1 时是无信息行):只在显式超采样时呈现。
+      const ratioLine = ratios === null
+        ? []
+        : [`- 各类配比（超采样）：${classFacts.map((c) => `${c.doc_type} ×${String(c.ratio)}`).join(" · ")}`];
+      // 确定性重放提示(D220 轻量面):run 内已有 checkpoint 时,若本次参数与上轮一致,
+      // 直接确认会重付整轮训练——卡面提示可复用。
+      const checkpointHint = (() => {
+        try {
+          const has = readdirSync(runDir).some((name) => name.startsWith("checkpoint-"));
+          return has ? ["- 本 run 已有训练 checkpoint：若本次配置与上轮一致（确定性重放），可复用既有 checkpoint 跳过重训——确认前请核对"] : [];
+        } catch { return []; }
+      })();
+      const confirmSvc = ctx.get("userQuestions") as FormAskService | undefined;
+      let launchConfirmed = false;
+      let pauseNote = "";
+      if (confirmSvc !== undefined && typeof confirmSvc.ask === "function") {
+        const question: ChoiceAskQuestion = {
+          id: `joint-launch-${runId}`,
+          question: `训练启动确认 — ${runId}（${typeList}，${String(slots.length)} 类联合）`,
+          header: "训练启动确认",
+          detail: [
+            `- 已登记单据（${registry.source === "run_json_docs" ? "run.json 单据清单" : "目录探测（legacy run）"}）：${registeredTypes.join("、")}${registry.source === "run_json_docs" ? "" : "——run 缺登记清单，按登记摘要探测"}`,
+            "构造结果：",
+            `- 各类训练行数（实测）：${rowDetail}（合计约 ${formatRowCount(estimatedRows)} 行）`,
+            ...ratioLine,
+            ...(prelaunchReport !== undefined && prelaunchReport !== ""
+              ? [`- 启动前报告：${prelaunchReport}`] : []),
+            "",
+            "训练参数：",
+            `- seed：${String(seed)} · 基座族：${baseModelFamily}`,
+            "- 卡数/量化/deepspeed/像素对与预算三键以启动件为准（生成前会再逐项过目）",
+            ...checkpointHint,
+            "",
+            "训练启动不可自动回滚（GPU 占用与产物写入）；装配产物可人工清理。",
+            "选「确认启动」按上述内容装配并启动；选「暂停调整」先改参数再重来。",
+          ].join("\n"),
+          options: [
+            { label: "确认启动", description: `按上述构造结果与参数装配并启动训练（合计约 ${formatRowCount(estimatedRows)} 行）` },
+            { label: "暂停调整", description: "先调整构造/训练参数，调整后重新发起" },
+          ],
+          multiSelect: false,
+        };
+        const answers = await confirmSvc.ask({ questions: [question], agent: exec.agent, signal: exec.signal });
+        const first = answers.answers[0];
+        const picked = (first?.selected[0] ?? "").trim();
+        launchConfirmed = picked === "确认启动";
+        if (!launchConfirmed) {
+          pauseNote = (first?.custom ?? "").trim();
+        }
+      } else {
+        // user_questions 服务缺席:降级为拒绝执行(训练启动必须经确认卡,不静默开跑)。
+        return asToolValue({
+          ok: false, error: "joint_launch_confirm_unavailable", run_id: runId, run_dir: runDir,
+          note: "训练启动确认卡服务不可用——启动必须经确认卡(owner 停等裁定),修复会话卡片服务后重试",
+        });
+      }
+      if (!launchConfirmed) {
+        return asToolValue({
+          ok: false, error: "joint_launch_paused", run_id: runId, run_dir: runDir,
+          note: `训练启动已暂停（用户未确认启动${pauseNote !== "" ? `；备注：${pauseNote}` : ""}）——调整参数后重新发起联合训练`,
+        });
+      }
 
       // ── ③ 装配：atf_pipeline_stage 执行函数直调（assemble=true——argv/审批/摘要/
       //    事实轨/绑定全在 pipelineFace 单源；内部段审批由本卡承接）──

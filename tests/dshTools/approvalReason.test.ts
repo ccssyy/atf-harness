@@ -20,7 +20,8 @@ const CALL_SITE_FILES = [
   "trainingFace.ts",
   "fileFace.ts",
   "fileGuardFace.ts",
-  "jointTrainFace.ts",
+  // jointTrainFace:装配卡已改训练启动确认卡(userQuestions 形态),退出审批面
+
   "quantizeFace.ts",
   "preflightFace.ts",
 ] as const;

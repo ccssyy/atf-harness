@@ -321,7 +321,7 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     expect(String(result.latest_ckpt)).toContain("checkpoint-30");
   });
 
-  it("status：八段任务卡段状态（目录标记推导与监控同步器同源）＋render 渲染 checklist", async () => {
+  it("status：九段任务卡段状态（目录标记推导与监控同步器同源）＋render 渲染 checklist", async () => {
     const root = tempRoot();
     const runDir = join(root, "r-task");
     mkdirSync(join(runDir, "training"), { recursive: true });
@@ -333,13 +333,17 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     writeFileSync(join(runDir, "webui", "config-snapshot.json"), "{}");
     writeFileSync(join(runDir, "contract-candidate.json"), "{}");
     mkdirSync(join(runDir, "split"), { recursive: true });
+    mkdirSync(join(runDir, "data", "style-split", "pl"), { recursive: true });
+    mkdirSync(join(runDir, "stage"), { recursive: true });
+    writeFileSync(join(runDir, "stage", "stage-style_split.pl.summary.json"),
+      JSON.stringify({ mode: "stage", run_id: "r-task", stage: "style_split", stages: { "style_split:pl": "ok" }, exit_code: 0 }), "utf8");
     mkdirSync(join(runDir, "launch"), { recursive: true });
     writeFileSync(join(runDir, "launch", "train.sh"), "#!/bin/bash\n");
     const tool = buildRunTrainingTool(noApproval, { runsRoot: root, logDir: root, ctx: noApproval }) as unknown as Tool & { output: { render: (args: unknown, value: unknown) => Array<{ type: string; text: string }> } };
     const result = await tool.execute({ action: "status", train_sh: join(root, "x.sh"), run_id: "r-task" }, fakeExec);
     const segments = result.segments as Array<{ key: string; status: string }>;
     // D96：八灯＝内核 STAGE_ORDER 八段（training 键不在灯面——训练态由独立卡数据源承载）
-    expect(segments).toHaveLength(8);
+    expect(segments).toHaveLength(9);
     expect(segments.find((s) => s.key === "register")?.status).toBe("done");
     expect(segments.find((s) => s.key === "training")).toBeUndefined();
     expect(segments.find((s) => s.key === "training_prep")?.status).toBe("pending");
@@ -349,7 +353,7 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     expect(text).toContain("✓ 数据登记");
     expect(text).toContain("✓ 准入检查");
     expect(text).toContain("○ 训练准备");
-    expect(text).toContain("进度 7/8"); // 前缀闭包＝锚面七段 done（登记→…→准入），训练准备无锚 pending
+    expect(text).toContain("进度 7/9"); // 九段口径(轮三+style_split)：本 fixture 未提供 style_split 段完成证据(事实轨摘要未达同源判定面)→该段 pending 是正确语义;真机跑过 style_split 后为 8/9。训练准备无锚恒 pending。
     expect(text).toMatch(/运行中|未运行/); // tmux 在场与否二态均如实
     expect(text).toContain("loss 点数：1");
     // start 结果不走任务卡（保持 JSON 卡面）

@@ -6,7 +6,7 @@
  *   参数面——缺省 auto／三值枚举逐值透传／非法值框架层拒（ToolArgsError，审批零触达）；
  *   argv 断言——`--auto-style-cluster` 仅 family_split 出现（缺省也显式上线解析值）；
  *   证据透传——summary 携带 results[].raw_response.style_cluster_state 时回传
- *   {state,pages_total,pages_with_cluster} 三键；八段闭集零回归；落盘摘要回读（双对账）。
+ *   {state,pages_total,pages_with_cluster} 三键；九段闭集零回归；落盘摘要回读（双对账）。
  * E10d 覆盖（§二）：
  *   user_message 逐字透传（不加工不拼接）；内核未带 → 业务兜底文案＋user_message_source=
  *   "fallback"；note 文案＝「原样告知用户」版（不含面向用户的枚举指令）；allow_small_cluster_
@@ -128,8 +128,8 @@ describe("E10b——argv 仅 family_split 出现（其它段忽略不报错不�
     expect((missing as Record<string, unknown>)["ok"]).toBe(true);
     expect(summaryArgv(missing)).not.toContain("--auto-style-cluster");
   });
-  it("八段闭集零回归（A2.2b 落点单源不回退；本批零增删改序）", () => {
-    expect(PIPELINE_STAGES).toEqual(["register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep"]);
+  it("九段闭集零回归（A2.2b 落点单源不回退；本批零增删改序）", () => {
+    expect(PIPELINE_STAGES).toEqual(["register", "label_qc", "experiment_setup", "style_split", "candidate_build", "publish", "family_split", "admission", "training_prep"]);
   });
 });
 

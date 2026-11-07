@@ -122,9 +122,9 @@ describe("workspaceRegistry 纯函数层（身份/注册表/桶编码）", () =>
     const outcome = createExperimentInWorkspace(ws, "iter-1", new Date("2026-10-16T08:00:00Z"), home);
     expect(outcome.registryStatus).toBe("pending_registration");
     expect(outcome.identityCreated).toBe(true);
-    expect(outcome.experimentDir).toBe(join(ws, "experiments", "20261016-iter-1"));
+    expect(outcome.experimentDir).toBe(join(ws, "experiments", "iter-1")); // 轮三单源化:裸名(RunLayout/v3)
     expect(existsSync(join(outcome.experimentDir, "experiment.json"))).toBe(true);
-    expect(existsSync(join(outcome.experimentDir, "runs"))).toBe(true);
+    expect(existsSync(join(outcome.experimentDir, "runs"))).toBe(false); // 轮三:run 直挂,不建 runs/ 中间层
     const identity = readWorkspaceIdentity(ws);
     expect(identity).not.toBeNull();
     expect(identity!.id).toBe(outcome.workspaceId);
@@ -134,7 +134,7 @@ describe("workspaceRegistry 纯函数层（身份/注册表/桶编码）", () =>
     expect(meta).toMatchObject({ name: "iter-1", workspaceId: outcome.workspaceId, datasets: [], baseline: null });
   });
 
-  it("createExperiment：路径不存在/非目录/重名（同日同名）→ 指路文案三态；既有身份文件复用（id 不变）", () => {
+  it("createExperiment：路径不存在/非目录/重名（同名——轮三单源化后实验目录=裸名,同名即同实验）→ 指路文案三态；既有身份文件复用（id 不变）", () => {
     const home = seedDshHome();
     expect(() => createExperimentInWorkspace(join(tempRoot(), "nope"), "a", new Date(), home)).toThrow(/不代建顶层工作区目录/);
     const fileWs = tempRoot() + "-f";
@@ -145,7 +145,7 @@ describe("workspaceRegistry 纯函数层（身份/注册表/桶编码）", () =>
     const first = createExperimentInWorkspace(ws, "dup", new Date("2026-10-16T08:00:00Z"), home);
     expect(() => createExperimentInWorkspace(ws, "dup", new Date("2026-10-16T09:00:00Z"), home)).toThrow(/重名实验/);
     const identityBefore = readWorkspaceIdentity(ws)!.id;
-    const second = createExperimentInWorkspace(ws, "dup", new Date("2026-10-17T08:00:00Z"), home);
+    const second = createExperimentInWorkspace(ws, "dup2", new Date("2026-10-17T08:00:00Z"), home);
     expect(second.workspaceId).toBe(identityBefore);
     expect(first.workspaceId).toBe(identityBefore);
     expect(readWorkspaceIdentity(ws)!.experiments).toHaveLength(2);

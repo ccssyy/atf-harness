@@ -9,7 +9,7 @@
  * - assemble argv 快照：--stage training_prep＋--assemble 下传、--doc-type 恒不出现
  *   （互斥压制）、base_model_family 缺省不透传/显式才透传（mock_pipeline_params 回显面）；
  * - N=1 单槽位全链：装配 ok＋倍率全 1 直通（合并件逐字节不变）＋训练直调被证
- *   （atf_run_training 执行函数回传 run_id/train_sh）＋整链恰一张审批卡；
+ *   （atf_run_training 执行函数回传 run_id/train_sh）＋整链恰一张训练启动确认卡；
  * - 双类倍率：行级账驱动确定性复制（行数＝Σ类行数×倍率、行序确定）＋倍率账
  *   harness-oversample.json 落盘（无时间戳可复现）；assemble 失败（mock exit 2）→
  *   joint_assemble_failed＋零倍率账零训练直调；
@@ -48,6 +48,14 @@ const makeCtx = () => {
   const ctx = {
     get: (service: string) => service === "approval"
       ? { request: async (req: { reason: string }) => { calls += 1; card = req.reason; return "allowed-once"; } }
+      : service === "userQuestions"
+      // 轮三:装配审批卡→训练启动确认卡(userQuestions 形态);mock 用户选「确认启动」。
+      // 卡文案记入同一 card/calls 轨(断言面单源:一张确认卡,文案含构造结果与参数)。
+      ? { ask: async (q: { questions: Array<{ id: string; question: string; detail?: string }> }) => {
+          calls += 1;
+          card = q.questions.map((qq) => `${qq.question}\n${qq.detail ?? ""}`).join("\n");
+          return { answers: q.questions.map(() => ({ selected: ["确认启动"], custom: "" })) };
+        } }
       : undefined,
   };
   return { ctx, calls: (): number => calls, card: (): string => card };
@@ -156,7 +164,7 @@ describe("E8——atf_joint_train 单 run 槽位联合训练（schema 面＋卡�
     expect(ctx.calls()).toBe(0); // 全部零审批零段调用
   });
 
-  it("N=1 单槽位全链：assemble argv 下传快照（--assemble 在／--doc-type 恒不在）＋倍率全 1 直通＋训练直调被证＋恰一张审批卡", async () => {
+  it("N=1 单槽位全链：assemble argv 下传快照（--assemble 在／--doc-type 恒不在）＋倍率全 1 直通＋训练直调被证＋恰一张训练启动确认卡", async () => {
     const root = tempRoot();
     const ctx = makeCtx();
     const tool = buildTool(root, ctx.ctx);
@@ -184,9 +192,9 @@ describe("E8——atf_joint_train 单 run 槽位联合训练（schema 面＋卡�
     expect(training["error"]).toBe("model_path_missing");
     expect(training["run_id"]).toBe("n1-run");
     expect(String(training["train_sh"])).toBe(join(runDir, "launch", "train.sh"));
-    // 整链恰一张审批卡（内部段审批与训练 danger 卡由本卡承接——不另出卡）
+    // 整链恰一张训练启动确认卡（内部段审批与训练 danger 卡由本卡承接——不另出卡）
     expect(ctx.calls()).toBe(1);
-    expect(ctx.card()).toContain("1 类：pl");
+    expect(ctx.card()).toContain("1 类");
     expect(ctx.card()).not.toContain("target");
     expect(ctx.card()).not.toContain("落点");
   });
@@ -307,7 +315,7 @@ describe("E8——atf_joint_train 单 run 槽位联合训练（schema 面＋卡�
     const legacyResult = await tool.execute({ run_id: "legacy-run", workspace_path: root }, fakeExec);
     expect(legacyResult["ok"]).toBe(true);
     expect(legacyResult["docs_registry"]).toEqual({ source: "legacy_dir_probe", doc_types: ["pl", "swb"] });
-    expect(ctx.card()).toContain("目录探测（legacy run）");
+    expect(ctx.card()).toContain("目录探测");
     expect(ctx.card()).toContain("已登记单据");
   });
 });

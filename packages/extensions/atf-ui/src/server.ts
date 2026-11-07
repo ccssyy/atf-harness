@@ -489,7 +489,7 @@ export interface ScanLiveness {
  *  训练执行/评估移出段灯——独立卡/区块，态在 scanRunDir segments 返回面独立承载）。
  *  导出供段对齐锚测试逐键断言（D96 映射表单源断言面）。 */
 export const SEGMENT_ORDER_KEYS: readonly string[] = [
-  "register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep",
+  "register", "label_qc", "experiment_setup", "style_split", "candidate_build", "publish", "family_split", "admission", "training_prep",
 ];
 
 /** 批㊶-N N-2：training-logs 目录活性（目录树内任一文件 mtime 在窗口内即 fresh；
@@ -671,6 +671,8 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
     register: segmentDone("register", has("registration.json") || has("dataset")),
     label_qc: segmentDone("label_qc", has("label_qc") || has("qc")),
     experiment_setup: has("webui/config-snapshot.json"),
+    // style_split(轮三九段):聚类产物锚 data/style-split/<doc>/style-cluster-manifest.json
+    style_split: has("data/style-split") || has("style-split"),
     candidate_build: has("contract-candidate.json") || slotCandidatesAll,
     publish: (has("report") && reportFiles.some((f) => f.startsWith("segment-"))) || has("contract-candidate.json") || slotReportsAll,
     family_split: has("split") || has("dataset/split"),

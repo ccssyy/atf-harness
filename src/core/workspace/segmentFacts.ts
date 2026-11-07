@@ -39,6 +39,7 @@ export const SEGMENT_FACT_BY_KERNEL_STAGE: Readonly<Record<string, string | null
   register: "register",
   label_qc: "label_qc",
   experiment_setup: "experiment_setup",
+  style_split: "style_split",
   candidate_build: "candidate_build",
   publish: "publish",
   family_split: "family_split",

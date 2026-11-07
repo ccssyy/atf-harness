@@ -2,10 +2,12 @@
 # -*- coding: utf-8 -*-
 """段序双源对账探针（单版本源门组件，1107 第二轮实锚机制化）。
 
-内核 STAGE_ORDER(walkthrough_pipeline.py)与 harness PIPELINE_STAGES
-(pipelineFace.ts)是跨仓双源——内核加 style_split 而 harness 闭集未同步时，
-agent 编排会整段跳过新段（真机实锚：全类分组前置断言失效）。本探针供
-check-kernel-single-source.sh 部署前调用，逐项对账。
+内核 STAGE_ORDER(walkthrough_pipeline.py)与 harness 的**五个段序载体**
+（pipelineFace.PIPELINE_STAGES / atf-ui server.SEGMENT_ORDER_KEYS /
+core runFacts.SEGMENT_ORDER / atf-ui snapshot.SEGMENTS / atf-ui panel.SEGMENTS）
+是跨仓多源——内核加 style_split 而任一 harness 载体未同步时，agent 编排或
+UI 段灯会整段跳过新段（真机两轮实锚）。本探针供 check-kernel-single-source.sh
+部署前调用，全部载体逐项对账。
 
 用法: stage-order-parity.py <kernel_repo_root> <harness_repo_root>
 一致性退出 0（stdout 打印绿行）；漂移退出 2 并打印双清单+修复指令。
@@ -31,20 +33,39 @@ def kernel_stages(kernel_root: str) -> list[str]:
     return re.findall(r'"([a-z_]+)"', match.group(1)) if match else []
 
 
+#: harness 段序载体清单:文件相对路径 → 段名提取正则。
+HARNESS_CARRIERS: list[tuple[str, str]] = [
+    ("packages/extensions/atf-tools/src/pipelineFace.ts",
+     r"PIPELINE_STAGES: readonly string\[\] = \[([\s\S]*?)\];"),
+    ("packages/extensions/atf-ui/src/server.ts",
+     r"SEGMENT_ORDER_KEYS: readonly string\[\] = \[([\s\S]*?)\];"),
+    ("src/core/workspace/runFacts.ts",
+     r"SEGMENT_ORDER: readonly string\[\] = \[([\s\S]*?)\];"),
+    ("packages/extensions/atf-ui/src/snapshot.js",
+     r"export const SEGMENTS = \[([\s\S]*?)\];"),
+    ("packages/extensions/atf-ui/src/panel.ts",
+     r"const SEGMENTS = \[([\s\S]*?)\];"),
+]
+
+
 def harness_stages(harness_root: str) -> list[str]:
-    """读 harness PIPELINE_STAGES 闭集。
+    """读 harness 五个段序载体，全部一致才返回（任一缺失/分歧返回空表=按漂移处置）。
 
     :param harness_root: harness 仓根。
-    :return: 段名列表；不可读返回空列表。
+    :return: 一致的段名列表；任一载体不可读或载体间分歧返回空列表。
     """
-    path = Path(harness_root) / "packages/extensions/atf-tools/src/pipelineFace.ts"
-    try:
-        match = re.search(
-            r"PIPELINE_STAGES: readonly string\[\] = \[([\s\S]*?)\];",
-            path.read_text(encoding="utf-8"))
-    except OSError:
+    readings: list[list[str]] = []
+    for rel, pattern in HARNESS_CARRIERS:
+        path = Path(harness_root) / rel
+        try:
+            match = re.search(pattern, path.read_text(encoding="utf-8"))
+        except OSError:
+            return []
+        readings.append(re.findall(r"['\"]([a-z_]+)['\"]", match.group(1)) if match else [])
+    first = readings[0]
+    if not first or any(r != first for r in readings[1:]):
         return []
-    return re.findall(r'"([a-z_]+)"', match.group(1)) if match else []
+    return first
 
 
 def main(argv: list[str]) -> int:
@@ -65,11 +86,12 @@ def main(argv: list[str]) -> int:
     if kernel == harness:
         print(f"[绿] 段序双源一致(STAGE_ORDER={'|'.join(kernel)})")
         return 0
-    print("[红] 段序双源漂移:", file=sys.stderr)
+    print("[红] 段序多源漂移(内核或 harness 某载体不一致):", file=sys.stderr)
     print(f"    内核 STAGE_ORDER({len(kernel)}): {'|'.join(kernel)}", file=sys.stderr)
-    print(f"    harness PIPELINE_STAGES({len(harness)}): {'|'.join(harness)}", file=sys.stderr)
-    print("    段名闭集是跨仓双源——改内核 STAGE_ORDER 时必须同批同步 pipelineFace.ts"
-          " 的 PIPELINE_STAGES（含 STAGE_BUSINESS 业务话）再部署", file=sys.stderr)
+    print(f"    harness 载体读数({'一致' if harness else '载体缺失/分歧'}): {'|'.join(harness) if harness else '(空)'}", file=sys.stderr)
+    print("    段序跨仓多源(五载体)——改内核 STAGE_ORDER 时必须同批同步 harness 全部载体"
+          "(pipelineFace.PIPELINE_STAGES/server.SEGMENT_ORDER_KEYS/runFacts.SEGMENT_ORDER/"
+          "snapshot.SEGMENTS/panel.SEGMENTS,含 STAGE_BUSINESS 业务话)再部署", file=sys.stderr)
     return 2
 
 

@@ -33,10 +33,11 @@ describe("批1-D210终版——视觉分析必经(training_prep 段内门槛)", 
     // 清单自动导出(判读缺席时,调用方无需带旗标——搬移后经 rs_dir 同路径)
     expect(kernel).toContain('/ "visual-sample-plan.json"');
     // 段序修正:提炼方法+experiment_setup 段首接线(分析先于确认卡)
+    // 流程 1 重排:视觉闸随 style_split 段(分组全部确认→聚类→看图)——判读缺席
+    // 拦截点在 style_setup 段内,不再位于 experiment_setup 之前。
     expect(kernel).toContain("def _run_risk_signals_with_gate");
-    expect(kernel.indexOf("def _run_risk_signals_with_gate")).toBeLessThan(kernel.indexOf("def stage_experiment_setup"));
-    const m = kernel.indexOf("def stage_experiment_setup");
-    expect(kernel.slice(m, m + 900)).toContain("_run_risk_signals_with_gate");
+    expect(kernel.indexOf("def _run_risk_signals_with_gate")).toBeLessThan(kernel.indexOf("def stage_style_split"));
+    // 流程 1 重排后视觉闸接线在 style_split 段尾,段体长度不设切片窗口(全文包含+顺序断言已覆盖)
     // 带判读重跑的指路
     // 合同演进(45d705f2+bdd07104):用户/agent 面参数名=visual_readings,harness 转发
     // 内核 --agent-signals;指引文案须用用户面名,内核 argv 名不进用户文案。

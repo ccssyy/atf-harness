@@ -517,7 +517,7 @@ export const WORKSPACE_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "atf_create_experiment",
     description:
-      "在工作区内创建实验（须审批）：实验目录 experiments/<YYYYMMDD>-<实验名>/（含 experiment.json 元数据与 runs/），工作区身份文件 .atf/workspace.json 缺席时自动初始化（id=uuid 永不变）。workspace_path 必须是已存在的目录（不代建顶层目录）；实验名重复（同日同名目录已在）即拒绝并指路。工作区未注册到 DSH 侧栏时返回 pending_registration 回执——请引导用户在 WebUI「添加工作区」选择该目录，本工具不代建注册表记录。落点纪律：工作区应在实例根（<ATF_INSTANCE_ROOT>）内——实例根外的工作区不进文件工具白名单，读写会被拒。",
+      "在工作区内创建实验（须审批）：实验目录 experiments/<实验名>/（run 直挂实验目录，RunLayout/v3 单源），工作区身份文件 .atf/workspace.json 缺席时自动初始化（id=uuid 永不变）。workspace_path 必须是已存在的目录（不代建顶层目录）；实验名重复（同名实验目录已在）即拒绝并指路。工作区未注册到 DSH 侧栏时返回 pending_registration 回执——请引导用户在 WebUI「添加工作区」选择该目录，本工具不代建注册表记录。落点纪律：工作区应在实例根（<ATF_INSTANCE_ROOT>）内——实例根外的工作区不进文件工具白名单，读写会被拒。",
     parameters: CREATE_EXPERIMENT_PARAMS,
     requires_approval: true,
     canonical_output: CREATE_EXPERIMENT_CANONICAL,
