@@ -54,6 +54,18 @@ fi
 # 内核仓 surface 实文摘要——不一致=内核参数面已变而锚点未同步(#27 温床),部署前必须重摘。
 HARNESS_REPO_ROOT="$(cd "$(dirname "$ENV_FILE")/../.." && pwd)"
 ANCHOR_META="${HARNESS_REPO_ROOT}/tests/fixtures/kernel-stage-arg-surface.json"
+# 段序双源断言(1107 第二轮实锚):内核 STAGE_ORDER 与 harness PIPELINE_STAGES
+# 跨仓双源逐项对账——内核加段而 harness 闭集未同步时 agent 编排整段跳过。
+if [[ -f "${HARNESS_REPO_ROOT}/deploy/verify/stage-order-parity.py" ]]; then
+  if ! python3 "${HARNESS_REPO_ROOT}/deploy/verify/stage-order-parity.py" "${ATF_KERNEL_SOURCE}" "${HARNESS_REPO_ROOT}"; then
+    fail=1
+  fi
+fi
+
+# 锚点新鲜度(批4 遗留收口):harness 跨仓参数锚点摘录时的内核 surface 摘要 vs 当前
+# 内核仓 surface 实文摘要——不一致=内核参数面已变而锚点未同步(#27 温床),部署前必须重摘。
+HARNESS_REPO_ROOT="$(cd "$(dirname "$ENV_FILE")/../.." && pwd)"
+
 if [[ -f "$ANCHOR_META" && -f "${ATF_KERNEL_SOURCE}/tools/argparse_surface.json" ]]; then
   ANCHOR_SHA="$(node -e "const d=require(process.argv[1]);console.log(d.source_surface_sha256)" "$ANCHOR_META" 2>/dev/null || true)"
   SURFACE_SHA="$(sha256sum "${ATF_KERNEL_SOURCE}/tools/argparse_surface.json" | cut -d" " -f1)"

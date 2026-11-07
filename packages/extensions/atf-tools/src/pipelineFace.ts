@@ -187,11 +187,15 @@ export const promptChoiceOptionsOf = (materialHint: string | null): ReadonlyArra
       ];
 };
 
-/** 段名闭集（权威＝内核 STAGE_ORDER 八项——禁增删改序；旧六段名别名不保留）。 */
+/** 段名闭集（权威＝内核 STAGE_ORDER 九项——禁增删改序；旧六段名别名不保留。
+ *  流程 1 重排(owner 1107 终裁):style_split 插 experiment_setup 后——分组全部
+ *  确认→聚类→看图→切分→构造;本闭集与内核 STAGE_ORDER 必须同批同步,单版本源
+ *  门的段序断言锚住此双源。 */
 export const PIPELINE_STAGES: readonly string[] = [
   "register",
   "label_qc",
   "experiment_setup",
+  "style_split",
   "candidate_build",
   "publish",
   "family_split",
@@ -204,6 +208,7 @@ export const STAGE_BUSINESS: Readonly<Record<string, string>> = {
   register: "登记数据集",
   label_qc: "标注检查",
   experiment_setup: "实验配置",
+  style_split: "版式聚类",
   candidate_build: "候选样本构造",
   publish: "发布",
   family_split: "版式划分",
@@ -1979,6 +1984,11 @@ const questionSubjectOf = (item: {
 /** D184 重做:建议处置人话化。 */
 const suggestedActionTextOf = (item: { suggested_action: Record<string, unknown>; candidates: Array<Record<string, unknown>> }): string => {
   const sa = item.suggested_action;
+  // review_hint=内核业务话术单源(Q2 类原始码 review 直出卡面的实锚修正);
+  // 旧件缺席时退 disposition_hint/action_hint(读兼容)。
+  if (sa["review_hint"] !== undefined && String(sa["review_hint"]) !== "") {
+    return String(sa["review_hint"]);
+  }
   const hint = String(sa["disposition_hint"] ?? sa["action_hint"] ?? "");
   const target = sa["target_candidate_id"] !== undefined ? String(sa["target_candidate_id"]) : "";
   const targetText = target !== "" && item.candidates.length > 0
