@@ -1922,7 +1922,7 @@ const mode5DisclosureOf = (countsRaw: Record<string, unknown> | null | undefined
 /** D184 重做:质检报告平读(datasets 布局推导+report_digest 对拍,读到 pending 明细项)。 */
 const readLabelQcReportFlat = async (
   wsRoot: string, docType: string, receipt: Record<string, unknown>,
-): Promise<{ report_digest: string; items: Array<{ item_id: string; check_class: string; human_label: string; suggested_action: Record<string, unknown>; locator: Record<string, unknown>; candidates: Array<Record<string, unknown>> }> } | null> => {
+): Promise<{ report_digest: string; items: Array<{ item_id: string; check_class: string; human_label: string; value_summary: string; suggested_action: Record<string, unknown>; locator: Record<string, unknown>; candidates: Array<Record<string, unknown>> }> } | null> => {
   const digest = String(firstResultKeyOf(receipt, "report_digest") ?? "");
   const datasetsRoot = join(wsRoot, "datasets");
   if (!existsSync(datasetsRoot)) return null;
@@ -1940,6 +1940,7 @@ const readLabelQcReportFlat = async (
           item_id: String(it["item_id"] ?? ""),
           check_class: String(it["check_class"] ?? ""),
           human_label: String(it["human_label"] ?? ""),
+          value_summary: String(it["value_summary"] ?? ""),
           suggested_action: (it["suggested_action"] ?? {}) as Record<string, unknown>,
           locator: (it["locator"] ?? {}) as Record<string, unknown>,
           candidates: Array.isArray(it["candidates"]) ? (it["candidates"] as Array<Record<string, unknown>>) : [],
@@ -1948,6 +1949,31 @@ const readLabelQcReportFlat = async (
     } catch { /* 报告不可读试下一个 */ }
   }
   return null;
+};
+
+/** 裁决卡题面具体化:争议内容(字段对/值摘要/页名)进 question 行,用户第一眼见争议本体。
+ *  candidates 成对=同框两值并列(vs);不成对退 value_summary;页名取 locator。 */
+const questionSubjectOf = (item: {
+  value_summary: string;
+  locator: Record<string, unknown>;
+  candidates: Array<Record<string, unknown>>;
+}): string => {
+  const parts: string[] = [];
+  if (item.candidates.length >= 2) {
+    parts.push(item.candidates.slice(0, 2)
+      .map((c) => `${String(c["field"] ?? "?")}＝「${String(c["value"] ?? "?").slice(0, 24)}」`)
+      .join(" vs "));
+  } else {
+    const field = String(item.locator["field"] ?? "");
+    const value = item.value_summary !== "" ? item.value_summary.slice(0, 24)
+      : String((item.candidates[0] ?? {})["value"] ?? "");
+    if (field !== "" || value !== "") {
+      parts.push(`${field !== "" ? field : "值"}「${value}」`);
+    }
+  }
+  const page = String(item.locator["page"] ?? item.locator["sample_id"] ?? "");
+  if (page !== "") parts.push(`（${page}）`);
+  return parts.join(" ");
 };
 
 /** D184 重做:建议处置人话化。 */
@@ -2797,53 +2823,9 @@ export const buildPipelineTool = (
         const riskPath = resolveRunFile(runDir, `prep/risk-signals/${riskDocType}/field_risk_signals.json`);
         if (existsSync(riskPath)) constructionAdvicePaths.riskSignals = riskPath;
       }
-      // A 面采纳卡：agent 给了建议 → 先问 owner「是否按建议执行」（卡收意愿，审批卡授权）。
-      // 依据 SKILL「必带字段由字段风险分析推荐、经用户确认后写入构造配置」——先前只有呈现
-      // 没有采纳入口，建议永远停在配置里不改变构造行为。无 userQuestions 服务时降级：
-      // 不弹卡、不采纳，卡面与返回体如实标注（不假装采纳过）。
-      let targetedAccept = false;
-      let acceptNote = "未提供建议，无需采纳";
-      if (constructionParams !== undefined && constructionParams.targetedAdvice !== undefined) {
-        const adv = constructionParams.targetedAdvice;
-        const range = adv.min !== null && adv.max !== null ? `${adv.min}-${adv.max} 字段` : "区间不主张";
-        const svc = ctx.get("userQuestions") as FormAskService | undefined;
-        if (svc !== undefined && typeof svc.ask === "function") {
-          try {
-            const answers = await svc.ask({
-              questions: [formAskQuestion({
-                id: `construction-${args.run_id}`,
-                question: `构造参数确认 — ${args.run_id}`,
-                header: "重点字段组合",
-                detail: [
-                  `agent 建议：必带 ${adv.carry.length > 0 ? adv.carry.join("、") : "(无)"}；字段数 ${range}`,
-                  `理由：${adv.reason}`,
-                  `依据：${adv.evidence.join("、")}（${adv.evidenceStatus === "verified" ? "已校验" : "待内核按本批风险信号校验"}）`,
-                  `填 yes＝把建议写入本轮构造规则（必带字段与字段数按建议，来源标 advice_accepted）；`,
-                  `no/留空＝保持当前生效值，建议只留档不改变构造行为。`,
-                  `本卡只收意愿——执行授权仍在随后那张审批卡。`,
-                ].join("\n"),
-                fields: [{
-                  key: "targeted_accept",
-                  label: "targeted_accept（是否按建议执行）",
-                  value: "no",
-                  placeholder: "yes＝按建议写入构造规则；no/留空＝保持当前值",
-                  hint: "建议不自动生效；填 yes 后仍需审批卡放行才执行",
-                }],
-                submitLabel: "提交构造参数选择",
-              })],
-              agent: exec.agent,
-              signal: exec.signal,
-            });
-            const submitted = editsFromFormAnswers(answers);
-            targetedAccept = String(submitted["targeted_accept"] ?? "").trim().toLowerCase() === "yes";
-            acceptNote = targetedAccept ? "已采纳建议（写入本轮构造规则）" : "保持当前值（建议仅留档）";
-          } catch (cause) {
-            acceptNote = `采纳卡应答失败：${String(cause).slice(0, 120)}（按未采纳处理，保持当前值）`;
-          }
-        } else {
-          acceptNote = "user_questions_unavailable——未弹采纳卡，建议仅留档（保持当前值）";
-        }
-      }
+      // 采纳卡退场(owner 2026-11-07 裁定):targeted 建议在场即由内核默认写入构造规则
+      // (来源标 advice_default),唯一确认面=构造确认卡随其他构造项一次确认——不再有独立
+      // yes/no 采纳链(harness 不拼 --targeted-accept,内核参数已退役)。
       if (args.stage === "training_prep") {
         // T3：卡位来源链（快照兜底接线——方案卡选的卡位由此真正进启动件）
         const resolvedDevices = resolveVisibleDevices(args, runDir);
@@ -2964,7 +2946,7 @@ export const buildPipelineTool = (
         // D90：构造参数的来源行（用户确认／agent 代决——谁定的必须写在卡上也写在回执里）
         + (args.stage === "experiment_setup" && constructionDecisionNote !== undefined ? `\n构造参数来源：${constructionDecisionNote}` : "")
         // A 面：采纳选择行（卡上选了 yes/no 的结果如实呈现在授权卡上）
-        + (args.stage === "experiment_setup" && constructionParams?.targetedAdvice !== undefined ? `\n采纳选择：${acceptNote}` : "")
+        + (args.stage === "experiment_setup" && constructionParams?.targetedAdvice !== undefined ? "\n建议已默认写入构造规则（advice_default），随构造确认卡一次确认" : "")
         // E3：预算三参行仅 experiment_setup 段呈现（终值与来源双双上卡）
         + (args.stage === "experiment_setup" && tokenParams !== undefined ? `\n${experimentTokenApprovalLine(tokenParams.values, tokenParams.sources)}` : "")
         + (priorGroupingSection === undefined ? "" : `\n${priorGroupingSection}`)
@@ -3262,7 +3244,6 @@ let visualSummary: Record<string, unknown> | undefined;
         if (constructionAdvicePaths.targetedAdvice !== undefined) argv.push("--targeted-advice", constructionAdvicePaths.targetedAdvice);
         if (constructionAdvicePaths.targetedPlan !== undefined) argv.push("--targeted-plan", constructionAdvicePaths.targetedPlan);
         if (constructionAdvicePaths.riskSignals !== undefined) argv.push("--risk-signals", constructionAdvicePaths.riskSignals);
-        if (targetedAccept) argv.push("--targeted-accept");
       }
       // E3：预算三参透传（仅 experiment_setup 段；终值在场才追加——显式值与快照兜底值
       // 同面下传（内核 b8 argparse --max-total-tokens／--image-min-pixels／
@@ -3828,7 +3809,7 @@ let visualSummary: Record<string, unknown> | undefined;
             if (qcSvc !== undefined && typeof qcSvc.ask === "function" && report !== null) {
               const questions = report.items.slice(0, pending).map((item, idx) => ({
                 id: `qc-item-${item.item_id}`,
-                question: `待裁决 ${String(idx + 1)}/${String(pending)} — ${item.human_label}`,
+                question: `待裁决 ${String(idx + 1)}/${String(pending)} — ${item.human_label}${questionSubjectOf(item) !== "" ? `：${questionSubjectOf(item)}` : ""}`,
                 header: `标签裁决${docTagQc !== "" ? `·${docTagQc}` : ""}`,
                 detail: [
                   `**问题**：${item.human_label}（${labelQcClassNameOf(item.check_class)}）`,

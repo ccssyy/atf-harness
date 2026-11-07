@@ -254,8 +254,8 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
   });
 });
 
-describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
-  it("卡上填 yes → argv 带 --targeted-accept，授权卡标已采纳", async () => {
+describe("A-2 采纳卡退场（建议默认生效，唯一确认面=构造确认卡）", () => {
+  it("给了建议 → argv 带 --targeted-advice、永不带 --targeted-accept，回执标默认生效", async () => {
     const ws = tempRoot("a-ws-");
     confirmFields(ws, "a-accept");
     const record: string[] = [];
@@ -264,23 +264,12 @@ describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
       fakeExec,
     );
     const argv = summaryArgv(result);
-    expect(argv).toContain("--targeted-accept");
-    expect(record.join("\n")).toContain("采纳选择：已采纳建议");
+    expect(argv).toContain("--targeted-advice");
+    expect(argv).not.toContain("--targeted-accept");
+    expect(record.join("\n")).toContain("建议已默认写入构造规则");
   });
 
-  it("卡上填 no → argv 不带 --targeted-accept，授权卡标保持当前值", async () => {
-    const ws = tempRoot("a-ws-");
-    confirmFields(ws, "a-reject");
-    const record: string[] = [];
-    const result = await toolWithAsk(record, "no").execute(
-      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "a-reject", workspace_path: ws, targeted_advice: ADVICE },
-      fakeExec,
-    );
-    expect(summaryArgv(result)).not.toContain("--targeted-accept");
-    expect(record.join("\n")).toContain("采纳选择：保持当前值");
-  });
-
-  it("无 userQuestions 服务 → 降级不阻塞，如实标未弹卡（不假装采纳）", async () => {
+  it("无 userQuestions 服务 → 建议仍默认生效（不弹卡不阻塞，不假装走过确认卡）", async () => {
     const ws = tempRoot("a-ws-");
     confirmFields(ws, "a-degrade");
     const record: string[] = [];
@@ -288,11 +277,12 @@ describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
       { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "a-degrade", workspace_path: ws, targeted_advice: ADVICE },
       fakeExec,
     );
-    expect(summaryArgv(result)).not.toContain("--targeted-accept");
-    expect(record.join("\n")).toContain("user_questions_unavailable");
+    const argv = summaryArgv(result);
+    expect(argv).toContain("--targeted-advice");
+    expect(argv).not.toContain("--targeted-accept");
   });
 
-  it("没给建议 → 不弹卡、不带采纳参数", async () => {
+  it("没给建议 → 不带建议参数、回执无生效提示", async () => {
     const ws = tempRoot("a-ws-");
     confirmFields(ws, "a-noadvice");
     const record: string[] = [];
@@ -301,7 +291,7 @@ describe("A-2 采纳卡（卡收意愿 → 审批卡授权）", () => {
       fakeExec,
     );
     expect(summaryArgv(result)).not.toContain("--targeted-accept");
-    expect(record.join("\n")).not.toContain("采纳选择");
+    expect(record.join("\n")).not.toContain("建议已默认写入构造规则");
   });
 });
 
