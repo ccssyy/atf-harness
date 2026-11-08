@@ -56,7 +56,7 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
     expect(permission?.config?.defaultPreset).toBe("danger-full-access");
   });
 
-  it("Agent 预设 atf-training：与 standard 的工具集差异落在配置里（vendor 技能面关）＋八段流程约束在 persona", () => {
+  it("Agent 预设 atf-training：与 standard 的工具集差异落在配置里（vendor 技能面关）＋九段流程约束在 persona", () => {
     // 模板里不该再有该行（profile 层新增不加载）；声明在 bundle 的 presets patch 里
     expect(rowById(templateRows(), "preset-atf-training")).toBeUndefined();
     const training = trainingPresetRow() as {
@@ -70,13 +70,13 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
     // 与 standard 的插件 id 集合差异＝仅技能面两个 disabled（其余逐项同名同序，防手抄漂移）
     const standard = (rowById(templateRows(), "preset-standard") as { config?: { plugins?: Array<Record<string, unknown>> } })?.config?.plugins ?? [];
     expect(plugins.map((p) => p["id"])).toEqual(standard.map((p) => p["id"]));
-    // 八段流程约束在 persona 配置里（配置声明，禁 TS 分支）
+    // 九段流程约束在 persona 配置里（配置声明，禁 TS 分支）
     const persona = byId.get("persona") as { config?: { prefix?: string } } | undefined;
     const prefix = persona?.config?.prefix ?? "";
     for (const stage of ["register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep"]) {
       expect(prefix).toContain(stage);
     }
-    expect(prefix).toContain("训练链固定八段");
+    expect(prefix).toContain("训练链固定九段");
   });
 
   it("免审声明 approvalPolicy 落在 atf-tools config：显式工具名清单、零治理点", () => {

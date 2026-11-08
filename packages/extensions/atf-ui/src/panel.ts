@@ -113,8 +113,8 @@ function render(data) {
     : '<div class="dim">（暂无 run）</div>';
   const points = run && Array.isArray(run.training.points) ? run.training.points : [];
   const training = document.getElementById('training');
-  // 八段四态任务卡（codex 式）+角标（渲染读四态 status——旧版读不存在的 lit 属性
-  // （monitor segments 元素为 {key,label,status}），八段恒不点亮）
+  // 九段四态任务卡（codex 式）+角标（渲染读四态 status——旧版读不存在的 lit 属性
+  // （monitor segments 元素为 {key,label,status}），九段恒不点亮）
   const taskEl = document.getElementById('atf-taskcard');
     if (taskEl && run) {
       const segs = run.segments || [];

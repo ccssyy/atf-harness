@@ -1,11 +1,11 @@
 # 系统预设 atf-training——bundle 层声明（与 standard/ptc/minimal/cordis 同级）。
 # 必须走 `- insert:`：profile 的 cordis.patch.yml 只按 id 覆盖已有行，新增预设不会被加载。
-# 与 standard 的差异全部落在配置里（禁 TS 分支）：① persona 追加八段流程约束；
+# 与 standard 的差异全部落在配置里（禁 TS 分支）：① persona 追加九段流程约束；
 # ② 工具集去掉 vendor 技能面（skill-filesystem／tool-skill）。免审资格的工具清单
 # 一律由 atf-tools config.approvalPolicy 声明，此处不重复列举工具名。
 - insert:
 # —— Agent 预设 atf-training（owner 2026-10-26 裁定：训练形态＝预设轴，不是权限档）——
-# 与 standard 的差异**全部落在配置里**（禁 TS 分支）：① persona 追加八段流程约束；
+# 与 standard 的差异**全部落在配置里**（禁 TS 分支）：① persona 追加九段流程约束；
 # ② 工具集去掉 vendor 技能面（skill-filesystem／tool-skill）。免审资格的工具清单一律
 # 由文件顶部 atf-tools config.approvalPolicy 声明，此处不重复列举工具名。
     - id: preset-atf-training
@@ -14,7 +14,7 @@
         id: atf-training
         order: 2
         name: 训练
-        description: ATF 训练链预设——按八段流程推进（登记／标注质检／实验配置／候选构造／发布段／家族切分／准入／训练准备）；是否逐段确认由用户权限档决定
+        description: ATF 训练链预设——按九段流程推进（登记／标注体检／实验配置／版式聚类／候选构造／发布段／家族切分／准入／训练准备）；是否逐段确认由用户权限档决定
         plugins:
           - id: persona
             name: '@deepseek-ai/dsh-persona'
@@ -23,10 +23,10 @@
               prefix: |
                 You are the ATF training agent (ATF 训练 Agent). {{model}} is the currently configured underlying model. 你始终用简体中文思考和回答——思考过程（reasoning）必须用中文句子，不得用英文推理；字段名、参数名、文件路径、命令与代码保持原样，不翻译。
 
-                训练链固定八段，按序推进（同一 run 内不跳段、不并段、不重复跑已完成段）：
-                1) 登记 register 2) 标注质检 label_qc 3) 实验配置 experiment_setup
-                4) 候选构造 candidate_build 5) 发布段 publish 6) 家族切分 family_split
-                7) 准入 admission 8) 训练准备 training_prep。
+                训练链固定九段，按序推进（同一 run 内不跳段、不并段、不重复跑已完成段）：
+                1) 登记 register 2) 标注体检 label_qc 3) 实验配置 experiment_setup
+                4) 版式聚类 style_split 5) 候选构造 candidate_build 6) 发布段 publish
+                7) 家族切分 family_split 8) 准入 admission 9) 训练准备 training_prep。
                 段外动作不属于训练链：真实 GPU 训练启动、模型发布、评估 release 恒为独立治理点，
                 任何档位都逐次人工确认——不得把它们说成训练链的一步，以免用户误判授权边界。
 

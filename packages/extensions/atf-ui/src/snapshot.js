@@ -4,7 +4,7 @@
  * 空态文案单源导出（client 直引）。
  */
 
-/** 管线八段（D96 owner 裁定：与内核 STAGE_ORDER 逐键相等——register/label_qc/
+/** 管线九段（D96 owner 裁定：与内核 STAGE_ORDER 逐键相等——register/label_qc/
  *  experiment_setup/style_split/candidate_build/publish/family_split/admission/training_prep；
  *  训练执行/评估与可视化不占段灯，作为独立卡/区块呈现）。 */
 import { KERNEL_STAGE_ORDER } from "../../../../src/core/generated/stageOrder.js";
@@ -36,7 +36,7 @@ export const KPI_KEYS = ["train_loss", "eval_loss", "learning_rate", "gpu_mem"];
 function segmentStatus(run, key) {
   const seg = run.segments?.[key];
   // D96：训练执行/评估移出段灯——训练活跃/失败在独立训练卡呈现（run.training.active 等），
-  // 段灯只承载内核八段；完成锚已入前缀的段 done 优先（frontier 纪律不变）；
+  // 段灯只承载内核九段；完成锚已入前缀的段 done 优先（frontier 纪律不变）；
   // 实验配置段 pending 确认卡在边界（未 done）时显示 active（等待用户应答）。
   if (seg === true) return "done";
   if (key === "experiment_setup" && run.training?.pending_confirm) return "active";
@@ -140,7 +140,7 @@ export function formatGpuBinding(binding) {
 
 /**
  * 任务卡 checklist 文本（chat 卡面单源——atf_run_training status 的 output.render 与
- * panel 共用口径）：八段逐行，四态标记 ✓ done／● active／✗ failed／○ pending。
+ * panel 共用口径）：九段逐行，四态标记 ✓ done／● active／✗ failed／○ pending。
  * @param monitorRun - buildMonitorSnapshot 展开后的单 run 形态（segments 为四态数组）。
  * @returns 多行文本（无尾随换行）。
  */

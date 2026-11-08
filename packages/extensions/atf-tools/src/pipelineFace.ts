@@ -2176,6 +2176,10 @@ export const buildPipelineTool = (
       `显式给 > run 目录 webui/config-snapshot.json 确认快照兜底 > 皆无则不下传（内核按缺省处理）；` +
       `审批卡与返回体逐参呈现终值与来源（user_specified／config_snapshot／unspecified）；` +
       `像素对须成对提供且 min<max（成对校验先于审批——单端或越界即卡前快败）。` +
+      `label_qc 段是双通道完整体检（机械检测＋看图核查，两通道都过才放行；机械零冲突不免除核查）：` +
+      `先裸跑（不带 visual_check）导出核查清单 qc-visual-checklist.json；逐项看图后按 LabelQcVisualCheck/v1 ` +
+      `回填 results 与 checklist_digests，再带 visual_check 参数重跑本段。收到「看图核查缺席/核查件覆盖不全」` +
+      `类 blocked 时按此两段式补件重跑——清单 digest 以导出件原值为准（漂移即拒）。` +
       `收到版式聚类状态类拒绝（style_cluster_state_not_clustered／style_cluster_state_ambiguous／` +
       `style_cluster_declared_but_absent）时，必须先问用户「这批数据做过版式聚类吗？」，` +
       `确认后再传 on（未聚类——内核自动补簇并产出 StyleClusterManifest/v1，按簇分层）或 off（已聚类——不再聚）重跑；` +
@@ -2326,6 +2330,16 @@ export const buildPipelineTool = (
           "字段 suggested_carry_fields／suggested_min_fields／suggested_max_fields／reason／" +
           "evidence（形如 container_no:occurrence_rate，须能在本批风险信号里查到）／effective（必须 false）。" +
           "建议不自动生效、随卡呈现；必带字段与区间须由风险分析得出，无理由或无出处会被拒。可直接给对象，无需自行落盘",
+      },
+      visual_check: {
+        type: "object",
+        additionalProperties: true,
+        description:
+          "label_qc 看图核查件 LabelQcVisualCheck/v1（仅 label_qc 段有意义，其它段忽略）：机械检测之外的第二检查通道。" +
+          "两段式流程：先不带本参数触发 label_qc（裸跑导出核查清单 qc-visual-checklist.json——机械冲突项全量＋每字段抽样）；" +
+          "逐项看图核查（框位对不对、值抄录是否一致、字段归属是否正确——这类问题只有看图能查出）后，" +
+          "按清单逐项回填 results[{key, verdict(ok|issue), note}] 并带上 checklist_digests（按清单原值，单类 checklist_digest/多类逐类 digests map）——" +
+          "机械零冲突不免除看图核查；含 issue 项会被并入披露面。缺本参数时该段 blocked 并附清单路径指路（非失败，按指路补件重跑）",
       },
       visual_readings: {
         type: "object",
@@ -2485,7 +2499,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; experiment?: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; prompt_material_hint?: string; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
+      args: { stage: string; run_id: string; experiment?: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; prompt_material_hint?: string; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_check?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -3133,6 +3147,14 @@ let visualSummary: Record<string, unknown> | undefined;
         if (splitId !== "") argv.push("--split-id", splitId);
       }
       // 段序修正(owner 2026-11-05):分析先于确认卡——experiment_setup 判读对象
+      // R2.5(D237):label_qc 看图核查件透传——与 visual_readings 同款写盘转发形态,
+      // 消除「段 blocked 指路指向工具面不可达参数」的断裂(agent 源码考古 2.2M token 实锚)
+      if (args.stage === "label_qc" && args.visual_check !== undefined) {
+        const checkPath = join(runDir, "runtime", "webui", "label-qc-visual-check.json");
+        mkdirSync(dirname(checkPath), { recursive: true });
+        writeFileSync(checkPath, JSON.stringify(args.visual_check, null, 1) + "\n", "utf8");
+        argv.push("--visual-check", checkPath);
+      }
       // 写盘转发内核(--visual-readings→风险步 --agent-signals)。
       if (args.stage === "experiment_setup" && args.visual_readings !== undefined) {
         const readingsPath = join(runDir, "runtime", "webui", "visual-readings.json");

@@ -746,7 +746,7 @@ window.__ModuleLoader__.load({
               React.createElement('span', { className: 'atf-viewer-empty' }, '未绑定／无槽位／倍率或 seed 非法会在这里红字拦下——不会出确认卡')))))
     }
     // ── D11-2 运行监控面板（原生右栏 tab body——按 UI 稿 v2 逐区块，区块序不得调整）──
-    // 顶部条（run/状态/进度/ETA/数据陈旧角标）→ 八段 stepper（禁 unknown，pending 指因）
+    // 顶部条（run/状态/进度/ETA/数据陈旧角标）→ 九段 stepper（禁 unknown，pending 指因）
     // → KPI×4（步进/Loss/指标 F1/显存）→ Loss 曲线（等距刻度＋网格＋图例＋hover＋原始/平滑）
     // → GPU 4×2（展开→2 列＋util/VRAM 双 sparkline＋进程 top1）→ 训练产物（run-file 打开）
     // → 训练日志（尾 40 行）。数据源＝monitor.json（5s 拍/SSE）＋/atf-ui/gpu-history；
@@ -1286,7 +1286,7 @@ window.__ModuleLoader__.load({
               },
             }, '重新发起'))
         })(),
-        // ② 八段 stepper 置顶（done/active/pending/failed；禁 unknown，pending 指因 tooltip）
+        // ② 九段 stepper 置顶（done/active/pending/failed；禁 unknown，pending 指因 tooltip）
         React.createElement('div', { className: 'atf-m-segments' },
           (run.segments || []).map(function(seg) {
             var cls = seg.status === 'done' ? ' done' : seg.status === 'active' ? ' active' : seg.status === 'failed' ? ' failed' : ''
@@ -1892,7 +1892,7 @@ window.__ModuleLoader__.load({
       }
       var lastCkpt = Array.isArray(run.ckpts) && run.ckpts.length > 0 ? run.ckpts[run.ckpts.length - 1] : null
       var segDetail = function(seg) {
-        // D96：训练执行/评估不占段灯（独立卡/区块）——以下两分支在八段键面下不再触发，
+        // D96：训练执行/评估不占段灯（独立卡/区块）——以下两分支在九段键面下不再触发，
         // 保留作旧快照缓存渲染防御（训练进度由独立进度行承载）。
         if (seg.key === 'training') {
           // 批㊶-N N-3：段内进度优先（"第 6/8 轮 · 剩余 17 步 · loss 0.0589"——无回退 loss/ckpt）
@@ -1934,7 +1934,7 @@ window.__ModuleLoader__.load({
             ...pulseStyle,
           },
           onClick: function() { setExpanded(true) },
-          title: '展开训练任务进度（八段明细）',
+          title: '展开训练任务进度（九段明细）',
         },
           React.createElement('span', { style: { width: 8, height: 8, borderRadius: 4, background: color, flex: 'none' } }),
           probeDot,
@@ -1990,7 +1990,7 @@ window.__ModuleLoader__.load({
             title: (run.workspace ? run.workspace + ' · ' : '') + run.run_id,
           },
             displayLabelOf(run))),
-        // ③ 八段清单区
+        // ③ 九段清单区
         React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
           (run.segments || []).map(function(seg, idx) {
             var markColor = seg.status === 'done' ? STATE_COLORS.done : seg.status === 'active' ? STATE_COLORS.active : seg.status === 'pending' ? STATE_PENDING_DOT : STATE_COLORS.fail
@@ -2021,7 +2021,7 @@ window.__ModuleLoader__.load({
               var input = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]')
               if (input) {
                 input.focus()
-                document.execCommand('insertText', false, '查看当前训练任务状态：调用 atf_run_training action=status，run_id=' + run.run_id + '，并把八段任务卡贴出来')
+                document.execCommand('insertText', false, '查看当前训练任务状态：调用 atf_run_training action=status，run_id=' + run.run_id + '，并把九段任务卡贴出来')
               }
             },
           }, '查状态')))
@@ -2041,7 +2041,7 @@ window.__ModuleLoader__.load({
       var color = STATE_COLORS[state]
       var progress = trainingNow ? (run.progress || null) : null
       var segDetail = function(seg) {
-        // D96：训练执行/评估不占段灯（独立卡/区块）——以下两分支在八段键面下不再触发，
+        // D96：训练执行/评估不占段灯（独立卡/区块）——以下两分支在九段键面下不再触发，
         // 保留作旧快照缓存渲染防御（训练进度由独立进度行承载）。
         if (seg.key === 'training') {
           if (progress) {
@@ -2122,7 +2122,7 @@ window.__ModuleLoader__.load({
               var input = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]')
               if (input) {
                 input.focus()
-                document.execCommand('insertText', false, '查看当前训练任务状态：调用 atf_run_training action=status，run_id=' + run.run_id + '，并把八段任务卡贴出来')
+                document.execCommand('insertText', false, '查看当前训练任务状态：调用 atf_run_training action=status，run_id=' + run.run_id + '，并把九段任务卡贴出来')
               }
             },
           }, '查状态')))

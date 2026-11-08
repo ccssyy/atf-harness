@@ -19,6 +19,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+#: R2.5(D238):段叙述载体(预设描述/前端可见文案)——出现「八段」陈旧叙述=漂移
+#: (九段实况自 D233 起;黑盒实锚:persona 与 agent 叙述均八段、缺版式聚类段)
+CARRIER_NARRATIVE_FILES = [
+    "packages/extensions/atf-ui/presets/atf-training.patch.yml",
+    "packages/extensions/atf-ui/client.js",
+    "packages/extensions/atf-ui/src/snapshot.js",
+    "packages/extensions/atf-ui/src/panel.ts",
+]
+_STALE_NARRATIVE = re.compile("八段")
+
 #: R1 后的消费面文件(六载体):其中任一再出现手写段序字面量=回潮
 CARRIER_FILES = [
     "packages/extensions/atf-tools/src/pipelineFace.ts",
@@ -72,6 +82,14 @@ def harness_stages(harness_root: str) -> list[str]:
     return stages if isinstance(stages, list) and all(isinstance(s, str) for s in stages) else []
 
 
+def _read_carrier(harness_root: str, rel: str) -> str:
+    """读载体文件文本(不可读返回空串,交由各扫描按缺file处置)。"""
+    try:
+        return (Path(harness_root) / rel).read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
 def handwritten_backsliders(harness_root: str) -> list[str]:
     """扫六载体文件,返回重新出现手写段序字面量的文件(防回潮)。
 
@@ -111,6 +129,16 @@ def main(argv: list[str]) -> int:
         print(f"    harness 生成物({len(harness)}): {'|'.join(harness)}", file=sys.stderr)
         print("    修复:内核改段序后,在 harness 仓重跑 npm run codegen:stage-order"
               " 并随批提交生成物,再部署", file=sys.stderr)
+        return 2
+    stale = [
+        rel for rel in CARRIER_NARRATIVE_FILES
+        if _STALE_NARRATIVE.search(_read_carrier(argv[1], rel))
+    ]
+    if stale:
+        print("[红] 段叙述陈旧(实况九段,D233 起;「八段」残留=D238 类漂移):", file=sys.stderr)
+        for rel in stale:
+            print(f"    {rel}", file=sys.stderr)
+        print("    修复:改为九段叙述或中性表述(段清单以 stageOrder 生成物为准)", file=sys.stderr)
         return 2
     backsliders = handwritten_backsliders(argv[1])
     if backsliders:

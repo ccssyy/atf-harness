@@ -2,7 +2,7 @@
  * 训练自动驾驶测试锚（owner 2026-10-26 两轴裁定后的回归面）。
  *
  * 段1 预设面：权限轴回三档（auto_training 权限档退役）；Agent 预设 atf-training 在模板声明，
- *   其与 standard 的工具集差异（vendor 技能面关闭）与八段流程约束全在配置里；免审工具清单
+ *   其与 standard 的工具集差异（vendor 技能面关闭）与九段流程约束全在配置里；免审工具清单
  *   由 atf-tools config.approvalPolicy 显式列举（零前缀匹配、零治理点）。
  * 段2 两轴判据：预设 + 权限档**同时**齐备才算自动驾驶（任一缺席 fail-closed）；确认链路
  *   免阻塞落快照＋通报写入＋agent 推荐护栏；人工档 recommend 不消费＋审批链零变化。
@@ -148,17 +148,17 @@ const template = readFileSync(join(repoRoot, "deploy", "profiles", "web", "cordi
     expect(sandboxLines).toHaveLength(3);
     expect(template).toContain("defaultPreset: danger-full-access");
   });
-  it("Agent 预设 atf-training 在 bundle 层声明：id／order／八段流程约束／工具集差异全在配置里", () => {
+  it("Agent 预设 atf-training 在 bundle 层声明：id／order／九段流程约束／工具集差异全在配置里", () => {
     const bundle = presetPatch();
     // 模板里不该再有该行（profile 层新增不加载）
     expect(template).not.toContain("- id: preset-atf-training");
     expect(bundle).toContain("- id: preset-atf-training");
     expect(bundle).toMatch(/id: atf-training\n\s+order: 2/);
-    // 八段流程约束（persona 内，配置声明——不是 TS 分支）
+    // 九段流程约束（persona 内，配置声明——不是 TS 分支）
     for (const stage of ["register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep"]) {
       expect(bundle).toContain(stage);
     }
-    expect(bundle).toContain("训练链固定八段");
+    expect(bundle).toContain("训练链固定九段");
     // 工具集差异：vendor 技能面关（atf_skill_read 单源）
     expect(bundle).toMatch(/- id: skill-filesystem\n\s+name: '@deepseek-ai\/dsh-skill-filesystem'\n\s+disabled: true/);
     expect(bundle).toMatch(/- id: tool-skill\n\s+name: '@deepseek-ai\/dsh-tool-skill'\n\s+disabled: true/);
