@@ -171,6 +171,26 @@ import { tmpdir } from "node:os";
 
 /** D181 机检面:prompt 卡选项表构造(纯函数)——材料/用户信号在场时
  *  不得出现「推荐——没有材料时的缺省」标注(T10 及 UAT 二发教训的机检锚)。 */
+/** R2.6(D240):字段卡自由文本解析单源(导出供锚测)——尾巴归一→排除语义→正面枚举。
+ * 归一吃掉高频口语尾巴:「除X外(的)(N个)(都)(要|训|训练)」「,其他/其余/剩下(都)要」等,
+ * 归一后不匹配或字段不在清单→返回空数组(调用方按 needs_selection 追问,fail-loud)。 */
+export const parseFieldChoiceInput = (typed: string, known: ReadonlySet<string>): string[] => {
+  const normalized = typed
+    .replace(/[,，]?\s*(?:其他|其余|剩下)的?(?:都)?(?:要|训|训练)?\s*$/, "")
+    .replace(/(?:之外|以外|外)(?:的)?(?:\s*\d+\s*个?)?(?:都)?(?:要|训|训练|都要|都训)?\s*$/, "");
+  const excludeMatch = normalized.match(/^(?:除了?|不要|去掉|排除)\s*(.+)$/);
+  if (excludeMatch !== null) {
+    const excluded = (excludeMatch[1] as string)
+      .split(/[,，、\s]+/).map((s) => s.trim()).filter((s) => s !== "");
+    if (excluded.length > 0 && excluded.every((name) => known.has(name))) {
+      return [...known].filter((name) => !excluded.includes(name));
+    }
+    return [];
+  }
+  const names = normalized.split(/[,，、\s]+/).map((s) => s.trim()).filter((s) => s !== "");
+  return names.length > 0 && names.every((name) => known.has(name)) ? names : [];
+};
+
 export const promptChoiceOptionsOf = (materialHint: string | null): ReadonlyArray<{ label: string; description: string }> => {
   const hasMaterial = materialHint !== null;
   const builtinDesc =
@@ -3421,21 +3441,8 @@ let visualSummary: Record<string, unknown> | undefined;
                   .join("；")
                   .trim();
                 const known = new Set(labels.labels.map((item) => item.label));
-                // ci-bl-1103 排除语义:用户写「除了X都训/不要X」→全部字段-排除集(排除项
-                // 须都在清单内,否则交回追问,不猜)。正面枚举(列字段名)为既有主路径。
-                const excludeMatch = typed.match(/^(?:除了?|不要|去掉|排除)\s*(.+)$/);
-                let confirmedList: string[] | null = null;
-                if (excludeMatch !== null) {
-                  const excluded = (excludeMatch[1] as string)
-                    .split(/[,，、\s]+/).map((s) => s.trim()).filter((s) => s !== "");
-                  if (excluded.length > 0 && excluded.every((name) => known.has(name))) {
-                    confirmedList = labels.labels.map((item) => item.label).filter((name) => !excluded.includes(name));
-                  }
-                }
-                const requested = confirmedList ?? typed
-                  .split(/[,，、\s]+/)
-                  .map((name) => name.trim())
-                  .filter((name) => name !== "");
+                // R2.6(D240):解析单源=parseFieldChoiceInput(尾巴归一+排除语义+正面枚举)
+                const requested = parseFieldChoiceInput(typed, known);
                 const allNamed = requested.length > 0 && requested.every((name) => known.has(name));
 
                 if (allNamed) {
@@ -3468,8 +3475,40 @@ let visualSummary: Record<string, unknown> | undefined;
                     total_fields: labels.label_count,
                   };
                 } else {
-                  // 选了「挑几个」却没写字段名，或写了清单外的名字 → **不落账**，
-                  // 把用户原话交回 agent 核对/追问；不替他改成「全都不要」，也不假确认。
+                  // R2.6(D240):解析失败 fail-loud——先出追问卡带格式示例(报错即修复指令),
+                  // 一次为限;仍失败才交回 agent,不再静默吞(用户视角卡消失=假成功)。
+                  const retry = await svc.ask({
+                    questions: [{
+                      id: 'field-choice-retry-' + args.run_id + registerDocTag,
+                      question: "字段清单没听懂——换个写法再说一次",
+                      header: "字段清单·重问",
+                      detail: '你写的「' + (typed !== "" ? typed : picked) + '」没有解析出字段清单。两种写法都行：'
+                        + '\n① 直接列字段名，逗号分隔（如 awb, shipper, mawb）'
+                        + '\n② 排除式：「除了 某字段」（如 除了 awb_title）',
+                      options: [],
+                      multiSelect: false,
+                    }],
+                  });
+                  const retryTyped = (retry.answers.map((a: { custom?: string }) => a.custom ?? "").filter((v: string) => v.trim() !== "").join("；").trim()) || "";
+                  const retryPicked = retry.answers.map((a) => [...a.selected]).flat()[0] ?? "";
+                  const retryRequested = parseFieldChoiceInput(retryTyped, known);
+                  const retryAll = retryRequested.length > 0;
+                  if (retryAll) {
+                    writeFieldChoice(runDir, {
+                      run_id: args.run_id,
+                      confirmed_fields: retryRequested,
+                      all_fields: retryRequested.length === labels.label_count,
+                      total_fields: labels.label_count,
+                      decided_at: new Date().toISOString(),
+                      source: "user_confirmed",
+                    }, registerDoc);
+                    fieldChoiceSummary = {
+                      confirmed_fields: retryRequested,
+                      all_fields: retryRequested.length === labels.label_count,
+                      total_fields: labels.label_count,
+                    };
+                  } else {
+                  // 追问一轮仍失败 → 把用户原话交回 agent 核对/追问(卡面已明示失败)。
                   fieldChoiceSummary = {
                     confirmed_fields: [],
                     all_fields: false,
@@ -3479,10 +3518,14 @@ let visualSummary: Record<string, unknown> | undefined;
                     ...(requested.filter((name) => !known.has(name)).length > 0
                       ? { unknown_names: requested.filter((name) => !known.has(name)) }
                       : {}),
+                    ...(retryTyped !== "" || retryPicked !== ""
+                      ? { retry_hint: "追问一轮仍未解析(卡面已明示失败,原话如实交回)" }
+                      : {}),
                     note:
                       "用户没有确认「全部训练」——请按他说的范围核对具体字段（清单外的名字先确认是笔误还是标注里没有），"
                       + "再以 field_config 显式给出；不要替他勾全选",
                   };
+                  }
                 }
               } catch {
                 // 卡被关掉/通道失败 → 不造假确认；P1-3：同 run 记一次"已问过"，
