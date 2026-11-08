@@ -7,21 +7,30 @@
 /** 管线九段（D96 owner 裁定：与内核 STAGE_ORDER 逐键相等——register/label_qc/
  *  experiment_setup/style_split/candidate_build/publish/family_split/admission/training_prep；
  *  训练执行/评估与可视化不占段灯，作为独立卡/区块呈现）。 */
-import { KERNEL_STAGE_ORDER } from "../../../../src/core/generated/stageOrder.js";
+// G5/ADR-0020:灯面=v2 全段 17 段;工具面管线 9 段在 KERNEL_STAGE_ORDER(两族分置)
+import { STAGE_REGISTRY_ORDER } from "../../../../src/core/generated/stageOrder.js";
 
-// R1 段序单源:键序=内核 codegen 生成物;label 为呈现面资产(LABELS 单表)
+// R1/G5 段序单源:键序=内核 v2 codegen 生成物;label 为呈现面资产(LABELS 单表)
 const SEGMENT_LABELS = {
+  contract: "提取合同验证",
+  ingest: "素材接入",
+  inspect: "标注盘点",
   register: "数据登记",
   label_qc: "标注体检",
-  experiment_setup: "实验配置",
+  snapshot: "标签快照",
   style_split: "版式聚类",
+  experiment_setup: "实验配置",
+  family_split: "数据切分",
   candidate_build: "候选构造",
   publish: "契约发布",
-  family_split: "数据切分",
   admission: "准入检查",
   training_prep: "训练准备",
+  training_run: "训练启动",
+  checkpoint_eval: "checkpoint 评估",
+  badcase_analysis: "badcase 分析",
+  iteration_proposal: "迭代建议",
 };
-export const SEGMENTS = KERNEL_STAGE_ORDER.map((key) => ({
+export const SEGMENTS = STAGE_REGISTRY_ORDER.map((key) => ({
   key,
   label: SEGMENT_LABELS[key] ?? key,
 }));

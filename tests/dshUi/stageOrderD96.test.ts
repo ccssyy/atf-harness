@@ -66,8 +66,11 @@ describe("D96 段清单对齐内核 STAGE_ORDER（映射表单源＋逐键相等
       },
     ], undefined, []);
     expect(snap.runs[0]?.segments.map((s) => s.key)).toEqual(SEGMENT_ORDER_KEYS);
-    expect(snap.runs[0]?.segments).toHaveLength(9);
-    expect(snap.runs[0]?.segments.filter((s) => s.status === "done").map((s) => s.key)).toEqual(PIPELINE_STAGES);
+    // G5(ADR-0020):段灯数组=v2 全段 17 段;done 集=管线 9 段(facts 全 true 时)
+    expect(snap.runs[0]?.segments).toHaveLength(17);
+    expect(snap.runs[0]?.segments.filter((s) => s.status === "done").map((s) => s.key)).toEqual(
+      SEGMENT_ORDER_KEYS.filter((k) => PIPELINE_STAGES.includes(k)),
+    );
     // 扫描面：launch/train.sh（admission 锚）在盘 → training/evaluate 独立键保留（false 态）
     const root = mkdtempSync(join(tmpdir(), "d96-scan-"));
     tempRoots.push(root);

@@ -489,8 +489,9 @@ export interface ScanLiveness {
  *  训练执行/评估移出段灯——独立卡/区块，态在 scanRunDir segments 返回面独立承载）。
  *  导出供段对齐锚测试逐键断言（D96 映射表单源断言面）。 */
 // R1 段序单源:内核 codegen 生成物(原手写字面量退役)
-import { KERNEL_STAGE_ORDER } from "../../../../src/core/generated/stageOrder.js";
-export const SEGMENT_ORDER_KEYS: readonly string[] = KERNEL_STAGE_ORDER;
+// G5/ADR-0020:灯面=v2 全段 17 段(工具面管线 9 段在 KERNEL_STAGE_ORDER 两族分置)
+import { STAGE_REGISTRY_ORDER } from "../../../../src/core/generated/stageOrder.js";
+export const SEGMENT_ORDER_KEYS: readonly string[] = STAGE_REGISTRY_ORDER;
 
 /** 批㊶-N N-2：training-logs 目录活性（目录树内任一文件 mtime 在窗口内即 fresh；
  *  目录缺失/异常＝false）。 */

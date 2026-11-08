@@ -95,26 +95,30 @@ const D173_PROPOSAL = {
 };
 
 describe("A2.2b——段模式闭集与映射表", () => {
-  it("段名闭集＝内核九段原文（顺序权威，禁增删改序；旧六段名不保留）", () => {
+  it("段名闭集＝内核管线九段 G1a 新序（顺序权威=ADR-0020 v2 子序列；旧六段名不保留）", () => {
     expect(PIPELINE_STAGES).toEqual([
-      "register", "label_qc", "experiment_setup", "style_split", "candidate_build", "publish", "family_split", "admission", "training_prep",
+      "register", "label_qc", "style_split", "experiment_setup", "family_split", "candidate_build", "publish", "admission", "training_prep",
     ]);
     expect(PIPELINE_STAGES).not.toContain("family_split_v2");
     expect(PIPELINE_STAGES).not.toContain("candidate");
   });
 
-  it("映射表落常量（D96 恒等化）：九项全覆——内核段名＝UI 段键（experiment_setup→experiment_setup／candidate_build→candidate_build／family_split→family_split／training_prep→training_prep）", () => {
-    expect(SEGMENT_FACT_BY_KERNEL_STAGE).toEqual({
+  it("映射表落常量（D96 恒等化/G5 升 17 段）：v2 全段恒等——内核段名＝UI 段键", () => {
+    // G5(ADR-0020):灯面映射=v2 全段 17 段(工具面 PIPELINE_STAGES=管线 9 段两族分置)
+    expect(Object.keys(SEGMENT_FACT_BY_KERNEL_STAGE)).toHaveLength(17);
+    expect(SEGMENT_FACT_BY_KERNEL_STAGE).toMatchObject({
       register: "register",
       label_qc: "label_qc",
-      experiment_setup: "experiment_setup",
-    style_split: "style_split",
-      candidate_build: "candidate_build",
-      publish: "publish",
+      style_split: "style_split",
       family_split: "family_split",
-      admission: "admission",
       training_prep: "training_prep",
+      contract: "contract",
+      training_run: "training_run",
+      iteration_proposal: "iteration_proposal",
     });
+    for (const value of Object.values(SEGMENT_FACT_BY_KERNEL_STAGE)) {
+      expect(value).not.toBeNull();
+    }
   });
 });
 
