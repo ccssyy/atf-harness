@@ -310,7 +310,7 @@ describe("atf_pipeline_stage 集成（mock pipeline）＋审批 seam", () => {
       const result = (await (tool as DshToolLike).execute({ stage: "label_qc", run_id: "r1", workspace_path: tempRoot() }, fakeExec)) as Record<string, unknown>;
       expect(result).toMatchObject({ error: "approval_denied", outcome });
     }
-    expect(PIPELINE_STAGES).toEqual(["register", "label_qc", "experiment_setup", "style_split", "candidate_build", "publish", "family_split", "admission", "training_prep"]);
+    expect(PIPELINE_STAGES).toEqual(["register", "label_qc", "style_split", "experiment_setup", "family_split", "candidate_build", "publish", "admission", "training_prep"]);
   });
 });
 

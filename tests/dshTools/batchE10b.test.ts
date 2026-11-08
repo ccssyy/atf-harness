@@ -129,7 +129,7 @@ describe("E10b——argv 仅 family_split 出现（其它段忽略不报错不�
     expect(summaryArgv(missing)).not.toContain("--auto-style-cluster");
   });
   it("九段闭集零回归（A2.2b 落点单源不回退；本批零增删改序）", () => {
-    expect(PIPELINE_STAGES).toEqual(["register", "label_qc", "experiment_setup", "style_split", "candidate_build", "publish", "family_split", "admission", "training_prep"]);
+    expect(PIPELINE_STAGES).toEqual(["register", "label_qc", "style_split", "experiment_setup", "family_split", "candidate_build", "publish", "admission", "training_prep"]);
   });
 });
 

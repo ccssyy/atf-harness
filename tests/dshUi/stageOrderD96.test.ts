@@ -25,15 +25,18 @@ afterEach(() => {
 });
 
 describe("D96 段清单对齐内核 STAGE_ORDER（映射表单源＋逐键相等）", () => {
-  it("① 五清单逐键相等：PIPELINE_STAGES＝映射表键＝SEGMENT_ORDER＝SEGMENTS 键＝SEGMENT_ORDER_KEYS", () => {
+  it("① 两族清单对齐（G5/ADR-0020）：工具面=管线 9 段新序；灯面=v2 全段 17 段", () => {
     const mappingKeys = Object.keys(SEGMENT_FACT_BY_KERNEL_STAGE);
+    // 工具面(CLI 合同):KERNEL_STAGE_ORDER 管线段序(G1a 新序)
     expect(PIPELINE_STAGES).toEqual([
-      "register", "label_qc", "experiment_setup", "style_split", "candidate_build", "publish", "family_split", "admission", "training_prep",
+      "register", "label_qc", "style_split", "experiment_setup", "family_split", "candidate_build", "publish", "admission", "training_prep",
     ]);
-    expect(mappingKeys).toEqual(PIPELINE_STAGES);
-    expect(SEGMENT_ORDER).toEqual(PIPELINE_STAGES);
-    expect(SEGMENT_ORDER_KEYS).toEqual(PIPELINE_STAGES);
-    expect(SEGMENTS.map((s) => s.key)).toEqual(PIPELINE_STAGES);
+    // 灯面(段灯/快照):映射表键=SEGMENT_ORDER=SEGMENTS 键=SEGMENT_ORDER_KEYS=v2 全段
+    expect(mappingKeys).toEqual([...SEGMENT_ORDER]);
+    expect(SEGMENT_ORDER).toHaveLength(17);
+    expect(SEGMENT_ORDER[0]).toBe("contract");
+    expect(SEGMENT_ORDER_KEYS).toEqual([...SEGMENT_ORDER]);
+    expect(SEGMENTS.map((s) => s.key)).toEqual([...SEGMENT_ORDER]);
   });
 
   it("② 映射恒等：内核段名→同名 UI 段键（D96 键名一一对应，无第二套键）", () => {

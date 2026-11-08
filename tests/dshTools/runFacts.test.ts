@@ -36,9 +36,11 @@ describe("批㊶-N N-1 段序守卫（orderGuarded）", () => {
   it("evaluate 锚在场但 training 未 done → 抑制为 false（陈旧轮倒挂场景）；training done → 放行", () => {
     // D96：段序八键＝内核段名（training/evaluate 不入段序——训练完成放行抑制场景随键面退役，
     // 独立卡态不再由 orderGuarded 承载）；末段 training_prep 的前缀抑制锚同构保留（中段断链即抑制）
-    const doneMap = { register: true, label_qc: true, experiment_setup: true, style_split: true, candidate_build: true, publish: true, family_split: false, admission: true, training_prep: true };
+    // G1a 段序(ADR-0020):style_split 前移、family_split 在 candidate_build 前;
+    // 中段断链点=candidate_build(family_split 已 done 而 candidate_build 缺)
+    const doneMap = { register: true, label_qc: true, style_split: true, experiment_setup: true, family_split: true, candidate_build: false, publish: true, admission: true, training_prep: true };
     expect(orderGuarded("training_prep", true, doneMap)).toBe(false);
-    const doneMap2 = { ...doneMap, family_split: true };
+    const doneMap2 = { ...doneMap, candidate_build: true };
     expect(orderGuarded("training_prep", true, doneMap2)).toBe(true);
   });
 
@@ -181,7 +183,8 @@ describe("批㊶-N N-5 会话绑定＋三级作用域", () => {
     expect(scopedB).toEqual([]);
     // 全部实例视图＝全量
     expect(mon.runs).toHaveLength(2);
-    expect(SEGMENT_ORDER).toHaveLength(9);
+    // G5:灯面升 v2 全段(17 段,ADR-0020);工具面管线 9 段在 KERNEL_STAGE_ORDER
+    expect(SEGMENT_ORDER).toHaveLength(17);
   });
 });
 

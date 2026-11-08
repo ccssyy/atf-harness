@@ -31,11 +31,15 @@ describe("R1 段序 codegen 单源锚", () => {
     expect(JSON.parse(m![1])).toEqual(kernelStageOrder());
   });
 
-  it.runIf(kernelRoot)("六载体消费的导出值与内核一致(经生成物 import 链)", async () => {
+  it.runIf(kernelRoot)("消费面导出值与内核一致(G5 双导出:管线 9 段+v2 注册表 17 段)", async () => {
     const kernel = kernelStageOrder();
     const mod = await import("../../../src/core/generated/stageOrder.js");
     expect([...mod.KERNEL_STAGE_ORDER]).toEqual(kernel);
     expect(mod.KERNEL_STAGE_ORDER).toHaveLength(9);
+    // G5(ADR-0020):v2 注册表=17 段全段元数据(灯面/探针/卡面键对齐源)
+    expect(mod.STAGE_REGISTRY_ORDER).toHaveLength(17);
+    expect(mod.STAGE_REGISTRY_V2[0]).toMatchObject({ stage: "contract" });
+    expect(mod.STAGE_REGISTRY_V2.every((e) => typeof e.label_zh === "string" && e.label_zh)).toBe(true);
   });
 
   it("env 未设时如实提示(不静默绿)", () => {

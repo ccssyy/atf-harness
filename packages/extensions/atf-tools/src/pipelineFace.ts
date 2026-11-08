@@ -218,15 +218,25 @@ export const PIPELINE_STAGES: readonly string[] = KERNEL_STAGE_ORDER;
 
 /** 段名 → 用户面业务话（回执三句话用；不念内部段名）。 */
 export const STAGE_BUSINESS: Readonly<Record<string, string>> = {
+  // v2 管线 9 段(G1a 新序;工具面 CLI 合同=KERNEL_STAGE_ORDER)
   register: "登记数据集",
   label_qc: "标注检查",
-  experiment_setup: "实验配置",
   style_split: "版式聚类",
+  experiment_setup: "实验配置",
+  family_split: "版式划分",
   candidate_build: "候选样本构造",
   publish: "发布",
-  family_split: "版式划分",
   admission: "准入检查",
   training_prep: "训练准备",
+  // v2 全段灯面新增 8 段(ADR-0020;灯面显示/卡面引用,不在管线 CLI 合同)
+  contract: "提取合同验证",
+  ingest: "素材接入",
+  inspect: "标注盘点",
+  snapshot: "标签快照发布",
+  training_run: "训练启动",
+  checkpoint_eval: "checkpoint 评估",
+  badcase_analysis: "badcase 分析",
+  iteration_proposal: "迭代建议",
 };
 
 /** D230 补:从段回执提取内核聚类摘要行(「版式聚类结果:」前缀,首条)。

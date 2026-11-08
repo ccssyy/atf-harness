@@ -342,9 +342,10 @@ export const formatProgressBadge = (progress: RunProgress | null): string | null
 
 /** 八段管线顺序（D96：与内核 STAGE_ORDER 逐键一致＝snapshot SEGMENTS 键同源序；
  *  训练执行/评估不占段灯——独立卡/区块，不入本序）。 */
-// R1 段序单源:内核 codegen 生成物(原手写字面量退役)
-import { KERNEL_STAGE_ORDER } from "../generated/stageOrder.js";
-export const SEGMENT_ORDER: readonly string[] = KERNEL_STAGE_ORDER;
+// R1/G5 段序单源:灯面升 v2 全段(STAGE_REGISTRY_ORDER,ADR-0020 全局单一段序;
+// 工具面 CLI 合同仍=KERNEL_STAGE_ORDER 管线 9 段,两族分置)
+import { STAGE_REGISTRY_ORDER } from "../generated/stageOrder.js";
+export const SEGMENT_ORDER: readonly string[] = STAGE_REGISTRY_ORDER;
 
 /** 段序守卫：后段 done 的成立前提＝前段 done 已成立（逐前序段检查；任一未 done 即抑制）。
  *  @param segment 目标段键
