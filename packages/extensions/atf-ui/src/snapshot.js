@@ -7,17 +7,24 @@
 /** 管线八段（D96 owner 裁定：与内核 STAGE_ORDER 逐键相等——register/label_qc/
  *  experiment_setup/style_split/candidate_build/publish/family_split/admission/training_prep；
  *  训练执行/评估与可视化不占段灯，作为独立卡/区块呈现）。 */
-export const SEGMENTS = [
-  { key: "register", label: "数据登记" },
-  { key: "label_qc", label: "标注体检" },
-  { key: "experiment_setup", label: "实验配置" },
-  { key: "style_split", label: "版式聚类" },
-  { key: "candidate_build", label: "候选构造" },
-  { key: "publish", label: "契约发布" },
-  { key: "family_split", label: "数据切分" },
-  { key: "admission", label: "准入检查" },
-  { key: "training_prep", label: "训练准备" },
-];
+import { KERNEL_STAGE_ORDER } from "../../../../src/core/generated/stageOrder.js";
+
+// R1 段序单源:键序=内核 codegen 生成物;label 为呈现面资产(LABELS 单表)
+const SEGMENT_LABELS = {
+  register: "数据登记",
+  label_qc: "标注体检",
+  experiment_setup: "实验配置",
+  style_split: "版式聚类",
+  candidate_build: "候选构造",
+  publish: "契约发布",
+  family_split: "数据切分",
+  admission: "准入检查",
+  training_prep: "训练准备",
+};
+export const SEGMENTS = KERNEL_STAGE_ORDER.map((key) => ({
+  key,
+  label: SEGMENT_LABELS[key] ?? key,
+}));
 
 /** 空态文案（GPU 排队语义——文案单源，client 直引不另写）。 */
 export const QUEUE_IDLE_TEXT = "等待训练启动 · DRY_RUN 已过 · 排队中";

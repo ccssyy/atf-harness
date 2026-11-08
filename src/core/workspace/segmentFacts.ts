@@ -35,17 +35,10 @@ export interface SegmentFact {
  *  admission/training_prep），训练执行（training）与评估（evaluate）不再占段灯（作为
  *  独立卡/区块，其事实轨键保留不占灯）。历史老键（experiment_config/split/candidate）
  *  不在灯面——老 run 段证据由启发式文件锚兜底（三源 OR 语义不动）。 */
-export const SEGMENT_FACT_BY_KERNEL_STAGE: Readonly<Record<string, string | null>> = {
-  register: "register",
-  label_qc: "label_qc",
-  experiment_setup: "experiment_setup",
-  style_split: "style_split",
-  candidate_build: "candidate_build",
-  publish: "publish",
-  family_split: "family_split",
-  admission: "admission",
-  training_prep: "training_prep",
-};
+// R1 段序单源:恒等映射键集=内核 codegen 生成物(原手写表退役)
+import { KERNEL_STAGE_ORDER } from "../generated/stageOrder.js";
+export const SEGMENT_FACT_BY_KERNEL_STAGE: Readonly<Record<string, string | null>> =
+  Object.fromEntries(KERNEL_STAGE_ORDER.map((stage) => [stage, stage]));
 
 /** 段事实文件路径（RunLayout/v3 <run>/runtime/webui/segments.json；v2 存量 webui/ 只读兜底）。 */
 export const segmentsFactPathOf = (runDir: string): string => join(resolveRunSubdir(runDir, "webui"), "segments.json");

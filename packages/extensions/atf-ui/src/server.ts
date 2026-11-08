@@ -488,9 +488,9 @@ export interface ScanLiveness {
 /** D96：八段有序键（唯一权威＝内核 STAGE_ORDER，snapshot SEGMENTS 同源序逐键相等；
  *  训练执行/评估移出段灯——独立卡/区块，态在 scanRunDir segments 返回面独立承载）。
  *  导出供段对齐锚测试逐键断言（D96 映射表单源断言面）。 */
-export const SEGMENT_ORDER_KEYS: readonly string[] = [
-  "register", "label_qc", "experiment_setup", "style_split", "candidate_build", "publish", "family_split", "admission", "training_prep",
-];
+// R1 段序单源:内核 codegen 生成物(原手写字面量退役)
+import { KERNEL_STAGE_ORDER } from "../../../../src/core/generated/stageOrder.js";
+export const SEGMENT_ORDER_KEYS: readonly string[] = KERNEL_STAGE_ORDER;
 
 /** 批㊶-N N-2：training-logs 目录活性（目录树内任一文件 mtime 在窗口内即 fresh；
  *  目录缺失/异常＝false）。 */

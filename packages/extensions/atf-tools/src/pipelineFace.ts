@@ -191,17 +191,10 @@ export const promptChoiceOptionsOf = (materialHint: string | null): ReadonlyArra
  *  流程 1 重排(owner 1107 终裁):style_split 插 experiment_setup 后——分组全部
  *  确认→聚类→看图→切分→构造;本闭集与内核 STAGE_ORDER 必须同批同步,单版本源
  *  门的段序断言锚住此双源。 */
-export const PIPELINE_STAGES: readonly string[] = [
-  "register",
-  "label_qc",
-  "experiment_setup",
-  "style_split",
-  "candidate_build",
-  "publish",
-  "family_split",
-  "admission",
-  "training_prep",
-];
+// R1 段序单源:内核 codegen 生成物(原手写字面量退役,探针保留双源对账哨兵)
+import { KERNEL_STAGE_ORDER } from "../../../../src/core/generated/stageOrder.js";
+// R1 段序单源:内核 codegen 生成物(原手写字面量退役,探针保留双源对账哨兵)
+export const PIPELINE_STAGES: readonly string[] = KERNEL_STAGE_ORDER;
 
 /** 段名 → 用户面业务话（回执三句话用；不念内部段名）。 */
 export const STAGE_BUSINESS: Readonly<Record<string, string>> = {

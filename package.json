@@ -27,7 +27,9 @@
     "smoke:piai": "npm run build && node dist/run/smokePiAi.js",
     "trial:piai-real": "npm run build && node dist/run/trialPiAiReal.js",
     "smoke:gate1a": "npm run build && node dist/agent/main.js",
-    "trial:gate1a-real": "npm run build && node dist/agent/main.js --peer real"
+    "trial:gate1a-real": "npm run build && node dist/agent/main.js --peer real",
+    "codegen:stage-order": "node tools/codegen-stage-order.mjs",
+    "prebuild": "npm run codegen:stage-order && git diff --exit-code -- src/core/generated || (echo \"生成物漂移:内核段序变更后须重跑 npm run codegen:stage-order 并随批提交\" && exit 1)"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",
