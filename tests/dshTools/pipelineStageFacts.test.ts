@@ -103,19 +103,8 @@ describe("A2.2b——段模式闭集与映射表", () => {
     expect(PIPELINE_STAGES).not.toContain("candidate");
   });
 
-  it("映射表落常量（D96 恒等化/G5 升 17 段）：v2 全段恒等——内核段名＝UI 段键", () => {
-    // G5(ADR-0020):灯面映射=v2 全段 17 段(工具面 PIPELINE_STAGES=管线 9 段两族分置)
-    expect(Object.keys(SEGMENT_FACT_BY_KERNEL_STAGE)).toHaveLength(17);
-    expect(SEGMENT_FACT_BY_KERNEL_STAGE).toMatchObject({
-      register: "register",
-      label_qc: "label_qc",
-      style_split: "style_split",
-      family_split: "family_split",
-      training_prep: "training_prep",
-      contract: "contract",
-      training_run: "training_run",
-      iteration_proposal: "iteration_proposal",
-    });
+  it("映射表落常量（D96 恒等化）：九项全覆 G1a 新序——内核段名＝UI 段键", () => {
+    expect(Object.keys(SEGMENT_FACT_BY_KERNEL_STAGE)).toEqual(PIPELINE_STAGES);
     for (const value of Object.values(SEGMENT_FACT_BY_KERNEL_STAGE)) {
       expect(value).not.toBeNull();
     }

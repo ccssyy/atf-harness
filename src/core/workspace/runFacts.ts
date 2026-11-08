@@ -344,14 +344,11 @@ export const formatProgressBadge = (progress: RunProgress | null): string | null
  *  训练执行/评估不占段灯——独立卡/区块，不入本序）。 */
 // R1/G5 段序单源:灯面升 v2 全段(STAGE_REGISTRY_ORDER,ADR-0020 全局单一段序;
 // 工具面 CLI 合同仍=KERNEL_STAGE_ORDER 管线 9 段,两族分置)
-import { STAGE_REGISTRY_ORDER, KERNEL_STAGE_ORDER } from "../generated/stageOrder.js";
-export const SEGMENT_ORDER: readonly string[] = STAGE_REGISTRY_ORDER;
-
-/** 段序守卫的前序链（G5/ADR-0020）：=管线段序(KERNEL_STAGE_ORDER)。
- *  灯面已升 v2 全段 17 段,但 contract/ingest/inspect/snapshot 等 agent 侧段
- *  无段事实轨(不在 walkthrough 管线跑)——守卫只对**有事实轨的管线段**做
- *  前序抑制,管线外段不参与守卫链(不因缺轨永抑制)。 */
-const GUARD_CHAIN: readonly string[] = KERNEL_STAGE_ORDER;
+// G5 收敛:灯面=管线段序(KERNEL_STAGE_ORDER G1a 新序,D96 owner 裁定——段灯
+// 只含管线段,训练/评估独立卡);v2 全段 17 段以 STAGE_REGISTRY_V2 注册表导出
+// 形态落地(codegen 生成物),灯面不消费(agent 侧段无事实轨,占灯恒 pending 无信息量)。
+import { KERNEL_STAGE_ORDER } from "../generated/stageOrder.js";
+export const SEGMENT_ORDER: readonly string[] = KERNEL_STAGE_ORDER;
 
 /** 段序守卫：后段 done 的成立前提＝前段 done 已成立（逐前序段检查；任一未 done 即抑制）。
  *  @param segment 目标段键
@@ -360,10 +357,10 @@ const GUARD_CHAIN: readonly string[] = KERNEL_STAGE_ORDER;
  */
 export const orderGuarded = (segment: string, anchorDone: boolean, doneMap: Readonly<Record<string, boolean>>): boolean => {
   if (!anchorDone) return false;
-  const at = GUARD_CHAIN.indexOf(segment);
+  const at = SEGMENT_ORDER.indexOf(segment);
   if (at <= 0) return anchorDone;
   for (let i = 0; i < at; i += 1) {
-    if (doneMap[GUARD_CHAIN[i] as string] !== true) return false;
+    if (doneMap[SEGMENT_ORDER[i] as string] !== true) return false;
   }
   return true;
 };

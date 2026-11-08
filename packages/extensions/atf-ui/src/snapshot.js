@@ -7,8 +7,9 @@
 /** 管线九段（D96 owner 裁定：与内核 STAGE_ORDER 逐键相等——register/label_qc/
  *  experiment_setup/style_split/candidate_build/publish/family_split/admission/training_prep；
  *  训练执行/评估与可视化不占段灯，作为独立卡/区块呈现）。 */
-// G5/ADR-0020:灯面=v2 全段 17 段;工具面管线 9 段在 KERNEL_STAGE_ORDER(两族分置)
-import { STAGE_REGISTRY_ORDER } from "../../../../src/core/generated/stageOrder.js";
+// G5 收敛:灯面=管线 9 段(G1a 新序;D96 裁定灯面只含管线段);label 表含 v2
+// 全段 17 段词(注册表元数据消费方共用,键序回管线)
+import { KERNEL_STAGE_ORDER } from "../../../../src/core/generated/stageOrder.js";
 
 // R1/G5 段序单源:键序=内核 v2 codegen 生成物;label 为呈现面资产(LABELS 单表)
 const SEGMENT_LABELS = {
@@ -30,7 +31,7 @@ const SEGMENT_LABELS = {
   badcase_analysis: "badcase 分析",
   iteration_proposal: "迭代建议",
 };
-export const SEGMENTS = STAGE_REGISTRY_ORDER.map((key) => ({
+export const SEGMENTS = KERNEL_STAGE_ORDER.map((key) => ({
   key,
   label: SEGMENT_LABELS[key] ?? key,
 }));

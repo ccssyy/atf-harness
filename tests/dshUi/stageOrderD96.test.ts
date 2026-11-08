@@ -25,18 +25,16 @@ afterEach(() => {
 });
 
 describe("D96 段清单对齐内核 STAGE_ORDER（映射表单源＋逐键相等）", () => {
-  it("① 两族清单对齐（G5/ADR-0020）：工具面=管线 9 段新序；灯面=v2 全段 17 段", () => {
+  it("① 清单对齐（G5 收敛/G1a 新序）：工具面=灯面=管线 9 段；v2 全段在注册表导出", () => {
     const mappingKeys = Object.keys(SEGMENT_FACT_BY_KERNEL_STAGE);
-    // 工具面(CLI 合同):KERNEL_STAGE_ORDER 管线段序(G1a 新序)
+    // 管线段序 G1a 新序(工具面 CLI 合同=灯面同源;D96 裁定灯面只含管线段)
     expect(PIPELINE_STAGES).toEqual([
       "register", "label_qc", "style_split", "experiment_setup", "family_split", "candidate_build", "publish", "admission", "training_prep",
     ]);
-    // 灯面(段灯/快照):映射表键=SEGMENT_ORDER=SEGMENTS 键=SEGMENT_ORDER_KEYS=v2 全段
-    expect(mappingKeys).toEqual([...SEGMENT_ORDER]);
-    expect(SEGMENT_ORDER).toHaveLength(17);
-    expect(SEGMENT_ORDER[0]).toBe("contract");
-    expect(SEGMENT_ORDER_KEYS).toEqual([...SEGMENT_ORDER]);
-    expect(SEGMENTS.map((s) => s.key)).toEqual([...SEGMENT_ORDER]);
+    expect(mappingKeys).toEqual(PIPELINE_STAGES);
+    expect(SEGMENT_ORDER).toEqual(PIPELINE_STAGES);
+    expect(SEGMENT_ORDER_KEYS).toEqual(PIPELINE_STAGES);
+    expect(SEGMENTS.map((s) => s.key)).toEqual(PIPELINE_STAGES);
   });
 
   it("② 映射恒等：内核段名→同名 UI 段键（D96 键名一一对应，无第二套键）", () => {
@@ -66,11 +64,8 @@ describe("D96 段清单对齐内核 STAGE_ORDER（映射表单源＋逐键相等
       },
     ], undefined, []);
     expect(snap.runs[0]?.segments.map((s) => s.key)).toEqual(SEGMENT_ORDER_KEYS);
-    // G5(ADR-0020):段灯数组=v2 全段 17 段;done 集=管线 9 段(facts 全 true 时)
-    expect(snap.runs[0]?.segments).toHaveLength(17);
-    expect(snap.runs[0]?.segments.filter((s) => s.status === "done").map((s) => s.key)).toEqual(
-      SEGMENT_ORDER_KEYS.filter((k) => PIPELINE_STAGES.includes(k)),
-    );
+    expect(snap.runs[0]?.segments).toHaveLength(9);
+    expect(snap.runs[0]?.segments.filter((s) => s.status === "done").map((s) => s.key)).toEqual(PIPELINE_STAGES);
     // 扫描面：launch/train.sh（admission 锚）在盘 → training/evaluate 独立键保留（false 态）
     const root = mkdtempSync(join(tmpdir(), "d96-scan-"));
     tempRoots.push(root);

@@ -353,7 +353,7 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     expect(text).toContain("✓ 数据登记");
     expect(text).toContain("✓ 准入检查");
     expect(text).toContain("○ 训练准备");
-    expect(text).toContain("进度 7/9"); // 九段口径(轮三+style_split)：本 fixture 未提供 style_split 段完成证据(事实轨摘要未达同源判定面)→该段 pending 是正确语义;真机跑过 style_split 后为 8/9。训练准备无锚恒 pending。
+    expect(text).toContain("进度 7/9"); // G1a 新序 9 段口径
     expect(text).toMatch(/运行中|未运行/); // tmux 在场与否二态均如实
     expect(text).toContain("loss 点数：1");
     // start 结果不走任务卡（保持 JSON 卡面）

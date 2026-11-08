@@ -183,8 +183,8 @@ describe("批㊶-N N-5 会话绑定＋三级作用域", () => {
     expect(scopedB).toEqual([]);
     // 全部实例视图＝全量
     expect(mon.runs).toHaveLength(2);
-    // G5:灯面升 v2 全段(17 段,ADR-0020);工具面管线 9 段在 KERNEL_STAGE_ORDER
-    expect(SEGMENT_ORDER).toHaveLength(17);
+    // G5 收敛:灯面=管线 9 段(G1a 新序);v2 全段在 STAGE_REGISTRY_V2 注册表导出
+    expect(SEGMENT_ORDER).toHaveLength(9);
   });
 });
 
