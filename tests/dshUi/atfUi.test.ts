@@ -1432,11 +1432,14 @@ describe("批㊶-S3 S-B2——八段卡判据链修复（lit 硬伤/级联抑制
     const scan = scanRunDir(root, "run-guard");
     expect(scan.segments.experiment_setup).toBe(true);
     expect(scan.segments.publish).toBe(true);
-    // owner 裁定（段显示态保序）：publish 事实反蕴含前段——register/label_qc 随前缀点亮，
-    // 不再出现 ✓○✓○ 间隔态；split/admission/training/evaluate 无证据如实 pending（frontier 后）
+    // owner 裁定（段显示态保序）：publish 事实反蕴含前段——前缀段随点亮，
+    // 不再出现 ✓○✓○ 间隔态;G1a 新序下 family_split/candidate_build 在 publish 前
+    // (先切分再构造,ADR-0020)→随前缀点亮;admission/training 无证据如实 pending(frontier 后)
     expect(scan.segments.register).toBe(true);
     expect(scan.segments.label_qc).toBe(true);
-    expect(scan.segments.family_split).toBe(false);
+    expect(scan.segments.family_split).toBe(true);
+    expect(scan.segments.candidate_build).toBe(true);
+    expect(scan.segments.admission).toBe(false);
     expect(scan.segments.training).toBe(false);
   });
   it("D96：训练/评估证据不占段灯——独立卡态 done（true），八段灯只按内核八段证据（无锚即 pending）", () => {
