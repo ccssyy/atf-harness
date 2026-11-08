@@ -80,6 +80,11 @@ export const APPROVAL_SEMANTICS_BY_TOOL: Readonly<Record<string, ApprovalSemanti
 const semanticsRequiresApproval = (klass: ApprovalSemanticsClass, context: ApprovalSemanticsContext | undefined): boolean => {
   if (klass === "readonly") return false;
   if (klass === "governance") return true;
+  // D243(四验实锚):user_decision 类没有专属分支时掉进 chain_advance 兜底——
+  // 完全权限+训练自动驾驶双轴齐备即免审,确认卡被整段跳过(resolve 受理无卡,
+  // 用户凭据不可达,agent 源码考古 25 分钟)。用户决定任何档位都过确认卡,
+  // 与分类表 D192 注释「免审链不放行」的意图对齐。
+  if (klass === "user_decision") return true;
   // chain_advance:训练预设+完全权限档双轴齐备才免审(豁免是便利、权限是授权——
   // 用户没给完全权限时预设不得自行放大能力;对齐 approvalExempt 双感知裁定)
   return !(context?.tier === "full-access" && context?.trainingAutopilot === true);
