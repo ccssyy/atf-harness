@@ -620,6 +620,23 @@ const launchConfirmCardOf = async (
             // decisions(item/两值/agent 建议),确认才执行;暂停不执行。修复
             // chain_advance 误分类导致的完全权限免审代裁(1104-5 实锤)。
             if (APPROVAL_SEMANTICS_BY_TOOL[definition.name] === "user_decision") {
+              // D244 fail-fast:resolve 缺 run_id/workspace_path 时拒绝执行(不弹卡不静默)
+              // ——弹卡后确认但无法写凭据=用户白点确认+agent 无限重试(真机 7 次卡循环实锚)
+              if (definition.name === "atf_label_qc_resolve") {
+                const _runId = typeof args["run_id"] === "string" ? args["run_id"] : "";
+                const _wsPath = typeof args["workspace_path"] === "string" ? args["workspace_path"] : "";
+                if (_runId === "" || _wsPath === "") {
+                  return asToolValue({
+                    error: "label_qc_resolve_params_missing",
+                    tool: definition.name,
+                    missing: [
+                      ...(_runId === "" ? ["run_id"] : []),
+                      ...(_wsPath === "" ? ["workspace_path"] : []),
+                    ],
+                    how_to_fix: "atf_label_qc_resolve 必须带 run_id 和 workspace_path 两个参数(用户确认后 harness 需要它们定位 run 目录写凭据);缺参调用被拒绝,不会弹确认卡。重调时补全参数。",
+                  });
+                }
+              }
               // D184 重做:decisions 与用户卡面凭据账本(label-qc-decisions.json,harness
               // 写、agent 不可伪造)逐项一致→直通(卡上逐项选择即用户决定,不再批量确认卡
               // 重复打扰);不一致(agent 自拟/改动)→批量确认卡拦。
