@@ -2175,6 +2175,9 @@ export const buildPipelineTool = (
       `experiment_setup 段另支持 grouping_proposal 分组建议（候选制）：` +
       `{schema_version:"GroupingProposal/v1",candidates:[{name,recommended,groups:[{name,fields}],reason}]}——` +
       `候选名是卡面标题、recommended 有且仅一个为 true、groups 逐组给组名与字段列表、reason 给候选理由；` +
+      `构造硬规则（内核 fail-closed 逐条校验，违反即拒不出卡——先核对再提交，不要试错）：每候选至少 2 组（单组等于没分组）；` +
+      `每候选的组内字段并集必须恰好覆盖登记字段全集（漏登记字段/含清单外字段都被拒——登记回执的字段清单就是全集，逐字段核对后再提交）；` +
+      `每组字段从登记清单选且每组至少 2 个字段；` +
       `传了就按候选出卡让用户挑一套；不传且字段配置自带 group＝用户已给，不出卡；` +
       `完全权限档不出卡、直接按推荐候选选定（复用既有授权档，不新增档位）。` +
       `返回体如实标注分组来源（user_provided／prior_decision／proposal／policy_auto／none）并附分组表（组名｜字段数｜字段），可原样贴给用户。` +
