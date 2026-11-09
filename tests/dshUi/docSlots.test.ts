@@ -158,7 +158,10 @@ describe("E8 H3b——scanRunDirAt 段灯（全类槽位齐才 done）与 doc_sl
     const full = scanRunDirAt(runDir, "e8-run");
     expect(full.segments["candidate_build"]).toBe(true);
     expect(full.segments["publish"]).toBe(true);
-    expect(full.segments["family_split"]).toBe(false); // 后段不受影响
+    // G1a 新序(ADR-0020):family_split 在 publish 前——publish done 随前缀蕴含点亮;
+    // 后段不受影响的判据改用 publish 之后的 admission
+    expect(full.segments["family_split"]).toBe(true);
+    expect(full.segments["admission"]).toBe(false); // 后段不受影响
   });
 
   it("缺一类：swb 候选缺席 → candidate_build 不 done（experiment_setup 仍 done——前缀闭包内如实）", () => {
