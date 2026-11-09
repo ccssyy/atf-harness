@@ -2878,6 +2878,16 @@ export const buildPipelineTool = (
       // (来源标 advice_default),唯一确认面=构造确认卡随其他构造项一次确认——不再有独立
       // yes/no 采纳链(harness 不拼 --targeted-accept,内核参数已退役)。
       if (args.stage === "training_prep") {
+        // D262:training_prep 段同样过视觉闸(_run_risk_signals_with_gate,
+        // walkthrough:4733)——判读件缺失会重跑 field_risk_signals 覆盖
+        // style_split 已写完成态的 rs_file,段 blocked 回落 pending。与
+        // style_split/experiment_setup 同款写盘转发。
+        if (args.visual_readings !== undefined) {
+          const readingsPath = join(runDir, "runtime", "webui", "visual-readings.json");
+          mkdirSync(dirname(readingsPath), { recursive: true });
+          writeFileSync(readingsPath, JSON.stringify(args.visual_readings, null, 1) + "\n", "utf8");
+          argv.push("--visual-readings", readingsPath);
+        }
         // T3：卡位来源链（快照兜底接线——方案卡选的卡位由此真正进启动件）
         const resolvedDevices = resolveVisibleDevices(args, runDir);
         if (!resolvedDevices.ok) {
