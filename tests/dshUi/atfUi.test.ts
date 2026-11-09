@@ -198,9 +198,13 @@ describe("atf-ui 同步器落盘（scan→monitor/artifacts/panel）", () => {
     const root = tempRoot();
     const runDir = join(root, "run-sync");
     mkdirSync(join(runDir, "training"), { recursive: true });
+    mkdirSync(join(runDir, "launch"), { recursive: true });
     writeFileSync(join(runDir, "registration.json"), "{}");
     writeFileSync(join(runDir, "session.jsonl"), "{}\n");
     writeFileSync(join(runDir, "training", "loss-series.json"), JSON.stringify([{ train_loss: 0.4 }]));
+    // D239 缓解配套(D28 语义):tmux 探测在默认 socket 主 server 上可用(域内零会话=
+    // launch/setsid 形态)——活跃由 log 面单判,补窗内新鲜编排 log
+    writeFileSync(join(runDir, "launch", "train-20260101.log"), "epoch 0\n");
     const { name, apply: applyPlugin, tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
     expect(name).toBe("atf-ui");
     const effects: Array<() => void> = [];
@@ -228,9 +232,12 @@ describe("批C1-1 D5 训练终态跃迁通知（tickOnce 状态机——跨 tick
     const mkRun = (runId: string): string => {
       const runDir = join(root, runId);
       mkdirSync(join(runDir, "training"), { recursive: true });
+      mkdirSync(join(runDir, "launch"), { recursive: true });
       writeFileSync(join(runDir, "registration.json"), "{}");
       writeFileSync(join(runDir, "session.jsonl"), "{}\n");
       writeFileSync(join(runDir, "training", "loss-series.json"), JSON.stringify([{ train_loss: 0.4 }]));
+      // D239 缓解配套(D28 语义):tmux 探测可用+域内零会话=launch/setsid 形态——活跃由 log 面单判
+      writeFileSync(join(runDir, "launch", "train-20260101.log"), "epoch 0\n");
       return runDir;
     };
     const doneRun = mkRun("run-d5-done");
@@ -251,6 +258,7 @@ describe("批C1-1 D5 训练终态跃迁通知（tickOnce 状态机——跨 tick
     writeFileSync(join(doneRun, "training", "all_results.json"), "{}");
     const stale = new Date(Date.now() - 48 * 3600 * 1000);
     utimesSync(join(doneRun, "training", "loss-series.json"), stale, stale);
+    utimesSync(join(doneRun, "launch", "train-20260101.log"), stale, stale);
     rmSync(join(failRun, "training", "loss-series.json"));
     writeFileSync(join(failRun, "training", "trainer_state.json"), "{}");
     await tickOnce({ runsRoot: root, intervalMs: 60_000 });

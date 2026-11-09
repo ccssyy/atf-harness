@@ -28,7 +28,7 @@ process.env["ATF_TMUX_SESSION_PREFIX"] = `${socketName}-`;
 export const killPrefixedSessions = (prefix: string = `${socketName}-`): void => {
   let names: string[] = [];
   try {
-    names = execSync("tmux list-sessions -F #{session_name}", { encoding: "utf8" })
+    names = execSync("tmux list-sessions -F \"#{session_name}\"", { encoding: "utf8" }) // # 须引号包裹:裸 # 词首被 shell 当注释致 -F 空值
       .split("\n")
       .filter((name) => name.startsWith(prefix));
   } catch {
@@ -39,7 +39,7 @@ export const killPrefixedSessions = (prefix: string = `${socketName}-`): void =>
   }
 };
 
-afterAll(killPrefixedSessions);
+afterAll(() => killPrefixedSessions()); // 箭头包裹:直传带默认参函数会被 vitest 误判 fixture 形态
 
 /** 本文件的测试 socket 名(D239 缓解:仅作测试态标记与会话前缀基,不再作 -L 值)。 */
 export const tmuxTestSocketName = (): string => socketName;
