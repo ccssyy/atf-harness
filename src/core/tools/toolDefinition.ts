@@ -466,9 +466,10 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       "提交标签体检裁决（写动作，须审批）：把逐项确认的处置批次写入累积裁决产物并留痕；全部待确认项确认完毕前该数据集准入保持阻断。decisions 逐项给出：item_id（只能取自体检报告待确认清单，勿自造）、action（accept=按建议处置／modify=自定处置／reject=维持原状不处置——reject≠剔除）、disposition 九项闭集（keep_first/keep_second/keep_both/drop_both/set_value/dedupe/fix_field/clip_to_bounds/no_action；须落该检查类允许组合：Q1 dedupe；Q2 keep_first/keep_second/keep_both/drop_both/set_value；Q3 set_value/fix_field/drop_both；Q4 clip_to_bounds），并按处置齐备必填附加字段（dedupe→keep_ref；keep_first/keep_second→target_candidate_id；keep_both/drop_both→reason_text；set_value→modified_value；fix_field→target_field）。Q2 项须附判断依据（judgements:[{item_id, basis:user|multimodal, reason_text?}]）。未决项绝不默认处置——只提交用户逐项确认过的项（可分批增量提交，同一 report_digest）。幂等：同项同值重放成功、同项异值冲突（label_qc_decision_conflict，转请示勿重试覆盖）。TUI 下推荐走体检确认卡（harness 确定性合成参数，免转写）。",
     parameters: {
       type: "object",
-      required: ["dataset_id", "actor", "report_digest", "decisions"],
+      required: ["dataset_id", "actor", "report_digest", "decisions", "run_id", "workspace_path"],
       properties: {
         run_id: { type: "string", optional: true, description: "可选：显式指定目标 run（如 run-bl-ci-mix-01）。会话未绑定 run（如 web 重启后绑定丢失）时必须携带；带显式 run_id 的调用同时恢复会话绑定（D170）。" },
+        workspace_path: { type: "string", description: "workspace 根（绝对路径——用户确认后 harness 需要它定位 run 目录写凭据；D244 fail-fast：缺任一参数拒绝执行不弹卡）。会话绑定的工作区根，形如 /data/atf/instances/dev/atf-home/workspaces/<工作区名>。" },
         dataset_id: {
           type: "string",
           description: "注册标识符：取自登记结果或体检报告；非文件路径、不含 @",
