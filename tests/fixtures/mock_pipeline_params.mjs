@@ -11,7 +11,8 @@ const stageIndex = argv.indexOf("--stage");
 const stage = stageIndex >= 0 ? argv[stageIndex + 1] : undefined;
 const runIdIndex = argv.indexOf("--run-id");
 const runId = runIdIndex >= 0 ? argv[runIdIndex + 1] : "";
-const KNOWN = ["register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep"];
+// G1a 新序(ADR-0020 v2 子序列:style_split 前移+family_split 前移+publish 后移)
+const KNOWN = ["register", "label_qc", "style_split", "experiment_setup", "family_split", "candidate_build", "publish", "admission", "training_prep"];
 if (typeof stage !== "string" || !KNOWN.includes(stage)) {
   console.error(`unknown or missing --stage: ${String(stage)}`);
   process.exit(2);

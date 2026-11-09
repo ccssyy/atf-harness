@@ -541,6 +541,20 @@ const orchestrationLogFresh = (runDir: string, liveness: ScanLiveness | undefine
   }
 };
 
+/** R-1/D5:编排 log 在场且全部超窗(确定性负证据——源停更;文件缺席=false 不猜)。
+ *  与 trainerLogOverWindow 同门:任一 log 源曾在场且停更时,活跃不应再被 progress/
+ *  loss 等回落证据单独续命(观测环残留帧≠训练在写)。 */
+const orchestrationLogOverWindow = (runDir: string, liveness: ScanLiveness | undefined): boolean => {
+  try {
+    const windowMs = liveness?.freshWindowMs ?? TRAIN_ACTIVE_WINDOW_MS_DEFAULT;
+    const now = liveness?.nowMs ?? Date.now();
+    const entries = readdirSync(join(runDir, "launch")).filter((name) => name.startsWith("train-") && name.endsWith(".log"));
+    return entries.length > 0 && entries.every((name) => now - statSync(join(runDir, "launch", name)).mtimeMs > windowMs);
+  } catch {
+    return false;
+  }
+};
+
 const hasAny = (runDir: string, rels: readonly string[]): boolean => rels.some((rel) => existsSync(join(runDir, rel)));
 
 /** loss-series mtime 新鲜判定（now/window 注入可测；stat 失败按不新鲜）。 */
@@ -618,7 +632,11 @@ const trainingActiveLive = (dir: string, runId: string, liveness: ScanLiveness |
   if (liveness?.tmuxProbeUsable === true && liveness.trainingEvidence !== undefined) {
     return trainerLogFresh(dir, liveness) || orchestrationLogFresh(dir, liveness); // D73＋R-1:setsid 无 tmux 既定——trainer_log 或编排 train-*.log 窗内新鲜即活跃
   }
-  if (trainerLogOverWindow(dir, liveness) && !orchestrationLogFresh(dir, liveness)) return false; // R-1:编排路径 trainer_log 恒缺席,超窗翻面需编排 log 同停更
+  // R-1+D5:任一 log 源曾在场且全部停更=确定性不活跃——回落证据(progress/loss 残留帧)
+  // 不单独续命。原守卫只以 trainerLogOverWindow 为入口,orch-only 形态(launch/train-*.log
+  // 超窗而 trainer_log 恒缺席)漏守,tick 间残留 progress 帧把停更训练误判回 active。
+  if ((trainerLogOverWindow(dir, liveness) || orchestrationLogOverWindow(dir, liveness))
+    && !trainerLogFresh(dir, liveness) && !orchestrationLogFresh(dir, liveness)) return false;
   const progressActive = progressFresh(
     readProgress(dir),
     liveness?.nowMs ?? Date.now(),

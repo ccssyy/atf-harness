@@ -288,15 +288,6 @@
     "required": null
    },
    {
-    "option": "--targeted-accept",
-    "dest": "targeted_accept",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
     "option": "--risk-signals",
     "dest": "risk_signals",
     "action": "store",
@@ -695,6 +686,15 @@
     "required": null
    },
    {
+    "option": "--style-cluster-manifest",
+    "dest": "style_cluster_manifest",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--out",
     "dest": "out",
     "action": "store",
@@ -763,6 +763,15 @@
     "dest": "workspace_root",
     "action": "store",
     "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--overwrite",
+    "dest": "overwrite",
+    "action": "store_true",
+    "type": null,
     "choices": null,
     "default": null,
     "required": null
@@ -897,6 +906,74 @@
   ]
  },
  {
+  "script": "skills/atf-admit-training-data/scripts/training_preflight.py",
+  "args": [
+   {
+    "option": "--run-dir",
+    "dest": "run_dir",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--source-root",
+    "dest": "source_root",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--field-config",
+    "dest": "field_config",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--token-provider",
+    "dest": "token_provider",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--base-model",
+    "dest": "base_model",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--apply",
+    "dest": "apply",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
+    "option": "--access-mode",
+    "dest": "access_mode",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
   "script": "skills/atf-admit-training-data/scripts/walkthrough_pipeline.py",
   "args": [
    {
@@ -906,7 +983,16 @@
     "type": null,
     "choices": null,
     "default": null,
-    "required": true
+    "required": false
+   },
+   {
+    "option": "--print-stage-order",
+    "dest": "print_stage_order",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
    },
    {
     "option": "--stage",
@@ -926,6 +1012,15 @@
      "enabled"
     ],
     "default": "enabled",
+    "required": null
+   },
+   {
+    "option": "--visual-check",
+    "dest": "visual_check",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
     "required": null
    },
    {
@@ -1112,15 +1207,6 @@
     "dest": "mode5_advice_stats",
     "action": "store",
     "type": "<expr:Path>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--targeted-accept",
-    "dest": "targeted_accept",
-    "action": "store_true",
-    "type": null,
     "choices": null,
     "default": null,
     "required": null
@@ -3134,7 +3220,7 @@
     "action": "store",
     "type": null,
     "choices": null,
-    "default": "http://127.0.0.1:5002/v1",
+    "default": null,
     "required": null
    },
    {
@@ -5911,7 +5997,16 @@
     "type": null,
     "choices": null,
     "default": null,
-    "required": true
+    "required": false
+   },
+   {
+    "option": "--print-stage-order",
+    "dest": "print_stage_order",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
    },
    {
     "option": "--stage",
@@ -5931,6 +6026,15 @@
      "enabled"
     ],
     "default": "enabled",
+    "required": null
+   },
+   {
+    "option": "--visual-check",
+    "dest": "visual_check",
+    "action": "store",
+    "type": "<expr:Path>",
+    "choices": null,
+    "default": null,
     "required": null
    },
    {
@@ -6117,15 +6221,6 @@
     "dest": "mode5_advice_stats",
     "action": "store",
     "type": "<expr:Path>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--targeted-accept",
-    "dest": "targeted_accept",
-    "action": "store_true",
-    "type": null,
     "choices": null,
     "default": null,
     "required": null

@@ -245,6 +245,8 @@ describe("批C1-1 D5 训练终态跃迁通知（tickOnce 状态机——跨 tick
     mkRun("run-d5-seen-done");
     // 首见即终态夹具：无活跃历史（撤 loss）＋直接给完成锚
     rmSync(join(root, "run-d5-seen-done", "training", "loss-series.json"));
+    // D239 配套:首见即终态=无任何活跃信号——launch log 同撤(新鲜 log 会把观测态压成 active)
+    rmSync(join(root, "run-d5-seen-done", "launch", "train-20260101.log"));
     writeFileSync(join(root, "run-d5-seen-done", "training", "all_results.json"), "{}");
     const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
     const readMonitor = (): Array<{ run_id: string; train_notices: Array<{ id: string; kind: string; text: string }> }> =>
@@ -261,6 +263,9 @@ describe("批C1-1 D5 训练终态跃迁通知（tickOnce 状态机——跨 tick
     utimesSync(join(doneRun, "launch", "train-20260101.log"), stale, stale);
     rmSync(join(failRun, "training", "loss-series.json"));
     writeFileSync(join(failRun, "training", "trainer_state.json"), "{}");
+    // D239 配套:mkRun 带窗内编排 log 后,failed 跃迁须同步停 log(orchLog 新鲜会把
+    // trainingActiveLive 拉回 true 挡掉 failed 判定——启动证据∧无完成锚∧无命中∧无活跃)
+    utimesSync(join(failRun, "launch", "train-20260101.log"), stale, stale);
     await tickOnce({ runsRoot: root, intervalMs: 60_000 });
     const t2 = readMonitor();
     const doneNotice = t2.find((r) => r.run_id === "run-d5-done")?.train_notices ?? [];

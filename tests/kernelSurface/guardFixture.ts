@@ -2,8 +2,7 @@
  * D94-harness 护栏事实面采集（guard.test.ts 与 guard.negative.test.ts 共享——
  * 测试文件互不 import（防 describe 重放，realPeer fixture 同纪律），采集逻辑单落本件）。
  */
-import { readFileSync , mkdirSync, writeFileSync } from "node:fs";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -83,8 +82,9 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   // D145/D163：重点字段组合计划（T/K/N 由 agent 给）与登记期输入声明
   targeted_plan: "--targeted-plan",
   style_clusters_source: "--style-clusters-source",
-  // 看图通道：判读件直传 / 只导出页清单 / 波次容量
+  // 看图通道：判读件直传 / 只导出页清单 / 波次容量 / 核查件(label_qc 双通道,D235 工具面)
   visual_readings: "--visual-readings",
+  visual_check: "--visual-check",
   visual_plan_only: "--visual-sample-plan",
   visual_wave_size: "--visual-wave-size",
   targeted_accept: "--targeted-accept",
@@ -189,6 +189,18 @@ export const collectArgvTokens = async (): Promise<string[]> => {
   const tool = buildPipelineTool(approvalCtx(), `node ${MOCK}`, 30_000) as unknown as DshToolLike;
   const fakeExec = { agent: undefined, callId: "d94-guard", signal: undefined };
   const tempRoot = mkdtempSync(join(tmpdir(), "d94-guard-"));
+  // workspace 前置闸(d94-guard 时代后加):显式 workspace_path 须为已初始化工作区
+  // (datasets+splits 任一标记对)——裸 tmp 目录被 workspace_path_invalid 在参数层
+  // 拒绝,register/experiment_setup 到不了 spawn,行为面采集缺 token
+  mkdirSync(join(tempRoot, "datasets"), { recursive: true });
+  mkdirSync(join(tempRoot, "splits"), { recursive: true });
+  // register 段参数给了 field_config 路径——工具侧路径校验要求文件在场(D82 无内置资产)
+  writeFileSync(join(tempRoot, "field-config.json"), JSON.stringify({
+    schema_version: "PromptFieldConfig/v1", document_type: "invoice", document_zh: "发票",
+    variant: "goods-flat",
+    fields: [{ field_id: "invoice_no", group: "header", zh: "发票号", definition: "diag" }],
+    training_excluded_fields: [],
+  }), "utf8");
   const calls: Array<Record<string, unknown>> = [
     {
       stage: "register",
@@ -235,6 +247,20 @@ export const collectArgvTokens = async (): Promise<string[]> => {
   writeFileSync(
     join(setupRunDir, "webui", "field-choice.json"),
     JSON.stringify({ schema_version: "FieldChoice/v1", confirmed_fields: ["invoice_no"] }),
+  );
+  // D173 必分组闸适配:无分组决策在盘时 experiment_setup 被 grouping_candidates_missing
+  // 拦(分组是 owner 裁定的必经确认,候选制——mock 链预置已选定分组让行为面采集贯通)
+  writeFileSync(
+    join(setupRunDir, "webui", "grouping-choice.json"),
+    JSON.stringify({
+      schema_version: "GroupingChoice/v1",
+      candidate_name: "diag-2groups",
+      groups: [
+        { name: "header", fields: ["invoice_no"] },
+        { name: "rest", fields: [] },
+      ],
+      payload: {},
+    }),
   );
   try {
     for (const call of calls) {
