@@ -12,6 +12,7 @@
  */
 
 import z from "@deepseek-ai/schemastery";
+import { findDeadAtfExtensions } from "../../../../src/core/workspace/atfBootHealth.js";
 import {
   makeContinuationCoordinator,
   type ContinuationAgent,
@@ -60,4 +61,25 @@ export function apply(ctx: any, config: AtfContinuationConfig): void {
   console.log(
     `[atf-continuation] 已装配——max-tokens turn-end 自动续写（预算 ${config.maxContinuations} 次/会话）`,
   );
+  // D246/D247 boot 健康门：loader 全树 settle 后检查治理面扩展（atf-tools/
+  // atf-continuation）装配活性——任一死亡即 process.exit(1) 拒绝服务。
+  // 背景：atf-tools 装配 fatal 只杀扩展、server 照起、WebUI 零告警，agent 无
+  // 工具面裸奔手搓假产物（1109 实锚）；tmux 直启不过 restart 外壳机检，
+  // 守卫必须由 server 自身执行。宁可起不来，不静默裸奔。
+  void Promise.resolve()
+    .then(() => ctx.loader?.await?.())
+    .then(() => {
+      const dead = findDeadAtfExtensions(ctx);
+      if (dead.length > 0) {
+        console.error(
+          `[atf-continuation] ⛔ boot 健康门：治理面扩展未装配（${dead.join(", ")}）`
+          + "——server 拒绝以裸奔形态服务（D246/D247 fail-fast），按 boot 日志修复后重启",
+        );
+        process.exit(1);
+      }
+      console.log("[atf-continuation] boot 健康门通过：治理面扩展全部存活");
+    })
+    .catch((error: unknown) => {
+      console.warn(`[atf-continuation] boot 健康门检查异常（不阻断）: ${String(error)}`);
+    });
 }
