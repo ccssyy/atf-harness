@@ -76,13 +76,15 @@ export const resolveLaunchSessionName = (base: string): string => {
   return prefix === "" ? base : `${prefix}${base}`;
 };
 
-/** D2① 测试 socket 注入（`-L <sock> `）：env 仅认 atf-test- 前缀值，生产无 env＝空串（默认 socket）。 */
-export const tmuxSocketFlag = (): string => {
-  const sock = (process.env[TMUX_TEST_SOCKET_ENV] ?? "").trim();
-  return /^atf-test-[A-Za-z0-9._-]+$/.test(sock) ? `-L ${sock} ` : "";
-};
+/**
+ * D2①/D239 缓解:测试态标记读取。历史上此处按 env 注入 `-L <sock> ` 建独立测试 server——
+ * D239(dev 容器对新 tmux server fork 恒「lost server」)后隔离轴迁到命名域
+ * (ATF_TMUX_SESSION_PREFIX 前缀会话),本函数恒返回空串(测试/生产都用默认 socket
+ * 的常活主 server;测试隔离由会话名前缀保证,结构锚在 tmuxSocketFence.test.ts)。
+ */
+export const tmuxSocketFlag = (): string => "";
 
-/** tmux 命令单源构造——生产面全部 tmux 调用经此（测试 socket 注入点同源；结构锚防裸命令回潮）。 */
+/** tmux 命令单源构造——全部 tmux 调用经此(命名域隔离+防裸命令回潮的结构锚同源)。 */
 export const tmuxCommand = (sub: string): string => `tmux ${tmuxSocketFlag()}${sub}`;
 
 /** 探测结果：present:false 时 refused 非 null＝命名域拒绝（调用方回流 status 面 guidance）；

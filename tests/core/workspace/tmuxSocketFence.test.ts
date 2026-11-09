@@ -1,9 +1,11 @@
 /**
- * 批㊶-ISO E2.2——禁默认 socket 结构锚（防回潮规则，取代批㊶-W 时代逐用例 guard）。
+ * 批㊶-ISO E2.2——tmux 测试命名域结构锚（防回潮规则;D239 缓解版——隔离轴从 -L 独立
+ * server 迁到命名域:dev 容器对新 tmux server fork 恒「lost server」(D239,10-28 后),
+ * 测试改在默认 socket 常活主 server 上用 atf-test-<runid>- 前缀会话,生产零交集。）
  *
  * 20261011/20261012 两次同型误杀事故（测试缺 guard kill-session 误杀真训）的结构收口：
- *  ① tests/ 内任何 tmux 命令字符串必须携带独立测试 socket（`-L`，D2① fixture 轴）——
- *     含 tmux 操作的测试对默认 socket 零触碰成为结构性规则，不再依赖逐用例自觉；
+ *  ① tests/ 内任何裸 tmux 命令字符串必须携带 atf-test 命名域锚(会话名/前缀 grep),
+ *     且全域禁 kill-server 字面量(主 server 承载生产会话——清理=前缀逐会话 kill-session);
  *  ② 生产面（src/＋packages 源码）零裸 tmux 命令字符串——一律经 tmuxLiveness tmuxCommand
  *     单源构造（会话命名域＋测试 socket 注入点同源）；
  *  ③ fixture 接线自证（vitest setupFiles 注册＋本进程 env 在位——防静默脱钩）。
@@ -43,13 +45,25 @@ function walkTsFiles(root: string, out: string[] = []): string[] {
   return out;
 }
 
-/** 单文件违规面：命令形态字面量中未携带测试 socket（-L）者。 */
+/**
+ * 单文件违规面(D239 判据):含 kill-server 恒违规;写命令无 atf-test 命名域锚违规。
+ * 豁免:只读命令(list-sessions/has-session 等零副作用)不违规;fixture 自身
+ * (tests/fixtures/tmuxTestSocket.ts=命名域单源实现处,动态 `${}` 前缀拼装)整文件豁免。
+ */
+const READ_ONLY_SUBS = "list-sessions|list-panes|has-session|capture-pane|display-message|show-options";
+const isReadOnly = (literal: string): boolean => new RegExp(`tmux (${READ_ONLY_SUBS})\\b`).test(literal);
 const violationsIn = (file: string): string[] => {
+  if (file.endsWith(join("fixtures", "tmuxTestSocket.ts"))) return [];
   const text = readFileSync(file, "utf8");
   const found: string[] = [];
   for (const m of text.matchAll(CMD_LITERAL_RE)) {
     const literal = m[0];
-    if (literal.includes("-L")) continue;
+    if (/kill-server/.test(literal)) {
+      found.push(literal.replace(/\s+/g, " ").slice(0, 120));
+      continue;
+    }
+    if (isReadOnly(literal)) continue;
+    if (literal.includes("atf-test")) continue;
     found.push(literal.replace(/\s+/g, " ").slice(0, 120));
   }
   return found;
@@ -62,7 +76,7 @@ describe("批㊶-ISO E2.2 结构锚——禁默认 socket（防回潮规则）",
     expect(process.env[TMUX_TEST_SOCKET_ENV] ?? "").toMatch(/^atf-test-/);
   });
 
-  it("tests/ 全部 tmux 命令字符串携带测试 socket（-L）——零默认 socket 调用", () => {
+  it("tests/ 全部 tmux 命令字符串携带 atf-test 命名域锚且零 kill-server（D239 缓解轴）", () => {
     const files = walkTsFiles(join(repoRoot, "tests"));
     expect(files.length).toBeGreaterThan(50); // 扫描面自证非空（全量测试文件在扫）
     const violations: string[] = [];

@@ -236,19 +236,18 @@ describe("批㊶-P1 S1——并发双会话最小链（真 tmux 实锚：两 run
 });
 
 describe("批㊶-ISO D2①——测试 socket 注入面（tmuxSocketFlag／tmuxCommand）", () => {
-  it("env 缺席 → 默认 socket 形态（无 -L）；atf-test-* 值 → -L 注入", () => {
+  it("D239 缓解:tmuxSocketFlag 恒空串(隔离轴=命名域)——env 值仅作测试态标记", () => {
     withEnv(() => { delete process.env[TMUX_TEST_SOCKET_ENV]; }, () => {
       expect(tmuxSocketFlag()).toBe("");
       const cmd = tmuxCommand("has-session -t x");
-      expect(cmd.startsWith("tmux ")).toBe(true);
-      expect(cmd.includes("-L")).toBe(false); // 默认 socket 形态——结构锚禁的正是缺 -L 的命令
-      expect(cmd.endsWith("has-session -t x")).toBe(true);
+      expect(cmd).toBe("tmux has-session -t x");
     });
     withEnv(() => { process.env[TMUX_TEST_SOCKET_ENV] = "atf-test-foo"; }, () => {
-      expect(tmuxSocketFlag()).toBe("-L atf-test-foo ");
+      // D239(台账):dev 容器对新 tmux server fork 恒「lost server」——测试不再注入
+      // -L(独立 server 轴退役);隔离由 ATF_TMUX_SESSION_PREFIX 命名域承载(fence 锚)
+      expect(tmuxSocketFlag()).toBe("");
       const cmd = tmuxCommand("has-session -t x");
-      expect(cmd).toContain("-L atf-test-foo ");
-      expect(cmd.endsWith("has-session -t x")).toBe(true);
+      expect(cmd).toBe("tmux has-session -t x");
     });
   });
   it("env 非 atf-test-* 值一律忽略（生产路径不可被指到业务 socket）", () => {

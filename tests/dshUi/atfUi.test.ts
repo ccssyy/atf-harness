@@ -13,6 +13,8 @@ import { tmuxHasSession, trainingSessionBase } from "../../src/core/workspace/tm
 import { progressFresh } from "../../src/core/workspace/runFacts.js";
 import { appendSegmentFact } from "../../src/core/workspace/segmentFacts.js";
 
+import { killPrefixedSessions } from "../fixtures/tmuxTestSocket.js";
+
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
   const root = mkdtempSync(join(tmpdir(), "atf-ui-test-"));
@@ -373,12 +375,13 @@ describe("D73 观测环端到端（launch/setsid 形态——tmux 域零会话�
     const prevSock = process.env["ATF_TMUX_TEST_SOCKET"];
     process.env["ATF_TMUX_SESSION_PREFIX"] = "d73t-";
     process.env["ATF_TMUX_TEST_SOCKET"] = "atf-test-d73";
-    execSync("tmux -L atf-test-d73 kill-server 2>/dev/null || true");
-    execSync("tmux -L atf-test-d73 new-session -d -s hold 'sleep 120'");
+    killPrefixedSessions("atf-test-d73-"); // D239 缓解:命名域轴清理,禁 kill-server
+    // D239 缓解:不带 -L(默认 socket 主 server),会话名带 atf-test-d73- 前缀(命名域轴)
+    execSync("tmux new-session -d -s atf-test-d73-hold 'sleep 120'");
     try {
       await fn();
     } finally {
-      execSync("tmux -L atf-test-d73 kill-server 2>/dev/null || true");
+      killPrefixedSessions("atf-test-d73-"); // D239 缓解:命名域轴清理,禁 kill-server
       if (prevPrefix === undefined) delete process.env["ATF_TMUX_SESSION_PREFIX"];
       else process.env["ATF_TMUX_SESSION_PREFIX"] = prevPrefix;
       if (prevSock === undefined) delete process.env["ATF_TMUX_TEST_SOCKET"];
