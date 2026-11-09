@@ -73,6 +73,12 @@
 # —— atf_* 工具投影插件（治理面：桥接 17 方法＋只读四件＋A7 治理四件＋路径守卫
 #   ＋bash/write 免审 answerer——全部由插件装配，此处仅 insert 行）————————————
 - insert:
+    # —— D250 输出截断自动续写（zcode 方案移植；max-tokens turn-end → followup 续写
+    #   提示，每会话 3 次预算；vendor 零改动。任务书 20261109-d250-output-continuation.md）——
+    - id: atf-continuation
+      name: '@atf/dsh-atf-continuation'
+      config:
+        maxContinuations: 3
     - id: atf-tools
       name: '@atf/dsh-atf-tools'
       config:
