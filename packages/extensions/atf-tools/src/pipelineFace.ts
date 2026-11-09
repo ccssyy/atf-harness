@@ -3186,6 +3186,15 @@ let visualSummary: Record<string, unknown> | undefined;
         argv.push("--visual-check", checkPath);
       }
       // 写盘转发内核(--visual-readings→风险步 --agent-signals)。
+      // D256:style_split 是内核 --visual-readings 的唯一消费段(walkthrough:2449
+      // 风险步 --agent-signals)——此前只转发 experiment_setup/candidate_build,
+      // style_split 断链(agent 看完 35 页构造判读件重跑仍 pending,对象直传被丢)。
+      if (args.stage === "style_split" && args.visual_readings !== undefined) {
+        const readingsPath = join(runDir, "runtime", "webui", "visual-readings.json");
+        mkdirSync(dirname(readingsPath), { recursive: true });
+        writeFileSync(readingsPath, JSON.stringify(args.visual_readings, null, 1) + "\n", "utf8");
+        argv.push("--visual-readings", readingsPath);
+      }
       if (args.stage === "experiment_setup" && args.visual_readings !== undefined) {
         const readingsPath = join(runDir, "runtime", "webui", "visual-readings.json");
         mkdirSync(dirname(readingsPath), { recursive: true });
