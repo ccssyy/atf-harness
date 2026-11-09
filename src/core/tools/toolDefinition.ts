@@ -469,7 +469,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       required: ["dataset_id", "actor", "report_digest", "decisions", "run_id", "workspace_path"],
       properties: {
         run_id: { type: "string", optional: true, description: "可选：显式指定目标 run（如 run-bl-ci-mix-01）。会话未绑定 run（如 web 重启后绑定丢失）时必须携带；带显式 run_id 的调用同时恢复会话绑定（D170）。" },
-        workspace_path: { type: "string", description: "workspace 根（绝对路径——用户确认后 harness 需要它定位 run 目录写凭据；D244 fail-fast：缺任一参数拒绝执行不弹卡）。会话绑定的工作区根，形如 /data/atf/instances/dev/atf-home/workspaces/<工作区名>。" },
+        workspace_path: { type: "string", description: "workspace 根（绝对路径——用户确认后 harness 需要它定位 run 目录写凭据；D244 fail-fast：缺任一参数拒绝执行不弹卡）。会话绑定的工作区根（atf-home 工作区目录下的绝对路径——可从 atf_workspace_status 回执或登记回执取得）。" },
         dataset_id: {
           type: "string",
           description: "注册标识符：取自登记结果或体检报告；非文件路径、不含 @",

@@ -529,31 +529,40 @@ const launchConfirmCardOf = async (
     const resolved = resolvePipelineRunDir(workspacePath, runId);
     if (!("error" in resolved)) {
       const runDir = resolved.runDir;
-      // ① 数据集组成（每类 variants_report 计数 → markdown 表）
-      lines.push("### 数据集组成");
+      // ① 数据集组成（D259②:详报归对话流——本卡只留一行引用+增强缺口警示;
+      //    完整 kind 组成/token 门/负样本对账在 variants-analysis-<doc>.md 与对话流报告）
+      lines.push("### 数据构造状态");
       const variantsRoot = join(runDir, "data", "variants");
       if (existsSync(variantsRoot)) {
-        for (const doc of readdirSync(variantsRoot)) {
-          const reportPath = join(variantsRoot, doc, "variants_report.json");
-          if (!existsSync(reportPath)) continue;
-          try {
-            const report = JSON.parse(readFileSync(reportPath, "utf8")) as {
-              base_rows?: number; produced?: number; kind_counts?: Record<string, number>;
-            };
-            const kinds = Object.entries(report.kind_counts ?? {})
-              .map(([kind, n]) => `${kind} ${String(n)}`).join(" / ");
-            lines.push(`- **${doc}**：基线 ${String(report.base_rows ?? "?")} 行，构造 ${String(report.produced ?? "?")} 行（${kinds}）`);
-            // D210(e2e 轮实锚):缺口与守护状态随计数上卡面——增强卡承诺「如实披露
-            // 实产条数与原因」,只沉在产物 json 不算披露。
-            const m5 = (report as { mode5?: { status?: string; requested_rows_total?: number; effective_rows_total?: number; shortfall_rows?: number; support_note?: string } }).mode5;
-            if (m5 !== undefined && m5.status === "completed_with_shortfall") {
-              lines.push(`  - ⚠ 增强缺口：请求 ${String(m5.requested_rows_total ?? "?")} 条、实产 ${String(m5.effective_rows_total ?? "?")} 条（差 ${String(m5.shortfall_rows ?? "?")}）——${m5.support_note ?? "字段池/尝试预算耗尽"}`);
-            }
-            const tg2 = (report as { targeted?: { advice_source?: string } | null }).targeted;
-            if (tg2 !== undefined && tg2 !== null && tg2.advice_source === "guard_unavailable") {
-              lines.push(`  - ⚠ 重点增强守护缺席（advice_source=guard_unavailable）：重点字段的选择依据未经守护校验，产出条数参考价值有限`);
-            }
-          } catch { /* 报告不可读按缺省呈现 */ }
+        const docs = readdirSync(variantsRoot).filter((doc) =>
+          existsSync(join(variantsRoot, doc, "variants_report.json")));
+        if (docs.length > 0) {
+          const analysisLinks = docs
+            .map((doc) => `[variants-analysis-${doc}.md](${join(runDir, "analysis", `variants-analysis-${doc}.md`)})`)
+            .join(" ｜ ");
+          lines.push(`- 构造已完成（${docs.join("、")}）——完整构造报告已在对话流展示，验收报告：${analysisLinks}`);
+          // D210(e2e 轮实锚,保留):增强缺口是治理必要披露——缺口与原因必须在卡面可见
+          for (const doc of docs) {
+            try {
+              const report = JSON.parse(readFileSync(join(variantsRoot, doc, "variants_report.json"), "utf8")) as {
+                mode5?: { status?: string; requested_rows_total?: number; effective_rows_total?: number; shortfall_rows?: number; support_note?: string };
+                kind_counts?: Record<string, number>;
+              };
+              const m5 = report.mode5;
+              if (m5 !== undefined && m5.status === "completed_with_shortfall") {
+                lines.push(`  - ⚠ ${doc} 增强缺口：请求 ${String(m5.requested_rows_total ?? "?")} 条、实产 ${String(m5.effective_rows_total ?? "?")} 条（差 ${String(m5.shortfall_rows ?? "?")}）——${m5.support_note ?? "字段池/尝试预算耗尽"}`);
+              }
+              const tg2 = (report as { targeted?: { advice_source?: string } | null }).targeted;
+              if (tg2 !== undefined && tg2 !== null && tg2.advice_source === "guard_unavailable") {
+                lines.push(`  - ⚠ ${doc} 重点增强守护缺席（advice_source=guard_unavailable）：重点字段的选择依据未经守护校验，产出条数参考价值有限`);
+              }
+              if (report.kind_counts !== undefined && report.kind_counts["targeted"] === undefined) {
+                lines.push(`  - ⚠ ${doc} 未含 targeted 重点增强（建议确认链未走或构造链缺陷 D261——详见对话流报告）`);
+              }
+            } catch { /* 报告不可读按缺省呈现 */ }
+          }
+        } else {
+          lines.push("-（构造产物目录缺席）");
         }
       } else {
         lines.push("-（构造产物目录缺席）");
@@ -580,7 +589,17 @@ const launchConfirmCardOf = async (
             ["visible_devices(卡位)", visibleDevices],
           ];
           const keys = ["learning_rate", "num_train_epochs", "per_device_train_batch_size",
-            "global_batch_size", "optim", "lora_rank", "lora_alpha", "cutoff_len", "warmup_ratio"];
+            "gradient_accumulation_steps", "global_batch_size", "optim", "lora_rank", "lora_alpha",
+            "cutoff_len", "warmup_ratio"];
+          // D260:accum 生效值+派生依据随卡（方案 C 口径——accum 是派生披露面,
+          // derived_accum_below_floor 只披露不改写;用户确认训练参数必须含 accum）。
+          const accumDerivation = (training["accum_derivation"] ?? {}) as
+            { accum?: number; formula?: string; gb_target?: number; source?: string } | undefined;
+          if (accumDerivation?.accum !== undefined) {
+            rows.push(`| gradient_accumulation_steps(派生) | ${String(accumDerivation.accum)}`
+              + `（${String(accumDerivation.formula ?? "")}，目标 global_batch=${String(accumDerivation.gb_target ?? "?")}`
+              + `，来源 ${String(accumDerivation.source ?? "?")}） |`);
+          }
           const rows = [
             ...resourceKeys
               .filter(([, v]) => v !== undefined)
