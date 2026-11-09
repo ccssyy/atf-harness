@@ -591,6 +591,14 @@ const launchConfirmCardOf = async (
           const keys = ["learning_rate", "num_train_epochs", "per_device_train_batch_size",
             "gradient_accumulation_steps", "global_batch_size", "optim", "lora_rank", "lora_alpha",
             "cutoff_len", "warmup_ratio"];
+          const rows = [
+            ...resourceKeys
+              .filter(([, v]) => v !== undefined)
+              .map(([label, v]) => `| ${label} | ${String(v)} |`),
+            ...keys
+              .filter((key) => training[key] !== undefined || config[key] !== undefined)
+              .map((key) => `| ${key} | ${String(training[key] ?? config[key] ?? "")} |`),
+          ];
           // D260:accum 生效值+派生依据随卡（方案 C 口径——accum 是派生披露面,
           // derived_accum_below_floor 只披露不改写;用户确认训练参数必须含 accum）。
           const accumDerivation = (training["accum_derivation"] ?? {}) as
@@ -600,14 +608,6 @@ const launchConfirmCardOf = async (
               + `（${String(accumDerivation.formula ?? "")}，目标 global_batch=${String(accumDerivation.gb_target ?? "?")}`
               + `，来源 ${String(accumDerivation.source ?? "?")}） |`);
           }
-          const rows = [
-            ...resourceKeys
-              .filter(([, v]) => v !== undefined)
-              .map(([label, v]) => `| ${label} | ${String(v)} |`),
-            ...keys
-              .filter((key) => training[key] !== undefined || config[key] !== undefined)
-              .map((key) => `| ${key} | ${String(training[key] ?? config[key] ?? "")} |`),
-          ];
           if (rows.length > 0) paramTable = "\n### 训练参数\n\n| 参数 | 值 |\n|---|---|\n" + rows.join("\n");
         } catch { /* 配置不可读按缺省呈现 */ }
       }
