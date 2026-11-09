@@ -82,6 +82,8 @@ export interface PreflightProbes {
   readText?: (path: string) => string | null;
   /** 批㊶-ISO-2 S1：pin 树 tag 探测（缺省 execFileSync `git describe --tags`；null＝不可解析）。 */
   gitDescribe?: (root: string) => string | null;
+  /** D249a：内核仓 HEAD 探测（缺省 execFileSync `git rev-parse HEAD`；null＝不可解析）。 */
+  revParseHead?: (root: string) => string | null;
   /** D88-A：GPU 探针注入面（vitest 假件）——返回归一 ProbeResult，参数为本消费方预算
    *  （缺省 30s／ATF_GPU_PROBE_TIMEOUT_MS）。注入即**不读写缓存**（缓存只服务
    *  defaultCommandWorks 真探路径）。 */
@@ -112,6 +114,17 @@ const defaultGitDescribe = (root: string): string | null => {
     const out = execFileSync("git", ["-C", root, "describe", "--tags"], { timeout: 5_000, stdio: ["ignore", "pipe", "ignore"] });
     const tag = out.toString("utf8").trim();
     return tag !== "" ? tag : null;
+  } catch {
+    return null;
+  }
+};
+
+/** D249a：内核仓 HEAD 探测缺省实现（`git rev-parse HEAD`；非 git 检出/超时＝null）。 */
+const defaultRevParseHead = (root: string): string | null => {
+  try {
+    const out = execFileSync("git", ["-C", root, "rev-parse", "HEAD"], { timeout: 5_000, stdio: ["ignore", "pipe", "ignore"] });
+    const commit = out.toString("utf8").trim();
+    return commit !== "" ? commit : null;
   } catch {
     return null;
   }
@@ -346,12 +359,23 @@ export const runBootPreflight = (
           fix: `ls ${join(pin.root, "src", "agentic_training_flow", "__init__.py")}  # 核对 pin 树完整性（re-pin 残留）`,
         });
       } else if (described.replace(/^v/, "") !== version) {
-        fatal.push({
-          level: "L2",
-          check: "pin_version_consistency",
-          missing: `pin 树 tag 与版本串不一致：describe=${described} vs __version__=${version}（${pin.root}）`,
-          fix: `git -C ${pin.root} log --oneline -1  # tag 与版本串须同指（沿 test_release_version_consistency 语义）——re-pin 残留请重做检出`,
-        });
+        // D249a：合码未发版窗口指纹旁路——describe tag≠版本串时，若 pinned 内容
+        // 指纹（.atf-pin-commit）对齐内核仓 HEAD，视为「内容最新、未发版」，放行
+        // 并留痕。化解「指纹机检要 HEAD、本检要 tag」的窗口互斥必一红（1109 实锚：
+        // 为过本检被迫提前发版）。tag 一致仍是首选实锚；旁路只在两者失配且内容
+        // 可证为 HEAD 时开启——指纹缺席/失配仍 fatal，不静默降级。
+        const pinCommit = (((probes.readText ?? ((pp: string) => { try { return readFileSync(pp, "utf8"); } catch { return null; } }))(join(pin.root, ".atf-pin-commit")) ?? "") as string).trim();
+        const headCommit = (probes.revParseHead ?? defaultRevParseHead)(kernelDir);
+        if (pinCommit !== "" && headCommit !== null && pinCommit === headCommit) {
+          notes.push(`pin 树实锚：${described}（tag≠版本串——合码未发版窗口，内容指纹 ${pinCommit.slice(0, 12)} 对齐仓 HEAD 放行）`);
+        } else {
+          fatal.push({
+            level: "L2",
+            check: "pin_version_consistency",
+            missing: `pin 树 tag 与版本串不一致：describe=${described} vs __version__=${version}（${pin.root}）`,
+            fix: `git -C ${pin.root} log --oneline -1  # tag 与版本串须同指（沿 test_release_version_consistency 语义）——re-pin 残留请重做检出；合码未发版窗口可走指纹旁路：python3 tools/release.py <ver> --repin（写 .atf-pin-commit 对齐 HEAD）`,
+          });
+        }
       } else {
         notes.push(`pin 树实锚：${described}（worktree describe＝版本串一致）`);
       }
