@@ -439,8 +439,42 @@ const userDecisionConfirmCardOf = async (
   if (decisions.length === 0) {
     return { ok: true, note: "无逐项决定载荷——按工具自身校验处理" };
   }
-  const rows = decisions.map((d, i) =>
-    `| ${String(i + 1)} | ${String(d["item_id"] ?? "?")} | ${String(d["action"] ?? "?")} | ${String(d["disposition"] ?? "")} |`).join("\n");
+  // D252 用户可读投影：处置枚举翻用户话（九项闭集），judgements/reason_text 的
+  // agent 看图结论随行上卡——item_id/枚举裸值对用户无意义（盲确认=治理空转）。
+  const DISPOSITION_ZH: Record<string, string> = {
+    keep_first: "保留第一候选",
+    keep_second: "保留第二候选",
+    keep_both: "两个候选都保留",
+    drop_both: "两个候选都丢弃",
+    set_value: "改为指定值",
+    dedupe: "去重合并",
+    fix_field: "归属到正确字段",
+    clip_to_bounds: "裁剪到边界内",
+    no_action: "不处理",
+  };
+  const reasonOf = (d: Record<string, unknown>): string => {
+    const juds = Array.isArray(d["judgements"]) ? (d["judgements"] as Array<Record<string, unknown>>) : [];
+    for (const j of juds) {
+      const rt = typeof j["reason_text"] === "string" ? j["reason_text"].trim() : "";
+      if (rt !== "") return rt;
+    }
+    const rt = typeof d["reason_text"] === "string" ? d["reason_text"].trim() : "";
+    return rt !== "" ? rt : (String(d["disposition"] ?? "") !== "" ? "（agent 未附理由——详情见对话分析）" : "");
+  };
+  const dispositionZhOf = (d: Record<string, unknown>): string => {
+    const disp = String(d["disposition"] ?? "");
+    const zh = DISPOSITION_ZH[disp] ?? disp;
+    const target = typeof d["target_candidate_id"] === "string" && d["target_candidate_id"] !== "" ? `（${String(d["target_candidate_id"])}）` : "";
+    const value = typeof d["modified_value"] === "string" && d["modified_value"] !== "" ? `（新值：${String(d["modified_value"])}）` : "";
+    const field = typeof d["target_field"] === "string" && d["target_field"] !== "" ? `（归属 ${String(d["target_field"])}）` : "";
+    return `${zh}${target}${value}${field}`;
+  };
+  const rows = decisions.map((d, i) => {
+    const item = String(d["item_id"] ?? "?");
+    const reason = reasonOf(d);
+    const itemCell = reason !== "" ? `${item}——${reason}` : item;
+    return `| ${String(i + 1)} | ${itemCell} | ${dispositionZhOf(d)} | ${d["action"] === "reject" ? "维持原状不处置" : "按建议处置"} |`;
+  }).join("\n");
   const title = toolName === "atf_label_qc_resolve" ? "标注冲突裁决确认" : "用户决定确认";
   try {
     const answers = await svc.ask({
@@ -453,7 +487,7 @@ const userDecisionConfirmCardOf = async (
           `|---|---|---|---|`,
           rows,
           "",
-          "以上是 agent 的分析与建议;确认后按建议提交(你可以在输入框写字段名改为自定义处置)。",
+          "以上每行=一项冲突裁决:裁决项含 agent 看图结论,处置已翻成用户话(保留哪个候选/改成什么值);确认后逐项按上表提交并留痕(要改某项就在输入框写哪一项怎么改)。",
           "暂停则不提交,你在对话里说明想怎么改。",
         ].join("\n"),
         options: [
