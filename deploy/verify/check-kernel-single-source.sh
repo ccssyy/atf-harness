@@ -78,6 +78,31 @@ if [[ -f "$ANCHOR_META" && -f "${ATF_KERNEL_SOURCE}/tools/argparse_surface.json"
   fi
 fi
 
+# pinned 内容指纹(2026-11-09 假绿收口):pinned 技能面(agent 可见 SKILL.md/skills
+# 与文件工具白名单根)与仓 HEAD 内容级对齐——版本号比对在「合码未发版」窗口假绿
+# (版本号同而 pinned 内容旧),指纹缺席/不齐=红,重启前必须 re-pin。
+if [[ -n "${ATF_INSTANCE_PIN_ROOT:-}" && -d "${ATF_INSTANCE_PIN_ROOT}" ]]; then
+  PIN_COMMIT_FILE="${ATF_INSTANCE_PIN_ROOT}/.atf-pin-commit"
+  REPO_HEAD="$(git -C "${ATF_KERNEL_SOURCE}" rev-parse HEAD 2>/dev/null || true)"
+  if [[ ! -f "$PIN_COMMIT_FILE" ]]; then
+    echo "[红] pinned 指纹缺席:${PIN_COMMIT_FILE}——pinned 树无内容级锚,版本号比对可假绿" >&2
+    echo "    改法:re-pin 生成指纹(正式发版 release.py --repin;或 git archive <HEAD> 解包进 pinned 后写指纹)" >&2
+    fail=1
+  else
+    PINNED_COMMIT="$(tr -d '[:space:]' < "$PIN_COMMIT_FILE")"
+    if [[ -z "$REPO_HEAD" ]]; then
+      echo "[红] 仓 HEAD 不可解析:${ATF_KERNEL_SOURCE} 非 git 检出?" >&2
+      fail=1
+    elif [[ "$PINNED_COMMIT" != "$REPO_HEAD" ]]; then
+      echo "[红] pinned 技能面落后:指纹 ${PINNED_COMMIT:0:12} ≠ 仓 HEAD ${REPO_HEAD:0:12}——合码未 re-pin(agent 可见 skills 面=旧内容)" >&2
+      echo "    改法:①正式发版 python3 tools/release.py <ver> --push --repin;②验证窗手动前移:git archive <HEAD> 解包进 pinned+写 .atf-pin-commit" >&2
+      fail=1
+    else
+      echo "[绿] pinned 内容指纹对齐 HEAD:${PINNED_COMMIT:0:12}"
+    fi
+  fi
+fi
+
 if [[ "$fail" -ne 0 ]]; then
   echo "单版本源自检失败——先修指针再重启（一次切换只改 ATF_KERNEL_SOURCE）" >&2
   exit 2
