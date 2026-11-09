@@ -896,7 +896,8 @@ export const resolveGroupingFace = async (input: {
             + (missing.length > 0 ? `漏了 ${missing.join("、")}` : "")
             + (missing.length > 0 && extra.length > 0 ? ";" : "")
             + (extra.length > 0 ? `多出清单外字段 ${extra.join("、")}` : "")
-            + `——按用户确认的字段全集(共 ${String(expected.size)} 个)重新设计候选再来;用户不该在缺字段的方案上做选择`,
+            + `——按用户确认的字段全集(共 ${String(expected.size)} 个)重新设计候选再来;用户不该在缺字段的方案上做选择。`
+            + `构造规则(与工具描述同款,先核对再提交不要试错):每候选 groups 数组形态、每候选至少 2 组(单组=没分组)、组内字段并集恰好覆盖登记字段全集、每组至少 2 个字段`,
         };
       }
     }
@@ -3837,7 +3838,15 @@ let visualSummary: Record<string, unknown> | undefined;
           ? { user_message: STYLE_CLUSTER_USER_MESSAGE_FALLBACK, user_message_source: "fallback" }
           : {}),
         ...(summary !== null ? { summary } : {}),
-        ...(result.code === 2 && rejections !== null ? { rejections } : {}),
+        ...(result.code === 2 && rejections !== null
+          ? {
+              rejections,
+              // D257②:rejections 在场不等于失败原因齐全——段可能在候选校验之外
+              // 失败(产物生成期),内核 stderr/stdout 尾随回执透传,agent 不再翻日志考古。
+              kernel_stderr_tail: result.stderr.slice(-2000),
+              ...(result.stdout.trim() !== "" ? { kernel_stdout_tail: result.stdout.trim().slice(-1000) } : {}),
+            }
+          : {}),
         // exit 2 且无摘要：最常见是「命令参数内核不认」——argparse 会直接 exit 2 且零写入，
         // 报错只在 stderr。原实现把手里的 stderr 丢掉、只回一句「摘要未含 rejections 原文」，
         // 现场导致 agent 读内核源码 15 分钟仍定位不到（真凶是 --grouping-proposal 未接线）。
