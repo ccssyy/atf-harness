@@ -3215,6 +3215,14 @@ let visualSummary: Record<string, unknown> | undefined;
         writeFileSync(readingsPath, JSON.stringify(args.visual_readings, null, 1) + "\n", "utf8");
         argv.push("--visual-readings", readingsPath);
       }
+      // D262:training_prep 段同过视觉闸(_run_risk_signals_with_gate,walkthrough:4733)——
+      // 无转发则重跑 field_risk_signals 覆盖 style_split 已写完成态的 rs_file→回落 pending。
+      if (args.stage === "training_prep" && args.visual_readings !== undefined) {
+        const tpReadingsPath = join(runDir, "runtime", "webui", "visual-readings.json");
+        mkdirSync(dirname(tpReadingsPath), { recursive: true });
+        writeFileSync(tpReadingsPath, JSON.stringify(args.visual_readings, null, 1) + "\n", "utf8");
+        argv.push("--visual-readings", tpReadingsPath);
+      }
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");
       // D163/W1（T2）：登记账本透传（仅 experiment_setup 段）——run 的 config/inputs.json
