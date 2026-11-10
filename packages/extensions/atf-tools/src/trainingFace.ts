@@ -2312,6 +2312,15 @@ const instrumentTrainOutcome = <T>(tool: T): T => {
         if (!trainTerminalNotified.has(runKey)) {
           trainTerminalNotified.add(runKey);
           terminalNotice = trainTerminalNoticeOf(statusValue);
+          // D264/ADR-0021：训练终态 → 自动 wake 会话 agent（训练后闭环自动推进——
+          // agent 被唤醒后自主走评估决策卡，ADR-0021 ②确认制保留）。agent 引用从
+          // exec 取（vendor 执行上下文自带——bridgeFace 确认卡同源）；缺席静默跳过。
+          const wakeAgent = (exec as { agent?: { followup(msg: unknown): void } }).agent;
+          wakeAgent?.followup({
+            role: "user",
+            content: [{ type: "text", text: "训练已完成（trainer_state 终态）。请继续走评估流程：出评估决策卡（环境档案/TP/轮次），确认后评估→badcase 分析→迭代建议自动推进（只读分析免逐段确认）。" }],
+            source: { kind: "atf-training-complete" },
+          });
         }
       }
     }
