@@ -149,8 +149,8 @@ const seedRun = (root: string, opts: { maxNumSeqs?: boolean } = {}): { assets: s
   writeFileSync(join(assets, "test_images.json"), "{}");
   const serviceConfig = join(root, "EvalServiceConfig.v1.json");
   writeFileSync(serviceConfig, JSON.stringify(opts.maxNumSeqs === false
-    ? { schema_version: "EvalServiceConfig/v1", run_id: RUN_ID, port: 5031, tensor_parallel_size: 4 }
-    : { schema_version: "EvalServiceConfig/v1", run_id: RUN_ID, port: 5031, tensor_parallel_size: 4, max_num_seqs: 8 }));
+    ? { schema_version: "EvalServiceConfig/v1", base_model_name: "awq-base-mock", run_id: RUN_ID, port: 5031, tensor_parallel_size: 4 }
+    : { schema_version: "EvalServiceConfig/v1", base_model_name: "awq-base-mock", run_id: RUN_ID, port: 5031, tensor_parallel_size: 4, max_num_seqs: 8 }));
   const ckpt = join(runDir, "training", "checkpoint-141");
   mkdirSync(ckpt, { recursive: true });
   writeFileSync(join(ckpt, "adapter_model.safetensors"), "x");

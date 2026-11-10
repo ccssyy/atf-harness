@@ -548,7 +548,7 @@ print(json.dumps({"ok": True}))`);
     writeFileSync(join(assets, "eval_labels.jsonl"), `${JSON.stringify({ page_id: "p1", labels: { f01: [{ value: "v" }] } })}\n`);
     writeFileSync(join(assets, "test_images.json"), "{}");
     const serviceConfig = join(root, "EvalServiceConfig.v1.json");
-    writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", port: 5032, tensor_parallel_size: 1 }));
+    writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", base_model_name: "awq-base-mock", port: 5032, tensor_parallel_size: 1 }));
     const ckpt = join(runDir, "training", "checkpoint-3");
     mkdirSync(ckpt, { recursive: true });
     writeFileSync(join(ckpt, "adapter_model.safetensors"), "x");

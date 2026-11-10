@@ -240,6 +240,21 @@ export const resolveToolRun = (runsRoot: string, exec: unknown, explicitRunId?: 
     if (!existsSync(runDir)) {
       return { ok: false, payload: { error: "run_not_found", run_id: runId, message: `实验不存在：${runId}——核对后重推，或省略 run_id 使用本会话绑定的实验` } };
     }
+    // D263-K2：无绑定+多工作区同名 run → 歧义报候选（fail-closed 停下问，不按注册序静默命中
+    // ——1109-4 实锚：同名 run 在 m5-accept-1102 有完整镜像，注册序命中后 eval 轮目录落错工作区）。
+    const siblingRoots = canonicalRoots
+      .filter((root) => typeof root === "string" && root !== "" && canonicalRunDirOf([root], runId) !== null);
+    if (siblingRoots.length > 1) {
+      const candidates = siblingRoots.map((root) => basename(root));
+      return {
+        ok: false,
+        payload: {
+          error: "run_multi_workspace_ambiguous", run_id: runId, candidates,
+          message: `run_id ${runId} 在 ${String(siblingRoots.length)} 个工作区同时存在（${candidates.join("、")}）——本会话无绑定，无法判定归属。`
+            + `先切到目标工作区或建立会话绑定后重推；跨工作区取用不在工具面`,
+        },
+      };
+    }
     return { ok: true, runId, runDir, workspace: workspaceOfRunDir(runsRoot, runDir) };
   }
   const resolution = sessionId === undefined
@@ -2542,6 +2557,22 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       if (!envProfileResolved.ok) return asToolValue(envProfileResolved.payload);
       const envProfile = envProfileResolved.name;
       const envProfileSource = envProfileResolved.source;
+      // D263-K1：服务配置必需键前置校验——base_model_name 缺失此前在内核运行时才炸
+      // （1109-4 实锚：agent 首份配置缺该键，报错晚于配置生成）。fail-closed 前置+指路。
+      try {
+        const svcConfig = JSON.parse(readFileSync(args.service_config as string, "utf8")) as Record<string, unknown>;
+        if (typeof svcConfig["base_model_name"] !== "string" || (svcConfig["base_model_name"] as string).trim() === "") {
+          return asToolValue({
+            started: false, error: "base_model_name_missing",
+            note: "service_config 缺 base_model_name 键（基模型服务名——vLLM served model name，基线对照按它点名裸基座）。在服务配置 JSON 里补该键后重推。",
+          });
+        }
+      } catch (svcReadErr) {
+        return asToolValue({
+          started: false, error: "service_config_unreadable",
+          note: `service_config 不可读（${String(svcReadErr).slice(0, 120)}）——核对路径与 JSON 形态后重推`,
+        });
+      }
       for (const script of [genService, prelaunch, ckptPlanGen, orchestration, runner]) {
         if (!existsSync(script)) return asToolValue({ started: false, error: "skill_script_missing", script, note: "pin 内技能脚本缺失——核 kernelDir 装配" });
       }
@@ -2793,7 +2824,32 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       // E5·H2：编排会话命令 env 前缀注入（HOME＝实例根＋ATF_APPROVAL_LEDGER 若设）——
       // 编排脚本内 ${ATF_APPROVAL_LEDGER:-${HOME}/...} 运行时解析不随 tmux 旧服务端
       // env 分轴漂移（训练链 ledgerEnvPrefixForShell 同构扩展）
+      // D263-K5：tee 目标父目录预建——目录缺失时 tee -a 开文件即败→SIGPIPE 杀编排→
+      // tmux 秒退零产物零日志而 started:true 照返（1109-4 实锚）。
+      mkdirSync(cfg.logDir, { recursive: true });
       execSync(tmuxCommand(`new-session -d -s ${orchSessionName} "${evalTmuxEnvPrefixOf()}bash ${orchDir}/eval_orchestration.sh --prompt-renderer ${skill("atf-admit-training-data", "render_prompt.py")} --coordinate qwen3_vl --prompt-mode ${promptMode.mode} 2>&1 | tee -a ${cfg.logDir}/eval-orchestration.log"`));
+      // D263-K6：启动活性披露（非阻断形态）——1109-4 真实故障：编排 tmux 秒退（tee 目录
+      // 缺失→SIGPIPE）零产物零日志而 started:true 照返=静默降级。此处 settle 后探测
+      // 「session 消失 && 轮目录零产物」，命中即在返回体标注 orchestration_liveness
+      // （agent 与用户立即可见异常，不静默）；不拒服务调用——mock/测试面秒退属正常完成。
+      const orchLogPath6 = join(cfg.logDir, "eval-orchestration.log");
+      void Promise.resolve()
+        .then(() => new Promise((r) => setTimeout(r, 3_000)))
+        .then(() => {
+          const sessionAlive = (() => {
+            try { execSync(tmuxCommand(`has-session -t ${orchSessionName}`), { timeout: 10_000 }); return true; }
+            catch { return false; }
+          })();
+          if (sessionAlive) return;
+          const orchArtifacts = (() => {
+            try { return readdirSync(orchDir, { recursive: true }).filter((e) => e.endsWith(".json") || e.endsWith(".jsonl") || e.endsWith(".log")); }
+            catch { return [] as string[]; }
+          })();
+          if (orchArtifacts.length === 0) {
+            console.error(`[atf-eval] ⛔ 编排存活异常：tmux 会话 ${orchSessionName} 已消失且轮目录（${orchDir}）零产物——编排首步即败（D263）。查 ${orchLogPath6} 与放行闸环境变量。`);
+          }
+        })
+        .catch(() => { /* 探针异常不阻断主流程 */ });
       // 批㊶-M M-3 段事实轨：评估编排启动成功即登记（evaluate 段）
       appendSegmentFact(runDir, "evaluate", "atf_evaluate");
       // 批㊶-N N-5：会话绑定

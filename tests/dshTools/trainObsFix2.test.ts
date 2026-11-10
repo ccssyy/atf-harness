@@ -206,7 +206,7 @@ print("{}")`);
     writeFileSync(join(assets, "eval_labels.jsonl"), "{}\n");
     writeFileSync(join(assets, "test_images.json"), "{}");
     const serviceConfig = join(root, "EvalServiceConfig.v1.json");
-    writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", run_id: "run-fix2", port: 5041 }));
+    writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", base_model_name: "awq-base-mock", run_id: "run-fix2", port: 5041 }));
     // B1：run 目录须真实在位（显式 run_id 存在性前置——ckpt 入 run 目录即真实布局种子）
     const ckpt = join(root, "run-fix2", "training", "checkpoint-141");
     mkdirSync(ckpt, { recursive: true });

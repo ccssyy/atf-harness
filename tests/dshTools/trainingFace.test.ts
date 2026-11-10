@@ -478,7 +478,7 @@ print("{}")`);
     writeFileSync(join(assets, "eval_labels.jsonl"), "{}\n");
     writeFileSync(join(assets, "test_images.json"), "{}");
     const serviceConfig = join(root, "EvalServiceConfig.v1.json");
-    writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", run_id: "run-regress-formal-02", port: 5021 }));
+    writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", base_model_name: "awq-base-mock", run_id: "run-regress-formal-02", port: 5021 }));
     // D14：field_config 显式传入路径须真实存在（缺省解析 fail-closed 后显式缺失同样拒）
     writeFileSync(join(root, "field-config.json"), JSON.stringify({
       schema_version: "PromptFieldConfig/v1", document_type: "pl", document_zh: "装箱单",

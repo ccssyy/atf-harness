@@ -433,7 +433,7 @@ describe("批次 R H1-3——kernelErrorFace 人话映射（提前接线；D98 �
     mkdirSync(join(runDir, "l1"), { recursive: true });
     writeFileSync(join(runDir, "l1", "training-data-manifest.json"), JSON.stringify({ schema_version: "TrainingDataArtifact/v1", lanes: { goods: {} } }));
     const serviceConfig = join(runDir, "eval-assets", "service-config.json");
-    writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", run_id: "run-h1e", port: 8210, tensor_parallel_size: 1, max_num_seqs: 8, adapters: [{ name: "ckpt100", path: join(runDir, "models", "checkpoint-100") }] }));
+    writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", base_model_name: "awq-base-mock", run_id: "run-h1e", port: 8210, tensor_parallel_size: 1, max_num_seqs: 8, adapters: [{ name: "ckpt100", path: join(runDir, "models", "checkpoint-100") }] }));
     const fieldConfig = join(runDir, "eval-assets", "field-config.json");
     writeFileSync(fieldConfig, JSON.stringify({ fields: [{ field_id: "f1" }] }));
     // mock pin：generate_eval_service 输出 token_budget_missing traceback 后退出 1；其余四脚本占位

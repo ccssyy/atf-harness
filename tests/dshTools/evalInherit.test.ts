@@ -138,7 +138,7 @@ const seedRun = (root: string, opts: { fieldConfigText?: string; dropFingerprint
   writeFileSync(join(assets, "eval_labels.jsonl"), evalLabelsFixture());
   writeFileSync(join(assets, "test_images.json"), "{}");
   const serviceConfig = join(root, "EvalServiceConfig.v1.json");
-  writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", run_id: RUN_ID, port: 5031, tensor_parallel_size: 4 }));
+  writeFileSync(serviceConfig, JSON.stringify({ schema_version: "EvalServiceConfig/v1", base_model_name: "awq-base-mock", run_id: RUN_ID, port: 5031, tensor_parallel_size: 4 }));
   const ckpt = join(runDir, "training", "checkpoint-141");
   mkdirSync(ckpt, { recursive: true });
   writeFileSync(join(ckpt, "adapter_model.safetensors"), "x");

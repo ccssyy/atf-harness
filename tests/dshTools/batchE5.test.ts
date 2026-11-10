@@ -225,7 +225,7 @@ print(json.dumps({"out": out}))`);
     writeFileSync(join(assets, "test_images.json"), "[]\n");
     writeFileSync(join(assets, "eval_labels.jsonl"), "\n");
     const serviceConfig = tempRoot("e5-svc-");
-    writeFileSync(join(serviceConfig, "svc.json"), JSON.stringify({ port: 5031, max_num_seqs: 4 }));
+    writeFileSync(join(serviceConfig, "svc.json"), JSON.stringify({ port: 5031, max_num_seqs: 4, base_model_name: "awq-base-mock" }));
     const tools = buildEvalTools({ get: () => undefined }, { resolveEvalRound: stubEvalRound, runsRoot, logDir: tempRoot("e5-logs-"), kernelDir: pin }) as unknown as DshToolLike[];
     const evaluate = tools.find((t) => t.name === "atf_evaluate");
     if (evaluate === undefined) throw new Error("atf_evaluate 未注册");
