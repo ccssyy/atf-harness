@@ -251,7 +251,8 @@ export const resolveToolRun = (runsRoot: string, exec: unknown, explicitRunId?: 
         payload: {
           error: "run_multi_workspace_ambiguous", run_id: runId, candidates,
           message: `run_id ${runId} 在 ${String(siblingRoots.length)} 个工作区同时存在（${candidates.join("、")}）——本会话无绑定，无法判定归属。`
-            + `先切到目标工作区或建立会话绑定后重推；跨工作区取用不在工具面`,
+            + `两条改法：①在 WebUI 顶部工作区选择器切到目标工作区（${candidates.join(" 或 ")} 之一）使会话绑定落位后重推；②让用户在卡上指定目标工作区后按指示重试。`
+            + `禁止绕行：不得经 scratch_exec 直调内核脚本替代本工具——歧义未消即旁路=评估产物落错工作区（1109-4 实锚）；工具面消歧是唯一通路`,
         },
       };
     }
