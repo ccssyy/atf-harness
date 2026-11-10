@@ -202,7 +202,7 @@ export const canonicalRunRootsOf = (cfg?: { canonicalRoots?: readonly string[] }
  *  D49：显式 run_id 的目录解析 canonical 优先（注册工作区 run.json 合法即 canonical）——
  *  training/evaluate 写面全经 runDir 拼接，解析档 canonical＝写面 canonical 落点
  *  （legacy 树零新增）。 */
-export const resolveToolRun = (runsRoot: string, exec: unknown, explicitRunId?: string, canonicalRoots: readonly string[] = canonicalRunRootsOf()): ToolRunResolution => {
+export const resolveToolRun = (runsRoot: string, exec: unknown, explicitRunId?: string, canonicalRoots: readonly string[] = canonicalRunRootsOf(), workspaceHint?: string): ToolRunResolution => {
   const sessionId = sessionIdOf(exec);
   if (explicitRunId !== undefined && explicitRunId.trim() !== "") {
     const runId = explicitRunId.trim();
@@ -245,13 +245,22 @@ export const resolveToolRun = (runsRoot: string, exec: unknown, explicitRunId?: 
     const siblingRoots = canonicalRoots
       .filter((root) => typeof root === "string" && root !== "" && canonicalRunDirOf([root], runId) !== null);
     if (siblingRoots.length > 1) {
+      // D270:workspace 提示参数命中候选即消歧续行(工具面通路,不再把 agent 逼上 scratch 旁路
+      // ——1109-5 实锚:拦截正确但「跨工作区取用不在工具面」关死通路,agent 被迫直调内核脚本)。
+      const hint = (workspaceHint ?? "").trim();
+      if (hint !== "") {
+        const hinted = siblingRoots.find((root) => basename(root) === hint || root === hint);
+        if (hinted !== undefined) {
+          return { ok: true, runId, runDir: canonicalRunDirOf([hinted], runId) as string, workspace: basename(hinted) };
+        }
+      }
       const candidates = siblingRoots.map((root) => basename(root));
       return {
         ok: false,
         payload: {
           error: "run_multi_workspace_ambiguous", run_id: runId, candidates,
           message: `run_id ${runId} 在 ${String(siblingRoots.length)} 个工作区同时存在（${candidates.join("、")}）——本会话无绑定，无法判定归属。`
-            + `两条改法：①在 WebUI 顶部工作区选择器切到目标工作区（${candidates.join(" 或 ")} 之一）使会话绑定落位后重推；②让用户在卡上指定目标工作区后按指示重试。`
+            + `两条改法：①在 WebUI 顶部工作区选择器切到目标工作区（${candidates.join(" 或 ")} 之一）使会话绑定落位后重推；②直接带 workspace_path 参数（值为候选工作区名或其绝对根路径）重推本调用——工具面即消歧续行。`
             + `禁止绕行：不得经 scratch_exec 直调内核脚本替代本工具——歧义未消即旁路=评估产物落错工作区（1109-4 实锚）；工具面消歧是唯一通路`,
         },
       };
@@ -1575,7 +1584,7 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
     },
     async execute(args: { run_id?: string; checkpoint: string; publish_root?: string; note?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选）
-      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id, canonicalRunRootsOf(cfg));
+      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id, canonicalRunRootsOf(cfg), (args as { workspace_path?: unknown }).workspace_path as string | undefined);
       if (!runResolution.ok) return asToolValue(runResolution.payload);
       const runId = runResolution.runId;
       const runDir = runResolution.runDir;
@@ -2517,7 +2526,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     },
     async execute(args: { action: string; run_id?: string; adapter_path?: string; eval_assets_dir?: string; lane?: string; field_config?: string; prompt_mode?: string; service_config?: string; env_profile?: string; deploy?: string; assets_split_manifest?: string; assets_external_confirm?: boolean; concurrency?: number; concurrency_reason?: string; accept_template_drift?: boolean }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选——先于一切检查）
-      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id, canonicalRunRootsOf(cfg));
+      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id, canonicalRunRootsOf(cfg), (args as { workspace_path?: unknown }).workspace_path as string | undefined);
       if (!runResolution.ok) return asToolValue(runResolution.payload);
       const runId = runResolution.runId;
       const runDir = runResolution.runDir;
@@ -2928,7 +2937,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
     },
     async execute(args: { run_id?: string; eval_assets_dir?: string; lane?: string; doc_type?: string; style_cluster_manifest?: string; coordinate_space?: string; gt_coordinate_space?: string; cluster_reviews?: string; review_check?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
       // 批B1：run_id 缺省解析（显式＞会话绑定；无绑定＝run_binding_required＋候选）
-      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id, canonicalRunRootsOf(cfg));
+      const runResolution = resolveToolRun(cfg.runsRoot, exec, args.run_id, canonicalRunRootsOf(cfg), (args as { workspace_path?: unknown }).workspace_path as string | undefined);
       if (!runResolution.ok) return asToolValue(runResolution.payload);
       const runId = runResolution.runId;
       const runDir = runResolution.runDir;
