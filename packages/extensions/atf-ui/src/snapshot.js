@@ -4,12 +4,14 @@
  * 空态文案单源导出（client 直引）。
  */
 
-/** 管线九段（D96 owner 裁定：与内核 STAGE_ORDER 逐键相等——register/label_qc/
- *  experiment_setup/style_split/candidate_build/publish/family_split/admission/training_prep；
- *  训练执行/评估与可视化不占段灯，作为独立卡/区块呈现）。 */
-// G5 收敛:灯面=管线 9 段(G1a 新序;D96 裁定灯面只含管线段);label 表含 v2
-// 全段 17 段词(注册表元数据消费方共用,键序回管线)
-import { KERNEL_STAGE_ORDER } from "../../../../src/core/generated/stageOrder.js";
+/** 段灯全生命周期（D264/ADR-0021 owner 1109-10 裁定：取代 D96「训练执行/评估不占
+ *  段灯」边界——灯面扩展为 V2 注册表从 register 起的 14 段（管线 9 段+snapshot+
+ *  训练后 4 段 training_run/checkpoint_eval/badcase_analysis/iteration_proposal）；
+ *  前置 3 段（contract/ingest/inspect——batch 素材直启 run 不经过的上游数据准备链）
+ *  折叠不进灯面。训练执行/评估的独立卡/区块呈现保留（D96 形态），段灯与独立卡并存。 */
+// 单源纪律不变:键序=内核 codegen 生成物 STAGE_REGISTRY_ORDER 过滤 register 起
+// （STAGE_ORDER_V2 唯一源);label 表 17 段词全量沿用
+import { STAGE_REGISTRY_ORDER } from "../../../../src/core/generated/stageOrder.js";
 
 // R1/G5 段序单源:键序=内核 v2 codegen 生成物;label 为呈现面资产(LABELS 单表)
 const SEGMENT_LABELS = {
@@ -31,7 +33,9 @@ const SEGMENT_LABELS = {
   badcase_analysis: "badcase 分析",
   iteration_proposal: "迭代建议",
 };
-export const SEGMENTS = KERNEL_STAGE_ORDER.map((key) => ({
+// D264:灯面段序=STAGE_REGISTRY_ORDER 从 register 起（9 管线+snapshot+训练后 4=14 段）。
+const LIFECYCLE_ORDER = STAGE_REGISTRY_ORDER.slice(STAGE_REGISTRY_ORDER.indexOf("register"));
+export const SEGMENTS = LIFECYCLE_ORDER.map((key) => ({
   key,
   label: SEGMENT_LABELS[key] ?? key,
 }));
@@ -150,7 +154,7 @@ export function formatGpuBinding(binding) {
 
 /**
  * 任务卡 checklist 文本（chat 卡面单源——atf_run_training status 的 output.render 与
- * panel 共用口径）：九段逐行，四态标记 ✓ done／● active／✗ failed／○ pending。
+ * panel 共用口径）：灯面全段逐行，四态标记 ✓ done／● active／✗ failed／○ pending。
  * @param monitorRun - buildMonitorSnapshot 展开后的单 run 形态（segments 为四态数组）。
  * @returns 多行文本（无尾随换行）。
  */

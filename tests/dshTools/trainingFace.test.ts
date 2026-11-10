@@ -342,18 +342,23 @@ describe("atf_run_training（danger 必确认＋DRY_RUN 校验门＋status 枚�
     const tool = buildRunTrainingTool(noApproval, { runsRoot: root, logDir: root, ctx: noApproval }) as unknown as Tool & { output: { render: (args: unknown, value: unknown) => Array<{ type: string; text: string }> } };
     const result = await tool.execute({ action: "status", train_sh: join(root, "x.sh"), run_id: "r-task" }, fakeExec);
     const segments = result.segments as Array<{ key: string; status: string }>;
-    // D96：八灯＝内核 STAGE_ORDER 八段（training 键不在灯面——训练态由独立卡数据源承载）
-    expect(segments).toHaveLength(9);
+    // D264/ADR-0021：段灯全生命周期＝管线 9 段+snapshot+训练后 4 段（training_run/
+    // checkpoint_eval/badcase_analysis/iteration_proposal）；training 键仍不在灯面（独立卡承载不变）。
+    expect(segments).toHaveLength(14);
     expect(segments.find((s) => s.key === "register")?.status).toBe("done");
     expect(segments.find((s) => s.key === "training")).toBeUndefined();
     expect(segments.find((s) => s.key === "training_prep")?.status).toBe("pending");
+    // D264 锚：训练后段在灯面（pending 态——产物未落盘）
+    for (const key of ["training_run", "checkpoint_eval", "badcase_analysis", "iteration_proposal"]) {
+      expect(segments.find((s) => s.key === key)?.status).toBe("pending");
+    }
     const blocks = tool.output.render({}, result);
     const text = blocks[0]?.text ?? "";
     expect(text).toContain("训练任务卡 — run r-task");
     expect(text).toContain("✓ 数据登记");
     expect(text).toContain("✓ 准入检查");
     expect(text).toContain("○ 训练准备");
-    expect(text).toContain("进度 7/9"); // G1a 新序 9 段口径
+    expect(text).toContain("进度 7/14"); // D264/ADR-0021 全生命周期 14 段口径（9 管线+snapshot+训练后 4）
     expect(text).toMatch(/运行中|未运行/); // tmux 在场与否二态均如实
     expect(text).toContain("loss 点数：1");
     // start 结果不走任务卡（保持 JSON 卡面）

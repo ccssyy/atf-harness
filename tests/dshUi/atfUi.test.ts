@@ -178,7 +178,7 @@ describe("快照构造纯函数（八段四态推导＋loss 曲线＋KPI＋空�
     const live = buildMonitorSnapshot([sampleRun], { offline: false, utilization: "12%", memoryUsed: "3497 MiB", memoryTotal: "81920 MiB" });
     expect(live.gpu).toMatchObject({ offline: false, utilization: "12%" });
   });
-  it("formatTaskCard：九段 checklist 四态标记＋进度行（chat 任务卡单源；D96 训练不占灯——九灯为内核九段）", () => {
+  it("formatTaskCard：全生命周期 14 段 checklist 四态标记＋进度行（chat 任务卡单源；D264/ADR-0021 训练后 4 段入灯）", () => {
     const snap = buildMonitorSnapshot([sampleRun]);
     const card = formatTaskCard(snap.runs[0]!);
     expect(card).toContain("✓ 数据登记");
@@ -186,10 +186,14 @@ describe("快照构造纯函数（八段四态推导＋loss 曲线＋KPI＋空�
     expect(card).toContain("○ 训练准备");
     expect(card).toContain("○ 标注体检");
     expect(card).toContain("○ 候选构造");
-    expect(card).toContain("进度 2/9");
-    // D96：训练执行/评估不再入 checklist（独立卡承载）
+    expect(card).toContain("进度 2/14");
+    // D264 锚：训练后 4 段在灯面（pending 态——产物未落盘）
+    expect(card).toContain("○ 训练启动");
+    expect(card).toContain("○ checkpoint 评估");
+    expect(card).toContain("○ badcase 分析");
+    expect(card).toContain("○ 迭代建议");
+    // training/evaluate 独立键不入 checklist（独立卡承载不变——training_run≠training）
     expect(card).not.toContain("训练执行");
-    expect(card).not.toContain("评估");
   });
 });
 

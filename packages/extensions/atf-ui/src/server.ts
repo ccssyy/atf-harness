@@ -489,9 +489,14 @@ export interface ScanLiveness {
  *  训练执行/评估移出段灯——独立卡/区块，态在 scanRunDir segments 返回面独立承载）。
  *  导出供段对齐锚测试逐键断言（D96 映射表单源断言面）。 */
 // R1 段序单源:内核 codegen 生成物(原手写字面量退役)
-// G5 收敛:灯面=管线 9 段(G1a 新序;v2 全段 17 段以注册表导出形态在生成物)
-import { KERNEL_STAGE_ORDER } from "../../../../src/core/generated/stageOrder.js";
-export const SEGMENT_ORDER_KEYS: readonly string[] = KERNEL_STAGE_ORDER;
+// G5 收敛后 D264/ADR-0021 扩域:灯面=注册表 register 起 14 段(v2 全段 17 段以注册表导出形态在生成物)
+import { KERNEL_STAGE_ORDER, STAGE_REGISTRY_ORDER } from "../../../../src/core/generated/stageOrder.js";
+// D264/ADR-0021：段灯全生命周期覆盖——14 段=管线 9 段（KERNEL_STAGE_ORDER）+snapshot+
+// 训练后 4 段（training_run/checkpoint_eval/badcase_analysis/iteration_proposal）。
+// 前置 3 段（contract/ingest/inspect）属上游数据准备链（batch 素材直启 run 不经过）——
+// 折叠不进灯面。owner 1109-10 裁定（取代 D96 不占段灯边界）。
+export const SEGMENT_ORDER_KEYS: readonly string[] = STAGE_REGISTRY_ORDER.slice(
+  STAGE_REGISTRY_ORDER.indexOf("register"));
 
 /** 批㊶-N N-2：training-logs 目录活性（目录树内任一文件 mtime 在窗口内即 fresh；
  *  目录缺失/异常＝false）。 */
@@ -704,6 +709,24 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
     // evaluate 评估轮产物锚。
     training: trainingAnchorPresent(dir) || readTrainingCompletion(dir)?.status === "ok",
     evaluate: has("eval/metrics_summary.json") || evalRoundAnchored(dir),
+    // D264/ADR-0021：训练后段锚（段灯全生命周期终态）——
+    // training_run done＝D50 completion ok（确定性完成锚，与独立卡同源）；
+    // checkpoint_eval done＝eval 四件套齐＋ingest 回灌（编排完成全量判据，与 evalFace 完成监听同口径）；
+    // badcase_analysis done＝analysis/<doc>/report/report.md+viewer/viewer.html 全类齐备；
+    // iteration_proposal done＝analysis/iteration-recommendations.md 在场。
+    training_run: readTrainingCompletion(dir)?.status === "ok",
+    checkpoint_eval:
+      has("eval/metrics_summary.json") && has("eval/badcases.jsonl")
+      && has("eval/raw_predictions.jsonl") && has("eval/indexes.csv"),
+    badcase_analysis: (() => {
+      const analysisDir = join(dir, "analysis");
+      if (!existsSync(analysisDir)) return false;
+      const docs = readdirSync(analysisDir).filter((d) =>
+        existsSync(join(analysisDir, d, "report", "report.md"))
+        && existsSync(join(analysisDir, d, "viewer", "viewer.html")));
+      return docs.length > 0;
+    })(),
+    iteration_proposal: has("analysis/iteration-recommendations.md"),
   };
   // 事实轨并入证据图（M-3 契约「有记录的段直接 done」——experiment_setup/publish 等段
   // 的 rawDone 表达式原本只读锚，事实在位而锚布局不符的历史 run 会丢证据）；D3/D4：段
@@ -810,6 +833,11 @@ export function scanRunDirAt(dir: string, runId: string, liveness?: ScanLiveness
       family_split: doneMap["family_split"] === true,
       admission: doneMap["admission"] === true,
       training_prep: doneMap["training_prep"] === true,
+      // D264/ADR-0021：训练后段进段灯（全生命周期终态）——前缀闭包 13 键内。
+      training_run: doneMap["training_run"] === true,
+      checkpoint_eval: doneMap["checkpoint_eval"] === true,
+      badcase_analysis: doneMap["badcase_analysis"] === true,
+      iteration_proposal: doneMap["iteration_proposal"] === true,
       // D96：训练执行/评估不占段灯（独立卡/区块）——态独立承载，不入前缀闭包：done＝完成
       // 锚且非活跃期；failed 沿 A3 语义（启动证据在场 ∧ 无完成锚 ∧ 取证面无命中 ∧ 无活跃）。
       // snapshot 段灯数组（八键）不读这两键；server 内 trainingDone 判据等独立消费照旧。
