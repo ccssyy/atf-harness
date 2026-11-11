@@ -15,9 +15,10 @@ describe("D173 必分组——无分组输入不静默平铺", () => {
   it("源码锚:grouping_candidates_missing 拦截在场且带两条改法与区间", () => {
     expect(src).toContain('"grouping_candidates_missing"');
     const note = src.match(/grouping_candidates_missing[\s\S]{0,600}?note: "([^"]*)"/);
-    expect(note?.[1]).toContain("必须分组");
-    expect(note?.[1]).toContain("2-3 组");
-    expect((note?.[1].match(/①|②/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    const noteText = note?.[1] ?? "";
+    expect(noteText).toContain("必须分组");
+    expect(noteText).toContain("2-3 组");
+    expect((noteText.match(/①|②/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
   it("源码锚:平铺兜底 note 与未确认文案不再承诺「默认生成」", () => {
     expect(src).not.toContain("按数据事实分组默认生成");

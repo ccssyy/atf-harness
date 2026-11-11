@@ -24,8 +24,9 @@ describe("D251 label_qc_resolve schema 与 D244 fail-closed 校验对账", () =>
 
   it("schema properties 声明了 workspace_path（模型能传 schema 外参数才会死锁）", () => {
     expect(resolveTool).toBeDefined();
-    expect(Object.keys(resolveTool!.parameters.properties)).toContain("workspace_path");
-    expect(Object.keys(resolveTool!.parameters.properties)).toContain("run_id");
+    const properties = (resolveTool!.parameters as { properties: Record<string, unknown> }).properties;
+    expect(Object.keys(properties)).toContain("workspace_path");
+    expect(Object.keys(properties)).toContain("run_id");
   });
 
   it("workspace_path 描述含 fail-fast 语义与绝对路径口径（报错即修复指令对齐）", () => {
