@@ -166,7 +166,7 @@ interface ParallelSubtaskInput {
   instruction: unknown;
 }
 
-const parseParallelParams = (
+export const parseParallelParams = (
   params: unknown,
 ): { ok: true; subtasks: Array<{ label: string; instruction: string }>; maxConcurrency: number } | { ok: false; error: string } => {
   const raw = (params as { subtasks?: unknown; max_concurrency?: unknown } | null) ?? {};
