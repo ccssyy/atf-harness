@@ -498,6 +498,9 @@ const userDecisionConfirmCardOf = async (
         question: `${title}${groupNote !== "" ? "" : `——以下 ${String(decisions.length)} 项处置请确认`}`,
         header: title,
         detail: [
+          ...(toolName === "atf_label_qc_resolve" && decisions.length === 1
+            ? ["〔D277 提醒〕本卡仅 1 项——若同 run 尚有其它待裁决项，应汇总为一次提交，不要逐条多次调用。", ""]
+            : []),
           `| # | 待裁决项 | 建议处置 | 说明 |`,
           `|---|---|---|---|`,
           rows,

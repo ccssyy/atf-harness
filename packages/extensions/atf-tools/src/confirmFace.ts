@@ -1298,22 +1298,40 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const slotTypes = slots.map((slot) => slot.doc_type);
       let candidatePath: string;
       let cardDocType: string | null = null;
+      let slotCreds: Array<{ slot: { doc_type: string }; digest: string; rel: string }> = [];
       if (slots.length > 0) {
-        const slot = wantedDocType !== "" ? slots.find((entry) => entry.doc_type === wantedDocType) ?? null : slots.length === 1 ? slots[0] ?? null : null;
-        if (wantedDocType !== "" && slot === null) {
+        // D280:确认槽位集——显式 doc_type=单类确认(E8 通路保留);缺省=全部在场类
+        // 合并单卡一次确认(各 digest 并列呈现),账本逐类落账(owner 1111 批准方案
+        // 「联合轮单卡双 digest」,替代旧「多类须显式 doc_type 逐类确认」)。
+        const targetSlots = wantedDocType !== ""
+          ? slots.filter((entry) => entry.doc_type === wantedDocType)
+          : slots.slice();
+        if (wantedDocType !== "" && targetSlots.length === 0) {
           return asToolValue({
             ok: false, run_id: args.run_id, error: "doc_slot_unknown", doc_type: wantedDocType, doc_types: slotTypes,
             note: `run ${args.run_id} 没有「${wantedDocType}」的单据槽位（在场类型：${slotTypes.join("、") || "（无）"}）——按在场类型给出 doc_type`,
           });
         }
-        if (slot === null) {
-          return asToolValue({
-            ok: false, run_id: args.run_id, error: "doc_type_required", doc_types: slotTypes,
-            note: `run ${args.run_id} 有 ${String(slotTypes.length)} 类单据槽位（${slotTypes.join("、")}）——多类须显式给 doc_type 按类逐一确认，不取任一份冒充全部`,
-          });
+        // 逐类 digest 凭据面:显式 digest 仅单类通路接受;缺省通路自动读各类
+        // candidate.digest,任一类缺失即拒绝(digest 凭据不缺类,不造数)。
+        const built: Array<{ slot: (typeof slots)[number]; digest: string | undefined; rel: string }> = targetSlots.map((slot) => {
+          let digest: string | undefined = targetSlots.length === 1 ? args.digest : undefined;
+          if (digest === undefined && existsSync(slot.candidate_path)) {
+            try {
+              const candidate = JSON.parse(readFileSync(slot.candidate_path, "utf8")) as Record<string, unknown>;
+              digest = typeof candidate["digest"] === "string" ? (candidate["digest"] as string) : undefined;
+            } catch {
+              digest = undefined;
+            }
+          }
+          return { slot, digest, rel: `publish/${slot.doc_type}/contract-candidate.json` };
+        });
+        const missingCreds = built.filter((entry) => entry.digest === undefined);
+        if (missingCreds.length > 0) {
+          return asToolValue({ ok: false, run_id: args.run_id, note: `契约件 digest 缺失（${missingCreds.map((e) => e.rel).join("、")}）——无可发布凭据，不造数` });
         }
-        candidatePath = slot.candidate_path;
-        cardDocType = slot.doc_type;
+        slotCreds = built.map((entry) => ({ slot: { doc_type: entry.slot.doc_type }, digest: entry.digest as string, rel: entry.rel }));
+        cardDocType = slotCreds.length > 1 ? null : (slotCreds[0]?.slot.doc_type ?? null);
       } else {
         // D281:无槽位报错带探测证据(variants 枚举根+legacy 候选存在性)与改法——
         // 不再让 agent 猜布局/手算 digest(1111 轮实锚:报错术语与实际布局脱节,
@@ -1327,35 +1345,35 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           });
         }
         candidatePath = legacyCandidatePath(runDir);
-      }
-      const candidateRel = cardDocType !== null ? `publish/${cardDocType}/contract-candidate.json` : "contract-candidate.json";
-      let candidateDigest = args.digest;
-      if (candidateDigest === undefined && existsSync(candidatePath)) {
-        try {
-          const candidate = JSON.parse(readFileSync(candidatePath, "utf8")) as Record<string, unknown>;
-          candidateDigest = typeof candidate["digest"] === "string" ? (candidate["digest"] as string) : undefined;
-        } catch {
-          candidateDigest = undefined;
+        // legacy 单条凭据面(run 根契约候选;digest 缺省读文件字段,显式传参收窄)
+        let legacyDigest: string | undefined = args.digest;
+        if (legacyDigest === undefined && existsSync(candidatePath)) {
+          try {
+            const candidate = JSON.parse(readFileSync(candidatePath, "utf8")) as Record<string, unknown>;
+            legacyDigest = typeof candidate["digest"] === "string" ? (candidate["digest"] as string) : undefined;
+          } catch {
+            legacyDigest = undefined;
+          }
         }
+        if (legacyDigest === undefined) {
+          return asToolValue({ ok: false, run_id: args.run_id, note: `无契约件 digest（contract-candidate.json 缺失或无 digest 字段）——无可发布凭据，不造数` });
+        }
+        slotCreds = [{ slot: { doc_type: "" }, digest: legacyDigest, rel: "contract-candidate.json" }];
       }
-      if (candidateDigest === undefined) {
-        return asToolValue({ ok: false, run_id: args.run_id, note: `无契约件 digest（${candidateRel} 缺失或无 digest 字段）——无可发布凭据，不造数` });
-      }
-      const title = `发布确认（digest 凭据）— run ${args.run_id}${cardDocType !== null ? ` · ${cardDocType}` : ""}`;
-      // D280:确认范围行(预期管理)——本类确认仅覆盖该类契约件;多类 run 其余类
-      // 将各自单独出卡(E8 按类逐一确认设计),操作员对「还会再弹几张」有预期,
-      // 不再误判重复弹卡。合并单卡与 E8 语义冲突,候裁未做。
-      const scopeLine = cardDocType !== null
-        ? (() => {
-            const remaining = slotTypes.filter((entry) => entry !== cardDocType);
-            return remaining.length > 0
-              ? `  确认范围：仅 ${cardDocType} 类契约件（其余待确认类：${remaining.join("、")}——将各自出卡）\n`
-              : `  确认范围：${cardDocType} 类契约件（本 run 单类，此卡后无后续契约确认）\n`;
-          })()
-        : "";
+      const multi = slotCreds.length > 1;
+      const candidateRel = multi ? slotCreds.map((e) => e.rel).join("、") : (slotCreds[0]?.rel ?? "contract-candidate.json");
+      const candidateDigest = multi ? slotCreds.map((e) => `${e.slot.doc_type}:${e.digest}`).join(" | ") : (slotCreds[0]?.digest ?? "");
+      const title = `发布确认（digest 凭据）— run ${args.run_id}${cardDocType !== null ? ` · ${cardDocType}` : multi ? ` · ${slotTypes.join("+")}` : ""}`;
+      // D280:确认范围行(预期管理)——单类=此卡后无后续契约确认;多类合并卡=
+      // 全部类一次确认(账本逐类落账),操作员对确认粒度有预期,不误判重复弹卡。
+      const scopeLine = multi
+        ? `  确认范围：全部 ${String(slotCreds.length)} 类契约件一次确认（${slotTypes.join("、")}——账本逐类落账）\n`
+        : `  确认范围：${cardDocType ?? "(legacy)"} 契约件${cardDocType !== null ? "（本 run 单类，此卡后无后续契约确认）" : ""}\n`;
       // 批㊶-U §五：凭据卡退化形式——无可调参数不虚构；卡面 note＝统一说明＋复核通道（聊天重呈）
-      const body = `  artifact: ${candidateRel}\n  digest: ${candidateDigest}\n${scopeLine}  ${dualStageNote("契约凭据卡", { amendable: false })}`;
-      writePending(runDir, { kind: "publish_confirm", run_id: args.run_id, title, digest: candidateDigest, ...(cardDocType !== null ? { doc_type: cardDocType } : {}), at: new Date().toISOString() });
+      const body = multi
+        ? `${slotCreds.map((e) => `  ${e.rel}\n  digest: ${e.digest}`).join("\n")}\n${scopeLine}  ${dualStageNote("契约凭据卡", { amendable: false })}`
+        : `  artifact: ${candidateRel}\n  digest: ${candidateDigest}\n${scopeLine}  ${dualStageNote("契约凭据卡", { amendable: false })}`;
+      writePending(runDir, { kind: "publish_confirm", run_id: args.run_id, title, digest: candidateDigest, ...(cardDocType !== null ? { doc_type: cardDocType } : { doc_types: slotTypes }), at: new Date().toISOString() });
       // E5 模板四行（凭据摘要续行；点按指引由审批卡自身承载）
       const verdict = await requestApproval(ctx, exec, "atf_publish_confirm",
         buildApprovalReason({
@@ -1367,8 +1385,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       if (!verdict.ok) return approvalDeniedResult("atf_publish_confirm", verdict.outcome);
       // 批㊶Q增补二3：放行完成即清 pending 卡（同确认卡语义）
       clearPending(runDir);
-      // 批㊶-M M-3 段事实轨：契约发布确认成功即登记（publish 段）
-      appendSegmentFact(runDir, "publish", "atf_publish_confirm");
+      // 批㊶-M M-3 段事实轨：契约发布确认成功即登记（publish 段）——D280 合并卡
+      // 一次确认仍逐类落账（账本粒度不变，仅卡面合并）。
+      for (const entry of slotCreds) appendSegmentFact(runDir, "publish", "atf_publish_confirm");
       // 批㊶-N N-5：会话绑定
       const sessionIdPub = sessionIdOfExec(exec);
       if (sessionIdPub !== undefined) appendBinding(runDir, sessionIdPub);
