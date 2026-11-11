@@ -594,6 +594,18 @@ export class WebUiSessionManager {
       // 修复批 D9.1：真 provider 链携带模型描述符（faux/注入链不携带＝零语义变化）
       ...(assembledProvider !== undefined ? { model: assembledProvider.model } : {}),
       approval: { kind: "surface", surface },
+      // D276:webui 宿主接 DSH 原生 subagent 并行面(dispatch_training_subtask/
+      // dispatch_parallel_training_subtask/deferred 三件注入;scopeRefBox 由
+      // assembleV1Agent 内部共享主链=账本同域;子任务审批继承同一操作员面,
+      // 写动作仍逐条过 GateLock 账本闸——并行不构成绕过治理)。
+      subagent: {
+        bridge,
+        sessionsRoot: this.deps.sessionsRoot,
+        surface,
+        childStreamFn: () => rawStreamFn,
+        ...(assembledProvider !== undefined ? { childModel: assembledProvider.model } : {}),
+        modelTag: this.deps.providerConfig?.model ?? "webui",
+      },
       steeringMode: "all",
       followUpMode: "all",
       contextTokens: compactionTriggerTokens(),
