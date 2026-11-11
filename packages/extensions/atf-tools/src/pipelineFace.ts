@@ -3938,7 +3938,11 @@ let visualSummary: Record<string, unknown> | undefined;
               // 分析的结论随 decisions 上卡,用户确认即凭据落账);此处只指路。
               receipt["label_qc_decisions"] = {
                 asked: false,
-                note: `待裁决 ${String(pending)} 项——先逐项看图分析(read_image 对照标注与全批惯例),形成判断与建议处置后,带 decisions 与理由调 atf_label_qc_resolve:提交前会出确认卡(你的分析上卡),用户卡上确认后凭据落 user_confirmed,再用同一 run_id 重跑本段`,
+                // D277 汇总纪律+D279 事实修正分流(owner 1111):机械裁决项全部检查
+                // 完成后一次性汇总提交(不分批多次调用);看图核查 issue 项(标注抄录
+                // 误差类)不进 resolve——走核查件 resolution 通路(内核自动修正+留痕,
+                // 无需用户卡)。
+                note: `待裁决 ${String(pending)} 项——先逐项看图分析(read_image 对照标注与全批惯例),形成判断与建议处置后,**把全部裁决项汇总为一次** atf_label_qc_resolve 调用(带完整 decisions 数组与理由,不要分批多次调用);提交前会出确认卡(你的分析上卡),用户卡上确认后凭据落 user_confirmed,再用同一 run_id 重跑本段。注意:看图核查发现的标注抄录误差类 issue 不进本工具——在核查件该条目带 resolution(set_value+field/page/old_value/new_value/basis)交内核自动修正+留痕,无需用户卡`,
               };
             } else {
               receipt["label_qc_decisions"] = { asked: false, note: "卡通道缺席或报告不可读——按回执指路文案走 atf_label_qc_inspect 逐项流程" };

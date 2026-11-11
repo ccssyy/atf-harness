@@ -98,6 +98,16 @@ const detailsOf = (result: unknown): Record<string, unknown> | undefined => {
     ? (details as Record<string, unknown>)
     : undefined;
 };
+/** D277:裁决卡分组摘要(模块级纯函数,vitest 可测)——disposition 归三类计数。 */
+export const resolveCardGroupSummary = (ds: Array<Record<string, unknown>>): string => {
+  const groups = new Map<string, number>();
+  for (const d of ds) {
+    const disp = String(d["disposition"] ?? "");
+    const kind = disp.startsWith("keep_") ? "归属保留类" : disp === "set_value" ? "值修正类" : disp !== "" ? `其他(${disp})` : "未分类";
+    groups.set(kind, (groups.get(kind) ?? 0) + 1);
+  }
+  return [...groups.entries()].map(([k, n]) => `${k} ${String(n)} 项`).join(" · ");
+};
 export const BRIDGE_TOOL_NAMES: readonly string[] = [
   "atf_workspace_status",
   "atf_admit_data",
@@ -475,12 +485,17 @@ const userDecisionConfirmCardOf = async (
     const itemCell = reason !== "" ? `${item}——${reason}` : item;
     return `| ${String(i + 1)} | ${itemCell} | ${dispositionZhOf(d)} | ${d["action"] === "reject" ? "维持原状不处置" : "按建议处置"} |`;
   }).join("\n");
-  const title = toolName === "atf_label_qc_resolve" ? "标注冲突裁决确认" : "用户决定确认";
+  // D277:卡面按裁决类型分组摘要——操作员连开多卡/单卡多裁决时可辨类型
+  // (归属保留类 vs 值修正类),不再因标题同形误判「重复弹卡」。
+  const groupNote = toolName === "atf_label_qc_resolve" ? resolveCardGroupSummary(decisions) : "";
+  const title = toolName === "atf_label_qc_resolve"
+    ? `标注冲突裁决确认（共 ${String(decisions.length)} 项${groupNote !== "" ? `：${groupNote}` : ""}）`
+    : "用户决定确认";
   try {
     const answers = await svc.ask({
       questions: [{
         id: `user-decision-${toolName}-${String(Date.now())}`,
-        question: `${title}——以下 ${String(decisions.length)} 项处置请确认`,
+        question: `${title}${groupNote !== "" ? "" : `——以下 ${String(decisions.length)} 项处置请确认`}`,
         header: title,
         detail: [
           `| # | 待裁决项 | 建议处置 | 说明 |`,
