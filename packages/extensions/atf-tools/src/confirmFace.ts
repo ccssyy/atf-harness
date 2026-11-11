@@ -1366,9 +1366,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const title = `发布确认（digest 凭据）— run ${args.run_id}${cardDocType !== null ? ` · ${cardDocType}` : multi ? ` · ${slotTypes.join("+")}` : ""}`;
       // D280:确认范围行(预期管理)——单类=此卡后无后续契约确认;多类合并卡=
       // 全部类一次确认(账本逐类落账),操作员对确认粒度有预期,不误判重复弹卡。
-      const scopeLine = multi
-        ? `  确认范围：全部 ${String(slotCreds.length)} 类契约件一次确认（${slotTypes.join("、")}——账本逐类落账）\n`
-        : `  确认范围：${cardDocType ?? "(legacy)"} 契约件${cardDocType !== null ? "（本 run 单类，此卡后无后续契约确认）" : ""}\n`;
+      const scopeLine = publishScopeLine(multi, cardDocType, slotTypes, slotCreds.length);
       // 批㊶-U §五：凭据卡退化形式——无可调参数不虚构；卡面 note＝统一说明＋复核通道（聊天重呈）
       const body = multi
         ? `${slotCreds.map((e) => `  ${e.rel}\n  digest: ${e.digest}`).join("\n")}\n${scopeLine}  ${dualStageNote("契约凭据卡", { amendable: false })}`
@@ -1400,4 +1398,23 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   });
 
   return [configTool, publishTool];
+};
+
+
+/** D280:契约卡确认范围行(模块级纯函数,vitest 可测)——预期管理:
+ * 多类合并卡=全部类一次确认账本逐类落账;单类=此卡后无后续契约确认;
+ * legacy=无类型标注。 */
+export const publishScopeLine = (
+  multi: boolean,
+  cardDocType: string | null,
+  slotTypes: string[],
+  credCount: number,
+): string => {
+  if (multi) {
+    return `  确认范围：全部 ${String(credCount)} 类契约件一次确认（${slotTypes.join("、")}——账本逐类落账）\n`;
+  }
+  if (cardDocType !== null) {
+    return `  确认范围：${cardDocType} 类契约件（本 run 单类，此卡后无后续契约确认）\n`;
+  }
+  return "  确认范围：(legacy) 契约件\n";
 };
