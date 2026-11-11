@@ -193,6 +193,43 @@ export interface CliDeps {
   err?: (line: string) => void;
 }
 
+/**
+ * D284 形态①+开关（owner 1111 裁定）：headless 审批面构造。
+ * - env `ATF_HEADLESS_PRESET=atf-unattended` → 自动 granted surface（D90 全自动档
+ *   语义的 headless 投影：审批全免+账本留痕照常[approvalHook 审计面]+stderr 放行通报；
+ *   无人值守 eval/无人值守循环场景用）；
+ * - `--approval interactive` → 交互卡 surface（stdout/stdin，既有语义）；
+ * - 其余（未设/值不符/未声明）→ `{ kind: "headless" }`＝现行为零变化（治理点
+ *   approval_missing fail-closed 78——不猜测授权）。
+ * 未知值显式拒绝（warn+按 headless）：防拼写错误静默获得免审面。
+ */
+export const ATF_HEADLESS_UNATTENDED_PRESET = "atf-unattended";
+
+export const buildHeadlessApproval = (
+  approvalMode: "headless" | "interactive",
+  approvalTimeoutMs: number | undefined,
+  env: NodeJS.ProcessEnv,
+): { kind: "headless" } | { kind: "interactive"; timeoutMs: number } | { kind: "surface"; surface: ApprovalSurface } => {
+  if (approvalMode === "interactive") {
+    return { kind: "interactive", timeoutMs: approvalTimeoutMs ?? 600_000 };
+  }
+  const preset = env["ATF_HEADLESS_PRESET"]?.trim() ?? "";
+  if (preset === "") return { kind: "headless" };
+  if (preset !== ATF_HEADLESS_UNATTENDED_PRESET) {
+    console.error(`[v1] ATF_HEADLESS_PRESET=\${preset} 不是受支持的值（仅 \${ATF_HEADLESS_UNATTENDED_PRESET}）——按无免审 headless 处理（fail-closed）`);
+    return { kind: "headless" };
+  }
+  const surface: ApprovalSurface = {
+    ask: async (info) => {
+      // D90 全自动档语义：审批由 agent 判定，落账 decided_by=agent（approvalHook
+      // 审计面照常记 allow_surface_ledger）；stderr 放行通报（放行必留痕纪律）。
+      console.error(`[atf-approval] 全自动档（headless unattended）：\${info.tool} 自动放行（账本照常留痕）`);
+      return { kind: "granted" };
+    },
+  };
+  return { kind: "surface", surface };
+};
+
 /** headless run（单一出口返回退出码；永不 throw）。 */
 export const runCli = async (deps: CliDeps): Promise<number> => {
   const env = deps.env ?? process.env;
@@ -323,7 +360,7 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
             ? { provider_id: resolvedConfig.provider_id, model: resolvedConfig.model, base_url: resolvedConfig.base_url, api_key: resolvedConfig.api_key }
             : undefined,
       bindRunId,
-      approval: args.approval === "interactive" ? { kind: "interactive", timeoutMs: args.approvalTimeoutMs } : { kind: "headless" },
+      approval: buildHeadlessApproval(args.approval, args.approvalTimeoutMs, env),
       steeringMode: args.steeringMode,
       followUpMode: args.followUpMode,
       skillsDir: args.skillsDir,
