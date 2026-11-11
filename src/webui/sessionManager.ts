@@ -100,6 +100,8 @@ interface PendingConfirm {
 interface Session {
   id: string;
   title: string;
+  /** D276:DSH 原生 subagent 并行面是否注入本会话(dispatch 两件+deferred 三件)。 */
+  subagentEnabled?: boolean;
   state: SessionSummary["state"];
   boundRunId?: string;
   resultSummary?: string;
@@ -634,6 +636,8 @@ export class WebUiSessionManager {
     });
     void atfToolDeps;
     session.agent = assembled.agent;
+    // D276:装配事实记录(并行派生工具注入断言面——vitest 装配 eval 消费)
+    session.subagentEnabled = true;
     // 批⑯prime B：过程流式渲染——逐事件即时 emit 到 SSE（对齐主流 agent 体验）：
     // thinking_delta/text_delta 逐段（GLM reasoning_content 与 content 分帧，上游本就流式）；
     // 工具流式两段式（tool_start 建 live 卡 → tool_end 更新完成）——原"turn 完成打包发"移除。
