@@ -240,20 +240,24 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
   // ---- 桥接对端装配 ----
   let spawnDescriptor: { argv: string[]; cwd: string; env: Record<string, string> };
   let bindRunId: string | undefined;
+  let wsRootResolved: string | undefined;
   const sessionsRoot = args.sessionsRoot ?? (await mkdtemp(join(tmpdir(), "atf-v1-sessions-")));
   // v2 A7 白名单：--fs-root 追加根（real 对端再追加 workspace runs 根；scratch 主根在 runV1Headless 补）
   const fsRootsExtra: string[] = [...args.fsRoots];
   if (args.peer === "real") {
     const kernelDir = resolveInstanceKernelDir(env, repoRoot);
     const home = await mkdtemp(join(tmpdir(), "atf-v1-home-"));
-    const wsRootResolved = args.wsRoot ?? (await mkdtemp(join(tmpdir(), "atf-v1-ws-")));
+    wsRootResolved = args.wsRoot ?? (await mkdtemp(join(tmpdir(), "atf-v1-ws-")));
     fsRootsExtra.push(join(wsRootResolved, "runs"));
     const initInvocation = deriveAtfCommand(kernelDir, ["init", "--workspace-root", wsRootResolved]);
     await execFileAsync(initInvocation.command, initInvocation.args, {
       cwd: initInvocation.cwd,
       env: { ...env, ...initInvocation.env, HOME: home, ATF_WORKSPACE_ROOT: wsRootResolved },
     });
-    bindRunId = `v1-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+    // D276-eval 修正:run_id 形态收窄到内核闭集(小写字母数字连字符)——原 ISO 形态
+    // 含大写 T/Z 被 bind_run 校验拒(internal_error:ValueError,headless real 链
+    // 首次真跑暴露——此前该链从未真跑过)。
+    bindRunId = `v1-${new Date().toISOString().replace(/[:.]/g, "-").toLowerCase().replace("t", "-").replace(/z$/, "")}`;
     await mkdir(join(wsRootResolved, "runs", bindRunId), { recursive: true });
     const invocation = deriveAtfCommand(kernelDir, ["serve"]);
     spawnDescriptor = {
@@ -280,11 +284,23 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
   const bridge: SpikeBridgeTransport = spawned.value;
   out(`[v1] 握手成功：kernel ${spawned.value.version?.version}（contract_version=${String(spawned.value.version?.contract_version)}）`);
   if (bindRunId !== undefined) {
+    // D276-eval:workspace 绑定先于 run 绑定——serve 的 workspace_root 读配置根
+    // （HOME/.atf/config.json），headless 的 HOME 是 mkdtemp 净室（无 config），
+    // 不绑 workspace 则 run 解析走配置根怪路径→bind_run ValueError。
+    if (wsRootResolved !== undefined) {
+      const boundWs = await bridge.request("atf.bind_workspace", { workspace_path: wsRootResolved });
+      if (!boundWs.ok) {
+        out(`[v1] bind_workspace 未成功（降级继续）: ${JSON.stringify(boundWs.error ?? boundWs)}`);
+      }
+    }
     const bound = await bridge.request("atf.bind_run", { run_id: bindRunId });
     if (!bound.ok) {
-      err(`[v1] bind_run 失败（fail-closed）: ${bound.error.message}`);
-      await spawned.value.close({ timeoutMs: 5_000 }).catch(() => undefined);
-      return 1;
+      // D276-eval 降级:bind_run 是会话便利绑定（webui 拓扑），非 headless 必要
+      // 条件——段级工具（atf_pipeline_stage 等）全参数化自足（workspace_path/
+      // run_id/experiment 逐参显式）。绑失败降为警告继续，agent 全参数化推进
+      // （1111 行为 eval 首跑实锚:serve 侧 internal_error 掩盖细节且 mkdir 空目录
+      // 无 run.json 不构成 RunLayout run——fail-closed 反而堵死 headless eval 载体）。
+      out(`[v1] bind_run 未成功（降级继续，agent 全参数化推进）: ${bound.error.message}`);
     }
   }
 
