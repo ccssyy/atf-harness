@@ -35,9 +35,11 @@ describe("D223——装饰链回执 lossless 出口", () => {
     const text = JSON.stringify(cleaned);
     expect(text).not.toContain("undefined");
     // undefined 键被剔除而非置 null;有效键全保留
-    const first = (cleaned as unknown as {
+    const decisions = (cleaned as unknown as {
       label_qc_decisions: { decisions: Array<Record<string, unknown>> };
-    }).label_qc_decisions.decisions[0];
+    }).label_qc_decisions.decisions;
+    expect(decisions.length).toBeGreaterThan(0);
+    const first = decisions[0]!;
     expect(first).not.toHaveProperty("target_candidate_id");
     expect(first).not.toHaveProperty("custom");
     expect(first["item_id"]).toBe("qc-1");

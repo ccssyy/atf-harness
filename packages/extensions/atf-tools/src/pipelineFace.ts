@@ -1156,6 +1156,8 @@ export const constructionParamsApprovalLines = (input: {
     | { targetRows: number; perPage: number; coverageFloor: number; coveredFields: number; reason: string }
     | undefined;
   riskSignalsProvided?: boolean;
+  /** 智能分析完成态(mode5 分析件在盘):未完成时即便有建议值也不出确认形态(卡时机断言)。 */
+  analysisReady?: boolean;
 }): string => {
   // 问题 6（owner 2026-10-28）：mode0/mode1/mode5/targeted 是工程内部叫法，
   // 一律不得出现在用户可见文案里——按「这套参数会产出什么样本」说人话。
@@ -2877,6 +2879,9 @@ export const buildPipelineTool = (
       // 采纳卡退场(owner 2026-11-07 裁定):targeted 建议在场即由内核默认写入构造规则
       // (来源标 advice_default),唯一确认面=构造确认卡随其他构造项一次确认——不再有独立
       // yes/no 采纳链(harness 不拼 --targeted-accept,内核参数已退役)。
+      // D282:判读件路径暂存——argv 声明在本函数后段(training_prep 分支先行写盘),
+      // 此处只暂存路径,声明后统一 push(patch 插码必核声明位置:argv TDZ 教训第三起)
+      let trainingPrepReadingsPath: string | undefined;
       if (args.stage === "training_prep") {
         // D262:training_prep 段同样过视觉闸(_run_risk_signals_with_gate,
         // walkthrough:4733)——判读件缺失会重跑 field_risk_signals 覆盖
@@ -2886,7 +2891,7 @@ export const buildPipelineTool = (
           const readingsPath = join(runDir, "runtime", "webui", "visual-readings.json");
           mkdirSync(dirname(readingsPath), { recursive: true });
           writeFileSync(readingsPath, JSON.stringify(args.visual_readings, null, 1) + "\n", "utf8");
-          argv.push("--visual-readings", readingsPath);
+          trainingPrepReadingsPath = readingsPath;
         }
         // T3：卡位来源链（快照兜底接线——方案卡选的卡位由此真正进启动件）
         const resolvedDevices = resolveVisibleDevices(args, runDir);
@@ -3034,6 +3039,10 @@ export const buildPipelineTool = (
       // 也显式上线解析值；E10d：allow_small_cluster_test 仅 family_split 且 true 才追加
       // 开关，缺省不出现在 argv，其它段不追加不报错）；禁拼第二套路径。
       const argv: string[] = ["--workspace", workspacePath, "--run-id", args.run_id, "--stage", args.stage];
+      // D282:training_prep 判读件写盘在前段完成,路径在此统一入 argv(声明后追加)
+      if (trainingPrepReadingsPath) {
+        argv.push("--visual-readings", trainingPrepReadingsPath);
+      }
       // 实验名显式才透传（#26）：缺省不传——内核按「复用 run 既有归属→adhoc」解析,
       // 不替调用方补默认(实验名是业务决策)。
       if (typeof args.experiment === "string" && args.experiment.trim() !== "") {

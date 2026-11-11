@@ -2891,7 +2891,8 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
           })();
           if (sessionAlive) return;
           const orchArtifacts = (() => {
-            try { return readdirSync(orchDir, { recursive: true }).filter((e) => e.endsWith(".json") || e.endsWith(".jsonl") || e.endsWith(".log")); }
+            // @types/node 26 recursive 重载返回宽类型,显式 encoding 收窄为 string[](恒文本文件名过滤)
+            try { return readdirSync(orchDir, { recursive: true, encoding: "utf8" }).filter((e) => e.endsWith(".json") || e.endsWith(".jsonl") || e.endsWith(".log")); }
             catch { return [] as string[]; }
           })();
           if (orchArtifacts.length === 0) {

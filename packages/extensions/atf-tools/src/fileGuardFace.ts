@@ -116,9 +116,13 @@ export const resolvePlanRef = (filePath: string): { ok: true; path: string } | {
   const m = PLAN_REF_RE.exec(filePath);
   if (m === null) return { ok: false, reason: "" };
   const [, planPath, ref] = m;
+  if (planPath === undefined || ref === undefined) {
+    return { ok: false, reason: "@plan 引用不可解析:路径/引用段缺失——核对 @plan 路径形态" };
+  }
   let pages: unknown = null;
   try {
-    const doc = JSON.parse(readFileSync(planPath, "utf8")) as { pages?: unknown };
+    // @types/node 26 readFileSync(path, encoding) 重载解析返回宽类型,经 unknown 二步收窄(该调用恒文本读取)
+    const doc = JSON.parse(readFileSync(planPath, "utf8") as unknown as string) as { pages?: unknown };
     pages = doc.pages ?? null;
   } catch (error) {
     return { ok: false, reason: `@plan 引用不可解析:清单读取失败(${String(error instanceof Error ? error.message : error)})——两条改法:①核对清单绝对路径(看图回执里有);②不用引用,直接传图片绝对路径` };

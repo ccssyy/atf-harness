@@ -38,8 +38,12 @@ export interface ConstructionParamsState {
   readonly cutoffLen?: number;
   /** D177:卡面呈现的智能默认(targeted 倍率推导值,缺信号时 undefined 呈现说明)。 */
   readonly targetedSuggested?: number;
+  /** P1-5:targeted 建议解析终值(agent 传参优先→盘面统计件同源兜底;决策闸入参)。 */
+  readonly targetedSuggestedResolved?: number;
   /** mode5 每图条数的智能分析建议值(agent 依 mode5_advice_stats 传;缺=未经分析)。 */
   readonly mode5Suggested?: number;
+  /** 智能分析完成态(mode5 分析件在盘;approval 旁路路径的卡面呈现用)。 */
+  readonly analysisReady?: boolean;
 }
 
 /** 决策闸结论：解析后的构造参数＋谁定的＋为什么。 */

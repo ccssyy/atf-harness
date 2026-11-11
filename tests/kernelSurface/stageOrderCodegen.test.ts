@@ -28,18 +28,20 @@ describe("R1 段序 codegen 单源锚", () => {
     );
     const m = generated.match(/KERNEL_STAGE_ORDER[^=]*= (\[.*\]);/s);
     expect(m, "生成物形态异常:找不到 KERNEL_STAGE_ORDER 数组").toBeTruthy();
-    expect(JSON.parse(m![1])).toEqual(kernelStageOrder());
+    expect(JSON.parse(m![1]!)).toEqual(kernelStageOrder());
   });
 
   it.runIf(kernelRoot)("消费面导出值与内核一致(G5 双导出:管线 9 段+v2 注册表 17 段)", async () => {
     const kernel = kernelStageOrder();
-    const mod = await import("../../../src/core/generated/stageOrder.js");
+    // 路径相对本文件(tests/kernelSurface/→仓根 src/);生成物由 codegen 产出,
+    // kernelRoot 缺席时本用例跳过,静态路径解析失败不构成门禁红。
+    const mod = await import("../../src/core/generated/stageOrder.js");
     expect([...mod.KERNEL_STAGE_ORDER]).toEqual(kernel);
     expect(mod.KERNEL_STAGE_ORDER).toHaveLength(9);
     // G5(ADR-0020):v2 注册表=17 段全段元数据(灯面/探针/卡面键对齐源)
     expect(mod.STAGE_REGISTRY_ORDER).toHaveLength(17);
     expect(mod.STAGE_REGISTRY_V2[0]).toMatchObject({ stage: "contract" });
-    expect(mod.STAGE_REGISTRY_V2.every((e) => typeof e.label_zh === "string" && e.label_zh)).toBe(true);
+    expect(mod.STAGE_REGISTRY_V2.every((e: { label_zh: unknown }) => typeof e.label_zh === "string" && e.label_zh)).toBe(true);
   });
 
   it("env 未设时如实提示(不静默绿)", () => {
