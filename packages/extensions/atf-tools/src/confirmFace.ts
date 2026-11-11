@@ -1315,10 +1315,15 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         candidatePath = slot.candidate_path;
         cardDocType = slot.doc_type;
       } else {
+        // D281:无槽位报错带探测证据(variants 枚举根+legacy 候选存在性)与改法——
+        // 不再让 agent 猜布局/手算 digest(1111 轮实锚:报错术语与实际布局脱节,
+        // agent 用 sha256sum 绕行)。
+        const legacyCandidate = legacyCandidatePath(runDir);
+        const evidence = `已探测:槽位类从 <run>/data/variants/<doc>/train.jsonl 在场目录枚举(当前 0 类——构造段产物未落位或布局不符),legacy 候选 ${legacyCandidate}${existsSync(legacyCandidate) ? " 在场" : " 不在场"}`;
         if (wantedDocType !== "") {
           return asToolValue({
             ok: false, run_id: args.run_id, error: "doc_slot_unknown", doc_type: wantedDocType, doc_types: [],
-            note: `run ${args.run_id} 无单据槽位（legacy 形态——契约件在 run 根），不接受 doc_type`,
+            note: `run ${args.run_id} 无单据槽位（legacy 形态——契约件在 run 根），不接受 doc_type。${evidence}。三条改法:①构造段(candidate_build)完成后再调,槽位类会自动就位;②单类 legacy run 不传 doc_type 直接调;③契约件确已在预期位置时传 digest 显式确认`,
           });
         }
         candidatePath = legacyCandidatePath(runDir);
@@ -1337,8 +1342,19 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         return asToolValue({ ok: false, run_id: args.run_id, note: `无契约件 digest（${candidateRel} 缺失或无 digest 字段）——无可发布凭据，不造数` });
       }
       const title = `发布确认（digest 凭据）— run ${args.run_id}${cardDocType !== null ? ` · ${cardDocType}` : ""}`;
+      // D280:确认范围行(预期管理)——本类确认仅覆盖该类契约件;多类 run 其余类
+      // 将各自单独出卡(E8 按类逐一确认设计),操作员对「还会再弹几张」有预期,
+      // 不再误判重复弹卡。合并单卡与 E8 语义冲突,候裁未做。
+      const scopeLine = cardDocType !== null
+        ? (() => {
+            const remaining = slotTypes.filter((entry) => entry !== cardDocType);
+            return remaining.length > 0
+              ? `  确认范围：仅 ${cardDocType} 类契约件（其余待确认类：${remaining.join("、")}——将各自出卡）\n`
+              : `  确认范围：${cardDocType} 类契约件（本 run 单类，此卡后无后续契约确认）\n`;
+          })()
+        : "";
       // 批㊶-U §五：凭据卡退化形式——无可调参数不虚构；卡面 note＝统一说明＋复核通道（聊天重呈）
-      const body = `  artifact: ${candidateRel}\n  digest: ${candidateDigest}\n  ${dualStageNote("契约凭据卡", { amendable: false })}`;
+      const body = `  artifact: ${candidateRel}\n  digest: ${candidateDigest}\n${scopeLine}  ${dualStageNote("契约凭据卡", { amendable: false })}`;
       writePending(runDir, { kind: "publish_confirm", run_id: args.run_id, title, digest: candidateDigest, ...(cardDocType !== null ? { doc_type: cardDocType } : {}), at: new Date().toISOString() });
       // E5 模板四行（凭据摘要续行；点按指引由审批卡自身承载）
       const verdict = await requestApproval(ctx, exec, "atf_publish_confirm",
