@@ -39,6 +39,9 @@ export interface EvalOrchArgsInput {
   readonly splitManifest?: string;
   /** 外部 eval-assets 显式确认（仅单类路径）。 */
   readonly assetsExternalConfirm?: boolean;
+  /** D274:mode1(按组口径)附加评估——仅用户在评估决策卡显式勾选时传(用户可选面);
+   *  mode0 基线组由内核恒推,占比派生已废除。 */
+  readonly evalMode1?: boolean;
 }
 
 /** 返回 argv（不含 `python3` 前缀，与调用点 `runCapture("python3", argv, …)` 同式）。 */
@@ -48,6 +51,7 @@ export const buildEvalOrchArgs = (input: EvalOrchArgsInput): string[] => {
     "--service", input.serviceDir,
     "--ckpt", input.ckptPlanDir,
     "--out", input.orchDir,
+    ...(input.evalMode1 ? ["--eval-mode1"] : []),
     "--eval-runner", input.runner,
     "--prompt-renderer", input.promptRenderer,
   ];
