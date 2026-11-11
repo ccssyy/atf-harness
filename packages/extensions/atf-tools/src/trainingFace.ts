@@ -35,6 +35,7 @@ import { isTrainingAutopilot, ATF_TRAINING_PRESET } from "./trainingPreset.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
+import { readTrainingCompletion } from "../../../../src/core/workspace/trainingCompletion.js";
 import { probeSession, resolveLaunchSessionName, tmuxCommand, tmuxTrainingEvidenceFor, evalOrchSessionBase, trainingSessionBase, type SessionProbe } from "../../../../src/core/workspace/tmuxLiveness.js";
 import { awaitGpuWindow, formatCardTable, gpuQueuePollMsFromEnv, TRAINING_RESIDUE_PATTERN } from "./gpuQueueFace.js";
 import { reconcileConfirmedWithTrainSh, formatReconcileDiff } from "./trainShReconcile.js";
@@ -202,6 +203,33 @@ export const canonicalRunRootsOf = (cfg?: { canonicalRoots?: readonly string[] }
  *  D49：显式 run_id 的目录解析 canonical 优先（注册工作区 run.json 合法即 canonical）——
  *  training/evaluate 写面全经 runDir 拼接，解析档 canonical＝写面 canonical 落点
  *  （legacy 树零新增）。 */
+// D271:训练完成 watcher（轮已闭场景的 wake——1109-6 实锚:agent 训完前结束轮次,
+// status 轮询侧 wake 永不触发;watcher 挂 launch 生命周期,不依赖轮存活）。
+export const registerCompletionWake = (runDir: string, exec: unknown, intervalMs = 60_000, maxMinutes = 150): (() => void) => {
+const agent = (exec as { agent?: { followup(msg: unknown): void } }).agent;
+if (!agent) return () => {};
+let tries = 0;
+const timer = setInterval(() => {
+  tries += 1;
+  let done = false;
+  try {
+    done = readTrainingCompletion(runDir)?.status === "ok";
+  } catch { done = false; }
+  if (done) {
+    clearInterval(timer);
+    agent.followup({
+      role: "user",
+      content: [{ type: "text", text: "训练已完成（完成文件落盘）。请继续走评估流程：出评估决策卡（环境档案/TP/轮次），确认后评估→badcase 分析→迭代建议自动推进。" }],
+      source: { kind: "atf-training-complete-watcher" },
+    });
+  } else if (tries * intervalMs >= maxMinutes * 60_000) {
+    clearInterval(timer);
+  }
+}, intervalMs);
+return () => clearInterval(timer);
+};
+
+
 export const resolveToolRun = (runsRoot: string, exec: unknown, explicitRunId?: string, canonicalRoots: readonly string[] = canonicalRunRootsOf(), workspaceHint?: string): ToolRunResolution => {
   const sessionId = sessionIdOf(exec);
   if (explicitRunId !== undefined && explicitRunId.trim() !== "") {
@@ -1163,6 +1191,8 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       const feedNote = probe.outcome === "feed_ok"
         ? "探活已确认进料（SHA=pass/ADMISSION=pass 且进程存活）"
         : `探活窗口（${String(resolveStartupProbeMs(process.env))}ms）内未见进料行但进程存活（llamafactory 启动中）——status 跟进确认`;
+
+      registerCompletionWake(runDir, exec);
       return asToolValue({
         started: true,
         tmux: sessionName,
