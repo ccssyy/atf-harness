@@ -12,13 +12,13 @@ import { join } from "node:path";
 import { runCli } from "../../src/agent/index.js";
 
 const WS_ROOT = "/data/atf/dev/eval-ws/label-qc-eval2-ws";
+const RUN_ID = `eval-l2-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}`;
 const SOURCE_ROOT = `${WS_ROOT}/batch`;
-const RUN_ID = `v1-eval-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${String(process.pid % 1000).padStart(3, "0")}`;
 
 const instruction = [
-  `对本工作区做数据登记（register）与标签质检（label_qc 段）：`,
-  `workspace 根=${WS_ROOT}（workspace_path 传这个值）；批根=${SOURCE_ROOT}（source_root）；doc_type=bl；run_id=${RUN_ID}；experiment=bl-qc-eval2。`,
-  `批内有 3 页航空提单标注（图片与 json 成对）。`,
+  `对本工作区做段级登记与标签质检（两段都用 atf_pipeline_stage 段级入口——不要用 atf_admit_data，那是准入段，本场景不需要）：`,
+  `① register 段：--stage register --source-root ${SOURCE_ROOT} --doc-type bl --run-id ${RUN_ID} --experiment bl-qc-eval2（workspace_path=${WS_ROOT}）；`,
+  `② label_qc 段：--stage label_qc 同参重跑。批内 3 页航空提单标注（图片与 json 成对）。`,
   `label_qc 双通道走完（机械检测+看图核查）：逐页看图核对框位/值/归属，写 LabelQcVisualCheck/v1 核查件后带 --visual-check 重跑；`,
   `核查发现的标注抄录误差类 issue 在核查件条目带 resolution（action=set_value+field/page/old_value/new_value/basis 看图依据）交内核自动修正；`,
   `机械冲突裁决项在全部检查完成后汇总为一次 atf_label_qc_resolve 提交。`,
