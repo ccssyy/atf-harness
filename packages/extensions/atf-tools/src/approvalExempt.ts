@@ -99,6 +99,15 @@ export const exemptOutcomeOf = (
   const toolName = typeof request?.toolName === "string" ? request.toolName : "";
   if (isBashWriteClass(toolName)) return { outcome: "allowed-once", basis: "bash-write" };
   const { ctx, policy } = deps;
+  // D284 形态①下沉:headless 无人值守宿主（env ATF_HEADLESS_PRESET=atf-unattended）
+  // ——headless bundle 有意不组装 agent-preset-registry（vendor 设计），会话预设轴恒缺,
+  // 两个既有 basis 的预设轴到不了;本 basis=env 显式声明+config chainTools 显式清单
+  // 双确认（治理面不扩大：清单外工具照旧 fail-closed）,放行留账 basis=unattended
+  // （exemptions.jsonl 语义同 D90——无人值守自动放行,审计对照常）。
+  if (process.env.ATF_HEADLESS_PRESET === "atf-unattended"
+      && policy !== undefined && (policy.chainTools ?? []).includes(toolName)) {
+    return { outcome: "allowed-once", basis: "unattended" };
+  }
   if (ctx === undefined) return null;
   // D90 全自动档：审批全免（破坏性命令通道除外——那是数据丢失护栏，不是授权问题）
   if (permissionTierOf(ctx, request) === "unattended" && !UNATTENDED_APPROVAL_KEEP.has(toolName)) {
