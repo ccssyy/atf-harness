@@ -20,7 +20,7 @@
  * 基础设施故障折算 rejected 结构化回填，模型可如实转述）。
  */
 import { createHash } from "node:crypto";
-import { ioContractViolationOf } from "./ioContractCheck.js";
+import { ioContractViolationOf, kernelStatisticWriteViolationOf } from "./ioContractCheck.js";
 import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
@@ -467,6 +467,9 @@ const writeHandler = async (params: Record<string, unknown>, host: FileToolHost)
   // schema_version 缺/错当场拒——错误在写入点暴露，不进下段才炸；scratch/raw: 零打扰）
   const ioViolation = ioContractViolationOf(guard.value.abs, content);
   if (ioViolation !== null) return rejected(ioViolation.reason, ioViolation.message);
+  // 子切片 6（M8 形态丙）：内核单源统计件外部直写拦截（分层准则正推；agent 判读件/scratch 放行）
+  const statisticViolation = kernelStatisticWriteViolationOf(guard.value.abs);
+  if (statisticViolation !== null) return rejected(statisticViolation.reason, statisticViolation.message);
 // A6：受保护产物 denylist（白名单之后的第二道——审计产物零直写；realpath 防符号链接绕过）
   if (isProtectedArtifactPath(guard.value.abs, protectedArtifactLedgerPathOf(host.env ?? {}))) {
     return rejected(PROTECTED_ARTIFACT_WRITE, `受保护产物不可直接改写: ${path}。${PROTECTED_ARTIFACT_NOTE}`);

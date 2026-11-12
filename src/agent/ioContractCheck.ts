@@ -38,6 +38,42 @@ export interface IoViolation {
 }
 
 /**
+ * 内核单源统计件闭集（子切片 6·M8 形态丙——只拦统计件，agent 判读件与 scratch 自由）。
+ * 分层准则（owner 1107 裁定）=语义判读归 agent / 事实统计归内核：闭集=内核脚本自产的事实
+ * 统计/计划/装配件文件名。1112 实锚=agent 手跑 field_risk_signals.py 直写 run 产物绕段门禁。
+ */
+const KERNEL_STATISTIC_FILES: readonly string[] = [
+  "field_risk_signals.json",
+  "visual-sample-plan.json",
+  "label-qc-report.json",
+  "qc-parallel-workorders.json",
+  "registration.json",
+  "split-manifest.json",
+  "iteration-config.json",
+  "train.sh",
+];
+
+/** run 数据面判定：路径含 run 目录标记（experiments/<exp>/<run> 或 datasets/）即视为 run 产物面；scratch/tmp 自由。 */
+const inRunDataSurface = (absPath: string): boolean =>
+  /experiments\/[a-z0-9_-]+\/[a-z0-9_-]+\//.test(absPath) || /\/datasets\//.test(absPath);
+
+/**
+ * 内核单源统计件外部直写拦截（子切片 6，纯函数）。
+ *
+ * @param absPath 写目标绝对路径。
+ * @return 违例描述（含段入口指路）；null=放行（agent 判读件/scratch/非闭集）。
+ */
+export const kernelStatisticWriteViolationOf = (absPath: string): IoViolation | null => {
+  if (!inRunDataSurface(absPath)) return null;
+  const base = absPath.split("/").pop() ?? "";
+  if (!KERNEL_STATISTIC_FILES.includes(base)) return null;
+  return {
+    reason: "kernel_statistic_write_denied",
+    message: `「${base}」是内核单源统计件（分层准则：事实统计归内核），不允许从文件工具旁路直写——旁路产物绕过段门禁校验（1112 实锚：手跑脚本直写导致段状态与盘面不一致）。how_to_fix：走段入口重跑本段由内核自产该件（如 field_risk_signals 由对应段门禁自建命令产出）；若为修数场景，用段入口的重跑/补件参数而非直写文件`,
+  };
+};
+
+/**
  * 写时校验判据（纯函数）。
  *
  * @param absPath 写目标绝对路径。
