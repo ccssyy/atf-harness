@@ -101,6 +101,25 @@ while (Date.now() < deadline) {
 
 // 轨迹与断言素材落盘
 import { writeFileSync } from "node:fs";
+
+// ── C3.2（批次任务书子切片 3）：D276 并行判据 P1 轨迹断言 ──
+// 判据文件=内核仓 docs/testing/eval-l2-parallel-dispatch-20261112.md（两载体共用）。
+// 条件化：夹具页数 <8（工单 <2 片）→ P1: SKIP（不触发并行要求，不误红）。
+const __assertP1 = (toolCalls, workorderCount) => {
+  if (workorderCount === null) {
+    console.log("[eval] P1: SKIP（qc-parallel-workorders.json 不在场——夹具未达并行判定面）");
+    return 0;
+  }
+  if (workorderCount < 2) {
+    console.log(`[eval] P1: SKIP（工单 ${String(workorderCount)} 片 <2——页数未达 8 页阈值）`);
+    return 0;
+  }
+  const hits = toolCalls.filter((n) => String(n).startsWith("dispatch_parallel"));
+  const pass = hits.length >= 1;
+  console.log(`[eval] P1: ${pass ? "PASS" : "FAIL"}（工单 ${String(workorderCount)} 片≥2，dispatch_parallel* 调用数=${String(hits.length)}——判据 eval-l2-parallel-dispatch-20261112.md）`);
+  return pass ? 0 : 3;
+};
+
 const session = internal.sessions.get(id);
 const out = {
   run_id: RUN_ID,
@@ -111,4 +130,18 @@ const out = {
 };
 writeFileSync("/tmp/l2-eval-v2-trajectory.json", JSON.stringify(out, null, 1));
 console.log(`[eval] 轨迹已落 /tmp/l2-eval-v2-trajectory.json（events=${out.events.length}，state=${out.state}）`);
-process.exit(0);
+const __toolCalls = out.events
+  .filter((e) => e.type === "tool/call")
+  .map((e) => e.data?.name ?? "");
+const __woGlob = __importSync("node:fs").readdirSync("/data/atf/dev/eval-ws/label-qc-eval2-ws/datasets", { withFileTypes: true });
+let __woCount = null;
+for (const ent of __woGlob) {
+  try {
+    const wo = JSON.parse(__importSync("node:fs").readFileSync(
+      __importSync("node:path").join("/data/atf/dev/eval-ws/label-qc-eval2-ws/datasets", ent.name, "qc-parallel-workorders.json"), "utf8"));
+    __woCount = (wo.workorders ?? []).length;
+    break;
+  } catch { /* 该 dataset 无工单，继续找 */ }
+}
+const __p1Code = __assertP1(__toolCalls, __woCount);
+process.exit(__p1Code !== 0 ? __p1Code : 0);

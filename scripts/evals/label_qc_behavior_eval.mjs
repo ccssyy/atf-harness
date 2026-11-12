@@ -25,6 +25,25 @@ const instruction = [
   `段 ok 后输出结论：每页发现什么问题、怎么处置的。`,
 ].join("\n");
 
+
+// ── C3.2（批次任务书子切片 3）：D276 并行判据 P1 轨迹断言 ──
+// 判据文件=内核仓 docs/testing/eval-l2-parallel-dispatch-20261112.md（两载体共用）。
+// 条件化：夹具页数 <8（工单 <2 片）→ P1: SKIP（不触发并行要求，不误红）。
+const __assertP1 = (toolCalls, workorderCount) => {
+  if (workorderCount === null) {
+    console.log("[eval] P1: SKIP（qc-parallel-workorders.json 不在场——夹具未达并行判定面）");
+    return 0;
+  }
+  if (workorderCount < 2) {
+    console.log(`[eval] P1: SKIP（工单 ${String(workorderCount)} 片 <2——页数未达 8 页阈值）`);
+    return 0;
+  }
+  const hits = toolCalls.filter((n) => String(n).startsWith("dispatch_parallel"));
+  const pass = hits.length >= 1;
+  console.log(`[eval] P1: ${pass ? "PASS" : "FAIL"}（工单 ${String(workorderCount)} 片≥2，dispatch_parallel* 调用数=${String(hits.length)}——判据 eval-l2-parallel-dispatch-20261112.md）`);
+  return pass ? 0 : 3;
+};
+const __toolLines = [];
 const code = await runCli({
   argv: [
     "--instruction", instruction,
@@ -39,8 +58,25 @@ const code = await runCli({
     ...process.env,
     ATF_V1_REAL_LLM_AUTHORIZED: "1",
   },
-  out: (line) => console.log(line),
+  out: (line) => { console.log(line); __toolLines.push(line); },
   err: (line) => console.error(line),
 });
 console.log(`[eval] headless 退出码=${String(code)}`);
-process.exit(code);
+const __toolCalls = __toolLines
+  .filter((l) => l.includes("tool/call") || l.includes("\"name\": \"atf_") || /\b(atf_[a-z_]+|dispatch_parallel[a-z_]*)\(/.test(l))
+  .map((l) => (l.match(/\b((?:atf|dispatch)[a-z_]*)\s*\(/) ?? [])[1] ?? "")
+  .filter((n) => n !== "");
+let __woCount = null;
+try {
+  const fs1 = await import("node:fs");
+  const path1 = await import("node:path");
+  for (const ent of fs1.readdirSync(`${WS_ROOT}/datasets`, { withFileTypes: true })) {
+    try {
+      const wo = JSON.parse(fs1.readFileSync(path1.join(`${WS_ROOT}/datasets`, ent.name, "qc-parallel-workorders.json"), "utf8"));
+      __woCount = (wo.workorders ?? []).length;
+      break;
+    } catch { /* 该 dataset 无工单 */ }
+  }
+} catch { /* datasets 缺席 */ }
+const __p1Code = __assertP1(__toolCalls, __woCount);
+process.exit(__p1Code !== 0 ? __p1Code : code);
