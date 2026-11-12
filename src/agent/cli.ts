@@ -230,6 +230,15 @@ export const buildHeadlessApproval = (
   return { kind: "surface", surface };
 };
 
+/**
+ * D276-eval:headless real 链的 bind run_id 形态——收窄到内核闭集（小写字母数字
+ * 连字符）。原 ISO 形态含大写 T/Z 被 bind_run 校验拒（internal_error:ValueError,
+ * headless real 链首次真跑暴露——此前该链从未真跑过；owner 1111 令按 TDD 补锚）。
+ * 纯函数导出=单测对象（tests/agent/headlessBindRunId.test.ts）。
+ */
+export const headlessBindRunIdOf = (d: Date): string =>
+  `v1-${d.toISOString().replace(/[:.]/g, "-").toLowerCase().replace("t", "-").replace(/z$/, "")}`;
+
 /** headless run（单一出口返回退出码；永不 throw）。 */
 export const runCli = async (deps: CliDeps): Promise<number> => {
   const env = deps.env ?? process.env;
@@ -294,7 +303,7 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
     // D276-eval 修正:run_id 形态收窄到内核闭集(小写字母数字连字符)——原 ISO 形态
     // 含大写 T/Z 被 bind_run 校验拒(internal_error:ValueError,headless real 链
     // 首次真跑暴露——此前该链从未真跑过)。
-    bindRunId = `v1-${new Date().toISOString().replace(/[:.]/g, "-").toLowerCase().replace("t", "-").replace(/z$/, "")}`;
+    bindRunId = headlessBindRunIdOf(new Date());
     await mkdir(join(wsRootResolved, "runs", bindRunId), { recursive: true });
     const invocation = deriveAtfCommand(kernelDir, ["serve"]);
     spawnDescriptor = {
