@@ -443,6 +443,13 @@ const userDecisionConfirmCardOf = async (
 ): Promise<{ ok: boolean; note: string }> => {
   const svc = ctx.get("userQuestions") as { ask?: (payload: unknown) => Promise<{ answers: Array<{ selected?: string[]; custom?: string }> }> } | undefined;
   if (svc === undefined || typeof svc.ask !== "function") {
+    // D284 无人值守形态（env 开关，与 approvalExempt/unattendedGuard 对称）:
+    // headless 宿主无 userQuestions 服务——atf-unattended 档语义=需要用户决定的点
+    // 由 agent 自行判断（decided_by=agent 落账,代决项进结论）,裁决照提不放空;
+    // 无 env=原 fail-closed 语义零变化（用户决定不可代行）。
+    if (process.env.ATF_HEADLESS_PRESET === "atf-unattended") {
+      return { ok: true, note: "无人值守档（headless）:确认卡通道缺席,裁决由 agent 判定（decided_by=agent 落账,代决项须在结论列明）" };
+    }
     return { ok: false, note: "确认卡通道缺席——裁决类工具不放行(用户决定不可代行);稍后重试或在对话里说明处置意见" };
   }
   const decisions = Array.isArray(args["decisions"]) ? (args["decisions"] as Array<Record<string, unknown>>) : [];
