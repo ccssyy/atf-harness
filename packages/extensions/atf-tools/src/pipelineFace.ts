@@ -1785,6 +1785,33 @@ const extractJsonBody = (stderr: string, marker: string): Record<string, unknown
   return null;
 };
 
+/**
+ * StageIoContract 切片 2·C7（2a 前置）：从落盘 summary 提取 field_config 结构化错误体。
+ *
+ * 断点实锚（1112 真机）：内核捕获孙进程 ValueError 后只写 summary 的 raw_response.field_config、
+ * 不回显自身 stderr → extractFieldConfigError（stderr 面）恒 null → agent 回执丢 how_to_fix/skeleton。
+ * 本函数=首选面（summary 已在扩展层解析，零额外 IO）；stderr 面降级为 summary 缺席时的兜底。
+ *
+ * @param summary 内核 stdout/落盘摘要解析结果（WalkthroughPipelineReport/v1 或 null）。
+ * @return field_config 结构化错误体；缺席＝null。
+ */
+export const summaryFieldConfigErrorOf = (summary: unknown): Record<string, unknown> | null => {
+  if (summary === null || typeof summary !== "object") return null;
+  const results = (summary as Record<string, unknown>)["results"];
+  if (!Array.isArray(results)) return null;
+  for (const item of results) {
+    if (typeof item !== "object" || item === null) continue;
+    const raw = (item as Record<string, unknown>)["raw_response"];
+    if (typeof raw === "object" && raw !== null) {
+      const fc = (raw as Record<string, unknown>)["field_config"];
+      if (typeof fc === "object" && fc !== null && !Array.isArray(fc)) {
+        return fc as Record<string, unknown>;
+      }
+    }
+  }
+  return null;
+};
+
 const extractFieldConfigError = (stderr: string): Record<string, unknown> | null => {
   const marker = '{"error": "field_config_invalid"';
   const start = stderr.indexOf(marker);
@@ -3725,7 +3752,10 @@ let visualSummary: Record<string, unknown> | undefined;
       // C1-L 面（变更单 §3 C1.3）：field_config_invalid 的结构化错误体原样透出。
       // 内核以 `ValueError: {"error": "field_config_invalid", ...}` 抛出，stderr 尾部
       // 可能还跟 traceback——用括号平衡切出对象，不靠整段 JSON.parse。
-      const fieldConfigError = result.code !== 0 ? extractFieldConfigError(result.stderr) : null;
+      // C7（2a）：落盘 summary 的 raw_response.field_config 优先（内核只写盘不回显 stderr——
+      // stderr 提取面对段内校验错误恒 null，1112 真机实锚）；stderr 面保留为 summary 缺席兜底。
+      const fieldConfigError = summaryFieldConfigErrorOf(summary)
+        ?? (result.code !== 0 ? extractFieldConfigError(result.stderr) : null);
       // C2：内核判分组建议不合格（grouping_proposal_invalid）时 errors 原样透出——不压成一句话
       const groupingKernelErrors = result.code !== 0 ? groupingProposalErrorsOf(summary, result.stderr) : null;
       // 分组表的字段名：run 内字段配置＋本次显式字段配置（后者优先——用户刚给的那份最新）
