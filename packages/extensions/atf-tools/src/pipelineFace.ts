@@ -157,7 +157,7 @@ import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorF
 // E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与本次训练方案卡同源）
 import { formAskQuestion, editsFromFormAnswers, visibleDevicesViolationsOf, type ChoiceAskQuestion, type FormAskService } from "./confirmFace.js";
 import { decideConstructionParams } from "./constructionGate.js";
-import { approvalBypassed, permissionTierOf } from "./permissionTier.js";
+import { approvalBypassed, approvalDecidedByOf, approvalTailLineOf, permissionTierOf } from "./permissionTier.js";
 import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 // E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
 import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
@@ -3087,7 +3087,7 @@ export const buildPipelineTool = (
         + (args.stage === "training_prep" ? `\n${trainingOutputDirApprovalLine(trainingOutputDirOf(runDir))}` : "")
         // T3：卡位终值与来源上卡（仅 training_prep——「卡面选了什么卡」与「实际绑了什么卡」同屏可对账）
         + (args.stage === "training_prep" ? `\n${visibleDevicesApprovalLine(visibleDevices, visibleDevicesSource)}` : "")
-        + "\n仅 owner 可点；执行方不得代点");
+        + approvalTailLineOf(permissionTierOf(ctx, exec)));
       if (!verdict.ok) return approvalDeniedResult("atf_pipeline_stage", verdict.outcome);
       // 落点单源（A2.2b）：与内核同一决定者 <workspace_path>/runs/<run_id>；resolveRunDir 本工具内退役
       // （E3：runDir 已提前到审批前计算——预算三参快照兜底同源落点，此处不复算）。
@@ -3471,8 +3471,11 @@ let visualSummary: Record<string, unknown> | undefined;
       // 用 env 而非 CLI 旗标：pin 内旧内核不认识 --access-mode 会让整条链 argparse
       // 失败，env 未识别＝被忽略——升级前后同一份 harness 都安全，re-pin 后自动生效。
       const accessMode = sandboxModeOf(ctx, exec) === DANGER_FULL_ACCESS_SANDBOX ? "full" : "limited";
+      // C1'（切片 2）：审批决定来源随段进程 env 传导——内核 Approval Ledger record 的
+      // decided_by 权威词表（approvalDecidedByOf 档位推导单源，零时间启发式）。
+      const approvalDecidedBy = approvalDecidedByOf(permissionTierOf(ctx, exec));
       const result = await runPipeline(pipelineCommand, argv, pipelineTimeoutMs,
-        { ATF_ACCESS_MODE: accessMode });
+        { ATF_ACCESS_MODE: accessMode, ATF_APPROVAL_DECIDED_BY: approvalDecidedBy });
       // C2：分组建议临时件用完即删（scratch/tmp 语义——不留在工作区冒充产物）
       if (groupingProposalPath !== null) {
         try { rmSync(groupingProposalPath, { force: true }); } catch { /* 删不掉不阻塞段回报 */ }
@@ -3793,6 +3796,8 @@ let visualSummary: Record<string, unknown> | undefined;
           : {}),
         ok: result.code === 0,
         exit_code: result.code,
+        // C1'：审批决定来源上回执（agent/用户可见——账面如实，不伪装 owner 决定）
+        approval_decided_by: approvalDecidedBy,
         // 询问闸：本次权限档 + 内核渲染的判定报告（「怎么执行 → 得到什么结果」，
         // 与内核 <run>/analysis/decisions/decisions.jsonl 同源；旧内核无该块＝省略键）。
         access_mode: accessMode,

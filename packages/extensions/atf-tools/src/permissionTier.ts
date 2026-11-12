@@ -43,6 +43,33 @@ export const permissionTierOf = (ctx: ServiceCtxFace, exec: ExecSessionFace): Pe
 /** 审批卡是否可免（完全权限与全自动两档都免；guarded 档零变化）。 */
 export const approvalBypassed = (tier: PermissionTier): boolean => tier !== "guarded";
 
+/** 审批决定来源三值（切片 2·C1'——Approval Ledger decided_by 权威词表；非法值 fail-closed 在消费端校验）。 */
+export type ApprovalDecidedBy = "auto" | "policy" | "owner";
+
+/**
+ * 档位 → 审批决定来源（切片 2·C2'，owner 确认口径）：可判定推导，零时间启发式——
+ * 账面如实记「策略自动」而非「谁点的」事实。1112 真机实锚：38 次 2-27ms 自动放行
+ * 全被记成 owner 批准=账面伪造；本推导修正该语义。
+ *
+ * @param tier 权限档（permissionTierOf 单源判定）。
+ * @return auto=无人值守自动；policy=完全权限策略档自动放行；owner=guarded 档真提问卡等待。
+ */
+export const approvalDecidedByOf = (tier: PermissionTier): ApprovalDecidedBy =>
+  tier === "unattended" ? "auto" : tier === "full-access" ? "policy" : "owner";
+
+/**
+ * 审批 reason 尾句按档位分支（切片 2·C3'：文案与行为一致——「仅 owner 可点」只在真提问档出现）。
+ *
+ * @param tier 权限档。
+ * @return 尾句（带前导换行，拼接进既有 reason 主体）。
+ */
+export const approvalTailLineOf = (tier: PermissionTier): string =>
+  tier === "guarded"
+    ? "\n仅 owner 可点；执行方不得代点"
+    : tier === "full-access"
+      ? "\n按当前权限档位自动放行（审计落账 decided_by=policy，owner 未交互）"
+      : "\n无人值守档自动放行（审计落账 decided_by=auto）";
+
 /** 问题卡是否还能弹给人（只有全自动档不弹——全自动不是「不问」，是「agent 自己决定」。 */
 export const questionsAllowed = (tier: PermissionTier): boolean => tier !== "unattended";
 
