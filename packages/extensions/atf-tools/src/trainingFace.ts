@@ -30,7 +30,7 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
 import { scanRunDir } from "../../atf-ui/src/server.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
-import { permissionTierOf } from "./permissionTier.js";
+import { approvalTailLineOf, permissionTierOf } from "./permissionTier.js";
 import { isTrainingAutopilot, ATF_TRAINING_PRESET } from "./trainingPreset.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
@@ -2777,7 +2777,7 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
             : ["分区清单：无绑定——owner 级外部确认通道"]),
           "详细报告已生成（评估轮目录内）",
           "如需调整评估数据、adapter 或服务参数，直接回复要改的项；不改直接回复「按现值确认」",
-          "仅 owner 可点；执行方不得代点",
+          approvalTailLineOf(permissionTierOf(ctx, exec)),
         ].join("\n");
       if (permissionTierOf(ctx as never, exec as never) === "full-access") {
         const card = await evalReleaseConfirmCardOf(ctx, exec, runId, reasonText);

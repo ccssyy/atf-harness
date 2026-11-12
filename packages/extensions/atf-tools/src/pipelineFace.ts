@@ -157,7 +157,7 @@ import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorF
 // E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与本次训练方案卡同源）
 import { formAskQuestion, editsFromFormAnswers, visibleDevicesViolationsOf, type ChoiceAskQuestion, type FormAskService } from "./confirmFace.js";
 import { decideConstructionParams } from "./constructionGate.js";
-import { approvalBypassed, permissionTierOf } from "./permissionTier.js";
+import { approvalBypassed, approvalDecidedByOf, approvalTailLineOf, permissionTierOf } from "./permissionTier.js";
 import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 // E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
 import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
@@ -1785,6 +1785,33 @@ const extractJsonBody = (stderr: string, marker: string): Record<string, unknown
   return null;
 };
 
+/**
+ * StageIoContract 切片 2·C7（2a 前置）：从落盘 summary 提取 field_config 结构化错误体。
+ *
+ * 断点实锚（1112 真机）：内核捕获孙进程 ValueError 后只写 summary 的 raw_response.field_config、
+ * 不回显自身 stderr → extractFieldConfigError（stderr 面）恒 null → agent 回执丢 how_to_fix/skeleton。
+ * 本函数=首选面（summary 已在扩展层解析，零额外 IO）；stderr 面降级为 summary 缺席时的兜底。
+ *
+ * @param summary 内核 stdout/落盘摘要解析结果（WalkthroughPipelineReport/v1 或 null）。
+ * @return field_config 结构化错误体；缺席＝null。
+ */
+export const summaryFieldConfigErrorOf = (summary: unknown): Record<string, unknown> | null => {
+  if (summary === null || typeof summary !== "object") return null;
+  const results = (summary as Record<string, unknown>)["results"];
+  if (!Array.isArray(results)) return null;
+  for (const item of results) {
+    if (typeof item !== "object" || item === null) continue;
+    const raw = (item as Record<string, unknown>)["raw_response"];
+    if (typeof raw === "object" && raw !== null) {
+      const fc = (raw as Record<string, unknown>)["field_config"];
+      if (typeof fc === "object" && fc !== null && !Array.isArray(fc)) {
+        return fc as Record<string, unknown>;
+      }
+    }
+  }
+  return null;
+};
+
 const extractFieldConfigError = (stderr: string): Record<string, unknown> | null => {
   const marker = '{"error": "field_config_invalid"';
   const start = stderr.indexOf(marker);
@@ -3060,7 +3087,7 @@ export const buildPipelineTool = (
         + (args.stage === "training_prep" ? `\n${trainingOutputDirApprovalLine(trainingOutputDirOf(runDir))}` : "")
         // T3：卡位终值与来源上卡（仅 training_prep——「卡面选了什么卡」与「实际绑了什么卡」同屏可对账）
         + (args.stage === "training_prep" ? `\n${visibleDevicesApprovalLine(visibleDevices, visibleDevicesSource)}` : "")
-        + "\n仅 owner 可点；执行方不得代点");
+        + approvalTailLineOf(permissionTierOf(ctx, exec)));
       if (!verdict.ok) return approvalDeniedResult("atf_pipeline_stage", verdict.outcome);
       // 落点单源（A2.2b）：与内核同一决定者 <workspace_path>/runs/<run_id>；resolveRunDir 本工具内退役
       // （E3：runDir 已提前到审批前计算——预算三参快照兜底同源落点，此处不复算）。
@@ -3444,8 +3471,11 @@ let visualSummary: Record<string, unknown> | undefined;
       // 用 env 而非 CLI 旗标：pin 内旧内核不认识 --access-mode 会让整条链 argparse
       // 失败，env 未识别＝被忽略——升级前后同一份 harness 都安全，re-pin 后自动生效。
       const accessMode = sandboxModeOf(ctx, exec) === DANGER_FULL_ACCESS_SANDBOX ? "full" : "limited";
+      // C1'（切片 2）：审批决定来源随段进程 env 传导——内核 Approval Ledger record 的
+      // decided_by 权威词表（approvalDecidedByOf 档位推导单源，零时间启发式）。
+      const approvalDecidedBy = approvalDecidedByOf(permissionTierOf(ctx, exec));
       const result = await runPipeline(pipelineCommand, argv, pipelineTimeoutMs,
-        { ATF_ACCESS_MODE: accessMode });
+        { ATF_ACCESS_MODE: accessMode, ATF_APPROVAL_DECIDED_BY: approvalDecidedBy });
       // C2：分组建议临时件用完即删（scratch/tmp 语义——不留在工作区冒充产物）
       if (groupingProposalPath !== null) {
         try { rmSync(groupingProposalPath, { force: true }); } catch { /* 删不掉不阻塞段回报 */ }
@@ -3725,7 +3755,10 @@ let visualSummary: Record<string, unknown> | undefined;
       // C1-L 面（变更单 §3 C1.3）：field_config_invalid 的结构化错误体原样透出。
       // 内核以 `ValueError: {"error": "field_config_invalid", ...}` 抛出，stderr 尾部
       // 可能还跟 traceback——用括号平衡切出对象，不靠整段 JSON.parse。
-      const fieldConfigError = result.code !== 0 ? extractFieldConfigError(result.stderr) : null;
+      // C7（2a）：落盘 summary 的 raw_response.field_config 优先（内核只写盘不回显 stderr——
+      // stderr 提取面对段内校验错误恒 null，1112 真机实锚）；stderr 面保留为 summary 缺席兜底。
+      const fieldConfigError = summaryFieldConfigErrorOf(summary)
+        ?? (result.code !== 0 ? extractFieldConfigError(result.stderr) : null);
       // C2：内核判分组建议不合格（grouping_proposal_invalid）时 errors 原样透出——不压成一句话
       const groupingKernelErrors = result.code !== 0 ? groupingProposalErrorsOf(summary, result.stderr) : null;
       // 分组表的字段名：run 内字段配置＋本次显式字段配置（后者优先——用户刚给的那份最新）
@@ -3763,6 +3796,8 @@ let visualSummary: Record<string, unknown> | undefined;
           : {}),
         ok: result.code === 0,
         exit_code: result.code,
+        // C1'：审批决定来源上回执（agent/用户可见——账面如实，不伪装 owner 决定）
+        approval_decided_by: approvalDecidedBy,
         // 询问闸：本次权限档 + 内核渲染的判定报告（「怎么执行 → 得到什么结果」，
         // 与内核 <run>/analysis/decisions/decisions.jsonl 同源；旧内核无该块＝省略键）。
         access_mode: accessMode,
