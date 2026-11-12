@@ -528,7 +528,14 @@ const userDecisionConfirmCardOf = async (
     const picked = [...(first?.selected ?? [])].join("") || (first?.custom ?? "");
     const confirmed = picked.includes("确认按建议提交") || (picked.trim() !== "" && !picked.includes("暂停"));
     return { ok: confirmed, note: confirmed ? "用户已在卡上确认(留痕)" : "用户暂停——未提交,等调整意见" };
-  } catch {
+  } catch (error) {
+    // D284 无人值守形态（与 svc 缺席分支对称）:ask 通道在 headless 异常/暂停
+    // （user_decision_paused）——atf-unattended 档裁决照提（decided_by=agent 落账,
+    // 代决项列明）;无 env 原 fail-closed 零变化。
+    if (process.env.ATF_HEADLESS_PRESET === "atf-unattended") {
+      console.warn(`[approval] 无人值守档（headless）:确认卡通道异常（${String(error instanceof Error ? error.message : error).slice(0, 80)}）,裁决由 agent 判定照提（decided_by=agent 落账）`);
+      return { ok: true, note: "无人值守档（headless）:确认卡通道异常,裁决由 agent 判定照提（decided_by=agent 落账,代决项须在结论列明）" };
+    }
     return { ok: false, note: "确认卡通道异常——不放行" };
   }
 };
