@@ -109,12 +109,23 @@ describe("D3 launchArtifactsOf（启动件在场判定）", () => {
     expect(artifacts.iteration_config).toBe("prep/iteration-config/iteration-config.json");
   });
 
-  it("两件都缺 → present=false 且 reason=assemble_not_requested（现场即此形态）", () => {
+  it("两件都缺且槽位 0 → reason=variants_slots_absent + verdict_basis 带槽位计数（M2:真实判定依据；1112 真机堵点即此形态）", () => {
     const artifacts = launchArtifactsOf(tempRoot());
     expect(artifacts.present).toBe(false);
     expect(artifacts.train_sh).toBeNull();
     expect(artifacts.iteration_config).toBeNull();
+    expect(artifacts.reason).toBe("variants_slots_absent");
+    expect(artifacts.verdict_basis).toContain("0");
+  });
+
+  it("槽位在盘但启动件缺 → assemble_not_requested 且 verdict_basis 带真实槽位数（装配没跑，不是没输入）", () => {
+    const runDir = tempRoot();
+    mkdirSync(join(runDir, "data", "variants", "bl"), { recursive: true });
+    writeFileSync(join(runDir, "data", "variants", "bl", "train.jsonl"), "{}\n", "utf8");
+    const artifacts = launchArtifactsOf(runDir);
+    expect(artifacts.present).toBe(false);
     expect(artifacts.reason).toBe("assemble_not_requested");
+    expect(artifacts.verdict_basis).toContain("1");
   });
 
   it("只产一半 → assemble_incomplete（说清是装配没跑完，不是没跑）", () => {

@@ -2126,7 +2126,9 @@ export const launchArtifactsOf = (
   present: boolean;
   train_sh: string | null;
   iteration_config: string | null;
-  reason: "assemble_not_requested" | "assemble_incomplete" | null;
+  reason: "variants_slots_absent" | "assemble_not_requested" | "assemble_incomplete" | null;
+  /** 真实判定依据（槽位计数）——reason 的推导事实，agent 无需翻源码即见判定链（M2）。 */
+  verdict_basis: string | null;
 } => {
   const trainSh = join(runDir, "launch", "train.sh");
   // 迭代配置的落点名同样走单源（读侧 resolveRunFile：v3 映射形态在前、v2 存量形态在后）。
@@ -2139,13 +2141,40 @@ export const launchArtifactsOf = (
       train_sh: relative(runDir, trainSh),
       iteration_config: relative(runDir, iterConfig),
       reason: null,
+      verdict_basis: null,
+    };
+  }
+  // StageIoContract M2 修正：reason 由真实判定依据（variants 槽位计数）推导，不再由
+  // 启动件文件在场倒推语义（1112 真机实锚：assemble_effective=true 与 reason=
+  // assemble_not_requested 并存=倒推测不中真堵点——真堵点是槽位 0）。
+  const slotCount = slotDocCountOf(runDir);
+  const basis = `variants 槽位数=${String(slotCount)}（联合装配枚举 prep|data/variants/<doc>/ 的槽位目录）`;
+  if (hasTrain || hasIter) {
+    // 启动件部分在场=装配已跑（缺的是剩余件）——槽位数只作判定依据注记
+    return {
+      present: false,
+      train_sh: hasTrain ? relative(runDir, trainSh) : null,
+      iteration_config: hasIter ? relative(runDir, iterConfig) : null,
+      reason: "assemble_incomplete",
+      verdict_basis: basis,
+    };
+  }
+  if (slotCount === 0) {
+    // 两件全缺+槽位 0=真堵点：上游构造产物缺席（1112 真机实锚形态）
+    return {
+      present: false,
+      train_sh: null,
+      iteration_config: null,
+      reason: "variants_slots_absent",
+      verdict_basis: basis,
     };
   }
   return {
     present: false,
-    train_sh: hasTrain ? relative(runDir, trainSh) : null,
-    iteration_config: hasIter ? relative(runDir, iterConfig) : null,
-    reason: hasTrain || hasIter ? "assemble_incomplete" : "assemble_not_requested",
+    train_sh: null,
+    iteration_config: null,
+    reason: "assemble_not_requested",
+    verdict_basis: basis,
   };
 };
 
@@ -3723,8 +3752,10 @@ let visualSummary: Record<string, unknown> | undefined;
                   ? {}
                   : {
                       launch_next:
-                        "启动件尚未生成——用 assemble=true 重跑本段（内核枚举 run 的单据槽位合并生成 iteration-config 与 launch/train.sh），" +
-                        "或用 atf_joint_train 做联合装配并启动；不要直接调 atf_run_training（缺启动件会空跑）",
+                        artifacts.reason === "variants_slots_absent"
+                          ? "上游产物缺席——variants 槽位 0 个（构造段产物未落位）：先完成 candidate_build 段产出 data/variants/<doc>/train.jsonl 槽位，再重跑本段（槽位 0 时 assemble 无输入，跑了也不产启动件）"
+                          : "启动件尚未生成——用 assemble=true 重跑本段（内核枚举 run 的单据槽位合并生成 iteration-config 与 launch/train.sh），" +
+                            "或用 atf_joint_train 做联合装配并启动；不要直接调 atf_run_training（缺启动件会空跑）",
                     }),
               };
             })()
@@ -3740,6 +3771,12 @@ let visualSummary: Record<string, unknown> | undefined;
         ...(fact_segment !== null ? { fact_segment } : {}),
         // D24h：账本 approval_id 回传（解析失败/缺席省略键——typert lossless 拒 undefined 键）
         ...(approvalEntryId !== undefined ? { approval_entry_id: approvalEntryId } : {}),
+        // StageIoContract C3/C4：链视图+缺件修复指令（内核 io_projection_of 单源生成，
+        // 本层零解释透传；旧内核无该键＝省略降级）。
+        ...(summary !== null && typeof summary === "object"
+              && (summary as Record<string, unknown>)["io_projection"] !== undefined
+            ? { io_projection: (summary as Record<string, unknown>)["io_projection"] }
+            : {}),
         // A-E14b：base_model 对账值（explicit＝显式下传优先；对端摘要携带 source 时透传）
         ...(baseModelSourceOf(needsBaseModel, summary) !== undefined ? { base_model_source: baseModelSourceOf(needsBaseModel, summary) } : {}),
         // D89：分组方案标注（仅 experiment_setup 段）——「缺省不静默」：显式给标注 explicit，
