@@ -26,7 +26,11 @@ sys.path.insert(0, ${JSON.stringify(resolve(kernelRoot, "src"))})
 from agentic_training_flow.application.stage_registry import STAGE_ORDER_V2, walkthrough_subset
 print(json.dumps({
     "registry": [
-        {"stage": e.stage, "label_zh": e.label_zh, "phase": e.phase, "skill_package": e.skill_package}
+        {"stage": e.stage, "label_zh": e.label_zh, "phase": e.phase, "skill_package": e.skill_package,
+         "output_artifacts": [
+             {"name": d.name, "schema_ref": d.schema_ref, "path_pattern": d.path_pattern}
+             for d in e.output_artifacts
+         ]}
         for e in STAGE_ORDER_V2
     ],
     "walkthrough": list(walkthrough_subset()),
@@ -57,12 +61,12 @@ for (const stage of walkthrough) {
 const banner =
   "// 自动生成(R1/G5 段序 codegen v2)——内核 stage_registry.STAGE_ORDER_V2 唯一源,请勿手改;\n" +
   "// 重生成: npm run codegen:stage-order (源=ATF_KERNEL_SOURCE 内核仓 stage_registry)\n" +
-  "// KERNEL_STAGE_ORDER=walkthrough 管线段序(工具面 CLI 合同);STAGE_REGISTRY_V2=17 段全段元数据(ADR-0020)\n";
+  "// KERNEL_STAGE_ORDER=walkthrough 管线段序(工具面 CLI 合同);STAGE_REGISTRY_V2=17 段全段元数据(ADR-0020)+output_artifacts(StageIoContract C2 写时校验声明)\n";
 const registryBody = JSON.stringify(registry);
 const walkthroughBody = JSON.stringify(walkthrough);
 const ts =
   `${banner}` +
-  `export const STAGE_REGISTRY_V2: readonly { stage: string; label_zh: string; phase: number; skill_package: string }[] = ${registryBody};\n` +
+  `export const STAGE_REGISTRY_V2: readonly { stage: string; label_zh: string; phase: number; skill_package: string; output_artifacts: readonly { name: string; schema_ref: string; path_pattern: string }[] }[] = ${registryBody};\n` +
   `export const STAGE_REGISTRY_ORDER: readonly string[] = ${JSON.stringify(registryStages)};\n` +
   `export const KERNEL_STAGE_ORDER: readonly string[] = ${walkthroughBody};\n`;
 const js =
