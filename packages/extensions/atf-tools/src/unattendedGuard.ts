@@ -32,6 +32,11 @@ export const unattendedDecideOutcomeOf = (
   request: QuestionRequest,
   deps: { ctx?: ServiceCtxFace },
 ): boolean => {
+  // D284 形态①下沉（与 approvalExempt env basis 对称）:headless 无人值守宿主
+  // （env ATF_HEADLESS_PRESET=atf-unattended）——headless bundle 不组装 preset
+  // registry,会话预设轴恒缺,tier 判定到不了 unattended;env 显式声明即全自动档
+  // 提问语义（问题交回模型自决,decided_by=agent 落账）,无 env 零变化。
+  if (process.env.ATF_HEADLESS_PRESET === "atf-unattended") return true;
   if (deps.ctx === undefined) return false;
   const tier: PermissionTier = permissionTierOf(deps.ctx, request);
   return tier === "unattended";
