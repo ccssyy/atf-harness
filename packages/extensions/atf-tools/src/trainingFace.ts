@@ -33,7 +33,7 @@ import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./ap
 import { approvalTailLineOf, permissionTierOf } from "./permissionTier.js";
 import { isTrainingAutopilot, ATF_TRAINING_PRESET } from "./trainingPreset.js";
 import { asToolValue } from "./schemaTranslate.js";
-import { decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
+import { ownerInterventionOf, decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { readTrainingCompletion } from "../../../../src/core/workspace/trainingCompletion.js";
 import { probeSession, resolveLaunchSessionName, tmuxCommand, tmuxTrainingEvidenceFor, evalOrchSessionBase, trainingSessionBase, type SessionProbe } from "../../../../src/core/workspace/tmuxLiveness.js";
@@ -2341,7 +2341,9 @@ const instrumentTrainOutcome = <T>(tool: T): T => {
     );
     const escalated = decorated.escalate_to_user === true;
     if (escalated) {
-      decorated.user_summary = { ...decorated.user_summary, next: "连续两次没成功——需要你介入：失败原因已写在回执里；也可以直接说要改哪一项" };
+      decorated.user_summary = { ...decorated.user_summary, next: ownerInterventionOf(JSON.stringify(decorated).slice(0, 4000))
+          ? "连续两次没成功——需要你介入：失败原因属于凭据/白名单/审批类（只有你能决定），已写在回执里"
+          : "连续两次没成功——失败原因已写在回执里；我先按它继续处理，若卡住会再向你报告" };
     }
     // 终态判定与首投（D5）：纯函数判定（可测），Set 会话×run 去重只投一次
     let terminalNotice: UserSummary | null = null;

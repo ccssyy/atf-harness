@@ -164,7 +164,7 @@ import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../.
 import { fieldNameMapOf, readExperimentGrouping, renderGroupingSection } from "../../../../src/core/workspace/experimentGrouping.js";
 import { fieldsDigestOf, groupingDecisionPathOf, readGroupingDecision, writeGroupingDecision } from "./groupingDecision.js";
 import { fieldChoiceAnyLedgerOf, fieldChoiceDetailOf, readFieldChoice, readFieldLabels, writeFieldChoice } from "./fieldChoice.js";
-import { decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
+import { escalationKeyOf, escalationFiredOf, clearEscalation, ownerInterventionOf, decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
 import { join } from "node:path";
 
 import { tmpdir } from "node:os";
@@ -4064,6 +4064,9 @@ let visualSummary: Record<string, unknown> | undefined;
           }
         }
       } catch { /* 报告呈现失败不阻断段回执 */ }
+      const escScope = `${String(args["stage"] ?? "")}:${typeof args["doc_type"] === "string" ? String(args["doc_type"]) : ""}`;
+      const escKey = escalationKeyOf(sessionIdOfExec(exec) ?? null, "atf_pipeline_stage", escScope);
+      const hadEscalation = escalationFiredOf(escKey);
       const decorated = decorateOutcome(
         receipt,
         sessionIdOfExec(exec) ?? null,
@@ -4071,12 +4074,26 @@ let visualSummary: Record<string, unknown> | undefined;
         ok,
         stageUserSummaryOf(receipt, ok, String(args["stage"] ?? "")),
         // P1-8:按段+doc 分键计数——ci 的失败不连带 bl 提前「连续两次」升级
-        `${String(args["stage"] ?? "")}:${typeof args["doc_type"] === "string" ? String(args["doc_type"]) : ""}`,
+        escScope,
       );
+      // C4.1（子切片 4）：自愈对账——上一轮升级、本轮成功=补发作废对冲（append-only 流的撤回形态）
+      if (ok && hadEscalation) {
+        clearEscalation(escKey);
+        projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, {
+          conclusion: `${String(args["stage"] ?? "")} 段已自愈成功——前述「连续两次没成功」提醒作废，无需处理`,
+          stage: String(args["stage"] ?? ""),
+          next: "继续后续段即可",
+        });
+      }
       if (decorated.escalate_to_user === true) {
+        // C4.1：文案与真实可介入性挂钩——凭据/白名单/审批类=owner 决定才能解（强文案）；
+        // 缺件/参数/schema 类=agent 可自愈（软文案；自愈成功会对冲作废——1112 实锚 13 条假告警的修正）
+        const ownerNeeded = ownerInterventionOf(JSON.stringify(receipt).slice(0, 4000));
         const summary: UserSummary = {
           ...decorated.user_summary,
-          next: "连续两次没成功——需要你介入：看一眼回执里缺的条件，或直接说要不要换做法",
+          next: ownerNeeded
+            ? "连续两次没成功——需要你介入：缺失条件属于凭据/白名单/审批类（只有你能决定），看一眼回执"
+            : "连续两次没成功——我先按回执缺的条件继续处理；若最终卡住会再向你报告（你也可以随时说换做法）",
         };
         decorated.user_summary = summary;
         // 升级是「必须被看见」的一条：直接进会话流（不依赖 agent 转述）

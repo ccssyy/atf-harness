@@ -52,6 +52,34 @@ export const recordToolSuccess: (sessionKey: string | null, tool: string, scope?
   failureCounts.delete(countKeyOf(sessionKey, tool, scope));
 };
 
+/** 升级已发射键（C4.1：自愈对账——升级发射后自愈成功须对冲撤回，append-only 流的对冲=补发作废说明）。 */
+const escalationFiredKeys = new Set<string>();
+
+/** 升级对账键（与内部计数键同构；调用点凭此查询/清除发射标记）。 */
+export const escalationKeyOf: (sessionKey: string | null, tool: string, scope?: string) => string = countKeyOf;
+
+/** 升级发射时标记（decorateOutcome 内部调用）。 */
+export const markEscalationFired: (key: string) => void = (key) => {
+  escalationFiredKeys.add(key);
+};
+
+/** 查询升级是否曾发射（自愈对冲触发依据）。 */
+export const escalationFiredOf: (key: string) => boolean = (key) => escalationFiredKeys.has(key);
+
+/** 清除发射标记，返回清除前是否在场（true=曾发射→调用点应补发对冲 notice）。 */
+export const clearEscalation: (key: string) => boolean = (key) => escalationFiredKeys.delete(key);
+
+/**
+ * owner 介入类判别（C4.1：文案与真实可介入性挂钩——1112 实锚 13 条「需要你介入」全为
+ * agent 自愈）。命中凭据/白名单/审批类=owner 决定才能解（强文案）；缺件/参数/schema 类=
+ * agent 可自愈（软文案+自愈对冲）。
+ *
+ * @param text 升级回执的 missing/reason_codes 文本（JSON 序列化形态即可）。
+ * @return true=owner 介入类。
+ */
+export const ownerInterventionOf: (text: string) => boolean = (text) =>
+  /凭据|user_confirmed|allowlist|白名单|审批|需要 owner/.test(text);
+
 /** 失败次数 → 升级字段（未达阈值＝null，回执保持原样）。 */
 export const escalationOf: (count: number) => { escalate_to_user: true; failure_count: number } | null = (count) =>
   count >= ESCALATION_FAILURE_THRESHOLD ? { escalate_to_user: true, failure_count: count } : null;
@@ -103,7 +131,9 @@ export const decorateOutcome = <T extends Record<string, unknown>>(
   const count = recordToolFailure(sessionKey, tool, scope);
   const escalated = escalationOf(count);
   const withSummary = withUserSummary(receipt, summary);
-  return escalated === null ? withSummary : { ...withSummary, ...escalated };
+  if (escalated === null) return withSummary;
+  markEscalationFired(countKeyOf(sessionKey, tool, scope));
+  return { ...withSummary, ...escalated };
 };
 
 /** 会话可见通知的载体形态（vendor user/message 的 data 形状；source 为 merge-extensible producer 标签）。 */
