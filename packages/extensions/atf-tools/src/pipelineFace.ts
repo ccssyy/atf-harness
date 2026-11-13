@@ -3888,6 +3888,12 @@ let visualSummary: Record<string, unknown> | undefined;
         ...(args.stage === "experiment_setup"
           ? { grouping_section: renderGroupingSection(readExperimentGrouping(runDir), fieldNameMapOf(runDir)) }
           : {}),
+        // 根治刀（1113）：内核 grouping_template 原样透传——分组候选模板单源=内核
+        // proposal_template 机械生成（字段集=实验门锁定闭集），harness 只透传不拼装，
+        // agent 出分组卡前即得可照抄全集序（罗列动作从 agent 消失）。
+        ...(args.stage === "experiment_setup" && asRecordOf(summary)?.["grouping_template"] !== undefined
+          ? { grouping_template: asRecordOf(summary)?.["grouping_template"] }
+          : {}),
         // C2：分组四态回执（grouping_source／grouping_decision）＋分组表（两档都必须有，
         // agent 可原样贴到对话）＋内核判不合格时的 errors 原文
         ...(args.stage === "experiment_setup" && groupingFace !== undefined
