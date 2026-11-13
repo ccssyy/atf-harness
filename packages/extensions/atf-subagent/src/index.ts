@@ -47,6 +47,8 @@ import { createFauxStreamFn, fauxAssistantMessage } from "../../../../src/agent/
 import type { SpikeBridgeTransport } from "../../../../src/agent/atfAgentTools.js";
 import type { BridgeError } from "../../../../src/bridge/index.js";
 import { requestApproval } from "../../atf-tools/src/approvalFace.js";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { bridgeManagerSlot } from "../../atf-tools/src/index.js";
 import { resolveSessionWorkspace, sessionCwdOfExec } from "../../atf-tools/src/scopeFace.js";
 
@@ -109,6 +111,17 @@ const looseObjectOutput = { type: "object", additionalProperties: true } as cons
 const renderAsJsonText = (_args: unknown, value: unknown): Array<{ type: "text"; text: string }> => [
   { type: "text", text: JSON.stringify(value, null, 1) },
 ];
+
+/** content text → JSON 解析（失败回执 error 面提取；非 JSON 返回 null）。 */
+const safeParseObj = (text: string): Record<string, unknown> | null => {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return parsed !== null && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+};
+const safeParseJson = safeParseObj;
 
 /** execute 返回收口：递归清洗为无损 JSON（DSH output 校验拒收 undefined 等非 lossless
  *  值——与 atf-tools asToolValue 同口径，几行通用件自带）。 */
@@ -193,6 +206,7 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
   // —— 账本域锚：plugin 自持 box + 会话级域连接（惰性解析，dispatch 执行时填充）——
   const scopeRefBox: { current: ScopeRef | undefined } = { current: undefined };
   let scopedConn: Promise<ScopedConnection> | null = null;
+  let scopedRoot: string | null = null;
   let scopeWarned = false;
   const ensureScope = async (exec: unknown): Promise<void> => {
     if (scopeRefBox.current !== undefined) return;
@@ -205,6 +219,7 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
         }
         return;
       }
+      if (scopedRoot === null) scopedRoot = workspace.root;
       if (scopedConn === null) scopedConn = manager.transportForWorkspace(workspace.root);
       const conn = await scopedConn;
       const response = await conn.request("atf_workspace_status", {});
@@ -273,11 +288,66 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
       return surfaceVerdictFromApproval(verdict);
     },
   };
+  // —— D293：工单装载器（workorders_path 形态）——工单文件解析+页图定位+白名单
+  // 校验+base64 组装全部工具内单源；agent 只传 workorders_path+source_root 两个
+  // 路径，切片与看图注入零自由度。图路径白名单=会话工作区根（scopedConn 解析锚）。
+  const workordersLoader = async (
+    workordersPath: string,
+    sourceRoot: string,
+  ): Promise<Array<{ instruction: string; label?: string; images?: unknown[] }>> => {
+    if (scopedRoot === null) {
+      throw new Error("会话工作区未解析（cwd 非注册工作区？）——workorders_path 形态需工作区锚，先重试或给绝对路径");
+    }
+    const wsRoot: string = scopedRoot;
+    const resolveInWorkspace = (given: string): string => {
+      if (given.startsWith("/")) {
+        if (!given.startsWith(wsRoot)) {
+          throw new Error(`路径越出会话工作区（${given} 不在 ${wsRoot} 内）——工单/页图必须在工作区内`);
+        }
+        return given;
+      }
+      return join(wsRoot, given);
+    };
+    const doc = JSON.parse(readFileSync(resolveInWorkspace(workordersPath), "utf8")) as {
+      doc_type?: unknown;
+      waves?: Array<{ label?: unknown; pages?: unknown; instruction?: unknown }>;
+    };
+    if (!Array.isArray(doc.waves) || doc.waves.length === 0) {
+      throw new Error("工单文件无 waves（LabelQcParallelWorkorders/v1 形态校验失败）");
+    }
+    const docType = typeof doc.doc_type === "string" && doc.doc_type !== "" ? doc.doc_type : "";
+    const batchRoot = resolveInWorkspace(sourceRoot);
+    return doc.waves.map((wave, index) => {
+      const instruction = typeof wave.instruction === "string" ? wave.instruction : "";
+      if (instruction === "") throw new Error(`工单片 ${String(index)} 缺 instruction`);
+      const label = typeof wave.label === "string" && wave.label !== "" ? wave.label : `wave-${String(index + 1)}`;
+      const pages = Array.isArray(wave.pages) ? (wave.pages as unknown[]).filter((x): x is string => typeof x === "string") : [];
+      const images: unknown[] = [];
+      for (const page of pages) {
+        const dir = docType !== "" ? join(batchRoot, docType) : batchRoot;
+        let imageFile: string | null = null;
+        try {
+          const hit = readdirSync(dir).find((name) => name === page || name.startsWith(page + "."));
+          if (hit !== undefined) imageFile = join(dir, hit);
+        } catch {
+          /* 目录不存在→保持 null 走统一缺图报错 */
+        }
+        if (imageFile === null) {
+          throw new Error(`工单片 ${label} 页 ${page} 的图片文件定位失败（找 ${dir}/${page}.*）——确认 source_root 与工单页名一致`);
+        }
+        const ext = imageFile.slice(imageFile.lastIndexOf(".") + 1).toLowerCase();
+        const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : "image/jpeg";
+        images.push({ type: "image", data: readFileSync(imageFile).toString("base64"), mimeType });
+      }
+      return { instruction, label, ...(images.length > 0 ? { images } : {}) };
+    });
+  };
   const deps: SubagentDeps = {
     bridge,
     sessionsRoot,
     scopeRefBox,
     surface,
+    workordersLoader,
     childStreamFn: childStreamFn as () => never,
     ...(childModel !== undefined ? { childModel: childModel as SubagentDeps["childModel"] } : {}),
     modelTag,
@@ -302,9 +372,19 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
         if (agent !== undefined) executionBox.agent = agent;
         await ensureScope(exec);
         const outcome = (await (agentTool.execute as (id: string, p: unknown) => Promise<unknown>)("atf-subagent", args)) as {
+          content?: Array<{ type?: string; text?: string }>;
           details?: unknown;
         };
-        return asToolValue(outcome.details ?? outcome);
+        // 失败 detail 保留：工厂失败形态 error 在 content[0].text、details 只有 {ok:false}
+        // （1113-2 真机「Failed without detail」根因——wrapper 此前只透传 details，error 全丢）。
+        // details 缺失或无 error 字段时从 content text 解析合并，canonical 值对 agent 完整。
+        const text = outcome.content?.find((block) => block.type === "text")?.text;
+        const details = outcome.details ?? (text !== undefined ? safeParseJson(text) : undefined);
+        const merged =
+          details !== null && typeof details === "object" && (details as { error?: unknown }).error === undefined && text !== undefined
+            ? { ...(details as Record<string, unknown>), ...(safeParseObj(text) ?? {}) }
+            : details;
+        return asToolValue(merged ?? outcome);
       },
     });
   const { tools: deferredTools } = createDeferredToolSet(createChildInstructionRunner(deps));

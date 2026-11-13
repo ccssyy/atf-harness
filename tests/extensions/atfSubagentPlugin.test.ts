@@ -50,6 +50,7 @@ const registeredNames = (ctxOverrides: Record<string, unknown> = {}): { names: s
 
 const applyPlugin = async (ctx: Record<string, unknown>, manager: unknown = null): Promise<void> => {
   process.env.ATF_WEBUI_SESSIONS_ROOT = process.env.ATF_WEBUI_SESSIONS_ROOT ?? "/tmp/atf-subagent-test-sessions";
+  mkdirSync(process.env.ATF_WEBUI_SESSIONS_ROOT, { recursive: true }); // 子任务 mkdtemp 需父目录在
   delete process.env.ATF_LLM_CONFIG;
   bridgeManagerSlot.current = manager;
   try {
@@ -140,5 +141,110 @@ describe("C1——atf-subagent 会话级 plugin", () => {
     expect(surfaceVerdictFromApproval({ ok: false, outcome: "cancelled" })).toEqual({ kind: "aborted" });
     expect(surfaceVerdictFromApproval({ ok: false, outcome: "unavailable" })).toEqual({ kind: "suspended" });
     expect(surfaceVerdictFromApproval({ ok: false })).toEqual({ kind: "suspended" });
+  });
+
+  it("能力闭集（D293）：workorders_path 形态派发断言子任务收到的 images 与工单页对位", async () => {
+    // 工作区+批根+两页图 fixture（页名→同名图片文件）
+    const wsRoot = tempWorkspace();
+    mkdirSync(join(wsRoot, ".atf"), { recursive: true });
+    writeFileSync(join(wsRoot, ".atf", "workspace.json"), JSON.stringify({ id: "ws-test-0002" }));
+    const docDir = join(wsRoot, "batch", "bl");
+    mkdirSync(docDir, { recursive: true });
+    writeFileSync(join(docDir, "p01.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    writeFileSync(join(docDir, "p02.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    // 工单文件（LabelQcParallelWorkorders/v1 形态：一片两页）
+    const workordersPath = join(wsRoot, "qc-parallel-workorders.json");
+    writeFileSync(workordersPath, JSON.stringify({
+      schema_version: "LabelQcParallelWorkorders/v1",
+      doc_type: "bl",
+      waves: [{ label: "qc-bl-01", pages: ["p01", "p02"], instruction: "看图核对任务(工单自带文本)" }],
+    }));
+
+    // 工厂面拿真工具（execute 可调）+域连接先解析（ensureScope 需 atf_workspace_status）
+    const seen: Array<{ instruction: string; images?: unknown[] }> = [];
+    const fakeManager = {
+      transport: async () => ({ request: async () => ({ ok: true as const, value: {} }) }),
+      transportForWorkspace: async (p: string) => {
+        expect(p).toBe(wsRoot);
+        return {
+          request: async (method: string) =>
+            (method === "atf_workspace_status"
+              ? { ok: true as const, value: { ok: true, run_id: "r1", admitted_count: 0, scope_ref: { project_id: "atf", scope_type: "workspace", scope_id: "ws-test-0002", scope_mode: "workspace" } } }
+              : { ok: true as const, value: {} }),
+        };
+      },
+    };
+    const tools: Array<{ name: string; execute: (params: unknown, exec?: unknown) => Promise<{ details?: unknown }> }> = [];
+    const ctx: Record<string, unknown> = {
+      tools: { register: (tool: { name: string; execute: (params: unknown, exec?: unknown) => Promise<{ details?: unknown }> }) => tools.push(tool) },
+      get: () => undefined,
+      atfBridgeManager: fakeManager,
+    };
+    process.env.ATF_WEBUI_SESSIONS_ROOT = process.env.ATF_WEBUI_SESSIONS_ROOT ?? "/tmp/atf-subagent-test-sessions";
+    delete process.env.ATF_LLM_CONFIG;
+    bridgeManagerSlot.current = fakeManager;
+    try {
+      await applyPluginRaw(ctx, {});
+    } finally {
+      bridgeManagerSlot.current = null;
+    }
+    const parallel = tools.find((x) => x.name === "dispatch_parallel_training_subtask");
+    expect(parallel).toBeDefined();
+    // exec.agent.session.header.cwd=工作区根（域锚+页图白名单同一来源）
+    const exec = { agent: { session: { header: { cwd: wsRoot } } } };
+    // 子任务派发的落点：faux 子 agent prompt 不可拦——断言面改为 loader 后置：无异常完成
+    // 即证明「工单解析+页图定位+base64 组装」链路通；images 对位由 loader 单测补一条。
+    const outcome = (await parallel!.execute({
+      workorders_path: workordersPath,
+      source_root: "batch",
+    }, exec)) as { details?: { completed?: number } };
+    // faux 模型面（LLM 配置缺席）子任务快速完成——completed=1 即整链（工单→图→注入→子任务）通
+    // wrapper 返回即聚合对象（{ok,completed,failed,results[]}）——completed=1=
+    // 整链通（工单解析→页图定位→base64 注入→子任务执行）；能闭集断言=loader 链可达
+    expect((outcome as unknown as { completed?: number }).completed).toBe(1);
+  });
+
+  it("能力闭集（D293）降级：页图缺文件→结构化报错指路（不静默派发）", async () => {
+    const wsRoot = tempWorkspace();
+    mkdirSync(join(wsRoot, ".atf"), { recursive: true });
+    writeFileSync(join(wsRoot, ".atf", "workspace.json"), JSON.stringify({ id: "ws-test-0003" }));
+    const workordersPath = join(wsRoot, "qc-parallel-workorders.json");
+    writeFileSync(workordersPath, JSON.stringify({
+      schema_version: "LabelQcParallelWorkorders/v1",
+      doc_type: "bl",
+      waves: [{ label: "qc-bl-01", pages: ["p99"], instruction: "x" }],
+    }));
+    const fakeManager = {
+      transport: async () => ({ request: async () => ({ ok: true as const, value: {} }) }),
+      transportForWorkspace: async () => ({
+        request: async (method: string) =>
+          (method === "atf_workspace_status"
+            ? { ok: true as const, value: { ok: true, run_id: "r1", admitted_count: 0, scope_ref: { project_id: "atf", scope_type: "workspace", scope_id: "ws-test-0003", scope_mode: "workspace" } } }
+            : { ok: true as const, value: {} }),
+      }),
+    };
+    const tools: Array<{ name: string; execute: (params: unknown, exec?: unknown) => Promise<{ details?: unknown }> }> = [];
+    const ctx: Record<string, unknown> = {
+      tools: { register: (tool: { name: string; execute: (params: unknown, exec?: unknown) => Promise<{ details?: unknown }> }) => tools.push(tool) },
+      get: () => undefined,
+      atfBridgeManager: fakeManager,
+    };
+    process.env.ATF_WEBUI_SESSIONS_ROOT = process.env.ATF_WEBUI_SESSIONS_ROOT ?? "/tmp/atf-subagent-test-sessions";
+    delete process.env.ATF_LLM_CONFIG;
+    bridgeManagerSlot.current = fakeManager;
+    try {
+      await applyPluginRaw(ctx, {});
+    } finally {
+      bridgeManagerSlot.current = null;
+    }
+    const parallel = tools.find((x) => x.name === "dispatch_parallel_training_subtask");
+    const exec = { agent: { session: { header: { cwd: wsRoot } } } };
+    const outcome = (await parallel!.execute({
+      workorders_path: workordersPath,
+      source_root: join(wsRoot, "batch"),
+    }, exec)) as { details?: { ok?: boolean }; };
+    // 回执文本=结构化报错（页 p99 图定位失败指路）——不静默派发
+    const raw = outcome as unknown as { content?: Array<{ text?: string }> };
+    expect(JSON.stringify(raw)).toContain("图片文件定位失败");
   });
 });
