@@ -22,6 +22,7 @@ import {
   ensureScopeRef,
   surfaceVerdictFromApproval,
 } from "../../packages/extensions/atf-subagent/src/index.js";
+import { bridgeManagerSlot } from "../../packages/extensions/atf-tools/src/index.js";
 import type { ScopeRef } from "../../src/core/tools/approvalKey.js";
 
 const REPO = join(import.meta.url.replace("file://", ""), "..", "..", "..");
@@ -47,10 +48,15 @@ const registeredNames = (ctxOverrides: Record<string, unknown> = {}): { names: s
   return { names, ctx };
 };
 
-const applyPlugin = async (ctx: Record<string, unknown>): Promise<void> => {
+const applyPlugin = async (ctx: Record<string, unknown>, manager: unknown = null): Promise<void> => {
   process.env.ATF_WEBUI_SESSIONS_ROOT = process.env.ATF_WEBUI_SESSIONS_ROOT ?? "/tmp/atf-subagent-test-sessions";
   delete process.env.ATF_LLM_CONFIG;
-  await applyPluginRaw(ctx, {});
+  bridgeManagerSlot.current = manager;
+  try {
+    await applyPluginRaw(ctx, {});
+  } finally {
+    bridgeManagerSlot.current = null;
+  }
 };
 
 const SCOPE_FIXTURE: ScopeRef = {
@@ -88,8 +94,8 @@ describe("C1——atf-subagent 会话级 plugin", () => {
 
   it("工厂面：apply 注册 dispatch 三件套（含并行件——D276 条款工具面）", async () => {
     const fakeManager = { transport: async () => ({ request: async () => ({ ok: true as const, value: {} }) }) };
-    const { names, ctx } = registeredNames({ atfBridgeManager: fakeManager });
-    await applyPlugin(ctx);
+    const { names, ctx } = registeredNames();
+    await applyPlugin(ctx, fakeManager);
     expect(names).toContain("dispatch_training_subtask");
     expect(names).toContain("dispatch_parallel_training_subtask");
     expect(names.length).toBeGreaterThanOrEqual(3);
@@ -100,7 +106,7 @@ describe("C1——atf-subagent 会话级 plugin", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await applyPlugin(ctx);
     expect(names).toHaveLength(0);
-    expect(warn.mock.calls.some((line) => String(line[0]).includes("atfBridgeManager 缺席"))).toBe(true);
+    expect(warn.mock.calls.some((line) => String(line[0]).includes("bridgeManagerSlot 缺席"))).toBe(true);
     warn.mockRestore();
   });
 
