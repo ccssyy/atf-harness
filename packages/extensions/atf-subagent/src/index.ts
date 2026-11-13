@@ -310,14 +310,17 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
     };
     const doc = JSON.parse(readFileSync(resolveInWorkspace(workordersPath), "utf8")) as {
       doc_type?: unknown;
-      waves?: Array<{ label?: unknown; pages?: unknown; instruction?: unknown }>;
+      // 字段名实锚=内核 walkthrough_pipeline.py _parallel_doc 的 workorders（不是 waves——
+      // 首实现凭想当然写 waves，真机全 0 解析失败；mock/自造形状教训第 5 次）
+      workorders?: Array<{ label?: unknown; pages?: unknown; instruction?: unknown }>;
     };
-    if (!Array.isArray(doc.waves) || doc.waves.length === 0) {
-      throw new Error("工单文件无 waves（LabelQcParallelWorkorders/v1 形态校验失败）");
+    const workorders = doc.workorders;
+    if (!Array.isArray(workorders) || workorders.length === 0) {
+      throw new Error("工单文件无 workorders（LabelQcParallelWorkorders/v1 形态校验失败——确认 label_qc 段已导出并行工单）");
     }
     const docType = typeof doc.doc_type === "string" && doc.doc_type !== "" ? doc.doc_type : "";
     const batchRoot = resolveInWorkspace(sourceRoot);
-    return doc.waves.map((wave, index) => {
+    return workorders.map((wave, index) => {
       const instruction = typeof wave.instruction === "string" ? wave.instruction : "";
       if (instruction === "") throw new Error(`工单片 ${String(index)} 缺 instruction`);
       const label = typeof wave.label === "string" && wave.label !== "" ? wave.label : `wave-${String(index + 1)}`;
