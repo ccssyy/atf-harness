@@ -1,6 +1,6 @@
 {
   "note": "内核 walkthrough 段级参数闭集快照（摘自内核仓 tools/argparse_surface.json）",
-  "source_surface_sha256": "d231c6292658eae8f1a6c6f275e9606f9f1966b16387adf6d3132b72ba627628",
+  "source_surface_sha256": "3420029fe987b6c8c39bcfa970f786a8221dbc43c80bff2da3aa80b8a2c400ed",
   "options": [
     "--workspace",
     "--stage",
