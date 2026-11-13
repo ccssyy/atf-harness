@@ -48,6 +48,12 @@ export interface SubagentDeps {
   childModel?: Model<"openai-completions">;
   modelTag: string;
   childMaxTurns?: number;
+  /** D293：并行工单文件装载器（workorders_path 形态——工单解析+页图注入由宿主层
+   *  注入，核心层零 fs 依赖；缺席时 workorders_path 参数 fail-closed 拒绝）。 */
+  workordersLoader?: (
+    workordersPath: string,
+    sourceRoot: string,
+  ) => Promise<Array<{ instruction: string; label?: string; images?: unknown[] }>>;
   /** 子任务上下文 token 参数（继承主链装配口径的缺省）。 */
   contextTokens?: number;
   keepRecentTokens?: number;
@@ -63,7 +69,12 @@ export interface SubtaskResult {
 }
 
 /** 子任务执行单径（单发/并行 fan-out/deferred 伴生同一径——审批继承与结果分类不分叉）。 */
-export const runChildSubtask = async (deps: SubagentDeps, instruction: string, label?: string): Promise<SubtaskResult> => {
+export const runChildSubtask = async (
+  deps: SubagentDeps,
+  instruction: string,
+  label?: string,
+  images?: unknown[],
+): Promise<SubtaskResult> => {
   const repo = createJsonlSessionRepo(deps.sessionsRoot);
   const childSessionRoot = await mkdtemp(join(deps.sessionsRoot, "dispatch-"));
   const childSession = await repo.create({ cwd: childSessionRoot }, BACKGROUND_CONTEXT);
@@ -87,7 +98,8 @@ export const runChildSubtask = async (deps: SubagentDeps, instruction: string, l
   Object.assign(assembled.scopeRefBox, { current: deps.scopeRefBox.current });
   let failure: string | undefined;
   try {
-    await assembled.agent.prompt(instruction);
+    // D293：看图工单场景图片随首条消息注入（pi prompt 原生 images 通路——零工具依赖）
+    await assembled.agent.prompt(instruction, images as never);
   } catch (cause) {
     failure = cause instanceof Error ? cause.message : String(cause);
   }
@@ -164,17 +176,18 @@ export const DISPATCH_PARALLEL_DEFAULT_CONCURRENCY = 4;
 interface ParallelSubtaskInput {
   label?: unknown;
   instruction: unknown;
+  images?: unknown[];
 }
 
 export const parseParallelParams = (
   params: unknown,
-): { ok: true; subtasks: Array<{ label: string; instruction: string }>; maxConcurrency: number } | { ok: false; error: string } => {
+): { ok: true; subtasks: Array<{ label: string; instruction: string; images?: unknown[] }>; maxConcurrency: number } | { ok: false; error: string } => {
   const raw = (params as { subtasks?: unknown; max_concurrency?: unknown } | null) ?? {};
   if (!Array.isArray(raw.subtasks) || raw.subtasks.length === 0) {
     return { ok: false, error: "subtasks 必填（非空数组，1..8 项）" };
   }
   if (raw.subtasks.length > DISPATCH_PARALLEL_MAX_SUBTASKS) {
-    return { ok: false, error: `subtasks 超上限（最多 ${String(DISPATCH_PARALLEL_MAX_SUBTASKS)} 项，本次 ${String(raw.subtasks.length)} 项）——拆成多批依次派发（每批 ≤${String(DISPATCH_PARALLEL_MAX_SUBTASKS)} 项），逐批聚合结果后合并回填` };
+    return { ok: false, error: `subtasks 超上限（最多 ${String(DISPATCH_PARALLEL_MAX_SUBTASKS)} 项，本次 ${String(raw.subtasks.length)} 项）——改用 workorders_path 形态直接传内核工单文件（LabelQcParallelWorkorders/v1 切片 ≤${String(DISPATCH_PARALLEL_MAX_SUBTASKS)} 片，一次派发正好容纳），不得自行拟切片数组` };
   }
   const subtasks: Array<{ label: string; instruction: string }> = [];
   for (const [index, item] of raw.subtasks.entries()) {
@@ -184,7 +197,7 @@ export const parseParallelParams = (
       return { ok: false, error: `subtasks[${String(index)}].instruction 必填（非空字符串）` };
     }
     const label = typeof entry?.label === "string" && entry.label.trim() !== "" ? entry.label : `subtask-${String(index + 1)}`;
-    subtasks.push({ label, instruction });
+    subtasks.push({ label, instruction, ...(Array.isArray(item.images) ? { images: item.images } : {}) });
   }
   let maxConcurrency = DISPATCH_PARALLEL_DEFAULT_CONCURRENCY;
   if (raw.max_concurrency !== undefined) {
@@ -193,7 +206,7 @@ export const parseParallelParams = (
     }
     maxConcurrency = raw.max_concurrency;
   }
-  return { ok: true, subtasks, maxConcurrency };
+  return { ok: true, subtasks: subtasks as Array<{ label: string; instruction: string; images?: unknown[] }>, maxConcurrency };
 };
 
 /** dispatch_parallel_training_subtask 工具（v2 fan-out；审批继承同单发——闸段经 GateLock 串行）。 */
@@ -205,8 +218,18 @@ export const createDispatchParallelTrainingSubtaskTool = (deps: SubagentDeps): A
       "并行派发多个训练子任务（fan-out）：各自在独立会话树并发执行自包含子指令，聚合返回逐项结果。适用：多数据集并行体检、多假设并行核验等多路可切分子任务。上限 8 项，缺省并发 4。纪律：子 Agent 不见主链上下文（instruction 必须自包含）；子任务内写动作仍逐条经同一审批账本闸（确认卡逐条出同一操作员面，账本闸临界段跨执行体串行——并行不构成绕过治理的理由）。",
     parameters: {
       type: "object",
-      required: ["subtasks"],
+      required: [],
       properties: {
+        workorders_path: {
+          type: "string",
+          optional: true,
+          description: "内核并行工单文件路径（LabelQcParallelWorkorders/v1，label_qc 段导出 qc-parallel-workorders.json）——给了本参数即以此文件切片派发（切片/页清单/看图注入工具内单源），subtasks 不得再传；与 subtasks 二选一",
+        },
+        source_root: {
+          type: "string",
+          optional: true,
+          description: "数据批根（workorders_path 形态必传；页图定位=<source_root>/<doc_type>/<页名>.*；相对路径按会话工作区根解析）",
+        },
         subtasks: {
           type: "array",
           items: {
@@ -227,7 +250,28 @@ export const createDispatchParallelTrainingSubtaskTool = (deps: SubagentDeps): A
       },
     },
     execute: async (_toolCallId: string, params: unknown) => {
-      const parsed = parseParallelParams(params);
+      const p = (params ?? {}) as { workorders_path?: unknown; source_root?: unknown; max_concurrency?: unknown };
+      // D293：workorders_path 形态——工单文件为切片单源（页图随片注入由 loader 组装）
+      let effectiveParams: unknown = params;
+      if (typeof p.workorders_path === "string" && p.workorders_path.trim() !== "") {
+        if (typeof p.source_root !== "string" || p.source_root.trim() === "") {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: "workorders_path 形态需同时传 source_root（页图定位=<source_root>/<doc_type>/<页名>.*；相对路径按会话工作区根解析）" }) }], details: { ok: false } };
+        }
+        if (deps.workordersLoader === undefined) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: "当前宿主未装配工单装载器（workordersLoader 缺席）——workorders_path 形态不可用；改传 subtasks（≤8 项自包含指令）" }) }], details: { ok: false } };
+        }
+        if (Array.isArray((params as { subtasks?: unknown })?.subtasks)) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: "workorders_path 与 subtasks 互斥（二选一）——工单文件形态下切片/页清单/看图注入全部由工单文件单源，不接受自拟切片" }) }], details: { ok: false } };
+        }
+        let loaded: Array<{ instruction: string; label?: string; images?: unknown[] }>;
+        try {
+          loaded = await deps.workordersLoader(p.workorders_path.trim(), p.source_root.trim());
+        } catch (cause) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: `工单文件装载失败（${cause instanceof Error ? cause.message : String(cause)}）——确认路径与 LabelQcParallelWorkorders/v1 形态后重试` }) }], details: { ok: false } };
+        }
+        effectiveParams = { subtasks: loaded, ...(typeof p.max_concurrency === "number" ? { max_concurrency: p.max_concurrency } : {}) };
+      }
+      const parsed = parseParallelParams(effectiveParams);
       if (!parsed.ok) {
         return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: parsed.error }) }], details: { ok: false } };
       }
@@ -243,7 +287,7 @@ export const createDispatchParallelTrainingSubtaskTool = (deps: SubagentDeps): A
         subtasks.map(async (item, index) => {
           while (!nextSlot()) await new Promise((resolve) => setTimeout(resolve, 5));
           try {
-            results[index] = await runChildSubtask(deps, item.instruction, item.label);
+            results[index] = await runChildSubtask(deps, item.instruction, item.label, item.images);
           } finally {
             releaseSlot();
           }
