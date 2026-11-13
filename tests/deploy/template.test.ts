@@ -68,8 +68,11 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
     expect(byId.get("skill-filesystem")?.["disabled"]).toBe(true);
     expect(byId.get("tool-skill")?.["disabled"]).toBe(true);
     // 与 standard 的插件 id 集合差异＝仅技能面两个 disabled（其余逐项同名同序，防手抄漂移）
+    // ＋C1 派发件（atf-subagent 紧随 tool-jobs——真机派发三件套 vendor 装接，B 批教训锁）
     const standard = (rowById(templateRows(), "preset-standard") as { config?: { plugins?: Array<Record<string, unknown>> } })?.config?.plugins ?? [];
-    expect(plugins.map((p) => p["id"])).toEqual(standard.map((p) => p["id"]));
+    const trainingIds = plugins.map((p) => p["id"]);
+    expect(trainingIds.filter((id) => id !== "atf-subagent")).toEqual(standard.map((p) => p["id"]));
+    expect(trainingIds.indexOf("atf-subagent")).toBe(trainingIds.indexOf("tool-jobs") + 1);
     // 九段流程约束在 persona 配置里（配置声明，禁 TS 分支）
     const persona = byId.get("persona") as { config?: { prefix?: string } } | undefined;
     const prefix = persona?.config?.prefix ?? "";

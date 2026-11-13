@@ -153,6 +153,10 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   }
   console.log(`[atf-tools] 管线对端: ${pipelineCommand}${process.env[BOOT_PREFLIGHT_PIPELINE_ENV] !== undefined ? "（env 真命令——F4）" : "（mock 缺省——设 ATF_DSH_PIPELINE_COMMAND 切真管线）"}`);
   const manager = new BridgeManager(deployment.argv, repoRoot, deployment.childEnv);
+  // C1（1113 真机派发装接）：桥接管理器挂 ctx 供会话级 plugin（@atf/dsh-atf-subagent）
+  // 共享同一桥接连接——子任务派发不另 spawn 第二条连接（cordis 子域原型链继承可达；
+  // 缺席时 plugin 侧 fail-loud 拒绝挂载，不静默降级）。
+  (ctx as Record<string, unknown>)["atfBridgeManager"] = manager;
 
   // 批㊶R前置 状态面：本机模型清单（启动扫描一次——boot 日志投影＋atf_run_training 描述注入；
   // 根＝env ATF_MODEL_ROOT（实例层注入）；未配置/缺席如实空清单不猜测）

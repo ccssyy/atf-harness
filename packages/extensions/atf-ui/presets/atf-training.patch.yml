@@ -55,6 +55,10 @@
               sampleOverCapGlobResults: false
           - id: tool-jobs
             name: '@deepseek-ai/dsh-tool-jobs'
+      # C1（1113 真机派发装接）：dispatch 三件套会话级挂载——D276 并行派发条款的真机
+      # 可达面（B 批装在 eval 专用入口被门禁拦下后改挂 vendor preset plugins 体系）。
+          - id: atf-subagent
+            name: '@atf/dsh-atf-subagent'
       # 工具集差异（配置声明，禁 TS 分支）：训练链读技能只走 atf_skill_read（桥接契约面，
       # 带内核技能包版本）；vendor 技能目录会引入非 ATF 技能，属错误引导面——本预设关闭。
           - id: skill-filesystem
