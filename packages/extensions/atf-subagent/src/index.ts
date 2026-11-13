@@ -326,11 +326,20 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
       const label = typeof wave.label === "string" && wave.label !== "" ? wave.label : `wave-${String(index + 1)}`;
       const pages = Array.isArray(wave.pages) ? (wave.pages as unknown[]).filter((x): x is string => typeof x === "string") : [];
       const images: unknown[] = [];
+      const annotationSections: string[] = [];
       for (const page of pages) {
+        // 工单页名=标注 JSON 文件名（1113-4 真机实锚 page 以 .json 结尾）——页图=去
+        // .json 后缀的同名图片文件；命中结果必须落在图片后缀闭集（同名 .json 标注跳过）
+        const stem = page.endsWith(".json") ? page.slice(0, -".json".length) : page;
         const dir = docType !== "" ? join(batchRoot, docType) : batchRoot;
         let imageFile: string | null = null;
         try {
-          const hit = readdirSync(dir).find((name) => name === page || name.startsWith(page + "."));
+          const hit = readdirSync(dir).find((name) => {
+            const candidate = name === stem ? name : name.startsWith(stem + ".") ? name : null;
+            if (candidate === null) return false;
+            const ext = candidate.slice(candidate.lastIndexOf(".") + 1).toLowerCase();
+            return ext === "png" || ext === "jpg" || ext === "jpeg" || ext === "webp";
+          });
           if (hit !== undefined) imageFile = join(dir, hit);
         } catch {
           /* 目录不存在→保持 null 走统一缺图报错 */
@@ -341,8 +350,22 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
         const ext = imageFile.slice(imageFile.lastIndexOf(".") + 1).toLowerCase();
         const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : "image/jpeg";
         images.push({ type: "image", data: readFileSync(imageFile).toString("base64"), mimeType });
+        // D293b：标注内容随片注入（看图核查=标注值 vs 图面值比对——子 agent 无文件读取
+        // 工具，同名 .json 8-12KB/页文本注入，比对依赖不缺、零工具依赖）
+        const annotationFile = join(dir, stem + ".json");
+        try {
+          annotationSections.push(`== 标注文件 ${page} ==\n` + readFileSync(annotationFile, "utf8"));
+        } catch {
+          // 同名标注缺席=工单 page 名与盘上形态不一致——图已注入，标注缺席可观测
+          annotationSections.push(`== 标注文件 ${page} ==（缺席——值比对项无法完成，按缺料如实记）`);
+        }
       }
-      return { instruction, label, ...(images.length > 0 ? { images } : {}) };
+      const fullInstruction =
+        (annotationSections.length > 0
+          ? "【该片各页标注内容（box 坐标与抄录值——与所附页图逐项比对）】\n"
+            + annotationSections.join("\n\n") + "\n\n【派发指令】\n"
+          : "") + instruction;
+      return { instruction: fullInstruction, label, ...(images.length > 0 ? { images } : {}) };
     });
   };
   const deps: SubagentDeps = {
