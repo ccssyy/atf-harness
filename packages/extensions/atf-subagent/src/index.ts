@@ -11,17 +11,22 @@
  * 全部复用工厂 execute（逻辑零复制，测真实实现）；schema 由 JSON Schema 方言直译为
  * DSH 参数表（照 atf-tools schemaTranslate 同款直译子集）。
  *
- * 装配语义（B1 保持）：
- * - 桥接连接共享 atf-tools 实例级 BridgeManager（ctx.atfBridgeManager，单连接不双 spawn）；
- * - 子任务审批继承同一操作员面：ApprovalSurface 适配 vendor approval 服务
- *   （allowed-once/rejected/cancelled/unavailable → granted/denied/aborted/suspended），
- *   主线 agent 从 dsh exec.agent 绑定（wrapper 先赋值再放行工厂 execute）；
- * - 写动作逐条过 GateLock（subagent.ts 工厂自挂，本包不重复实现）；
- * - 子任务模型面走 ATF_LLM_CONFIG（HarnessLlmConfig/v3）独立装配——与 vendor 会话
- *   选型解耦（headless 线同口径）；配置缺席降级 faux 并在 boot 日志留痕（可观测，非静默）。
- *
- * 残留（如实呈报）：主线 scopeRefBox 在 vendor 链无 harness 装配对应物——子任务账本
- * 定位域为空 box（审批走 surface+GateLock 不受影响；scope 域对账随真机轮验证）。
+ * 治理面接线（残留三题收敛，1113-2 会话定位批）：
+ * - 账本域锚（原 scopeRefBox 空 box 残留）：dispatch 执行时惰性解析会话工作区
+ *   （sessionCwdOfExec→resolveSessionWorkspace，身份文件单源）→ 经 workspace 域桥接
+ *   连接调 atf_workspace_status 取 scope_ref 填 box（与 harness 线同一回填机制
+ *   atfAgentTools.ts）——子任务经 runChildSubtask 的 Object.assign 继承同域；解析失败
+ *   降级留痕，子任务首写被 approvalHook 指路自愈（atf_workspace_status 填子任务自己的
+ *   box，既有 fail-closed 语义不变）。桥接代理路由到同一域连接（atf.bind_workspace 绑定，
+ *   与主线 atf_* 工具同池）。
+ * - 审批卡单源（原 hand-rolled 适配残留）：surface 经 atf-tools requestApproval
+ *   （approvalFace）走 vendor approval 服务——与主线 atf_* 工具同一通路同一词汇
+ *   （callId/signal/displayReason 全量）；outcome→verdict 映射 fail-保守。
+ * - 锁域（定性收窄）：子任务间 GateLock 串行 ✓（approvalHook gateLock.run 包裹审批段）；
+ *   主线↔子任务仅 deferred spawn（fire-and-forget）场景可交叠——两路账本异流且内核
+ *   Approval Ledger append-only，无配对损坏；残留＝可能同时弹卡（UX 面，记录不修）。
+ * - 主线 scopeRefBox 无 harness 装配对应物 → 不再依赖主线：本包自持 box 并在派发时
+ *   主动填充（结构性残留的替代解，非等待主线接线）。
  * @module @atf/dsh-atf-subagent
  */
 import { defineTool } from "@deepseek-ai/dsh-tools";
@@ -35,18 +40,27 @@ import {
 import { createGateLock } from "../../../../src/agent/approvalHook.js";
 import { createDeferredToolSet } from "../../../../src/agent/deferredTools.js";
 import type { ApprovalSurface, ApprovalSurfaceVerdict } from "../../../../src/agent/approvalSurface.js";
+import type { ScopeRef } from "../../../../src/core/tools/approvalKey.js";
 import { createProviderStreamFn } from "../../../../src/agent/providerStreamFn.js";
 import { loadLlmProviderConfig } from "../../../../src/llm/providerConfig.js";
 import { createFauxStreamFn, fauxAssistantMessage } from "../../../../src/agent/fauxStream.js";
 import type { SpikeBridgeTransport } from "../../../../src/agent/atfAgentTools.js";
 import type { BridgeError } from "../../../../src/bridge/index.js";
+import { requestApproval } from "../../atf-tools/src/approvalFace.js";
+import { resolveSessionWorkspace, sessionCwdOfExec } from "../../atf-tools/src/scopeFace.js";
 
 export const name = "atf-subagent";
 export const inject = ["tools"];
 
-/** vendor approval 服务请求形态（本包只消费 request 一个面）。 */
-interface VendorApprovalService {
-  request(req: { agent: unknown; toolName: string; reason?: string }): Promise<string>;
+/** workspace 域桥接连接（atf.bind_workspace 绑定形态；与主线 atf_* 工具同池）。 */
+interface ScopedConnection {
+  request(method: string, params?: unknown): Promise<{ ok: true; value: unknown } | { ok: false; error: BridgeError }>;
+}
+
+/** atf-tools 暴露的实例级桥接管理器（ctx.atfBridgeManager——index.ts 挂载）。 */
+interface BridgeManagerLike {
+  transport(): Promise<ScopedConnection>;
+  transportForWorkspace(workspacePath: string): Promise<ScopedConnection>;
 }
 
 /** DSH 属性 spec 直译子集（对齐 atf-tools schemaTranslate 的 DshPropertySpec 同款）。 */
@@ -113,13 +127,56 @@ const asToolValue = (value: unknown): Record<string, never> => {
   return clean(value) as Record<string, never>;
 };
 
+/** vendor approval outcome → harness surface verdict（requestApproval verdict 映射；
+ *  fail-保守：未知 outcome 落 suspended 非否决——未决不猜授权）。 */
+export const surfaceVerdictFromApproval = (
+  verdict: { ok: true } | { ok: false; outcome?: string },
+): ApprovalSurfaceVerdict => {
+  if (verdict.ok) return { kind: "granted" };
+  switch (verdict.outcome) {
+    case "rejected":
+      return { kind: "denied" };
+    case "cancelled":
+      return { kind: "aborted" };
+    default:
+      return { kind: "suspended" };
+  }
+};
+
+/**
+ * 账本域锚惰性填充（C1-① 收敛）：从执行上下文解析会话工作区（身份文件单源），经
+ * workspace 域桥接连接调 atf_workspace_status 取 scope_ref 填 box——与 harness 线
+ * 同一回填机制（atf_workspace_status 响应 .scope_ref → box，atfAgentTools.ts 同款）。
+ * 已填/已建连接则幂等跳过；解析失败返回 false 并由调用方 warn（子任务首写被
+ * approvalHook 指路自愈——既有 fail-closed 语义不变）。
+ *
+ * :param box: plugin 自持的 scopeRefBox（子任务派发时经 runChildSubtask 继承）。
+ * :param manager: atf-tools 实例级桥接管理器（workspace 域连接池单源）。
+ * :param exec: dsh 工具执行上下文（agent.session.header.cwd 为会话工作区）。
+ * :return: 是否成功取得 scope_ref（连接已建但本次未取到也算 false——不重复尝试）。
+ */
+export const ensureScopeRef = async (
+  box: { current: ScopeRef | undefined },
+  manager: BridgeManagerLike,
+  exec: unknown,
+): Promise<boolean> => {
+  if (box.current !== undefined) return true;
+  const workspace = resolveSessionWorkspace(sessionCwdOfExec(exec));
+  if (workspace === null) return false;
+  const conn = await manager.transportForWorkspace(workspace.root);
+  const response = await conn.request("atf_workspace_status", {});
+  if (!response.ok) return false;
+  const scopeRef = (response.value as { scope_ref?: ScopeRef } | null)?.scope_ref;
+  if (scopeRef === undefined || scopeRef === null) return false;
+  box.current = scopeRef;
+  return true;
+};
+
 export async function apply(ctx: unknown, _config: unknown): Promise<void> {
   const c = ctx as {
     tools: { register(tool: unknown): void };
     get(service: string): unknown;
-    atfBridgeManager?: {
-      transport(): Promise<{ request(method: string, params?: unknown): Promise<{ ok: true; value: unknown } | { ok: false; error: BridgeError }> }>;
-    };
+    atfBridgeManager?: BridgeManagerLike;
   };
   // —— 前置依赖 fail-loud（可观测降级＝不注册三件，boot 日志留痕；不静默）——
   const manager = c.atfBridgeManager;
@@ -132,10 +189,42 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
     console.warn("[atf-subagent] ⚠ ATF_WEBUI_SESSIONS_ROOT 未设置——dispatch 三件不注册（本环境非 WebUI 实例形态）");
     return;
   }
-  // 桥接惰性代理：首唤时经 BridgeManager 建连（与 atf-tools 工具面同一连接，不双 spawn）。
+  // —— 账本域锚：plugin 自持 box + 会话级域连接（惰性解析，dispatch 执行时填充）——
+  const scopeRefBox: { current: ScopeRef | undefined } = { current: undefined };
+  let scopedConn: Promise<ScopedConnection> | null = null;
+  let scopeWarned = false;
+  const ensureScope = async (exec: unknown): Promise<void> => {
+    if (scopeRefBox.current !== undefined) return;
+    try {
+      const workspace = resolveSessionWorkspace(sessionCwdOfExec(exec));
+      if (workspace === null) {
+        if (!scopeWarned) {
+          console.warn("[atf-subagent] ⚠ 会话工作区解析失败（cwd 缺席或非注册工作区）——子任务账本域锚缺席，子任务首写将按既有 fail-closed 指路自愈");
+          scopeWarned = true;
+        }
+        return;
+      }
+      if (scopedConn === null) scopedConn = manager.transportForWorkspace(workspace.root);
+      const conn = await scopedConn;
+      const response = await conn.request("atf_workspace_status", {});
+      if (response.ok) {
+        const scopeRef = (response.value as { scope_ref?: ScopeRef } | null)?.scope_ref;
+        if (scopeRef !== undefined && scopeRef !== null) scopeRefBox.current = scopeRef;
+      }
+    } catch (cause) {
+      // 域锚失败不阻断派发（子任务首写按既有 fail-closed 指路自愈）——warn 一次可观测
+      scopedConn = null;
+      if (!scopeWarned) {
+        console.warn(`[atf-subagent] ⚠ 账本域锚解析失败（${cause instanceof Error ? cause.message : String(cause)}）——降级为子任务自愈路径`);
+        scopeWarned = true;
+      }
+    }
+  };
+  // 桥接代理：域连接已建则路由之（子任务账本调用与主线 atf_* 工具同池同域）；
+  // 未建走默认连接（eval 线等价形态——子任务自己的 atf_workspace_status 可再锚）。
   const bridge: SpikeBridgeTransport = {
     request: async (method, params) => {
-      const conn = await manager.transport();
+      const conn = scopedConn !== null ? await scopedConn : await manager.transport();
       return conn.request(method, params);
     },
   };
@@ -166,49 +255,41 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
       ]);
     modelTag = "webui";
   }
-  // —— 审批继承：dsh execute 的 exec.agent 是主线 agent 唯一可靠绑定点（vendor UI
-  // answerer 只应答自己拥有的 agent）；wrapper 先赋值再放行工厂 execute——子任务内
-  // surface.ask 的时序必然晚于赋值。 ——
+  // —— 审批继承（C1-③ 收敛）：经 atf-tools requestApproval 走 vendor approval 服务——
+  // 与主线 atf_* 工具同一通路同一词汇（callId/signal/displayReason 全量；outcome
+  // "allowed-once" 语义单源）。主线 agent 从 dsh exec.agent 绑定：vendor UI answerer
+  // 只应答自己拥有的 agent，工具 execute 的 exec.agent 是唯一可靠绑定点——wrapper 先
+  // 赋值再放行工厂 execute，子任务内 ask 时序必然晚于赋值。
   const executionBox: { agent: unknown } = { agent: undefined };
   const surface: ApprovalSurface = {
     ask: async (info) => {
-      const approval = c.get("approval") as VendorApprovalService | undefined;
-      const agent = executionBox.agent;
-      if (approval === undefined || agent === undefined) return { kind: "suspended" };
-      const outcome = await approval.request({
-        agent,
-        toolName: info.tool,
-        reason: `子任务内写动作确认（dispatch 派发链——继承同一操作员面）：${info.tool}`,
-      });
-      switch (String(outcome)) {
-        case "allowed-once":
-          return { kind: "granted" };
-        case "rejected":
-          return { kind: "denied" };
-        case "cancelled":
-          return { kind: "aborted" };
-        default:
-          return { kind: "suspended" };
-      }
+      const verdict = await requestApproval(
+        c,
+        { agent: executionBox.agent },
+        info.tool,
+        `子任务内写动作确认（dispatch 派发链——继承同一操作员面）：${info.tool}`,
+      );
+      return surfaceVerdictFromApproval(verdict);
     },
   };
   const deps: SubagentDeps = {
     bridge,
     sessionsRoot,
-    scopeRefBox: { current: undefined },
+    scopeRefBox,
     surface,
     childStreamFn: childStreamFn as () => never,
     ...(childModel !== undefined ? { childModel: childModel as SubagentDeps["childModel"] } : {}),
     modelTag,
     // GateLock 显式自挂（verdict 首轮 FAIL 实锚：「工厂自挂」系误记——自动创建点只在
     // headless 线 cli.ts，plugin 不传即无锁，并行子任务审批临界段不串行）。本锁覆盖
-    // plugin 派发的全部子任务执行体；主线 vendor agent 审批段不在锁域（结构性残留，
-    // 与 scopeRefBox 空 box 同源，随真机轮裁决）。
+    // plugin 派发的全部子任务执行体；主线 vendor agent 审批段不在锁域（deferred spawn
+    // 场景可交叠——两路账本异流且内核 Approval Ledger append-only，无配对损坏；残留＝
+    // 可能同时弹卡，UX 面记录不修）。
     gateLock: createGateLock(),
   };
   // —— dsh-tools 包装：签名/结果转换零逻辑复制（工厂 execute 内的参数校验、fan-out、
   // GateLock 串行、聚合全量复用）；AgentTool 返回 {content, details}，canonical 值取
-  // details（SubtaskResult / 并行聚合形态）。 ——
+  // details（SubtaskResult / 并行聚合形态）。执行前惰性填充账本域锚（子任务继承）。——
   const dshToolOf = (agentTool: AgentTool): unknown =>
     defineTool({
       name: agentTool.name,
@@ -218,6 +299,7 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
       async execute(args: unknown, exec: { agent?: unknown }) {
         const agent = (exec as { agent?: unknown } | undefined)?.agent;
         if (agent !== undefined) executionBox.agent = agent;
+        await ensureScope(exec);
         const outcome = (await (agentTool.execute as (id: string, p: unknown) => Promise<unknown>)("atf-subagent", args)) as {
           details?: unknown;
         };
