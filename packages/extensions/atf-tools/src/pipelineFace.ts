@@ -1966,13 +1966,7 @@ export const fieldConfigPrecheckOf = (
   runDir: string,
   docType?: string,
 ): { ok: true; resolved: string } | { ok: false; given: string; resolved: string; note: string } => {
-  // 相对路径锚工作区根解析（真机 web 进程 cwd=vendor 检出域——1113-2 真机实锚
-  // 「batch」→ vendor/batch 荒谬落点）；工作区不可得时拒绝相对路径（不给歧义解析）。
-  const resolved = isAbsolute(given)
-    ? given
-    : (workspacePath !== undefined && workspacePath !== ""
-        ? resolve(workspacePath, given)
-        : "");
+  const resolved = isAbsolute(given) ? given : resolve(given);
   if (existsSync(resolved)) return { ok: true, resolved };
   const slot = `${runDir}/config/experiment-setup/${docType ?? "<单据类型>"}/field-config.json`;
   return {
