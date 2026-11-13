@@ -204,6 +204,59 @@ describe("C1——atf-subagent 会话级 plugin", () => {
     expect((outcome as unknown as { completed?: number }).completed).toBe(1);
   });
 
+  it("能力闭集（D294 共用）：VisualSamplePlan/v1（版式聚类工单）→wave 切片派发整链通", async () => {
+    const wsRoot = tempWorkspace();
+    mkdirSync(join(wsRoot, ".atf"), { recursive: true });
+    writeFileSync(join(wsRoot, ".atf", "workspace.json"), JSON.stringify({ id: "ws-test-0004" }));
+    const docDir = join(wsRoot, "batch", "bl");
+    mkdirSync(docDir, { recursive: true });
+    writeFileSync(join(docDir, "pg1.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    writeFileSync(join(docDir, "pg2.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const planPath = join(wsRoot, "visual-sample-plan.json");
+    writeFileSync(planPath, JSON.stringify({
+      schema_version: "VisualSamplePlan/v1",
+      source: docDir,
+      pages_total: 2, waves_total: 1,
+      pages: [
+        { page: "pg1.png", path: join(docDir, "pg1.png"), wave: 1, fields: ["goods"] },
+        { page: "pg2.png", path: join(docDir, "pg2.png"), wave: 1, fields: ["goods"] },
+      ],
+    }));
+    const fakeManager = {
+      transport: async () => ({ request: async () => ({ ok: true as const, value: {} }) }),
+      transportForWorkspace: async () => ({
+        request: async (method: string) =>
+          (method === "atf_workspace_status"
+            ? { ok: true as const, value: { ok: true, run_id: "r1", admitted_count: 0, scope_ref: { project_id: "atf", scope_type: "workspace", scope_id: "ws-test-0004", scope_mode: "workspace" } } }
+            : { ok: true as const, value: {} }),
+      }),
+    };
+    const tools: Array<{ name: string; execute: (params: unknown, exec?: unknown) => Promise<unknown> }> = [];
+    const ctx: Record<string, unknown> = {
+      tools: { register: (tool: { name: string; execute: (params: unknown, exec?: unknown) => Promise<unknown> }) => tools.push(tool) },
+      get: () => undefined,
+      atfBridgeManager: fakeManager,
+    };
+    process.env.ATF_WEBUI_SESSIONS_ROOT = process.env.ATF_WEBUI_SESSIONS_ROOT ?? "/tmp/atf-subagent-test-sessions";
+    mkdirSync(process.env.ATF_WEBUI_SESSIONS_ROOT, { recursive: true });
+    delete process.env.ATF_LLM_CONFIG;
+    bridgeManagerSlot.current = fakeManager;
+    try {
+      await applyPluginRaw(ctx, {});
+    } finally {
+      bridgeManagerSlot.current = null;
+    }
+    const parallel = tools.find((x) => x.name === "dispatch_parallel_training_subtask");
+    const exec = { agent: { session: { header: { cwd: wsRoot } } } };
+    const outcome = (await parallel!.execute({
+      workorders_path: planPath,
+      source_root: docDir,
+    }, exec)) as { completed?: number; results?: Array<{ ok: boolean; label?: string }> };
+    // 整链通：plan（pages+wave）→wave 分组→页图 base64 注入→子任务完成
+    expect(outcome.completed).toBe(1);
+    expect(outcome.results?.[0]?.label).toBe("style-wave-1");
+  });
+
   it("能力闭集（D293）降级：页图缺文件→结构化报错指路（不静默派发）", async () => {
     const wsRoot = tempWorkspace();
     mkdirSync(join(wsRoot, ".atf"), { recursive: true });

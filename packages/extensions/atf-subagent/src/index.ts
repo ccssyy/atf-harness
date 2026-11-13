@@ -310,17 +310,79 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
     };
     const doc = JSON.parse(readFileSync(resolveInWorkspace(workordersPath), "utf8")) as {
       doc_type?: unknown;
-      // 字段名实锚=内核 walkthrough_pipeline.py _parallel_doc 的 workorders（不是 waves——
-      // 首实现凭想当然写 waves，真机全 0 解析失败；mock/自造形状教训第 5 次）
-      workorders?: Array<{ label?: unknown; pages?: unknown; instruction?: unknown }>;
+      // 字段名实锚=内核 _parallel_doc 的 workorders（首实现凭想当然写 waves=真机全 0 失败，
+      // mock/自造形状教训第 5 次）。D294 共用工单装载（双形态，按字段存在识别不绑业务段）：
+      //   A workorders 型——LabelQcParallelWorkorders/v1 等（每片自带 instruction/pages，
+      //     页名=标注 JSON 名→stem 定位同名图+同名标注内容随片文本注入）
+      //   B VisualSamplePlan/v1——版式聚类抽样计划（pages[].{page,path,wave}+source，
+      //     按 wave 分组切片；看图作用=验证聚类簇语义+采集 FieldVisualSignals/v1 视觉信号）
+      workorders?: Array<{ label?: unknown; pages?: unknown; instruction?: unknown; images?: unknown[] }>;
+      pages?: Array<{ page?: unknown; path?: unknown; wave?: unknown }>;
+      source?: unknown;
+      how_to_use?: unknown;
     };
-    const workorders = doc.workorders;
+    let workorders: Array<{ instruction: string; label?: string; pages?: string[]; images?: unknown[] }>;
+    const isVisualSamplePlan = Array.isArray(doc.pages) && doc.pages.length > 0 && !Array.isArray(doc.workorders);
+    if (isVisualSamplePlan) {
+      // 形态 B：pages 按 wave 分组切片，页图读 pages[].path（内核已给确定性真名路径），
+      // 产出合同=FieldVisualSignals/v1（信号闭集+coverage——style_split 视觉闸与倍数建议共用输入）
+      const planSource = typeof doc.source === "string" ? doc.source : "";
+      if (planSource === "") throw new Error("VisualSamplePlan/v1 缺 source 字段——页图定位需要标注源根");
+      const planRoot = resolveInWorkspace(planSource);
+      const byWave = new Map<number, Array<{ page: string; path: string }>>();
+      for (const entry of doc.pages as Array<{ page?: unknown; path?: unknown; wave?: unknown }>) {
+        const pageName = typeof entry.page === "string" ? entry.page : "";
+        const pagePath = typeof entry.path === "string" ? entry.path : "";
+        if (pageName === "" || pagePath === "") continue;
+        const waveNo = typeof entry.wave === "number" ? entry.wave : 1;
+        const bucket = byWave.get(waveNo) ?? [];
+        bucket.push({ page: pageName, path: pagePath });
+        byWave.set(waveNo, bucket);
+      }
+      if (byWave.size === 0) throw new Error("VisualSamplePlan/v1 无可用页（pages 全部缺 page/path）");
+      const signalsContract =
+        "输出 JSON：{pages:[{page,signals:[页级闭集:layout_style_mixed|table_irregular|wireframe_misaligned|dense_table|scan_skew|print_blur|noise_heavy|watermark_overlay]}],"
+        + "fields:[{field_id,signals:[字段闭集:multi_line|multi_value|stamp|handwriting|tiny_text|overlap_obscured],evidence:[{page,note:该页观察}]}],"
+        + "coverage:{pages_reviewed:[已实际看过的页文件名数组],pages_remaining:未看页数,incomplete_reason:可选}}——"
+        + "闭集权威=scripts/visual_signals.py;coverage 必报,未看完如实报 pages_remaining";
+      workorders = [...byWave.entries()].map(([waveNo, pages], index) => ({
+        instruction:
+          `版式判读任务(版式聚类并行片 ${String(index + 1)}/${String(byWave.size)},来源根 ${planSource}):`
+          + "逐页查看所附页面图片——这些页已被版式聚类算法按视觉签名分为同类,你的任务是确认簇语义并采集视觉信号:"
+          + "每页记录页级信号(版式混杂/表格不规则/线框错位/密表/扫描倾斜/打印模糊/噪点重/水印遮挡,无则空数组);"
+          + "登记字段在页上的视觉表现记录字段级信号(多行/多值/印章/手写/小字/遮挡)与图面观察;"
+          + "若发现某页与其他页明显不同类,在 note 里指明——聚类语义错误的页单独标记。"
+          + signalsContract,
+        label: `style-wave-${String(waveNo)}`,
+        pages: pages.map((p) => p.page),
+        images: pages.map((p) => {
+          const imagePath = resolveInWorkspace(p.path);
+          const ext = imagePath.slice(imagePath.lastIndexOf(".") + 1).toLowerCase();
+          const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : "image/jpeg";
+          return { type: "image", data: readFileSync(imagePath).toString("base64"), mimeType };
+        }),
+      }));
+    } else {
+      workorders = (doc.workorders ?? []).map((entry) => ({
+        instruction: typeof entry.instruction === "string" ? entry.instruction : "",
+        label: typeof entry.label === "string" && entry.label !== "" ? entry.label : undefined,
+        pages: Array.isArray(entry.pages) ? (entry.pages as unknown[]).filter((x): x is string => typeof x === "string") : undefined,
+      }));
+    }
     if (!Array.isArray(workorders) || workorders.length === 0) {
-      throw new Error("工单文件无 workorders（LabelQcParallelWorkorders/v1 形态校验失败——确认 label_qc 段已导出并行工单）");
+      throw new Error("工单文件无 workorders（共用工单形态:workorders 数组,每片 label/pages/instruction——确认产出段已导出并行工单）");
     }
     const docType = typeof doc.doc_type === "string" && doc.doc_type !== "" ? doc.doc_type : "";
     const batchRoot = resolveInWorkspace(sourceRoot);
     return workorders.map((wave, index) => {
+      // 双形态：形态 B 元素已带 images（loader 前段组装）——直接通过；形态 A 走下方组装
+      if (Array.isArray(wave.images) && wave.images.length > 0) {
+        return {
+          instruction: typeof wave.instruction === "string" ? wave.instruction : "",
+          label: typeof wave.label === "string" && wave.label !== "" ? wave.label : `wave-${String(index + 1)}`,
+          images: wave.images,
+        };
+      }
       const instruction = typeof wave.instruction === "string" ? wave.instruction : "";
       if (instruction === "") throw new Error(`工单片 ${String(index)} 缺 instruction`);
       const label = typeof wave.label === "string" && wave.label !== "" ? wave.label : `wave-${String(index + 1)}`;
