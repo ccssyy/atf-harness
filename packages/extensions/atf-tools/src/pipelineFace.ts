@@ -716,6 +716,25 @@ export const groupingProposalErrorsOf = (summary: unknown, stderr: string): unkn
   return null;
 };
 
+/** 分组候选模板提取：内核段摘要在 results[].raw_response.grouping_template 随段留痕
+ *  （根治刀 1113——proposal_template 机械生成，字段集=实验门锁定闭集）。summary 不
+ *  携带或形态不合法一律 undefined（不猜值不造默认模板——模板拼装逻辑禁在 harness
+ *  二次实现，D173 下限语义归内核单源）。stdout report 与 stage-<stage>.summary.json
+ *  落盘件同形状，本提取两来源通吃。 */
+export const groupingTemplateOf = (summary: unknown): unknown => {
+  const results = (summary as Record<string, unknown> | null)?.["results"];
+  if (!Array.isArray(results)) return undefined;
+  for (const entry of results) {
+    const raw = (entry as Record<string, unknown> | null)?.["raw_response"];
+    const template = (raw as Record<string, unknown> | null)?.["grouping_template"];
+    if (template !== null && typeof template === "object" && !Array.isArray(template)
+        && Array.isArray((template as Record<string, unknown>)["candidates"])) {
+      return template;
+    }
+  }
+  return undefined;
+};
+
 /** 从内核错误体取 errors（ok:false 或错误码在前才算不合格——不猜）。 */
 const groupingErrorsIn = (body: Record<string, unknown> | null): unknown[] | null => {
   if (body === null) return null;
@@ -3888,11 +3907,12 @@ let visualSummary: Record<string, unknown> | undefined;
         ...(args.stage === "experiment_setup"
           ? { grouping_section: renderGroupingSection(readExperimentGrouping(runDir), fieldNameMapOf(runDir)) }
           : {}),
-        // 根治刀（1113）：内核 grouping_template 原样透传——分组候选模板单源=内核
+        // 根治刀（1113）：内核 grouping_template 原样透传（results[].raw_response 层——
+        // 与回放断言同层、与内核 record() 序列化同构）——分组候选模板单源=内核
         // proposal_template 机械生成（字段集=实验门锁定闭集），harness 只透传不拼装，
         // agent 出分组卡前即得可照抄全集序（罗列动作从 agent 消失）。
-        ...(args.stage === "experiment_setup" && asRecordOf(summary)?.["grouping_template"] !== undefined
-          ? { grouping_template: asRecordOf(summary)?.["grouping_template"] }
+        ...(args.stage === "experiment_setup" && groupingTemplateOf(summary) !== undefined
+          ? { grouping_template: groupingTemplateOf(summary) }
           : {}),
         // C2：分组四态回执（grouping_source／grouping_decision）＋分组表（两档都必须有，
         // agent 可原样贴到对话）＋内核判不合格时的 errors 原文

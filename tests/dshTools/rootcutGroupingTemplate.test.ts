@@ -50,7 +50,8 @@ const approvalCtx = (): { get(service: string): unknown } => ({
       : undefined),
 });
 
-/** 内联 mock：stdout report 恒带 grouping_template（段 gate 由 harness 侧负责）。 */
+/** 内联 mock：stdout report 按**真实内核形状**构造——模板在 results[].raw_response 层
+ *  （contract-verdict 首轮 FAIL 实锚：mock 挂顶层=假绿，验收门禁拦下后对齐）。 */
 const mockScriptOf = (withTemplate: boolean): string => {
   const script = join(mkdtempSync(join(tmpdir(), "rootcut-mock-")), "mock.mjs");
   writeFileSync(script, [
@@ -60,8 +61,9 @@ const mockScriptOf = (withTemplate: boolean): string => {
     "const runId = argv[argv.indexOf('--run-id') + 1] ?? '';",
     `const TEMPLATE = ${JSON.stringify(TEMPLATE)};`,
     `const WITH_TPL = ${withTemplate ? "true" : "false"};`,
-    "const report = { schema_version: 'WalkthroughPipelineReport/v1', mode: 'stage', stage, run_id: runId, exit_code: 0, ok: true, argv };",
-    "if (WITH_TPL) report.grouping_template = TEMPLATE;",
+    "const record = { stage, status: 'ok', reason_codes: [], missing: [], raw_response: {} };",
+    "if (WITH_TPL) record.raw_response.grouping_template = TEMPLATE;",
+    "const report = { schema_version: 'WalkthroughPipelineReport/v1', mode: 'stage', stage, run_id: runId, exit_code: 0, ok: true, argv, results: [record] };",
     "console.log(JSON.stringify(report));",
   ].join("\n"), "utf-8");
   return script;
