@@ -63,6 +63,7 @@ const deadline = Date.now() + 15 * 60 * 1000;
 const answeredSeqs = new Set();
 let lastSeq = 0;
   let sawActive = false;
+let emptyReplyRetries = 0;
 const trajectory = [];
 while (Date.now() < deadline) {
   await new Promise((r) => setTimeout(r, 5000));
@@ -94,6 +95,17 @@ while (Date.now() < deadline) {
   // 完成判定：曾进入 running/waiting 且回 idle（createSession 初始即 idle,不可作完成信号）
   if (session.state === "running" || session.state === "waiting") sawActive = true;
   if (sawActive && session.state === "idle" && pending === undefined) {
+    // 空回复守卫(1113 实锚:模型连续空回复致驱动器空转退出,五跑无一到判据面)——
+    // idle 但轨迹无实质产物(atf_label_qc_resolve/核查件未出现)时重发指令一次,
+    // 仍空转才判失败退出。
+    const hasSubstance = trajectory.some((e) => String(e.text ?? "").includes("atf_label_qc_resolve") || String(e.text ?? "").includes("核查"));
+    if (!hasSubstance && emptyReplyRetries < 1) {
+      emptyReplyRetries += 1;
+      sawActive = false;
+      console.log("[eval] 空转检测:轨迹无实质推进——重发指令(第 " + emptyReplyRetries + " 次)");
+      await internal.postUserMessage(id, "继续执行:按任务书完成 label_qc 双通道并提交裁决。");
+      continue;
+    }
     console.log("[eval] agent 收尾（state 回 idle）——驱动结束");
     break;
   }
