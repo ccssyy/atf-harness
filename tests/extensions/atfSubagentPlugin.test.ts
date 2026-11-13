@@ -157,7 +157,7 @@ describe("C1——atf-subagent 会话级 plugin", () => {
     writeFileSync(workordersPath, JSON.stringify({
       schema_version: "LabelQcParallelWorkorders/v1",
       doc_type: "bl",
-      waves: [{ label: "qc-bl-01", pages: ["p01", "p02"], instruction: "看图核对任务(工单自带文本)" }],
+      workorders: [{ label: "qc-bl-01", pages: ["p01", "p02"], instruction: "看图核对任务(工单自带文本)" }],
     }));
 
     // 工厂面拿真工具（execute 可调）+域连接先解析（ensureScope 需 atf_workspace_status）
@@ -212,7 +212,7 @@ describe("C1——atf-subagent 会话级 plugin", () => {
     writeFileSync(workordersPath, JSON.stringify({
       schema_version: "LabelQcParallelWorkorders/v1",
       doc_type: "bl",
-      waves: [{ label: "qc-bl-01", pages: ["p99"], instruction: "x" }],
+      workorders: [{ label: "qc-bl-01", pages: ["p99"], instruction: "x" }],
     }));
     const fakeManager = {
       transport: async () => ({ request: async () => ({ ok: true as const, value: {} }) }),
