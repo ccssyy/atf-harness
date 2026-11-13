@@ -883,6 +883,36 @@ export const resolveGroupingFace = async (input: {
       note: "没有分组输入（无候选、字段配置无分组）——按必分组规则由段闸拦截指路提候选,不静默平铺",
     };
   }
+  // D295b：分组提案校验的 per-doc 设防——单类形态（run 级 field-choice.json 在场）
+  // doc_type 缺省合法（校验以 run 级账本为基准）；联合轮形态（per-doc 账本在场而
+  // run 级缺席）doc_type 缺失=覆盖校验无比对基准整体跳过（1113-7 真机实锚：混合
+  // 分组未经 per-doc 比对直接上卡）——拒绝并指路逐单据类型分别提交。
+  if ((input.docType === undefined || input.docType === "") && input.proposalRaw !== undefined && input.runDir !== undefined) {
+    const webuiDir = join(input.runDir, "webui");
+    let perDocPresent = false;
+    let runLevelPresent = false;
+    try {
+      for (const name of readdirSync(webuiDir)) {
+        if (/^field-choice\..+\.json$/.test(name)) perDocPresent = true;
+        if (name === "field-choice.json") runLevelPresent = true;
+      }
+    } catch {
+      /* 目录不存在=无账本，交由既有逐校验分支 */
+    }
+    if (perDocPresent && !runLevelPresent) {
+      return {
+        source: "proposal",
+        decision: "none",
+        candidate_name: null,
+        groups: [],
+        evidence: {},
+        payload: null,
+        note: "分组提案须逐单据类型提交:联合轮按单据类型分别调用(doc_type=bl 与 doc_type=ci 各一次,"
+          + "每次提案的字段必须全部属于该单据类型,不得跨单据类型混分)——本次调用缺 doc_type,"
+          + "无法按单据类型校验字段归属,不出卡",
+      };
+    }
+  }
   const parsed = parseGroupingProposal(proposalRaw);
   if (!parsed.ok) return { ok: false, errors: parsed.errors };
   const proposal = parsed.proposal;
