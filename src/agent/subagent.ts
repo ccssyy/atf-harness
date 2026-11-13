@@ -174,7 +174,7 @@ export const parseParallelParams = (
     return { ok: false, error: "subtasks 必填（非空数组，1..8 项）" };
   }
   if (raw.subtasks.length > DISPATCH_PARALLEL_MAX_SUBTASKS) {
-    return { ok: false, error: `subtasks 超上限（最多 ${String(DISPATCH_PARALLEL_MAX_SUBTASKS)} 项）` };
+    return { ok: false, error: `subtasks 超上限（最多 ${String(DISPATCH_PARALLEL_MAX_SUBTASKS)} 项，本次 ${String(raw.subtasks.length)} 项）——拆成多批依次派发（每批 ≤${String(DISPATCH_PARALLEL_MAX_SUBTASKS)} 项），逐批聚合结果后合并回填` };
   }
   const subtasks: Array<{ label: string; instruction: string }> = [];
   for (const [index, item] of raw.subtasks.entries()) {

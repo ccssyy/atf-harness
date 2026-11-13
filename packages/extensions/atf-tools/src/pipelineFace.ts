@@ -1885,6 +1885,7 @@ const extractFieldConfigError = (stderr: string): Record<string, unknown> | null
 export const sourceRootPrecheckOf = (
   given: string,
   docType: string,
+  workspacePath?: string,
 ):
   | { ok: true; resolved: string }
   | {
@@ -1895,7 +1896,13 @@ export const sourceRootPrecheckOf = (
       subdirs_present: string[];
       note: string;
     } => {
-  const resolved = isAbsolute(given) ? given : resolve(given);
+  // 相对路径锚工作区根解析（真机 web 进程 cwd=vendor 检出域——1113-2 真机实锚
+  // 「batch」→ vendor/batch 荒谬落点）；工作区不可得时拒绝相对路径（不给歧义解析）。
+  const resolved = isAbsolute(given)
+    ? given
+    : (workspacePath !== undefined && workspacePath !== ""
+        ? resolve(workspacePath, given)
+        : "");
   if (!existsSync(resolved)) {
     return {
       ok: false,
@@ -1904,8 +1911,8 @@ export const sourceRootPrecheckOf = (
       expected_dir: null,
       subdirs_present: [],
       note:
-        `数据批根指不到目录：「${given}」→ 解析为 ${resolved}（不存在）。`
-        + `相对路径按本工具进程的当前目录解析，跨进程传递请一律给绝对路径。`,
+        `数据批根指不到目录：「${given}」→ 解析为 ${resolved || "（相对路径且工作区不可得——拒绝歧义解析）"}（不存在）。`
+        + `相对路径按会话工作区根解析；工作区不可得时请一律给绝对路径。`,
     };
   }
   if (docType.trim() === "") return { ok: true, resolved };
@@ -1959,7 +1966,13 @@ export const fieldConfigPrecheckOf = (
   runDir: string,
   docType?: string,
 ): { ok: true; resolved: string } | { ok: false; given: string; resolved: string; note: string } => {
-  const resolved = isAbsolute(given) ? given : resolve(given);
+  // 相对路径锚工作区根解析（真机 web 进程 cwd=vendor 检出域——1113-2 真机实锚
+  // 「batch」→ vendor/batch 荒谬落点）；工作区不可得时拒绝相对路径（不给歧义解析）。
+  const resolved = isAbsolute(given)
+    ? given
+    : (workspacePath !== undefined && workspacePath !== ""
+        ? resolve(workspacePath, given)
+        : "");
   if (existsSync(resolved)) return { ok: true, resolved };
   const slot = `${runDir}/config/experiment-setup/${docType ?? "<单据类型>"}/field-config.json`;
   return {
@@ -3235,7 +3248,8 @@ let visualSummary: Record<string, unknown> | undefined;
         // 不把「拼成 …/awb/awb 不存在」这种可自证的错误留到内核侧只有一句「不可解析」。
         const sourceRootGiven = (args.source_root as string).trim();
         const docTypeForRoot = typeof args.doc_type === "string" ? args.doc_type.trim() : "";
-        const rootPrecheck = sourceRootPrecheckOf(sourceRootGiven, docTypeForRoot);
+        const workspacePathForRoot = typeof args.workspace_path === "string" ? args.workspace_path.trim() : "";
+        const rootPrecheck = sourceRootPrecheckOf(sourceRootGiven, docTypeForRoot, workspacePathForRoot !== "" ? workspacePathForRoot : undefined);
         if (!rootPrecheck.ok) {
           return asToolValue({
             ok: false,
