@@ -3967,6 +3967,20 @@ let visualSummary: Record<string, unknown> | undefined;
         ...(result.code === 3 || result.code === null
           ? { stderr_tail: result.stderr.slice(-2000), note: "环境错误（exit 3）——零写入；核管线环境（python 依赖/数据在位）后重试" }
           : {}),
+        // 1113 实锚:内核段内未捕获异常 exit 1（如 PosixPath 不可 JSON 序列化），stdout 空、
+        // summary=null——不落任何分支,回执裸 ok:false 连 stderr 都不给,agent 被迫翻 run
+        // 目录日志考古。exit 1 与 exit 3 同属异常/环境形态:stderr 栈投影+修复指令
+        // （报错即修复指令元规则;栈尾最后一行 TypeError/Exception 即真因）。
+        ...(result.code === 1
+          ? {
+              stderr_tail: result.stderr.slice(-2000),
+              error: "kernel_exception_exit_1",
+              note:
+                "内核段内未捕获异常（exit 1）——大概率零写入。真因=stderr 栈的最后一行"
+                + "（TypeError/Exception 行），按它定位；常见成因：产物 document 混入非 JSON 类型"
+                + "（如 Path 未转字符串）、段内前置产物形态漂移。不要靠猜或读源码。",
+            }
+          : {}),
         ...(summary === null && result.code === 0 ? { note: "段命令成功退出但无 JSON 摘要输出", stdout_head: trimmed.slice(0, 2000) } : {}),
         // 批次 R H1-3：内核错误码人话回流（提前接线——token_budget_missing /
         // token_budget_inconsistent:<detail> / token_gate_not_configured 构造期码命中即转
