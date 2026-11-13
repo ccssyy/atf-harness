@@ -84,6 +84,8 @@ const BLOCKED_SCRIPT = (root: string): string =>
     'process.stdout.write(JSON.stringify({mode:"stage",stage:"family_split",rejections:{reason_codes:["walkthrough_upstream_not_ok"],missing:["publish"]}}))\nprocess.exit(2)\n',
   );
 const ENVFAIL_SCRIPT = (root: string): string => writeScript(root, "envfail.mjs", "process.stderr.write('ModuleNotFoundError: pandas')\nprocess.exit(3)\n");
+// 1113 实锚:内核段内未捕获异常 exit 1（如 PosixPath 不可 JSON 序列化）——真因在 stderr 栈尾。
+const CRASH_SCRIPT = (root: string): string => writeScript(root, "crash.mjs", "process.stderr.write('Traceback (most recent call last):\\nTypeError: Object of type PosixPath is not JSON serializable')\nprocess.exit(1)\n");
 
 /** D173 必分组(1106 晚机检):experiment_setup 用例统一带分组候选过闸。 */
 const D173_PROPOSAL = {
@@ -323,6 +325,21 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
     expect(String(result["stderr_tail"])).toContain("ModuleNotFoundError");
     expect(String(result["note"])).toContain("环境错误");
     expect(existsSync(join(ws, "runs", "run-e3", "webui"))).toBe(false);
+  });
+
+  it("exit 1（内核段内未捕获异常）：stderr_tail＋error+修复指令（1113 静默崩溃形态锁）", async () => {
+    const root = tempRoot();
+    const ws = join(root, "ws");
+    mkdirSync(ws, { recursive: true });
+    const tool = pipelineToolOf(approvalCtx("allowed-once"), `node ${CRASH_SCRIPT(root)}`, 30_000) as {
+      execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
+    };
+    const result = await tool.execute({ stage: "register", run_id: "run-crash", workspace_path: ws, source_root: join(root, "src") }, execWithSession("sess-crash"));
+    expect(result).toMatchObject({ ok: false, exit_code: 1, segment_fact_recorded: false, session_bound: false });
+    expect(String(result["stderr_tail"])).toContain("PosixPath is not JSON serializable");
+    expect(String(result["error"])).toContain("kernel_exception_exit_1");
+    expect(String(result["note"])).toContain("未捕获异常");
+    expect(existsSync(join(ws, "runs", "run-crash", "webui"))).toBe(false);
   });
 
   it("A2 回归：sessionId 取不到 → 如实跳过（segment_fact_recorded=true、session_bound=false、无 binding）", async () => {
