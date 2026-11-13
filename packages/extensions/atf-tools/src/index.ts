@@ -45,6 +45,9 @@ import { BRIDGE_TOOL_NAMES } from "./bridgeFace.js";
 /** Cordis 插件名（loader 诊断用）。 */
 export const name = "atf-tools";
 
+/** C1：实例级桥接管理器槽（apply 装配时填充；atf-subagent 经此共享同一桥接单连接）。 */
+export const bridgeManagerSlot: { current: unknown } = { current: null };
+
 /** 依赖的 DSH service：tools＝工具注册表（approval 以 ctx.get 可选消费——缺失时敏感工具 fail-closed）。 */
 export const inject = ["tools"];
 
@@ -153,10 +156,13 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   }
   console.log(`[atf-tools] 管线对端: ${pipelineCommand}${process.env[BOOT_PREFLIGHT_PIPELINE_ENV] !== undefined ? "（env 真命令——F4）" : "（mock 缺省——设 ATF_DSH_PIPELINE_COMMAND 切真管线）"}`);
   const manager = new BridgeManager(deployment.argv, repoRoot, deployment.childEnv);
-  // C1（1113 真机派发装接）：桥接管理器挂 ctx 供会话级 plugin（@atf/dsh-atf-subagent）
-  // 共享同一桥接连接——子任务派发不另 spawn 第二条连接（cordis 子域原型链继承可达；
-  // 缺席时 plugin 侧 fail-loud 拒绝挂载，不静默降级）。
-  (ctx as Record<string, unknown>)["atfBridgeManager"] = manager;
+  // C1（1113 真机派发装接）：桥接管理器经模块级槽暴露给会话级 plugin
+  // （@atf/dsh-atf-subagent）共享同一桥接连接——子任务派发不另 spawn 第二条连接。
+  // 走槽不走 ctx 赋值：cordis ctx 是 Proxy，拒绝裸 set 未 provide 属性
+  // （「cannot set property without provide」真机 boot 实锚——组件 mock 普通对象
+  // 测不出，mock 必须按真实对端形状构造教训的又一案例）。实例级单例语义：
+  // 每次 apply 覆盖槽为最新 manager。缺席时 plugin 侧 fail-loud 拒绝挂载，不静默降级。
+  bridgeManagerSlot.current = manager;
 
   // 批㊶R前置 状态面：本机模型清单（启动扫描一次——boot 日志投影＋atf_run_training 描述注入；
   // 根＝env ATF_MODEL_ROOT（实例层注入）；未配置/缺席如实空清单不猜测）

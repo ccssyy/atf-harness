@@ -47,6 +47,7 @@ import { createFauxStreamFn, fauxAssistantMessage } from "../../../../src/agent/
 import type { SpikeBridgeTransport } from "../../../../src/agent/atfAgentTools.js";
 import type { BridgeError } from "../../../../src/bridge/index.js";
 import { requestApproval } from "../../atf-tools/src/approvalFace.js";
+import { bridgeManagerSlot } from "../../atf-tools/src/index.js";
 import { resolveSessionWorkspace, sessionCwdOfExec } from "../../atf-tools/src/scopeFace.js";
 
 export const name = "atf-subagent";
@@ -176,12 +177,12 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
   const c = ctx as {
     tools: { register(tool: unknown): void };
     get(service: string): unknown;
-    atfBridgeManager?: BridgeManagerLike;
   };
   // —— 前置依赖 fail-loud（可观测降级＝不注册三件，boot 日志留痕；不静默）——
-  const manager = c.atfBridgeManager;
-  if (manager === undefined) {
-    console.warn("[atf-subagent] ⚠ ctx.atfBridgeManager 缺席（atf-tools 未挂载或未暴露）——dispatch 三件不注册（fail-closed）");
+  // manager 经 atf-tools 模块级槽共享（cordis ctx 拒绝裸 set——真机 boot 实锚）。
+  const manager = bridgeManagerSlot.current as BridgeManagerLike | null;
+  if (manager === null) {
+    console.warn("[atf-subagent] ⚠ bridgeManagerSlot 缺席（atf-tools 未挂载或未填充）——dispatch 三件不注册（fail-closed）");
     return;
   }
   const sessionsRoot = process.env.ATF_WEBUI_SESSIONS_ROOT;
