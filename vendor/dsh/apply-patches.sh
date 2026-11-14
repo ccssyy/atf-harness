@@ -4,7 +4,7 @@
 #
 # 用途：vendor/dsh/deepseek-harness submodule 升级（LOCK.md 锁 commit 变更）或 UAT 发版
 #       （uat-deploy.sh 步骤 1c——submodule update 每次重置 pristine，patch 集不随发版走）后，
-#       将 patches/0001-0006 按序重放到新 worktree 并重建消费产物。
+#       将 patches/ 全部编号 patch（0*.patch glob 按序）重放到新 worktree 并重建消费产物。
 # 纪律：升级只走独立评估批（LOCK.md）；本脚本不检测破坏性变更——apply 失败即停
 #       （上游改动冲突须人工评估后更新 patch），绝不静默跳过。
 # 幂等（D85）：patch 链已全部应用（链式逆向判定——临时 index 上逆序逐个逆向验证）

@@ -1,0 +1,61 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.3 [39m[90m/data/sam/ATF-Harness[39m
+
+ [31m❯[39m tests/tools/testVendorPatchConsolidation.test.ts [2m([22m[2m6 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 3226[2mms[22m[39m
+   [31m❯[39m vendor patch 收编守护 [2m(6)[22m
+     [32m✓[39m C-A1 前提：submodule 锁在官方基线 639ed01[32m 7[2mms[22m[39m
+     [32m✓[39m 登记↔文件对账：LOCK.md patch 表与 patches/ 目录一一对应[32m 1[2mms[22m[39m
+     [32m✓[39m 编号连续：从 0001 起无跳号（抽走 patch 立即可见）[32m 0[2mms[22m[39m
+[31m     [31m×[31m C-A3 应用态在位：工作区呈 patch 全集应用态（16 M＋2 新增源文件）[39m[32m 37[2mms[22m[39m
+     [32m✓[39m 产物特征码：关键构建产物含 patch 特征键（防 client 面静默回退）[32m 1[2mms[22m[39m
+[31m     [31m×[31m 对抗+演练：干净检出上乱序必败（0005 先于 0003）、按序全过、触达闭集一致、应用态逐字节等价[39m[33m 3170[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/tools/testVendorPatchConsolidation.test.ts[2m > [22mvendor patch 收编守护[2m > [22mC-A3 应用态在位：工作区呈 patch 全集应用态（16 M＋2 新增源文件）
+[31m[1mAssertionError[22m: vendor 工作区偏离 patch 全集应用态——dev server tsx 直跑 src，工作区必须保持「锁 commit＋patch 已应用」（2026-11-15 实证：还原 pristine 即回退 server 面）。modifiedCount<16=被还原（在 submodule 内跑 vendor/dsh/apply-patches.sh 或按序 git apply ../patches/0*.patch 重放恢复）；出现 patch 外源文件=先收编为编号 patch 并登记 LOCK.md 后重放，或移除: expected { modifiedCount: 15, …(1) } to deeply equal { modifiedCount: 16, …(1) }[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "modifiedCount": 16,[39m
+[31m+   "modifiedCount": 15,[39m
+[2m    "untrackedSrc": [[22m
+[2m      "packages/client/ui-user-questions/src/client/FormPanel.module.css",[22m
+[2m      "packages/client/ui-user-questions/src/client/FormPanel.tsx",[22m
+[2m    ],[22m
+[2m  }[22m
+
+[36m [2m❯[22m tests/tools/testVendorPatchConsolidation.test.ts:[2m118:7[22m[39m
+
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/tools/testVendorPatchConsolidation.test.ts[2m > [22mvendor patch 收编守护[2m > [22m对抗+演练：干净检出上乱序必败（0005 先于 0003）、按序全过、触达闭集一致、应用态逐字节等价
+[31m[1mAssertionError[22m: 工作区触达文件与 patch 全集重放结果逐字节不一致——server 面 patch 行为已偏离（dev server tsx 直跑 src，源文件即行为）；修复：在 submodule 内 git checkout -- packages/ 后按序重放（bash ../apply-patches.sh 或逐个 git apply ../patches/0*.patch）: expected [ Array(1) ] to deeply equal [][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [][39m
+[31m+ [[39m
+[31m+   "packages/shell/bash-local/src/index.ts",[39m
+[31m+ ][39m
+
+[36m [2m❯[22m tests/tools/testVendorPatchConsolidation.test.ts:[2m183:9[22m[39m
+    [90m181|[39m         drifted,
+    [90m182|[39m         "工作区触达文件与 patch 全集重放结果逐字节不一致——server 面 patch 行为已偏离（dev server …
+    [90m183|[39m       ).toEqual([]);
+    [90m   |[39m         [31m^[39m
+    [90m184|[39m     } finally {
+    [90m185|[39m       rmSync(tmp, { recursive: true, force: true });
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m4 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 00:01:47
+[2m   Duration [22m 5.05s[2m (tests 66%, setup 34%)[22m
+

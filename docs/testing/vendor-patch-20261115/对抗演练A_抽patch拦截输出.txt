@@ -1,0 +1,95 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.3 [39m[90m/data/sam/ATF-Harness[39m
+
+ [31m❯[39m tests/tools/testVendorPatchConsolidation.test.ts [2m([22m[2m6 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[33m 2585[2mms[22m[39m
+   [31m❯[39m vendor patch 收编守护 [2m(6)[22m
+     [32m✓[39m C-A1 前提：submodule 锁在官方基线 639ed01[32m 7[2mms[22m[39m
+[31m     [31m×[31m 登记↔文件对账：LOCK.md patch 表与 patches/ 目录一一对应[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m 编号连续：从 0001 起无跳号（抽走 patch 立即可见）[39m[32m 1[2mms[22m[39m
+     [32m✓[39m C-A3 应用态在位：工作区呈 patch 全集应用态（16 M＋2 新增源文件）[32m 30[2mms[22m[39m
+     [32m✓[39m 产物特征码：关键构建产物含 patch 特征键（防 client 面静默回退）[32m 1[2mms[22m[39m
+[31m     [31m×[31m 对抗+演练：干净检出上乱序必败（0005 先于 0003）、按序全过、触达闭集一致、应用态逐字节等价[39m[33m 2526[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/tools/testVendorPatchConsolidation.test.ts[2m > [22mvendor patch 收编守护[2m > [22m登记↔文件对账：LOCK.md patch 表与 patches/ 目录一一对应
+[31m[1mAssertionError[22m: LOCK.md 登记面与 patches/ 文件面对账失败——missingInLock=已落盘未登记（在 LOCK.md patch 表补行，格式沿既有行）；orphanInLock=登记了但文件缺席（从工作区重导出，或删除孤儿登记行）: expected { missingInLock: [], …(1) } to deeply equal { missingInLock: [], orphanInLock: [] }[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[2m    "missingInLock": [],[22m
+[32m-   "orphanInLock": [],[39m
+[31m+   "orphanInLock": [[39m
+[31m+     "0005-form-cancel.patch",[39m
+[31m+   ],[39m
+[2m  }[22m
+
+[36m [2m❯[22m tests/tools/testVendorPatchConsolidation.test.ts:[2m95:7[22m[39m
+    [90m 93|[39m       { missingInLock, orphanInLock },
+    [90m 94|[39m       "LOCK.md 登记面与 patches/ 文件面对账失败——missingInLock=已落盘未登记（在 LOCK.md p…
+    [90m 95|[39m     ).toEqual({ missingInLock: [], orphanInLock: [] });
+    [90m   |[39m       [31m^[39m
+    [90m 96|[39m   });
+    [90m 97|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/tools/testVendorPatchConsolidation.test.ts[2m > [22mvendor patch 收编守护[2m > [22m编号连续：从 0001 起无跳号（抽走 patch 立即可见）
+[31m[1mAssertionError[22m: patch 编号断链——编号即重放顺序，缺号会让 apply-patches.sh 重放集不完整；对照 LOCK.md 台账定位缺失编号，从 submodule 工作区重导出（git diff > vendor/dsh/patches/00NN-<主题>.patch）后补登记: expected [ 1, 2, 3, 4, 6, 7, 8 ] to deeply equal [ 1, 2, 3, 4, 5, 6, 7 ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    1,[22m
+[2m    2,[22m
+[2m    3,[22m
+[2m    4,[22m
+[32m-   5,[39m
+[2m    6,[22m
+[2m    7,[22m
+[31m+   8,[39m
+[2m  ][22m
+
+[36m [2m❯[22m tests/tools/testVendorPatchConsolidation.test.ts:[2m104:7[22m[39m
+    [90m102|[39m       nums,
+    [90m103|[39m       "patch 编号断链——编号即重放顺序，缺号会让 apply-patches.sh 重放集不完整；对照 LOCK.md 台账定…
+    [90m104|[39m     ).toEqual(expected);
+    [90m   |[39m       [31m^[39m
+    [90m105|[39m   });
+    [90m106|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/tools/testVendorPatchConsolidation.test.ts[2m > [22mvendor patch 收编守护[2m > [22m对抗+演练：干净检出上乱序必败（0005 先于 0003）、按序全过、触达闭集一致、应用态逐字节等价
+[31m[1mAssertionError[22m: 工作区触达文件与 patch 全集重放结果逐字节不一致——server 面 patch 行为已偏离（dev server tsx 直跑 src，源文件即行为）；修复：在 submodule 内 git checkout -- packages/ 后按序重放（bash ../apply-patches.sh 或逐个 git apply ../patches/0*.patch）: expected [ …(4) ] to deeply equal [][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [][39m
+[31m+ [[39m
+[31m+   "packages/client/ui-user-questions/src/client/FormPanel.module.css",[39m
+[31m+   "packages/client/ui-user-questions/src/client/FormPanel.tsx",[39m
+[31m+   "packages/client/ui-user-questions/src/client/contract/slots.ts",[39m
+[31m+   "packages/client/ui-user-questions/src/client/locales.ts",[39m
+[31m+ ][39m
+
+[36m [2m❯[22m tests/tools/testVendorPatchConsolidation.test.ts:[2m183:9[22m[39m
+    [90m181|[39m         drifted,
+    [90m182|[39m         "工作区触达文件与 patch 全集重放结果逐字节不一致——server 面 patch 行为已偏离（dev server …
+    [90m183|[39m       ).toEqual([]);
+    [90m   |[39m         [31m^[39m
+    [90m184|[39m     } finally {
+    [90m185|[39m       rmSync(tmp, { recursive: true, force: true });
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m3 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 00:01:30
+[2m   Duration [22m 4.58s[2m (tests 58%, setup 41%)[22m
+
