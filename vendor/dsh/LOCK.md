@@ -15,7 +15,7 @@
 
 ## 本地 patch 清单（patch 文件住父仓版本化；bump 须重同步）
 
-上游源码以 patch 形态维护（patch 文件住本目录、父仓 git 跟踪；submodule 工作区日常保持 pristine——2026-11-15 收编批起，patch 生效走 apply-patches.sh 重放＋产物重建，运行时消费已构建 lib/ 产物，产物含 patch 特征由 tests/tools/test_vendor_patch_consolidation.py 断言护栏）：
+上游源码以 patch 形态维护（patch 文件住本目录、父仓 git 跟踪；worktree 保持「锁 commit＋patch 已应用」修改态——2026-11-15 收编批实证：dev server 以 tsx 直跑 src（node --import tsx/esm apps/cli/src/bin.ts），工作区还原 pristine 即刻回退 server 面 patch 行为（launch token 固定值变随机实锚），pristine 日常态被真机否决；应用态一致性由 tests/tools/testVendorPatchConsolidation.test.ts 断言护栏——18 触达文件与 patch 全集重放逐字节比对＋client 产物特征码）：
 
 | patch | 批次 | 内容 | 触及文件 |
 |---|---|---|---|
