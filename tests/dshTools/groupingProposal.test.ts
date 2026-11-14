@@ -404,7 +404,10 @@ describe("F6 回执用户面摘要（atf_pipeline_stage）", () => {
     );
     expect(second["escalate_to_user"]).toBe(true);
     expect(second["failure_count"]).toBe(2);
-    expect(String((second["user_summary"] as { next: string }).next)).toContain("需要你介入");
+    // M4 文案分类（19b69a4d）：分组缺件属缺件/参数类＝软文案（升级仍发射 escalate_to_user=true，
+    // 强「需要你介入」只属凭据/白名单/审批类——1112 实锚 13 条假告警修正）。
+    expect(String((second["user_summary"] as { next: string }).next)).toContain("连续两次没成功");
+    expect(String((second["user_summary"] as { next: string }).next)).not.toContain("需要你介入");
   });
 });
 
