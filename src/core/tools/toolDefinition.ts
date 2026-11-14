@@ -33,24 +33,17 @@ export interface ModelVisibleTool {
 }
 
 /**
- * 操作语义分类（D170v2 §4.1——审批按操作语义分派,替代逐工具名枚举）。
- * 三类闭集:
- *   readonly      只读(query/inspect/status/list/read,无写盘)——任何档位免审;
- *   chain_advance 链内推进(写 run 域内、可逆——八段链/裁决/准入/建实验/重绑)——
- *                 训练预设+完全权限档免审(免审放行留痕可审计),其余档位逐次审批;
- *   governance    治理点(不可逆/出链——训练启动/发布/删除/迁移)——任何档位逐次审批。
- * 表是单源:工具定义引用类别,消费点(requiresApprovalFor)按类别+档位上下文判定;
+ * 操作语义分类（D170v2 §4.1 确认卡分派；ADR-0022 后审批拦截已退役——本表只回答
+ * 「哪些动作执行前须经业务确认卡」，不再承载档位审批）。
+ * 四类闭集:
+ *   readonly      只读(query/inspect/status/list/read,无写盘)——直通;
+ *   chain_advance 链内推进(写 run 域内、可逆——八段链/裁决/准入/建实验/重绑)——直通留痕;
+ *   governance    治理点(不可逆/出链——训练启动/发布/删除/迁移)——业务确认卡(任何档位);
+ *   user_decision 裁决决定(D192:裁决是用户决定不是链内推进)——业务确认卡(任何档位)。
+ * 表是单源:工具定义引用类别,消费点(requiresUserConfirmationOf)按类别判定;
  * 未收编工具维持既有链(谓词优先,退基准旗标)——渐进收编,不一次性改全部声明。
  */
 export type ApprovalSemanticsClass = "readonly" | "chain_advance" | "governance" | "user_decision";
-
-/** 档位上下文(缺省=审慎侧:chain_advance 须审批)。 */
-export interface ApprovalSemanticsContext {
-  /** 权限档(permissionTierOf 单源;缺省按 guarded 处置)。 */
-  tier?: "guarded" | "full-access" | "unattended";
-  /** 训练预设自动驾驶在位(atf-training 预设;链内免审的另一必要轴)。 */
-  trainingAutopilot?: boolean;
-}
 
 /** 工具名 → 语义类别(单源表;atf_gate 的 query/advance 分派在谓词面保留)。 */
 export const APPROVAL_SEMANTICS_BY_TOOL: Readonly<Record<string, ApprovalSemanticsClass>> = {
@@ -76,29 +69,28 @@ export const APPROVAL_SEMANTICS_BY_TOOL: Readonly<Record<string, ApprovalSemanti
   atf_launch_execute: "governance",
 };
 
-/** 语义类别+档位 → 是否须审批(单一判定规则)。 */
-const semanticsRequiresApproval = (klass: ApprovalSemanticsClass, context: ApprovalSemanticsContext | undefined): boolean => {
+/** 语义类别 → 是否须经业务确认卡(单一判定规则;ADR-0022:档位审批轴已退役——
+ * chain_advance 直通留痕,只读直通,治理点/裁决确认卡任何档位照出)。 */
+const semanticsRequiresConfirmation = (klass: ApprovalSemanticsClass): boolean => {
   if (klass === "readonly") return false;
   if (klass === "governance") return true;
   // D243(四验实锚):user_decision 类没有专属分支时掉进 chain_advance 兜底——
-  // 完全权限+训练自动驾驶双轴齐备即免审,确认卡被整段跳过(resolve 受理无卡,
-  // 用户凭据不可达,agent 源码考古 25 分钟)。用户决定任何档位都过确认卡,
-  // 与分类表 D192 注释「免审链不放行」的意图对齐。
+  // 用户决定任何档位都过确认卡,与分类表 D192 注释「免审链不放行」的意图对齐。
   if (klass === "user_decision") return true;
-  // chain_advance:训练预设+完全权限档双轴齐备才免审(豁免是便利、权限是授权——
-  // 用户没给完全权限时预设不得自行放大能力;对齐 approvalExempt 双感知裁定)
-  return !(context?.tier === "full-access" && context?.trainingAutopilot === true);
+  // chain_advance:ADR-0022 去拦截——原「训练预设+完全权限档双轴免审,其余档位
+  // 逐次审批」随审批拦截退役;直通留痕义务由 bridgeFace 直通分支承载。
+  return false;
 };
 
-/** 审批判定单一出口（executor/bridgeFace 消费点唯一）:语义分类表优先(带档位
- * 上下文;atf_gate 的 query/advance 参数分派保留),未收编工具走既有链——谓词存在
- * 以其为准，否则退回基准旗标。缺省 context=审慎侧(chain_advance 须审批)。 */
-export const requiresApprovalFor = (definition: ToolDefinition, params: unknown, context?: ApprovalSemanticsContext): boolean => {
+/** 业务确认卡判定单一出口（bridgeFace 消费点唯一;原审批谓词 requiresApprovalFor
+ * 随 ADR-0022 拦截退役改名——语义表优先(atf_gate 的 query/advance 参数分派保留),
+ * 未收编工具走既有链——谓词存在以其为准，否则退回基准旗标。 */
+export const requiresUserConfirmationOf = (definition: ToolDefinition, params: unknown): boolean => {
   // atf_gate 参数面分派(§4.1:query=只读,advance=链内推进)——其余按名查表
   const klass = definition.name === "atf_gate"
     ? ((typeof params === "object" && params !== null ? (params as { action?: unknown }).action : undefined) === "query" ? "readonly" : "chain_advance")
     : APPROVAL_SEMANTICS_BY_TOOL[definition.name];
-  if (klass !== undefined) return semanticsRequiresApproval(klass, context);
+  if (klass !== undefined) return semanticsRequiresConfirmation(klass);
   return definition.requiresApproval !== undefined ? definition.requiresApproval(params) : definition.requires_approval;
 };
 

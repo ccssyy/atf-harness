@@ -147,10 +147,12 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
     expect(JSON.stringify(result)).toContain("1");
   }, 20_000);
 
-  it("atf_admit_data：审批 rejected → 结构化拒绝（不触桥）", async () => {
+  it("atf_admit_data：chain_advance 直通触桥（审批面 rejected 不再拦截——ADR-0022）", async () => {
     const tools = buildBridgeTools(approvalCtx("rejected"), manager, localRoots);
     const result = (await findTool(tools, "atf_admit_data").execute({ source_root: "/tmp/a", split_root: "/tmp/b" }, fakeExec)) as Record<string, unknown>;
-    expect(result).toMatchObject({ error: "approval_denied", outcome: "rejected" });
+    expect(result).not.toMatchObject({ error: "approval_denied" });
+    // 触桥实证：mock 对端业务校验结果（invalid_params）回流，而非审批拒绝
+    expect(JSON.stringify(result)).toContain("invalid_params");
   }, 20_000);
 
   it("atf_skill_read：审批放行 → 本地治理径（内核根缺失 → 结构化 rejected 如实回流）", async () => {
@@ -166,10 +168,11 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
     expect(JSON.stringify(result).length).toBeGreaterThan(0);
   }, 20_000);
 
-  it("atf_gate advance：须审批——approval unavailable → fail-closed（不触桥）", async () => {
+  it("atf_gate advance：直通触桥（approval unavailable 不再 fail-closed——ADR-0022；对端业务拒绝结构化回流）", async () => {
     const tools = buildBridgeTools(approvalCtx("unavailable"), manager, localRoots);
     const result = (await findTool(tools, "atf_gate").execute({ gate: "G1（数据准入闸，命名分流）", action: "advance", evidence_refs: ["sha256:deadbeef"] }, fakeExec)) as Record<string, unknown>;
-    expect(result).toMatchObject({ error: "approval_denied", outcome: "unavailable" });
+    expect(result).not.toMatchObject({ error: "approval_denied" });
+    expect(JSON.stringify(result)).toContain("unknown_gate");
   }, 20_000);
 
   afterAll(async () => {

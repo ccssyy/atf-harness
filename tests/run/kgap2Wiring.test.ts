@@ -93,7 +93,7 @@ const registerThen = (decisions: LlmDecision[], dirs: { sourceRoot: string; spli
 const tempDirs = () => ({ sourceRoot: mkdtempSync(join(tmpdir(), "k2-src-")), splitRoot: mkdtempSync(join(tmpdir(), "k2-split-")) });
 
 describe("K-Gap-2 接线：工具面 5→7（模型可见面与审批矩阵）", () => {
-  it("模型可见面含两新工具；propose 免审批、execute 需审批（requiresApprovalFor 矩阵）", async () => {
+  it("模型可见面含两新工具；propose 免审批、execute 需确认卡（requiresUserConfirmationOf 矩阵）", async () => {
     const visible = ToolRegistry.createDefault().modelVisible();
     const names = visible.map((tool) => tool.name);
     expect(names).toContain("atf_preparation_propose");
@@ -162,9 +162,9 @@ describe("K-Gap-2 用例 2：execute 写（需审批——审批链在场）", (
     const report = ran.value;
     if (report.outcome.kind !== "completed") console.log("DBG-EXEC", JSON.stringify(report.outcome));
     expect(report.outcome.kind).toBe("completed");
-    // 需审批：admit 与 execute 各触发一次问答轨审批（approval/request 在场）
+    // ADR-0022 后：execute（表外旗标 true）仍走确认卡审批一次；chain_advance 类直通
     const approvals = report.events.filter((event) => event.type === "approval/request");
-    expect(approvals.length).toBeGreaterThanOrEqual(2);
+    expect(approvals.length).toBeGreaterThanOrEqual(1);
     const executeResult = resultsOf(report).find((result) => result.tool === "atf_style_cluster_execute" && result.ok === true);
     expect(executeResult).toBeDefined();
     const value = (executeResult?.result ?? {}) as Record<string, unknown>;

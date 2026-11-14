@@ -1,13 +1,13 @@
 /**
- * L1b B7 N1：atf_gate 审批按 action 分派（owner 裁定 2026-09-17）。
- * query（只读）免审批自主执行——含未知 gate 名（对端 unknown_gate 结果直返模型、零弹窗）；
- * advance（推进）仍须审批（问答轨）；admit_data 不变；MCP 面同一 executor 同语义。
+ * L1b B7 N1：atf_gate 按 action 分派（ADR-0022 后：query/advance 均直通——原
+ * advance 问答轨审批随拦截退役；未知 gate 名对端 unknown_gate 结果直返模型）；
+ * MCP 面同一 executor 同语义。
  */
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { type BridgeTransport, requiresApprovalFor, TOOL_DEFINITIONS, ToolExecutor, ToolRegistry } from "../../src/core/tools/index.js";
+import { type BridgeTransport, requiresUserConfirmationOf, TOOL_DEFINITIONS, ToolExecutor, ToolRegistry } from "../../src/core/tools/index.js";
 import { AtfBridgeConnection, type BridgeError } from "../../src/bridge/index.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
@@ -53,16 +53,16 @@ const gateHandlerOf = (transport: SpyTransport) => ({
 });
 
 describe("B7 N1：gate 审批按 action 分派", () => {
-  it("谓词面：query 免审批；advance/缺 action 须审批；其余工具旗标不变", () => {
+  it("谓词面：query/advance 直通（ADR-0022 拦截退役）；其余工具旗标不变", () => {
     const gate = TOOL_DEFINITIONS.find((definition) => definition.name === "atf_gate");
     const admit = TOOL_DEFINITIONS.find((definition) => definition.name === "atf_admit_data");
     const scan = TOOL_DEFINITIONS.find((definition) => definition.name === "atf_fact_scan");
     expect(gate).toBeDefined();
-    expect(requiresApprovalFor(gate!, { gate: "g1", action: "query" })).toBe(false);
-    expect(requiresApprovalFor(gate!, { gate: "g1", action: "advance" })).toBe(true);
-    expect(requiresApprovalFor(gate!, { gate: "g1" })).toBe(true); // 缺 action = fail-closed 按须审批
-    expect(requiresApprovalFor(admit!, {})).toBe(true);
-    expect(requiresApprovalFor(scan!, {})).toBe(false);
+    expect(requiresUserConfirmationOf(gate!, { gate: "g1", action: "query" })).toBe(false);
+    expect(requiresUserConfirmationOf(gate!, { gate: "g1", action: "advance" })).toBe(false);
+    expect(requiresUserConfirmationOf(gate!, { gate: "g1" })).toBe(false); // 缺 action 按 chain_advance 直通
+    expect(requiresUserConfirmationOf(admit!, {})).toBe(false);
+    expect(requiresUserConfirmationOf(scan!, {})).toBe(false);
   });
 
   it("gate(query)：零账本请求、零审批调用、直执行（自主只读）", async () => {
@@ -88,20 +88,20 @@ describe("B7 N1：gate 审批按 action 分派", () => {
     expect(transport.methods).toEqual(["atf_gate"]);
   });
 
-  it("gate(advance)：仍须审批（handler 被调用；账本查询在先——账本轨优先不变）", async () => {
+  it("gate(advance)：直通执行（ADR-0022 拦截退役——零账本请求零审批调用）", async () => {
     const transport = new SpyTransport();
     const outcome = await executorOf(transport).execute(
       "atf_gate", { gate: "g1", action: "advance" },
       gateHandlerOf(transport),
     );
     expect(outcome.kind, JSON.stringify(outcome)).toBe("executed");
-    expect(transport.methods).toEqual(["ledger_query", "atf_gate"]); // 账本轨查询在先（无预录→问答轨；无消费）
-    expect(transport.handlerCalls).toBe(1);
+    expect(transport.methods).toEqual(["atf_gate"]); // 无 ledger_query/consume（直通）
+    expect(transport.handlerCalls).toBe(0); // 零弹窗
   });
 });
 
 describe("B7 N1：MCP 面同语义（真实 mock 对端，同一 executor）", () => {
-  it("query 免审批直执行；advance 走问答轨（mcp 通道留痕）", async () => {
+  it("query/advance 均直通执行（mcp 通道零审批）", async () => {
     const spawned = await AtfBridgeConnection.spawn({ command: ["node", mockPath, "--no-auto-bind"] });
     expect(spawned.ok).toBe(true);
     if (!spawned.ok) throw new Error("unreachable");
@@ -123,7 +123,7 @@ describe("B7 N1：MCP 面同语义（真实 mock 对端，同一 executor）", (
 
       const advance = await executor.execute("atf_gate", { gate: "g1", action: "advance" }, gate);
       expect(advance.kind).toBe("executed");
-      expect(qaCalls).toBe(1); // advance 仍须审批（本例账本无预录 → 问答轨放行）
+      expect(qaCalls).toBe(0); // ADR-0022：advance 直通（审批拦截退役）
     } finally {
       await connection.close().catch(() => undefined);
     }

@@ -15,7 +15,7 @@ import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { type BridgeError } from "../bridge/index.js";
 import {
   checkSchema,
-  requiresApprovalFor,
+  requiresUserConfirmationOf,
   TOOL_DEFINITIONS,
   validateCanonicalOutput,
   type SchemaNode,
@@ -121,4 +121,4 @@ export const buildAtfAgentTools = (deps: AtfAgentToolDeps, opts?: { names?: read
 export const buildSpikeAgentTools = (deps: AtfAgentToolDeps): AgentTool[] => buildAtfAgentTools(deps, { names: SPIKE_TOOL_NAMES });
 
 /** 供审批 hook 直接复用的单源判定（与 executor 消费点同一出口）。 */
-export const spikeRequiresApproval = (definition: ToolDefinition, params: unknown): boolean => requiresApprovalFor(definition, params);
+export const spikeRequiresApproval = (definition: ToolDefinition, params: unknown): boolean => requiresUserConfirmationOf(definition, params);

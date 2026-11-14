@@ -32,7 +32,7 @@ export {
   PROPOSAL_CONTENT_MAX_BYTES,
   type ProposalContentDigestFor,
 } from "./proposalContent.js";
-export { GATE_LEGAL_IDS, INTEGRITY_GATE_IDS, requiresApprovalFor, TOOL_DEFINITIONS, TOOL_NAMES, toModelVisible, type ModelVisibleTool, type ToolDefinition } from "./toolDefinition.js";
+export { GATE_LEGAL_IDS, INTEGRITY_GATE_IDS, requiresUserConfirmationOf, TOOL_DEFINITIONS, TOOL_NAMES, toModelVisible, type ModelVisibleTool, type ToolDefinition } from "./toolDefinition.js";
 export { ToolRegistry } from "./registry.js";
 export type { BridgeTransport } from "./executor.js";
 export {

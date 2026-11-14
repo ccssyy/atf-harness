@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { err, ok, type Result } from "../../src/bridge/index.js";
 import type { BridgeError } from "../../src/bridge/errors.js";
-import { requiresApprovalFor, ToolExecutor, ToolRegistry, type ApprovalGate, type BridgeTransport } from "../../src/core/tools/index.js";
+import { requiresUserConfirmationOf, ToolExecutor, ToolRegistry, type ApprovalGate, type BridgeTransport } from "../../src/core/tools/index.js";
 import type { ScopeRef } from "../../src/core/tools/approvalKey.js";
 
 const SCOPE_REF: ScopeRef = { project_id: "proj", scope_type: "run", scope_id: "run", scope_mode: "headless" };
@@ -55,12 +55,12 @@ const execute = async (transport: BridgeTransport, tool: string, params: unknown
 };
 
 describe("审批策略矩阵：label_qc 两工具分流（批㊶-F2——inspect 确定性检测免审；resolve 裁决须审批）", () => {
-  it("inspect requires_approval=false／resolve=true（requiresApprovalFor 单一出口）", () => {
+  it("inspect requires_approval=false／resolve=true（requiresUserConfirmationOf 单一出口）", () => {
     const registry = ToolRegistry.createDefault();
     const inspect = registry.get("atf_label_qc_inspect");
     const resolve = registry.get("atf_label_qc_resolve");
-    expect(inspect.ok && requiresApprovalFor(inspect.value, { dataset_id: "ds" })).toBe(false);
-    expect(resolve.ok && requiresApprovalFor(resolve.value, { dataset_id: "ds", actor: "a", report_digest: "d", decisions: [] })).toBe(true);
+    expect(inspect.ok && requiresUserConfirmationOf(inspect.value, { dataset_id: "ds" })).toBe(false);
+    expect(resolve.ok && requiresUserConfirmationOf(resolve.value, { dataset_id: "ds", actor: "a", report_digest: "d", decisions: [] })).toBe(true);
   });
 });
 

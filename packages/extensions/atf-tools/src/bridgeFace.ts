@@ -11,7 +11,7 @@ import {
   TOOL_DEFINITIONS,
   WORKSPACE_TOOL_DEFINITIONS,
   WORKSPACE_TOOL_HANDLERS,
-  requiresApprovalFor,
+  requiresUserConfirmationOf,
   type LaunchGpuQueueFace,
   type LocalToolHost,
   type ToolDefinition,
@@ -691,13 +691,13 @@ const launchConfirmCardOf = async (
             trainingAutopilot: isTrainingAutopilot(ctx as never, exec as never),
           };
           if (
-            !requiresApprovalFor(definition, args, approvalContext)
+            !requiresUserConfirmationOf(definition, args)
             && APPROVAL_SEMANTICS_BY_TOOL[definition.name] === "chain_advance"
           ) {
             // 免审放行留痕(§4.2 auto-allowed 可审计:stderr 告警保留,非隔离执行事实)
             console.warn(`[approval] ${definition.name} 链内推进免审放行(训练预设+完全权限档,写 run 域内可逆)`);
           }
-          if (requiresApprovalFor(definition, args, approvalContext)) {
+          if (requiresUserConfirmationOf(definition, args)) {
             // D186(owner 2026-11-04 裁定):完全权限档下训练启动不弹审批卡——改停等
             // 「训练启动确认卡」(完整实验准备+参数报告+脚本链接),确认即用户决定
             // (审计=卡面回执+放行账本);暂停不启动。guarded 档审批卡照旧。

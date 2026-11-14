@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { checkSchema, validateCanonicalOutput, type SchemaNode } from "../../src/core/tools/canonical.js";
-import { ToolRegistry, toModelVisible, WORKSPACE_TOOL_DEFINITIONS, requiresApprovalFor } from "../../src/core/tools/index.js";
+import { ToolRegistry, toModelVisible, WORKSPACE_TOOL_DEFINITIONS, requiresUserConfirmationOf } from "../../src/core/tools/index.js";
 import { TOOL_DEFINITIONS } from "../../src/core/tools/toolDefinition.js";
 import { spikeRequiresApproval } from "../../src/agent/atfAgentTools.js";
 import { approvalParamsDigest, stableStringify } from "../../src/core/tools/approvalKey.js";
@@ -253,46 +253,43 @@ describe("批㊶-F2 审批标注增补（转派记录——免审清单/高危�
   const workspaceByName = new Map(WORKSPACE_TOOL_DEFINITIONS.map((definition) => [definition.name, definition]));
   const byName = (name: string) => contractByName.get(name) ?? workspaceByName.get(name);
 
-  it("免审清单逐值 false（任意 params）＋两线（executor/atfAgentTools）全工具面 requiresApprovalFor 逐工具相等", () => {
-    // 免审清单（批㊶-F2 改 scratch_exec/label_qc_inspect；fact_scan/workspace_status/preparation_propose 既有 false 确认维持）
-    for (const name of ["atf_scratch_exec", "atf_label_qc_inspect", "atf_fact_scan", "atf_workspace_status", "atf_preparation_propose"]) {
+  it("直通清单逐值 false（任意 params）＋两线（executor/atfAgentTools）全工具面 requiresUserConfirmationOf 逐工具相等", () => {
+    // 直通清单（ADR-0022：readonly/chain_advance 直通；scratch_exec/preparation_propose 表外旗标 false 维持）
+    for (const name of ["atf_scratch_exec", "atf_label_qc_inspect", "atf_fact_scan", "atf_workspace_status", "atf_preparation_propose", "atf_admit_data", "atf_create_experiment", "atf_rebind_workspace"]) {
       const definition = byName(name);
       expect(definition, name).toBeDefined();
-      expect(requiresApprovalFor(definition!, {})).toBe(false);
-      expect(requiresApprovalFor(definition!, {任意: "params"})).toBe(false);
+      expect(requiresUserConfirmationOf(definition!, {})).toBe(false);
+      expect(requiresUserConfirmationOf(definition!, {任意: "params"})).toBe(false);
     }
-    // 两线一致性：甲线消费点（executor import 的 requiresApprovalFor）≡ 丙线消费点
+    // 两线一致性：甲线消费点（executor import 的 requiresUserConfirmationOf）≡ 丙线消费点
     // （atfAgentTools spikeRequiresApproval）——全工具面（9 契约＋工作区分册 7）逐工具相等，
     // 防未来任一线另立本地判定分叉（沿 methodOverrides 静态防分叉先例）。
     expect(TOOL_DEFINITIONS).toHaveLength(9);
     expect(WORKSPACE_TOOL_DEFINITIONS).toHaveLength(7);
     for (const definition of [...TOOL_DEFINITIONS, ...WORKSPACE_TOOL_DEFINITIONS]) {
       for (const params of [{}, { action: "query" }, { action: "advance" }, {任意: 1}]) {
-        expect(spikeRequiresApproval(definition, params)).toBe(requiresApprovalFor(definition, params));
+        expect(spikeRequiresApproval(definition, params)).toBe(requiresUserConfirmationOf(definition, params));
       }
     }
   });
 
-  it("高危清单逐值 true＋atf_gate 谓词三态（advance→true／query→false／缺失→true fail-closed 不回退）", () => {
+  it("确认卡清单逐值 true（governance/user_decision＋表外旗标）＋atf_gate 参数分派直通", () => {
     for (const name of [
-      "atf_admit_data",
       "atf_data_admission_request",
       "atf_style_cluster_execute",
       "atf_label_qc_resolve",
       "atf_launch_execute",
-      // 目录结构 v1 工具链两件：注册表/身份文件治理写——高危治理点（atf_* 全体人工面板语义）
-      "atf_create_experiment",
-      "atf_rebind_workspace",
     ]) {
       const definition = byName(name);
       expect(definition, name).toBeDefined();
-      expect(requiresApprovalFor(definition!, {})).toBe(true);
+      expect(requiresUserConfirmationOf(definition!, {})).toBe(true);
     }
     const gate = byName("atf_gate");
     expect(gate).toBeDefined();
-    expect(requiresApprovalFor(gate!, { action: "advance" })).toBe(true);
-    expect(requiresApprovalFor(gate!, { action: "query" })).toBe(false);
-    expect(requiresApprovalFor(gate!, {})).toBe(true);
-    expect(requiresApprovalFor(gate!, { action: "非法值" })).toBe(true);
+    // ADR-0022：gate advance（chain_advance）直通——原 fail-closed 须审批随拦截退役
+    expect(requiresUserConfirmationOf(gate!, { action: "advance" })).toBe(false);
+    expect(requiresUserConfirmationOf(gate!, { action: "query" })).toBe(false);
+    expect(requiresUserConfirmationOf(gate!, {})).toBe(false);
+    expect(requiresUserConfirmationOf(gate!, { action: "非法值" })).toBe(false);
   });
 });

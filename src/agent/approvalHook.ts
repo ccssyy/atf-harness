@@ -21,7 +21,7 @@
 import type { BeforeToolCallContext, BeforeToolCallResult } from "@earendil-works/pi-agent-core";
 import { type ScopeRef, proposalApprovalKey, type LedgerRecord } from "../core/tools/approvalKey.js";
 import { runLedgerGate } from "../core/tools/ledgerGate.js";
-import { requiresApprovalFor, validateCanonicalOutput } from "../core/tools/index.js";
+import { requiresUserConfirmationOf, validateCanonicalOutput } from "../core/tools/index.js";
 import type { AtfAgentToolDeps, SpikeBridgeTransport } from "./atfAgentTools.js";
 import { toolDefinitionFor } from "./atfAgentTools.js";
 import { surfaceVerdictToAudit, type ApprovalSurface } from "./approvalSurface.js";
@@ -121,7 +121,7 @@ export const createApprovalBeforeToolCall = (deps: ApprovalHookDeps) => {
       deps.audit.push({ tool: toolName, verdict: "blocked_unknown_tool", requiresApproval: true, detail: { why: "工具面收敛（fail-closed）" } });
       return block(`未注册工具（工具面收敛，fail-closed）: ${toolName}`);
     }
-    const requiresApproval = requiresApprovalFor(definition, params);
+    const requiresApproval = requiresUserConfirmationOf(definition, params);
     if (!requiresApproval) {
       deps.audit.push({ tool: toolName, verdict: "allow_readonly", requiresApproval: false });
       return undefined; // 只读直通（与 executor：requiresApprovalFor=false 时跳过审批一致）

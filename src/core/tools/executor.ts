@@ -18,7 +18,7 @@ import { checkSchema, validateCanonicalOutput, type SchemaNode } from "./canonic
 import { rpcMethodFor } from "./methodOverrides.js";
 import { runLedgerGate } from "./ledgerGate.js";
 import { type ScopeRef, proposalApprovalKey } from "./approvalKey.js";
-import { requiresApprovalFor } from "./toolDefinition.js";
+import { requiresUserConfirmationOf } from "./toolDefinition.js";
 import { approvalMissingBlock, approvalTrackBlock, toolError, toolErrorFromBridge, type ToolBlock, type ToolError } from "./errors.js";
 import { type ToolRegistry } from "./registry.js";
 import { type LocalToolHandler, type LocalToolHost } from "./workspaceTools.js";
@@ -130,7 +130,7 @@ export class ToolExecutor {
       };
     }
 
-    if (requiresApprovalFor(definition.value, params ?? {})) {
+    if (requiresUserConfirmationOf(definition.value, params ?? {})) {
       const approvalOutcome = await this.approve(definition.value, params ?? {}, approval, options?.operationId);
       if (!approvalOutcome.ok) return approvalOutcome.outcome;
     }

@@ -25,7 +25,7 @@ import {
   FILE_TOOL_NAMES,
 } from "../../src/agent/fileTools.js";
 import { toolDefinitionFor } from "../../src/agent/atfAgentTools.js";
-import { requiresApprovalFor } from "../../src/core/tools/index.js";
+import { requiresUserConfirmationOf } from "../../src/core/tools/index.js";
 import { createDeferredSubtaskRegistry } from "../../src/agent/deferredFace.js";
 import { createDeferredToolSet } from "../../src/agent/deferredTools.js";
 import { planRunBoundary } from "../../src/agent/driveFace.js";
@@ -270,10 +270,10 @@ describe("丙 v2 · A7 工具面与白名单（13→17）", () => {
     // 审批闸消费同一单源（hook 谓词 = 定义谓词）
     const bashDefinition = toolDefinitionFor("atf_bash");
     expect(bashDefinition).toBeDefined();
-    expect(requiresApprovalFor(bashDefinition as never, { command: "ls" })).toBe(false);
-    expect(requiresApprovalFor(bashDefinition as never, { command: "rm x" })).toBe(true);
-    expect(requiresApprovalFor(toolDefinitionFor("atf_read") as never, {})).toBe(false);
-    expect(requiresApprovalFor(toolDefinitionFor("atf_write") as never, { path: "x", content: "y" })).toBe(true);
+    expect(requiresUserConfirmationOf(bashDefinition as never, { command: "ls" })).toBe(false);
+    expect(requiresUserConfirmationOf(bashDefinition as never, { command: "rm x" })).toBe(true);
+    expect(requiresUserConfirmationOf(toolDefinitionFor("atf_read") as never, {})).toBe(false);
+    expect(requiresUserConfirmationOf(toolDefinitionFor("atf_write") as never, { path: "x", content: "y" })).toBe(true);
   });
 
   it("A7-⑦ bash 受控执行：白名单 cwd／env 最小集／超时形态；只读命令免审批直通（allow_readonly）", async () => {
@@ -461,7 +461,7 @@ describe("丙 v2 · dispatch_parallel_training_subtask（并行 fan-out）", () 
     expect(bridge.maxInflight).toBe(1); // 限流实证
   });
 
-  it("v2-f③ 审批继承（并行不绕闸）：双子任务各推 atf_gate，headless 双双 fail-closed；granted 面逐条出卡逐条消费", async () => {
+  it("v2-f③ 直通继承（ADR-0022）：双子任务各推 atf_gate advance，headless 双双直通完成；确认卡面零出卡", async () => {
     const raw = await spawnMock();
     const sessionsRoot = await mkdtemp(join(tmpdir(), "v2-approval-"));
     const parentScript = [
@@ -474,10 +474,10 @@ describe("丙 v2 · dispatch_parallel_training_subtask（并行 fan-out）", () 
       ]),
       fauxFinalAnswer("子任务审批结果已如实获知。"),
     ];
-    // —— headless：子内写动作双双 approval_missing（fail-closed×2，无静默放行）——
+    // —— headless：子内 chain_advance 双双直通完成（ADR-0022 拦截退役）——
     const blockedChild = [
       fauxMessageWithToolCalls("推进 G1。", [{ id: "g1", name: "atf_gate", arguments: { gate: "G1", action: "advance" } }]),
-      fauxFinalAnswer("不应到达"),
+      fauxFinalAnswer("G1 推进完成。"),
     ];
     const s1 = assembleV1Agent({
       bridge: raw as never,
@@ -497,11 +497,9 @@ describe("丙 v2 · dispatch_parallel_training_subtask（并行 fan-out）", () 
     const blocked = s1.events.find((event) => event.type === "tool_execution_end" && (event as { toolName?: string }).toolName === "dispatch_parallel_training_subtask") as
       | { result?: { details?: { ok: boolean; completed: number; failed: number; results: Array<{ outcome: string }> } } }
       | undefined;
-    expect(blocked?.result?.details).toMatchObject({ ok: false, completed: 0, failed: 2 });
-    expect(blocked?.result?.details?.results.every((result) => result.outcome === "approval_missing")).toBe(true);
+    expect(blocked?.result?.details).toMatchObject({ ok: true, completed: 2, failed: 0 });
 
-    // —— granted：逐条确认卡（ask×2）、逐条预录消费，双子完成——闸段经共享 GateLock 串行，
-    // 授权对象不错位（watermark 保护；并行 fan-out 不构成绕过账本的理由）——
+    // —— surface 面：确认卡零出卡（advance 直通不问人），双子同样完成——
     const okChild = [
       fauxMessageWithToolCalls("推进 G1。", [{ id: "g1", name: "atf_gate", arguments: { gate: "G1", action: "advance" } }]),
       fauxFinalAnswer("G1 推进完成。"),
@@ -533,7 +531,7 @@ describe("丙 v2 · dispatch_parallel_training_subtask（并行 fan-out）", () 
       | { result?: { details?: { ok: boolean; completed: number } } }
       | undefined;
     expect(granted?.result?.details).toMatchObject({ ok: true, completed: 2 });
-    expect(askCount).toBe(2); // 逐条确认卡（不是一次放行打包）
+    expect(askCount).toBe(0); // ADR-0022：chain_advance 直通（零确认卡）
   });
 });
 
