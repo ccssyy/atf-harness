@@ -31,6 +31,9 @@ const DRIVE_PARAMS: Record<string, unknown> = {
     actor: "guard",
     report_digest: `sha256:${"a".repeat(64)}`,
     decisions: [{ item_id: "qc-q1-aaaaaaaaaaaa", action: "reject" }],
+    // D244/D269 起 run_id/workspace_path 入 required（定位 run 目录写凭据）——存量红#2 同根补齐
+    run_id: "run-guard",
+    workspace_path: "/tmp/ws-guard",
   },
   atf_gate: { gate: "G2", action: "query" },
   atf_fact_scan: {},
