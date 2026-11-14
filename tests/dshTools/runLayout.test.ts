@@ -220,15 +220,37 @@ describe("批㊶Q增补三 段1③——train.sh 生成面审计注释（幂等�
 });
 
 describe("批㊶Q增补三 段1②——atf-tools apply 启动面（fail-fast 裁决落地；boot 日志同源）", () => {
-  const baseConfig = {
+  // 存量红#4 隔离：apply 启动闸 preflight 含 pin 一致性检查——测试此前直指真 pin 树
+  // （.atf-pinned），main 前进窗口态（tag≠版本串）下 fatal 先于测试目标逻辑触发=环境耦合。
+  // 修法=fixture 显式注入 pinned 路径：受控假内核树（git tag 与 __version__ 一致）+env
+  // ATF_INSTANCE_PIN_ROOT 显式指入——测试目标（放行账本裁决）不再受部署面 pin 状态摆布。
+  let fakeKernelDir = "";
+  const buildFakeKernelPin = (): string => {
+    const { execFileSync } = require("node:child_process") as typeof import("node:child_process");
+    const root = mkdtempSync(join(tmpdir(), "fake-kernel-pin-"));
+    const git = (args: string[]): void =>
+      execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...args], { cwd: root, stdio: "ignore" });
+    mkdirSync(join(root, "src", "agentic_training_flow"), { recursive: true });
+    writeFileSync(join(root, "src", "agentic_training_flow", "__init__.py"), '__version__ = "0.7.27b46"\n');
+    writeFileSync(join(root, ".atf-pin-commit"), "0".repeat(40));
+    // resolveBridgeDeployment：kernelDir 在场即取真内核 argv——管线脚本在场性是其部署检查项
+    mkdirSync(join(root, "tools"), { recursive: true });
+    writeFileSync(join(root, "tools", "walkthrough_pipeline.py"), "# fixture stub\n");
+    git(["init"]);
+    git(["add", "-A"]);
+    git(["commit", "-m", "fake pin tree for test"]);
+    git(["tag", "v0.7.27b46"]);
+    return root;
+  };
+  const baseConfig = () => ({
     runsRoot: "/tmp/ledger-boot-runs",
-    kernelDir: "/data/sam/ATF-Harness/.atf-pinned",
+    kernelDir: fakeKernelDir,
     execHome: "/tmp/ledger-boot-exec-home",
     logDir: "/tmp/ledger-boot-logs",
     bridgeCommand: "node /data/sam/ATF-Harness/tests/fixtures/mock_atf.mjs",
     pipelineCommand: "node /data/sam/ATF-Harness/tests/fixtures/mock_pipeline.mjs",
     pipelineTimeoutMs: 120_000,
-  };
+  });
   const ctxStub = { tools: { register: (): void => {} }, get: (): undefined => undefined, effect: (): void => {} };
   it("env 配置而目录不可写 → apply 抛错拒绝启动（fail-fast）", async () => {
     const { mkdtempSync: mk, writeFileSync: wf } = await import("node:fs");
@@ -236,23 +258,31 @@ describe("批㊶Q增补三 段1②——atf-tools apply 启动面（fail-fast �
     const blocker = join(home, "blocker");
     wf(blocker, "not-a-dir");
     const { apply } = await import("../../packages/extensions/atf-tools/src/index.js");
+    fakeKernelDir = buildFakeKernelPin();
+    const savedPin = process.env["ATF_INSTANCE_PIN_ROOT"];
+    process.env["ATF_INSTANCE_PIN_ROOT"] = fakeKernelDir;
     const saved = process.env["ATF_APPROVAL_LEDGER"];
     const savedHome = process.env["HOME"];
     process.env["ATF_APPROVAL_LEDGER"] = join(blocker, "sub", "training-release.jsonl");
     try {
-      expect(() => apply(ctxStub, baseConfig)).toThrow(/放行账本目录不可写/);
+      expect(() => apply(ctxStub, baseConfig())).toThrow(/放行账本目录不可写/);
     } finally {
+      if (savedPin === undefined) delete process.env["ATF_INSTANCE_PIN_ROOT"]; else process.env["ATF_INSTANCE_PIN_ROOT"] = savedPin;
       if (saved === undefined) delete process.env["ATF_APPROVAL_LEDGER"]; else process.env["ATF_APPROVAL_LEDGER"] = saved;
       if (savedHome !== undefined) process.env["HOME"] = savedHome;
     }
   });
   it("env 缺省回退位 → apply 正常完成（不阻塞；GPU 排队旁路 env 已由文件头设置）", async () => {
     const { apply } = await import("../../packages/extensions/atf-tools/src/index.js");
+    if (!fakeKernelDir) fakeKernelDir = buildFakeKernelPin();
+    const savedPin = process.env["ATF_INSTANCE_PIN_ROOT"];
+    process.env["ATF_INSTANCE_PIN_ROOT"] = fakeKernelDir;
     const saved = process.env["ATF_APPROVAL_LEDGER"];
     delete process.env["ATF_APPROVAL_LEDGER"];
     try {
-      expect(() => apply(ctxStub, baseConfig)).not.toThrow();
+      expect(() => apply(ctxStub, baseConfig())).not.toThrow();
     } finally {
+      if (savedPin === undefined) delete process.env["ATF_INSTANCE_PIN_ROOT"]; else process.env["ATF_INSTANCE_PIN_ROOT"] = savedPin;
       if (saved !== undefined) process.env["ATF_APPROVAL_LEDGER"] = saved;
     }
   });
