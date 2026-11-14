@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { buildFakeKernelPin } from "../helpers/fakeKernelPin.js";
 import {
   bucketedRunEntries,
   flatRunDirNames,
@@ -220,31 +221,14 @@ describe("批㊶Q增补三 段1③——train.sh 生成面审计注释（幂等�
 });
 
 describe("批㊶Q增补三 段1②——atf-tools apply 启动面（fail-fast 裁决落地；boot 日志同源）", () => {
+  let fakeKernelDir: string | null = null;
   // 存量红#4 隔离：apply 启动闸 preflight 含 pin 一致性检查——测试此前直指真 pin 树
   // （.atf-pinned），main 前进窗口态（tag≠版本串）下 fatal 先于测试目标逻辑触发=环境耦合。
   // 修法=fixture 显式注入 pinned 路径：受控假内核树（git tag 与 __version__ 一致）+env
   // ATF_INSTANCE_PIN_ROOT 显式指入——测试目标（放行账本裁决）不再受部署面 pin 状态摆布。
-  let fakeKernelDir = "";
-  const buildFakeKernelPin = (): string => {
-    const { execFileSync } = require("node:child_process") as typeof import("node:child_process");
-    const root = mkdtempSync(join(tmpdir(), "fake-kernel-pin-"));
-    const git = (args: string[]): void =>
-      execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...args], { cwd: root, stdio: "ignore" });
-    mkdirSync(join(root, "src", "agentic_training_flow"), { recursive: true });
-    writeFileSync(join(root, "src", "agentic_training_flow", "__init__.py"), '__version__ = "0.7.27b46"\n');
-    writeFileSync(join(root, ".atf-pin-commit"), "0".repeat(40));
-    // resolveBridgeDeployment：kernelDir 在场即取真内核 argv——管线脚本在场性是其部署检查项
-    mkdirSync(join(root, "tools"), { recursive: true });
-    writeFileSync(join(root, "tools", "walkthrough_pipeline.py"), "# fixture stub\n");
-    git(["init"]);
-    git(["add", "-A"]);
-    git(["commit", "-m", "fake pin tree for test"]);
-    git(["tag", "v0.7.27b46"]);
-    return root;
-  };
   const baseConfig = () => ({
     runsRoot: "/tmp/ledger-boot-runs",
-    kernelDir: fakeKernelDir,
+    kernelDir: fakeKernelDir ?? (fakeKernelDir = buildFakeKernelPin()),
     execHome: "/tmp/ledger-boot-exec-home",
     logDir: "/tmp/ledger-boot-logs",
     bridgeCommand: "node /data/sam/ATF-Harness/tests/fixtures/mock_atf.mjs",

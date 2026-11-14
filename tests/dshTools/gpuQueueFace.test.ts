@@ -22,6 +22,7 @@ import {
 import { resetResidentBaselineForTest } from "../../packages/extensions/atf-tools/src/gpuQueueFace.js";
 import { parseTrainerLine, startLossIngest } from "../../src/core/workspace/lossIngest.js";
 import { apply as applyAtfTools } from "../../packages/extensions/atf-tools/src/index.js";
+import { buildFakeKernelPin } from "../helpers/fakeKernelPin.js";
 
 // 批㊶-W：本文件 applyAtfTools 装配面预检（kernelDir=tempRoot 空）——env 显式声明走
 // 「env 已配置」路径（preflight ①⑥ 跳过派生与文件核查）。
@@ -247,15 +248,23 @@ describe("批㊶-K 项 3 atf_permission_status（只读档位可见性——零�
       on: () => () => true,
       effect: () => undefined,
     };
-    applyAtfTools(ctx as never, {
-      runsRoot: tempRoot(),
-      kernelDir: tempRoot(),
-      execHome: tempRoot(),
-      logDir: tempRoot(),
-      bridgeCommand: "",
-      pipelineCommand: `node x`,
-      pipelineTimeoutMs: 1000,
-    });
+    // 存量红#8b 隔离：pin 一致性检查在真 pin 窗口态先 fatal——env 显式注入受控假树
+    const fakePin = buildFakeKernelPin();
+    const savedPin = process.env["ATF_INSTANCE_PIN_ROOT"];
+    process.env["ATF_INSTANCE_PIN_ROOT"] = fakePin;
+    try {
+      applyAtfTools(ctx as never, {
+        runsRoot: tempRoot(),
+        kernelDir: tempRoot(),
+        execHome: tempRoot(),
+        logDir: tempRoot(),
+        bridgeCommand: "",
+        pipelineCommand: `node x`,
+        pipelineTimeoutMs: 1000,
+      });
+    } finally {
+      if (savedPin === undefined) delete process.env["ATF_INSTANCE_PIN_ROOT"]; else process.env["ATF_INSTANCE_PIN_ROOT"] = savedPin;
+    }
     const tool = registered.find((entry) => entry.name === "atf_permission_status");
     expect(tool).toBeDefined();
     const result = (await tool!.execute({}, { agent: { session: { id: "s" } } })) as Record<string, unknown>;
@@ -269,10 +278,17 @@ describe("批㊶-K 项 3 atf_permission_status（只读档位可见性——零�
     expect(missing["current_preset"]).toBe("danger-full-access");
     // 服务缺失面
     const registered2: CapturedTool[] = [];
-    applyAtfTools(
-      { tools: { register: (tool: CapturedTool) => registered2.push(tool) }, get: () => undefined, on: () => () => true, effect: () => undefined } as never,
-      { runsRoot: tempRoot(), kernelDir: tempRoot(), execHome: tempRoot(), logDir: tempRoot(), bridgeCommand: "", pipelineCommand: "node x", pipelineTimeoutMs: 1000 },
-    );
+    const fakePin2 = buildFakeKernelPin(); // 同上：pin 检查隔离（存量红#8b）
+    const savedPin2 = process.env["ATF_INSTANCE_PIN_ROOT"];
+    process.env["ATF_INSTANCE_PIN_ROOT"] = fakePin2;
+    try {
+      applyAtfTools(
+        { tools: { register: (tool: CapturedTool) => registered2.push(tool) }, get: () => undefined, on: () => () => true, effect: () => undefined } as never,
+        { runsRoot: tempRoot(), kernelDir: tempRoot(), execHome: tempRoot(), logDir: tempRoot(), bridgeCommand: "", pipelineCommand: "node x", pipelineTimeoutMs: 1000 },
+      );
+    } finally {
+      if (savedPin2 === undefined) delete process.env["ATF_INSTANCE_PIN_ROOT"]; else process.env["ATF_INSTANCE_PIN_ROOT"] = savedPin2;
+    }
     const tool2 = registered2.find((entry) => entry.name === "atf_permission_status");
     const unavailable = (await tool2!.execute({}, {})) as Record<string, unknown>;
     expect(unavailable["error"]).toBe("unavailable");
