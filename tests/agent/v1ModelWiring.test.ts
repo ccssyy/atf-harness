@@ -55,7 +55,6 @@ describe("修复批 D9.1：v1 装配模型描述符守卫钉", () => {
         requestedModels.push(model as { id?: string; provider?: string; api?: string });
         return scripted(model, context, options);
       },
-      approval: { kind: "headless" },
       steeringMode: "all",
       followUpMode: "all",
       contextTokens: 24_000,

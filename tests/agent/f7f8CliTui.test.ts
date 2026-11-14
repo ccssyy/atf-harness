@@ -60,7 +60,6 @@ const runAndCollect = async (
     maxTurns: 4,
     streamFn: streamFn as unknown as AssembleV1Deps["streamFn"],
     ...(providerConfig !== undefined ? { providerConfig } : {}),
-    approval: { kind: "headless" },
     steeringMode: "all",
     followUpMode: "all",
     contextTokens: 24_000,

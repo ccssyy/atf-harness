@@ -38,7 +38,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/pi-agent-core";
 import type { ChatEvent } from "./chatModel.js";
 import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, hasConfigSnapshot, loadConfigSnapshot, parseConfigEditText, saveConfigSnapshot } from "./configConfirm.js";
 import { GpuQueueOrchestrator, queueHitText, queueHitEstimateText, formatWaited } from "./gpuQueue.js";
-import { computeContextUsage, type ApprovalPolicy, type ContextUsage, type ScenarioProfileId, type SettingsStore } from "./settings.js";
+import { computeContextUsage, type ContextUsage, type ScenarioProfileId, type SettingsStore } from "./settings.js";
 import { buildReadOnlyAgentTools } from "./readOnlyTools.js";
 import { compactionTriggerTokens, setCompactionContextWindow } from "../core/session/constantsBudget.js";
 
@@ -152,8 +152,6 @@ export class WebUiSessionManager {
   private readonly deps: SessionManagerDeps;
   private readonly parseBudget: number;
   private readonly chatBudget: number;
-  /** 批⑭：审批策略（三档；切换即时生效于新 turn——已挂起卡不受影响）。 */
-  public approvalPolicy: ApprovalPolicy = "per_card";
   /** 批⑭：场景档徽标（会话头）。 */
   public scenarioProfile: ScenarioProfileId = "first_train";
 
@@ -162,16 +160,10 @@ export class WebUiSessionManager {
     this.parseBudget = deps.parseBudget ?? parseBudgetFromEnv();
     this.chatBudget = deps.chatBudget ?? chatBudgetFromEnv();
     if (deps.settings !== undefined) {
-      this.approvalPolicy = deps.settings.get().approval_policy;
       this.scenarioProfile = deps.settings.get().profile;
     }
     if (deps.scenarioProfile !== undefined) this.scenarioProfile = deps.scenarioProfile;
     mkdirSync(deps.sessionsRoot, { recursive: true });
-  }
-
-  /** 批⑭：审批策略热切（§一.区2：即时生效于新 turn；已挂起卡不受影响——pending 存活）。 */
-  public setApprovalPolicy(policy: ApprovalPolicy): void {
-    this.approvalPolicy = policy;
   }
 
   /** 批⑭：模型/effort 运行时热切（§二.1：新 turn 生效不重启 loop——pi-ai 换实例语义）＋对话流留痕。
@@ -498,17 +490,7 @@ export class WebUiSessionManager {
     const fileHost: FileToolHost = { env: process.env, roots: [scratchDir] };
     const surface: ApprovalSurface = {
       ask: async (info: ApprovalRequestInfo) => {
-        // 批⑭ 审批三档（§一.区2）：danger_only＝配置/发布确认批量放行（单 run 一次应答），
-        // train.sh 真跑（danger 卡走 emitDangerConfirm 不经本面）仍必确认；demo＝只读白名单
-        // 自动放行、管线写仍逐卡（永不全免）。已挂起卡不受影响（本面只对新 ask 生效）。
-        if (this.approvalPolicy === "danger_only" && (info.tool === "ask_user_for_input" || info.tool === "atf_config_confirm")) {
-          this.emit(session, { kind: "system_notice", level: "info", text: `审批策略=危险动作必确认：${info.tool} 批量放行（真跑类仍逐卡）`, at: new Date().toISOString() });
-          return { kind: "granted" } as ApprovalSurfaceVerdict;
-        }
-        if (this.approvalPolicy === "demo" && info.tool === "atf_config_confirm") {
-          this.emit(session, { kind: "system_notice", level: "info", text: `审批策略=演示模式：${info.tool} 自动放行（只读白名单；管线写仍逐卡）`, at: new Date().toISOString() });
-          return { kind: "granted" } as ApprovalSurfaceVerdict;
-        }
+        // ADR-0022：审批策略三档（danger_only/demo 批量放行＝假审批形态源）退役——恒逐卡。
         return await new Promise<ApprovalSurfaceVerdict>((resolve) => {
           const event = this.emit(session, {
             kind: "confirm_card",

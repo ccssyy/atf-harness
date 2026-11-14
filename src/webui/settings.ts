@@ -24,7 +24,6 @@ export interface ProviderEntry {
   default_model: string;
 }
 
-export type ApprovalPolicy = "per_card" | "danger_only" | "demo";
 export type ScenarioProfileId = "first_train" | "walkthrough" | "demo";
 
 export interface EnvProfileSettings {
@@ -63,7 +62,6 @@ export interface SettingsDoc {
   schema_version: "WebUiSettings/v1";
   providers: ProviderEntry[];
   default_provider: string;
-  approval_policy: ApprovalPolicy;
   env_profile: EnvProfileSettings;
   profile: ScenarioProfileId;
   /** 批㊶-S5：存储与运行环境（区块 1/2/3）——缺席视为全未配置 */
@@ -78,18 +76,13 @@ export interface SettingsDoc {
 /** 上下文窗口 per-model 覆盖（区 1：数字输入，缺省按 provider 预设）——providers.json 内嵌。 */
 export type ContextWindowOverrides = Record<string, number>;
 
-/** 审批三档语义表（行为单源：demo 档只读白名单自动放行，管线写仍逐卡——永不全免）。 */
-export const APPROVAL_POLICIES: ReadonlyArray<{ id: ApprovalPolicy; label: string; behavior: string }> = [
-  { id: "per_card", label: "逐卡确认", behavior: "每个 confirm_card / danger_confirm 都要人应答（缺省）" },
-  { id: "danger_only", label: "危险动作必确认", behavior: "配置/发布确认可批量放行（单 run 一次应答）；train.sh 真跑仍必确认" },
-  { id: "demo", label: "演示模式", behavior: "只读白名单自动放行；管线写操作仍逐卡（永不全免）" },
-];
+/** ADR-0022：审批三档（per_card/danger_only/demo）随审批拦截退役删除——确认卡恒逐张。 */
 
 /** 场景 Profiles（区 4 预设捆绑；切换在会话头显示档位徽标）。 */
-export const SCENARIO_PROFILES: ReadonlyArray<{ id: ScenarioProfileId; label: string; approval_policy: ApprovalPolicy; notes: string }> = [
-  { id: "first_train", label: "首训档", approval_policy: "per_card", notes: "小批＋逐卡确认＋DRY_RUN" },
-  { id: "walkthrough", label: "走查档", approval_policy: "per_card", notes: "严确认＋GLM 线" },
-  { id: "demo", label: "演示档", approval_policy: "demo", notes: "审批策略=演示模式（只读白名单自动放行）" },
+export const SCENARIO_PROFILES: ReadonlyArray<{ id: ScenarioProfileId; label: string; notes: string }> = [
+  { id: "first_train", label: "首训档", notes: "小批＋逐卡确认＋DRY_RUN" },
+  { id: "walkthrough", label: "走查档", notes: "严确认＋GLM 线" },
+  { id: "demo", label: "演示档", notes: "演示场景预设（确认卡恒逐张——审批策略轴已退役）" },
 ];
 
 /** pi-ai 语义 provider 预设（缺省注册表；GLM/DeepSeek 两条既有授权线）。 */
@@ -124,7 +117,6 @@ const DEFAULT_SETTINGS = (): SettingsDoc => ({
     default_model: preset.models[0]?.id ?? "",
   })),
   default_provider: "zai-coding-cn",
-  approval_policy: "per_card",
   env_profile: { train_env: "system", eval_env: "", gpu_visible_devices: "auto", master_port: 29517, base_model_dir: "" },
   profile: "first_train",
   storage: { ...EMPTY_STORAGE_SETTINGS },
@@ -187,7 +179,6 @@ const loadDoc = (settingsPath: string): SettingsDoc => {
       schema_version: "WebUiSettings/v1",
       providers: normalizeContextWindows(Array.isArray(parsed.providers) && parsed.providers.length > 0 ? (parsed.providers as ProviderEntry[]) : fallback.providers),
       default_provider: typeof parsed.default_provider === "string" ? parsed.default_provider : fallback.default_provider,
-      approval_policy: parsed.approval_policy ?? fallback.approval_policy,
       env_profile: { ...fallback.env_profile, ...(typeof parsed.env_profile === "object" && parsed.env_profile !== null ? parsed.env_profile : {}) },
       profile: parsed.profile ?? fallback.profile,
       storage: { ...fallback.storage, ...(typeof parsed.storage === "object" && parsed.storage !== null ? parsed.storage : {}) },

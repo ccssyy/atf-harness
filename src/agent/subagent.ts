@@ -84,7 +84,7 @@ export const runChildSubtask = async (
     // 修复批 D9.1：子链模型描述符（同主链 D9 根因修复——真 provider 子链不传则
     // DEFAULT_MODEL 渗漏首参，"Unknown provider" 空回复）
     ...(deps.childModel !== undefined ? { model: deps.childModel } : {}),
-    approval: deps.surface !== undefined ? { kind: "surface", surface: deps.surface } : { kind: "headless" },
+    ...(deps.surface !== undefined ? { approval: { kind: "surface", surface: deps.surface } } : {}),
     steeringMode: "all",
     followUpMode: "all",
     contextTokens: deps.contextTokens ?? compactionTriggerTokens(),

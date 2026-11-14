@@ -7,7 +7,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  APPROVAL_POLICIES,
   EFFORT_CLOSED_IDS,
   SCENARIO_PROFILES,
   computeContextUsage,
@@ -38,11 +37,7 @@ describe("providers 注册表（env_key 纪律）与脱敏", () => {
     const store = openSettingsStore(join(root, "providers.json"));
     const initial = store.get();
     expect(initial.providers.map((provider) => provider.id)).toContain("zai-coding-cn");
-    expect(initial.approval_policy).toBe("per_card");
-    const updated = store.put({ approval_policy: "demo" });
-    expect(updated.approval_policy).toBe("demo");
     const reopened = openSettingsStore(join(root, "providers.json")).get();
-    expect(reopened.approval_policy).toBe("demo");
   });
 
   it("key 脱敏红线：GET 投影只回 env 变量名＋尾 4 位；PUT 剥除 api_key 明文字段", () => {
@@ -77,9 +72,6 @@ describe("providers 注册表（env_key 纪律）与脱敏", () => {
 
 describe("审批三档（§一.区2 行为差异）", () => {
   it("语义表：demo 档只读白名单自动放行、永不全免（文案锚）", () => {
-    expect(APPROVAL_POLICIES.map((policy) => policy.id)).toEqual(["per_card", "danger_only", "demo"]);
-    expect(APPROVAL_POLICIES[2]?.behavior).toContain("永不全免");
-    expect(APPROVAL_POLICIES[1]?.behavior).toContain("train.sh 真跑仍必确认");
   });
 
   it("热切：setApprovalPolicy 即时生效（surface 按 policy 走批量放行/逐卡）；已挂起卡不受影响", async () => {
@@ -89,12 +81,7 @@ describe("审批三档（§一.区2 行为差异）", () => {
       bridgeCommand: { argv: ["node", join(import.meta.url.replace("file://", ""), "..", "..", "..", "tests", "fixtures", "mock_atf.mjs")] },
       settings: openSettingsStore(join(tempRoot(), "providers.json")),
     });
-    expect(manager.approvalPolicy).toBe("per_card");
-    manager.setApprovalPolicy("demo");
-    expect(manager.approvalPolicy).toBe("demo");
-    // approval surface 在 demo 档对 config 类审批自动放行（danger 卡走 emitDangerConfirm 不经本面）
-    manager.setApprovalPolicy("danger_only");
-    expect(manager.approvalPolicy).toBe("danger_only");
+    // ADR-0022：审批策略三档热切退役——确认卡恒逐张（manager 无 approvalPolicy 面）。
   });
 });
 
@@ -150,14 +137,8 @@ describe("设置 API 七条（HTTP 面）", () => {
     // test 404
     const testMissing = await fetch(`${base}/api/settings/providers/ghost/test`, { method: "POST" });
     expect(testMissing.status).toBe(404);
-    // approval 三档 PUT 非法拒绝
-    const badPolicy = await fetch(`${base}/api/settings/approval`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ approval_policy: "never_ask" }) });
-    expect(badPolicy.status).toBe(400);
-    const putPolicy = await put("/api/settings/approval", { approval_policy: "danger_only" });
-    expect(putPolicy["approval_policy"]).toBe("danger_only");
     // profile
     const putProfile = await put("/api/settings/profile", { profile: "demo" });
-    expect(putProfile["approval_policy"]).toBe("demo"); // 预设捆绑联动
     // env-profile
     const envProfile = await get("/api/settings/env-profile");
     expect(envProfile["write_path"]).toContain("env-profiles");
@@ -175,7 +156,6 @@ describe("设置 API 七条（HTTP 面）", () => {
 describe("场景 Profiles（§一.区4）", () => {
   it("三档预设捆绑：首训/走查逐卡、演示档 demo", () => {
     expect(SCENARIO_PROFILES.map((profile) => profile.id)).toEqual(["first_train", "walkthrough", "demo"]);
-    expect(SCENARIO_PROFILES.find((profile) => profile.id === "demo")?.approval_policy).toBe("demo");
   });
 });
 

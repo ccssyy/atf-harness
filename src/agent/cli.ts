@@ -66,8 +66,6 @@ export interface CliArgs {
   sessionsRoot?: string;
   llm: { kind: "faux"; scriptPath: string } | { kind: "deepseek" } | { kind: "config" };
   maxTurns?: number;
-  approval: "headless" | "interactive";
-  approvalTimeoutMs: number;
   steeringMode: QueueMode;
   followUpMode: QueueMode;
   skillsDir?: string;
@@ -85,8 +83,6 @@ export const parseCliArgs = (argv: readonly string[]): CliArgs | { error: string
   let sessionsRoot: string | undefined;
   let llm: CliArgs["llm"] | undefined;
   let maxTurns: number | undefined;
-  let approval: "headless" | "interactive" = "headless";
-  let approvalTimeoutMs = 120_000;
   let steeringMode: QueueMode = "all";
   let followUpMode: QueueMode = "all";
   let skillsDir: string | undefined;
@@ -131,18 +127,6 @@ export const parseCliArgs = (argv: readonly string[]): CliArgs | { error: string
         maxTurns = value;
         break;
       }
-      case "--approval": {
-        const value = take();
-        if (value !== "headless" && value !== "interactive") return { error: `--approval 非法: ${value}（headless | interactive）` };
-        approval = value;
-        break;
-      }
-      case "--approval-timeout-ms": {
-        const value = Number(take());
-        if (!Number.isInteger(value) || value < 1) return { error: "--approval-timeout-ms 须为正整数" };
-        approvalTimeoutMs = value;
-        break;
-      }
       case "--steering-mode": {
         const parsed = takeQueueMode("--steering-mode");
         if (typeof parsed !== "string") return parsed;
@@ -182,7 +166,7 @@ export const parseCliArgs = (argv: readonly string[]): CliArgs | { error: string
   }
   if (instruction === undefined || instruction.trim() === "") return { error: "--instruction 必填（非空）" };
   if (llm === undefined) return { error: "--llm 必填（faux:<script.json> | deepseek | config；真实调用须 owner 另批授权——env ATF_V1_REAL_LLM_AUTHORIZED=1）" };
-  return { instruction, peer, wsRoot, sessionsRoot, llm, maxTurns, approval, approvalTimeoutMs, steeringMode, followUpMode, skillsDir, contextTokens, keepRecentTokens, subagent, fsRoots };
+  return { instruction, peer, wsRoot, sessionsRoot, llm, maxTurns, steeringMode, followUpMode, skillsDir, contextTokens, keepRecentTokens, subagent, fsRoots };
 };
 
 export interface CliDeps {
@@ -193,41 +177,10 @@ export interface CliDeps {
 }
 
 /**
- * D284 形态①+开关（owner 1111 裁定）：headless 审批面构造。
- * - env `ATF_HEADLESS_PRESET=atf-unattended` → 自动 granted surface（D90 全自动档
- *   语义的 headless 投影：审批全免+账本留痕照常[approvalHook 审计面]+stderr 放行通报；
- *   无人值守 eval/无人值守循环场景用）；
- * - `--approval interactive` → 交互卡 surface（stdout/stdin，既有语义）；
- * - 其余（未设/值不符/未声明）→ `{ kind: "headless" }`＝现行为零变化（治理点
- *   approval_missing fail-closed 78——不猜测授权）。
- * 未知值显式拒绝（warn+按 headless）：防拼写错误静默获得免审面。
+ * ADR-0022（D284 语义退役）：headless 载体审批三态（headless 拒绝/unattended 自动
+ * granted/interactive 交互卡）收敛为单态——无 surface＝确认卡轨直通留痕（approvalHook
+ * 内置行为）；WebUI 载体 surface 透传（B 层确认卡出卡面）不受影响。
  */
-export const ATF_HEADLESS_UNATTENDED_PRESET = "atf-unattended";
-
-export const buildHeadlessApproval = (
-  approvalMode: "headless" | "interactive",
-  approvalTimeoutMs: number | undefined,
-  env: NodeJS.ProcessEnv,
-): { kind: "headless" } | { kind: "interactive"; timeoutMs: number } | { kind: "surface"; surface: ApprovalSurface } => {
-  if (approvalMode === "interactive") {
-    return { kind: "interactive", timeoutMs: approvalTimeoutMs ?? 600_000 };
-  }
-  const preset = env["ATF_HEADLESS_PRESET"]?.trim() ?? "";
-  if (preset === "") return { kind: "headless" };
-  if (preset !== ATF_HEADLESS_UNATTENDED_PRESET) {
-    console.error(`[v1] ATF_HEADLESS_PRESET=\${preset} 不是受支持的值（仅 \${ATF_HEADLESS_UNATTENDED_PRESET}）——按无免审 headless 处理（fail-closed）`);
-    return { kind: "headless" };
-  }
-  const surface: ApprovalSurface = {
-    ask: async (info) => {
-      // D90 全自动档语义：审批由 agent 判定，落账 decided_by=agent（approvalHook
-      // 审计面照常记 allow_surface_ledger）；stderr 放行通报（放行必留痕纪律）。
-      console.error(`[atf-approval] 全自动档（headless unattended）：\${info.tool} 自动放行（账本照常留痕）`);
-      return { kind: "granted" };
-    },
-  };
-  return { kind: "surface", surface };
-};
 
 /**
  * D276-eval:headless real 链的 bind run_id 形态——收窄到内核闭集（小写字母数字
@@ -368,7 +321,6 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
             ? { provider_id: resolvedConfig.provider_id, model: resolvedConfig.model, base_url: resolvedConfig.base_url, api_key: resolvedConfig.api_key }
             : undefined,
       bindRunId,
-      approval: buildHeadlessApproval(args.approval, args.approvalTimeoutMs, env),
       steeringMode: args.steeringMode,
       followUpMode: args.followUpMode,
       skillsDir: args.skillsDir,
@@ -432,7 +384,8 @@ export interface AssembleV1Deps {
    *  真 provider 链则 streamFn 首参渗漏 DEFAULT_MODEL → "Unknown provider" 空回复——
    *  D9 根因）。真 provider 装配必须携带。 */
   model?: Model<"openai-completions">;
-  approval: { kind: "headless" } | { kind: "interactive"; timeoutMs: number } | { kind: "surface"; surface: ApprovalSurface };
+  /** 确认卡 surface（WebUI 载体透传；缺省无＝headless 直通留痕——ADR-0022 单态）。 */
+  approval?: { kind: "surface"; surface: ApprovalSurface };
   steeringMode: QueueMode;
   followUpMode: QueueMode;
   systemSuffix?: string;
@@ -485,12 +438,7 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
   const registry = createHookRegistry();
 
   const runId = (): string | null => scopeRefBox.current?.scope_id ?? null;
-  const surface: ApprovalSurface | undefined =
-    deps.approval.kind === "surface"
-      ? deps.approval.surface
-      : deps.approval.kind === "interactive"
-        ? createInteractiveApprovalSurface({ timeoutMs: deps.approval.timeoutMs })
-        : undefined;
+  const surface: ApprovalSurface | undefined = deps.approval?.kind === "surface" ? deps.approval.surface : undefined;
 
   // B4：hook 注册面 8 名实际注册（缺省观测体；调用方可经 registry.register 追加）——
   // before_run（prompt 前）／before_drive（agent_start）／before_run_end（agent_end）／
@@ -591,7 +539,8 @@ export interface V1HeadlessDeps {
   streamFn?: (model: never, context: TranscriptContext, options?: SimpleStreamOptions) => unknown;
   providerConfig?: { provider_id: string; model: string; base_url: string; api_key: string };
   bindRunId?: string;
-  approval: { kind: "headless" } | { kind: "interactive"; timeoutMs: number } | { kind: "surface"; surface: ApprovalSurface };
+  /** 确认卡 surface（WebUI 载体透传；缺省无＝headless 直通留痕——ADR-0022 单态）。 */
+  approval?: { kind: "surface"; surface: ApprovalSurface };
   steeringMode: QueueMode;
   followUpMode: QueueMode;
   skillsDir?: string;
@@ -655,7 +604,7 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
           subagent: {
             bridge: deps.bridge,
             sessionsRoot: deps.sessionsRoot,
-            surface: deps.approval.kind === "surface" ? deps.approval.surface : deps.approval.kind === "interactive" ? createInteractiveApprovalSurface({ timeoutMs: deps.approval.timeoutMs }) : undefined,
+            surface: deps.approval?.kind === "surface" ? deps.approval.surface : undefined,
             childStreamFn: deps.childStreamFn !== undefined ? deps.childStreamFn : () => streamFn as never,
             ...(providerAssembled !== undefined ? { childModel: providerAssembled.model } : {}),
             modelTag,

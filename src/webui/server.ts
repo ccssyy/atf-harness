@@ -19,7 +19,7 @@ import { loadLlmProviderConfig } from "../llm/providerConfig.js";
 import { resolveBridgeDeployment } from "../bridge/bridgeCommand.js";
 import { resolveInstanceKernelDir } from "../core/workspace/instancePin.js";
 import { WebUiSessionManager, chatBudgetFromEnv, parseBudgetFromEnv, type SessionManagerDeps } from "./sessionManager.js";
-import { openSettingsStore, redactProviders, envProfilePath, writeEnvProfile, SCENARIO_PROFILES, APPROVAL_POLICIES, type ApprovalPolicy, type ScenarioProfileId } from "./settings.js";
+import { openSettingsStore, redactProviders, envProfilePath, writeEnvProfile, SCENARIO_PROFILES, type ScenarioProfileId } from "./settings.js";
 import { listRuns, filterRunsByWorkspace, queryNvidiaSmi } from "./readOnlyTools.js";
 import { resolveRunDir } from "../core/workspace/runLayout.js";
 import { registeredWorkspaceRoots } from "../core/workspace/workspaceRegistry.js";
@@ -352,7 +352,6 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
       json(res, 200, {
         providers: redactProviders(doc.providers, (envName) => settings.keyTail(envName)),
         default_provider: doc.default_provider,
-        policies: APPROVAL_POLICIES,
         profiles: SCENARIO_PROFILES,
       });
       return;
@@ -385,23 +384,7 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
       json(res, 200, { result: await settings.testProvider(provider) });
       return;
     }
-    if (path === "/api/settings/approval" && req.method === "GET") {
-      const doc = settings.get();
-      json(res, 200, { approval_policy: doc.approval_policy, policies: APPROVAL_POLICIES });
-      return;
-    }
-    if (path === "/api/settings/approval" && req.method === "PUT") {
-      const body = await readBody(req);
-      const policy = body["approval_policy"] as ApprovalPolicy | undefined;
-      if (policy === undefined || !APPROVAL_POLICIES.some((entry) => entry.id === policy)) {
-        json(res, 400, { error: "approval_policy 非法（per_card | danger_only | demo）" });
-        return;
-      }
-      settings.put({ approval_policy: policy });
-      manager.setApprovalPolicy(policy);
-      json(res, 200, { approval_policy: policy });
-      return;
-    }
+    // ADR-0022：/api/settings/approval GET/PUT 端点随审批策略三档退役删除。
     if (path === "/api/settings/env-profile" && req.method === "GET") {
       json(res, 200, { env_profile: settings.get().env_profile, write_path: envProfilePath(env["HOME"] ?? "") });
       return;
@@ -432,10 +415,8 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
         json(res, 400, { error: "profile 非法（first_train | walkthrough | demo）" });
         return;
       }
-      const preset = SCENARIO_PROFILES.find((entry) => entry.id === profile);
-      settings.put({ profile, ...(preset !== undefined ? { approval_policy: preset.approval_policy } : {}) });
-      manager.setApprovalPolicy(preset?.approval_policy ?? manager.approvalPolicy);
-      json(res, 200, { profile, approval_policy: manager.approvalPolicy });
+      settings.put({ profile });
+      json(res, 200, { profile });
       return;
     }
     const contextMatch = path.match(/^\/api\/sessions\/([^/]+)\/context$/);
