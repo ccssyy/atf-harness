@@ -133,7 +133,29 @@ const pinRoot = join(repoRoot, LEGACY_PIN_ROOT_RELPATH);
 const pinServeReady = existsSync(join(pinRoot, "src", "agentic_training_flow"));
 const describeSmoke = pinServeReady ? describe : describe.skip;
 
-describeSmoke("批㊶-ISO-2 S2 定形冒烟（真内核 serve @ 仓内 pin）", () => {
+// 存量红#8 隔离：真 pin 树窗口态（main 前进未发版）git describe 带 -NN-g<sha> 后缀，
+// mismatchWarning 必红=环境耦合。修法=受控完整副本：真内核 src 拷贝进临时树＋git tag
+// 与 __version__ 一致——serve 载荷仍为真内核代码（冒烟语义保持），describe/握手同指由夹具保证。
+const buildControlledPin = (): string => {
+  const { cpSync } = require("node:fs") as typeof import("node:fs");
+  const root = mkdtempSync(join(tmpdir(), "iso2-controlled-pin-"));
+  cpSync(join(pinRoot, "src"), join(root, "src"), { recursive: true });
+  const git = (args: string[]): void => {
+    execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...args], { cwd: root, stdio: "ignore" });
+  };
+  const version = ((): string => {
+    const run = spawnSync("python3", ["-c", "import sys; sys.path.insert(0, sys.argv[1]); import agentic_training_flow; print(agentic_training_flow.__version__)", join(root, "src")], { encoding: "utf8", timeout: 30_000 });
+    if (run.status !== 0) throw new Error("副本版本串读取失败");
+    return (run.stdout ?? "").trim();
+  })();
+  git(["init", "-q"]);
+  git(["add", "-A"]);
+  git(["commit", "-qm", "controlled pin copy"]);
+  git(["tag", `v${version}`]); // describe 去 v 前缀＝版本串——同指由夹具保证
+  return root;
+};
+
+describeSmoke("批㊶-ISO-2 S2 定形冒烟（真内核 serve @ 受控 pin 副本）", () => {
   const pinVersion = (() => {
     const run = spawnSync("python3", ["-c", "import sys; sys.path.insert(0, sys.argv[1]); import agentic_training_flow; print(agentic_training_flow.__version__)", join(pinRoot, "src")], { encoding: "utf8", timeout: 30_000 });
     return run.status === 0 ? (run.stdout ?? "").trim() : null;
@@ -146,11 +168,13 @@ describeSmoke("批㊶-ISO-2 S2 定形冒烟（真内核 serve @ 仓内 pin）", 
     }
     const home = mkdtempSync(join(tmpdir(), "iso2-serve-home-"));
     tempRoots.push(home);
+    const controlledPin = buildControlledPin();
+    tempRoots.push(controlledPin);
     const deployment: BridgeDeployment = {
       mode: "real",
       argv: ["python3", "-m", "agentic_training_flow", "serve"],
-      childEnv: { PYTHONPATH: join(pinRoot, "src"), HOME: home, ATF_SKILLS_AUTO_INSTALL: "0", PYTHONDONTWRITEBYTECODE: "1" },
-      kernelRoot: pinRoot,
+      childEnv: { PYTHONPATH: join(controlledPin, "src"), HOME: home, ATF_SKILLS_AUTO_INSTALL: "0", PYTHONDONTWRITEBYTECODE: "1" },
+      kernelRoot: controlledPin,
     };
     const surface = probeBridgeHandshakeVersionSync(deployment, 20_000);
     expect(surface.handshakeError ?? "ok").toBe("ok");
