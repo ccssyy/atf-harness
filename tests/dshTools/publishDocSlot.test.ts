@@ -71,18 +71,24 @@ describe("E8 H3c——atf_publish_confirm 槽位优先（多类按类出卡）",
     expect(existsSync(join(root, "runs", "e8-one", "webui", "segments.json"))).toBe(true); // publish 段事实
   });
 
-  it("多类不指定 doc_type：拒绝 doc_type_required（列在场类型——不取任一份冒充全部；零审批）", async () => {
+  it("多类不指定 doc_type：D280 合并单卡（全部在场类一次确认、逐类落账——不取任一份冒充全部）", async () => {
+    // 行为变更出处=D280（1113 批「合并轮单卡」裁定）：多类缺省从「doc_type_required 拒绝」
+    // 改为全部在场类合并单卡（digest 双段、段事实逐类落账、账本粒度不变仅卡面合并）。
     const root = tempRoot();
     const approvals: string[] = [];
     seedSlot(root, "e8-two", "pl", { digest: "sha-e8-pl" });
     seedSlot(root, "e8-two", "swb", { digest: "sha-e8-swb" });
     const tool = publishToolOf(root, approvals);
     const result = await tool.execute({ run_id: "e8-two" }, confirmExec);
-    expect(result["ok"]).toBe(false);
-    expect(result["error"]).toBe("doc_type_required");
-    expect(result["doc_types"]).toEqual(["pl", "swb"]);
-    expect(String(result["note"])).toContain("不取任一份冒充全部");
-    expect(approvals).toHaveLength(0);
+    expect(result["ok"]).toBe(true);
+    expect(String(result["digest"])).toContain("pl:sha-e8-pl");
+    expect(String(result["digest"])).toContain("swb:sha-e8-swb");
+    expect(String(result["artifact"])).toContain("publish/pl/contract-candidate.json");
+    expect(String(result["artifact"])).toContain("publish/swb/contract-candidate.json");
+    expect(approvals).toHaveLength(1); // 合并单卡＝一次审批（D280 卡面合并；逐类凭据在 pending 卡 doc_types，确认后清除）
+    // 段事实形态（segmentFacts 幂等去重）：同段同源一条 publish 事实——合并卡不改段事实粒度模型
+    const segments = JSON.parse(readFileSync(join(root, "runs", "e8-two", "webui", "segments.json"), "utf8")) as Array<Record<string, unknown>>;
+    expect(segments.filter((e) => e["segment"] === "publish" && e["source"] === "atf_publish_confirm")).toHaveLength(1);
   });
 
   it("多类按类出卡：doc_type=pl／swb 各自读各槽位 digest——两类两卡凭据互不冒充", async () => {
