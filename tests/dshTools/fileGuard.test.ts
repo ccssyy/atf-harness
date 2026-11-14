@@ -318,7 +318,10 @@ describe("批㊶-H/I A7 四件 DSH 挂载（buildFileGuardTools）＋产品资�
         }
         if (!/\.(ts|js|mjs|yml|yaml|py)$/.test(entry)) continue;
         const text = readFileSync(abs, "utf8");
-        if (text.includes("/data/") || text.includes("/home/")) hits.push(`${abs.slice(base.length + 1)}（/data|/home）`);
+        // 收窄(存量红#7):`<run>/data/...` 模板串占位符形态非硬编码绝对路径——负向后行
+        // 断言排除占位符收尾前缀;真绝对路径(引号/空格/行首后跟 /data|/home)仍拦。
+        if (/(?<![\w<>}])\/data\//.test(text) || /(?<![\w<>}])\/home\//.test(text))
+          hits.push(`${abs.slice(base.length + 1)}（/data|/home）`);
       }
       return hits;
     };
