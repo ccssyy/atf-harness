@@ -25,6 +25,8 @@ const RETIRED_SYMBOLS = [
   "ApprovalSemanticsContext",
   "approvalMissingBlock",
   "requiresApprovalFor",
+  "ApprovalPolicy",
+  "APPROVAL_POLICIES",
 ] as const;
 
 /** 剥注释：逐字符状态机（// 行注释、/* 块注释、字符串字面量内不剥）。 */

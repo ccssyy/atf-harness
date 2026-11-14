@@ -36,7 +36,7 @@ import { loadLlmProviderConfig, type ResolvedLlmProviderConfig } from "../llm/pr
 import { buildAtfAgentTools, type SpikeBridgeTransport } from "./atfAgentTools.js";
 import { createApprovalBeforeToolCall, type ApprovalAuditEntry } from "./approvalHook.js";
 import { createSessionApprovalAuditStream } from "./approvalAudit.js";
-import { createInteractiveApprovalSurface, type ApprovalSurface } from "./approvalSurface.js";
+import type { ApprovalSurface } from "./approvalSurface.js";
 import { createBudgetFinishTurn, maxTurnsFromEnv, resolveV1ExitCode, type V1RunOutcome } from "./budget.js";
 import { assembleProviderModel, createProviderStreamFn } from "./providerStreamFn.js";
 import { createScriptedStreamFn, loadFauxScript } from "./fauxScript.js";
