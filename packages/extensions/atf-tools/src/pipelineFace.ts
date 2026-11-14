@@ -239,6 +239,42 @@ export const STAGE_BUSINESS: Readonly<Record<string, string>> = {
   iteration_proposal: "迭代建议",
 };
 
+/** D294 C1:对象参数形态闸——引用/局部形态快败判定(D294-1 事故根治)。
+ *
+ * 1114-1 实锚:agent 四次以 {file:}/{__ref:}/{checklist_digest:单值} 传 visual_check,
+ * 写盘转发原样序列化成 0 条空壳,段报不相关的「覆盖不全」→agent 翻内核 3 分钟
+ * (同族二发,:3317 注释自供 2.2M token 前科)。生产端闸:引用形态在机制层不可能
+ * 再静默通过。
+ *
+ * :param param: 参数名(报文定位用)。
+ * :param value: agent 传入的对象参数值。
+ * :param contentKeys: 内容键闭集(合法形态必须含其一,如 visual_check=["results"])。
+ * :return: null=形态合法放行;否则返回 {error,note} 快败投影(note=修复指令)。
+ */
+export const objectParamShapeErrorOf = (
+  param: string, value: Record<string, unknown>, contentKeys: string[],
+): { error: string; note: string } | null => {
+  const keys = Object.keys(value);
+  const refKey = keys.find((k) => k === "file" || k === "__ref" || k === "path" || k === "ref");
+  const contentKey = contentKeys.find((k) => k in value);
+  if (contentKey !== undefined) {
+    if (refKey === undefined) return null;
+    return {
+      error: `${param}_ref_and_content`,
+      note: `同时给了引用键 ${refKey} 和内容键 ${contentKey}——引用键不被读取,去掉 ${refKey} 后重发(以内容对象为准)`,
+    };
+  }
+  const shape = refKey !== undefined
+    ? `引用形态(只给了 ${refKey} 键)`
+    : keys.length === 0 ? "空对象" : `无内容键的局部形态(键:${keys.join(",")})`;
+  return {
+    error: `${param}_shape_invalid`,
+    note: `${param} 须传内容对象全文(含 ${contentKeys.join("/")} 键),不接受文件路径/引用/${shape}。`
+      + "改法:①盘上已有 JSON 文件时用 atf_read 读出全文,把对象整体作为参数值传入;"
+      + "②按本参数 schema description 的骨架现场构造。",
+  };
+};
+
 /** D230 补:从段回执提取内核聚类摘要行(「版式聚类结果:」前缀,首条)。
  *  1106 晚核对发现第三处漏修载体:内核 family_split 摘要行只落 stage 文件,
  *  stageUserSummaryOf 成功态是通用文案——用户面看不到聚类结果。 */
@@ -2462,7 +2498,8 @@ export const buildPipelineTool = (
         type: "object",
         additionalProperties: true,
         description:
-          "随机子集增强建议所依据的数据规模统计（Mode5AdviceStats/v1：images／full_field_baseline_rows／可选 suggested_mode5_random）" +
+          "随机子集增强建议所依据的数据规模统计（Mode5AdviceStats/v1：images／full_field_baseline_rows／可选 suggested_mode5_random）。" +
+          "【形态】传内容对象全文（含 images 键），不是文件路径/引用——引用/局部形态当场拒绝（param_shape_invalid）。" +
           "（仅 experiment_setup 段有意义）。【owner 2026-11-07 裁定】分析归你(看图判读→风险件)、" +
           "数值映射归引擎：引擎已按你的判读风险件自动推导建议值(来源标 engine_derived,随卡呈现)——" +
           "你不需要也不应自己编建议数值,把判读做实即可;本参仅在你有更优确定性统计时显式覆盖" +
@@ -2474,7 +2511,8 @@ export const buildPipelineTool = (
         type: "object",
         additionalProperties: true,
         description:
-          "重点字段组合的 agent 建议（TargetedRulesAdvice/v1）（仅 experiment_setup 段有意义）：" +
+          "重点字段组合的 agent 建议（TargetedRulesAdvice/v1）（仅 experiment_setup 段有意义）。" +
+          "【形态】传内容对象全文（含 suggested_carry_fields 键），不是文件路径/引用——引用/局部形态当场拒绝（param_shape_invalid）。" +
           "字段 suggested_carry_fields／suggested_min_fields／suggested_max_fields／reason／" +
           "evidence（形如 container_no:occurrence_rate，须能在本批风险信号里查到）／effective（必须 false）。" +
           "建议不自动生效、随卡呈现；必带字段与区间须由风险分析得出，无理由或无出处会被拒。可直接给对象，无需自行落盘",
@@ -2483,7 +2521,9 @@ export const buildPipelineTool = (
         type: "object",
         additionalProperties: true,
         description:
-          "label_qc 看图核查件 LabelQcVisualCheck/v1（仅 label_qc 段有意义，其它段忽略）：机械检测之外的第二检查通道。" +
+          "label_qc 看图核查件 LabelQcVisualCheck/v1（仅 label_qc 段有意义，其它段忽略）。" +
+          "【形态】传内容对象全文（含 results 键），不是文件路径/引用——盘上已有文件时用 atf_read 读出全文整体作为参数值传入；引用/局部形态当场拒绝（param_shape_invalid）。" +
+          "机械检测之外的第二检查通道。" +
           "两段式流程：先不带本参数触发 label_qc（裸跑导出核查清单 qc-visual-checklist.json——机械冲突项全量＋每字段抽样）；" +
           "看图核查（框位对不对、值抄录是否一致、字段归属是否正确——这类问题只有看图能查出）后，" +
           "按清单回填 results[{key, verdict(ok|issue), note}] 并带上 checklist_digests（按清单原值，单类 checklist_digest/多类逐类 digests map）。" +
@@ -2494,7 +2534,9 @@ export const buildPipelineTool = (
         type: "object",
         additionalProperties: true,
         description:
-          "看图判读结果（仅候选构造段有意义）：你直接看数据原图后，把结论按结构化回填——" +
+          "看图判读结果（仅候选构造段有意义）。" +
+          "【形态】传内容对象全文（含 fields 键），不是文件路径/引用——盘上已有文件时用 atf_read 读出全文整体作为参数值传入；引用/局部形态当场拒绝（param_shape_invalid）。" +
+          "你直接看数据原图后，把结论按结构化回填——" +
           "fields[{field_id, signals[], evidence[{page, note}]}] 逐个字段报「找得到吗、分得清吗」，" +
           "pages[{page, signals[], note}] 报整页形态（版式风格、表格形态、成像质量），" +
           "coverage{pages_reviewed[], pages_remaining, incomplete_reason} 报看过多少页。" +
@@ -2516,7 +2558,8 @@ export const buildPipelineTool = (
         type: "object",
         additionalProperties: true,
         description:
-          "重点字段组合的规模计划（TargetedPlan/v1）（仅 experiment_setup 段有意义）：" +
+          "重点字段组合的规模计划（TargetedPlan/v1）（仅 experiment_setup 段有意义）。" +
+          "【形态】传内容对象全文（含 target_rows 键），不是文件路径/引用——引用/局部形态当场拒绝（param_shape_invalid）。" +
           "target_rows／per_page／coverage_floor（三键均为正整数）／可选 covered_fields（缺省=全部参与训练字段）" +
           "／可选 fields_band 与 carry_fields／reason／evidence（形如 container_no:occurrence_rate，须能在本批风险信号里查到）。" +
           "规模是**你的判断**：按覆盖缺口（哪些字段还没练过组合）与数据规模定，不要套固定倍数；" +
@@ -2843,6 +2886,22 @@ export const buildPipelineTool = (
             note: "run 尚未创建（register 段经内核 create_run 落位）——先跑 register 段再带 advice 参数重推；"
               + "本工具不在未创建的 run 路径下建目录（否则内核将无法落位该 run_id）",
           });
+        }
+        // D294 C1:advice 三参同款形态闸(引用/局部形态取键全 undefined→静默写空壳,
+        // 卡面全空值——写盘前当场快败)
+        for (const [p, v, ck] of [
+          ["mode5_advice_stats", args.mode5_advice_stats, ["images"]],
+          ["targeted_advice", args.targeted_advice, ["suggested_carry_fields"]],
+          ["targeted_plan", args.targeted_plan, ["target_rows"]],
+        ] as const) {
+          if (v === undefined) continue;
+          const shapeErr = objectParamShapeErrorOf(p, v, ck);
+          if (shapeErr !== null) {
+            return asToolValue({
+              ok: false, stage: args.stage, run_id: args.run_id,
+              error: shapeErr.error, param: p, note: shapeErr.note,
+            });
+          }
         }
         const writeAdviceFile = (name: string, payload: unknown): string => {
           // RunLayout/v3：prep → data（存量 v2 run 的 prep/ 经 resolveRunSubdir 只读兼容）；
@@ -3312,6 +3371,30 @@ let visualSummary: Record<string, unknown> | undefined;
       if (args.stage === "register") {
         const splitId = typeof args.split_id === "string" ? args.split_id.trim() : "";
         if (splitId !== "") argv.push("--split-id", splitId);
+      }
+      // D294 C1:visual_check/visual_readings 形态闸(引用/局部形态写盘成空壳→段报
+      // 不相关拒绝→agent 源码考古——1114-1 事故链;写盘转发前当场快败)
+      {
+        const visualViolations: Array<{ param: string; error: string; note: string }> = [];
+        if (args.visual_check !== undefined) {
+          const e = objectParamShapeErrorOf("visual_check", args.visual_check, ["results"]);
+          if (e !== null) visualViolations.push({ param: "visual_check", ...e });
+        }
+        if (args.visual_readings !== undefined) {
+          const e = objectParamShapeErrorOf("visual_readings", args.visual_readings, ["fields"]);
+          if (e !== null) visualViolations.push({ param: "visual_readings", ...e });
+        }
+        if (visualViolations.length > 0) {
+          return asToolValue({
+            ok: false, stage: args.stage, run_id: args.run_id,
+            error: "param_shape_invalid",
+            violations: visualViolations,
+            note: "对象参数只接受内容对象全文,不接受文件路径/引用/局部摘要"
+              + "(引用形态会被写盘成空壳,段读到 0 条后报不相关的拒绝——1114-1 事故链)。"
+              + "改法:①盘上已有 JSON 文件时用 atf_read 读出全文,把对象整体作为参数值传入;"
+              + "②按本参数 schema description 骨架现场构造。",
+          });
+        }
       }
       // 段序修正(owner 2026-11-05):分析先于确认卡——experiment_setup 判读对象
       // R2.5(D237):label_qc 看图核查件透传——与 visual_readings 同款写盘转发形态,
