@@ -14,8 +14,9 @@ import { join } from "node:path";
 
 export const buildFakeKernelPin = (): string => {
   const root = mkdtempSync(join(tmpdir(), "fake-kernel-pin-"));
-  const git = (args: string[]): void =>
+  const git = (args: string[]): void => {
     execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...args], { cwd: root, stdio: "ignore" });
+  };
   mkdirSync(join(root, "src", "agentic_training_flow"), { recursive: true });
   writeFileSync(join(root, "src", "agentic_training_flow", "__init__.py"), '__version__ = "0.7.27b46"\n');
   writeFileSync(join(root, ".atf-pin-commit"), "0".repeat(40));
