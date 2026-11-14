@@ -252,10 +252,13 @@ export const STAGE_BUSINESS: Readonly<Record<string, string>> = {
  * :return: null=形态合法放行;否则返回 {error,note} 快败投影(note=修复指令)。
  */
 export const objectParamShapeErrorOf = (
-  param: string, value: Record<string, unknown>, contentKeys: string[],
+  param: string, value: Record<string, unknown>, contentKeys: readonly string[],
+  allowPathRef = false,
 ): { error: string; note: string } | null => {
+  // path 键=盘上文件引用(D280 语义:桥读原文落盘,零转写失真)——allowPathRef 时放行,转发点处理
+  if (allowPathRef && typeof value.path === "string") return null;
   const keys = Object.keys(value);
-  const refKey = keys.find((k) => k === "file" || k === "__ref" || k === "path" || k === "ref");
+  const refKey = keys.find((k) => k === "file" || k === "__ref" || k === "ref");
   const contentKey = contentKeys.find((k) => k in value);
   if (contentKey !== undefined) {
     if (refKey === undefined) return null;
@@ -267,12 +270,39 @@ export const objectParamShapeErrorOf = (
   const shape = refKey !== undefined
     ? `引用形态(只给了 ${refKey} 键)`
     : keys.length === 0 ? "空对象" : `无内容键的局部形态(键:${keys.join(",")})`;
+  const howTo = allowPathRef
+    ? "改法:①用 path 键引用盘上已有 JSON 文件(桥读原文落盘,零转写失真);②用 atf_read 读出全文,把对象整体作为参数值传入。"
+    : "改法:用 atf_read 读出文件全文,把对象整体作为参数值传入。";
   return {
     error: `${param}_shape_invalid`,
-    note: `${param} 须传内容对象全文(含 ${contentKeys.join("/")} 键),不接受文件路径/引用/${shape}。`
-      + "改法:①盘上已有 JSON 文件时用 atf_read 读出全文,把对象整体作为参数值传入;"
-      + "②按本参数 schema description 的骨架现场构造。",
+    note: `${param} 须传内容对象全文(含 ${contentKeys.join("/")} 键),不接受${shape}。${howTo}`,
   };
+};
+
+/** D280/D294:判读件写盘转发——path 键=桥读盘上文件原文(逐字正确);否则对象序列化。
+ *
+ * :param value: agent 传入的 visual_readings 对象(已过形态闸)。
+ * :param runDir: run 目录(落点 runtime/webui/visual-readings.json)。
+ * :return: ok=true 携落盘路径;ok=false 携快败投影(path 文件不存在)。
+ */
+const forwardReadingObject = (
+  value: Record<string, unknown>, runDir: string,
+): { ok: true; file: string } | { ok: false; error: string; note: string } => {
+  const readingsPath = join(runDir, "runtime", "webui", "visual-readings.json");
+  mkdirSync(dirname(readingsPath), { recursive: true });
+  const refPath = typeof value.path === "string" ? value.path : "";
+  if (refPath !== "") {
+    if (!existsSync(refPath)) {
+      return {
+        ok: false, error: "visual_readings_path_not_found",
+        note: `path 指向的文件不存在:${refPath}——确认路径后重发,或传内容对象全文(含 fields 键)`,
+      };
+    }
+    writeFileSync(readingsPath, readFileSync(refPath));
+  } else {
+    writeFileSync(readingsPath, JSON.stringify(value, null, 1) + "\n", "utf8");
+  }
+  return { ok: true, file: readingsPath };
 };
 
 /** D230 补:从段回执提取内核聚类摘要行(「版式聚类结果:」前缀,首条)。
@@ -2522,7 +2552,7 @@ export const buildPipelineTool = (
         additionalProperties: true,
         description:
           "label_qc 看图核查件 LabelQcVisualCheck/v1（仅 label_qc 段有意义，其它段忽略）。" +
-          "【形态】传内容对象全文（含 results 键），不是文件路径/引用——盘上已有文件时用 atf_read 读出全文整体作为参数值传入；引用/局部形态当场拒绝（param_shape_invalid）。" +
+          "【形态】传内容对象全文（含 results 键）或用 path 键引用盘上已有 JSON 文件（桥读原文零转写失真）；file/__ref 引用与局部摘要当场拒绝（param_shape_invalid）。" +
           "机械检测之外的第二检查通道。" +
           "两段式流程：先不带本参数触发 label_qc（裸跑导出核查清单 qc-visual-checklist.json——机械冲突项全量＋每字段抽样）；" +
           "看图核查（框位对不对、值抄录是否一致、字段归属是否正确——这类问题只有看图能查出）后，" +
@@ -2535,7 +2565,7 @@ export const buildPipelineTool = (
         additionalProperties: true,
         description:
           "看图判读结果（仅候选构造段有意义）。" +
-          "【形态】传内容对象全文（含 fields 键），不是文件路径/引用——盘上已有文件时用 atf_read 读出全文整体作为参数值传入；引用/局部形态当场拒绝（param_shape_invalid）。" +
+          "【形态】传内容对象全文（含 fields 键）或用 path 键引用盘上已有 JSON 文件（桥读原文零转写失真）；file/__ref 引用与局部摘要当场拒绝（param_shape_invalid）。" +
           "你直接看数据原图后，把结论按结构化回填——" +
           "fields[{field_id, signals[], evidence[{page, note}]}] 逐个字段报「找得到吗、分得清吗」，" +
           "pages[{page, signals[], note}] 报整页形态（版式风格、表格形态、成像质量），" +
@@ -3373,26 +3403,25 @@ let visualSummary: Record<string, unknown> | undefined;
         if (splitId !== "") argv.push("--split-id", splitId);
       }
       // D294 C1:visual_check/visual_readings 形态闸(引用/局部形态写盘成空壳→段报
-      // 不相关拒绝→agent 源码考古——1114-1 事故链;写盘转发前当场快败)
+      // 不相关拒绝→agent 源码考古——1114-1 事故链;写盘转发前当场快败)。
+      // path 键=盘上文件引用,放行走转发点读原文(D280 语义)。
       {
         const visualViolations: Array<{ param: string; error: string; note: string }> = [];
-        if (args.visual_check !== undefined) {
-          const e = objectParamShapeErrorOf("visual_check", args.visual_check, ["results"]);
-          if (e !== null) visualViolations.push({ param: "visual_check", ...e });
-        }
-        if (args.visual_readings !== undefined) {
-          const e = objectParamShapeErrorOf("visual_readings", args.visual_readings, ["fields"]);
-          if (e !== null) visualViolations.push({ param: "visual_readings", ...e });
+        for (const [p, v, ck] of [
+          ["visual_check", args.visual_check, ["results"]],
+          ["visual_readings", args.visual_readings, ["fields"]],
+        ] as const) {
+          if (v === undefined) continue;
+          const e = objectParamShapeErrorOf(p, v, ck, true);
+          if (e !== null) visualViolations.push({ param: p, ...e });
         }
         if (visualViolations.length > 0) {
           return asToolValue({
             ok: false, stage: args.stage, run_id: args.run_id,
             error: "param_shape_invalid",
             violations: visualViolations,
-            note: "对象参数只接受内容对象全文,不接受文件路径/引用/局部摘要"
-              + "(引用形态会被写盘成空壳,段读到 0 条后报不相关的拒绝——1114-1 事故链)。"
-              + "改法:①盘上已有 JSON 文件时用 atf_read 读出全文,把对象整体作为参数值传入;"
-              + "②按本参数 schema description 骨架现场构造。",
+            note: "对象参数只接受内容对象全文或 path 引用盘上文件,不接受 file/__ref 引用与局部摘要"
+              + "(file/__ref 形态会被写盘成空壳,段读到 0 条后报不相关的拒绝——1114-1 事故链)。",
           });
         }
       }
@@ -3402,7 +3431,21 @@ let visualSummary: Record<string, unknown> | undefined;
       if (args.stage === "label_qc" && args.visual_check !== undefined) {
         const checkPath = join(runDir, "runtime", "webui", "label-qc-visual-check.json");
         mkdirSync(dirname(checkPath), { recursive: true });
-        writeFileSync(checkPath, JSON.stringify(args.visual_check, null, 1) + "\n", "utf8");
+        // D280/D294:path 键=桥读盘上文件原文落盘转发(逐字正确,agent 转写易失真);否则对象序列化
+        const vcRefPath = typeof (args.visual_check as Record<string, unknown>).path === "string"
+          ? (args.visual_check as Record<string, unknown>).path as string : "";
+        if (vcRefPath !== "") {
+          if (!existsSync(vcRefPath)) {
+            return asToolValue({
+              ok: false, stage: args.stage, run_id: args.run_id,
+              error: "visual_check_path_not_found",
+              note: `path 指向的文件不存在:${vcRefPath}——确认路径后重发,或传内容对象全文(含 results 键)`,
+            });
+          }
+          writeFileSync(checkPath, readFileSync(vcRefPath));
+        } else {
+          writeFileSync(checkPath, JSON.stringify(args.visual_check, null, 1) + "\n", "utf8");
+        }
         argv.push("--visual-check", checkPath);
       }
       // 写盘转发内核(--visual-readings→风险步 --agent-signals)。
@@ -3410,24 +3453,21 @@ let visualSummary: Record<string, unknown> | undefined;
       // 风险步 --agent-signals)——此前只转发 experiment_setup/candidate_build,
       // style_split 断链(agent 看完 35 页构造判读件重跑仍 pending,对象直传被丢)。
       if (args.stage === "style_split" && args.visual_readings !== undefined) {
-        const readingsPath = join(runDir, "runtime", "webui", "visual-readings.json");
-        mkdirSync(dirname(readingsPath), { recursive: true });
-        writeFileSync(readingsPath, JSON.stringify(args.visual_readings, null, 1) + "\n", "utf8");
-        argv.push("--visual-readings", readingsPath);
+        const fr = forwardReadingObject(args.visual_readings as Record<string, unknown>, runDir);
+        if (fr.ok) argv.push("--visual-readings", fr.file);
+        else return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: fr.error, note: fr.note });
       }
       if (args.stage === "experiment_setup" && args.visual_readings !== undefined) {
-        const readingsPath = join(runDir, "runtime", "webui", "visual-readings.json");
-        mkdirSync(dirname(readingsPath), { recursive: true });
-        writeFileSync(readingsPath, JSON.stringify(args.visual_readings, null, 1) + "\n", "utf8");
-        argv.push("--visual-readings", readingsPath);
+        const fr = forwardReadingObject(args.visual_readings as Record<string, unknown>, runDir);
+        if (fr.ok) argv.push("--visual-readings", fr.file);
+        else return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: fr.error, note: fr.note });
       }
       // D262:training_prep 段同过视觉闸(_run_risk_signals_with_gate,walkthrough:4733)——
       // 无转发则重跑 field_risk_signals 覆盖 style_split 已写完成态的 rs_file→回落 pending。
       if (args.stage === "training_prep" && args.visual_readings !== undefined) {
-        const tpReadingsPath = join(runDir, "runtime", "webui", "visual-readings.json");
-        mkdirSync(dirname(tpReadingsPath), { recursive: true });
-        writeFileSync(tpReadingsPath, JSON.stringify(args.visual_readings, null, 1) + "\n", "utf8");
-        argv.push("--visual-readings", tpReadingsPath);
+        const fr = forwardReadingObject(args.visual_readings as Record<string, unknown>, runDir);
+        if (fr.ok) argv.push("--visual-readings", fr.file);
+        else return asToolValue({ ok: false, stage: args.stage, run_id: args.run_id, error: fr.error, note: fr.note });
       }
       if (args.stage === "family_split") argv.push("--auto-style-cluster", args.auto_style_cluster ?? "auto");
       if (args.stage === "family_split" && args.allow_small_cluster_test === true) argv.push("--allow-small-cluster-test");

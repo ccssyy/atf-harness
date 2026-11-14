@@ -450,10 +450,37 @@ describe("D294 对象参数形态闸（1114-1 visual_check 引用形态静默写
   });
 
   it("advice 三参引用/空形态：快败（写盘前拦截——空壳卡面不再静默）", async () => {
-    const mode5 = await call({ stage: "experiment_setup", mode5_advice_stats: { file: "/tmp/m.json" } });
+    // advice 写盘前置 run_not_created 检查——预建 runDir 让形态闸先于消费链触发
+    const root = tempRoot();
+    mkdirSync(join(root, "experiments", "ut-exp", "r1"), { recursive: true });
+    const tool = stageTool();
+    const base = { stage: "experiment_setup", run_id: "r1", workspace_path: root, experiment: "ut-exp" };
+    const mode5 = (await (tool as DshToolLike).execute({ ...base, mode5_advice_stats: { file: "/tmp/m.json" } }, fakeExec)) as Record<string, unknown>;
     expect(mode5).toMatchObject({ ok: false, error: "mode5_advice_stats_shape_invalid" });
-    const plan = await call({ stage: "experiment_setup", targeted_plan: {} });
+    const plan = (await (tool as DshToolLike).execute({ ...base, targeted_plan: {} }, fakeExec)) as Record<string, unknown>;
     expect(plan).toMatchObject({ ok: false, error: "targeted_plan_shape_invalid" });
+  });
+
+  it("path 键=盘上文件引用：放行且桥读原文落盘（D280 语义——零转写失真）", async () => {
+    const root = tempRoot();
+    const srcFile = join(root, "vc-src.json");
+    writeFileSync(srcFile, JSON.stringify({
+      schema_version: "LabelQcVisualCheck/v1",
+      checklist_digests: { bl: "sha256:x" },
+      results: [{ key: "qc-q2-x", verdict: "ok", note: "原文逐字转发断言" }],
+    }), "utf8");
+    const result = (await (stageTool() as DshToolLike).execute(
+      { stage: "label_qc", run_id: "r1", workspace_path: root, experiment: "ut-exp", visual_check: { path: srcFile } }, fakeExec,
+    )) as Record<string, unknown>;
+    expect(result["error"]).toBeUndefined();
+    const forwarded = readFileSync(join(root, "experiments", "ut-exp", "r1", "runtime", "webui", "label-qc-visual-check.json"), "utf8");
+    expect(forwarded).toContain("原文逐字转发断言");
+  });
+
+  it("path 指向不存在的文件：快败 path_not_found 带路径", async () => {
+    const result = await call({ visual_check: { path: "/tmp/definitely-missing-d294.json" } });
+    expect(result).toMatchObject({ ok: false, error: "visual_check_path_not_found" });
+    expect(String(result["note"])).toContain("/tmp/definitely-missing-d294.json");
   });
 
   it("合法内容形态回归：{results,checklist_digests} 照常通过走 spawn（闸零误伤）", async () => {
