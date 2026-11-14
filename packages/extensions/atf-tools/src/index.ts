@@ -10,9 +10,8 @@
  * src/webui/readOnlyTools.ts 纯函数；审批判定沿 src/core/tools 的 requiresApprovalFor
  * 单源语义。
  *
- * 审批（指令要求 2）：atf_scratch_exec / atf_admit_data / atf_pipeline_stage（及
- * requiresApprovalFor 判定为真的调用，如 gate advance）走 DSH user-approval seam
- * ——确认卡由 DSH 原生 ui-approval 呈现；无审批服务时 fail-closed 拒绝。
+ * 确认卡（ADR-0022 后）：requiresUserConfirmationOf 判定为真的调用（裁决/治理点/表外
+ * 旗标工具）走 DSH user-approval seam 出业务确认卡；chain_advance/只读直通留痕。
  */
 import z from "@deepseek-ai/schemastery";
 import { join, dirname } from "node:path";
@@ -178,7 +177,7 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   }
   if (registerApprovalExempt(ctx, config.approvalPolicy)) {
     const chain = config.approvalPolicy?.chainTools ?? [];
-    console.log(`[atf-tools] 免审 answerer 已挂（approval/request waterfall 头部；bash/write 恒免；训练链 ${chain.length} 件仅在预设 ${config.approvalPolicy?.preset ?? "（未声明）"}＋完全权限双齐时免；治理点审批语义零变化）`);
+    console.log(`[atf-tools] 直通留痕器已挂（approval/request waterfall 头部，ADR-0022；bash/write 恒留痕；训练链 ${chain.length} 件直通留痕；atf_* 契约工具 next() 走业务确认卡）`);
   }
 
   // 批㊶-H/I：文件工具路径守卫＋A7 治理四件挂载（案 甲单轨）——白名单根＝派生集
@@ -254,51 +253,7 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
 
   // 批㊶-K 项 3：档位可见性只读工具（当前档＋部署默认档＋全部可选档两维度——
   // 零切换路径：档位/审批面变更须经界面人工操作；文案产品口径）
-  ctx.tools.register(
-    defineTool({
-      name: "atf_permission_status",
-      description:
-        "查询当前会话的权限档与审批面（只读）：返回当前生效档位、部署默认档位，以及全部可选档位（每档含文件沙箱层与审批面两个维度的说明）。档位或审批面的变更须经用户在界面人工操作——本工具只读，不提供任何改档路径。当用户询问当前权限档/审批要求时调用本工具如实回答。",
-      parameters: {},
-      output: {
-        schema: looseObjectOutput,
-        render: renderAsJsonText,
-      },
-      async execute(_args: Record<string, unknown>, exec: { agent?: { session?: unknown } }): Promise<ReturnType<typeof asToolValue>> {
-        const service = ctx.get("permissionPresets") as
-          | {
-              current?: (session: unknown) => string;
-              defaultPreset?: string;
-              config?: { presets?: Record<string, { sandbox?: string; approval?: string; name?: string }> };
-              catalog?: () => { options: Array<{ value: string; name: string; description?: string }>; defaultPreset: string };
-            }
-          | undefined;
-        if (service === undefined || typeof service.catalog !== "function") {
-          return asToolValue({ error: "unavailable", message: "权限档服务未挂载（装配面缺失）——如实告知用户当前无法查询" });
-        }
-        const catalog = service.catalog();
-        const session = exec.agent?.session;
-        const current = session !== undefined && typeof service.current === "function" ? service.current(session) : undefined;
-        const fallbackDefault = service.defaultPreset ?? catalog.defaultPreset;
-        const presetSpecs = service.config?.presets ?? {};
-        return asToolValue({
-          current_preset: current ?? fallbackDefault ?? "unknown",
-          deployment_default: fallbackDefault ?? "unknown",
-          presets: catalog.options.map((option) => {
-            const spec = presetSpecs[option.value];
-            return {
-              value: option.value,
-              name: option.name ?? spec?.name ?? option.value,
-              file_sandbox: spec?.sandbox ?? "unknown",
-              approval: spec?.approval ?? "unknown",
-              ...(option.description !== undefined ? { description: option.description } : {}),
-            };
-          }),
-          note: "档位与审批面的变更须经用户在界面人工操作",
-        });
-      },
-    }),
-  );
+  // ADR-0022：atf_permission_status（档位可见性只读工具）随审批拦截退役删除。
 
   // 连通性自检探针（M1 验收辅助；保留为装配诊断面）
   ctx.tools.register(

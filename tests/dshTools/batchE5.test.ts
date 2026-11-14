@@ -133,33 +133,27 @@ describe("E5-H1 training_overrides 段命令直传（零 scratch 面）", () => 
 // ══ H3（D140）：output_dir 终值呈现（落点可见） ══
 
 describe("E5-H3 output_dir 终值呈现", () => {
-  it("首跑无配置：审批卡行内核 run 布局预期＋返回体 output_dir=<runDir>/training（source=kernel_layout）", async () => {
-    const record: string[] = [];
+  it("首跑无配置：返回体 output_dir=<runDir>/training（source=kernel_layout——内核 run 布局预期）", async () => {
     const ws = tempRoot("e5-ws-");
-    const result = (await toolOf(record).execute(
+    const result = (await toolOf().execute(
       { stage: "training_prep", run_id: "e5-layout", workspace_path: ws, base_model_path: join(ws, "model") },
       fakeExec,
     )) as Record<string, unknown>;
     const runDir = join(ws, "runs", "e5-layout");
     expect(result["output_dir"]).toBe(join(runDir, "training"));
     expect(result["output_dir_source"]).toBe("kernel_layout");
-    expect(record.join("\n")).toContain("训练输出目录（output_dir）");
-    expect(record.join("\n")).toContain(join(runDir, "training"));
-    expect(record.join("\n")).toContain("段产出后以落盘终值为准");
   });
 
-  it("重跑盘上配置在场：返回体与审批卡均呈现配置终值（source=iteration_config）——live＞legacy 双形态同序", async () => {
-    const record: string[] = [];
+  it("重跑盘上配置在场：返回体呈现配置终值（source=iteration_config）——live＞legacy 双形态同序", async () => {
     const ws = tempRoot("e5-ws-");
     const runDir = join(ws, "runs", "e5-term");
     writeIterationConfig(runDir, join(runDir, "training"));
-    const result = (await toolOf(record).execute(
+    const result = (await toolOf().execute(
       { stage: "training_prep", run_id: "e5-term", workspace_path: ws, base_model_path: join(ws, "model") },
       fakeExec,
     )) as Record<string, unknown>;
     expect(result["output_dir"]).toBe(join(runDir, "training"));
     expect(result["output_dir_source"]).toBe("iteration_config");
-    expect(record.join("\n")).toContain("盘上迭代配置终值");
 
     // live 形态优先：live 在场时 legacy 同在也读 live
     const runDirLive = join(ws, "runs", "e5-live");

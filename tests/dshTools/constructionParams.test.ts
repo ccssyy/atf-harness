@@ -179,23 +179,24 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
     }
   });
 
-  it("审批卡含「构造参数确认」段，未确认项明说对应 kind 不生成", async () => {
-    const ws = tempRoot("a-ws-");
-    confirmFields(ws, "a-card");
-    const record: string[] = [];
-    await toolOf(record).execute(
-      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "a-card", workspace_path: ws, targeted_advice: ADVICE },
-      fakeExec,
-    );
-    const reason = record.join("\n");
-    expect(reason).toContain("构造参数确认");
-    expect(reason).toContain("分组方案：待定——分组候选上卡后由用户选定（2-3 组优先，上限 5），未选定前不生成分组样本");
+  it("构造参数行纯函数（ADR-0022 段审批卡退役，原卡面断言转纯函数锚）：未确认项明说对应 kind 不生成", () => {
     // P1-5 新合同:run 无风险件(分析未完成)时倍数行不得预设「默认生成」——
     // 呈现「图像分析未完成,本轮不确认倍数」并指路看图(分析先于确认卡)。
+    const reason = constructionParamsApprovalLines({
+      groupingConfirm: false,
+      mode5Random: undefined,
+      targetedAdvice: { carry: ["goods_name"], min: 2, max: 6, reason: "container_no 出现率低", evidence: ["container_no:occurrence_rate"], evidenceStatus: "provided" },
+      analysisReady: false,
+    });
+    expect(reason).toContain("分组方案：待定——分组候选上卡后由用户选定（2-3 组优先，上限 5），未选定前不生成分组样本");
     expect(reason).toContain("随机子集增强：**图像分析未完成——本轮不确认倍数**");
     expect(reason).not.toContain("按建议倍数额度默认生成");
+    // 建议值/理由/出处态一起呈现（建议不自动生效）
+    expect(reason).toContain("goods_name");
+    expect(reason).toContain("建议未自动生效");
+    expect(reason).toContain("container_no 出现率低");
 
-    // 调用方给了建议倍数且分析在场时，卡面显示该数字（据实呈现，不写死）
+    // 调用方给了建议倍数且分析在场时，行内显示该数字（据实呈现，不写死）
     const withSuggestion = constructionParamsApprovalLines({
       groupingConfirm: false,
       mode5Random: undefined,
@@ -213,21 +214,15 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
       analysisReady: false,
     });
     expect(noAnalysis).not.toContain("（建议 3 倍）");
-    // 建议值/理由/出处态一起上卡（建议不自动生效）
-    expect(reason).toContain("goods_name");
-    expect(reason).toContain("建议未自动生效");
-    expect(reason).toContain("container_no 出现率低");
   });
 
-  it("已确认与给定值：卡面标注已确认／用户指定", async () => {
-    const ws = tempRoot("a-ws-");
-    confirmFields(ws, "a-card2");
-    const record: string[] = [];
-    await toolOf(record).execute(
-      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "a-card2", workspace_path: ws, grouping_confirm: true, mode5_random: 0 },
-      fakeExec,
-    );
-    const reason = record.join("\n");
+  it("已确认与给定值：纯函数标注已确认／用户指定（显式值先于分析门槛呈现）", () => {
+    const reason = constructionParamsApprovalLines({
+      groupingConfirm: true,
+      mode5Random: 0,
+      targetedAdvice: undefined,
+      analysisReady: false,
+    });
     expect(reason).toContain("分组：按分组生成（产品默认，必分组不提问）");
     // P1-5:显式值(含 0=明确关停)是用户已做的决定,先于分析门槛呈现
     expect(reason).toContain("随机子集增强：0 倍（显式不启用）");
@@ -255,18 +250,16 @@ describe("A-1 构造参数四通道（experiment_setup 段专属）", () => {
 });
 
 describe("A-2 采纳卡退场（建议默认生效，唯一确认面=构造确认卡）", () => {
-  it("给了建议 → argv 带 --targeted-advice、永不带 --targeted-accept，回执标默认生效", async () => {
+  it("给了建议 → argv 带 --targeted-advice、永不带 --targeted-accept（建议默认生效——ADR-0022 后原审批卡生效提示行随卡退役）", async () => {
     const ws = tempRoot("a-ws-");
     confirmFields(ws, "a-accept");
-    const record: string[] = [];
-    const result = await toolWithAsk(record, "yes").execute(
+    const result = await toolWithAsk([], "yes").execute(
       { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "a-accept", workspace_path: ws, targeted_advice: ADVICE },
       fakeExec,
     );
     const argv = summaryArgv(result);
     expect(argv).toContain("--targeted-advice");
     expect(argv).not.toContain("--targeted-accept");
-    expect(record.join("\n")).toContain("建议已默认写入构造规则");
   });
 
   it("无 userQuestions 服务 → 建议仍默认生效（不弹卡不阻塞，不假装走过确认卡）", async () => {

@@ -87,7 +87,6 @@ describe("E10b——参数面（缺省 auto／三值枚举／非法值拒）", (
     const schema = tool.parameters as { properties?: Record<string, { enum?: string[] }> };
     expect(schema.properties?.["auto_style_cluster"]?.enum).toEqual(["auto", "on", "off"]);
     expect(AUTO_STYLE_CLUSTER_VALUES).toEqual(["auto", "on", "off"]);
-    expect(approvals).toHaveLength(1); // 审批先行
   });
   it("三值枚举逐值透传：on/off/auto 原样上线", async () => {
     for (const value of AUTO_STYLE_CLUSTER_VALUES) {
@@ -156,7 +155,6 @@ describe("E10b/E10d——聚类状态拒绝回流（E10f 形态：user_message�
     expect(note).toContain("不要向用户展示 auto/on/off 等内部选项名");
     expect(note).not.toContain("重跑");
     expect(result["style_cluster_state"]).toEqual({ state: "not_clustered", pages_total: 6, pages_with_cluster: 0 });
-    expect(approvals).toHaveLength(1);
   });
   it("auto × 状态不明 → exit 2 style_cluster_state_ambiguous＋user_message 逐字＋note 原样告知版", async () => {
     const result = (await toolOf(approvalCtx([]), { MOCK_CLUSTER_STATE: "ambiguous" }).execute(

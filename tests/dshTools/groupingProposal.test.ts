@@ -358,18 +358,19 @@ describe("C2 用户可见面纪律", () => {
     expect(confirm).toContain("不给＝未确认，本轮不生成分组样本");
     expect(confirm).not.toMatch(/mode[015]|targeted/i);
 
-    // 卡面：审批卡文案也不许出现内部词
+    // 回执（ADR-0022 审批卡退役后用户可见面＝返回体）：文案不许出现内部词
     const ws = tempRoot("c2-words-");
     confirmFields(ws, "words");
-    const approvals: string[] = [];
-    await toolOf(ctxOf({ approvals, choose: (labels) => labels[0]! }), mockOf(MOCK_OK)).execute(
+    const result = await toolOf(ctxOf({ choose: (labels) => labels[0]! }), mockOf(MOCK_OK)).execute(
       { stage: "experiment_setup", run_id: "words", workspace_path: ws, grouping_proposal: PROPOSAL },
       fakeExec,
     );
-    expect(approvals).toHaveLength(1);
-    const reason = approvals[0]!;
-    expect(reason.toLowerCase()).not.toContain("lane");
-    expect(reason).toContain("分组来源：你在候选里选定的「按单据/明细两层」");
+    const visible = JSON.stringify(result);
+    expect(visible.toLowerCase()).not.toContain("lane");
+    // 用户选定态经结构化回执字段呈现（ADR-0022：原审批卡「分组来源：…」渲染行随卡退役）
+    expect(result["grouping_decision"]).toBe("user_selected");
+    expect(result["grouping_candidate_name"]).toBe("按单据/明细两层");
+    expect(result["grouping_note"]).toContain("用户选定了「按单据/明细两层」");
   });
 });
 

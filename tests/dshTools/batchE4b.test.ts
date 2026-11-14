@@ -103,9 +103,8 @@ const D173_PROPOSAL = {
 
 describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）", () => {
   it("显式键注入面：argv --training-overrides <json> 下传（E5·H1 D139 段命令通路）＋返回体 delivery=segment_argv；数值形态＋来源 user_confirmed；convention 键呈现不注入", async () => {
-    const record: string[] = [];
     const ws = tempRoot("e4b-ws-");
-    const result = await toolOf(record).execute(
+    const result = await toolOf().execute(
       { stage: "training_prep", run_id: "e4b-explicit", workspace_path: ws, base_model_path: join(ws, "model"), training_overrides: { learning_rate: "2e-4", lora_rank: 32, warmup_ratio: 0.1 } },
       fakeExec,
     );
@@ -121,10 +120,6 @@ describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）"
     expect(resolution["deepspeed"]).toEqual({ value: "ds_z3_offload", source: "convention" });
     expect(passed).not.toHaveProperty("per_device_train_batch_size");
     expect(passed).not.toHaveProperty("deepspeed");
-    // 审批卡行：逐键终值＋来源中文标签（convention 明示只呈现不下传）
-    expect(record.join("\n")).toContain("训练参数覆盖（training_prep）");
-    expect(record.join("\n")).toContain("learning_rate=2e-4（用户确认）");
-    expect(record.join("\n")).toContain("per_device_train_batch_size=2（内核惯例·只呈现不下传）");
   });
 
   it("禁入键（像素对/TokenBudget 三键）与白名单外键一律卡前快败——审批未消耗", async () => {

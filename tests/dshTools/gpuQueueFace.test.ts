@@ -1,6 +1,6 @@
 /**
  * 批㊶-K 测试锚——GPU 排队编排（批㊶-W F6 四合一语义重写：整组判定＋compute-apps
- * 归属＋快速二次确认）／训练进料共享面／档位可见性只读工具（含审批面实值）。
+ * 归属＋快速二次确认）／训练进料共享面。
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,8 +21,6 @@ import {
 } from "../../packages/extensions/atf-tools/src/gpuQueueFace.js";
 import { resetResidentBaselineForTest } from "../../packages/extensions/atf-tools/src/gpuQueueFace.js";
 import { parseTrainerLine, startLossIngest } from "../../src/core/workspace/lossIngest.js";
-import { apply as applyAtfTools } from "../../packages/extensions/atf-tools/src/index.js";
-import { buildFakeKernelPin } from "../helpers/fakeKernelPin.js";
 
 // 批㊶-W：本文件 applyAtfTools 装配面预检（kernelDir=tempRoot 空）——env 显式声明走
 // 「env 已配置」路径（preflight ①⑥ 跳过派生与文件核查）。
@@ -219,78 +217,3 @@ interface CapturedTool {
   name: string;
   execute: (args: Record<string, unknown>, exec: { agent?: { session?: unknown } }) => Promise<unknown>;
 }
-
-describe("批㊶-K 项 3 atf_permission_status（只读档位可见性——零切换路径）", () => {
-  it("返回当前档／部署默认档／全档两维度实值（文件沙箱层＋审批面）；服务缺失如实 unavailable", async () => {
-    const registered: CapturedTool[] = [];
-    const serviceStub = {
-      current: () => "workspace-write",
-      defaultPreset: "danger-full-access",
-      config: {
-        presets: {
-          "danger-full-access": { sandbox: "danger-full-access", approval: "ask", name: "Full access" },
-          "workspace-write": { sandbox: "workspace-write", approval: "ask" },
-          "read-only": { sandbox: "read-only", approval: "ask" },
-        },
-      },
-      catalog: () => ({
-        options: [
-          { value: "danger-full-access", name: "Full access" },
-          { value: "workspace-write", name: "Workspace write" },
-          { value: "read-only", name: "Read only" },
-        ],
-        defaultPreset: "danger-full-access",
-      }),
-    };
-    const ctx = {
-      tools: { register: (tool: CapturedTool) => registered.push(tool) },
-      get: (service: string) => (service === "permissionPresets" ? serviceStub : undefined),
-      on: () => () => true,
-      effect: () => undefined,
-    };
-    // 存量红#8b 隔离：pin 一致性检查在真 pin 窗口态先 fatal——env 显式注入受控假树
-    const fakePin = buildFakeKernelPin();
-    const savedPin = process.env["ATF_INSTANCE_PIN_ROOT"];
-    process.env["ATF_INSTANCE_PIN_ROOT"] = fakePin;
-    try {
-      applyAtfTools(ctx as never, {
-        runsRoot: tempRoot(),
-        kernelDir: tempRoot(),
-        execHome: tempRoot(),
-        logDir: tempRoot(),
-        bridgeCommand: "",
-        pipelineCommand: `node x`,
-        pipelineTimeoutMs: 1000,
-      });
-    } finally {
-      if (savedPin === undefined) delete process.env["ATF_INSTANCE_PIN_ROOT"]; else process.env["ATF_INSTANCE_PIN_ROOT"] = savedPin;
-    }
-    const tool = registered.find((entry) => entry.name === "atf_permission_status");
-    expect(tool).toBeDefined();
-    const result = (await tool!.execute({}, { agent: { session: { id: "s" } } })) as Record<string, unknown>;
-    expect(result["current_preset"]).toBe("workspace-write");
-    expect(result["deployment_default"]).toBe("danger-full-access");
-    const presets = result["presets"] as Array<Record<string, unknown>>;
-    const full = presets.find((preset) => preset.value === "danger-full-access");
-    expect(full).toMatchObject({ file_sandbox: "danger-full-access", approval: "ask" });
-    expect(JSON.stringify(result)).not.toContain("switch");
-    const missing = (await tool!.execute({}, {})) as Record<string, unknown>;
-    expect(missing["current_preset"]).toBe("danger-full-access");
-    // 服务缺失面
-    const registered2: CapturedTool[] = [];
-    const fakePin2 = buildFakeKernelPin(); // 同上：pin 检查隔离（存量红#8b）
-    const savedPin2 = process.env["ATF_INSTANCE_PIN_ROOT"];
-    process.env["ATF_INSTANCE_PIN_ROOT"] = fakePin2;
-    try {
-      applyAtfTools(
-        { tools: { register: (tool: CapturedTool) => registered2.push(tool) }, get: () => undefined, on: () => () => true, effect: () => undefined } as never,
-        { runsRoot: tempRoot(), kernelDir: tempRoot(), execHome: tempRoot(), logDir: tempRoot(), bridgeCommand: "", pipelineCommand: "node x", pipelineTimeoutMs: 1000 },
-      );
-    } finally {
-      if (savedPin2 === undefined) delete process.env["ATF_INSTANCE_PIN_ROOT"]; else process.env["ATF_INSTANCE_PIN_ROOT"] = savedPin2;
-    }
-    const tool2 = registered2.find((entry) => entry.name === "atf_permission_status");
-    const unavailable = (await tool2!.execute({}, {})) as Record<string, unknown>;
-    expect(unavailable["error"]).toBe("unavailable");
-  });
-});

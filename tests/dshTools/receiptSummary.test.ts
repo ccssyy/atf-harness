@@ -4,9 +4,6 @@
 // 判据：①升级发射即标 fired、自愈成功可 clear（对冲依据）；②owner 介入类判别（凭据/白名单/审批类=强文案，其余=软文案+对冲）。
 import { describe, expect, it } from "vitest";
 import {
-  approvalTailLineOf,
-} from "../../packages/extensions/atf-tools/src/permissionTier.js";
-import {
   decorateOutcome,
   escalationFiredOf,
   clearEscalation,
@@ -55,11 +52,5 @@ describe("ownerInterventionOf（C4.1② 文案与可介入性挂钩）", () => {
     expect(ownerInterventionOf("missing: 缺顶层键 template")).toBe(false);
     expect(ownerInterventionOf("variants 槽位缺席——先完成 candidate_build")).toBe(false);
     expect(ownerInterventionOf("")).toBe(false);
-  });
-});
-
-describe("approvalTailLineOf 回归锚（切片 2 交付不回退）", () => {
-  it("guarded 档保留 owner 措辞", () => {
-    expect(approvalTailLineOf("guarded")).toContain("仅 owner 可点");
   });
 });

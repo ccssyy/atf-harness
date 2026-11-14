@@ -6,8 +6,8 @@
  *   由 atf-tools config.approvalPolicy 显式列举（零前缀匹配、零治理点）。
  * 段2 两轴判据：预设 + 权限档**同时**齐备才算自动驾驶（任一缺席 fail-closed）；确认链路
  *   免阻塞落快照＋通报写入＋agent 推荐护栏；人工档 recommend 不消费＋审批链零变化。
- * 段3 训练链豁免 answerer：chainTools 未声明／预设不符／权限档不足三种情形一律 next()；
- *   三者齐备 allowed-once；治理点恒 next()；bash/write 类语义不变。
+ * 段3 直通留痕判定（ADR-0022）：chainTools 显式命中→allowed-once/chain（直通无轴）；
+ *   atf_* 契约工具恒 null（B 层确认卡保护）；bash/write 类留痕放行；清单外 null。
  * 段4 OOM 自动降档重发：批参解析/补丁纯函数＋编排护栏（通报前置·每 run 一次·bs1 不重发·
  *   端口占用停手·DRY_RUN 不过不重发）。
  */
@@ -22,7 +22,7 @@ import {
   sandboxModeOf,
   ATF_TRAINING_PRESET,
 } from "../../packages/extensions/atf-tools/src/trainingPreset.js";
-import { makeApprovalExemptAnswerer, type ApprovalExemptPolicy } from "../../packages/extensions/atf-tools/src/approvalExempt.js";
+import { exemptOutcomeOf, type ApprovalExemptPolicy } from "../../packages/extensions/atf-tools/src/approvalExempt.js";
 import { readTrainShBatchParams, patchTrainShForOom, maybeAutoOomFallback, oomFallbackStatePath } from "../../src/core/workspace/oomFallback.js";
 import { resolveLaunchSessionName, tmuxSocketFlag, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
 import { injectMonitorGlobal } from "../../packages/extensions/atf-ui/src/server.js";
@@ -247,64 +247,43 @@ describe("两轴改造 段2：预设 + 权限档双齐才自动驾驶（任一�
   });
 });
 
-// ---------------------------------------------------------------- 段3 训练链豁免 answerer 真值表
+// ---------------------------------------------------------------- 段3 直通留痕判定真值表（ADR-0022：直通无轴，命中即留痕放行）
 
-describe("两轴改造 段3：训练链豁免 = 声明命中 + 预设 + 权限档三齐（治理点恒 next）", () => {
+describe("ADR-0022 段3：训练链直通留痕 = chainTools 显式命中（无轴条件；atf_* 恒 next）", () => {
   const policy: ApprovalExemptPolicy = {
     preset: "atf-training",
-    chainTools: ["atf_pipeline_stage", "atf_config_confirm"],
+    chainTools: ["chain_advance", "grep"],
   };
-  const answer = async (
-    toolName: string,
-    ctx: { get(service: string): unknown },
-    declared: ApprovalExemptPolicy | undefined = policy,
-  ): Promise<{ outcome: string; nextCalled: boolean }> => {
-    let nextCalled = false;
-    const outcome = await makeApprovalExemptAnswerer({ ctx, policy: declared })({ toolName, agent: { session: { id: "s" } } }, async () => {
-      nextCalled = true;
-      return "unavailable";
-    });
-    return { outcome, nextCalled };
-  };
+  const outcomeOf = (toolName: string, declared: ApprovalExemptPolicy | undefined = policy) =>
+    exemptOutcomeOf({ toolName }, { policy: declared });
 
-  it("三齐 → allowed-once（面板不见，next 零触达）", async () => {
-    const hit = await answer("atf_pipeline_stage", autopilotCtx());
-    expect(hit).toEqual({ outcome: "allowed-once", nextCalled: false });
+  it("chainTools 显式命中 → allowed-once / basis=chain（不看预设与权限档——直通无轴）", () => {
+    expect(outcomeOf("chain_advance")).toEqual({ outcome: "allowed-once", basis: "chain" });
+    expect(outcomeOf("grep")).toEqual({ outcome: "allowed-once", basis: "chain" });
   });
-  it("未声明 chainTools / 未给 policy → next()（治理语义零变化）", async () => {
-    expect(await answer("atf_pipeline_stage", autopilotCtx(), { preset: "atf-training", chainTools: [] })).toEqual({ outcome: "unavailable", nextCalled: true });
-    let nextCalled = false;
-    const outcome = await makeApprovalExemptAnswerer({ ctx: autopilotCtx() })({ toolName: "atf_pipeline_stage", agent: { session: { id: "s" } } }, async () => {
-      nextCalled = true;
-      return "unavailable";
-    });
-    expect(outcome).toBe("unavailable");
-    expect(nextCalled).toBe(true);
+  it("未声明 chainTools / 未给 policy → null（next()，vendor 面板兜底）", () => {
+    expect(outcomeOf("chain_advance", { preset: "atf-training", chainTools: [] })).toBeNull();
+    expect(exemptOutcomeOf({ toolName: "chain_advance" }, {})).toBeNull();
+    expect(exemptOutcomeOf({ toolName: "chain_advance" })).toBeNull();
   });
-  it("预设不符（standard）→ next()（预设不得替用户放大能力）", async () => {
-    expect(await answer("atf_pipeline_stage", manualCtx())).toEqual({ outcome: "unavailable", nextCalled: true });
-  });
-  it("权限档不足（workspace-write）→ next()（授权轴优先）", async () => {
-    const weak = twoAxisCtx({ preset: "atf-training", sandbox: "workspace-write" });
-    expect(await answer("atf_pipeline_stage", weak)).toEqual({ outcome: "unavailable", nextCalled: true });
-  });
-  it("治理点即使三齐也恒 next()：训练启动/发布/release/编排/联合训练/门/准入/临时执行", async () => {
+  it("atf_* 契约工具恒 null（B 层确认卡保护，即使被误列进 chainTools）：训练启动/发布/release/编排/联合训练/门/准入/临时执行", () => {
     for (const governed of ["atf_run_training", "atf_publish_confirm", "atf_publish_model", "atf_evaluate", "atf_launch_execute", "atf_joint_train", "atf_gate", "atf_admit_data", "atf_scratch_exec"]) {
-      expect(await answer(governed, autopilotCtx())).toEqual({ outcome: "unavailable", nextCalled: true });
+      expect(outcomeOf(governed)).toBeNull();
     }
+    expect(outcomeOf("atf_pipeline_stage", { preset: "atf-training", chainTools: ["atf_pipeline_stage"] })).toBeNull();
   });
-  it("禁前缀匹配：清单里没有 atf_ 前缀时，同前缀的治理点不被连带放行", async () => {
-    const loose: ApprovalExemptPolicy = { preset: "atf-training", chainTools: ["atf_pipeline_stage"] };
-    expect(await answer("atf_pipeline_stage_v2", autopilotCtx(), loose)).toEqual({ outcome: "unavailable", nextCalled: true });
-    expect(await answer("atf_run_training", autopilotCtx(), { preset: "atf-training", chainTools: ["atf_"] })).toEqual({ outcome: "unavailable", nextCalled: true });
+  it("禁前缀匹配：清单精确命中，同前缀治理点不被连带放行", () => {
+    const loose: ApprovalExemptPolicy = { preset: "atf-training", chainTools: ["chain_advance"] };
+    expect(outcomeOf("chain_advance_v2", loose)).toBeNull();
+    expect(outcomeOf("atf_run_training", { preset: "atf-training", chainTools: ["atf_"] })).toBeNull();
   });
-  it("bash/write 类语义不变：不看预设与档位，恒 allowed-once", async () => {
+  it("bash/write 类：留痕闭集，恒 allowed-once / basis=bash-write（不看清单与档位）", () => {
     for (const toolName of ["bash", "write", "edit"]) {
-      expect(await answer(toolName, manualCtx(), { preset: "", chainTools: [] })).toEqual({ outcome: "allowed-once", nextCalled: false });
+      expect(outcomeOf(toolName, { preset: "", chainTools: [] })).toEqual({ outcome: "allowed-once", basis: "bash-write" });
     }
   });
-  it("声明预设与实际预设漂移（policy.preset=other）→ next()", async () => {
-    expect(await answer("atf_pipeline_stage", autopilotCtx(), { preset: "other", chainTools: ["atf_pipeline_stage"] })).toEqual({ outcome: "unavailable", nextCalled: true });
+  it("清单外（非 atf_、非 bash/write、不在 chainTools）→ null", () => {
+    expect(outcomeOf("sort")).toBeNull();
   });
 });
 

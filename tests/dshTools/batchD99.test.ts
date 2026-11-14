@@ -116,24 +116,7 @@ describe("D99——negative_ratio_target 透传（仅 experiment_setup 段）", 
     expect((result as Record<string, unknown>)["negative_ratio_target_source"]).toBeUndefined();
   });
 
-  it("审批卡：负样本带行仅 experiment_setup 段呈现（显式与缺省两形态）", async () => {
-    for (const value of ["0.03,0.06", ""]) {
-      const record: string[] = [];
-      await toolOf(record).execute(
-        { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: `d99-card-${value || "default"}`, workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, `d99-card-${value || "default"}`); })(), ...(value === "" ? {} : { negative_ratio_target: value }) },
-        fakeExec,
-      );
-      expect(record[0]).toContain(negativeRatioApprovalLine(value));
-    }
-    const otherRecord: string[] = [];
-    await toolOf(otherRecord).execute(
-      { stage: "label_qc", run_id: "d99-card-lq", workspace_path: tempRoot(), negative_ratio_target: "0.03,0.06" },
-      fakeExec,
-    );
-    expect(otherRecord[0]).not.toContain("负样本构造带");
-  });
-
-  it("negativeRatioApprovalLine 纯函数：显式与未指定两形态直测（文案单源）", () => {
+  it("negativeRatioApprovalLine 纯函数：显式与未指定两形态直测（文案单源；ADR-0022 段审批卡退役，原卡面呈现断言随卡删除）", () => {
     expect(negativeRatioApprovalLine("0.03,0.06")).toBe("负样本构造带：0.03,0.06（用户指定——实验门以该值锁定）");
     expect(negativeRatioApprovalLine("")).toBe("负样本构造带：未指定——将按构造器内置常量带（0.02,0.05）兜底");
   });

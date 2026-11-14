@@ -101,15 +101,13 @@ describe("D89——grouping_preset 透传（experiment_setup 段）", () => {
     expect((result as Record<string, unknown>)["grouping_preset_source"]).toBe("undeclared");
   });
   it("空白串 → 视同未给（trim 后空串走缺省，不触框架拒收也不进 argv）", async () => {
-    const approvals: string[] = [];
-    const result = (await toolOf(approvals).execute(
+    const result = (await toolOf().execute(
       { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "d89-blank", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-blank"); })(), grouping_preset: "  " },
       fakeExec,
     )) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
     expect(summaryArgv(result)).not.toContain("--grouping-preset");
     expect(result["grouping_preset_source"]).toBe("undeclared");
-    expect(approvals).toHaveLength(1);
   });
   it("非 experiment_setup 段（family_split）给了也不出现在 argv，且返回体无两键（仅 experiment_setup 加键）", async () => {
     const result = (await toolOf().execute(
@@ -122,52 +120,17 @@ describe("D89——grouping_preset 透传（experiment_setup 段）", () => {
     expect((result as Record<string, unknown>)["grouping_preset_source"]).toBeUndefined();
   });
   it("取值集合归内核：形状合法的任意标识都透传（不再由 harness 枚举拒收）", async () => {
-    const approvals: string[] = [];
-    const result = (await toolOf(approvals).execute(
+    const result = (await toolOf().execute(
       { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "d89-any", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-any"); })(), grouping_preset: "custom_recipe" },
       fakeExec,
     )) as Record<string, unknown>;
     expect(result["ok"]).toBe(true);
     expect(summaryArgv(result)[summaryArgv(result).indexOf("--grouping-preset") + 1]).toBe("custom_recipe");
     // 越界值由内核 argparse choices 拒绝（回流为内核错误），harness 不复制词表
-    expect(approvals).toHaveLength(1);
   });
 });
 
-describe("D89——审批卡分组方案呈现（reason 内追加一行，仅 experiment_setup 段）", () => {
-  it("显式 A/B → 卡含「分组方案：<标识>（候选方案由训练内核定义…）」", async () => {
-    for (const value of ["A", "B"] as const) {
-      const approvals: string[] = [];
-      await toolOf(approvals).execute(
-        { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: `d89-card-${value}`, workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, `d89-card-${value}`); })(), grouping_preset: value },
-        fakeExec,
-      );
-      expect(approvals).toHaveLength(1);
-      expect(approvals[0]).toContain(groupingPresetApprovalLine(value));
-      // G2：卡面只报标识＋「候选由内核定义」，不复述组构成（测试样板字段名不进产品文案）
-      expect(approvals[0]).toContain(`分组方案：${value}（候选方案由训练内核定义，组构成以内核产出为准）`);
-      expect(approvals[0]).not.toContain("doc_identifier");
-      expect(approvals[0]).not.toContain("goods_item");
-    }
-  });
-  it("未给 → 卡含「分组方案：未指定——不预设（按字段配置中的分组键走）」（缺省不静默，卡上可见）", async () => {
-    const approvals: string[] = [];
-    await toolOf(approvals).execute(
-      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "d89-card-def", workspace_path: (() => { const w = tempRoot(); return withFieldChoice(w, "d89-card-def"); })() },
-      fakeExec,
-    );
-    expect(approvals).toHaveLength(1);
-    expect(approvals[0]).toContain("分组方案：未指定——不预设（按字段配置中的分组键走，组构成以内核产出为准）");
-  });
-  it("非 experiment_setup 段卡无分组方案行（该段该参无意义不上卡）", async () => {
-    const approvals: string[] = [];
-    await toolOf(approvals).execute(
-      { stage: "label_qc", run_id: "d89-card-lq", workspace_path: tempRoot(), grouping_preset: "A" },
-      fakeExec,
-    );
-    expect(approvals).toHaveLength(1);
-    expect(approvals[0]).not.toContain("分组方案：");
-  });
+describe("D89——分组方案呈现文案（ADR-0022 段审批卡退役：原卡面行断言随卡删除，文案单源保留直测）", () => {
   it("groupingPresetApprovalLine 纯函数：给值／未给两形态直测（文案单源，零组名词汇）", () => {
     expect(groupingPresetApprovalLine("A")).toBe("分组方案：A（候选方案由训练内核定义，组构成以内核产出为准）");
     expect(groupingPresetApprovalLine("custom_recipe")).toBe("分组方案：custom_recipe（候选方案由训练内核定义，组构成以内核产出为准）");

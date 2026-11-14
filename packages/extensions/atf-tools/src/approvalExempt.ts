@@ -1,59 +1,43 @@
 /**
- * 批㊶-F-H 项 1——bash/write 类审批豁免 answerer（两案侦察后择案 A）。
+ * ADR-0022 直通留痕器（原批㊶-F-H 项 1 审批豁免 answerer——「豁免拦截」语义随工具执行
+ * 审批拦截退役，平移为「直通留痕」：水瀑（approval/request waterfall）头部 prepend 原位
+ * 不变，敏感闭集命中写 exemptions.jsonl 留痕后放行；非敏感闭集 next() 交回后链
+ * （atf_* 契约工具的业务确认卡照常出卡，B 层不经过本面）。
  *
- * 弹卡根因（批㊶-E-H 实证）：bash-sandbox 三后端全断（容器 seccomp 禁命名空间＋内核
- * 5.4 无 Landlock）→ 每条 bash 先 SANDBOX_UNAVAILABLE → 模型带 sandbox_permissions
- * 重试 → 升级审批 ask → 人工面板逐次弹卡（同事 342 次）。分级原则（owner 裁）：
- * 读=免、写=会话信任、高危治理点=每次必弹——bash/write 类经本 answerer 自动
- * allowed-once，高危治理点（atf_* 契约工具全体：登记/训练/发布/config/评估 release/
- * gate）不进类 → next() 原路人工面板，审批语义零变化。
+ * 留痕闭集（ADR-0022 实施批决策点 4，owner 确认敏感闭集方案）：
+ *   - bash/write/edit 三件（vendor 面——批㊶-E-H 342 次弹卡教训的审计面延续）；
+ *   - chainTools（overlay 配置 approvalPolicy.chainTools 显式清单——训练链留痕）。
+ * 原 D90 双轴（预设声明+完全权限档）与 D284 headless env basis（审批轴）随档位审批
+ * 退役——直通形态无轴，命中即留痕放行。
  *
- * 择案依据（报告同步）：案 B 所指 approvalHook（src/core/tools 审批判定面）不在该弹卡
- * 链路上——bash 卡走 DSH ApprovalService waterfall（approval/request 事件）至 client
- * 面板，不经 atf approvalHook；故豁免必须落 waterfall 头部（案 A）。案 A 亦无需逐会话
- * seed 机制：宿主级 listener 覆盖进程内全部会话，prepend 保证先于 api-remotes 的
- * client 转发桥（其 apply 先于 profile patch insert 行执行）。
- *
- * owner 2026-10-26 裁定（两轴改造）：本 answerer 由「只认工具名」改为「档位 + 预设
- * 双感知」。训练链工具（43/43 段调用 100% 弹卡实测）在
- *   ①预设声明该工具 ∈ chainTools 且 ②用户权限档 = danger-full-access
- * 同时成立时免审；任一不成立一律 next()。理由：豁免是便利、权限是授权——用户没给完全
- * 权限时预设不得自行放大能力，否则是 agent 越过用户自我提权。
- * 命中判定显式列举工具名（**禁 atf_ 前缀匹配**：前缀会把训练启动/发布/评估 release
- * 等治理点一起放掉）。治理点（atf_run_training／atf_publish_*／atf_launch_execute／
- * atf_joint_train／atf_gate／atf_admit_data／atf_scratch_exec）永不出现在 chainTools。
+ * 留账纪律（ADR-0019 底线不破）：写账失败＝stderr 告警后照常放行（直通形态下无
+ * 「不放行」语义可回退——决策点 8 裁定 fail-open+告警；账本面故障经启动校验
+ * checkApprovalLedgerStartup fail-fast 兜底）。
  */
-import { ATF_TRAINING_PRESET, isPresetAutopilot, type ExecSessionFace, type ServiceCtxFace } from "./trainingPreset.js";
 import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { permissionTierOf } from "./permissionTier.js";
 
 /**
  * bash/write 类工具名（vendor 面：tool-bash=bash；tool-fs 写类=write/edit）。
  *
  * ⚠ atf_bash 不在此集合（owner 2026-10-26 裁定）：A7 治理面把 bash 换成了 atf_bash
- * （fileGuardFace：白名单守卫＋命令串扫描），它的审批面是**独立**的——只在破坏性命令
- * （D23 递归删除）时经 requestApproval 出卡，且必须以「逐次人工确认」结案。若把 atf_bash
- * 并进本集合，等于把递归删除卡也变成免审，与 D23 裁定冲突。故此处只收 vendor 三名，
- * atf_bash 恒走 next()（是裁定，不是漏配）。 */
+ * （fileGuardFace：白名单守卫＋命令串扫描），它的确认面是**独立**的——破坏性命令
+ * （D23 递归删除）经 requestApproval 出卡，且必须以「逐次人工确认」结案（B 层，
+ * ADR-0022 不动）。故此处只收 vendor 三名。
+ */
 export const BASH_WRITE_APPROVAL_TOOLS: ReadonlySet<string> = new Set(["bash", "write", "edit"]);
 
-/** atf_* 前缀＝契约工具全体（高危治理点）——永远 next() 人工面板，语义零变化。 */
+/** atf_* 前缀＝契约工具全体（治理点/裁决确认卡）——永远 next() 人工面板，B 层语义零变化。 */
 export const isAtfContractTool = (toolName: string): boolean => toolName.startsWith("atf_");
 
 export const isBashWriteClass = (toolName: string): boolean => BASH_WRITE_APPROVAL_TOOLS.has(toolName);
 
 /**
- * 全自动档也不免的审批面（D90）：`atf_bash` 的破坏性命令确认（D23 递归删除）属**不可逆
- * 数据丢失**护栏，不是权限问题——档位再高也逐次确认。其余工具在全自动档一律免审。
- */
-export const UNATTENDED_APPROVAL_KEEP: ReadonlySet<string> = new Set(["atf_bash"]);
-
-/**
- * 训练链豁免声明（overlay 侧 atf-tools config.approvalPolicy——预设声明 + 工具白名单）。
+ * 训练链留痕声明（overlay 侧 atf-tools config.approvalPolicy——预设声明 + 工具白名单）。
  * `preset`＝声明该链的 Agent 预设 id；`chainTools`＝显式工具名清单（禁前缀/通配）。
- * 两者皆由 profile 配置给出，代码零硬编码工具名——预设间的工具集差异只落配置。
+ * 两者皆由 profile 配置给出，代码零硬编码工具名——ADR-0022 后 preset 仅作声明留痕
+ * （exemptions 行的 preset 字段），不再参与放行判定（直通无轴）。
  */
 export interface ApprovalExemptPolicy {
   readonly preset?: string;
@@ -61,76 +45,47 @@ export interface ApprovalExemptPolicy {
 }
 
 /** ApprovalRequest 的消费面（结构类型——与 DSH ApprovalRequestEvent 最小交集）。 */
-interface ExemptRequest extends ExecSessionFace {
+interface ExemptRequest {
   toolName?: unknown;
   reason?: unknown;
 }
 
 type Answerer = (request: ExemptRequest, next: () => Promise<string>) => Promise<string>;
 
-/** 免审放行可见性（指令约束：stderr 告警保留——非隔离执行事实随放行落 stderr；asked/decided 审计对由审批服务照常落账）。 */
-const warnExempt = (toolName: string, reason: unknown): void => {
-  const what = toolName === "bash" ? "bash 以无隔离模式执行（免审）" : `${toolName} 以无隔离模式执行（免审）`;
+/** 直通放行可见性（放行必留痕纪律的 stderr 半边——非隔离执行事实随放行落 stderr）。 */
+const warnDirect = (toolName: string, reason: unknown, basis: "bash-write" | "chain"): void => {
   const brief = typeof reason === "string" && reason !== "" ? `；${reason.slice(0, 100)}` : "";
-  process.stderr.write(`[atf-approval] 沙箱不可用，${what}${brief}\n`);
-};
-
-/** 训练链工具命中的事实通报（与 bash 类告警同纪律：放行必留痕，且带上放行依据两轴）。 */
-const warnChainExempt = (toolName: string, preset: string): void => {
-  process.stderr.write(`[atf-approval] 训练链工具 ${toolName} 免审放行（预设=${preset}／权限档=danger-full-access）\n`);
-};
-
-/** 全自动档免审的事实通报（放行必留痕：审计面照旧有 asked/decided 对）。 */
-const warnUnattendedExempt = (toolName: string): void => {
-  process.stderr.write(`[atf-approval] 全自动档：${toolName} 免审放行（无人可审批）\n`);
+  const basisText = basis === "bash-write" ? "bash/write 类" : "训练链";
+  process.stderr.write(`[atf-approval] ${toolName} 直通放行（${basisText}留痕，ADR-0022）${brief}\n`);
 };
 
 /**
- * 豁免判定单源（档位 + 预设双感知）：
- * - bash/write 类：原有语义不变（不看档位/预设，恒 allowed-once）；
- * - 训练链工具：预设声明 ∈ chainTools **且** isTrainingAutopilot 才放行；
- *   其余（含全部治理点）→ next()。
- * @returns allowed-once 表示免审放行，null 表示交给 waterfall 后续 answerer。
+ * 直通留痕判定单源（ADR-0022）：
+ * - bash/write 类：留痕闭集（原语义不看档位）；
+ * - chainTools 显式清单命中：留痕闭集（原双轴判定随档位审批退役）；
+ * - atf_* 契约工具：null（next()——业务确认卡保护，B 层不经本面）；
+ * - 其余：null（next()——vendor 面板兜底）。
  */
 export const exemptOutcomeOf = (
   request: ExemptRequest,
-  deps: { ctx?: ServiceCtxFace; policy?: ApprovalExemptPolicy },
-): { outcome: "allowed-once"; basis: "bash-write" | "chain" | "unattended" } | null => {
+  deps: { policy?: ApprovalExemptPolicy } = {},
+): { outcome: "allowed-once"; basis: "bash-write" | "chain" } | null => {
   const toolName = typeof request?.toolName === "string" ? request.toolName : "";
+  if (isAtfContractTool(toolName)) return null;
   if (isBashWriteClass(toolName)) return { outcome: "allowed-once", basis: "bash-write" };
-  const { ctx, policy } = deps;
-  // D284 形态①下沉:headless 无人值守宿主（env ATF_HEADLESS_PRESET=atf-unattended）
-  // ——headless bundle 有意不组装 agent-preset-registry（vendor 设计），会话预设轴恒缺,
-  // 两个既有 basis 的预设轴到不了;本 basis=env 显式声明+config chainTools 显式清单
-  // 双确认（治理面不扩大：清单外工具照旧 fail-closed）,放行留账 basis=unattended
-  // （exemptions.jsonl 语义同 D90——无人值守自动放行,审计对照常）。
-  if (process.env.ATF_HEADLESS_PRESET === "atf-unattended"
-      && policy !== undefined && (policy.chainTools ?? []).includes(toolName)) {
-    return { outcome: "allowed-once", basis: "unattended" };
-  }
-  if (ctx === undefined) return null;
-  // D90 全自动档：审批全免（破坏性命令通道除外——那是数据丢失护栏，不是授权问题）
-  if (permissionTierOf(ctx, request) === "unattended" && !UNATTENDED_APPROVAL_KEEP.has(toolName)) {
-    return { outcome: "allowed-once", basis: "unattended" };
-  }
-  if (policy === undefined) return null;
-  const chainTools = policy.chainTools ?? [];
-  // 显式列举命中（禁前缀匹配——前缀会连带放行训练启动/发布/release 等治理点）
-  if (!chainTools.includes(toolName)) return null;
-  // 两轴齐备：配置声明的预设 = 当前会话预设（声明漂移即不放行）且权限档 = 完全权限。
-  if (!isPresetAutopilot(ctx, request, policy.preset ?? ATF_TRAINING_PRESET)) return null;
-  return { outcome: "allowed-once", basis: "chain" };
+  const chainTools = deps.policy?.chainTools ?? [];
+  if (chainTools.includes(toolName)) return { outcome: "allowed-once", basis: "chain" };
+  return null;
 };
 
 /**
- * 放行留账（ADR-0019 决定 1 语义层边界）：answerer 每次自动放行必须 append Approval
- * Ledger 同目录的 exemptions.jsonl（append-only 一行一 JSON：ts/tool/basis/preset）。
- * 写账失败＝不放行（fail-closed 转 next 人工面板）——放行无账本即越权，属边界违约。
- * bash/write 类高频放行逐条留痕是设计意图（批㊶-E-H 342 次弹卡教训的审计面）。
+ * 直通留痕（ADR-0019 决定 1 语义平移）：敏感闭集命中 append Approval Ledger 同目录的
+ * exemptions.jsonl（append-only 一行一 JSON：ts/tool/basis/preset）。写账失败＝stderr
+ * 告警后照常放行（直通形态 fail-open——决策点 8；启动校验 fail-fast 兜底账本面故障）。
  */
-const appendExemptionRecord = async (
+export const appendExemptionRecord = async (
   toolName: string,
-  basis: "bash-write" | "chain" | "unattended",
+  basis: "bash-write" | "chain",
   preset?: string,
 ): Promise<boolean> => {
   try {
@@ -145,28 +100,24 @@ const appendExemptionRecord = async (
 };
 
 /**
- * answerer 工厂（approval/request waterfall 头部形态）：deps 携带 ctx 与 overlay 声明，
- * 缺省（无 ctx／无声明）＝仅 bash/write 类豁免，其余一律 next()。
+ * 直通留痕器工厂（waterfall 头部形态——挂载位与签名原位平移）：deps 携带 overlay 声明。
  */
 export const makeApprovalExemptAnswerer = (
-  deps: { ctx?: ServiceCtxFace; policy?: ApprovalExemptPolicy } = {},
+  deps: { policy?: ApprovalExemptPolicy } = {},
 ): Answerer => async (request, next) => {
   const hit = exemptOutcomeOf(request, deps);
   if (hit === null) return next();
   const toolName = typeof request?.toolName === "string" ? request.toolName : "";
-  // 放行留账先行(ADR-0019 决定 1)：落账失败即不放行——fail-closed,免审不得无账。
+  // 直通留痕先行：写账失败 stderr 告警（fail-open——直通无「不放行」可回退）
   const recorded = await appendExemptionRecord(toolName, hit.basis, deps.policy?.preset);
   if (!recorded) {
-    console.warn(`[atf-tools] 放行留账失败,${toolName} 转人工面板(fail-closed)`);
-    return next();
+    console.warn(`[atf-tools] 直通留痕写账失败，${toolName} 照常放行（fail-open 告警，ADR-0019 审计缺口如实暴露）`);
   }
-  if (hit.basis === "bash-write") warnExempt(toolName, request.reason);
-  else if (hit.basis === "unattended") warnUnattendedExempt(toolName);
-  else warnChainExempt(toolName, deps.policy?.preset ?? "");
+  warnDirect(toolName, request.reason, hit.basis);
   return "allowed-once";
 };
 
-/** 无装配面直接调用形态（bash/write 类语义单源；训练链判定需 ctx，故此处仅前一类）。 */
+/** 无装配面直接调用形态（bash/write 类语义单源；训练链判定需 policy，故此处仅前一类）。 */
 export const approvalExemptAnswerer: Answerer = makeApprovalExemptAnswerer();
 
 /**
@@ -182,7 +133,6 @@ export const registerApprovalExempt = (
   policy?: ApprovalExemptPolicy,
 ): boolean => {
   if (typeof ctx.on !== "function") return false;
-  const serviceCtx = typeof ctx.get === "function" ? { get: (service: string): unknown => ctx.get?.(service) } : undefined;
-  ctx.on("approval/request", makeApprovalExemptAnswerer({ ctx: serviceCtx, policy }), { prepend: true });
+  ctx.on("approval/request", makeApprovalExemptAnswerer({ policy }), { prepend: true });
   return true;
 };

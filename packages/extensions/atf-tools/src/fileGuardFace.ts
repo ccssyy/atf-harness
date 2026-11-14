@@ -18,7 +18,6 @@
  * 白名单根＝派生集（fileRoots.ts 配置声明面镜像）＋env 附加集（ATF_V1_FILE_TOOL_ROOTS）；
  * 产品资产零具体目录（增补裁定——分层原则）。
  */
-import { approvalTailLineOf, permissionTierOf } from "./permissionTier.js";
 import { existsSync, readFileSync, readdirSync, statSync, watchFile, unwatchFile } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { attachmentsRootOf, toFileAgentTool, FILE_TOOL_DEFINITIONS, type FileToolHost } from "../../../../src/agent/fileTools.js";
@@ -728,7 +727,7 @@ export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: stri
                     target: `（${String(destructive.paths.length)} 个目标）`,
                     effect: `不可逆删除：${targets}`,
                     reversible: "不可逆——删除后无自动恢复",
-                  }) + approvalTailLineOf(permissionTierOf(deps.approvalCtx, exec)));
+                  }) + "\n破坏性命令确认：逐次人工确认，执行方不得代点（D23——数据丢失护栏，不随档位放松）");
             if (!verdict.ok) {
               const why = verdict.outcome === "unavailable"
                 ? "（本环境未挂审批服务——fail-closed 拒绝，不静默放行）"

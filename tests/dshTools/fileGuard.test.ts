@@ -452,7 +452,8 @@ describe("D23——破坏性命令确认闸（rm 递归删 → owner 审批卡�
     expect(existsSync(target)).toBe(false);
     expect(String(captured.reason)).toContain("递归删除");
     expect(String(captured.reason)).toContain(target);
-    expect(String(captured.reason)).toContain("仅 owner 可点；执行方不得代点");
+    // D23 尾句固定文案（ADR-0022：原「仅 owner 可点」权属行退役，逐次人工确认语义保留）
+    expect(String(captured.reason)).toContain("破坏性命令确认：逐次人工确认，执行方不得代点");
   });
 
   it("owner 拒绝：rejected → 结构化拒绝（outcome=rejected＋未放行文案）；目标零执行", async () => {

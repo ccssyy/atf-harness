@@ -1,8 +1,8 @@
 /** 批1-D208 锚:评估放行完全权限档停等确认卡(免审批卡,沿 D186 语义)。
  *
  * 三锚:
- * 1. 源码面:evalReleaseConfirmCardOf 在位+调用点 tier 分流在位(完全权限→
- *    确认卡;guarded→审批卡照旧;通道缺席/异常回退审批轨)。
+ * 1. 源码面:evalReleaseConfirmCardOf 在位+确认卡恒走调用点在位(ADR-0022:
+ *    tier 分流退役;通道异常 fallback 回退审批轨保留)。
  * 2. 行为面:确认卡通道(userQuestions.ask)被调用且选项含「确认启动/暂停」,
  *    选确认→ok=true;选暂停→started:false eval_release_paused_by_user。
  * 3. 行为面:确认卡通道缺席时回退 requestApproval(fail-closed,不静默放行)。
@@ -28,10 +28,11 @@ const fakeExec = (): { agent: unknown; signal: undefined; run: (cmd: string, arg
 });
 
 describe("批1-D208——评估放行完全权限档停等确认卡", () => {
-  it("源码面:确认卡函数+tier 分流在位,旧无条件审批形态退役", () => {
+  it("源码面:确认卡函数在位+恒走调用点在位(ADR-0022 tier 分流退役),fallback 审批兜底保留", () => {
     const src = readFileSync(SRC, "utf8");
     expect(src).toContain("const evalReleaseConfirmCardOf");
-    expect(src).toContain('permissionTierOf(ctx as never, exec as never) === "full-access"');
+    expect(src).toContain("const card = await evalReleaseConfirmCardOf(ctx, exec, runId, reasonText);");
+    expect(src).toContain("if (card.fallback)");
     expect(src).toContain('"eval_release_paused_by_user"');
   });
 

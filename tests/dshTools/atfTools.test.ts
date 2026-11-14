@@ -307,11 +307,11 @@ describe("atf_pipeline_stage 集成（mock pipeline）＋审批 seam", () => {
     await expect((tool as DshToolLike).execute({ stage: "nonexistent", run_id: "r1" }, fakeExec)).rejects.toThrow(/must be one of/);
   });
 
-  it("审批三态：rejected／unavailable 均 fail-closed 且不 spawn；段名清单与 walkthrough 段一致", async () => {
+  it("审批轴退役（ADR-0022）：rejected／unavailable 不再拦截段执行（直通留痕照常 spawn）；段名清单与 walkthrough 段一致", async () => {
     for (const outcome of ["rejected", "unavailable"]) {
       const tool = buildPipelineTool(approvalCtx(outcome), `node ${mockPipelinePath}`, 30_000);
       const result = (await (tool as DshToolLike).execute({ stage: "label_qc", run_id: "r1", workspace_path: tempRoot() }, fakeExec)) as Record<string, unknown>;
-      expect(result).toMatchObject({ error: "approval_denied", outcome });
+      expect(result).toMatchObject({ stage: "label_qc", ok: true, exit_code: 0 });
     }
     expect(PIPELINE_STAGES).toEqual(["register", "label_qc", "style_split", "experiment_setup", "family_split", "candidate_build", "publish", "admission", "training_prep"]);
   });
@@ -371,8 +371,8 @@ describe("批㉛段2 atf_config_confirm 现值基线（run 的 IterationConfig �
   });
 });
 
-describe("批㊶-F-H 项 1 bash/write 免审 answerer（waterfall 头部——择案 A）", () => {
-  it("bash 调用不再产生审批请求：bash/write/edit 自动 allowed-once 且 next() 零触达（面板不见）＋stderr 告警保留", async () => {
+describe("批㊶-F-H 项 1 bash/write 直通留痕 answerer（waterfall 头部——ADR-0022）", () => {
+  it("bash 调用不再产生审批请求：bash/write/edit 直通 allowed-once 且 next() 零触达（面板不见）＋stderr 留痕通报保留", async () => {
     const errWrites: string[] = [];
     const original = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: unknown) => { errWrites.push(String(chunk)); return true; }) as typeof process.stderr.write;
@@ -386,7 +386,7 @@ describe("批㊶-F-H 项 1 bash/write 免审 answerer（waterfall 头部——�
         expect(outcome).toBe("allowed-once");
         expect(nextCalled).toBe(false);
       }
-      expect(errWrites.join("")).toContain("[atf-approval] 沙箱不可用，bash 以无隔离模式执行（免审）");
+      expect(errWrites.join("")).toContain("[atf-approval] bash 直通放行（bash/write 类留痕，ADR-0022）");
     } finally {
       process.stderr.write = original;
     }

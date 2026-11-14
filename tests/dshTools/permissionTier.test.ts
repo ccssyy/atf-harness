@@ -3,7 +3,8 @@
  *
  * 三档语义的判据面与后果面各锁一遍：
  *  ① `permissionTierOf`：只看 sandbox 值 + 预设 id（档位名可改、语义不可改）；
- *  ② 审批面：全自动档全免，但破坏性命令通道（atf_bash）不免——不可逆数据丢失不随档位放松；
+ *  ② 审批面（ADR-0022 直通留痕）：敏感闭集（bash/write 类＋chainTools 显式清单）命中放行留痕；
+ *     atf_* 契约工具（含破坏性命令通道 atf_bash）恒 null——确认卡走 B 层，不随档位放松；
  *  ③ 提问面：完全权限档**必须还能问人**（本次事故就是审批免了、卡也没了、样本没生成）；
  *     全自动档不问人，但必须落账 `decided_by: agent`（不许把「没人回答」当成用户默认）。
  */
@@ -18,7 +19,7 @@ import {
   permissionTierOf,
   questionsAllowed,
 } from "../../packages/extensions/atf-tools/src/permissionTier.js";
-import { makeApprovalExemptAnswerer, type ApprovalExemptPolicy } from "../../packages/extensions/atf-tools/src/approvalExempt.js";
+import { exemptOutcomeOf, type ApprovalExemptPolicy } from "../../packages/extensions/atf-tools/src/approvalExempt.js";
 import {
   constructionGapOf,
   decideConstructionParams,
@@ -73,7 +74,7 @@ const fakeCtx = (
 
 const exec = { agent: { session: { id: "sess-d90" } }, callId: "call-d90", signal: undefined };
 
-const policy: ApprovalExemptPolicy = { preset: ATF_TRAINING_PRESET, chainTools: ["atf_pipeline_stage"] };
+const policy: ApprovalExemptPolicy = { preset: ATF_TRAINING_PRESET, chainTools: ["chain_advance"] };
 
 describe("D90 权限三档判据（sandbox 值 + 预设 id 两轴）", () => {
   it("未开完全权限＝guarded（预设不改变结论）；完全权限＝full-access；完全权限＋全自动预设＝unattended", () => {
@@ -92,43 +93,23 @@ describe("D90 权限三档判据（sandbox 值 + 预设 id 两轴）", () => {
   });
 });
 
-describe("D90 审批面：全自动档全免，破坏性命令通道除外", () => {
-  const answerer = makeApprovalExemptAnswerer({
-    ctx: fakeCtx({ sandbox: "danger-full-access", preset: ATF_UNATTENDED_PRESET }) as never,
-    policy,
-  });
-
-  it("治理点在全自动档也免审（不弹卡）；atf_bash 仍走人工面板（数据丢失护栏不随档位放松）", async () => {
-    for (const toolName of ["atf_pipeline_stage", "atf_run_training", "atf_evaluate", "atf_publish_confirm", "atf_gate"]) {
-      let nextCalled = false;
-      const outcome = await answerer({ toolName, reason: "全自动档", agent: exec.agent } as never, async () => {
-        nextCalled = true;
-        return "rejected";
-      });
-      expect(outcome).toBe("allowed-once");
-      expect(nextCalled).toBe(false);
+describe("D90 审批面（ADR-0022 直通留痕形态）：敏感闭集命中放行留痕，atf_* 恒走确认卡", () => {
+  it("chainTools 显式命中 → allowed-once/chain（直通无轴）；bash/write 类 → allowed-once/bash-write", () => {
+    expect(exemptOutcomeOf({ toolName: "chain_advance" }, { policy })).toEqual({ outcome: "allowed-once", basis: "chain" });
+    for (const toolName of ["bash", "write", "edit"]) {
+      expect(exemptOutcomeOf({ toolName }, { policy })).toEqual({ outcome: "allowed-once", basis: "bash-write" });
     }
-    let nextCalled = false;
-    const bashOutcome = await answerer({ toolName: "atf_bash", reason: "递归删除确认", agent: exec.agent } as never, async () => {
-      nextCalled = true;
-      return "rejected";
-    });
-    expect(nextCalled).toBe(true);
-    expect(bashOutcome).toBe("rejected");
   });
 
-  it("完全权限档沿用旧语义：chainTools 命中才免，治理点与未声明工具仍 next()", async () => {
-    const full = makeApprovalExemptAnswerer({
-      ctx: fakeCtx({ sandbox: "danger-full-access", preset: ATF_TRAINING_PRESET }) as never,
-      policy,
-    });
-    expect(await full({ toolName: "atf_pipeline_stage", reason: "段", agent: exec.agent } as never, async () => "rejected")).toBe("allowed-once");
-    let nextCalled = false;
-    await full({ toolName: "atf_evaluate", reason: "评估", agent: exec.agent } as never, async () => {
-      nextCalled = true;
-      return "rejected";
-    });
-    expect(nextCalled).toBe(true);
+  it("atf_* 契约工具（治理点与破坏性命令通道 atf_bash）恒 null → next() 确认卡/人工面板（B 层语义零变化，数据丢失护栏不随档位放松）", () => {
+    for (const toolName of ["atf_pipeline_stage", "atf_run_training", "atf_evaluate", "atf_publish_confirm", "atf_gate", "atf_bash"]) {
+      expect(exemptOutcomeOf({ toolName }, { policy })).toBeNull();
+    }
+  });
+
+  it("清单外未声明工具 → null（vendor 面板兜底）", () => {
+    expect(exemptOutcomeOf({ toolName: "sort" }, { policy })).toBeNull();
+    expect(exemptOutcomeOf({ toolName: "chain_advance" }, { policy: { preset: ATF_TRAINING_PRESET, chainTools: [] } })).toBeNull();
   });
 });
 

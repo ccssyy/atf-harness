@@ -166,8 +166,7 @@ describe("分组节接线：experiment_setup 段回执带 grouping_section", () 
     mkdirSync(join(runDir, "experiment-setup"), { recursive: true });
     writeFileSync(join(runDir, "experiment-setup", "field-config.json"), JSON.stringify(FIELD_CONFIG));
     writeFileSync(join(runDir, "experiment-setup", "experiment-config.json"), JSON.stringify({ grouping: GROUPING_FIELD_GROUP }));
-    const record: string[] = [];
-    const result = await toolOf(record).execute(
+    const result = await toolOf([]).execute(
       { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "grp-run", workspace_path: ws },
       { agent: { session: { id: "g" } }, callId: "g1", signal: undefined },
     );
@@ -176,9 +175,6 @@ describe("分组节接线：experiment_setup 段回执带 grouping_section", () 
     expect(section).toContain("分组来源：按你字段配置里的分组");
     expect(section).toContain("组清单（2 组）");
     expect(section).toContain("单据标识（doc_identifier）");
-    // 审批卡面也带上（run 里已有配置 → 作为「上一轮产物」提示）
-    expect(record.join("\n")).toContain("以下是 run 里已有的一次实验配置");
-    expect(record.join("\n")).toContain("分组来源：按你字段配置里的分组");
   });
 
   it("非 experiment_setup 段：回执不带 grouping_section（不越段呈现）", async () => {

@@ -26,6 +26,7 @@ import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./ap
 import type { ChoiceAskQuestion } from "./confirmFace.js";
 import { APPROVAL_SEMANTICS_BY_TOOL } from "../../../../src/core/tools/toolDefinition.js";
 import { permissionTierOf } from "./permissionTier.js";
+import { appendExemptionRecord } from "./approvalExempt.js";
 import { isTrainingAutopilot } from "./trainingPreset.js";
 import { appendSegmentFact } from "../../../../src/core/workspace/segmentFacts.js";
 import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
@@ -681,21 +682,18 @@ const launchConfirmCardOf = async (
   }
 };
 
-          // 审批前置（指令要求 2）：requiresApprovalFor 语义为唯一判定源；E8b·H3 D152——
-          // 卡面三行模板＋业务动作名（零内部工具名：工具名经 requestApproval 的 toolName
-          // 进审批服务记录＝日志审计面，卡面 reason 不出现）。
-          // 语义分类表判定(D170v2 §4.1):链内推进在训练预设+完全权限档免审
-          // (免审放行 stderr 留痕可审计,对齐 approvalExempt 的可见性纪律)。
+          // 确认卡前置（ADR-0022 后：requiresUserConfirmationOf 语义为唯一判定源——
+          // 原档位审批轴退役；chain_advance 直通留痕写账，stderr 通报保留可审计）。
           const approvalContext = {
             tier: permissionTierOf(ctx as never, exec as never),
-            trainingAutopilot: isTrainingAutopilot(ctx as never, exec as never),
           };
           if (
             !requiresUserConfirmationOf(definition, args)
             && APPROVAL_SEMANTICS_BY_TOOL[definition.name] === "chain_advance"
           ) {
-            // 免审放行留痕(§4.2 auto-allowed 可审计:stderr 告警保留,非隔离执行事实)
-            console.warn(`[approval] ${definition.name} 链内推进免审放行(训练预设+完全权限档,写 run 域内可逆)`);
+            // 直通留痕(ADR-0022:chain_advance 写账+stderr 通报,非隔离执行事实可审计)
+            await appendExemptionRecord(definition.name, "chain");
+            console.warn(`[approval] ${definition.name} 链内推进直通放行(chain 留痕,ADR-0022,写 run 域内可逆)`);
           }
           if (requiresUserConfirmationOf(definition, args)) {
             // D186(owner 2026-11-04 裁定):完全权限档下训练启动不弹审批卡——改停等
@@ -759,7 +757,7 @@ const launchConfirmCardOf = async (
                 }
               }
             }
-            if (definition.name === "atf_launch_execute" && approvalContext.tier === "full-access") {
+            if (definition.name === "atf_launch_execute") {
               const launchConfirm = await launchConfirmCardOf(ctx, exec, args);
               if (!launchConfirm.ok) {
                 return asToolValue({ error: "launch_paused_by_user", tool: definition.name, note: launchConfirm.note });

@@ -6,11 +6,8 @@
  * 双锚:行为锚(constructionParamsApprovalLines 三态)+源码锚(调用点传 analysisReady)。
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { constructionParamsApprovalLines } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
 
-const SRC = join(process.cwd(), "packages/extensions/atf-tools/src/pipelineFace.ts");
 
 describe("P1-5——倍数卡时机断言(分析先于确认卡)", () => {
   const base = { groupingConfirm: false, mode5Random: undefined, targetedAdvice: undefined };
@@ -30,9 +27,7 @@ describe("P1-5——倍数卡时机断言(分析先于确认卡)", () => {
     const lines = constructionParamsApprovalLines({ ...base, analysisReady: true, mode5Random: 3 } as never);
     expect(lines).toContain("3 倍（已确认）");
   });
-  it("源码锚:调用点接入 mode5AnalysisReadyOf(防退回无断言形态)", () => {
-    const src = readFileSync(SRC, "utf8");
-    expect(src).toContain("analysisReady: mode5AnalysisReadyOf(runDir");
-    expect(src).toContain("const mode5AnalysisReadyOf");
-  });
+  // 源码锚退役说明：原锚「调用点接入 mode5AnalysisReadyOf」的载体＝experiment_setup 段
+  // 审批卡的构造参数行调用点，ADR-0022 段审批轴退役后调用点消失（负向断言批 4 另装）；
+  // 时机语义由上方行为锚三态（文案单源）继续锁定。
 });

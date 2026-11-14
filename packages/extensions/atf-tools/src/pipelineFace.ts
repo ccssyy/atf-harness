@@ -157,7 +157,8 @@ import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorF
 // E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与本次训练方案卡同源）
 import { formAskQuestion, editsFromFormAnswers, visibleDevicesViolationsOf, type ChoiceAskQuestion, type FormAskService } from "./confirmFace.js";
 import { decideConstructionParams } from "./constructionGate.js";
-import { approvalBypassed, approvalDecidedByOf, approvalTailLineOf, permissionTierOf } from "./permissionTier.js";
+import { approvalBypassed, permissionTierOf } from "./permissionTier.js";
+import { appendExemptionRecord } from "./approvalExempt.js";
 import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 // E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
 import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
@@ -3204,47 +3205,10 @@ export const buildPipelineTool = (
       const priorGroupingSection = priorGrouping === null
         ? undefined
         : `（以下是 run 里已有的一次实验配置，本次会按当前输入重算）\n${renderGroupingSection(priorGrouping, fieldNameMapOf(runDir))}`;
-      const verdict = await requestApproval(ctx, exec, "atf_pipeline_stage",
-        buildApprovalReason({
-          action: "触发管线段",
-          target: `「${args.stage}」（run ${args.run_id}）`,
-          effect: "在 run 目录内写该段产物（register 段另读源文档根）",
-          reversible: "段产物可人工清理；已写数据面不自动回滚",
-          // D24h：卡面追加放行权属行（与评估 EVAL_RELEASE 卡同款——点卡权属只在 owner）
-        })
-        // D89：分组方案行仅 experiment_setup 段呈现（其它段该参无意义不上卡）
-        + (args.stage === "experiment_setup" ? `\n${groupingPresetApprovalLine(groupingPreset)}` : "")
-        // C2：分组来源行（四态各一句业务话——卡上能看到「按谁的分组走」）
-        + (args.stage === "experiment_setup" && groupingFace !== undefined ? `\n${groupingApprovalLine(groupingFace)}` : "")
-        // D99：负样本带行仅 experiment_setup 段呈现（与分组方案行同款「缺省不静默」）
-        + (args.stage === "experiment_setup" ? `\n${negativeRatioApprovalLine(negativeRatioTarget)}` : "")
-        // A 面：构造参数确认段（分组确认／mode5／targeted 建议）仅 experiment_setup 段呈现
-        + (args.stage === "experiment_setup" && constructionParams !== undefined
-            ? `\n${constructionParamsApprovalLines({ ...constructionParams, riskSignalsProvided: constructionAdvicePaths.riskSignals !== undefined, analysisReady: mode5AnalysisReadyOf(runDir, typeof args.doc_type === "string" ? args.doc_type.trim() : undefined) })}`
-            : "")
-        // D90：构造参数的来源行（用户确认／agent 代决——谁定的必须写在卡上也写在回执里）
-        + (args.stage === "experiment_setup" && constructionDecisionNote !== undefined ? `\n构造参数来源：${constructionDecisionNote}` : "")
-        // A 面：采纳选择行（卡上选了 yes/no 的结果如实呈现在授权卡上）
-        + (args.stage === "experiment_setup" && constructionParams?.targetedAdvice !== undefined ? "\n建议已默认写入构造规则（advice_default），随构造确认卡一次确认" : "")
-        // E3：预算三参行仅 experiment_setup 段呈现（终值与来源双双上卡）
-        + (args.stage === "experiment_setup" && tokenParams !== undefined ? `\n${experimentTokenApprovalLine(tokenParams.values, tokenParams.sources)}` : "")
-        + (priorGroupingSection === undefined ? "" : `\n${priorGroupingSection}`)
-        // T4 例外：下限偏离基线时把理由摆上卡（用户在自己确认的这一屏能看到差异与原因）
-        + (pixelPairException !== undefined
-            ? `\n像素下限例外：${String(pixelPairException.image_min_pixels)}（基线 ${pixelPairException.baseline.toLocaleString("en-US")}）——理由：${pixelPairException.reason}`
-            : "")
-        // E4-乙：训练参数覆盖行仅 training_prep 段呈现（终值与来源逐键上卡；convention 明示只呈现不下传）
-        + (args.stage === "training_prep" && trainingOverrides !== undefined ? `\n${trainingOverridesApprovalLine(trainingOverrides.values, trainingOverrides.sources)}` : "")
-        // E8·H1：装配模式行仅 training_prep 段呈现（run 级联合装配语义上卡——槽位枚举
-        // 与 doc_type 互斥口径可见，卡面不出现落点路径指引）
-        + (assembleMode ? "\n装配模式（assemble）：run 级联合装配——枚举本 run 单据槽位合并训练数据并生成迭代配置与启动件（不按单类执行）" : "")
-        // E5·H3 D140：训练输出目录行仅 training_prep 段呈现（落点可见——盘上终值优先，
-        // 首跑无配置时按内核 ADR-0005 run 布局呈现预期并标注来源）
-        + (args.stage === "training_prep" ? `\n${trainingOutputDirApprovalLine(trainingOutputDirOf(runDir))}` : "")
-        // T3：卡位终值与来源上卡（仅 training_prep——「卡面选了什么卡」与「实际绑了什么卡」同屏可对账）
-        + (args.stage === "training_prep" ? `\n${visibleDevicesApprovalLine(visibleDevices, visibleDevicesSource)}` : "")
-        + approvalTailLineOf(permissionTierOf(ctx, exec)));
-      if (!verdict.ok) return approvalDeniedResult("atf_pipeline_stage", verdict.outcome);
+      // ADR-0022：段审批卡（chain_advance 档位审批）退役——直通留痕；
+      // 业务终值确认已由提问卡体系（分组卡/字段清单卡/构造确认卡）承担。
+      await appendExemptionRecord(`atf_pipeline_stage:${args.stage}`, "chain");
+      console.warn(`[approval] atf_pipeline_stage（${String(args.stage)}）直通放行（chain 留痕，ADR-0022）`);
       // 落点单源（A2.2b）：与内核同一决定者 <workspace_path>/runs/<run_id>；resolveRunDir 本工具内退役
       // （E3：runDir 已提前到审批前计算——预算三参快照兜底同源落点，此处不复算）。
       // argv 只传内核声明参数（register 时含 --source-root；training_prep 时含 --base-model
@@ -3662,9 +3626,9 @@ let visualSummary: Record<string, unknown> | undefined;
       // 用 env 而非 CLI 旗标：pin 内旧内核不认识 --access-mode 会让整条链 argparse
       // 失败，env 未识别＝被忽略——升级前后同一份 harness 都安全，re-pin 后自动生效。
       const accessMode = sandboxModeOf(ctx, exec) === DANGER_FULL_ACCESS_SANDBOX ? "full" : "limited";
-      // C1'（切片 2）：审批决定来源随段进程 env 传导——内核 Approval Ledger record 的
-      // decided_by 权威词表（approvalDecidedByOf 档位推导单源，零时间启发式）。
-      const approvalDecidedBy = approvalDecidedByOf(permissionTierOf(ctx, exec));
+      // C1'（切片 2）/ADR-0022（D287 单值化）：直通形态统一 decided_by=policy——
+      // 档位推导（approvalDecidedByOf）随审批拦截退役；内核 Ledger record 语义不变。
+      const approvalDecidedBy = "policy" as const;
       const result = await runPipeline(pipelineCommand, argv, pipelineTimeoutMs,
         { ATF_ACCESS_MODE: accessMode, ATF_APPROVAL_DECIDED_BY: approvalDecidedBy });
       // C2：分组建议临时件用完即删（scratch/tmp 语义——不留在工作区冒充产物）

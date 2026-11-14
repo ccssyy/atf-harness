@@ -30,7 +30,6 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildMonitorSnapshot, formatTaskCard } from "../../atf-ui/src/snapshot.js";
 import { scanRunDir } from "../../atf-ui/src/server.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
-import { approvalTailLineOf, permissionTierOf } from "./permissionTier.js";
 import { isTrainingAutopilot, ATF_TRAINING_PRESET } from "./trainingPreset.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { ownerInterventionOf, decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
@@ -2779,9 +2778,10 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
             : ["分区清单：无绑定——owner 级外部确认通道"]),
           "详细报告已生成（评估轮目录内）",
           "如需调整评估数据、adapter 或服务参数，直接回复要改的项；不改直接回复「按现值确认」",
-          approvalTailLineOf(permissionTierOf(ctx, exec)),
         ].join("\n");
-      if (permissionTierOf(ctx as never, exec as never) === "full-access") {
+      // ADR-0022：评估 release 确认卡恒走（B 层——原 guarded 档审批面板分支退役）；
+      // 提问卡通道异常 fallback 保留审批面板（确认卡兜底）。
+      {
         const card = await evalReleaseConfirmCardOf(ctx, exec, runId, reasonText);
         if (card.fallback) {
           const verdict = await requestApproval(ctx, exec, "atf_evaluate", reasonText);
@@ -2789,9 +2789,6 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
         } else if (!card.ok) {
           return asToolValue({ started: false, error: "eval_release_paused_by_user", note: card.note });
         }
-      } else {
-        const verdict = await requestApproval(ctx, exec, "atf_evaluate", reasonText);
-        if (!verdict.ok) return approvalDeniedResult("atf_evaluate", verdict.outcome);
       }
       // D20h：放行登记带会话身份与 ui 模式（actor＝会话 id，缺失＝unattributed——不伪造 owner）；
       // 账本 approval_id 回传返回体（解析失败省略键不阻断——stderr 记一条）

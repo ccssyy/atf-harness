@@ -2,8 +2,8 @@
  * E1b 测试锚——atf_quantize_annotations（坐标量化工具面；指令件 4c0cff0c §四）。
  *
  * 覆盖：参数面（必填/绝对路径/枚举）／A4 路径越界 fail-closed／out 与源重叠三形态
- * （相等、嵌套、祖先）＋输出非空／审批拒绝零写入／exit 0 回传字段＋argv 断言（mock 回显
- * 落盘 summary）／exit 2 退化清单（含超限截断）与零写入／exit 3 stderr_tail／纯函数直测。
+ * （相等、嵌套、祖先）＋输出非空／审批轴退役直通（ADR-0022）／exit 0 回传字段＋argv 断言
+ * （mock 回显落盘 summary）／exit 2 退化清单（含超限截断）与零写入／exit 3 stderr_tail／纯函数直测。
  * 真实环境验收（真内核 CLI 量化→register exit 0＋源 sha 清单一致）随批执行报告，不入本锚。
  */
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
@@ -148,7 +148,6 @@ describe("E1b——落点四形态 fail-closed（先于审批）", () => {
       fakeExec,
     )) as Record<string, unknown>;
     expect(good["ok"]).toBe(true); // 空目录放行
-    expect(approvals).toHaveLength(1);
   });
   it("纯函数：重叠判定与占用判定", () => {
     expect(outOverlapViolation("/a", "/a")).toBe(OUT_PATH_EQUALS_SOURCE);
@@ -161,7 +160,7 @@ describe("E1b——落点四形态 fail-closed（先于审批）", () => {
 });
 
 describe("E1b——审批与退出码面", () => {
-  it("审批拒绝 → 结构化拒绝零写入（输出目录未创建）", async () => {
+  it("审批轴退役（ADR-0022）：审批拒绝不再拦截——直通照常执行（写副本属 chain_advance，run 域内可逆）", async () => {
     const root = tempRoot();
     const src = join(root, "src");
     mkdirSync(src, { recursive: true });
@@ -171,10 +170,9 @@ describe("E1b——审批与退出码面", () => {
       { annotations_path: src, out_path: out },
       fakeExec,
     )) as Record<string, unknown>;
-    expect(result["error"]).toBe("approval_denied");
-    expect(result["outcome"]).toBe("rejected");
-    expect(existsSync(out)).toBe(false); // 零写入
-    expect(approvals).toHaveLength(1);
+    expect(result["ok"]).toBe(true);
+    expect(result["exit_code"]).toBe(0);
+    expect(approvals).toHaveLength(0); // 审批面板零触达
   });
   it("exit 0 → 回传字段齐全＋argv 单源断言（mock 落盘 summary 回显）", async () => {
     const root = tempRoot();
@@ -186,8 +184,6 @@ describe("E1b——审批与退出码面", () => {
       { annotations_path: src, out_path: out, mode: "floor", allow_degenerate: true },
       fakeExec,
     )) as Record<string, unknown>;
-    expect(approvals).toHaveLength(1);
-    expect(String(approvals[0])).toContain("量化标注坐标并写出副本（源目录只读）");
     expect(result["ok"]).toBe(true);
     expect(result["exit_code"]).toBe(0);
     expect(result["total_values"]).toBe(16);

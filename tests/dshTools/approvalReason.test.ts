@@ -14,15 +14,13 @@ import { buildApprovalReason } from "../../packages/extensions/atf-tools/src/app
 const SRC_DIR = join(import.meta.dirname, "../../packages/extensions/atf-tools/src");
 const CALL_SITE_FILES = [
   "recordsFace.ts",
-  "pipelineFace.ts",
   "bridgeFace.ts",
   "confirmFace.ts",
   "trainingFace.ts",
   "fileFace.ts",
   "fileGuardFace.ts",
   // jointTrainFace:装配卡已改训练启动确认卡(userQuestions 形态),退出审批面
-
-  "quantizeFace.ts",
+  // pipelineFace/quantizeFace:ADR-0022 段审批/档位审批退役(直通留痕),requestApproval 调用点已删
   "preflightFace.ts",
 ] as const;
 

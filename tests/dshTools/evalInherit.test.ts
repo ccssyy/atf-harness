@@ -431,7 +431,7 @@ describe("批D20h——审批 actor/mode 接入（放行 argv 三参＋approval_
     expect(tmuxTestOk(`kill-session -t ${orchName()}`)).toBe(true);
   });
 
-  it("卡面 reason 含「仅 owner 可点；执行方不得代点」", async () => {
+  it("确认卡恒走且卡面为三行模板（ADR-0022：owner 尾行随 approvalTailLineOf 退役）", async () => {
     const root = tempRoot();
     const pin = tempRoot();
     writeMockPin(pin);
@@ -439,7 +439,9 @@ describe("批D20h——审批 actor/mode 接入（放行 argv 三参＋approval_
     const card = { text: "" };
     const result = await evalOf(root, pin, ctxWithCard(card)).execute(baseArgs(root, f), fakeExec);
     expect(result.started).toBe(true);
-    expect(card.text).toContain("仅 owner 可点；执行方不得代点");
+    expect(card.text).toContain("将要执行：放行评估服务编排");
+    expect(card.text).toContain("影响范围：");
+    expect(card.text).toContain("可逆性：");
     expect(tmuxTestOk(`kill-session -t ${orchName()}`)).toBe(true);
   });
 });

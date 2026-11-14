@@ -77,12 +77,11 @@ describe("T3 卡位通道（显式 > 确认快照 > 不下传）", () => {
     expect(fromSnapshot.ok).toBe(false);
     expect(fromSnapshot.ok === false && fromSnapshot.note).toContain("确认快照");
   });
-  it("段通道：快照有卡位而参数没给 → argv 带 --visible-devices；返回体 source=config_snapshot；卡面行可见", async () => {
+  it("段通道：快照有卡位而参数没给 → argv 带 --visible-devices；返回体 source=config_snapshot（段审批卡已退役——终值与来源见返回体）", async () => {
     const ws = tempRoot();
     const runDir = join(ws, "runs", "t3-snap");
     writeSnapshot(runDir, { visible_devices: "4,5,6,7" });
-    const record: string[] = [];
-    const result = (await toolOf(record).execute(
+    const result = (await toolOf().execute(
       { stage: "training_prep", run_id: "t3-snap", workspace_path: ws, base_model_path: join(ws, "model") },
       fakeExec,
     )) as Record<string, unknown>;
@@ -90,7 +89,6 @@ describe("T3 卡位通道（显式 > 确认快照 > 不下传）", () => {
     expect(argv[argv.indexOf("--visible-devices") + 1]).toBe("4,5,6,7");
     expect(result["visible_devices"]).toBe("4,5,6,7");
     expect(result["visible_devices_source"]).toBe("config_snapshot");
-    expect(record.join("\n")).toContain("训练绑卡：4,5,6,7（确认快照）");
   });
   it("段通道：显式压过快照；两者皆无 → 不下传（回退部署层）且返回体如实标注", async () => {
     const ws = tempRoot();
@@ -142,9 +140,8 @@ describe("T4 像素对不变量（段参数通道：越界即拒，不静默纠�
     expect(result["error"]).toBe("pixel_pair_min_not_pinned_without_reason");
     expect(String(result["note"])).toContain("pixel_pair_reason");
   });
-  it("下限偏离基线但带理由 → 放行；例外连同理由进回执与卡面（不改写、不静默回退）", async () => {
-    const record: string[] = [];
-    const result = (await toolOf(record).execute(
+  it("下限偏离基线但带理由 → 放行；例外连同理由进回执（不改写、不静默回退）", async () => {
+    const result = (await toolOf().execute(
       {
         ...base(),
         image_min_pixels: 1024,
@@ -162,9 +159,6 @@ describe("T4 像素对不变量（段参数通道：越界即拒，不静默纠�
     // 实际下传值＝用户值（不静默改回基线）
     const argv = summaryArgv(result);
     expect(argv[argv.indexOf("--image-min-pixels") + 1]).toBe("1024");
-    const card = record.join("\n");
-    expect(card).toContain("像素下限例外：1024");
-    expect(card).toContain("这批单据字号小");
   });
   it("基线对合法 → 通过并随 argv 下传（两档上限均可）", async () => {
     for (const maxPixels of TRAINING_PIN_CONSTANTS.image_max_pixels) {

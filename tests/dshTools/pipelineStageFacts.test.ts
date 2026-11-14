@@ -354,19 +354,18 @@ describe("A2/A3——exit 三态事实轨与绑定语义", () => {
     expect(existsSync(join(ws, "runs", "run-d", "webui", "binding.json"))).toBe(false);
   });
 
-  it("A3 回归：审批 rejected → 结构化拒绝且零写入（spawn 不发生）", async () => {
+  it("A3 回归（ADR-0022 翻转）：审批 rejected 不再拦截段执行——直通照常 spawn 成功", async () => {
     const root = tempRoot();
     const ws = join(root, "ws");
     mkdirSync(join(ws, ".atf"), { recursive: true });
     writeFileSync(join(ws, ".atf", "workspace.json"), "{}\n");
-    // seedRun:false——本用例断言「拒绝即零写入」，夹具不得预先铺 run 目录
-    // (.atf/workspace.json 是 D133 合法性身件标记,非 run 写入,零写入断言不受扰)
+    // seedRun:false——夹具不预先铺 run 目录，spawn 后 run 目录由段执行真实产生
+    // (.atf/workspace.json 是 D133 合法性身件标记,非 run 写入)
     const tool = pipelineToolOf(approvalCtx("rejected"), `node ${OK_SCRIPT(root)}`, 30_000, { seedRun: false }) as {
       execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
     };
     const result = await tool.execute({ stage: "register", run_id: "run-r", workspace_path: ws, source_root: join(root, "src") }, execWithSession("s1"));
-    expect(result).toMatchObject({ error: "approval_denied", outcome: "rejected" });
-    expect(existsSync(join(ws, "runs"))).toBe(false);
+    expect(result).toMatchObject({ stage: "register", ok: true, exit_code: 0 });
   });
 });
 
@@ -453,15 +452,6 @@ describe("D24h——阶段放行 actor/mode 与 approval_id 回传", () => {
     }
   });
 
-  it("卡面 reason 含放行权属行「仅 owner 可点；执行方不得代点」", async () => {
-    const root = tempRoot();
-    const ws = join(root, "ws");
-    mkdirSync(ws, { recursive: true });
-    const captured: { reason?: string } = {};
-    const tool = pipelineToolOf(approvalCaptureCtx(captured), `node ${OK_SCRIPT(root)}`, 30_000) as {
-      execute: (a: Record<string, unknown>, e: unknown) => Promise<Record<string, unknown>>;
-    };
-    await tool.execute({ stage: "label_qc", run_id: "run-card", workspace_path: ws }, execWithSession("s1"));
-    expect(captured.reason).toContain("仅 owner 可点；执行方不得代点");
-  });
+  // D24h 段卡权属行锚退役：载体＝experiment 段审批卡，ADR-0022 段审批轴退役后
+  // requestApproval 不再被段执行调用（负向断言批 4 另装）。
 });

@@ -235,34 +235,6 @@ describe("E3-1 预算三参（experiment_setup 段专属）", () => {
     }
   });
 
-  it("审批卡：预算五参行仅 experiment_setup 段呈现（终值与来源双双上卡；unspecified 明示）", async () => {
-    const ws = tempRoot("e3-ws-");
-    writeSnapshot(join(ws, "runs", "e3-card"), { image_min_pixels: "65536", image_max_pixels: "1605632" });
-    const record: string[] = [];
-    await toolOf(record).execute(
-      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-card", workspace_path: (() => { writeFieldChoice(join(ws, "runs", "e3-card")); return ws; })(), max_total_tokens: 9000 },
-      fakeExec,
-    );
-    expect(record[0]).toContain("预算五参（实验门）");
-    expect(record[0]).toContain("max_total_tokens=9000（本次调用传入，非你在方案卡确认）");
-    expect(record[0]).toContain("cutoff_len=未定（未指定——内核按缺省处理）");
-    expect(record[0]).toContain("max_model_len=未定（未指定——内核按缺省处理）");
-    expect(record[0]).toContain("image_min_pixels=65536（你在方案卡确认的）");
-    expect(record[0]).toContain("image_max_pixels=1605632（你在方案卡确认的）");
-    const recordNone: string[] = [];
-    await toolOf(recordNone).execute(
-      { stage: "experiment_setup", grouping_proposal: D173_PROPOSAL, run_id: "e3-card-none", workspace_path: (() => { const w = tempRoot("e3-ws-"); writeFieldChoice(join(w, "runs", "e3-card-none")); return w; })() },
-      fakeExec,
-    );
-    expect(recordNone[0]).toContain("max_total_tokens=未定（未指定——内核按缺省处理）");
-    const recordOther: string[] = [];
-    await toolOf(recordOther).execute(
-      { stage: "label_qc", run_id: "e3-card-lq", workspace_path: tempRoot("e3-ws-"), max_total_tokens: 9000 },
-      fakeExec,
-    );
-    expect(recordOther[0]).not.toContain("预算五参");
-  });
-
   it("参数 schema：五参 number 型＋description 提及快照兜底与成对口径", () => {
     const tool = toolOf();
     const props = (tool.parameters as { properties?: Record<string, { type?: string; description?: string }> }).properties ?? {};

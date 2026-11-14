@@ -22,7 +22,6 @@ import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
-import { permissionTierOf, approvalBypassed } from "./permissionTier.js";
 import { pathOutsideRoots } from "./fileGuardFace.js";
 
 /** 量化口径闭集（权威＝内核 --mode 枚举）。 */
@@ -202,16 +201,9 @@ export const buildQuantizeTool = (
       // ④ 审批必经（拒绝/取消/无审批服务 → 结构化拒绝零写入）——
       // dry_run=true 只报数零写盘=只读语义,免审不弹卡(真执行写盘才逐次审批)
       // D218:chain_advance 语义——完全权限档免审放行(与桥面分类表同源)
-      const verdict = (dryRun || approvalBypassed(permissionTierOf(ctx as never, exec as never)))
-        ? ({ ok: true } as const)
-        : await requestApproval(ctx, exec, "atf_quantize_annotations",
-        buildApprovalReason({
-          action: "量化标注坐标并写出副本（源目录只读）",
-          target: `（源 ${basename(sourceResolved)} → 输出 ${basename(outResolved)}，mode=${mode}${dryRun ? "，dry-run 只报数" : ""}${allowDegenerate ? "，放行退化框" : ""}）`,
-          effect: dryRun ? "dry-run 只报数不写盘" : "在输出目录写出量化副本与逐值映射留档；源目录零写入",
-          reversible: "输出目录为新建目录可整目录删除回退；源目录不可变",
-        }));
-      if (!verdict.ok) return approvalDeniedResult("atf_quantize_annotations", verdict.outcome);
+      // ④ 直通留痕（ADR-0022）：原「dry_run 免审/完全权限档免审/guarded 档审批面板」
+      // 档位审批分支随拦截退役——量化写副本属 chain_advance（run 域内可逆），直通执行。
+      console.warn(`[approval] atf_quantize_annotations 直通放行（chain_advance，ADR-0022；dry_run=${String(dryRun)}）`);
       // ⑤ 内核 CLI 单源执行（argv 只传内核声明参数；禁传未声明参数）
       const argv: string[] = ["--annotations", annotationsPath, "--out", outPath, "--mode", mode];
       if (allowDegenerate) argv.push("--allow-degenerate");

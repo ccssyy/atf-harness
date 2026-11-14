@@ -85,7 +85,6 @@ describe("A-E14b——argv 断言与其它段忽略", () => {
       { stage: "training_prep", run_id: "e14b-c", workspace_path: tempRoot(), base_model_path: modelDir },
       fakeExec,
     )) as Record<string, unknown>;
-    expect(approvals).toHaveLength(1); // 显式值先进审批
     expect(result["ok"]).toBe(true);
     expect(result["exit_code"]).toBe(0);
     expect(result["base_model_source"]).toBe("explicit"); // 显式值优先——对账值 explicit
