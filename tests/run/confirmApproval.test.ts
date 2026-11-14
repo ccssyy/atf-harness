@@ -3,7 +3,7 @@
  *   4.1 confirm 型请示——ask_user_for_input 经问答轨落账（approval/request → granted
  *       response）→ tool/result 携确认凭据（user_confirmation：by/at 账面事实、
  *       approval_ref＝approval_session_id、candidate_digest＝harness 复算）；
- *       denied 非终局；headless 无审批面 exit 78；空心卡面 fail-closed 拒绝。
+ *       denied 非终局；headless 无审批面直通执行（ADR-0022，78 退役）；空心卡面 fail-closed 拒绝。
  *   4.2 内容绑定提案键——同 argv 脚本重写前后两次提案 approval_key 不同且 content_digest
  *       随 request 落账。
  * 注：预写 scratch 文件的用例声明 fresh:false（跳过工作区清场——既有 scratch 料在位语义）。
@@ -203,14 +203,22 @@ describe("F5 4.1：confirm 型请示全链（问答轨落账 → 确认凭据随
     }
   });
 
-  it("headless 无审批面 → approval_missing exit 78（fail-closed，ADR-07）", async () => {
+  it("headless 无审批面 → 确认工具直通执行成功（ADR-0022 拦截退役，78 不再产生）", async () => {
     const env = makeEnv();
     try {
       const runId = `f5-headless-${randomUUID()}`;
       env.host.scratchDir = join(env.runsRoot, runId, "scratch");
+      mkdirSync(env.host.scratchDir, { recursive: true });
+      writeFileSync(join(env.host.scratchDir, "candidate.json"), '{"a":1}');
       const report = await runF5(env, runId, [{ decision: { type: "tool_call", tool: "ask_user_for_input", params: CONFIRM_PARAMS } }]);
-      expect(report.outcome.kind).toBe("approval_missing");
-      expect(report.exit_code).toBe(78);
+      expect(report.outcome.kind).toBe("completed");
+      expect(report.exit_code).toBe(0);
+      // 无 surface（headless）＝确认卡无人可出——直通真执行，结果带确认凭据
+      const confirmResults = resultsOf(report, "ask_user_for_input");
+      expect(confirmResults).toHaveLength(1);
+      expect(confirmResults[0]?.ok).toBe(true);
+      // 直通留痕（stderr/audit），不产生 approval/request·response 事件
+      expect(approvalPayloads(report)).toHaveLength(0);
     } finally {
       env.cleanup();
     }

@@ -63,16 +63,16 @@ describe("丙 v1：九工具全挂接与点号方法映射", () => {
     expect(seen).toEqual(["atf_preparation.propose", "atf_data_admission.request", "atf_label_qc.inspect"]);
   });
 
-  it("③ 审批 hook 全 face：写类（admit_data）无 scope_ref 拦截；只读（fact_scan）直通", async () => {
+  it("③ 确认卡 hook 全 face（ADR-0022）：chain_advance（admit_data）无 scope_ref 概念直通；只读（fact_scan）直通", async () => {
     const bridge = await spawnMock();
     const audit: ApprovalAuditEntry[] = [];
     const hook = createApprovalBeforeToolCall({ bridge, scopeRefBox: { current: undefined }, audit });
-    const blocked = await hook({
+    const admitted = await hook({
       toolCall: { id: "t1", name: "atf_admit_data", arguments: { dataset_id: "ds-x", source_ref: "s" } },
       args: { dataset_id: "ds-x", source_ref: "s" },
     } as unknown as Parameters<typeof hook>[0]);
-    expect(blocked?.block).toBe(true);
-    expect(audit[0]?.verdict).toBe("blocked_scope_ref_missing");
+    expect(admitted).toBeUndefined(); // chain_advance 直通（授权拦截退役）
+    expect(audit[0]?.verdict).toBe("allow_readonly");
     const allowed = await hook({
       toolCall: { id: "t2", name: "atf_fact_scan", arguments: {} },
       args: {},
@@ -113,9 +113,8 @@ describe("丙 v1：预算护栏（finishTurn hook 化）", () => {
     expect(finishTurn(makeTurn(3, false))).toBeUndefined(); // 收束 turn 不拦（防御：预算已触发后不再可达）
   });
 
-  it("⑥ 退出码映射：0/78/1 单一出口", () => {
+  it("⑥ 退出码映射：0/1 单一出口（ADR-0022 后 78 随 approval_missing 退役）", () => {
     expect(resolveV1ExitCode({ kind: "completed" })).toBe(0);
-    expect(resolveV1ExitCode({ kind: "approval_missing", tool: "atf_gate", reason: "x" })).toBe(78);
     expect(resolveV1ExitCode({ kind: "budget_exhausted", turns_used: 8, max_turns: 8 })).toBe(1);
     expect(resolveV1ExitCode({ kind: "failed", error: "x" })).toBe(1);
   });
@@ -147,13 +146,13 @@ describe("丙 v1：headless CLI e2e（mock 对端＋faux 脚本）", () => {
     expect(out.join("\n")).toContain("工作区就绪");
   });
 
-  it("⑧ approval_missing：status 取 scope_ref → gate advance 无预录 → 拦截终止，exit 78（ADR-07 锚）", async () => {
+  it("⑧ 直通（ADR-0022）：status → gate advance 无预录 → 直通执行收束，exit 0", async () => {
     const bridge = await spawnMock();
     void bridge;
     const script = await writeScript(JSON.stringify([
       { text: "先查状态。", toolCalls: [{ id: "c1", name: "atf_workspace_status", arguments: {} }] },
       { text: "推进 G1。", toolCalls: [{ id: "c2", name: "atf_gate", arguments: { gate: "G1", action: "advance" } }] },
-      { final: "不应到达" },
+      { final: "G1 已直通推进。" },
     ]));
     const err: string[] = [];
     const code = await runCli({
@@ -161,8 +160,7 @@ describe("丙 v1：headless CLI e2e（mock 对端＋faux 脚本）", () => {
       out: () => undefined,
       err: (line) => err.push(line),
     });
-    expect(code).toBe(78);
-    expect(err.join("\n")).toContain("approval_missing");
+    expect(code).toBe(0);
   });
 
   it("⑨ budget_exhausted：max-turns=1 且首 turn 带工具调用 → 收口 exit 1", async () => {

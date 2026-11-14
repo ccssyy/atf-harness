@@ -37,7 +37,6 @@ import {
   createDispatchTrainingSubtaskTool,
   type SubagentDeps,
 } from "../../../../src/agent/subagent.js";
-import { createGateLock } from "../../../../src/agent/approvalHook.js";
 import { createDeferredToolSet } from "../../../../src/agent/deferredTools.js";
 import type { ApprovalSurface, ApprovalSurfaceVerdict } from "../../../../src/agent/approvalSurface.js";
 import type { ScopeRef } from "../../../../src/core/tools/approvalKey.js";
@@ -439,12 +438,6 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
     childStreamFn: childStreamFn as () => never,
     ...(childModel !== undefined ? { childModel: childModel as SubagentDeps["childModel"] } : {}),
     modelTag,
-    // GateLock 显式自挂（verdict 首轮 FAIL 实锚：「工厂自挂」系误记——自动创建点只在
-    // headless 线 cli.ts，plugin 不传即无锁，并行子任务审批临界段不串行）。本锁覆盖
-    // plugin 派发的全部子任务执行体；主线 vendor agent 审批段不在锁域（deferred spawn
-    // 场景可交叠——两路账本异流且内核 Approval Ledger append-only，无配对损坏；残留＝
-    // 可能同时弹卡，UX 面记录不修）。
-    gateLock: createGateLock(),
   };
   // —— dsh-tools 包装：签名/结果转换零逻辑复制（工厂 execute 内的参数校验、fan-out、
   // GateLock 串行、聚合全量复用）；AgentTool 返回 {content, details}，canonical 值取

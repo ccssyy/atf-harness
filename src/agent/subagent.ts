@@ -6,13 +6,12 @@
  * 丙 v2（批 P 续作，指令 6227dbfc §四.2）——并行 fan-out：dispatch_parallel_training_subtask
  * （独立工具，二选一取此并登记理由：与单发工具 required 参数面/结果聚合面不同构，独立
  * schema 使模型面无歧义，且单发语义与既有测试零回归）。多子任务并发 spawn——并发的是
- * **模型轮与只读工作**；写动作审批不并发：全部执行体共享 GateLock 串行化账本闸临界段
- * （approvalHook.createGateLock），逐条确认卡、逐条消费、授权对象不错位——并行 fan-out
- * 不构成绕过账本的理由（指令 §三.3；如需并发授权模型，先登记设计另批）。
+ * **模型轮与只读工作**（ADR-0022：原 GateLock 账本闸临界区串行化随审批授权轨退役——
+ * 确认卡轨无并发消费面）。
  *
- * 设计纪律（《方案丙补充》钉死项，v2 沿用）：子 Agent 审批语义＝**继承主线账本闸**——
- * 子任务的写动作仍过同一账本（共享 bridge＋scope_ref），确认卡出同一操作员面（surface
- * 透传）；子 Agent 不见主链上下文（instruction 自包含）。
+ * 设计纪律（《方案丙补充》钉死项，v2 沿用）：子 Agent 确认卡语义＝**继承主线确认卡轨**——
+ * 子任务的须确认动作仍出同一操作员面（surface 透传）；子 Agent 不见主链上下文
+ * （instruction 自包含）。
  *
  * 工具面纪律：本地工具（不进 TOOL_DEFINITIONS／零桥接契约 diff）——丙线 tools 数组装配
  * 期追加（deps.subagent 显式开启）。
@@ -27,7 +26,6 @@ import { assembleV1Agent } from "./cli.js";
 import { createJsonlSessionRepo } from "./sessionMirror.js";
 import type { SpikeBridgeTransport } from "./atfAgentTools.js";
 import type { ApprovalSurface } from "./approvalSurface.js";
-import type { GateLock } from "./approvalHook.js";
 import { ensureTemBranch } from "./tem/store.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/pi-agent-core";
 
@@ -37,10 +35,8 @@ export interface SubagentDeps {
   sessionsRoot: string;
   /** 主线 scope_ref box（共享引用＝同一账本定位域——审批继承的技术承载）。 */
   scopeRefBox: { current: import("../core/tools/approvalKey.js").ScopeRef | undefined };
-  /** 主线确认卡 surface（透传＝同一操作员面；缺省＝子任务内 headless fail-closed）。 */
+  /** 主线确认卡 surface（透传＝同一操作员面；缺省＝子任务内 headless 直通留痕）。 */
   surface?: ApprovalSurface;
-  /** 账本闸临界区锁（v2 并行 fan-out：与主链 hook 共享同一把——watermark 保护，见文件头）。 */
-  gateLock?: GateLock;
   /** 子 Agent 模型面（装配 factory——tests 注 faux；真实＝providerStreamFn 单点）。 */
   childStreamFn: () => (model: never, context: never, options?: never) => unknown;
   /** 修复批 D9.1：子链模型描述符（进子 Agent initialState——与主链同一 D9 根因修复面；
@@ -93,8 +89,7 @@ export const runChildSubtask = async (
     followUpMode: "all",
     contextTokens: deps.contextTokens ?? compactionTriggerTokens(),
     keepRecentTokens: deps.keepRecentTokens ?? 8_000,
-    ...(deps.gateLock !== undefined ? { gateLock: deps.gateLock } : {}),
-  });  // 审批继承：子 Agent 共享主线 scope_ref box（同一账本定位域）
+  });  // 确认卡继承：子 Agent 共享主线 scope_ref box
   Object.assign(assembled.scopeRefBox, { current: deps.scopeRefBox.current });
   let failure: string | undefined;
   try {
@@ -105,8 +100,7 @@ export const runChildSubtask = async (
   }
   const lastAssistant = [...assembled.agent.state.messages].reverse().find((message) => (message as { role?: string }).role === "assistant") as AssistantMessage | undefined;
   const hasFinal = lastAssistant !== undefined && !lastAssistant.content.some((block) => block.type === "toolCall");
-  const approvalBlocked = assembled.audit.some((entry) => entry.verdict === "blocked_approval_missing");
-  const denied = assembled.audit.some((entry) => entry.verdict === "blocked_denied");
+  const denied = assembled.audit.some((entry) => entry.verdict === "denied");
   let result: SubtaskResult;
   if (hasFinal && lastAssistant !== undefined) {
     result = {
@@ -118,8 +112,6 @@ export const runChildSubtask = async (
         .join(""),
       child_session_dir: childSessionRoot,
     };
-  } else if (approvalBlocked) {
-    result = { ok: false, outcome: "approval_missing", final_answer: null, child_session_dir: childSessionRoot, note: "子任务内高危动作缺授权（同账本 fail-closed）——主线获授权后可重新派发" };
   } else if (denied) {
     result = { ok: false, outcome: "denied", final_answer: null, child_session_dir: childSessionRoot, note: "子任务内动作被操作员否决" };
   } else {
@@ -139,7 +131,7 @@ export const createChildInstructionRunner =
     throw new Error(`子任务未完成（outcome=${result.outcome}）${result.note !== undefined ? `: ${result.note}` : ""}`);
   };
 
-/** dispatch_training_subtask 工具（装配期追加；审批继承主线账本闸）。 */
+/** dispatch_training_subtask 工具（装配期追加；确认卡继承主线操作员面）。 */
 export const createDispatchTrainingSubtaskTool = (deps: SubagentDeps): AgentTool =>
   ({
     name: "dispatch_training_subtask",

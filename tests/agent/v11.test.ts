@@ -172,16 +172,16 @@ describe("丙 v1.1 · subagent-as-tool（dispatch_training_subtask）", () => {
     expect((s.agent.state.messages.at(-1) as { content: Array<{ text: string }> }).content[0]?.text).toContain("子任务答复");
   });
 
-  it("⑥ 审批继承主线账本闸：子任务内写动作缺授权 → 子 headless fail-closed → 父收到 approval_missing 结构化结果", async () => {
+  it("⑥ 写动作直通（ADR-0022）：子任务 gate advance 直通执行——无预录回 blocked 业务信号（非拦截）→ 子完成 → 父收到 completed 结构化结果", async () => {
     const bridge = await spawnMock();
     const sessionsRoot = await mkdtemp(join(tmpdir(), "v11-sub-"));
     const childScript = [
       fauxMessageWithToolCalls("子任务：推进 G1。", [{ id: "child-gate", name: "atf_gate", arguments: { gate: "G1", action: "advance" } }]),
-      fauxFinalAnswer("不应到达"),
+      fauxFinalAnswer("子任务收束：G1 推进遇业务闸 blocked（缺已登记事实）——如实上报。"),
     ];
     const parentScript = [
       fauxMessageWithToolCalls("派发子任务推进闸门。", [{ id: "p1", name: "dispatch_training_subtask", arguments: { instruction: "推进 G1（无预录）" } }]),
-      fauxFinalAnswer("子任务被审批闸拦截（approval_missing）——已如实获知。"),
+      fauxFinalAnswer("子任务答复：G1 推进遇业务闸 blocked——已如实获知。"),
     ];
     // 主线已捕获 scope_ref（真实流程：父先经 status 取定位域）——子任务继承同一账本定位域
     const scopeRefBox = { current: { project_id: "mock-project", scope_type: "run", scope_id: "mock-run-1", scope_mode: "headless" } as never };
@@ -210,7 +210,7 @@ describe("丙 v1.1 · subagent-as-tool（dispatch_training_subtask）", () => {
       | { type: "tool_execution_end"; result?: { details?: { ok: boolean; outcome: string } } }
       | undefined;
     expect(toolEnd !== undefined && toolEnd.type === "tool_execution_end").toBe(true);
-    expect(toolEnd?.result?.details).toMatchObject({ ok: false, outcome: "approval_missing" }); // 子任务不绕过治理
-    expect((s.agent.state.messages.at(-1) as { content: Array<{ text: string }> }).content[0]?.text).toContain("approval_missing");
+    expect(toolEnd?.result?.details).toMatchObject({ ok: true, outcome: "completed" }); // 子 headless 直通（ADR-0022），gate 业务信号照常回流
+    expect((s.agent.state.messages.at(-1) as { content: Array<{ text: string }> }).content[0]?.text).toContain("G1 推进遇业务闸 blocked");
   });
 });

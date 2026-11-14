@@ -82,13 +82,13 @@ describe("批㊳ 1.1 · 审批留痕入流（approval_audit custom entry）", ()
     });
     s.scopeRefBox.current = { project_id: "mock-project", scope_type: "run", scope_id: "mock-run-1", scope_mode: "headless" } as never;
     await s.agent.prompt("写入运行笔记。");
-    expect(s.audit.some((entry) => entry.verdict === "allow_surface_ledger")).toBe(true); // 判定本身在位
+    expect(s.audit.some((entry) => entry.verdict === "allow_surface")).toBe(true); // 判定本身在位
     // 留痕入流：session 流可回扫（assembly 自动接线——过闸判定与留痕同步落盘）
     const streamed = await scanApprovalAudit(session);
     expect(streamed).toHaveLength(1);
-    expect(streamed[0]?.verdict).toBe("allow_surface_ledger");
+    expect(streamed[0]?.verdict).toBe("allow_surface");
     expect(streamed[0]?.source).toBe("surface");
-    expect(streamed[0]?.proposal_key).toBe(approvalKeyFor("atf_write", writeParams).params_digest); // atf_write 非脚本类＝key 即 params_digest
+    expect(streamed[0]?.proposal_key).toContain("atf_write:"); // ADR-0022：hook 组合键（tool:时间戳——账本定位键退役）
     // JSONL 落盘持久（崩溃后转录可回溯——审计面闭合的落点）
     const { dirname } = await import("node:path");
     const sessionDir = dirname((session as unknown as { metadata: { path: string } }).metadata.path);
@@ -103,10 +103,10 @@ describe("批㊳ 1.1 · 审批留痕入流（approval_audit custom entry）", ()
     const bridge = await spawnMock();
     const scopeRefBox = { current: { project_id: "mock-project", scope_type: "run", scope_id: "mock-run-2", scope_mode: "headless" } as never };
     const ctx = {
-      toolCall: { id: "t1", name: "atf_gate", arguments: { gate: "G1", action: "advance" } },
-      args: { gate: "G1", action: "advance" },
+      toolCall: { id: "t1", name: "atf_write", arguments: { path: "notes/a.txt", content: "x" } },
+      args: { path: "notes/a.txt", content: "x" },
     } as unknown as Parameters<ReturnType<typeof createApprovalBeforeToolCall>>[0];
-    // 注入面抛错：hook 不透出异常，surface granted 照常放行（预录→消费）
+    // 注入面抛错：hook 不透出异常，surface granted 照常放行（确认卡放行）
     const throwing: ApprovalAuditEntry[] = [];
     const grantedWithThrowingStream = await createApprovalBeforeToolCall({
       bridge,
@@ -116,29 +116,29 @@ describe("批㊳ 1.1 · 审批留痕入流（approval_audit custom entry）", ()
       auditStream: { write: async () => { throw new Error("disk full"); } },
     })(ctx);
     expect(grantedWithThrowingStream).toBeUndefined(); // 放行不受留痕失败影响
-    expect(throwing.at(-1)?.verdict).toBe("allow_surface_ledger"); // 内存留痕照常
+    expect(throwing.at(-1)?.verdict).toBe("allow_surface"); // 内存留痕照常
     // 标准装配流（session 写失败）：write 返回 false＋stderr 记录（best-effort 登记）
     const stderr = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const brokenStream = createSessionApprovalAuditStream({
       branch: async () => ({ appendCustomEntry: async () => { throw new Error("ENOENT"); } }),
     } as never);
-    expect(await brokenStream.write(buildApprovalAuditStreamEntry("k", "blocked_denied", "surface"))).toBe(false);
+    expect(await brokenStream.write(buildApprovalAuditStreamEntry("k", "denied", "surface"))).toBe(false);
     expect(stderr).toHaveBeenCalledTimes(1);
     expect(String(stderr.mock.calls[0]?.[0])).toContain("审批留痕入流失败");
     expect(String(stderr.mock.calls[0]?.[0])).toContain("fail-open");
   });
 
   it("③ 字段闭集：留痕条目恰为 proposal key／verdict／时间戳／来源四字段（ts 可解析；来源闭集 surface|ledger）", () => {
-    const entry = buildApprovalAuditStreamEntry("key-1", "blocked_denied", "surface", new Date("2026-10-06T02:40:00.000Z"));
+    const entry = buildApprovalAuditStreamEntry("key-1", "denied", "surface", new Date("2026-10-06T02:40:00.000Z"));
     expect(Object.keys(entry).sort()).toEqual(["proposal_key", "source", "ts", "verdict"].sort());
     const round: ApprovalAuditStreamEntry = { ...entry };
     expect(round.proposal_key).toBe("key-1");
-    expect(round.verdict).toBe("blocked_denied");
+    expect(round.verdict).toBe("denied");
     expect(round.ts).toBe("2026-10-06T02:40:00.000Z");
     expect(round.source).toBe("surface");
     expect(Number.isNaN(Date.parse(round.ts))).toBe(false);
-    for (const source of ["surface", "ledger"] as const) {
-      expect(buildApprovalAuditStreamEntry("k", "allow_ledger", source).source).toBe(source);
+    for (const source of ["surface"] as const) {
+      expect(buildApprovalAuditStreamEntry("k", "allow_surface", source).source).toBe(source);
     }
   });
 });

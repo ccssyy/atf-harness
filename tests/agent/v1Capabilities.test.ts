@@ -118,8 +118,8 @@ describe("批 P 增补 A2：审批问答轨（确认卡四 verdict）", () => {
     const { createApprovalBeforeToolCall } = await import("../../src/agent/approvalHook.js");
     const scopeRefBox = { current: { project_id: "p", scope_type: "run", scope_id: "mock-run-1", scope_mode: "headless" } as never };
     const ctx = {
-      toolCall: { id: "t1", name: "atf_gate", arguments: { gate: "G1", action: "advance" } },
-      args: { gate: "G1", action: "advance" },
+      toolCall: { id: "t1", name: "atf_write", arguments: { path: "notes/a.txt", content: "x" } },
+      args: { path: "notes/a.txt", content: "x" },
     } as unknown as Parameters<ReturnType<typeof createApprovalBeforeToolCall>>[0];
 
     const stubSurface = (kind: "granted" | "denied" | "suspended" | "aborted"): ApprovalSurface => ({
@@ -128,13 +128,13 @@ describe("批 P 增补 A2：审批问答轨（确认卡四 verdict）", () => {
 
     const grantedHook = createApprovalBeforeToolCall({ bridge, scopeRefBox, audit, surface: stubSurface("granted") });
     expect(await grantedHook(ctx)).toBeUndefined(); // 预录→查询→消费→放行
-    expect(audit.at(-1)?.verdict).toBe("allow_surface_ledger");
+    expect(audit.at(-1)?.verdict).toBe("allow_surface");
 
     const deniedHook = createApprovalBeforeToolCall({ bridge, scopeRefBox, audit, surface: stubSurface("denied") });
     const denied = await deniedHook(ctx);
     expect(denied?.block).toBe(true);
     expect(denied?.terminate).toBeUndefined(); // 否决＝非终局结构化回填
-    expect(audit.at(-1)?.verdict).toBe("blocked_denied");
+    expect(audit.at(-1)?.verdict).toBe("denied");
 
     const suspendedHook = createApprovalBeforeToolCall({ bridge, scopeRefBox, audit, surface: stubSurface("suspended") });
     const suspended = await suspendedHook(ctx);
@@ -150,8 +150,8 @@ describe("批 P 增补 A2：审批问答轨（确认卡四 verdict）", () => {
   it("A2-e2e CLI 退出码：interactive granted → 0；suspended → 75；aborted → 79", async () => {
     const script = [
       fauxMessageWithToolCalls("先查状态。", [{ id: "c0", name: "atf_workspace_status", arguments: {} }]),
-      fauxMessageWithToolCalls("推进 G1。", [{ id: "c1", name: "atf_gate", arguments: { gate: "G1", action: "advance" } }]),
-      fauxFinalAnswer("闸门已推进。"),
+      fauxMessageWithToolCalls("推进 G1。", [{ id: "c1", name: "atf_data_admission_request", arguments: { dataset_id: "ds-a2" } }]),
+      fauxFinalAnswer("已推进。"),
     ];
     const run = async (verdict: "granted" | "suspended" | "aborted"): Promise<number> => {
       const bridge = await spawnMock();
@@ -239,8 +239,8 @@ describe("批 P 增补 B1/B2/B6：双队列、生命周期、审批窗口输入�
     };
     const cap = capturing([
       fauxMessageWithToolCalls("先查状态。", [{ id: "c0", name: "atf_workspace_status", arguments: {} }]),
-      fauxMessageWithToolCalls("推进 G1。", [{ id: "c1", name: "atf_gate", arguments: { gate: "G1", action: "advance" } }]),
-      fauxFinalAnswer("闸门已推进。"),
+      fauxMessageWithToolCalls("推进 G1。", [{ id: "c1", name: "atf_data_admission_request", arguments: { dataset_id: "ds-b6" } }]),
+      fauxFinalAnswer("已推进。"),
     ]);
     const bridge = await spawnMock();
     const { session } = await makeSession();
@@ -263,7 +263,7 @@ describe("批 P 增补 B1/B2/B6：双队列、生命周期、审批窗口输入�
     await run;
     const lastCtx = JSON.stringify(cap.contexts.at(-1) ?? {});
     expect(lastCtx).toContain("（审批窗口期输入）"); // B6：窗口期输入入队不丢弃
-    expect(s.audit.some((entry) => entry.verdict === "allow_surface_ledger")).toBe(true);
+    expect(s.audit.some((entry) => entry.verdict === "allow_surface")).toBe(true);
   });
 });
 

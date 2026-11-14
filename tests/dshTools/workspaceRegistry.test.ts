@@ -301,7 +301,7 @@ describe("workspaceRegistry rebind（按 id 认领/桶零操作/空锚点清理�
 // ---------------------------------------------------------------- 工具 handler 层（经 buildBridgeTools 真装配）
 
 describe("工作区治理两工具 handler（WebUI 桥装配同链——审批/折算/回流）", () => {
-  it("atf_create_experiment：审批放行→真建（canonical 全键）＋审批拒绝→结构化 denial 不落盘", async () => {
+  it("atf_create_experiment：直通真建（canonical 全键）——审批面 rejected 也放行（ADR-0022 拦截退役）", async () => {
     const home = seedDshHome();
     const ws = tempRoot();
     mkdirSync(ws, { recursive: true });
@@ -311,12 +311,14 @@ describe("工作区治理两工具 handler（WebUI 桥装配同链——审批/�
     expect(result).toMatchObject({ ok: true, registry_status: "pending_registration", experiments_count: 1 });
     expect(existsSync(join(ws, "experiments"))).toBe(true);
 
-    const denied = toolExec({ dshHome: home }, "rejected", "atf_create_experiment");
+    // ADR-0022：授权拦截轨退役——审批面应答 rejected 不再折算 denial，动作照常执行
+    const rejected = toolExec({ dshHome: home }, "rejected", "atf_create_experiment");
     const ws2 = tempRoot();
     mkdirSync(ws2, { recursive: true });
-    const deniedResult = (await denied.execute({ workspace_path: ws2, experiment_name: "e2e-2" }, fakeExec)) as Record<string, unknown>;
-    expect(deniedResult).toMatchObject({ error: "approval_denied", outcome: "rejected" });
-    expect(existsSync(join(ws2, ".atf"))).toBe(false);
+    const rejectedResult = (await rejected.execute({ workspace_path: ws2, experiment_name: "e2e-2" }, fakeExec)) as Record<string, unknown>;
+    expect(rejectedResult).toMatchObject({ ok: true, registry_status: "pending_registration", experiments_count: 1 });
+    expect(existsSync(join(ws2, ".atf"))).toBe(true);
+    expect(existsSync(join(ws2, "experiments"))).toBe(true);
   });
 
   it("atf_create_experiment：路径不存在→rejected(invalid_params)＋指路文案（不代建目录）", async () => {

@@ -35,6 +35,16 @@ import {
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
 
+// ADR-0022 后：admit_data（chain_advance）直通——确认卡轨用例改为两步：
+// REGISTER（admit 直通执行完成 mock 登记）＋ atf_data_admission_request（表外
+// requires_approval: true，恒走确认卡问答轨）。
+const REGISTER_OF = (datasetId: string): LlmDecision => ({
+  type: "tool_call",
+  tool: "atf_admit_data",
+  params: { dataset_id: datasetId, source_ref: `datasets/external/${datasetId}` },
+});
+const REQUEST_OF = (datasetId: string): LlmDecision => ({ type: "tool_call", tool: "atf_data_admission_request", params: { dataset_id: datasetId } });
+
 const scenarioOf = (runId: string, instruction: string): Scenario => ({
   scenario_id: "walkthrough-fix-b2",
   version: 1,
@@ -206,7 +216,7 @@ describe("B2 E2E：孤儿流修复 → continue 走通（无旗标仍拒收）",
     const suspended = await ScenarioRunner.runBranch(scenarioOf(runId, "触发准入"), "main", {
       runsRoot,
       mockCommand: ["node", mockPath],
-      modelProvider: scripted([{ type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-b2" } }]),
+      modelProvider: scripted([REGISTER_OF("ds-b2"), REQUEST_OF("ds-b2")]),
       approvalSurface: { stub: timeoutStub },
     });
     expect(suspended.ok).toBe(true);
@@ -276,7 +286,7 @@ describe("B2 E2E：孤儿流修复 → continue 走通（无旗标仍拒收）",
     const suspended = await ScenarioRunner.runBranch(scenarioOf(runId, "触发准入"), "main", {
       runsRoot,
       mockCommand: ["node", mockPath],
-      modelProvider: scripted([{ type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-note" } }]),
+      modelProvider: scripted([REGISTER_OF("ds-note"), REQUEST_OF("ds-note")]),
       approvalSurface: { stub: timeoutStub },
     });
     expect(suspended.ok).toBe(true);
@@ -300,7 +310,7 @@ describe("B2 E2E：孤儿流修复 → continue 走通（无旗标仍拒收）",
     const suspended = await ScenarioRunner.runBranch(scenarioOf(runId, "触发准入"), "main", {
       runsRoot,
       mockCommand: ["node", mockPath],
-      modelProvider: scripted([{ type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-ans" } }]),
+      modelProvider: scripted([REGISTER_OF("ds-ans"), REQUEST_OF("ds-ans")]),
       approvalSurface: { stub: timeoutStub },
     });
     expect(suspended.ok).toBe(true);

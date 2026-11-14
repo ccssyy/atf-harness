@@ -55,6 +55,11 @@ const runsRootOf = (): string => join(repoRoot, "tmp", "runs", `da-${randomUUID(
 const PATH_ID = "datasets/external/ds-da/swb";
 const GOOD_ID = "ds-da-20260920";
 
+// ADR-0022 后：admit_data（chain_advance）直通——确认卡轨用例改用表外旗标工具
+// atf_style_cluster_execute（requires_approval: true，恒走确认卡问答轨）；
+// REGISTER 步骤经 admit 直通执行完成 mock 登记（mock 进程内 admittedFacts）。
+const CLUSTER_PARAMS = { algorithm_version: "bbox_layout_v1", granularity: "page", metric: "cosine", linkage: "average", threshold: "auto_candidates", min_cluster_size: "1" };
+
 describe("D-a E1：对端业务拒绝回流（模型面非终局）", () => {
   it("invalid_params → 回流模型（上下文可见）→ 修参重调 → turn completed exit 0", async () => {
     const contexts: string[] = [];
@@ -263,12 +268,15 @@ describe("D-a E2：入参违规回流（R-1 锚定入参点位）", () => {
 });
 
 describe("D-a：resume 重派 rejected 续跑（同口径）", () => {
-  it("挂起 → resume granted → 重派吃 invalid_params → 非终局 → 模型修参 → completed", async () => {
+  it("挂起 → resume granted → 重派吃 invalid_params → 非终局 → 模型修参 → completed（ADR-0022：确认卡轨由 atf_style_cluster_execute 承载）", async () => {
     const runsRoot = runsRootOf();
     const suspended = await ScenarioRunner.runBranch(scenarioOf("da-resume-fix", "准入"), "main", {
       runsRoot,
-      mockCommand: ["node", mockPath, "--invalid-params-on-path-dataset-id"],
-      modelProvider: modelStub([{ type: "tool_call", tool: "atf_admit_data", params: { dataset_id: PATH_ID } }]),
+      mockCommand: ["node", mockPath],
+      modelProvider: modelStub([
+        { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: GOOD_ID, source_ref: "datasets/external/ds-da" } }, // REGISTER 直通登记
+        { type: "tool_call", tool: "atf_style_cluster_execute", params: { dataset_id: PATH_ID, cluster_params: CLUSTER_PARAMS } }, // 确认卡挂起（路径形态参数待重派校验）
+      ]),
       approvalSurface: { stub: timeoutStub },
     });
     expect(suspended.ok).toBe(true);
@@ -278,10 +286,11 @@ describe("D-a：resume 重派 rejected 续跑（同口径）", () => {
 
     const resumed = await ScenarioRunner.runBranch(scenarioOf("da-resume-fix", "(resume)"), "main", {
       runsRoot,
-      mockCommand: ["node", mockPath, "--invalid-params-on-path-dataset-id"],
+      mockCommand: ["node", mockPath],
       modelProvider: modelStub([
-        { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: GOOD_ID } },
-        { type: "final_answer", text: "已按标识符准入。" },
+        { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: GOOD_ID, source_ref: "datasets/external/ds-da" } }, // REGISTER：resume run 新 mock 进程先登记
+        { type: "tool_call", tool: "atf_style_cluster_execute", params: { dataset_id: GOOD_ID, cluster_params: CLUSTER_PARAMS } }, // 重派吃 invalid_params 后修参重调
+        { type: "final_answer", text: "已按标识符执行。" },
       ]),
       approvalSurface: { stub: grantedStub },
       resume: { verdict: "granted" },

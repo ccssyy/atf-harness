@@ -101,23 +101,19 @@ describe("S5 验收 · B2 缺证据 → block 回填 → 自纠 → PASS", () =>
   });
 });
 
-describe("S5 验收 · B3 无审批 → approval_missing → exit 78", () => {
-  it("无预录 → blocked(approval_missing) 即终局，exit 78（78 不扩用）", async () => {
+describe("S5 验收 · B3 无预录 → admit 直通执行（ADR-0022）→ completed", () => {
+  it("无预录 → admit 直通执行（ADR-0022 拦截退役，78 不再产生）→ completed，exit 0", async () => {
     const r = await runBranch("B3_no_approval_exit78");
-    expect(r.outcome.kind).toBe("approval_missing");
-    expect(r.exit_code).toBe(78);
+    expect(r.outcome.kind).toBe("completed");
+    expect(r.exit_code).toBe(0);
     expect(r.expect_violations).toEqual([]);
-    if (r.outcome.kind === "approval_missing") {
-      expect(r.outcome.block.reason).toBe("approval_missing");
-      expect(r.outcome.block.exit_code).toBe(78);
-      expect(resolveRunExitCode(r.outcome)).toBe(78);
-    }
-    // 结构化 block 已作为 tool/result 回填会话（事件留痕），流可重建
-    const backfilled = r.events.find(
-      (event) => event.type === "tool/result" && (event.payload as { reason?: string }).reason === "approval_missing",
+    // admit_data（chain_advance）直通执行成功：真实登记回执落会话
+    const admitted = r.events.find(
+      (event) => event.type === "tool/result" && (event.payload as { tool?: string; ok?: boolean }).tool === "atf_admit_data",
     );
-    expect(backfilled).toBeDefined();
-    expect(r.events.map((event) => event.type)).toEqual(["turn/start", "user/message", "tool/call", "tool/result", "turn/end"]);
+    expect(admitted).toBeDefined();
+    expect((admitted?.payload as { ok?: boolean }).ok).toBe(true);
+    expect(r.events.map((event) => event.type)).toEqual(["turn/start", "user/message", "tool/call", "tool/result", "assistant/message", "turn/end"]);
     expect(r.replay?.kind).toBe("replayed");
   });
 });

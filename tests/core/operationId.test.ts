@@ -1,8 +1,8 @@
 /**
  * L1b B5：ledger_query operation_id 透传（§9⑤ 立项切片，澄清范围）。
  *
- * ① executor seam：execute(options.operationId) → approve 内 ledger_query 透传
- *    operation_id（带/不带两态；契约 v2 已登记参数，bridge.contract.yaml 零 diff）；
+ * ① executor seam（ADR-0022 后）：approve 账本授权轨退役——execute 直通执行，
+ *    零 ledger_query/ledger_consume；operation_id 契约参数保留（对端过滤行为见②）；
  * ② mock 对端过滤行为：ledger_record 存 operation_id → ledger_query 按 operation_id
  *    过滤（命中/不命中两态）——对端支持实证（不支持即停红线未触发）；
  * ③ MCP tools/list：ledger_query inputSchema 含可选 operation_id（沿用契约，不另造）。
@@ -21,6 +21,7 @@ const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
 /** 捕获 ledger_query 请求参数的桩 transport（须审批工具 atf_admit_data 走审批链）。 */
 class CapturingTransport implements BridgeTransport {
   public readonly queries: Array<Record<string, unknown>> = [];
+  public readonly consumed: Array<Record<string, unknown>> = [];
   public seed: Array<Record<string, unknown>> = [];
 
   public async request(method: string, params?: unknown): Promise<{ ok: true; value: unknown } | { ok: false; error: BridgeError }> {
@@ -29,6 +30,7 @@ class CapturingTransport implements BridgeTransport {
       return { ok: true, value: { ok: true, records: this.seed } };
     }
     if (method === "ledger_consume") {
+      this.consumed.push(params as Record<string, unknown>);
       return { ok: true, value: { ok: true, record_id: "rec-001", state: "consumed" } };
     }
     // 审批链命中后工具执行：atf_admit_data 走到执行面的最小回执
@@ -43,7 +45,7 @@ class CapturingTransport implements BridgeTransport {
 }
 
 describe("B5：executor operation_id 透传（两态）", () => {
-  it("带 operationId → ledger_query 透传 operation_id；不带 → 仅 scope_ref（既有行为逐位不变）", async () => {
+  it("带/不带 operationId → 均直通执行，零账本查询零消费（ADR-0022 账本授权轨退役）", async () => {
     const records = [{ record_id: "rec-001", approval_id: "apr-001", sequence: 1, state: "approved" }];
     const withId = new CapturingTransport();
     withId.seed = records;
@@ -56,19 +58,21 @@ describe("B5：executor operation_id 透传（两态）", () => {
       { operationId: "op-42" },
     );
     expect(outcome.kind, JSON.stringify(outcome)).toBe("executed");
-    expect(withId.queries.length).toBe(1);
-    expect(withId.queries[0]).toEqual({ scope_ref: { project_id: "p", scope_type: "run", scope_id: "r", scope_mode: "canonical" }, operation_id: "op-42" });
+    expect(withId.queries.length).toBe(0);
+    expect(withId.consumed.length).toBe(0);
 
     const withoutId = new CapturingTransport();
     withoutId.seed = records;
     const executor2 = new ToolExecutor(withoutId, ToolRegistry.createDefault(), {
       project_id: "p", scope_type: "run", scope_id: "r", scope_mode: "canonical",
     });
-    await executor2.execute(
+    const outcome2 = await executor2.execute(
       "atf_admit_data", { dataset_id: "ds-b5" },
       { handler: async () => ({ kind: "granted" as const }) },
     );
-    expect(withoutId.queries[0]).toEqual({ scope_ref: { project_id: "p", scope_type: "run", scope_id: "r", scope_mode: "canonical" } });
+    expect(outcome2.kind).toBe("executed");
+    expect(withoutId.queries.length).toBe(0);
+    expect(withoutId.consumed.length).toBe(0);
   });
 });
 

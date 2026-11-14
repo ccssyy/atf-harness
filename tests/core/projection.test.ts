@@ -80,15 +80,16 @@ describe("core 投影同源（T01）", () => {
 
   it("history 轨：resume 先投既有流（history）再续投 live，拼接后与全流一致", async () => {
     const runsRoot = join(repoRoot, "tmp", "runs", `test-${randomUUID()}`);
-    // 第一段：制造挂起 run（atf_admit_data 无账本预录 → 问答轨；stub timeout → suspended, exit 75）
+    // 第一段：制造挂起 run（ADR-0022：确认卡轨由表外 atf_data_admission_request 承载；
+    // stub timeout → suspended, exit 75）
     const suspendedScenario = finalAnswerScenario();
     suspendedScenario.branches.main!.steps = [
-      { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-core-proj" } },
+      { type: "tool_call", tool: "atf_data_admission_request", params: { dataset_id: "ds-core-proj" } },
     ];
     const first = await ScenarioRunner.runBranch(suspendedScenario, "main", {
       runsRoot,
       mockCommand: ["node", mockPath],
-      modelProvider: scriptedProvider([{ type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-core-proj" } }]),
+      modelProvider: scriptedProvider([{ type: "tool_call", tool: "atf_data_admission_request", params: { dataset_id: "ds-core-proj" } }]),
       approvalSurface: { stub: async (): Promise<ApprovalStubResponse> => ({ verdict: "timeout" }) },
     });
     expect(first.ok, !first.ok ? JSON.stringify(first.error) : "").toBe(true);

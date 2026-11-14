@@ -46,7 +46,7 @@ const executorOf = (transport: SpyTransport): ToolExecutor =>
   new ToolExecutor(transport, ToolRegistry.createDefault(), scopeRef);
 
 const gateHandlerOf = (transport: SpyTransport) => ({
-  handler: async (input: { tool: string; params: unknown; approval_key: string }) => {
+  handler: async (input: { tool: string; params: unknown }) => {
     transport.handlerCalls += 1;
     return { kind: "granted" as const };
   },

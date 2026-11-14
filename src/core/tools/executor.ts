@@ -16,10 +16,9 @@
 import { type BridgeError } from "../../bridge/index.js";
 import { checkSchema, validateCanonicalOutput, type SchemaNode } from "./canonical.js";
 import { rpcMethodFor } from "./methodOverrides.js";
-import { runLedgerGate } from "./ledgerGate.js";
-import { type ScopeRef, proposalApprovalKey } from "./approvalKey.js";
+import { type ScopeRef } from "./approvalKey.js";
 import { requiresUserConfirmationOf } from "./toolDefinition.js";
-import { approvalMissingBlock, approvalTrackBlock, toolError, toolErrorFromBridge, type ToolBlock, type ToolError } from "./errors.js";
+import { approvalTrackBlock, toolError, toolErrorFromBridge, type ToolBlock, type ToolError } from "./errors.js";
 import { type ToolRegistry } from "./registry.js";
 import { type LocalToolHandler, type LocalToolHost } from "./workspaceTools.js";
 import type { ToolDefinition } from "./toolDefinition.js";
@@ -75,13 +74,16 @@ export type ApprovalTrackVerdict =
   | { kind: "aborted"; block: ToolBlock };
 
 export interface ApprovalGate {
-  handler: (input: { tool: string; params: unknown; approval_key: string; content_digest?: string }) => Promise<ApprovalTrackVerdict>;
+  handler: (input: { tool: string; params: unknown }) => Promise<ApprovalTrackVerdict>;
 }
 
 /** 工具执行所需的桥接最小面（AtfBridgeConnection 结构满足；测试可用桩注入）。 */
 export interface BridgeTransport {
   request(method: string, params?: unknown): Promise<{ ok: true; value: unknown } | { ok: false; error: BridgeError }>;
 }
+
+// ADR-0022：ApprovalGate.handler 入参收缩为 {tool, params}——原 approval_key/content_digest
+// 提案键面随审批授权轨退役（确认卡不再派生账本定位键）。
 
 // toolName → RPC method 显式映射已单源化至 ./methodOverrides.ts（批㊶-H 共享内核收口；
 // 本行 import 的 rpcMethodFor 即唯一折叠出口，守护测试锚两线一致性）。
@@ -131,7 +133,7 @@ export class ToolExecutor {
     }
 
     if (requiresUserConfirmationOf(definition.value, params ?? {})) {
-      const approvalOutcome = await this.approve(definition.value, params ?? {}, approval, options?.operationId);
+      const approvalOutcome = await this.approve(definition.value, params ?? {}, approval);
       if (!approvalOutcome.ok) return approvalOutcome.outcome;
     }
 
@@ -154,118 +156,41 @@ export class ToolExecutor {
     return { kind: "failed", error: invoked.error ?? toolError("bridge_failure", "工具调用失败（原因未归类）") };
   }
 
-  /** 审批检查点(契约 v2 审批链键模型;双轨语义不变):账本轨先以 scope_ref 查询可消费
-   *  记录(取链首 sequence 最小者),命中 → {approval_ref, record_id} 消费放行;
-   *  无可消费记录 + 无 gate → blocked(approval_missing,Phase 1 逐位一致);
-   *  未命中 + gate → 问答轨编排(handler 发起/延续审批会话,granted 附带持久化前置)。
-   *  scope_ref 缺省 = harness 配置故障,无法核对授权状态 → failed(fail-closed,不猜测)。
-   *  批㊶-H:query→比对→consume 调用骨架单源 core/tools/ledgerGate.ts runLedgerGate,
-   *  本方法保留终态映射(ToolCallOutcome 词汇面)——与收口前逐位一致。 */
-  private async approve(definition: ToolDefinition, params: unknown, approval?: ApprovalGate, operationId?: string): Promise<ApprovalOutcome> {
-    if (this.scopeRef === undefined) {
+  /**
+   * 确认卡检查点（ADR-0022 后）：审批授权轨（账本 query/consume、scope_ref fail-closed、
+   * approval_missing 78 终局）已退役——requiresUserConfirmationOf true 的工具经 handler
+   * 出业务确认卡等待真人应答；无 handler（headless 无人值守）＝直通留痕（stderr 通报，
+   * D284 fail-closed 语义退役），不再拦截。
+   */
+  private async approve(definition: ToolDefinition, params: unknown, approval?: ApprovalGate): Promise<ApprovalOutcome> {
+    if (approval === undefined) {
+      process.stderr.write(`[approval] ${definition.name} 确认卡无人可出——直通留痕（ADR-0022）\n`);
+      return { ok: true };
+    }
+    let verdict: ApprovalTrackVerdict;
+    try {
+      verdict = await approval.handler({ tool: definition.name, params });
+    } catch (cause) {
+      // 禁止异常穿越边界:编排层故障折算结构化 block(fail-closed,不放行)
       return {
         ok: false,
         outcome: {
-          kind: "failed",
-          error: toolError("scope_ref_missing", `审批账本查询缺少 scope_ref（契约 v2 定位键）: ${definition.name}`, { tool: definition.name }),
+          kind: "blocked",
+          block: approvalTrackBlock(definition.name, "approval_track_failed", `确认卡编排故障: ${String(cause)}`),
         },
       };
     }
-    // F5 4.2（2026-09-26）：脚本类提案的问答轨 key 派生纳入引用脚本内容摘要（同路径重写
-    // → key 必变，修 peek.py 30 次同 key 盲区）。contentDigestFor 由 runner/装配线注入
-    // （fs 半边见 proposalContent.ts）；缺省/非脚本类 → 既有 key 逐位一致（零回归）。
-    // 账本轨键面（ledger_query/evidence_refs）不随本批变化——approval_key 是 harness
-    // 内部状态键，非账本键（approvalKey.ts 头注）。
-    const proposalKey = proposalApprovalKey(definition.name, params, this.local?.contentDigestFor !== undefined ? await this.local.contentDigestFor(definition.name, params) : undefined);
-    const auditKey = { tool: definition.name, params_digest: proposalKey.params_digest };
-    const scopeRef = this.scopeRef;
-    return runLedgerGate<ApprovalOutcome>(
-      this.connection,
-      () => scopeRef,
-      {
-        onQueryFailure: (failure) => {
-          // 账本面故障 = 无法确认授权状态 → fail-closed,不猜测审批通过
-          const error =
-            failure.canonicalError !== undefined
-              ? failure.canonicalError
-              : failure.bridgeError !== undefined && failure.bridgeError.code !== "request_rejected"
-                ? toolErrorFromBridge(failure.bridgeError)
-                : toolError("bridge_failure", "账本查询失败");
-          return { ok: false, outcome: { kind: "failed", error } };
-        },
-        onNoRecord: async (records) => {
-          if (approval === undefined) {
-            return {
-              ok: false,
-              outcome: {
-                kind: "blocked",
-                block: approvalMissingBlock(
-                  definition.name,
-                  `审批缺失：账本无可消费记录（tool=${definition.name}）——headless 下进程须以 exit 78 终止`,
-                  { scope_ref: scopeRef, audit_key: auditKey, ledger_records: records },
-                ),
-              },
-            };
-          }
-          // 问答轨(账本未命中且已声明审批面):编排 handler 发起 request → 等待应答 → 分支处置
-          let verdict: ApprovalTrackVerdict;
-          try {
-            verdict = await approval.handler({
-              tool: definition.name,
-              params,
-              approval_key: proposalKey.approval_key,
-              ...(proposalKey.content_digest !== undefined ? { content_digest: proposalKey.content_digest } : {}),
-            });
-          } catch (cause) {
-            // 禁止异常穿越边界:编排层故障折算结构化 block(fail-closed,不放行)
-            return {
-              ok: false,
-              outcome: {
-                kind: "blocked",
-                block: approvalTrackBlock(definition.name, "approval_track_failed", `问答轨编排故障: ${String(cause)}`),
-              },
-            };
-          }
-          switch (verdict.kind) {
-            case "granted":
-              return { ok: true };
-            case "suspended":
-              return { ok: false, outcome: { kind: "suspended", tool: definition.name, block: verdict.block } };
-            case "aborted":
-              return { ok: false, outcome: { kind: "aborted", tool: definition.name, block: verdict.block } };
-            default:
-              // denied / reproposal / blocked:结构化回填(非终局类由 runner 按 block.reason 分流换路径)
-              return { ok: false, outcome: { kind: "blocked", block: verdict.block } };
-          }
-        },
-        onConsumeFailure: (failure) => {
-          if (failure.bridgeError !== undefined && failure.bridgeError.code === "request_rejected") {
-            // 预录存在但消费时已被吃掉/不匹配/不存在（一次性语义在对端强制）→ 授权不可用 → blocked
-            const { code } = (failure.bridgeError.detail ?? {}) as { code?: string };
-            return {
-              ok: false,
-              outcome: {
-                kind: "blocked",
-                block: approvalMissingBlock(
-                  definition.name,
-                  "审批消费失败（记录已消费、不匹配或不存在）——一次性语义 fail-closed",
-                  { kind: "rejected", tool: "ledger_consume", reason: code ?? "rejected", detail: failure.bridgeError.detail },
-                ),
-              },
-            };
-          }
-          const error =
-            failure.canonicalError !== undefined
-              ? failure.canonicalError
-              : failure.bridgeError !== undefined
-                ? toolErrorFromBridge(failure.bridgeError)
-                : toolError("bridge_failure", "审批消费失败");
-          return { ok: false, outcome: { kind: "failed", error } };
-        },
-        onGranted: () => ({ ok: true }),
-      },
-      operationId !== undefined ? { operationId } : undefined,
-    );
+    switch (verdict.kind) {
+      case "granted":
+        return { ok: true };
+      case "suspended":
+        return { ok: false, outcome: { kind: "suspended", tool: definition.name, block: verdict.block } };
+      case "aborted":
+        return { ok: false, outcome: { kind: "aborted", tool: definition.name, block: verdict.block } };
+      default:
+        // denied / reproposal / blocked:结构化回填(非终局类由 runner 按 block.reason 分流换路径)
+        return { ok: false, outcome: { kind: "blocked", block: verdict.block } };
+    }
   }
 
   /** 桥接请求 + canonical 校验（对端 ok=false → rejected 结构化回填；其余折算 failed）。

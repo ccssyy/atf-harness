@@ -104,7 +104,11 @@ describe("B4 多轮续跑（runner continue 通道）", () => {
     const suspended = await ScenarioRunner.runBranch(scenarioOf("b4-susp", "触发准入"), "main", {
       runsRoot: suspendRuns,
       mockCommand: ["node", mockPath],
-      modelProvider: scripted([{ type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-b4" } }]),
+      // ADR-0022：确认卡轨由表外 atf_data_admission_request 承载（admit_data 直通前置登记）
+      modelProvider: scripted([
+        { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-b4", source_ref: "datasets/external/ds-b4" } },
+        { type: "tool_call", tool: "atf_data_admission_request", params: { dataset_id: "ds-b4" } },
+      ]),
       approvalSurface: { stub: async (): Promise<{ verdict: "timeout" }> => ({ verdict: "timeout" }) },
     });
     expect(suspended.ok).toBe(true);

@@ -4,7 +4,6 @@
 export { checkSchema, validateCanonicalOutput, type SchemaNode } from "./canonical.js";
 export { approvalCopyFor, CLUSTER_PARAM_LABELS } from "./approvalCopy.js";
 export {
-  approvalMissingBlock,
   approvalTrackBlock,
   toolError,
   toolErrorFromBridge,

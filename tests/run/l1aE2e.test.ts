@@ -28,6 +28,11 @@ const FAKE_KEY_ENV = "ATF_LLM_KEY_E2E_FAKE";
 const FAKE_MODEL = "deepseek-flash";
 const FAKE_PROVIDER = "deepseek";
 
+// ADR-0022 后：admit_data（chain_advance）直通——确认卡轨用例改用表外旗标工具
+// atf_style_cluster_execute（requires_approval: true，恒走确认卡问答轨）；前置 REGISTER
+// 步骤经 admit 直通执行完成 mock 登记（mock 进程内 admittedFacts）。
+const CLUSTER_PARAMS = { algorithm_version: "bbox_layout_v1", granularity: "page", metric: "cosine", linkage: "average", threshold: "auto_candidates", min_cluster_size: "1" };
+
 /** canonical 回放响应（脚本面——与被删 FakeEndpointScriptItem response 项同形状）。 */
 type ScriptedResponse = { tool_calls?: Array<{ tool: string; params: Record<string, unknown> }>; final_answer?: string };
 
@@ -115,7 +120,7 @@ const makeScenario = (opts: { gatePreRecord: boolean; runLabel: string }): Scena
       main: {
         branch_id: "main",
         run_id: `run-l1a-e2e-${opts.runLabel}-${String(scenarioSeq)}`,
-        trigger_instruction: "读取事实索引，报告数据集登记与闸门状态并给建议；如需准入发起 atf_admit_data。",
+        trigger_instruction: "读取事实索引，报告数据集登记与闸门状态并给建议；如需确认执行发起 atf_style_cluster_execute（前置 atf_admit_data 登记）。",
         purpose: "L1a e2e",
         setup: { ledger: opts.gatePreRecord ? [{ tool: "atf_gate", params: { gate: "g1", action: "query" } }] : [] },
         steps: [],
@@ -191,8 +196,9 @@ describe("VERIFY 3——只读链路自主完成（脚本桩，零人工干预�
 describe("VERIFY 4/5——挂起闭环 + 人放行闭环", () => {
   const SUSPEND: ScriptedResponse[] = [
     ...RO.slice(0, 3),
-    { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-l1a-e2e" } }] },
-    { final_answer: "数据集 ds-l1a-e2e 已准入；G1 通过；建议推进 G2。" },
+    { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-l1a-e2e", source_ref: "datasets/external/ds-l1a-e2e" } }] },
+    { tool_calls: [{ tool: "atf_style_cluster_execute", params: { dataset_id: "ds-l1a-e2e", cluster_params: CLUSTER_PARAMS } }] },
+    { final_answer: "数据集 ds-l1a-e2e 聚类确认执行完成；G1 通过；建议推进 G2。" },
   ];
 
   it("触发 admit → approval/request + exit 75 + turn 收口（INV-2）；CLI 面应答 → resume 开新 turn → 真正执行", async () => {
@@ -205,9 +211,9 @@ describe("VERIFY 4/5——挂起闭环 + 人放行闭环", () => {
     const turnEnds1 = report1.events.filter((event) => event.type === "turn/end");
     expect((turnEnds1.at(-1)?.payload as { reason?: string }).reason).toBe("suspended"); // INV-2
     const request1 = requests(report1)[0];
-    expect(request1?.payload["tool"]).toBe("atf_admit_data");
+    expect(request1?.payload["tool"]).toBe("atf_style_cluster_execute");
     const callEvent = report1.events.find(
-      (event) => event.type === "tool/call" && (event.payload as { tool?: string }).tool === "atf_admit_data",
+      (event) => event.type === "tool/call" && (event.payload as { tool?: string }).tool === "atf_style_cluster_execute",
     );
     // 人放行闭环（进程内通道应答；CLI 子进程路径见 smoke:l1a）
     const report2 = await run(rig, scenario, providerOf(rig), {
@@ -222,9 +228,13 @@ describe("VERIFY 4/5——挂起闭环 + 人放行闭环", () => {
     // 答复落事件（actor=cli-operator）
     const granted = responses(report2).find((payload) => payload["verdict"] === "granted");
     expect(granted).toMatchObject({ actor: "cli-operator", request_event_ref: request1?.id });
-    // 动作真正执行（可复核证据：ok=true + call_ref 与原 tool/call 配对——重派复用原事件 id）
-    const executed = toolResults(report2).find((r) => r.tool === "atf_admit_data" && r.ok === true);
+    // 动作真正派发执行（可复核证据：确认卡工具回执 call_ref 与原 tool/call 配对——重派复用
+    // 原事件 id）；mock 进程随 run 重建、进程内登记不延续，dataset_not_registered 是 mock 侧
+    // 业务信号（执行已发生），非审批拦截
+    const executed = toolResults(report2).find((r) => r.tool === "atf_style_cluster_execute");
     expect(executed?.call_ref).toBe(callEvent?.id);
+    expect(executed?.ok).toBe(false);
+    expect(executed?.reason).toBe("dataset_not_registered");
     expect(report2.events.some((event) => event.type === "assistant/message")).toBe(true); // 模型收束
     // 脱敏：两份报告全序列化不含 fake key
     expect(JSON.stringify([report1, report2])).not.toContain(FAKE_KEY);
@@ -248,8 +258,9 @@ describe("VERIFY 6——拒绝/建议/中止分支", () => {
   it("denied → 动作不执行且可解释；模型换路径收束", async () => {
     const rig = await makeRig([
       { tool_calls: [{ tool: "atf_workspace_status", params: {} }] },
-      { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-denied" } }] },
-      { final_answer: "准入被拒（未备案）；建议先完成数据集备案后重试。" },
+      { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-denied", source_ref: "datasets/external/ds-denied" } }] },
+      { tool_calls: [{ tool: "atf_style_cluster_execute", params: { dataset_id: "ds-denied", cluster_params: CLUSTER_PARAMS } }] },
+      { final_answer: "确认被拒（未备案）；建议先完成数据集备案后重试。" },
     ]);
     const scenario = makeScenario({ gatePreRecord: false, runLabel: "deny" });
     const report1 = await run(rig, scenario, providerOf(rig));
@@ -260,8 +271,8 @@ describe("VERIFY 6——拒绝/建议/中止分支", () => {
       request_event_id: request1?.id,
     });
     expect(report2.outcome.kind).toBe("completed");
-    // 动作未执行：无 atf_admit_data 成功回填
-    expect(toolResults(report2).some((r) => r.tool === "atf_admit_data" && r.ok === true)).toBe(false);
+    // 动作未执行：无 atf_style_cluster_execute 成功回填
+    expect(toolResults(report2).some((r) => r.tool === "atf_style_cluster_execute" && r.ok === true)).toBe(false);
     // 可解释：denied 应答（含人读理由）落流内
     const denied = responses(report2).find((payload) => payload["verdict"] === "denied");
     expect(denied).toMatchObject({ actor: "cli-operator", reason: "数据集未备案，不予准入" });
@@ -270,9 +281,10 @@ describe("VERIFY 6——拒绝/建议/中止分支", () => {
   it("advised → 建议回填（不构成放行）→ 模型重提案（supersedes 链跨进程延续）→ 再挂起 → granted 执行", async () => {
     const rig = await makeRig([
       { tool_calls: [{ tool: "atf_workspace_status", params: {} }] },
-      { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-adv" } }] },
-      { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-adv" } }] },
-      { final_answer: "数据集已准入；建议归档草案。" },
+      { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-adv", source_ref: "datasets/external/ds-adv" } }] },
+      { tool_calls: [{ tool: "atf_style_cluster_execute", params: { dataset_id: "ds-adv", cluster_params: CLUSTER_PARAMS } }] },
+      { tool_calls: [{ tool: "atf_style_cluster_execute", params: { dataset_id: "ds-adv", cluster_params: CLUSTER_PARAMS } }] },
+      { final_answer: "聚类确认执行完成；建议归档草案。" },
     ]);
     const scenario = makeScenario({ gatePreRecord: false, runLabel: "advise" });
     const report1 = await run(rig, scenario, providerOf(rig));
@@ -284,7 +296,7 @@ describe("VERIFY 6——拒绝/建议/中止分支", () => {
       request_event_id: request1?.id,
     });
     expect(report2.outcome.kind).toBe("suspended"); // 重提案再次等待人工（headless 超时挂起）
-    expect(toolResults(report2).some((r) => r.tool === "atf_admit_data" && r.ok === true)).toBe(false); // 未执行
+    expect(toolResults(report2).some((r) => r.tool === "atf_style_cluster_execute" && r.ok === true)).toBe(false); // 未执行
     const advised = responses(report2).find((payload) => payload["verdict"] === "advised");
     expect(advised?.["advice_text"]).toBe("补备案说明后重提");
     // 重提案（同提案键）：跨进程 supersedes 链延续（attempt+1 指回原 request）
@@ -296,14 +308,18 @@ describe("VERIFY 6——拒绝/建议/中止分支", () => {
       request_event_id: request2?.id,
     });
     expect(report3.outcome.kind).toBe("completed");
-    const executed = toolResults(report3).find((r) => r.tool === "atf_admit_data" && r.ok === true);
+    // 放行后确认卡工具真派发执行（回执在流内；mock 进程随 run 重建——dataset_not_registered
+    // 是 mock 侧业务信号，非审批拦截）
+    const executed = toolResults(report3).find((r) => r.tool === "atf_style_cluster_execute");
     expect(executed).toBeDefined();
+    expect(executed?.reason).toBe("dataset_not_registered");
   });
 
   it("abort → run 终态 exit 79；不开新 turn；动作不执行", async () => {
     const rig = await makeRig([
       { tool_calls: [{ tool: "atf_workspace_status", params: {} }] },
-      { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-abort" } }] },
+      { tool_calls: [{ tool: "atf_admit_data", params: { dataset_id: "ds-abort", source_ref: "datasets/external/ds-abort" } }] },
+      { tool_calls: [{ tool: "atf_style_cluster_execute", params: { dataset_id: "ds-abort", cluster_params: CLUSTER_PARAMS } }] },
       { final_answer: "不可达" },
     ]);
     const scenario = makeScenario({ gatePreRecord: false, runLabel: "abort" });
@@ -317,7 +333,7 @@ describe("VERIFY 6——拒绝/建议/中止分支", () => {
     expect(report2.outcome.kind).toBe("aborted");
     expect(report2.exit_code).toBe(79);
     expect(report2.events.filter((event) => event.type === "turn/start")).toHaveLength(1); // 仅 run 1 的 turn
-    expect(toolResults(report2).some((r) => r.tool === "atf_admit_data" && r.ok === true)).toBe(false);
+    expect(toolResults(report2).some((r) => r.tool === "atf_style_cluster_execute" && r.ok === true)).toBe(false);
   });
 });
 

@@ -15,6 +15,7 @@ import { synthesizeUserConfirmation } from "../confirmRequest.js";
 import type { ToolCallOutcome, ToolBlock } from "../tools/index.js";
 import type { ApprovalGate } from "../tools/index.js";
 import type { ApprovalHandler } from "./approvalTrack.js";
+import { approvalKeyFor } from "../tools/approvalKey.js";
 import type { SessionEvent } from "../session/index.js";
 
 /**
@@ -121,4 +122,15 @@ export const buildToolResultPayload = (input: {
  *  （tool/call 事件落盘后回填 tool_call_id——凭据配对键）。原主循环/resume 重派/确认直填
  *  三处内联同构收口单源（零行为变化）。 */
 export const gateFor = (handler: ApprovalHandler | undefined, toolCallId: number): ApprovalGate | undefined =>
-  handler === undefined ? undefined : { handler: (gateInput) => handler({ ...gateInput, tool_call_id: toolCallId }) };
+  handler === undefined
+    ? undefined
+    : {
+        handler: (gateInput) =>
+          handler({
+            ...gateInput,
+            // 确认卡会话键＝params 摘要（同提案重提可判定——advised supersedes/拒绝循环升级前提）；
+            // 仅作 runner 侧确认卡会话键，非账本键（ADR-0022 后账本授权轨已退役）。
+            approval_key: approvalKeyFor(gateInput.tool, gateInput.params).params_digest,
+            tool_call_id: toolCallId,
+          }),
+      };

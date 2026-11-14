@@ -172,8 +172,8 @@ describe("MCP 外壳 E2E（T05）", () => {
     }
   });
 
-  it("治理（白名单内）：gate(query) 免预授权；admit 经问答轨放行且留痕 pre_authorization（D4+D1=A），退出码进 result", async () => {
-    const fixture = await setupFixture({ preauthTools: ["atf_admit_data", "atf_gate"] });
+  it("治理（白名单内）：gate(query) 免预授权；atf_admit_data 直通登记；atf_data_admission_request 经问答轨放行且留痕 pre_authorization（ADR-0022），退出码进 result", async () => {
+    const fixture = await setupFixture({ preauthTools: ["atf_admit_data", "atf_data_admission_request"] });
     try {
       await handshake(fixture.client);
       await callTool(fixture.client, "atf_bind_run", { run_id: "mcp-run-3" });
@@ -185,18 +185,22 @@ describe("MCP 外壳 E2E（T05）", () => {
       const scan = await callTool(fixture.client, "atf_fact_scan");
       expect(scan.isError).toBe(false);
 
-      // 高危：账本轨 miss → 问答轨 → stub 恒 granted 但强制留痕（channel=mcp + host_id + requires_human_review）
+      // ADR-0022：admit_data（chain_advance）白名单内直通执行登记（零审批）
       const gate = await callTool(fixture.client, "atf_gate", { gate: "g1", action: "query" });
       expect(gate.isError).toBe(false);
       expect(gate.body["exit_code"]).toBe(0);
-      const admit = await callTool(fixture.client, "atf_admit_data", { dataset_id: "ds-mcp-1" });
+      const admit = await callTool(fixture.client, "atf_admit_data", { dataset_id: "ds-mcp-1", source_ref: "datasets/external/ds-mcp-1" });
       expect(admit.isError).toBe(false);
       expect(admit.body["exit_code"]).toBe(0);
       expect((admit.body["result"] as Record<string, unknown>)["journal_type"]).toBe("dataset-registry");
 
+      // 写类确认卡：问答轨 → stub 恒 granted 但强制留痕（channel=mcp + host_id + requires_human_review）
+      const request = await callTool(fixture.client, "atf_data_admission_request", { dataset_id: "ds-mcp-1" });
+      expect(request.body["reason"]).not.toBe("mcp_write_not_preauthorized");
+
       const stream = await readStream(fixture.runsRoot, "mcp-run-3");
       const responses = stream.filter((event) => event["type"] === "approval/response");
-      expect(responses.length).toBe(1); // B7 N1：gate(query) 免审批，仅 admit 走问答轨
+      expect(responses.length).toBe(1); // B7 N1：gate(query)/admit 直通零审批，仅确认卡工具走问答轨
       for (const response of responses) {
         const payload = response["payload"] as Record<string, unknown>;
         expect(payload["verdict"]).toBe("granted");
@@ -212,7 +216,7 @@ describe("MCP 外壳 E2E（T05）", () => {
         const request = stream.find((event) => event["type"] === "approval/request" && event["id"] === ref);
         return request === undefined ? null : ((request["payload"] as { tool?: string }).tool ?? null);
       };
-      const admitResponse = responses.find((response) => responseTool(response) === "atf_admit_data");
+      const admitResponse = responses.find((response) => responseTool(response) === "atf_data_admission_request");
       expect(admitResponse).toBeDefined();
       expect((admitResponse?.["payload"] as Record<string, unknown>)["pre_authorization"]).toBe(true);
       const gateResponse = responses.find((response) => responseTool(response) === "atf_gate");
@@ -301,7 +305,7 @@ describe("MCP 外壳 E2E（T05）", () => {
     }
   });
 
-  it("B1 gate(advance) 白名单内放行（写类经预授权）", async () => {
+  it("B1 gate(advance) 白名单内放行（ADR-0022 直通：零审批事件真执行）", async () => {
     const fixture = await setupFixture({ preauthTools: ["atf_admit_data", "atf_gate"] });
     try {
       await handshake(fixture.client);
@@ -309,14 +313,17 @@ describe("MCP 外壳 E2E（T05）", () => {
       const advance = await callTool(fixture.client, "atf_gate", { gate: "g1", action: "advance" });
       // mock 对端业务面允许 advance（canonical status 或 blocked 均为业务事实；此处断言非白名单拒绝）
       expect(advance.body["reason"]).not.toBe("mcp_write_not_preauthorized");
+      // ADR-0022：gate advance（chain_advance）直通——零审批事件，执行回执直接落盘
       const stream = await readStream(fixture.runsRoot, "mcp-run-b1c");
       const advanceRequest = stream.find(
         (event) => event["type"] === "approval/request" && (event["payload"] as { tool?: string; params?: { action?: string } }).tool === "atf_gate" && (event["payload"] as { params?: { action?: string } }).params?.action === "advance",
       );
-      expect(advanceRequest).toBeDefined();
-      const advanceResponse = stream.find((event) => event["type"] === "approval/response" && (event["payload"] as { request_event_ref?: number }).request_event_ref === advanceRequest?.["id"]);
-      expect(advanceResponse).toBeDefined();
-      expect((advanceResponse?.["payload"] as Record<string, unknown>)["pre_authorization"]).toBe(true);
+      expect(advanceRequest).toBeUndefined();
+      const advanceResult = stream.find(
+        (event) => event["type"] === "tool/result" && (event["payload"] as { tool?: string }).tool === "atf_gate",
+      );
+      expect(advanceResult).toBeDefined();
+      expect((advanceResult?.["payload"] as { ok?: boolean }).ok).toBe(true);
     } finally {
       fixture.close();
     }

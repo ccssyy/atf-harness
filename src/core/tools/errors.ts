@@ -47,7 +47,8 @@ export type ToolBlockReason =
   | "approval_timeout"
   | "approval_aborted";
 
-/** 结构化 block 结果（账本轨：approval_missing 恒 exit 78；问答轨：按上表语义映射 1/75/79，
+/** 结构化 block 结果（问答轨：按原因语义映射 1/75/79；ADR-0022 后账本轨 approval_missing
+ *  78 已随审批拦截退役，
  *  全部经 resolveHeadlessExitCode 单出口决出）。 */
 export interface ToolBlock {
   reason: ToolBlockReason;
@@ -58,7 +59,8 @@ export interface ToolBlock {
   detail?: unknown;
 }
 
-export const approvalMissingBlock = (tool: string, message: string, detail?: unknown): ToolBlock => ({
+export const approvalMissingBlockRemoved = undefined as never as void; // ADR-0022 占位（下方随函数体一并清理）
+const _removedApprovalMissingBlock = (tool: string, message: string, detail?: unknown): ToolBlock => ({
   reason: "approval_missing",
   message,
   tool,

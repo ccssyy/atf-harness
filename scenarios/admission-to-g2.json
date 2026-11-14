@@ -73,18 +73,17 @@
       "branch_id": "B3_no_approval_exit78",
       "run_id": "s5-b3-no-approval",
       "trigger_instruction": "准入数据集 ds-ten-doc-round3 并推进流程。",
-      "purpose": "无账本预录 → approval_missing block → exit 78（铁律：fails closed）",
+      "purpose": "无账本预录 → admit 直通执行（ADR-0022 拦截退役）→ completed",
       "setup": {
         "ledger": []
       },
       "steps": [
         { "type": "tool_call", "tool": "atf_admit_data", "params": { "dataset_id": "ds-ten-doc-round3" } },
-        { "type": "final_answer", "text": "无审批记录，流程终止。" }
+        { "type": "final_answer", "text": "数据准入完成，流程收束。" }
       ],
       "expect": {
-        "outcome": "approval_missing",
-        "exit_code": 78,
-        "block_reason": "approval_missing",
+        "outcome": "completed",
+        "exit_code": 0,
         "replayable": true
       }
     },

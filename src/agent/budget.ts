@@ -13,23 +13,20 @@
  */
 import type { AgentTurnDecision, AgentTurnContext } from "@earendil-works/pi-agent-core";
 
-/** 丙 v1 终局闭集（穷尽互斥；词汇对齐 runner 七态——批 P 增补 A2 激活 75/79）。 */
+/** 丙 v1 终局闭集（穷尽互斥；ADR-0022 后 approval_missing/78 随审批拦截退役）。 */
 export type V1RunOutcome =
   | { kind: "completed" }
-  | { kind: "approval_missing"; tool: string; reason: string }
   | { kind: "suspended"; tool: string; reason: string }
   | { kind: "aborted"; tool: string; reason: string }
   | { kind: "budget_exhausted"; turns_used: number; max_turns: number }
   | { kind: "failed"; error: string };
 
-/** headless 退出码（ADR-07 锚不挪用：0=completed；78=approval_missing；75=suspended
+/** headless 退出码（ADR-0022 后：0=completed；75=suspended
  *  （未决非否决）；79=aborted（人中止）；其余=1。单一出口防语义漂移。 */
 export const resolveV1ExitCode = (outcome: V1RunOutcome): 0 | 1 | 75 | 78 | 79 => {
   switch (outcome.kind) {
     case "completed":
       return 0;
-    case "approval_missing":
-      return 78;
     case "suspended":
       return 75;
     case "aborted":

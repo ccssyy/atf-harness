@@ -10,7 +10,7 @@
 export { createFauxStreamFn, fauxAssistantMessage, fauxFinalAnswer, fauxMessageWithToolCalls, type FauxStreamFn } from "./fauxStream.js";
 export { assembleProviderModel, createProviderStreamFn, createDeepSeekStreamFn, type ProviderStreamFnConfig } from "./providerStreamFn.js";
 export { buildSpikeAgentTools, spikeToolDefinitions, SPIKE_TOOL_NAMES, toAtfAgentTool, spikeRequiresApproval, toolDefinitionFor, type AtfAgentToolDeps, type SpikeBridgeTransport } from "./atfAgentTools.js";
-export { createApprovalBeforeToolCall, createGateLock, type ApprovalAuditEntry, type ApprovalHookDeps, type GateLock } from "./approvalHook.js";
+export { createApprovalBeforeToolCall, type ApprovalAuditEntry, type ApprovalHookDeps } from "./approvalHook.js";
 export {
   FILE_TOOL_DEFINITIONS,
   FILE_TOOL_NAMES,

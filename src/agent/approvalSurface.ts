@@ -33,9 +33,9 @@ export interface ApprovalSurface {
 export const surfaceVerdictToAudit = (verdict: ApprovalSurfaceVerdict): ApprovalAuditEntry["verdict"] => {
   switch (verdict.kind) {
     case "granted":
-      return "allow_surface_ledger";
+      return "allow_surface";
     case "denied":
-      return "blocked_denied";
+      return "denied";
     case "suspended":
       return "suspended";
     case "aborted":

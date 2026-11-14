@@ -19,6 +19,11 @@ import { ACP_METHODS, type AcpSessionUpdate } from "../../src/acp/index.js";
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
 
+// ADR-0022 后：admit_data（chain_advance）直通——确认卡轨用例改用表外旗标工具
+// atf_style_cluster_execute（requires_approval: true，恒走确认卡问答轨）；
+// 前置 REGISTER 步骤经 admit 直通执行完成 mock 登记（mock 进程内 admittedFacts）。
+const CLUSTER_PARAMS = { algorithm_version: "bbox_layout_v1", granularity: "page", metric: "cosine", linkage: "average", threshold: "auto_candidates", min_cluster_size: "1" };
+
 /** 保留字段最小的假 provider 配置（外壳只读 model 与透传给工厂）。 */
 const fakeConfig = {
   provider_id: "fake",
@@ -180,8 +185,9 @@ describe("ACP 外壳 E2E（T04）", () => {
     const fixture = await setupFixture();
     try {
       fixture.queue.push(
-        { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-acp-1" } },
-        { type: "final_answer", text: "数据集 ds-acp-1 已准入（宿主放行）。" },
+        { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-acp-1", source_ref: "datasets/external/ds-acp-1" } },
+        { type: "tool_call", tool: "atf_style_cluster_execute", params: { dataset_id: "ds-acp-1", cluster_params: CLUSTER_PARAMS } },
+        { type: "final_answer", text: "数据集 ds-acp-1 聚类确认执行完成（宿主放行）。" },
       );
       const sessionId = await newSession(fixture.client);
       const prompt = await fixture.client.peer.request(ACP_METHODS.sessionPrompt, {
@@ -214,8 +220,8 @@ describe("ACP 外壳 E2E（T04）", () => {
       expect(grantedPayload["host_id"]).toBe("acp-client");
       expect(grantedPayload["requires_human_review"]).toBe(true);
       expect(grantedPayload["actor"]).toBe("acp-host");
-      const call = stream.find((event) => event["type"] === "tool/call" && JSON.stringify(event["payload"]).includes("atf_admit_data"));
-      const result = stream.find((event) => event["type"] === "tool/result" && JSON.stringify(event["payload"]).includes('"ok":true'));
+      const call = stream.find((event) => event["type"] === "tool/call" && JSON.stringify(event["payload"]).includes("atf_style_cluster_execute"));
+      const result = stream.find((event) => event["type"] === "tool/result" && JSON.stringify(event["payload"]).includes("atf_style_cluster_execute") && JSON.stringify(event["payload"]).includes('"ok":true'));
       expect(call).toBeDefined();
       expect(result).toBeDefined();
       expect((result?.["payload"] as { call_ref?: number }).call_ref).toBe(call?.["id"]);
@@ -229,7 +235,8 @@ describe("ACP 外壳 E2E（T04）", () => {
     try {
       fixture.client.policy = () => ({ kind: "outcome", outcome: { outcome: "selected", optionId: "allow_always" } });
       fixture.queue.push(
-        { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-acp-2" } },
+        { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-acp-2", source_ref: "datasets/external/ds-acp-2" } },
+        { type: "tool_call", tool: "atf_style_cluster_execute", params: { dataset_id: "ds-acp-2", cluster_params: CLUSTER_PARAMS } },
         { type: "final_answer", text: "改换路径收束。" },
       );
       const sessionId = await newSession(fixture.client);
@@ -241,7 +248,7 @@ describe("ACP 外壳 E2E（T04）", () => {
       expect(denied).toBeDefined();
       expect((denied?.["payload"] as { reason?: string }).reason).toContain("非法 optionId");
       const executed = stream.find(
-        (event) => event["type"] === "tool/result" && JSON.stringify(event["payload"]).includes('"ok":true') && JSON.stringify(event["payload"]).includes("atf_admit_data"),
+        (event) => event["type"] === "tool/result" && JSON.stringify(event["payload"]).includes('"ok":true') && JSON.stringify(event["payload"]).includes("atf_style_cluster_execute"),
       );
       expect(executed).toBeUndefined();
     } finally {
@@ -278,7 +285,8 @@ describe("ACP 外壳 E2E（T04）", () => {
     const fixture = await setupFixture();
     try {
       fixture.queue.push(
-        { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-acp-3" } },
+        { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-acp-3", source_ref: "datasets/external/ds-acp-3" } },
+        { type: "tool_call", tool: "atf_style_cluster_execute", params: { dataset_id: "ds-acp-3", cluster_params: CLUSTER_PARAMS } },
         { type: "final_answer", text: "续答后收束。" },
       );
       const sessionId = await newSession(fixture.client);
@@ -296,8 +304,12 @@ describe("ACP 外壳 E2E（T04）", () => {
       expect(stopReasonOf(prompt2)).toBe("end_turn");
       expect(fixture.client.permissionRequests.length).toBe(2); // 挂起续答重新请求授权
       const stream2 = await readStream(fixture.runsRoot, sessionId);
-      const executed = stream2.find((event) => event["type"] === "tool/result" && JSON.stringify(event["payload"]).includes('"ok":true'));
-      expect(executed).toBeDefined();
+      // resume 放行后原挂起调用真派发执行（call_ref 与挂起前 tool/call 配对）；mock 进程随
+      // run 重建、进程内登记不延续——dataset_not_registered 是 mock 侧业务信号（非审批拦截）
+      const pendingCall = stream1.find((event) => event["type"] === "tool/call" && JSON.stringify(event["payload"]).includes("atf_style_cluster_execute"));
+      const resumedExecution = stream2.find((event) => event["type"] === "tool/result" && (event["payload"] as { tool?: string }).tool === "atf_style_cluster_execute");
+      expect(resumedExecution).toBeDefined();
+      expect((resumedExecution?.["payload"] as { call_ref?: number }).call_ref).toBe(pendingCall?.["id"]);
       const resumeGranted = stream2.find((event) => event["type"] === "approval/response" && (event["payload"] as { verdict?: string }).verdict === "granted");
       expect((resumeGranted?.["payload"] as Record<string, unknown>)["channel"]).toBe("acp");
     } finally {
@@ -311,7 +323,10 @@ describe("ACP 外壳 E2E（T04）", () => {
       let sessionId = "";
       {
         const fixture = await setupFixture(runsRoot);
-        fixture.queue.push({ type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-acp-5" } });
+        fixture.queue.push(
+          { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-acp-5", source_ref: "datasets/external/ds-acp-5" } },
+          { type: "tool_call", tool: "atf_style_cluster_execute", params: { dataset_id: "ds-acp-5", cluster_params: CLUSTER_PARAMS } },
+        );
         fixture.client.policy = () => ({ kind: "cancel-then-outcome", outcome: { outcome: "cancelled" } });
         sessionId = await newSession(fixture.client);
         await fixture.client.peer.request(ACP_METHODS.sessionPrompt, { sessionId, prompt: [{ type: "text", text: "准入 ds-acp-5" }] });
@@ -331,7 +346,10 @@ describe("ACP 外壳 E2E（T04）", () => {
         const prompt = await fixture2.client.peer.request(ACP_METHODS.sessionPrompt, { sessionId, prompt: [{ type: "text", text: "继续" }] });
         expect(stopReasonOf(prompt)).toBe("end_turn");
         const stream = await readStream(runsRoot, sessionId);
-        expect(stream.some((event) => event["type"] === "tool/result" && JSON.stringify(event["payload"]).includes('"ok":true'))).toBe(true);
+        // 跨进程续答：放行后确认卡工具真派发执行（call_ref 配对回执）；mock 进程随 run 重建，
+        // dataset_not_registered 为 mock 侧业务信号（非审批拦截）
+        const resumedExecution = stream.find((event) => event["type"] === "tool/result" && (event["payload"] as { tool?: string }).tool === "atf_style_cluster_execute");
+        expect(resumedExecution).toBeDefined();
       } finally {
         fixture2.close();
       }

@@ -4,10 +4,9 @@
  * 锚定面（对端 = 契约 mock 内核子进程；模型面 = faux streamFn，零真实 Provider 调用）：
  *   ① 三类决策走通：assistant 文本＋tool_calls 同消息 → tool_call（atf_workspace_status
  *      经 stdio 桥执行、canonical 过）→ final_answer；
- *   ② 审批 before_tool hook——拒径：approval_missing（账本空）拦截＋run 级终止
- *      （headless exit 78 锚语义的库内映射；atf_gate 零触桥执行面）；
- *   ③ 审批 before_tool hook——放行径＋一次性：账本预录 → 查询命中 → consume →
- *      atf_gate 真执行；事后账本无可消费记录；
+ *   ② 确认卡轨（ADR-0022 后）：gate advance（chain_advance）headless 直通留痕
+ *      （原 approval_missing 78 拦截随审批授权轨退役）；
+ *   ③ 直通径：atf_gate advance 真执行（原账本预录→消费一次性语义随授权轨退役）；
  *   ④ 孤儿/续跑：session 树注入崩溃半边 → detectOrphanTip → 库 continue() 内建拒绝 →
  *      fork 到最后完整边 → 重建转录 → continue() 续跑收口；
  *   ⑤ TEM 镜像点：afterToolCall → tem/evidence_event custom entry 落库；
@@ -68,21 +67,15 @@ describe("门 1a spike（批 P：pi-agent-core Agent＋桥接单工具＋审批 
     ).toBe("mock-run-1");
   });
 
-  it("② 审批拒径：approval_missing 拦截＋run 终止；atf_gate 零触桥执行面", async () => {
+  it("② 直通径（ADR-0022）：gate advance headless 直通留痕（audit allow_readonly）", async () => {
     const { approvalAudit } = await runSpike();
-    const deny = approvalAudit.find((entry) => entry.verdict === "blocked_approval_missing");
-    expect(deny).toBeDefined();
-    expect(deny?.tool).toBe("atf_gate");
-    expect(deny?.requiresApproval).toBe(true);
+    const direct = approvalAudit.find((entry) => entry.tool === "atf_gate" && entry.verdict === "allow_readonly");
+    expect(direct).toBeDefined();
   });
 
-  it("③ 审批放行径＋一次性消费：预录 → consume → 真执行；事后账本空", async () => {
-    const { approvalAudit, checks } = await runSpike();
-    const allow = approvalAudit.find((entry) => entry.verdict === "allow_ledger");
-    expect(allow).toBeDefined();
-    expect(allow?.tool).toBe("atf_gate");
-    expect(checks["scenario_c_allowed"]).toBe(true);
-    expect(checks["scenario_c_one_shot"]).toBe(true);
+  it("③ 直通真执行：atf_gate advance 触桥执行；确认卡轨零拦截", async () => {
+    const { checks } = await runSpike();
+    expect(checks["scenario_b_direct"]).toBe(true);
   });
 
   it("④ 孤儿/续跑：孤儿检测 → 库级拒绝 → fork 恢复 → continue() 续跑收口", async () => {

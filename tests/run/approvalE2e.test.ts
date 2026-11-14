@@ -19,7 +19,12 @@ import type { ScenarioStep } from "../../src/llm/index.js";
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
 
-const ADMIT = { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-p2s2" } } as const;
+// ADR-0022 后：admit_data（chain_advance）直通——确认卡轨用例改用表外旗标工具
+// atf_style_cluster_execute（requires_approval: true，恒走问答轨确认卡）；
+// 前置 REGISTER 步骤经 admit 直通执行完成 mock 登记（mock 进程内 admittedFacts）。
+const CLUSTER_PARAMS = { algorithm_version: "bbox_layout_v1", granularity: "page", metric: "cosine", linkage: "average", threshold: "auto_candidates", min_cluster_size: "1" };
+const REGISTER = { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-p2s2", source_ref: "datasets/external/ds-p2s2" } } as const;
+const ADMIT = { type: "tool_call", tool: "atf_style_cluster_execute", params: { dataset_id: "ds-p2s2", cluster_params: CLUSTER_PARAMS } } as const;
 const STATUS = { type: "tool_call", tool: "atf_workspace_status", params: {} } as const;
 const DONE = { type: "final_answer", text: "收束" } as const;
 
@@ -74,7 +79,7 @@ const approvalEvents = (report: BranchRunReport): { requests: number; responses:
 
 describe("P2-S2 e2e——granted 主路径(凭据成立 → 执行 → exit 0)", () => {
   it("无预录 + 审批面声明 + granted:call_ref 结果回填,退出码 0", async () => {
-    const report = await runBranch(makeScenario([ADMIT, DONE]), scriptStub([{ verdict: "granted", actor: "stub-host" }]));
+    const report = await runBranch(makeScenario([REGISTER, ADMIT, DONE]), scriptStub([{ verdict: "granted", actor: "stub-host" }]));
     expect(report.outcome.kind).toBe("completed");
     expect(report.exit_code).toBe(0);
     const approval = approvalEvents(report);
@@ -90,7 +95,7 @@ describe("P2-S2 e2e——granted 主路径(凭据成立 → 执行 → exit 0)",
 describe("P2-S2 e2e——advised 重提案(supersedes 演化链)", () => {
   it("advised → 意见回填 → 模型重提(同 params)→ granted → exit 0;链可审计", async () => {
     const report = await runBranch(
-      makeScenario([ADMIT, ADMIT, DONE]),
+      makeScenario([REGISTER, ADMIT, ADMIT, DONE]),
       scriptStub([
         { verdict: "advised", actor: "stub-host", advice_text: "用正式编号重提" },
         { verdict: "granted", actor: "stub-host" },
@@ -114,7 +119,7 @@ describe("P2-S2 e2e——advised 重提案(supersedes 演化链)", () => {
 describe("P2-S2 e2e——denied 换路径(非终局)", () => {
   it("denied → 结构化回填 → 模型换路径(免审批工具)→ exit 0", async () => {
     const report = await runBranch(
-      makeScenario([ADMIT, STATUS, DONE]),
+      makeScenario([REGISTER, ADMIT, STATUS, DONE]),
       scriptStub([{ verdict: "denied", actor: "stub-host", reason: "数据集未备案" }]),
     );
     expect(report.outcome.kind).toBe("completed");
@@ -128,7 +133,7 @@ describe("P2-S2 e2e——denied 换路径(非终局)", () => {
 
 describe("P2-S2 e2e——aborted 终态(79)", () => {
   it("应答 verdict=abort → run 终态 aborted,exit 79", async () => {
-    const report = await runBranch(makeScenario([ADMIT, DONE]), scriptStub([{ verdict: "aborted", actor: "stub-host", reason: "任务取消" }]));
+    const report = await runBranch(makeScenario([REGISTER, ADMIT, DONE]), scriptStub([{ verdict: "aborted", actor: "stub-host", reason: "任务取消" }]));
     expect(report.outcome.kind).toBe("aborted");
     expect(report.exit_code).toBe(79);
   });
@@ -137,7 +142,7 @@ describe("P2-S2 e2e——aborted 终态(79)", () => {
 describe("P2-S2 e2e——clarification 多轮(同一审批会话)", () => {
   it("clarification → 同 session 重发 → granted → exit 0", async () => {
     const report = await runBranch(
-      makeScenario([ADMIT, DONE]),
+      makeScenario([REGISTER, ADMIT, DONE]),
       scriptStub([
         { verdict: "clarification", actor: "stub-host", question: "来源?" },
         { verdict: "granted", actor: "stub-host" },
@@ -154,7 +159,7 @@ describe("P2-S2 e2e——clarification 多轮(同一审批会话)", () => {
 
 describe("P2-S2 e2e——timeout 挂起(75,超时非否决)", () => {
   it("timeout → suspended,exit 75;response actor = harness", async () => {
-    const report = await runBranch(makeScenario([ADMIT, DONE]), scriptStub([{ verdict: "timeout" }]));
+    const report = await runBranch(makeScenario([REGISTER, ADMIT, DONE]), scriptStub([{ verdict: "timeout" }]));
     expect(report.outcome.kind).toBe("suspended");
     expect(report.exit_code).toBe(75);
     const response = report.events.find((event) => event.type === "approval/response");
@@ -165,7 +170,7 @@ describe("P2-S2 e2e——timeout 挂起(75,超时非否决)", () => {
 describe("P2-S2 e2e——拒绝循环升级(阈值 2,第 3 次提案)", () => {
   it("三次同提案:第 1/2 次 denied,第 3 次升级 aborted → exit 79", async () => {
     const report = await runBranch(
-      makeScenario([ADMIT, ADMIT, ADMIT, DONE]),
+      makeScenario([REGISTER, ADMIT, ADMIT, ADMIT, DONE]),
       scriptStub([
         { verdict: "denied", actor: "stub-host", reason: "r1" },
         { verdict: "denied", actor: "stub-host", reason: "r2" },
@@ -179,11 +184,11 @@ describe("P2-S2 e2e——拒绝循环升级(阈值 2,第 3 次提案)", () => {
 });
 
 describe("P2-S2 e2e——headless 等价性(口径 #7)", () => {
-  it("审批面未声明 + 无预录 → blocked(approval_missing) exit 78(Phase 1 逐位一致)", async () => {
-    const report = await runBranch(makeScenario([ADMIT, DONE])); // 无 approvalSurface
-    expect(report.outcome.kind).toBe("approval_missing");
-    expect(report.exit_code).toBe(78);
-    expect(approvalEvents(report).requests).toBe(0); // 不发问答 request
+  it("headless 无人值守直通（ADR-0022）：无审批面 → 确认卡工具直通执行 → exit 0", async () => {
+    const report = await runBranch(makeScenario([REGISTER, ADMIT, DONE])); // 无 approvalSurface
+    expect(report.outcome.kind).toBe("completed");
+    expect(report.exit_code).toBe(0);
+    expect(approvalEvents(report).requests).toBe(0); // 不发问答 request（直通留痕语义）
   });
 });
 

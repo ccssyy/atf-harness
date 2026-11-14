@@ -51,7 +51,6 @@ import { createRealSummarizer } from "./realSummarizer.js";
 import { OVERFLOW_FINAL_NOTICE_TEXT, promptWithOverflowRetry } from "./overflowRetry.js";
 import { createDispatchParallelTrainingSubtaskTool, createDispatchTrainingSubtaskTool, createChildInstructionRunner, type SubagentDeps } from "./subagent.js";
 import { buildFileAgentTools } from "./fileTools.js";
-import { createGateLock } from "./approvalHook.js";
 import { planRunBoundary } from "./driveFace.js";
 import type { DeferredSubtaskRegistry } from "./deferredFace.js";
 import { createDeferredToolSet } from "./deferredTools.js";
@@ -416,7 +415,6 @@ export interface AssembleV1Deps {
   /** 批⑬ WebUI：追加工具的审批豁免面（interactive/只读工具自带确认语义——缺省空＝零变化）。 */
   exemptTools?: readonly string[];
   /** 外部共享账本闸锁（runChildSubtask 子装配透传同一把；缺省＝subagent 挂接时自建）。 */
-  gateLock?: import("./approvalHook.js").GateLock;
   /** 批㊵（D-LLM-1 R3 WebUI 面）：初始推理档位——进 Agent initialState（首轮即生效）。
    *  词表＝pi-ai ModelThinkingLevel（off/minimal/low/medium/high/xhigh/max）；模型实支持
    *  子集以 provider 目录 thinkingLevelMap 为准（GLM coding 线＝off/low/high/max），装配
@@ -475,8 +473,7 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
   tools.push(...(deps.extraTools ?? []));
   // v2：并发执行体（主链＋并行 fan-out/deferred 子任务）共享同一把账本闸锁——
   // 闸段（query→预录→consume）串行化，watermark 语义不被并发破坏（subagent 缺省不挂接＝无锁，语义零变化）。
-  const gateLock = deps.gateLock ?? (deps.subagent !== undefined ? createGateLock() : undefined);
-  const subagentDeps: SubagentDeps | undefined = deps.subagent !== undefined ? { ...deps.subagent, scopeRefBox, ...(gateLock !== undefined ? { gateLock } : {}) } : undefined;
+  const subagentDeps: SubagentDeps | undefined = deps.subagent !== undefined ? { ...deps.subagent, scopeRefBox } : undefined;
   let deferredRegistry: DeferredSubtaskRegistry | undefined;
   if (subagentDeps !== undefined) {
     tools.push(createDispatchTrainingSubtaskTool(subagentDeps));
@@ -536,9 +533,6 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
       // 批㊳ 1.1：过闸判定同步留痕入本 session（approval_audit custom entry；best-effort
       // fail-open——写失败不阻断审批流，stderr 记录；子装配各自 session 各自留痕）。
       auditStream: createSessionApprovalAuditStream(deps.session),
-      ...(deps.fileTools !== undefined
-        ? { contentDigestFor: createProposalContentDigestFor({ roots: () => deps.fileTools!.roots }) }
-        : {}),
       ...(surface !== undefined ? { surface } : {}),
       ...(() => {
         // 批⑬：豁免面＝subagent 伴生五件（既有）＋宿主追加（WebUI interactive/只读，缺省空）。
@@ -556,7 +550,6 @@ export const assembleV1Agent = (deps: AssembleV1Deps): AssembledV1Agent => {
         ];
         return exempt.length > 0 ? { exemptTools: exempt } : {};
       })(),
-      ...(gateLock !== undefined ? { gateLock } : {}),
     }),
     afterToolCall: createTemAfterToolMirror({ session: deps.session, runId, model: envFingerprint(deps.modelTag).model }),
     transformContext,
@@ -756,14 +749,12 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
   // completed（走查 v078 实锚：首轮空文本即 completed、静默 exit 0）。
   const hasFinalAnswer = lastAssistant !== undefined && !lastAssistantHasToolCall && lastAssistantText !== "";
   let outcome: V1RunOutcome;
-  const terminalAudit = [...audit].reverse().find((entry) => ["aborted", "suspended", "blocked_approval_missing"].includes(entry.verdict));
+  const terminalAudit = [...audit].reverse().find((entry) => ["aborted", "suspended"].includes(entry.verdict));
   if (terminalAudit !== undefined && !hasFinalAnswer) {
     outcome =
       terminalAudit.verdict === "aborted"
         ? { kind: "aborted", tool: terminalAudit.tool, reason: "操作员中止（确认卡 abort）" }
-        : terminalAudit.verdict === "suspended"
-          ? { kind: "suspended", tool: terminalAudit.tool, reason: "操作员未决——超时非否决（75）" }
-          : { kind: "approval_missing", tool: terminalAudit.tool, reason: "审批缺失：账本无可消费记录（headless exit 78 锚语义）" };
+        : { kind: "suspended", tool: terminalAudit.tool, reason: "操作员未决——超时非否决（75）" };
   } else if (outcomeBox.current !== undefined) {
     outcome = outcomeBox.current;
   } else if (failure !== undefined) {
@@ -811,9 +802,6 @@ export const runV1Headless = async (deps: V1HeadlessDeps): Promise<number> => {
       deps.out(text);
       break;
     }
-    case "approval_missing":
-      deps.err(`[v1] 终局 approval_missing（exit 78）：tool=${outcome.tool}——${outcome.reason}`);
-      break;
     case "suspended":
       deps.err(`[v1] 终局 suspended（exit 75）：tool=${outcome.tool}——${outcome.reason}`);
       break;

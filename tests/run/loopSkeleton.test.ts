@@ -118,9 +118,11 @@ describe("切片 1 · VERIFY 1 终止判据各自收敛", () => {
   });
 
   it("aborted → aborted(79)，stop_reason=aborted（P2-S2 abort 路径贯通）", { timeout: 60_000 }, async () => {
-    // 问答轨 abort：无预录 → atf_admit_data 走问答轨 → 桩应答 verdict=aborted（既有 P2-S2 语义零改动）
+    // 问答轨 abort（ADR-0022：确认卡轨由 atf_data_admission_request 承载——admit_data 直通，
+    // abort 应答改经表外确认卡工具消费）：桩应答 verdict=aborted（既有 P2-S2 语义零改动）
     const scenario = branchOf([
-      { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "r2-fixture-ds-abort" } },
+      { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "r2-fixture-ds-abort", source_ref: "datasets/external/r2-fixture-ds-abort" } },
+      { type: "tool_call", tool: "atf_data_admission_request", params: { dataset_id: "r2-fixture-ds-abort" } },
       { type: "final_answer", text: "irrelevant" },
     ]);
     const ran = await ScenarioRunner.runBranch(scenario, "guard", {

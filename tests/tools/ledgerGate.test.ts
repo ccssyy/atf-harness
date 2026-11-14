@@ -163,7 +163,7 @@ describe("镜像面② 两线等价（同一审批场景：预录→query→cons
     return { state: records[0]?.state ?? "none", count: records.length };
   };
 
-  it("甲线 executor executed ≡ 丙线 approvalHook allow_ledger——同一骨架（runLedgerGate）逐位一致；账本同入 consumed 态、事后无可消费记录", async () => {
+  it.skip("（ADR-0022 退役）甲线 executor ≡ 丙线 approvalHook 账本一致性——授权消费轨已删，骨架仅存 canonical 常量载体", async () => {
     // 甲线：预录 → executor.execute → executed（账本轨 query→consume 放行）
     const connectionA = await spawnMock();
     const scopeA: ScopeRef = { ...SCOPE, scope_id: "run-eq-a" };

@@ -61,12 +61,9 @@ const recordApproval = async (connection: AtfBridgeConnection, tool: string, par
   return (recorded.value as { record_id: string }).record_id;
 };
 
-describe("S3 验收（成功用例）——预录 → 执行成功 → 账本已消费 → 重复调用 → block", () => {
-  it("atf_admit_data 全生命周期：预录 → executed → state=consumed → 重复 blocked(approval_missing)", async () => {
-    const { connection, executor } = await makeExecutor();
-
-    const recordId = await recordApproval(connection, "atf_admit_data", ADMIT_PARAMS);
-    expect(recordId).toMatch(/^approval-record:/);
+describe("S3 验收（ADR-0022 后）——chain_advance 直通执行（授权消费轨退役）", () => {
+  it("atf_admit_data 直通：无预录无审批面 → executed；重复调用同 executed（无一次性消费语义）", async () => {
+    const { executor } = await makeExecutor();
 
     const first = await executor.execute("atf_admit_data", ADMIT_PARAMS);
     expect(first.kind).toBe("executed");
@@ -77,25 +74,9 @@ describe("S3 验收（成功用例）——预录 → 执行成功 → 账本已
     expect(result.fact_id).toMatch(/^ds-2026-001@[0-9a-f]{12}$/);
     expect(result.sha256_digest).toMatch(/^[0-9a-f]{64}$/);
 
-    // 账本记录变为已消费（契约 v2：include_consumed 查询，审批链形态）
-    const queried = await connection.request("ledger_query", { scope_ref: SCOPE_REF, include_consumed: true });
-    expect(queried.ok).toBe(true);
-    if (queried.ok) {
-      const records = (queried.value as { records: LedgerRecord[] }).records;
-      expect(records).toHaveLength(1);
-      expect(records[0]?.record_id).toBe(recordId);
-      expect(records[0]?.approval_id).toMatch(/^apr-/);
-      expect(records[0]?.sequence).toBe(1);
-      expect(records[0]?.state).toBe("consumed");
-    }
-
-    // 重复调用同 request → block（一次性消费语义）
+    // 直通：重复调用同 executed（原「一次性消费→blocked 78」随审批授权轨退役）
     const replay = await executor.execute("atf_admit_data", ADMIT_PARAMS);
-    expect(replay.kind).toBe("blocked");
-    if (replay.kind === "blocked") {
-      expect(replay.block.reason).toBe("approval_missing");
-      expect(replay.block.exit_code).toBe(78);
-    }
+    expect(replay.kind).toBe("executed");
   });
 
   it("atf_gate：预录后 advance——无证据 → blocked（reason_codes 内业务信号）；准入证据后 → pass", async () => {
@@ -120,29 +101,15 @@ describe("S3 验收（成功用例）——预录 → 执行成功 → 账本已
       expect((withEvidence.result as { status?: string }).status).toBe("pass");
     }
   });
-
-  it("账本查询默认只返回可消费记录：include_consumed 缺省不回已消费记录（契约 v2 变更 #4）", async () => {
-    const { connection, executor } = await makeExecutor();
-    await recordApproval(connection, "atf_admit_data", ADMIT_PARAMS);
-    await executor.execute("atf_admit_data", ADMIT_PARAMS); // 消费唯一记录
-
-    const defaultQuery = await connection.request("ledger_query", { scope_ref: SCOPE_REF });
-    expect(defaultQuery.ok).toBe(true);
-    if (defaultQuery.ok) expect((defaultQuery.value as { records: unknown[] }).records).toHaveLength(0);
-  });
 });
 
-describe("S3 验收（反例 1）——无预录 → blocked(approval_missing) → exit 78", () => {
-  it("无预录 admit_data → blocked，exit_code 78；resolveHeadlessExitCode 锚点 = 78", async () => {
+describe("S3 验收（ADR-0022 后）——直通执行与退出码单出口", () => {
+  it("chain_advance 无预录无审批面 → 直通 executed；resolveHeadlessExitCode(executed) = 0", async () => {
     const { executor } = await makeExecutor();
 
-    const blocked = await executor.execute("atf_admit_data", ADMIT_PARAMS);
-    expect(blocked.kind).toBe("blocked");
-    if (blocked.kind !== "blocked") return;
-    expect(blocked.block.reason).toBe("approval_missing");
-    expect(blocked.block.exit_code).toBe(78);
-    expect(blocked.block.tool).toBe("atf_admit_data");
-    expect(resolveHeadlessExitCode(blocked)).toBe(78);
+    const outcome = await executor.execute("atf_admit_data", ADMIT_PARAMS);
+    expect(outcome.kind).toBe("executed");
+    expect(resolveHeadlessExitCode(outcome)).toBe(0);
     expect(resolveHeadlessExitCode({ kind: "executed", tool: "x", result: null })).toBe(0);
   });
 
@@ -250,7 +217,7 @@ describe("S3 补充语义——canonical 反例 / 对端拒绝 / 参数白名单
     if (gatedOutcome.kind === "failed") expect(gatedOutcome.error.code).toBe("bridge_failure");
   });
 
-  it("契约 v2：scope_ref 缺省 → 须审批工具 failed(scope_ref_missing)，fail-closed 不猜测", async () => {
+  it("ADR-0022：scope_ref 缺省不再 fail-closed——chain_advance 直通触桥（连接未就绪 → failed(bridge_failure)）", async () => {
     const transport: BridgeTransport = {
       request: async (): Promise<Result<unknown, BridgeError>> => err({ code: "closed", message: "连接尚未就绪" }),
     };
@@ -258,8 +225,7 @@ describe("S3 补充语义——canonical 反例 / 对端拒绝 / 参数白名单
     const outcome = await executor.execute("atf_admit_data", ADMIT_PARAMS);
     expect(outcome.kind).toBe("failed");
     if (outcome.kind === "failed") {
-      expect(outcome.error.code).toBe("scope_ref_missing");
-      expect(outcome.error.message).toContain("scope_ref");
+      expect(outcome.error.code).toBe("bridge_failure");
     }
   });
 });

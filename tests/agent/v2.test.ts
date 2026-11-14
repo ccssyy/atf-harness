@@ -175,13 +175,14 @@ describe("丙 v2 · A7 工具面与白名单（13→17）", () => {
     });
     s.scopeRefBox.current = { project_id: "mock-project", scope_type: "run", scope_id: "mock-run-1", scope_mode: "headless" } as never;
     await s.agent.prompt("写入运行笔记。");
-    expect(s.audit.some((entry) => entry.tool === "atf_write" && entry.verdict === "blocked_approval_missing")).toBe(true);
+    expect(s.audit.some((entry) => entry.tool === "atf_write" && entry.verdict === "allow_surface")).toBe(true); // headless 直通留痕
     const writeEnd = s.events.find((event) => event.type === "tool_execution_end" && (event as { toolName?: string }).toolName === "atf_write") as { result?: { content?: Array<{ text?: string }> } } | undefined;
-    expect(JSON.stringify(writeEnd?.result ?? "")).toContain("审批缺失"); // 结构化回填（模型可如实转述）
-    await expect(readFile(join(scratch, "notes", "a.txt"))).rejects.toThrow(); // 未放行＝未落盘
+    const writeResult = JSON.stringify(writeEnd?.result ?? "");
+    expect(writeResult).toContain('"ok"'); // 直通执行成功（写入 ok:true）
+    expect(await readFile(join(scratch, "notes", "a.txt"), "utf8")).toBe("hello"); // headless 直通落盘（ADR-0022）
   });
 
-  it("A7-③ 批后放行：surface granted → 账本预录→消费 → atf_write 执行落盘（一次性语义）", async () => {
+  it("A7-③ surface granted → 确认卡放行 → atf_write 执行落盘（ADR-0022 后无账本预录消费）", async () => {
     const bridge = await spawnMock();
     const scratch = await makeScratch();
     const script = [
@@ -203,17 +204,16 @@ describe("丙 v2 · A7 工具面与白名单（13→17）", () => {
     });
     s.scopeRefBox.current = { project_id: "mock-project", scope_type: "run", scope_id: "mock-run-1", scope_mode: "headless" } as never;
     await s.agent.prompt("写入运行笔记。");
-    expect(s.audit.some((entry) => entry.tool === "atf_write" && entry.verdict === "allow_surface_ledger")).toBe(true);
+    expect(s.audit.some((entry) => entry.tool === "atf_write" && entry.verdict === "allow_surface")).toBe(true);
     expect(await readFile(join(scratch, "notes", "a.txt"), "utf8")).toBe("hello");
-    // 一次性语义：同参再写一次需再次授权（账本已消费）
-    const again = await execTool(fileToolByName(scratch, "atf_write"), { path: "notes/a.txt", content: "hello" });
-    void again;
+    // ADR-0022：无一次性消费语义——同参 hook 重入仍经确认卡出卡（granted → 放行）
     const hookAgain = await (await import("../../src/agent/approvalHook.js")).createApprovalBeforeToolCall({
       bridge,
       scopeRefBox: s.scopeRefBox,
       audit: s.audit,
+      surface: grantedSurface,
     })({ toolCall: { id: "w2", name: "atf_write", arguments: { path: "notes/a.txt", content: "hello" } }, args: { path: "notes/a.txt", content: "hello" } } as never);
-    expect(hookAgain).toMatchObject({ block: true }); // 记录已消费 → approval_missing（fail-closed）
+    expect(hookAgain).toBeUndefined(); // granted 确认卡放行
   });
 
   it("A7-④ read 行区间分页：offset/limit/has_more/next_offset 闭环＋行内超长截断留痕", async () => {

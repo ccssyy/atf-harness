@@ -73,39 +73,29 @@ const runBranch = async (
   return ran.value;
 };
 
-describe("切片 2 · VERIFY 2 多工具展开——逐工具守卫与逐工具审批（禁止共享授权）", () => {
-  it("展开后的两个高危决策顺序执行：第一个消费账本记录，第二个被独立拒绝（不得沿用授权）", { timeout: 60_000 }, async () => {
+describe("切片 2 · VERIFY 2 多工具展开——逐工具守卫与直通执行（ADR-0022 拦截退役）", () => {
+  it("展开后的两个高危决策顺序直通执行：各自独立执行成功（ADR-0022 账本授权轨退役，无一次性消费语义）", { timeout: 60_000 }, async () => {
     // 一次"模型响应"展开出的两个高危决策（adapter 展开产物），经 modelProvider seam 注入 loop：
-    // 账本仅预录一条 atf_admit_data 记录——第一个决策消费之；第二个决策必须独立被拒。
+    // ADR-0022 后 admit_data（chain_advance）直通执行——逐工具守卫仍在，逐工具审批轨退役。
     const { provider, contexts } = queueProvider([
       { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-first" } },
       { type: "tool_call", tool: "atf_admit_data", params: { dataset_id: "ds-second" } },
       { type: "final_answer", text: "done" },
     ]);
-    const r = await runBranch(
-      scenarioOf([{ type: "final_answer", text: "irrelevant" }], [
-        { tool: "atf_admit_data", params: { dataset_id: "ds-first" } },
-      ]),
-      { modelProvider: provider },
-    );
+    const r = await runBranch(scenarioOf([{ type: "final_answer", text: "irrelevant" }]), { modelProvider: provider });
 
     // 两个决策都过了切片 0 守卫（无 model_decision_forbidden）
     expect(r.outcome.kind).not.toBe("failed");
     const results = r.events.filter((event) => event.type === "tool/result");
     expect(results).toHaveLength(2);
-    // 第一个：预录记录存在 → 消费放行 → 执行成功
+    // 两个决策各自独立直通执行成功（不再有预录消费/独立拒绝的分叉）
     expect((results[0]?.payload as { ok?: boolean }).ok).toBe(true);
-    // 第二个：账本无可消费记录（一次性语义，记录已被第一个消费）→ blocked approval_missing
-    const second = results[1]?.payload as { ok?: boolean; reason?: string; block?: { reason?: string } };
-    expect(second?.ok).toBe(false);
-    expect(second?.block?.reason).toBe("approval_missing");
-    // 授权确实未被沿用：第二条 tool/result 之后的调用没有产生第二个成功结果
-    expect(results.filter((event) => (event.payload as { ok?: boolean }).ok === true)).toHaveLength(1);
+    expect((results[1]?.payload as { ok?: boolean }).ok).toBe(true);
+    expect(results.filter((event) => (event.payload as { ok?: boolean }).ok === true)).toHaveLength(2);
     // 守卫与预算未拦截展开语义：两个 tool/call 均落盘（逐个过守卫的证明）
     expect(r.events.filter((event) => event.type === "tool/call")).toHaveLength(2);
-    // decide 恰调用两次（第二决策 blocked(approval_missing) 为 headless 终局，exit 78——
-    // 终局先于 final_answer，不再有第三次 decide）
-    expect(contexts.length).toBe(2);
+    // decide 恰调用三次（两决策直通执行后 loop 继续，第三次 decide 给出 final_answer 收束）
+    expect(contexts.length).toBe(3);
   });
 });
 

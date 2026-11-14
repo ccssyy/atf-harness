@@ -81,11 +81,9 @@ export const runGate1aSpike = async (deps: SpikeDeps): Promise<SpikeResult> => {
       // ---- A：文本＋tool_call(status) → final_answer（三类决策；两段模型请求）----
       fauxMessageWithToolCalls("先查询工作区状态。", [{ id: "call-status", name: "atf_workspace_status", arguments: {} }]),
       fauxFinalAnswer("工作区状态已确认：run 就绪、事实计数与 scope_ref 已取得。"),
-      // ---- B：高危动作（gate advance）→ 审批闸拒绝（终局；循环不再发起请求）----
+      // ---- B：gate advance 直通执行（ADR-0022：审批拦截退役）→ 结果回流 → final_answer ----
       fauxMessageWithToolCalls("尝试推进闸门 G1。", [{ id: "call-gate-deny", name: "atf_gate", arguments: { gate: "G1", action: "advance" } }]),
-      // ---- C：预录后重试同参 → 账本放行 → 结果回流 → final_answer ----
-      fauxMessageWithToolCalls("再次推进闸门 G1（已获授权预录）。", [{ id: "call-gate-allow", name: "atf_gate", arguments: { gate: "G1", action: "advance" } }]),
-      fauxFinalAnswer("闸门查询已执行完毕（经账本授权放行，记录一次性消费）。"),
+      fauxFinalAnswer("闸门已直通执行完毕（ADR-0022：审批拦截退役，直通留痕）。"),
     ]),
     beforeToolCall: createApprovalBeforeToolCall({ bridge: deps.bridge, scopeRefBox, audit: approvalAudit }),
     afterToolCall: temMirror,
@@ -100,21 +98,13 @@ export const runGate1aSpike = async (deps: SpikeDeps): Promise<SpikeResult> => {
   await agent.prompt("启动门 1a 最小链演示：先查询工作区状态。");
   let mirrored = await mirrorTranscriptDelta(session, agent, 0);
 
-  // ---- B：审批拒（approval_missing → 78 锚语义，terminate 终局）----
+  // ---- B：gate advance 直通执行（ADR-0022 拦截退役）----
   await agent.prompt("现在推进 G1 闸门。");
-  mirrored = await mirrorTranscriptDelta(session, agent, mirrored);
-
-  // ---- C：账本预录（操作员面等价物经同一桥面）→ 放行 → 一次性消费 ----
-  const recorded = await recordApprovalViaBridge(deps.bridge, scopeRefBox);
-  if (!recorded.ok) throw new Error(`账本预录失败（fail-closed）: ${recorded.message}`);
-  await agent.prompt("已获授权，再次推进 G1 闸门。");
   mirrored = await mirrorTranscriptDelta(session, agent, mirrored);
 
   const checks: Record<string, unknown> = {
     scenario_a_three_decisions: decisionFormsSeen(events),
-    scenario_b_denied: approvalAudit.some((entry) => entry.verdict === "blocked_approval_missing"),
-    scenario_c_allowed: approvalAudit.some((entry) => entry.verdict === "allow_ledger"),
-    scenario_c_one_shot: await verifyNoConsumableRecords(deps.bridge, scopeRefBox),
+    scenario_b_direct: approvalAudit.some((entry) => entry.tool === "atf_gate" && entry.verdict === "allow_readonly"),
   };
 
   // ---- D：孤儿注入（崩溃等价物）＋库级拒绝判据 ----

@@ -310,7 +310,7 @@ describe("放行执行(经 executor 的Granted→执行链,R1「放行执行」�
       scope_id: "run-test",
       scope_mode: "headless",
     });
-    const gate = { handler: (input: { tool: string; params: unknown; approval_key: string }) => h.handler({ ...input, tool_call_id: 1 }) };
+    const gate = { handler: (input: { tool: string; params: unknown }) => h.handler({ ...input, tool_call_id: 1 }) };
     const outcome = await executor.execute("atf_admit_data", { dataset_id: "ds-1" }, gate);
     expect(outcome.kind).toBe("executed"); // granted → 放行 → 执行
   });
