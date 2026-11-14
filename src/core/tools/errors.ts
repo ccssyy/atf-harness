@@ -59,14 +59,6 @@ export interface ToolBlock {
   detail?: unknown;
 }
 
-export const approvalMissingBlockRemoved = undefined as never as void; // ADR-0022 占位（下方随函数体一并清理）
-const _removedApprovalMissingBlock = (tool: string, message: string, detail?: unknown): ToolBlock => ({
-  reason: "approval_missing",
-  message,
-  tool,
-  exit_code: 78,
-  ...(detail !== undefined ? { detail } : {}),
-});
 
 /** 问答轨结构化 block 构造（exit_code 由原因决定：denied/credential_* = 1）。 */
 export const approvalTrackBlock = (
