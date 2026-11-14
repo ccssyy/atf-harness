@@ -255,9 +255,19 @@ export const objectParamShapeErrorOf = (
   param: string, value: Record<string, unknown>, contentKeys: readonly string[],
   allowPathRef = false,
 ): { error: string; note: string } | null => {
-  // path 键=盘上文件引用(D280 语义:桥读原文落盘,零转写失真)——allowPathRef 时放行,转发点处理
-  if (allowPathRef && typeof value.path === "string") return null;
   const keys = Object.keys(value);
+  const hasPath = allowPathRef && typeof value.path === "string";
+  if (hasPath) {
+    // D294 复核缺口2:path 与其它键并存→消歧拒绝(纯 path 才放行——引用通道唯一入口,双给不静默取优先级)
+    const others = keys.filter((k) => k !== "path");
+    if (others.length > 0) {
+      return {
+        error: `${param}_ref_and_content`,
+        note: `path 与其它键(${others.join(",")})并存——二选一后重发:path=桥读盘上文件原文;去掉 path 则传内容对象全文`,
+      };
+    }
+    return null;
+  }
   const refKey = keys.find((k) => k === "file" || k === "__ref" || k === "ref");
   const contentKey = contentKeys.find((k) => k in value);
   if (contentKey !== undefined) {
@@ -270,9 +280,10 @@ export const objectParamShapeErrorOf = (
   const shape = refKey !== undefined
     ? `引用形态(只给了 ${refKey} 键)`
     : keys.length === 0 ? "空对象" : `无内容键的局部形态(键:${keys.join(",")})`;
+  // D294 复核缺口1:两分支各至少两条改法(owner 硬约束「报错即修复指令:至少两条改法」——advice 分支此前缩水单改法)
   const howTo = allowPathRef
-    ? "改法:①用 path 键引用盘上已有 JSON 文件(桥读原文落盘,零转写失真);②用 atf_read 读出全文,把对象整体作为参数值传入。"
-    : "改法:用 atf_read 读出文件全文,把对象整体作为参数值传入。";
+    ? "改法:①用 path 键引用盘上已有 JSON 文件(桥读原文落盘,零转写失真);②用 atf_read 读出全文,把对象整体作为参数值传入;③按本参数 schema description 字段闭集现场构造。"
+    : "改法:①用 atf_read 读出文件全文,把对象整体作为参数值传入;②按本参数 schema description 字段闭集现场构造。";
   return {
     error: `${param}_shape_invalid`,
     note: `${param} 须传内容对象全文(含 ${contentKeys.join("/")} 键),不接受${shape}。${howTo}`,

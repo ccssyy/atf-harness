@@ -457,6 +457,9 @@ describe("D294 对象参数形态闸（1114-1 visual_check 引用形态静默写
     const base = { stage: "experiment_setup", run_id: "r1", workspace_path: root, experiment: "ut-exp" };
     const mode5 = (await (tool as DshToolLike).execute({ ...base, mode5_advice_stats: { file: "/tmp/m.json" } }, fakeExec)) as Record<string, unknown>;
     expect(mode5).toMatchObject({ ok: false, error: "mode5_advice_stats_shape_invalid" });
+    // D294 复核缺口1:advice 分支快败报文至少两条改法(owner 硬约束——不缩水)
+    expect(String(mode5["note"])).toContain("atf_read 读出文件全文");
+    expect(String(mode5["note"])).toContain("现场构造");
     const plan = (await (tool as DshToolLike).execute({ ...base, targeted_plan: {} }, fakeExec)) as Record<string, unknown>;
     expect(plan).toMatchObject({ ok: false, error: "targeted_plan_shape_invalid" });
   });
@@ -475,6 +478,14 @@ describe("D294 对象参数形态闸（1114-1 visual_check 引用形态静默写
     expect(result["error"]).toBeUndefined();
     const forwarded = readFileSync(join(root, "experiments", "ut-exp", "r1", "runtime", "webui", "label-qc-visual-check.json"), "utf8");
     expect(forwarded).toContain("原文逐字转发断言");
+  });
+
+  it("path 双给消歧（复核缺口2）：{path+results}/{path+file} 并存→ref_and_content 拒绝,纯 path 才放行", async () => {
+    const withContent = await call({ visual_check: { path: "/tmp/vc.json", results: [{ key: "k", verdict: "ok" }] } });
+    expect(withContent).toMatchObject({ ok: false, error: "param_shape_invalid" });
+    expect((withContent["violations"] as Array<{ error: string }>)[0]?.error).toBe("visual_check_ref_and_content");
+    const withFile = await call({ visual_check: { path: "/tmp/vc.json", file: "/tmp/vc2.json" } });
+    expect((withFile["violations"] as Array<{ error: string }>)[0]?.error).toBe("visual_check_ref_and_content");
   });
 
   it("path 指向不存在的文件：快败 path_not_found 带路径", async () => {
