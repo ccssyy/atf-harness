@@ -412,3 +412,100 @@ describe("批㊶-F-H 项 1 bash/write 免审 answerer（waterfall 头部——�
     expect(registerApprovalExempt({})).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------- D294 C1 对象参数形态闸
+describe("D294 对象参数形态闸（1114-1 visual_check 引用形态静默写空壳事故根治）", () => {
+  const stageTool = () => buildPipelineTool(approvalCtx("allowed-once"), `node ${mockPipelinePath}`, 30_000);
+  const call = async (argsExtra: Record<string, unknown>) =>
+    (await (stageTool() as DshToolLike).execute(
+      { stage: "label_qc", run_id: "r1", workspace_path: tempRoot(), ...argsExtra }, fakeExec,
+    )) as Record<string, unknown>;
+
+  it("visual_check 引用形态 {__ref}/{file}：当场快败 param_shape_invalid，不再静默写盘转发", async () => {
+    for (const ref of [{ __ref: "/tmp/x.json" }, { file: "/tmp/x.json" }]) {
+      const result = await call({ visual_check: ref });
+      expect(result).toMatchObject({ ok: false, error: "param_shape_invalid" });
+      const violations = result["violations"] as Array<{ error: string; note: string }>;
+      expect(violations[0]?.error).toBe("visual_check_shape_invalid");
+      expect(violations[0]?.note).toContain("读出全文");
+    }
+  });
+
+  it("visual_check 局部形态 {checklist_digest:单值}（缺 results）＝1114-1 真实事故形态：快败", async () => {
+    const result = await call({ visual_check: { checklist_digests: { bl: "sha256:abc" } } });
+    expect(result).toMatchObject({ ok: false, error: "param_shape_invalid" });
+    expect((result["violations"] as Array<{ error: string }>)[0]?.error).toBe("visual_check_shape_invalid");
+  });
+
+  it("visual_check 双给（file+results 并存）：ref_and_content 消歧拒绝", async () => {
+    const result = await call({ visual_check: { file: "/tmp/x.json", results: [{ key: "k", verdict: "ok" }] } });
+    expect(result).toMatchObject({ ok: false, error: "param_shape_invalid" });
+    expect((result["violations"] as Array<{ error: string }>)[0]?.error).toBe("visual_check_ref_and_content");
+  });
+
+  it("visual_readings 引用形态 {__ref}：快败（五处写盘转发前置闸）", async () => {
+    const result = await call({ stage: "style_split", visual_readings: { __ref: "/tmp/r.json" } });
+    expect(result).toMatchObject({ ok: false, error: "param_shape_invalid" });
+    expect((result["violations"] as Array<{ error: string }>)[0]?.error).toBe("visual_readings_shape_invalid");
+  });
+
+  it("advice 三参引用/空形态：快败（写盘前拦截——空壳卡面不再静默）", async () => {
+    // advice 写盘前置 run_not_created 检查——预建 runDir 让形态闸先于消费链触发
+    const root = tempRoot();
+    mkdirSync(join(root, "experiments", "ut-exp", "r1"), { recursive: true });
+    const tool = stageTool();
+    const base = { stage: "experiment_setup", run_id: "r1", workspace_path: root, experiment: "ut-exp" };
+    const mode5 = (await (tool as DshToolLike).execute({ ...base, mode5_advice_stats: { file: "/tmp/m.json" } }, fakeExec)) as Record<string, unknown>;
+    expect(mode5).toMatchObject({ ok: false, error: "mode5_advice_stats_shape_invalid" });
+    const plan = (await (tool as DshToolLike).execute({ ...base, targeted_plan: {} }, fakeExec)) as Record<string, unknown>;
+    expect(plan).toMatchObject({ ok: false, error: "targeted_plan_shape_invalid" });
+  });
+
+  it("path 键=盘上文件引用：放行且桥读原文落盘（D280 语义——零转写失真）", async () => {
+    const root = tempRoot();
+    const srcFile = join(root, "vc-src.json");
+    writeFileSync(srcFile, JSON.stringify({
+      schema_version: "LabelQcVisualCheck/v1",
+      checklist_digests: { bl: "sha256:x" },
+      results: [{ key: "qc-q2-x", verdict: "ok", note: "原文逐字转发断言" }],
+    }), "utf8");
+    const result = (await (stageTool() as DshToolLike).execute(
+      { stage: "label_qc", run_id: "r1", workspace_path: root, experiment: "ut-exp", visual_check: { path: srcFile } }, fakeExec,
+    )) as Record<string, unknown>;
+    expect(result["error"]).toBeUndefined();
+    const forwarded = readFileSync(join(root, "experiments", "ut-exp", "r1", "runtime", "webui", "label-qc-visual-check.json"), "utf8");
+    expect(forwarded).toContain("原文逐字转发断言");
+  });
+
+  it("path 指向不存在的文件：快败 path_not_found 带路径", async () => {
+    const result = await call({ visual_check: { path: "/tmp/definitely-missing-d294.json" } });
+    expect(result).toMatchObject({ ok: false, error: "visual_check_path_not_found" });
+    expect(String(result["note"])).toContain("/tmp/definitely-missing-d294.json");
+  });
+
+  it("合法内容形态回归：{results,checklist_digests} 照常通过走 spawn（闸零误伤）", async () => {
+    const result = await call({
+      visual_check: {
+        schema_version: "LabelQcVisualCheck/v1",
+        checklist_digests: { bl: "sha256:138ab4fc" },
+        results: [{ key: "qc-q2-x", verdict: "ok", note: "回归夹具" }],
+      },
+    });
+    expect(result["error"]).toBeUndefined();
+    expect(result).toMatchObject({ ok: true, stage: "label_qc" });
+  });
+
+  it("1114-1 四次真实调用形态原样重放：第一次即快败带修复指令（不再空壳静默+不相关拒绝）", async () => {
+    const replay = [
+      { checklist_digests: "sha256:138ab4fc" },
+      { file: "/data/x/qc-visual-check-bd4a46658c4d.json" },
+      { checklist_digest: "sha256:138ab4fc" },
+      { __ref: "/data/x/qc-visual-check-bd4a46658c4d.json" },
+    ];
+    for (const vc of replay) {
+      const result = await call({ visual_check: vc });
+      expect(result).toMatchObject({ ok: false, error: "param_shape_invalid" });
+      expect(JSON.stringify(result["violations"])).toContain("读出全文");
+    }
+  });
+});

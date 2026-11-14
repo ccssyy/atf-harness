@@ -43,12 +43,22 @@ describe("D256 visual_readings 段消费×转发覆盖对账", () => {
     ).toBe(true);
   });
 
-  it("style_split 转发形态与 experiment_setup 同款（落 runtime/webui/ 下写盘传路径）", () => {
+  it("style_split/experiment_setup/training_prep 转发形态同款（统一走 forwardReadingObject 写盘传路径——D294 重构后语义不变）", () => {
     const harness = readFileSync(harnessPipelineFace, "utf8");
-    expect(harness).toContain('args.stage === "style_split" && args.visual_readings !== undefined');
-    // 转发必须是写盘+传路径（对象直传内核 argparse Path 参数不识别——1109-2 实锚）
-    const styleBlock = harness.slice(harness.indexOf('args.stage === "style_split" && args.visual_readings'));
-    expect(styleBlock.slice(0, 400)).toContain("writeFileSync");
-    expect(styleBlock.slice(0, 400)).toContain('argv.push("--visual-readings", readingsPath)');
+    // 三段独立转发分支仍在（D256 围栏语义：加段漏段拦截面——新增消费段必须同款接线）
+    for (const stage of ["style_split", "experiment_setup", "training_prep"]) {
+      expect(
+        harness.includes(`args.stage === "${stage}" && args.visual_readings !== undefined`),
+        `harness 缺 ${stage} 段的 visual_readings 转发分支`,
+      ).toBe(true);
+      const block = harness.slice(harness.indexOf(`args.stage === "${stage}" && args.visual_readings`));
+      expect(block.slice(0, 400)).toContain("forwardReadingObject");
+    }
+    // 转发必须是写盘+传路径（对象直传内核 argparse Path 参数不识别——1109-2 实锚）；
+    // D294 重构：写盘细节收敛进 forwardReadingObject 单源（三处同构消重），本断言钉住单源本体
+    const helper = harness.slice(harness.indexOf("const forwardReadingObject"));
+    expect(helper.slice(0, 800)).toContain("writeFileSync");
+    expect(helper.slice(0, 800)).toContain('"runtime", "webui", "visual-readings.json"');
+    expect(harness).toContain('argv.push("--visual-readings", fr.file)');
   });
 });
