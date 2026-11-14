@@ -83,6 +83,9 @@ describe("executor 显式映射与 canonical 校验", () => {
         { item_id: "qc-q2-aaaaaaaaaaaa", action: "modify", disposition: "keep_both", reason_text: "两条都保留" },
         { item_id: "qc-q4-bbbbbbbbbbbb", action: "reject" },
       ],
+      // D244/D269 起 run_id/workspace_path 入 required（定位 run 目录写凭据）——存量红#3 同根补齐
+      run_id: "run-ut-wiring",
+      workspace_path: "/tmp/ws-wiring",
     };
     const outcome = await execute(makeStubTransport(RESOLVE_RESULT, methods), "atf_label_qc_resolve", params);
     expect(methods).toEqual(["atf_label_qc.resolve"]);
