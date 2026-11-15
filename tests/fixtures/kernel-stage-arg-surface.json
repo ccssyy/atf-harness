@@ -1,11 +1,10 @@
 {
-  "note": "内核 walkthrough 段级参数闭集快照(摘自内核仓 tools/argparse_surface.json;AB 归一批重摘=F0a contract 参数增+dispatch/resume 五参数删)",
-  "source_surface_sha256": "905b090aec8808c59aafc011e1e563b5184a79277c798ff923607a6e23acad84",
+  "note": "内核 walkthrough 段级参数闭集快照(摘自内核仓 tools/argparse_surface.json;候裁①a 重摘=--contract-split-root 退役)",
+  "source_surface_sha256": "350d1a5067b95d0e6883179e4ee67bee42baf9b751ead73c0e90981092a67b0a",
   "options": [
     "--workspace",
     "--print-stage-order",
     "--contract-candidate",
-    "--contract-split-root",
     "--stage",
     "--visual-channel",
     "--visual-check",
