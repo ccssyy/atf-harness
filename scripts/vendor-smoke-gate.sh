@@ -9,7 +9,7 @@
 #   ① vendor 守护七用例（应用态/登记对账/明细对账/演练逐字节等价）
 #   ② server 起＋atf 工具面在场探针（临时端口起 dsh web→HTTP 探活→启动日志
 #      marker 断言→杀进程；不调 LLM）
-#   ③ 九段 smoke 回放（内核仓 scripts/evals/replay_corpus_1113.py；exit 0=绿）
+#   ③ 管线回放·三层四 case（内核仓 scripts/evals/replay_corpus_1113.py；exit 0=绿）
 #   ④ 重评触发器三信号现状（C4：报告段，超限提示启动独立评估批，不拦截）
 # 用法：bash scripts/vendor-smoke-gate.sh [--skip-replay]
 #       --skip-replay 跳段③（回放资产不在场时）；段①②④仍全跑。
@@ -63,12 +63,12 @@ grep -F '[atf-tools] apply()' "$SMOKE_LOG" >/dev/null \
 echo "[vendor-smoke-gate] atf 工具面在场：[atf-tools] apply() marker 命中"
 grep -F '[atf-ui] 桥类型: real' "$SMOKE_LOG" | head -1 || true
 
-# —— 段③：九段 smoke 回放 ——
+# —— 段③：管线回放·三层四 case ——
 if [[ "$SKIP_REPLAY" == "1" ]]; then
-  echo "=== 段③ 九段 smoke 回放：--skip-replay 跳过（本门未全跑，放行判据不成立）==="
+  echo "=== 段③ 管线回放：--skip-replay 跳过（本门未全跑，放行判据不成立）==="
 else
   KERNEL_ROOT="${ATF_KERNEL_SOURCE:-/data/sam/AgenticTrainingFlow}"
-  echo "=== 段③ 九段 smoke 回放（$KERNEL_ROOT/scripts/evals/replay_corpus_1113.py）==="
+  echo "=== 段③ 管线回放·三层四 case（$KERNEL_ROOT/scripts/evals/replay_corpus_1113.py）==="
   ( cd "$KERNEL_ROOT" && PYTHONPATH=src python3 scripts/evals/replay_corpus_1113.py ) \
     || fail "回放红（exit=$?）——内核段行为回归；判据面见回放清单，与 vendor 面相关时按 LOCK.md SOP 步骤④走真机回归"
 fi
@@ -125,5 +125,5 @@ PYEOF
 if [[ "$SKIP_REPLAY" == "1" ]]; then
   echo "[vendor-smoke-gate] 段①②绿；段③回放被跳过——放行判据不成立，patch 变更放行前须完整跑本门"
 else
-  echo "[vendor-smoke-gate] 全绿：patch 应用态合法（段①守护＋段②工具面在场＋段③九段回放），放行"
+  echo "[vendor-smoke-gate] 全绿：patch 应用态合法（段①守护＋段②工具面在场＋段③管线回放），放行"
 fi

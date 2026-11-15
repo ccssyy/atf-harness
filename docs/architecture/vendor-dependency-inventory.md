@@ -16,7 +16,7 @@
 
 | 消费方式 | 实锚 |
 |---|---|
-| patch 0001-0008 触达 18 文件/8 包，改 vendor 源码行为的唯一合法通道 | `vendor/dsh/LOCK.md` patch 表（触及文件列）；闭集快照＝`tests/tools/testVendorPatchConsolidation.test.ts` `TOUCHED_FILES`/`UNTRACKED_SRC`；重放＝`vendor/dsh/apply-patches.sh`（幂等三态） |
+| patch 0001-0008 触达 18 文件/10 包，改 vendor 源码行为的唯一合法通道 | `vendor/dsh/LOCK.md` patch 表（触及文件列）；闭集快照＝`tests/tools/testVendorPatchConsolidation.test.ts` `TOUCHED_FILES`/`UNTRACKED_SRC`；重放＝`vendor/dsh/apply-patches.sh`（幂等三态） |
 
 ### 面 2 · 构建产物消费面（级 B）
 
@@ -25,7 +25,7 @@
 | vitest alias 直指 vendor lib（13 包：dsh-tools/schemastery/cordis/cosmokit/dsh-scope/dsh-util-values/dsh-brand/dsh-llm/dsh-typert-protocol/dsh-sandbox/dsh-user-approval/dsh-fs/dsh-session） | `vitest.config.ts:23-35` |
 | atf-tools/atf-ui 扩展＝DSH Cordis 扩展包，仓侧消费 vendor/dsh 协议；生产经父仓 node_modules symlink 消费构建产物 | `packages/extensions/atf-tools/src/index.ts:4` |
 | worktree 依赖装配（硬链主仓 node_modules+vendor 产物两层） | `scripts/setup-worktree-deps.sh` |
-| 测试直 require vendor 模块（jsdom×真 React×vendor 组件） | `tests/dshUi/*.test.ts`（`createRequire("…/vendor/dsh/deepseek-harness/package.json")`，如 `tests/dshUi/draftResumeCard.test.ts:8`） |
+| 测试直 require vendor 模块（jsdom×真 React×vendor 组件） | `tests/dshUi/*.test.ts`（`createRequire("…/vendor/dsh/deepseek-harness/package.json")`，如 `tests/dshUi/draftResumeCard.test.ts:14`） |
 
 ### 面 3 · 装配/进程面（级 A）
 
@@ -48,7 +48,7 @@
 |---|---|
 | 测试经 atf-tools 源码间接消费（vitest alias 解析 @deepseek-ai/* → vendor lib） | `tests/dshTools/*.test.ts`（3 件，import `packages/extensions/atf-tools/src/*`） |
 | dshUi 直消费（见面 2） | `tests/dshUi/*.test.ts`（9 件）＋browser smoke（`smoke_*_browser.py` 3 件） |
-| L2 eval 一次性宿主（headless 载体：`node --import tsx/esm apps/cli/src/bin.ts headless`） | `scripts/evals/label_qc_behavior_eval_dsh.sh:47` |
+| L2 eval 一次性宿主（headless 载体：`node --import tsx/esm apps/cli/src/bin.ts headless`） | `scripts/evals/label_qc_behavior_eval_dsh.sh:44` |
 
 ### 面 6 · codegen 消费面（盘点结论：零直接消费）
 
@@ -60,7 +60,7 @@
 
 | 消费方式 | 实锚 |
 |---|---|
-| dsh CLI 运维角色：`dsh web`/`dsh headless`（实例管理＋eval 环境旁路；1107 裁定＝运维工具级非架构级，pin 保留无害） | `deploy/instances/instance-restart.sh:215`、`scripts/evals/label_qc_behavior_eval_dsh.sh:47`；角色定调＝`vendor/dsh/LOCK.md` 纪律段 |
+| dsh CLI 运维角色：`dsh web`/`dsh headless`（实例管理＋eval 环境旁路；1107 裁定＝运维工具级非架构级，pin 保留无害） | `deploy/instances/instance-restart.sh:215`、`scripts/evals/label_qc_behavior_eval_dsh.sh:44`；角色定调＝`vendor/dsh/LOCK.md` 纪律段 |
 
 ## 与重评触发器（C4）的基线关系
 
