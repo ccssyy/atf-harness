@@ -9,7 +9,9 @@
  * - client 面消费构建产物——产物含 patch 特征由本文件断言护栏
  *   （防 10-17「src/产物失配后重新构建把 patch 效果静默打回」形态复现）；
  * - 登记面（LOCK.md patch 表）与文件面（patches/ 目录）由本文件对账
- *   （防 0007/0008 只落文件不落登记的漂移复现——收编批的起因缺陷）。
+ *   （防 0007/0008 只落文件不落登记的漂移复现——收编批的起因缺陷）；
+ * - 登记明细面（LOCK 表「触及文件」列）与 patch 事实（numstat 触达）逐 patch 对账
+ *   （批 4 C2：新增 patch 时的同步义务——LOCK 行/TOUCHED_FILES/C-A3 数字——落机检）。
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
@@ -72,6 +74,44 @@ function sameFile(a: string, b: string): boolean {
   return readFileSync(a).equals(readFileSync(b));
 }
 
+/** 解析 LOCK.md patch 表行「触及文件」列为文件路径集合（`{a,b}` 简写展开）。 */
+function lockRowTouches(patch: string): string[] {
+  const row = readFileSync(LOCK_MD, "utf8")
+    .split("\n")
+    .find((l) => l.startsWith("|") && l.includes(`\`${patch}\``));
+  if (!row) return [];
+  const cells = row.split("|").map((c) => c.trim());
+  const touchCell = cells[cells.length - 2] ?? ""; // 触及文件=表行最后一个非空列
+  const files: string[] = [];
+  for (const m of touchCell.matchAll(/`([^`]+)`/g)) {
+    const token = m[1] as string;
+    const brace = token.match(/^(.*)\{(.+)\}(.*)$/);
+    if (brace) {
+      const [, prefix = "", options = "", suffix = ""] = brace;
+      for (const opt of options.split(",")) files.push(prefix + opt.trim() + suffix);
+    } else {
+      files.push(token);
+    }
+  }
+  return [...new Set(files)].sort();
+}
+
+/** patch 实际触达文件集（numstat 只解析 patch 内容；须在仓根以全路径跑——patches/ 目录内裸文件名跑出空输出）。 */
+function patchNumstatFiles(patch: string): string[] {
+  const out = execFileSync("git", ["apply", "--numstat", join(PATCH_DIR, patch)], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return out
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => (l.split("\t")[2] ?? "").trim())
+    .filter(Boolean)
+    .sort();
+}
+
 describe("vendor patch 收编守护", () => {
   it("C-A1 前提：submodule 锁在官方基线 639ed01", () => {
     const head = git(["rev-parse", "HEAD"], VENDOR_DIR);
@@ -93,6 +133,26 @@ describe("vendor patch 收编守护", () => {
       { missingInLock, orphanInLock },
       "LOCK.md 登记面与 patches/ 文件面对账失败——missingInLock=已落盘未登记（在 LOCK.md patch 表补行，格式沿既有行）；orphanInLock=登记了但文件缺席（从工作区重导出，或删除孤儿登记行）"
     ).toEqual({ missingInLock: [], orphanInLock: [] });
+  });
+
+  it("C2 明细对账：LOCK 表触及文件列 ↔ patch 实际触达逐 patch 相等，登记并集锚定闭集快照", () => {
+    const mismatches: string[] = [];
+    const registeredUnion = new Set<string>();
+    for (const f of patchFiles()) {
+      const registered = lockRowTouches(f);
+      const actual = patchNumstatFiles(f);
+      for (const x of registered) if (!actual.includes(x)) mismatches.push(`${f}: LOCK 多登记 ${x}`);
+      for (const x of actual) if (!registered.includes(x)) mismatches.push(`${f}: LOCK 漏登记 ${x}`);
+      for (const x of registered) registeredUnion.add(x);
+    }
+    expect(
+      mismatches,
+      "LOCK.md 触及文件列与 patch 实际触达不符——多登记=删该行多余文件项或补 patch 内容；漏登记=在该 patch 行「触及文件」列补文件项（`{a,b}` 简写同 token 内展开）。登记明细是依赖盘点闭集（docs/architecture/vendor-dependency-inventory.md 面 1）与重评触发器的数据源，必须与 patch 事实一致"
+    ).toEqual([]);
+    expect(
+      [...registeredUnion].sort(),
+      "LOCK 登记触达并集偏离守护闭集快照——新增 patch 后须同步三处才可合入：LOCK.md 表行（含触及文件列）＋本文件 TOUCHED_FILES（新触达文件时）＋C-A3 应用态数字（新触达源文件时）"
+    ).toEqual(TOUCHED_FILES);
   });
 
   it("编号连续：从 0001 起无跳号（抽走 patch 立即可见）", () => {
