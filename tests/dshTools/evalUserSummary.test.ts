@@ -48,7 +48,9 @@ describe("F6 atf_evaluate：user_summary 与连续失败升级", () => {
     expect(second["escalate_to_user"]).toBe(true);
     expect(second["failure_count"]).toBe(2);
     const escalatedSummary = second["user_summary"] as { next: string };
-    expect(escalatedSummary.next).toContain("需要你介入");
+    // 批 5 3c:eval 恒强文案退役——本码(adapter_path_missing)按内核三分表判
+    // self_heal=软文案(继续处理);需要人的码才「需要你介入」(receiptSummary 锚覆盖)。
+    expect(escalatedSummary.next).not.toContain("需要你介入");
     // 升级文案必须点明「失败原因可见」（用户不用追问就知道去哪看）
     expect(escalatedSummary.next).toContain("失败原因");
     // L 面：升级即投影一条 form=notice 的 user/message

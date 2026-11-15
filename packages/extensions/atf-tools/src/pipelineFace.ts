@@ -165,7 +165,7 @@ import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../.
 import { fieldNameMapOf, readExperimentGrouping, renderGroupingSection } from "../../../../src/core/workspace/experimentGrouping.js";
 import { fieldsDigestOf, groupingDecisionPathOf, readGroupingDecision, writeGroupingDecision } from "./groupingDecision.js";
 import { fieldChoiceAnyLedgerOf, fieldChoiceDetailOf, readFieldChoice, readFieldLabels, writeFieldChoice } from "./fieldChoice.js";
-import { escalationKeyOf, escalationFiredOf, clearEscalation, ownerInterventionOf, decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
+import { escalationKeyOf, escalationFiredOf, clearEscalation, receiptNeedsUser, decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
 import { join } from "node:path";
 
 import { tmpdir } from "node:os";
@@ -4218,6 +4218,82 @@ let visualSummary: Record<string, unknown> | undefined;
             });
           }
         }
+        // 批 5 3b/3c:聚类路线待答——内核 style_split 段回执携带 cluster_route_choice
+        // (state=pending,两条产品路线分叉=真决策点,owner 2026-11-16 裁定)→ 原生
+        // 选项卡问用户(#13 统一问询通道,分组卡同款);应答直写内核决策账本
+        // cluster-choice.json(source=user_selected,#33 用户决定凭据;单源路径=
+        // answer_ledger),回执附应答事实与重跑指路。卡通道缺席=回执原样带指路
+        // (聊天转述兜底),零越权代答。
+        if (stage === "style_split") {
+          const scs = firstResultKeyOf(receipt, "style_cluster_state") as Record<string, unknown> | undefined;
+          const pendingChoice = scs !== undefined && typeof scs === "object"
+            ? (scs["cluster_route_choice"] as Record<string, unknown> | undefined)
+            : undefined;
+          if (pendingChoice !== undefined && pendingChoice["state"] === "pending") {
+            const ledger = typeof pendingChoice["answer_ledger"] === "string" ? String(pendingChoice["answer_ledger"]) : "";
+            const rawOptions = Array.isArray(pendingChoice["options"]) ? (pendingChoice["options"] as unknown[]) : [];
+            const optionRows = rawOptions
+              .map((entry) => (entry !== null && typeof entry === "object" ? entry as Record<string, unknown> : undefined))
+              .filter((entry): entry is Record<string, unknown> => entry !== undefined);
+            const options = optionRows.map((entry) => ({
+              label: String(entry["label"] ?? entry["id"] ?? ""),
+              description: "",
+            }));
+            const choiceSvc = ctx.get("userQuestions") as FormAskService | undefined;
+            if (choiceSvc !== undefined && typeof choiceSvc.ask === "function" && ledger !== "" && optionRows.length === 2) {
+              try {
+                const answered = await choiceSvc.ask({
+                  questions: [{
+                    id: "cluster-route-choice",
+                    question: String(pendingChoice["question"] ?? "这批素材要不要按版式聚类后再划分训练/测试集?"),
+                    header: "版式聚类",
+                    detail: "两条路线:\n· 按版式聚类:同版式归同一侧,按簇分层切分(更防泄漏)\n· 不聚类:每页各自成类,按全数据随机切分",
+                    options,
+                    multiSelect: false,
+                  }],
+                  agent: (exec as { agent?: unknown }).agent,
+                  signal: (exec as { signal?: unknown }).signal,
+                });
+                const firstAnswer = answered.answers[0];
+                const selectedLabel = firstAnswer !== undefined ? (firstAnswer.selected[0] ?? "") : "";
+                const selectedRow = optionRows.find(
+                  (entry) => String(entry["label"] ?? entry["id"] ?? "") === selectedLabel
+                    || String(entry["id"] ?? "") === selectedLabel);
+                const choice = selectedRow !== undefined ? String(selectedRow["id"] ?? "") : "";
+                if (choice === "cluster" || choice === "no_cluster") {
+                  mkdirSync(dirname(ledger), { recursive: true });
+                  writeFileSync(ledger, JSON.stringify({
+                    schema_version: "ClusterChoice/v1",
+                    choice,
+                    source: "user_selected",
+                    note: "聚类路线选项卡应答(批 5 真决策点,用户卡上选定)",
+                  }, null, 1) + "\n", "utf8");
+                  receipt["cluster_route_answered"] = {
+                    choice,
+                    source: "user_selected",
+                    ledger,
+                    note: "用户已在选项卡选定聚类路线并落账 cluster-choice.json——重跑 style_split 段即按所选路线推进(账本直读,勿重复提问)",
+                  };
+                } else {
+                  receipt["cluster_route_answered"] = {
+                    asked: true,
+                    note: "选项卡应答未落选定(未选提交/自由输入)——把用户原话带回确认两条路线(按版式聚类/不聚类随机切分)后重跑本段",
+                  };
+                }
+              } catch (cause) {
+                receipt["cluster_route_answered"] = {
+                  asked: false,
+                  note: `选项卡应答失败(${String(cause).slice(0, 120)})——聚类路线仍待用户选择,改在聊天里转述两条路线后按答案重跑本段`,
+                };
+              }
+            } else if (optionRows.length === 2) {
+              receipt["cluster_route_answered"] = {
+                asked: false,
+                note: "选项卡通道缺席——聚类路线待用户选择:向用户转述两条路线(①按版式聚类:同版式同侧更防泄漏;②不聚类:一页一类全数据随机切分),按答案带 --auto-style-cluster on/no_cluster 重跑本段",
+              };
+            }
+          }
+        }
         if (stage === "training_prep" && ok) {
           const report = firstResultKeyOf(receipt, "construction_report") as Record<string, unknown> | undefined;
           if (report !== undefined) {
@@ -4264,7 +4340,9 @@ let visualSummary: Record<string, unknown> | undefined;
       if (decorated.escalate_to_user === true) {
         // C4.1：文案与真实可介入性挂钩——凭据/白名单/审批类=owner 决定才能解（强文案）；
         // 缺件/参数/schema 类=agent 可自愈（软文案；自愈成功会对冲作废——1112 实锚 13 条假告警的修正）
-        const ownerNeeded = ownerInterventionOf(JSON.stringify(receipt).slice(0, 4000));
+        // 批 5 3c:码级三分表主判(need_user=强文案;self_heal/record=软文案+自愈
+        // 对冲;越集默认呈人 fail-closed)——文案正则主判退役(1112 稀释形态终结)。
+        const ownerNeeded = receiptNeedsUser(receipt as Record<string, unknown>);
         const summary: UserSummary = {
           ...decorated.user_summary,
           next: ownerNeeded

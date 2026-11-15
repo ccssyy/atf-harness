@@ -32,7 +32,7 @@ import { scanRunDir } from "../../atf-ui/src/server.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { isTrainingAutopilot, ATF_TRAINING_PRESET } from "./trainingPreset.js";
 import { asToolValue } from "./schemaTranslate.js";
-import { ownerInterventionOf, decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
+import { escalationKeyOf, escalationFiredOf, clearEscalation, receiptNeedsUser, decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
 import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
 import { readTrainingCompletion } from "../../../../src/core/workspace/trainingCompletion.js";
 import { probeSession, resolveLaunchSessionName, tmuxCommand, tmuxTrainingEvidenceFor, evalOrchSessionBase, trainingSessionBase, type SessionProbe } from "../../../../src/core/workspace/tmuxLiveness.js";
@@ -2340,9 +2340,22 @@ const instrumentTrainOutcome = <T>(tool: T): T => {
     );
     const escalated = decorated.escalate_to_user === true;
     if (escalated) {
-      decorated.user_summary = { ...decorated.user_summary, next: ownerInterventionOf(JSON.stringify(decorated).slice(0, 4000))
-          ? "连续两次没成功——需要你介入：失败原因属于凭据/白名单/审批类（只有你能决定），已写在回执里"
+      // 批 5 3c:码级三分表主判(need_user=强文案/self_heal=软文案;越集默认呈人)
+      // ——文案正则主判退役;训练面与段面同判据,不再各猜各的。
+      decorated.user_summary = { ...decorated.user_summary, next: receiptNeedsUser(payload)
+          ? "连续两次没成功——需要你介入：失败原因属于需要你决定/提供的条件（只有你能解），已写在回执里"
           : "连续两次没成功——失败原因已写在回执里；我先按它继续处理，若卡住会再向你报告" };
+    }
+    // 批 5 3c:训练面补自愈对冲(pipelineFace C4.1 同款)——升级发射后自愈成功=
+    // 补发作废说明(append-only 流的撤回形态),不再留一条已失效的「需要你介入」。
+    const trainEscKey = escalationKeyOf(sessionIdOf(exec) ?? null, TRAIN_TOOL_NAME);
+    if (ok && escalationFiredOf(trainEscKey)) {
+      clearEscalation(trainEscKey);
+      projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, {
+        conclusion: "训练调用已自愈成功——前述「连续两次没成功」提醒作废，无需处理",
+        stage: "training",
+        next: "继续后续流程即可",
+      });
     }
     // 终态判定与首投（D5）：纯函数判定（可测），Set 会话×run 去重只投一次
     let terminalNotice: UserSummary | null = null;
@@ -2390,8 +2403,12 @@ const instrumentEvalOutcome = <T extends { execute: (args: unknown, exec: unknow
       payload, sessionIdOf(exec) ?? null, EVAL_TOOL_NAME, ok, evalUserSummaryOf(payload, ok, action),
     );
     const escalated = decorated.escalate_to_user === true;
+    // 批 5 3c:eval 面接码级分类器(恒强文案退役——1112 稀释形态与 train/pipeline
+    // 同源终结;need_user 强文案,self_heal 软文案继续处理)。
     const summary: UserSummary = escalated
-      ? { ...decorated.user_summary, next: "连续两次没成功——需要你介入：失败原因已写在回执里（可直接查看），看一眼就知道是缺条件还是环境问题；也可以直接说要改哪一项" }
+      ? { ...decorated.user_summary, next: receiptNeedsUser(payload)
+          ? "连续两次没成功——需要你介入：失败原因属于需要你决定/提供的条件（只有你能解），已写在回执里"
+          : "连续两次没成功——失败原因已写在回执里；我先按它继续处理，若卡住会再向你报告" }
       : decorated.user_summary;
     if (escalated) decorated.user_summary = summary;
     // L 层投影：通知进会话流（status 查询且未升级时不投——免噪声）
