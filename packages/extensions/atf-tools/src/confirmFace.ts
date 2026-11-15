@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows, pixelPairViolationOf, READONLY_CONFIG_KEYS, configFieldPlaceholderOf, configBlockOf, configChoiceValuesOf } from "../../../../src/webui/configConfirm.js";
+import { buildPipelineTool } from "./pipelineFace.js";
 
 /** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型；批㊶-Q 增第四态 agent_recommend，
  *  仅全自动档采纳 agent 参数推荐时由本文件后处理标注，buildConfigConfirmFields 不产出该态）。
@@ -524,7 +525,61 @@ interface ConfirmDeps {
   gpuProbe?: () => number | null;
   /** F1：前置预检装配（本次训练方案卡前先出预检卡；缺席＝不出预检卡，训练方案链现状语义）。 */
   preflight?: PreflightDeps;
+  /** 三期批 1a：确认落账自动重触发 training_prep 段（T7 时序硬规则下移机制；
+   *  缺席＝不重触发并如实回执 skipped（测试注入面渐进装配，生产 index.ts 必传）。 */
+  pipeline?: { command: string; timeoutMs: number };
 }
+
+/** 三期批 1a：段重触发结果 → training_prep_auto 回执投影（纯函数——组件测试锚）。
+ *  ok 态说明确认值已进启动件;失败态不遮蔽确认成功,note 带显式重调指引(报错即修复指令)。 */
+export const trainingPrepAutoOf = (result: Record<string, unknown>): { ok: boolean; note: string } => {
+  if (result["ok"] === true) {
+    return { ok: true, note: "training_prep 段已自动重触发,确认值已进 iteration-config 与启动件" };
+  }
+  const reason = typeof result["note"] === "string" ? result["note"] : JSON.stringify(result).slice(0, 300);
+  return { ok: false, note: `快照已落盘;training_prep 自动重触发失败——请显式调 atf_pipeline_stage(stage=training_prep),失败原因:${reason}` };
+};
+
+/** 三期批 1a：确认落账后自动重触发 training_prep 段（T7 时序硬规则下移——确认的新值
+ *  即时进 iteration-config 与启动件,确认后不存在「旧参数产物」状态;失败不遮蔽确认成功,
+ *  回执 training_prep_auto 如实投影并带显式重调指引）。innerCtx 放行形态=jointTrainFace
+ *  先例（确认刚完成的段重触发不再弹审批——atf_pipeline_stage 直通）。 */
+export const autoRetriggerTrainingPrep = async (
+  deps: ConfirmDeps,
+  ctx: { get(service: string): unknown },
+  exec: unknown,
+  runId: string,
+  workspacePath: string | undefined,
+): Promise<{ ok: boolean; note: string } | { skipped: string }> => {
+  if (deps.pipeline === undefined) {
+    return { skipped: "pipeline 未装配（非生产装配形态）——快照已落盘。改法一:显式调 atf_pipeline_stage(stage=training_prep) 刷新启动件;改法二:核对装配面——生产 index.ts 装配 buildConfirmTools 必传 pipeline(与段工具同源 pipelineCommand)" };
+  }
+  const realGet = (service: string): unknown => ctx.get(service);
+  const innerCtx: { get(service: string): unknown } = {
+    get: (service: string) => {
+      if (service !== "approval") return realGet(service);
+      const real = realGet("approval") as { request?: (req: unknown) => Promise<unknown> } | undefined;
+      const realRequest = real?.request;
+      if (typeof realRequest !== "function") return undefined;
+      return {
+        request: async (req: { toolName: string }) =>
+          req.toolName === "atf_pipeline_stage" ? "allowed-once" : await realRequest(req as never),
+      };
+    },
+  };
+  const innerPipeline = buildPipelineTool(innerCtx, deps.pipeline.command, deps.pipeline.timeoutMs) as {
+    execute: (args: Record<string, unknown>, exec: unknown) => Promise<Record<string, unknown>>;
+  };
+  try {
+    const result = await innerPipeline.execute(
+      { stage: "training_prep", run_id: runId, ...(workspacePath !== undefined ? { workspace_path: workspacePath } : {}) },
+      exec,
+    );
+    return trainingPrepAutoOf(result);
+  } catch (error) {
+    return { ok: false, note: `快照已落盘;training_prep 自动重触发异常——请显式调 atf_pipeline_stage(stage=training_prep),异常:${String(error).slice(0, 200)}` };
+  }
+};
 
 /** pending 卡落盘（刷新重建源：<runDir>/runtime/webui/pending-confirm.json——RunLayout/v3；
  *  存量 v2 run 的 <runDir>/webui/ 经 resolveRunSubdir 只读兼容，落点单源不劈两处。
@@ -628,10 +683,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
   const configTool = defineTool({
     name: "atf_config_confirm",
     description:
-      "本次训练方案确认卡：action=present 构造/重呈本次训练方案卡（overrides 传显式覆盖值）；action=amend 应用结构化改参（edits 传键值对象）后重呈。合并版双段式编排（present/amend 同链）：第一段改参收集——决策类（卡位/像素上限/LoRA 容量/显存策略）走原生选项卡（可多选处开 multiSelect，自由输入走选项组末尾「其他」），录入类走原生 form intent 表单卡逐键输入框（现值预填＋clamp 域提示；max_model_len 只读不入输入框；标签带六区块业务标题），卡面附 TokenBudget 三要素区（预算/训练截断/推理窗口三行＋两条不变式校验：预算超 cutoff 或超 max_model_len 即红字禁确认；预算与 cutoff 不等须同步（用户动作不自动）或填不同步理由），用户改值/直接提交即回结构化 key=value；第二段授权——有改动走确定性 clamp（越界回退域边界＋可读说明），最终授权一律走审批卡 Allow once（账本留痕不变）；审批卡 Reject → 回表单卡（带上次值）循环，用户关闭表单卡＝取消（结构化拒绝）。问题卡只收集改参、不承载授权（审批≠请示，闸门语义不迁移）；用户在聊天里的改参话术由 agent 语义理解后转 edits 结构化参数（自由文本永不直达生成面）。现值基线＝已确认快照（runtime/webui/config-snapshot.json，v2 存量 webui/ 只读兼容）＞run 的 IterationConfig 实值（config/iteration-config，v2 存量 prep/iteration-config 只读兼容——登记源，卡面与 Web 摘要同源）＞缺省。【确认后时序硬规则】快照落盘后必须重新触发 training_prep 段——快照兜底（显式参数＞确认快照＞派生＞缺省）只在训练准备段工具触发时读取，确认的新值要重触发才会进 iteration-config；禁止拿确认前生成的旧 iteration-config 直接调 atf_joint_train——那会用旧参数（旧卡数/旧卡位）生成 launch 件绑错卡（T7 实证：快照已落 4 卡 0-3，iteration-config 仍是确认前旧值 1 卡）。人工档（预设非 atf-training 或权限档非 danger-full-access）：审批面板 Allow once 确认后 config-snapshot 落盘。训练自动驾驶（Agent 预设 atf-training ＋ 权限档 danger-full-access 两轴齐备）：present 免审批——以智能缺省（L3 clamp 建议＋L2 派生）＋agent 参数推荐直接落快照，卡面内容转为通报（告警行＋alerts.json，每键取值＋来源标注可回看）；改参仍走 amend（同样免阻塞）。" +
-      "全自动档 agent 参数推荐（recommend 参数，本档专属）：训练提交前基于任务描述＋数据集统计（样本数/长度分布/模态）＋经验锚点给出 epochs/lr/rank/cutoff/负样本带推荐值并附 reason（理由）。经验锚点（owner 手工训练经验，参考知识非硬规则）：样本 2万–3万 → 3 epochs；4万以上 → 2 epochs；小样本（<1万）宜多轮并防过拟合（配早停观察）。护栏：epochs∈[1,10] 整数、lr∈[5e-5,5e-4]、lora_rank∈{16,32,64,128}（alpha=2×rank 联动）、cutoff≤12800、像素两档∈{802816,1605632}（单源）、负样本构造带∈[0.02,0.05]（F2 R1 终裁——空对象构造配额）、bs 正整数、nproc∈[1,可用卡数]——越界推荐被拦截并回退固定建议（不静默修正），拦截事实进通报；推荐缺失同样回退。lora_alpha 不单独推荐（随 rank 联动）。" +
-      "基模型锚点（owner 裁定 2026-10-12 §九）：确认卡基模型字段默认值＝模型库位置下的 Qwen3-VL-32B-Instruct（owner 偏置锚点，非查表推导；卡上可改，改动经防线①本地复核）。评估侧继续锚定 -AWQ 变体（现状不变）。" +
-      "卡数偏置（owner 裁定 2026-10-11）：训练卡数默认拉满本机可用卡（nproc_per_node=机器事实可用卡数），训练时长优先；代价（显存/时长）如实呈现给用户，不作降档依据；降档仅在用户任务上下文明确要求时采纳。卡数维度无成文锚点——不编造「数据规模→卡数」映射、不查表推荐，卡数只来自机器事实与用户显式要求；自动档默认低于可用卡的 nproc 推荐会被护栏回退拉满。",
+      "本次训练方案确认卡：present 构造/重呈方案卡（overrides）；amend 应用结构化改参（edits）后重呈；用户改参话术由 agent 语义理解转 edits。现值基线：已确认快照＞run 的 IterationConfig 实值＞缺省。确认即落快照 runtime/webui/config-snapshot.json 并自动重触发 training_prep 段刷新 iteration-config（见回执 training_prep_auto，失败按 note 重调）。参数域/TokenBudget/卡位校验由执行体 fail-closed 承接，拒绝回执自带修复指引。",
     parameters: {
       action: { type: "string", required: true, enum: ["present", "amend"], description: "present=构造/重呈卡；amend=应用结构化改参后重呈（edits 键值对象）" },
       run_id: { type: "string", required: true, description: "run 标识（快照与 pending 卡落点）" },
@@ -1055,6 +1107,8 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
         const sessionIdAuto = sessionIdOfExec(exec);
         if (sessionIdAuto !== undefined) appendBinding(runDir, sessionIdAuto);
         injectBashRunWorkspace(runDir); // 批㊶-S1 门2修复：围栏可写根随 run 切换更新
+        // 三期批 1a：确认即自动重触发 training_prep（T7 时序下移机制）
+        const trainingPrepAuto = await autoRetriggerTrainingPrep(deps, ctx, exec, args.run_id, typeof args.workspace_path === "string" ? args.workspace_path : undefined);
         return asToolValue({
           ok: true,
           run_id: args.run_id,
@@ -1063,6 +1117,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           run_dir_source: runDirSource,
           confirmed: true,
           auto: true,
+          training_prep_auto: trainingPrepAuto,
           tier: ATF_TRAINING_PRESET,
           fields,
           sources,
@@ -1264,7 +1319,9 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       const sessionIdCfg = sessionIdOfExec(exec);
       if (sessionIdCfg !== undefined) appendBinding(runDir, sessionIdCfg);
       injectBashRunWorkspace(runDir); // 批㊶-S1 门2修复
-      return asToolValue({ ok: true, run_id: args.run_id, run_dir: runDir, run_dir_source: runDirSource, confirmed: true, fields, snapshot: "runtime/webui/config-snapshot.json", ...(preflightNote !== undefined ? { preflight: preflightNote } : {}), ...(amendNote !== undefined ? { amend: amendNote } : {}) });
+      // 三期批 1a：确认即自动重触发 training_prep（T7 时序下移机制）
+      const trainingPrepAuto = await autoRetriggerTrainingPrep(deps, ctx, exec, args.run_id, typeof args.workspace_path === "string" ? args.workspace_path : undefined);
+      return asToolValue({ ok: true, run_id: args.run_id, run_dir: runDir, run_dir_source: runDirSource, confirmed: true, fields, snapshot: "runtime/webui/config-snapshot.json", training_prep_auto: trainingPrepAuto, ...(preflightNote !== undefined ? { preflight: preflightNote } : {}), ...(amendNote !== undefined ? { amend: amendNote } : {}) });
     },
   });
 

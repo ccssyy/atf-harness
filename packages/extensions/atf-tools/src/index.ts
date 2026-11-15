@@ -231,7 +231,7 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
   // E1b：坐标量化工具面——内核 CLI 单源（<kernelDir>/tools/quantize_annotations.py，pin 随
   // kernelDir 消费链；白名单根＝A4 同一可变数组实例 fileHostRoots，热加载同步生效）。
   ctx.tools.register(buildQuantizeTool(ctx, { roots: fileHostRoots, command: `python3 ${join(config.kernelDir, "tools", "quantize_annotations.py")}`, timeoutMs: config.quantizeTimeoutMs }));
-  for (const tool of buildConfirmTools({ runsRoot: config.runsRoot, ctx, preflight: preflightDeps })) ctx.tools.register(tool);
+  for (const tool of buildConfirmTools({ runsRoot: config.runsRoot, ctx, preflight: preflightDeps, pipeline: { command: pipelineCommand, timeoutMs: config.pipelineTimeoutMs } })) ctx.tools.register(tool);
   // E4-乙（改动 4）：训练启动前报告只读生成/回读（免审批——材料不是闸；内核件
   // build_prelaunch_report.py 单源，param_sources 来源校验归内核不复制）
   ctx.tools.register(buildPrelaunchReportTool(ctx, { kernelDir: config.kernelDir, timeoutMs: 120_000 }));

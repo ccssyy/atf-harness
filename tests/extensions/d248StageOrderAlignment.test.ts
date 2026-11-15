@@ -33,10 +33,10 @@ function stageOrderIn(text: string): string[] {
 describe("D248 预设段序文案 vs 内核 STAGE_ORDER 对账", () => {
   it("内核 STAGE_ORDER 单源为九段新序（导航锚）", () => {
     const kernel = readFileSync(kernelWalkthrough, "utf8");
-    const m = kernel.match(/STAGE_ORDER = \(([^)]+)\)/);
-    expect(m).toBeDefined();
-    const order = m![1]!.split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean);
-    expect(order).toEqual([...KERNEL_STAGE_ORDER]);
+    // 三期批 1b：段序单源派生——脚本不再持有手抄元组，锚改为派生调用在场+段名集合对账
+    expect(kernel).toContain("STAGE_ORDER = walkthrough_subset()");
+    const order = [...kernel.matchAll(/"(register|label_qc|style_split|experiment_setup|family_split|candidate_build|publish|admission|training_prep)"/g)].map((m) => m[1]!);
+    expect(new Set(order)).toEqual(new Set(KERNEL_STAGE_ORDER));
   });
 
   for (const preset of ["atf-training.patch.yml", "atf-unattended.patch.yml"]) {
