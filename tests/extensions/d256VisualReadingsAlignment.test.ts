@@ -12,8 +12,9 @@ import { fileURLToPath } from "node:url";
  */
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+// AB 归一批:内核源同单版本源门 env 覆盖(worktree 验收指向内核 worktree),缺省仓相对路径
 const kernelWalkthrough = join(
-  repoRoot, "..", "AgenticTrainingFlow",
+  process.env.ATF_KERNEL_SOURCE ?? join(repoRoot, "..", "AgenticTrainingFlow"),
   "skills", "atf-admit-training-data", "scripts", "walkthrough_pipeline.py",
 );
 const harnessPipelineFace = join(

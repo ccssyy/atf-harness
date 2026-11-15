@@ -12,35 +12,40 @@ import { fileURLToPath } from "node:url";
  */
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+// AB 归一批:内核源同 codegen 单版本源门——env 覆盖(验收指向 worktree),缺省仓相对路径
+const kernelRoot = process.env.ATF_KERNEL_SOURCE ?? join(repoRoot, "..", "AgenticTrainingFlow");
 const kernelWalkthrough = join(
-  repoRoot, "..", "AgenticTrainingFlow",
+  kernelRoot,
   "skills", "atf-admit-training-data", "scripts", "walkthrough_pipeline.py",
 );
 const presetsDir = join(repoRoot, "packages", "extensions", "atf-ui", "presets");
 
+// AB 归一批 F0b:17 段全表(driver 直驱,九段子序列退役)
 const KERNEL_STAGE_ORDER = [
-  "register", "label_qc", "style_split", "experiment_setup", "family_split",
-  "candidate_build", "publish", "admission", "training_prep",
+  "contract", "ingest", "inspect", "register", "label_qc", "snapshot",
+  "style_split", "experiment_setup", "family_split", "candidate_build",
+  "publish", "admission", "training_prep", "training_run", "checkpoint_eval",
+  "badcase_analysis", "iteration_proposal",
 ] as const;
 
 /** 从 preset 文本抽 persona 段序列表里的英文段名（按出现顺序）。 */
 function stageOrderIn(text: string): string[] {
-  const block = text.match(/按序推进[^：]*：\n((?:.*\n)+?)(?:\s*段外动作)/);
+  const block = text.match(/段序直驱[^：]*：\n((?:.*\n)+?)(?:\s*真实 GPU)/);
   const body = block?.[1] ?? "";
-  return [...body.matchAll(/\b(register|label_qc|style_split|experiment_setup|family_split|candidate_build|publish|admission|training_prep)\b/g)].map((m) => m[1]!);
+  return [...body.matchAll(/\b(contract|ingest|inspect|register|label_qc|snapshot|style_split|experiment_setup|family_split|candidate_build|publish|admission|training_prep|training_run|checkpoint_eval|badcase_analysis|iteration_proposal)\b/g)].map((m) => m[1]!);
 }
 
 describe("D248 预设段序文案 vs 内核 STAGE_ORDER 对账", () => {
-  it("内核 STAGE_ORDER 单源为九段新序（导航锚）", () => {
+  it("内核 STAGE_ORDER 单源为 17 段全表（导航锚,AB 归一批）", () => {
     const kernel = readFileSync(kernelWalkthrough, "utf8");
     // 三期批 1b：段序单源派生——脚本不再持有手抄元组，锚改为派生调用在场+段名集合对账
-    expect(kernel).toContain("STAGE_ORDER = walkthrough_subset()");
-    const order = [...kernel.matchAll(/"(register|label_qc|style_split|experiment_setup|family_split|candidate_build|publish|admission|training_prep)"/g)].map((m) => m[1]!);
+    expect(kernel).toContain("STAGE_ORDER = STAGE_REGISTRY_ORDER");
+    const order = [...kernel.matchAll(/"(contract|ingest|inspect|register|label_qc|snapshot|style_split|experiment_setup|family_split|candidate_build|publish|admission|training_prep|training_run|checkpoint_eval|badcase_analysis|iteration_proposal)"/g)].map((m) => m[1]!);
     expect(new Set(order)).toEqual(new Set(KERNEL_STAGE_ORDER));
   });
 
   for (const preset of ["atf-training.patch.yml", "atf-unattended.patch.yml"]) {
-    it(`${preset} persona 段序列表逐位一致（九段、无旧序残留）`, () => {
+    it(`${preset} persona 段序列表逐位一致（17 段、无旧序残留）`, () => {
       const text = readFileSync(join(presetsDir, preset), "utf8");
       const order = stageOrderIn(text);
       expect(order, `${preset} 段序列表与内核 STAGE_ORDER 不一致`).toEqual([...KERNEL_STAGE_ORDER]);
