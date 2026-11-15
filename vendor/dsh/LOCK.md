@@ -30,6 +30,6 @@
 
 **bump 重同步**（唯一合法路径＝re-pin 三步同族）：submodule 升级后走四步 SOP——①指针推进（独立评估批内改锁 commit）→ ②跑 `vendor/dsh/apply-patches.sh` 按序重放全部编号 patch（当前 0001→0008，新 patch 接续编号 glob 自动纳入；幂等：已应用 patch reverse-check 跳过；未应用且 apply 失败即停，人工评估更新 patch）＋产物重建（有新应用才重建，全部已应用则跳过重建段）→ ③**契约冒烟**：`npx vitest run tests/tools/testVendorPatchConsolidation.test.ts` 全绿（基线/登记对账/编号/应用态/产物特征码/演练逐字节 cmp 六面）＋目录回归 → ④**真机回归**：dev 净室重启后验三项功能点——bash 会话透传（python3 可起）、提问卡可出可答（atf_config_confirm present 出卡→作答提交→agent 消费）、模型设置面板可开（0006 describe 正常+0004 眼睛按钮）；三项证据落盘真机轮报告（docs/testing/）。跳过③④的 bump 无效（20261115 实证：还原 pristine 即回退 server 面行为，只有真机能抓到）。
 
-**重评触发**（受控修改通道的退出条件，三期方案 §3.2 批 4 预留路径）：patch 改动面扩大到治理成本超阈值——具体信号：新 patch 落盘频率显著上升（月均 ≥2 个非缺陷修复类新 patch）、触达包数超过当前闭集（18 文件/8 包）的 1.5 倍、或同文件被 ≥3 个 patch 叠加导致重放链脆弱——满足任一时启动独立评估批，评估「建镜像仓转 fork 模式」替换 submodule+patch 通道；重评与切换只走独立批，不在业务批夹带。
+**重评触发**（受控修改通道的退出条件，三期方案 §3.2 批 4 预留路径）：patch 改动面扩大到治理成本超阈值——具体信号：新 patch 落盘频率显著上升（月均 ≥2 个非缺陷修复类新 patch）、触达包数超过当前闭集（18 文件/10 包，批 4 机检实锚更正旧记 8 包）的 1.5 倍、或同文件被 ≥3 个 patch 叠加导致重放链脆弱——满足任一时启动独立评估批，评估「建镜像仓转 fork 模式」替换 submodule+patch 通道；重评与切换只走独立批，不在业务批夹带。
 
 构建命令明细：`tsc -b tsconfig.host.json`＋`tsc -b tsconfig.client.json`＋`tsdown --env.DSH_BUILD_FACE host`＋`pnpm --filter @deepseek-ai/dsh-client-ui-user-questions run bundle`＋`corepack pnpm --filter @deepseek-ai/dsh-client-ui-settings run bundle`（成本已接受——M3 同族裁定；末条＝D75 补口——patch 触达的 client 包凡带 bundle 脚本均需重建，当前 0006＝ui-settings）。
