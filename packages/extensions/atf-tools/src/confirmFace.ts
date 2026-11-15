@@ -530,11 +530,21 @@ interface ConfirmDeps {
   pipeline?: { command: string; timeoutMs: number };
 }
 
+/** 三期批 1a：段重触发结果 → training_prep_auto 回执投影（纯函数——组件测试锚）。
+ *  ok 态说明确认值已进启动件;失败态不遮蔽确认成功,note 带显式重调指引(报错即修复指令)。 */
+export const trainingPrepAutoOf = (result: Record<string, unknown>): { ok: boolean; note: string } => {
+  if (result["ok"] === true) {
+    return { ok: true, note: "training_prep 段已自动重触发,确认值已进 iteration-config 与启动件" };
+  }
+  const reason = typeof result["note"] === "string" ? result["note"] : JSON.stringify(result).slice(0, 300);
+  return { ok: false, note: `快照已落盘;training_prep 自动重触发失败——请显式调 atf_pipeline_stage(stage=training_prep),失败原因:${reason}` };
+};
+
 /** 三期批 1a：确认落账后自动重触发 training_prep 段（T7 时序硬规则下移——确认的新值
  *  即时进 iteration-config 与启动件,确认后不存在「旧参数产物」状态;失败不遮蔽确认成功,
  *  回执 training_prep_auto 如实投影并带显式重调指引）。innerCtx 放行形态=jointTrainFace
  *  先例（确认刚完成的段重触发不再弹审批——atf_pipeline_stage 直通）。 */
-const autoRetriggerTrainingPrep = async (
+export const autoRetriggerTrainingPrep = async (
   deps: ConfirmDeps,
   ctx: { get(service: string): unknown },
   exec: unknown,
@@ -542,7 +552,7 @@ const autoRetriggerTrainingPrep = async (
   workspacePath: string | undefined,
 ): Promise<{ ok: boolean; note: string } | { skipped: string }> => {
   if (deps.pipeline === undefined) {
-    return { skipped: "pipeline 未装配（非生产装配形态）——快照已落盘,请显式调 atf_pipeline_stage(stage=training_prep) 刷新启动件" };
+    return { skipped: "pipeline 未装配（非生产装配形态）——快照已落盘。改法一:显式调 atf_pipeline_stage(stage=training_prep) 刷新启动件;改法二:核对装配面——生产 index.ts 装配 buildConfirmTools 必传 pipeline(与段工具同源 pipelineCommand)" };
   }
   const realGet = (service: string): unknown => ctx.get(service);
   const innerCtx: { get(service: string): unknown } = {
@@ -565,11 +575,7 @@ const autoRetriggerTrainingPrep = async (
       { stage: "training_prep", run_id: runId, ...(workspacePath !== undefined ? { workspace_path: workspacePath } : {}) },
       exec,
     );
-    if (result["ok"] === true) {
-      return { ok: true, note: "training_prep 段已自动重触发,确认值已进 iteration-config 与启动件" };
-    }
-    const reason = typeof result["note"] === "string" ? result["note"] : JSON.stringify(result).slice(0, 300);
-    return { ok: false, note: `快照已落盘;training_prep 自动重触发失败——请显式调 atf_pipeline_stage(stage=training_prep),失败原因:${reason}` };
+    return trainingPrepAutoOf(result);
   } catch (error) {
     return { ok: false, note: `快照已落盘;training_prep 自动重触发异常——请显式调 atf_pipeline_stage(stage=training_prep),异常:${String(error).slice(0, 200)}` };
   }
