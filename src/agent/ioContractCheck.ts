@@ -43,6 +43,10 @@ export interface IoViolation {
  * 统计/计划/装配件文件名。1112 实锚=agent 手跑 field_risk_signals.py 直写 run 产物绕段门禁。
  */
 const KERNEL_STATISTIC_FILES: readonly string[] = [
+  // 批 2 C1:候选工单/判读计划/工单副本=内核单源导出件(agent 直写=伪造工单,拦)
+  "candidate-workorder.json",
+  "visual-sample-plan.json",
+  "style-visual-workorders.json",
   "field_risk_signals.json",
   "visual-sample-plan.json",
   "label-qc-report.json",
