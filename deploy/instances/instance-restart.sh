@@ -29,6 +29,10 @@
 # （`fromEnv ?? 随机`）。实例 env 声明后 token 长期固定、不再每 boot 轮换；未声明则退回随机。
 # 重启完成仍打印完整公网 URL，已登录浏览器凭 30 天签名 cookie 跨重启存续。
 #
+# 键指认标准用法（owner 1115 裁定 b，D301 候裁收口）：重启一律显式带
+#   ATF_INSTANCE_KEY_ENV=<活键 env 绝对路径> bash deploy/instances/instance-restart.sh dev
+# 当前活键=/root/.atf-harness/.env-glm-new（缺省探针键 .env-keyfix-20261023 已 401 失效；
+# 换键只换指认路径，脚本缺省不改——避免每次换键改脚本）。
 # 纪律（沿 uat-deploy.sh 先例）：演示/同事使用时段禁重启；脚本不可用时先修脚本再重启；
 # 本脚本不回写任何 env 文件。
 # 测试：tests/deploy/instanceRestart.test.ts（净化锚——--env-dump 走 fixture 密钥 env，
