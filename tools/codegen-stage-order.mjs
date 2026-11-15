@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // R1/G5 段序 codegen v2:内核 stage_registry.STAGE_ORDER_V2 唯一源 → harness 生成物。
-// 双导出:KERNEL_STAGE_ORDER(walkthrough 管线 9 段,工具面 CLI 合同)+
+// 双导出:KERNEL_STAGE_ORDER(工具面 CLI 合同,17 段全表=driver 直驱形态)+
 // STAGE_REGISTRY_V2(17 段全段元数据,灯面/探针/卡片段键对齐源,ADR-0020)。
 // 内核路径取 ATF_KERNEL_SOURCE(单版本源门同源 env);生成物不入手改,重生成:
 //   npm run codegen:stage-order
@@ -18,12 +18,12 @@ if (!kernelRoot) {
   process.exit(2);
 }
 
-// v2:源=stage_registry(ADR-0020 全局单一段序);G1a 后 walkthrough 管线段序
-// 与 v2 子序列同步派生(walkthrough_subset),双导出同一进程读单源。
+// AB 归一批 F0b:源=stage_registry 17 段全表(driver 直驱全链,owner 1115 终裁);
+// 九段子序列派生已退役——KERNEL_STAGE_ORDER(工具面 CLI 合同)与灯面同=全表。
 const probe = `
 import json, sys
 sys.path.insert(0, ${JSON.stringify(resolve(kernelRoot, "src"))})
-from agentic_training_flow.application.stage_registry import STAGE_ORDER_V2, walkthrough_subset
+from agentic_training_flow.application.stage_registry import STAGE_ORDER_V2, STAGE_ORDER
 print(json.dumps({
     "registry": [
         {"stage": e.stage, "label_zh": e.label_zh, "phase": e.phase, "skill_package": e.skill_package,
@@ -33,7 +33,7 @@ print(json.dumps({
          ]}
         for e in STAGE_ORDER_V2
     ],
-    "walkthrough": list(walkthrough_subset()),
+    "walkthrough": list(STAGE_ORDER),
 }))
 `;
 const out = execFileSync("python3", ["-c", probe], { encoding: "utf-8", timeout: 60_000 });
