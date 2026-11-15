@@ -54,3 +54,47 @@ describe("ownerInterventionOf（C4.1② 文案与可介入性挂钩）", () => {
     expect(ownerInterventionOf("")).toBe(false);
   });
 });
+
+
+// ── 批 5 3c（owner 2026-11-16）：升级文案分类=码级三分表（U-E2/U-E3）──
+
+import { receiptNeedsUser, reasonCodesOfReceipt } from "../../packages/extensions/atf-tools/src/receiptSummary.js";
+import { REASON_CODE_CATEGORIES } from "../../src/core/generated/reasonCategories.js";
+
+describe("receiptNeedsUser（批 5 三分判据：码级闭集主判）", () => {
+  it("need_user 码 → 呈人强文案（裁决/等人/聚类路线待答类）", () => {
+    expect(receiptNeedsUser({ ok: false, reason_codes: ["label_conflict_unresolved"] })).toBe(true);
+    expect(receiptNeedsUser({ ok: false, reason_codes: ["cluster_route_choice_pending"] })).toBe(true);
+    expect(receiptNeedsUser({ ok: false, error: "vllm_memory_confirmation_required:显存确认" })).toBe(true);
+  });
+
+  it("self_heal / record 码 → 软文案+自愈对冲（不稀释真告警）", () => {
+    expect(receiptNeedsUser({ ok: false, reason_codes: ["fixture_not_found"] })).toBe(false);
+    expect(receiptNeedsUser({ ok: false, reason_codes: ["embedding_cluster_degraded_no_cluster"] })).toBe(false);
+  });
+
+  it("越集码（未登记分类的新码）→ 默认呈人 fail-closed（U-E3 演练锚）", () => {
+    expect(receiptNeedsUser({ ok: false, reason_codes: ["totally_unknown_new_code"] })).toBe(true);
+    expect(REASON_CODE_CATEGORIES["totally_unknown_new_code"]).toBeUndefined();
+  });
+
+  it("无码回执 → 文案正则兜底（观测面，非主判）", () => {
+    expect(receiptNeedsUser({ ok: false, missing: ["凭据缺失"] })).toBe(true);
+    expect(receiptNeedsUser({ ok: false, missing: ["缺顶层键 template"] })).toBe(false);
+  });
+
+  it("段回执形态：raw_response.reason_codes 同判（含混合码任一 need_user 即强）", () => {
+    expect(receiptNeedsUser({ ok: false, raw_response: { reason_codes: ["fixture_not_found"] } })).toBe(false);
+    expect(receiptNeedsUser({ ok: false, raw_response: { reason_codes: ["fixture_not_found", "waiting_on_user"] } })).toBe(true);
+    expect(reasonCodesOfReceipt({ error: "cluster_route_choice_pending:待答" })).toEqual(["cluster_route_choice_pending"]);
+  });
+
+  it("生成物三分表：内核单源投影在场景内（≥50 码+值域闭集）", () => {
+    const entries = Object.entries(REASON_CODE_CATEGORIES);
+    expect(entries.length).toBeGreaterThanOrEqual(50);
+    const valid = new Set(["need_user", "self_heal", "record"]);
+    for (const [, value] of entries) expect(valid.has(value)).toBe(true);
+    expect(REASON_CODE_CATEGORIES["label_conflict_unresolved"]).toBe("need_user");
+    expect(REASON_CODE_CATEGORIES["embedding_cluster_degraded_no_cluster"]).toBe("record");
+  });
+});

@@ -74,11 +74,67 @@ export const clearEscalation: (key: string) => boolean = (key) => escalationFire
  * agent 自愈）。命中凭据/白名单/审批类=owner 决定才能解（强文案）；缺件/参数/schema 类=
  * agent 可自愈（软文案+自愈对冲）。
  *
+ * 批 5 3c 降级说明：本正则从升级文案**主判**降级为无码回执的观测兜底——主判改码级
+ * 三分表（`receiptNeedsUser`，内核 reason_codes.REASON_CODE_CATEGORY codegen 投影），
+ * 文案一变即打穿的启发式形态由此退役。
+ *
  * @param text 升级回执的 missing/reason_codes 文本（JSON 序列化形态即可）。
  * @return true=owner 介入类。
  */
 export const ownerInterventionOf: (text: string) => boolean = (text) =>
   /凭据|user_confirmed|allowlist|白名单|审批|需要 owner/.test(text);
+
+// 批 5 3c：升级文案分类＝码级三分表（内核单源 codegen 投影；批 5 合同 U-E2/U-E3）。
+import { REASON_CODE_CATEGORIES } from "../../../../src/core/generated/reasonCategories.js";
+
+/**
+ * 从回执收集 reason code 候选：`reason_codes` 数组、`error` 字符串首段（冒号前）、
+ * `raw_response.reason_codes`（段回执形态）三处。
+ *
+ * @param receipt 工具回执（只读，不改写）。
+ * @return 码值列表（可能为空——空表＝调用方走无码兜底）。
+ */
+export const reasonCodesOfReceipt: (receipt: Record<string, unknown>) => string[] = (receipt) => {
+  const codes: string[] = [];
+  const pushAll = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === "string" && item !== "") codes.push(item);
+      }
+    } else if (typeof value === "string" && value !== "") {
+      // 批 5 形态约束:error 文本首段仅当形如 reason code(小写字母/数字/下划线,
+      // 内核码规范)才计码——自由文本(如 mock/适配层的叙述性错误)不算码,
+      // 走无码兜底(文案正则),不被越集 fail-closed 误伤成强文案。
+      const head = value.split(":")[0] ?? value;
+      if (/^[a-z0-9_]+$/.test(head)) codes.push(head);
+    }
+  };
+  pushAll(receipt["reason_codes"]);
+  pushAll(receipt["error"]);
+  const raw = receipt["raw_response"];
+  if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
+    pushAll((raw as Record<string, unknown>)["reason_codes"]);
+  }
+  return codes;
+};
+
+/**
+ * 升级是否需要用户介入（批 5 三分判据，U-E3）。
+ *
+ * 判定序：回执 reason codes 查内核三分表——任一码 need_user、或**越集**（码不在表内，
+ * fail-closed 默认呈人）＝true；全 self_heal/record ＝false（软文案+自愈对冲）。
+ * 无码回执回退文案正则（`ownerInterventionOf`，观测兜底非主判）。
+ *
+ * @param receipt 工具回执。
+ * @return true=呈人强文案「需要你介入」。
+ */
+export const receiptNeedsUser: (receipt: Record<string, unknown>) => boolean = (receipt) => {
+  const codes = reasonCodesOfReceipt(receipt);
+  if (codes.length === 0) {
+    return ownerInterventionOf(JSON.stringify(receipt).slice(0, 4000));
+  }
+  return codes.some((code) => (REASON_CODE_CATEGORIES[code] ?? "need_user") === "need_user");
+};
 
 /** 失败次数 → 升级字段（未达阈值＝null，回执保持原样）。 */
 export const escalationOf: (count: number) => { escalate_to_user: true; failure_count: number } | null = (count) =>
