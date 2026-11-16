@@ -15,7 +15,7 @@ import { KERNEL_ERROR_FACE_CODES } from "../../src/core/workspace/kernelErrorFac
 import { CONFIG_CONFIRM_KEYS, READONLY_CONFIG_KEYS } from "../../src/webui/configConfirm.js";
 import type { HarnessSurfaceFacts, SurfaceSnapshot } from "./guard.js";
 
-const WALKTHROUGH = "tools/walkthrough_pipeline.py";
+const WALKTHROUGH = "skills/atf-admit-training-data/scripts/walkthrough_pipeline.py";
 const BUILD_EXPERIMENT_SETUP = "skills/atf-admit-training-data/scripts/build_experiment_setup.py";
 const GENERATE_ITERATION_CONFIG = "skills/atf-prepare-training/scripts/generate_iteration_config.py";
 
@@ -99,6 +99,7 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   // H7h：卡位显式通道（内核 b16 walkthrough --visible-devices；快照随 b17 同批）
   visible_devices: "--visible-devices",
   doc_type: "--doc-type",
+  unit_bindings: "--unit-bindings",
   field_config: "--field-config",
   train_all: "--train-all",
   assignment_source: "--assignment-source",

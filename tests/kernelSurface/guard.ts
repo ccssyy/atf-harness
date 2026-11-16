@@ -90,7 +90,10 @@ export interface GuardViolation {
   detail: string;
 }
 
-const WALKTHROUGH = "tools/walkthrough_pipeline.py";
+// 1116 A2 随迁:内核 D217 单源化后 walkthrough 唯一源=skills 树路径（D217 tools 壳
+// 退转发壳；fixture 自 f996be92 起即 skills/ 形态——tools/ 锚与之错位致 guard 六类
+// 检查全空转,存量错位红修复）
+const WALKTHROUGH = "skills/atf-admit-training-data/scripts/walkthrough_pipeline.py";
 
 // ── 一 参数面：harness 下传面 ⊆ 内核声明面；映射表完整；必填参在传；choices 同源 ──
 
@@ -154,8 +157,8 @@ export const guardStageList = (snapshot: SurfaceSnapshot, facts: HarnessSurfaceF
   const stageArg = entry?.args.find((arg) => arg.option === "--stage");
   if (stageArg === undefined) {
     out.push({ kind: "段清单", detail: "快照缺 --stage 参数——内核段清单失去对账锚" });
-  } else if (stageArg.choices !== "<expr:list(STAGE_ORDER)>") {
-    out.push({ kind: "段清单", detail: `--stage choices 表达式漂移（期望 <expr:list(STAGE_ORDER)>，得 ${JSON.stringify(stageArg.choices)}）——内核段序单源名变更须随 re-pin 重对账` });
+  } else if (stageArg.choices !== "<expr:list(STAGE_REGISTRY_ORDER)>") {
+    out.push({ kind: "段清单", detail: `--stage choices 表达式漂移（期望 <expr:list(STAGE_REGISTRY_ORDER)>，得 ${JSON.stringify(stageArg.choices)}）——内核段序单源名变更须随 re-pin 重对账` });
   }
   const sameSeq = (a: readonly string[], b: readonly string[]): boolean =>
     a.length === b.length && a.every((item, index) => item === b[index]);

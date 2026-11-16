@@ -39,7 +39,7 @@ describe("D94 阴性对照——六类护栏故意注入偏差必红", () => {
     // auto-style-cluster 词汇闭集——护栏能力不因退役而丢失。
     const { facts } = base();
     const snapshot = deepClone(snapshotOf());
-    const entry = snapshot.find((script) => script.script === "tools/walkthrough_pipeline.py");
+    const entry = snapshot.find((script) => script.script === "skills/atf-admit-training-data/scripts/walkthrough_pipeline.py");
     const arg = entry?.args.find((item) => item.option === "--auto-style-cluster");
     expect(arg).toBeDefined();
     const before = [...((arg?.choices ?? []) as string[])];
@@ -62,7 +62,7 @@ describe("D94 阴性对照——六类护栏故意注入偏差必红", () => {
     // D139 豁免退役后的阴性锚：快照缺旗标时行为面与映射面两项都红，无豁免可过关
     // （退役动作有测试锚；重生成快照缺该旗标＝快照漂移，护栏必红）
     const b9like = deepClone(snapshotOf());
-    const walkthrough = b9like.find((s) => s.script === "tools/walkthrough_pipeline.py");
+    const walkthrough = b9like.find((s) => s.script === "skills/atf-admit-training-data/scripts/walkthrough_pipeline.py");
     if (walkthrough !== undefined) walkthrough.args = walkthrough.args.filter((arg) => arg.option !== "--training-overrides");
     const withToken: HarnessSurfaceFactsWithMock = { ...facts, argvTokens: [...facts.argvTokens, "--training-overrides"] };
     const b9Violations = guardParamsFace(b9like, withToken);
@@ -75,7 +75,7 @@ describe("D94 阴性对照——六类护栏故意注入偏差必红", () => {
   it("段清单：--stage choices 表达式漂移 → 必红；mock 段闭集漂移 → 必红", () => {
     const { facts } = base();
     const snapshot = deepClone(snapshotOf());
-    const entry = snapshot.find((script) => script.script === "tools/walkthrough_pipeline.py");
+    const entry = snapshot.find((script) => script.script === "skills/atf-admit-training-data/scripts/walkthrough_pipeline.py");
     const stageArg = entry?.args.find((item) => item.option === "--stage");
     if (stageArg !== undefined) stageArg.choices = "<expr:list(STAGE_ORDER_V2)>";
     const violations = guardStageList(snapshot, facts);

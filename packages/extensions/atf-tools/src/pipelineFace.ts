@@ -398,7 +398,7 @@ export const baseModelSourceOf = (explicit: boolean, summary: unknown): "explici
 // ── E10b：family_split 段版式聚类三态透传（内核 main E10a 命令面）──
 
 /** auto_style_cluster 词汇闭集（权威＝内核 argparse choices；缺省 auto 同源）。 */
-export const AUTO_STYLE_CLUSTER_VALUES: readonly string[] = ["auto", "on", "off"];
+export const AUTO_STYLE_CLUSTER_VALUES: readonly string[] = ["auto", "on", "off", "no_cluster"];
 
 /** 聚类证据提取：内核段摘要在 results[].raw_response.style_cluster_state 随段留痕
  *  （blocked/通过/异常三路统一嵌套，五键形态）——本工具只透传 {state,pages_total,
