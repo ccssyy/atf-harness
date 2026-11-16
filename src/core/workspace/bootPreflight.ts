@@ -265,6 +265,17 @@ export const runBootPreflight = (
       }
     }
   }
+  // ③b ATF_EXEC_SOURCE：缺 → L1 注入 bridge（A8 直跑收紧闸：桥调用默认携带执行来源
+  // 标记，段命令子进程继承；用户直跑不经 preflight 缺标记由内核闸拦——escape 逃生是
+  // 用户显式动作，不代设不猜）
+  if (env["ATF_EXEC_SOURCE"] === undefined || env["ATF_EXEC_SOURCE"]?.trim() === "") {
+    autoFixed.push({
+      level: "L1",
+      key: "ATF_EXEC_SOURCE",
+      value: "bridge",
+      note: "已自动补齐 ATF_EXEC_SOURCE＝bridge（A8 桥形态执行来源标记缺省）",
+    });
+  }
   // ④ python3 可用（L2）
   if (!commandWorks("python3", ["-c", "import sys"])) {
     fatal.push({

@@ -1,3 +1,23 @@
+
+
+
+/** A10 放行凭据稳定语义键（内核 generate_train_launch._release_subject_sha 同构单源）。
+ * ＝sha256(canonicalJson({action, run_id, config_core}))：config_core 剥 generated.at
+ * 时钟面——字节 sha 对重生成 config 必漂移（发现 13 三弹卡根因）。 */
+const releaseSubjectShaOf = async (configBytes: Buffer): Promise<string> => {
+  const { canonicalDigestHex } = await import("../canonicalDigest.js");
+  const config = JSON.parse(configBytes.toString("utf8")) as Record<string, unknown>;
+  const core = JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
+  if (core["generated"] !== null && typeof core["generated"] === "object") {
+    delete (core["generated"] as Record<string, unknown>)["at"];
+  }
+  const output = (core["output"] ?? {}) as Record<string, unknown>;
+  return canonicalDigestHex({
+    action: "training_release",
+    run_id: typeof output["run_name"] === "string" ? output["run_name"] : "",
+    config_core: core,
+  });
+};
 /**
  * 工作区工具面（批 3「创作执行面」§一/§二/§三，DDL 关键路径）——
  * 把既有工作区能力（T0 写 / 受控执行 / skills 读 / G5 后受控启动）包成模型面工具。
@@ -848,7 +868,9 @@ const launchExecuteHandler: LocalToolHandler = async (rawParams, host) => {
     } catch (cause) {
       return rejected("launch_config_missing", { message: `IterationConfig 不可读: ${String(cause)}` });
     }
-    const configSha = createHash("sha256").update(configBytes).digest("hex");
+    // A10:对拍口径=放行凭据稳定语义键(内核 _release_subject_sha 同构——剥
+    // generated.at 时钟面+action/run_id 成分;字节 sha 对重生成 config 必漂移)
+    const configSha = await releaseSubjectShaOf(configBytes);
     if (manifestSha !== undefined && manifestSha !== configSha) {
       return rejected("launch_config_mismatch", {
         message: "IterationConfig 与 launch_manifest 的 iteration_config_sha256 不一致（放行对拍 fail-closed）",
