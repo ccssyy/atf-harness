@@ -2382,10 +2382,9 @@ export const buildPipelineTool = (
       // 这里把「不传的后果」写进工具描述——系统知识不靠用户提示词承载。
       `【构造参数必须作为工具参数显式传入，只在回复文字里说明不会被采纳】experiment_setup 段另有三个` +
       `确认／建议参数：grouping_confirm（确认当前分组方案；不传＝未确认，本轮不生成分组样本。` +
-      `【分组确认时序硬规则】分组确认必须走分组卡：第一次触发 experiment_setup 不带 grouping_confirm、` +
+      `分组确认走分组卡（两次触发的参数流由内核固定）：第一次触发 experiment_setup 不带 grouping_confirm、` +
       `只带 grouping_proposal（候选含带风险信号依据的 reason），卡上呈现候选让用户选定后，` +
       `重跑 experiment_setup 才带 grouping_confirm=true——两次触发是设计内流程，不是浪费。` +
-      `禁止在触发 experiment_setup 之前用聊天文字问分组并当作用户确认：` +
       `聊天确认不落分组卡账本，实验门来源只能标 agent_inferred，` +
       `且分组候选没有字段风险信号支撑（问了也白问）。若用户在聊天里主动说了分组意愿，` +
       `如实转成 grouping_proposal 候选走卡，让用户在卡上正式确认）、` +
@@ -2406,8 +2405,8 @@ export const buildPipelineTool = (
       `回填 results 与 checklist_digests，再带 visual_check 参数重跑本段。收到「看图核查缺席/核查件覆盖不全」` +
       `类 blocked 时按此两段式补件重跑——清单 digest 以导出件原值为准（漂移即拒）。` +
       `收到版式聚类状态类拒绝（style_cluster_state_not_clustered／style_cluster_state_ambiguous／` +
-      `style_cluster_declared_but_absent）时，必须先问用户「这批数据做过版式聚类吗？」，` +
-      `确认后再传 on（未聚类——内核自动补簇并产出 StyleClusterManifest/v1，按簇分层）或 off（已聚类——不再聚）重跑；` +
+      `style_cluster_declared_but_absent）时，先经选项卡问用户「这批数据做过版式聚类吗？」（待笔回执附选项），` +
+      `用户确认后再传 on（未聚类——内核自动补簇并产出 StyleClusterManifest/v1，按簇分层）或 off（已聚类——不再聚）重跑；` +
       `禁止在 auto 被拒后自行猜一个值重跑。` +
       `单据类型／数据后缀／字段配置三件可缺省（缺省不上送，各段均有效；数据后缀是内部键，一般不用传）：` +
       `不传 doc_type 时内核按数据/登记面推断单据类型，无法确定即 blocked（会带业务文案指路）——` +
@@ -2511,10 +2510,9 @@ export const buildPipelineTool = (
         description:
           "确认当前分组方案为选定方案（仅 experiment_setup 段有意义）：确认后内核按分组逐组各生成一条样本；" +
           "不给＝未确认，本轮不生成分组样本（卡面明示）。分组必须用户确认——agent 给出的只是候选，不得默认成立。" +
-          "【时序硬规则】分组确认必须走分组卡：第一次触发 experiment_setup 只带 grouping_proposal（不带本参），" +
+          "分组确认走分组卡（两次触发的参数流由内核固定）：第一次触发 experiment_setup 只带 grouping_proposal（不带本参），" +
           "卡上让用户选定后，重跑 experiment_setup 才带 grouping_confirm=true——两次触发是设计内流程，不是浪费。" +
-          "禁止在触发 experiment_setup 之前用聊天文字确认分组并当作用户已确认：聊天确认不落分组卡账本，" +
-          "实验门来源只能标助手推断，且候选没有字段风险信号支撑（问了也白问）。" +
+          "聊天确认不落分组卡账本，实验门来源只能标助手推断，且候选没有字段风险信号支撑（问了也白问）。" +
           "【凭据制】user-confirmed 只认分组卡账本:用户在卡上选定即落 <run>/runtime/webui/grouping-choice.json,内核实验门读该回执且分组内容逐字一致才落 user-confirmed——本旗标无论何时都只落 agent-confirmed,不再构成用户确认事实。凭据在场匹配时旗标可省(内核凭据自主成立)。用户在聊天里主动说了分组意愿时，如实转成 grouping_proposal 候选走卡，让用户在卡上正式确认",
       },
       mode5_random: {
