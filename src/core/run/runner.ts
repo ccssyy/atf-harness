@@ -333,6 +333,9 @@ export interface RunBranchOptions {
       contentDigestFor?: (tool: string, params: unknown) => Promise<string | undefined>;
     };
   };
+  /** A7 身份注入：会话 id（TUI/resume/webui 装配传入；executor 每 execute 注入本地宿主，
+   *  run 定位消歧（resolveToolRun）与 runFacts 绑定读侧共用；缺省缺席＝既有行为零变化） */
+  sessionId?: string;
   /** provenance model_id（缺省 "faux"，既有行为逐位不变；L1a 传入 provider config.model） */
   modelId?: string;
   /** 账本 scope_ref.scope_mode（缺省 "headless"——mock 轨既有行为逐位不变）。
@@ -842,7 +845,7 @@ export class ScenarioRunner {
                   provider = null;
                 } else {
                   const gate: ApprovalGate | undefined = gateFor(resumeHandler, originalCall.id);
-                  const result: ToolCallOutcome = await executor.execute(callPayload.tool, callPayload.params, gate);
+                  const result: ToolCallOutcome = await executor.execute(callPayload.tool, callPayload.params, gate, { sessionId: options.sessionId });
                   if (result.kind === "suspended" || result.kind === "aborted") {
                     outcome = result.kind === "suspended"
                       ? { kind: "suspended", block: result.block }
@@ -949,7 +952,7 @@ export class ScenarioRunner {
         if (call === null) return; // 会话写路径失败已在 appendEvent 内折算
         turnLastTool = action.tool;
         const gate: ApprovalGate | undefined = gateFor(approvalHandler, call.id);
-        const result: ToolCallOutcome = await executor.execute(action.tool, action.params, gate);
+        const result: ToolCallOutcome = await executor.execute(action.tool, action.params, gate, { sessionId: options.sessionId });
         if (result.kind === "suspended" || result.kind === "aborted") {
           outcome = result.kind === "suspended"
             ? { kind: "suspended", block: result.block }
@@ -1365,7 +1368,7 @@ export class ScenarioRunner {
           // P2-S2:审批面缺省 = 账本轨-only(Phase 1 逐位一致,headless 等价性);
           // 声明后账本轨优先,未命中走问答轨(handler 发起/延续审批会话)。
           const gate: ApprovalGate | undefined = gateFor(approvalHandler, call.id);
-          const result: ToolCallOutcome = await executor.execute(step.tool, step.params, gate);
+          const result: ToolCallOutcome = await executor.execute(step.tool, step.params, gate, { sessionId: options.sessionId });
 
           // 证据链：cite_admitted_fact = 把最近一次成功准入的三元组作为本 tool/result 的 domain_refs
           let refs: DomainRef[] | undefined;

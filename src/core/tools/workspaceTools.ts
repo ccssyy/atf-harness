@@ -122,6 +122,9 @@ export interface LocalToolHost {
   baseEnv: Record<string, string>;
   /** python3 解释器覆盖（测试；缺省自动探测） */
   pythonPath?: string;
+  /** A7 身份注入：会话 id（框架层每 execute 注入——消歧/绑定/状态三面共用；
+   *  缺省缺席＝消歧回落既有解析，不猜身份） */
+  sessionId?: string;
   /** launch.sh 执行等待上限覆盖（测试；缺省 120s，未退出不杀） */
   launchWaitMs?: number;
   /** 编排主路径 GPU 排队面（批㊶-S4b T1；web 桥装配注入——TUI/resume 缺席＝直启回退） */

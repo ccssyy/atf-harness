@@ -115,8 +115,13 @@ export class ToolExecutor {
     toolName: string,
     params: unknown,
     approval?: ApprovalGate,
-    options?: { operationId?: string },
+    options?: { operationId?: string; sessionId?: string },
   ): Promise<ToolCallOutcome> {
+    // A7 身份注入：会话 id 每 execute 注入本地工具宿主（发现 15 五环断裂根治——
+    // 消歧/绑定/状态三面共用同一身份面；vendor exec.agent.session.id 链路实锚）
+    if (this.local !== undefined && options?.sessionId !== undefined) {
+      this.local.host.sessionId = options.sessionId;
+    }
     const definition = this.registry.get(toolName);
     if (!definition.ok) return { kind: "failed", error: definition.error };
 

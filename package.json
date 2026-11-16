@@ -30,7 +30,8 @@
     "trial:gate1a-real": "npm run build && node dist/agent/main.js --peer real",
     "codegen:stage-order": "node tools/codegen-stage-order.mjs",
     "codegen:reason-categories": "node tools/codegen-reason-categories.mjs",
-    "prebuild": "npm run codegen:stage-order && npm run codegen:reason-categories && git diff --exit-code -- src/core/generated || (echo \"生成物漂移:内核段序/三分表变更后须重跑 codegen 并随批提交\" && exit 1)"
+    "prebuild": "npm run codegen:stage-order && npm run codegen:stage-params && npm run codegen:reason-categories && git diff --exit-code -- src/core/generated || (echo \"生成物漂移:内核段序/三分表变更后须重跑 codegen 并随批提交\" && exit 1)",
+    "codegen:stage-params": "node tools/codegen-stage-params.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",

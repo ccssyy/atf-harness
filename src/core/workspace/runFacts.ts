@@ -10,8 +10,8 @@
  * 均为 run 目录本地文件，不进 bridge 契约面。
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, renameSync } from "node:fs";
-import { join } from "node:path";
-import { runFileCandidates, runSubdirCandidates, resolveRunSubdir } from "./runLayout.js";
+import { join, sep } from "node:path";
+import { resolveRunDir, runFileCandidates, runSubdirCandidates, resolveRunSubdir } from "./runLayout.js";
 
 // ── 绑定 ──
 
@@ -103,6 +103,59 @@ export const resolveSessionRunWorkspace = (runsRoot: string, sessionId: string):
   let best = hits[0] as { runDir: string; at: number };
   for (const hit of hits) if (hit.at >= best.at) best = hit;
   return best.runDir;
+};
+
+/** A7 消歧约束解析结果：ok=收敛；ambiguous=多工作区同名且身份不可判别（显式列候选，
+ *  不再全量扫描歧义静默取首——发现 15 消歧死指路根治）。 */
+export type ToolRunResolution =
+  | { ok: true; runDir: string }
+  | { ok: false; reason: "ambiguous"; candidates: string[] }
+  | { ok: false; reason: "not_found" };
+
+/**
+ * 工具运行定位消歧约束单源（A7/发现 15 五环断裂终版）。
+ *
+ * 解析序：① 会话绑定收敛（sessionId 在场→resolveSessionRunWorkspace 命中且 run 名
+ * 匹配→该 run 即目标）；② 既有单源解析（resolveRunDir：canonical＞平铺＞桶 prefer）；
+ * ③ 歧义显式化——无绑定收敛且多工作区桶同名命中 → ambiguous+候选列表（调用方呈现
+ * 让用户/agent 指认），绝不静默取首。
+ *
+ * :param runsRoot: runs 根。
+ * :param runId: run 标识。
+ * :param opts: sessionId（框架层注入的会话身份）／workspace prefer／canonicalRoots。
+ */
+export const resolveToolRun = (
+  runsRoot: string,
+  runId: string,
+  opts?: { sessionId?: string; workspace?: string | null; canonicalRoots?: readonly string[] },
+): ToolRunResolution => {
+  if (opts?.sessionId) {
+    const bound = resolveSessionRunWorkspace(runsRoot, opts.sessionId);
+    if (bound !== null && bound.split(sep).pop() === runId) {
+      return { ok: true, runDir: bound };
+    }
+  }
+  // 多桶同名歧义检测（绑定未收敛时）：逐桶列同名候选
+  const candidates: string[] = [];
+  try {
+    for (const level1 of readdirSync(runsRoot, { withFileTypes: true })) {
+      if (!level1.isDirectory()) continue;
+      const candidate = join(runsRoot, level1.name, runId);
+      if (existsSync(candidate)) candidates.push(candidate);
+    }
+  } catch { /* runsRoot 不可读——交给既有解析 */ }
+  // 显式身份=调用方给了 workspace prefer 或 canonicalRoots（会话工作区桶名/注册根）
+  const hasExplicitIdentity =
+    (opts?.workspace != null && opts.workspace !== "") || (opts?.canonicalRoots?.length ?? 0) > 0;
+  if (candidates.length > 1 && !hasExplicitIdentity) {
+    return { ok: false, reason: "ambiguous", candidates: candidates.sort() };
+  }
+  const direct = resolveRunDir(runsRoot, runId, {
+    workspace: opts?.workspace ?? null,
+    canonicalRoots: opts?.canonicalRoots,
+  });
+  if (existsSync(direct)) return { ok: true, runDir: direct };
+  return { ok: false, reason: "not_found" };
 };
 
 // ── 段内进度 ──
