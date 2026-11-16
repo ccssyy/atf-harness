@@ -81,7 +81,7 @@ const seedSlots = (root: string, runId: string, classes: ReadonlyArray<{ doc: st
     layout_version: "RunLayout/v1",
     docs: [...classes]
       .sort((a, b) => (a.doc < b.doc ? -1 : 1))
-      .map((c) => ({ doc_type: c.doc, lane_suffix: c.doc, registered_at: "2026-10-25T00:00:00+00:00" })),
+      .map((c) => ({ doc_type: c.doc, registered_at: "2026-10-25T00:00:00+00:00" })),
   }, null, 1)}\n`);
   return runDir;
 };
@@ -276,8 +276,8 @@ describe("E8——atf_joint_train 单 run 槽位联合训练（schema 面＋卡�
     writeFileSync(join(partial, "run.json"), `${JSON.stringify({
       run_id: "partial-prep", layout_version: "RunLayout/v1",
       docs: [
-        { doc_type: "do", lane_suffix: "do", registered_at: "2026-10-25T00:00:00+00:00" },
-        { doc_type: "swb", lane_suffix: "swb", registered_at: "2026-10-25T01:00:00+00:00" },
+        { doc_type: "do", registered_at: "2026-10-25T00:00:00+00:00" },
+        { doc_type: "swb", registered_at: "2026-10-25T01:00:00+00:00" },
       ],
     }, null, 1)}\n`);
     const mismatch = await tool.execute({ run_id: "partial-prep", workspace_path: root }, fakeExec);
@@ -290,7 +290,7 @@ describe("E8——atf_joint_train 单 run 槽位联合训练（schema 面＋卡�
     const unregistered = seedSlots(root, "unreg-slot", [{ doc: "do", rows: 1 }, { doc: "swb", rows: 1 }]);
     writeFileSync(join(unregistered, "run.json"), `${JSON.stringify({
       run_id: "unreg-slot", layout_version: "RunLayout/v1",
-      docs: [{ doc_type: "do", lane_suffix: "do", registered_at: "2026-10-25T00:00:00+00:00" }],
+      docs: [{ doc_type: "do", registered_at: "2026-10-25T00:00:00+00:00" }],
     }, null, 1)}\n`);
     const mismatch2 = await tool.execute({ run_id: "unreg-slot", workspace_path: root }, fakeExec);
     expect(mismatch2["error"]).toBe("joint_docs_slots_mismatch");

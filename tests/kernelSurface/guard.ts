@@ -225,11 +225,13 @@ export const guardClosedSets = (snapshot: SurfaceSnapshot, facts: HarnessSurface
       out.push({ kind: "闭集", detail: `行为面 approval-mode ${facts.approvalModeValue} 不在内核 choices ${JSON.stringify(choices)}` });
     }
   }
-  const laneArg = entry?.args.find((arg) => arg.option === "--lane-suffix");
-  if (laneArg === undefined) {
-    out.push({ kind: "闭集", detail: "快照缺 --lane-suffix——lane 产品闭集失去内核锚" });
-  } else if (JSON.stringify(laneArg.choices) !== JSON.stringify(["goods", "non_goods", "mixed"])) {
-    out.push({ kind: "闭集", detail: `--lane-suffix choices 漂移（产品闭集 goods/non_goods/mixed）：${JSON.stringify(laneArg.choices)}` });
+  // A2 lane 退役(1116):--lane-suffix 闭集检查退役——反向锚=旧旗标不得回流;
+  // A5 显式捆绑通道 --unit-bindings 在场锚定（发现 8 裁定的合法捆绑唯一通道）
+  if (entry?.args.some((arg) => arg.option === "--lane-suffix")) {
+    out.push({ kind: "闭集", detail: "快照含 --lane-suffix——lane 旗标已退役(owner 1116),不得回流" });
+  }
+  if (entry?.args.every((arg) => arg.option !== "--unit-bindings")) {
+    out.push({ kind: "闭集", detail: "快照缺 --unit-bindings——显式捆绑通道(A5)失去内核锚" });
   }
   return out;
 };

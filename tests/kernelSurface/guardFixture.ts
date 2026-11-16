@@ -99,7 +99,6 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   // H7h：卡位显式通道（内核 b16 walkthrough --visible-devices；快照随 b17 同批）
   visible_devices: "--visible-devices",
   doc_type: "--doc-type",
-  lane_suffix: "--lane-suffix",
   field_config: "--field-config",
   train_all: "--train-all",
   assignment_source: "--assignment-source",
@@ -208,7 +207,6 @@ export const collectArgvTokens = async (): Promise<string[]> => {
       workspace_path: tempRoot,
       source_root: (mkdirSync(join(tempRoot, "src"), { recursive: true }), join(tempRoot, "src")),
       doc_type: "invoice",
-      lane_suffix: "goods",
       field_config: join(tempRoot, "field-config.json"),
     },
     {

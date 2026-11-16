@@ -219,16 +219,16 @@ describe("E8b·H2——runDocRegistry（已登记单据清单读侧：run.json d
     const runDir = tempRoot();
     mkdirSync(runDir, { recursive: true });
     seedRunJson(runDir, [
-      { doc_type: "swb", lane_suffix: "goods", registered_at: "2026-10-25T02:00:00+00:00" },
-      { doc_type: "do", lane_suffix: "docs", registered_at: "2026-10-25T01:00:00+00:00" },
+      { doc_type: "swb", registered_at: "2026-10-25T02:00:00+00:00" },
+      { doc_type: "do", registered_at: "2026-10-25T01:00:00+00:00" },
     ]);
     const registry = runDocRegistry(runDir);
     expect(registry).toEqual({
       status: "ok",
       source: "run_json_docs",
       docs: [
-        { doc_type: "do", lane_suffix: "docs", registered_at: "2026-10-25T01:00:00+00:00" },
-        { doc_type: "swb", lane_suffix: "goods", registered_at: "2026-10-25T02:00:00+00:00" },
+        { doc_type: "do", registered_at: "2026-10-25T01:00:00+00:00" },
+        { doc_type: "swb", registered_at: "2026-10-25T02:00:00+00:00" },
       ],
     });
   });
@@ -261,7 +261,7 @@ describe("E8b·H2——runDocRegistry（已登记单据清单读侧：run.json d
   });
 
   it("docs 键形态非法（非列表／条目缺 doc_type／doc_type 空串）→ docs_invalid（fail-closed 不降级为目录探测）", () => {
-    for (const bad of [["not-object"], [{ lane_suffix: "x" }], [{ doc_type: "  " }], "string"]) {
+    for (const bad of [["not-object"], [{ legacy_key: "x" }], [{ doc_type: "  " }], "string"]) {
       const runDir = tempRoot();
       mkdirSync(runDir, { recursive: true });
       seedRunJson(runDir, bad);

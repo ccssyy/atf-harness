@@ -518,7 +518,7 @@ describe("RunLayout/v3 写侧落名——v3 树不写 v2 名（声明闭集单�
 //   ② 本轮现造的验证件（不在①存量口径内；数据为假；/tmp 会随清理消失，故此条按
 //      "可复跑"而非"可访问"引用）：当时指纹 /tmp/v3s/ws → dev:ino=116:247792136（仅当时确证，重建即变）。
 //      内核 create_run + register 真落位；check_run_layout → layout_scanned {"RunLayout/v3":1}
-//      / findings [] / pass（run.json docs=[{doc_type:pl, lane_suffix:all}] 与
+//      / findings [] / pass（run.json docs=[{doc_type:pl}] 与
 //      stage/stage-register.pl.summary.json 对得上，否则会报 layout_docs_registry_mismatch）；
 //      harness helper 解析：webui→runtime/webui、loop→runtime/loop、prep→data、
 //      experiment-setup→config/experiment-setup，全部落在 run.json.dirs 声明内。

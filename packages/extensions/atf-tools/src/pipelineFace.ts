@@ -2673,7 +2673,7 @@ export const buildPipelineTool = (
           "未显式给定时读确认快照兜底；皆无则不下传（内核按第一档 802816）",
       },
       doc_type: { type: "string", description: "单据类型（可缺省——缺省不上送，内核按数据/登记面推断，无法确定即 blocked；给了则显式指定）" },
-      lane_suffix: { type: "string", description: "数据后缀（内部键，一般不用传：缺省不上送，内核按全部处理）" },
+      unit_bindings: { type: "object", additionalProperties: true, description: "显式 unit 捆绑声明（JSON:unit_id->页 safe_id 列表；1116 发现 8——数据图片无特殊说明默认一页一独立切分单元，数据集级/多页捆绑仅显式声明；不给=全页级。A2 lane 退役:lane_suffix 参数已删，重生成同语义 config 场景改传本参数或省略）" },
       field_config: {
         type: "string",
         description:
@@ -2730,7 +2730,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; experiment?: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; lane_suffix?: string; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; prompt_material_hint?: string; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_check?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
+      args: { stage: string; run_id: string; experiment?: string; workspace_path?: string; source_root?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; unit_bindings?: Record<string, unknown>; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; prompt_material_hint?: string; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_check?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -3462,8 +3462,17 @@ let visualSummary: Record<string, unknown> | undefined;
       // doc_type 一律不传（run 级联合装配按槽位枚举，不按单类执行）。
       const docType = typeof args.doc_type === "string" ? args.doc_type.trim() : "";
       if (docType !== "" && !assembleMode) argv.push("--doc-type", docType);
-      const laneSuffix = typeof args.lane_suffix === "string" ? args.lane_suffix.trim() : "";
-      if (laneSuffix !== "") argv.push("--lane-suffix", laneSuffix);
+      // A2 lane 退役+A5 显式捆绑:lane_suffix argv 通道退役（内核 argparse 已删该旗标,
+      // 真传必报 unrecognized——跨仓断裂修复）;--unit-bindings 显式声明通道接管
+      const unitBindings = args.unit_bindings;
+      if (unitBindings !== undefined && unitBindings !== null) {
+        const { tmpdir } = await import("node:os");
+        const { join } = await import("node:path");
+        const { writeFileSync } = await import("node:fs");
+        const bindingsPath = join(tmpdir(), `atf-unit-bindings-${Date.now()}.json`);
+        writeFileSync(bindingsPath, JSON.stringify(unitBindings), "utf-8");
+        argv.push("--unit-bindings", bindingsPath);
+      }
       const fieldConfig = typeof args.field_config === "string" ? args.field_config.trim() : "";
       if (fieldConfig !== "") {
         // D-a：传前校验＋绝对化（纯函数单测覆盖；见 fieldConfigPrecheckOf）

@@ -4,7 +4,7 @@
  * _20261023》§二 harness 条目）。内核侧默认值清除与资产删除属内核会话窗口，不入本锚。
  *
  * §一.3 透传覆盖：
- *   doc_type/lane_suffix/field_config 三件——显式给 → argv 含对应旗标；不给/空串 →
+ *   doc_type/field_config 两件（1116 A2 lane 退役:lane_suffix 通道删）——显式给 → argv 含对应旗标；不给/空串 →
  *   argv 不含（缺省不上送）；与既有段特定追加逻辑并存零回归（register --source-root／
  *   training_prep --base-model／family_split --auto-style-cluster＋开关）；参数 schema
  *   三件在位；工具描述含「不传 doc_type 内核按数据/登记面推断，无法确定即 blocked」句。
@@ -66,14 +66,14 @@ const summaryArgv = (result: unknown): string[] =>
   ((result as { summary?: { argv?: string[] } }).summary?.argv ?? []);
 
 describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
-  it("显式给三件 → argv 含 --doc-type／--lane-suffix／--field-config（label_qc 段）", async () => {
+  it("显式给两件 → argv 含 --doc-type／--field-config（label_qc 段）；lane_suffix 通道退役即拒形态由内核 argparse 兜底", async () => {
     const result = await toolOf(ARGV_MOCK).execute(
       {
         stage: "label_qc",
         run_id: "d82-given",
         workspace_path: tempRoot(),
         doc_type: "bill_of_lading",
-        lane_suffix: "goods",
+
         field_config: FAKE_FIELD_CONFIG,
       },
       fakeExec,
@@ -81,7 +81,7 @@ describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
     expect((result as Record<string, unknown>)["ok"]).toBe(true);
     const argv = summaryArgv(result);
     expect(argv[argv.indexOf("--doc-type") + 1]).toBe("bill_of_lading");
-    expect(argv[argv.indexOf("--lane-suffix") + 1]).toBe("goods");
+    expect(argv).not.toContain("--lane-suffix");
     expect(argv[argv.indexOf("--field-config") + 1]).toBe(FAKE_FIELD_CONFIG);
   });
   it("不给三件 → argv 不含三旗标（缺省不上送——内核自行推断，推断不出即 blocked）", async () => {
@@ -96,7 +96,7 @@ describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
   });
   it("给空串/纯空白 → 同缺省不上送（trim 非空才追加）", async () => {
     const result = await toolOf(ARGV_MOCK).execute(
-      { stage: "label_qc", run_id: "d82-blank", workspace_path: tempRoot(), doc_type: "  ", lane_suffix: "", field_config: "\t" },
+      { stage: "label_qc", run_id: "d82-blank", workspace_path: tempRoot(), doc_type: "  ", field_config: "\t" },
       fakeExec,
     );
     const argv = summaryArgv(result);
@@ -116,7 +116,7 @@ describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
         workspace_path: root,
         source_root: join(root, "src-docs"),
         doc_type: "bill_of_lading",
-        lane_suffix: "goods",
+
         field_config: FAKE_FIELD_CONFIG,
       },
       fakeExec,
@@ -151,7 +151,7 @@ describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
         run_id: "d82-fs",
         workspace_path: tempRoot(),
         doc_type: "bill_of_lading",
-        lane_suffix: "goods",
+
         field_config: FAKE_FIELD_CONFIG,
       },
       fakeExec,
@@ -165,7 +165,7 @@ describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
   it("参数 schema：三件 string 可缺省在位；工具描述含「推断/blocked」指路句", () => {
     const tool = toolOf(ARGV_MOCK);
     const props = (tool.parameters as { properties?: Record<string, { type?: string }> }).properties ?? {};
-    for (const key of ["doc_type", "lane_suffix", "field_config"]) {
+    for (const key of ["doc_type", "field_config"]) {
       expect(props[key]?.type).toBe("string");
     }
     expect(tool.description).toContain("不传 doc_type 时内核按数据/登记面推断");

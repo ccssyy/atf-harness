@@ -243,6 +243,15 @@
     "required": null
    },
    {
+    "option": "--train-ratio",
+    "dest": "train_ratio",
+    "action": "store",
+    "type": "<expr:float>",
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--targeted-multiplier",
     "dest": "targeted_multiplier",
     "action": "store",
@@ -995,11 +1004,20 @@
     "required": null
    },
    {
+    "option": "--contract-candidate",
+    "dest": "contract_candidate",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   },
+   {
     "option": "--stage",
     "dest": "stage",
     "action": "store",
     "type": null,
-    "choices": "<expr:list(STAGE_ORDER)>",
+    "choices": "<expr:list(STAGE_REGISTRY_ORDER)>",
     "default": null,
     "required": null
    },
@@ -1248,15 +1266,11 @@
     "required": null
    },
    {
-    "option": "--lane-suffix",
-    "dest": "lane_suffix",
+    "option": "--unit-bindings",
+    "dest": "unit_bindings",
     "action": "store",
-    "type": null,
-    "choices": [
-     "goods",
-     "non_goods",
-     "mixed"
-    ],
+    "type": "<expr:Path>",
+    "choices": null,
     "default": null,
     "required": null
    },
@@ -1340,9 +1354,19 @@
     "choices": [
      "auto",
      "on",
-     "off"
+     "off",
+     "no_cluster"
     ],
     "default": "auto",
+    "required": null
+   },
+   {
+    "option": "--train-ratio",
+    "dest": "train_ratio",
+    "action": "store",
+    "type": "<expr:float>",
+    "choices": null,
+    "default": null,
     "required": null
    },
    {
@@ -3269,6 +3293,15 @@
     "required": null
    },
    {
+    "option": "--eval-mode1",
+    "dest": "eval_mode1",
+    "action": "store_true",
+    "type": null,
+    "choices": null,
+    "default": false,
+    "required": null
+   },
+   {
     "option": "--split-manifest",
     "dest": "split_manifest",
     "action": "store",
@@ -3608,6 +3641,29 @@
     "choices": null,
     "default": null,
     "required": null
+   }
+  ]
+ },
+ {
+  "script": "skills/atf-ingest-attachments/scripts/blocks_inventory.py",
+  "args": [
+   {
+    "option": "--source-root",
+    "dest": "source_root",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
+   },
+   {
+    "option": "--output",
+    "dest": "output",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": true
    }
   ]
  },
@@ -4993,33 +5049,14 @@
     "choices": [
      "plan",
      "inspect",
-     "run",
-     "dispatch"
+     "run"
     ],
     "default": "plan",
     "required": null
    },
    {
-    "option": "--task",
-    "dest": "task",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
     "option": "--training-profile",
     "dest": "training_profile",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--session-id",
-    "dest": "session_id",
     "action": "store",
     "type": null,
     "choices": null,
@@ -5656,6 +5693,20 @@
   ]
  },
  {
+  "script": "tools/flow_verb_lint.py",
+  "args": [
+   {
+    "option": "--repo-root",
+    "dest": "repo_root",
+    "action": "store",
+    "type": null,
+    "choices": null,
+    "default": null,
+    "required": null
+   }
+  ]
+ },
+ {
   "script": "tools/generate_argparse_surface.py",
   "args": [
    {
@@ -5911,660 +5962,6 @@
    {
     "option": "--boot-log",
     "dest": "boot_log",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   }
-  ]
- },
- {
-  "script": "tools/training_preflight.py",
-  "args": [
-   {
-    "option": "--run-dir",
-    "dest": "run_dir",
-    "action": "store",
-    "type": "<expr:Path>",
-    "choices": null,
-    "default": null,
-    "required": true
-   },
-   {
-    "option": "--source-root",
-    "dest": "source_root",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--field-config",
-    "dest": "field_config",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--token-provider",
-    "dest": "token_provider",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--base-model",
-    "dest": "base_model",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--apply",
-    "dest": "apply",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--access-mode",
-    "dest": "access_mode",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   }
-  ]
- },
- {
-  "script": "tools/walkthrough_pipeline.py",
-  "args": [
-   {
-    "option": "--workspace",
-    "dest": "workspace",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": false
-   },
-   {
-    "option": "--print-stage-order",
-    "dest": "print_stage_order",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--stage",
-    "dest": "stage",
-    "action": "store",
-    "type": null,
-    "choices": "<expr:list(STAGE_ORDER)>",
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--visual-channel",
-    "dest": "visual_channel",
-    "action": "store",
-    "type": null,
-    "choices": [
-     "enabled"
-    ],
-    "default": "enabled",
-    "required": null
-   },
-   {
-    "option": "--visual-check",
-    "dest": "visual_check",
-    "action": "store",
-    "type": "<expr:Path>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--visual-readings",
-    "dest": "visual_readings",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--visual-sample-plan",
-    "dest": "visual_sample_plan",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--visual-bundle-out",
-    "dest": "visual_bundle_out",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--visual-wave-size",
-    "dest": "visual_wave_size",
-    "action": "store",
-    "type": "<expr:int>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--style-clusters-source",
-    "dest": "style_clusters_source",
-    "action": "store",
-    "type": null,
-    "choices": [
-     "auto",
-     "directory",
-     "placeholder",
-     "layout"
-    ],
-    "default": "auto",
-    "required": null
-   },
-   {
-    "option": "--grouping-provenance",
-    "dest": "grouping_provenance",
-    "action": "store",
-    "type": null,
-    "choices": [
-     "user_stated",
-     "agent_inferred"
-    ],
-    "default": "agent_inferred",
-    "required": null
-   },
-   {
-    "option": "--grouping-quote",
-    "dest": "grouping_quote",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--source-root",
-    "dest": "source_root",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--doc-type",
-    "dest": "doc_type",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--field-config",
-    "dest": "field_config",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--inputs-file",
-    "dest": "inputs_file",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--experiment",
-    "dest": "experiment",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": "",
-    "required": null
-   },
-   {
-    "option": "--run-id",
-    "dest": "run_id",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": "<expr:f\"walkthrough-{datetime.now().strftime('%Y%m%d')}\">",
-    "required": null
-   },
-   {
-    "option": "--rerun",
-    "dest": "rerun",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--prompt-template",
-    "dest": "prompt_template",
-    "action": "store",
-    "type": "<expr:Path>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--grouping-proposal",
-    "dest": "grouping_proposal",
-    "action": "store",
-    "type": "<expr:Path>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--grouping-confirm",
-    "dest": "grouping_confirm",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--targeted-multiplier",
-    "dest": "targeted_multiplier",
-    "action": "store",
-    "type": "<expr:float>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--mode5-random",
-    "dest": "mode5_random",
-    "action": "store",
-    "type": "<expr:int>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--mode5-advice-stats",
-    "dest": "mode5_advice_stats",
-    "action": "store",
-    "type": "<expr:Path>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--targeted-plan",
-    "dest": "targeted_plan",
-    "action": "store",
-    "type": "<expr:Path>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--targeted-advice",
-    "dest": "targeted_advice",
-    "action": "store",
-    "type": "<expr:Path>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--risk-signals",
-    "dest": "risk_signals",
-    "action": "store",
-    "type": "<expr:Path>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--grouping-preset",
-    "dest": "grouping_preset",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--lane-suffix",
-    "dest": "lane_suffix",
-    "action": "store",
-    "type": null,
-    "choices": [
-     "goods",
-     "non_goods",
-     "mixed"
-    ],
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--negative-ratio-target",
-    "dest": "negative_ratio_target",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--max-total-tokens",
-    "dest": "max_total_tokens",
-    "action": "store",
-    "type": "<expr:int>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--image-min-pixels",
-    "dest": "image_min_pixels",
-    "action": "store",
-    "type": "<expr:int>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--image-max-pixels",
-    "dest": "image_max_pixels",
-    "action": "store",
-    "type": "<expr:int>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--cutoff-len",
-    "dest": "cutoff_len",
-    "action": "store",
-    "type": "<expr:int>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--max-model-len",
-    "dest": "max_model_len",
-    "action": "store",
-    "type": "<expr:int>",
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--merge-small-clusters",
-    "dest": "merge_small_clusters",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--allow-small-cluster-test",
-    "dest": "allow_small_cluster_test",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--auto-style-cluster",
-    "dest": "auto_style_cluster",
-    "action": "store",
-    "type": null,
-    "choices": [
-     "auto",
-     "on",
-     "off"
-    ],
-    "default": "auto",
-    "required": null
-   },
-   {
-    "option": "--base-model",
-    "dest": "base_model",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--base-model-family",
-    "dest": "base_model_family",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--output-mode",
-    "dest": "output_mode",
-    "action": "store",
-    "type": null,
-    "choices": [
-     "grouped",
-     "flat"
-    ],
-    "default": "flat",
-    "required": null
-   },
-   {
-    "option": "--split-id",
-    "dest": "split_id",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--split-assignment-mode",
-    "dest": "split_assignment_mode",
-    "action": "store",
-    "type": null,
-    "choices": [
-     "recompute_with_policy",
-     "source_assignment"
-    ],
-    "default": "recompute_with_policy",
-    "required": null
-   },
-   {
-    "option": "--train-all",
-    "dest": "train_all",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--assignment-source",
-    "dest": "assignment_source",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--reuse-experiment-setup",
-    "dest": "reuse_experiment_setup",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--allow-below-steps-floor",
-    "dest": "allow_below_steps_floor",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--processor-path",
-    "dest": "processor_path",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--token-provider",
-    "dest": "token_provider",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--training-overrides",
-    "dest": "training_overrides",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--visible-devices",
-    "dest": "visible_devices",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--allow-token-gate-skip",
-    "dest": "allow_token_gate_skip",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--retry-coordinate-pending",
-    "dest": "retry_coordinate_pending",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--assemble",
-    "dest": "assemble",
-    "action": "store_true",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--out-json",
-    "dest": "out_json",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--out-md",
-    "dest": "out_md",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--actor",
-    "dest": "actor",
-    "action": "store",
-    "type": null,
-    "choices": null,
-    "default": "unattributed",
-    "required": null
-   },
-   {
-    "option": "--approval-mode",
-    "dest": "approval_mode",
-    "action": "store",
-    "type": null,
-    "choices": [
-     "ui",
-     "stub",
-     "ledger"
-    ],
-    "default": "ui",
-    "required": null
-   },
-   {
-    "option": "--access-mode",
-    "dest": "access_mode",
-    "action": "store",
-    "type": null,
-    "choices": [
-     "full",
-     "limited",
-     "danger-full-access"
-    ],
-    "default": null,
-    "required": null
-   },
-   {
-    "option": "--round-dir",
-    "dest": "round_dir",
     "action": "store",
     "type": null,
     "choices": null,
