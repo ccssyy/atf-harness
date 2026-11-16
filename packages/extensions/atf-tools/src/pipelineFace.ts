@@ -1643,9 +1643,9 @@ export type TrainingOverrideSource = "user_confirmed" | "config_snapshot" | "der
  *  确认快照、derived＝global_batch=256 派生、convention＝内核惯例缺省〔只呈现不下传〕）。 */
 export const TRAINING_OVERRIDE_SOURCE_LABEL: Readonly<Record<TrainingOverrideSource, string>> = {
   user_confirmed: "用户确认",
-  config_snapshot: "确认快照",
-  derived: "派生",
-  convention: "内核惯例",
+  config_snapshot: "沿用方案确认值",
+  derived: "按总批次自动推算",
+  convention: "产品缺省",
 };
 
 /** run 目录确认快照兜底读取（webui/config-snapshot.json 的 confirmed 子对象——九键
@@ -4220,7 +4220,7 @@ let visualSummary: Record<string, unknown> | undefined;
             projectUserNotice(exec as { deferContext?: (context: unknown) => void } | undefined, {
               conclusion: `版式聚类对账（目录划分碎片化，布局口径显著更少簇）：\n${hintLines}`,
               stage: "family_split",
-              next: "版式划分权威在你——合并相近小类重切（回复确认）或维持目录口径",
+              next: "版式划分权威在你——合并相近小类重切或维持目录口径:经原生卡/选项卡确认后生效（聊天文本答复不构成放行凭据,#13 统一问询通道）",
             });
           }
         }

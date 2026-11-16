@@ -28,6 +28,16 @@ export const launchCardLines = (ready: LaunchReady): string[] => [
   `│   · 配置指纹（iteration_config_sha256）：${sha12(ready.iteration_config_sha256)}`,
   ...(ready.global_batch !== undefined ? [`│   · 全局批量：${String(ready.global_batch)}`] : []),
   ...(ready.nnodes !== undefined ? [`│   · 节点数：${String(ready.nnodes)}`] : []),
+  // B9 六项直读面（内核 manifest.summary_card；缺席=旧 manifest 无该件——按既有形态呈现）
+  ...(ready.summary_card !== undefined
+    ? [
+        `│   · 模型：${ready.summary_card.model}`,
+        `│   · 卡数：${String(ready.summary_card.nproc_per_node)}`,
+        `│   · 学习率：${ready.summary_card.learning_rate}`,
+        `│   · 训练轮数：${String(ready.summary_card.epochs)}`,
+        `│   · 训练数据量：${String(ready.summary_card.train_samples)} 行`,
+      ]
+    : []),
   `│   · 启动脚本：${ready.launch_sh}`,
   `│   · 配置文件：${ready.config ?? "（未在工作区找到字节级匹配的 IterationConfig——确认后将按账本现状执行）"}`,
   "│ 确认后 harness 将：① 按配置登记训练放行记录（内核审批账本）；② 执行 launch.sh",

@@ -43,39 +43,54 @@ const typeOf = (value: unknown): string => {
 };
 
 /** 校验 value 是否匹配 schema 节点。返回 null = 通过；返回人读错误消息 = 违规。 */
+// B11/发现 5（1116):schema_violation 防御径消息=定位+两条改法（A4 批覆盖率口径升级——
+// 纯定位无改法=agent 翻源码自救的根因面；报错即修复指令纪律的桥侧新发射点）。
+const withHowToFix = (violation: string, kind: "const" | "enum" | "type" | "pattern" | "required" | "undeclared" | "child"): string => {
+  const fixes: Record<typeof kind, string> = {
+    const: "两条改法:①按期望固定值修正该参数后重试;②对照工具 schema 描述确认合法取值形态",
+    enum: "两条改法:①改取枚举闭集内的合法值(见括号清单)后重试;②读工具 description 的取值说明确认语义再传",
+    type: "两条改法:①按期望类型修正该参数(JSON 形态)后重试;②对照工具 schema 的 type 声明确认字段形态",
+    pattern: "两条改法:①按 pattern 形态修正该参数后重试;②对照工具 description 的格式说明确认写法",
+    required: "两条改法:①补齐该必填字段后重试;②对照工具 description 的参数说明确认来源(如回执字段/上游产物)",
+    undeclared: "两条改法:①删去该未声明字段后重试(properties 即白名单);②确认是否传错工具——对照 description 的参数清单",
+    child: "两条改法:①按报错路径修正该子字段后重试;②对照工具 schema 的嵌套声明确认形态",
+  };
+  return `${violation}；${fixes[kind]}`;
+};
+
 export const checkSchema = (value: unknown, schema: SchemaNode, path: string): string | null => {
   if (schema.const !== undefined) {
     if (JSON.stringify(value) !== JSON.stringify(schema.const)) {
-      return `${path} 违反 const 约束（期望 ${brief(schema.const)}，实得 ${brief(value)}）`;
+      return withHowToFix(`${path} 违反 const 约束（期望 ${brief(schema.const)}，实得 ${brief(value)}）`, "const");
     }
   }
   if (schema.enum !== undefined) {
     const hit = schema.enum.some((option) => JSON.stringify(option) === JSON.stringify(value));
-    if (!hit) return `${path} 不在枚举 ${brief(schema.enum)} 内（实得 ${brief(value)}）`;
+    if (!hit) return withHowToFix(`${path} 不在枚举 ${brief(schema.enum)} 内（实得 ${brief(value)}）`, "enum");
   }
   if (schema.type !== undefined && typeOf(value) !== schema.type) {
-    return `${path} 类型非法（期望 ${schema.type}，实得 ${typeOf(value)}: ${brief(value)}）`;
+    return withHowToFix(`${path} 类型非法（期望 ${schema.type}，实得 ${typeOf(value)}: ${brief(value)}）`, "type");
   }
   if (schema.pattern !== undefined) {
     if (typeof value !== "string" || !new RegExp(schema.pattern).test(value)) {
-      return `${path} 不匹配 pattern ${schema.pattern}（实得 ${brief(value)}）`;
+      return withHowToFix(`${path} 不匹配 pattern ${schema.pattern}（实得 ${brief(value)}）`, "pattern");
     }
   }
   if (typeOf(value) === "object") {
     const record = value as Record<string, unknown>;
     for (const key of schema.required ?? []) {
-      if (!(key in record)) return `${path} 缺少 required 字段 "${key}"`;
+      if (!(key in record)) return withHowToFix(`${path} 缺少 required 字段 "${key}"`, "required");
     }
     const declared = schema.properties ?? {};
     if (schema.strict !== false) {
       for (const key of Object.keys(record)) {
-        if (!(key in declared)) return `${path} 含未声明字段 "${key}"（properties 即白名单，额外字段拒绝）`;
+        if (!(key in declared)) return withHowToFix(`${path} 含未声明字段 "${key}"（properties 即白名单，额外字段拒绝）`, "undeclared");
       }
     }
     for (const [key, child] of Object.entries(declared)) {
       if (!(key in record)) continue;
       const violation = checkSchema(record[key], child, `${path}.${key}`);
-      if (violation !== null) return violation;
+      if (violation !== null) return violation; // 子字段违例已自带改法（递归同口径）
     }
   }
   if (schema.type === "array" && schema.items !== undefined && Array.isArray(value)) {

@@ -78,7 +78,7 @@ export const toAtfAgentTool = (definition: ToolDefinition, deps: AtfAgentToolDep
         // 入参违规（循环侧已先做 validateToolArguments；此处防御径）→ 结构化错误结果回流
         return {
           content: [{ type: "text", text: textOf({ error: "schema_violation", tool: definition.name, message: paramCheck }) }],
-          details: { error: "schema_violation" },
+          details: { error: "schema_violation", tool: definition.name, message: paramCheck },
         };
       }
       const response = await deps.bridge.request(rpcMethodFor(definition.name), params ?? {});

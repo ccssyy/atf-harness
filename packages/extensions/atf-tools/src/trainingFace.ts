@@ -815,12 +815,20 @@ export function renderTaskCardText(value: TrainingStatusValue): string | null {
   const segs = value.running === true
     ? value.segments.map((s) => (s.key === "training" && s.status === "done" ? { ...s, status: "active" as const } : s))
     : value.segments;
-  // 批㊶-ISO E1：进程行随解析会话名自然变化；探测被命名域拒绝时如实呈现拒绝语义（guidance 可见）
+  // 批㊶-ISO E1：进程行随解析会话名自然变化；探测被命名域拒绝时如实呈现拒绝语义（guidance 可见）。
+  // 1116 发现 14 三态消歧：「未运行」不再吞「已结束/未启动/已停止」——产物事实（loss 点数+
+  // checkpoint 实存）是分态依据，状态探测与进程事实对账（假完成状态/假清单的根治面）。
+  const trainingDone = value.segments.some((s) => s.key === "training" && s.status === "done");
+  const hasCkpts = Array.isArray(value.ckpts) && value.ckpts.length > 0;
   const processLine = value.running === true
     ? `运行中（tmux ${value.tmux ?? ""}）`
     : value.tmux_probe
       ? `未运行（tmux 探测拒绝：${value.tmux_probe.guidance}）`
-      : "未运行";
+      : trainingDone && value.loss_points !== undefined && value.loss_points > 0
+        ? "已结束（训练段 done 且 loss 序列在场；进程已退出）"
+        : hasCkpts
+          ? "已停止（有 checkpoint 产物但 tmux 会话不在场——崩溃或手动终止，查 training 日志尾部定位）"
+          : "未启动（无 checkpoint 产物，训练尚未运行过）";
   return [
     `训练任务卡 — run ${value.run_id ?? "?"}`,
     formatTaskCard({ segments: segs }),

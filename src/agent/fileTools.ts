@@ -610,7 +610,7 @@ export const toFileAgentTool = (definition: ToolDefinition, host: FileToolHost):
       if (paramCheck !== null) {
         return {
           content: [{ type: "text", text: textOf({ ok: false, error: "schema_violation", tool: definition.name, message: paramCheck }) }],
-          details: { ok: false, error: "schema_violation" },
+          details: { ok: false, error: "schema_violation", tool: definition.name, message: paramCheck },
         };
       }
       const handler = FILE_TOOL_HANDLERS[definition.name];

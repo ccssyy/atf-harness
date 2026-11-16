@@ -257,6 +257,8 @@ export interface LaunchReady {
   config?: string;
   /** D115：来源标注——run_tree＝run 树 launch/ 布局（正道落点，优先）；scratch＝exec-home scratch（存量） */
   source?: "run_tree" | "scratch";
+  /** B9 训练确认卡六项直读面（内核 manifest.summary_card——1116 发现 12 卡面缺项+术语泄漏根治） */
+  summary_card?: { model: string; nproc_per_node: number; learning_rate: string; epochs: number; train_samples: number };
 }
 
 interface ScratchFileHit {
@@ -315,6 +317,8 @@ interface LaunchManifestFacts {
   iteration_config_sha256?: string;
   global_batch?: number;
   nnodes?: number;
+  /** B9 训练确认卡六项直读面（内核 launch_manifest.summary_card——1116 发现 12） */
+  summary_card?: { model: string; nproc_per_node: number; learning_rate: string; epochs: number; train_samples: number };
 }
 
 const readManifestFacts = async (manifestAbs: string): Promise<LaunchManifestFacts | null> => {
@@ -328,6 +332,9 @@ const readManifestFacts = async (manifestAbs: string): Promise<LaunchManifestFac
       ...(typeof record["iteration_config_sha256"] === "string" ? { iteration_config_sha256: record["iteration_config_sha256"] } : {}),
       ...(typeof record["global_batch"] === "number" ? { global_batch: record["global_batch"] } : {}),
       ...(typeof record["nnodes"] === "number" ? { nnodes: record["nnodes"] } : {}),
+      ...((record["summary_card"] ?? null) !== null && typeof record["summary_card"] === "object"
+        ? { summary_card: record["summary_card"] as LaunchManifestFacts["summary_card"] }
+        : {}),
     };
   } catch {
     return null;
