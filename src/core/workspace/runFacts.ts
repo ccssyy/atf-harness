@@ -343,7 +343,7 @@ export const formatProgressBadge = (progress: RunProgress | null): string | null
 /** 八段管线顺序（D96：与内核 STAGE_ORDER 逐键一致＝snapshot SEGMENTS 键同源序；
  *  训练执行/评估不占段灯——独立卡/区块，不入本序）。 */
 // R1/G5 段序单源:灯面升 v2 全段(STAGE_REGISTRY_ORDER,ADR-0020 全局单一段序;
-// 工具面 CLI 合同仍=KERNEL_STAGE_ORDER 管线 9 段,两族分置)
+// 工具面 CLI 合同=KERNEL_STAGE_ORDER 17 段全表,AB 归一后两族同源)
 // G5 收敛:灯面=管线段序(KERNEL_STAGE_ORDER G1a 新序,D96 owner 裁定——段灯
 // 只含管线段,训练/评估独立卡);v2 全段 17 段以 STAGE_REGISTRY_V2 注册表导出
 // 形态落地(codegen 生成物),灯面不消费(agent 侧段无事实轨,占灯恒 pending 无信息量)。

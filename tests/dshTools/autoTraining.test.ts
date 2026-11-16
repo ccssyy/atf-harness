@@ -27,6 +27,7 @@ import { readTrainShBatchParams, patchTrainShForOom, maybeAutoOomFallback, oomFa
 import { resolveLaunchSessionName, tmuxSocketFlag, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
 import { injectMonitorGlobal } from "../../packages/extensions/atf-ui/src/server.js";
 import { buildRunTrainingTool } from "../../packages/extensions/atf-tools/src/trainingFace.js";
+import { STAGE_REGISTRY_ORDER } from "../../src/core/generated/stageOrder.js";
 
 /** atf-training 预设已移出模板：走 bundle 层 `- insert:` 声明（profile 层新增不加载）。 */
 const presetPatch = (): string =>
@@ -148,17 +149,17 @@ const template = readFileSync(join(repoRoot, "deploy", "profiles", "web", "cordi
     expect(sandboxLines).toHaveLength(3);
     expect(template).toContain("defaultPreset: danger-full-access");
   });
-  it("Agent 预设 atf-training 在 bundle 层声明：id／order／九段流程约束／工具集差异全在配置里", () => {
+  it("Agent 预设 atf-training 在 bundle 层声明：id／order／17 段流程约束／工具集差异全在配置里", () => {
     const bundle = presetPatch();
     // 模板里不该再有该行（profile 层新增不加载）
     expect(template).not.toContain("- id: preset-atf-training");
     expect(bundle).toContain("- id: preset-atf-training");
     expect(bundle).toMatch(/id: atf-training\n\s+order: 2/);
-    // 九段流程约束（persona 内，配置声明——不是 TS 分支）
-    for (const stage of ["register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep"]) {
+    // 段流程约束（persona 内，配置声明——不是 TS 分支）：AB 归一后 17 段全表逐段在场
+    for (const stage of STAGE_REGISTRY_ORDER) {
       expect(bundle).toContain(stage);
     }
-    expect(bundle).toContain("训练链固定九段");
+    expect(bundle).toContain("训练链固定十七段");
     // 工具集差异：vendor 技能面关（atf_skill_read 单源）
     expect(bundle).toMatch(/- id: skill-filesystem\n\s+name: '@deepseek-ai\/dsh-skill-filesystem'\n\s+disabled: true/);
     expect(bundle).toMatch(/- id: tool-skill\n\s+name: '@deepseek-ai\/dsh-tool-skill'\n\s+disabled: true/);

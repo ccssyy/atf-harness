@@ -52,9 +52,8 @@
  * 接口契约（引自内核件 K-A2.2a §二，双件同步；A-E14b 增补 K-E14a 命令面；E10b 增补
  * E10a 命令面；E10d 增补 E10f 命令面；D89 增补 --grouping-preset 命令面；D93 增补
  * 全局三参命令面）：
- *   段名闭集（权威＝内核 STAGE_ORDER，八项，禁增删改序）＝register／label_qc／
- *   experiment_setup／candidate_build／publish／family_split／admission／training_prep。
- *   命令面（段模式）：--workspace 必填／--stage 八段之一／--run-id 建议显式／
+ *   段名闭集（权威＝内核 STAGE_ORDER 17 段全表，禁增删改序——AB 归一后=KERNEL_STAGE_ORDER）。
+ *   命令面（段模式）：--workspace 必填／--stage 取段闭集之一／--run-id 建议显式／
  *   --source-root 仅 register 必填其余可省／--base-model 仅 training_prep（本地模型目录
  *   绝对路径；K-E14a 拆分后渲染位吃 --base-model-family，内核段模式另有盘上只读再水合，
  *   harness 案 a＝必填显式值卡前快败；E8 起 assemble 模式豁免——run 级联合装配由内核
@@ -2419,7 +2418,7 @@ export const buildPipelineTool = (
       `（胶囊数据源；experiment_setup/candidate_build/training_prep 按映射口径落事实，点灯以内核段序闭包为准）；` +
       `exit 2（blocked）／exit 3（环境错误）一律零写入。审批面板放行后才会执行。`,
     parameters: {
-      stage: { type: "string", required: true, enum: [...PIPELINE_STAGES], description: "要触发的内核管线段（八段原文，单段）" },
+      stage: { type: "string", required: true, enum: [...PIPELINE_STAGES], description: "要触发的内核管线段（段名原文，单段）" },
       run_id: { type: "string", required: true, description: "run 标识（落点 <workspace_path>/experiments/<exp>/<run_id>·RunLayout/v3；未指定实验归入当日「未命名实验」）" },
       experiment: { type: "string", description: "实验名（可选；显式给定时内核把 run 归属该实验——register 建 run 与摘要落点单源。缺省不传：内核按「复用该 run 既有归属→当日未命名实验」解析。#26 r2 实锤：指定实验名但段驱动不转发→run 落 adhoc）" },
       workspace_path: { type: "string", description: "workspace 根（可选覆盖——缺省按会话 cwd→工作区身份→实例配置解析，并回显所用根与依据；显式给时必须是已初始化的工作区——含 .atf/workspace.json、datasets+splits、runs、experiments、workspace/runs(v1 存量) 任一标记，裸目录被 workspace_path_invalid 拒绝、不在错路径上静默建骨架）。注意：会话未绑定工作区时本参数**必须显式传**（绝对路径）——漏传会在段入口被拒（workspace_path_missing），白白多一轮" },

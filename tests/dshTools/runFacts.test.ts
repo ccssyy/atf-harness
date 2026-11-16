@@ -33,21 +33,25 @@ afterEach(() => {
 });
 
 describe("批㊶-N N-1 段序守卫（orderGuarded）", () => {
-  it("evaluate 锚在场但 training 未 done → 抑制为 false（陈旧轮倒挂场景）；training done → 放行", () => {
-    // D96：段序八键＝内核段名（training/evaluate 不入段序——训练完成放行抑制场景随键面退役，
-    // 独立卡态不再由 orderGuarded 承载）；末段 training_prep 的前缀抑制锚同构保留（中段断链即抑制）
-    // G1a 段序(ADR-0020):style_split 前移、family_split 在 candidate_build 前;
-    // 中段断链点=candidate_build(family_split 已 done 而 candidate_build 缺)
-    const doneMap = { register: true, label_qc: true, style_split: true, experiment_setup: true, family_split: true, candidate_build: false, publish: true, admission: true, training_prep: true };
+  it("训练链中段断链 → 抑制为 false；断链修复（全前序 done）→ 放行", () => {
+    // AB 归一（D303）：SEGMENT_ORDER=KERNEL_STAGE_ORDER 17 段全表——doneMap 从单源构造，
+    // 不复制段清单字面（扩段时本测试自动随迁）；中段断链点取 candidate_build（前序段已 done）
+    const allDone = Object.fromEntries(SEGMENT_ORDER.map((s) => [s, true])) as Record<string, boolean>;
+    const brokenAt = SEGMENT_ORDER.indexOf("candidate_build");
+    expect(brokenAt).toBeGreaterThan(0);
+    const doneMap = { ...allDone, [SEGMENT_ORDER[brokenAt] as string]: false };
     expect(orderGuarded("training_prep", true, doneMap)).toBe(false);
-    const doneMap2 = { ...doneMap, candidate_build: true };
-    expect(orderGuarded("training_prep", true, doneMap2)).toBe(true);
+    expect(orderGuarded("training_prep", true, allDone)).toBe(true);
   });
 
   it("中段未 done 同样抑制（register 缺 → label_qc 抑制）；首段无前序直达；锚缺省 false 恒 false", () => {
-    expect(orderGuarded("label_qc", true, { register: false })).toBe(false);
-    expect(orderGuarded("label_qc", true, { register: true })).toBe(true);
-    expect(orderGuarded("register", true, {})).toBe(true);
+    // label_qc 前序=17 段序中其前的全部段（contract/ingest/inspect/register）——从单源取前缀构造
+    const at = SEGMENT_ORDER.indexOf("label_qc");
+    expect(at).toBeGreaterThan(0);
+    const prefixDone = Object.fromEntries(SEGMENT_ORDER.slice(0, at).map((s) => [s, true]));
+    expect(orderGuarded("label_qc", true, { ...prefixDone, register: false })).toBe(false);
+    expect(orderGuarded("label_qc", true, prefixDone)).toBe(true);
+    expect(orderGuarded(SEGMENT_ORDER[0] as string, true, {})).toBe(true);
     expect(orderGuarded("training_prep", false, { admission: true })).toBe(false);
   });
 
@@ -183,8 +187,8 @@ describe("批㊶-N N-5 会话绑定＋三级作用域", () => {
     expect(scopedB).toEqual([]);
     // 全部实例视图＝全量
     expect(mon.runs).toHaveLength(2);
-    // G5 收敛:灯面=管线 9 段(G1a 新序);v2 全段在 STAGE_REGISTRY_V2 注册表导出
-    expect(SEGMENT_ORDER).toHaveLength(9);
+    // AB 归一（D303）：SEGMENT_ORDER=KERNEL_STAGE_ORDER 17 段全表（ADR-0020；扩段时此处显式更新）
+    expect(SEGMENT_ORDER).toHaveLength(17);
   });
 });
 

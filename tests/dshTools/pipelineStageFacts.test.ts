@@ -21,6 +21,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildPipelineTool, PIPELINE_STAGES, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
+import { STAGE_REGISTRY_ORDER } from "../../src/core/generated/stageOrder.js";
 import { readSegmentFacts } from "../../src/core/workspace/segmentFacts.js";
 import { readBindings } from "../../src/core/workspace/runFacts.js";
 
@@ -97,15 +98,15 @@ const D173_PROPOSAL = {
 };
 
 describe("A2.2b——段模式闭集与映射表", () => {
-  it("段名闭集＝内核管线九段 G1a 新序（顺序权威=ADR-0020 v2 子序列；旧六段名不保留）", () => {
-    expect(PIPELINE_STAGES).toEqual([
-      "register", "label_qc", "style_split", "experiment_setup", "family_split", "candidate_build", "publish", "admission", "training_prep",
-    ]);
+  it("段名闭集＝内核 17 段全表（AB 归一后=KERNEL_STAGE_ORDER 单源；顺序权威=ADR-0020/stage_registry）", () => {
+    // AB 归一（D303）：与 codegen 单源对账，不复制段名字面（段数=显式守卫点，扩段时随迁）
+    expect(PIPELINE_STAGES).toEqual(STAGE_REGISTRY_ORDER);
+    expect(PIPELINE_STAGES).toHaveLength(17);
     expect(PIPELINE_STAGES).not.toContain("family_split_v2");
     expect(PIPELINE_STAGES).not.toContain("candidate");
   });
 
-  it("映射表落常量（D96 恒等化）：九项全覆 G1a 新序——内核段名＝UI 段键", () => {
+  it("映射表落常量（D96 恒等化）：全段覆盖——内核段名＝UI 段键", () => {
     expect(Object.keys(SEGMENT_FACT_BY_KERNEL_STAGE)).toEqual(PIPELINE_STAGES);
     for (const value of Object.values(SEGMENT_FACT_BY_KERNEL_STAGE)) {
       expect(value).not.toBeNull();

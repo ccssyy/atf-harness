@@ -7,6 +7,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { STAGE_REGISTRY_ORDER } from "../../src/core/generated/stageOrder.js";
 
 const repo = join(import.meta.url.replace("file://", ""), "..", "..", "..");
 const TEMPLATE = join(repo, "deploy", "profiles", "web", "cordis.patch.template.yml");
@@ -73,13 +74,13 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
     const trainingIds = plugins.map((p) => p["id"]);
     expect(trainingIds.filter((id) => id !== "atf-subagent")).toEqual(standard.map((p) => p["id"]));
     expect(trainingIds.indexOf("atf-subagent")).toBe(trainingIds.indexOf("tool-jobs") + 1);
-    // 九段流程约束在 persona 配置里（配置声明，禁 TS 分支）
+    // 段流程约束在 persona 配置里（配置声明，禁 TS 分支）——AB 归一后 17 段全表逐段在场
     const persona = byId.get("persona") as { config?: { prefix?: string } } | undefined;
     const prefix = persona?.config?.prefix ?? "";
-    for (const stage of ["register", "label_qc", "experiment_setup", "candidate_build", "publish", "family_split", "admission", "training_prep"]) {
+    for (const stage of STAGE_REGISTRY_ORDER) {
       expect(prefix).toContain(stage);
     }
-    expect(prefix).toContain("训练链固定九段");
+    expect(prefix).toContain("训练链固定十七段");
   });
 
   it("免审声明 approvalPolicy 落在 atf-tools config：显式工具名清单、零治理点", () => {

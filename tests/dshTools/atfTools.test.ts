@@ -14,6 +14,7 @@ import { BridgeManager, allDefinitions, BRIDGE_TOOL_NAMES, buildBridgeTools } fr
 import { approvalExemptAnswerer, registerApprovalExempt } from "../../packages/extensions/atf-tools/src/approvalExempt.js";
 import { buildFileTools } from "../../packages/extensions/atf-tools/src/fileFace.js";
 import { buildPipelineTool, PIPELINE_STAGES } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
+import { STAGE_REGISTRY_ORDER } from "../../src/core/generated/stageOrder.js";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 import { translateParameters } from "../../packages/extensions/atf-tools/src/schemaTranslate.js";
 import { TOOL_DEFINITIONS, WORKSPACE_TOOL_DEFINITIONS } from "../../src/core/tools/index.js";
@@ -313,7 +314,9 @@ describe("atf_pipeline_stage 集成（mock pipeline）＋审批 seam", () => {
       const result = (await (tool as DshToolLike).execute({ stage: "label_qc", run_id: "r1", workspace_path: tempRoot() }, fakeExec)) as Record<string, unknown>;
       expect(result).toMatchObject({ stage: "label_qc", ok: true, exit_code: 0 });
     }
-    expect(PIPELINE_STAGES).toEqual(["register", "label_qc", "style_split", "experiment_setup", "family_split", "candidate_build", "publish", "admission", "training_prep"]);
+    // AB 归一（D303）：段名清单=KERNEL_STAGE_ORDER 17 段全表（与 codegen 单源对账，不复制段名字面）
+    expect(PIPELINE_STAGES).toEqual(STAGE_REGISTRY_ORDER);
+    expect(PIPELINE_STAGES).toHaveLength(17);
   });
 });
 
