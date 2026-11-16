@@ -2673,7 +2673,7 @@ export const buildPipelineTool = (
           "未显式给定时读确认快照兜底；皆无则不下传（内核按第一档 802816）",
       },
       doc_type: { type: "string", description: "单据类型（可缺省——缺省不上送，内核按数据/登记面推断，无法确定即 blocked；给了则显式指定）" },
-      unit_bindings: { type: "object", additionalProperties: true, description: "显式 unit 捆绑声明（JSON:unit_id->页 safe_id 列表；1116 发现 8——数据图片无特殊说明默认一页一独立切分单元，数据集级/多页捆绑仅显式声明；不给=全页级。A2 lane 退役:lane_suffix 参数已删，重生成同语义 config 场景改传本参数或省略）" },
+      unit_bindings: { type: "object", additionalProperties: true, description: "显式 unit 捆绑声明（JSON:unit_id 到页列表的映射；数据图片无特殊说明时默认一页一独立切分单元，多页捆绑或整数据集共用一个切分单元时才需要本参数；不给=全部按页独立）" },
       field_config: {
         type: "string",
         description:

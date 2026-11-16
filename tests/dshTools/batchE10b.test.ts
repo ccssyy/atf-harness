@@ -86,8 +86,8 @@ describe("E10b——参数面（缺省 auto／三值枚举／非法值拒）", (
       "--actor", "unattributed", "--approval-mode", "ui", "--round-dir", expect.any(String),
     ]);
     const schema = tool.parameters as { properties?: Record<string, { enum?: string[] }> };
-    expect(schema.properties?.["auto_style_cluster"]?.enum).toEqual(["auto", "on", "off"]);
-    expect(AUTO_STYLE_CLUSTER_VALUES).toEqual(["auto", "on", "off"]);
+    expect(schema.properties?.["auto_style_cluster"]?.enum).toEqual(["auto", "on", "off", "no_cluster"]);
+    expect(AUTO_STYLE_CLUSTER_VALUES).toEqual(["auto", "on", "off", "no_cluster"]);
   });
   it("三值枚举逐值透传：on/off/auto 原样上线", async () => {
     for (const value of AUTO_STYLE_CLUSTER_VALUES) {
