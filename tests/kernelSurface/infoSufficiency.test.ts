@@ -5,6 +5,18 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+// 内核源路径=ATF_KERNEL_SOURCE（单版本源门同源 env；未设=内核读取面用例如实 skip
+// ——stageOrder 同款形态，杜绝 worktree 绝对路径硬编码事故）
+const kernelRoot = process.env.ATF_KERNEL_SOURCE ?? "";
+const readKernel = (rel: string): string | null => {
+  if (!kernelRoot) return null;
+  try {
+    return readFileSync(resolve(kernelRoot, rel), "utf-8");
+  } catch {
+    return null;
+  }
+};
+
 const pipelineFaceSrc = readFileSync(
   resolve(process.cwd(), "packages/extensions/atf-tools/src/pipelineFace.ts"),
   "utf-8",
@@ -59,11 +71,9 @@ describe("B1 信息足八子面（CI 全链断言）", () => {
     expect(cardSrc).toContain("内核建议：");
   });
 
-  it("⑤结果汇报：构造产物会话流摘要行（B8 发现 10 反例=mode5 产 37 行零披露）", () => {
-    const pipelineSrc = readFileSync(
-      resolve("/data/sam/AgenticTrainingFlow/.worktrees/fixbatch-b-interaction/skills/atf-admit-training-data/scripts/walkthrough_pipeline.py"),
-      "utf-8",
-    );
+  it.runIf(kernelRoot)("⑤结果汇报：构造产物会话流摘要行（B8 发现 10 反例=mode5 产 37 行零披露）", () => {
+    const pipelineSrc = readKernel("skills/atf-admit-training-data/scripts/walkthrough_pipeline.py");
+    expect(pipelineSrc, "内核 walkthrough_pipeline.py 可读").toBeTruthy();
     expect(pipelineSrc).toContain("_construction_summary_line");
     expect(pipelineSrc).toContain("构造汇总：");
     expect(pipelineSrc).toContain("mode5 短缺如实");
@@ -88,17 +98,13 @@ describe("B1 信息足八子面（CI 全链断言）", () => {
     expect(pipelineFaceSrc).not.toContain('"--lane-suffix"');
   });
 
-  it("⑧追溯足：直跑闸+账本留痕（A8 逃生留痕+ApprovalRecord subject_components）", () => {
-    const pipelineSrc = readFileSync(
-      resolve("/data/sam/AgenticTrainingFlow/.worktrees/fixbatch-b-interaction/skills/atf-admit-training-data/scripts/walkthrough_pipeline.py"),
-      "utf-8",
-    );
+  it.runIf(kernelRoot)("⑧追溯足：直跑闸+账本留痕（A8 逃生留痕+ApprovalRecord subject_components）", () => {
+    const pipelineSrc = readKernel("skills/atf-admit-training-data/scripts/walkthrough_pipeline.py");
+    expect(pipelineSrc, "内核 walkthrough_pipeline.py 可读").toBeTruthy();
     expect(pipelineSrc).toContain("direct-exec-audit.jsonl");
     expect(pipelineSrc).toContain("_EXEC_SOURCE_ENV");
-    const launchSrc = readFileSync(
-      resolve("/data/sam/AgenticTrainingFlow/.worktrees/fixbatch-b-interaction/skills/atf-prepare-training/scripts/generate_train_launch.py"),
-      "utf-8",
-    );
+    const launchSrc = readKernel("skills/atf-prepare-training/scripts/generate_train_launch.py");
+    expect(launchSrc, "内核 generate_train_launch.py 可读").toBeTruthy();
     expect(launchSrc).toContain("subject_components");
   });
 });

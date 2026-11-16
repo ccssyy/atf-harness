@@ -379,10 +379,10 @@ describe("任务卡卡面（renderTaskCardText——liveness 覆盖语义）", (
     expect(text).toContain(`运行中（tmux ${launchName()}）`); // 批㊶-ISO E1：随命名域解析名自然变化
     expect(text).toContain("进度 1/3");
   });
-  it("running=false：训练段按段语义 done（loss-series 在场）", () => {
+  it("running=false：训练段 done+loss 在场=已结束（B5 三态消歧——发现 14）", () => {
     const text = renderTaskCardText({ ...base, running: false });
     expect(text).toContain("✓ 训练执行");
-    expect(text).toContain("未运行");
+    expect(text).toContain("已结束");
   });
   it("tmux 探测被命名域拒绝（tmux_probe）→ 未运行＋guidance 回流可见（批㊶-ISO E1 fail-closed）", () => {
     const text = renderTaskCardText({

@@ -227,7 +227,7 @@ describe("E4b-H1 training_overrides（training_prep 段训练参数单源桥）"
     const badValue = resolveTrainingOverrides({ training_overrides: { learning_rate: { nested: true } } }, runDir);
     expect(badValue.ok).toBe(false);
     // 卡行空态：快照缺席且显式空 → convention 两键仍在卡行（bs/deepspeed 恒有终值呈现）
-    expect(trainingOverridesApprovalLine({ per_device_train_batch_size: "2", deepspeed: "ds_z3_offload" }, { per_device_train_batch_size: "convention", deepspeed: "convention" })).toContain("内核惯例·只呈现不下传");
+    expect(trainingOverridesApprovalLine({ per_device_train_batch_size: "2", deepspeed: "ds_z3_offload" }, { per_device_train_batch_size: "convention", deepspeed: "convention" })).toContain("产品缺省·只呈现不下传");
   });
 
   it("cutoff≥10000 快照 → bs 内核缺省分档取 1（convention 只呈现）；<10000 取 2", async () => {
