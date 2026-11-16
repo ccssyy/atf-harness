@@ -124,7 +124,7 @@ describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
     const argv = summaryArgv(result);
     expect(argv[argv.indexOf("--source-root") + 1]).toBe(join(root, "src-docs"));
     expect(argv).toContain("--doc-type");
-    expect(argv).toContain("--lane-suffix");
+    expect(argv).not.toContain("--lane-suffix");
     expect(argv).toContain("--field-config");
   });
   it("并存零回归·training_prep：--base-model 与 --doc-type 同 argv", async () => {
@@ -159,7 +159,7 @@ describe("D82 §一.3——atf_pipeline_stage 单据类型三件透传", () => {
     const argv = summaryArgv(result);
     expect(argv[argv.indexOf("--auto-style-cluster") + 1]).toBe("auto");
     expect(argv).toContain("--doc-type");
-    expect(argv).toContain("--lane-suffix");
+    expect(argv).not.toContain("--lane-suffix");
     expect(argv).toContain("--field-config");
   });
   it("参数 schema：三件 string 可缺省在位；工具描述含「推断/blocked」指路句", () => {
