@@ -30,6 +30,7 @@ import {
   STYLE_CLUSTER_REJECTION_NOTE,
   STYLE_CLUSTER_USER_MESSAGE_FALLBACK,
 } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
+import { STAGE_REGISTRY_ORDER } from "../../src/core/generated/stageOrder.js";
 
 interface DshToolLike {
   name: string;
@@ -127,8 +128,9 @@ describe("E10b——argv 仅 family_split 出现（其它段忽略不报错不�
     expect((missing as Record<string, unknown>)["ok"]).toBe(true);
     expect(summaryArgv(missing)).not.toContain("--auto-style-cluster");
   });
-  it("九段闭集零回归（A2.2b 落点单源不回退；本批零增删改序）", () => {
-    expect(PIPELINE_STAGES).toEqual(["register", "label_qc", "style_split", "experiment_setup", "family_split", "candidate_build", "publish", "admission", "training_prep"]);
+  it("段闭集零回归（A2.2b 落点单源不回退；AB 归一后=17 段全表与 codegen 单源对账）", () => {
+    expect(PIPELINE_STAGES).toEqual(STAGE_REGISTRY_ORDER);
+    expect(PIPELINE_STAGES).toHaveLength(17);
   });
 });
 

@@ -93,9 +93,13 @@ describe("批㊶-P P-1a/c param_sources 补丁＋deepspeed 缺省（E4-乙停写
     expect(moduleText).not.toContain("export const applyConfirmedToIterationConfig");
     expect(moduleText).toContain("快照是训练参数唯一出口");
   });
-  it("deepspeed 智能缺省＝ds_z3_offload（E4-乙与内核统一别名形态；内核 assets 在位——BUILD 首验）", () => {
+  it("deepspeed 智能缺省＝ds_z3_offload（E4-乙与内核统一别名形态；内核仓源 assets 在位）", () => {
     expect(SMART_DEEPSPEED_DEFAULT).toBe("ds_z3_offload");
-    expect(existsSync("/data/sam/ATF-Harness/.atf-pinned/skills/atf-prepare-training/assets/deepspeed/ds_z3_offload_config.json")).toBe(true);
+    // 断内核仓源（A800 双仓同父布局的相对锚）——pinned 是部署投影，由 rebuild-pinned.sh
+    // 同步+vendor 冒烟门守护，不在单测裸写 .atf-pinned 路径字面量（instancePin fence 纪律）
+    const kernelAsset = join(import.meta.dirname, "..", "..", "..", "AgenticTrainingFlow",
+      "skills", "atf-prepare-training", "assets", "deepspeed", "ds_z3_offload_config.json");
+    expect(existsSync(kernelAsset)).toBe(true);
   });
   it("E4-乙改动 2：bs 内核缺省分档单源 kernelBsDefaultOf（cutoff<10000→2，≥10000→1；缺席按惯例基线判档）", () => {
     expect(kernelBsDefaultOf(9000)).toBe(2);

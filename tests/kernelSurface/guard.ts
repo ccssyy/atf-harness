@@ -51,7 +51,7 @@ export interface HarnessSurfaceFacts {
   /** 参数面前瞻豁免集（E4-乙 b9 未发窗——豁免键跳过「旗标落声明面」单项对账；
    *  映射完整性与必填/choices 对账不变；re-pin b9 时随快照更新退役）。 */
   paramFaceWaivers: ReadonlySet<string>;
-  /** harness 八段序（runFacts SEGMENT_ORDER）。 */
+  /** harness 段序（runFacts SEGMENT_ORDER，AB 归一后=17 段全表）。 */
   pipelineStages: readonly string[];
   /** 段事实映射键集（segmentFacts SEGMENT_FACT_BY_KERNEL_STAGE 键）。 */
   segmentFactKeys: readonly string[];
@@ -163,7 +163,7 @@ export const guardStageList = (snapshot: SurfaceSnapshot, facts: HarnessSurfaceF
     out.push({ kind: "段清单", detail: `SEGMENT_ORDER 与 SEGMENT_FACT_BY_KERNEL_STAGE 键序不恒等（D96 映射恒等化破坏）：${JSON.stringify(facts.pipelineStages)} vs ${JSON.stringify(facts.segmentFactKeys)}` });
   }
   if (!sameSeq(facts.pipelineStages, facts.mockKnownStages)) {
-    out.push({ kind: "段清单", detail: "mock 对端 KNOWN 段闭集与 harness 八段序不一致（mock 漂移）" });
+    out.push({ kind: "段清单", detail: "mock 对端 KNOWN 段闭集与 harness 段序不一致（mock 漂移）" });
   }
   return out;
 };

@@ -1,11 +1,11 @@
 # 系统预设 atf-training——bundle 层声明（与 standard/ptc/minimal/cordis 同级）。
 # 必须走 `- insert:`：profile 的 cordis.patch.yml 只按 id 覆盖已有行，新增预设不会被加载。
-# 与 standard 的差异全部落在配置里（禁 TS 分支）：① persona 追加九段流程约束；
+# 与 standard 的差异全部落在配置里（禁 TS 分支）：① persona 追加训练链段序流程约束（17 段全表）；
 # ② 工具集去掉 vendor 技能面（skill-filesystem／tool-skill）。免审资格的工具清单
 # 一律由 atf-tools config.approvalPolicy 声明，此处不重复列举工具名。
 - insert:
 # —— Agent 预设 atf-training（owner 2026-10-26 裁定：训练形态＝预设轴，不是权限档）——
-# 与 standard 的差异**全部落在配置里**（禁 TS 分支）：① persona 追加九段流程约束；
+# 与 standard 的差异**全部落在配置里**（禁 TS 分支）：① persona 追加训练链段序流程约束（17 段全表）；
 # ② 工具集去掉 vendor 技能面（skill-filesystem／tool-skill）。免审资格的工具清单一律
 # 由文件顶部 atf-tools config.approvalPolicy 声明，此处不重复列举工具名。
     - id: preset-atf-training
@@ -14,7 +14,7 @@
         id: atf-training
         order: 2
         name: 训练
-        description: ATF 训练链预设——按九段流程推进（登记／标注体检／版式聚类／实验配置／家族切分／候选构造／发布／准入／训练准备）；是否逐段确认由用户权限档决定
+        description: ATF 训练链预设——按内核 stage_registry 段序推进训练全流程；是否逐段确认由用户权限档决定
         plugins:
           - id: persona
             name: '@deepseek-ai/dsh-persona'

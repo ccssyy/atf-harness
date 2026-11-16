@@ -11,8 +11,9 @@ const stageIndex = argv.indexOf("--stage");
 const stage = stageIndex >= 0 ? argv[stageIndex + 1] : undefined;
 const runIdIndex = argv.indexOf("--run-id");
 const runId = runIdIndex >= 0 ? argv[runIdIndex + 1] : "";
-// G1a 新序(ADR-0020 v2 子序列:style_split 前移+family_split 前移+publish 后移)
-const KNOWN = ["register", "label_qc", "style_split", "experiment_setup", "family_split", "candidate_build", "publish", "admission", "training_prep"];
+// AB 归一（D303）：段闭集=内核 STAGE_ORDER 17 段全表（ADR-0020/stage_registry；
+// 本夹具为静态字面量，guardStageList 对账 pipelineStages——扩段时此处随迁即红）
+const KNOWN = ["contract", "ingest", "inspect", "register", "label_qc", "snapshot", "style_split", "experiment_setup", "family_split", "candidate_build", "publish", "admission", "training_prep", "training_run", "checkpoint_eval", "badcase_analysis", "iteration_proposal"];
 if (typeof stage !== "string" || !KNOWN.includes(stage)) {
   console.error(`unknown or missing --stage: ${String(stage)}`);
   process.exit(2);
