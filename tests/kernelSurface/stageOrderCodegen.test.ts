@@ -31,13 +31,16 @@ describe("R1 段序 codegen 单源锚", () => {
     expect(JSON.parse(m![1]!)).toEqual(kernelStageOrder());
   });
 
-  it.runIf(kernelRoot)("消费面导出值与内核一致(G5 双导出:管线 9 段+v2 注册表 17 段)", async () => {
+  it.runIf(kernelRoot)("消费面导出值与内核一致(G5 双导出:管线 17 段全表+v2 注册表 17 段——D303 F0b)", async () => {
     const kernel = kernelStageOrder();
     // 路径相对本文件(tests/kernelSurface/→仓根 src/);生成物由 codegen 产出,
     // kernelRoot 缺席时本用例跳过,静态路径解析失败不构成门禁红。
     const mod = await import("../../src/core/generated/stageOrder.js");
     expect([...mod.KERNEL_STAGE_ORDER]).toEqual(kernel);
-    expect(mod.KERNEL_STAGE_ORDER).toHaveLength(9);
+    // 1116 批 C 清偿:AB 归一批 D303 F0b 起 KERNEL_STAGE_ORDER=17 段全表(driver 直驱
+    // 全链,owner 1115 终裁)——批 2 段序 17 段化时本断言漏随迁(env-gated skip 形态
+    // 从未暴露),复核 verdict 披露后随批 C 验证债清偿。
+    expect(mod.KERNEL_STAGE_ORDER).toHaveLength(17);
     // G5(ADR-0020):v2 注册表=17 段全段元数据(灯面/探针/卡面键对齐源)
     expect(mod.STAGE_REGISTRY_ORDER).toHaveLength(17);
     expect(mod.STAGE_REGISTRY_V2[0]).toMatchObject({ stage: "contract" });
