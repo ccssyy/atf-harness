@@ -832,6 +832,21 @@ const launchConfirmCardOf = async (
               }
             }
           }
+          // 批㊶-M M-3 段事实轨：桥接面工具成功即登记（register/label_qc——run 归属取参数）
+          const details = result.details as Record<string, unknown> | undefined;
+          // D81-B（指令 §二.4）：状态面附加当前会话归属工作区身份（atf_workspace_status 显示
+          // 当前 workspace_id）。附加在内核返回体之上（canonical root strict:false 放行附加
+          // 字段——bridge.contract.yaml 零 diff）；归属缺失如实给指引 note，状态面核心事实
+          // （run_id/admitted_count/scope_ref）不被遮蔽。
+          if (definition.name === "atf_workspace_status" && details !== undefined && details !== null && !("error" in details)) {
+            const sessionScope = resolveSessionWorkspace(sessionCwdOfExec(exec));
+            if (sessionScope !== null) {
+              details["workspace_id"] = sessionScope.workspaceId;
+              details["workspace_path"] = sessionScope.root;
+            } else {
+              details["workspace_scope_note"] = SCOPE_UNRESOLVED_NOTE;
+            }
+          }
           // D318 挂卡（1117-2 死锁实锚）：inspect 回执 pending>0 时把待裁决项直接以
           // 确认卡呈现（用户逐项点选→写 dataset_dir 侧凭据账本→同 run 重跑 label_qc
           // 段放行）——确认卡与 resolve 调用解耦（此前卡只在 resolve 调用时弹出：模型
@@ -927,21 +942,6 @@ const launchConfirmCardOf = async (
               if (details !== undefined && details !== null && typeof details === "object") {
                 details["pending_card_note"] = `挂卡未完成（${String(cause).slice(0, 120)}）——待裁决项仍在，可重跑本工具重新出卡或走 atf_label_qc_resolve 通路`;
               }
-            }
-          }
-          // 批㊶-M M-3 段事实轨：桥接面工具成功即登记（register/label_qc——run 归属取参数）
-          const details = result.details as Record<string, unknown> | undefined;
-          // D81-B（指令 §二.4）：状态面附加当前会话归属工作区身份（atf_workspace_status 显示
-          // 当前 workspace_id）。附加在内核返回体之上（canonical root strict:false 放行附加
-          // 字段——bridge.contract.yaml 零 diff）；归属缺失如实给指引 note，状态面核心事实
-          // （run_id/admitted_count/scope_ref）不被遮蔽。
-          if (definition.name === "atf_workspace_status" && details !== undefined && details !== null && !("error" in details)) {
-            const sessionScope = resolveSessionWorkspace(sessionCwdOfExec(exec));
-            if (sessionScope !== null) {
-              details["workspace_id"] = sessionScope.workspaceId;
-              details["workspace_path"] = sessionScope.root;
-            } else {
-              details["workspace_scope_note"] = SCOPE_UNRESOLVED_NOTE;
             }
           }
           if (details !== undefined && details !== null && typeof details === "object" && !("error" in details)) {
