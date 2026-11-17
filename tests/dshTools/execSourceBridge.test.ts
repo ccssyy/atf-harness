@@ -89,3 +89,22 @@ describe("D317b 补——contract_candidate 工具通道断言", () => {
     }
   });
 });
+
+describe("D318——user_decision 审批卡双卡冗余修复", () => {
+  it("裁决落账类直通到 B 层确认卡（宿主泛化面板不再拦）；governance 照旧", async () => {
+    const { exemptOutcomeOf } = await import("../../packages/extensions/atf-tools/src/approvalExempt.js");
+    // user_decision 类：直通（basis=bridge-confirm——放行到 B 层逐项确认卡）
+    expect(exemptOutcomeOf({ toolName: "atf_label_qc_resolve" }))
+      .toEqual({ outcome: "allowed-once", basis: "bridge-confirm" });
+    // governance 类（launch）：不直通——宿主面板照旧（治理点双保险不动）
+    expect(exemptOutcomeOf({ toolName: "atf_launch_execute" })).toBeNull();
+    // 其余 atf_* 契约工具：照旧 null（next()——chainTools 清单命中才直通）
+    expect(exemptOutcomeOf({ toolName: "atf_workspace_status" })).toBeNull();
+  });
+  it("bridgeFace 卡面终点：user_decision 不落泛化审批卡（源码结构锚）", async () => {
+    const { readFileSync } = await import("node:fs");
+    const face = readFileSync(new URL("../../packages/extensions/atf-tools/src/bridgeFace.ts", import.meta.url), "utf-8");
+    expect(face).toContain("user_decision 的卡面");
+    expect(face).toContain('} else if (definition.name === "atf_launch_execute") {');
+  });
+});

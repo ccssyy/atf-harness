@@ -757,21 +757,22 @@ const launchConfirmCardOf = async (
                 }
               }
             }
-            if (definition.name === "atf_launch_execute") {
+            if (APPROVAL_SEMANTICS_BY_TOOL[definition.name] === "user_decision") {
+              // D318（1117-2 真机实锚「老问题又弹审批卡」）：user_decision 的卡面
+              // 终点=上方逐项业务确认卡（决策内容形态）——不再落宿主泛化审批卡
+              // （「执行训练流程操作」零决策内容文案与逐项确认卡重复，双卡冗余；
+              // 拒绝动作由确认卡拒绝承载，决定能力不损失）。governance（launch）
+              // 宿主面板照旧——治理点双保险不动。
+            } else if (definition.name === "atf_launch_execute") {
               const launchConfirm = await launchConfirmCardOf(ctx, exec, args);
               if (!launchConfirm.ok) {
                 return asToolValue({ error: "launch_paused_by_user", tool: definition.name, note: launchConfirm.note });
               }
-            } else {
-            const verdict = await requestApproval(ctx, exec, definition.name,
-              buildApprovalReason({
-                action: BRIDGE_ACTION_LABELS[definition.name] ?? "执行训练流程操作",
-                target: "",
-                effect: "按该操作的业务语义执行（写面以实际参数为准）",
-                reversible: "按操作语义（写盘产物可人工清理）",
-              }));
-            if (!verdict.ok) return approvalDeniedResult(definition.name, verdict.outcome);
             }
+            // D318：泛化审批卡调用点删除（ADR-0022「禁止留半截调用链」）——
+            // requiresUserConfirmationOf=true 仅 governance（launch 专属确认卡）与
+            // user_decision（逐项确认卡）两类，各有 B 层卡面终点，泛化 fallback
+            // （「执行训练流程操作」+空 target）不可达且属 A 层审批拦截残留形态。
           }
           // 执行径分派（复用面与手搓一致）：工作区治理面（scratch_exec/skill_read）走
           // WORKSPACE_TOOL_HANDLERS 本地执行；桥接契约面走 toAtfAgentTool 桥接执行径。

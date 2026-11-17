@@ -40,9 +40,11 @@ describe("模板形状（buildApprovalReason——E8b·H3 三行）", () => {
     expect(reason).not.toContain("预计代价");
     expect(reason).not.toContain("按任务卡");
   });
-  it("空 target 容忍（action 单独成义）", () => {
-    const reason = buildApprovalReason({ action: "执行工具", target: "", effect: "只读", reversible: "可逆" });
-    expect(reason.split("\n")[0]).toBe("将要执行：执行工具");
+  it("空 target 拒绝（D318 生产端闸——泛化审批卡不可发）", () => {
+    // 空 target 是泛化审批卡（A 层审批拦截残留，ADR-0022 退役）的确定特征——
+    // 全部 11 个 B 层生产调用点 target 均为具体落点；容忍即泛化卡漏网缝隙。
+    expect(() => buildApprovalReason({ action: "执行工具", target: "", effect: "只读", reversible: "可逆" }))
+      .toThrow(/approval_reason_generic/);
   });
 });
 
@@ -87,7 +89,9 @@ describe("调用点全量走模板（源面钉——禁自由文案）", () => {
   it("E8b·H3 D152：桥接通用卡 action 走业务动作名映射（卡面零 atf_* 工具名）", () => {
     const source = readFileSync(join(SRC_DIR, "bridgeFace.ts"), "utf8");
     expect(source).toContain("BRIDGE_ACTION_LABELS");
-    expect(source).toContain('action: BRIDGE_ACTION_LABELS[definition.name] ?? "执行训练流程操作"');
+    // D318：泛化 fallback 消费随泛化审批卡退役（ADR-0022）——bridgeFace 零 fallback
+    // 消费，映射表由其余消费面（webui gpuQueue）与注释文档承载
+    expect(source).not.toContain('BRIDGE_ACTION_LABELS[definition.name]');
     // 卡面构造处不再出现 target 回填工具名形态
     expect(source).not.toContain("target: `（${definition.name}）`");
   });

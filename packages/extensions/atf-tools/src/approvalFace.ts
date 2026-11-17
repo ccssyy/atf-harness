@@ -40,12 +40,26 @@ export interface ApprovalReasonParts {
  * 卡表/摘要行）以换行续在模板之后，不得替代或前置模板三行。文案纪律：中文；零批次号/
  * 指令件名/内部工程代号/自拟黑话；零内部工具名（atf_* 工具名只进日志与审计面，D152）。
  */
-export const buildApprovalReason = (parts: ApprovalReasonParts): string =>
-  [
+export const buildApprovalReason = (parts: ApprovalReasonParts): string => {
+  // D318 生产端闸（1117-2 真机实锚「老问题又弹审批卡」）：零决策内容的泛化审批卡
+  // 不可发——ADR-0022 后审批卡=B 层业务确认卡载体，卡面必须带具体业务决策内容
+  // （action 具体动作+target 具体落点）；空 target 是泛化审批卡（A 层审批拦截
+  // 残留形态，ADR-0022 退役）的确定特征——所有 B 层确认卡都有具体落点。命中即
+  // fail-fast 给修复指令（调用点按语义重定性：user_decision=B 层确认卡/
+  // chain_advance=直通留痕），不弹零内容卡。
+  if (parts.target.trim() === "") {
+    throw new Error(
+      "approval_reason_generic:审批卡 reason 缺具体决策内容（action 为泛化描述或 target 为空）——"
+      + "ADR-0022 后审批卡=B 层业务确认卡载体，卡面必须呈现具体业务决策内容。两条改法："
+      + "①该调用按语义重定性（user_decision=B 层确认卡通道；chain_advance=直通留痕，不出审批卡）；"
+      + "②确属 B 层确认卡的，补齐 action/target 具体业务内容后重试。");
+  }
+  return [
     `将要执行：${parts.action}${parts.target}`,
     `影响范围：${parts.effect}`,
     `可逆性：${parts.reversible}`,
   ].join("\n");
+};
 
 /** 向 DSH 审批面板请求一次性放行；无审批服务 → unavailable（fail-closed）。 */
 export const requestApproval = async (

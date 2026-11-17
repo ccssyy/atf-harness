@@ -15,6 +15,7 @@
  * checkApprovalLedgerStartup fail-fast 兜底）。
  */
 import { appendFile, mkdir } from "node:fs/promises";
+import { APPROVAL_SEMANTICS_BY_TOOL } from "../../../../src/core/tools/toolDefinition.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -69,9 +70,19 @@ const warnDirect = (toolName: string, reason: unknown, basis: "bash-write" | "ch
 export const exemptOutcomeOf = (
   request: ExemptRequest,
   deps: { policy?: ApprovalExemptPolicy } = {},
-): { outcome: "allowed-once"; basis: "bash-write" | "chain" } | null => {
+): { outcome: "allowed-once"; basis: "bash-write" | "chain" | "bridge-confirm" } | null => {
   const toolName = typeof request?.toolName === "string" ? request.toolName : "";
-  if (isAtfContractTool(toolName)) return null;
+  if (isAtfContractTool(toolName)) {
+    // D318（1117-2 真机实锚「老问题又弹审批卡」）：user_decision 类（裁决落账
+    // atf_label_qc_resolve 等）直通到 B 层业务确认卡——宿主泛化审批面板（拒绝/
+    // 允许一次）与逐项确认卡重复且形态错误（零决策内容文案），卡面决定权归
+    // 逐项确认卡（D192「任何档位都走前置确认卡」的载体=B 层卡，非宿主面板）。
+    // governance（atf_launch_execute）不在此列——治理点宿主面板照旧。
+    if (APPROVAL_SEMANTICS_BY_TOOL[toolName] === "user_decision") {
+      return { outcome: "allowed-once", basis: "bridge-confirm" };
+    }
+    return null;
+  }
   if (isBashWriteClass(toolName)) return { outcome: "allowed-once", basis: "bash-write" };
   const chainTools = deps.policy?.chainTools ?? [];
   if (chainTools.includes(toolName)) return { outcome: "allowed-once", basis: "chain" };

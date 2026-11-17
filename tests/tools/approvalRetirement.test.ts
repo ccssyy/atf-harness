@@ -13,6 +13,11 @@ import { describe, expect, it } from "vitest";
 const repoRoot = join(import.meta.dirname, "..", "..");
 
 /** 退役符号闭集（代码级标识符——剥注释后零在场）。 */
+// D318（1117-2 真机实锚「老问题又弹审批卡」）：泛化审批卡文案退役——零决策内容的
+// 泛化 fallback（「执行训练流程操作」+空 target）是 A 层审批拦截残留形态；卡面
+// 终点=各 B 层业务确认卡（resolve 逐项确认卡/launch 专属卡/训练启动卡/amber 琥珀卡）。
+const RETIRED_COPY_TEXTS = ["执行训练流程操作"] as const;
+
 const RETIRED_SYMBOLS = [
   "approvalDecidedByOf",
   "approvalTailLineOf",
@@ -79,6 +84,14 @@ const collectTsFiles = (dir: string): string[] => {
 };
 
 describe("C5 负向断言（ADR-0022 审批拦截退役）", () => {
+  it("D318 泛化审批卡文案退役：闭集文案在源码（剥注释后）零在场", () => {
+    for (const file of collectTsFiles(join(repoRoot, "src")).concat(collectTsFiles(join(repoRoot, "packages")))) {
+      const stripped = stripComments(readFileSync(file, "utf-8"));
+      for (const text of RETIRED_COPY_TEXTS) {
+        expect(stripped).not.toContain(text);
+      }
+    }
+  });
   it("退役符号闭集在 src/ 与 packages/extensions/ 源码（剥注释后）零在场", () => {
     const files = [...collectTsFiles(join(repoRoot, "src")), ...collectTsFiles(join(repoRoot, "packages"))];
     expect(files.length).toBeGreaterThan(50); // 扫描面在场锚（防目录错配静默空扫）
