@@ -50,3 +50,26 @@ describe("D317——exec_source 拦截码人话（改法按执行主体分档）
     expect(invalid).toContain("请升级用户处理");
   });
 });
+
+describe("D317 补——--source-root 段×参数矩阵跨仓连接断言", () => {
+  it("harness 组装段闭集与内核消费面对齐（链首三段+register；源码文本锚）", async () => {
+    const { SOURCE_ROOT_ARGV_STAGES } = await import("../../packages/extensions/atf-tools/src/pipelineFace.js");
+    // harness 组装闭集：register + 链首三段（contract/ingest/inspect——内核段序中
+    // 位于 register 之前直接消费 source_root，链首无登记件再水合源）
+    for (const stage of ["register", "contract", "ingest", "inspect"]) {
+      expect(SOURCE_ROOT_ARGV_STAGES.has(stage)).toBe(true);
+    }
+    // 闭集外段不组装（label_qc 等经内核登记件 refs 再水合，组装反而越权）
+    expect(SOURCE_ROOT_ARGV_STAGES.has("label_qc")).toBe(false);
+    expect(SOURCE_ROOT_ARGV_STAGES.has("snapshot")).toBe(false);
+    // 跨仓文本锚：内核侧 contract/ingest/inspect 段对 source_root 的消费声明在场
+    // （ATF_KERNEL_SOURCE 在场时校验，缺席跳过——headless 载体无内核仓检出）
+    const kernelSource = process.env.ATF_KERNEL_SOURCE;
+    if (kernelSource !== undefined && kernelSource !== "") {
+      const { readFileSync } = await import("node:fs");
+      const wp = readFileSync(`${kernelSource}/skills/atf-admit-training-data/scripts/walkthrough_pipeline.py`, "utf-8");
+      expect(wp).toContain("walkthrough_contract_source_required");
+      expect(wp).toContain("合同段需要 --doc-type 与 --source-root");
+    }
+  });
+});

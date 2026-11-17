@@ -1823,6 +1823,19 @@ export const decisionReportKeys = (summary: unknown): Record<string, unknown> =>
   };
 };
 
+/** --source-root 进 argv 的段闭集（D317 补，1117-2 真机实锚）：register+链首三段
+ *  （contract/ingest/inspect——内核段序中位于 register 之前且直接消费 source_root，
+ *  链首无登记件 refs 可再水合，必须显式下传）；label_qc/style_split/candidate_build/
+ *  publish/family_split（内核 _STAGE_SOURCE_ROOT_REQUIRED）不在此列——可省时内核经
+ *  登记件 refs 再水合恢复。两仓各持一份该矩阵（内核消费闭集/harness 组装闭集），
+ *  连接断言见 tests/dshTools/execSourceBridge.test.ts（跨仓源码文本锚）。 */
+export const SOURCE_ROOT_ARGV_STAGES: ReadonlySet<string> = new Set([
+  "register",
+  "contract",
+  "ingest",
+  "inspect",
+]);
+
 /** 子进程封装（execFile——非零退出/超时如实回传，不抛；F1 预检工具同源复用）。 */
 export const runPipeline = (command: string, args: readonly string[], timeoutMs: number,
   extraEnv?: Readonly<Record<string, string>>): Promise<{ code: number | null; stdout: string; stderr: string }> =>
@@ -3314,7 +3327,7 @@ let visualSummary: Record<string, unknown> | undefined;
         }
         // 两者都不给：不传 → 内核默认 disabled（无图分析，报告如实披露缺版式/语义分量）
       }
-      if (args.stage === "register") {
+      if (SOURCE_ROOT_ARGV_STAGES.has(args.stage)) {
         // D-b：传前按内核同一判据校验（批根 + 单据类型 → 子目录必须存在），
         // 不把「拼成 …/awb/awb 不存在」这种可自证的错误留到内核侧只有一句「不可解析」。
         const sourceRootGiven = (args.source_root as string).trim();
