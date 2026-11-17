@@ -768,20 +768,6 @@ export const renderGroupingReportMarkdown = (
   return lines.join("\n");
 };
 
-/** 审批卡上的分组行（业务话；四态各一句）。 */
-export const groupingApprovalLine = (face: GroupingFace): string => {
-  if (face.source === "user_provided") return `分组来源：字段配置自带的分组（${String(face.groups.length)} 组）——按你给的走，不出卡`;
-  if (face.source === "policy_auto") return `分组来源：完全权限档按推荐候选「${face.candidate_name ?? ""}」自动选定（${String(face.groups.length)} 组）`;
-  if (face.source === "prior_decision")
-    return `分组来源：沿用你上次在这次 run 里选定的「${face.candidate_name ?? ""}」（${String(face.groups.length)} 组）——同一次 run 不重复问；要换直接说`;
-  if (face.source === "proposal") {
-    return face.decision === "user_selected"
-      ? `分组来源：你在候选里选定的「${face.candidate_name ?? ""}」（${String(face.groups.length)} 组）`
-      : `分组来源：候选建议本次未确认——${face.note}`;
-  }
-  return "分组来源：无——全部平铺（字段没有分组、也没给候选建议）";
-};
-
 /** 内核判分组建议不合格时的 errors 原文（内核返回 {ok,errors,recommended} 且不抛异常）。 */
 export const groupingProposalErrorsOf = (summary: unknown, stderr: string): unknown[] | null => {
   const fromSummary = groupingErrorsIn(asRecordOf(summary));
@@ -1497,12 +1483,6 @@ export const resolveVisibleDevices = (
   }
   return { ok: true, value, source };
 };
-
-/** 审批卡卡位行（仅 training_prep 段追加——终值与来源双双可见）。 */
-export const visibleDevicesApprovalLine = (value: string, source: VisibleDevicesSource): string =>
-  value === ""
-    ? `训练绑卡：${VISIBLE_DEVICES_SOURCE_LABEL.deploy_default}`
-    : `训练绑卡：${value}（${VISIBLE_DEVICES_SOURCE_LABEL[source]}）`;
 
 /** 五参键值类型（缺项＝键不在，不造占位）。 */
 export type ExperimentTokenParams = Partial<
