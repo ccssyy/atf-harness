@@ -1,6 +1,6 @@
 {
  "note": "内核 walkthrough 段级参数闭集快照(摘自内核仓 tools/argparse_surface.json;1116 A2 lane 退役+A5 --unit-bindings 装接重摘)",
- "source_surface_sha256": "4c8aafa826ecdfbb155f23007128472968edd59837404be3ec6dd52780eda91e",
+ "source_surface_sha256": "bb9525bc03d80c8e1315b99292634e90e25c23ec40a92d8cb20c0e3748148fc6",
  "options": [
   "--workspace",
   "--print-stage-order",
