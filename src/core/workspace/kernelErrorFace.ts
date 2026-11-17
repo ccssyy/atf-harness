@@ -26,6 +26,10 @@ export const KERNEL_ERROR_FACE_CODES: ReadonlySet<string> = new Set([
   "walkthrough_run_dir_not_empty",
   // C1（变更单 §3 C1.3）：字段配置契约错误——结构化体随回执透出（含 skeleton）。
   "field_config_invalid",
+  // D317（1117 真机发现 2）：段执行来源标记闸——改法按执行主体分档，工具链路命中
+  // =桥面装配缺陷（主体部署层），文案指向升级而非留自查/绕行空间。
+  "exec_source_unmarked",
+  "exec_source_invalid",
 ]);
 
 /** 人话文案选项：gpuFreeRows＝每卡 free 表行（gpu_capacity_insufficient 专属——由调用方
@@ -47,6 +51,10 @@ export const humanizeKernelError = (code: string, opts: KernelErrorFaceOptions =
       return `预算不一致${detail !== "" ? `：${detail}` : "（预算三要素不一致）"}——展示两值指到对应字段：请回本次训练方案卡核对 max_total_tokens / cutoff_len / max_model_len 三要素（预算 ≤ 训练截断 cutoff、预算 ≤ 推理窗口两条不变式须成立）。下一步：修正对应字段后重新确认`;
     case "token_gate_not_configured":
       return "数据构造未配置 token 审计，已拒绝构造——构造命令未传 token provider（token 审计不再可选，D59 实锚：跳过闸门会把超限样本放行给训练截断）。下一步：构造命令带上 token provider（--token-provider）后重推";
+    case "exec_source_unmarked":
+      return "段执行被拒：执行来源标记缺失。经工具（atf_pipeline_stage）调用时标记由桥自动携带、无需设置——工具链路出现本提示说明桥面装配有缺陷，请升级用户处理（不要自查内核源码、也不要自建脚本绕行，绕行会跳过段间对账与卡面确认）。人工直跑脚本属用户本人操作，处置方式由用户决定";
+    case "exec_source_invalid":
+      return "段执行被拒：执行来源标记值非法。工具链路出现本提示说明桥面装配有缺陷，请升级用户处理（不要自查内核源码、也不要自建脚本绕行）";
     case "gpu_capacity_insufficient": {
       const table = opts.gpuFreeRows !== undefined && opts.gpuFreeRows.length > 0
         ? `每卡 free：\n${opts.gpuFreeRows.map((row) => `  ${row}`).join("\n")}\n`

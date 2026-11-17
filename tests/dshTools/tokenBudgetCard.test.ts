@@ -384,7 +384,8 @@ describe("批次 R H1-3——kernelErrorFace 人话映射（提前接线；D98 �
     expect(humanizeKernelError("some_unknown_code")).toBeNull();
     // C1（变更单 §3 C1.3）新增 field_config_invalid：五码 -> 六码。
     // 该码不走扁平 note 承载骨架，骨架由 pipelineFace 从 stderr 解析后放回执 field_config 键。
-    expect(KERNEL_ERROR_FACE_CODES.size).toBe(6);
+    // D317（1117 真机发现 2）新增 exec_source_unmarked/invalid：六码 -> 八码（改法按执行主体分档）。
+    expect(KERNEL_ERROR_FACE_CODES.size).toBe(8);
   });
   it("scanKernelErrorFace：错误文本（构造的错误对象串）命中带 detail 码；未命中 null", () => {
     const hit = scanKernelErrorFace(['{"error": "token_gate_not_configured"}']);

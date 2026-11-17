@@ -2189,6 +2189,7 @@ const labelQcClassNameOf = (code: string): string =>
   : code === "q2_same_box_same_value_diff_field" ? "同框同值不同字段（一字段两用）"
   : code === "q3_value_box_shape_mismatch" ? "值与框形状不匹配"
   : code === "q4_box_out_of_bounds" ? "标注框越界"
+  : code === "q_visual_fix_suggested" ? "看图核查建议修正（agent 视觉检查发现，需你确认后才改）"
   : code;
 
 export const labelQcResumeHintOf = (stage: string, code: number | null): Record<string, unknown> => {
@@ -3617,11 +3618,16 @@ let visualSummary: Record<string, unknown> | undefined;
       // 用 env 而非 CLI 旗标：pin 内旧内核不认识 --access-mode 会让整条链 argparse
       // 失败，env 未识别＝被忽略——升级前后同一份 harness 都安全，re-pin 后自动生效。
       const accessMode = sandboxModeOf(ctx, exec) === DANGER_FULL_ACCESS_SANDBOX ? "full" : "limited";
+      // 权限三档传导（D317 owner 裁定「全自动 preset 下才 agent 自决，其余必须出卡」）：
+      // 内核 D279 事实性修正自动通路按档闸——仅 unattended 放行；guarded/full-access
+      // 转 pending 出卡（agent 建议进卡面，用户逐项确认）。缺省判定走 permissionTierOf
+      // 单源（guarded=没给完全权限）。旧内核未识别该键＝忽略（同 access-mode 安全先例）。
+      const permissionTier = permissionTierOf(ctx, exec);
       // C1'（切片 2）/ADR-0022（D287 单值化）：直通形态统一 decided_by=policy——
       // 档位推导（approvalDecidedByOf）随审批拦截退役；内核 Ledger record 语义不变。
       const approvalDecidedBy = "policy" as const;
       const result = await runPipeline(pipelineCommand, argv, pipelineTimeoutMs,
-        { ATF_ACCESS_MODE: accessMode, ATF_APPROVAL_DECIDED_BY: approvalDecidedBy });
+        { ATF_ACCESS_MODE: accessMode, ATF_APPROVAL_DECIDED_BY: approvalDecidedBy, ATF_PERMISSION_TIER: permissionTier });
       // C2：分组建议临时件用完即删（scratch/tmp 语义——不留在工作区冒充产物）
       if (groupingProposalPath !== null) {
         try { rmSync(groupingProposalPath, { force: true }); } catch { /* 删不掉不阻塞段回报 */ }

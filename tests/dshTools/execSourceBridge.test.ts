@@ -29,4 +29,24 @@ describe("runPipeline 执行来源标记传导（A8 桥形态）", () => {
     expect(ran.code).toBe(0);
     expect(ran.stdout).toBe("limited");
   });
+
+  it("权限三档传导下传（D317 档位闸——内核按档放行修正自决）", async () => {
+    const ran = await runPipeline("bash", ["-c", 'printf %s "$ATF_PERMISSION_TIER"'], 10_000,
+      { ATF_PERMISSION_TIER: "unattended" });
+    expect(ran.code).toBe(0);
+    expect(ran.stdout).toBe("unattended");
+  });
+});
+
+describe("D317——exec_source 拦截码人话（改法按执行主体分档）", () => {
+  it("闭集在案+人话指向升级（不留自查/绕行空间）", async () => {
+    const { humanizeKernelError, KERNEL_ERROR_FACE_CODES } = await import("../../src/core/workspace/kernelErrorFace.js");
+    expect(KERNEL_ERROR_FACE_CODES.has("exec_source_unmarked")).toBe(true);
+    expect(KERNEL_ERROR_FACE_CODES.has("exec_source_invalid")).toBe(true);
+    const unmarked = humanizeKernelError("exec_source_unmarked");
+    expect(unmarked).toContain("请升级用户处理");
+    expect(unmarked).toContain("不要自查内核源码");
+    const invalid = humanizeKernelError("exec_source_invalid");
+    expect(invalid).toContain("请升级用户处理");
+  });
 });
