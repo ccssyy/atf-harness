@@ -4271,7 +4271,7 @@ let visualSummary: Record<string, unknown> | undefined;
                     id: "cluster-route-choice",
                     question: String(pendingChoice["question"] ?? "这批素材要不要按版式聚类后再划分训练/测试集?"),
                     header: "版式聚类",
-                    detail: "两条路线:\n· 按版式聚类:同版式归同一侧,按簇分层切分(更防泄漏)\n· 不聚类:每页各自成类,按全数据随机切分",
+                    detail: "两条路线:\n· 按版式聚类:同版式归同簇,簇内等比例分层切分(两侧均含各版式样本)\n· 不聚类:每页各自成类,按全数据随机切分",
                     options,
                     multiSelect: false,
                   }],
@@ -4313,7 +4313,7 @@ let visualSummary: Record<string, unknown> | undefined;
             } else if (optionRows.length === 2) {
               receipt["cluster_route_answered"] = {
                 asked: false,
-                note: "选项卡通道缺席——聚类路线待用户选择:向用户转述两条路线(①按版式聚类:同版式同侧更防泄漏;②不聚类:一页一类全数据随机切分),按答案带 --auto-style-cluster on/no_cluster 重跑本段",
+                note: "选项卡通道缺席——聚类路线待用户选择:向用户转述两条路线(①按版式聚类:同版式归同簇,簇内等比例分层切分——两侧均含各版式样本;②不聚类:一页一类全数据随机切分),按答案带 --auto-style-cluster on/no_cluster 重跑本段",
               };
             }
           }
