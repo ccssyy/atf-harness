@@ -73,3 +73,19 @@ describe("D317 补——--source-root 段×参数矩阵跨仓连接断言", () =
     }
   });
 });
+
+describe("D317b 补——contract_candidate 工具通道断言", () => {
+  it("contract 段候选信封路径通道在参数面在场（跨仓文本锚：内核指路可执行）", async () => {
+    const { readFileSync } = await import("node:fs");
+    const face = readFileSync(new URL("../../packages/extensions/atf-tools/src/pipelineFace.ts", import.meta.url), "utf-8");
+    // 工具参数面声明+argv 组装两处在场
+    expect(face).toContain("contract_candidate: {");
+    expect(face).toContain('argv.push("--contract-candidate"');
+    // 跨仓锚：内核指路文案在（改法「带 --contract-candidate 重跑」必须在工具面上可执行）
+    const kernelSource = process.env.ATF_KERNEL_SOURCE;
+    if (kernelSource !== undefined && kernelSource !== "") {
+      const wp = readFileSync(`${kernelSource}/skills/atf-admit-training-data/scripts/walkthrough_pipeline.py`, "utf-8");
+      expect(wp).toContain("带 --contract-candidate <信封路径> 重跑本段");
+    }
+  });
+});

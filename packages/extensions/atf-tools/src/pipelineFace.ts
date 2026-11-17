@@ -2425,7 +2425,14 @@ export const buildPipelineTool = (
         description:
           "数据批根（**不是单据目录**）：内核拼 <批根>/<单据类型>/ 作为单据所在目录，其下可再有多层子目录（递归）。" +
           "例：批根 …/batch ＋ doc_type awb → 实际读 …/batch/awb/。" +
-          "传成单据目录会拼出 …/awb/awb 并报目录不可解析。仅 register 段必填；其余段可省。",
+          "传成单据目录会拼出 …/awb/awb 并报目录不可解析。register+contract/ingest/inspect（链首三段——早于 register 无登记件可再水合）必填；其余段可省（内核经登记件 refs 再水合）。",
+      },
+      contract_candidate: {
+        type: "string",
+        description:
+          "候选合同信封路径（仅 contract 段；JSON，信封 ContractCandidateSubmission/v1 或裸候选）——" +
+          "候选=agent 判读产物（按段一回执导出的候选工单生产：workorder_digest 原样抄回+23 键闭集）。" +
+          "工单落点见 contract 段首跑回执（candidate_workorder）。",
       },
       base_model_path: { type: "string", description: "本地模型目录绝对路径（含 config.json）；模型家族名（如 qwen3_vl）不可当路径用（training_prep 段必填，其它段忽略；assemble=true 时豁免——内核盘上再水合单源，恢复不了内核 blocked 指路）" },
       assemble: { type: "boolean", description: "run 级联合装配（仅 training_prep 段有效，其它段忽略）：true 时下传 --assemble——内核枚举 run 的单据槽位（prep/variants/<doc>/）合并生成迭代配置与启动件；与 doc_type 单类语义互斥，true 时不传 doc_type。不给且 run 下单据槽位多于一个时本工具自动按联合装配执行（回执 assemble_auto=multi_doc_slots 标注）；回执的 launch_artifacts 恒说明启动件是否已生成" },
@@ -3326,6 +3333,13 @@ let visualSummary: Record<string, unknown> | undefined;
           visualSummary = { mode: "readings", readings_path: readingsPath };
         }
         // 两者都不给：不传 → 内核默认 disabled（无图分析，报告如实披露缺版式/语义分量）
+      }
+      // D317b 补：contract 段候选信封路径通道（1117-2 真机实锚——工具参数面此前
+      // 缺该参数，agent 产出信封后无法经工具传路径，被迫手搓直跑=上轮绕行根因）。
+      // 内核 blocked walkthrough_contract_candidate_missing 的指路「带 --contract-candidate
+      // <信封路径> 重跑本段」在工具面上必须可执行。
+      if (args.stage === "contract" && typeof args.contract_candidate === "string" && args.contract_candidate.trim() !== "") {
+        argv.push("--contract-candidate", args.contract_candidate.trim());
       }
       if (SOURCE_ROOT_ARGV_STAGES.has(args.stage)) {
         // D-b：传前按内核同一判据校验（批根 + 单据类型 → 子目录必须存在），

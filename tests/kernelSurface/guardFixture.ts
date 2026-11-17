@@ -58,6 +58,7 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   run_id: "--run-id",
   workspace_path: "--workspace",
   source_root: "--source-root",
+  contract_candidate: "--contract-candidate", // D317b 补登（护栏当场修）：contract 段候选信封路径通道
   base_model_path: "--base-model",
   auto_style_cluster: "--auto-style-cluster",
   allow_small_cluster_test: "--allow-small-cluster-test",
