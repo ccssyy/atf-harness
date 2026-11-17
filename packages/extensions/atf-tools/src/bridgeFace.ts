@@ -832,6 +832,103 @@ const launchConfirmCardOf = async (
               }
             }
           }
+          // D318 挂卡（1117-2 死锁实锚）：inspect 回执 pending>0 时把待裁决项直接以
+          // 确认卡呈现（用户逐项点选→写 dataset_dir 侧凭据账本→同 run 重跑 label_qc
+          // 段放行）——确认卡与 resolve 调用解耦（此前卡只在 resolve 调用时弹出：模型
+          // 调用生成塌缩=卡不存在=用户无处确认=死锁；内核凭据读取的 dataset_dir 侧
+          // fallback 与本写入配对）。幂等：已确认项不重复问。
+          if (definition.name === "atf_label_qc_inspect" && details !== undefined && details !== null && typeof details === "object" && !("error" in details)) {
+            try {
+              const countsObj = details["counts"] as { pending?: number } | undefined;
+              const pendingCount = Number(countsObj?.pending ?? 0);
+              const scopeForCard = resolveSessionWorkspace(sessionCwdOfExec(exec));
+              const reportRef = String(details["report_ref"] ?? "");
+              if (pendingCount > 0 && scopeForCard !== null && reportRef !== "") {
+                const reportPath = join(scopeForCard.root, reportRef);
+                const report = JSON.parse(readFileSync(reportPath, "utf-8")) as { items?: Array<Record<string, unknown>> };
+                const pendingItems = (report["items"] ?? []).filter((i) => String(i["status"] ?? "") === "pending");
+                if (pendingItems.length > 0) {
+                  const datasetDirRel = reportRef.split("/").slice(0, 2).join("/");
+                  const credDir = join(scopeForCard.root, datasetDirRel, "runtime", "webui");
+                  const credPath = join(credDir, "label-qc-decisions.json");
+                  let confirmedIds = new Set<string>();
+                  try {
+                    const existing = JSON.parse(readFileSync(credPath, "utf-8")) as { decisions?: Array<{ item_id?: string }> };
+                    for (const d of existing.decisions ?? []) confirmedIds.add(String(d.item_id ?? ""));
+                  } catch { /* 账本缺席=全 pending 待问 */ }
+                  const open = pendingItems.filter((i) => !confirmedIds.has(String(i["item_id"] ?? "")));
+                  if (open.length > 0) {
+                    const svcCard = ctx.get("userQuestions") as { ask?: (payload: unknown) => Promise<{ answers: Array<{ selected?: string[]; custom?: string }> }> } | undefined;
+                    if (svcCard !== undefined && typeof svcCard.ask === "function") {
+                      const zhOf = (i: Record<string, unknown>): string => {
+                        const sa = (i["suggested_action"] ?? {}) as Record<string, unknown>;
+                        return String(sa["review_hint"] ?? "") !== "" ? String(sa["review_hint"])
+                          : String(i["value_summary"] ?? "") !== "" ? `现值「${String(i["value_summary"])}」` : String(i["human_label"] ?? i["check_class"] ?? i["item_id"]);
+                      };
+                      const rows = open.map((i, idx) => {
+                        const itemCell = `${String(i["item_id"] ?? "?")}——${String(i["human_label"] ?? i["check_class"] ?? "")}`;
+                        return `| ${idx + 1} | ${itemCell} | ${zhOf(i)} |`;
+                      }).join("\n");
+                      const answers = await svcCard.ask({
+                        questions: [{
+                          id: `label-qc-pending-card-${String(Date.now())}`,
+                          question: `标注体检待确认（共 ${open.length} 项）——确认后落账并放行重跑`,
+                          header: "标注体检裁决确认",
+                          detail: [
+                            `| # | 待裁决项 | agent 看图结论/建议 |`,
+                            `|---|---|---|`,
+                            rows,
+                            "",
+                            "确认=逐项按上表建议处置提交并留账（decided_by=user_confirmed）；暂停则在对话里说明想怎么改。",
+                          ].join("\n"),
+                          options: [
+                            { label: "确认按建议处置", description: `逐项按上表 agent 建议提交并留账（${open.length} 项）` },
+                            { label: "暂停，我要调整", description: "不提交；在对话里说明调整意见" },
+                          ],
+                          multiSelect: false,
+                        }],
+                      });
+                      const picked = answers.answers[0]?.selected?.[0] ?? "";
+                      if (picked.startsWith("确认")) {
+                        const confirmed = open.map((i) => {
+                          const sa = (i["suggested_action"] ?? {}) as Record<string, unknown>;
+                          const entry: Record<string, unknown> = {
+                            item_id: String(i["item_id"] ?? ""),
+                            action: "modify",
+                            disposition: String(sa["disposition_hint"] ?? "no_action"),
+                            reason_text: `用户卡上确认：${String(sa["review_hint"] ?? "按建议处置")}`,
+                          };
+                          if (typeof sa["visual_fix"] === "object" && sa["visual_fix"] !== null) {
+                            const fix = sa["visual_fix"] as Record<string, unknown>;
+                            if (fix["new_value"] !== undefined && fix["new_value"] !== null) entry["modified_value"] = fix["new_value"];
+                          }
+                          return entry;
+                        });
+                        mkdirSync(credDir, { recursive: true });
+                        let merged: Array<Record<string, unknown>> = confirmed;
+                        try {
+                          const existing = JSON.parse(readFileSync(credPath, "utf-8")) as { decisions?: Array<Record<string, unknown>> };
+                          merged = [...(existing.decisions ?? []), ...confirmed];
+                        } catch { /* 首写 */ }
+                        writeFileSync(credPath, `${JSON.stringify({
+                          schema_version: "LabelQcUserDecisions/v1", decided_by: "user_confirmed",
+                          decided_at: new Date().toISOString(), decisions: merged,
+                        }, null, 1)}\n`, "utf8");
+                        details["pending_card_note"] = `卡面已确认 ${confirmed.length} 项并落账（${datasetDirRel}/runtime/webui/label-qc-decisions.json，decided_by=user_confirmed）——同 run 重跑 label_qc 段即放行（有看图核查时重跑带 --visual-check）`;
+                      } else {
+                        details["pending_card_note"] = "卡面选择暂停——pending 维持；调整意见确认后可重跑本工具重新出卡";
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (cause) {
+              // 挂卡失败不阻断 inspect 回执（回执与 resolve 指路完整在——agent 可走 resolve 通路或重试出卡）
+              if (details !== undefined && details !== null && typeof details === "object") {
+                details["pending_card_note"] = `挂卡未完成（${String(cause).slice(0, 120)}）——待裁决项仍在，可重跑本工具重新出卡或走 atf_label_qc_resolve 通路`;
+              }
+            }
+          }
           // 批㊶-M M-3 段事实轨：桥接面工具成功即登记（register/label_qc——run 归属取参数）
           const details = result.details as Record<string, unknown> | undefined;
           // D81-B（指令 §二.4）：状态面附加当前会话归属工作区身份（atf_workspace_status 显示
