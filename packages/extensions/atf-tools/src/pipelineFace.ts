@@ -1834,8 +1834,13 @@ export const runPipeline = (command: string, args: readonly string[], timeoutMs:
       {
         timeout: timeoutMs,
         maxBuffer: 4 * 1024 * 1024,
-        // 逐调用追加 env（会话级事实如权限档）——不污染 process.env，多会话并发各归各。
-        ...(extraEnv === undefined ? {} : { env: { ...process.env, ...extraEnv } }),
+        // A8 执行来源标记单源注入（1117 真机发现 1 修复）：本函数只服务桥侧段/预检执行
+        // （atf_pipeline_stage/F1 预检）——子进程恒属桥形态调用，env 单源补
+        // ATF_EXEC_SOURCE=bridge。bootPreflight 的 L1 补齐写 preflightEnv 局部束
+        // （不写 process.env——并发互踩面收敛），对本链路不可达，此前段子进程无标记
+        // 被内核闸 exec_source_unmarked 拦死（真机首跑实锚）。extraEnv 显式值仍可覆盖
+        // （现无调用方覆盖；escape 逃生是用户显式动作，不经本通道）。
+        env: { ...process.env, ATF_EXEC_SOURCE: "bridge", ...(extraEnv ?? {}) },
       },
       (error, stdout, stderr) => {
         // 非零退出也返回（如实回报；超时时 code 为 null）
