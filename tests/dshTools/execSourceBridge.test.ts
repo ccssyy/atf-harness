@@ -53,23 +53,22 @@ describe("D317——exec_source 拦截码人话（改法按执行主体分档）
 
 describe("D317 补——--source-root 段×参数矩阵跨仓连接断言", () => {
   it("harness 组装段闭集与内核消费面对齐（链首三段+register；源码文本锚）", async () => {
+    // D318 M2/M4：生成物承载（内核 stage_registry 唯一源 codegen 派生）——手写闭集
+    // 与跨仓文本锚双退役（文本锚=脆弱且不拦新断裂，由生成物对账替代）。
     const { SOURCE_ROOT_ARGV_STAGES } = await import("../../packages/extensions/atf-tools/src/pipelineFace.js");
-    // harness 组装闭集：register + 链首三段（contract/ingest/inspect——内核段序中
-    // 位于 register 之前直接消费 source_root，链首无登记件再水合源）
+    const { STAGE_MATRIX } = await import("../../src/core/generated/stageMatrix.js");
+    // 期望闭集字面量=单源对账锚（内核矩阵变更不重新生成→prebuild 红——M3 演练留证）
     for (const stage of ["register", "contract", "ingest", "inspect"]) {
       expect(SOURCE_ROOT_ARGV_STAGES.has(stage)).toBe(true);
     }
     // 闭集外段不组装（label_qc 等经内核登记件 refs 再水合，组装反而越权）
     expect(SOURCE_ROOT_ARGV_STAGES.has("label_qc")).toBe(false);
     expect(SOURCE_ROOT_ARGV_STAGES.has("snapshot")).toBe(false);
-    // 跨仓文本锚：内核侧 contract/ingest/inspect 段对 source_root 的消费声明在场
-    // （ATF_KERNEL_SOURCE 在场时校验，缺席跳过——headless 载体无内核仓检出）
-    const kernelSource = process.env.ATF_KERNEL_SOURCE;
-    if (kernelSource !== undefined && kernelSource !== "") {
-      const { readFileSync } = await import("node:fs");
-      const wp = readFileSync(`${kernelSource}/skills/atf-admit-training-data/scripts/walkthrough_pipeline.py`, "utf-8");
-      expect(wp).toContain("walkthrough_contract_source_required");
-      expect(wp).toContain("合同段需要 --doc-type 与 --source-root");
+    // 生成物与两态闭集自洽（explicit ∩ recoverable=∅，并集=消费段全集）
+    expect(STAGE_MATRIX.source_root_explicit.length).toBe(4);
+    expect(STAGE_MATRIX.source_root_recoverable.length).toBe(5);
+    for (const stage of STAGE_MATRIX.source_root_explicit) {
+      expect(STAGE_MATRIX.source_root_recoverable).not.toContain(stage);
     }
   });
 });
@@ -81,12 +80,8 @@ describe("D317b 补——contract_candidate 工具通道断言", () => {
     // 工具参数面声明+argv 组装两处在场
     expect(face).toContain("contract_candidate: {");
     expect(face).toContain('argv.push("--contract-candidate"');
-    // 跨仓锚：内核指路文案在（改法「带 --contract-candidate 重跑」必须在工具面上可执行）
-    const kernelSource = process.env.ATF_KERNEL_SOURCE;
-    if (kernelSource !== undefined && kernelSource !== "") {
-      const wp = readFileSync(`${kernelSource}/skills/atf-admit-training-data/scripts/walkthrough_pipeline.py`, "utf-8");
-      expect(wp).toContain("带 --contract-candidate <信封路径> 重跑本段");
-    }
+    // D318 M4：内核指路可执行性由 M1 单源承载（段参数面矩阵化后，信封通道=contract
+    // 段参数声明的一部分，契约级追溯归 stage_registry 段定义；此处保留工具面两处在场）
   });
 });
 
