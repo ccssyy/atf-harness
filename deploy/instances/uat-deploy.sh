@@ -138,6 +138,18 @@ TARGET_SHA=$(git -C "$MAIN_REPO" rev-parse "$TARGET")
 TARGET_SHORT=$(git -C "$MAIN_REPO" rev-parse --short "$TARGET")
 log "发版目标：${TARGET} → ${TARGET_SHA}（atf-uat 容器 ${SSH_TARGET}）"
 
+# ---------- 部署证据门（work/20261117-deploy-evidence-gate·owner 授权批） ----------
+# 发版＝显式 commit 上线＝「新代码上线」动作：恒严证据门（--status 查询态已在上方
+# exit，不进本闸）。证据清单 head_commit 必须与本次发版 commit 一致（expect 对账）。
+EVID_GATE="$MAIN_REPO/deploy/verify/check-deploy-evidence.sh"
+if [[ -z "${ATF_DEPLOY_EVIDENCE:-}" ]]; then
+  die "证据清单缺席（ATF_DEPLOY_EVIDENCE 未设置）——发版是新代码上线动作（部署证据门）
+  改法一: 收口时按 DeployEvidence/v1 写清单（verdict PASS+变更面→测试形态映射+证据锚）后 ATF_DEPLOY_EVIDENCE=<清单json> 重跑;
+  改法二: DEV 实例上线一律走 deploy-dev.sh 唯一入口（证据门→预演门→单源门→pinned→重启→健康门）。"
+fi
+bash "$EVID_GATE" "$ATF_DEPLOY_EVIDENCE" "$MAIN_REPO" "$TARGET_SHA" \
+  || die "证据门未过（见上——补齐证据后重跑）"
+
 # ---------- 停旧：pid 文件组杀＋cmdline 兜底＋端口释放等待（容器内） ----------
 remote_stop_dsh() {
   ssh "${SSH_OPTS[@]}" "$SSH_TARGET" bash -s -- "$UAT_PORT" "$UAT_PID" <<'STOP_EOF'

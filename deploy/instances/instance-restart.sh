@@ -169,6 +169,34 @@ else
   [[ -f "$KEY_ENV" ]] || { echo "[instance-restart] FAIL: 密钥 env 不存在: $KEY_ENV（net-room source 链第一环）" >&2; exit 2; }
 fi
 
+# —— 部署证据门（work/20261117-deploy-evidence-gate·owner 授权批）——
+# 拦截面＝dev 重启路径：内核仓 HEAD 相对在跑 pin 指纹有**代码面**前进（diff 触达
+# src/skills/tools/packages）＝重启将上线未持证代码——必须持证据清单
+# （ATF_DEPLOY_EVIDENCE）或走 deploy-dev.sh 唯一上线入口。纯文档/装配物前进＝
+# 例行重启放行（运维连续性）；诊断态（--env-cmd/--env-dump，零副作用）不进闸；
+# uat 上线面＝uat-deploy.sh（恒严证据门），本闸不重复覆盖。
+if [[ "$INSTANCE" == "dev" && "$MODE" == "restart" ]]; then
+  GATE_KERNEL_SOURCE=$(grep -E '^export ATF_KERNEL_SOURCE=' "$ENV_FILE" | tail -1 | sed -E "s/^export ATF_KERNEL_SOURCE=['\"]?([^'#]*)['\"]?.*/\1/" | xargs)
+  GATE_PIN_ROOT=$(grep -E '^export ATF_INSTANCE_PIN_ROOT=' "$ENV_FILE" | tail -1 | sed -E "s/^export ATF_INSTANCE_PIN_ROOT=['\"]?([^'#]*)['\"]?.*/\1/" | xargs)
+  GATE_PIN_COMMIT=$(cat "$GATE_PIN_ROOT/.atf-pin-commit" 2>/dev/null || true)
+  GATE_HEAD_COMMIT=$(git -C "$GATE_KERNEL_SOURCE" rev-parse HEAD 2>/dev/null || true)
+  if [[ -n "$GATE_PIN_COMMIT" && -n "$GATE_HEAD_COMMIT" && "$GATE_PIN_COMMIT" != "$GATE_HEAD_COMMIT" ]]; then
+    GATE_CODE_DIFF=$(git -C "$GATE_KERNEL_SOURCE" diff --name-only "$GATE_PIN_COMMIT..$GATE_HEAD_COMMIT" 2>/dev/null | grep -E '^(src|skills|tools|packages)/' || true)
+    if [[ -n "$GATE_CODE_DIFF" ]]; then
+      if [[ -z "${ATF_DEPLOY_EVIDENCE:-}" ]]; then
+        echo "[instance-restart] FAIL: 内核仓 HEAD(${GATE_HEAD_COMMIT:0:12}) 相对在跑 pin(${GATE_PIN_COMMIT:0:12}) 有代码面前进——重启将上线未持证代码（部署证据门）" >&2
+        echo "  改法一: 走 deploy-dev.sh 唯一上线入口（证据门→预演门→单源门→pinned→重启→健康门）;" >&2
+        echo "  改法二: 确属持证批次 → ATF_DEPLOY_EVIDENCE=<清单json> 后重跑本脚本。" >&2
+        exit 2
+      fi
+      bash "$(cd "$(dirname "$0")/../verify" && pwd)/check-deploy-evidence.sh" "$ATF_DEPLOY_EVIDENCE" "$GATE_KERNEL_SOURCE" \
+        || { echo "[instance-restart] FAIL: 证据门未过（见上）" >&2; exit 2; }
+    else
+      echo "[instance-restart] 证据门: HEAD 前进仅文档/装配物（非代码面）——例行重启放行"
+    fi
+  fi
+fi
+
 
 sq() { printf "'%s'" "${1//\'/\'\"\'\"\'}"; }
 

@@ -18,6 +18,20 @@ COMMIT="${3:-origin/main}"
 
 fail() { echo "rebuild-pinned FAILED: $1" >&2; echo "  改法一: 核对参数(内核仓路径/pin 目标)后重跑" >&2; echo "  改法二: 指纹/产物校验失败时,确认目标 commit 在内核仓 origin 可达(git fetch 后重跑)" >&2; exit 2; }
 
+# —— 部署证据门（work/20261117-deploy-evidence-gate·owner 授权批）——
+# pinned 重建＝技能面/文件白名单根投影推进＝「新代码可服务化」动作：无证据清单即拒
+# （fail-closed）。deploy-dev.sh 唯一上线入口串联调用时自动携带清单（--evidence）；
+# 手工直调须 ATF_DEPLOY_EVIDENCE 显式持证——绕过入口手工重建即裸奔面，本闸关闭之。
+EVID_GATE="$(cd "$(dirname "$0")" && pwd)/check-deploy-evidence.sh"
+if [[ -z "${ATF_DEPLOY_EVIDENCE:-}" ]]; then
+  echo "rebuild-pinned 拦截: 证据清单缺席（ATF_DEPLOY_EVIDENCE 未设置）——pinned 重建是新代码可服务化动作（部署证据门）" >&2
+  echo "  改法一: 走 deploy-dev.sh 唯一上线入口（证据门→预演门→单源门→pinned→重启→健康门）;" >&2
+  echo "  改法二: 确属持证批次 → ATF_DEPLOY_EVIDENCE=<清单json> 后重跑。" >&2
+  exit 2
+fi
+bash "$EVID_GATE" "$ATF_DEPLOY_EVIDENCE" "$KERNEL_DIR" \
+  || { echo "rebuild-pinned 拦截: 证据门未过（见上）" >&2; exit 2; }
+
 cd "$KERNEL_DIR" || fail "内核仓路径不可达:$KERNEL_DIR"
 git fetch origin --quiet || fail "git fetch 失败(内核仓 origin)"
 RESOLVED=$(git rev-parse --verify "${COMMIT}^{commit}" 2>/dev/null) || fail "commit 不可达:$COMMIT"
