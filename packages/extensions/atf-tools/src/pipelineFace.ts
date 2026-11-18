@@ -1823,18 +1823,12 @@ export const decisionReportKeys = (summary: unknown): Record<string, unknown> =>
   };
 };
 
-/** --source-root 进 argv 的段闭集（D317 补，1117-2 真机实锚）：register+链首三段
- *  （contract/ingest/inspect——内核段序中位于 register 之前且直接消费 source_root，
- *  链首无登记件 refs 可再水合，必须显式下传）；label_qc/style_split/candidate_build/
- *  publish/family_split（内核 _STAGE_SOURCE_ROOT_REQUIRED）不在此列——可省时内核经
- *  登记件 refs 再水合恢复。两仓各持一份该矩阵（内核消费闭集/harness 组装闭集），
- *  连接断言见 tests/dshTools/execSourceBridge.test.ts（跨仓源码文本锚）。 */
-export const SOURCE_ROOT_ARGV_STAGES: ReadonlySet<string> = new Set([
-  "register",
-  "contract",
-  "ingest",
-  "inspect",
-]);
+/** --source-root 进 argv 的段闭集——D318 M2 生成物（内核 stage_registry.param_requirements
+ *  唯一源 codegen 派生，src/core/generated/stageMatrix.ts；手写形态退役=D317b 时代两仓
+ *  各持一份的断裂温床根治，M6 预演+单源门双实锚的 M2 清偿对象）。重生成:
+ *  npm run codegen:stage-matrix。 */
+import { SOURCE_ROOT_ARGV_STAGES } from "../../../../src/core/generated/stageMatrix.js";
+export { SOURCE_ROOT_ARGV_STAGES };
 
 /** 子进程封装（execFile——非零退出/超时如实回传，不抛；F1 预检工具同源复用）。 */
 export const runPipeline = (command: string, args: readonly string[], timeoutMs: number,
