@@ -18,18 +18,24 @@ import { createRequire } from "node:module";
 
 // ---------------------------------------------------------------- 常量与 env
 
-const WORKTREE = "/data/sam/ATF-Harness/.worktrees/d318-impl";
-const KERNEL = "/data/sam/AgenticTrainingFlow";
-const REPLAY_WS = "/data/atf/instances/dev/atf-home/workspaces/ci-bl-test-1117-2";
-const REPLAY_FULL_WS = "/data/atf/instances/dev/atf-home/workspaces/ci-bl-test-1109-4";
+// 主机环境锚（D318 verdict blocker② 清偿：产品资产零硬编码绝对路径——fileGuard 守护
+// 红清偿形态；值=fixtures/host.json 数据件，运行时加载）
+const HOST = JSON.parse(readFileSync(join(import.meta.dirname ?? ".", "fixtures", "host.json"), "utf-8")) as {
+  worktree: string; kernel: string; dev_env: string; replay_ws: string;
+  replay_full_ws: string; ws_root: string; base_model: string; field_config_replay_ws: string;
+};
+const WORKTREE = HOST.worktree;
+const KERNEL = HOST.kernel;
+const REPLAY_WS = HOST.replay_ws;
+const REPLAY_FULL_WS = HOST.replay_full_ws;
 const REPLAY_RUN = join(REPLAY_FULL_WS, "experiments/ci-bl-joint/run-ci-bl-joint-01");
-const WS_ROOT = "/data/atf/instances/dev/atf-home/workspaces";
-const BASE_MODEL = "/data/LLM_model/Qwen3-VL-8B-Instruct";
+const WS_ROOT = HOST.ws_root;
+const BASE_MODEL = HOST.base_model;
 const DOC_TYPES = ["bl", "ci"] as const;
 
-// dev.env 同源注入（与生产 web 同一取值链）
+// dev.env 同源注入（与生产 web 同一取值链；路径=host.json 锚）
 const loadDevEnv = (): void => {
-  for (const line of readFileSync("/data/sam/ATF-Harness/deploy/instances/dev.env", "utf-8").split("\n")) {
+  for (const line of readFileSync(HOST.dev_env, "utf-8").split("\n")) {
     const m = line.match(/^export\s+([A-Z_0-9]+)=(.*)$/);
     if (!m) continue;
     let value = m[2]!.trim();
@@ -434,7 +440,7 @@ const runJourney = async (): Promise<void> => {
     cpSync(join(REPLAY_WS, "scratch", `${dt}-visual-check.json`), join(ws, "scratch", `${dt}-visual-check.json`));
     // 字段配置回放件（1111-1 run 的槽位形态=现行 D268 富描述契约+同素材战役 20 字段）
     // ——style_split 视觉判读闸与 experiment_setup 消费（链序上视觉闸在实验门前）。
-    cpSync(join("/data/atf/instances/dev/atf-home/workspaces/ci-bl-test-1111-1/experiments/bl-ci-extract/run-bl-ci-1111-01/config/experiment-setup", dt, "field-config.json"),
+    cpSync(join(HOST.field_config_replay_ws, dt, "field-config.json"),
            join(ws, "scratch", `field-config-${dt}.json`));
   }
   const candidates = Object.fromEntries(DOC_TYPES.map((dt) => [dt, join(ws, "scratch", `${dt}-contract-candidate.json`)]));
@@ -991,7 +997,8 @@ const runJourney = async (): Promise<void> => {
       // 17a 回放拷入的旧 decisions（1109-4 先于 C2 的不完整集）清除后由内核单源重产
       rmSync(join(effRunDir(), "analysis", "decisions"), { recursive: true, force: true });
       execFileSync("python3", [`${WORKTREE}/deploy/verify/rehearsal/build_decisions_replay.py`,
-        join(effRunDir(), "analysis", "decisions")], { stdio: "pipe" });
+        join(effRunDir(), "analysis", "decisions")],
+        { stdio: "pipe", env: { ...process.env, PYTHONPATH: `${KERNEL}/src` } });
       const receipt = await callStage("17b-iteration-proposal", { stage: "iteration_proposal", run_id: runId, workspace_path: ws });
       assert(stageOk(receipt, "iteration_proposal"), `iteration_proposal 回放未 ok: ${receiptText(receipt).slice(0, 300)}`);
       reconcileOutputs(declOf("iteration_proposal"), runDir, ws);

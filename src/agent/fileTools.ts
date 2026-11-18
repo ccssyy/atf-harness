@@ -159,11 +159,15 @@ export const ATTACHMENT_WRITE_NOTE = "用户上传的附件是只读材料（经
 export const PROTECTED_ARTIFACT_WRITE = "protected_artifact_write";
 
 /** 受保护产物形态闭集（runs 下审计面；权威＝本表单源，消费面禁复制规则）。
- *  段事实 webui/segments.json／段摘要 stage-*.summary.{json,md}／事实轨 facts/*.jsonl。 */
+ *  段事实 webui/segments.json／段摘要 stage-*.summary.{json,md}／事实轨 facts/*.jsonl／
+ *  label_qc 裁决凭据账本 label-qc-decisions.json（D319⑦ 围栏写保护——凭据=harness 原生
+ *  裁决卡/内核落账写入，agent atf_edit 直写=伪造用户决定通道；文件名全域闭集：
+ *  v3 runtime/webui 与 dataset 侧两落点同 protected）。 */
 export const PROTECTED_ARTIFACT_RES: readonly RegExp[] = [
   /(^|\/)runs\/[^/]+\/webui\/segments\.json$/,
   /(^|\/)runs\/[^/]+\/stage-[^/]+\.summary\.(?:json|md)$/,
   /(^|\/)runs\/[^/]+\/facts\/[^/]+\.jsonl$/,
+  /(^|\/)label-qc-decisions\.json$/,
 ];
 
 /** 审批账本路径单源（实例 env 显式＞HOME 推导缺省——与放行账本启动校验同源消费同一 env）。 */
@@ -188,7 +192,8 @@ export const isProtectedArtifactPath = (absPath: string, ledgerPath?: string): b
 
 /** A6 指路文案（产品口径，零内部代号）。 */
 export const PROTECTED_ARTIFACT_NOTE =
-  "该文件由对应工具写入（段事实由管线/工具链登记；段摘要由管线生成；事实轨由训练链写入）——请勿直接改写";
+  "该文件由对应工具写入（段事实由管线/工具链登记；段摘要由管线生成；事实轨由训练链写入；" +
+  "label_qc 裁决凭据由原生裁决卡/内核落账写入——直接改写=伪造用户决定）——请勿直接改写";
 
 // ---------------------------------------------------------------- bash 命令分类（审批判定单源）
 

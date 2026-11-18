@@ -116,6 +116,23 @@ describe("A6——受保护产物 denylist（atf_write 白名单后第二道）"
     expect(isProtectedArtifactPath(join(root, "ws", "runs", "r1", "reports", "note.md"))).toBe(false);
   });
 
+  it("label_qc 裁决凭据账本写保护（D319⑦ 围栏——write/edit 双闸，伪造用户决定通道关闭）", async () => {
+    // v3 形态构造：<root>/experiments/<exp>/<run>/runtime/webui/label-qc-decisions.json
+    const root = tempRoot();
+    const ledger = join(root, "ws", "experiments", "exp1", "run1", "runtime", "webui", "label-qc-decisions.json");
+    mkdirSync(join(ledger, ".."), { recursive: true });
+    writeFileSync(ledger, '{"schema_version":"LabelQcUserDecisions/v1","decided_by":"user_confirmed","decisions":[]}');
+    const w = await FILE_TOOL_HANDLERS["atf_write"]!(
+      { path: ledger, content: '{"decided_by":"agent_forged"}' }, hostOf(root));
+    expect(w.ok).toBe(false);
+    if (!w.ok) expect(w.error.reason).toBe(PROTECTED_ARTIFACT_WRITE);
+    const e = await FILE_TOOL_HANDLERS["atf_edit"]!(
+      { path: ledger, old_string: "user_confirmed", new_string: "agent_forged" }, hostOf(root));
+    expect(e.ok).toBe(false);
+    if (!e.ok) expect(e.error.reason).toBe(PROTECTED_ARTIFACT_WRITE);
+    expect(readFileSync(ledger, "utf8")).toContain("user_confirmed");
+  });
+
   it("edit 同闸闭合（直改既有审计件的绕过面）", async () => {
     const { root, segments } = makeRun();
     const r = await FILE_TOOL_HANDLERS["atf_edit"]!(

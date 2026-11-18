@@ -1,0 +1,11 @@
+{
+ "note": "M6 预演驱动器主机环境锚（数据件——fileGuard 产品资产零硬编码路径合规形态；值=本 dev 容器拓扑）",
+ "worktree": "/data/sam/ATF-Harness/.worktrees/d318-impl",
+ "kernel": "/data/sam/AgenticTrainingFlow",
+ "dev_env": "/data/sam/ATF-Harness/deploy/instances/dev.env",
+ "replay_ws": "/data/atf/instances/dev/atf-home/workspaces/ci-bl-test-1117-2",
+ "replay_full_ws": "/data/atf/instances/dev/atf-home/workspaces/ci-bl-test-1109-4",
+ "ws_root": "/data/atf/instances/dev/atf-home/workspaces",
+ "base_model": "/data/LLM_model/Qwen3-VL-8B-Instruct",
+ "field_config_replay_ws": "/data/atf/instances/dev/atf-home/workspaces/ci-bl-test-1111-1/experiments/bl-ci-extract/run-bl-ci-1111-01/config/experiment-setup"
+}

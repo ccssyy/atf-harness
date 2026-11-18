@@ -13,10 +13,12 @@ evals-guard 指路形态）；assess status=evidence_gap（诚实停止）也是
 用法: build_decisions_replay.py <输出decisions目录>
 """
 import json
+import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, "/data/sam/AgenticTrainingFlow/src")
+# 内核 src 由调用方 PYTHONPATH 注入（D318 verdict blocker②：本文件零硬编码主机路径）
+sys.path.insert(0, os.environ.get("ATF_KERNEL_SRC", ""))
 from agentic_training_flow.application.agent_mainline.wave2_suggestion import (  # noqa: E402
     assess_wave2_workspace,
     write_wave2_suggestion_artifacts,
