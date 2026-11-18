@@ -742,14 +742,33 @@ const launchConfirmCardOf = async (
                       if (!("error" in resolvedRun)) {
                         const decisionsDir = join(resolvedRun.runDir, "runtime", "webui");
                         mkdirSync(decisionsDir, { recursive: true });
-                        writeFileSync(join(decisionsDir, "label-qc-decisions.json"),
+                        // D319 覆写挤掉修复（M6 保护下修 1118）：账本按 item_id 合并累积
+                        // （多类 run 的 BL/CI 各批凭据并存——覆写曾挤掉先批条目）；
+                        // 附绑定 report_digest（D319 重映射反查源）。
+                        const ledgerPath = join(decisionsDir, "label-qc-decisions.json");
+                        const existingLedger = existsSync(ledgerPath)
+                          ? (JSON.parse(readFileSync(ledgerPath, "utf8")) as { decisions?: Array<Record<string, unknown>> })
+                          : { decisions: [] as Array<Record<string, unknown>> };
+                        const merged = new Map((existingLedger.decisions ?? []).map((d) => [String(d["item_id"]), d]));
+                        for (const d of (Array.isArray(args["decisions"]) ? args["decisions"] : [])) {
+                          // 条目级 dataset_id+report_digest：多类 run 各批绑定不同代际报告——
+                          // 内核重映射按条目分组反查（单顶层 digest 跨批必错配，1118 预演实锚）。
+                          merged.set(String((d as Record<string, unknown>)["item_id"]), {
+                            ...(d as Record<string, unknown>),
+                            dataset_id: String(args["dataset_id"] ?? ""),
+                            report_digest: String(args["report_digest"] ?? ""),
+                          });
+                        }
+                        writeFileSync(ledgerPath,
                           `${JSON.stringify({
                             schema_version: "LabelQcUserDecisions/v1", decided_by: "user_confirmed",
                             decided_at: new Date().toISOString(),
-                            decisions: (Array.isArray(args["decisions"]) ? args["decisions"] : []).map((d) => {
-                              const entry = d as Record<string, unknown>;
-                              return { item_id: entry["item_id"], action: entry["action"], disposition: entry["disposition"] };
-                            }),
+                            // M6 预演实锚（1118）：剥离式写账丢 disposition 必填附加字段
+                            // （keep_both 缺 reason_text）→ 内核重跑校验必拒。凭据账本=
+                            // 用户卡确认的完整决策（含 reason_text/modified_value 等），
+                            // 原样保全（agent 不可伪造语义不变——账本仍由 harness 写）。
+                            report_digest: String(args["report_digest"] ?? ""),
+                            decisions: [...merged.values()],
                           }, null, 1)}\n`, "utf8");
                       }
                     }

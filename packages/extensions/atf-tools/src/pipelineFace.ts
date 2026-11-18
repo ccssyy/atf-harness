@@ -3344,7 +3344,14 @@ let visualSummary: Record<string, unknown> | undefined;
       if (SOURCE_ROOT_ARGV_STAGES.has(args.stage)) {
         // D-b：传前按内核同一判据校验（批根 + 单据类型 → 子目录必须存在），
         // 不把「拼成 …/awb/awb 不存在」这种可自证的错误留到内核侧只有一句「不可解析」。
-        const sourceRootGiven = (args.source_root as string).trim();
+        // M6 预演实锚（1118 首跑）：source_root 缺省时此前裸 TypeError——工具面 crash
+        // 非结构化回执。缺省直通内核：链首/登记段缺参语义归内核单源判定
+        // （walkthrough_contract_source_required 等 clean blocked+how_to_fix），
+        // harness 不代判不中断。
+        const sourceRootGiven = typeof args.source_root === "string" ? args.source_root.trim() : "";
+        if (sourceRootGiven === "") {
+          // 缺省：不组装 --source-root，内核按段需求矩阵给 clean blocked 回执
+        } else {
         const docTypeForRoot = typeof args.doc_type === "string" ? args.doc_type.trim() : "";
         const workspacePathForRoot = typeof args.workspace_path === "string" ? args.workspace_path.trim() : "";
         const rootPrecheck = sourceRootPrecheckOf(sourceRootGiven, docTypeForRoot, workspacePathForRoot !== "" ? workspacePathForRoot : undefined);
@@ -3362,7 +3369,8 @@ let visualSummary: Record<string, unknown> | undefined;
             note: rootPrecheck.note,
           });
         }
-        argv.push("--source-root", rootPrecheck.resolved);
+          argv.push("--source-root", rootPrecheck.resolved);
+        }
       }
       // 显式给的基模型一律下传（assemble 模式亦然）：再水合只是「没给」时的兜底，
       // 不能把用户显式值静默丢掉（不静默原则——丢了就是 blocked 与卡上填值不符）。
