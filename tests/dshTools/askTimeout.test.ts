@@ -14,7 +14,7 @@ const svcWith = (over: Partial<FormAskService>): FormAskService => ({
   ...over,
 });
 
-const REQ = { questions: [{ id: "q1", question: "选哪个？" }], agent: { id: "agent-1" } };
+const REQ = { questions: [{ id: "q1", question: "选哪个？", intent: { kind: "form" as const, fields: [{ key: "k1", label: "字段1" }], submitLabel: "提交" } }], agent: { id: "agent-1" } };
 
 describe("askWithTimeout — 卡面限时等待", () => {
   it("有 askTimed 且开启限时 → 走限时通道并返回答案", async () => {

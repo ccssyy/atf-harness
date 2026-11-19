@@ -8,7 +8,7 @@
  * 内核事实依据：《ATF-Harness_冒烟2三跑核验记录_20260921.md》§四（data_admission.py
  * _read_assignments 的强制清单形态）。
  */
-import { INTEGRITY_GATE_IDS } from "../tools/index.js";
+import { INTEGRITY_GATE_IDS } from "./tools/index.js";
 
 export interface GapCardOption {
   text: string;
