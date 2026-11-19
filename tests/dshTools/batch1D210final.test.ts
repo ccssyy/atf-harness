@@ -28,7 +28,8 @@ describe("批1-D210终版——视觉分析必经(training_prep 段内门槛)", 
       "utf8",
     );
     expect(kernel).toContain('"visual_readings_pending"');
-    expect(kernel).toContain("智能分析必经:agent 还没看图");
+    // M 批迁移后:改法文案住目录 visual_readings_pending 条目,源码形态=渲染接线调用
+    expect(kernel).toContain('render_remediation_lines("visual_readings_pending"');
     expect(kernel).toContain("看图清单已导出");
     // 清单自动导出(判读缺席时,调用方无需带旗标——搬移后经 rs_dir 同路径)
     expect(kernel).toContain('/ "visual-sample-plan.json"');

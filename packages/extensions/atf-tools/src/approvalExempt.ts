@@ -54,7 +54,7 @@ interface ExemptRequest {
 type Answerer = (request: ExemptRequest, next: () => Promise<string>) => Promise<string>;
 
 /** 直通放行可见性（放行必留痕纪律的 stderr 半边——非隔离执行事实随放行落 stderr）。 */
-const warnDirect = (toolName: string, reason: unknown, basis: "bash-write" | "chain"): void => {
+const warnDirect = (toolName: string, reason: unknown, basis: "bash-write" | "chain" | "bridge-confirm"): void => {
   const brief = typeof reason === "string" && reason !== "" ? `；${reason.slice(0, 100)}` : "";
   const basisText = basis === "bash-write" ? "bash/write 类" : "训练链";
   process.stderr.write(`[atf-approval] ${toolName} 直通放行（${basisText}留痕，ADR-0022）${brief}\n`);
@@ -96,7 +96,7 @@ export const exemptOutcomeOf = (
  */
 export const appendExemptionRecord = async (
   toolName: string,
-  basis: "bash-write" | "chain",
+  basis: "bash-write" | "chain" | "bridge-confirm",
   preset?: string,
 ): Promise<boolean> => {
   try {
