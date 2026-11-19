@@ -42,7 +42,8 @@ describe("批1-D210终版——视觉分析必经(training_prep 段内门槛)", 
     // 带判读重跑的指路
     // 合同演进(45d705f2+bdd07104):用户/agent 面参数名=visual_readings,harness 转发
     // 内核 --agent-signals;指引文案须用用户面名,内核 argv 名不进用户文案。
-    expect(kernel).toContain("带 --visual-readings");
+    // M 批迁移后:改法文案住目录条目 fix(含 --visual-readings {signals}),源码形态=argparse 定义
+    expect(kernel).toContain('"--visual-readings"');
     // 门槛在构造步之前:block 段先于 build_training_variants 调用点
     expect(kernel.indexOf('"visual_readings_pending"')).toBeLessThan(kernel.indexOf('"build_training_variants.py"'));
   });
