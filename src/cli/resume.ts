@@ -26,7 +26,7 @@ import {
 } from "../llm/index.js";
 import { formatThreePartLines, providerConfigThreePart } from "../core/index.js";
 import { ToolRegistry, WORKSPACE_TOOL_HANDLERS, buildSkillsSystemSuffix, type LocalToolHost } from "../core/tools/index.js";
-import { resolveKernelDir } from "../ui/tuiArgs.js";
+import { resolveInstanceKernelDir } from "../core/workspace/instancePin.js";
 import {
   ScenarioRunner,
   parseResumeArgs,
@@ -82,7 +82,13 @@ const runAnswer = async (
   // 注意：resume 的执行 HOME 用进程 HOME（CLI 通道无对端隔离 home；内核配置根以本机为准）。
   let toolFace: RunBranchOptions["toolFace"] = undefined;
   let skillsSuffix: string | undefined;
-  const kernelDirResolved = resolveKernelDir(process.env, repoRoot);
+  const kernelDirResolved = ((): { ok: true; path: string } | { ok: false; error: string } => {
+    try {
+      return { ok: true, path: resolveInstanceKernelDir(process.env, repoRoot) };
+    } catch (cause) {
+      return { ok: false, error: cause instanceof Error ? cause.message : String(cause) };
+    }
+  })();
   if (kernelDirResolved.ok) {
     const home = process.env["HOME"] ?? "";
     const localHost: LocalToolHost = {
