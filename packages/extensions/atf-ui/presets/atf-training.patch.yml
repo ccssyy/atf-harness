@@ -59,6 +59,15 @@
               sampleOverCapGlobResults: false
           - id: tool-jobs
             name: '@deepseek-ai/dsh-tool-jobs'
+      # 阶段2-2：DSH 原生提问卡工具挂载（原先训练预设未挂，agent 无原生提问通道）。
+      # mode=timed：超时转 pending 而非永久阻塞（vendor askTimed 语义，非自造）。
+      # timeout 与 atf-tools 的 ATF_ASK_TIMEOUT_MS 同源缺省（120s）。
+      # 这不是新实现——用的是 DSH 原生 @deepseek-ai/dsh-tool-ask-user 包。
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+            config:
+              mode: timed
+              timeout: 120
       # C1（1113 真机派发装接）：dispatch 三件套会话级挂载——D276 并行派发条款的真机
       # 可达面（B 批装在 eval 专用入口被门禁拦下后改挂 vendor preset plugins 体系）。
           - id: atf-subagent

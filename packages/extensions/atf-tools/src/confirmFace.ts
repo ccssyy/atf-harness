@@ -95,7 +95,59 @@ export interface FormAskService {
     agent?: unknown;
     signal?: unknown;
   }): Promise<{ answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string>; custom?: string }> }>;
+  /** DSH 原生限时等待通道（`UserQuestionService.askTimed`——vendor 已有，非自造）。
+   *  超时不失败、转 `{pending:true, callId}` 供后续续答；解 zcode A3「resolve 挂起
+   *  25 分钟无超时无告警」。结构类型消费，零 import。 */
+  askTimed?(request: {
+    questions: ReadonlyArray<FormAskQuestion | ChoiceAskQuestion>;
+    agent: unknown;
+    signal?: unknown;
+  }, callId: string, timeoutMs: number): Promise<
+    | { answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string>; custom?: string }> }
+    | { pending: true; callId: string }
+  >;
 }
+
+/** 卡面前台等待缺省时长（毫秒）。超过即转 pending——不阻塞 agent 回合，
+ *  用户在后续轮次仍可作答（vendor `askTimed` 语义）。env 可覆盖，0=关闭限时。 */
+export const ASK_TIMEOUT_MS_DEFAULT = 120_000;
+
+/** 读取限时等待配置（`ATF_ASK_TIMEOUT_MS`；缺省 120s，显式 0 = 关闭限时走阻塞通道）。 */
+export const askTimeoutMsOf = (env: Readonly<Record<string, string | undefined>> = process.env): number | null => {
+  const raw = env["ATF_ASK_TIMEOUT_MS"];
+  if (raw === undefined || raw.trim() === "") return ASK_TIMEOUT_MS_DEFAULT;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return ASK_TIMEOUT_MS_DEFAULT;
+  return parsed === 0 ? null : Math.floor(parsed);
+};
+
+/** 统一卡面等待入口：有 `askTimed` 能力且开启限时 → 走限时；超时返回 pending 标记。
+ *  其余情形（无 askTimed / 关闭限时 / 无 callId / 无 agent）回落既有 `ask`，行为逐字不变。
+ *  返回 `{ pending: true }` 时调用方须如实回执「等待超时，卡待续答」，不得静默当作未作答。 */
+export const askWithTimeout = async (
+  svc: FormAskService,
+  request: {
+    questions: ReadonlyArray<FormAskQuestion | ChoiceAskQuestion>;
+    agent?: unknown;
+    signal?: unknown;
+  },
+  exec: { callId?: string },
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<
+  | { answers: ReadonlyArray<{ id: string; selected: ReadonlyArray<string>; custom?: string }>; pending?: false }
+  | { answers: []; pending: true; callId: string }
+> => {
+  const timeoutMs = askTimeoutMsOf(env);
+  const callId = exec.callId;
+  const askTimed = svc.askTimed;
+  if (timeoutMs === null || callId === undefined || typeof askTimed !== "function" || request.agent === undefined) {
+    const answers = await svc.ask(request);
+    return { answers: answers.answers };
+  }
+  const result = await askTimed.call(svc, { ...request, agent: request.agent }, callId, timeoutMs);
+  if ("pending" in result) return { answers: [], pending: true, callId: result.callId };
+  return { answers: result.answers };
+};
 
 /** 表单卡问题对象单源（A1：confirmFace/trainingFace 两调用面与源面回归断言
  *  tests/dshTools/askFormIntent.test.ts 同构——intent 形态漂移即测试红）。
