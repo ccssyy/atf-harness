@@ -1,6 +1,6 @@
 {
- "note": "M6 预演驱动器主机环境锚（数据件——fileGuard 产品资产零硬编码路径合规形态；值=本 dev 容器拓扑）",
- "worktree": "/data/sam/ATF-Harness/.worktrees/d318-impl",
+ "note": "M6 预演驱动器主机环境锚（数据件——fileGuard 产品资产零硬编码路径合规形态；值=本 dev 容器拓扑）；2026-11-19 更新：d318-impl worktree 已随批次收口删除，预演装配锚改指主仓（src/*.js 构建形态在场，单版本源门保证 main=部署源）",
+ "worktree": "/data/sam/ATF-Harness",
  "kernel": "/data/sam/AgenticTrainingFlow",
  "dev_env": "/data/sam/ATF-Harness/deploy/instances/dev.env",
  "replay_ws": "/data/atf/instances/dev/atf-home/workspaces/ci-bl-test-1117-2",
