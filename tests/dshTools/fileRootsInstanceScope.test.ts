@@ -171,12 +171,18 @@ describe("b11-A 注册工作区定域闸", () => {
         }),
         "utf8",
       );
-      const deadline = Date.now() + 8000;
-      while (Date.now() < deadline && !roots.includes(third)) {
-        await new Promise((resolve) => setTimeout(resolve, 250));
-      }
+      // 并发负载下 fs.watch 通知与热加载写日志非原子——roots 与 logs 各自轮询等待,
+      // deadline 内未就绪如实红(硬化:全量并发跑偶发「roots 已到但日志未写完」竞态)。
+      const deadline = Date.now() + 15000;
+      const waitFor = async (pred: () => boolean): Promise<void> => {
+        while (Date.now() < deadline && !pred()) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+      };
+      await waitFor(() => roots.includes(third));
       expect(roots).toContain(third);
       expect(roots).not.toContain(outside);
+      await waitFor(() => logs.join("\n").includes("实例根外已排除"));
       const joined = logs.join("\n");
       expect(joined).toContain("白名单根热加载");
       expect(joined).toContain("实例根外已排除");
