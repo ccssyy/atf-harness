@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { err, ok, type Result } from "../bridge/index.js";
 import { type LlmDecision } from "./provider.js";
 import { type LlmContextEvent } from "../core/session/index.js";
-import { renderGuidanceText } from "../core/run/blockGuidance.js";
+import { renderGuidanceText } from "../core/blockGuidance.js";
 import {
   IMAGE_MAX_BYTES,
   IMAGE_MAX_COUNT,
