@@ -24,9 +24,9 @@
  *    glm-atf 的 settingsNs 'llm-pi-ai'）注入 ProviderModelDefaults：每模型一个「默认思考等级」
  *    下拉（选项＝该模型目录 efforts 闭集），持久化走 /atf-ui/settings effort_defaults 块
  *    （产品层设置单源；vendor 零写入）。
- *  数据：workspaceFiles.read 轮询 <runsRoot>/atf-ui/monitor.json（同步器 5s 快照单源，
+ *  数据：同源快照端点 /atf-ui/snapshot 轮询＋/atf-ui/events SSE 增量（同步器 5s 拍单源，
  *  gpu 字段＝nvidia-smi 首行单卡面，gpu_all/gpu_binding＝批㉝H 多卡聚合与绑卡声明，
- *  viewers 字段＝run 维度 badcase viewer 发现清单——批㉛段1）；
+ *  viewers 字段＝run 维度 badcase viewer 发现清单——批㉛段1；不经 vendor workspaceFiles.read）；
  *  sessionId 经 header.utilities 的 session-scoped inject 工厂捕获（批⑳实证通道）。
  *  viewer 渲染：iframe 指 server 半静态路由 /atf-ui/viewer/<runId>/（同源 cookie 鉴权，
  *  不重建 viewer 本身——产物由 atf-analyze-badcases skill 链产出）。
@@ -97,8 +97,7 @@ window.__ModuleLoader__.load({
       return typeof v === 'string' ? v : undefined
     }
 
-    var remoteFace = null
-    // 批㊶Q增补一：右栏导航面暂存（apply 赋值；组件在 factory 闭包拿不到 ctx——沿 remoteFace 先例）
+    // 批㊶Q增补一：右栏导航面暂存（apply 赋值；组件在 factory 闭包拿不到 ctx）
     var sidebarFace = null
     var store = {
       sessionId: undefined,
@@ -3161,9 +3160,8 @@ window.__ModuleLoader__.load({
 
 
     return {
-      inject: ['slots', 'remote', 'remote.workspaceFiles', 'sidebarRightTabs', 'sidebarRight'],
+      inject: ['slots', 'remote', 'remote.session', 'sidebarRightTabs', 'sidebarRight'],
       apply: function(ctx) {
-        remoteFace = ctx.remote
         sidebarFace = ctx.sidebarRight || null
 
         if (typeof document !== 'undefined') {
