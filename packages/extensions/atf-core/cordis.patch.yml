@@ -1,0 +1,13 @@
+# atf-core bundle 层（G2）。
+#
+# 为什么是空表：本包当前是**纯库**（导出面 = src/index.ts），没有 apply()——
+# 36 个 A 类文件全是训练域纯逻辑，没有一个向 ctx 注册服务、工具或槽位。
+# vendor 的 bundle 组合器（packages/boot/app-boot/src/index.ts::parsePatchList）
+# 要求 dsh.bundle.patch 指向「顶层 YAML 数组」，空数组是合法输入（无行插入）。
+#
+# 于是这里声明形态、不声明行：等到 G3/G5 需要把 atf-core 的某个装配点
+# （例如 T0 守卫的 session/event 观察器）正式挂进 profile 时，再往此表 insert
+# 一条 id 行；届时本包才获得插件入口，package.json 的 exports 也随之再加一个面。
+#
+# 现在插入一行会失败：@atf/dsh-atf-core 没有 apply 导出，loader 拒绝挂载。
+[]
