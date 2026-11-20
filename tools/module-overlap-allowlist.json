@@ -1,0 +1,31 @@
+{
+  "_doc": "模块/服务层重复白名单（只减不增）。由 tools/audit-module-overlap.mjs 读取。新增重复必须显式登记并写理由——禁止静默放过。退役一项即删一项；表空 = 模块层重复已清零。",
+  "approved_duplicates": [
+    "src/agent",
+    "src/webui",
+    "src/llm",
+    "src/core/session",
+    "packages/extensions/atf-subagent",
+    "src/core/workspace",
+    "packages/extensions/atf-ui",
+    "src/core/tools",
+    "src/rpc",
+    "src/session",
+    "src/workspace",
+    "src/tools"
+  ],
+  "rationale": {
+    "src/agent": "【重复·批次2】自研 agent loop（assembleV1Agent）+ sessionMirror + deferredTools + hooks → vendor subagent/session/jobs/hooks 族。退役后 4 项重复一并消。",
+    "src/webui": "【重复·批次7】sessionManager/server 与 vendor api 族 session-controller 等价。当前 dev 未装配（dev 跑 vendor dsh web），属历史资产。",
+    "src/llm": "【重复·批次8】provider/providerConfig/adapter 与 vendor llm 族等价。直接后果：改模型/上下文窗口要改多处。",
+    "src/core/session": "【重复·批次2/5】compaction（faux 摘要）+ sessionLog 与 vendor compaction/session 族等价。",
+    "packages/extensions/atf-subagent": "【重复·批次2】派发包装，底层跑自研 loop。随 src/agent 退役一并换 vendor subagent。",
+    "src/core/workspace": "【部分重复·批次6】workspaceRegistry 直接改 vendor storages/workspace.json（写时全量回写会覆盖 + 须重启才生效）。run/段/GPU 运维面属训练域保留。",
+    "packages/extensions/atf-ui": "【部分重复·批次7】自建 HTTP/SSE 与 vendor api 族重叠；槽位注入/训练监控卡属合理领域定制。",
+    "src/core/tools": "【部分重复·批次4】canonical.ts 手搓 JSON Schema 子集校验器 ≈ vendor validateArgs；toolDefinition 训练域描述合理保留。",
+    "src/rpc": "【待判】JSON-RPC 传输层 449 行；vendor 有 typert-protocol。需确认是否可换——此前 ACP/MCP 宿主已删线，可能已无消费方。",
+    "src/session": "【待判】230 行；需确认与 vendor session 族关系。",
+    "src/workspace": "【待判】155 行；需确认是否死代码。",
+    "src/tools": "【待判】115 行；疑似死代码（甲线删线后可能已无消费方）。"
+  }
+}
