@@ -28,8 +28,8 @@ import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { resolvePipelineRunDir, runPipeline } from "./pipelineFace.js";
-import { runFileCandidates } from "../../../../src/core/workspace/runLayout.js";
-import { buildTrainingPromptPreview, renderTrainingPromptPreviewBlock } from "../../../../src/core/workspace/trainingPromptPreview.js";
+import { runFileCandidates } from "../../atf-core/src/runLayout.js";
+import { buildTrainingPromptPreview, renderTrainingPromptPreviewBlock } from "../../atf-core/src/trainingPromptPreview.js";
 
 /** 报告读回摘要行数上限（head 截断——全文落盘在 report_path，摘要仅呈现面）。 */
 const REPORT_SUMMARY_HEAD_LINES = 24;

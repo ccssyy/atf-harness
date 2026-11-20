@@ -148,11 +148,11 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { readInputsPromptResolvedVia, writeInputsPromptChoice } from "./promptChoiceIo.js";
-import { appendSegmentFact, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../../../src/core/workspace/segmentFacts.js";
-import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
-import { resolveRunFile, resolveRunSubdir, runFileCandidates, runSubdirCandidates } from "../../../../src/core/workspace/runLayout.js";
-import { scanLocalModels } from "../../../../src/core/workspace/modelInventory.js";
-import { scanKernelErrorFace } from "../../../../src/core/workspace/kernelErrorFace.js";
+import { appendSegmentFact, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../atf-core/src/segmentFacts.js";
+import { appendBinding } from "../../atf-core/src/runFacts.js";
+import { resolveRunFile, resolveRunSubdir, runFileCandidates, runSubdirCandidates } from "../../atf-core/src/runLayout.js";
+import { scanLocalModels } from "../../atf-core/src/modelInventory.js";
+import { scanKernelErrorFace } from "../../atf-core/src/kernelErrorFace.js";
 // E3：像素对成对校验判据单源（configConfirm pixelPairViolationOf——文案与本次训练方案卡同源）
 import { formAskQuestion, editsFromFormAnswers, visibleDevicesViolationsOf, type ChoiceAskQuestion, type FormAskService } from "./confirmFace.js";
 import { decideConstructionParams } from "./constructionGate.js";
@@ -160,8 +160,8 @@ import { approvalBypassed, permissionTierOf } from "./permissionTier.js";
 import { appendExemptionRecord } from "./approvalExempt.js";
 import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
 // E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
-import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../../../../src/core/workspace/smartDefaults.js";
-import { fieldNameMapOf, readExperimentGrouping, renderGroupingSection } from "../../../../src/core/workspace/experimentGrouping.js";
+import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "../../atf-core/src/smartDefaults.js";
+import { fieldNameMapOf, readExperimentGrouping, renderGroupingSection } from "../../atf-core/src/experimentGrouping.js";
 import { fieldsDigestOf, groupingDecisionPathOf, readGroupingDecision, writeGroupingDecision } from "./groupingDecision.js";
 import { fieldChoiceAnyLedgerOf, fieldChoiceDetailOf, readFieldChoice, readFieldLabels, writeFieldChoice } from "./fieldChoice.js";
 import { escalationKeyOf, escalationFiredOf, clearEscalation, receiptNeedsUser, decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";

@@ -24,7 +24,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { join } from "node:path";
-import { resolveRunSubdir } from "../../../../src/core/workspace/runLayout.js";
+import { resolveRunSubdir } from "../../atf-core/src/runLayout.js";
 
 /** 账本 schema 标识。 */
 export const FIELD_CHOICE_SCHEMA = "FieldChoice/v1";
