@@ -21,8 +21,6 @@ const ALLOWLIST = new Set<string>([
   "agent/deferredTools.ts", // 同上
   "agent/index.ts", // 存量引用面 → 随 B3 迁移
   "agent/cli.ts", // 同上
-  "core/run/noProgress.ts", // 无进展控制面 → B3（guard 收编）退役
-  "core/run/noProgressCrossTurn.ts", // 同上
 ]);
 
 /** 手搓上下文阈值（faux compaction 的 24K 硬编码形态）。 */

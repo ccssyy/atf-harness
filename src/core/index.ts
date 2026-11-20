@@ -8,7 +8,8 @@
  *   src/core/session/    会话事件 schema · append-only 日志（SessionLog）· compaction · 上下文管道
  *   src/core/tools/      工具定义 · canonical 校验 · ToolExecutor（审批闸消费点）· 审批键/凭据
  *   src/core/workspace/  三层工作区（RunWorkspace）· 晋升 · Catalog · GuardedSessionLog（铁律一）
- *   src/core/run/        run 引擎（ScenarioRunner）· 审批闸编排（approvalTrack）· resume/loop 状态
+ *   （原 src/core/run/ 已随阶段1-A 删线退役——甲线 core/run 不再是产品面；
+ *    审批轨语义由 vendor ctx.approval + 业务确认卡承载，见 ADR-0022）
  *   src/core/projection  投影订阅面（本文件）
  *
  * 边界纪律（T01 交付判据，tests/core/boundary.test.ts 守卫）：core 不依赖任何外壳

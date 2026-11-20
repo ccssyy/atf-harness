@@ -34,7 +34,8 @@
     "codegen:stage-params": "node tools/codegen-stage-params.mjs",
     "codegen:stage-matrix": "node tools/codegen-stage-matrix.mjs",
     "rehearsal": "node --import ./vendor/dsh/deepseek-harness/node_modules/tsx/dist/esm/index.mjs deploy/verify/rehearsal/journey.ts",
-    "rehearsal:break": "node --import ./vendor/dsh/deepseek-harness/node_modules/tsx/dist/esm/index.mjs deploy/verify/rehearsal/journey.ts --break-step 06-snapshot"
+    "rehearsal:break": "node --import ./vendor/dsh/deepseek-harness/node_modules/tsx/dist/esm/index.mjs deploy/verify/rehearsal/journey.ts --break-step 06-snapshot",
+    "audit:vendor-overlap": "node tools/audit-vendor-overlap.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",

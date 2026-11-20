@@ -1,0 +1,27 @@
+{
+  "_doc": "机制重复白名单（只减不增）。本文件由 tools/audit-vendor-overlap.mjs 读取：列在 approved_duplicates 的工具不触发退出码 2（已知重复，待退役）。新增重复必须显式登记并写理由——禁止静默放过。退役一项即从本表删除一项；表空 = 重复已清零。",
+  "approved_duplicates": [
+    "atf_read",
+    "atf_write",
+    "atf_edit",
+    "atf_bash",
+    "atf_scratch_write",
+    "atf_scratch_exec",
+    "atf_skill_read",
+    "atf_deferred_spawn",
+    "atf_deferred_poll",
+    "atf_deferred_cancel"
+  ],
+  "rationale": {
+    "atf_read": "vendor fs/tool-fs read（分页/截断/has_more）已完整实现；ATF 版连带丢失 read-before-edit 与 fs-sandbox。待退役→批次5。",
+    "atf_write": "vendor fs/tool-fs write；同上。",
+    "atf_edit": "vendor fs/tool-fs edit（另有 str_replace_editor）；同上。",
+    "atf_bash": "vendor shell 族 bash；ATF 版替代后丢失 shell 沙箱与 timeout-policy。待退役→批次5。",
+    "atf_scratch_write": "vendor write 的路径约束变体，非独立能力。待退役→批次5。",
+    "atf_scratch_exec": "vendor bash 的 cwd 约束变体，非独立能力。待退役→批次5。",
+    "atf_skill_read": "vendor skill 族；ATF 自建 skillCatalog 顶替。待退役→批次7。",
+    "atf_deferred_spawn": "vendor jobs 族 job_list/注册；ATF 版缺 completion 自动唤醒。待退役→批次2。",
+    "atf_deferred_poll": "vendor job_output；同上。",
+    "atf_deferred_cancel": "vendor job_kill；同上。"
+  }
+}
