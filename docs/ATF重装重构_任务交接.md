@@ -10,14 +10,19 @@ ATF 项目**基于干净 vendor 重装**的施工交接。owner 已裁定：不�
 
 ## 二、文件
 
-| 类别 | 路径 ||---|---|
-| **交付物（改这里）** | `/data/sam/ATF-Harness`（harness）、`/data/sam/AgenticTrainingFlow`（内核 Py） |
-| **权威源（勿改）** | `vendor/dsh/deepseek-harness`（submodule pin `639ed015`） |
-| **施工方案** | `docs/audit/ATF_重装重构方案_20261120.md` |
-| **审计机检** | `npm run audit:all`（退出码 2=有未登记重复） |
-| **施工卡 G0-G7** | `docs/audit/ATF_施工卡_G0-G7_20261120.md` |
-| **决策理由** | `docs/audit/ATF_决策理由档案_20261120.md` |
-| **方案文档** | `docs/audit/ATF_重装重构方案_20261120.md` |
+**代码实际落地 = A800_5005 服务器（不在本地 Mac）**
+
+| 类别 | 位置 |
+|---|---|
+| **harness 仓** | `A800_5005:/data/sam/ATF-Harness`（main）→ `ccssyy/atf-harness` |
+| **内核仓** | `A800_5005:/data/sam/AgenticTrainingFlow`（main）→ `ccssyy/AgenticTrainingFlow` |
+| **权威源（勿改）** | 两仓内 `vendor/dsh/deepseek-harness`（submodule pin `639ed015`） |
+| **部署实例** | `A800_5005:/data/atf/dev`（pin 根）、`/data/atf/instances/dev` |
+| **审计机检** | 仓根 `npm run audit:all`（退出码 2=有未登记重复） |
+
+⚠ 本地 Mac `~/Work/AutoTrainingFlow` **不是 git 仓库、无源码**，只是文档看板；所有开发都在 A800_5005。
+
+文档（两仓 `docs/audit/`）：方案 / 施工卡G0-G7 / 决策理由 / 重复清单 / 总纲 / E1方案。
 
 ## 三、已拍板口径/决策
 
@@ -48,7 +53,7 @@ ATF 项目**基于干净 vendor 重装**的施工交接。owner 已裁定：不�
 - 批次 A（snapshot 接回正式实现 + inspect per-doc）+ 批次 0-1/1-A/2 已部署 dev
 - harness `cc5c334e` / 内核 `85edd5f4`，均已推 main
 
-**进行中**：无。刚完成文档落盘，等开工 Phase 0。
+**进行中**：无。等开工 Phase 0。
 
 **待用户决策**：
 1. **段落 3（段序单源）**：声明 17 段 vs 真机实跑 9 段，不一致 → 暂停中
@@ -56,8 +61,6 @@ ATF 项目**基于干净 vendor 重装**的施工交接。owner 已裁定：不�
 
 **已否决**：
 - 渐进替换（B 批次逐个清）→ 依赖纠缠仅 13 处，重装更彻底 → 改为重装
-- 向上游提 PR → owner 裁定独立产品 → 不提
-- 目录照搬参考文章（harness/extensions/api/web）→ ATF 双仓+submodule 不适用 → 不搬
 
 ## 六、编辑纪律
 
@@ -106,10 +109,7 @@ G0（串行）→ G1+G2+G4（并行）→ G2完成→G3 → G1+G3完成→G5 →
 
 **每个 G 组的完整施工卡**（边界/交付/验收/依赖）见 `docs/audit/ATF_施工卡_G0-G7_20261120.md`。
 
-
-### 回补记录（读侧追加；写侧消费清空，≤5 行）
-> 只记「因缺失而真出错」：`[日期] 漏：<什么> → 错：<后果> → 处置`
-
+### 回补记录（≤5 行）
 本轮无。
 
 ---
