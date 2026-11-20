@@ -1,33 +1,45 @@
 /**
- * 铁律一（ADR-08：T0 不可引用为证据）的 domain_refs 校验扩展
- * （任务书 §4.4 / owner 口径 #4：扩展方式接入，不修改 src/session/ 既有语义）。
+ * 铁律一（ADR-08：T0 不可引用为证据）的 domain_refs 校验扩展。
  *
- * 接线形态 = GuardedSessionLog 包装 SessionLog（S2 会话校验入口）：
- * - append：写入前先对本事件 domain_refs 逐条做 scratch/ 前缀判定，命中 → 返回首类结构化
- *   block（reason = t0_ref_forbidden，cause 登记于 workspace.contract.yaml）且**事件不落盘**
- *   （直接拒绝）；未命中 → 原样委托内层 SessionLog（digest 校验等 S2 既有语义零改动）；
- * - replay：先委托内层重建，再对重建事件逐条扫描——流内出现 scratch 引用 = 流不可信
- *   （fail-closed → blocked），文件本身只读不改写（与会话流事实留痕纪律一致）。
+ * ── G2 迁移改造（施工卡交付物 3）：t0Guard 重判 ────────────────────────────────
  *
- * 设计说明（为何不经 DigestResolver 通道注入）：S2 checkRefs 会把 resolver 的 err 统一
- * 包装为 resolver_failure（基础设施故障语义）——策略拒绝经该通道将被错误标注且归因深埋；
- * S2 的 ref_invalid cause 枚举（digest_mismatch | fact_not_found）固定，无法承载
- * t0_ref_forbidden。包装 SessionLog 入口是唯一不修改 src/session/、又不复用/污染既有
- * 语义的扩展点（owner 口径 #4"新增规则注入或包装校验器"之包装形态）。
+ * **为什么必须重判**：原实现（`GuardedSessionLog`）包装 `src/core/session/SessionLog`，
+ * 靠「在 append 委托前先判定」实现**写前拒绝**（命中＝事件不落盘）。方案 §3.3 判
+ * `src/core/session` 整模块删除、由 vendor session 族承接。实测 vendor 的会话写入面：
+ *
+ * | vendor 面 | 模式 | 能否否决写入 |
+ * |---|---|---|
+ * | `session/event` | emit（post-commit，明示「fire-and-forget」） | ❌ 事件已进 log |
+ * | `session/flush` | parallel（durable checkpoint） | ❌ 无 veto |
+ * | `session/created` / `session/disposed` | emit | ❌ 非写入点 |
+ *
+ * 结论：**vendor 没有 pre-append waterfall 否决点**。「命中即不落盘」这条语义在
+ * vendor 事件模型下不可复现——把它硬做成 post-commit 监听器再声称「已拦截」就是自欺。
+ *
+ * **重判方案（两层，语义诚实分层）**：
+ *
+ * 1. **写前闸（能力保留，位置前移）**：`guardT0Append(port, scratchRoot)` 包一个最小的
+ *    `T0AppendPort`（`append(input)` 单方法）——任何会话写入实现都能适配。判定逻辑
+ *    `scanT0Refs` 逐字沿用原实现（命中 → 结构化 block 并**不调用** inner.append）。
+ *    接线方式：生产路径的写入调用点先过闸，再 append。这是唯一能保住「事件不落盘」的位置。
+ *
+ * 2. **写后审计（新增，fail-loud 而非 fail-closed）**：`t0AuditSink(scratchRoot)` 产出一个
+ *    纯函数 sink，供 `ctx.on('session/event', ...)` 观察者调用——对**已提交**事件做同样的
+ *    `scanDomainRefs` 判定，命中即回一条 `T0Violation`。它**不能撤销写入**，语义是
+ *    「违规留痕 + 可被告警/停止后续动作」，与写前闸不同类，故类型上分开（`T0Violation`
+ *    vs `T0RefBlock`），不混用一个枚举。
+ *
+ * **不可迁移的关键能力（如实登记）**：原 `GuardedSessionLog.replay` 在**重建流**上做
+ * fail-closed（流内出现 scratch 引用 → 整个流 blocked，文件只读不改写）。vendor 的重建
+ * 读取面是 `Session.snapshotEvents()`（明示 deprecated，禁止新调用）。故 replay 判定退化为
+ * 上层可选审计，本包不再提供 `replay`——见交付报告「候裁/风险」段：若 owner 要求保留
+ * fail-closed 重建，需 G5 时在 vendor 侧找替代读取面，属跨组决策。
+ *
+ * **依赖改造**：原实现 import `src/bridge` 的 `Result` 与 `src/core/session` 的类型。
+ * 现在两者都不再依赖——本文件零包外 import（纯 node:path），返回 `T0RefBlock | null`
+ * 而不是 Result，避免把「Result 形状」这一 bridge 细节带进迁移后的包。
  */
 import { dirname, isAbsolute, relative, resolve } from "node:path";
-import { type Result } from "../../../../src/bridge/index.js";
-import {
-  SessionLog,
-  type AppendOutcome,
-  type DigestResolver,
-  type SessionBlock,
-  type SessionError,
-  type SessionEventInput,
-  type SessionLogOptions,
-  type ReplayOutcome,
-  type TruncatedTail,
-} from "../../../../src/core/session/index.js";
 
 /** 铁律一拒绝归因（workspace.contract.yaml t0_ref_forbidden 节登记）。 */
 export const T0_REF_FORBIDDEN = "t0_ref_forbidden";
@@ -47,7 +59,7 @@ export const isScratchReference = (ref: string, scratchRoot: string): boolean =>
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 };
 
-/** 铁律一结构化 block（cause = t0_ref_forbidden；与 S2 SessionBlock 同构不同型——不混用既有枚举）。 */
+/** 铁律一结构化 block（写前闸的拒绝载荷；cause = t0_ref_forbidden）。 */
 export interface T0RefBlock {
   reason: "t0_ref_forbidden";
   message: string;
@@ -55,116 +67,22 @@ export interface T0RefBlock {
   invalid_refs: Array<{ index: number; journal_type: string; fact_id: string }>;
 }
 
-/** GuardedSessionLog.append 结果：rejected = 铁律一拒绝（事件不落盘）；其余为 S2 既有两态原样透传。 */
-export type GuardedAppendOutcome =
-  | { status: "rejected"; block: T0RefBlock }
-  | AppendOutcome;
+/** domain_refs 条目（本模块用到的最小子集——不依赖 src/core/session 的 DomainRef）。 */
+export interface T0DomainRef {
+  readonly journal_type: string;
+  readonly fact_id: string;
+}
 
-/** GuardedSessionLog.replay 结果：blocked = 流内含 T0 引用（fail-closed，文件只读不改写）。 */
-export type GuardedReplayOutcome =
-  | { kind: "blocked"; block: T0RefBlock }
-  | ({ kind: "replayed" } & ReplayOutcome);
-
-export class GuardedSessionLog {
-  private constructor(
-    private readonly inner: SessionLog,
-    private readonly scratchRoot: string,
-  ) {}
-
-  /** S1b（L-2）：透传内层的尾部修复事实——run 层经包装实例亦可读，不再静默丢失。 */
-  public get truncatedTail(): TruncatedTail | null {
-    return this.inner.truncatedTail;
-  }
-
-  /**
-   * S2a（决议 §3.3，C-2）：透传内层句柄显式关闭（批量档冲刷 + close；关闭后 append 一律
-   * err，fail-closed）——消除 FileHandle 依赖 GC 回收的 DeprecationWarning。纯新增透传，
-   * 不触及 append/replay 任何既有语义。
-   */
-  public async close(): Promise<Result<void, SessionError>> {
-    return this.inner.close();
-  }
-
-  /** 打开（或创建）挂载铁律一规则的会话日志。resolver 为 S2 既有注入口（digest 校验），原样透传。 */
-  public static async create(
-    filePath: string,
-    resolver: DigestResolver,
-    scratchRoot: string,
-    options: SessionLogOptions = {},
-  ): Promise<Result<GuardedSessionLog, SessionError>> {
-    const inner = await SessionLog.create(filePath, resolver, options);
-    if (!inner.ok) return inner;
-    return { ok: true, value: new GuardedSessionLog(inner.value, scratchRoot) };
-  }
-
-  /**
-   * 追加事件：先做铁律一前置校验（scratch 引用 → rejected + 事件不落盘），
-   * 未命中再委托 S2（结构校验 / digest 校验 / 落盘）。
-   */
-  public async append(input: SessionEventInput): Promise<Result<GuardedAppendOutcome, SessionError>> {
-    const t0 = scanDomainRefs(input.domain_refs, this.scratchRoot);
-    if (t0 !== null) {
-      return {
-        ok: true,
-        value: {
-          status: "rejected",
-          block: {
-            reason: "t0_ref_forbidden",
-            message: `T0 不可引用为证据（铁律一）：引用 ${t0.invalid_refs.map((ref) => ref.fact_id).join(", ")} 落于 scratch/ 前缀，事件不落盘`,
-            invalid_refs: t0.invalid_refs,
-          },
-        },
-      };
-    }
-    const delegated = await this.inner.append(input);
-    if (!delegated.ok) return delegated;
-    return { ok: true, value: delegated.value };
-  }
-
-  /**
-   * 从磁盘全量重建：先委托 S2 replay（结构校验 + digest 校验），再对重建出的事件逐条
-   * 扫描铁律一——流内出现 scratch 引用 = 流不可信 → blocked（文件只读不改写）。
-   * S1b（L-2）：透传 truncated_tail（尾部修复事实），拦截语义逐位不变。
-   */
-  public static async replay(
-    filePath: string,
-    resolver: DigestResolver,
-    scratchRoot: string,
-  ): Promise<Result<GuardedReplayOutcome, SessionError>> {
-    const delegated = await SessionLog.replay(filePath, resolver);
-    if (!delegated.ok) return delegated;
-    const allRefs = delegated.value.events.flatMap((event) => event.domain_refs ?? []);
-    const t0 = scanDomainRefs(allRefs, scratchRoot);
-    if (t0 !== null) {
-      return {
-        ok: true,
-        value: {
-          kind: "blocked",
-          block: {
-            reason: "t0_ref_forbidden",
-            message: "T0 不可引用为证据（铁律一）：流内出现落于 scratch/ 前缀的引用，流不可信（fail-closed）",
-            invalid_refs: t0.invalid_refs,
-          },
-        },
-      };
-    }
-    return {
-      ok: true,
-      value: {
-        kind: "replayed",
-        events: delegated.value.events,
-        blocks: delegated.value.blocks,
-        truncated_tail: delegated.value.truncated_tail,
-      },
-    };
-  }
+/** 待校验事件的形状（本模块用到的最小子集——不依赖 src/core/session 的 SessionEventInput）。 */
+export interface T0EventShape {
+  readonly domain_refs?: readonly T0DomainRef[] | undefined;
 }
 
 /** 逐条判定 domain_refs：命中 scratch 前缀 → 结构化明细（null = 无命中）。 */
-const scanDomainRefs = (
-  domainRefs: readonly { journal_type: string; fact_id: string }[] | undefined,
+export const scanT0Refs = (
+  domainRefs: readonly T0DomainRef[] | undefined,
   scratchRoot: string,
-): { invalid_refs: T0RefBlock["invalid_refs"] } | null => {
+): T0RefBlock["invalid_refs"] | null => {
   if (domainRefs === undefined || domainRefs.length === 0) return null;
   const invalidRefs: T0RefBlock["invalid_refs"] = [];
   for (let index = 0; index < domainRefs.length; index += 1) {
@@ -174,9 +92,81 @@ const scanDomainRefs = (
       invalidRefs.push({ index, journal_type: ref.journal_type, fact_id: ref.fact_id });
     }
   }
-  return invalidRefs.length > 0 ? { invalid_refs: invalidRefs } : null;
+  return invalidRefs.length > 0 ? invalidRefs : null;
 };
 
-/** 便利判断（供 S5 runner 归约结构化 block 用）。 */
-export const isT0RefBlock = (block: T0RefBlock | SessionBlock): block is T0RefBlock =>
-  block.reason === "t0_ref_forbidden";
+/** 判定并组装完整 block（null = 放行）。写前闸与写后审计共用同一判定。 */
+export const t0BlockOf = (input: T0EventShape, scratchRoot: string): T0RefBlock | null => {
+  const invalidRefs = scanT0Refs(input.domain_refs, scratchRoot);
+  if (invalidRefs === null) return null;
+  return {
+    reason: T0_REF_FORBIDDEN,
+    message: `T0 不可引用为证据（铁律一）：引用 ${invalidRefs.map((ref) => ref.fact_id).join(", ")} 落于 scratch/ 前缀`,
+    invalid_refs: invalidRefs,
+  };
+};
+
+// ── 写前闸 ────────────────────────────────────────────────────────────────
+
+/**
+ * 会话写入端口（vendor `Session.append` 或其他实现的适配点）。
+ * 只要求单方法——闸门不关心底层是 append-only log、内存队列还是远端会话。
+ */
+export interface T0AppendPort<Input extends T0EventShape, Outcome> {
+  append(input: Input): Promise<Outcome>;
+}
+
+/** 闸门结果：rejected ＝ 铁律一拒绝（**inner.append 未被调用，事件未落盘**）；passed ＝ 内层原样结果。 */
+export type GuardedAppendOutcome<Outcome> =
+  | { status: "rejected"; block: T0RefBlock }
+  | { status: "passed"; outcome: Outcome };
+
+/**
+ * 写前闸工厂：对每个事件先判铁律一，命中即拒绝且**不委托内层**——这是原
+ * `GuardedSessionLog.append` 的唯一核心语义，逐位保留。
+ *
+ * 用法（接线点）：`const guarded = guardT0Append(sessionAdapter, run.scratchDir)`，
+ * 生产写入走 `guarded.append(input)`；未命中时行为与直连内层完全一致。
+ */
+export const guardT0Append = <Input extends T0EventShape, Outcome>(
+  inner: T0AppendPort<Input, Outcome>,
+  scratchRoot: string,
+): T0AppendPort<Input, GuardedAppendOutcome<Outcome>> => ({
+  append: async (input: Input) => {
+    const block = t0BlockOf(input, scratchRoot);
+    if (block !== null) return { status: "rejected", block };
+    return { status: "passed", outcome: await inner.append(input) };
+  },
+});
+
+/** 便利判断（供 runner 归约结构化 block 用）。 */
+export const isT0RefBlock = (block: T0RefBlock | { reason: string }): block is T0RefBlock =>
+  block.reason === T0_REF_FORBIDDEN;
+
+// ── 写后审计（新增能力：观察已提交事件）────────────────────────────────────
+
+/** 已提交事件上的违规留痕（**不可撤销写入**——与写前闸的 T0RefBlock 严格区分）。 */
+export interface T0Violation {
+  kind: "t0_ref_violation";
+  message: string;
+  invalid_refs: T0RefBlock["invalid_refs"];
+}
+
+/**
+ * 写后审计 sink 工厂：给 `ctx.on('session/event', (session, event) => sink(event))` 用。
+ * 返回 `T0Violation | null`——命中即违规留痕，调用方可据此告警/停后续动作。
+ *
+ * 明确与写前闸的差别：事件**已经提交**（vendor `session/event` 是 post-commit emit），
+ * 本 sink 不能回收它。要真正「不落盘」必须走 {@link guardT0Append}。
+ */
+export const t0AuditSink = (scratchRoot: string): ((input: T0EventShape) => T0Violation | null) => {
+  return (input: T0EventShape): T0Violation | null => {
+    const block = t0BlockOf(input, scratchRoot);
+    if (block === null) return null;
+    return {
+      kind: "t0_ref_violation",
+      message: `T0 不可引用为证据（铁律一）：已提交事件中出现落于 scratch/ 前缀的引用（违规已留痕，写入不可撤销）：${block.invalid_refs.map((ref) => ref.fact_id).join(", ")}`,
+      invalid_refs: block.invalid_refs,
+    };
+  };
+};

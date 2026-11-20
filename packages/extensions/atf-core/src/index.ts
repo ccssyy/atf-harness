@@ -1,5 +1,13 @@
 /**
- * S4 工作区层公开出口。后续 slice（S5 冒烟）只从这里 import。
+ * atf-core 公开出口（G2 迁入）。
+ *
+ * 迁入来自 `src/core/workspace` 的 A 类 36 文件（方案 §3.2）。迁移＝搬运：
+ * 除三个需改接口的文件（t0Guard / skillCatalog / sessionBindings）外，
+ * 其余导出与源文件逐项一致。
+ *
+ * 两个指向 src 的 re-export 是**迁移期过渡面**（方案已判 B 类删除，本批不动 src）：
+ * - scratchExec：index 原本从它导出 20 项，现直连 src 原文件，等 G5 走 vendor fs/bash；
+ * - 其余 33 个纯领域文件无包外依赖。
  */
 export {
   workspaceError,
@@ -38,13 +46,19 @@ export {
   type PromoteOptions,
 } from "./promote.js";
 export {
-  GuardedSessionLog,
   T0_REF_FORBIDDEN,
+  guardT0Append,
   isScratchReference,
   isT0RefBlock,
+  scanT0Refs,
+  t0AuditSink,
+  t0BlockOf,
   type GuardedAppendOutcome,
-  type GuardedReplayOutcome,
+  type T0AppendPort,
+  type T0DomainRef,
+  type T0EventShape,
   type T0RefBlock,
+  type T0Violation,
 } from "./t0Guard.js";
 export {
   buildScratchExecEnv,
@@ -90,10 +104,53 @@ export {
 } from "./labelQc.js";
 export {
   listSkills,
+  listSkillsFromRegistry,
   parseSkillFrontmatter,
   readSkillBody,
+  readSkillBodyFromRegistry,
   readSkillFile,
+  readSkillFileFromRegistry,
   skillsSuffixText,
+  summariesOfSkillRegistry,
   SKILL_FILE_MAX_BYTES,
+  type SkillCatalogError,
+  type SkillRegistryPort,
   type SkillSummary,
+  type VendorSkillDefinition,
+  type VendorSkillSummary,
 } from "./skillCatalog.js";
+export {
+  BINDINGS_HISTORY_MAX,
+  BINDINGS_SCHEMA_VERSION,
+  SESSION_BINDINGS_TABLE,
+  SESSION_BINDINGS_UNIT,
+  SESSION_BINDINGS_UNIT_VERSION,
+  bindSessionRun,
+  bindSessionRunInto,
+  enumerateBindingCandidates,
+  fileSessionBindingStore,
+  kvUnitSessionBindingStore,
+  migrateFromRunBindings,
+  migrateFromRunBindingsInto,
+  nextBoundRecord,
+  nextUnboundRecord,
+  readSessionBinding,
+  readSessionBindingFrom,
+  resolveActiveRun,
+  resolveActiveRunWith,
+  resolveBindingsHome,
+  sessionBindingsPathOf,
+  sessionBindingsUnitDescriptor,
+  unbindSession,
+  unbindSessionIn,
+  type ActiveRunResolution,
+  type BindingCandidateEntry,
+  type KvUnitPort,
+  type ResolveActiveRunOptions,
+  type SessionBindingHistoryEntry,
+  type SessionBindingSource,
+  type SessionBindingStore,
+  type SessionBindingsFile,
+  type SessionRunBindingRecord,
+  type UnboundReason,
+} from "./sessionBindings.js";
