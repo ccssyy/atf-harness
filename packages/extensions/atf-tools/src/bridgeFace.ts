@@ -23,6 +23,7 @@ import { toAtfAgentTool } from "../../../../src/agent/atfAgentTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { translateParameters, looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
+import { askWithTimeout, ASK_TIMEOUT_MS_DEFAULT, type FormAskService } from "./confirmFace.js";
 import type { ChoiceAskQuestion } from "./confirmFace.js";
 import { APPROVAL_SEMANTICS_BY_TOOL } from "../../../../src/core/tools/toolDefinition.js";
 import { permissionTierOf } from "./permissionTier.js";
@@ -438,11 +439,11 @@ const matchesLabelQcUserDecisions = async (args: Record<string, unknown>): Promi
  *  (卡面回执即 user_confirmed 凭据),暂停=不执行。通道缺席 fail-closed(不放行)。 */
 const userDecisionConfirmCardOf = async (
   ctx: { get(service: string): unknown },
-  exec: { agent?: unknown; signal?: unknown },
+  exec: { agent?: unknown; signal?: unknown; callId?: string },
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<{ ok: boolean; note: string }> => {
-  const svc = ctx.get("userQuestions") as { ask?: (payload: unknown) => Promise<{ answers: Array<{ selected?: string[]; custom?: string }> }> } | undefined;
+  const svc = ctx.get("userQuestions") as FormAskService | undefined;
   if (svc === undefined || typeof svc.ask !== "function") {
     // D284 无人值守形态（env 开关，与 approvalExempt/unattendedGuard 对称）:
     // headless 宿主无 userQuestions 服务——atf-unattended 档语义=需要用户决定的点
@@ -500,7 +501,9 @@ const userDecisionConfirmCardOf = async (
     ? `标注冲突裁决确认（共 ${String(decisions.length)} 项${groupNote !== "" ? `：${groupNote}` : ""}）`
     : "用户决定确认";
   try {
-    const answers = await svc.ask({
+    // 阶段2-1：卡面限时等待（解 zcode A3「resolve 挂起 25 分钟无超时无告警」）。
+    // 有 askTimed 能力且未关闭限时 → 超时转 pending 并如实回执，不永久阻塞 agent 回合。
+    const answers = await askWithTimeout(svc, {
       questions: [{
         id: `user-decision-${toolName}-${String(Date.now())}`,
         question: `${title}${groupNote !== "" ? "" : `——以下 ${String(decisions.length)} 项处置请确认`}`,
@@ -524,7 +527,14 @@ const userDecisionConfirmCardOf = async (
       }],
       agent: exec.agent,
       signal: exec.signal,
-    });
+    }, exec);
+    if ("pending" in answers && answers.pending === true) {
+      // 超时转 pending：不当作"未作答"，也不假报确认——如实说"等你回来续答"。
+      return {
+        ok: false,
+        note: `等待超时（${String(Math.round(ASK_TIMEOUT_MS_DEFAULT / 1000))}s 内未应答）——本项待续答，未提交；你在下一轮可直接作答或重新触发本工具`,
+      };
+    }
     const first = answers.answers[0];
     const picked = [...(first?.selected ?? [])].join("") || (first?.custom ?? "");
     const confirmed = picked.includes("确认按建议提交") || (picked.trim() !== "" && !picked.includes("暂停"));
