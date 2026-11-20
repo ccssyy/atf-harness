@@ -23,8 +23,9 @@
     "rehearsal:break": "node --import ./vendor/dsh/deepseek-harness/node_modules/tsx/dist/esm/index.mjs deploy/verify/rehearsal/journey.ts --break-step 06-snapshot",
     "audit:vendor-overlap": "node tools/audit-vendor-overlap.mjs",
     "audit:module-overlap": "node tools/audit-module-overlap.mjs",
-    "audit:all": "npm run audit:vendor-overlap && npm run audit:module-overlap && npm run audit:cross-repo-overlap",
-    "audit:cross-repo-overlap": "node tools/audit-cross-repo-overlap.mjs"
+    "audit:all": "npm run audit:vendor-overlap && npm run audit:module-overlap && npm run audit:cross-repo-overlap && npm run audit:architectural-decay",
+    "audit:cross-repo-overlap": "node tools/audit-cross-repo-overlap.mjs",
+    "audit:architectural-decay": "node tools/audit-architectural-decay.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",
