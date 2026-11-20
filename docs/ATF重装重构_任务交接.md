@@ -15,6 +15,9 @@ ATF 项目**基于干净 vendor 重装**的施工交接。owner 已裁定：不�
 | **权威源（勿改）** | `vendor/dsh/deepseek-harness`（submodule pin `639ed015`） |
 | **施工方案** | `docs/audit/ATF_重装重构方案_20261120.md` |
 | **审计机检** | `npm run audit:all`（退出码 2=有未登记重复） |
+| **施工卡 G0-G7** | `docs/audit/ATF_施工卡_G0-G7_20261120.md` |
+| **决策理由** | `docs/audit/ATF_决策理由档案_20261120.md` |
+| **方案文档** | `docs/audit/ATF_重装重构方案_20261120.md` |
 
 ## 三、已拍板口径/决策
 
@@ -55,7 +58,6 @@ ATF 项目**基于干净 vendor 重装**的施工交接。owner 已裁定：不�
 - 渐进替换（B 批次逐个清）→ 依赖纠缠仅 13 处，重装更彻底 → 改为重装
 - 向上游提 PR → owner 裁定独立产品 → 不提
 - 目录照搬参考文章（harness/extensions/api/web）→ ATF 双仓+submodule 不适用 → 不搬
-- 工具名改 `mcp__atf__*` → 破坏面太大 → 加适配层
 
 ## 六、编辑纪律
 
@@ -67,7 +69,7 @@ ATF 项目**基于干净 vendor 重装**的施工交接。owner 已裁定：不�
 ## 七、坑
 
 **技术坑**
-- worktree 的 `vendor/dsh/deepseek-harness` 是**空目录**（子模块未初始化）。跑审计器前需软链主仓：`ln -s /data/sam/ATF-Harness/vendor/dsh/deepseek-harness vendor/dsh/deepseek-harness`；**提交前必须删软链**，否则 git 报错
+- worktree 的 `vendor/dsh/deepseek-harness` 是**空目录**。跑审计器前软链主仓：`ln -s /data/sam/ATF-Harness/vendor/dsh/deepseek-harness vendor/dsh/deepseek-harness`；**提交前必须删软链**
 - 39 packages + 55 src 有**陈旧 `.js` 残留**，会让 `createRequire` 加载旧代码 → 改 packages 后须先清
 - 部署门禁：`head_commit` 须传**完整 40 位 sha**；预演报告禁写"0 FAIL"字面（用"零失败项"）
 
@@ -84,28 +86,26 @@ ATF 项目**基于干净 vendor 重装**的施工交接。owner 已裁定：不�
 
 ## 附录
 
-### 并行施工分组（G1-G4，文件范围不重叠）
+### 施工分组（G0-G7，完整覆盖 Phase 0-5）
 
-| 组 | 任务 | 独占范围 | 依赖 |
-|---|---|---|---|
-| **G0** | A5 腐化审计器 + Phase 0 | `tools/`、`vendor/dsh/patches/`、profile | **必须先做** |
-| **G1** | 内核 MCP server | `AgenticTrainingFlow/src/agentic_training_flow/mcp/**`（新建） | 无 |
-| **G2** | `atf-core` 迁 A 类 | `ATF-Harness/packages/extensions/atf-core/**`（新建） | G0 |
-| **G3** | `atf-tools` 改 13 处依赖 | `ATF-Harness/packages/extensions/atf-tools/src/**` | G2 |
-| **G4** | `atf-ui` 瘦身 | `ATF-Harness/packages/extensions/atf-ui/**` | G0 |
+| 组 | Phase | 任务 | 独占范围 | 依赖 |
+|---|---|---|---|---|
+| **G0** | 0 | 基座固化（A5 审计器、patch 8→6+2插件、同步检查器） | `tools/`、`vendor/dsh/patches/`、`atf-ui` | **必须先做** |
+| **G1** | 1 | 内核 MCP server | `内核/.../mcp/**`（新建） | 无（可与 G0 并行） |
+| **G2** | 2 | `atf-core` 迁 36 文件 | `packages/extensions/atf-core/**` | G0 |
+| **G3** | 2 | `atf-tools` 改 13 处依赖 | `packages/extensions/atf-tools/src/**` | G2 |
+| **G4** | 2 | `atf-ui` 瘦身 | `packages/extensions/atf-ui/**` | G0 |
+| **G5** | 3 | **MCP 切换**（适配层、删 bridge） | `atf-tools` 适配、`src/bridge`、内核分帧层 | G1+G2+G3 |
+| **G6** | 4 | **测试与验收**（74 黑盒重跑、155 白盒随删） | `tests/**` | G5 |
+| **G7** | 5 | **部署 + pin 退役 + 文档** | `deploy/`、`instancePin.ts`、`docs/` | G6 |
 
-串行前置：G0 → G1/G2/G4 并行 → G2 完成后 G3。
+**执行顺序（不可跳）**：
+```
+G0（串行）→ G1+G2+G4（并行）→ G2完成→G3 → G1+G3完成→G5 → G6 → G7
+```
 
-### Phase 清单（详见方案文档）
+**每个 G 组的完整施工卡**（边界/交付/验收/依赖）见 `docs/audit/ATF_施工卡_G0-G7_20261120.md`。
 
-| Phase | 内容 | 工时 |
-|---|---|---|
-| 0 | 基座固化（patch 8→6+2插件、vendor 固化、同步检查器） | 3-5 天 |
-| 1 | 内核 MCP server（可并行） | 3-5 天 |
-| 2 | harness 清空重建（迁 36 文件、删 18,476 行） | 1-2 周 |
-| 3 | MCP 切换（适配层） | 3-5 天 |
-| 4 | 测试与验收（74 黑盒重跑、155 白盒随模块删） | 1 周 |
-| 5 | 部署切换 + pin 退役 + 文档 | 2-3 天 |
 
 ### 回补记录（读侧追加；写侧消费清空，≤5 行）
 > 只记「因缺失而真出错」：`[日期] 漏：<什么> → 错：<后果> → 处置`
