@@ -8,11 +8,7 @@
     "packages/extensions/atf-subagent",
     "src/core/workspace",
     "packages/extensions/atf-ui",
-    "src/core/tools",
-    "src/rpc",
-    "src/session",
-    "src/workspace",
-    "src/tools"
+    "src/core/tools"
   ],
   "rationale": {
     "src/agent": "【重复·批次2】自研 agent loop（assembleV1Agent）+ sessionMirror + deferredTools + hooks → vendor subagent/session/jobs/hooks 族。退役后 4 项重复一并消。",
@@ -23,9 +19,6 @@
     "src/core/workspace": "【部分重复·批次6】workspaceRegistry 直接改 vendor storages/workspace.json（写时全量回写会覆盖 + 须重启才生效）。run/段/GPU 运维面属训练域保留。",
     "packages/extensions/atf-ui": "【部分重复·批次7】自建 HTTP/SSE 与 vendor api 族重叠；槽位注入/训练监控卡属合理领域定制。",
     "src/core/tools": "【部分重复·批次4】canonical.ts 手搓 JSON Schema 子集校验器 ≈ vendor validateArgs；toolDefinition 训练域描述合理保留。",
-    "src/rpc": "【待判】JSON-RPC 传输层 449 行；vendor 有 typert-protocol。需确认是否可换——此前 ACP/MCP 宿主已删线，可能已无消费方。",
-    "src/session": "【待判】230 行；需确认与 vendor session 族关系。",
-    "src/workspace": "【待判】155 行；需确认是否死代码。",
-    "src/tools": "【待判】115 行；疑似死代码（甲线删线后可能已无消费方）。"
+    "_retired_dead_code": "本批删除的死代码：src/rpc(446行，仅测试消费)、src/session|workspace|tools(仅 smoke 脚本，零消费)。删后模块清单从 16 降到 12。"
   }
 }
