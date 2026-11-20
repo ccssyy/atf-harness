@@ -129,6 +129,7 @@ const MODULE_RULES = {
   "packages/extensions/atf-ui": { family: "api", verdict: "部分重复", why: "自建 HTTP/SSE 与 vendor api 族重复，但槽位注入/训练监控卡属合理领域定制" },
   "packages/extensions/atf-subagent": { family: "subagent", verdict: "重复", why: "派发三件套包装，底层跑自研 loop（src/agent）——vendor subagent 族有完整替代" },
   "packages/extensions/atf-continuation": { family: null, verdict: "领域保留", why: "输出截断自动续写——已核实 vendor 无此能力" },
+  "packages/extensions/atf-core": { family: null, verdict: "领域保留", why: "G2 迁入的 src/core/workspace A 类训练域逻辑（run 布局/段灯/GPU 探针/训练预检等）——vendor 无对应，产品本体" },
 };
 
 // ---------------------------------------------------------------- 判定
