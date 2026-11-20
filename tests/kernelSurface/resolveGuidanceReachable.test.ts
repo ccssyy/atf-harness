@@ -42,12 +42,17 @@ describe("B4 指路可达性与单卡形态", () => {
     // ADR-0022:审批拦截轨退役——语义表存在即无叠加轨（approvalTrack 账本轨优先+问答轨单 handler）
   });
 
-  it("approvalTrack 重入直通锚：同 tool_call_id 已 granted 不重复问询（单卡形态）", () => {
-    const trackSrc = readFileSync(
-      resolve(process.cwd(), "src/core/run/approvalTrack.ts"),
-      "utf-8",
-    );
-    expect(trackSrc).toContain("同 tool_call_id 已有 granted 时不重复问询");
-    expect(trackSrc).toContain("findExistingCredential");
+  it("approvalTrack 重入直通锚已随甲线退役（阶段1-A 删线）", () => {
+    // 原用例验证 `src/core/run/approvalTrack.ts` 的重入语义；该文件已随甲线
+    // core/run 在「阶段1-A 删线」退役（commit 8f33cec5）。断言改为「已退役」，
+    // 防止该文件被误恢复——恢复即红，需重新评估治理面归属。
+    // ADR-0022 后审批拦截轨的语义已由 vendor `ctx.approval` + 业务确认卡承载。
+    let exists = true;
+    try {
+      readFileSync(resolve(process.cwd(), "src/core/run/approvalTrack.ts"), "utf-8");
+    } catch {
+      exists = false;
+    }
+    expect(exists, "src/core/run/approvalTrack.ts 已退役，不应被恢复").toBe(false);
   });
 });

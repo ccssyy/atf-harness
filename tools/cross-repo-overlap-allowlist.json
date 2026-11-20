@@ -1,0 +1,15 @@
+{
+  "_doc": "跨仓重复白名单（只减不增）。由 tools/audit-cross-repo-overlap.mjs 读取。指认「harness 侧某能力 ↔ 内核侧某能力」已确认为重复但未处置的组合，新增重复必须显式登记理由。",
+  "approved_duplicates": [
+    "src/core/workspace/segmentFacts.ts",
+    "src/core/workspace/runFacts.ts",
+    "src/core/tools/toolDefinition.ts",
+    "src/core/workspace/bootPreflight.ts"
+  ],
+  "rationale": {
+    "src/core/workspace/segmentFacts.ts": "【重复·待处置】harness 自建八段事实轨（webui/segments.json）vs 内核 phase_projection.py 的 PhaseKind 11 值——同一「流程到哪一步」两套投影。处置方向：段灯改为消费内核 stage 摘要（stage/*.summary.json）或 flow_anchor，而非自建第二轨。",
+    "src/core/workspace/runFacts.ts": "【待判】harness 从 run 目录聚合事实 vs 内核 TrainingFlowAnchor/v1 派生投影。需确认是否同一职责——若 harness 只是「读内核产物」则合理，若「另算一套」则重复。",
+    "src/core/tools/toolDefinition.ts": "【部分重复】harness 工具定义（含 canonical_output schema）vs 内核 serve 面 16 方法声明。桥接契约两侧各自声明，存在漂移风险（bridge.contract.yaml 是第三份）。需评估是否收敛为单源。",
+    "src/core/workspace/bootPreflight.ts": "【待判】harness 启动预检 vs 内核 runtime_probe.py——可能有重叠的环境检查（python 版本/路径/依赖）。需确认职责边界。"
+  }
+}
