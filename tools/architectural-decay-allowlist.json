@@ -1,0 +1,31 @@
+{
+  "_doc": "架构腐化白名单（只减不增）。由 tools/audit-architectural-decay.mjs 读取。对象三分：可闭集不变量→堵、开放行为面→判据+回放、架构固有形状→显式化不修。登记在此的项表示「确认为架构固有形状或待重构」，不阻断 CI。",
+  "approved": [
+    "packages/extensions/atf-tools/src/pipelineFace.ts:stageBranches",
+    "packages/extensions/atf-tools/src/pipelineFace.ts:fileLines",
+    "packages/extensions/atf-tools/src/pipelineFace.ts:functionLines",
+    "packages/extensions/atf-tools/src/trainingFace.ts:fileLines",
+    "packages/extensions/atf-tools/src/trainingFace.ts:functionLines",
+    "packages/extensions/atf-tools/src/confirmFace.ts:functionLines",
+    "packages/extensions/atf-tools/src/constructionGate.ts:functionLines",
+    "packages/extensions/atf-ui/src/server.ts:fileLines",
+    "packages/extensions/atf-ui/src/server.ts:functionLines",
+    "packages/extensions/atf-subagent/src/index.ts:functionLines",
+    "src/agent/cli.ts:functionLines",
+    "src/webui/server.ts:functionLines"
+  ],
+  "rationale": {
+    "packages/extensions/atf-tools/src/pipelineFace.ts:stageBranches": "【46 处·最高优先】流程段分支内嵌工具代码。这是 G0 腐化审计的第一目标，也是删正则/退役 loop 批次的依据。重构方向：段定义带自己的参数/校验/卡面（声明式），而非 46 个 if。",
+    "packages/extensions/atf-tools/src/pipelineFace.ts:fileLines": "4390 行，与上条同源。随 stageBranches 重构一起下降。",
+    "packages/extensions/atf-tools/src/pipelineFace.ts:functionLines": "resolveGroupingFace 405 行——分组解析逻辑，含正则解析用户自由文本，B3 删正则时一并重构。",
+    "packages/extensions/atf-tools/src/trainingFace.ts:fileLines": "3151 行，训练域工具聚合。属领域复杂度，非机制重复；重构优先级低于 pipelineFace。",
+    "packages/extensions/atf-tools/src/trainingFace.ts:functionLines": "buildEvalTools 597 行——评估工具构造，工具数量多导致。",
+    "packages/extensions/atf-tools/src/confirmFace.ts:functionLines": "buildConfirmTools 784 行——确认卡构造，含 6 处治理卡。ADR-0022 后属 B 层保留面。",
+    "packages/extensions/atf-tools/src/constructionGate.ts:functionLines": "decideConstructionParams 209 行——构造参数决策，含正则解析数字（B3 目标）。",
+    "packages/extensions/atf-ui/src/server.ts:fileLines": "3106 行，与 vendor api 族部分重复（B7/G4 目标）。",
+    "packages/extensions/atf-ui/src/server.ts:functionLines": "scanRunDirAt 242 行 / tickOnce 235 行——监控轮询，随 G4 瘦身下降。",
+    "packages/extensions/atf-subagent/src/index.ts:functionLines": "apply 295 行——派发装配，随 G3 退役自研 loop 删除。",
+    "src/agent/cli.ts:functionLines": "runV1Headless 203 行——自研 loop 入口，G3 直接删除整个模块。",
+    "src/webui/server.ts:functionLines": "startWebUiServer 374 行——旧 WebUI，dev 已不用，G3/G4 删除。"
+  }
+}
