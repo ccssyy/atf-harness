@@ -26,7 +26,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
+import { renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { resolvePipelineRunDir, runPipeline } from "./pipelineFace.js";
 import { runFileCandidates } from "@atf/dsh-atf-core";
 import { buildTrainingPromptPreview, renderTrainingPromptPreviewBlock } from "@atf/dsh-atf-core";
@@ -65,7 +65,36 @@ export const buildPrelaunchReportTool = (
       workspace_path: { type: "string", required: true, description: "workspace 根（绝对路径——与 atf_pipeline_stage 的 workspace_path 同值；落点解析 canonical RunLayout 优先）" },
     },
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：additionalProperties 保持开放；只声明跨全部 return 路径类型稳定的
+      // 顶层键，一律不写 required。依据＝execute 八条 return 逐条核对：六条失败态均为
+      // {ok:false,run_id,error,note[,run_dir,exit_code,stderr_tail]}；成功体为 {ok:true,
+      // run_id,run_dir,run_dir_layout,config_used,config_form,report_path,report_bytes,
+      // summary_head,training_prompt_preview,training_fields,prompt_field_lines,
+      // [fields_using_verbatim_text],[training_prompt_preview_unavailable],note}。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "false＝材料未生成（error+note 带修复指引）；true＝报告已生成并回读" },
+          run_id: { type: "string", description: "run 标识（回显）" },
+          error: { type: "string", description: "拒绝码（workspace_path_missing/落点解析码/iteration_config_missing/launch_artifacts_missing/prelaunch_script_missing/prelaunch_report_failed/prelaunch_report_unreadable）——note 里有对应业务语言说明" },
+          note: { type: "string", description: "人读说明与修复指引（成功路径为材料使用说明）" },
+          run_dir: { type: "string", description: "run 目录绝对路径（落点解析成功后）" },
+          exit_code: { type: "number", description: "内核报告脚本退出码（prelaunch_report_failed 时——非零）" },
+          stderr_tail: { type: "string", description: "内核 stderr 尾部原文（prelaunch_report_failed 时——配置/来源串/产物形态由内核单源裁决）" },
+          run_dir_layout: { type: "string", description: "落点形态（canonical/legacy）" },
+          config_used: { type: "string", description: "实际消费的 IterationConfig 路径（成功体）" },
+          config_form: { type: "string", description: "配置形态（live＝config/iteration-config 目录形态；legacy＝prep 平铺存量）" },
+          report_path: { type: "string", description: "报告落盘路径（launch/prelaunch-report.md）" },
+          report_bytes: { type: "number", description: "报告字节数" },
+          summary_head: { type: "string", description: "报告摘要（头部 24 行——全文在 report_path）" },
+          training_prompt_preview: { type: "string", description: "本次训练字段＋prompt 字段段只读呈现块（用户面原文——原样转述，不改写成参数名）" },
+          training_fields: { type: "array", description: "本次训练字段清单（[{name,id,source}]）" },
+          prompt_field_lines: { type: "array", description: "prompt 字段段原文行（string[]）" },
+          fields_using_verbatim_text: { type: "array", description: "使用原文段的字段 id 清单（在场时）" },
+          training_prompt_preview_unavailable: { type: "string", description: "字段清单未产出时的如实说明（实验配置段还没跑）" },
+        },
+      },
       render: renderAsJsonText,
     },
     async execute(
