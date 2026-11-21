@@ -2801,6 +2801,18 @@ export const buildPipelineTool = (
           grouping_template: { type: "json", description: "内核分组候选模板原样透传（experiment_setup 段，字段集全集序）" },
           grouping_evidence: { type: "object", additionalProperties: true, description: "分组判定证据（在场时）" },
           construction_decided_by: { type: "string", description: "构造参数决定者（user＝卡上选定；agent＝代决——experiment_setup 段审批免档）" },
+          construction_card_answers: {
+            type: "array",
+            description: "用户在构造参数卡上的作答原文（vendor 原样给出，本工具不做语义解析）——experiment_setup 段构造卡问过且用户作答时出现；结构化终值以落账 construction-choice.json 为准",
+            items: {
+              type: "object",
+              additionalProperties: true,
+              properties: {
+                field: { type: "string", description: "哪一问（业务语言）" },
+                said: { type: "string", description: "用户原文（点选的选项 label 或手打文字）" },
+              },
+            },
+          },
           field_choice: { type: "object", additionalProperties: true, description: "字段清单确认结果（register 段即时确认——confirmed_fields/all_fields/total_fields；用户手打原话在 user_words 键；卡未确认时 skipped:true）" },
           prompt_choice: { type: "object", additionalProperties: true, description: "训练 prompt 确认结果（register 段——picked/typed/resolved_via）" },
           assemble_auto: { type: "string", description: "联合装配判定来源（training_prep 段）" },
@@ -3044,6 +3056,9 @@ export const buildPipelineTool = (
       // 完全权限档下审批免了，这两项就是「谁定了分组与增强」的唯一凭据。
       let constructionDecisionNote: string | undefined;
       let constructionDecidedBy: "user" | "agent" | undefined;
+      // A2（2026-11-22）：用户构造卡作答原文透传——B3c 放进 decideConstructionParams
+      // 返回的 card_answers 此前在此被丢弃（只落账本），agent 在工具返回面看不到。
+      let constructionCardAnswers: ReadonlyArray<{ readonly field: string; readonly said: string }> | undefined;
       if (args.stage === "experiment_setup") {
         const groupingConfirm = args.grouping_confirm === true;
         const mode5Random = typeof args.mode5_random === "number" ? Number(args.mode5_random) : undefined;
@@ -3217,6 +3232,7 @@ export const buildPipelineTool = (
           };
           constructionDecisionNote = decided.note;
           constructionDecidedBy = decided.decided_by;
+          constructionCardAnswers = decided.card_answers;
         }
         // 风险信号在场才带：targeted evidence 的出处校验要用它（缺则内核标未校验）
         const riskDocType = typeof args.doc_type === "string" && args.doc_type.trim() !== "" ? args.doc_type.trim() : "do";
@@ -4100,7 +4116,13 @@ let visualSummary: Record<string, unknown> | undefined;
         // D90：构造参数来源（仅 experiment_setup 段）——分组与增强「谁定的」必须可对账：
         // 完全权限档下审批已免，这一行就是唯一凭据（user＝卡上选定；agent＝代决，无人确认）。
         ...(args.stage === "experiment_setup" && constructionDecidedBy !== undefined
-          ? { construction_decided_by: constructionDecidedBy }
+          ? {
+              construction_decided_by: constructionDecidedBy,
+              // A2：作答原文一并回传（纯数据，不解读——语义理解归 agent，AGENTS.md 硬约束 8）。
+              ...(constructionCardAnswers !== undefined && constructionCardAnswers.length > 0
+                ? { construction_card_answers: constructionCardAnswers }
+                : {}),
+            }
           : {}),
         // 看图通道（仅候选构造段）：把「只导出了清单」与「已交判读件」两态如实回传，
         // 模型据此决定是继续看图还是直接跑正式构造。
