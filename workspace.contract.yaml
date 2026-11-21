@@ -92,6 +92,12 @@ promotion_gate_a:
 # owner 口径 #4：S2 校验器代码以扩展方式接入（包装校验器），不修改 src/session/ 既有语义；
 # 判定为"无需改 S2 代码"——接线形态 = 包装 SessionLog 会话校验入口（见下）。
 t0_ref_forbidden:
+  # ⚠️ 2026-11-21 复核裁定（ADR-0021）：本节 wiring 与 enforcement 已失效，待重写。
+  #    实测：t0Guard / GuardedSessionLog 从未接进生产调用点（grep 排除 tests 后零实例化）；
+  #    其假设的「会话写入前否决」在 vendor 事件模型下不存在（session/event 是 post-commit）。
+  #    规则本身仍有效：T0 不可引用为证据。但落点应从「会话写入层」改到
+  #    「晋升闸 A」（promote.ts 已有 not_reproducible/already_promoted）或训练启动前置校验。
+  #    本节保留供考古，不得据此实现；owner 裁定不接进 G5，另立批次重判落点。
   wiring: GuardedSessionLog 包装 SessionLog（src/workspace/t0Guard.ts）——src/session/ 零改动
   why_not_resolver_channel: S2 checkRefs 把 resolver 的 err 统一包装为 resolver_failure（基础设施故障语义），
                             策略拒绝经该通道会被错误标注且归因深埋；S2 ref_invalid cause 枚举固定
