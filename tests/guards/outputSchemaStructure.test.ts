@@ -27,19 +27,21 @@ const BARE_OPEN_OUTPUT =
 const LOOSE_REF_USAGE = /schema:\s*looseObjectOutput\b/g;
 
 /**
- * 引用形态存量登记（文件 → 使用位计数；精确匹配——变多=新腐化，
+ * 引用形态存量登记（文件 → [计数, 身份]；精确匹配——变多=新腐化，
  * 变少=存量已修、登记待清）。定义处（schemaTranslate.ts）不计——
  * 检测串锚定 `schema: looseObjectOutput` 使用形态。
+ * 身份注释吸收自 lead 2d301c7b 版守卫（fileGuard/bridge 非盘点 18 清单
+ * 工具的真实归属）。
  */
-const KNOWN_LEGACY_REFS: Readonly<Record<string, number>> = {
-  "fileFace.ts": 4, // atf_run_list / atf_report_read / atf_metrics_compare / atf_gpu_status
-  "attachmentsFace.ts": 1, // atf_attachments_assembly
-  "jointTrainFace.ts": 1, // atf_joint_train
-  "prelaunchFace.ts": 1, // atf_prelaunch_report
-  "recordsFace.ts": 1, // atf_records_query
-  "quantizeFace.ts": 1, // atf_quantize_annotations
-  "bridgeFace.ts": 1, // 桥接工具（不在盘点 18 清单）
-  "fileGuardFace.ts": 1, // 文件守卫工具（不在盘点 18 清单）
+const KNOWN_LEGACY_REFS: Readonly<Record<string, [number, string]>> = {
+  "fileFace.ts": [4, "atf_run_list / atf_report_read / atf_metrics_compare / atf_gpu_status"],
+  "attachmentsFace.ts": [1, "atf_attachments_assembly"],
+  "jointTrainFace.ts": [1, "atf_joint_train"],
+  "prelaunchFace.ts": [1, "atf_prelaunch_report"],
+  "recordsFace.ts": [1, "atf_records_query"],
+  "quantizeFace.ts": [1, "atf_quantize_annotations"],
+  "bridgeFace.ts": [1, "label-qc resolve 卡工具（agent 可见）"],
+  "fileGuardFace.ts": [1, "FILE_TOOL_DEFINITIONS 文件工具族（atf_read/write/edit/bash 等）"],
 };
 
 /** 本批次结构化声明的工具：output 块内必须带 properties（声明面存在性）。 */
@@ -106,8 +108,8 @@ describe("工具面自描述守卫（outputSchemaStructure）", () => {
     // 文件集与逐文件计数精确匹配——变多=新腐化（新代码禁用该常量），
     // 变少=存量已修、登记待清（清零后本断言与常量一起退役）
     expect(Object.keys(refsByFile).sort()).toEqual(Object.keys(KNOWN_LEGACY_REFS).sort());
-    for (const [file, expected] of Object.entries(KNOWN_LEGACY_REFS)) {
-      expect(refsByFile[file] ?? 0, `${file} 的 looseObjectOutput 引用计数应恰为 ${expected}`).toBe(expected);
+    for (const [file, [expected, note]] of Object.entries(KNOWN_LEGACY_REFS)) {
+      expect(refsByFile[file] ?? 0, `${file} 的 looseObjectOutput 引用计数应恰为 ${expected}（${note}）`).toBe(expected);
     }
   });
 
