@@ -16,7 +16,7 @@ import {
   type LocalToolHost,
   type ToolDefinition,
 } from "../../../../src/core/tools/index.js";
-import { appendNotification } from "../../atf-core/src/trainProbe.js";
+import { appendNotification } from "@atf/dsh-atf-core";
 import { registeredWorkspaceRoots, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { awaitGpuWindow, formatCardTable, gpuQueuePollMsFromEnv } from "./gpuQueueFace.js";
 import { toAtfAgentTool } from "../../../../src/agent/atfAgentTools.js";
@@ -29,9 +29,9 @@ import { APPROVAL_SEMANTICS_BY_TOOL } from "../../../../src/core/tools/toolDefin
 import { permissionTierOf } from "./permissionTier.js";
 import { appendExemptionRecord } from "./approvalExempt.js";
 import { isTrainingAutopilot } from "./trainingPreset.js";
-import { appendSegmentFact } from "../../atf-core/src/segmentFacts.js";
-import { appendBinding } from "../../atf-core/src/runFacts.js";
-import { resolveRunDir, sessionWorkspaceSlug } from "../../atf-core/src/runLayout.js";
+import { appendSegmentFact } from "@atf/dsh-atf-core";
+import { appendBinding } from "@atf/dsh-atf-core";
+import { resolveRunDir, sessionWorkspaceSlug } from "@atf/dsh-atf-core";
 import { resolvePipelineRunDir } from "./pipelineFace.js";
 import { SCOPE_UNRESOLVED_NOTE, resolveSessionWorkspace, sessionCwdOfExec } from "./scopeFace.js";
 // E8c：业务动作名映射单源（webui GPU 队列卡同表复用——D152 卡面零内部工具名）

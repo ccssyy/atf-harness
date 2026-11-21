@@ -33,24 +33,24 @@ import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./ap
 import { isTrainingAutopilot, ATF_TRAINING_PRESET } from "./trainingPreset.js";
 import { asToolValue } from "./schemaTranslate.js";
 import { escalationKeyOf, escalationFiredOf, clearEscalation, receiptNeedsUser, decorateOutcome, projectUserNotice, receiptIsFailure, type UserSummary } from "./receiptSummary.js";
-import { startLossIngest } from "../../atf-core/src/lossIngest.js";
-import { readTrainingCompletion } from "../../atf-core/src/trainingCompletion.js";
-import { probeSession, resolveLaunchSessionName, tmuxCommand, tmuxTrainingEvidenceFor, evalOrchSessionBase, trainingSessionBase, type SessionProbe } from "../../atf-core/src/tmuxLiveness.js";
+import { startLossIngest } from "@atf/dsh-atf-core";
+import { readTrainingCompletion } from "@atf/dsh-atf-core";
+import { probeSession, resolveLaunchSessionName, tmuxCommand, tmuxTrainingEvidenceFor, evalOrchSessionBase, trainingSessionBase, type SessionProbe } from "@atf/dsh-atf-core";
 import { awaitGpuWindow, formatCardTable, gpuQueuePollMsFromEnv, TRAINING_RESIDUE_PATTERN } from "./gpuQueueFace.js";
 import { reconcileConfirmedWithTrainSh, formatReconcileDiff } from "./trainShReconcile.js";
 import { editsFromFormAnswers, formAskQuestion, type FormAskService } from "./confirmFace.js";
 import { appendAskFailureDiagnostic } from "./askDiagnostics.js";
-import { appendSegmentFact } from "../../atf-core/src/segmentFacts.js";
+import { appendSegmentFact } from "@atf/dsh-atf-core";
 import {
   latestCheckpointOf, readTrainingExitCode, readTrainingStartedAt, writeTrainingCompletion, writeTrainingStartedAt,
-} from "../../atf-core/src/trainingCompletion.js";
-import { appendNotification } from "../../atf-core/src/trainProbe.js";
-import { appendBinding, readNumTrainEpochs, writeProgress } from "../../atf-core/src/runFacts.js";
-import { canonicalRunDirOf, resolveRunDir, resolveRunFile, runFileCandidates, workspaceOfRunDir } from "../../atf-core/src/runLayout.js";
+} from "@atf/dsh-atf-core";
+import { appendNotification } from "@atf/dsh-atf-core";
+import { appendBinding, readNumTrainEpochs, writeProgress } from "@atf/dsh-atf-core";
+import { canonicalRunDirOf, resolveRunDir, resolveRunFile, runFileCandidates, workspaceOfRunDir } from "@atf/dsh-atf-core";
 import { listRegistryRecords, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
-import { bindSessionRun, readSessionBinding, resolveActiveRun, resolveBindingsHome } from "../../atf-core/src/sessionBindings.js";
-import { buildRunCandidates } from "../../atf-core/src/runDisplay.js";
-import { appendLedgerAuditComment, ledgerEnvPrefixForShell, shellSingleQuoted } from "../../atf-core/src/approvalLedger.js";
+import { bindSessionRun, readSessionBinding, resolveActiveRun, resolveBindingsHome } from "@atf/dsh-atf-core";
+import { buildRunCandidates } from "@atf/dsh-atf-core";
+import { appendLedgerAuditComment, ledgerEnvPrefixForShell, shellSingleQuoted } from "@atf/dsh-atf-core";
 import { dualStageNote } from "./confirmFace.js";
 import { deriveAtfRoot } from "../../../../src/webui/storageSettings.js";
 
@@ -59,8 +59,8 @@ export const derivePublishRoot = (env: Readonly<Record<string, string | undefine
   const root = deriveAtfRoot(env);
   return root === null ? null : join(root, "models");
 };
-import { scanLocalModels } from "../../atf-core/src/modelInventory.js";
-import { humanizeKernelError, scanKernelErrorFace } from "../../atf-core/src/kernelErrorFace.js";
+import { scanLocalModels } from "@atf/dsh-atf-core";
+import { humanizeKernelError, scanKernelErrorFace } from "@atf/dsh-atf-core";
 // E9a·H2-H5：评估面走 docSlots 唯一路径表（ADR-0017 决定 10/12——禁再自拼槽位路径）
 import { listDocSlots } from "../../atf-ui/src/docSlots.js";
 import { queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
@@ -374,7 +374,7 @@ export const confirmDoubleLaunch = async (
 
 // 批㊶-K 项 4：进料面提取共享（src/core/workspace/lossIngest.ts）——atf_launch_execute
 // 登记放行后同挂（harness-launch-*.log 此前无人监控＝曲线进料断根因面）；本文件 re-export 兼容面。
-export { parseTrainerLine, startLossIngest } from "../../atf-core/src/lossIngest.js";
+export { parseTrainerLine, startLossIngest } from "@atf/dsh-atf-core";
 
 /** 训练 master 端口占用者（批⑳dot3 修复 3）。 */
 export interface PortOccupant {

@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { listRuns, queryNvidiaSmiProbed, gpuOfflinePayload, queryNvidiaSmiAll, queryGpuComputeApps } from "../../../../src/webui/readOnlyTools.js";
 import { buildCardOccupancyTable, formatCardTable } from "./gpuQueueFace.js";
-import { resolveRunDir } from "../../atf-core/src/runLayout.js";
+import { resolveRunDir } from "@atf/dsh-atf-core";
 import { registeredWorkspaceRoots } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";

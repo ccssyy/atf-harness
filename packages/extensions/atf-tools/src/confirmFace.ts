@@ -22,9 +22,9 @@ import { buildPipelineTool } from "./pipelineFace.js";
 export type ConfigConfirmField = { key: string; value: string; tag: "need_confirm" | "from_registry" | "default_used" | "agent_recommend" };
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { appendAskFailureDiagnostic } from "./askDiagnostics.js";
-import { appendSegmentFact } from "../../atf-core/src/segmentFacts.js";
-import { appendNotification } from "../../atf-core/src/trainProbe.js";
-import { evalAgentRecommend, type RecommendVerdict } from "../../atf-core/src/agentRecommend.js";
+import { appendSegmentFact } from "@atf/dsh-atf-core";
+import { appendNotification } from "@atf/dsh-atf-core";
+import { evalAgentRecommend, type RecommendVerdict } from "@atf/dsh-atf-core";
 import { isTrainingAutopilot, ATF_TRAINING_PRESET } from "./trainingPreset.js";
 import {
   FIXED_SMART_DEFAULTS,
@@ -44,11 +44,11 @@ import {
   detectAvailableGpuCount,
   guardNprocAntiPatterns,
   defaultBaseModelPath,
-} from "../../atf-core/src/smartDefaults.js";
-import { appendBinding } from "../../atf-core/src/runFacts.js";
+} from "@atf/dsh-atf-core";
+import { appendBinding } from "@atf/dsh-atf-core";
 import { legacyCandidatePath, listDocSlots } from "../../atf-ui/src/docSlots.js";
-import { readLaunchKpi } from "../../atf-core/src/trainingPreflight.js";
-import { isValidRunId, resolveRunDir, resolveRunFile, resolveRunSubdir, sessionWorkspaceSlug } from "../../atf-core/src/runLayout.js";
+import { readLaunchKpi } from "@atf/dsh-atf-core";
+import { isValidRunId, resolveRunDir, resolveRunFile, resolveRunSubdir, sessionWorkspaceSlug } from "@atf/dsh-atf-core";
 import { registeredWorkspaceRoots } from "../../../../src/core/workspace/workspaceRegistry.js";
 // F1 前置预检共用交互流（循环 import 安全：两侧顶层均零执行对方导出——函数体内引用）
 import { preflightScriptAvailable, runPreflightFlow, resolvePreflightRunDir, type PreflightDeps, type PreflightRunDirSource } from "./preflightFace.js";

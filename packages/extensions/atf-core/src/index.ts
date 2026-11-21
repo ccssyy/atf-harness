@@ -154,3 +154,155 @@ export {
   type SessionRunBindingRecord,
   type UnboundReason,
 } from "./sessionBindings.js";
+
+// ---------------------------------------------------------------- G3 消费面补全
+// atf-tools 迁移后需要而原 index 未转发的符号（原先经深路径跨包引用，绕过包边界）。
+// 符号清单由 tsc 的「no exported member」报错机械提取；类型走 export type
+//（tsconfig 开 verbatimModuleSyntax，混用会报 TS1205）。
+
+export {
+  evalAgentRecommend,
+} from "./agentRecommend.js";
+
+export type {
+  RecommendVerdict,
+} from "./agentRecommend.js";
+
+export {
+  appendLedgerAuditComment,
+  checkApprovalLedgerStartup,
+  ledgerEnvPrefixForShell,
+  shellSingleQuoted,
+} from "./approvalLedger.js";
+
+export {
+  ASSEMBLY_ROLES,
+  CONFIDENCE_WORD,
+  MISSING_IMPACT,
+  ROLE_BUSINESS,
+  confidenceBandOf,
+  needsUserConfirmation,
+  readAssemblyReport,
+  renderAssemblyCardDetail,
+  renderAssemblySummaryLine,
+  renderAttachmentsMarkdown,
+} from "./attachmentsReport.js";
+
+export type {
+  AssemblyReport,
+  AssemblyRole,
+} from "./attachmentsReport.js";
+
+export {
+  fieldNameMapOf,
+  readExperimentGrouping,
+  renderGroupingSection,
+} from "./experimentGrouping.js";
+
+export {
+  humanizeKernelError,
+  scanKernelErrorFace,
+} from "./kernelErrorFace.js";
+
+export {
+  parseTrainerLine,
+  startLossIngest,
+} from "./lossIngest.js";
+
+export {
+  scanLocalModels,
+} from "./modelInventory.js";
+
+export {
+  buildRunCandidates,
+} from "./runDisplay.js";
+
+export {
+  appendBinding,
+  readNumTrainEpochs,
+  resolveSessionRunWorkspace,
+  writeProgress,
+} from "./runFacts.js";
+
+export {
+  canonicalRunDirOf,
+  flatRunDirNames,
+  isValidRunId,
+  resolveRunDir,
+  resolveRunFile,
+  resolveRunSubdir,
+  runCandidateDirs,
+  runFileCandidates,
+  runSubdirCandidates,
+  sessionWorkspaceSlug,
+  workspaceOfRunDir,
+} from "./runLayout.js";
+
+export {
+  SEGMENT_FACT_BY_KERNEL_STAGE,
+  appendSegmentFact,
+} from "./segmentFacts.js";
+
+export {
+  CLAMP_DOMAINS,
+  FIXED_SMART_DEFAULTS,
+  SMART_DEEPSPEED_DEFAULT,
+  TRAINING_PIN_CONSTANTS,
+  checkTokenBudget,
+  clampCutoffLen,
+  clampEpochs,
+  clampImageMaxPixels,
+  clampLearningRate,
+  clampLoraRank,
+  clampNegativeRatio,
+  defaultBaseModelPath,
+  deriveGradAccum,
+  detectAvailableGpuCount,
+  guardNprocAntiPatterns,
+  kernelBsDefaultOf,
+  loraAlphaFor,
+} from "./smartDefaults.js";
+
+export {
+  evalOrchSessionBase,
+  probeSession,
+  resolveLaunchSessionName,
+  tmuxCommand,
+  tmuxTrainingEvidenceFor,
+  trainingSessionBase,
+} from "./tmuxLiveness.js";
+
+export type {
+  SessionProbe,
+} from "./tmuxLiveness.js";
+
+export {
+  appendNotification,
+} from "./trainProbe.js";
+
+export {
+  latestCheckpointOf,
+  readTrainingCompletion,
+  readTrainingExitCode,
+  readTrainingStartedAt,
+  writeTrainingCompletion,
+  writeTrainingStartedAt,
+} from "./trainingCompletion.js";
+
+export {
+  parsePreflightReport,
+  readLaunchKpi,
+  recordPreflightAt,
+  renderPreflightFace,
+} from "./trainingPreflight.js";
+
+export type {
+  PreflightDecisions,
+  PreflightReport,
+} from "./trainingPreflight.js";
+
+export {
+  buildTrainingPromptPreview,
+  renderTrainingPromptPreviewBlock,
+} from "./trainingPromptPreview.js";
+

@@ -38,7 +38,7 @@ import {
   needsUserConfirmation,
   type AssemblyReport,
   type AssemblyRole,
-} from "../../atf-core/src/attachmentsReport.js";
+} from "@atf/dsh-atf-core";
 
 /** 装配结果落点（内核 `_analysis_dir` 同构：`<ws>/analysis/<name>/`）。 */
 export const assemblyReportPathOf = (workspacePath: string, name: string): string =>

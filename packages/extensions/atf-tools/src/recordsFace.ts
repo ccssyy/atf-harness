@@ -8,7 +8,7 @@ import { join, dirname } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
-import { resolveRunSubdir } from "../../atf-core/src/runLayout.js";
+import { resolveRunSubdir } from "@atf/dsh-atf-core";
 
 /** 豁免登记落点（RunLayout/v3 <runworkspace>/runtime/webui/records-exemptions.json；
  *  v2 存量 webui/ 只读兼容——append 留痕可回看）。 */
