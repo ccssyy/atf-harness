@@ -102,7 +102,28 @@ export const buildFileTools = (runsRoot: string, scopeDeps?: FileToolScopeDeps):
       scope: { type: "string", description: SCOPE_PARAM_DESCRIPTION },
     },
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：additionalProperties 保持开放；只声明跨全部 return 路径类型稳定的
+      // 顶层键，一律不写 required。依据＝execute 六条 return 逐条核对：跨任务早退
+      // （workspace_not_found）为 {scope,runs:[],count:0,error,note}；审批拒绝路径
+      // （approvalDeniedResult）为 {error,tool,outcome,note}（无 scope/runs——不可声明
+      // 为必有）；跨任务成功为 {scope,workspace:对象|null,groups,runs,count,approval,note}；
+      // 缺省三态为 {scope,workspace:对象|null,runs,count[,note]}（归属缺失 workspace=null）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          scope: { type: "string", description: "实际作用域（current／显式工作区标识／all）" },
+          runs: { type: "array", description: "run 清单（跨任务视图为全量展平；元素含 run_id/状态/最近产物——形态由执行体产出）" },
+          count: { type: "number", description: "run 条数" },
+          error: { type: "string", description: "拒绝码（workspace_not_found／approval_denied）——note 里有对应业务语言说明" },
+          note: { type: "string", description: "人读说明与修复指引（跨任务分组说明/归属缺失指引等）" },
+          workspace: { oneOf: [{ type: "object", additionalProperties: true }, { type: "null" }], description: "当前视角工作区（{workspace_id,path}；归属缺失＝null）" },
+          groups: { type: "array", description: "跨任务分组（scope 显式时：[{group:本任务|历史任务,runs}]）" },
+          approval: { type: "string", description: "审批结果标注（跨任务放行时 allowed-once）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable）" },
+        },
+      },
       render: renderAsJsonText,
     },
     async execute(args: { scope?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
