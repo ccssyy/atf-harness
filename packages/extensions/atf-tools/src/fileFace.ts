@@ -196,7 +196,26 @@ export const buildFileTools = (runsRoot: string, scopeDeps?: FileToolScopeDeps):
       scope: { type: "string", description: SCOPE_PARAM_DESCRIPTION },
     },
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：同 atf_run_list 纪律。依据＝execute 九条 return：早退两态
+      // （workspace_not_found/scope_unresolved）为 {run_id,exists:false,error,note}；
+      // 审批拒绝为 {error,tool,outcome,note}；读到位为 {run_id,path,exists:true[,scope],text}
+      // （text 截 8000 字符）；报告不存在为 {run_id,path,exists:false,note}；越界为
+      // {run_id,exists:false,error:scope_out_of_workspace,note}。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          run_id: { type: "string", description: "run 标识（回显）" },
+          exists: { type: "boolean", description: "目标报告是否读到" },
+          path: { type: "string", description: "报告相对路径（report/report.md 或 report/segment-<n>.md）" },
+          error: { type: "string", description: "拒绝码（workspace_not_found／scope_unresolved／scope_out_of_workspace／approval_denied）——note 里有对应业务语言说明" },
+          note: { type: "string", description: "人读说明与修复指引（报告不存在/越界跨任务指引等）" },
+          scope: { type: "string", description: "实际作用域（跨任务读取成功时回显）" },
+          text: { type: "string", description: "报告正文（前 8000 字符）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable）" },
+        },
+      },
       render: renderAsJsonText,
     },
     async execute(args: { run_id: string; segment?: number; scope?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
