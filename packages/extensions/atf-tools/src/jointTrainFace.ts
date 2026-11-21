@@ -37,7 +37,7 @@ import type { ChoiceAskQuestion, FormAskService } from "./confirmFace.js";
 import { isAbsolute, join } from "node:path";
 import { createHash } from "node:crypto";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
+import { asToolValue, renderAsJsonText } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval, type ApprovalFace } from "./approvalFace.js";
 import { buildRunTrainingTool, type TrainingToolsConfig } from "./trainingFace.js";
 import { buildPipelineTool, resolvePipelineRunDir } from "./pipelineFace.js";
@@ -144,7 +144,55 @@ export const buildJointTrainTool = (ctx: { get(service: string): unknown }, cfg:
       prelaunch_report: { type: "string", description: "可选：build_prelaunch_report.py 产物路径（缺省自动扫 train.sh 同目录 prelaunch*）" },
     },
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：additionalProperties 保持开放；只声明跨全部 return 路径类型稳定的
+      // 顶层键，一律不写 required。依据＝execute 十九条 return 逐条核对：卡前快败十一态
+      // 均为 {ok:false,error,note[,run_id,run_dir,...]}（快败细节键随态：doc_types/
+      // registered/prepared_slots/missing_slots/unregistered_slots/empty/oversample/
+      // doc_type/value/missing_keys/extra_keys/seed）；确认卡三态（服务缺席/暂停）为
+      // {ok:false,error,run_id,run_dir,note}；装配失败 {ok:false,...,stage_result,note}；
+      // 倍率失败 {ok:false,error,note}；train.sh 缺席 {ok:false,...,train_sh,assemble,note}；
+      // 成功体 {ok:true,started,action,run_id,run_dir,run_dir_layout,docs_registry,doc_types,
+      // seed,base_model_family,classes,oversample,train_jsonl,manifest_path,oversample_note,
+      // merged_rows,merged_sha256,oversample_passthrough,assemble,training,note}。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "false＝卡前快败或链内失败（error+note 带修复指引）；true＝装配完成（训练是否启动看 started 与 training 载荷）" },
+          error: { type: "string", description: "拒绝码（joint_run_missing/workspace_path_*/joint_run_unresolved/joint_slots_missing/joint_docs_registry_invalid/joint_docs_slots_mismatch/joint_slot_empty/joint_oversample_invalid/joint_oversample_keyset_mismatch/joint_seed_invalid/joint_launch_confirm_unavailable/joint_launch_paused/joint_assemble_failed/joint_oversample_failed/joint_train_sh_missing 及落点解析码）——note 里有对应业务语言说明" },
+          note: { type: "string", description: "人读说明与修复指引（成功路径为装配/启动摘要）" },
+          run_id: { type: "string", description: "run 标识（回显）" },
+          run_dir: { type: "string", description: "run 目录绝对路径" },
+          started: { type: "boolean", description: "true＝训练进程已启动（成功体；false＝装配完成但训练未启动，按 training 载荷处理）" },
+          action: { type: "string", description: "已执行动作（成功体恒 \"joint_train\"）" },
+          run_dir_layout: { type: "string", description: "落点形态（canonical/legacy——resolvePipelineRunDir 单源）" },
+          docs_registry: { type: "object", additionalProperties: true, description: "已登记单据清单读侧投影（{source,doc_types}——run.json docs[] 优先，目录探测标 legacy）" },
+          doc_types: { type: "array", description: "已备槽位类型清单（快败空态为空数组）" },
+          registered: { type: "array", description: "已登记类型清单（joint_docs_slots_mismatch 时）" },
+          prepared_slots: { type: "array", description: "已备槽位类型清单（joint_docs_slots_mismatch 时）" },
+          missing_slots: { type: "array", description: "已登记但缺槽位的类型（joint_docs_slots_mismatch 时）" },
+          unregistered_slots: { type: "array", description: "槽位有但未登记的类型（joint_docs_slots_mismatch 时）" },
+          empty: { type: "array", description: "训练数据为空的类型（joint_slot_empty 时）" },
+          oversample: { oneOf: [{ type: "object", additionalProperties: true }, { type: "null" }], description: "倍率对象（成功体＝生效值；快败态＝null）" },
+          doc_type: { type: "string", description: "倍率非法的具体类型键（joint_oversample_invalid 时）" },
+          value: { type: "json", description: "非法倍率原值（joint_oversample_invalid 时——任意 JSON 值原样回显）" },
+          missing_keys: { type: "array", description: "倍率键集缺的类型（joint_oversample_keyset_mismatch 时）" },
+          extra_keys: { type: "array", description: "倍率键集多出的类型（joint_oversample_keyset_mismatch 时）" },
+          seed: { type: "json", description: "随机种子（成功体＝整数；joint_seed_invalid 时＝用户传入原值，形态不定）" },
+          stage_result: { type: "object", additionalProperties: true, description: "装配段执行结果（joint_assemble_failed 时——按其 rejections/note 处理后重推）" },
+          train_sh: { type: "string", description: "启动件路径（joint_train_sh_missing 时）" },
+          assemble: { type: "object", additionalProperties: true, description: "装配段完整回执（成功体/train.sh 缺席时）" },
+          classes: { type: "array", description: "各类构造事实（[{doc_type,rows,ratio}]——成功体）" },
+          base_model_family: { type: "string", description: "基座模型族（成功体）" },
+          train_jsonl: { type: "string", description: "合并训练数据路径（成功体）" },
+          manifest_path: { type: "string", description: "内核合并账路径（成功体）" },
+          oversample_note: { type: "string", description: "harness 倍率账注记路径（成功体）" },
+          merged_rows: { type: "number", description: "合并后总行数（成功体）" },
+          merged_sha256: { type: "string", description: "合并件 sha256（成功体）" },
+          oversample_passthrough: { type: "boolean", description: "true＝全 1 倍直通（合并件逐字节保真——成功体）" },
+          training: { type: "object", additionalProperties: true, description: "训练直调回执（atf_run_training 执行函数产出——含 started/error/note 等）" },
+        },
+      },
       render: renderAsJsonText,
     },
     presentCall: function(args: { run_id?: string }) {

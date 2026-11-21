@@ -26,7 +26,7 @@ import { resolveSessionRunWorkspace } from "@atf/dsh-atf-core";
 import { runFileCandidates } from "@atf/dsh-atf-core";
 import { listRegistryRecords, registryPathOf, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { deriveFileToolRoots, type DeriveFileRootsInput } from "../../../../src/agent/fileRoots.js";
-import { translateParameters, asToolValue, looseObjectOutput } from "./schemaTranslate.js";
+import { translateParameters, asToolValue } from "./schemaTranslate.js";
 import { buildApprovalReason, requestApproval } from "./approvalFace.js";
 
 /** pre-execute 守卫的 vendor 工具名闭集。 */
@@ -638,7 +638,26 @@ export const buildFileGuardTools = (host: FileToolHost, deps?: { runsRoot?: stri
       description: definition.description,
       parameters: translateParameters(definition.parameters),
       output: {
-        schema: looseObjectOutput,
+        // 声明面（保守——候裁默认动作：族并集共有键）：本位一位四工具
+        // （atf_read/atf_edit/atf_write/atf_bash），execute 全路径＝包装层守卫五条早退
+        // {ok:false,error,tool,message[,kind,paths,outcome]} ＋ toFileAgentTool 执行径
+        // details 四形态（schema_violation/handler_missing/handler 失败均为 {ok:false,
+        // error[,tool][,message]}；成功为各 handler canonical——read {ok:true,path,
+        // content,...}/write {ok:true,path,bytes,sha256,...}/edit {ok:true,path,
+        // replacements,...}/bash {ok:true,timed_out,stdout,...}）。跨全族稳定的顶层键
+        // 只有 ok/error/tool/message（handler_missing 路径无 tool/message——不写
+        // required）；单工具特有键（content/bytes/sha256/stdout 等）与守卫细节键
+        // （kind/paths/outcome）不入声明，additionalProperties 开放容纳。
+        schema: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            ok: { type: "boolean", description: "false＝结构化拒绝（error+message 带修复指引）；true＝动作已执行（read/write/edit/bash 各自回执键随 canonical 开放透出）" },
+            error: { type: "string", description: "拒绝码（如 path_escape/file_missing/old_string_not_found/protected_artifact_write/attachment_write_denied/file_path_outside_allowlist/destructive_command_hard_deny/destructive_command_requires_confirmation/schema_violation 等——message 里有对应业务语言说明）" },
+            tool: { type: "string", description: "产生本回执的工具名（atf_read/atf_edit/atf_write/atf_bash）" },
+            message: { type: "string", description: "人读说明与修复指引（拒绝路径必带）" },
+          },
+        },
         render: (_args: unknown, value: unknown) => [{ type: "text" as const, text: JSON.stringify(value, null, 1) }],
       },
       async execute(args: Record<string, unknown>, exec: { callId?: string; agent?: unknown }) {

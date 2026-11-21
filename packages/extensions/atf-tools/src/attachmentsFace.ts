@@ -21,7 +21,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
+import { renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { type ChoiceAskQuestion, type FormAskService } from "./confirmFace.js";
 import { runPipeline } from "./pipelineFace.js";
 import { isTrainingAutopilot } from "./trainingPreset.js";
@@ -134,7 +134,51 @@ export const buildAttachmentsTool = (
       reason: { type: "string", description: "revise 用：用户给的原因原话（不改写、不概括掉关键信息）" },
     },
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：additionalProperties 保持开放；只声明跨全部 return 路径类型稳定的
+      // 顶层键，一律不写 required。依据＝execute 十三条 return 逐条核对：参数/revise 三态
+      // 早退为 {ok:false,error,note,next,next_hint}；revise 内核失败为 {ok:false,error,
+      // exit_code(number|null),stdout_head,stderr_tail,note,next,next_hint}；revision_conflict
+      // 为 {ok:false,error,conflicts,note,...}；报告读失败三态为 {ok:false,error,report_path,
+      // [missing_field],note,...}；revise 成功为 {ok:true,action,summary_line,revision,version,
+      // landing,replayed,plan_path,note,next,next_hint}；review 完全授权档为 {ok:true,mode,
+      // summary_line,report_path,report_file,identified,missing,degraded_lines,note,next}；
+      // review 卡路径为 {ok:true,mode,cancelled?|confirmed/disputed/...,note,next}（卡取消
+      // ok:true+cancelled、通道失败 {ok:false,error,...}）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "false＝结构化拒绝（error+note 带修复指引）；true＝review/revise 已完成（cancelled=true 时＝用户关卡未确认，按未确认处理）" },
+          error: { type: "string", description: "拒绝码（args_missing/revise_args_missing/revise_target_unknown/revise_timeout/revise_failed/revision_conflict/assembly_report_missing 等读侧码/attachments_report_unwritable/user_questions_unavailable/card_ask_failed）——note 里有对应业务语言说明" },
+          note: { type: "string", description: "人读说明与行为指引（回传用户的话术指引/失败修复指引）" },
+          next: { type: "string", description: "装配方案下一步三态（\"run plan → land\"｜\"land\"｜\"register\"——回执每条必带）" },
+          next_hint: { type: "string", description: "失败回执固定提示（手工解包不产方案——下游会标 assembly_plan_absent）" },
+          report_path: { type: "string", description: "装配结果报告路径（assembly-report.json）" },
+          detail: { type: "string", description: "卡面/回执的业务话明细（识别结果与缺口）" },
+          summary_line: { type: "string", description: "一行汇报（完全授权档直接念给用户）" },
+          action: { type: "string", description: "已执行动作（revise 成功时 \"revise\"）" },
+          mode: { type: "string", description: "呈现档位（report_only＝完全授权档直落盘；card＝确认卡）" },
+          cancelled: { type: "boolean", description: "true＝用户关掉确认卡（未确认任何判断，ok:true 但按未确认处理）" },
+          exit_code: { oneOf: [{ type: "number" }, { type: "null" }], description: "内核修订进程退出码（revise 内核失败时；null＝超时未跑完）" },
+          stdout_head: { type: "string", description: "内核 stdout 头部摘录（revise 内核失败时）" },
+          stderr_tail: { type: "string", description: "内核 stderr 尾部摘录（revise 内核失败时——原文如实告知用户）" },
+          conflicts: { type: "array", description: "revision_conflict 时的冲突清单（内核逐条 {check,detail}）" },
+          revision: { type: "object", additionalProperties: true, description: "revise 成功的修订条目（{id,from,to,reason}——业务话版）" },
+          version: { type: "string", description: "修订后方案版本（revise 成功时）" },
+          landing: { type: "string", description: "修订重放的落地位置（revise 成功时）" },
+          replayed: { type: "boolean", description: "true＝内核已重放受影响的落地步骤" },
+          plan_path: { type: "string", description: "装配方案路径（revise 成功时回带）" },
+          identified: { type: "array", description: "已识别项清单（[{id,role_label,path_count}]——完全授权档）" },
+          confirmed: { type: "array", description: "卡上确认的判断项（[{id,role_label,path_count}]）" },
+          disputed: { type: "array", description: "被勾掉（存疑）的判断项——逐项问清后走 action=revise" },
+          missing: { type: "array", description: "缺口清单（[{role_label,detail[,impact]}]——按角色给业务话）" },
+          degraded_lines: { type: "array", description: "未读到项逐条说明（路径＋原因）" },
+          revise_choices: { type: "array", description: "存疑项的 revise 候选（[{id,current_role_label}]——disputed 非空时）" },
+          revise_hint: { type: "string", description: "revise 操作指引（disputed 非空时）" },
+          report_file: { type: "string", description: "业务话版本落盘位置（analysis/attachments-report.md——完全授权档）" },
+          missing_field: { type: "string", description: "装配报告缺的字段名（error=assembly_report_incomplete 时）" },
+        },
+      },
       render: renderAsJsonText,
     },
     async execute(

@@ -16,7 +16,7 @@ import { buildCardOccupancyTable, formatCardTable } from "./gpuQueueFace.js";
 import { resolveRunDir } from "@atf/dsh-atf-core";
 import { registeredWorkspaceRoots } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
+import { renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import {
   SCOPE_PARAM_DESCRIPTION,
   SCOPE_UNRESOLVED_NOTE,
@@ -102,7 +102,28 @@ export const buildFileTools = (runsRoot: string, scopeDeps?: FileToolScopeDeps):
       scope: { type: "string", description: SCOPE_PARAM_DESCRIPTION },
     },
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：additionalProperties 保持开放；只声明跨全部 return 路径类型稳定的
+      // 顶层键，一律不写 required。依据＝execute 六条 return 逐条核对：跨任务早退
+      // （workspace_not_found）为 {scope,runs:[],count:0,error,note}；审批拒绝路径
+      // （approvalDeniedResult）为 {error,tool,outcome,note}（无 scope/runs——不可声明
+      // 为必有）；跨任务成功为 {scope,workspace:对象|null,groups,runs,count,approval,note}；
+      // 缺省三态为 {scope,workspace:对象|null,runs,count[,note]}（归属缺失 workspace=null）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          scope: { type: "string", description: "实际作用域（current／显式工作区标识／all）" },
+          runs: { type: "array", description: "run 清单（跨任务视图为全量展平；元素含 run_id/状态/最近产物——形态由执行体产出）" },
+          count: { type: "number", description: "run 条数" },
+          error: { type: "string", description: "拒绝码（workspace_not_found／approval_denied）——note 里有对应业务语言说明" },
+          note: { type: "string", description: "人读说明与修复指引（跨任务分组说明/归属缺失指引等）" },
+          workspace: { oneOf: [{ type: "object", additionalProperties: true }, { type: "null" }], description: "当前视角工作区（{workspace_id,path}；归属缺失＝null）" },
+          groups: { type: "array", description: "跨任务分组（scope 显式时：[{group:本任务|历史任务,runs}]）" },
+          approval: { type: "string", description: "审批结果标注（跨任务放行时 allowed-once）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable）" },
+        },
+      },
       render: renderAsJsonText,
     },
     async execute(args: { scope?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
@@ -175,7 +196,26 @@ export const buildFileTools = (runsRoot: string, scopeDeps?: FileToolScopeDeps):
       scope: { type: "string", description: SCOPE_PARAM_DESCRIPTION },
     },
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：同 atf_run_list 纪律。依据＝execute 九条 return：早退两态
+      // （workspace_not_found/scope_unresolved）为 {run_id,exists:false,error,note}；
+      // 审批拒绝为 {error,tool,outcome,note}；读到位为 {run_id,path,exists:true[,scope],text}
+      // （text 截 8000 字符）；报告不存在为 {run_id,path,exists:false,note}；越界为
+      // {run_id,exists:false,error:scope_out_of_workspace,note}。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          run_id: { type: "string", description: "run 标识（回显）" },
+          exists: { type: "boolean", description: "目标报告是否读到" },
+          path: { type: "string", description: "报告相对路径（report/report.md 或 report/segment-<n>.md）" },
+          error: { type: "string", description: "拒绝码（workspace_not_found／scope_unresolved／scope_out_of_workspace／approval_denied）——note 里有对应业务语言说明" },
+          note: { type: "string", description: "人读说明与修复指引（报告不存在/越界跨任务指引等）" },
+          scope: { type: "string", description: "实际作用域（跨任务读取成功时回显）" },
+          text: { type: "string", description: "报告正文（前 8000 字符）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable）" },
+        },
+      },
       render: renderAsJsonText,
     },
     async execute(args: { run_id: string; segment?: number; scope?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
@@ -231,7 +271,25 @@ export const buildFileTools = (runsRoot: string, scopeDeps?: FileToolScopeDeps):
       scope: { type: "string", description: SCOPE_PARAM_DESCRIPTION },
     },
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：同 atf_run_list 纪律。依据＝execute 六条 return：早退两态
+      // （workspace_not_found/scope_unresolved）为 {comparable:false,error,note}；审批拒绝
+      // 为 {error,tool,outcome,note}；越界为 {comparable:false,error,missing,note}；对比结果
+      // 单源 buildMetricsCompareResult——缺料 {comparable:false,scope,note,missing}／
+      // 成功 {comparable:true,scope,diff}（diff 键集随两轮 metrics 动态并集，开放对象）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          comparable: { type: "boolean", description: "两轮 metrics 是否都读到（false＝无可比轮次，不造数）" },
+          scope: { type: "string", description: "实际作用域（对比结果回显）" },
+          diff: { type: "object", additionalProperties: true, description: "两轮逐键对比（键＝两轮 metrics_summary 键并集，值 {a,b}——形态随内核产出）" },
+          missing: { type: "array", description: "缺席侧 run 标识（无可比轮次或越界时列出）" },
+          error: { type: "string", description: "拒绝码（workspace_not_found／scope_unresolved／scope_out_of_workspace／approval_denied）——note 里有对应业务语言说明" },
+          note: { type: "string", description: "人读说明（无可比轮次/越界跨任务指引等）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable）" },
+        },
+      },
       render: renderAsJsonText,
     },
     async execute(args: { run_a: string; run_b: string; scope?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
@@ -282,7 +340,31 @@ export const buildFileTools = (runsRoot: string, scopeDeps?: FileToolScopeDeps):
     description: "GPU 状态（只读，nvidia-smi 包装）：全卡利用率/显存/进程归属（空闲/常驻/训练三态逐卡表＋占用进程摘要；归属判定＝compute-apps 进程，非显存阈值）。nvidia-smi 不可用时报 gpu_offline（不猜测）。",
     parameters: {},
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：同 atf_run_list 纪律。依据＝execute 两条 return：离线态
+      // gpuOfflinePayload 单源 {gpu_offline:true,offline_reason,offline_label,note,
+      // probe_status,probe_evidence}（timeout 与 unreachable 必须可区分）；在线态
+      // {gpu_offline:false,...单卡摘要(utilization/memoryUsed/memoryTotal/topProcesses),
+      // card_table,card_table_text,ownership_available}——cards 解析失败时
+      // card_table_text 为 null（oneOf 收 null）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          gpu_offline: { type: "boolean", description: "false＝nvidia-smi 可用；true＝离线/不可达（见 offline_reason 与 probe 证据）" },
+          offline_reason: { type: "string", description: "离线归类（timeout＝探活超时，负载/预算向；unreachable＝驱动/可见性向）" },
+          offline_label: { type: "string", description: "离线状态用户面说法" },
+          note: { type: "string", description: "离线说明与排查指引（超时≠不可达，文案分流）" },
+          probe_status: { type: "string", description: "探针状态（ok/timeout/failed 等原始态）" },
+          probe_evidence: { type: "string", description: "探针证据摘要（耗时/退出码等）" },
+          utilization: { type: "string", description: "首卡利用率（如 \"37%\"）" },
+          memoryUsed: { type: "string", description: "首卡已用显存（如 \"4096 MiB\"）" },
+          memoryTotal: { type: "string", description: "首卡总显存" },
+          topProcesses: { type: "array", description: "占用显存前 3 进程行（nvidia-smi compute-apps 原文）" },
+          card_table: { type: "array", description: "全卡状态表（逐卡：利用率/显存/三态归属——空闲/常驻/训练）" },
+          card_table_text: { oneOf: [{ type: "string" }, { type: "null" }], description: "全卡表文本版（cards 解析失败＝null）" },
+          ownership_available: { type: "boolean", description: "进程归属面是否可得（compute-apps 不可得＝false，归属如实 unavailable 不猜测）" },
+        },
+      },
       render: renderAsJsonText,
     },
     async execute() {

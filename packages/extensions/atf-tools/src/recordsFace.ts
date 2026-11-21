@@ -6,7 +6,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
+import { asToolValue, renderAsJsonText } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { resolveRunSubdir } from "@atf/dsh-atf-core";
 
@@ -79,7 +79,31 @@ export function buildRecordsQueryTool(ctx: { get(service: string): unknown }, cf
       task_workspace: { type: "string", description: "任务工作区桶名（可选——缺省自动全桶扫描）" },
       note: { type: "string", description: "读取目的（入确认卡与豁免留痕）" },
     },
-    output: { schema: looseObjectOutput, render: renderAsJsonText },
+    output: {
+      // 声明面（保守）：additionalProperties 保持开放；只声明跨全部 return 路径类型稳定的
+      // 顶层键，一律不写 required。依据＝execute 三条 return 逐条核对：任务未命中为
+      // {ok:false,error:task_not_found,task_run,note}；审批拒绝（approvalDeniedResult）为
+      // {error,tool,outcome,note}（无 ok/task_run——不可声明为必有）；读取成功为
+      // {ok:true,task_run[,task_workspace],exempt,report_head,notes,note}——readRecordDigest
+      // 单源产 report_head/notes，目标文件缺席时如实 null（oneOf 收）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "false＝任务未命中（error+note 带修复指引）；true＝记录已读取" },
+          error: { type: "string", description: "拒绝码（task_not_found／approval_denied）——note 里有对应业务语言说明" },
+          task_run: { type: "string", description: "任务 run 名（回显）" },
+          task_workspace: { type: "string", description: "任务工作区桶名（传入时回显）" },
+          exempt: { type: "boolean", description: "true＝命中同会话豁免登记（本次读取未打扰用户）" },
+          report_head: { oneOf: [{ type: "string" }, { type: "null" }], description: "目标 run 报告首段（前 600 字符；目标无 report.md＝null 如实缺席）" },
+          notes: { oneOf: [{ type: "string" }, { type: "null" }], description: "human_summary 摘录（前 600 字符；目标无该文件＝null）" },
+          note: { type: "string", description: "人读说明（路径翻译语义/豁免登记留痕位置）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable）" },
+        },
+      },
+      render: renderAsJsonText,
+    },
     presentCall: function(args: { task_run: string }) {
       return { card: "generic" as const, title: `跨任务记录读取 — ${args.task_run}`, kind: "other" as const };
     },

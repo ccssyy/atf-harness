@@ -21,7 +21,7 @@ import { registeredWorkspaceRoots, resolveDshHome } from "../../../../src/core/w
 import { awaitGpuWindow, formatCardTable, gpuQueuePollMsFromEnv } from "./gpuQueueFace.js";
 import { toAtfAgentTool } from "../../../../src/agent/atfAgentTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { translateParameters, looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
+import { translateParameters, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { askWithTimeout, ASK_TIMEOUT_MS_DEFAULT, type FormAskService } from "./confirmFace.js";
 import type { ChoiceAskQuestion } from "./confirmFace.js";
@@ -401,7 +401,29 @@ export const buildBridgeTools = (
         // 模型照 schema 传了却被 handler 判缺参）。
         parameters: translateParameters(definition.parameters),
         output: {
-          schema: looseObjectOutput,
+          // 声明面（保守——候裁默认动作：族并集共有键）：本位一位多工具（BRIDGE_TOOL_NAMES
+          // 十一件：workspace_status/admit_data/label_qc_inspect/label_qc_resolve/scratch_exec/
+          // skill_read/gate/launch_execute/create_experiment/rebind_workspace），各工具成功
+          // details 形态由内核 canonical 各自定义（run_id/admitted_count/counts/scope_ref 等）
+          // ——单工具特有键不入声明。跨全族稳定的顶层键＝包装层守卫早退与桥接执行径
+          // rejected 面的并集：resolve 缺参 {error,tool,missing,how_to_fix}；确认卡暂停两态
+          // {error,tool,note}；本地治理 rejected {error,tool,reason[,detail]}；桥接 schema_
+          // violation {error,tool,message}／request_rejected {tool,reason[,detail]}；成功 details
+          // 就地附加键（pending_answers/pending_card_note/workspace_id 等）随内核体开放透出。
+          schema: {
+            type: "object",
+            additionalProperties: true,
+            properties: {
+              error: { type: "string", description: "拒绝码（label_qc_resolve_params_missing/user_decision_paused/launch_paused_by_user/rejected/schema_violation 或内核业务拒绝码）——note/message 里带对应说明" },
+              tool: { type: "string", description: "产生本回执的工具名（atf_* 桥接/治理工具名）" },
+              note: { type: "string", description: "人读说明与行为指引（确认卡暂停/附加说明等）" },
+              message: { type: "string", description: "参数校验拒绝说明（error=schema_violation 时）" },
+              reason: { type: "string", description: "执行拒绝原因码（error=rejected 时——本地治理/桥接对端拒绝）" },
+              missing: { type: "array", description: "缺失参数名清单（label_qc_resolve 缺参时）" },
+              how_to_fix: { type: "string", description: "缺参修复指引（label_qc_resolve 缺参时）" },
+              detail: { type: "json", description: "拒绝明细原样透传（对端/本地治理拒绝时——形态不定）" },
+            },
+          },
           render: renderAsJsonText,
         },
         async execute(args: Record<string, unknown>, exec: { agent?: unknown; callId?: string; signal?: unknown }) {

@@ -20,7 +20,7 @@ import { execFile } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
+import { asToolValue, renderAsJsonText } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { pathOutsideRoots } from "./fileGuardFace.js";
 
@@ -143,7 +143,42 @@ export const buildQuantizeTool = (
       dry_run: { type: "boolean", description: "只报数不写盘（可选，缺省 false）" },
     },
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：additionalProperties 保持开放；只声明跨全部 return 路径类型稳定的
+      // 顶层键，一律不写 required。依据＝execute 十一条 return 逐条核对：参数/白名单/落点
+      // 八条早退均为 {ok:false,error,note[,path,parameter,out_path,annotations_path]}；内核
+      // exit 0 为 {ok:true,exit_code:0,mode,out_dir,annotations_path,<六计数键>,[dry_run,true,
+      // note]|[summary_path]}（计数键经 countersFromStdout 只收 number——缺则整键缺席）；
+      // exit 2 为 {ok:false,exit_code:2,error,mode,out_dir,degenerate_total,degenerate_files,
+      // degenerate,[truncated],note}；超时/环境错为 {ok:false,exit_code, error,stderr_tail,note}
+      // （exit_code 超时＝null——oneOf 收）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "false＝护栏/内核拒绝（error+note 带修复指引）；true＝量化完成（dry_run=true 时零写盘只报数）" },
+          error: { type: "string", description: "拒绝码（annotations_path_missing/not_absolute/out_path_*/mode_invalid/path_outside_allowlist/out_path_equals_source/inside_source/ancestor_of_source/out_dir_not_empty/degenerate_boxes_rejected/quantize_timeout/quantize_env_error）——note 里有对应业务语言说明" },
+          note: { type: "string", description: "人读说明与修复指引（成功路径为计数说明）" },
+          path: { type: "string", description: "越界的具体路径（error=path_outside_allowlist 时）" },
+          parameter: { type: "string", description: "越界参数名（annotations_path/out_path——error=path_outside_allowlist 时）" },
+          out_path: { type: "string", description: "输出目录（用户入参回显）" },
+          annotations_path: { type: "string", description: "源标注目录（回显）" },
+          exit_code: { oneOf: [{ type: "number" }, { type: "null" }], description: "内核 CLI 退出码（0 成功／2 退化未放行／3 参数环境错；null＝超时进程未跑完）" },
+          mode: { type: "string", description: "量化口径（round/floor/ceil——内核到点即回显）" },
+          out_dir: { type: "string", description: "输出目录绝对路径（resolved）" },
+          files_total: { type: "number", description: "处理文件数（内核 stdout 计数投影——缺则整键缺席）" },
+          total_values: { type: "number", description: "坐标值总数（同上）" },
+          marks_passthrough: { type: "number", description: "整数直通坐标数（同上）" },
+          degenerate_boxes: { type: "number", description: "退化框数（同上）" },
+          degenerate_files: { type: "number", description: "含退化框的文件数（同上）" },
+          float_remaining: { type: "number", description: "量化后仍非整数坐标数（同上）" },
+          dry_run: { type: "boolean", description: "true＝只报数不写盘（dry-run 成功时）" },
+          summary_path: { type: "string", description: "内核 summary 落盘位（真执行成功时——out/quantize-summary.json）" },
+          degenerate_total: { type: "number", description: "退化框总数（error=degenerate_boxes_rejected 时）" },
+          degenerate: { type: "array", description: "退化框清单（前 20 条：[{file,field,mark_index,width,height,note}]）" },
+          truncated: { type: "string", description: "清单截断说明（总数超 20 条时）" },
+          stderr_tail: { type: "string", description: "内核 stderr 尾部原文（超时/环境错时——按明细修正后重试）" },
+        },
+      },
       render: renderAsJsonText,
     },
     async execute(
