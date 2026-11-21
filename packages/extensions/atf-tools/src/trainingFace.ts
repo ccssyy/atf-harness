@@ -2677,7 +2677,118 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       concurrency_reason: { type: "string", description: "并发取值理由（可选——传 concurrency 时一并给；随确认报告落盘，缺理由＝报告不完备）" },
     },
     output: {
-      schema: { type: "object", additionalProperties: true },
+      // 声明面（保守）：additionalProperties 开放、零 required；多 action（start/status）
+      // 返回形态不同——只声明跨路径类型稳定的键，null-able（eval_round/latest_round/
+      // field_config/eval_caliber/latest_checkpoint）一律 oneOf [值型,null]；内核原样
+      // 透传键（service/orchestration/metrics_summary/missing_facts_block）声明 json 或
+      // 开放 object（形态随内核版本）。
+      // 依据 execute 全部 return 逐条核对：status 三态（1512 无轮/1526 无完成轮/1585
+      // 完成轮）＝{action:"status", run_id, running, tmux[, tmux_probe], instance_root,
+      // instance_root_source[, eval_round|null, latest_round, latest_round_incomplete]
+      // [, service, orchestration, files, metrics_summary, model_label_warning,
+      // model_matches_manifest], next_steps, note}；start 失败链（2720-2996——多类
+      // 入参歧义/参数缺/档案派生/服务件生成/泄漏防线/确认报告/放行登记/SHA 对账/
+      // ckpt 计划/编排计划）＝{started:false, error[, note][, run_id][, doc_types,
+      // explicit_inputs][, adapter_path][, eval_assets_dir][, script|path]
+      // [, eval_round, stderr_tail][, concurrency, max_num_seqs, suggested_concurrency]
+      // [, field_config_expected][, lanes_seen, lanes_conflict][, missing_facts_block]
+      // [, models][, manifest_sha, recorded_sha]}；确认卡拒绝（2922 approvalDenied
+      // ＝{error,tool,outcome,note}／2924 eval_release_paused_by_user）；start 成功
+      // （3046）＝{started:true, eval_round, tmux, run_id, serving_models,
+      // service_manifest, prelaunch_report, release, env_profile, env_profile_source
+      // [, approval_entry_id][, field_config|null, field_config_source, ...指纹三键]
+      // [, template_sha256_source, template_drift_accepted], prompt_mode,
+      // prompt_mode_source, eval_caliber|null, concurrency[, concurrency_reason]
+      // [, rebound_from], note}；外层 instrumentEvalOutcome（3077）恒追加 user_summary
+      // ＋escalate_to_user/failure_count。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          started: { type: "boolean", description: "start 路径：true＝评估编排已在 tmux 后台启动；false＝卡前快败或链中失败" },
+          action: { type: "string", description: "status 路径回显（\"status\"）" },
+          run_id: { type: "string", description: "run 标识（显式或会话绑定解析值）" },
+          running: { type: "boolean", description: "status 路径：评估编排 tmux 会话是否在场" },
+          eval_round: { oneOf: [{ type: "string" }, { type: "null" }], description: "评估轮目录绝对路径（status 无完成轮/start 失败与成功路径各异；null＝尚无完成轮）" },
+          latest_round: { oneOf: [{ type: "string" }, { type: "null" }], description: "最新轮目录名（status 路径）" },
+          latest_round_incomplete: { type: "boolean", description: "true＝最新轮尚未产出 metrics_summary（status 路径）" },
+          tmux: { type: "string", description: "评估编排 tmux 会话名" },
+          tmux_probe: {
+            type: "object",
+            additionalProperties: true,
+            description: "tmux 探测被命名域拒绝时的回流（refused 时在场）",
+            properties: { ok: { type: "boolean" }, reason: { type: "string" }, guidance: { type: "string" } },
+          },
+          instance_root: { type: "string", description: "实例根解析值（status 路径——env 漂移下对账锚）" },
+          instance_root_source: { type: "string", description: "实例根来源（env 键名）" },
+          note: { type: "string", description: "人读说明与修复指引" },
+          error: { type: "string", description: "失败码（adapter_path_missing/eval_assets_dir_missing/service_config_missing/eval_lane_unresolved/machine_facts_missing/prelaunch_report_failed/eval_release_record_failed/eval_release_ledger_mismatch/checkpoint_plan_failed/orchestration_plan_failed/eval_release_paused_by_user/approval_denied 等）" },
+          stderr_tail: { type: "string", description: "子步 stderr 尾部摘要（失败定位用）" },
+          doc_types: { type: "array", description: "本 run 的单据类清单（多类快败路径）", items: { type: "string" } },
+          explicit_inputs: { type: "array", description: "多类形态下传了的单类入参名（快败路径）", items: { type: "string" } },
+          adapter_path: { type: "string", description: "adapter checkpoint 路径（校验拒绝时回显）" },
+          eval_assets_dir: { type: "string", description: "评估资产目录（绑定/缺失路径回显）" },
+          script: { type: "string", description: "缺失的技能脚本路径（skill_script_missing）" },
+          path: { type: "string", description: "相关文件路径（分区清单/服务配置缺失路径回显）" },
+          concurrency: { type: "number", description: "评估推理并发终值（缺省 1）" },
+          max_num_seqs: { type: "number", description: "服务容量上限（并发门拒绝时）" },
+          suggested_concurrency: { type: "number", description: "建议并发（并发门拒绝时）" },
+          field_config: { oneOf: [{ type: "string" }, { type: "null" }], description: "字段配置路径（多类逐类派生时 null——start 成功路径）" },
+          field_config_source: { type: "string", description: "字段配置来源（explicit/run_recorded/per_doc_derived）" },
+          field_config_expected: { type: "string", description: "期望的字段配置路径（unresolved 时）" },
+          field_config_sha256: { type: "string", description: "字段配置指纹（start 成功路径）" },
+          field_config_warning: { type: "string", description: "与训练记录指纹不一致的告警" },
+          template_sha256_source: { type: "string", description: "模板骨架核对来源（verified/absent）" },
+          template_drift_accepted: { type: "boolean", description: "true＝模板骨架差异经显式确认放行" },
+          lanes_seen: { type: "json", description: "lane 判定看到的键集（eval_lane_unresolved 时）" },
+          lanes_conflict: { type: "json", description: "多源 lane 冲突两值（eval_lane_unresolved 时）" },
+          missing_facts_block: { type: "json", description: "机器事实缺项块原文（machine_facts_missing 时——停下问用户）" },
+          models: { type: "array", description: "涉事模型名列表（标签泄漏防线拒绝时）", items: { type: "string" } },
+          manifest_sha: { type: "string", description: "服务清单 SHA 前缀（账本对账失败时）" },
+          recorded_sha: { type: "string", description: "放行记录 SHA 前缀（账本对账失败时）" },
+          serving_models: { type: "array", description: "服务期望模型名（start 成功路径）", items: { type: "string" } },
+          service_manifest: { type: "string", description: "service_manifest.json 路径（start 成功路径）" },
+          prelaunch_report: { type: "string", description: "九必报项确认报告路径（start 成功路径）" },
+          release: { type: "string", description: "放行账本登记说明（start 成功路径）" },
+          env_profile: { type: "string", description: "环境档案名（终值）" },
+          env_profile_source: { type: "string", description: "环境档案来源（explicit/instance_default(<名>)）" },
+          approval_entry_id: { type: "string", description: "放行账本 approval_id（解析成功时）" },
+          prompt_mode: { type: "string", enum: ["mode0", "mode1"], description: "抽取方式终值（每页一条全字段/按分组逐组各一条）" },
+          prompt_mode_source: { type: "string", description: "抽取方式来源（继承训练声明/显式）" },
+          eval_caliber: { oneOf: [{ type: "object", additionalProperties: true }, { type: "null" }], description: "评测口径（GT 外字段数等——不可得时 null）" },
+          concurrency_reason: { type: "string", description: "并发取值理由（随确认报告落盘）" },
+          rebound_from: { type: "string", description: "会话绑定被改写前的原 run（绑定切换时）" },
+          service: { type: "json", description: "服务 receipt 原文（status 路径，在场时）" },
+          orchestration: { type: "object", additionalProperties: true, description: "编排状态合并块（state/block/ingest——status 路径）" },
+          files: { type: "array", description: "评估四件套在位文件名（status 路径）", items: { type: "string" } },
+          metrics_summary: { type: "json", description: "metrics_summary.json 原文（status 路径，完成轮在场）" },
+          model_label_warning: { type: "string", description: "模型名泄漏告警（metrics_summary.model 为缺省名时）" },
+          model_matches_manifest: { type: "boolean", description: "模型名与服务清单期望名对拍结果（status 路径）" },
+          next_steps: {
+            type: "object",
+            additionalProperties: true,
+            description: "后续步骤事实核对（status 路径——四件套/分析/发布前置）",
+            properties: {
+              four_set_ready: { type: "boolean", description: "true＝评估四件套齐" },
+              badcases_ready: { type: "boolean", description: "true＝坏例分析前置在位" },
+              latest_checkpoint: { oneOf: [{ type: "string" }, { type: "null" }], description: "最新 checkpoint 路径（缺席 null）" },
+              publish_prereq_met: { type: "boolean", description: "true＝模型发布前置满足" },
+              analyze_guidance: { type: "string", description: "坏例分析指引（四件套齐时出现）" },
+              note: { type: "string" },
+            },
+          },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable 等）" },
+          user_summary: {
+            type: "object",
+            additionalProperties: true,
+            description: "用户面三句话摘要（外层装饰恒追加）",
+            properties: { conclusion: { type: "string" }, stage: { type: "string" }, next: { type: "string" } },
+          },
+          escalate_to_user: { type: "boolean", description: "true＝连续失败达阈值，已向用户升级" },
+          failure_count: { type: "number", description: "连续失败计数（升级时出现）" },
+        },
+      },
       render: (_args, value) => {
         // 批次R H1-3 补面（R-H）：内核四码命中时用户面只呈人话 note——kernel_error 属
         // 机器对账键，码原文/traceback 不进页面（产品语言纪律：错误回流全业务语）。
