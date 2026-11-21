@@ -16,7 +16,7 @@ import { buildCardOccupancyTable, formatCardTable } from "./gpuQueueFace.js";
 import { resolveRunDir } from "@atf/dsh-atf-core";
 import { registeredWorkspaceRoots } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
+import { renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import {
   SCOPE_PARAM_DESCRIPTION,
   SCOPE_UNRESOLVED_NOTE,
@@ -340,7 +340,31 @@ export const buildFileTools = (runsRoot: string, scopeDeps?: FileToolScopeDeps):
     description: "GPU 状态（只读，nvidia-smi 包装）：全卡利用率/显存/进程归属（空闲/常驻/训练三态逐卡表＋占用进程摘要；归属判定＝compute-apps 进程，非显存阈值）。nvidia-smi 不可用时报 gpu_offline（不猜测）。",
     parameters: {},
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：同 atf_run_list 纪律。依据＝execute 两条 return：离线态
+      // gpuOfflinePayload 单源 {gpu_offline:true,offline_reason,offline_label,note,
+      // probe_status,probe_evidence}（timeout 与 unreachable 必须可区分）；在线态
+      // {gpu_offline:false,...单卡摘要(utilization/memoryUsed/memoryTotal/topProcesses),
+      // card_table,card_table_text,ownership_available}——cards 解析失败时
+      // card_table_text 为 null（oneOf 收 null）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          gpu_offline: { type: "boolean", description: "false＝nvidia-smi 可用；true＝离线/不可达（见 offline_reason 与 probe 证据）" },
+          offline_reason: { type: "string", description: "离线归类（timeout＝探活超时，负载/预算向；unreachable＝驱动/可见性向）" },
+          offline_label: { type: "string", description: "离线状态用户面说法" },
+          note: { type: "string", description: "离线说明与排查指引（超时≠不可达，文案分流）" },
+          probe_status: { type: "string", description: "探针状态（ok/timeout/failed 等原始态）" },
+          probe_evidence: { type: "string", description: "探针证据摘要（耗时/退出码等）" },
+          utilization: { type: "string", description: "首卡利用率（如 \"37%\"）" },
+          memoryUsed: { type: "string", description: "首卡已用显存（如 \"4096 MiB\"）" },
+          memoryTotal: { type: "string", description: "首卡总显存" },
+          topProcesses: { type: "array", description: "占用显存前 3 进程行（nvidia-smi compute-apps 原文）" },
+          card_table: { type: "array", description: "全卡状态表（逐卡：利用率/显存/三态归属——空闲/常驻/训练）" },
+          card_table_text: { oneOf: [{ type: "string" }, { type: "null" }], description: "全卡表文本版（cards 解析失败＝null）" },
+          ownership_available: { type: "boolean", description: "进程归属面是否可得（compute-apps 不可得＝false，归属如实 unavailable 不猜测）" },
+        },
+      },
       render: renderAsJsonText,
     },
     async execute() {
