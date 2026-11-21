@@ -262,22 +262,24 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
       description: "atf-tools 装配自检探针：返回固定问候与桥接工具清单（连通性诊断用），附本机可用模型清单（ATF_MODEL_ROOT 扫描——训练 base_model.path 选型参考）。",
       parameters: {},
       output: {
+        // 装配自检探针的最小结构化声明（返回形态简单稳定——greeting/package/tools
+        // 恒在；local_models 子块 root/count/models 恒在、error 仅扫描失败时附）。
         schema: {
           type: "object",
           additionalProperties: true,
           properties: {
-            greeting: { type: "string", description: "固定问候（装配成功的标志位）" },
+            greeting: { type: "string", description: "固定问候（atf-tools 已挂载）" },
             package: { type: "string", description: "包名与版本" },
-            tools: { type: "number", description: "本包注册的工具数" },
+            tools: { type: "number", description: "挂载的工具数" },
             local_models: {
               type: "object",
               additionalProperties: true,
-              description: "本机可用模型清单（ATF_MODEL_ROOT 扫描）",
+              description: "本机可用模型清单（ATF_MODEL_ROOT 扫描结果）",
               properties: {
-                root: { type: "string", description: "扫描根" },
-                count: { type: "number", description: "模型数" },
-                models: { type: "array", description: "模型目录名列表" },
-                error: { type: "string", description: "扫描失败原因（成功时缺省）" },
+                root: { type: "string", description: "模型库根路径" },
+                count: { type: "number", description: "可用模型数" },
+                models: { type: "array", description: "模型名清单（训练 base_model.path 选型参考）", items: { type: "string" } },
+                error: { type: "string", description: "扫描失败原因（失败时附）" },
               },
             },
           },
