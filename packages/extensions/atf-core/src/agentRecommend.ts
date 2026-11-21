@@ -10,7 +10,7 @@
  * （iteration-config L3 clamp 值＞固定缺省），来源 default:harness-smart-defaults，拦截事实进通报。
  */
 import { statSync } from "node:fs";
-import { CONFIG_CONFIRM_KEYS } from "../../../../src/webui/configConfirm.js";
+import { CONFIG_BLOCK_ORDER } from "./configBlocks.js";
 import { CLAMP_DOMAINS } from "./smartDefaults.js";
 
 /** 本地目录在位（agentRecommend 内联探测——防线①同源口径的轻量形）。 */
@@ -23,7 +23,7 @@ const existsSyncDir = (path: string): boolean => {
 };
 
 /** 推荐护栏可消费的键集（方案键集为闭集——卡外键一律拒收）。 */
-export const RECOMMENDABLE_KEYS: ReadonlySet<string> = new Set(CONFIG_CONFIRM_KEYS.map((entry) => entry.key));
+export const RECOMMENDABLE_KEYS: ReadonlySet<string> = new Set(CONFIG_BLOCK_ORDER);
 
 export interface RecommendVerdict {
   key: string;

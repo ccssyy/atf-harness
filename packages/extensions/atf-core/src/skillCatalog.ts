@@ -33,7 +33,7 @@
 import { existsSync } from "node:fs";
 import { open, readFile, stat } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { err, ok, type Result } from "../../../../src/bridge/index.js";
+import { err, ok, type Result } from "./result.js";
 
 /** reference 全文读取字节上限（超限截断＋知情尾标）。 */
 export const SKILL_FILE_MAX_BYTES = 256 * 1024;

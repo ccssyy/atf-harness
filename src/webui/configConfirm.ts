@@ -12,6 +12,12 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { CLAMP_DOMAINS, TRAINING_PIN_CONSTANTS } from "../core/workspace/smartDefaults.js";
 import { resolveRunSubdir } from "../core/workspace/runSubdirs.js";
+export {
+  CONFIG_CONFIRM_BLOCKS,
+  CONFIG_BLOCK_ORDER,
+  configBlockOf,
+  type ConfigBlock,
+} from "../../packages/extensions/atf-core/src/configBlocks.js";
 
 // ── 六区块（owner 2026-10-26 重排裁定：卡面按「问什么」分组，不按实现键序）──────────
 // 排序理由（owner 明示，改动前先读这段）：
@@ -25,29 +31,6 @@ import { resolveRunSubdir } from "../core/workspace/runSubdirs.js";
 //  D 优化设置：学习率与 LoRA 容量（rank→alpha 联动）＋显存策略是一个决策面。
 //  E 数据构造：负样本带是构造配额，独立成区。
 //  F 只读信息：内核实算/派生值——只呈现不收集，放最后折叠。
-/** 卡面区块（title＝用户可见业务标题；keys＝区块内键序单源）。 */
-export interface ConfigBlock {
-  readonly id: string;
-  readonly title: string;
-  readonly keys: readonly string[];
-}
-
-export const CONFIG_CONFIRM_BLOCKS: readonly ConfigBlock[] = [
-  { id: "environment", title: "运行环境", keys: ["nproc_per_node", "visible_devices", "base_model_path"] },
-  { id: "scale", title: "训练规模", keys: ["per_device_train_batch_size", "gradient_accumulation_steps", "num_train_epochs"] },
-  { id: "budget", title: "长度与预算", keys: ["cutoff_len", "max_total_tokens", "max_model_len", "image_min_pixels", "image_max_pixels"] },
-  { id: "optimization", title: "优化设置", keys: ["learning_rate", "lora_rank", "lora_alpha", "deepspeed"] },
-  { id: "data", title: "数据构造", keys: ["negative_ratio_target"] },
-  { id: "readonly", title: "只读信息", keys: ["dataset_keys"] },
-];
-
-/** 键 → 所属区块（卡面标签前缀与只读折叠共用）。 */
-export const configBlockOf = (key: string): ConfigBlock | undefined =>
-  CONFIG_CONFIRM_BLOCKS.find((block) => block.keys.includes(key));
-
-/** 区块顺序展平的键序（CONFIG_CONFIRM_KEYS 必须按此序声明——单源防两份排序漂移）。 */
-export const CONFIG_BLOCK_ORDER: readonly string[] = CONFIG_CONFIRM_BLOCKS.flatMap((block) => block.keys);
-
 /** 配置值的显示文本（呈现面单源：卡面与 web 摘要同一句，禁一处「待定」一处空）。
  *  梯度累积没有确定值（卡数未定）时统一显示「待定（先定卡数）」——它不是一个「空值」，
  *  而是「还没法算」的状态。 */
