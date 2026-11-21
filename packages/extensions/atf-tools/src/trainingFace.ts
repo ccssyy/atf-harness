@@ -3204,7 +3204,65 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       review_check: { type: "string", description: "审阅覆盖校验件路径（BadcaseReviewCheck/v1，可选；与审阅件同源）" },
     },
     output: {
-      schema: { type: "object", additionalProperties: true },
+      // 声明面（保守）：additionalProperties 开放、零 required。依据 execute 全部 12 条
+      // return 逐条核对：run 解析失败（3216——run_binding_required payload 直通）；多类
+      // 联合链（3229 脚本缺/3241 非零退出/3248 成功＝{ok,mode:"multi_doc",doc_types,
+      // analysis_dir,report,viewer,…reviewCoverage,note}）；单类两步链（3261 脚本缺/
+      // 3268 评估产物缺/3271 资产缺/3277 lane 未决/3288 图片根未决/3297 冻结失败/
+      // 3322 链失败/3326 成功＝{ok,run_id,ledger,viewer_html,report_md,report_html,
+      // viewer_ready,report_ready,…reviewCoverage[,viewer_url,viewer_url_note]}）。
+      // exit_code 为 number|null（runCapture 超时/信号形态 null）——oneOf 声明；
+      // review_coverage 解析不到＝null——oneOf [object,null]（F8：覆盖度未知不假装）；
+      // lanes_seen/lanes_conflict 形态随 lane 解析器——声明 json。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "true＝分析完成（账本冻结＋链跑通，产物路径随回执）；false＝结构化拒绝或链失败" },
+          run_id: { type: "string", description: "run 标识（单类成功路径——显式或会话绑定解析值）" },
+          error: { type: "string", description: "失败码（skill_script_missing/eval_products_missing/eval_assets_missing/eval_lane_unresolved/images_root_unresolved/run_binding_required 等）" },
+          note: { type: "string", description: "人读说明与修复指引" },
+          script: { type: "string", description: "缺失的技能脚本路径（skill_script_missing）" },
+          step: { type: "string", enum: ["freeze", "chain", "joint_analysis"], description: "失败所在链步" },
+          exit_code: { oneOf: [{ type: "number" }, { type: "null" }], description: "子脚本退出码（null＝超时/信号形态）" },
+          stderr_tail: { type: "string", description: "子脚本 stderr 尾部摘要（失败定位用）" },
+          doc_types: { type: "array", description: "本 run 的单据类清单（多类路径）", items: { type: "string" } },
+          mode: { type: "string", enum: ["multi_doc"], description: "多类联合链形态标记（单类两步链不带本键）" },
+          analysis_dir: { type: "string", description: "run 级分析输出目录（多类路径）" },
+          report: { type: "string", description: "run 级报告路径（多类路径——report.md）" },
+          viewer: { type: "string", description: "run 级查看器路径（多类路径——viewer.html）" },
+          eval_dir: { type: "string", description: "评估目录（eval_products_missing 时回显）" },
+          eval_assets_dir: { type: "string", description: "评估资产目录（缺失/未决时回显）" },
+          lanes_seen: { type: "json", description: "lane 判定看到的键集（eval_lane_unresolved 时）" },
+          lanes_conflict: { type: "json", description: "多源 lane 冲突两值（eval_lane_unresolved 时）" },
+          ledger: { type: "string", description: "冻结账本路径（RawBadcaseAnalysis/v1——失败时已落可续查）" },
+          viewer_html: { type: "string", description: "GT/预测叠图查看器路径（单类成功路径）" },
+          report_md: { type: "string", description: "markdown 报告路径（单类成功路径）" },
+          report_html: { type: "string", description: "html 报告路径（单类成功路径）" },
+          viewer_ready: { type: "boolean", description: "true＝查看器产物实存在位" },
+          report_ready: { type: "boolean", description: "true＝报告产物实存在位" },
+          review_coverage: {
+            oneOf: [
+              {
+                type: "object",
+                additionalProperties: true,
+                description: "审阅覆盖度（内核 stdout 原值）",
+                properties: {
+                  pages_total: { type: "number", description: "总页数" },
+                  pages_reviewed: { type: "number", description: "已审页数" },
+                  status: { type: "string", description: "覆盖状态" },
+                },
+              },
+              { type: "null", description: "链输出缺失——覆盖度未知（不假装已审阅完整）" },
+            ],
+          },
+          incomplete: { type: "boolean", description: "true＝审阅未覆盖完整（内核旗标或 pages_reviewed=0）" },
+          incomplete_reason: { type: "string", description: "未覆盖原因（chain_output_missing＝链输出里无覆盖块）" },
+          viewer_url: { type: "string", description: "可点开的查看器 URL（/atf-ui/viewer/<run_id>/——在已登录 dsh web 会话里打开，勿取磁盘路径本地打开）" },
+          viewer_url_note: { type: "string", description: "查看器打开方式说明" },
+          rebound_from: { type: "string", description: "会话绑定被改写前的原 run（绑定切换时）" },
+        },
+      },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
     presentCall: function(args: { run_id?: string }) {
