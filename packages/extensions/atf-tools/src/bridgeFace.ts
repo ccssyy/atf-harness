@@ -532,7 +532,7 @@ const userDecisionConfirmCardOf = async (
       // 超时转 pending：不当作"未作答"，也不假报确认——如实说"等你回来续答"。
       return {
         ok: false,
-        note: `等待超时（${String(Math.round(ASK_TIMEOUT_MS_DEFAULT / 1000))}s 内未应答）——本项待续答，未提交；你在下一轮可直接作答或重新触发本工具`,
+        note: `等待超时（${String(Math.round(ASK_TIMEOUT_MS_DEFAULT / 1000))}s 内未应答）——本项待续答，未提交；你在下一轮可直接作答，或再次调用本工具`,
       };
     }
     const first = answers.answers[0];
