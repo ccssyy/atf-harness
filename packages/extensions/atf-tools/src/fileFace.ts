@@ -271,7 +271,25 @@ export const buildFileTools = (runsRoot: string, scopeDeps?: FileToolScopeDeps):
       scope: { type: "string", description: SCOPE_PARAM_DESCRIPTION },
     },
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：同 atf_run_list 纪律。依据＝execute 六条 return：早退两态
+      // （workspace_not_found/scope_unresolved）为 {comparable:false,error,note}；审批拒绝
+      // 为 {error,tool,outcome,note}；越界为 {comparable:false,error,missing,note}；对比结果
+      // 单源 buildMetricsCompareResult——缺料 {comparable:false,scope,note,missing}／
+      // 成功 {comparable:true,scope,diff}（diff 键集随两轮 metrics 动态并集，开放对象）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          comparable: { type: "boolean", description: "两轮 metrics 是否都读到（false＝无可比轮次，不造数）" },
+          scope: { type: "string", description: "实际作用域（对比结果回显）" },
+          diff: { type: "object", additionalProperties: true, description: "两轮逐键对比（键＝两轮 metrics_summary 键并集，值 {a,b}——形态随内核产出）" },
+          missing: { type: "array", description: "缺席侧 run 标识（无可比轮次或越界时列出）" },
+          error: { type: "string", description: "拒绝码（workspace_not_found／scope_unresolved／scope_out_of_workspace／approval_denied）——note 里有对应业务语言说明" },
+          note: { type: "string", description: "人读说明（无可比轮次/越界跨任务指引等）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable）" },
+        },
+      },
       render: renderAsJsonText,
     },
     async execute(args: { run_a: string; run_b: string; scope?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
