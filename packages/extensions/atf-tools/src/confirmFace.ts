@@ -745,7 +745,78 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       recommend: { type: "object", additionalProperties: true, description: "全自动档专属 agent 参数推荐：{epochs:3, learning_rate:\"2e-4\", lora_rank:32, cutoff_len:9000, reason:\"2.8万样本→3 epochs 防欠拟合\"}——越界键被拦截回退，手动档不消费" },
     },
     output: {
-      schema: { type: "object", additionalProperties: true },
+      // 声明面（保守）：additionalProperties 保持开放；只声明跨全部 return 路径类型稳定的
+      // 顶层键，一律不写 required（多返回路径下无全路径必现字段）。依据＝execute 全部
+      // return 逐条核对：失败早退（amend 缺 edits/落点解析/参数域校验/派生失败/护栏/
+      // 预算与卡位校验/卡通道失败）均为 {ok:false, run_id, error?, note[, value|max_total_
+      // tokens+cutoff_len]}；审批拒绝路径（approvalDeniedResult）为 {error,tool,outcome,note}
+      // （无 ok/run_id——不可声明为必有）；成功主链（手动档/全自动档）为 {ok:true, run_id,
+      // run_dir, run_dir_source, confirmed, fields, snapshot, training_prep_auto[, auto, tier,
+      // sources, recommend_report|recommend, notification][, preflight][, amend]}。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "false＝结构化拒绝（error+note 带修复指引）；true＝方案确认已落快照" },
+          run_id: { type: "string", description: "run 标识（回显）" },
+          error: { type: "string", description: "拒绝码（如 image_min_pixels_fixed、max_total_tokens_exceeds_cutoff、nproc_invalid、global_batch_derive_failed、visible_devices_inconsistency、visible_devices_invalid、recommend_bs_invalid、accum_requires_nproc、nproc_anti_pattern_blocked、token_budget_invariant_violated、form_ask_failed、user_questions_unavailable、run_experiment_required、approval_denied 等——note 里有对应业务语言说明）" },
+          note: { type: "string", description: "人读说明与修复指引；成功路径为预检清单/amend 摘要等附注" },
+          value: { type: "string", description: "image_min_pixels_fixed 拒绝时用户传入的原值" },
+          max_total_tokens: { type: "string", description: "max_total_tokens_exceeds_cutoff 拒绝时的预算值" },
+          cutoff_len: { type: "string", description: "max_total_tokens_exceeds_cutoff 拒绝时的截断长度值" },
+          run_dir: { type: "string", description: "run 目录绝对路径（成功路径）" },
+          run_dir_source: { type: "string", description: "落点解析来源（workspace_path 显式/会话工作区/实例 runs 根）" },
+          confirmed: { type: "boolean", description: "true＝确认值已落 config-snapshot.json" },
+          auto: { type: "boolean", description: "true＝全自动训练档免审批直接落快照" },
+          tier: { type: "string", description: "自动档回执的预设档位名" },
+          training_prep_auto: {
+            type: "object",
+            additionalProperties: true,
+            description: "确认后自动重触发 training_prep 段的回执：成功 {ok:true,note}；失败 {ok:false,note=重调指引}；pipeline 未装配 {skipped=原因}",
+            properties: {
+              ok: { type: "boolean" },
+              note: { type: "string" },
+              skipped: { type: "string" },
+            },
+          },
+          fields: {
+            type: "array",
+            description: "方案卡全字段现值（成功路径）",
+            items: {
+              type: "object",
+              additionalProperties: true,
+              properties: {
+                key: { type: "string", description: "配置键名" },
+                value: { type: "string", description: "现值（一律字符串化）" },
+                tag: { type: "string", enum: ["need_confirm", "from_registry", "default_used", "agent_recommend"], description: "取值来源标记" },
+              },
+            },
+          },
+          sources: { type: "object", additionalProperties: true, description: "自动档每键取值来源标注（键=配置键名，值=来源串）" },
+          recommend_report: {
+            type: "array",
+            description: "agent 参数推荐逐键判定（自动档且传了 recommend 时）",
+            items: {
+              type: "object",
+              additionalProperties: true,
+              properties: {
+                key: { type: "string" },
+                accepted: { type: "boolean", description: "true＝采纳推荐；false＝拦截回退基线" },
+                terminal: { type: "string", description: "终值（采纳=推荐值原样，拦截=基线建议）" },
+                source: { type: "string", description: "来源串（内核 param_sources 文法内）" },
+                note: { type: "string", description: "判定说明（采纳=理由摘录，拦截=越界/缺失事实）" },
+              },
+            },
+          },
+          recommend: { type: "string", description: "未传 recommend 时的回注（missing_fallback_defaults＝全键回退固定建议）" },
+          notification: { type: "string", description: "自动档通报全文（每键取值+来源+拦截/护栏摘要）" },
+          snapshot: { type: "string", description: "快照落点相对路径（runtime/webui/config-snapshot.json）" },
+          preflight: { type: "string", description: "首跑预检清单附注（预检跑了且有检查项时）" },
+          amend: { type: "string", description: "amend 摘要（改了哪些键；含越界拦截回退说明）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable）" },
+        },
+      },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
     presentCall: function(args: { action: string; run_id: string }) {
@@ -1388,7 +1459,32 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       doc_type: { type: "string", description: "单据类型键（E8 槽位形态）：多类 run 必填——按类逐一确认，不取任一份冒充全部；单类可省（缺省取该类）；无槽位 legacy run 不得传" },
     },
     output: {
-      schema: { type: "object", additionalProperties: true },
+      // 声明面（保守）：additionalProperties 开放、零 required。依据 execute 全部 7 条
+      // return：落点解析失败（1469）＝{ok:false, run_id, error, note}；槽位未知名（1490/
+      // 1522——带 doc_type 与在场 doc_types 清单）；digest 缺失（1511/1539——无 error
+      // 码只有 note）；审批拒绝（1563 approvalDeniedResult——无 ok/run_id，故不可
+      // required）＝{error, tool, outcome, note}；成功（1573）＝{ok:true, run_id,
+      // run_dir, run_dir_source, confirmed, digest, artifact[, doc_type]}（多类合并卡
+      // 不带 doc_type 键——账本逐类落账，卡面 doc_types 在 pending 件里）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "false＝结构化拒绝；true＝发布确认已放行并登记 publish 段事实" },
+          run_id: { type: "string", description: "run 标识（回显）" },
+          error: { type: "string", description: "拒绝码（run_experiment_required/run_id_invalid/doc_slot_unknown/approval_denied 等落点与槽位类）" },
+          note: { type: "string", description: "人读说明与修复指引（digest 缺失时＝无可发布凭据，不造数）" },
+          doc_type: { type: "string", description: "单类确认的单据类型键（单类卡/显式 doc_type 路径）" },
+          doc_types: { type: "array", description: "run 在场的单据类型清单（doc_slot_unknown 时供改参对账）", items: { type: "string" } },
+          run_dir: { type: "string", description: "run 目录绝对路径（成功路径）" },
+          run_dir_source: { type: "string", description: "落点解析来源（workspace 显式/会话工作区/实例 runs 根）" },
+          confirmed: { type: "boolean", description: "true＝契约发布凭据已确认" },
+          digest: { type: "string", description: "确认的契约件 sha256 digest（多类合并卡＝逐类 <doc>:<digest> 以 \" | \" 连接）" },
+          artifact: { type: "string", description: "契约件相对路径（多类＝逐类路径以 、 连接）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable）" },
+        },
+      },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
     async execute(args: { run_id: string; workspace_path?: string; digest?: string; doc_type?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {

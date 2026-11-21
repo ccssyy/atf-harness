@@ -145,7 +145,7 @@ import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { looseObjectOutput, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
+import { renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { readInputsPromptResolvedVia, writeInputsPromptChoice } from "./promptChoiceIo.js";
 import { appendSegmentFact, SEGMENT_FACT_BY_KERNEL_STAGE } from "@atf/dsh-atf-core";
@@ -2742,7 +2742,127 @@ export const buildPipelineTool = (
       },
     },
     output: {
-      schema: looseObjectOutput,
+      // 声明面（保守）：additionalProperties 保持开放；零 required；只声明跨返回路径
+      // 类型稳定的顶层键，多值/不定形态字段用 oneOf 或 json（annotation-only，任意无损
+      // JSON）。依据＝execute 全部 return 逐条核对：约 30 条 fail-closed 参数早退
+      // （workspace/source_root/base_model/grouping/像素对/形态闸/落点解析）均为
+      // {ok:false, stage, run_id, error, note[, 诊断键]}；主链（内核段执行回执 3922）
+      // 恒带 stage/run_id/workspace_path/run_dir/run_dir_layout/ok/exit_code/
+      // approval_decided_by/access_mode/segment_fact_recorded/session_bound＋按段与
+      // 退出码的条件键；外层包装（4161）经 decorateOutcome 无差别追加 user_summary
+      // （escalate 时再加 escalate_to_user/failure_count）。exit_code 与预算/像素/卡位
+      // 等 null-able 值一律 oneOf [值型, null]（校验器对 null 按声明类型报错——见
+      // vendor json-schema.ts case 'string'/'number' 分支）；summary/rejections/
+      // io_projection/approval_entry_id 等内核原样透传键声明 json（形态随内核版本）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "false＝段未成功（参数早退拒绝或内核非零退出）；true＝段成功（exit 0）" },
+          stage: { type: "string", description: "本次执行的段名（register/style_split/family_split/experiment_setup/label_qc/contract/candidate_build/training_prep 等）" },
+          run_id: { type: "string", description: "run 标识（回显）" },
+          error: { type: "string", description: "拒绝/错误码（harness 侧参数闸或 kernel_exception_exit_1）；业务语言说明见 note" },
+          note: { type: "string", description: "人读说明与修复指引（含内核错误码人话回流）" },
+          workspace_path: { type: "string", description: "workspace 根（回显，主链路径）" },
+          run_dir: { type: "string", description: "run 目录绝对路径" },
+          run_dir_layout: { type: "string", description: "落点形态（canonical＝RunLayout/v3；legacy＝<wp>/runs 旧形态）" },
+          exit_code: { oneOf: [{ type: "number" }, { type: "null" }], description: "内核段命令退出码（0 成功；2＝blocked 拒绝；3＝环境错误；1＝内核未捕获异常；null＝进程未跑起来）" },
+          approval_decided_by: { type: "string", description: "审批决定来源（policy＝直通留痕）" },
+          access_mode: { type: "string", description: "询问闸权限档（full/limited）" },
+          segment_fact_recorded: { type: "boolean", description: "true＝段事实已登记（仅 exit 0 后为 true）" },
+          session_bound: { type: "boolean", description: "true＝run 已绑定当前会话" },
+          fact_segment: { type: "string", description: "段事实映射键（成功路径）" },
+          summary: { type: "json", description: "内核段摘要原文（stdout JSON 或落盘 stage-<段>.summary.json 回读——形态随内核版本，含 construction_report/counts/raw_response 等段事实）" },
+          rejections: { type: "json", description: "内核拒绝清单（exit 2 且摘要携带时，原样透传）" },
+          io_projection: { type: "json", description: "内核链视图与缺件修复指令（io_projection 单源生成，旧内核无此键）" },
+          approval_entry_id: { type: "json", description: "内核 stdout 账本 approval_id（解析失败/缺席省略）" },
+          user_summary: {
+            type: "object",
+            additionalProperties: true,
+            description: "用户面三句话摘要（外层装饰恒追加——成功失败都带）",
+            properties: {
+              conclusion: { type: "string", description: "结论一句话" },
+              stage: { type: "string", description: "所属段名" },
+              next: { type: "string", description: "下一步指引" },
+            },
+          },
+          escalate_to_user: { type: "boolean", description: "true＝连续失败达阈值，已向用户升级" },
+          failure_count: { type: "number", description: "连续失败计数（升级时随 escalate_to_user 出现）" },
+          grouping_source: { type: "string", description: "分组来源五态（user_provided/prior_decision/proposal/policy_auto/none——experiment_setup 段）" },
+          grouping_decision: { type: "string", description: "分组决定形态（user_selected/inherited/auto/regroup_request 等——experiment_setup 段）" },
+          grouping_candidate_name: { oneOf: [{ type: "string" }, { type: "null" }], description: "选定候选名（user_provided/none 为 null）" },
+          grouping_note: { type: "string", description: "分组判定说明" },
+          grouping_section: { type: "string", description: "分组表（跑完后重读产物渲染，agent 可原样贴对话——experiment_setup 段）" },
+          grouping_report: { type: "string", description: "分组卡 markdown 报告（候选组非空时）" },
+          grouping_user_words: { oneOf: [{ type: "string" }, { type: "null" }], description: "用户在分组卡上自述的原话（vendor 原样给出，本工具不做语义解析）；无则 null——experiment_setup 段" },
+          grouping_preset: { oneOf: [{ type: "string" }, { type: "null" }], description: "分组方案取值（experiment_setup 段——显式传了为值本身，未传为 null 即 undeclared）" },
+          grouping_preset_source: { type: "string", description: "分组方案来源（explicit/undeclared）" },
+          grouping_errors: { type: "json", description: "内核判分组建议不合格时的逐条 errors 原文" },
+          grouping_template: { type: "json", description: "内核分组候选模板原样透传（experiment_setup 段，字段集全集序）" },
+          grouping_evidence: { type: "object", additionalProperties: true, description: "分组判定证据（在场时）" },
+          construction_decided_by: { type: "string", description: "构造参数决定者（user＝卡上选定；agent＝代决——experiment_setup 段审批免档）" },
+          field_choice: { type: "object", additionalProperties: true, description: "字段清单确认结果（register 段即时确认——confirmed_fields/all_fields/total_fields；用户手打原话在 user_words 键；卡未确认时 skipped:true）" },
+          prompt_choice: { type: "object", additionalProperties: true, description: "训练 prompt 确认结果（register 段——picked/typed/resolved_via）" },
+          assemble_auto: { type: "string", description: "联合装配判定来源（training_prep 段）" },
+          assemble_effective: { type: "boolean", description: "本次是否实际走联合装配（training_prep 段）" },
+          launch_artifacts: {
+            type: "object",
+            additionalProperties: true,
+            description: "启动件在位事实（training_prep 段恒在场）",
+            properties: {
+              present: { type: "boolean", description: "true＝launch/train.sh 与 iteration-config 都在位" },
+              train_sh: { oneOf: [{ type: "string" }, { type: "null" }], description: "train.sh 相对路径（缺席 null）" },
+              iteration_config: { oneOf: [{ type: "string" }, { type: "null" }], description: "iteration-config 相对路径（缺席 null）" },
+              reason: { oneOf: [{ type: "string" }, { type: "null" }], description: "缺席原因（variants_slots_absent/assemble_not_requested/assemble_incomplete；在位 null）" },
+              verdict_basis: { oneOf: [{ type: "string" }, { type: "null" }], description: "判定依据（槽位计数）" },
+            },
+          },
+          launch_next: { type: "string", description: "启动件缺席时的修复指引（training_prep 段且未产启动件时）" },
+          output_dir: { type: "string", description: "训练输出目录终值（training_prep 段）" },
+          output_dir_source: { type: "string", description: "输出目录来源（iteration-config 实值/内核布局预期）" },
+          visible_devices: { oneOf: [{ type: "string" }, { type: "null" }], description: "卡位终值（training_prep 段——空＝null 即走 deploy 缺省）" },
+          visible_devices_source: { type: "string", description: "卡位来源（explicit/snapshot/deploy_default）" },
+          training_overrides_resolution: { type: "object", additionalProperties: true, description: "训练参数逐键终值与来源（training_prep 段九键——{键:{value,source}}，无终值 value=null）" },
+          training_overrides_delivery: { type: "string", description: "训练参数下传通道（segment_argv/none）" },
+          training_overrides_note: { type: "string", description: "训练参数下传说明" },
+          training_overrides_ignored: { type: "boolean", description: "true＝training_overrides 在非消费段被忽略（不报错）" },
+          negative_ratio_target: { type: "string", description: "负样本目标带终值（experiment_setup 段——显式值或内核缺省带）" },
+          negative_ratio_target_source: { type: "string", description: "负样本带来源（explicit/kernel_default）" },
+          max_total_tokens: { oneOf: [{ type: "number" }, { type: "null" }], description: "预算终值（experiment_setup 段五键恒在场——未定 null）" },
+          max_total_tokens_source: { type: "string", description: "预算来源（explicit/snapshot/unspecified）" },
+          cutoff_len: { oneOf: [{ type: "number" }, { type: "null" }], description: "训练截断长度终值（experiment_setup 段——未定 null）" },
+          cutoff_len_source: { type: "string", description: "截断长度来源" },
+          max_model_len: { oneOf: [{ type: "number" }, { type: "null" }], description: "推理窗口终值（experiment_setup 段——未定 null）" },
+          max_model_len_source: { type: "string", description: "推理窗口来源" },
+          image_min_pixels: { oneOf: [{ type: "number" }, { type: "null" }], description: "像素下限终值（experiment_setup 段——未定 null）" },
+          image_min_pixels_source: { type: "string", description: "像素下限来源" },
+          image_max_pixels: { oneOf: [{ type: "number" }, { type: "null" }], description: "像素上限终值（experiment_setup 段——未定 null）" },
+          image_max_pixels_source: { type: "string", description: "像素上限来源" },
+          pixel_pair_exception: {
+            type: "object",
+            additionalProperties: true,
+            description: "像素下限偏离基线且带理由的例外账（experiment_setup 段）",
+            properties: {
+              image_min_pixels: { type: "number" },
+              baseline: { type: "number" },
+              reason: { type: "string" },
+            },
+          },
+          kernel_stderr: { type: "string", description: "内核原始 stderr 尾部（exit 2 无摘要时——按它定位，不要靠猜）" },
+          kernel_stderr_tail: { type: "string", description: "内核 stderr 尾部 2000 字符（exit 2 带拒绝时）" },
+          kernel_stdout_tail: { type: "string", description: "内核 stdout 尾部 1000 字符（非空时）" },
+          stderr_tail: { type: "string", description: "stderr 尾部（exit 1/3 环境错误形态）" },
+          stdout_head: { type: "string", description: "stdout 头部（成功但无 JSON 摘要时）" },
+          user_message: { type: "string", description: "内核拒绝的 user_message 原样透传（不加工不拼接）" },
+          user_message_source: { type: "string", description: "user_message 来源（fallback＝harness 兜底文案）" },
+          label_qc_decisions: { type: "object", additionalProperties: true, description: "label_qc 段待裁决指路（pending>0 时——asked/note）" },
+          cluster_route_answered: { type: "object", additionalProperties: true, description: "style_split 段聚类路线应答事实（choice/source/ledger/note 或 asked/note）" },
+          base_model_source: { type: "string", description: "基模型对账来源（explicit/内核摘要）" },
+          style_cluster_state: { type: "object", additionalProperties: true, description: "聚类证据三键（内核摘要携带时——为什么开/没开聚类）" },
+          visual: { type: "object", additionalProperties: true, description: "看图通道两态回执（candidate_build 段——mode:plan_only 带清单路径；mode:readings 带判读件路径）" },
+          field_config: { type: "object", additionalProperties: true, description: "field_config_invalid 的结构化错误体（原样透出）" },
+        },
+      },
       render: renderAsJsonText,
     },
     async execute(

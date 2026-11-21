@@ -61,7 +61,11 @@ export const translateParameters = (parameters: SchemaNode): DshParamsSpec => {
   return spec;
 };
 
-/** DSH 宽根 output schema（canonical 校验已在手搓执行径做掉——这里只约束对象根，避免第二权威漂移）。 */
+/** DSH 宽根 output schema（canonical 校验已在手搓执行径做掉——这里只约束对象根，避免第二权威漂移）。
+ * @deprecated 存量待清退（2026-11-21「工具面自描述」批裁定）：裸开放＝agent 视角黑盒。
+ * 现存 11 个引用位（fileFace×4、fileGuardFace×1、attachmentsFace×1、jointTrainFace×1、
+ * prelaunchFace×1、recordsFace×1、quantizeFace×1、bridgeFace×1）登记于
+ * tests/guards/outputSchemaStructure.test.ts 显式清单；新代码禁用，清退为独立后续批次。 */
 export const looseObjectOutput = { type: "object", additionalProperties: true } as const;
 
 /** 结果序列化（与手搓 textResult 同口径：canonical 值 JSON 文本化给模型）。 */

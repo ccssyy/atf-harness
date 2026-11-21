@@ -854,7 +854,116 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       prelaunch_report: { type: "string", description: "build_prelaunch_report.py 产物路径（缺省自动扫 train.sh 同目录 prelaunch*——两处皆无即拒绝启动）" },
     },
     output: {
-      schema: { type: "object", additionalProperties: true },
+      // 声明面（保守）：additionalProperties 开放、零 required、只声明跨全部 return
+      // 路径类型稳定的顶层键（多 action 形态不同——只声明共有且类型稳定的）。
+      // 依据 execute 全部 return 逐条核对：status 分支（915）＝{action:"status",
+      // running, run_id, segments[{key,label,status 四态}], ckpts, loss_points, tmux
+      // [, tmux_probe][, latest_ckpt], next_steps{eval_ready,checkpoint_candidates,
+      // latest_checkpoint_path,eval_assets_dir,field_config,split_manifest,note}}；
+      // start 失败链（947 DRY_RUN／952 prelaunch 缺失／960 model 复核／976/1083 端口
+      // 占用／1027 对账失败／1110 双启未确认／1161 启动探活 dead）＝{started:false,
+      // error, note[, train_sh][, run_id][, reason][, dry_stdout_head][, model_path,
+      // models, models_root][, port, occupant][, mismatches, extracted][, outcome,
+      // tmux][, exit_code, log_tail]}；审批拒绝（991/1065/1075 approvalDeniedResult
+      // ——无 started/run_id）＝{error,tool,outcome,note}；start 成功（1203）＝
+      // {started:true, tmux, run_id, log, reconcile, probe{outcome,feed_seen}
+      // [, auto,tier][, previous_log], note}。外层 instrumentTrainOutcome（2337）
+      // 经 decorateOutcome 无差别追加 user_summary{conclusion,stage,next}＋
+      // escalate_to_user/failure_count。null-able（exit_code/model_path/
+      // next_steps 三路径键）一律 oneOf [值型,null]。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          started: { type: "boolean", description: "start 路径：true＝训练进程已启动（探活确认/进程存活）；false＝启动被拒或失败" },
+          action: { type: "string", description: "status 路径回显（\"status\"）" },
+          run_id: { type: "string", description: "run 标识（回显）" },
+          running: { type: "boolean", description: "status 路径：训练 tmux 会话是否在场" },
+          tmux: { type: "string", description: "训练 tmux 会话名（启动与状态查询路径）" },
+          tmux_probe: {
+            type: "object",
+            additionalProperties: true,
+            description: "tmux 探测被命名域拒绝时的回流（status 路径，refused 时在场）",
+            properties: {
+              ok: { type: "boolean", description: "恒 false（探测拒绝形态）" },
+              reason: { type: "string" },
+              guidance: { type: "string", description: "修复指引（随卡面可见）" },
+            },
+          },
+          segments: {
+            type: "array",
+            description: "八段任务卡段状态（status 路径——与监控同步器同源推导）",
+            items: {
+              type: "object",
+              additionalProperties: true,
+              properties: {
+                key: { type: "string", description: "段键（如 training）" },
+                label: { type: "string", description: "段中文名" },
+                status: { type: "string", enum: ["done", "active", "failed", "pending"] },
+              },
+            },
+          },
+          ckpts: { type: "array", description: "checkpoint 目录名列表（checkpoint-N 形态；status 路径）", items: { type: "string" } },
+          loss_points: { type: "number", description: "loss 序列点数（status 路径——训练推进的事实信号）" },
+          latest_ckpt: { type: "string", description: "最新 checkpoint 相对路径（有 ckpt 时；status 路径）" },
+          next_steps: {
+            type: "object",
+            additionalProperties: true,
+            description: "评估衔接事实核对（status 路径——确定性产物事实，评估参数可直接取用）",
+            properties: {
+              eval_ready: { type: "boolean", description: "true＝训练段产物在位（有含 adapter 的 checkpoint）" },
+              checkpoint_candidates: { type: "array", description: "含 adapter 的 checkpoint 候选名（有序）", items: { type: "string" } },
+              latest_checkpoint_path: { oneOf: [{ type: "string" }, { type: "null" }], description: "最新 checkpoint 路径（多类/缺席为 null）" },
+              eval_assets_dir: { oneOf: [{ type: "string" }, { type: "null" }], description: "评估资产目录（多类/缺席为 null——逐类明细不在本块）" },
+              field_config: { oneOf: [{ type: "string" }, { type: "null" }], description: "字段配置路径（多类/缺席为 null）" },
+              split_manifest: { oneOf: [{ type: "string" }, { type: "null" }], description: "分区清单路径（多类/缺席为 null）" },
+              note: { type: "string", description: "衔接说明（产物未齐时给缺口事实）" },
+            },
+          },
+          error: { type: "string", description: "失败码或失败说明（start 面与审批拒绝路径；approval_denied 时另有 tool/outcome）" },
+          note: { type: "string", description: "人读说明与修复指引" },
+          reason: { type: "string", description: "失败细分原因（model_path_missing 的复核 reason／startup_failed 的终止原因）" },
+          train_sh: { type: "string", description: "train.sh 路径（回显）" },
+          dry_stdout_head: { type: "string", description: "DRY_RUN 校验失败的 stdout 头部摘要" },
+          model_path: { oneOf: [{ type: "string" }, { type: "null" }], description: "base_model.path 复核值（缺席 null）" },
+          models: { type: "array", description: "本机可用模型清单（model_path_missing 时回流）", items: { type: "string" } },
+          models_root: { type: "string", description: "本机模型库根（ATF_MODEL_ROOT）" },
+          port: { type: "number", description: "train.sh master 端口（端口占用路径）" },
+          occupant: { type: "object", additionalProperties: true, description: "端口占用者事实（pid/命令等——端口占用路径）" },
+          mismatches: { type: "json", description: "确认值与 train.sh 生成面不符的逐键差异（train_sh_reconcile_failed 时）" },
+          extracted: { type: "object", additionalProperties: true, description: "从 train.sh 提取的生成面现值（对账失败时）" },
+          outcome: { type: "string", description: "双启确认/审批拒绝的结果（cancelled/rejected/unavailable 等）" },
+          exit_code: { oneOf: [{ type: "number" }, { type: "null" }], description: "启动失败的训练退出码（78＝放行记录闸；null＝未知）" },
+          log_tail: { type: "string", description: "训练日志尾部摘要（startup_failed 时——按它定位）" },
+          reconcile: { type: "string", enum: ["ok", "skipped_no_baseline"], description: "确认值→train.sh 透传对账结论（start 成功路径）" },
+          probe: {
+            type: "object",
+            additionalProperties: true,
+            description: "启动探活结果（start 成功路径）",
+            properties: {
+              outcome: { type: "string", enum: ["feed_ok", "alive_no_feed", "dead"], description: "feed_ok＝进料确认且进程存活；alive_no_feed＝窗口内无进料但存活" },
+              feed_seen: { type: "boolean", description: "是否已见进料行（SHA/ADMISSION）" },
+            },
+          },
+          log: { type: "string", description: "训练 stdout 日志路径（start 成功路径）" },
+          auto: { type: "boolean", description: "true＝全自动训练档免审批放行（start 成功路径）" },
+          tier: { type: "string", description: "自动档预设档位名" },
+          previous_log: { type: "string", description: "启动轮转归档的旧日志路径（在位时）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          user_summary: {
+            type: "object",
+            additionalProperties: true,
+            description: "用户面三句话摘要（外层装饰恒追加）",
+            properties: {
+              conclusion: { type: "string" },
+              stage: { type: "string" },
+              next: { type: "string" },
+            },
+          },
+          escalate_to_user: { type: "boolean", description: "true＝连续失败达阈值，已向用户升级" },
+          failure_count: { type: "number", description: "连续失败计数（升级时出现）" },
+        },
+      },
       render: (_args, value) => {
         // 任务卡 chat 卡面：status 结果带段状态时渲染八段 checklist——run 推进期 agent
         // 每次 status 轮询即把最新任务卡贴进对话流；其余形态保持 JSON 卡面。
@@ -1615,7 +1724,54 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
       publish_root: { type: "string", description: "发布库位根（缺省＝统一根 models 子目录——ATF_ATF_ROOT/ATF_DSH_RUNS_ROOT 父目录派生；实例分桶自动）" },
       note: { type: "string", description: "发布说明（入发布报告）" },
     },
-    output: { schema: { type: "object", additionalProperties: true }, render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }] },
+    output: {
+      // 声明面（保守）：additionalProperties 开放、零 required。依据 execute 全部 9 条
+      // return：run 解析失败（1734＝run_binding_required payload 直通）；checkpoint
+      // 三态拒绝（1738 名称/1742 符号链接/1744 不存在）；发布前置缺（1748——四件套
+      // 不齐不猜测）；发布库位未派生（1753）；审批拒绝（1764 approvalDeniedResult
+      // ——无 ok，故不可 required）；拷贝中断/校验失败（1771＝error(publish_copy_
+      // interrupted|publish_copy_verify_failed)[, file], copied, reused, total
+      // [, reason], dest_dir, note）；成功（1813＝ok, run_id, checkpoint, dest_dir,
+      // file_count, copy_stats{total, copied, reused, bytes_copied, bytes_total}
+      // [, changed_re_copied], manifest, report[, rebound_from], note）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "false＝发布被拒或拷贝失败；true＝已归档发布（SHA256 清单＋manifest＋发布报告）" },
+          run_id: { type: "string", description: "run 标识（成功路径）" },
+          error: { type: "string", description: "失败码（checkpoint_name_invalid/checkpoint_symlink_forbidden/checkpoint_missing/发布前置缺/publish_root_unset/publish_copy_interrupted/publish_copy_verify_failed/approval_denied/run_binding_required 等）" },
+          note: { type: "string", description: "人读说明与修复指引（拷贝失败时含续传指引）" },
+          file: { type: "string", description: "中断/校验失败所在文件（拷贝失败路径）" },
+          copied: { type: "number", description: "本次新拷文件数（拷贝失败路径——已拷保留可续传）" },
+          reused: { type: "number", description: "按 sha 相等复用的文件数" },
+          total: { type: "number", description: "源文件总数" },
+          reason: { type: "string", description: "失败原因（校验失败＝目标 sha 与源不等等）" },
+          dest_dir: { type: "string", description: "发布库目标目录（<发布库位>/<run_id>/<checkpoint>）" },
+          checkpoint: { type: "string", description: "checkpoint 目录名（成功路径）" },
+          file_count: { type: "number", description: "发布文件总数（成功路径）" },
+          copy_stats: {
+            type: "object",
+            additionalProperties: true,
+            description: "拷贝计数（成功路径——total/copy/reused/字节双轴）",
+            properties: {
+              total: { type: "number" },
+              copied: { type: "number" },
+              reused: { type: "number" },
+              bytes_copied: { type: "number" },
+              bytes_total: { type: "number" },
+            },
+          },
+          changed_re_copied: { type: "number", description: "目标在场但 sha 不等而重拷的计数（源变更/目标损坏——如实通报）" },
+          manifest: { type: "string", description: "发布清单文件名（publish-manifest.json）" },
+          report: { type: "string", description: "发布报告相对路径（publish/<checkpoint>.md）" },
+          rebound_from: { type: "string", description: "会话绑定被改写前的原 run（绑定切换时）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable）" },
+        },
+      },
+      render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
+    },
     presentCall: function(args: { run_id?: string; checkpoint?: string }) {
       return { card: "generic" as const, title: `模型发布 — ${args.run_id ?? "会话绑定实验"}${args.checkpoint !== undefined ? `/${args.checkpoint}` : ""}`, kind: "other" as const };
     },
@@ -2568,7 +2724,118 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       concurrency_reason: { type: "string", description: "并发取值理由（可选——传 concurrency 时一并给；随确认报告落盘，缺理由＝报告不完备）" },
     },
     output: {
-      schema: { type: "object", additionalProperties: true },
+      // 声明面（保守）：additionalProperties 开放、零 required；多 action（start/status）
+      // 返回形态不同——只声明跨路径类型稳定的键，null-able（eval_round/latest_round/
+      // field_config/eval_caliber/latest_checkpoint）一律 oneOf [值型,null]；内核原样
+      // 透传键（service/orchestration/metrics_summary/missing_facts_block）声明 json 或
+      // 开放 object（形态随内核版本）。
+      // 依据 execute 全部 return 逐条核对：status 三态（1512 无轮/1526 无完成轮/1585
+      // 完成轮）＝{action:"status", run_id, running, tmux[, tmux_probe], instance_root,
+      // instance_root_source[, eval_round|null, latest_round, latest_round_incomplete]
+      // [, service, orchestration, files, metrics_summary, model_label_warning,
+      // model_matches_manifest], next_steps, note}；start 失败链（2720-2996——多类
+      // 入参歧义/参数缺/档案派生/服务件生成/泄漏防线/确认报告/放行登记/SHA 对账/
+      // ckpt 计划/编排计划）＝{started:false, error[, note][, run_id][, doc_types,
+      // explicit_inputs][, adapter_path][, eval_assets_dir][, script|path]
+      // [, eval_round, stderr_tail][, concurrency, max_num_seqs, suggested_concurrency]
+      // [, field_config_expected][, lanes_seen, lanes_conflict][, missing_facts_block]
+      // [, models][, manifest_sha, recorded_sha]}；确认卡拒绝（2922 approvalDenied
+      // ＝{error,tool,outcome,note}／2924 eval_release_paused_by_user）；start 成功
+      // （3046）＝{started:true, eval_round, tmux, run_id, serving_models,
+      // service_manifest, prelaunch_report, release, env_profile, env_profile_source
+      // [, approval_entry_id][, field_config|null, field_config_source, ...指纹三键]
+      // [, template_sha256_source, template_drift_accepted], prompt_mode,
+      // prompt_mode_source, eval_caliber|null, concurrency[, concurrency_reason]
+      // [, rebound_from], note}；外层 instrumentEvalOutcome（3077）恒追加 user_summary
+      // ＋escalate_to_user/failure_count。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          started: { type: "boolean", description: "start 路径：true＝评估编排已在 tmux 后台启动；false＝卡前快败或链中失败" },
+          action: { type: "string", description: "status 路径回显（\"status\"）" },
+          run_id: { type: "string", description: "run 标识（显式或会话绑定解析值）" },
+          running: { type: "boolean", description: "status 路径：评估编排 tmux 会话是否在场" },
+          eval_round: { oneOf: [{ type: "string" }, { type: "null" }], description: "评估轮目录绝对路径（status 无完成轮/start 失败与成功路径各异；null＝尚无完成轮）" },
+          latest_round: { oneOf: [{ type: "string" }, { type: "null" }], description: "最新轮目录名（status 路径）" },
+          latest_round_incomplete: { type: "boolean", description: "true＝最新轮尚未产出 metrics_summary（status 路径）" },
+          tmux: { type: "string", description: "评估编排 tmux 会话名" },
+          tmux_probe: {
+            type: "object",
+            additionalProperties: true,
+            description: "tmux 探测被命名域拒绝时的回流（refused 时在场）",
+            properties: { ok: { type: "boolean" }, reason: { type: "string" }, guidance: { type: "string" } },
+          },
+          instance_root: { type: "string", description: "实例根解析值（status 路径——env 漂移下对账锚）" },
+          instance_root_source: { type: "string", description: "实例根来源（env 键名）" },
+          note: { type: "string", description: "人读说明与修复指引" },
+          error: { type: "string", description: "失败码（adapter_path_missing/eval_assets_dir_missing/service_config_missing/eval_lane_unresolved/machine_facts_missing/prelaunch_report_failed/eval_release_record_failed/eval_release_ledger_mismatch/checkpoint_plan_failed/orchestration_plan_failed/eval_release_paused_by_user/approval_denied 等）" },
+          stderr_tail: { type: "string", description: "子步 stderr 尾部摘要（失败定位用）" },
+          doc_types: { type: "array", description: "本 run 的单据类清单（多类快败路径）", items: { type: "string" } },
+          explicit_inputs: { type: "array", description: "多类形态下传了的单类入参名（快败路径）", items: { type: "string" } },
+          adapter_path: { type: "string", description: "adapter checkpoint 路径（校验拒绝时回显）" },
+          eval_assets_dir: { type: "string", description: "评估资产目录（绑定/缺失路径回显）" },
+          script: { type: "string", description: "缺失的技能脚本路径（skill_script_missing）" },
+          path: { type: "string", description: "相关文件路径（分区清单/服务配置缺失路径回显）" },
+          concurrency: { type: "number", description: "评估推理并发终值（缺省 1）" },
+          max_num_seqs: { type: "number", description: "服务容量上限（并发门拒绝时）" },
+          suggested_concurrency: { type: "number", description: "建议并发（并发门拒绝时）" },
+          field_config: { oneOf: [{ type: "string" }, { type: "null" }], description: "字段配置路径（多类逐类派生时 null——start 成功路径）" },
+          field_config_source: { type: "string", description: "字段配置来源（explicit/run_recorded/per_doc_derived）" },
+          field_config_expected: { type: "string", description: "期望的字段配置路径（unresolved 时）" },
+          field_config_sha256: { type: "string", description: "字段配置指纹（start 成功路径）" },
+          field_config_warning: { type: "string", description: "与训练记录指纹不一致的告警" },
+          template_sha256_source: { type: "string", description: "模板骨架核对来源（verified/absent）" },
+          template_drift_accepted: { type: "boolean", description: "true＝模板骨架差异经显式确认放行" },
+          lanes_seen: { type: "json", description: "lane 判定看到的键集（eval_lane_unresolved 时）" },
+          lanes_conflict: { type: "json", description: "多源 lane 冲突两值（eval_lane_unresolved 时）" },
+          missing_facts_block: { type: "json", description: "机器事实缺项块原文（machine_facts_missing 时——停下问用户）" },
+          models: { type: "array", description: "涉事模型名列表（标签泄漏防线拒绝时）", items: { type: "string" } },
+          manifest_sha: { type: "string", description: "服务清单 SHA 前缀（账本对账失败时）" },
+          recorded_sha: { type: "string", description: "放行记录 SHA 前缀（账本对账失败时）" },
+          serving_models: { type: "array", description: "服务期望模型名（start 成功路径）", items: { type: "string" } },
+          service_manifest: { type: "string", description: "service_manifest.json 路径（start 成功路径）" },
+          prelaunch_report: { type: "string", description: "九必报项确认报告路径（start 成功路径）" },
+          release: { type: "string", description: "放行账本登记说明（start 成功路径）" },
+          env_profile: { type: "string", description: "环境档案名（终值）" },
+          env_profile_source: { type: "string", description: "环境档案来源（explicit/instance_default(<名>)）" },
+          approval_entry_id: { type: "string", description: "放行账本 approval_id（解析成功时）" },
+          prompt_mode: { type: "string", enum: ["mode0", "mode1"], description: "抽取方式终值（每页一条全字段/按分组逐组各一条）" },
+          prompt_mode_source: { type: "string", description: "抽取方式来源（继承训练声明/显式）" },
+          eval_caliber: { oneOf: [{ type: "object", additionalProperties: true }, { type: "null" }], description: "评测口径（GT 外字段数等——不可得时 null）" },
+          concurrency_reason: { type: "string", description: "并发取值理由（随确认报告落盘）" },
+          rebound_from: { type: "string", description: "会话绑定被改写前的原 run（绑定切换时）" },
+          service: { type: "json", description: "服务 receipt 原文（status 路径，在场时）" },
+          orchestration: { type: "object", additionalProperties: true, description: "编排状态合并块（state/block/ingest——status 路径）" },
+          files: { type: "array", description: "评估四件套在位文件名（status 路径）", items: { type: "string" } },
+          metrics_summary: { type: "json", description: "metrics_summary.json 原文（status 路径，完成轮在场）" },
+          model_label_warning: { type: "string", description: "模型名泄漏告警（metrics_summary.model 为缺省名时）" },
+          model_matches_manifest: { type: "boolean", description: "模型名与服务清单期望名对拍结果（status 路径）" },
+          next_steps: {
+            type: "object",
+            additionalProperties: true,
+            description: "后续步骤事实核对（status 路径——四件套/分析/发布前置）",
+            properties: {
+              four_set_ready: { type: "boolean", description: "true＝评估四件套齐" },
+              badcases_ready: { type: "boolean", description: "true＝坏例分析前置在位" },
+              latest_checkpoint: { oneOf: [{ type: "string" }, { type: "null" }], description: "最新 checkpoint 路径（缺席 null）" },
+              publish_prereq_met: { type: "boolean", description: "true＝模型发布前置满足" },
+              analyze_guidance: { type: "string", description: "坏例分析指引（四件套齐时出现）" },
+              note: { type: "string" },
+            },
+          },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable 等）" },
+          user_summary: {
+            type: "object",
+            additionalProperties: true,
+            description: "用户面三句话摘要（外层装饰恒追加）",
+            properties: { conclusion: { type: "string" }, stage: { type: "string" }, next: { type: "string" } },
+          },
+          escalate_to_user: { type: "boolean", description: "true＝连续失败达阈值，已向用户升级" },
+          failure_count: { type: "number", description: "连续失败计数（升级时出现）" },
+        },
+      },
       render: (_args, value) => {
         // 批次R H1-3 补面（R-H）：内核四码命中时用户面只呈人话 note——kernel_error 属
         // 机器对账键，码原文/traceback 不进页面（产品语言纪律：错误回流全业务语）。
@@ -2984,7 +3251,65 @@ export function buildEvalTools(ctx: { get(service: string): unknown }, cfg: { ru
       review_check: { type: "string", description: "审阅覆盖校验件路径（BadcaseReviewCheck/v1，可选；与审阅件同源）" },
     },
     output: {
-      schema: { type: "object", additionalProperties: true },
+      // 声明面（保守）：additionalProperties 开放、零 required。依据 execute 全部 12 条
+      // return 逐条核对：run 解析失败（3216——run_binding_required payload 直通）；多类
+      // 联合链（3229 脚本缺/3241 非零退出/3248 成功＝{ok,mode:"multi_doc",doc_types,
+      // analysis_dir,report,viewer,…reviewCoverage,note}）；单类两步链（3261 脚本缺/
+      // 3268 评估产物缺/3271 资产缺/3277 lane 未决/3288 图片根未决/3297 冻结失败/
+      // 3322 链失败/3326 成功＝{ok,run_id,ledger,viewer_html,report_md,report_html,
+      // viewer_ready,report_ready,…reviewCoverage[,viewer_url,viewer_url_note]}）。
+      // exit_code 为 number|null（runCapture 超时/信号形态 null）——oneOf 声明；
+      // review_coverage 解析不到＝null——oneOf [object,null]（F8：覆盖度未知不假装）；
+      // lanes_seen/lanes_conflict 形态随 lane 解析器——声明 json。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "true＝分析完成（账本冻结＋链跑通，产物路径随回执）；false＝结构化拒绝或链失败" },
+          run_id: { type: "string", description: "run 标识（单类成功路径——显式或会话绑定解析值）" },
+          error: { type: "string", description: "失败码（skill_script_missing/eval_products_missing/eval_assets_missing/eval_lane_unresolved/images_root_unresolved/run_binding_required 等）" },
+          note: { type: "string", description: "人读说明与修复指引" },
+          script: { type: "string", description: "缺失的技能脚本路径（skill_script_missing）" },
+          step: { type: "string", enum: ["freeze", "chain", "joint_analysis"], description: "失败所在链步" },
+          exit_code: { oneOf: [{ type: "number" }, { type: "null" }], description: "子脚本退出码（null＝超时/信号形态）" },
+          stderr_tail: { type: "string", description: "子脚本 stderr 尾部摘要（失败定位用）" },
+          doc_types: { type: "array", description: "本 run 的单据类清单（多类路径）", items: { type: "string" } },
+          mode: { type: "string", enum: ["multi_doc"], description: "多类联合链形态标记（单类两步链不带本键）" },
+          analysis_dir: { type: "string", description: "run 级分析输出目录（多类路径）" },
+          report: { type: "string", description: "run 级报告路径（多类路径——report.md）" },
+          viewer: { type: "string", description: "run 级查看器路径（多类路径——viewer.html）" },
+          eval_dir: { type: "string", description: "评估目录（eval_products_missing 时回显）" },
+          eval_assets_dir: { type: "string", description: "评估资产目录（缺失/未决时回显）" },
+          lanes_seen: { type: "json", description: "lane 判定看到的键集（eval_lane_unresolved 时）" },
+          lanes_conflict: { type: "json", description: "多源 lane 冲突两值（eval_lane_unresolved 时）" },
+          ledger: { type: "string", description: "冻结账本路径（RawBadcaseAnalysis/v1——失败时已落可续查）" },
+          viewer_html: { type: "string", description: "GT/预测叠图查看器路径（单类成功路径）" },
+          report_md: { type: "string", description: "markdown 报告路径（单类成功路径）" },
+          report_html: { type: "string", description: "html 报告路径（单类成功路径）" },
+          viewer_ready: { type: "boolean", description: "true＝查看器产物实存在位" },
+          report_ready: { type: "boolean", description: "true＝报告产物实存在位" },
+          review_coverage: {
+            oneOf: [
+              {
+                type: "object",
+                additionalProperties: true,
+                description: "审阅覆盖度（内核 stdout 原值）",
+                properties: {
+                  pages_total: { type: "number", description: "总页数" },
+                  pages_reviewed: { type: "number", description: "已审页数" },
+                  status: { type: "string", description: "覆盖状态" },
+                },
+              },
+              { type: "null", description: "链输出缺失——覆盖度未知（不假装已审阅完整）" },
+            ],
+          },
+          incomplete: { type: "boolean", description: "true＝审阅未覆盖完整（内核旗标或 pages_reviewed=0）" },
+          incomplete_reason: { type: "string", description: "未覆盖原因（chain_output_missing＝链输出里无覆盖块）" },
+          viewer_url: { type: "string", description: "可点开的查看器 URL（/atf-ui/viewer/<run_id>/——在已登录 dsh web 会话里打开，勿取磁盘路径本地打开）" },
+          viewer_url_note: { type: "string", description: "查看器打开方式说明" },
+          rebound_from: { type: "string", description: "会话绑定被改写前的原 run（绑定切换时）" },
+        },
+      },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
     presentCall: function(args: { run_id?: string }) {
