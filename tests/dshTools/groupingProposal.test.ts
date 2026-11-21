@@ -414,7 +414,7 @@ describe("F6 回执用户面摘要（atf_pipeline_stage）", () => {
 });
 
 describe('ci-bl-1103 组数指令闭环（防循环确认）', () => {
-  it('custom「分3组」→ 结构化 regroup_request + run 级 marker 落盘 + 强指令 note', async () => {
+  it('custom 原话回传 agent（工具不解析组数）+ 提示带 requested_group_count 重调', async () => {
     const ws = tempRoot('c2-n3-');
     confirmFields(ws, 'n3run');
     const asked: Array<Record<string, unknown>> = [];
@@ -423,9 +423,28 @@ describe('ci-bl-1103 组数指令闭环（防循环确认）', () => {
       fakeExec,
     );
     expect(asked).toHaveLength(1);
+    // B3c：工具不解析自由文本——原话原样回传，由 agent 理解组数。
+    expect(result['grouping_decision']).toBe('none');
+    expect(JSON.stringify(result)).toContain('分3组');
+    expect(JSON.stringify(result)).toContain('requested_group_count');
+    // 工具不落 marker（组数不是它猜的），marker 由 agent 理解后带参重调时才落。
+    expect(existsSync(join(ws, 'runs', 'n3run', 'runtime', 'webui', 'grouping-request.json'))).toBe(false);
+  });
+
+  it('agent 理解后带 requested_group_count=3 重调 → 结构化 regroup_request + marker 落盘', async () => {
+    const ws = tempRoot('c2-n3c-');
+    confirmFields(ws, 'n3run2');
+    const asked: Array<Record<string, unknown>> = [];
+    const result = await toolOf(ctxOf({ asked }), mockOf(MOCK_OK)).execute(
+      {
+        stage: 'experiment_setup', run_id: 'n3run2', workspace_path: ws,
+        grouping_proposal: PROPOSAL, requested_group_count: 3,
+      },
+      fakeExec,
+    );
     expect(result['grouping_decision']).toBe('regroup_request');
-    expect(JSON.stringify(result)).toContain('必须恰好3组');
-    const marker = JSON.parse(readFileSync(join(ws, 'runs', 'n3run', 'runtime', 'webui', 'grouping-request.json'), 'utf8')) as { requested_group_count: number };
+    expect(JSON.stringify(result)).toContain('用户明确要求3组');
+    const marker = JSON.parse(readFileSync(join(ws, 'runs', 'n3run2', 'runtime', 'webui', 'grouping-request.json'), 'utf8')) as { requested_group_count: number };
     expect(marker.requested_group_count).toBe(3);
   });
 

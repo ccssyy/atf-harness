@@ -53,6 +53,7 @@ describe("A6 codegen 生成物↔手写面装接对账", () => {
       "pixel_pair_reason",    // D106 像素对确认话由（工具侧组装进基模型参数面）
       "prompt_material_hint", // D181 段内路由非透传键
       "visual_plan_only",     // 视觉计划态工具面开关（组合自内核双旗标）
+      "requested_group_count", // B3c 用户组数意愿（agent 理解原话后显式传入；工具落 marker，不传内核）
     ]);
     const faceSet = new Set(faceDests);
     for (const key of faceSet) {

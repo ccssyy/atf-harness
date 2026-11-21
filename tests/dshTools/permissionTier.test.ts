@@ -170,10 +170,18 @@ describe("D90 提问面：完全权限档必须还能问人", () => {
     });
     expect(asked).toHaveLength(1);
     expect(asked[0]!.questions).toHaveLength(3);
-    expect(decision).toMatchObject({ asked: true, decided_by: "user", groupingConfirm: true, mode5Random: 2, targetedMultiplier: 1.5, cutoffLen: 9000 });
+    // B3c（2026-11-21 owner 裁定）：工具不再把 label 翻成数字——答案原样回传 agent 理解。
+    // 故本轮三值保持 state 现值（undefined），作答原文进 pending 面等 agent 重调。
+    expect(decision).toMatchObject({ asked: true, decided_by: "user", groupingConfirm: true });
+    expect(decision.mode5Random).toBeUndefined();
+    expect(decision.cutoffLen).toBeUndefined();
     const ledger = join(runDir, "runtime", "webui", "construction-choice.json");
-    expect(existsSync(ledger)).toBe(true);
-    expect(JSON.parse(readFileSync(ledger, "utf8"))).toMatchObject({ decided_by: "user", grouping_confirm: true, mode5_random: 2, targeted_multiplier: 1.5, cutoff_len: 9000 });
+    expect(existsSync(ledger), "作答必须落账（不能因未解析就不记账）").toBe(true);
+    const ledgerDoc = JSON.parse(readFileSync(ledger, "utf8")) as Record<string, unknown>;
+    expect(ledgerDoc["decided_by"]).toBe("user");
+    // 用户作答原样留底，一条不丢
+    expect(JSON.stringify(ledgerDoc)).toContain("2 倍");
+    expect(JSON.stringify(ledgerDoc)).toContain("9000");
   });
 
   it("问题卡通道不可用：如实标为 agent（不假装用户确认过）", async () => {
