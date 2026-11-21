@@ -80,8 +80,42 @@ describe("事故锚（复验#24）：用户写的话绝不被静默吞掉", () =
     expect(pipelineSrc, "缺 all_field_names——agent 无法把口语对上字段").toContain("all_field_names:");
   });
 
-  it("构造参数卡认不出的原话也留底（unrecognized_user_words）", () => {
+  it("构造参数卡未解析的作答也留底（pending_user_answers）", () => {
     const gateSrc = read("constructionGate.ts");
-    expect(gateSrc, "构造卡缺 unrecognized 留底——认不出即静默丢原话").toContain("unrecognized");
+    expect(gateSrc, "构造卡缺 pending_user_answers 留底——作答会被静默丢").toContain("pending_user_answers");
+  });
+});
+
+/**
+ * 事故锚迁移（B3c，2026-11-21 owner 裁定）：N5 回归锁。
+ *
+ * 原事故（N5）：WebUI 把 selected 回传成整行文字时，「2 倍」被吞成「不增强」。
+ * 原解法：写 `augmentFromText` 做闭集查表把 label 翻回数字。
+ * 该函数已随 B3c 删除——工具不再做 label→value 翻译（vendor 官方 tool-ask-user
+ * 明写「答案原样回 agent」）。
+ *
+ * 新方向：答案原样回传，由 agent 理解。故事故锚从「必须解析对」改为
+ * 「作答必须原样照录，不得被任何解析层吞掉或改写」。
+ */
+describe("事故锚（N5/B3c）：作答原样照录，不被解析层吞改", () => {
+  const gateSrc = read("constructionGate.ts");
+
+  it("构造卡不再有任何 label→value 查表（spellingIndex / TEXT_INDEX 全族不得存在）", () => {
+    expect(gateSrc.includes("spellingIndexOf"), "闭集查表工厂仍在").toBe(false);
+    expect(gateSrc.includes("TEXT_INDEX"), "查表常量仍在").toBe(false);
+    expect(gateSrc.includes("numericSpellingsOf"), "拼写生成器仍在").toBe(false);
+  });
+
+  it("构造卡不再有 xxxFromText 解析入口", () => {
+    expect(gateSrc.includes("augmentFromText"), "augmentFromText 仍在").toBe(false);
+    expect(gateSrc.includes("cutoffFromText"), "cutoffFromText 仍在").toBe(false);
+  });
+
+  it("用户作答必须原样照录进回传面（pending_user_answers）", () => {
+    expect(gateSrc, "缺 pending_user_answers——作答会被静默吞").toContain("pending_user_answers");
+  });
+
+  it("回传面给出重调指引", () => {
+    expect(gateSrc, "缺重调指引").toContain("带结构化参数重调本工具");
   });
 });

@@ -75,74 +75,24 @@ const AUGMENT_OPTIONS: ReadonlyArray<{ label: string; value: number }> = [
   { label: "每图 10 条", value: 10 },
 ];
 
-/** 值→合法拼写的闭集索引（B3：自由文本不由工具解析，只认本卡声明过的拼写）。
+/** B3c（2026-11-21 owner 裁定）：本卡不再做任何「label → value」翻译。
  *
- * 背景（B3 判据）：用户写「分两拨」「一半一半」这类说法，工具无从判断、也不该猜。
- * 旧实现用正则从自由文本抽数字，抽不到就静默丢弃——agent 根本不知道用户说过话。
- * 现在只做**有限集等值查表**：本卡选项里出现过的值加上声明过的拼写，命中才算数；
- * 集合外一律 undefined（调用方保持现值，并把原话交回 agent 重调——不猜、不吞）。
+ * vendor 的 `AskUserQuestionAnswerItem` 只给 `selected: string[]`（label 原文）
+ * 与 `custom?: string`（手打原文）——官方 `tool-ask-user` 明写「feeds that answer
+ * back into the agent loop as an ordinary tool result」，即**答案原样回给 agent**。
+ *
+ * 原实现（正则 → 闭集查表）是在工具内替 agent 做语义理解：
+ *   - 点选路径：label 本来就能被 agent 直接读懂，翻回数字是多余一步
+ *   - 手打路径：自由输入不可能穷举，正则/查表注定漏，漏了还要防静默丢
+ * 两步都是替 agent 干活，且方法不对。
+ *
+ * 现在：三个字段的答案（selected / custom）**原样**进 tool result，
+ * agent 理解后带结构化参数重调本工具。工具只做确定性动作（落账）。
  */
-const spellingIndexOf = (
-  entries: ReadonlyArray<readonly [number, readonly string[]]>,
-): ReadonlyMap<string, number> => {
-  const index = new Map<string, number>();
-  for (const [value, spellings] of entries) {
-    for (const spelling of spellings) index.set(spelling, value);
-  }
-  return index;
-};
 
-/** 一个数值的三种声明拼写（「3」「3 倍」「3倍」）—— 闭集，不是正则。 */
-const numericSpellingsOf = (value: number): readonly string[] => [
-  String(value), `${String(value)} 倍`, `${String(value)}倍`,
-];
-
-/** 增强条数：选项值域（AUGMENT_OPTIONS）＋否定说法（值 0）的闭集拼写。 */
-const AUGMENT_TEXT_INDEX: ReadonlyMap<string, number> = spellingIndexOf(
-  AUGMENT_OPTIONS.map((option): readonly [number, readonly string[]] => [
-    option.value,
-    option.value === 0
-      ? ["不增强", "不要", "不", "否", "none", "off", "0"]
-      : [`每图 ${String(option.value)} 条`, `每图${String(option.value)}条`, ...numericSpellingsOf(option.value)],
-  ]),
-);
-
-/** targeted 倍率：档位值域＋「不重点扩」的闭集拼写（智能推导 label 由调用方等值命中）。 */
-const TARGETED_TEXT_INDEX: ReadonlyMap<string, number> = spellingIndexOf([
-  [1, ["1 倍（不重点扩）", "1 倍", "不重点扩", ...numericSpellingsOf(1)]],
-  [1.5, numericSpellingsOf(1.5)],
-  [2, numericSpellingsOf(2)],
-  [3, numericSpellingsOf(3)],
-]);
-
-/** cutoff_len：三档选项 label＋裸数值的闭集拼写。 */
-const CUTOFF_TEXT_INDEX: ReadonlyMap<string, number> = spellingIndexOf([
-  [9000, ["9000（基线默认）", "9000"]],
-  [12288, ["12288"]],
-  [8192, ["8192"]],
-]);
-
-/** 增强条数解析（selected 回显或 custom 手打；只认声明拼写，集合外 undefined）。 */
-export const augmentFromText = (text: string): number | undefined => {
-  const trimmed = text.trim();
-  if (trimmed === "") return undefined;
-  return AUGMENT_TEXT_INDEX.get(trimmed);
-};
-
-/** targeted 倍率解析：智能推导 label 命中→推导值；声明拼写→档位值；未答 undefined。 */
-const targetedFromText = (text: string, suggestedLabel: string, suggested: number | undefined): number | undefined => {
-  const trimmed = text.trim();
-  if (trimmed === "") return undefined;
-  if (trimmed === suggestedLabel) return suggested ?? 1.0;
-  return TARGETED_TEXT_INDEX.get(trimmed);
-};
-
-/** cutoff_len 解析：只认三档声明拼写；未答 undefined（保持现值，不猜）。 */
-const cutoffFromText = (text: string): number | undefined => {
-  const trimmed = text.trim();
-  if (trimmed === "") return undefined;
-  return CUTOFF_TEXT_INDEX.get(trimmed);
-};
+/** 把某问的答案原样取出（selected 在前、custom 兜底），不做任何解析。 */
+const rawAnswerOf = (answer: { selected?: readonly string[]; custom?: string } | undefined): string =>
+  answer === undefined ? "" : ([...(answer.selected ?? [])].join("") || (answer.custom ?? "")).trim();
 
 /** 分组的自由输入解析：只认明确的正/负，其余 undefined（保持现值）。 */
 /** 读既有构造选择落账（ci-bl-1103 多类去重）：decided_by=user 的记录才复用
@@ -410,35 +360,31 @@ export const decideConstructionParams = async (input: {
       if (answer === undefined) return "";
       return [...(answer.selected ?? [])].join("") || (answer.custom ?? "");
     };
-    const augmentAnswerText = answerTextOf(`construction-augment-${input.runId}`);
-    const augmentCustom = needAugment ? customTextOf(`construction-augment-${input.runId}`) : "";
+    // B3c（2026-11-21 owner 裁定）：答案原样回传，工具不做 label→value 翻译。
+    // 三问的原文一律照录（点了选项就是 label，手打就是 custom），由 agent 理解。
+    const augmentAnswer = byId.get(`construction-augment-${input.runId}`);
+    const targetedAnswer = byId.get(`construction-targeted-${input.runId}`);
+    const cutoffAnswer = byId.get(`construction-cutoff-${input.runId}`);
+    const augmentAnswerText = rawAnswerOf(augmentAnswer);
+    const targetedAnswerText = rawAnswerOf(targetedAnswer);
+    const cutoffAnswerText = rawAnswerOf(cutoffAnswer);
     const groupingConfirm = true;
-    const mode5RandomParsed = needAugment ? augmentFromText(augmentAnswerText) : undefined;
-    const mode5Random = mode5RandomParsed ?? input.state.mode5Random;
-    // D177:targeted/cutoff 解析(selected label 或 custom;未答保持现值,不猜)
-    const targetedAnswerText = answerTextOf(`construction-targeted-${input.runId}`);
-    const targetedCustom = needTargeted ? customTextOf(`construction-targeted-${input.runId}`) : "";
-    const suggestedLabel = input.state.targetedSuggested !== undefined
-          ? `智能推导（${String(input.state.targetedSuggested)} 倍）`
-          : "1 倍（未经智能分析——产品默认，不猜难度；要看分析建议先完成看图分析）";
-    const targetedParsed = needTargeted
-      ? targetedFromText(targetedAnswerText, suggestedLabel, input.state.targetedSuggested)
-      : undefined;
-    const targetedMultiplier = targetedParsed ?? input.state.targetedMultiplier;
-    const cutoffAnswerText = answerTextOf(`construction-cutoff-${input.runId}`);
-    const cutoffCustom = needCutoff ? customTextOf(`construction-cutoff-${input.runId}`) : "";
-    const cutoffParsed = needCutoff ? cutoffFromText(cutoffAnswerText) : undefined;
-    const cutoffLen = cutoffParsed ?? input.state.cutoffLen;
-    // B3 回落链路：第 2 步收集——用户写了话但本卡认不出（闭集外）的，一条都不许丢。
-    const unrecognized: ReadonlyArray<{ readonly field: string; readonly said: string }> = [
-      ...(mode5RandomParsed === undefined && augmentCustom !== ""
-        ? [{ field: "随机子集增强每图条数", said: augmentCustom }]
+
+    // 本轮未解析：一律保持现值（不猜、不崩）。agent 理解答案后带参数重调。
+    const mode5Random = input.state.mode5Random;
+    const targetedMultiplier = input.state.targetedMultiplier;
+    const cutoffLen = input.state.cutoffLen;
+
+    // 凡用户作答但工具未解析的，逐条原文回传（一条不丢）。
+    const pendingAnswers: ReadonlyArray<{ readonly field: string; readonly said: string }> = [
+      ...(needAugment && augmentAnswerText !== ""
+        ? [{ field: "随机子集增强每图条数", said: augmentAnswerText }]
         : []),
-      ...(targetedParsed === undefined && targetedCustom !== ""
-        ? [{ field: "重点字段增强倍率", said: targetedCustom }]
+      ...(needTargeted && targetedAnswerText !== ""
+        ? [{ field: "重点字段增强倍率", said: targetedAnswerText }]
         : []),
-      ...(cutoffParsed === undefined && cutoffCustom !== ""
-        ? [{ field: "序列长度上限", said: cutoffCustom }]
+      ...(needCutoff && cutoffAnswerText !== ""
+        ? [{ field: "序列长度上限", said: cutoffAnswerText }]
         : []),
     ];
     const ledgerPath = writeLedger(input.runDir, "construction-choice.json", {
@@ -458,14 +404,14 @@ export const decideConstructionParams = async (input: {
         augment: augmentAnswerText, targeted: targetedAnswerText, cutoff: cutoffAnswerText,
       },
       // B3：认不出的原话一并落账——事后可核「用户到底说了什么」，不被解析层吞掉
-      ...(unrecognized.length > 0 ? { unrecognized_user_words: unrecognized } : {}),
+      ...(pendingAnswers.length > 0 ? { pending_user_answers: pendingAnswers } : {}),
     });
     const augmentLine = mode5Random === undefined || mode5Random === 0 ? "不增强" : `${String(mode5Random)} 倍`;
     // B3 回落链路：第 3 步回传——原话逐条回给 agent（不截断、不改写），
     // 并明说「这几项按现值/原值保留」，让 agent 带结构化参数重调工具。
-    const echoLine = unrecognized.length === 0
+    const echoLine = pendingAnswers.length === 0
       ? ""
-      : `\n用户写的话本卡没能认成参数，原话照录——${unrecognized.map((item) => `「${item.said}」（${item.field}）`).join("、")}；这几项本轮按原值保留。请理解他的意思后带结构化参数重调本工具（不要当作他没说）。`;
+      : `\n用户的作答本卡未做解析，原样照录——${pendingAnswers.map((item) => `「${item.said}」（${item.field}）`).join("、")}；这几项本轮按现值保留。请理解他的意思后带结构化参数重调本工具（不要当作他没说）。`;
     return {
       groupingConfirm,
       mode5Random,

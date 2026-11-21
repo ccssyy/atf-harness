@@ -76,6 +76,8 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
   // D163 出处模型：分组出处与用户原话（替代按文件路径猜来路）
   grouping_provenance: "--grouping-provenance",
   grouping_quote: "--grouping-quote",
+  // B3c：用户组数意愿（agent 理解原话后显式传入；工具落 run 级 marker，不传内核 argv）
+  requested_group_count: "--requested-group-count",
   grouping_confirm: "--grouping-confirm",
   mode5_random: "--mode5-random",
   mode5_advice_stats: "--mode5-advice-stats",
@@ -132,6 +134,8 @@ export const FLAG_BY_PARAM: Readonly<Record<string, string>> = {
 export const PARAM_FACE_WAIVERS: ReadonlySet<string> = new Set<string>([
   // harness 自用参数（不落内核 argv，只进回执账）：T4 像素下限例外的理由位。
   "pixel_pair_reason",
+  // B3c：组数意愿只落 run 级 marker（runtime/webui/grouping-request.json），不传内核 argv。
+  "requested_group_count",
 ]);
 
 /** 九要素键 → 消费点登记表（「可编辑不消费」禁的正向登记；旗标空串＝脚本级组装消费

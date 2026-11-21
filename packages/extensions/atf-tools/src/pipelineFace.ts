@@ -231,34 +231,6 @@ export const STAGE_BUSINESS: Readonly<Record<string, string>> = {
   badcase_analysis: "badcase 分析",
   iteration_proposal: "迭代建议",
 };
-
-/** 组数指令的闭集拼写索引（B3：不用正则解析自由文本，只认声明过的说法）。
- *
- * 旧实现用一条「动词＋数字＋组」的正则扫自由文本，
- * 「分两拨」「一半一半」「别分那么多」全漏——漏了就静默丢弃，用户的分组意愿
- * 整句话消失。现在改成闭集等值查表：命中才是组数指令，没命中就把原话交回 agent
- * （见下方 note 的原话照录），不再静默吞。
- *
- * 闭集只覆盖高频说法，不试图穷尽自然语言——穷尽不了，那是 agent 的活。
- */
-const GROUP_COUNT_VERBS: readonly string[] = ["分", "分成", "改", "改成", "要", "按"];
-const GROUP_COUNT_NUMERALS: ReadonlyArray<readonly [string, number]> = [
-  ["1", 1], ["一", 1], ["2", 2], ["两", 2], ["二", 2],
-  ["3", 3], ["三", 3], ["4", 4], ["四", 4], ["5", 5], ["五", 5],
-  ["6", 6], ["六", 6], ["7", 7], ["七", 7], ["8", 8], ["八", 8],
-  ["9", 9], ["九", 9], ["10", 10], ["十", 10],
-];
-const GROUP_COUNT_SPELLINGS: ReadonlyMap<string, number> = new Map(
-  GROUP_COUNT_VERBS.flatMap((verb) => GROUP_COUNT_NUMERALS.flatMap(([numeral, count]): Array<[string, number]> => [
-    [`${verb}${numeral}组`, count],
-    [`${verb}${numeral}`, count],
-  ])),
-);
-
-/** 组数指令解析：闭集等值命中才算；否则 undefined（调用方原话回传 agent，不猜）。 */
-export const groupCountFromText = (text: string): number | undefined =>
-  GROUP_COUNT_SPELLINGS.get(text.trim());
-
 /** D294 C1:对象参数形态闸——引用/局部形态快败判定(D294-1 事故根治)。
  *
  * 1114-1 实锚:agent 四次以 {file:}/{__ref:}/{checklist_digest:单值} 传 visual_check,
@@ -843,8 +815,44 @@ export const resolveGroupingFace = async (input: {
   /** 单据类型（ci-bl-1103 per-doc 化）：多类联合训练每类字段分组各自落账/出卡,
    *  卡 id 与 header 带类名（用户辨识）;缺席=单类形态（兼容）。 */
   docType?: string;
+  /** 用户明确要求的组数（agent 理解用户原话后显式传入；工具不从自由文本猜）。
+   *  传入时落 run 级 marker `runtime/webui/grouping-request.json`，
+   *  下一轮出卡以它为硬约束（ci-bl-1103 防循环确认）。 */
+  requestedGroupCount?: number;
+  /** 用户说分组时的原话（只用于 marker 留痕，不参与解析）。 */
+  groupingQuote?: string;
 }): Promise<GroupingFace | { ok: false; errors: string[] }> => {
   const docTag = input.docType !== undefined && input.docType !== "" ? `:${input.docType}` : "";
+
+  // ci-bl-1103 组数硬约束前置（B3c）：agent 理解用户原话后带 requested_group_count 显式传入，
+  // 工具据此落 marker 并直接返回 regroup_request——不必再走后面的出卡链路。
+  // 工具不从自由文本猜组数（vendor 的答案原样回交 agent 理解）。
+  if (input.requestedGroupCount !== undefined) {
+    const requestedCountRaw = input.requestedGroupCount;
+    if (input.runDir !== undefined) {
+      try {
+        const markerDir = join(input.runDir, "runtime", "webui");
+        mkdirSync(markerDir, { recursive: true });
+        writeFileSync(join(markerDir, "grouping-request.json"),
+          JSON.stringify({
+            requested_group_count: requestedCountRaw,
+            raw_text: typeof input.groupingQuote === "string" ? input.groupingQuote.slice(0, 120) : "",
+            at: new Date().toISOString(),
+          }, null, 1), "utf-8");
+      } catch { /* marker 落盘失败不阻断——靠 note 强指令兜底 */ }
+    }
+    return {
+      source: "proposal",
+      decision: "regroup_request",
+      candidate_name: null,
+      groups: [],
+      evidence: {},
+      payload: null,
+      note: `用户明确要求${String(requestedCountRaw)}组（不要改这个数，这是用户的硬性意愿不是建议）——`
+        + `按${String(requestedCountRaw)}组重新设计候选（语义聚合可合并现组），再出分组卡让用户选定；`
+        + `不得再带原组数方案重出（ci-bl-1103 循环确认事故）`,
+    };
+  }
   // P1-6b:agent 没传候选而字段配置自带分组(≥2 组)时,把配置分组合成单候选
   // 走完整出卡链——此前该形态只有审批卡上一行 note,分组确认卡永远不弹
   // (真机 11-06 实锚:用户被迫聊天裁决「ci可以,bl也要3组」)。用户在卡上
@@ -1131,26 +1139,9 @@ export const resolveGroupingFace = async (input: {
       // 闭集命中就落 run 级 marker，让用户意愿成为下一轮出卡的硬约束。
       // 集合外（「分两拨」「一半一半」「别分那么多」）不再静默丢——走下面的
       // none 分支，把原话照录回传 agent，由它理解后组装候选或带参重调。
-      const requestedGroups = groupCountFromText(customText);
-      if (requestedGroups !== undefined) {
-        if (input.runDir !== undefined) {
-          try {
-            const markerDir = join(input.runDir, "runtime", "webui");
-            mkdirSync(markerDir, { recursive: true });
-            writeFileSync(join(markerDir, "grouping-request.json"),
-              JSON.stringify({ requested_group_count: requestedGroups, raw_text: customText.slice(0, 120), at: new Date().toISOString() }, null, 1), "utf-8");
-          } catch { /* marker 落盘失败不阻断——靠 note 强指令兜底 */ }
-        }
-        return {
-          source: "proposal",
-          decision: "regroup_request",
-          candidate_name: null,
-          groups: [],
-          evidence,
-          payload: null,
-          note: `用户明确要求${String(requestedGroups)}组（原话「${customText.slice(0, 120)}」）——下一次分组候选必须恰好${String(requestedGroups)}组(这是用户的硬性意愿,不是建议):按${String(requestedGroups)}组重新设计候选(语义聚合可合并现组),再出分组卡让用户选定;不得再带原组数方案重出`,
-        };
-      }
+      // B3c（2026-11-21 owner 裁定）：组数不由工具从自由文本猜——闭集查表也是替 agent 做语义理解。
+      // 用户原话一律回传 agent；agent 读懂后带 requested_group_count 显式参数重调，
+      // 工具据此落 marker 供下一轮出卡做硬约束（ci-bl-1103 防循环确认的护栏因此保住）。
       return {
         source: "proposal",
         decision: "none",
@@ -1161,7 +1152,9 @@ export const resolveGroupingFace = async (input: {
         note: customText !== ""
           ? `用户自述了分组(原话照录:「${customText.slice(0, 200)}」)而不是选候选——本工具不解析自由文本。`
             + "请先理解他的意思(要几组/按什么维度分/是嫌组太多还是太少),再组装成新的分组候选重新出分组卡让用户正式选定"
-            + "(自由文本不直达生成面);本次未下传分组、未落账"
+            + "(自由文本不直达生成面);本次未下传分组、未落账。"
+            + "若他已明确说出组数,你理解后带 requested_group_count=<整数> 重调本工具"
+            + "(工具会落 run 级 marker,下一轮出卡以它为硬约束)——不得无视用户组数带原方案重出(ci-bl-1103 循环确认事故)"
           : "用户未在候选里选定也未自述——不替用户选:换一组候选重新出卡,或直接问用户想怎么分;本次未下传分组、未落账",
       };
     }
@@ -2527,6 +2520,14 @@ export const buildPipelineTool = (
           "用户说分组时的原话（一句话即可，原样，不要改写）——只用于回执与审计，不参与解析。"
           + "grouping_provenance=user_stated 时必填。",
       },
+      requested_group_count: {
+        type: "number",
+        description:
+          "用户明确要求的组数（仅 experiment_setup 段有意义）。**用户说了要几组时由你理解后填这里**——"
+          + "本工具不解析自由文本，卡上用户自述的原话会原样回传给你，你读懂后带本参数重调，"
+          + "工具据此落 run 级 marker，下一轮出卡以它为硬约束（防无视用户意愿的循环确认）。"
+          + "不填＝无组数约束。",
+      },
       grouping_confirm: {
         type: "boolean",
         description:
@@ -2752,7 +2753,7 @@ export const buildPipelineTool = (
       render: renderAsJsonText,
     },
     async execute(
-      args: { stage: string; run_id: string; experiment?: string; workspace_path?: string; source_root?: string; contract_candidate?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; unit_bindings?: Record<string, unknown>; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; prompt_material_hint?: string; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_check?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
+      args: { stage: string; run_id: string; experiment?: string; workspace_path?: string; source_root?: string; contract_candidate?: string; base_model_path?: string; assemble?: boolean; base_model_family?: string; auto_style_cluster?: string; style_clusters_source?: string; split_id?: string; allow_small_cluster_test?: boolean; merge_small_clusters?: boolean; grouping_preset?: string; negative_ratio_target?: string; max_total_tokens?: number; cutoff_len?: number; max_model_len?: number; image_min_pixels?: number; image_max_pixels?: number; pixel_pair_reason?: string; doc_type?: string; unit_bindings?: Record<string, unknown>; field_config?: string; train_all?: boolean; assignment_source?: string; reuse_experiment_setup?: boolean; token_provider?: string; retry_coordinate_pending?: boolean; visible_devices?: string; training_overrides?: Record<string, unknown>; grouping_proposal?: Record<string, unknown>; grouping_provenance?: string; grouping_quote?: string; grouping_confirm?: boolean; requested_group_count?: number; prompt_material_hint?: string; mode5_random?: number; mode5_advice_stats?: Record<string, unknown>; targeted_advice?: Record<string, unknown>; targeted_plan?: Record<string, unknown>; visual_readings?: Record<string, unknown>; visual_check?: Record<string, unknown>; visual_plan_only?: boolean; visual_wave_size?: number },
       exec: { agent?: unknown; callId?: string; signal?: unknown },
     ) {
       // fail-closed 参数面（先于审批——坏参数不消耗放行）：workspace_path 必填绝对路径；
@@ -3191,6 +3192,11 @@ export const buildPipelineTool = (
           proposalRaw: args.grouping_proposal,
           runDir,
           fieldChoiceConfirmed,
+          // B3c：组数由 agent 理解用户原话后显式传入（工具不猜自由文本）。
+          requestedGroupCount: typeof args.requested_group_count === "number"
+            && Number.isInteger(args.requested_group_count) && args.requested_group_count >= 1
+            ? args.requested_group_count
+            : undefined,
         });
         if ("ok" in resolvedGrouping) {
           return asToolValue({
