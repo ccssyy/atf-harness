@@ -854,7 +854,116 @@ export const buildRunTrainingTool = (ctx: { get(service: string): unknown }, cfg
       prelaunch_report: { type: "string", description: "build_prelaunch_report.py 产物路径（缺省自动扫 train.sh 同目录 prelaunch*——两处皆无即拒绝启动）" },
     },
     output: {
-      schema: { type: "object", additionalProperties: true },
+      // 声明面（保守）：additionalProperties 开放、零 required、只声明跨全部 return
+      // 路径类型稳定的顶层键（多 action 形态不同——只声明共有且类型稳定的）。
+      // 依据 execute 全部 return 逐条核对：status 分支（915）＝{action:"status",
+      // running, run_id, segments[{key,label,status 四态}], ckpts, loss_points, tmux
+      // [, tmux_probe][, latest_ckpt], next_steps{eval_ready,checkpoint_candidates,
+      // latest_checkpoint_path,eval_assets_dir,field_config,split_manifest,note}}；
+      // start 失败链（947 DRY_RUN／952 prelaunch 缺失／960 model 复核／976/1083 端口
+      // 占用／1027 对账失败／1110 双启未确认／1161 启动探活 dead）＝{started:false,
+      // error, note[, train_sh][, run_id][, reason][, dry_stdout_head][, model_path,
+      // models, models_root][, port, occupant][, mismatches, extracted][, outcome,
+      // tmux][, exit_code, log_tail]}；审批拒绝（991/1065/1075 approvalDeniedResult
+      // ——无 started/run_id）＝{error,tool,outcome,note}；start 成功（1203）＝
+      // {started:true, tmux, run_id, log, reconcile, probe{outcome,feed_seen}
+      // [, auto,tier][, previous_log], note}。外层 instrumentTrainOutcome（2337）
+      // 经 decorateOutcome 无差别追加 user_summary{conclusion,stage,next}＋
+      // escalate_to_user/failure_count。null-able（exit_code/model_path/
+      // next_steps 三路径键）一律 oneOf [值型,null]。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          started: { type: "boolean", description: "start 路径：true＝训练进程已启动（探活确认/进程存活）；false＝启动被拒或失败" },
+          action: { type: "string", description: "status 路径回显（\"status\"）" },
+          run_id: { type: "string", description: "run 标识（回显）" },
+          running: { type: "boolean", description: "status 路径：训练 tmux 会话是否在场" },
+          tmux: { type: "string", description: "训练 tmux 会话名（启动与状态查询路径）" },
+          tmux_probe: {
+            type: "object",
+            additionalProperties: true,
+            description: "tmux 探测被命名域拒绝时的回流（status 路径，refused 时在场）",
+            properties: {
+              ok: { type: "boolean", description: "恒 false（探测拒绝形态）" },
+              reason: { type: "string" },
+              guidance: { type: "string", description: "修复指引（随卡面可见）" },
+            },
+          },
+          segments: {
+            type: "array",
+            description: "八段任务卡段状态（status 路径——与监控同步器同源推导）",
+            items: {
+              type: "object",
+              additionalProperties: true,
+              properties: {
+                key: { type: "string", description: "段键（如 training）" },
+                label: { type: "string", description: "段中文名" },
+                status: { type: "string", enum: ["done", "active", "failed", "pending"] },
+              },
+            },
+          },
+          ckpts: { type: "array", description: "checkpoint 目录名列表（checkpoint-N 形态；status 路径）", items: { type: "string" } },
+          loss_points: { type: "number", description: "loss 序列点数（status 路径——训练推进的事实信号）" },
+          latest_ckpt: { type: "string", description: "最新 checkpoint 相对路径（有 ckpt 时；status 路径）" },
+          next_steps: {
+            type: "object",
+            additionalProperties: true,
+            description: "评估衔接事实核对（status 路径——确定性产物事实，评估参数可直接取用）",
+            properties: {
+              eval_ready: { type: "boolean", description: "true＝训练段产物在位（有含 adapter 的 checkpoint）" },
+              checkpoint_candidates: { type: "array", description: "含 adapter 的 checkpoint 候选名（有序）", items: { type: "string" } },
+              latest_checkpoint_path: { oneOf: [{ type: "string" }, { type: "null" }], description: "最新 checkpoint 路径（多类/缺席为 null）" },
+              eval_assets_dir: { oneOf: [{ type: "string" }, { type: "null" }], description: "评估资产目录（多类/缺席为 null——逐类明细不在本块）" },
+              field_config: { oneOf: [{ type: "string" }, { type: "null" }], description: "字段配置路径（多类/缺席为 null）" },
+              split_manifest: { oneOf: [{ type: "string" }, { type: "null" }], description: "分区清单路径（多类/缺席为 null）" },
+              note: { type: "string", description: "衔接说明（产物未齐时给缺口事实）" },
+            },
+          },
+          error: { type: "string", description: "失败码或失败说明（start 面与审批拒绝路径；approval_denied 时另有 tool/outcome）" },
+          note: { type: "string", description: "人读说明与修复指引" },
+          reason: { type: "string", description: "失败细分原因（model_path_missing 的复核 reason／startup_failed 的终止原因）" },
+          train_sh: { type: "string", description: "train.sh 路径（回显）" },
+          dry_stdout_head: { type: "string", description: "DRY_RUN 校验失败的 stdout 头部摘要" },
+          model_path: { oneOf: [{ type: "string" }, { type: "null" }], description: "base_model.path 复核值（缺席 null）" },
+          models: { type: "array", description: "本机可用模型清单（model_path_missing 时回流）", items: { type: "string" } },
+          models_root: { type: "string", description: "本机模型库根（ATF_MODEL_ROOT）" },
+          port: { type: "number", description: "train.sh master 端口（端口占用路径）" },
+          occupant: { type: "object", additionalProperties: true, description: "端口占用者事实（pid/命令等——端口占用路径）" },
+          mismatches: { type: "json", description: "确认值与 train.sh 生成面不符的逐键差异（train_sh_reconcile_failed 时）" },
+          extracted: { type: "object", additionalProperties: true, description: "从 train.sh 提取的生成面现值（对账失败时）" },
+          outcome: { type: "string", description: "双启确认/审批拒绝的结果（cancelled/rejected/unavailable 等）" },
+          exit_code: { oneOf: [{ type: "number" }, { type: "null" }], description: "启动失败的训练退出码（78＝放行记录闸；null＝未知）" },
+          log_tail: { type: "string", description: "训练日志尾部摘要（startup_failed 时——按它定位）" },
+          reconcile: { type: "string", enum: ["ok", "skipped_no_baseline"], description: "确认值→train.sh 透传对账结论（start 成功路径）" },
+          probe: {
+            type: "object",
+            additionalProperties: true,
+            description: "启动探活结果（start 成功路径）",
+            properties: {
+              outcome: { type: "string", enum: ["feed_ok", "alive_no_feed", "dead"], description: "feed_ok＝进料确认且进程存活；alive_no_feed＝窗口内无进料但存活" },
+              feed_seen: { type: "boolean", description: "是否已见进料行（SHA/ADMISSION）" },
+            },
+          },
+          log: { type: "string", description: "训练 stdout 日志路径（start 成功路径）" },
+          auto: { type: "boolean", description: "true＝全自动训练档免审批放行（start 成功路径）" },
+          tier: { type: "string", description: "自动档预设档位名" },
+          previous_log: { type: "string", description: "启动轮转归档的旧日志路径（在位时）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          user_summary: {
+            type: "object",
+            additionalProperties: true,
+            description: "用户面三句话摘要（外层装饰恒追加）",
+            properties: {
+              conclusion: { type: "string" },
+              stage: { type: "string" },
+              next: { type: "string" },
+            },
+          },
+          escalate_to_user: { type: "boolean", description: "true＝连续失败达阈值，已向用户升级" },
+          failure_count: { type: "number", description: "连续失败计数（升级时出现）" },
+        },
+      },
       render: (_args, value) => {
         // 任务卡 chat 卡面：status 结果带段状态时渲染八段 checklist——run 推进期 agent
         // 每次 status 轮询即把最新任务卡贴进对话流；其余形态保持 JSON 卡面。
