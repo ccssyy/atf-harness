@@ -414,7 +414,7 @@ describe("F6 回执用户面摘要（atf_pipeline_stage）", () => {
 });
 
 describe('ci-bl-1103 组数指令闭环（防循环确认）', () => {
-  it('custom 原话回传 agent（工具不解析组数）+ 提示带 requested_group_count 重调', async () => {
+  it('custom 原话原样进返回体（工具不做语义解析）', async () => {
     const ws = tempRoot('c2-n3-');
     confirmFields(ws, 'n3run');
     const asked: Array<Record<string, unknown>> = [];
@@ -426,7 +426,7 @@ describe('ci-bl-1103 组数指令闭环（防循环确认）', () => {
     // B3c：工具不解析自由文本——原话原样回传，由 agent 理解组数。
     expect(result['grouping_decision']).toBe('none');
     expect(JSON.stringify(result)).toContain('分3组');
-    expect(JSON.stringify(result)).toContain('requested_group_count');
+    expect(result['grouping_user_words']).toBe('分3组');
     // 工具不落 marker（组数不是它猜的），marker 由 agent 理解后带参重调时才落。
     expect(existsSync(join(ws, 'runs', 'n3run', 'runtime', 'webui', 'grouping-request.json'))).toBe(false);
   });

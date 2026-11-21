@@ -181,7 +181,7 @@ import { tmpdir } from "node:os";
  * 现在字段卡的答复只走两条明路：
  *  · 选项卡 label 命中（selected）——用户明确选定，工具原样落账；
  *  · 用户手打了文字——**原话原样回传 agent**（见 user_words），由 agent 理解后
- *    带 field_config 结构化参数重调本工具。
+ *    原文进 user_words，由 agent 读取后自行决定如何构造 field_config。
  */
 
 export const promptChoiceOptionsOf = (materialHint: string | null): ReadonlyArray<{ label: string; description: string }> => {
@@ -527,6 +527,8 @@ export interface GroupingFace {
   evidence: Record<string, unknown> | null;
   /** 透传内核的候选原文（用户选定后把 recommended 旗标挪到他选的那个）。 */
   payload: Record<string, unknown> | null;
+  /** 用户在卡上自述的原话（vendor 原样给出，本工具不做语义解析）；无则 null。 */
+  user_words?: string | null;
   note: string;
 }
 
@@ -1144,13 +1146,11 @@ export const resolveGroupingFace = async (input: {
         groups: [],
         evidence,
         payload: null,
+        // 用户在卡上自述的原话（vendor 原样给出，本工具不做语义解析）。
+        user_words: customText === "" ? null : customText.slice(0, 200),
         note: customText !== ""
-          ? `用户自述了分组(原话照录:「${customText.slice(0, 200)}」)而不是选候选——本工具不解析自由文本。`
-            + "请先理解他的意思(要几组/按什么维度分/是嫌组太多还是太少),再组装成新的分组候选重新出分组卡让用户正式选定"
-            + "(自由文本不直达生成面);本次未下传分组、未落账。"
-            + "若他已明确说出组数,你理解后带 requested_group_count=<整数> 重调本工具"
-            + "(工具会落 run 级 marker,下一轮出卡以它为硬约束)——不得无视用户组数带原方案重出(ci-bl-1103 循环确认事故)"
-          : "用户未在候选里选定也未自述——不替用户选:换一组候选重新出卡,或直接问用户想怎么分;本次未下传分组、未落账",
+          ? "用户在卡上自述了分组内容（见 user_words），未选候选；本次未下传分组、未落账"
+          : "用户未在候选里选定也未自述；本次未下传分组、未落账",
       };
     }
     const chosenPayload = withChoice(chosen.name);
@@ -2518,10 +2518,8 @@ export const buildPipelineTool = (
       requested_group_count: {
         type: "number",
         description:
-          "用户明确要求的组数（仅 experiment_setup 段有意义）。**用户说了要几组时由你理解后填这里**——"
-          + "本工具不解析自由文本，卡上用户自述的原话会原样回传给你，你读懂后带本参数重调，"
-          + "工具据此落 run 级 marker，下一轮出卡以它为硬约束（防无视用户意愿的循环确认）。"
-          + "不填＝无组数约束。",
+          "用户明确要求的组数（仅 experiment_setup 段有意义）。传入时本工具落 run 级 marker "
+          + "(runtime/webui/grouping-request.json)，下一轮出卡以它为硬约束。不填＝无组数约束。",
       },
       grouping_confirm: {
         type: "boolean",
@@ -3773,7 +3771,7 @@ let visualSummary: Record<string, unknown> | undefined;
                     total_fields: labels.label_count,
                   };
                 } else {
-                  // 用户手打了文字：不解析、不追问——原话照录回传 agent。
+                  // 用户手打了文字：原话照录进 user_words 返回（无解析、无追问）。
                   // 「分两拨」「除了 X 都要」「awb 和 shipper 那俩」都走这一条，
                   // 无论工具能否理解，agent 一定看得到用户到底说了什么。
                   const said = typed !== "" ? typed : (picked !== "" ? picked : "");
@@ -3784,13 +3782,12 @@ let visualSummary: Record<string, unknown> | undefined;
                     needs_selection: true,
                     user_words: said,
                     retry_hint: said === ""
-                      ? "用户既没选「全部训练」也没写字（或直接关了卡）——不要替他勾全选，请向用户确认要训哪些字段"
-                      : "用户手打了文字，本工具不解析自由文本——原文照录在 user_words，请理解后带 field_config 重调",
+                      ? "用户既没选「全部训练」也没写字（或直接关了卡）"
+                      : "用户手打了文字，原文在 user_words",
                     all_field_names: allLabels,
-                    note:
-                      "用户没有确认「全部训练」——他写的话原样在 user_words 里（工具不做语义解析）。"
-                      + "请理解他的意思后，以 field_config 显式给出要训的字段再重调本工具；"
-                      + "清单外的名字先确认是笔误还是标注里没有，不要替他勾全选",
+                    note: said === ""
+                      ? "用户没有确认「全部训练」，也没有写字；本次未落字段选择"
+                      : "用户手打了文字（见 user_words），未选「全部训练」；本次未落字段选择",
                   };
                 }
               } catch {
@@ -4059,6 +4056,8 @@ let visualSummary: Record<string, unknown> | undefined;
               grouping_decision: groupingFace.decision,
               grouping_candidate_name: groupingFace.candidate_name,
               grouping_note: groupingFace.note,
+              // 用户在卡上自述的原话（vendor 原样给出）；无则 null。
+              grouping_user_words: groupingFace.user_words ?? null,
               ...(groupingFace.evidence !== null ? { grouping_evidence: groupingFace.evidence } : {}),
               ...(groupingFace.groups.length > 0
                 ? { grouping_report: renderGroupingReportMarkdown(groupingFace.groups, groupingFieldNames) }

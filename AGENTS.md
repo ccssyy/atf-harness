@@ -33,8 +33,8 @@
 8. **语义理解归 agent，工具不代猜（B3c，2026-11-21 owner 裁定）**：工具只做两类事——确定性动作（落账/调内核/协议转换）与精确映射（本卡下发数据的等值查找）。**凡是需要「理解用户意思」的，一律原样回传 agent，由它理解后带结构化参数重调。**
    - vendor 原生模型即此形态：`AskUserQuestionAnswerItem` 只给 `selected: string[]`（label 原文）与 `custom?: string`（手打原文），官方 `tool-ask-user` 明写「feeds that answer back into the agent loop as an ordinary tool result」。
    - **禁止**形态：用正则从 `custom` 抽数字/组数、把 `label` 经拼写表（`"3"`/`"3倍"`/`"每图 3 条"` 混一表）翻回 `value`、任何 `spellingIndexOf` / `*TEXT_INDEX` / `*FromText` 式猜测。
-   - **正确形态**：答案原样进 `pending_user_answers` 回传 + 落账留痕；需要结构化值时由 agent 显式传参（如 `requested_group_count`）。
-   - **机检**：`tests/dshTools/freeTextNoRegex.test.ts` 的 B3c 事故锚（查表全族不得存在、必有 `pending_user_answers` 与重调指引）。
+   - **正确形态**：答案原样进 `card_answers` 返回 + 落账留痕；需要结构化值时由 agent 显式传参（如 `requested_group_count`）。
+   - **机检**：`tests/dshTools/freeTextNoRegex.test.ts` 的 B3c 事故锚（查表全族不得存在、必有 `card_answers` 字段）。
    - **历史事故**：复验#24（「除 X 外的 N 个都要」被正则静默吞、卡消失凭据不落）+ N5（`"2 倍"` 被吞成「不增强」）+ ci-bl-1103（无视用户组数导致循环确认）。
 
 ### 3.8 产品验证纪律（浏览器实操）

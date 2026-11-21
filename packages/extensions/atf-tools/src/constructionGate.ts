@@ -55,6 +55,9 @@ export interface ConstructionDecision extends ConstructionParamsState {
   readonly note: string;
   /** 落点（问到人／全自动自决时写；通道不可用时为 null）。 */
   readonly ledgerPath: string | null;
+  /** 用户在卡上的作答原文（vendor 原样给出的 selected/custom）。
+   *  纯数据，工具不解读；无作答时缺省。 */
+  readonly card_answers?: ReadonlyArray<{ readonly field: string; readonly said: string }>;
 }
 
 /** 分组两态（要不要按分组生成——组构成由内核按字段配置产出，本问只收意愿）。 */
@@ -85,7 +88,7 @@ const AUGMENT_OPTIONS: ReadonlyArray<{ label: string; value: number }> = [
  * 两步都是替 agent 干活，且方法不对。
  *
  * 现在：三个字段的答案（selected / custom）**原样**进 tool result，
- * agent 理解后带结构化参数重调本工具。工具只做确定性动作（落账）。
+ * 工具只做确定性动作（落账）；用户说了什么由 agent 从返回体读到后自行判断下一步。
  */
 
 /** 把某问的答案原样取出（selected 在前、custom 兜底），不做任何解析。 */
@@ -364,7 +367,7 @@ export const decideConstructionParams = async (input: {
     const cutoffLen = input.state.cutoffLen;
 
     // 凡用户作答但工具未解析的，逐条原文回传（一条不丢）。
-    const pendingAnswers: ReadonlyArray<{ readonly field: string; readonly said: string }> = [
+    const userAnswersInCard: ReadonlyArray<{ readonly field: string; readonly said: string }> = [
       ...(needAugment && augmentAnswerText !== ""
         ? [{ field: "随机子集增强每图条数", said: augmentAnswerText }]
         : []),
@@ -392,14 +395,11 @@ export const decideConstructionParams = async (input: {
         augment: augmentAnswerText, targeted: targetedAnswerText, cutoff: cutoffAnswerText,
       },
       // B3：认不出的原话一并落账——事后可核「用户到底说了什么」，不被解析层吞掉
-      ...(pendingAnswers.length > 0 ? { pending_user_answers: pendingAnswers } : {}),
+      ...(userAnswersInCard.length > 0 ? { card_answers: userAnswersInCard } : {}),
     });
     const augmentLine = mode5Random === undefined || mode5Random === 0 ? "不增强" : `${String(mode5Random)} 倍`;
     // B3 回落链路：第 3 步回传——原话逐条回给 agent（不截断、不改写），
     // 并明说「这几项按现值/原值保留」，让 agent 带结构化参数重调工具。
-    const echoLine = pendingAnswers.length === 0
-      ? ""
-      : `\n用户的作答本卡未做解析，原样照录——${pendingAnswers.map((item) => `「${item.said}」（${item.field}）`).join("、")}；这几项本轮按现值保留。请理解他的意思后带结构化参数重调本工具（不要当作他没说）。`;
     return {
       groupingConfirm,
       mode5Random,
@@ -408,7 +408,10 @@ export const decideConstructionParams = async (input: {
       targetedSuggested: input.state.targetedSuggested,
       asked: true,
       decided_by: "user",
-      note: `分组＝按分组生成（产品默认,必分组不提问）；随机子集增强＝${augmentLine}；重点字段倍率＝${targetedMultiplier === undefined ? "未确认" : `${String(targetedMultiplier)} 倍`}；序列长度上限＝${cutoffLen === undefined ? "未确认" : String(cutoffLen)}` + echoLine,
+      note: `分组＝按分组生成（产品默认,必分组不提问）；随机子集增强＝${augmentLine}；重点字段倍率＝${targetedMultiplier === undefined ? "未确认" : `${String(targetedMultiplier)} 倍`}；序列长度上限＝${cutoffLen === undefined ? "未确认" : String(cutoffLen)}`,
+      // 用户在卡上的作答原文（vendor 原样给出，本工具不做语义解析）。
+      // 结构化值留在账本供审计；agent 从本字段读到用户说了什么。
+      card_answers: userAnswersInCard.map((item) => ({ field: item.field, said: item.said })),
       ledgerPath,
     };
   } catch (cause) {

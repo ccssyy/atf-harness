@@ -80,9 +80,9 @@ describe("事故锚（复验#24）：用户写的话绝不被静默吞掉", () =
     expect(pipelineSrc, "缺 all_field_names——agent 无法把口语对上字段").toContain("all_field_names:");
   });
 
-  it("构造参数卡未解析的作答也留底（pending_user_answers）", () => {
+  it("构造参数卡未解析的作答也留底（card_answers）", () => {
     const gateSrc = read("constructionGate.ts");
-    expect(gateSrc, "构造卡缺 pending_user_answers 留底——作答会被静默丢").toContain("pending_user_answers");
+    expect(gateSrc, "构造卡缺 card_answers 留底——作答会被静默丢").toContain("card_answers");
   });
 });
 
@@ -111,11 +111,12 @@ describe("事故锚（N5/B3c）：作答原样照录，不被解析层吞改", (
     expect(gateSrc.includes("cutoffFromText"), "cutoffFromText 仍在").toBe(false);
   });
 
-  it("用户作答必须原样照录进回传面（pending_user_answers）", () => {
-    expect(gateSrc, "缺 pending_user_answers——作答会被静默吞").toContain("pending_user_answers");
+  it("用户作答必须原样照录进返回体（card_answers）", () => {
+    expect(gateSrc, "缺 card_answers——作答会被静默吞").toContain("card_answers");
   });
 
-  it("回传面给出重调指引", () => {
-    expect(gateSrc, "缺重调指引").toContain("带结构化参数重调本工具");
+  it("返回体不含指令式话术（工具只交数据，不指挥 agent 怎么做）", () => {
+    expect(gateSrc.includes("不解析"), "返回体仍带「不解析」类工具视角话术").toBe(false);
+    expect(gateSrc.includes("请理解他的意思后"), "返回体仍带命令式指令").toBe(false);
   });
 });
