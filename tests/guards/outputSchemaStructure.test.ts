@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * 工具面自描述守卫（2026-11-21「工具面自描述补全」批次）。
+ * 工具面自描述守卫（2026-11-21「工具面自描述补全」批次建立；2026-11-22 A1 清退批收口）。
  *
  * defineTool 的 output.schema 由 dsh-system-prompt 自动组装进 agent prompt——
  * 是 agent 知道「会收到什么结构」的唯一来源。「无 properties 的裸开放
@@ -12,9 +12,9 @@ import { join } from "node:path";
  *
  * 检测形态＝单行字面量 `schema: { type: "object", additionalProperties: true }`
  * 后紧跟 `,` 或 `}`（render 单行 / output 块收口两种排布均命中）——断言为零。
- * `looseObjectOutput` 常量引用形态（schemaTranslate.ts @deprecated）存量 11 个
- * 工具位在用（盘点正则只查字面量、引用全部漏计）——按文件计数精确登记，
- * 新增引用即失败；待独立批次逐个结构化后清零并删除常量。
+ * `looseObjectOutput` 常量（schemaTranslate.ts）曾以 `schema: looseObjectOutput`
+ * 引用形态承载 11 个工具位的裸开放声明——A1 批逐位结构化后清零、常量已删；
+ * 本守卫对引用形态保持零断言（任何回潮引用即失败）。
  */
 
 const SRC_ROOT = join(process.cwd(), "packages", "extensions", "atf-tools", "src");
@@ -26,25 +26,11 @@ const BARE_OPEN_OUTPUT =
 /** looseObjectOutput 引用使用位的检测正则（schema: looseObjectOutput）。 */
 const LOOSE_REF_USAGE = /schema:\s*looseObjectOutput\b/g;
 
-/**
- * 引用形态存量登记（文件 → [计数, 身份]；精确匹配——变多=新腐化，
- * 变少=存量已修、登记待清）。定义处（schemaTranslate.ts）不计——
- * 检测串锚定 `schema: looseObjectOutput` 使用形态。
- * 身份注释吸收自 lead 2d301c7b 版守卫（fileGuard/bridge 非盘点 18 清单
- * 工具的真实归属）。
- */
-const KNOWN_LEGACY_REFS: Readonly<Record<string, [number, string]>> = {
-  "fileFace.ts": [4, "atf_run_list / atf_report_read / atf_metrics_compare / atf_gpu_status"],
-  "attachmentsFace.ts": [1, "atf_attachments_assembly"],
-  "jointTrainFace.ts": [1, "atf_joint_train"],
-  "prelaunchFace.ts": [1, "atf_prelaunch_report"],
-  "recordsFace.ts": [1, "atf_records_query"],
-  "quantizeFace.ts": [1, "atf_quantize_annotations"],
-  "bridgeFace.ts": [1, "label-qc resolve 卡工具（agent 可见）"],
-  "fileGuardFace.ts": [1, "FILE_TOOL_DEFINITIONS 文件工具族（atf_read/write/edit/bash 等）"],
-};
-
-/** 本批次结构化声明的工具：output 块内必须带 properties（声明面存在性）。 */
+/** 本批次结构化声明的工具：output 块内必须带 properties（声明面存在性）。
+ *  A1 批（2026-11-22）清退 11 位：9 个字面量 name 工具入本表；fileGuardFace
+ *  （FILE_TOOL_DEFINITIONS 循环挂载）与 bridgeFace（BRIDGE_TOOL_NAMES 循环挂载）
+ *  两位的 name 为动态表达式（definition.name），toolDefinitionSlice 锚不到字面量
+ *  ——由「循环挂载面」断言单独覆盖。 */
 const DECLARED_TOOLS: ReadonlyArray<{ tool: string; file: string }> = [
   { tool: "atf_config_confirm", file: "confirmFace.ts" },
   { tool: "atf_publish_confirm", file: "confirmFace.ts" },
@@ -55,6 +41,22 @@ const DECLARED_TOOLS: ReadonlyArray<{ tool: string; file: string }> = [
   { tool: "atf_evaluate", file: "trainingFace.ts" },
   { tool: "atf_analyze_badcases", file: "trainingFace.ts" },
   { tool: "atf_hello", file: "index.ts" },
+  // ── A1 批清退位（2026-11-22）──
+  { tool: "atf_run_list", file: "fileFace.ts" },
+  { tool: "atf_report_read", file: "fileFace.ts" },
+  { tool: "atf_metrics_compare", file: "fileFace.ts" },
+  { tool: "atf_gpu_status", file: "fileFace.ts" },
+  { tool: "atf_attachments_assembly", file: "attachmentsFace.ts" },
+  { tool: "atf_joint_train", file: "jointTrainFace.ts" },
+  { tool: "atf_prelaunch_report", file: "prelaunchFace.ts" },
+  { tool: "atf_records_query", file: "recordsFace.ts" },
+  { tool: "atf_quantize_annotations", file: "quantizeFace.ts" },
+];
+
+/** 循环挂载面（一位多工具、name 为动态表达式）：文件级声明面存在性。 */
+const LOOP_MOUNTED_FACES: ReadonlyArray<{ face: string; file: string; note: string }> = [
+  { face: "FILE_TOOL_DEFINITIONS 文件工具族", file: "fileGuardFace.ts", note: "atf_read/atf_edit/atf_write/atf_bash" },
+  { face: "BRIDGE_TOOL_NAMES 桥接面", file: "bridgeFace.ts", note: "label-qc resolve 卡工具等" },
 ];
 
 /** 递归收集 src 下全部 .ts 源文件。 */
@@ -98,19 +100,13 @@ describe("工具面自描述守卫（outputSchemaStructure）", () => {
     expect(hits).toEqual([]);
   });
 
-  it("looseObjectOutput 引用仅存于已登记的存量工具位（新增即失败）", () => {
+  it("looseObjectOutput 引用为零（A1 批清退后常量已删——任何引用即回潮失败）", () => {
     const files = listSourceFiles(SRC_ROOT);
-    const refsByFile: Record<string, number> = {};
+    const hits: string[] = [];
     for (const file of files) {
-      const count = findLooseRefUsages(readFileSync(file, "utf8")).length;
-      if (count > 0) refsByFile[file.split("/").pop() as string] = count;
+      hits.push(...findLooseRefUsages(readFileSync(file, "utf8")).map((fragment) => `${file.split("/").pop()}: ${fragment}`));
     }
-    // 文件集与逐文件计数精确匹配——变多=新腐化（新代码禁用该常量），
-    // 变少=存量已修、登记待清（清零后本断言与常量一起退役）
-    expect(Object.keys(refsByFile).sort()).toEqual(Object.keys(KNOWN_LEGACY_REFS).sort());
-    for (const [file, [expected, note]] of Object.entries(KNOWN_LEGACY_REFS)) {
-      expect(refsByFile[file] ?? 0, `${file} 的 looseObjectOutput 引用计数应恰为 ${expected}（${note}）`).toBe(expected);
-    }
+    expect(hits).toEqual([]);
   });
 
   it("阴性对照：检测器能命中合成源串里的裸开放形态（防检测器失效）", () => {
@@ -148,6 +144,22 @@ describe("工具面自描述守卫（outputSchemaStructure）", () => {
       const slice = toolDefinitionSlice(text, tool);
       expect(slice, `${tool} 的定义片段应含 output 块`).toContain("output:");
       expect(slice, `${tool}（${file}）的 output schema 应带 properties——裸开放形态=agent 视角黑盒`).toContain("properties:");
+    }
+  });
+
+  it("循环挂载面（一位多工具）的 output schema 块带 properties（声明面存在）", () => {
+    for (const { face, file, note } of LOOP_MOUNTED_FACES) {
+      const text = readFileSync(join(SRC_ROOT, file), "utf8");
+      // 循环挂载面唯一的 output 块即共享 schema 声明——文件级锚定足够
+      // （fileGuardFace/bridgeFace 的 name 为 definition.name 动态表达式，
+      //  无法按工具名切片；本断言与「inline 裸形态为零」互为犄角）。
+      const outputAt = text.indexOf("output: {");
+      expect(outputAt, `${face}（${file}）应含 output 块`).toBeGreaterThanOrEqual(0);
+      const schemaAt = text.indexOf("schema: {", outputAt);
+      expect(schemaAt, `${face}（${file}）的 output 块应含 schema 声明`).toBeGreaterThan(outputAt);
+      const renderAt = text.indexOf("render:", schemaAt);
+      const schemaSlice = text.slice(schemaAt, renderAt > schemaAt ? renderAt : undefined);
+      expect(schemaSlice, `${face}（${file}，${note}）的 output schema 应带 properties——裸开放形态=agent 视角黑盒`).toContain("properties:");
     }
   });
 });
