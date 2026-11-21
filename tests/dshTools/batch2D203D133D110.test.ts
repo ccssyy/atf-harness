@@ -32,7 +32,7 @@ describe("批2-D203——放行后账本对账(不盲启编排)", () => {
   });
   it("对账对象=编排闸同一真相(service_manifest.config_sha256 vs record subject)", () => {
     const src = readFileSync(TRAINING, "utf8");
-    const idx = src.indexOf("eval_release_ledger_mismatch");
+    const idx = src.indexOf('error: "eval_release_ledger_mismatch"');
     const window = src.slice(Math.max(0, idx - 900), idx);
     expect(window).toContain("service_manifest.json");
     expect(window).toContain("config_sha256");
