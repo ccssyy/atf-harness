@@ -110,4 +110,39 @@ describe("工具面自描述守卫（outputSchemaStructure）", () => {
       expect(slice, `${tool}（${file}）的 output schema 应带 properties——裸开放形态=agent 视角黑盒`).toContain("properties:");
     }
   });
+
+  // 显式存量清单（2026-11-21 批裁定 A）：looseObjectOutput 引用位按文件精确计数，
+  // 漂移（新增/清退未同步本清单）即红——报错点名文件。新代码禁用该常量（@deprecated）。
+  const KNOWN_LOOSE_SITES: ReadonlyArray<{ readonly file: string; readonly count: number; readonly note: string }> = [
+    { file: "fileFace.ts", count: 4, note: "atf_run_list / atf_report_read / atf_metrics_compare / atf_gpu_status" },
+    { file: "fileGuardFace.ts", count: 1, note: "FILE_TOOL_DEFINITIONS 文件工具族（atf_read/write/edit/bash 等）" },
+    { file: "attachmentsFace.ts", count: 1, note: "atf_attachments_assembly" },
+    { file: "jointTrainFace.ts", count: 1, note: "atf_joint_train" },
+    { file: "prelaunchFace.ts", count: 1, note: "atf_prelaunch_report" },
+    { file: "recordsFace.ts", count: 1, note: "atf_records_query" },
+    { file: "quantizeFace.ts", count: 1, note: "atf_quantize_annotations" },
+    { file: "bridgeFace.ts", count: 1, note: "label-qc resolve 卡工具（agent 可见）" },
+  ];
+
+  it("looseObjectOutput 引用位＝显式存量清单（按文件精确计数，漂移即红）", () => {
+    const totalExpected = KNOWN_LOOSE_SITES.reduce((sum, s) => sum + s.count, 0);
+    const usageRe = /schema:\s*looseObjectOutput,/g;
+    let totalActual = 0;
+    const perFileActual = new Map<string, number>();
+    for (const entry of readdirSync(SRC_ROOT)) {
+      if (!entry.endsWith(".ts")) continue;
+      const text = readFileSync(join(SRC_ROOT, entry), "utf8");
+      const n = (text.match(usageRe) ?? []).length;
+      if (n > 0) { perFileActual.set(entry, n); totalActual += n; }
+    }
+    expect(totalActual, `looseObjectOutput 引用位总数应为 ${String(totalExpected)}（显式清单）——实得 ${String(totalActual)}，见逐文件差异`).toBe(totalExpected);
+    for (const site of KNOWN_LOOSE_SITES) {
+      expect(perFileActual.get(site.file) ?? 0,
+        `${site.file} 的 looseObjectOutput 引用数应为 ${String(site.count)}（${site.note}）——清单与代码漂移，双向都要同步`).toBe(site.count);
+    }
+    for (const [file, n] of perFileActual) {
+      const known = KNOWN_LOOSE_SITES.find((s) => s.file === file);
+      expect(known, `${file} 出现 ${String(n)} 处 looseObjectOutput 引用但不在存量清单——新代码禁用该常量（@deprecated）`).toBeDefined();
+    }
+  });
 });

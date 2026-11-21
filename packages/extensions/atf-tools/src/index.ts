@@ -27,7 +27,7 @@ import { registerUnattendedQuestionGuard } from "./unattendedGuard.js";
 import { buildFileGuardTools, registerPathGuard, startFileRootsHotReload } from "./fileGuardFace.js";
 import { deriveFileToolRoots } from "../../../../src/agent/fileRoots.js";
 import type { FileToolHost } from "../../../../src/agent/fileTools.js";
-import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTranslate.js";
+import { asToolValue, renderAsJsonText } from "./schemaTranslate.js";
 import { BridgeManager, buildBridgeTools } from "./bridgeFace.js";
 import { buildFileTools } from "./fileFace.js";
 import { buildPipelineTool } from "./pipelineFace.js";
@@ -262,7 +262,26 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
       description: "atf-tools 装配自检探针：返回固定问候与桥接工具清单（连通性诊断用），附本机可用模型清单（ATF_MODEL_ROOT 扫描——训练 base_model.path 选型参考）。",
       parameters: {},
       output: {
-        schema: looseObjectOutput,
+        schema: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            greeting: { type: "string", description: "固定问候（装配成功的标志位）" },
+            package: { type: "string", description: "包名与版本" },
+            tools: { type: "number", description: "本包注册的工具数" },
+            local_models: {
+              type: "object",
+              additionalProperties: true,
+              description: "本机可用模型清单（ATF_MODEL_ROOT 扫描）",
+              properties: {
+                root: { type: "string", description: "扫描根" },
+                count: { type: "number", description: "模型数" },
+                models: { type: "array", description: "模型目录名列表" },
+                error: { type: "string", description: "扫描失败原因（成功时缺省）" },
+              },
+            },
+          },
+        },
         render: renderAsJsonText,
       },
       async execute() {
