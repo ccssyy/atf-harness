@@ -75,51 +75,73 @@ const AUGMENT_OPTIONS: ReadonlyArray<{ label: string; value: number }> = [
   { label: "每图 10 条", value: 10 },
 ];
 
-/** 自由输入解析（仅 custom 通道：用户手打「3」「三倍」「不增强」这类文字）。
+/** 值→合法拼写的闭集索引（B3：自由文本不由工具解析，只认本卡声明过的拼写）。
  *
- * 选项卡的 selected 回传的是 label 本身（契约 confirmFace.ts:199——选项编码），
- * 等值命中在调用方完成，不经本函数。本函数只服务自由输入：认数字认否定，
- * 认不出按未答处理（不猜）。N5 教训：不要为「回传形态可能变形」加猜测层——
- * 形态不对修回传端（对齐契约），解析端不加启发式。
+ * 背景（B3 判据）：用户写「分两拨」「一半一半」这类说法，工具无从判断、也不该猜。
+ * 旧实现用正则从自由文本抽数字，抽不到就静默丢弃——agent 根本不知道用户说过话。
+ * 现在只做**有限集等值查表**：本卡选项里出现过的值加上声明过的拼写，命中才算数；
+ * 集合外一律 undefined（调用方保持现值，并把原话交回 agent 重调——不猜、不吞）。
  */
+const spellingIndexOf = (
+  entries: ReadonlyArray<readonly [number, readonly string[]]>,
+): ReadonlyMap<string, number> => {
+  const index = new Map<string, number>();
+  for (const [value, spellings] of entries) {
+    for (const spelling of spellings) index.set(spelling, value);
+  }
+  return index;
+};
+
+/** 一个数值的三种声明拼写（「3」「3 倍」「3倍」）—— 闭集，不是正则。 */
+const numericSpellingsOf = (value: number): readonly string[] => [
+  String(value), `${String(value)} 倍`, `${String(value)}倍`,
+];
+
+/** 增强条数：选项值域（AUGMENT_OPTIONS）＋否定说法（值 0）的闭集拼写。 */
+const AUGMENT_TEXT_INDEX: ReadonlyMap<string, number> = spellingIndexOf(
+  AUGMENT_OPTIONS.map((option): readonly [number, readonly string[]] => [
+    option.value,
+    option.value === 0
+      ? ["不增强", "不要", "不", "否", "none", "off", "0"]
+      : [`每图 ${String(option.value)} 条`, `每图${String(option.value)}条`, ...numericSpellingsOf(option.value)],
+  ]),
+);
+
+/** targeted 倍率：档位值域＋「不重点扩」的闭集拼写（智能推导 label 由调用方等值命中）。 */
+const TARGETED_TEXT_INDEX: ReadonlyMap<string, number> = spellingIndexOf([
+  [1, ["1 倍（不重点扩）", "1 倍", "不重点扩", ...numericSpellingsOf(1)]],
+  [1.5, numericSpellingsOf(1.5)],
+  [2, numericSpellingsOf(2)],
+  [3, numericSpellingsOf(3)],
+]);
+
+/** cutoff_len：三档选项 label＋裸数值的闭集拼写。 */
+const CUTOFF_TEXT_INDEX: ReadonlyMap<string, number> = spellingIndexOf([
+  [9000, ["9000（基线默认）", "9000"]],
+  [12288, ["12288"]],
+  [8192, ["8192"]],
+]);
+
+/** 增强条数解析（selected 回显或 custom 手打；只认声明拼写，集合外 undefined）。 */
 export const augmentFromText = (text: string): number | undefined => {
   const trimmed = text.trim();
   if (trimmed === "") return undefined;
-  const exact = AUGMENT_OPTIONS.find((option) => option.label === trimmed);
-  if (exact !== undefined) return exact.value;
-  const numMatch = trimmed.match(/(\d+(?:\.\d+)?)/);
-  if (numMatch !== null) {
-    const num = Number(numMatch[1]);
-    if (Number.isFinite(num) && num >= 0) return num;
-  }
-  if (/不|否|none|off/i.test(trimmed)) return 0;
-  return undefined;
+  return AUGMENT_TEXT_INDEX.get(trimmed);
 };
 
-/** targeted 倍率解析:selected 命中智能默认 label→推导值;数字/档位文字→值;未答 undefined。 */
+/** targeted 倍率解析：智能推导 label 命中→推导值；声明拼写→档位值；未答 undefined。 */
 const targetedFromText = (text: string, suggestedLabel: string, suggested: number | undefined): number | undefined => {
   const trimmed = text.trim();
   if (trimmed === "") return undefined;
   if (trimmed === suggestedLabel) return suggested ?? 1.0;
-  if (trimmed.includes("不重点扩")) return 1.0;
-  const numMatch = trimmed.match(/(\d+(?:\.\d+)?)/);
-  if (numMatch !== null) {
-    const num = Number(numMatch[1]);
-    if (Number.isFinite(num) && num > 0) return num;
-  }
-  return undefined;
+  return TARGETED_TEXT_INDEX.get(trimmed);
 };
 
-/** cutoff_len 解析:数字(选项 label 前缀或 custom);未答 undefined。 */
+/** cutoff_len 解析：只认三档声明拼写；未答 undefined（保持现值，不猜）。 */
 const cutoffFromText = (text: string): number | undefined => {
   const trimmed = text.trim();
   if (trimmed === "") return undefined;
-  const numMatch = trimmed.match(/(\d{3,6})/);
-  if (numMatch !== null) {
-    const num = Number(numMatch[1]);
-    if (Number.isFinite(num) && num >= 1024 && num <= 65536) return num;
-  }
-  return undefined;
+  return CUTOFF_TEXT_INDEX.get(trimmed);
 };
 
 /** 分组的自由输入解析：只认明确的正/负，其余 undefined（保持现值）。 */
@@ -375,20 +397,50 @@ export const decideConstructionParams = async (input: {
       signal: (input.exec as { signal?: unknown }).signal,
     });
     const byId = new Map(answers.answers.map((answer) => [answer.id, answer]));
-    const augmentAnswer = needAugment ? byId.get(`construction-augment-${input.runId}`) : undefined;
-    const augmentText = [...(augmentAnswer?.selected ?? [])].join("") || (augmentAnswer?.custom ?? "");
+    // B3：卡面原话必须原样回传——三问各自的「文字通道」原文与「认出的值」分开收。
+    // customTextOf=用户手打的原文（卡片 selected 为空时才有意义）；undefined=没写。
+    const customTextOf = (id: string): string => {
+      const answer = byId.get(id);
+      if (answer === undefined) return "";
+      if ((answer.selected ?? []).length > 0) return "";
+      return (answer.custom ?? "").trim();
+    };
+    const answerTextOf = (id: string): string => {
+      const answer = byId.get(id);
+      if (answer === undefined) return "";
+      return [...(answer.selected ?? [])].join("") || (answer.custom ?? "");
+    };
+    const augmentAnswerText = answerTextOf(`construction-augment-${input.runId}`);
+    const augmentCustom = needAugment ? customTextOf(`construction-augment-${input.runId}`) : "";
     const groupingConfirm = true;
-    const mode5Random = augmentFromText(augmentText) ?? input.state.mode5Random;
+    const mode5RandomParsed = needAugment ? augmentFromText(augmentAnswerText) : undefined;
+    const mode5Random = mode5RandomParsed ?? input.state.mode5Random;
     // D177:targeted/cutoff 解析(selected label 或 custom;未答保持现值,不猜)
-    const targetedAnswer = needTargeted ? byId.get(`construction-targeted-${input.runId}`) : undefined;
-    const targetedText = [...(targetedAnswer?.selected ?? [])].join("") || (targetedAnswer?.custom ?? "");
+    const targetedAnswerText = answerTextOf(`construction-targeted-${input.runId}`);
+    const targetedCustom = needTargeted ? customTextOf(`construction-targeted-${input.runId}`) : "";
     const suggestedLabel = input.state.targetedSuggested !== undefined
           ? `智能推导（${String(input.state.targetedSuggested)} 倍）`
           : "1 倍（未经智能分析——产品默认，不猜难度；要看分析建议先完成看图分析）";
-    const targetedMultiplier = targetedFromText(targetedText, suggestedLabel, input.state.targetedSuggested) ?? input.state.targetedMultiplier;
-    const cutoffAnswer = needCutoff ? byId.get(`construction-cutoff-${input.runId}`) : undefined;
-    const cutoffText = [...(cutoffAnswer?.selected ?? [])].join("") || (cutoffAnswer?.custom ?? "");
-    const cutoffLen = cutoffFromText(cutoffText) ?? input.state.cutoffLen;
+    const targetedParsed = needTargeted
+      ? targetedFromText(targetedAnswerText, suggestedLabel, input.state.targetedSuggested)
+      : undefined;
+    const targetedMultiplier = targetedParsed ?? input.state.targetedMultiplier;
+    const cutoffAnswerText = answerTextOf(`construction-cutoff-${input.runId}`);
+    const cutoffCustom = needCutoff ? customTextOf(`construction-cutoff-${input.runId}`) : "";
+    const cutoffParsed = needCutoff ? cutoffFromText(cutoffAnswerText) : undefined;
+    const cutoffLen = cutoffParsed ?? input.state.cutoffLen;
+    // B3 回落链路：第 2 步收集——用户写了话但本卡认不出（闭集外）的，一条都不许丢。
+    const unrecognized: ReadonlyArray<{ readonly field: string; readonly said: string }> = [
+      ...(mode5RandomParsed === undefined && augmentCustom !== ""
+        ? [{ field: "随机子集增强每图条数", said: augmentCustom }]
+        : []),
+      ...(targetedParsed === undefined && targetedCustom !== ""
+        ? [{ field: "重点字段增强倍率", said: targetedCustom }]
+        : []),
+      ...(cutoffParsed === undefined && cutoffCustom !== ""
+        ? [{ field: "序列长度上限", said: cutoffCustom }]
+        : []),
+    ];
     const ledgerPath = writeLedger(input.runDir, "construction-choice.json", {
       schema: "ConstructionChoice/v1",
       run_id: input.runId,
@@ -401,9 +453,19 @@ export const decideConstructionParams = async (input: {
       // 视觉通道恒 enabled（SKILL v1.16 owner 裁定:内置默认必开、无 disable、
       // 不弹卡）——键保留读侧兼容,值不再是决策面。
       visual_channel: "enabled",
-      answers: { grouping: "(产品默认:按分组生成,不问)", augment: augmentText, targeted: targetedText, cutoff: cutoffText },
+      answers: {
+        grouping: "(产品默认:按分组生成,不问)",
+        augment: augmentAnswerText, targeted: targetedAnswerText, cutoff: cutoffAnswerText,
+      },
+      // B3：认不出的原话一并落账——事后可核「用户到底说了什么」，不被解析层吞掉
+      ...(unrecognized.length > 0 ? { unrecognized_user_words: unrecognized } : {}),
     });
     const augmentLine = mode5Random === undefined || mode5Random === 0 ? "不增强" : `${String(mode5Random)} 倍`;
+    // B3 回落链路：第 3 步回传——原话逐条回给 agent（不截断、不改写），
+    // 并明说「这几项按现值/原值保留」，让 agent 带结构化参数重调工具。
+    const echoLine = unrecognized.length === 0
+      ? ""
+      : `\n用户写的话本卡没能认成参数，原话照录——${unrecognized.map((item) => `「${item.said}」（${item.field}）`).join("、")}；这几项本轮按原值保留。请理解他的意思后带结构化参数重调本工具（不要当作他没说）。`;
     return {
       groupingConfirm,
       mode5Random,
@@ -412,7 +474,7 @@ export const decideConstructionParams = async (input: {
       targetedSuggested: input.state.targetedSuggested,
       asked: true,
       decided_by: "user",
-      note: `分组＝按分组生成（产品默认,必分组不提问）；随机子集增强＝${augmentLine}；重点字段倍率＝${targetedMultiplier === undefined ? "未确认" : `${String(targetedMultiplier)} 倍`}；序列长度上限＝${cutoffLen === undefined ? "未确认" : String(cutoffLen)}`,
+      note: `分组＝按分组生成（产品默认,必分组不提问）；随机子集增强＝${augmentLine}；重点字段倍率＝${targetedMultiplier === undefined ? "未确认" : `${String(targetedMultiplier)} 倍`}；序列长度上限＝${cutoffLen === undefined ? "未确认" : String(cutoffLen)}` + echoLine,
       ledgerPath,
     };
   } catch (cause) {

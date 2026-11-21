@@ -171,25 +171,18 @@ import { tmpdir } from "node:os";
 
 /** D181 机检面:prompt 卡选项表构造(纯函数)——材料/用户信号在场时
  *  不得出现「推荐——没有材料时的缺省」标注(T10 及 UAT 二发教训的机检锚)。 */
-/** R2.6(D240):字段卡自由文本解析单源(导出供锚测)——尾巴归一→排除语义→正面枚举。
- * 归一吃掉高频口语尾巴:「除X外(的)(N个)(都)(要|训|训练)」「,其他/其余/剩下(都)要」等,
- * 归一后不匹配或字段不在清单→返回空数组(调用方按 needs_selection 追问,fail-loud)。 */
-export const parseFieldChoiceInput = (typed: string, known: ReadonlySet<string>): string[] => {
-  const normalized = typed
-    .replace(/[,，]?\s*(?:其他|其余|剩下)的?(?:都)?(?:要|训|训练)?\s*$/, "")
-    .replace(/(?:之外|以外|外)(?:的)?(?:\s*\d+\s*个?)?(?:都)?(?:要|训|训练|都要|都训)?\s*$/, "");
-  const excludeMatch = normalized.match(/^(?:除了?|不要|去掉|排除)\s*(.+)$/);
-  if (excludeMatch !== null) {
-    const excluded = (excludeMatch[1] as string)
-      .split(/[,，、\s]+/).map((s) => s.trim()).filter((s) => s !== "");
-    if (excluded.length > 0 && excluded.every((name) => known.has(name))) {
-      return [...known].filter((name) => !excluded.includes(name));
-    }
-    return [];
-  }
-  const names = normalized.split(/[,，、\s]+/).map((s) => s.trim()).filter((s) => s !== "");
-  return names.length > 0 && names.every((name) => known.has(name)) ? names : [];
-};
+/** B3：字段卡不再解析自由文本（字段名解析函数已整体退役）。
+ *
+ * 产品判据：自由文本 ≠ 工具可解析的结构化输入。用户写「除了 awb_title 都要」
+ * 「分两拨」「awb 和 shipper 那俩」，工具内的正则只能覆盖想得到的说法，
+ * 覆盖不到就返回空数组——等于「用户没说话」，这句话彻底消失，agent 无从知道
+ * 用户表达过意图。语义理解归 agent，工具不代劳。
+ *
+ * 现在字段卡的答复只走两条明路：
+ *  · 选项卡 label 命中（selected）——用户明确选定，工具原样落账；
+ *  · 用户手打了文字——**原话原样回传 agent**（见 user_words），由 agent 理解后
+ *    带 field_config 结构化参数重调本工具。
+ */
 
 export const promptChoiceOptionsOf = (materialHint: string | null): ReadonlyArray<{ label: string; description: string }> => {
   const hasMaterial = materialHint !== null;
@@ -238,6 +231,33 @@ export const STAGE_BUSINESS: Readonly<Record<string, string>> = {
   badcase_analysis: "badcase 分析",
   iteration_proposal: "迭代建议",
 };
+
+/** 组数指令的闭集拼写索引（B3：不用正则解析自由文本，只认声明过的说法）。
+ *
+ * 旧实现用一条「动词＋数字＋组」的正则扫自由文本，
+ * 「分两拨」「一半一半」「别分那么多」全漏——漏了就静默丢弃，用户的分组意愿
+ * 整句话消失。现在改成闭集等值查表：命中才是组数指令，没命中就把原话交回 agent
+ * （见下方 note 的原话照录），不再静默吞。
+ *
+ * 闭集只覆盖高频说法，不试图穷尽自然语言——穷尽不了，那是 agent 的活。
+ */
+const GROUP_COUNT_VERBS: readonly string[] = ["分", "分成", "改", "改成", "要", "按"];
+const GROUP_COUNT_NUMERALS: ReadonlyArray<readonly [string, number]> = [
+  ["1", 1], ["一", 1], ["2", 2], ["两", 2], ["二", 2],
+  ["3", 3], ["三", 3], ["4", 4], ["四", 4], ["5", 5], ["五", 5],
+  ["6", 6], ["六", 6], ["7", 7], ["七", 7], ["8", 8], ["八", 8],
+  ["9", 9], ["九", 9], ["10", 10], ["十", 10],
+];
+const GROUP_COUNT_SPELLINGS: ReadonlyMap<string, number> = new Map(
+  GROUP_COUNT_VERBS.flatMap((verb) => GROUP_COUNT_NUMERALS.flatMap(([numeral, count]): Array<[string, number]> => [
+    [`${verb}${numeral}组`, count],
+    [`${verb}${numeral}`, count],
+  ])),
+);
+
+/** 组数指令解析：闭集等值命中才算；否则 undefined（调用方原话回传 agent，不猜）。 */
+export const groupCountFromText = (text: string): number | undefined =>
+  GROUP_COUNT_SPELLINGS.get(text.trim());
 
 /** D294 C1:对象参数形态闸——引用/局部形态快败判定(D294-1 事故根治)。
  *
@@ -1105,20 +1125,20 @@ export const resolveGroupingFace = async (input: {
       // ——不替选、不落账。此前静默 fallback recommended 会把 agent 的推荐落进
       // user_selected 账本,污染内核凭据比对基准(r2 账本错位形态);自由文本
       // 不直达生成面——把用户原话带回,组装成新候选重新出卡让用户正式选定。
-      // ci-bl-1103 组数指令闭环:custom 是组数指令(分N组/改成N组/N组)时结构化
-      // 落 run 级 marker——用户意愿成为下一轮出卡的硬约束(防 agent 无视后带原
-      // 方案重出造成循环确认)。
-      const countMatch = customText.match(/(?:分|改成?|要|按)\s*([0-9一二三四五六七八九十]+)\s*组/);
-      if (countMatch !== null) {
-        const cnDigits: Record<string, number> = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10 };
-        const raw = countMatch[1] as string;
-        const requested = /^[0-9]+$/.test(raw) ? Number(raw) : (cnDigits[raw] ?? 0);
-        if (requested > 0 && input.runDir !== undefined) {
+      //
+      // B3：正则退役，改闭集查表（groupCountFromText）。组数指令是真实护栏——
+      // ci-bl-1103 防的是「用户说改成3组，agent 无视后带原方案重出」的循环确认；
+      // 闭集命中就落 run 级 marker，让用户意愿成为下一轮出卡的硬约束。
+      // 集合外（「分两拨」「一半一半」「别分那么多」）不再静默丢——走下面的
+      // none 分支，把原话照录回传 agent，由它理解后组装候选或带参重调。
+      const requestedGroups = groupCountFromText(customText);
+      if (requestedGroups !== undefined) {
+        if (input.runDir !== undefined) {
           try {
             const markerDir = join(input.runDir, "runtime", "webui");
             mkdirSync(markerDir, { recursive: true });
             writeFileSync(join(markerDir, "grouping-request.json"),
-              JSON.stringify({ requested_group_count: requested, raw_text: customText.slice(0, 120), at: new Date().toISOString() }, null, 1), "utf-8");
+              JSON.stringify({ requested_group_count: requestedGroups, raw_text: customText.slice(0, 120), at: new Date().toISOString() }, null, 1), "utf-8");
           } catch { /* marker 落盘失败不阻断——靠 note 强指令兜底 */ }
         }
         return {
@@ -1128,7 +1148,7 @@ export const resolveGroupingFace = async (input: {
           groups: [],
           evidence,
           payload: null,
-          note: `用户明确要求${String(requested)}组——下一次分组候选必须恰好${String(requested)}组(这是用户的硬性意愿,不是建议):按${String(requested)}组重新设计候选(语义聚合可合并现组),再出分组卡让用户选定;不得再带原组数方案重出`,
+          note: `用户明确要求${String(requestedGroups)}组（原话「${customText.slice(0, 120)}」）——下一次分组候选必须恰好${String(requestedGroups)}组(这是用户的硬性意愿,不是建议):按${String(requestedGroups)}组重新设计候选(语义聚合可合并现组),再出分组卡让用户选定;不得再带原组数方案重出`,
         };
       }
       return {
@@ -1139,7 +1159,9 @@ export const resolveGroupingFace = async (input: {
         evidence,
         payload: null,
         note: customText !== ""
-          ? `用户自述了分组(「${customText.slice(0, 120)}」)而不是选候选——请把它组装成新的分组候选重新出分组卡让用户选定(自由文本不直达生成面);本次未下传分组、未落账`
+          ? `用户自述了分组(原话照录:「${customText.slice(0, 200)}」)而不是选候选——本工具不解析自由文本。`
+            + "请先理解他的意思(要几组/按什么维度分/是嫌组太多还是太少),再组装成新的分组候选重新出分组卡让用户正式选定"
+            + "(自由文本不直达生成面);本次未下传分组、未落账"
           : "用户未在候选里选定也未自述——不替用户选:换一组候选重新出卡,或直接问用户想怎么分;本次未下传分组、未落账",
       };
     }
@@ -3731,92 +3753,44 @@ let visualSummary: Record<string, unknown> | undefined;
                   .filter((value) => value.trim() !== "")
                   .join("；")
                   .trim();
-                const known = new Set(labels.labels.map((item) => item.label));
-                // R2.6(D240):解析单源=parseFieldChoiceInput(尾巴归一+排除语义+正面枚举)
-                const requested = parseFieldChoiceInput(typed, known);
-                const allNamed = requested.length > 0 && requested.every((name) => known.has(name));
-
-                if (allNamed) {
-                  // 用户**在输入框里写了字段名且都在清单内** → 按他写的落账（最明确的用户决定）
+                // B3：字段卡不再解析自由文本（字段名解析函数已整体退役）。
+                // 选项卡 label 命中＝明确决定，原样落账；手打文字＝原话回传 agent。
+                const allLabels = labels.labels.map((item) => item.label);
+                const pickAll = picked.startsWith("全部 ") && typed === "";
+                if (pickAll) {
                   writeFieldChoice(runDir, {
                     run_id: args.run_id,
-                    confirmed_fields: requested,
-                    all_fields: requested.length === labels.label_count,
-                    total_fields: labels.label_count,
-                    decided_at: new Date().toISOString(),
-                    source: "user_confirmed",
-                  }, registerDoc);
-                  fieldChoiceSummary = {
-                    confirmed_fields: requested,
-                    all_fields: requested.length === labels.label_count,
-                    total_fields: labels.label_count,
-                  };
-                } else if (picked.startsWith("全部 ") && typed === "") {
-                  writeFieldChoice(runDir, {
-                    run_id: args.run_id,
-                    confirmed_fields: labels.labels.map((item) => item.label),
+                    confirmed_fields: allLabels,
                     all_fields: true,
                     total_fields: labels.label_count,
                     decided_at: new Date().toISOString(),
                     source: "user_confirmed",
                   }, registerDoc);
                   fieldChoiceSummary = {
-                    confirmed_fields: labels.labels.map((item) => item.label),
+                    confirmed_fields: allLabels,
                     all_fields: true,
                     total_fields: labels.label_count,
                   };
                 } else {
-                  // R2.6(D240):解析失败 fail-loud——先出追问卡带格式示例(报错即修复指令),
-                  // 一次为限;仍失败才交回 agent,不再静默吞(用户视角卡消失=假成功)。
-                  const retry = await svc.ask({
-                    questions: [{
-                      id: 'field-choice-retry-' + args.run_id + registerDocTag,
-                      question: "字段清单没听懂——换个写法再说一次",
-                      header: "字段清单·重问",
-                      detail: '你写的「' + (typed !== "" ? typed : picked) + '」没有解析出字段清单。两种写法都行：'
-                        + '\n① 直接列字段名，逗号分隔（如 awb, shipper, mawb）'
-                        + '\n② 排除式：「除了 某字段」（如 除了 awb_title）',
-                      options: [],
-                      multiSelect: false,
-                    }],
-                  });
-                  const retryTyped = (retry.answers.map((a: { custom?: string }) => a.custom ?? "").filter((v: string) => v.trim() !== "").join("；").trim()) || "";
-                  const retryPicked = retry.answers.map((a) => [...a.selected]).flat()[0] ?? "";
-                  const retryRequested = parseFieldChoiceInput(retryTyped, known);
-                  const retryAll = retryRequested.length > 0;
-                  if (retryAll) {
-                    writeFieldChoice(runDir, {
-                      run_id: args.run_id,
-                      confirmed_fields: retryRequested,
-                      all_fields: retryRequested.length === labels.label_count,
-                      total_fields: labels.label_count,
-                      decided_at: new Date().toISOString(),
-                      source: "user_confirmed",
-                    }, registerDoc);
-                    fieldChoiceSummary = {
-                      confirmed_fields: retryRequested,
-                      all_fields: retryRequested.length === labels.label_count,
-                      total_fields: labels.label_count,
-                    };
-                  } else {
-                  // 追问一轮仍失败 → 把用户原话交回 agent 核对/追问(卡面已明示失败)。
+                  // 用户手打了文字：不解析、不追问——原话照录回传 agent。
+                  // 「分两拨」「除了 X 都要」「awb 和 shipper 那俩」都走这一条，
+                  // 无论工具能否理解，agent 一定看得到用户到底说了什么。
+                  const said = typed !== "" ? typed : (picked !== "" ? picked : "");
                   fieldChoiceSummary = {
                     confirmed_fields: [],
                     all_fields: false,
                     total_fields: labels.label_count,
                     needs_selection: true,
-                    user_words: typed !== "" ? typed : picked,
-                    ...(requested.filter((name) => !known.has(name)).length > 0
-                      ? { unknown_names: requested.filter((name) => !known.has(name)) }
-                      : {}),
-                    ...(retryTyped !== "" || retryPicked !== ""
-                      ? { retry_hint: "追问一轮仍未解析(卡面已明示失败,原话如实交回)" }
-                      : {}),
+                    user_words: said,
+                    retry_hint: said === ""
+                      ? "用户既没选「全部训练」也没写字（或直接关了卡）——不要替他勾全选，请向用户确认要训哪些字段"
+                      : "用户手打了文字，本工具不解析自由文本——原文照录在 user_words，请理解后带 field_config 重调",
+                    all_field_names: allLabels,
                     note:
-                      "用户没有确认「全部训练」——请按他说的范围核对具体字段（清单外的名字先确认是笔误还是标注里没有），"
-                      + "再以 field_config 显式给出；不要替他勾全选",
+                      "用户没有确认「全部训练」——他写的话原样在 user_words 里（工具不做语义解析）。"
+                      + "请理解他的意思后，以 field_config 显式给出要训的字段再重调本工具；"
+                      + "清单外的名字先确认是笔误还是标注里没有，不要替他勾全选",
                   };
-                  }
                 }
               } catch {
                 // 卡被关掉/通道失败 → 不造假确认；P1-3：同 run 记一次"已问过"，
