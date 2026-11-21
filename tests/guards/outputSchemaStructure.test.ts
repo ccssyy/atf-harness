@@ -11,9 +11,10 @@ import { join } from "node:path";
  * 键）等同未声明＝agent 视角黑盒，本守卫禁止其存在于 atf-tools 源码。
  *
  * 检测形态＝单行字面量 `schema: { type: "object", additionalProperties: true }`
- * 后紧跟 `,` 或 `}`（render 单行 / output 块收口两种排布均命中）；
- * `looseObjectOutput` 常量引用形态由下方「output 块内 properties 必在」
- * 断言覆盖（引用不带字面量，靠逐工具结构断言兜住）。
+ * 后紧跟 `,` 或 `}`（render 单行 / output 块收口两种排布均命中）。
+ * `looseObjectOutput` 常量引用形态（schemaTranslate.ts）仍在 12 个存量工具位
+ * 使用——字面量检测器抓不到引用，其处置待批次裁定；本守卫当前覆盖 inline
+ * 形态清零 + 已结构化工具的 properties 存在性（防回退）。
  */
 
 const SRC_ROOT = join(process.cwd(), "packages", "extensions", "atf-tools", "src");
@@ -23,23 +24,19 @@ const BARE_OPEN_OUTPUT =
   /schema:\s*\{\s*type:\s*"object"\s*,\s*additionalProperties:\s*true\s*\}\s*[,}]/g;
 
 /**
- * 已知残留（批次边界外——任务书只授权 6 个目标工具）：
- * 修复这两处需 lead 扩边裁定；清单非许可——新增命中一律失败，
- * 本清单内的计数变化（增多/清零后复现）同样失败。
+ * 已知残留：无——inline 裸形态已全部清零（本批 6 目标 + lead 扩边的
+ * publish_confirm/publish_model）。`looseObjectOutput` 常量引用形态的
+ * 存量缺口（12 个工具位）待 lead 裁定处置方案后补充对应断言。
  */
-const KNOWN_RESIDUALS: Readonly<Record<string, number>> = {
-  // atf_publish_confirm：盘点报告在册的松散工具之一，任务书 6 工具清单未含
-  "confirmFace.ts": 1,
-  // atf_publish_model：盘点误判 OK（单行形态漏检），任务书 6 工具清单未含
-  "trainingFace.ts": 1,
-};
 
-/** 本批次 6 个目标工具：output 块内必须带 properties（声明面存在性）。 */
+/** 本批次结构化声明的工具：output 块内必须带 properties（声明面存在性）。 */
 const DECLARED_TOOLS: ReadonlyArray<{ tool: string; file: string }> = [
   { tool: "atf_config_confirm", file: "confirmFace.ts" },
+  { tool: "atf_publish_confirm", file: "confirmFace.ts" },
   { tool: "atf_pipeline_stage", file: "pipelineFace.ts" },
   { tool: "atf_training_preflight", file: "preflightFace.ts" },
   { tool: "atf_run_training", file: "trainingFace.ts" },
+  { tool: "atf_publish_model", file: "trainingFace.ts" },
   { tool: "atf_evaluate", file: "trainingFace.ts" },
   { tool: "atf_analyze_badcases", file: "trainingFace.ts" },
 ];
@@ -70,21 +67,14 @@ function toolDefinitionSlice(text: string, toolName: string): string {
 }
 
 describe("工具面自描述守卫（outputSchemaStructure）", () => {
-  it("atf-tools 源码不存在无 properties 的裸开放 output schema（已知残留除外）", () => {
+  it("atf-tools 源码不存在无 properties 的裸开放 output schema（inline 形态为零）", () => {
     const files = listSourceFiles(SRC_ROOT);
     expect(files.length).toBeGreaterThan(0);
-    const hitsByFile: Record<string, string[]> = {};
+    const hits: string[] = [];
     for (const file of files) {
-      const hits = findBareOpenOutputs(readFileSync(file, "utf8"));
-      if (hits.length > 0) hitsByFile[file.split("/").pop() as string] = hits;
+      hits.push(...findBareOpenOutputs(readFileSync(file, "utf8")).map((fragment) => `${file.split("/").pop()}: ${fragment}`));
     }
-    // 已知残留逐一核对（计数精确匹配——变多=新腐化，变少=残留已修、清单待清）
-    const residualFiles = Object.keys(KNOWN_RESIDUALS).sort();
-    const hitFiles = Object.keys(hitsByFile).sort();
-    expect(hitFiles).toEqual(residualFiles);
-    for (const [file, expected] of Object.entries(KNOWN_RESIDUALS)) {
-      expect(hitsByFile[file]?.length ?? 0, `${file} 的裸开放形态计数应恰为 ${expected}`).toBe(expected);
-    }
+    expect(hits).toEqual([]);
   });
 
   it("阴性对照：检测器能命中合成源串里的裸开放形态（防检测器失效）", () => {
@@ -112,7 +102,7 @@ describe("工具面自描述守卫（outputSchemaStructure）", () => {
     expect(findBareOpenOutputs(declared)).toEqual([]);
   });
 
-  it("六个目标工具的 output 块内均带 properties（声明面存在，含 looseObjectOutput 引用形态）", () => {
+  it("已结构化工具的 output 块内均带 properties（声明面存在，防回退为裸开放）", () => {
     for (const { tool, file } of DECLARED_TOOLS) {
       const text = readFileSync(join(SRC_ROOT, file), "utf8");
       const slice = toolDefinitionSlice(text, tool);
