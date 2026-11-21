@@ -22,8 +22,8 @@ import { existsSync, readFileSync, readdirSync, statSync, watchFile, unwatchFile
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { attachmentsRootOf, toFileAgentTool, FILE_TOOL_DEFINITIONS, type FileToolHost } from "../../../../src/agent/fileTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { resolveSessionRunWorkspace } from "../../../../src/core/workspace/runFacts.js";
-import { runFileCandidates } from "../../../../src/core/workspace/runLayout.js";
+import { resolveSessionRunWorkspace } from "@atf/dsh-atf-core";
+import { runFileCandidates } from "@atf/dsh-atf-core";
 import { listRegistryRecords, registryPathOf, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { deriveFileToolRoots, type DeriveFileRootsInput } from "../../../../src/agent/fileRoots.js";
 import { translateParameters, asToolValue, looseObjectOutput } from "./schemaTranslate.js";

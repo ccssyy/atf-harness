@@ -41,7 +41,7 @@ import { asToolValue, looseObjectOutput, renderAsJsonText } from "./schemaTransl
 import { approvalDeniedResult, buildApprovalReason, requestApproval, type ApprovalFace } from "./approvalFace.js";
 import { buildRunTrainingTool, type TrainingToolsConfig } from "./trainingFace.js";
 import { buildPipelineTool, resolvePipelineRunDir } from "./pipelineFace.js";
-import { resolveRunSubdir } from "../../../../src/core/workspace/runLayout.js";
+import { resolveRunSubdir } from "@atf/dsh-atf-core";
 import { listDocSlots, countJsonlRows, runDocRegistry } from "../../atf-ui/src/docSlots.js";
 import { listRegistryRecords, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { formatRowCount } from "../../atf-ui/src/jointTrainState.js";

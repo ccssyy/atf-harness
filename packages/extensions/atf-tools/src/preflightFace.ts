@@ -44,8 +44,8 @@ import {
   recordPreflightAt,
   type PreflightDecisions,
   type PreflightReport,
-} from "../../../../src/core/workspace/trainingPreflight.js";
-import { isValidRunId, resolveRunDir, runCandidateDirs, sessionWorkspaceSlug } from "../../../../src/core/workspace/runLayout.js";
+} from "@atf/dsh-atf-core";
+import { isValidRunId, resolveRunDir, runCandidateDirs, sessionWorkspaceSlug } from "@atf/dsh-atf-core";
 import { registeredWorkspaceRoots } from "../../../../src/core/workspace/workspaceRegistry.js";
 
 /** 预检命令形态："python3 /abs/tools/training_preflight.py"（或 mock "node /abs/mock.mjs"）。

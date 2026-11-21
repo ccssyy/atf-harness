@@ -24,7 +24,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { resolveRunSubdir } from "../../../../src/core/workspace/runLayout.js";
+import { resolveRunSubdir } from "@atf/dsh-atf-core";
 
 /** 账本 schema 标识（与 schema_version 同值；版本不符即视为不可用）。 */
 export const GROUPING_DECISION_SCHEMA = "GroupingChoice/v1";
