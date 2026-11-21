@@ -30,6 +30,12 @@
 5. **内核仓引用纪律**：对 ATF 主仓工作区只读；需要 pin 版本副本用 `git worktree add`（见 §4）；本仓产生的一切改动不回写内核仓。若确需内核新能力，登记待办交 owner 走 ATF 仓自己的流程排队，**本仓不阻塞等待、不插队**。
 6. **低依赖＋锁版本＋审计（R2a，2026-09-23 修订态）**：`dependencies` 保持低依赖且一律锁版本（当前＝pi-ai 底座 `@earendil-works/pi-ai`／`@earendil-works/pi-agent-core` 双包锁 0.87.1）；devDependencies 仅允许构建测试工具（typescript / vitest 类）。借鉴 Pi 的设计（分层纪律、Result 类型、双上下文管道）。
 7. **脱敏**：本仓任何文件不得出现 A800 地址端口、业务单据内容、内部同事信息；ATF 路径一律经环境变量（`ATF_CLI_PATH`）注入。
+8. **语义理解归 agent，工具不代猜（B3c，2026-11-21 owner 裁定）**：工具只做两类事——确定性动作（落账/调内核/协议转换）与精确映射（本卡下发数据的等值查找）。**凡是需要「理解用户意思」的，一律原样回传 agent，由它理解后带结构化参数重调。**
+   - vendor 原生模型即此形态：`AskUserQuestionAnswerItem` 只给 `selected: string[]`（label 原文）与 `custom?: string`（手打原文），官方 `tool-ask-user` 明写「feeds that answer back into the agent loop as an ordinary tool result」。
+   - **禁止**形态：用正则从 `custom` 抽数字/组数、把 `label` 经拼写表（`"3"`/`"3倍"`/`"每图 3 条"` 混一表）翻回 `value`、任何 `spellingIndexOf` / `*TEXT_INDEX` / `*FromText` 式猜测。
+   - **正确形态**：答案原样进 `pending_user_answers` 回传 + 落账留痕；需要结构化值时由 agent 显式传参（如 `requested_group_count`）。
+   - **机检**：`tests/dshTools/freeTextNoRegex.test.ts` 的 B3c 事故锚（查表全族不得存在、必有 `pending_user_answers` 与重调指引）。
+   - **历史事故**：复验#24（「除 X 外的 N 个都要」被正则静默吞、卡消失凭据不落）+ N5（`"2 倍"` 被吞成「不增强」）+ ci-bl-1103（无视用户组数导致循环确认）。
 
 ### 3.8 产品验证纪律（浏览器实操）
 
