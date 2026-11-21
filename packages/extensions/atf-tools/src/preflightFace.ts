@@ -328,7 +328,74 @@ export const buildPreflightTool = (deps: PreflightDeps): unknown =>
       workspace_path: { type: "string", description: "workspace 根（绝对路径——与 atf_pipeline_stage 的 workspace_path 同值；落点 <workspace_path>/runs/<run_id>）" },
     },
     output: {
-      schema: { type: "object", additionalProperties: true },
+      // 声明面（保守）：additionalProperties 开放、零 required、只声明跨全部 return
+      // 路径类型稳定的顶层键。依据 execute 三条 return 逐条核对：脚本缺席早退（336）
+      // ＝{ok:false, run_id, error, note}；flow 失败早退（345——落点三级解析
+      // run_dir_not_found/run_dir_symlink_rejected/workspace_path_not_absolute、
+      // preflight_failed/preflight_schema_invalid）＝{ok:false, run_id, error[, note]}；
+      // 成功主链（347）＝{ok:true, run_id, run_dir, run_dir_source, generated_at,
+      // summary{missing,derivable,confirm}, order, checklist[, decisions][, applied]
+      // [, cancelled][, degraded, exit_code][, note]}（成功时 report 恒在场，五键随出）。
+      // exit_code 为 number|null（超时/信号形态 null）——oneOf 声明（校验器对 null
+      // 按声明类型报错）；decisions.entries[].decision 为内核原样 unknown——声明 json。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "false＝预检未跑成（脚本缺席/落点解析失败/脚本失败）；true＝清单已拿到（degraded 也是 true——退出码非零但报告可用）" },
+          run_id: { type: "string", description: "run 标识（回显）" },
+          error: { type: "string", description: "失败码（preflight_script_missing/run_dir_not_found/run_dir_symlink_rejected/workspace_path_not_absolute/preflight_failed/preflight_schema_invalid）" },
+          note: { type: "string", description: "人读说明与修复指引（失败含 stdout/stderr 摘要；成功为待确认项/可派生项提示）" },
+          run_dir: { type: "string", description: "实际解析出的 run 目录绝对路径（三级单源——成功路径）" },
+          run_dir_source: { type: "string", enum: ["workspace_path", "session_fact", "instance_runs_root"], description: "run 目录解析来源（核对预检查的哪棵树）" },
+          generated_at: { type: "string", description: "预检报告生成时间戳（内核报告原文）" },
+          summary: {
+            type: "object",
+            additionalProperties: true,
+            description: "三态计数",
+            properties: {
+              missing: { type: "number", description: "环境/用户必须提供的缺项数" },
+              derivable: { type: "number", description: "可自动执行的派生项数" },
+              confirm: { type: "number", description: "需业务确认的项数" },
+            },
+          },
+          order: { type: "array", description: "检查项依赖链顺序（内核 PREFLIGHT_ORDER 全序）", items: { type: "string" } },
+          checklist: { type: "string", description: "三态清单渲染文本（missing/derivable/needs_confirm——按依赖链顺序）" },
+          decisions: {
+            type: "object",
+            additionalProperties: true,
+            description: "询问闸判定块（内核 DecisionGate——ask 项由 agent 在对话里向用户转达）",
+            properties: {
+              schema_version: { type: "string" },
+              access_mode: { type: "string", description: "判定时的权限档" },
+              auto: { type: "number", description: "自动推进项数" },
+              ask: { type: "number", description: "待问项数" },
+              entries: {
+                type: "array",
+                description: "逐项判定（ask 项带 question 转达面）",
+                items: {
+                  type: "object",
+                  additionalProperties: true,
+                  properties: {
+                    schema_version: { type: "string" },
+                    question_id: { type: "string" },
+                    kind: { oneOf: [{ type: "string" }, { type: "null" }], description: "项类（内核标识，可 null）" },
+                    mode: { type: "string", enum: ["auto", "ask"] },
+                    decision: { type: "json", description: "内核原样判定值" },
+                    basis: { type: "string" },
+                    evidence: { type: "array", description: "判定证据", items: { type: "string" } },
+                    reason: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+          applied: { type: "boolean", description: "true＝--apply 已实际执行（审批卡放行后，清单为执行后报告）" },
+          cancelled: { type: "boolean", description: "true＝预检卡被用户取消（清单仍如实返回）" },
+          degraded: { type: "boolean", description: "true＝脚本退出码非零但报告可用（清单完整，退出码如实透传）" },
+          exit_code: { oneOf: [{ type: "number" }, { type: "null" }], description: "degraded 时的脚本退出码（null＝超时/信号形态）" },
+        },
+      },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
     async execute(args: { run_id: string; apply?: boolean; workspace_path?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {
