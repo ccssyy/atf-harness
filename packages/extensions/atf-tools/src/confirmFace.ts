@@ -1459,7 +1459,32 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
       doc_type: { type: "string", description: "单据类型键（E8 槽位形态）：多类 run 必填——按类逐一确认，不取任一份冒充全部；单类可省（缺省取该类）；无槽位 legacy run 不得传" },
     },
     output: {
-      schema: { type: "object", additionalProperties: true },
+      // 声明面（保守）：additionalProperties 开放、零 required。依据 execute 全部 7 条
+      // return：落点解析失败（1469）＝{ok:false, run_id, error, note}；槽位未知名（1490/
+      // 1522——带 doc_type 与在场 doc_types 清单）；digest 缺失（1511/1539——无 error
+      // 码只有 note）；审批拒绝（1563 approvalDeniedResult——无 ok/run_id，故不可
+      // required）＝{error, tool, outcome, note}；成功（1573）＝{ok:true, run_id,
+      // run_dir, run_dir_source, confirmed, digest, artifact[, doc_type]}（多类合并卡
+      // 不带 doc_type 键——账本逐类落账，卡面 doc_types 在 pending 件里）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "false＝结构化拒绝；true＝发布确认已放行并登记 publish 段事实" },
+          run_id: { type: "string", description: "run 标识（回显）" },
+          error: { type: "string", description: "拒绝码（run_experiment_required/run_id_invalid/doc_slot_unknown/approval_denied 等落点与槽位类）" },
+          note: { type: "string", description: "人读说明与修复指引（digest 缺失时＝无可发布凭据，不造数）" },
+          doc_type: { type: "string", description: "单类确认的单据类型键（单类卡/显式 doc_type 路径）" },
+          doc_types: { type: "array", description: "run 在场的单据类型清单（doc_slot_unknown 时供改参对账）", items: { type: "string" } },
+          run_dir: { type: "string", description: "run 目录绝对路径（成功路径）" },
+          run_dir_source: { type: "string", description: "落点解析来源（workspace 显式/会话工作区/实例 runs 根）" },
+          confirmed: { type: "boolean", description: "true＝契约发布凭据已确认" },
+          digest: { type: "string", description: "确认的契约件 sha256 digest（多类合并卡＝逐类 <doc>:<digest> 以 \" | \" 连接）" },
+          artifact: { type: "string", description: "契约件相对路径（多类＝逐类路径以 、 连接）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable）" },
+        },
+      },
       render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
     },
     async execute(args: { run_id: string; workspace_path?: string; digest?: string; doc_type?: string }, exec: { agent?: unknown; callId?: string; signal?: unknown }) {

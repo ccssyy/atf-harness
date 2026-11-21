@@ -1724,7 +1724,54 @@ export function buildPublishModelTool(ctx: { get(service: string): unknown }, cf
       publish_root: { type: "string", description: "发布库位根（缺省＝统一根 models 子目录——ATF_ATF_ROOT/ATF_DSH_RUNS_ROOT 父目录派生；实例分桶自动）" },
       note: { type: "string", description: "发布说明（入发布报告）" },
     },
-    output: { schema: { type: "object", additionalProperties: true }, render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }] },
+    output: {
+      // 声明面（保守）：additionalProperties 开放、零 required。依据 execute 全部 9 条
+      // return：run 解析失败（1734＝run_binding_required payload 直通）；checkpoint
+      // 三态拒绝（1738 名称/1742 符号链接/1744 不存在）；发布前置缺（1748——四件套
+      // 不齐不猜测）；发布库位未派生（1753）；审批拒绝（1764 approvalDeniedResult
+      // ——无 ok，故不可 required）；拷贝中断/校验失败（1771＝error(publish_copy_
+      // interrupted|publish_copy_verify_failed)[, file], copied, reused, total
+      // [, reason], dest_dir, note）；成功（1813＝ok, run_id, checkpoint, dest_dir,
+      // file_count, copy_stats{total, copied, reused, bytes_copied, bytes_total}
+      // [, changed_re_copied], manifest, report[, rebound_from], note）。
+      schema: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          ok: { type: "boolean", description: "false＝发布被拒或拷贝失败；true＝已归档发布（SHA256 清单＋manifest＋发布报告）" },
+          run_id: { type: "string", description: "run 标识（成功路径）" },
+          error: { type: "string", description: "失败码（checkpoint_name_invalid/checkpoint_symlink_forbidden/checkpoint_missing/发布前置缺/publish_root_unset/publish_copy_interrupted/publish_copy_verify_failed/approval_denied/run_binding_required 等）" },
+          note: { type: "string", description: "人读说明与修复指引（拷贝失败时含续传指引）" },
+          file: { type: "string", description: "中断/校验失败所在文件（拷贝失败路径）" },
+          copied: { type: "number", description: "本次新拷文件数（拷贝失败路径——已拷保留可续传）" },
+          reused: { type: "number", description: "按 sha 相等复用的文件数" },
+          total: { type: "number", description: "源文件总数" },
+          reason: { type: "string", description: "失败原因（校验失败＝目标 sha 与源不等等）" },
+          dest_dir: { type: "string", description: "发布库目标目录（<发布库位>/<run_id>/<checkpoint>）" },
+          checkpoint: { type: "string", description: "checkpoint 目录名（成功路径）" },
+          file_count: { type: "number", description: "发布文件总数（成功路径）" },
+          copy_stats: {
+            type: "object",
+            additionalProperties: true,
+            description: "拷贝计数（成功路径——total/copy/reused/字节双轴）",
+            properties: {
+              total: { type: "number" },
+              copied: { type: "number" },
+              reused: { type: "number" },
+              bytes_copied: { type: "number" },
+              bytes_total: { type: "number" },
+            },
+          },
+          changed_re_copied: { type: "number", description: "目标在场但 sha 不等而重拷的计数（源变更/目标损坏——如实通报）" },
+          manifest: { type: "string", description: "发布清单文件名（publish-manifest.json）" },
+          report: { type: "string", description: "发布报告相对路径（publish/<checkpoint>.md）" },
+          rebound_from: { type: "string", description: "会话绑定被改写前的原 run（绑定切换时）" },
+          tool: { type: "string", description: "审批拒绝路径的工具名（error=approval_denied 时）" },
+          outcome: { type: "string", description: "审批拒绝结果（cancelled/rejected/unavailable）" },
+        },
+      },
+      render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 1) }],
+    },
     presentCall: function(args: { run_id?: string; checkpoint?: string }) {
       return { card: "generic" as const, title: `模型发布 — ${args.run_id ?? "会话绑定实验"}${args.checkpoint !== undefined ? `/${args.checkpoint}` : ""}`, kind: "other" as const };
     },
