@@ -58,8 +58,6 @@ export interface ConstructionDecision extends ConstructionParamsState {
 }
 
 /** 分组两态（要不要按分组生成——组构成由内核按字段配置产出，本问只收意愿）。 */
-const GROUPING_YES = "要（按分组生成）";
-const GROUPING_NO = "不要（一图一条）";
 
 /** 增强倍数档位（值→文案单源；内核只认数字，不认文案）。 */
 const AUGMENT_OPTIONS: ReadonlyArray<{ label: string; value: number }> = [
@@ -120,16 +118,6 @@ export const readConstructionChoice = (
   } catch {
     return null;
   }
-};
-
-export const groupingFromText = (text: string): boolean | undefined => {
-  const trimmed = text.trim();
-  if (trimmed === "") return undefined;
-  if (trimmed === GROUPING_YES) return true;
-  if (trimmed === GROUPING_NO) return false;
-  if (/^不|不要|否|no|n$/i.test(trimmed)) return false;
-  if (/要|是|分组|yes|y/i.test(trimmed)) return true;
-  return undefined;
 };
 
 const writeLedger = (
