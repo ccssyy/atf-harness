@@ -1,0 +1,41 @@
+{
+  "_source": "G5 切换前采集（2026-11-22，collectBaseline.mjs）——mcpModelTools=src/core/tools/toolDefinition.ts TOOL_DEFINITIONS 全部；localWorkspaceTools=BRIDGE_TOOL_NAMES ∩ workspaceTools.ts（装配后本地治理面）；两者并集=模型可见 atf_* 工具基线（D6 机检锚）",
+  "mcpModelTools": [
+    "atf_admit_data",
+    "atf_data_admission_request",
+    "atf_preparation_propose",
+    "atf_style_cluster_execute",
+    "atf_label_qc_inspect",
+    "atf_label_qc_resolve",
+    "atf_gate",
+    "atf_fact_scan",
+    "atf_workspace_status"
+  ],
+  "localWorkspaceTools": [
+    "atf_scratch_exec",
+    "atf_skill_read",
+    "atf_launch_execute",
+    "atf_create_experiment",
+    "atf_rebind_workspace"
+  ],
+  "workspaceToolsAll": [
+    "atf_scratch_write",
+    "atf_scratch_exec",
+    "atf_skill_read",
+    "atf_launch_execute",
+    "atf_create_experiment",
+    "atf_rebind_workspace"
+  ],
+  "bridgeToolNamesAtCutover": [
+    "atf_workspace_status",
+    "atf_admit_data",
+    "atf_label_qc_inspect",
+    "atf_label_qc_resolve",
+    "atf_scratch_exec",
+    "atf_skill_read",
+    "atf_gate",
+    "atf_launch_execute",
+    "atf_create_experiment",
+    "atf_rebind_workspace"
+  ]
+}
