@@ -97,14 +97,24 @@
               toolName: dispatch_training_subtask_background
               enableRunInBackground: true
               backgroundMode: continuable
-          # 工具集差异（配置声明，禁 TS 分支）：训练链读技能只走 atf_skill_read（桥接契约面，
-          # 带内核技能包版本）；vendor 技能目录会引入非 ATF 技能，属错误引导面——本预设关闭。
+          # 技能面：B17 原生化（owner 2026-11-23 裁定）——用 vendor 原生机制，
+          # 不再自造 skillCatalog(340 行) + atf_skill_read。
+          #
+          # 披露控制靠三个正交开关（都不需要关插件）：
+          #   includeDefaultRoots: true  → 扫 $DSH_HOME/skills（实例级统一入口）。
+          #     实例部署期把内核 skills 软链到 $DSH_HOME/skills/atf-*，
+          #     用户自定义技能也放这里——watch 自动发现，免重启。
+          #     DSH 自带 4 个开发类技能（agent-experience / cordis-*）是
+          #     「写 DSH 插件」的知识，对训练链是错误引导面 → 部署期不软链即可，
+          #     它们住在 vendor bundled 根，与 $DSH_HOME/skills 无关。
+          #   watch: true → 增删改技能免重启。
+          #   tool-skill → 启用（原 disabled 是因为自造了 atf_skill_read）。
           - id: skill-filesystem
             name: '@deepseek-ai/dsh-skill-filesystem'
-            disabled: true
+            config:
+              watch: true
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
-            disabled: true
       # 批㊶-I 段 B：goal 产品收敛——自主多轮循环是能力面开关，须显式开启。
       # 三行齐关（模型工具＋人类命令＋host 续轮引擎）才彻底；重开＝模板按实例
       # 显式开启三行＋收敛 maxGoalRounds（vendor 自报 blocked ≥3 轮机制照用）。

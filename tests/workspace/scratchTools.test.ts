@@ -21,11 +21,6 @@ import {
   SCRATCH_WRITE_MAX_BYTES,
 } from "../../packages/extensions/atf-core/src/index.js";
 import {
-  listSkills,
-  parseSkillFrontmatter,
-  readSkillBody,
-  readSkillFile,
-  skillsSuffixText,
 } from "../../packages/extensions/atf-core/src/index.js";
 
 const makeTemp = (label: string): string => mkdtempSync(join(tmpdir(), `atf-b3-${label}-`));
@@ -218,55 +213,3 @@ describe("批 3 §三：G5 就绪检测（确定性）", () => {
   });
 });
 
-describe("批 3 §二：SkillCatalog", () => {
-  it("frontmatter 解析（含续行）；清单一行/技能；全文与附属文件路径守卫", async () => {
-    expect(parseSkillFrontmatter("---\nname: atf-run-training\nversion: 1.5\ndescription: 启动编排生成\n---\n\n# 正文\n")?.name).toBe("atf-run-training");
-    expect(parseSkillFrontmatter("no frontmatter")).toBeNull();
-
-    const skillsRoot = makeTemp("skills");
-    try {
-      const dir = join(skillsRoot, "atf-evaluate-checkpoints");
-      mkdirSync(join(dir, "references"), { recursive: true });
-      writeFileSync(join(dir, "SKILL.md"), "---\nname: atf-evaluate-checkpoints\ndescription: 评估 checkpoint\n---\n\n# 评估\n按此执行。");
-      writeFileSync(join(dir, "references", "method.md"), "# 方法");
-      const other = join(skillsRoot, "not-a-skill");
-      mkdirSync(other, { recursive: true });
-      writeFileSync(join(other, "README.md"), "no skill");
-
-      const listed = await listSkills(skillsRoot);
-      expect(listed.ok).toBe(true);
-      if (listed.ok) {
-        expect(listed.value).toHaveLength(1);
-        expect(listed.value[0]?.name).toBe("atf-evaluate-checkpoints");
-        expect(skillsSuffixText(listed.value)).toContain("- atf-evaluate-checkpoints — 评估 checkpoint");
-        expect(skillsSuffixText(listed.value)).toContain("atf_scratch_exec");
-      }
-
-      const body = await readSkillBody(skillsRoot, "atf-evaluate-checkpoints");
-      expect(body.ok).toBe(true);
-      if (body.ok) {
-        expect(body.value.body).toContain("# 评估");
-        expect(body.value.body).not.toContain("description:");
-        expect(body.value.references).toContain("references/method.md");
-      }
-
-      const ref = await readSkillFile(skillsRoot, "atf-evaluate-checkpoints", "references/method.md");
-      expect(ref.ok).toBe(true);
-      if (ref.ok) expect(ref.value.body).toBe("# 方法");
-
-      const escape = await readSkillFile(skillsRoot, "atf-evaluate-checkpoints", "../../etc/passwd");
-      expect(escape.ok).toBe(false);
-      if (!escape.ok) expect(escape.error.code).toBe("skill_file_forbidden");
-
-      const outsideSkill = await readSkillBody(skillsRoot, "../escape");
-      expect(outsideSkill.ok).toBe(false);
-      if (!outsideSkill.ok) expect(outsideSkill.error.code).toBe("skill_unknown");
-
-      const missingRoot = await listSkills(join(skillsRoot, "absent"));
-      expect(missingRoot.ok).toBe(false);
-      if (!missingRoot.ok) expect(missingRoot.error.code).toBe("skills_root_missing");
-    } finally {
-      rmSync(skillsRoot, { recursive: true, force: true });
-    }
-  });
-});

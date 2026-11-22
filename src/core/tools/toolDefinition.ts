@@ -51,7 +51,6 @@ export const APPROVAL_SEMANTICS_BY_TOOL: Readonly<Record<string, ApprovalSemanti
   atf_workspace_status: "readonly",
   atf_fact_scan: "readonly",
   atf_label_qc_inspect: "readonly",
-  atf_skill_read: "readonly",
   // 链内推进(写 run 域内、可逆)
   atf_admit_data: "chain_advance",
   // D192(owner 2026-11-04 1104-5 实锤):裁决是用户决定不是链内推进——

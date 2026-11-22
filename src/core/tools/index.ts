@@ -53,7 +53,6 @@ export {
 export {
   WORKSPACE_TOOL_DEFINITIONS,
   WORKSPACE_TOOL_HANDLERS,
-  buildSkillsSystemSuffix,
   parseLaunchRequiredCards,
   type LaunchGpuQueueFace,
   type LocalToolHandler,

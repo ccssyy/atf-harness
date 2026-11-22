@@ -161,8 +161,8 @@ const template = readFileSync(join(repoRoot, "deploy", "profiles", "web", "cordi
     }
     expect(bundle).toContain("训练链固定十七段");
     // 工具集差异：vendor 技能面关（atf_skill_read 单源）
-    expect(bundle).toMatch(/- id: skill-filesystem\n\s+name: '@deepseek-ai\/dsh-skill-filesystem'\n\s+disabled: true/);
-    expect(bundle).toMatch(/- id: tool-skill\n\s+name: '@deepseek-ai\/dsh-tool-skill'\n\s+disabled: true/);
+    expect(bundle).toMatch(/- id: skill-filesystem\n\s+name: '@deepseek-ai\/dsh-skill-filesystem'/);
+    expect(bundle).toMatch(/- id: tool-skill\n\s+name: '@deepseek-ai\/dsh-tool-skill'/);
   });
   it("免审清单在 atf-tools config.approvalPolicy：显式工具名、零 atf_ 前缀、零治理点", () => {
     const block = template.slice(template.indexOf("approvalPolicy:"), template.indexOf("# —— M3 品牌定稿"));

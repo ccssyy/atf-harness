@@ -369,6 +369,6 @@ describe("投影面护栏：BRIDGE_TOOL_NAMES ⊆ 契约定义单源（G5 后=TO
     expect(BRIDGE_TOOL_NAMES).toContain("atf_label_qc_resolve");
     // G5（2026-11-22）：MCP 化模型面全量投影——10→14（fact_scan/data_admission_request/
     // preparation_propose/style_cluster_execute 四件经 MCP tools/list 进 DSH 面）
-    expect(BRIDGE_TOOL_NAMES).toHaveLength(14);
+    expect(BRIDGE_TOOL_NAMES).toHaveLength(13);
   });
 });

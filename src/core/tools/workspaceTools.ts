@@ -74,12 +74,6 @@ const withinRootOf = (
 import { startLossIngest } from "@atf/dsh-atf-core";
 import { recordFirstLaunchAt } from "@atf/dsh-atf-core";
 import {
-  listSkills,
-  readSkillBody,
-  readSkillFile,
-  skillsSuffixText,
-  SKILL_FILE_MAX_BYTES,
-  type SkillSummary,
 } from "@atf/dsh-atf-core";
 import { safeScratchPath } from "@atf/dsh-atf-core";
 import {
@@ -240,23 +234,6 @@ const SCRATCH_EXEC_CANONICAL: SchemaNode = {
   },
 };
 
-/** atf_skill_read 参数。 */
-const SKILL_READ_PARAMS: SchemaNode = {
-  type: "object",
-  required: [],
-  properties: {
-    skill: {
-      type: "string",
-      optional: true,
-      description: "技能名（清单内的 name，如 atf-run-training）；缺省＝返回技能清单",
-    },
-    file: {
-      type: "string",
-      optional: true,
-      description: "技能内附属文件（references/assets/scripts 内相对路径，随全文返回的 references 清单取值）；缺省＝只读 SKILL.md 全文",
-    },
-  },
-};
 
 const SKILL_READ_CANONICAL: SchemaNode = {
   type: "object",
@@ -526,14 +503,6 @@ export const WORKSPACE_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     canonical_output: SCRATCH_EXEC_CANONICAL,
   },
   {
-    name: "atf_skill_read",
-    description:
-      "读 ATF 训练链技能（skills）操作定义（纯读，免审批）：无参调用返回技能清单（name+一行描述）；给 skill 返回该技能 SKILL.md 全文（操作定义，含 scripts 用法与交互纪律）与附属文件清单；给 skill+file 读 references/assets 内附属文件。训练准备/启动/评估/badcase 分析的操作步骤都在对应技能的 SKILL.md 里——先读再按其指引执行。",
-    parameters: SKILL_READ_PARAMS,
-    requires_approval: false,
-    canonical_output: SKILL_READ_CANONICAL,
-  },
-  {
     name: "atf_launch_execute",
     description:
       "训练启动放行与执行（须审批，harness 专执行点）：G5 preview 闭合且 launch.sh 已生成后，由用户确认触发——harness 先按 IterationConfig 登记训练放行记录（--record-training-release，内核审批账本），再执行 launch.sh（其内置 TRAINING_RELEASE 闸核对该记录）。不要自行调用本工具之外的任何方式启动训练；未经用户确认不得发起。",
@@ -695,38 +664,6 @@ const scratchExecHandler: LocalToolHandler = async (rawParams, host) => {
   };
 };
 
-const skillReadHandler: LocalToolHandler = async (rawParams, host) => {
-  if (!isPlainObject(rawParams)) return rejected("invalid_input", { message: "参数须为 JSON 对象" });
-  const skillsRoot = join(host.kernelDir, "skills");
-  const skill = stringParam(rawParams, "skill");
-  const file = stringParam(rawParams, "file");
-  if (skill === undefined) {
-    const listed = await listSkills(skillsRoot);
-    if (!listed.ok) return rejected(listed.error.code, { message: listed.error.message });
-    const skills = listed.value.map((summary: SkillSummary) => ({ name: summary.name, description: summary.description }));
-    return { kind: "executed", result: { ok: true, skills } };
-  }
-  if (file !== undefined) {
-    const read = await readSkillFile(skillsRoot, skill, file);
-    if (!read.ok) return rejected(read.error.code, { message: read.error.message });
-    return {
-      kind: "executed",
-      result: {
-        ok: true,
-        skill: read.value.skill,
-        file: read.value.file,
-        body: read.value.body,
-        ...(read.value.truncated ? { truncated: true, truncation_note: `超 ${String(Math.floor(SKILL_FILE_MAX_BYTES / 1024))} KiB 已截断` } : {}),
-      },
-    };
-  }
-  const read = await readSkillBody(skillsRoot, skill);
-  if (!read.ok) return rejected(read.error.code, { message: read.error.message });
-  return {
-    kind: "executed",
-    result: { ok: true, skill: read.value.skill, body: read.value.body, references: read.value.references },
-  };
-};
 
 /** D115：launch_sh 三形态解析——绝对路径＝runDir 树内守卫（越界拒）；相对路径＝runDir 树内
  *  优先（launch/ 布局正道落点，禁滞留旧条目——新件在 run 树时不被旧 scratch 条目遮蔽），
@@ -1093,7 +1030,6 @@ const rebindWorkspaceHandler: LocalToolHandler = async (rawParams, host) => {
 export const WORKSPACE_TOOL_HANDLERS: Readonly<Record<string, LocalToolHandler>> = {
   atf_scratch_write: scratchWriteHandler,
   atf_scratch_exec: scratchExecHandler,
-  atf_skill_read: skillReadHandler,
   atf_launch_execute: launchExecuteHandler,
   ask_user_for_input: askUserHandler,
   atf_create_experiment: createExperimentHandler,
@@ -1101,7 +1037,3 @@ export const WORKSPACE_TOOL_HANDLERS: Readonly<Record<string, LocalToolHandler>>
 };
 
 /** 装配 helper（TUI/resume 消费）：技能常驻清单 systemSuffix（skillsRoot 缺失 = undefined，装载降级）。 */
-export const buildSkillsSystemSuffix = async (kernelDir: string): Promise<string | undefined> => {
-  const listed = await listSkills(join(kernelDir, "skills"));
-  return listed.ok ? skillsSuffixText(listed.value) : undefined;
-};

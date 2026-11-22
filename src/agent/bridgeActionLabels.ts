@@ -12,7 +12,6 @@ export const BRIDGE_ACTION_LABELS: Readonly<Record<string, string>> = {
   atf_admit_data: "登记训练数据集",
   atf_label_qc_inspect: "抽检标注质量",
   atf_scratch_exec: "在工作区草稿目录执行脚本",
-  atf_skill_read: "读取操作指引文档",
   atf_gate: "调用流程闸门核验",
   atf_launch_execute: "启动训练编排",
   atf_create_experiment: "创建训练实验",

@@ -265,7 +265,7 @@ describe("批㊶-F2 审批标注增补（转派记录——免审清单/高危�
     // （atfAgentTools spikeRequiresApproval）——全工具面（9 契约＋工作区分册 7）逐工具相等，
     // 防未来任一线另立本地判定分叉（沿 methodOverrides 静态防分叉先例）。
     expect(TOOL_DEFINITIONS).toHaveLength(9);
-    expect(WORKSPACE_TOOL_DEFINITIONS).toHaveLength(7);
+    expect(WORKSPACE_TOOL_DEFINITIONS).toHaveLength(6);
     for (const definition of [...TOOL_DEFINITIONS, ...WORKSPACE_TOOL_DEFINITIONS]) {
       for (const params of [{}, { action: "query" }, { action: "advance" }, {任意: 1}]) {
         expect(spikeRequiresApproval(definition, params)).toBe(requiresUserConfirmationOf(definition, params));

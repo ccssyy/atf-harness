@@ -103,23 +103,6 @@ export {
   type LabelQcReportFile,
 } from "./labelQc.js";
 export {
-  listSkills,
-  listSkillsFromRegistry,
-  parseSkillFrontmatter,
-  readSkillBody,
-  readSkillBodyFromRegistry,
-  readSkillFile,
-  readSkillFileFromRegistry,
-  skillsSuffixText,
-  summariesOfSkillRegistry,
-  SKILL_FILE_MAX_BYTES,
-  type SkillCatalogError,
-  type SkillRegistryPort,
-  type SkillSummary,
-  type VendorSkillDefinition,
-  type VendorSkillSummary,
-} from "./skillCatalog.js";
-export {
   BINDINGS_HISTORY_MAX,
   BINDINGS_SCHEMA_VERSION,
   SESSION_BINDINGS_TABLE,
@@ -336,7 +319,6 @@ export * from "./runSubdirs.js";
 export * from "./runWorkspace.js";
 export * from "./segmentFacts.js";
 export * from "./sessionBindings.js";
-export * from "./skillCatalog.js";
 export * from "./smartDefaults.js";
 export * from "./t0Guard.js";
 export * from "./tmuxLiveness.js";

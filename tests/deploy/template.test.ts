@@ -66,9 +66,11 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
     expect(training?.config?.id).toBe("atf-training");
     const plugins = training?.config?.plugins ?? [];
     const byId = new Map(plugins.map((plugin) => [plugin["id"] as string, plugin]));
-    expect(byId.get("skill-filesystem")?.["disabled"]).toBe(true);
-    expect(byId.get("tool-skill")?.["disabled"]).toBe(true);
-    // 与 standard 的插件 id 集合差异＝仅技能面两个 disabled（其余逐项同名同序，防手抄漂移）
+    // B17：技能面原生化（vendor 原生 + roots 配置），两件不再 disabled。
+    // 披露控制靠 skill-filesystem 的 includeDefaultRoots/watch 配置，不靠关插件。
+    expect(byId.get("skill-filesystem")?.["disabled"]).toBeUndefined();
+    expect(byId.get("tool-skill")?.["disabled"]).toBeUndefined();
+    // 与 standard 的插件 id 集合差异＝派发件（其余逐项同名同序，防手抄漂移）
     // ＋派发件：原自研 atf-subagent（498 行）已退役，改由三个 vendor tool-subagent
     // 实例承接（dispatch 两件 toolName 保名 + deferred 用 backgroundMode:continuable）。
     const standard = (rowById(templateRows(), "preset-standard") as { config?: { plugins?: Array<Record<string, unknown>> } })?.config?.plugins ?? [];

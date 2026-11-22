@@ -15,7 +15,7 @@ const defOf = (name: string): Parameters<typeof requiresUserConfirmationOf>[0] =
 
 describe("D170v2 §4.1 确认卡语义分类表（ADR-0022 退役后）", () => {
   it("只读面直通", () => {
-    for (const name of ["atf_workspace_status", "atf_label_qc_inspect", "atf_skill_read"]) {
+    for (const name of ["atf_workspace_status", "atf_label_qc_inspect"]) {
       expect(requiresUserConfirmationOf(defOf(name), {})).toBe(false);
     }
   });

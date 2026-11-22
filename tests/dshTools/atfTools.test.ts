@@ -99,7 +99,7 @@ describe("atf-tools 注册面（11 工具清单＝指令要求）", () => {
     // ＋G5（2026-11-22）：MCP 化模型面全量投影——BRIDGE_TOOL_NAMES 十件→十四件
     //   （atf_fact_scan/atf_data_admission_request/atf_preparation_propose/
     //    atf_style_cluster_execute 经 MCP tools/list 进 DSH 面）→ registered 15→19。
-    expect(registered).toHaveLength(19);
+    expect(registered).toHaveLength(18);
     await manager.close();
   });
 
@@ -159,12 +159,6 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
     expect(JSON.stringify(result)).toContain("invalid_params");
   }, 20_000);
 
-  it("atf_skill_read：审批放行 → 本地治理径（内核根缺失 → 结构化 rejected 如实回流）", async () => {
-    const tools = await buildBridgeTools(approvalCtx("allowed-once"), manager, localRoots);
-    const result = (await findTool(tools, "atf_skill_read").execute({}, fakeExec)) as Record<string, unknown>;
-    const text = JSON.stringify(result);
-    expect(text.length).toBeGreaterThan(0);
-  }, 20_000);
 
   it("atf_label_qc_inspect：审批 allowed-once → 触桥（契约参数面）", async () => {
     const tools = await buildBridgeTools(approvalCtx("allowed-once"), manager, localRoots);
