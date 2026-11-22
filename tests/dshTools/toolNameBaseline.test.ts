@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { TOOL_DEFINITIONS } from "../../../../src/core/tools/toolDefinition.js";
-import { WORKSPACE_TOOL_DEFINITIONS } from "../../../../src/core/tools/workspaceTools.js";
-import { TOOL_METHOD_OVERRIDES } from "../../../../src/core/tools/methodOverrides.js";
-import { BRIDGE_TOOL_NAMES } from "../../../../packages/extensions/atf-tools/src/bridgeFace.js";
+import { TOOL_DEFINITIONS } from "../../src/core/tools/toolDefinition.js";
+import { WORKSPACE_TOOL_DEFINITIONS } from "../../src/core/tools/workspaceTools.js";
+import { TOOL_METHOD_OVERRIDES } from "../../src/core/tools/methodOverrides.js";
+import { BRIDGE_TOOL_NAMES } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
 
 /**
  * D6 机检（G5 MCP 切换批）：模型可见工具名集合与切换前逐字一致。
