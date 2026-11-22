@@ -68,12 +68,37 @@
             config:
               mode: timed
               timeout: 120
-      # C1（1113 真机派发装接）：dispatch 三件套会话级挂载——D276 并行派发条款的真机
-      # 可达面（B 批装在 eval 专用入口被门禁拦下后改挂 vendor preset plugins 体系）。
-          - id: atf-subagent
-            name: '@atf/dsh-atf-subagent'
-      # 工具集差异（配置声明，禁 TS 分支）：训练链读技能只走 atf_skill_read（桥接契约面，
-      # 带内核技能包版本）；vendor 技能目录会引入非 ATF 技能，属错误引导面——本预设关闭。
+          # D6 新口径（2026-11-22 owner 裁定 A）：内核协议名稳定，模型可见名可演进。
+          # 原自研 atf-subagent（498 行，含自研 loop 装配）退役——dispatch 两件改由
+          # vendor tool-subagent 配置承接（toolName 保名），deferred 三件由
+          # backgroundMode:continuable 单工具承接（vendor 后台上任务原生形态）。
+          # ATF 领域增量只留：账本域锚 + 审批继承（改走 vendor pre-execute）。
+          - id: tool-subagent-dispatch
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: spawn
+              toolName: dispatch_training_subtask
+              enableRunInBackground: true
+              backgroundMode: one-shot
+          - id: tool-subagent-parallel
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: spawn
+              toolName: dispatch_parallel_training_subtask
+              enableRunInBackground: true
+              backgroundMode: one-shot
+          # deferred 三件（spawn/poll/cancel）→ vendor continuable 单工具：
+          # 起后台任务返 durable child id，后续消息续写（vendor 原生，比三件更简）。
+          # 工具名变更已按 D6 新口径裁决（表现层可演进，内核协议名不动）。
+          - id: tool-subagent-background
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: spawn
+              toolName: dispatch_training_subtask_background
+              enableRunInBackground: true
+              backgroundMode: continuable
+          # 工具集差异（配置声明，禁 TS 分支）：训练链读技能只走 atf_skill_read（桥接契约面，
+          # 带内核技能包版本）；vendor 技能目录会引入非 ATF 技能，属错误引导面——本预设关闭。
           - id: skill-filesystem
             name: '@deepseek-ai/dsh-skill-filesystem'
             disabled: true

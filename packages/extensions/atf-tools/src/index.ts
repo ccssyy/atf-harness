@@ -45,8 +45,6 @@ import { BRIDGE_TOOL_NAMES } from "./bridgeFace.js";
 /** Cordis 插件名（loader 诊断用）。 */
 export const name = "atf-tools";
 
-/** C1：实例级桥接管理器槽（apply 装配时填充；atf-subagent 经此共享同一桥接单连接）。 */
-export const bridgeManagerSlot: { current: unknown } = { current: null };
 
 /** 依赖的 DSH service：tools＝工具注册表（approval 以 ctx.get 可选消费——缺失时敏感工具 fail-closed）。 */
 export const inject = ["tools"];
@@ -159,7 +157,6 @@ export async function apply(ctx: any, config: AtfToolsConfig): Promise<void> {
   // （「cannot set property without provide」真机 boot 实锚——组件 mock 普通对象
   // 测不出，mock 必须按真实对端形状构造教训的又一案例）。实例级单例语义：
   // 每次 apply 覆盖槽为最新 manager。缺席时 plugin 侧 fail-loud 拒绝挂载，不静默降级。
-  bridgeManagerSlot.current = manager;
 
   // 批㊶R前置 状态面：本机模型清单（启动扫描一次——boot 日志投影＋atf_run_training 描述注入；
   // 根＝env ATF_MODEL_ROOT（实例层注入）；未配置/缺席如实空清单不猜测）
