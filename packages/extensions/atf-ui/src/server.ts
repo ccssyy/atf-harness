@@ -18,7 +18,7 @@ import { buildArtifactsSnapshot, buildMonitorSnapshot } from "./snapshot.js";
 import { PANEL_HTML } from "./panel.js";
 import { queryNvidiaSmi, queryNvidiaSmiAll, queryGpuComputeApps, gpuProcTopByIndex } from "../../../../src/webui/readOnlyTools.js";
 import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS, renderPixelPairRows, renderTokenBudgetRows } from "../../../../src/webui/configConfirm.js";
-import { resolveBridgeDeployment, kernelVersionSync, type BridgeDeployment } from "../../../../src/bridge/bridgeCommand.js";
+import { resolveMcpDeployment, kernelVersionSync, kernelRootOf, type BridgeDeployment } from "../../../../src/mcp/bridgeCommand.js";
 import { resolveInstanceKernelDir } from "../../../../src/core/workspace/instancePin.js";
 import {
   ensureDefaultWorkspace,
@@ -134,7 +134,7 @@ export const injectMonitorGlobal = (html: string, monitorPath: string, bridge?: 
 };
 
 /**
- * 桥徽标面推导（批㊶-E-H 项 2.3）：与 atf-tools 装配同源（src/bridge/bridgeCommand.ts
+ * 对端徽标面推导（批㊶-E-H 项 2.3；G5 起为 MCP 装配）：与 atf-tools 装配同源（src/mcp/bridgeCommand.ts
  * 单源＋同进程同 env——本插件不持 Config，env 缺省值与 atf-tools Config 缺省一致）。
  * real 时探测内核版本（git describe，fail-soft null）。
  */
@@ -143,8 +143,8 @@ export const bridgeBadgeSurface = (env: Readonly<Record<string, string | undefin
   // ATF_CLI_PATH＞实例 pin 根）；徽标版本沿 describe（boot 行实载化为 S2——徽标不 spawn 探针）
   const kernelDir = resolveInstanceKernelDir(env, repoRootValue);
   const commandValue = env["ATF_DSH_BRIDGE_COMMAND"] ?? `node ${join(repoRootValue, "tests", "fixtures", "mock_atf.mjs")}`;
-  const deployment: BridgeDeployment = resolveBridgeDeployment({ commandValue, kernelDir, env, ...(probe !== undefined ? { probe } : {}) });
-  return { mode: deployment.mode, version: deployment.mode === "real" ? kernelVersionSync(deployment.kernelRoot) : null };
+  const deployment: BridgeDeployment = resolveMcpDeployment({ commandValue, kernelDir, env, ...(probe !== undefined ? { probe } : {}) });
+  return { mode: deployment.mode, version: deployment.mode === "real" ? kernelVersionSync(kernelRootOf(deployment, kernelDir)) : null };
 };
 
 export interface RunScan {

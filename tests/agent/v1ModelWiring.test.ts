@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { AtfBridgeConnection } from "../../src/bridge/connection.js";
+import { AtfBridgeConnection } from "../../src/mcp/connection.js";
 import { runV1Headless } from "../../src/agent/cli.js";
 import { createFauxStreamFn, fauxFinalAnswer } from "../../src/agent/fauxStream.js";
 import type { SpikeBridgeTransport } from "../../src/agent/atfAgentTools.js";

@@ -16,7 +16,7 @@ import { join, dirname, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import { loadLlmProviderConfig } from "../llm/providerConfig.js";
-import { resolveBridgeDeployment } from "../bridge/bridgeCommand.js";
+import { resolveMcpDeployment } from "../mcp/bridgeCommand.js";
 import { resolveInstanceKernelDir } from "../core/workspace/instancePin.js";
 import { WebUiSessionManager, chatBudgetFromEnv, parseBudgetFromEnv, type SessionManagerDeps } from "./sessionManager.js";
 import { openSettingsStore, redactProviders, envProfilePath, writeEnvProfile, SCENARIO_PROFILES, type ScenarioProfileId } from "./settings.js";
@@ -152,7 +152,7 @@ export const startWebUiServer = async (overrides: WebUiServerOverrides = {}): Pr
   } else {
     const bridgeEnvCommand = env["ATF_DSH_BRIDGE_COMMAND"]?.trim();
     if (bridgeEnvCommand !== undefined && bridgeEnvCommand !== "") {
-      const deployment = resolveBridgeDeployment({
+      const deployment = resolveMcpDeployment({
         commandValue: bridgeEnvCommand,
         kernelDir: resolveInstanceKernelDir(env, repoRoot),
         env,

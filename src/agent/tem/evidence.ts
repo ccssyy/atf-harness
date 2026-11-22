@@ -11,7 +11,7 @@
 import { createHash } from "node:crypto";
 import { BACKGROUND_CONTEXT, type Context } from "@earendil-works/pi-agent-core";
 import { uuidv7 } from "@earendil-works/pi-ai";
-import { ATF_UPSTREAM_TAG } from "../../bridge/atfCommand.js";
+import { ATF_UPSTREAM_TAG } from "../../mcp/atfCommand.js";
 import { stableStringify } from "../../core/tools/approvalKey.js";
 import { ensureMainBranch, type SessionLike } from "../sessionMirror.js";
 

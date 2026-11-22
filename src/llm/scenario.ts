@@ -15,7 +15,7 @@
  * 空数组；segments[0].provider_id 须与 scenario.provider 一致（初始 provider 一致性）。
  * 本模块只做结构与语法校验；语义（步骤顺序、账本绑定一致性）由 runner 执行期承载。
  */
-import { err, ok, type Result } from "../bridge/index.js";
+import { err, ok, type Result } from "../mcp/index.js";
 import { type LlmDecision } from "./provider.js";
 
 export const SCENARIO_VERSION = 1;

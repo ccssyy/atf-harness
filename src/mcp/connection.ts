@@ -29,8 +29,8 @@ import {
   STDERR_TAIL_LIMIT,
   takeStderrTail,
   type BridgeError,
-} from "../../../../../src/bridge/errors.js";
-import { err, ok, type Result } from "../../../../../src/bridge/result.js";
+} from "./errors.js";
+import { err, ok, type Result } from "./result.js";
 
 /** 请求级超时（沿用旧桥 REQUEST_TIMEOUT_MS 语义，harness 内部细节）。 */
 export const MCP_REQUEST_TIMEOUT_MS = 30_000;
@@ -53,11 +53,14 @@ export interface McpToolDescriptor {
   outputSchema?: unknown;
 }
 
-/** initialize 握手结果（serverInfo；无 contract_version——该轴随旧桥退役）。 */
+/** initialize 握手结果（serverInfo）。contract_version 为旧桥 API 兼容位（恒 1——
+ *  会话协议版本轴已随旧 JSONL 桥退役，字段仅为 webui/agent-cli 的打印链保形）。 */
 export interface McpServerVersion {
   name: string;
   version: string;
   protocolVersion: string;
+  /** 旧 AtfVersionInfo 形态兼容（恒 1，语义已退役）。 */
+  contract_version: number;
 }
 
 export interface McpSpawnOptions {
@@ -121,7 +124,7 @@ const appendStderr = (chunks: string[], text: string): void => {
  * 生命周期：spawn → initialize（含 notifications/initialized）→ 就绪 → 优雅关闭。
  * 纪律与旧桥一致：公开 API 全部返回 Result，禁止异常穿越边界；失败 fail-closed。
  */
-export class AtfMcpConnection {
+export class AtfBridgeConnection {
   private readonly pending = new Map<RequestId, PendingRequest>();
   private readonly stderrChunks: string[] = [];
   private requestTimeoutMs: number;
@@ -147,7 +150,7 @@ export class AtfMcpConnection {
   }
 
   /** spawn + initialize 握手。任一步失败：回收子进程并返回 err（含 stderr 尾部）。 */
-  public static async spawn(options: McpSpawnOptions): Promise<Result<AtfMcpConnection, BridgeError>> {
+  public static async spawn(options: McpSpawnOptions): Promise<Result<AtfBridgeConnection, BridgeError>> {
     if (options.command.length === 0) {
       return err(bridgeError({ code: "spawn_failed", message: "spawn 失败：command 为空" }));
     }
@@ -167,7 +170,7 @@ export class AtfMcpConnection {
         }),
       );
     }
-    const connection = new AtfMcpConnection(
+    const connection = new AtfBridgeConnection(
       options.requestTimeoutMs ?? MCP_REQUEST_TIMEOUT_MS,
       options.maxFrameBytes ?? MCP_MAX_FRAME_BYTES,
     );
@@ -214,7 +217,7 @@ export class AtfMcpConnection {
       await connection.waitForExit(5_000);
       return err(error);
     }
-    connection.version = { name: serverInfo.name, version: serverInfo.version, protocolVersion };
+    connection.version = { name: serverInfo.name, version: serverInfo.version, protocolVersion, contract_version: 1 };
     // MCP 规范：initialize 应答后客户端发 initialized 通知（server 不回帧）
     const notified = connection.sendFrame({ jsonrpc: "2.0", method: "notifications/initialized" });
     if (!notified.ok) {
@@ -488,3 +491,6 @@ export class AtfMcpConnection {
     });
   }
 }
+
+/** 阶段 1-2 过渡名（atf-tools 消费）——与 AtfBridgeConnection 同类。 */
+export { AtfBridgeConnection as AtfMcpConnection };

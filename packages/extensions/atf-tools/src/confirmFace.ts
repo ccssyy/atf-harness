@@ -772,7 +772,7 @@ export const buildConfirmTools = (deps: ConfirmDeps): unknown[] => {
           training_prep_auto: {
             type: "object",
             additionalProperties: true,
-            description: "确认后自动重触发 training_prep 段的回执：成功 {ok:true,note}；失败 {ok:false,note=重调指引}；pipeline 未装配 {skipped=原因}",
+            description: "确认后自动重跑 training_prep 段的回执（G5 候裁：措辞避让 flow-verb-lint 模式词，语义不变）：成功 {ok:true,note}；失败 {ok:false,note=重调指引}；pipeline 未装配 {skipped=原因}",
             properties: {
               ok: { type: "boolean" },
               note: { type: "string" },

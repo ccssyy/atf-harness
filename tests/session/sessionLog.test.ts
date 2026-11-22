@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { err } from "../../src/bridge/index.js";
+import { err } from "../../src/mcp/index.js";
 import { sessionError } from "../../src/core/session/errors.js";
 import { MockDigestResolver, type DigestResolver } from "../../src/core/session/digestResolver.js";
 import { SessionLog } from "../../src/core/session/sessionLog.js";

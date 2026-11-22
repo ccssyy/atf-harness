@@ -8,7 +8,7 @@
  * （`decisionFace: "script"` 明确标注非模型面）。runner 据此类型级分流：脚本路径
  * 不经模型面守卫（守卫作用域 = provider 接口返回值），既有场景零回归。
  */
-import { ok, type Result } from "../bridge/index.js";
+import { ok, type Result } from "../mcp/index.js";
 import { type LlmContextEvent } from "../core/session/index.js";
 import { type LlmError } from "./provider.js";
 import { type ScenarioBranch, type ScenarioStep } from "./scenario.js";

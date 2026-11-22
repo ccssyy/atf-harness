@@ -14,7 +14,7 @@ import { filterRunsByWorkspace, makeReadOnlyTools } from "../../src/webui/readOn
 import { buildReadOnlyAgentTools, listRuns } from "../../src/webui/readOnlyTools.js";
 import { WebUiSessionManager, parseBudgetFromEnv, chatBudgetFromEnv } from "../../src/webui/sessionManager.js";
 import { startWebUiServer } from "../../src/webui/server.js";
-import { AtfBridgeConnection } from "../../src/bridge/index.js";
+import { AtfBridgeConnection } from "../../src/mcp/index.js";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { createFauxStreamFn, fauxAssistantMessage, fauxFinalAnswer } from "../../src/agent/fauxStream.js";
 import type { ToolCall } from "@earendil-works/pi-ai";

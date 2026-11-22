@@ -6,7 +6,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { AtfMcpConnection } from "./mcp/connection.js";
+import { AtfMcpConnection } from "../../../../src/mcp/connection.js";
 import { createMcpToolDefinition } from "@deepseek-ai/dsh-mcp-client";
 import {
   TOOL_DEFINITIONS,
@@ -226,7 +226,7 @@ export class BridgeManager {
 
   /** MCP tools/list 装配面（懒连接+缓存；失败 fail-closed 抛错——任务书候裁默认②：
    *  server 启动/列举失败即拒绝装配，不静默降级本地 schema 副本）。 */
-  async mcpTools(): Promise<import("./mcp/connection.js").McpToolDescriptor[]> {
+  async mcpTools(): Promise<import("../../../../src/mcp/connection.js").McpToolDescriptor[]> {
     const connection = await this.transport();
     const listed = await connection.listTools();
     if (!listed.ok) {

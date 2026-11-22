@@ -8,8 +8,8 @@
  */
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { AtfBridgeConnection } from "../../src/bridge/connection.js";
-import type { BridgeError } from "../../src/bridge/errors.js";
+import { AtfBridgeConnection } from "../../src/mcp/connection.js";
+import type { BridgeError } from "../../src/mcp/errors.js";
 import { runLedgerGate, type LedgerGateFailure } from "../../src/core/tools/ledgerGate.js";
 import { ToolExecutor, ToolRegistry } from "../../src/core/tools/index.js";
 import { approvalParamsDigest, type LedgerRecord, type ScopeRef } from "../../src/core/tools/approvalKey.js";

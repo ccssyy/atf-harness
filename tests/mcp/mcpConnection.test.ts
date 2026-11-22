@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { join } from "node:path";
-import { AtfMcpConnection } from "../../packages/extensions/atf-tools/src/mcp/connection.js";
+import { AtfMcpConnection } from "../../src/mcp/connection.js";
 
 /**
  * G5 MCP 连接器单测（mock 双协议夹具的 MCP 面）——帧分帧/请求关联/超时/

@@ -1,12 +1,14 @@
 /**
- * G5 MCP 切换——MCP 对端装配单源（阶段 1 落位 atf-tools；阶段 3 删 src/bridge 时
- * 承接 resolveBridgeDeployment 的 webui/atf-ui 消费面并迁移）。
+ * G5 MCP 对端装配单源（src/mcp/bridgeCommand.ts——承接旧 src/bridge/bridgeCommand.ts
+ * 的部署解析与版本交叉核对消费面；旧 JSONL 桥与 atf.version 握手已退役）。
  *
- * ATF_DSH_BRIDGE_COMMAND 语义随批变更（任务书路标）：MCP 后＝启动内核 MCP server
- * 的命令串（缺省派生 `python3 -m agentic_training_flow.mcp`，PYTHONPATH 从 kernelDir
- * 探测派生）；前导 KEY=VALUE 词法仍作子进程私有 env。mock 判定沿旧口径：显式 env
- * 缺席且命令指向 mock 夹具＝mock。mock 夹具自 G5 起双协议（首帧 initialize → MCP）。
+ * ATF_DSH_BRIDGE_COMMAND 语义（G5 起）＝启动内核 MCP server 的命令串：argv 自命令串
+ * 解析，前导 KEY=VALUE 词法作子进程私有 env（PYTHONPATH 即此注入）；缺席＝mock 对端
+ * （tests/fixtures/mock_atf.mjs，G5 起双协议——首帧 initialize 探测进 MCP 面）。
+ * 消费方：packages/extensions/atf-tools（装配）、src/webui/server.ts（会话装配）、
+ * atf-ui（徽标注入）——三插件同进程同 env，共用本单源防分叉。
  */
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 
@@ -18,6 +20,9 @@ export interface McpDeployment {
   /** 子进程私有 env 增量（仅合并于 spawn，不进 process.env）。 */
   childEnv: Readonly<Record<string, string>>;
 }
+
+/** 旧消费面（webui/atf-ui）的形态名——与 McpDeployment 同构（G5 承接位）。 */
+export type BridgeDeployment = McpDeployment;
 
 /** 引号感知分词（与旧 bridgeCommand 同款：env 值可含空格路径）。 */
 const tokenizeRespectingQuotes = (value: string): string[] => {
@@ -108,8 +113,17 @@ export const resolveMcpDeployment = (
   };
 };
 
-/** 内核 MCP server 启动命令派生（CLI 直调形态：cwd=kernelDir）。 */
-export const kernelMcpArgv = (kernelDir: string): string[] => ["-m", "agentic_training_flow.mcp"];
+/** 内核版本（`git -C <root> describe --tags`；fail-soft null——非 git 目录/超时/无 tag 如实降级）。 */
+export const kernelVersionSync = (kernelRoot: string | null, timeoutMs = 3_000): string | null => {
+  if (kernelRoot === null) return null;
+  try {
+    const out = execFileSync("git", ["-C", kernelRoot, "describe", "--tags"], { timeout: timeoutMs, stdio: ["ignore", "pipe", "ignore"] });
+    const tag = out.toString("utf8").trim();
+    return tag !== "" ? tag : null;
+  } catch {
+    return null;
+  }
+};
 
 /** kernelRootFromPythonpath 对外（boot 日志用）。 */
 export const kernelRootOf = (deployment: McpDeployment, kernelDir: string): string | null => {

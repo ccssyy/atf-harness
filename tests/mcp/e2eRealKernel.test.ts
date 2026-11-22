@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { AtfMcpConnection } from "../../packages/extensions/atf-tools/src/mcp/connection.js";
+import { AtfMcpConnection } from "../../src/mcp/connection.js";
 import { BridgeManager, buildBridgeTools } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
 
 /**
@@ -47,7 +47,7 @@ const makeWorkspace = (): string => {
 };
 
 describe("G5 真内核 MCP 链路（ATF_G5_KERNEL_SRC 门控）", () => {
-  d("initialize → tools/list：15 方法名逐字（内核注册闭集）", async () => {
+  d("initialize → tools/list：15 方法名逐字（内核注册闭集）+ outputSchema 全携带（A3）", async () => {
     const spawned = await AtfMcpConnection.spawn({ ...mcpArgv() });
     expect(spawned.ok).toBe(true);
     if (!spawned.ok) return;
@@ -73,6 +73,13 @@ describe("G5 真内核 MCP 链路（ATF_G5_KERNEL_SRC 门控）", () => {
       "ledger_record",
       "atf_flow_anchor",
     ]);
+    // A3：15 方法成功返回体声明全携带（schema 零复制的装配端实证）
+    for (const tool of listed.value) {
+      expect(
+        tool.outputSchema,
+        `tools/list ${tool.name} 缺 outputSchema（A3）`,
+      ).toBeDefined();
+    }
     await spawned.value.close();
   }, 60_000);
 
