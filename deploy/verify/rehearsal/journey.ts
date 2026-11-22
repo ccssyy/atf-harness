@@ -121,7 +121,7 @@ const makeApprovalService = () => ({
   },
 });
 
-const assemble = (): Map<string, DshToolLike> => {
+const assemble = async (): Promise<Map<string, DshToolLike>> => {
   const registered: DshToolLike[] = [];
   const askService = makeAskService();
   const ctx = {
@@ -146,7 +146,9 @@ const assemble = (): Map<string, DshToolLike> => {
     pipelineCommand: process.env["ATF_DSH_PIPELINE_COMMAND"],
     pipelineTimeoutMs: 900_000,
   };
-  mod.apply(ctx, config);
+  // G5：apply 改 async（MCP 装配需 await tools/list 拉取 schema）——
+  // 同步调用会在注册完成前 return，工具面为空（本预演曾因此报「缺关键工具」）。
+  await mod.apply(ctx, config);
   return new Map(registered.map((t) => [t.name, t]));
 };
 
@@ -405,7 +407,7 @@ const runJourney = async (): Promise<void> => {
     ? process.argv[process.argv.indexOf("--evidence-dir") + 1]!
     : `${KERNEL}/.zcode/deploy-evidence`;
   const ts = new Date().toISOString().replaceAll(/[:.]/g, "-").slice(0, 19);
-  const tools = assemble();
+  const tools = await assemble();
   const pipeline = tools.get("atf_pipeline_stage");
   const createExperiment = tools.get("atf_create_experiment");
   const resolveTool = tools.get("atf_label_qc_resolve");
