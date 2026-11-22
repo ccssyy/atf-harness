@@ -1,24 +1,21 @@
 /**
- * 批㊶-ISO-2 S1 fence 锚——生产面 pin 路径裸写清零（沿 ISO 批 tmux fence 先例的防回潮规则）。
+ * G7／D9 fence 锚——生产面「pin 路径字面量」与「pin env 读取」双双清零（防回潮）。
  *
- * `.atf-pinned` 路径字面量全仓生产面（src/＋packages 扩展源码）唯一合法落点＝单源模块
- * src/core/workspace/instancePin.ts（LEGACY_PIN_ROOT_RELPATH）；其余任何生产文件出现该
- * 字面量即红——pin 路径一律经 resolveInstancePinRoot／resolveInstanceKernelDir（实例
- * pin 根 env 注入后自动切换，无需逐点改码）。
+ * 沿革：原锚要求 `.atf-pinned` 字面量唯一落点＝instancePin.ts 单源，并自证「回退共享态
+ * 在路」。pin 退役后判据反转：**生产面任何文件都不得再出现 pin 路径字面量或 pin env 名**
+ * ——单源模块本身也不例外（它已重写为纯内核目录解析）。
+ *
+ * 为什么用反向断言而不是删掉整个文件：退役最怕的是悄悄回潮（某处又 readFileSync pin 树）。
+ * 机检落点保留在此，判据从「唯一落点」改成「零落点」。
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  INSTANCE_PIN_ROOT_ENV,
-  LEGACY_PIN_ROOT_RELPATH,
-  resolveInstanceKernelDir,
-  resolveInstancePinRoot,
-} from "../../../src/core/workspace/instancePin.js";
 
 const repoRoot = join(import.meta.dirname, "..", "..", "..");
-const SINGLE_SOURCE = join(repoRoot, "src", "core", "workspace", "instancePin.ts");
 const SKIP_DIRS = new Set(["node_modules", "dist", "lib", ".git"]);
+/** 历史沿革注释豁免面：只剩说明性文字、无活引用的文件。 */
+const HISTORY_ONLY = new Set([join(repoRoot, "src", "core", "workspace", "instancePin.ts")]);
 
 function walkTsFiles(root: string, out: string[] = []): string[] {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
@@ -33,24 +30,43 @@ function walkTsFiles(root: string, out: string[] = []): string[] {
   return out;
 }
 
-describe("批㊶-ISO-2 S1 fence 锚——生产面 pin 路径裸写清零", () => {
-  it("生产面 .atf-pinned 字面量唯一落点＝instancePin.ts 单源（其余零残留）", () => {
-    const files = [...walkTsFiles(join(repoRoot, "src")), ...walkTsFiles(join(repoRoot, "packages"))];
-    expect(files.length).toBeGreaterThan(50); // 扫描面自证非空
-    expect(files).toContain(SINGLE_SOURCE); // 单源在扫描域内（防挪位漂移）
+describe("G7／D9 fence 锚——pin 概念零残留（生产面）", () => {
+  const files = [...walkTsFiles(join(repoRoot, "src")), ...walkTsFiles(join(repoRoot, "packages"))];
+
+  it("扫描面自证非空且覆盖单源模块", () => {
+    expect(files.length).toBeGreaterThan(50);
+    expect(files).toContain(join(repoRoot, "src", "core", "workspace", "instancePin.ts"));
+  });
+
+  it("pin 路径字面量（.atf-pinned）在消费面零残留", () => {
     const violations: string[] = [];
     for (const file of files) {
-      if (file === SINGLE_SOURCE) continue;
-      const text = readFileSync(file, "utf8");
-      if (text.includes(LEGACY_PIN_ROOT_RELPATH)) violations.push(relative(repoRoot, file));
+      if (file.includes(join("packages", "extensions", "atf-ui", "node_modules"))) continue;
+      if (HISTORY_ONLY.has(file)) continue;
+      const text = readFileSync(file, "utf-8");
+      if (text.includes(".atf-pinned")) violations.push(relative(repoRoot, file));
     }
     expect(violations).toEqual([]);
   });
 
-  it("单源接线自证：env 名/回退名/消费链导出在位", () => {
-    expect(INSTANCE_PIN_ROOT_ENV).toBe("ATF_INSTANCE_PIN_ROOT");
-    expect(LEGACY_PIN_ROOT_RELPATH).toBe(".atf-pinned");
-    expect(resolveInstancePinRoot({}, "/repo").source).toBe("fallback");
-    expect(resolveInstanceKernelDir({}, "/repo")).toContain(".atf-pinned");
+  it("pin env 名（ATF_INSTANCE_PIN_ROOT）无活读取（仅允许出现在退役说明注释中）", () => {
+    const violations: string[] = [];
+    for (const file of files) {
+      if (HISTORY_ONLY.has(file)) continue;
+      const text = readFileSync(file, "utf-8");
+      // 活读取形态：env[...] 或 env. 取键，或 process.env 直取
+      const activeRead = /(?:env(?:ironment)?|process\.env)\s*\[\s*["'`]ATF_INSTANCE_PIN_ROOT["'`]\s*\]/;
+      if (activeRead.test(text)) violations.push(relative(repoRoot, file));
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("单源模块不再导出 pin 专属符号（INSTANCE_PIN_ROOT_ENV／LEGACY_PIN_ROOT_RELPATH）", async () => {
+    const mod = await import("../../../src/core/workspace/instancePin.js");
+    expect("INSTANCE_PIN_ROOT_ENV" in mod).toBe(false);
+    expect("LEGACY_PIN_ROOT_RELPATH" in mod).toBe(false);
+    // 现行导出面
+    expect(typeof mod.resolveKernelDir).toBe("function");
+    expect(typeof mod.resolveInstanceKernelDir).toBe("function");
   });
 });

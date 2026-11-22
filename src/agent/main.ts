@@ -4,8 +4,9 @@
  * 用法：
  *   node dist/agent/main.js                        # mock 对端（缺省，零外部依赖）
  *   node dist/agent/main.js --peer real [--ws-root <path>]
- *                                                  # pin 副本真内核（ATF_CLI_PATH 或
- *                                                  # 实例 pin 根单源；隔离 HOME；
+ *                                                  # 真内核（resolveKernelDir 单源：
+ *                                                  # ATF_DSH_KERNEL_DIR／ATF_CLI_PATH／
+ *                                                  # ATF_KERNEL_SOURCE／兄弟目录；隔离 HOME；
  *                                                  # ws-root 缺省 = /tmp 临时工作区）
  *
  * 红线：模型循环恒为 faux streamFn（零真实 Provider 调用）；真内核模式下
@@ -21,7 +22,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { AtfBridgeConnection } from "../mcp/connection.js";
 import { deriveAtfCommand } from "../mcp/atfCommand.js";
-import { resolveInstanceKernelDir } from "../core/workspace/instancePin.js";
+import { resolveKernelDir } from "../core/workspace/instancePin.js";
 import { runGate1aSpike } from "./spike.js";
 import { runGate1bPoc } from "./tem/poc.js";
 
@@ -40,7 +41,7 @@ const main = async (): Promise<number> => {
   let sessionsRoot: string;
   let bindRunId: string | undefined;
   if (peerReal) {
-    const kernelDir = resolveInstanceKernelDir(process.env, repoRoot);
+    const kernelDir = resolveKernelDir(process.env, repoRoot);
     const home = await mkdtemp(join(tmpdir(), "atf-spike-home-"));
     const wsRootResolved = wsRoot ?? (await mkdtemp(join(tmpdir(), "atf-spike-ws-")));
     // 预置（TUI 真对端同序）：atf init（幂等）→ 建 run 骨架目录（内核 run 存在性 =
@@ -59,7 +60,7 @@ const main = async (): Promise<number> => {
       env: { ...invocation.env, HOME: home, ATF_WORKSPACE_ROOT: wsRootResolved },
     };
     sessionsRoot = await mkdtemp(join(tmpdir(), "atf-spike-sessions-"));
-    console.log(`[spike] 对端=real（pin 副本 ${kernelDir}；run=${bindRunId}）；session 根=${sessionsRoot}`);
+    console.log(`[spike] 对端=real（内核目录 ${kernelDir}；run=${bindRunId}）；session 根=${sessionsRoot}`);
   } else {
     const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
     spawnDescriptor = { argv: ["node", mockPath], cwd: repoRoot, env: {} };

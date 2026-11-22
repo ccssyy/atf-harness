@@ -1,108 +1,123 @@
 /**
- * 批㊶-ISO-2 S1 测试锚——实例 pin 根单源（resolveInstancePinRoot／resolveInstanceKernelDir）
- * ＋boot preflight ⑦ pin 树 worktree 实锚校验（tag↔版本串一致，沿 test_release_version_consistency
- * 语义）＋回退共享态留痕。
+ * G7／D9——内核目录解析单源测试锚（原「批㊶-ISO-2 S1 实例 pin 根单源」测试，pin 退役后重写）。
+ *
+ * 被测契约只有一条：内核目录怎么定。
+ *   ATF_DSH_KERNEL_DIR ＞ ATF_CLI_PATH ＞ ATF_KERNEL_SOURCE ＞ 兄弟目录缺省 ＞ 空串（fail-closed）
+ *
+ * 退役面反锚（演练拦截用）：pin env、`.atf-pinned` 回退、pin tag↔版本串一致性门三者
+ * 若被重新注入，必须不再影响解析结果——本组用例即该断言的机检落点。
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  INSTANCE_PIN_ROOT_ENV,
+  KERNEL_DIR_ENV,
+  KERNEL_SIBLING_DIRNAME,
+  KERNEL_SOURCE_ENV,
+  CLI_PATH_ENV,
   resolveInstanceKernelDir,
   resolveInstancePinRoot,
+  resolveKernelDir,
 } from "../../../src/core/workspace/instancePin.js";
-import { runBootPreflight, pinVersionFromTree, type PreflightProbes } from "../../../src/core/workspace/bootPreflight.js";
 
-const tempRoot = (): string => mkdtempSync(join(tmpdir(), "iso2-pin-"));
+const tempRoot = (): string => mkdtempSync(join(tmpdir(), "g7-kernel-dir-"));
 
-describe("批㊶-ISO-2 S1——resolveInstancePinRoot 单源", () => {
-  it("env 显式设置 → 实例 pin 根（source=env·无留痕）", () => {
-    const r = resolveInstancePinRoot({ [INSTANCE_PIN_ROOT_ENV]: "/data/atf/dev/pinned" }, "/repo");
-    expect(r).toEqual({ root: "/data/atf/dev/pinned", source: "env", note: null });
+describe("G7／D9——内核目录解析单源", () => {
+  it("env 链优先级：ATF_DSH_KERNEL_DIR ＞ ATF_CLI_PATH ＞ ATF_KERNEL_SOURCE", () => {
+    expect(resolveKernelDir({ ATF_DSH_KERNEL_DIR: "/k1", ATF_CLI_PATH: "/k2", ATF_KERNEL_SOURCE: "/k3" }, "/repo")).toBe("/k1");
+    expect(resolveKernelDir({ ATF_CLI_PATH: "/k2", ATF_KERNEL_SOURCE: "/k3" }, "/repo")).toBe("/k2");
+    expect(resolveKernelDir({ ATF_KERNEL_SOURCE: "/k3" }, "/repo")).toBe("/k3");
   });
 
-  it("env 未设 → 兼容回退共享态（root=<repo>/.atf-pinned·note 留痕「回退共享态」）", () => {
-    const r = resolveInstancePinRoot({}, "/repo");
-    expect(r.root).toBe("/repo/.atf-pinned");
-    expect(r.source).toBe("fallback");
-    expect(r.note).toContain("pin 路径：回退共享态");
-    expect(r.note).toContain(INSTANCE_PIN_ROOT_ENV);
+  it("env 名常量即解析链顺序（防改名漂移）", () => {
+    expect(KERNEL_DIR_ENV).toBe("ATF_DSH_KERNEL_DIR");
+    expect(CLI_PATH_ENV).toBe("ATF_CLI_PATH");
+    expect(KERNEL_SOURCE_ENV).toBe("ATF_KERNEL_SOURCE");
   });
 
-  it("env 空串/纯空白视同未设（回退共享态）", () => {
-    expect(resolveInstancePinRoot({ [INSTANCE_PIN_ROOT_ENV]: "   " }, "/repo").source).toBe("fallback");
-    expect(resolveInstancePinRoot({ [INSTANCE_PIN_ROOT_ENV]: "" }, "/repo").source).toBe("fallback");
+  it("空串/纯空白视同未设（不吞后续优先级的合法值）", () => {
+    expect(resolveKernelDir({ ATF_DSH_KERNEL_DIR: "   ", ATF_CLI_PATH: "/k2" }, "/repo")).toBe("/k2");
+    expect(resolveKernelDir({ ATF_DSH_KERNEL_DIR: "", ATF_KERNEL_SOURCE: "/k3" }, "/repo")).toBe("/k3");
   });
 
-  it("resolveInstanceKernelDir 消费链：ATF_DSH_KERNEL_DIR ＞ ATF_CLI_PATH ＞ 实例 pin 根", () => {
-    expect(resolveInstanceKernelDir({ ATF_DSH_KERNEL_DIR: "/k1", ATF_CLI_PATH: "/k2", [INSTANCE_PIN_ROOT_ENV]: "/k3" }, "/repo")).toBe("/k1");
-    expect(resolveInstanceKernelDir({ ATF_CLI_PATH: "/k2", [INSTANCE_PIN_ROOT_ENV]: "/k3" }, "/repo")).toBe("/k2");
-    expect(resolveInstanceKernelDir({ [INSTANCE_PIN_ROOT_ENV]: "/k3" }, "/repo")).toBe("/k3");
-    expect(resolveInstanceKernelDir({}, "/repo")).toBe("/repo/.atf-pinned");
+  it("相对路径升绝对（cwd=kernelDir 语义下杜绝子进程二次解析）", () => {
+    expect(resolveKernelDir({ ATF_DSH_KERNEL_DIR: "/a/../b" }, "/repo")).toBe("/b");
+  });
+
+  it("全 env 缺席 → 兄弟目录缺省（双仓同父布局；在场即用）", () => {
+    const parent = tempRoot();
+    const repoRoot = join(parent, "ATF-Harness");
+    const sibling = join(parent, KERNEL_SIBLING_DIRNAME);
+    mkdirSync(repoRoot, { recursive: true });
+    mkdirSync(sibling, { recursive: true });
+    try {
+      expect(resolveKernelDir({}, repoRoot)).toBe(sibling);
+      expect(resolveInstanceKernelDir({}, repoRoot)).toBe(sibling);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+
+  it("兄弟目录也不在场 → 空串（fail-closed：不猜路径，交调用方 L2 报错）", () => {
+    const parent = tempRoot();
+    const repoRoot = join(parent, "ATF-Harness");
+    mkdirSync(repoRoot, { recursive: true });
+    try {
+      expect(resolveKernelDir({}, repoRoot)).toBe("");
+      // 空串是「未解析」而非「不可解析错误」——语义与 boot preflight 的 hasKernelDir 判假对齐
+      expect(resolveKernelDir({}, repoRoot)).not.toContain(KERNEL_SIBLING_DIRNAME);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
   });
 });
 
-describe("批㊶-ISO-2 S1——boot preflight ⑦ pin 树 worktree 实锚校验", () => {
-  // ①②（pipeline/bridge 派生）以 env 显式命令跳过——本组只看 ⑦
-  const quietEnv = { ATF_DSH_PIPELINE_COMMAND: "x", ATF_DSH_BRIDGE_COMMAND: "y" };
-  const baseProbes: PreflightProbes = {
-    commandWorks: () => true,
-    fileExists: () => true,
-    dirExists: () => true,
-    listJsonFiles: () => [],
-    // readText 不注入——走缺省 readFileSync 读真实夹具文件
-  };
-  /** pin 版本串夹具（__init__.py 形态）。 */
-  const withVersion = (root: string, version: string): void => {
-    mkdirSync(join(root, "src", "agentic_training_flow"), { recursive: true });
-    writeFileSync(join(root, "src", "agentic_training_flow", "__init__.py"), `__version__ = "${version}"\n`);
-  };
-
-  it("pinVersionFromTree：__version__ 提取；缺失＝null", () => {
-    const root = tempRoot();
-    withVersion(root, "0.7.13b0");
-    expect(pinVersionFromTree(root, (p) => `__version__ = "0.7.13b0"\n`)).toBe("0.7.13b0");
-    expect(pinVersionFromTree(root, () => null)).toBeNull();
-    expect(pinVersionFromTree(root, () => "x = 1\n")).toBeNull();
+describe("G7／D9——pin 机制彻底解耦（演练拦截）", () => {
+  it("pin env 被重新注入也不被消费（ATF_INSTANCE_PIN_ROOT 已非解析输入）", () => {
+    const parent = tempRoot();
+    const repoRoot = join(parent, "ATF-Harness");
+    mkdirSync(repoRoot, { recursive: true });
+    // 人为违规注入：pin 根指向一个真实存在的诱饵目录
+    const bait = join(parent, "pinned-bait");
+    mkdirSync(bait, { recursive: true });
+    try {
+      const withBait = { ATF_INSTANCE_PIN_ROOT: bait, ATF_KERNEL_SOURCE: "/real-kernel" };
+      // 解析结果只取 KERNEL_SOURCE——诱饵未被读作内核目录
+      expect(resolveKernelDir(withBait, repoRoot)).toBe("/real-kernel");
+      // 只有 pin env 一个都不给合法内核键时，不落回诱饵
+      const pinOnly = { ATF_INSTANCE_PIN_ROOT: bait };
+      expect(resolveKernelDir(pinOnly, repoRoot)).toBe("");
+      expect(resolveKernelDir(pinOnly, repoRoot)).not.toBe(bait);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
   });
 
-  it("回退共享态（explicit=false）→ notes 留痕「pin 路径：回退共享态」＋实锚成功注记", () => {
-    const root = tempRoot();
-    withVersion(root, "0.7.13b0");
-    const reportOk = runBootPreflight(quietEnv, { ...baseProbes, gitDescribe: () => "v0.7.13b0" }, undefined, { root, explicit: false });
-    expect(reportOk.notes.some((n) => n.includes("pin 路径：回退共享态"))).toBe(true);
-    expect(reportOk.notes.some((n) => n.includes("pin 树实锚：v0.7.13b0"))).toBe(true);
-    expect(reportOk.fatal).toHaveLength(0);
+  it("仓内共享 pin 回退已消失（不再有 .atf-pinned 缺省）", () => {
+    const repoRoot = tempRoot();
+    try {
+      // 旧行为：返回 <repoRoot>/.atf-pinned。现行为：空串或兄弟目录，绝不含 pin 目录名。
+      const resolved = resolveKernelDir({}, repoRoot);
+      expect(resolved.includes(".atf-pinned")).toBe(false);
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 
-  it("describe 不可解析 → L2 fatal pin_worktree（附核查命令）", () => {
-    const root = tempRoot();
-    withVersion(root, "0.7.13b0");
-    const report = runBootPreflight(quietEnv, { ...baseProbes, gitDescribe: () => null }, undefined, { root, explicit: true });
-    expect(report.fatal).toHaveLength(1);
-    expect(report.fatal[0]?.check).toBe("pin_worktree");
-    expect(report.fatal[0]?.fix).toContain("git -C");
+  it("兼容壳 resolveInstancePinRoot 不再产生「回退共享态」留痕（source 恒 env·note 恒 null）", () => {
+    const r = resolveInstancePinRoot({ ATF_KERNEL_SOURCE: "/k" }, "/repo");
+    expect(r.root).toBe("/k");
+    expect(r.source).toBe("env");
+    expect(r.note).toBeNull();
+    // 缺席时也不得给出「回退共享态」文案
+    const absent = resolveInstancePinRoot({}, "/repo");
+    expect(absent.note).toBeNull();
+    expect(absent.source).toBe("env");
   });
 
-  it("tag 与版本串不一致 → L2 fatal pin_version_consistency（沿 release_version_consistency 语义）", () => {
-    const root = tempRoot();
-    withVersion(root, "0.7.13b0");
-    const offTag = runBootBootPreflightWith(root, "v0.7.13b0-3-gabc1234");
-    expect(offTag.fatal.map((f) => f.check)).toContain("pin_version_consistency");
-    const wrongTag = runBootBootPreflightWith(root, "v0.7.11b0");
-    expect(wrongTag.fatal.map((f) => f.check)).toContain("pin_version_consistency");
+  it("resolveInstanceKernelDir 与 resolveKernelDir 同值（单源无分叉）", () => {
+    const env = { ATF_CLI_PATH: "/k2" };
+    expect(resolveInstanceKernelDir(env, "/repo")).toBe(resolveKernelDir(env, "/repo"));
   });
-
-  it("版本串不可读 → L2 fatal pin_version；pin 目录不存在 → ⑦ 跳过（不双报）", () => {
-    const root = tempRoot();
-    const noVersion = runBootBootPreflightWith(root, "v0.7.13b0");
-    expect(noVersion.fatal.map((f) => f.check)).toContain("pin_version");
-    // dirExists 换真实探测——目录缺席分支方可触达
-    const missing = runBootPreflight(quietEnv, { ...baseProbes, gitDescribe: () => "v0.7.13b0", dirExists: (p: string) => existsSync(p) }, undefined, { root: join(root, "absent"), explicit: true });
-    expect(missing.fatal).toHaveLength(0);
-  });
-
-  const runBootBootPreflightWith = (root: string, described: string) =>
-    runBootPreflight(quietEnv, { ...baseProbes, gitDescribe: () => described }, undefined, { root, explicit: true });
 });

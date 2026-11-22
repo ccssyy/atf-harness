@@ -30,7 +30,7 @@ import { Agent, BACKGROUND_CONTEXT, type AgentEvent, type AgentMessage, type Que
 import type { AssistantMessage, Model, TranscriptContext, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { AtfBridgeConnection } from "../mcp/connection.js";
 import { deriveAtfCommand, mcpInvocation } from "../mcp/atfCommand.js";
-import { resolveInstanceKernelDir } from "../core/workspace/instancePin.js";
+import { resolveKernelDir } from "../core/workspace/instancePin.js";
 import { HARNESS_SYSTEM_PROMPT } from "../llm/systemPrompt.js";
 import { loadLlmProviderConfig, type ResolvedLlmProviderConfig } from "../llm/providerConfig.js";
 import { buildAtfAgentTools, type SpikeBridgeTransport } from "./atfAgentTools.js";
@@ -243,7 +243,7 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
   // v2 A7 白名单：--fs-root 追加根（real 对端再追加 workspace runs 根；scratch 主根在 runV1Headless 补）
   const fsRootsExtra: string[] = [...args.fsRoots];
   if (args.peer === "real") {
-    const kernelDir = resolveInstanceKernelDir(env, repoRoot);
+    const kernelDir = resolveKernelDir(env, repoRoot);
     const home = await mkdtemp(join(tmpdir(), "atf-v1-home-"));
     wsRootResolved = args.wsRoot ?? (await mkdtemp(join(tmpdir(), "atf-v1-ws-")));
     fsRootsExtra.push(join(wsRootResolved, "runs"));
@@ -264,7 +264,7 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
       cwd: invocation.cwd,
       env: { ...invocation.env, HOME: home, ATF_WORKSPACE_ROOT: wsRootResolved },
     };
-    out(`[v1] 对端=real（pin 副本 ${kernelDir}；run=${bindRunId}）；session 根=${sessionsRoot}`);
+    out(`[v1] 对端=real（内核目录 ${kernelDir}；run=${bindRunId}）；session 根=${sessionsRoot}`);
   } else {
     const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");
     spawnDescriptor = { argv: ["node", mockPath], cwd: repoRoot, env: {} };
