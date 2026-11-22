@@ -3326,6 +3326,9 @@ export const buildPipelineTool = (
             && Number.isInteger(args.requested_group_count) && args.requested_group_count >= 1
             ? args.requested_group_count
             : undefined,
+          // G6 集成侧补漏：groupingQuote 声明与读侧（marker raw_text）都在，
+          // 但调用点此前未透传 → marker 的 raw_text 恒空串（G6 执行者发现）。
+          groupingQuote: typeof args.grouping_quote === "string" ? args.grouping_quote : undefined,
         });
         if ("ok" in resolvedGrouping) {
           return asToolValue({
