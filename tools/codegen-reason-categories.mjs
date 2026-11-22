@@ -103,10 +103,17 @@ if (
 }
 
 // ── merge:内核表优先(同码重名时内核口径赢),harness 码默认 self_heal ──
-const merged = { ...kernelCategories };
+const mergedRaw = { ...kernelCategories };
 for (const code of harnessList) {
-  if (!(code in merged)) merged[code] = HARNESS_NEED_USER.has(code) ? "need_user" : "self_heal";
+  if (!(code in mergedRaw)) mergedRaw[code] = HARNESS_NEED_USER.has(code) ? "need_user" : "self_heal";
 }
+// A5 确定性:键序按码名排序后再序列化。
+// why:双源输入(内核 dict + harness Set 扫描)的迭代序不受本脚本控制——内核 REASON_CODE_CATEGORY
+// 是 Python dict(构建期插入序/PYTHONHASHSEED 敏感),harness 侧是目录扫描序;不排序则同一源码
+// 两次生成产出不同字节,prebuild 的 `git diff --exit-code` 会随机红(假漂移),真漂移反而被噪声淹没。
+// 排序是纯输出形态修正:不影响任何码的取值,只固定键序。
+const merged = {};
+for (const code of Object.keys(mergedRaw).sort()) merged[code] = mergedRaw[code];
 
 const banner =
   "// 自动生成(批 5 3c codegen)——双源 merge:内核 contracts/reason_codes.REASON_CODE_CATEGORY +\n" +
