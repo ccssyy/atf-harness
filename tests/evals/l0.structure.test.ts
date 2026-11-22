@@ -138,6 +138,10 @@ interface DefineToolSite {
   readonly hasProperties: boolean;
 }
 
+/** output schema 块内 `properties` 键的检测（键名锚定，不用裸子串）。
+ *  裸子串会被 `x_disabled_properties:` 这类派生名命中的假阴性放过——演练实测发现。 */
+const HAS_PROPERTIES_KEY = /(?:^|[^A-Za-z0-9_$])properties\s*:/;
+
 /** 从 `defineTool({ ... })` 定义点切出 output.schema 片段并判 properties 在场。 */
 const defineToolSitesOf = (file: string): DefineToolSite[] => {
   const text = readFileSync(file, "utf8");
@@ -157,7 +161,7 @@ const defineToolSitesOf = (file: string): DefineToolSite[] => {
       file,
       line: text.slice(0, start).split("\n").length,
       toolName: nameMatch === null ? "(动态)" : (nameMatch[1] ?? nameMatch[2] ?? nameMatch[3] ?? "(动态)"),
-      hasProperties: schemaSlice.includes("properties:"),
+      hasProperties: HAS_PROPERTIES_KEY.test(schemaSlice),
     };
   });
 };
@@ -201,7 +205,7 @@ describe("L0 · 事故6 output.schema 黑盒：新增工具必须带 properties�
     const schemaAt = segment.indexOf("schema:");
     const renderAt = segment.indexOf("render:");
     const schemaSlice = segment.slice(schemaAt, renderAt);
-    expect(schemaSlice.includes("properties:")).toBe(false); // 检测器对裸形态判「无 properties」
+    expect(HAS_PROPERTIES_KEY.test(schemaSlice), "检测器对裸形态应判「无 properties」").toBe(false);
 
     const declared = synthetic.replace(
       'schema: { type: "object", additionalProperties: true },',
@@ -210,7 +214,7 @@ describe("L0 · 事故6 output.schema 黑盒：新增工具必须带 properties�
     const segment2 = declared.slice(declared.indexOf("defineTool({"));
     const schemaAt2 = segment2.indexOf("schema:");
     const renderAt2 = segment2.indexOf("render:");
-    expect(segment2.slice(schemaAt2, renderAt2).includes("properties:")).toBe(true);
+    expect(HAS_PROPERTIES_KEY.test(segment2.slice(schemaAt2, renderAt2))).toBe(true);
   });
 
   it("工具名可枚举：定义点的 name 不是全部为动态表达式（否则入口枚举退化）", () => {

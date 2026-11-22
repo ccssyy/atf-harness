@@ -472,7 +472,8 @@ describe("L3 · 事故6 schema 黑盒：新增工具漏 properties 必被入口�
       if (schemaAt < 0) return false;
       const renderAt = segment.indexOf("render:", schemaAt);
       const slice = segment.slice(schemaAt, renderAt > schemaAt ? renderAt : segment.length);
-      return slice.includes("properties:");
+      // 键名锚定（非裸子串）：`x_disabled_properties:` 一类派生名不得被判成合规
+      return /(?:^|[^A-Za-z0-9_$])properties\s*:/.test(slice);
     };
     const bare = ['defineTool({', '  name: "atf_new_tool",', '  output: {', '    schema: { type: "object", additionalProperties: true },', '    render: () => [],', '  },', '});'].join("\n");
     expect(hasPropertiesInOutput(bare.slice(bare.indexOf("defineTool({"))), "裸开放形态被误判为合规").toBe(false);
