@@ -9,7 +9,15 @@
  *
  * 纯函数:无 I/O、无时钟、无进程态;只依赖事件存在性/引用链/水位线比较。
  */
-import { type SessionEvent } from "../session/index.js";
+/** 会话事件最小形状（原 src/core/session 已随 Phase 2 删除；本文件只读这几个字段）。 */
+export type SessionEvent = {
+  readonly id: number;
+  readonly type: string;
+  readonly payload: unknown;
+  readonly ts?: string;
+  readonly time?: number;
+  readonly projection?: unknown;
+};
 
 /** 凭据四值判定结果。 */
 export type CredentialState = "consumed" | "available" | "indeterminate" | "invalid";

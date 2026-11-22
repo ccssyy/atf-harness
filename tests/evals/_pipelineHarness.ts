@@ -12,7 +12,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Agent } from "@earendil-works/pi-agent-core";
-import { createFauxStreamFn, type FauxStreamFn } from "../../src/agent/fauxStream.js";
+import { createFauxStreamFn, type FauxStreamFn } from "../helpers/fauxStream.js";
 import { buildPipelineTool } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
 
 /** agent 轨迹里被断言的一步（工具调用 + 它收到的回执原文）。 */
@@ -166,7 +166,7 @@ export const runSegment = async (
     mkdirSync(join(batch, String(callArgs["doc_type"] ?? "doc")), { recursive: true });
     callArgs["source_root"] = batch;
   }
-  const { fauxFinalAnswer, fauxMessageWithToolCalls } = await import("../../src/agent/fauxStream.js");
+  const { fauxFinalAnswer, fauxMessageWithToolCalls } = await import("../helpers/fauxStream.js");
   const script = [
     fauxMessageWithToolCalls("触发该段。", [
       { id: "call-1", name: raw.name, arguments: callArgs as never },

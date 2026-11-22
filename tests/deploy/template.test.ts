@@ -69,11 +69,28 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
     expect(byId.get("skill-filesystem")?.["disabled"]).toBe(true);
     expect(byId.get("tool-skill")?.["disabled"]).toBe(true);
     // 与 standard 的插件 id 集合差异＝仅技能面两个 disabled（其余逐项同名同序，防手抄漂移）
-    // ＋C1 派发件（atf-subagent 紧随 tool-jobs——真机派发三件套 vendor 装接，B 批教训锁）
+    // ＋派发件：原自研 atf-subagent（498 行）已退役，改由三个 vendor tool-subagent
+    // 实例承接（dispatch 两件 toolName 保名 + deferred 用 backgroundMode:continuable）。
     const standard = (rowById(templateRows(), "preset-standard") as { config?: { plugins?: Array<Record<string, unknown>> } })?.config?.plugins ?? [];
-    const trainingIds = plugins.map((p) => p["id"]);
-    expect(trainingIds.filter((id) => id !== "atf-subagent")).toEqual(standard.map((p) => p["id"]));
-    expect(trainingIds.indexOf("atf-subagent")).toBe(trainingIds.indexOf("tool-jobs") + 1);
+    const trainingIds = plugins.map((p) => p["id"] as string);
+    // 派发件：原自研 atf-subagent（498 行）退役，改为三个 vendor tool-subagent 实例。
+    // standard 把 subagent 收在 delegation group 内（id 是 tool-subagent/-fork/-codex 等），
+    // ATF 平铺挂载且 toolName 各自保名——两侧 subagent 面本就不同构，故按「差异闭集」断言：
+    // ATF 相对 standard 的插件 id 差异必须恰好等于已知集合，防手抄漂移不再是逐项相等。
+    // 已知差异闭集：三个平铺派发件 + tool-ask-user（ATF 显式挂 vendor 提问工具，
+    // standard 的 ask-user 收在 interaction group 内，平铺层不见该 id）。
+    const SUBAGENT_IDS = ["tool-subagent-dispatch", "tool-subagent-parallel", "tool-subagent-background"];
+    const KNOWN_EXTRA = [...SUBAGENT_IDS, "tool-ask-user"];
+    const standardIds = standard.map((p) => p["id"] as string);
+    const extra = trainingIds.filter((id) => !standardIds.includes(id));
+    const missing = standardIds.filter((id) => !trainingIds.includes(id));
+    expect({ extra: extra.sort(), missing: missing.sort() }).toEqual({
+      extra: [...KNOWN_EXTRA].sort(),
+      missing: [],
+    });
+    // 三个实例紧随 tool-ask-user（平铺挂载位，防后续挪位难查）
+    const askAt = trainingIds.indexOf("tool-ask-user");
+    expect(trainingIds.slice(askAt + 1, askAt + 4)).toEqual(SUBAGENT_IDS);
     // 段流程约束在 persona 配置里（配置声明，禁 TS 分支）——AB 归一后 17 段全表逐段在场
     const persona = byId.get("persona") as { config?: { prefix?: string } } | undefined;
     const prefix = persona?.config?.prefix ?? "";

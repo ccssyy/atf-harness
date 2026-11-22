@@ -9,7 +9,14 @@
  * 纯函数判定面（queueHit 判定＋等待时长格式化）与本类编排分离——合成测试直接锚判定。
  */
 import { queryNvidiaSmi, type GpuStatus } from "./readOnlyTools.js";
-import type { ChatEvent } from "./chatModel.js";
+/** 会话事件最小形状（原 chatModel 已随自研 loop 删除）。 */
+type ChatEvent = {
+  readonly seq: number;
+  readonly kind: string;
+  readonly level: string;
+  readonly text: string;
+  readonly at: string;
+};
 // E8c·D159：确认卡动作名单源（与桥接审批卡同一映射——禁第二套文案表）
 import { BRIDGE_ACTION_LABELS } from "../agent/bridgeActionLabels.js";
 

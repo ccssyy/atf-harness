@@ -18,12 +18,6 @@
  * 唯一真相源，本层零改动。
  */
 export {
-  createProjectionHub,
-  type ProjectionHub,
-  type ProjectionOrigin,
-  type RunEventSubscriber,
-} from "./projection.js";
-export {
   formatThreePartInline,
   formatThreePartLines,
   providerConfigThreePart,

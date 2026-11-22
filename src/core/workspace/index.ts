@@ -38,15 +38,6 @@ export {
   type PromoteOptions,
 } from "./promote.js";
 export {
-  GuardedSessionLog,
-  T0_REF_FORBIDDEN,
-  isScratchReference,
-  isT0RefBlock,
-  type GuardedAppendOutcome,
-  type GuardedReplayOutcome,
-  type T0RefBlock,
-} from "./t0Guard.js";
-export {
   buildScratchExecEnv,
   ensureExecDirs,
   findBash,

@@ -12,7 +12,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 import { configFieldDisplayValueOf } from "../../src/webui/configConfirm.js";
-import { renderChatEvent } from "../../src/webui/chatModel.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (prefix: string): string => {
@@ -98,20 +97,4 @@ describe("裁定：累积空值文案单源", () => {
     expect(configFieldDisplayValueOf("learning_rate", "")).toBe("");
   });
 
-  it("web 摘要（确认卡渲染）同句：累积空值显示「待定（先定卡数）」", () => {
-    const html = renderChatEvent({
-      seq: 1,
-      kind: "confirm_card",
-      cardType: "config_confirm",
-      title: "本次训练方案",
-      fields: [
-        { key: "nproc_per_node", value: "", tag: "default_used" },
-        { key: "gradient_accumulation_steps", value: "", tag: "default_used" },
-      ],
-      pending: true,
-      at: "2026-10-26T00:00:00Z",
-    } as never);
-    expect(html).toContain("待定（先定卡数）");
-    expect(html).toContain("gradient_accumulation_steps");
-  });
 });

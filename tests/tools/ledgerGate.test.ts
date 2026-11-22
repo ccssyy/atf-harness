@@ -13,7 +13,6 @@ import type { BridgeError } from "../../src/mcp/index.js";
 import { runLedgerGate, type LedgerGateFailure } from "../../src/core/tools/ledgerGate.js";
 import { ToolExecutor, ToolRegistry } from "../../src/core/tools/index.js";
 import { approvalParamsDigest, type LedgerRecord, type ScopeRef } from "../../src/core/tools/approvalKey.js";
-import { createApprovalBeforeToolCall, type ApprovalAuditEntry } from "../../src/agent/approvalHook.js";
 
 const mockAtf = fileURLToPath(new URL("../fixtures/mock_atf.mjs", import.meta.url));
 
@@ -172,25 +171,8 @@ describe("镜像面② 两线等价（同一审批场景：预录→query→cons
     expect(outcomeA.kind).toBe("executed");
     expect(await consumedStateOf(connectionA, scopeA)).toEqual({ state: "consumed", count: 1 });
 
-    // 丙线：同场景预录 → beforeToolCall hook → 放行（同一骨架 query→consume→granted）
-    const connectionB = await spawnMock();
-    const scopeB: ScopeRef = { ...SCOPE, scope_id: "run-eq-b" };
-    await recordApproval(connectionB, scopeB, "atf_admit_data", ADMIT_PARAMS);
-    const audit: ApprovalAuditEntry[] = [];
-    const hook = createApprovalBeforeToolCall({ bridge: connectionB, scopeRefBox: { current: scopeB }, audit });
-    const verdict = await hook({
-      toolCall: { id: "t-eq", name: "atf_admit_data", arguments: ADMIT_PARAMS },
-      args: ADMIT_PARAMS,
-    } as unknown as Parameters<typeof hook>[0]);
-    expect(verdict).toBeUndefined(); // 放行 ≡ 甲线 executed 的闸段结论
-    expect(audit.at(-1)?.verdict).toBe("allow_ledger");
-    expect((audit.at(-1)?.detail as { record_id?: string }).record_id).toMatch(/^approval-record:/);
-    expect(await consumedStateOf(connectionB, scopeB)).toEqual({ state: "consumed", count: 1 });
-
     // 一次性语义两线同界：事后无可消费记录
     const emptyA = await connectionA.request("ledger_query", { scope_ref: scopeA });
-    const emptyB = await connectionB.request("ledger_query", { scope_ref: scopeB });
     expect((emptyA as { ok: true; value: { records: unknown[] } }).value.records).toHaveLength(0);
-    expect((emptyB as { ok: true; value: { records: unknown[] } }).value.records).toHaveLength(0);
   });
 });

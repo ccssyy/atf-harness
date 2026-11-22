@@ -4,7 +4,8 @@ import {
   resolveCredentialState,
   type CredentialRef,
 } from "../../src/core/tools/index.js";
-import { type SessionEvent, type SessionEventType } from "../../src/core/session/index.js";
+import type { SessionEvent } from "../../src/core/tools/credentialState.js";
+
 
 /**
  * P2-S2 凭据判定纯函数测试(设计 v1.1 §2 / 门 2 A1–A2):
@@ -12,7 +13,7 @@ import { type SessionEvent, type SessionEventType } from "../../src/core/session
  */
 
 let seq = 0;
-const ev = (type: SessionEventType, payload: unknown): SessionEvent => ({
+const ev = (type: string, payload: unknown): SessionEvent => ({
   id: ++seq,
   ts: "2026-09-11T00:00:00.000Z",
   type,
