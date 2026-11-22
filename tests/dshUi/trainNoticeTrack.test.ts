@@ -18,7 +18,7 @@ import {
   TRAIN_NOTICE_TEXT,
   writeTrainNoticeState,
   type TrainObservedState,
-} from "../../src/core/workspace/trainNoticeTrack.js";
+} from "@atf/dsh-atf-core";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {

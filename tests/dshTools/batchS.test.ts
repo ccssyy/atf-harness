@@ -16,9 +16,9 @@ import {
   effectiveStorageValues,
 } from "../../src/webui/storageSettings.js";
 import { openSettingsStore, EMPTY_STORAGE_SETTINGS } from "../../src/webui/settings.js";
-import { DEFAULT_BASE_MODEL_NAME, defaultBaseModelPath } from "../../src/core/workspace/smartDefaults.js";
+import { DEFAULT_BASE_MODEL_NAME, defaultBaseModelPath } from "@atf/dsh-atf-core";
 import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields } from "../../src/webui/configConfirm.js";
-import { evalAgentRecommend, RECOMMENDABLE_KEYS } from "../../src/core/workspace/agentRecommend.js";
+import { evalAgentRecommend, RECOMMENDABLE_KEYS } from "@atf/dsh-atf-core";
 import { buildSettingsReadonlyBlock } from "../../packages/extensions/atf-ui/src/server.js";
 
 const tempRoots: string[] = [];
@@ -131,7 +131,7 @@ describe("批㊶-S5 §九——默认基模型锚点（确认卡基线＋防线�
     writeFileSync(iterPath, before);
     // 回写函数已退役（applyConfirmedToIterationConfig 删）——内核产物零触碰锚：
     // 确认链不再改写 iteration-config；base_model.path 由内核 training_prep 段按快照落账。
-    const moduleText = readFileSync(join(import.meta.dirname, "..", "..", "src", "core", "workspace", "smartDefaults.ts"), "utf8");
+    const moduleText = readFileSync(join(import.meta.dirname, "..", "..", "packages", "extensions", "atf-core", "src", "smartDefaults.ts"), "utf8");
     expect(moduleText).not.toContain("export const applyConfirmedToIterationConfig");
     expect(readFileSync(iterPath, "utf8")).toBe(before);
   });

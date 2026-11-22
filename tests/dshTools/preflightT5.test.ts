@@ -13,7 +13,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { businessOverflowReason, parsePreflightReport, renderPreflightFace } from "../../src/core/workspace/trainingPreflight.js";
+import { businessOverflowReason, parsePreflightReport, renderPreflightFace } from "@atf/dsh-atf-core";
 import { buildPreflightTool, type PreflightDeps } from "../../packages/extensions/atf-tools/src/preflightFace.js";
 
 const repoRoot = join(import.meta.dirname, "..", "..");

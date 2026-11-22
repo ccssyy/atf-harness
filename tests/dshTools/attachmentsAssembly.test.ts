@@ -19,7 +19,7 @@ import {
   missingLineOf,
   parseAssemblyReport,
   renderAssemblyCardDetail,
-} from "../../src/core/workspace/attachmentsReport.js";
+} from "@atf/dsh-atf-core";
 import { buildAttachmentsTool } from "../../packages/extensions/atf-tools/src/attachmentsFace.js";
 
 const tempRoots: string[] = [];

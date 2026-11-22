@@ -9,9 +9,9 @@ import {
   AUTO_STYLE_CLUSTER_VALUES,
   buildPipelineTool,
 } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
-import { SEGMENT_ORDER } from "../../src/core/workspace/runFacts.js";
-import { SEGMENT_FACT_BY_KERNEL_STAGE } from "../../src/core/workspace/segmentFacts.js";
-import { KERNEL_ERROR_FACE_CODES } from "../../src/core/workspace/kernelErrorFace.js";
+import { SEGMENT_ORDER } from "@atf/dsh-atf-core";
+import { SEGMENT_FACT_BY_KERNEL_STAGE } from "@atf/dsh-atf-core";
+import { KERNEL_ERROR_FACE_CODES } from "@atf/dsh-atf-core";
 import { CONFIG_CONFIRM_KEYS, READONLY_CONFIG_KEYS } from "../../src/webui/configConfirm.js";
 import type { HarnessSurfaceFacts, SurfaceSnapshot } from "./guard.js";
 
@@ -29,7 +29,7 @@ export const pipelineFaceSource = readFileSync(
   "utf8",
 );
 export const kernelErrorFaceSource = readFileSync(
-  join(import.meta.dirname, "../../src/core/workspace/kernelErrorFace.ts"),
+  join(import.meta.dirname, "../../packages/extensions/atf-core/src/kernelErrorFace.ts"),
   "utf8",
 );
 /** G5：bridge.contract.yaml 已退役——pin 契约面单源=src/mcp/atfCommand.ts 常量段（守卫改锚）。 */

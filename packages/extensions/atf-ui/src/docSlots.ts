@@ -25,7 +25,7 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { resolveRunFile, resolveRunSubdir } from "../../../../src/core/workspace/runSubdirs.js";
+import { resolveRunFile, resolveRunSubdir } from "@atf/dsh-atf-core";
 
 /** 槽位名规则（E8 §〇：doc_type 须匹配本式——内核写入侧 fail-closed，读侧非法名不构成类）。 */
 export const DOC_TYPE_SLOT_RE = /^[a-z0-9][a-z0-9_-]*$/;

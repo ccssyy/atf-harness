@@ -6,15 +6,15 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { scanLocalModels, modelRootOf } from "../../src/core/workspace/modelInventory.js";
+import { scanLocalModels, modelRootOf } from "@atf/dsh-atf-core";
 import {
   detectAvailableGpuCount,
   guardNprocAntiPatterns,
   parseVisibleDevicesCount,
   type NprocGuardField,
-} from "../../src/core/workspace/smartDefaults.js";
+} from "@atf/dsh-atf-core";
 import { checkStartModelPath } from "../../packages/extensions/atf-tools/src/trainingFace.js";
-import { evalAgentRecommend, RECOMMENDABLE_KEYS } from "../../src/core/workspace/agentRecommend.js";
+import { evalAgentRecommend, RECOMMENDABLE_KEYS } from "@atf/dsh-atf-core";
 import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, parseConfigEditText } from "../../src/webui/configConfirm.js";
 import { buildIterationSummary } from "../../packages/extensions/atf-ui/src/server.js";
 

@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { canonicalRunDirOf } from "../../src/core/workspace/runLayout.js";
+import { canonicalRunDirOf } from "@atf/dsh-atf-core";
 
 const tempRoot = (): string => mkdtempSync(join(tmpdir(), "b0-evalhard-"));
 

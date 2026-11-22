@@ -17,7 +17,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
-import { TMUX_TEST_SOCKET_ENV } from "../../../src/core/workspace/tmuxLiveness.js";
+import { TMUX_TEST_SOCKET_ENV } from "@atf/dsh-atf-core";
 
 const repoRoot = join(import.meta.dirname, "..", "..", "..");
 

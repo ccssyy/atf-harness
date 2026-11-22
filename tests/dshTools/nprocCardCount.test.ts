@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
-import { deriveGradAccum, oomFallbackParams } from "../../src/core/workspace/smartDefaults.js";
+import { deriveGradAccum, oomFallbackParams } from "@atf/dsh-atf-core";
 
 const tempRoots: string[] = [];
 const tempRoot = (prefix: string): string => {

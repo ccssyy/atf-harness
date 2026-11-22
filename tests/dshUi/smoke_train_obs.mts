@@ -8,7 +8,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startLossIngest } from "/data/sam/ATF-Harness/src/core/workspace/lossIngest.js";
+import { startLossIngest } from "@atf/dsh-atf-core";
 
 const RUN_ID = `train-obs-smoke-r${process.env["SMOKE_SEQ"] ?? "2"}`;
 const RUN_DIR = `/data/atf/dev/runs/${RUN_ID}`;

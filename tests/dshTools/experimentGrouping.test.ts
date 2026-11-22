@@ -17,7 +17,7 @@ import {
   fieldNameMapOf,
   readExperimentGrouping,
   renderGroupingSection,
-} from "../../src/core/workspace/experimentGrouping.js";
+} from "@atf/dsh-atf-core";
 import { buildPipelineTool } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
 
 const tempRoots: string[] = [];

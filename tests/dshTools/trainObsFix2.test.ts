@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { guardTrainingLock } from "../fixtures/trainingLock.js";
 import { buildEvalTools, buildRunTrainingTool } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 import { BridgeManager } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
-import { evalOrchSessionBase, resolveLaunchSessionName, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
+import { evalOrchSessionBase, resolveLaunchSessionName, trainingSessionBase } from "@atf/dsh-atf-core";
 import { tmuxTestOk } from "../fixtures/tmuxTestSocket.js";
 
 process.env["ATF_GPU_POLL_MS"] = "0";

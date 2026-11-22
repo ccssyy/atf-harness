@@ -23,9 +23,9 @@ import {
   resolveActiveRun,
   sessionBindingsPathOf,
   unbindSession,
-} from "../../src/core/workspace/sessionBindings.js";
-import { appendBinding } from "../../src/core/workspace/runFacts.js";
-import { autoTitle, displayOf, readDisplay, shortModelName, writeDisplay } from "../../src/core/workspace/runDisplay.js";
+} from "@atf/dsh-atf-core";
+import { appendBinding } from "@atf/dsh-atf-core";
+import { autoTitle, displayOf, readDisplay, shortModelName, writeDisplay } from "@atf/dsh-atf-core";
 import {
   sessionBindingPayloadOf,
   sessionBindingRouteHandler,
@@ -39,7 +39,7 @@ import {
   buildRunTrainingTool,
   RUN_BINDING_REQUIRED_MESSAGE,
 } from "../../packages/extensions/atf-tools/src/trainingFace.js";
-import { evalOrchSessionBase, resolveLaunchSessionName } from "../../src/core/workspace/tmuxLiveness.js";
+import { evalOrchSessionBase, resolveLaunchSessionName } from "@atf/dsh-atf-core";
 import { tmuxTestOk } from "../fixtures/tmuxTestSocket.js";
 
 const repoRoot = "/data/sam/ATF-Harness";
@@ -638,7 +638,7 @@ sleep 20
     writeFileSync(join(root, "prelaunch-report.md"), "# 训练前报告\n");
     const ctx = { get: (s: string) => (s === "approval" ? { request: async () => "allowed-once" } : undefined) };
     const tool = buildRunTrainingTool(ctx, { runsRoot: root, logDir: root, ctx }) as unknown as Tool;
-    const { trainingSessionBase } = await import("../../src/core/workspace/tmuxLiveness.js");
+    const { trainingSessionBase } = await import("@atf/dsh-atf-core");
     const launchName = resolveLaunchSessionName(trainingSessionBase(RUN_ID));
     try {
       const result = await tool.execute({ action: "start", train_sh: trainSh, run_id: RUN_ID }, execWithSession("s-train"));

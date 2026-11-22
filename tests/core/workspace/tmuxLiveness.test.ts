@@ -27,7 +27,7 @@ import {
   TMUX_SESSION_PREFIX_ENV,
   TMUX_TEST_SOCKET_ENV,
   trainingSessionBase,
-} from "../../../src/core/workspace/tmuxLiveness.js";
+} from "@atf/dsh-atf-core";
 import { tmuxTest, tmuxTestOk } from "../../fixtures/tmuxTestSocket.js";
 
 /** env 保存/恢复壳（本文件内互不污染——vitest 逐文件隔离进程 env 已由 fixture 落盘）。 */

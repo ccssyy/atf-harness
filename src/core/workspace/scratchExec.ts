@@ -26,9 +26,10 @@ import { closeSync, existsSync, mkdirSync, openSync, readdirSync } from "node:fs
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { err, ok, type Result } from "../rpc.js";
-import { ENV_DENY_PATTERN, runtimeEnvOf } from "./controlledEnv.js";
-import { safeScratchPath } from "./runWorkspace.js";
-import { runRelPathV3 } from "./runSubdirs.js";
+// 直连 atf-core 的单模块（不经 index）——避免 index → scratchExec → index 的循环。
+import { ENV_DENY_PATTERN, runtimeEnvOf } from "../../../packages/extensions/atf-core/src/controlledEnv.js";
+import { safeScratchPath } from "@atf/dsh-atf-core";
+import { runRelPathV3 } from "@atf/dsh-atf-core";
 
 /** stdout 字节上限（超出截断；管道继续排空）。 */
 export const SCRATCH_EXEC_STDOUT_CAP_BYTES = 16 * 1024;

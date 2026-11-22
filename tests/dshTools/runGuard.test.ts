@@ -18,7 +18,7 @@ import {
   readGuardState,
   type GuardFacts,
   type GuardState,
-} from "../../src/core/workspace/runGuard.js";
+} from "@atf/dsh-atf-core";
 
 const NOW = Date.parse("2026-10-29T00:00:00Z");
 

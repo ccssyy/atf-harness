@@ -22,7 +22,7 @@ import {
   launchKpiPathOf,
   dependencyBlockersOf,
   type PreflightReport,
-} from "../../src/core/workspace/trainingPreflight.js";
+} from "@atf/dsh-atf-core";
 import { buildPreflightTool, runPreflightFlow, preflightScriptAvailable, type PreflightDeps } from "../../packages/extensions/atf-tools/src/preflightFace.js";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 import { WORKSPACE_TOOL_HANDLERS, type LocalToolHost } from "../../src/core/tools/workspaceTools.js";

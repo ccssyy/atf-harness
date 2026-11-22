@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { TRAINING_PIN_CONSTANTS, checkTokenBudget } from "../../src/core/workspace/smartDefaults.js";
+import { TRAINING_PIN_CONSTANTS, checkTokenBudget } from "@atf/dsh-atf-core";
 import {
   CONFIG_CONFIRM_KEYS,
   buildConfigConfirmFields,
@@ -24,11 +24,11 @@ import {
   tokenBudgetSourceNoteOf,
   TOKEN_BUDGET_KEYS,
 } from "../../src/webui/configConfirm.js";
-import { evalAgentRecommend } from "../../src/core/workspace/agentRecommend.js";
+import { evalAgentRecommend } from "@atf/dsh-atf-core";
 import { configFormFieldsOf, domainHintOf, pixelPairChangeNoteOf, pixelPairViolationNoteOf, tokenBudgetCheckOf, tokenBudgetFaceText, type ConfigConfirmField } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 import { buildLaunchSurface } from "../../packages/extensions/atf-ui/src/server.js";
-import { humanizeKernelError, scanKernelErrorFace, KERNEL_ERROR_FACE_CODES } from "../../src/core/workspace/kernelErrorFace.js";
+import { humanizeKernelError, scanKernelErrorFace, KERNEL_ERROR_FACE_CODES } from "@atf/dsh-atf-core";
 import { buildPipelineTool } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
 import { buildEvalTools } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 
@@ -153,9 +153,9 @@ describe("批次 R H1-2——别名退役与 65536 退役 grep 锚（源码面�
    *  agentRecommend 护栏/atf-ui server web 面/client 渲染/kernelErrorFace 错误回流）。 */
   const faces = [
     "src/webui/configConfirm.ts",
-    "src/core/workspace/smartDefaults.ts",
-    "src/core/workspace/agentRecommend.ts",
-    "src/core/workspace/kernelErrorFace.ts",
+    "packages/extensions/atf-core/src/smartDefaults.ts",
+    "packages/extensions/atf-core/src/agentRecommend.ts",
+    "packages/extensions/atf-core/src/kernelErrorFace.ts",
     "packages/extensions/atf-tools/src/confirmFace.ts",
     "packages/extensions/atf-ui/src/server.ts",
     "packages/extensions/atf-ui/client.js",

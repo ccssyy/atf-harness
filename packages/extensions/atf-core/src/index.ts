@@ -306,3 +306,43 @@ export {
   renderTrainingPromptPreviewBlock,
 } from "./trainingPromptPreview.js";
 
+// ── 清源补齐（2026-11-23）──────────────────────────────────────────
+// 原 src/core/workspace 的 34 个副本已删除，正本全部在此。以下为
+// 整体转出，保证消费方按符号名取用时无遗漏（G2 具名导出曾漏多个）。
+export * from "./agentRecommend.js";
+export * from "./approvalLedger.js";
+export * from "./atfBootHealth.js";
+export * from "./attachmentsReport.js";
+export * from "./catalog.js";
+export * from "./configBlocks.js";
+export * from "./controlledEnv.js";
+export * from "./errors.js";
+export * from "./evalProgressTrack.js";
+export * from "./evalServiceHealth.js";
+export * from "./experimentGrouping.js";
+export * from "./gpuProbe.js";
+export * from "./kernelErrorFace.js";
+export * from "./labelQc.js";
+export * from "./lossIngest.js";
+export * from "./modelInventory.js";
+export * from "./oomFallback.js";
+export * from "./promote.js";
+export * from "./result.js";
+export * from "./runDisplay.js";
+export * from "./runFacts.js";
+export * from "./runGuard.js";
+export * from "./runLayout.js";
+export * from "./runSubdirs.js";
+export * from "./runWorkspace.js";
+export * from "./segmentFacts.js";
+export * from "./sessionBindings.js";
+export * from "./skillCatalog.js";
+export * from "./smartDefaults.js";
+export * from "./t0Guard.js";
+export * from "./tmuxLiveness.js";
+export * from "./trainNoticeTrack.js";
+export * from "./trainObsSync.js";
+export * from "./trainProbe.js";
+export * from "./trainingCompletion.js";
+export * from "./trainingPreflight.js";
+export * from "./trainingPromptPreview.js";

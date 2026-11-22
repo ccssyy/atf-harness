@@ -20,8 +20,8 @@ import {
   readEvalProgressLedger,
   trainingDoneAnchored,
   type EvalProgressRow,
-} from "../../src/core/workspace/evalProgressTrack.js";
-import { appendSegmentFact, readSegmentFacts } from "../../src/core/workspace/segmentFacts.js";
+} from "@atf/dsh-atf-core";
+import { appendSegmentFact, readSegmentFacts } from "@atf/dsh-atf-core";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {

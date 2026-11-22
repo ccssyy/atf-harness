@@ -23,8 +23,8 @@ import {
   ATF_TRAINING_PRESET,
 } from "../../packages/extensions/atf-tools/src/trainingPreset.js";
 import { exemptOutcomeOf, type ApprovalExemptPolicy } from "../../packages/extensions/atf-tools/src/approvalExempt.js";
-import { readTrainShBatchParams, patchTrainShForOom, maybeAutoOomFallback, oomFallbackStatePath } from "../../src/core/workspace/oomFallback.js";
-import { resolveLaunchSessionName, tmuxSocketFlag, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
+import { readTrainShBatchParams, patchTrainShForOom, maybeAutoOomFallback, oomFallbackStatePath } from "@atf/dsh-atf-core";
+import { resolveLaunchSessionName, tmuxSocketFlag, trainingSessionBase } from "@atf/dsh-atf-core";
 import { injectMonitorGlobal } from "../../packages/extensions/atf-ui/src/server.js";
 import { buildRunTrainingTool } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 import { STAGE_REGISTRY_ORDER } from "../../src/core/generated/stageOrder.js";

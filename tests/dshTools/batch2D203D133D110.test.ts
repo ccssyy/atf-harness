@@ -15,7 +15,7 @@ import { join } from "node:path";
 
 const TRAINING = join(process.cwd(), "packages/extensions/atf-tools/src/trainingFace.ts");
 const PIPELINE = join(process.cwd(), "packages/extensions/atf-tools/src/pipelineFace.ts");
-const SMART = join(process.cwd(), "src/core/workspace/smartDefaults.ts");
+const SMART = join(process.cwd(), "packages/extensions/atf-core/src/smartDefaults.ts");
 const KB = join(process.cwd(), "../AgenticTrainingFlow/skills/atf-admit-training-data/scripts/kb_contract.py");
 
 describe("批2-D203——放行后账本对账(不盲启编排)", () => {

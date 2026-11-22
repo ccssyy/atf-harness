@@ -12,7 +12,7 @@ import {
   evalServicePortOf,
   probeEvalServiceHealth,
   type PythonProbeRunner,
-} from "../../src/core/workspace/evalServiceHealth.js";
+} from "@atf/dsh-atf-core";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {

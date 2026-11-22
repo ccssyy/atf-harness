@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   KERNEL_RUNTIME_LINKAGE_CONFLICT_TEXT,
   KERNEL_RUNTIME_LINKAGE_REMEDY_TEXT,
-} from "../../src/core/workspace/smartDefaults.js";
+} from "@atf/dsh-atf-core";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 
 const tempRoots: string[] = [];

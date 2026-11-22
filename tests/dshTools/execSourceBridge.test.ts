@@ -40,7 +40,7 @@ describe("runPipeline 执行来源标记传导（A8 桥形态）", () => {
 
 describe("D317——exec_source 拦截码人话（改法按执行主体分档）", () => {
   it("闭集在案+人话指向升级（不留自查/绕行空间）", async () => {
-    const { humanizeKernelError, KERNEL_ERROR_FACE_CODES } = await import("../../src/core/workspace/kernelErrorFace.js");
+    const { humanizeKernelError, KERNEL_ERROR_FACE_CODES } = await import("@atf/dsh-atf-core");
     expect(KERNEL_ERROR_FACE_CODES.has("exec_source_unmarked")).toBe(true);
     expect(KERNEL_ERROR_FACE_CODES.has("exec_source_invalid")).toBe(true);
     const unmarked = humanizeKernelError("exec_source_unmarked");

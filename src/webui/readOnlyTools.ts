@@ -8,8 +8,8 @@ import { execFile } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { bucketedRunEntries, flatRunDirNames, hasRunMarkers, resolveRunDir, runFileCandidates, RUN_MARKER_RELS } from "../core/workspace/runLayout.js";
-import { captureGpuProbeAsync, formatProbeEvidence, gpuOfflineLabel, type ProbeResult } from "../core/workspace/gpuProbe.js";
+import { bucketedRunEntries, flatRunDirNames, hasRunMarkers, resolveRunDir, runFileCandidates, RUN_MARKER_RELS } from "@atf/dsh-atf-core";
+import { captureGpuProbeAsync, formatProbeEvidence, gpuOfflineLabel, type ProbeResult } from "@atf/dsh-atf-core";
 import { registeredWorkspaceRoots } from "../core/workspace/workspaceRegistry.js";
 
 /** AgentTool 兼容形状（与 src/agent/atfAgentTools.ts 的 AgentTool 同构——避免循环 import 用结构类型）。 */

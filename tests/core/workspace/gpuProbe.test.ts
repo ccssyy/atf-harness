@@ -29,7 +29,7 @@ import {
   type ProbeResult,
   type RawProbeOutcome,
   type RawProbeRunner,
-} from "../../../src/core/workspace/gpuProbe.js";import {
+} from "@atf/dsh-atf-core";import {
   BOOT_PREFLIGHT_ALLOW_PROBE_TIMEOUT_ENV,
   formatPreflightFatal,
   runBootPreflight,

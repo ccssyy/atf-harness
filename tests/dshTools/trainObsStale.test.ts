@@ -5,8 +5,8 @@
  * 源 mtime 变新 → 过门复活（新鲜日志不误杀）。
  */
 import { describe, expect, it } from "vitest";
-import { progressFresh, type RunProgress } from "../../src/core/workspace/runFacts.js";
-import { resetTrainObsForTest, trainObsTick, type TrainObsDeps } from "../../src/core/workspace/trainObsSync.js";
+import { progressFresh, type RunProgress } from "@atf/dsh-atf-core";
+import { resetTrainObsForTest, trainObsTick, type TrainObsDeps } from "@atf/dsh-atf-core";
 
 /** A800 现网真实样本行（84.95%——合并窗截图「训练中 85%」假活源）。 */
 const REAL_LINE = '{"current_steps": 158, "total_steps": 186, "loss": 0.31, "epoch": 2.55, "percentage": 84.95, "remaining_time": "0:12:00"}';

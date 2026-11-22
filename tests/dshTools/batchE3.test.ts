@@ -26,7 +26,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { parsePreflightReport, renderPreflightChecklist, PREFLIGHT_KNOWN_ITEM_IDS } from "../../src/core/workspace/trainingPreflight.js";
+import { parsePreflightReport, renderPreflightChecklist, PREFLIGHT_KNOWN_ITEM_IDS } from "@atf/dsh-atf-core";
 import {
   buildPipelineTool,
   experimentTokenApprovalLine,

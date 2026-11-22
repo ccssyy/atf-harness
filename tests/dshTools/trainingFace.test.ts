@@ -27,7 +27,7 @@ import {
   startLossIngest,
   terminateOccupant,
 } from "../../packages/extensions/atf-tools/src/trainingFace.js";
-import { evalOrchSessionBase, resolveLaunchSessionName, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
+import { evalOrchSessionBase, resolveLaunchSessionName, trainingSessionBase } from "@atf/dsh-atf-core";
 import { tmuxTestOk } from "../fixtures/tmuxTestSocket.js";
 // D112 训练互斥守卫：真训练在跑时本文件杀伤面 describe 逐用例 skip（探测式训练锁，
 // 语义见 tests/fixtures/trainingLock.ts 头注——B7 缺陷⑪收口）

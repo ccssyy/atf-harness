@@ -13,7 +13,7 @@ import {
   readTrainerLogTail,
   trainerLogPathOf,
   writeProgress,
-} from "../../src/core/workspace/runFacts.js";
+} from "@atf/dsh-atf-core";
 import {
   readTrainlogTail,
   resetTrainObsForTest,
@@ -23,7 +23,7 @@ import {
   trainObsRunning,
   trainObsTick,
   truncateCaptureLines,
-} from "../../src/core/workspace/trainObsSync.js";
+} from "@atf/dsh-atf-core";
 import { scanRunDir } from "../../packages/extensions/atf-ui/src/server.js";
 import { buildMonitorSnapshot } from "../../packages/extensions/atf-ui/src/snapshot.js";
 
@@ -177,8 +177,8 @@ describe("批㊶-TRAIN-OBS T1 状态机（fail-closed 三锚＋12 轮 stale＋�
     mkdirSync(join(runDir, "prep", "iteration-config", "checkpoint-2"), { recursive: true }); // walkthrough 布局 checkpoint
     const r = await trainObsTick("run-d50", runDir, null, { capture: async () => null, sessionName: () => null });
     expect(r).toBe("finished-stopped");
-    const { readTrainingCompletion } = await import("../../src/core/workspace/trainingCompletion.js");
-    const { readSegmentFacts } = await import("../../src/core/workspace/segmentFacts.js");
+    const { readTrainingCompletion } = await import("@atf/dsh-atf-core");
+    const { readSegmentFacts } = await import("@atf/dsh-atf-core");
     const completion = readTrainingCompletion(runDir);
     expect(completion?.status).toBe("ok");
     expect(completion?.exit_code).toBeNull(); // 无尾声件＝如实 null（launch 链形态）

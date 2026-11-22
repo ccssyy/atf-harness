@@ -17,7 +17,7 @@ import {
   resolveEvalPromptMode,
   summarizeEvalPrelaunchReport,
 } from "../../packages/extensions/atf-tools/src/trainingFace.js";
-import { evalOrchSessionBase, resolveLaunchSessionName } from "../../src/core/workspace/tmuxLiveness.js";
+import { evalOrchSessionBase, resolveLaunchSessionName } from "@atf/dsh-atf-core";
 import { tmuxTest, tmuxTestOk } from "../fixtures/tmuxTestSocket.js";
 
 const tempRoots: string[] = [];

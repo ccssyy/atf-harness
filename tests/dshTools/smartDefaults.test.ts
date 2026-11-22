@@ -17,7 +17,7 @@ import {
   oomFallbackParams,
   SMART_DEEPSPEED_DEFAULT,
   kernelBsDefaultOf,
-} from "../../src/core/workspace/smartDefaults.js";
+} from "@atf/dsh-atf-core";
 import {
   probeAndRecord,
   medianStepIntervalSec,
@@ -25,7 +25,7 @@ import {
   probeRun,
   readAlerts,
   OOM_PATTERN,
-} from "../../src/core/workspace/trainProbe.js";
+} from "@atf/dsh-atf-core";
 import { existsSync } from "node:fs";
 
 const tempRoots: string[] = [];
@@ -89,7 +89,7 @@ describe("批㊶-P P-1a/c param_sources 补丁＋deepspeed 缺省（E4-乙停写
     // training 段与 param_sources 由内核 training_prep 段写 user_confirmed(ref=stage:training_overrides)）。
     // 模块级锚：导出面不再含回写件（import 已摘——typecheck 层断链；此处行为锚归
     // autoTraining.test「停写断言」与 batchE4b 停写例）。
-    const moduleText = readFileSync(join(import.meta.dirname, "..", "..", "src", "core", "workspace", "smartDefaults.ts"), "utf8");
+    const moduleText = readFileSync(join(import.meta.dirname, "..", "..", "packages", "extensions", "atf-core", "src", "smartDefaults.ts"), "utf8");
     expect(moduleText).not.toContain("export const applyConfirmedToIterationConfig");
     expect(moduleText).toContain("快照是训练参数唯一出口");
   });

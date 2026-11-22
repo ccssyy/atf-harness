@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildTrainingPromptPreview, renderTrainingPromptPreviewBlock } from "../../src/core/workspace/trainingPromptPreview.js";
+import { buildTrainingPromptPreview, renderTrainingPromptPreviewBlock } from "@atf/dsh-atf-core";
 import { buildPrelaunchReportTool } from "../../packages/extensions/atf-tools/src/prelaunchFace.js";
 
 const tempRoots: string[] = [];

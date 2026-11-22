@@ -21,7 +21,7 @@ import {
   resolveWorkspaceRef,
   type LabelQcDecisionDraft,
   type LabelQcReportFile,
-} from "../../../src/core/workspace/index.js";
+} from "../../../packages/extensions/atf-core/src/index.js";
 
 const REPORT_DIGEST = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { appendBinding, resolveToolRun } from "../../src/core/workspace/runFacts.js";
+import { appendBinding, resolveToolRun } from "@atf/dsh-atf-core";
 
 const cleanups: string[] = [];
 const ws = (name: string, runId: string, opts?: { binding?: string }) => {

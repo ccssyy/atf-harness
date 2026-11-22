@@ -21,8 +21,8 @@ import {
   TRAINING_EXIT_CODE_REL,
   writeTrainingCompletion,
   writeTrainingStartedAt,
-} from "../../../src/core/workspace/trainingCompletion.js";
-import { readSegmentFacts } from "../../../src/core/workspace/segmentFacts.js";
+} from "@atf/dsh-atf-core";
+import { readSegmentFacts } from "@atf/dsh-atf-core";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {

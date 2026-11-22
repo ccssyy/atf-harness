@@ -23,7 +23,7 @@ import {
   kernelErrorEnvelopeCode,
   replaceKernelErrorFace,
   scanKernelErrorFace,
-} from "../../src/core/workspace/kernelErrorFace.js";
+} from "@atf/dsh-atf-core";
 
 const makeTemp = (label: string): string => mkdtempSync(join(tmpdir(), `atf-d71-${label}-`));
 

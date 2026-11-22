@@ -15,16 +15,16 @@ import {
   sessionWorkspaceSlug,
   slugForWorkspaceCwd,
   sweepAnsweredPendings,
-} from "../../src/core/workspace/runLayout.js";
-import { appendSegmentFact } from "../../src/core/workspace/segmentFacts.js";
-import { appendBinding } from "../../src/core/workspace/runFacts.js";
+} from "@atf/dsh-atf-core";
+import { appendSegmentFact } from "@atf/dsh-atf-core";
+import { appendBinding } from "@atf/dsh-atf-core";
 import {
   isV3RunTree,
   resolveRunFile,
   resolveRunSubdir,
   RUN_LAYOUT_V3,
   runLayoutVersionOf,
-} from "../../src/core/workspace/runSubdirs.js";
+} from "@atf/dsh-atf-core";
 import {
   appendLedgerAuditComment,
   checkApprovalLedgerStartup,
@@ -32,7 +32,7 @@ import {
   LEDGER_AUDIT_MARKER,
   ledgerEnvPrefixForShell,
   shellSingleQuoted,
-} from "../../src/core/workspace/approvalLedger.js";
+} from "@atf/dsh-atf-core";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {

@@ -24,8 +24,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { classifyRunRootEntries, enumerateRunEntries, hasRunChildDirs, isQualifyingRunChild, scanRuns, scanRunDir, scanRunDirAt, type ScanLiveness } from "../../packages/extensions/atf-ui/src/server.js";
 import { buildMonitorSnapshot } from "../../packages/extensions/atf-ui/src/snapshot.js";
-import { writeProgress, appendBinding } from "../../src/core/workspace/runFacts.js";
-import { appendSegmentFact } from "../../src/core/workspace/segmentFacts.js";
+import { writeProgress, appendBinding } from "@atf/dsh-atf-core";
+import { appendSegmentFact } from "@atf/dsh-atf-core";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {

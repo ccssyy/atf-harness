@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { appendSegmentFact, hasSegmentFact, readSegmentFacts } from "../../src/core/workspace/segmentFacts.js";
+import { appendSegmentFact, hasSegmentFact, readSegmentFacts } from "@atf/dsh-atf-core";
 import { scanRunDir } from "../../packages/extensions/atf-ui/src/server.js";
 import { taskStateOf } from "../../packages/extensions/atf-ui/src/client.taskState.js";
 

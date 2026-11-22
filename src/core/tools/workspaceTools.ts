@@ -71,8 +71,8 @@ const withinRootOf = (
   if (base === "/") return target.startsWith("/");
   return target === base || target.startsWith(base + "/");
 };
-import { startLossIngest } from "../workspace/lossIngest.js";
-import { recordFirstLaunchAt } from "../workspace/trainingPreflight.js";
+import { startLossIngest } from "@atf/dsh-atf-core";
+import { recordFirstLaunchAt } from "@atf/dsh-atf-core";
 import {
   listSkills,
   readSkillBody,
@@ -80,13 +80,13 @@ import {
   skillsSuffixText,
   SKILL_FILE_MAX_BYTES,
   type SkillSummary,
-} from "../workspace/skillCatalog.js";
-import { safeScratchPath } from "../workspace/runWorkspace.js";
+} from "@atf/dsh-atf-core";
+import { safeScratchPath } from "@atf/dsh-atf-core";
 import {
   KERNEL_ERROR_FACE_CODES,
   kernelErrorEnvelopeCode,
   replaceKernelErrorFace,
-} from "../workspace/kernelErrorFace.js";
+} from "@atf/dsh-atf-core";
 import {
   createExperimentInWorkspace,
   rebindWorkspaceToPath,

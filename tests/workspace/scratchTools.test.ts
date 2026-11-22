@@ -19,14 +19,14 @@ import {
   scanLaunchReady,
   SCRATCH_EXEC_STDOUT_CAP_BYTES,
   SCRATCH_WRITE_MAX_BYTES,
-} from "../../src/core/workspace/index.js";
+} from "../../packages/extensions/atf-core/src/index.js";
 import {
   listSkills,
   parseSkillFrontmatter,
   readSkillBody,
   readSkillFile,
   skillsSuffixText,
-} from "../../src/core/workspace/index.js";
+} from "../../packages/extensions/atf-core/src/index.js";
 
 const makeTemp = (label: string): string => mkdtempSync(join(tmpdir(), `atf-b3-${label}-`));
 

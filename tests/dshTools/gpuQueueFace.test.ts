@@ -20,7 +20,7 @@ import {
   queueStatusText,
 } from "../../packages/extensions/atf-tools/src/gpuQueueFace.js";
 import { resetResidentBaselineForTest } from "../../packages/extensions/atf-tools/src/gpuQueueFace.js";
-import { parseTrainerLine, startLossIngest } from "../../src/core/workspace/lossIngest.js";
+import { parseTrainerLine, startLossIngest } from "@atf/dsh-atf-core";
 
 // 批㊶-W：本文件 applyAtfTools 装配面预检（kernelDir=tempRoot 空）——env 显式声明走
 // 「env 已配置」路径（preflight ①⑥ 跳过派生与文件核查）。

@@ -7,11 +7,11 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMonitorSnapshot, buildArtifactsSnapshot, formatGpuAll, formatGpuBinding, formatTaskCard, QUEUE_IDLE_TEXT, SEGMENTS, buildTrainLaunchMessage, CLOSURE_MESSAGE } from "../../packages/extensions/atf-ui/src/snapshot.js";
 import { PANEL_HTML } from "../../packages/extensions/atf-ui/src/panel.js";
-import { TRAIN_ACTIVE_WINDOW_MS_DEFAULT } from "../../src/core/workspace/trainObsSync.js";
+import { TRAIN_ACTIVE_WINDOW_MS_DEFAULT } from "@atf/dsh-atf-core";
 import { buildIterationSummary, buildEnvSurface, buildLaunchSurface, bridgeBadgeSurface, discoverViewerDirs, gpuBindingOf, injectMonitorGlobal, latestEvalMetrics, parseEvalMetrics, resolveTrainActiveWindowMs, resolveViewerRequest, scanEvalRounds, scanRunDir, scanRunDirAt, scanRuns, looksLikeRun, RUN_MARKER_RELS, trainerHistoryLoss, VIEWER_ROUTE_PREFIX, viewerRouteHandler } from "../../packages/extensions/atf-ui/src/server.js";
-import { tmuxHasSession, trainingSessionBase } from "../../src/core/workspace/tmuxLiveness.js";
-import { progressFresh } from "../../src/core/workspace/runFacts.js";
-import { appendSegmentFact } from "../../src/core/workspace/segmentFacts.js";
+import { tmuxHasSession, trainingSessionBase } from "@atf/dsh-atf-core";
+import { progressFresh } from "@atf/dsh-atf-core";
+import { appendSegmentFact } from "@atf/dsh-atf-core";
 
 import { killPrefixedSessions } from "../fixtures/tmuxTestSocket.js";
 
@@ -428,7 +428,7 @@ describe("D73 观测环端到端（launch/setsid 形态——tmux 域零会话�
     await withDomain(async () => {
       const root = tempRoot();
       seedOrchestrationRun(root, "run-r1-live", { started: true });
-      const { resetTrainObsForTest } = await import("../../src/core/workspace/trainObsSync.js");
+      const { resetTrainObsForTest } = await import("@atf/dsh-atf-core");
       const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
       resetTrainObsForTest();
       await tickOnce({ runsRoot: root, intervalMs: 60_000 });
@@ -469,7 +469,7 @@ describe("D73 观测环端到端（launch/setsid 形态——tmux 域零会话�
     await withDomain(async () => {
       const root = tempRoot();
       const runDir = seedLaunchRun(root, "run-d73-e2e");
-      const { resetTrainObsForTest } = await import("../../src/core/workspace/trainObsSync.js");
+      const { resetTrainObsForTest } = await import("@atf/dsh-atf-core");
       const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
       resetTrainObsForTest();
       await tickOnce({ runsRoot: root, intervalMs: 60_000 }); // 首轮：观测环写出 progress.json
@@ -495,7 +495,7 @@ describe("D73 观测环端到端（launch/setsid 形态——tmux 域零会话�
       const root = tempRoot();
       const runDir = seedLaunchRun(root, "run-d73-stale-e2e");
       const trainerLog = join(runDir, "training", "trainer_log.jsonl");
-      const { resetTrainObsForTest } = await import("../../src/core/workspace/trainObsSync.js");
+      const { resetTrainObsForTest } = await import("@atf/dsh-atf-core");
       const { tickOnce } = await import("../../packages/extensions/atf-ui/src/server.js");
       resetTrainObsForTest();
       await tickOnce({ runsRoot: root, intervalMs: 60_000 }); // 新鲜态：写出 progress.json v1

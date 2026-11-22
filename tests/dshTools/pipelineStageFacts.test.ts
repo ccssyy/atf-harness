@@ -22,8 +22,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildPipelineTool, PIPELINE_STAGES, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
 import { STAGE_REGISTRY_ORDER } from "../../src/core/generated/stageOrder.js";
-import { readSegmentFacts } from "../../src/core/workspace/segmentFacts.js";
-import { readBindings } from "../../src/core/workspace/runFacts.js";
+import { readSegmentFacts } from "@atf/dsh-atf-core";
+import { readBindings } from "@atf/dsh-atf-core";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {

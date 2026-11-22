@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildPipelineTool, resolveVisibleDevices, snapshotVisibleDevicesOf } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
-import { TRAINING_PIN_CONSTANTS } from "../../src/core/workspace/smartDefaults.js";
+import { TRAINING_PIN_CONSTANTS } from "@atf/dsh-atf-core";
 
 const MOCK = join(import.meta.dirname, "..", "fixtures", "mock_pipeline_params.mjs");
 /** D191 字段确认闸适配:setup 段前置落盘 FieldChoice/v1(用户已确认——合法通过态)。 */

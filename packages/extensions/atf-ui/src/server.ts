@@ -24,30 +24,30 @@ import {
   ensureDefaultWorkspace,
   syncWorkspaceExperiments,
 } from "../../../../src/core/workspace/workspaceRegistry.js";
-import { sessionDomainRefusal, listTrainingSessionCmdlines, probeTrainingEvidence, resolveSessionName, trainingSessionBase } from "../../../../src/core/workspace/tmuxLiveness.js";
-import { appendBinding } from "../../../../src/core/workspace/runFacts.js";
-import { probeAndRecord, OOM_PATTERN } from "../../../../src/core/workspace/trainProbe.js";
-import { maybeAutoOomFallback, nodeOomFallbackIo } from "../../../../src/core/workspace/oomFallback.js";
-import { startLossIngest } from "../../../../src/core/workspace/lossIngest.js";
-import { hasSegmentFact, stageSummarySegmentFacts } from "../../../../src/core/workspace/segmentFacts.js";
+import { sessionDomainRefusal, listTrainingSessionCmdlines, probeTrainingEvidence, resolveSessionName, trainingSessionBase } from "@atf/dsh-atf-core";
+import { appendBinding } from "@atf/dsh-atf-core";
+import { probeAndRecord, OOM_PATTERN } from "@atf/dsh-atf-core";
+import { maybeAutoOomFallback, nodeOomFallbackIo } from "@atf/dsh-atf-core";
+import { startLossIngest } from "@atf/dsh-atf-core";
+import { hasSegmentFact, stageSummarySegmentFacts } from "@atf/dsh-atf-core";
 import { countJsonlRows, listDocSlots } from "./docSlots.js";
-import { completionFromExitCodeFile, readTrainingCompletion, writeTrainingCompletion } from "../../../../src/core/workspace/trainingCompletion.js";
-import { buildEvalNoticeFaces, type EvalNoticeFace, type EvalProgressFace } from "../../../../src/core/workspace/evalProgressTrack.js";
+import { completionFromExitCodeFile, readTrainingCompletion, writeTrainingCompletion } from "@atf/dsh-atf-core";
+import { buildEvalNoticeFaces, type EvalNoticeFace, type EvalProgressFace } from "@atf/dsh-atf-core";
 import {
   applyTrainNoticeTransitions, readTrainNoticeState, trainObservedStateOf,
   TRAIN_NOTICE_STATE_FILENAME, writeTrainNoticeState, type TrainTerminalNoticeFace,
-} from "../../../../src/core/workspace/trainNoticeTrack.js";
-import { probeEvalServiceHealth, type EvalServiceHealthFace } from "../../../../src/core/workspace/evalServiceHealth.js";
-import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readNumTrainEpochs, trainerLogPathOf, type RunProgress } from "../../../../src/core/workspace/runFacts.js";
-import { trainObsTick, readTrainlogTail, resetTrainObsForTest, type TrainlogTailFace } from "../../../../src/core/workspace/trainObsSync.js";
-import { guardTick } from "../../../../src/core/workspace/runGuard.js";
-import { bucketedRunEntries, flatRunDirNames, resolveRunDir, resolveRunFile, runFileCandidates, runRelPathV3, RUN_MARKER_RELS, sweepAnsweredPendings, workspaceOfRunDir } from "../../../../src/core/workspace/runLayout.js";
-import { displayOf, buildRunCandidates, writeDisplay } from "../../../../src/core/workspace/runDisplay.js";
+} from "@atf/dsh-atf-core";
+import { probeEvalServiceHealth, type EvalServiceHealthFace } from "@atf/dsh-atf-core";
+import { orderGuarded, readProgress, progressFresh, readBindings, writeProgress, readNumTrainEpochs, trainerLogPathOf, type RunProgress } from "@atf/dsh-atf-core";
+import { trainObsTick, readTrainlogTail, resetTrainObsForTest, type TrainlogTailFace } from "@atf/dsh-atf-core";
+import { guardTick } from "@atf/dsh-atf-core";
+import { bucketedRunEntries, flatRunDirNames, resolveRunDir, resolveRunFile, runFileCandidates, runRelPathV3, RUN_MARKER_RELS, sweepAnsweredPendings, workspaceOfRunDir } from "@atf/dsh-atf-core";
+import { displayOf, buildRunCandidates, writeDisplay } from "@atf/dsh-atf-core";
 import {
   bindSessionRun, migrateFromRunBindings, readSessionBinding, resolveActiveRun, resolveBindingsHome, unbindSession,
   type SessionRunBindingRecord, type UnboundReason,
-} from "../../../../src/core/workspace/sessionBindings.js";
-import { checkApprovalLedgerStartup, ledgerEnvPrefixForShell, homeLedgerPathOf } from "../../../../src/core/workspace/approvalLedger.js";
+} from "@atf/dsh-atf-core";
+import { checkApprovalLedgerStartup, ledgerEnvPrefixForShell, homeLedgerPathOf } from "@atf/dsh-atf-core";
 import { EFFORT_CLOSED_IDS, openSettingsStore, type SettingsDoc, type SettingsStore } from "../../../../src/webui/settings.js";
 import {
   instanceSettingsPath,
@@ -57,9 +57,9 @@ import {
   validateGpuBaseline,
   ensureConventionSubdirs,
 } from "../../../../src/webui/storageSettings.js";
-import { detectAvailableGpuCount, checkTokenBudget } from "../../../../src/core/workspace/smartDefaults.js";
+import { detectAvailableGpuCount, checkTokenBudget } from "@atf/dsh-atf-core";
 import { listRegistryRecords, registeredWorkspaceRoots, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
-import { readAlerts } from "../../../../src/core/workspace/trainProbe.js";
+import { readAlerts } from "@atf/dsh-atf-core";
 
 /** Cordis 插件名。 */
 export const name = "atf-ui";
@@ -462,8 +462,8 @@ export const buildEnvSurface = (iter: Record<string, unknown> | null, runId: str
 /** 单 run 目录标记推导（任务卡 chat 卡面与同步器同源——trainingFace status 复用本出口）。 */
 /** 批㊶-L L-1／D16 单源迁移：训练活跃新鲜窗口常量/解析迁 core trainObsSync.ts
  *  （源新鲜度门同源消费——core 不得反向依赖 extensions）；此处 re-export 兼容既有引用面。 */
-export { TRAIN_ACTIVE_WINDOW_MS_DEFAULT, TRAIN_ACTIVE_WINDOW_MS_ENV, resolveTrainActiveWindowMs } from "../../../../src/core/workspace/trainObsSync.js";
-import { resolveTrainActiveWindowMs, TRAIN_ACTIVE_WINDOW_MS_DEFAULT } from "../../../../src/core/workspace/trainObsSync.js";
+export { TRAIN_ACTIVE_WINDOW_MS_DEFAULT, TRAIN_ACTIVE_WINDOW_MS_ENV, resolveTrainActiveWindowMs } from "@atf/dsh-atf-core";
+import { resolveTrainActiveWindowMs, TRAIN_ACTIVE_WINDOW_MS_DEFAULT } from "@atf/dsh-atf-core";
 
 /** 训练活跃注入面（调用方——同步器循环每周期探测一次 tmux，不逐 run）。 */
 export interface ScanLiveness {
@@ -2500,7 +2500,7 @@ export const eventsRouteHandler = (deps: {
 
 /** 批㊶-TRAIN-OBS T3：capture-pane 适配器（eventsRouteHandler 依赖注入形——生产走真 tmux）。 */
 const sseCapturePane = (session: string): Promise<string[] | null> =>
-  import("../../../../src/core/workspace/trainObsSync.js").then((m) => m.captureTrainlogPane(session));
+  import("@atf/dsh-atf-core").then((m) => m.captureTrainlogPane(session));
 
 // ===== 批B1：会话↔Run 绑定端点（GET/POST /atf-ui/session-binding——鉴权同 settings）=====
 

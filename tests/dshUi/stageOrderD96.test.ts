@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { PIPELINE_STAGES, SEGMENT_FACT_BY_KERNEL_STAGE } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
-import { SEGMENT_ORDER } from "../../src/core/workspace/runFacts.js";
+import { SEGMENT_ORDER } from "@atf/dsh-atf-core";
 import { STAGE_REGISTRY_ORDER } from "../../src/core/generated/stageOrder.js";
 import { SEGMENTS, buildMonitorSnapshot } from "../../packages/extensions/atf-ui/src/snapshot.js";
 import { SEGMENT_ORDER_KEYS, scanRunDirAt } from "../../packages/extensions/atf-ui/src/server.js";

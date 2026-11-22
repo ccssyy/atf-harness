@@ -12,7 +12,7 @@
  */
 
 import z from "@deepseek-ai/schemastery";
-import { findDeadAtfExtensions } from "../../../../src/core/workspace/atfBootHealth.js";
+import { findDeadAtfExtensions } from "@atf/dsh-atf-core";
 import {
   makeContinuationCoordinator,
   type ContinuationAgent,

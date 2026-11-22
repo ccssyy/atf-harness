@@ -17,10 +17,10 @@ import {
   SEGMENT_ORDER,
   writeProgress,
   type RunProgress,
-} from "../../src/core/workspace/runFacts.js";
+} from "@atf/dsh-atf-core";
 import { scanRunDir, trainingLogsFreshAt } from "../../packages/extensions/atf-ui/src/server.js";
-import { probeTrainingEvidence, tmuxTrainingFamilyPresent, TMUX_SESSION_PREFIX_ENV } from "../../src/core/workspace/tmuxLiveness.js";
-import { resetTrainObsForTest, trainObsTick } from "../../src/core/workspace/trainObsSync.js";
+import { probeTrainingEvidence, tmuxTrainingFamilyPresent, TMUX_SESSION_PREFIX_ENV } from "@atf/dsh-atf-core";
+import { resetTrainObsForTest, trainObsTick } from "@atf/dsh-atf-core";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -415,7 +415,7 @@ import {
   parseTrainerLogLine,
   readNumTrainEpochs,
   readTrainerLogTail,
-} from "../../src/core/workspace/runFacts.js";
+} from "@atf/dsh-atf-core";
 
 describe("批㊶Q增补二1 progress 持续写链（trainer_log 步进解析＋progress 组装＋epochs 读取）", () => {
   it("parseTrainerLogLine：合法行全键解析；缺键/坏 JSON/空行 → null（不猜测）", () => {

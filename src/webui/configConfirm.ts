@@ -10,8 +10,8 @@
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { CLAMP_DOMAINS, TRAINING_PIN_CONSTANTS } from "../core/workspace/smartDefaults.js";
-import { resolveRunSubdir } from "../core/workspace/runSubdirs.js";
+import { CLAMP_DOMAINS, TRAINING_PIN_CONSTANTS } from "@atf/dsh-atf-core";
+import { resolveRunSubdir } from "@atf/dsh-atf-core";
 export {
   CONFIG_CONFIRM_BLOCKS,
   CONFIG_BLOCK_ORDER,

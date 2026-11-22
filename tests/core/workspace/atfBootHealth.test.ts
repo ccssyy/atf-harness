@@ -3,7 +3,7 @@ import {
   findDeadAtfExtensions,
   ATF_REQUIRED_EXTENSION_IDS,
   type LoaderCtxLike,
-} from "../../../src/core/workspace/atfBootHealth.js";
+} from "@atf/dsh-atf-core";
 
 /**
  * D246/D247 boot 健康门判定（无机检不立规；事故=1109 工具面静默降级整轮假链路）：

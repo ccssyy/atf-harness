@@ -38,7 +38,7 @@ import {
   formatProbeEvidence,
   resolveGpuProbeBudgetMs,
   type ProbeResult,
-} from "./gpuProbe.js";
+} from "@atf/dsh-atf-core";
 
 export interface PreflightAutoFix {
   level: "L1";

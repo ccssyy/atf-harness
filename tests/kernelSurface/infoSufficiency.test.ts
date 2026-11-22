@@ -81,7 +81,7 @@ describe("B1 信息足八子面（CI 全链断言）", () => {
 
   it("⑥进度足：progress.jsonl 机制在场（正向锚——真机轮正向 7 条之一勿回退）", () => {
     const runFactsSrc = readFileSync(
-      resolve(process.cwd(), "src/core/workspace/runFacts.ts"),
+      resolve(process.cwd(), "packages/extensions/atf-core/src/runFacts.ts"),
       "utf-8",
     );
     expect(runFactsSrc).toContain("progressPathOf");
