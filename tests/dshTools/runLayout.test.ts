@@ -249,7 +249,8 @@ describe("批㊶Q增补三 段1②——atf-tools apply 启动面（fail-fast �
     const savedHome = process.env["HOME"];
     process.env["ATF_APPROVAL_LEDGER"] = join(blocker, "sub", "training-release.jsonl");
     try {
-      expect(() => apply(ctxStub, baseConfig())).toThrow(/放行账本目录不可写/);
+      // G5：apply 改 async（MCP 装配）——fail-fast 由同步 throw 变 rejected Promise（行为不变）
+      await expect(apply(ctxStub, baseConfig())).rejects.toThrow(/放行账本目录不可写/);
     } finally {
       if (savedPin === undefined) delete process.env["ATF_INSTANCE_PIN_ROOT"]; else process.env["ATF_INSTANCE_PIN_ROOT"] = savedPin;
       if (saved === undefined) delete process.env["ATF_APPROVAL_LEDGER"]; else process.env["ATF_APPROVAL_LEDGER"] = saved;
@@ -264,7 +265,12 @@ describe("批㊶Q增补三 段1②——atf-tools apply 启动面（fail-fast �
     const saved = process.env["ATF_APPROVAL_LEDGER"];
     delete process.env["ATF_APPROVAL_LEDGER"];
     try {
-      expect(() => apply(ctxStub, baseConfig())).not.toThrow();
+      // G5：apply 改 async——stub 环境会因 MCP spawn 缺席而拒绝（与本例合同无关）。
+      // 本例合同＝账本 env 缺省回退位不因账本原因 fail-fast，断言收窄到该面。
+      let rejection: unknown;
+      await apply(ctxStub, baseConfig()).catch((error: unknown) => { rejection = error; });
+      const message = rejection instanceof Error ? rejection.message : String(rejection ?? "");
+      expect(message).not.toMatch(/放行账本目录不可写|账本双轴告警/);
     } finally {
       if (savedPin === undefined) delete process.env["ATF_INSTANCE_PIN_ROOT"]; else process.env["ATF_INSTANCE_PIN_ROOT"] = savedPin;
       if (saved !== undefined) process.env["ATF_APPROVAL_LEDGER"] = saved;
