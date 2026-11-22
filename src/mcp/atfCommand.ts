@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { resolve } from "node:path";
-import { bridgeError, stringifyCause, type BridgeError } from "./errors.js";
-import { err, ok, type Result } from "./result.js";
+import { bridgeError, stringifyCause, type BridgeError } from "../core/rpc.js";
+import { err, ok, type Result } from "../core/rpc.js";
 
 /**
  * atf CLI 对接面（G5：原 bridge.contract.yaml atf_cli 段的承接位——契约文件已随

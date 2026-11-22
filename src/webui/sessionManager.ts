@@ -21,7 +21,7 @@ import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { join } from "node:path";
-import { err, ok, type Result } from "../mcp/result.js";
+import { err, ok, type Result } from "../mcp/index.js";
 import { AtfBridgeConnection } from "../mcp/connection.js";
 import type { AtfAgentToolDeps } from "../agent/atfAgentTools.js";
 import type { FileToolHost } from "../agent/fileTools.js";

@@ -38,6 +38,8 @@ const tokenizeRespectingQuotes = (value: string): string[] => {
     } else if (/\s/.test(ch)) {
       if (current !== "") tokens.push(current);
       current = "";
+    } else {
+      current += ch;
     }
   }
   if (current !== "") tokens.push(current);

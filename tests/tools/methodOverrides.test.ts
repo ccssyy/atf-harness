@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { BridgeError } from "../../src/mcp/errors.js";
+import type { BridgeError } from "../../src/mcp/index.js";
 import { ToolExecutor, ToolRegistry, type BridgeTransport } from "../../src/core/tools/index.js";
 import { TOOL_METHOD_OVERRIDES, rpcMethodFor } from "../../src/core/tools/methodOverrides.js";
 import { buildAtfAgentTools } from "../../src/agent/atfAgentTools.js";

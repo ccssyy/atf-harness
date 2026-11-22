@@ -127,10 +127,10 @@ describe("D94 阴性对照——六类护栏故意注入偏差必红", () => {
 
     const pinMutated: HarnessSurfaceFactsWithMock = {
       ...facts,
-      bridgeContractText: facts.bridgeContractText.replace(/^ {2}commit_sha: [0-9a-f]{40}$/m, "  commit_sha: short"),
+      bridgeContractText: facts.bridgeContractText.replace(/export const ATF_UPSTREAM_COMMIT_SHA = "[0-9a-f]{40}";/, 'export const ATF_UPSTREAM_COMMIT_SHA = "short";'),
     };
     const pinViolations = guardDocImplementation(snapshotOf(), pinMutated);
-    expect(pinViolations.some((v) => v.kind === "文档实现" && v.detail.includes("pin 段"))).toBe(true);
+    expect(pinViolations.some((v) => v.kind === "文档实现" && v.detail.includes("pin 常量段"))).toBe(true);
   });
 
   it("形态假设：内核脚本引用悬空 → 必红；store_true 携值 → 必红；摘要模板缺失 → 必红", () => {

@@ -29,8 +29,8 @@ import {
   STDERR_TAIL_LIMIT,
   takeStderrTail,
   type BridgeError,
-} from "./errors.js";
-import { err, ok, type Result } from "./result.js";
+} from "../core/rpc.js";
+import { err, ok, type Result } from "../core/rpc.js";
 
 /** 请求级超时（沿用旧桥 REQUEST_TIMEOUT_MS 语义，harness 内部细节）。 */
 export const MCP_REQUEST_TIMEOUT_MS = 30_000;

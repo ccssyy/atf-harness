@@ -25,7 +25,7 @@ import { createHash } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync } from "node:fs";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { err, ok, type Result } from "../../mcp/index.js";
+import { err, ok, type Result } from "../rpc.js";
 import { ENV_DENY_PATTERN, runtimeEnvOf } from "./controlledEnv.js";
 import { safeScratchPath } from "./runWorkspace.js";
 import { runRelPathV3 } from "./runSubdirs.js";
