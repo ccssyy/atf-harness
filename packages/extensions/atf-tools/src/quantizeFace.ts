@@ -22,7 +22,12 @@ import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { asToolValue, renderAsJsonText } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
-import { pathOutsideRoots } from "./fileGuardFace.js";
+/** 路径是否在白名单根之外（复用本文件既有 insideRoot；守卫机制 B5 后已退役）。 */
+const pathOutsideRoots = (rawPath: string, roots: readonly string[]): boolean => {
+  if (roots.length === 0) return true;
+  const abs = isAbsolute(rawPath) ? resolve(rawPath) : resolve(join(roots[0] as string, rawPath));
+  return !roots.some((root) => insideRoot(abs, root));
+};
 
 /** 量化口径闭集（权威＝内核 --mode 枚举）。 */
 export const QUANTIZE_MODES: readonly string[] = ["round", "floor", "ceil"];

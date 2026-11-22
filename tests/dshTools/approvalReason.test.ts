@@ -18,7 +18,6 @@ const CALL_SITE_FILES = [
   "confirmFace.ts",
   "trainingFace.ts",
   "fileFace.ts",
-  "fileGuardFace.ts",
   // jointTrainFace:装配卡已改训练启动确认卡(userQuestions 形态),退出审批面
   // pipelineFace/quantizeFace:ADR-0022 段审批/档位审批退役(直通留痕),requestApproval 调用点已删
   "preflightFace.ts",

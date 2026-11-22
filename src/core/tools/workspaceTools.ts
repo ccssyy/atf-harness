@@ -56,7 +56,21 @@ import {
   SCRATCH_WRITE_MAX_BYTES,
   type LaunchReady,
 } from "../workspace/scratchExec.js";
-import { withinRootOf } from "../../agent/fileRoots.js";
+/** 目标是否在根内（realpath 归一；原 fileRoots 的纯函数，B5 后内联）。 */
+const withinRootOf = (
+  path: string,
+  root: string,
+  realpath: (value: string) => string | null,
+): boolean => {
+  const normalize = (value: string): string => {
+    const resolved = (realpath(value) ?? value).replace(/\/+$/, "");
+    return resolved === "" ? "/" : resolved;
+  };
+  const target = normalize(path);
+  const base = normalize(root);
+  if (base === "/") return target.startsWith("/");
+  return target === base || target.startsWith(base + "/");
+};
 import { startLossIngest } from "../workspace/lossIngest.js";
 import { recordFirstLaunchAt } from "../workspace/trainingPreflight.js";
 import {

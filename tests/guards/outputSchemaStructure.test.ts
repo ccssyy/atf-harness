@@ -54,7 +54,6 @@ const DECLARED_TOOLS: ReadonlyArray<{ tool: string; file: string }> = [
 
 /** 循环挂载面（一位多工具、name 为动态表达式）：文件级声明面存在性。 */
 const LOOP_MOUNTED_FACES: ReadonlyArray<{ face: string; file: string; note: string }> = [
-  { face: "FILE_TOOL_DEFINITIONS 文件工具族", file: "fileGuardFace.ts", note: "atf_read/atf_edit/atf_write/atf_bash" },
   { face: "BRIDGE_TOOL_NAMES 桥接面", file: "bridgeFace.ts", note: "label-qc resolve 卡工具等" },
 ];
 

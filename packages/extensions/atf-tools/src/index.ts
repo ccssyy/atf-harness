@@ -25,9 +25,6 @@ import { resolveInstanceKernelDir, resolveInstancePinRoot } from "../../../../sr
 import { scanLocalModels } from "@atf/dsh-atf-core";
 import { registerApprovalExempt } from "./approvalExempt.js";
 import { registerUnattendedQuestionGuard } from "./unattendedGuard.js";
-import { buildFileGuardTools, registerPathGuard, startFileRootsHotReload } from "./fileGuardFace.js";
-import { deriveFileToolRoots } from "../../../../src/agent/fileRoots.js";
-import type { FileToolHost } from "../../../../src/agent/fileTools.js";
 import { asToolValue, renderAsJsonText } from "./schemaTranslate.js";
 import { BridgeManager, buildBridgeTools } from "./bridgeFace.js";
 import { buildFileTools } from "./fileFace.js";
@@ -175,35 +172,6 @@ export async function apply(ctx: any, config: AtfToolsConfig): Promise<void> {
     console.log(`[atf-tools] 直通留痕器已挂（approval/request waterfall 头部，ADR-0022；bash/write 恒留痕；训练链 ${chain.length} 件直通留痕；atf_* 契约工具 next() 走业务确认卡）`);
   }
 
-  // 批㊶-H/I：文件工具路径守卫＋A7 治理四件挂载（案 甲单轨）——白名单根＝派生集
-  // （配置声明面镜像，fileRoots.ts）＋env 附加集；产品资产零具体目录（增补裁定）。
-  const fileRoots = deriveFileToolRoots({ env: process.env });
-  // A4：持可变数组实例（FileToolHost.roots 为 readonly 视图——热加载原地替换同一实例，
-  // 守卫每次调用读到的即最新派生集）。
-  const fileHostRoots: string[] = fileRoots.roots;
-  const fileHost: FileToolHost = { roots: fileHostRoots, env: process.env };
-  // A4：注册表感知热加载——UI 建工作区（注册表变更）免重启进白名单（守卫每次调用读
-  // host.roots，原地替换同一数组；轮询侦听 2s，重派生异常保留现集不缩窄）。
-  startFileRootsHotReload(fileHostRoots, { env: process.env });
-  // 批㊶-W W1：atf_bash 围栏取值链＝会话绑定反查（runsRoot 直传 deps）＞ env 过渡态
-  // D23：审批 ctx 直传（atf_bash 破坏性命令确认闸——owner 审批卡放行唯一通道；
-  // atf_* 契约工具不进 bash/write 豁免类，卡面恒达人工面板）
-  for (const tool of buildFileGuardTools(fileHost, { runsRoot: config.runsRoot, approvalCtx: ctx })) ctx.tools.register(tool);
-  if (registerPathGuard(ctx, fileHost)) {
-    // 定域闸排除项如实投影（无静默）：实例根外的注册工作区不进白名单——启动期就看得见，
-    // 不必等热加载或撞拒绝。前 5 条给路径，其余只给计数（日志行长可控）。
-    const excludedNote =
-      fileRoots.excluded.length === 0
-        ? ""
-        : `；实例根外工作区 ${String(fileRoots.excluded.length)} 个已排除（${fileRoots.excluded
-            .map((item) => item.path)
-            .slice(0, 5)
-            .join("、")}${fileRoots.excluded.length > 5 ? " 等" : ""}——工作区请建在 <ATF_INSTANCE_ROOT> 内）`;
-    console.log(
-      `[atf-tools] 文件路径守卫已挂（tools/pre-execute prepend；守卫 glob/grep/read_image，封闭 vendor read/edit/write 改道 A7；A7 四件挂载）白名单根 ${String(fileRoots.roots.length)} 个（派生集＝配置声明面镜像＋env 附加集）${excludedNote}`,
-    );
-  }
-
   for (const tool of await buildBridgeTools(ctx, manager, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, execHome: config.execHome })) ctx.tools.register(tool);
   // D81-B 会话作用域隔离：run 面读具缺省只看当前会话归属工作区；跨任务 scope 走审批
   // （approvalFace 既有 seam——ctx 注入是审批服务唯一可达路径）。
@@ -223,9 +191,10 @@ export async function apply(ctx: any, config: AtfToolsConfig): Promise<void> {
     ctx,
   };
   ctx.tools.register(buildPreflightTool(preflightDeps));
-  // E1b：坐标量化工具面——内核 CLI 单源（<kernelDir>/tools/quantize_annotations.py，pin 随
-  // kernelDir 消费链；白名单根＝A4 同一可变数组实例 fileHostRoots，热加载同步生效）。
-  ctx.tools.register(buildQuantizeTool(ctx, { roots: fileHostRoots, command: `python3 ${join(config.kernelDir, "tools", "quantize_annotations.py")}`, timeoutMs: config.quantizeTimeoutMs }));
+  // E1b：坐标量化工具面——内核 CLI 单源（<kernelDir>/tools/quantize_annotations.py）。
+  // B5：ATF 白名单机制已退役（改由 vendor fs-sandbox/workspace 绑定），roots 传空
+  // ＝不做自造路径守卫；内核脚本自身仍是唯一执行者。
+  ctx.tools.register(buildQuantizeTool(ctx, { roots: [], command: `python3 ${join(config.kernelDir, "tools", "quantize_annotations.py")}`, timeoutMs: config.quantizeTimeoutMs }));
   for (const tool of buildConfirmTools({ runsRoot: config.runsRoot, ctx, preflight: preflightDeps, pipeline: { command: pipelineCommand, timeoutMs: config.pipelineTimeoutMs } })) ctx.tools.register(tool);
   // E4-乙（改动 4）：训练启动前报告只读生成/回读（免审批——材料不是闸；内核件
   // build_prelaunch_report.py 单源，param_sources 来源校验归内核不复制）

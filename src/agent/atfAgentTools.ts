@@ -23,7 +23,6 @@ import {
 } from "../core/tools/index.js";
 import { rpcMethodFor } from "../core/tools/methodOverrides.js";
 import { type ScopeRef } from "../core/tools/approvalKey.js";
-import { FILE_TOOL_DEFINITIONS } from "./fileTools.js";
 
 /** spike 桥接最小面（AtfBridgeConnection 结构满足；测试可注桩）。 */
 export interface SpikeBridgeTransport {
@@ -43,12 +42,11 @@ export const allToolDefinitions = (): ToolDefinition[] => [...TOOL_DEFINITIONS];
 export const spikeToolDefinitions = (): ToolDefinition[] =>
   TOOL_DEFINITIONS.filter((definition) => SPIKE_TOOL_NAMES.includes(definition.name));
 
-/** 全 face 查找单点（丙 v2 A7 起）：桥接面（TOOL_DEFINITIONS，契约登记）＋丙线本地治理面
- *  （FILE_TOOL_DEFINITIONS，A7 四工具）——审批 hook 以本出口为唯一工具定义查找点，
- *  本地工具同样入闸分类（写闸 fail-closed），不因不经桥而脱治理。 */
+/** 全 face 查找单点：桥接面（TOOL_DEFINITIONS，契约登记）。
+ *  B5：A7 四工具（FILE_TOOL_DEFINITIONS）已退役——文件面改由 vendor read/write/edit/bash
+ *  承接，vendor 侧自带沙箱与观测策略，不再经本出口分类。 */
 export const toolDefinitionFor = (toolName: string): ToolDefinition | undefined =>
-  TOOL_DEFINITIONS.find((definition) => definition.name === toolName) ??
-  FILE_TOOL_DEFINITIONS.find((definition) => definition.name === toolName);
+  TOOL_DEFINITIONS.find((definition) => definition.name === toolName);
 
 export interface AtfAgentToolDeps {
   bridge: SpikeBridgeTransport;

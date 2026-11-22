@@ -12,7 +12,6 @@ import type { BridgeError } from "../../src/mcp/index.js";
 import { ToolExecutor, ToolRegistry, type BridgeTransport } from "../../src/core/tools/index.js";
 import { TOOL_METHOD_OVERRIDES, rpcMethodFor } from "../../src/core/tools/methodOverrides.js";
 import { buildAtfAgentTools } from "../../src/agent/atfAgentTools.js";
-import { FILE_TOOL_DEFINITIONS } from "../../src/agent/fileTools.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -60,8 +59,6 @@ describe("镜像面① 单源真值（TOOL_METHOD_OVERRIDES／rpcMethodFor）", 
     for (const name of names) {
       if (!(name in TOOL_METHOD_OVERRIDES)) expect(rpcMethodFor(name), name).toBe(name);
     }
-    // 丙线本地治理面（FILE_TOOL_DEFINITIONS）不经桥——恒等折叠同样成立
-    for (const definition of FILE_TOOL_DEFINITIONS) expect(rpcMethodFor(definition.name), definition.name).toBe(definition.name);
   });
 });
 
