@@ -86,22 +86,17 @@ else
 fi
 
 # ── 5 真机预演（可选档：前提缺则 SKIP，--require-rehearsal 升为 FAIL）──────
-pin_ok() {
-  local pinned="${ATF_PIN_ROOT:-/data/atf/dev/pinned}"
-  [[ -d "$pinned" ]] || return 1
-  local tag ver
-  tag=$(git -C "$pinned" describe --tags 2>/dev/null) || return 1
-  ver=$(python3 -c "
-import sys
-sys.path.insert(0, '$pinned/src')
-from agentic_training_flow import __version__
-print(__version__)
-" 2>/dev/null) || return 1
-  # describe 形如 v0.7.27b47-9-g85e2c827（tag + 提交数 + sha）：tag 段必须与 __version__ 同指
-  [[ "${tag%%-*}" == "v${ver}" || "$tag" == "v${ver}" ]]
+# pin 树退役后（D9，2026-11-22）前提探测改判「内核目录在场」——
+# 原 pin 版本一致性门（describe tag ↔ __version__）已随 bootPreflight 删除，
+# 保留对账只会拿一个不再是加载源的目录做 veto（A9 断引用）。
+kernel_ready() {
+  local kernel="${ATF_DSH_KERNEL_DIR:-${ATF_KERNEL_SOURCE:-}}"
+  [[ -n "$kernel" && -d "$kernel" ]] || return 1
+  # 内核入口在场才算就绪（不猜路径；解析失败即 SKIP/FAIL，不静默降级）
+  [[ -d "$kernel/src/agentic_training_flow" || -d "$kernel/agentic_training_flow" ]]
 }
 
-if [[ -n "${ATF_DSH_PIPELINE_COMMAND:-}" ]] && pin_ok; then
+if [[ -n "${ATF_DSH_PIPELINE_COMMAND:-}" ]] && kernel_ready; then
   if npm run rehearsal >/tmp/pregate-rehearsal.log 2>&1; then
     pass "npm run rehearsal（JOURNEY GREEN）"
   else
