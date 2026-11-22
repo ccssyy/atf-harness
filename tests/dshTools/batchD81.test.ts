@@ -335,7 +335,7 @@ describe("D81-B 可发现性三面＋atf_workspace_status 附加", () => {
     const repoRoot = join(import.meta.url.replace("file://", ""), "..", "..", "..");
     const manager = new BridgeManager(["node", join(repoRoot, "tests", "fixtures", "mock_atf.mjs")], repoRoot);
     try {
-      const tools = buildBridgeTools(noApprovalCtx, manager, { runsRoot: fx.runsRoot, kernelDir: fx.base, execHome: fx.base });
+      const tools = await buildBridgeTools(noApprovalCtx, manager, { runsRoot: fx.runsRoot, kernelDir: fx.base, execHome: fx.base });
       const hit = (await findTool(tools, "atf_workspace_status").execute({}, execWithCwd(fx.wsMine))) as Record<string, unknown>;
       expect(hit["ok"]).toBe(true);
       expect(hit["workspace_id"]).toBe("ws-mine-uuid");

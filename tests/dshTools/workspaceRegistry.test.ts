@@ -25,6 +25,7 @@ import {
 } from "../../src/core/workspace/workspaceRegistry.js";
 import { buildBridgeTools, BRIDGE_TOOL_NAMES } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
 import { TOOL_DEFINITIONS, WORKSPACE_TOOL_DEFINITIONS } from "../../src/core/tools/index.js";
+import { rpcMethodFor } from "../../src/core/tools/methodOverrides.js";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {
@@ -77,9 +78,11 @@ const seedIdentity = (workspacePath: string, id: string): void => {
   );
 };
 
-const toolExec = (host: { dshHome?: string }, outcome: string, name: "atf_create_experiment" | "atf_rebind_workspace") => {
+const toolExec = async (host: { dshHome?: string }, outcome: string, name: "atf_create_experiment" | "atf_rebind_workspace") => {
   const ctx = { get: (service: string) => (service === "approval" ? { request: async () => outcome } : undefined) };
-  const tools = buildBridgeTools(ctx, { transport: async () => ({ request: async () => ({ ok: true, value: {} }), close: async () => undefined }) } as never, {
+  // G5：buildBridgeTools 装配面先拉 MCP tools/list——本地治理件测试不 spawn 真对端，
+  // 以最小 descriptor 桩供给装配（工厂面〔workspace_status〕不在此测试触达）。
+  const tools = await buildBridgeTools(ctx, { mcpTools: async () => TOOL_DEFINITIONS.map((definition) => ({ name: rpcMethodFor(definition.name), description: definition.description, inputSchema: { type: "object", properties: {}, additionalProperties: true } })), transport: async () => ({ request: async () => ({ ok: true, value: {} }), close: async () => undefined }) } as never, {
     runsRoot: tempRoot(),
     kernelDir: tempRoot(),
     execHome: tempRoot(),
@@ -305,14 +308,14 @@ describe("工作区治理两工具 handler（WebUI 桥装配同链——审批/�
     const home = seedDshHome();
     const ws = tempRoot();
     mkdirSync(ws, { recursive: true });
-    const allowed = toolExec({ dshHome: home }, "allowed-once", "atf_create_experiment");
+    const allowed = await toolExec({ dshHome: home }, "allowed-once", "atf_create_experiment");
     expect(allowed.name).toBe("atf_create_experiment");
     const result = (await allowed.execute({ workspace_path: ws, experiment_name: "e2e-1" }, fakeExec)) as Record<string, unknown>;
     expect(result).toMatchObject({ ok: true, registry_status: "pending_registration", experiments_count: 1 });
     expect(existsSync(join(ws, "experiments"))).toBe(true);
 
     // ADR-0022：授权拦截轨退役——审批面应答 rejected 不再折算 denial，动作照常执行
-    const rejected = toolExec({ dshHome: home }, "rejected", "atf_create_experiment");
+    const rejected = await toolExec({ dshHome: home }, "rejected", "atf_create_experiment");
     const ws2 = tempRoot();
     mkdirSync(ws2, { recursive: true });
     const rejectedResult = (await rejected.execute({ workspace_path: ws2, experiment_name: "e2e-2" }, fakeExec)) as Record<string, unknown>;
@@ -323,7 +326,7 @@ describe("工作区治理两工具 handler（WebUI 桥装配同链——审批/�
 
   it("atf_create_experiment：路径不存在→rejected(invalid_params)＋指路文案（不代建目录）", async () => {
     const home = seedDshHome();
-    const tool = toolExec({ dshHome: home }, "allowed-once", "atf_create_experiment");
+    const tool = await toolExec({ dshHome: home }, "allowed-once", "atf_create_experiment");
     const result = (await tool.execute({ workspace_path: join(tempRoot(), "missing"), experiment_name: "x" }, fakeExec)) as Record<string, unknown>;
     expect(result).toMatchObject({ error: "rejected", reason: "invalid_params" });
     expect(String((result as { detail?: { message?: string } }).detail?.message)).toContain("不代建顶层工作区目录");
@@ -338,7 +341,7 @@ describe("工作区治理两工具 handler（WebUI 桥装配同链——审批/�
     mkdirSync(oldPath, { recursive: true });
     renameSync(oldPath, newPath);
     seedIdentity(newPath, ID);
-    const tool = toolExec({ dshHome: home }, "allowed-once", "atf_rebind_workspace");
+    const tool = await toolExec({ dshHome: home }, "allowed-once", "atf_rebind_workspace");
     expect(tool.name).toBe("atf_rebind_workspace");
     const result = (await tool.execute({ workspace_path: newPath }, fakeExec)) as Record<string, unknown>;
     expect(result).toMatchObject({ ok: true, workspace_id: ID, registry_updated: true, bucket_disposition: "old_bucket_absent", old_anchor_removed: false });
@@ -356,14 +359,16 @@ describe("工作区治理两工具 handler（WebUI 桥装配同链——审批/�
 
 // ---------------------------------------------------------------- 投影面护栏（contract_field_wiring 同族）
 
-describe("投影面护栏：BRIDGE_TOOL_NAMES ⊆ 工作区分册（定义单源对账）", () => {
-  it("十件投影名全部能在契约定义单源找到（TOOL_DEFINITIONS ∪ WORKSPACE_TOOL_DEFINITIONS）", () => {
+describe("投影面护栏：BRIDGE_TOOL_NAMES ⊆ 契约定义单源（G5 后=TOOL_DEFINITIONS ∪ WORKSPACE_TOOL_DEFINITIONS）", () => {
+  it("十四件投影名全部能在契约定义单源找到（MCP 模型面 9＋工作区治理分册）", () => {
     const contractNames = [...TOOL_DEFINITIONS, ...WORKSPACE_TOOL_DEFINITIONS].map((definition) => definition.name);
     for (const name of BRIDGE_TOOL_NAMES) expect(contractNames).toContain(name);
     expect(BRIDGE_TOOL_NAMES).toContain("atf_create_experiment");
     expect(BRIDGE_TOOL_NAMES).toContain("atf_rebind_workspace");
     // F14：atf_label_qc_resolve 与 inspect 同面开放（决议入口，见 labelQcResume.test.ts）→ 9→10
     expect(BRIDGE_TOOL_NAMES).toContain("atf_label_qc_resolve");
-    expect(BRIDGE_TOOL_NAMES).toHaveLength(10);
+    // G5（2026-11-22）：MCP 化模型面全量投影——10→14（fact_scan/data_admission_request/
+    // preparation_propose/style_cluster_execute 四件经 MCP tools/list 进 DSH 面）
+    expect(BRIDGE_TOOL_NAMES).toHaveLength(14);
   });
 });

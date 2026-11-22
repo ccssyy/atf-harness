@@ -17,7 +17,8 @@ import z from "@deepseek-ai/schemastery";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { resolveBridgeDeployment, probeBridgeHandshakeVersionSync, formatBridgeBootVersionText, type BridgeBootVersionSurface } from "../../../../src/bridge/bridgeCommand.js";
+import { kernelVersionSync } from "../../../../src/bridge/bridgeCommand.js";
+import { resolveMcpDeployment } from "./mcp/mcpDeploy.js";
 import { checkApprovalLedgerStartup } from "@atf/dsh-atf-core";
 import { runBootPreflight, formatPreflightFatal, BOOT_PREFLIGHT_PIPELINE_ENV, BOOT_PREFLIGHT_BRIDGE_ENV } from "../../../../src/core/workspace/bootPreflight.js";
 import { resolveInstanceKernelDir, resolveInstancePinRoot } from "../../../../src/core/workspace/instancePin.js";
@@ -104,7 +105,7 @@ export const Config = z.object({
     .default({ preset: "", chainTools: [] }),
 });
 
-export function apply(ctx: any, config: AtfToolsConfig): void {
+export async function apply(ctx: any, config: AtfToolsConfig): Promise<void> {
   console.log(`[atf-tools] apply()——注册 atf_* 工具集（桥接 ${BRIDGE_TOOL_NAMES.length} 件·含工作区治理两件 create_experiment/rebind_workspace；runsRoot=${config.runsRoot}）`);
   // 批㊶-W：boot 环境预检分级自愈（§五/§6.3——L1 产品写权限内自动补＋留痕；L2 系统级
   // fail-fast 给可复制命令。先于账本校验与工具装配：env 补齐影响后续全部取值链；
@@ -139,20 +140,17 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
     console.log(`[atf-tools] ${ledgerCheck.message}`);
   }
   // （M2 时序注记：loader.create 动态行会触发 atf-ui 双 mount——已移除；atf-ui 行由 profile patch 静态装配。）
-  // 批㊶-E-H 项 2.1：桥对端装配单源（src/bridge/bridgeCommand.ts）——ATF_DSH_BRIDGE_COMMAND
-  // 在场即真内核 argv＋PYTHONPATH（子进程私有 env，派生自 kernelDir/src）；缺席保留 mock。
-  const deployment = resolveBridgeDeployment({ commandValue: bridgeCommand, kernelDir: config.kernelDir, env: process.env });
-  // 批㊶-ISO-2 S2：boot 版本行以 bridge 握手实载版本为准（atf.version→version——serve 进程
-  // 实载）；kernelVersionSync describe 降交叉核对项，不一致双显＋warning（同步探针 fail-soft，
-  // 握手不可达时如实降级为 describe 未核对显示）。
-  const versionSurface: BridgeBootVersionSurface | null = deployment.mode === "real" ? probeBridgeHandshakeVersionSync(deployment) : null;
+  // G5：MCP 对端装配单源（atf-tools/src/mcp/mcpDeploy.ts）——ATF_DSH_BRIDGE_COMMAND 语义
+  // 变更为「启动内核 MCP server」（缺省派生 python3 -m agentic_training_flow.mcp＋PYTHONPATH
+  // 子进程私有 env）；缺席保留 mock（夹具 G5 起双协议：首帧 initialize → MCP）。boot 版本行
+  // 降 describe 交叉核对（同步握手探针随旧桥 atf.version 退役；实载版本=首连后连接器
+  // version 属性〔serverInfo〕——候裁项记录）。
+  const deployment = resolveMcpDeployment({ commandValue: bridgeCommand, kernelDir: config.kernelDir, env: process.env });
+  const describeTag = kernelVersionSync(deployment.mode === "real" ? config.kernelDir : null);
   const bridgeLine = deployment.mode === "real"
-    ? `real（${deployment.argv.join(" ")}${deployment.childEnv["PYTHONPATH"] !== undefined ? ` ｜ PYTHONPATH=${deployment.childEnv["PYTHONPATH"]}` : ""}）内核 ${formatBridgeBootVersionText(versionSurface)}`
-    : `mock（${deployment.argv.join(" ")}——设 ATF_DSH_BRIDGE_COMMAND 切真内核）`;
-  console.log(`[atf-tools] 桥对端: ${bridgeLine}`);
-  if (versionSurface?.mismatchWarning !== undefined && versionSurface !== null && versionSurface.mismatchWarning !== null) {
-    console.warn(`[atf-tools] ${versionSurface.mismatchWarning}`);
-  }
+    ? `real（MCP stdio：${deployment.argv.join(" ")}${deployment.childEnv["PYTHONPATH"] !== undefined ? ` ｜ PYTHONPATH=${deployment.childEnv["PYTHONPATH"]}` : ""}）内核 ${describeTag ?? "版本未知（describe 不可用；实载版本=首连后 serverInfo）"}`
+    : `mock（${deployment.argv.join(" ")}——设 ATF_DSH_BRIDGE_COMMAND 切真内核 MCP）`;
+  console.log(`[atf-tools] MCP 对端: ${bridgeLine}`);
   console.log(`[atf-tools] 管线对端: ${pipelineCommand}${process.env[BOOT_PREFLIGHT_PIPELINE_ENV] !== undefined ? "（env 真命令——F4）" : "（mock 缺省——设 ATF_DSH_PIPELINE_COMMAND 切真管线）"}`);
   const manager = new BridgeManager(deployment.argv, repoRoot, deployment.childEnv);
   // C1（1113 真机派发装接）：桥接管理器经模块级槽暴露给会话级 plugin
@@ -209,7 +207,7 @@ export function apply(ctx: any, config: AtfToolsConfig): void {
     );
   }
 
-  for (const tool of buildBridgeTools(ctx, manager, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, execHome: config.execHome })) ctx.tools.register(tool);
+  for (const tool of await buildBridgeTools(ctx, manager, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, execHome: config.execHome })) ctx.tools.register(tool);
   // D81-B 会话作用域隔离：run 面读具缺省只看当前会话归属工作区；跨任务 scope 走审批
   // （approvalFace 既有 seam——ctx 注入是审批服务唯一可达路径）。
   for (const tool of buildFileTools(config.runsRoot, { ctx })) ctx.tools.register(tool);
