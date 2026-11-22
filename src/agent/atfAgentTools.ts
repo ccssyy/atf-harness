@@ -12,7 +12,7 @@
  * 门 2 收口时与 ToolExecutor 抽共享执行内核（工单登记）。
  */
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
-import { type BridgeError } from "../bridge/index.js";
+import { type BridgeError } from "../mcp/index.js";
 import {
   checkSchema,
   requiresUserConfirmationOf,

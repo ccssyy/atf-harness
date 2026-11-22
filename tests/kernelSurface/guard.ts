@@ -261,8 +261,8 @@ export const guardDocImplementation = (snapshot: SurfaceSnapshot, facts: Harness
       out.push({ kind: "文档实现", detail: `错误码 ${code} 未记载于 kernelErrorFace 头注释闭集段（文档漂移）` });
     }
   }
-  if (!/atf_upstream:\n {2}tag: v/.test(facts.bridgeContractText) || !/^ {2}commit_sha: [0-9a-f]{40}$/m.test(facts.bridgeContractText)) {
-    out.push({ kind: "文档实现", detail: "bridge.contract.yaml pin 段形态不自洽（atf_upstream tag/commit_sha 缺失或形态漂移）" });
+  if (!/export const ATF_UPSTREAM_TAG = "v[^"]+";/.test(facts.bridgeContractText) || !/export const ATF_UPSTREAM_COMMIT_SHA = "[0-9a-f]{40}";/.test(facts.bridgeContractText)) {
+    out.push({ kind: "文档实现", detail: "pin 常量段形态不自洽（ATF_UPSTREAM_TAG/ATF_UPSTREAM_COMMIT_SHA 缺失或形态漂移——G5 起单源在 src/mcp/atfCommand.ts）" });
   }
   return out;
 };

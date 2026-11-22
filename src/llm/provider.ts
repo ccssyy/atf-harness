@@ -12,7 +12,7 @@
  * 均为脚本化 Faux（零网络调用）——切片 0 起二者不再实现本接口（改实现测试供应商
  * 接口 ScriptedStepSource，见 fauxProvider.ts；明确标注非模型面）。
  */
-import { type Result } from "../bridge/index.js";
+import { type Result } from "../mcp/index.js";
 import { type LlmContextEvent } from "../core/session/index.js";
 
 /**

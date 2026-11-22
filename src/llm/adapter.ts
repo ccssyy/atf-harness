@@ -10,7 +10,7 @@
  *     ADR-07 无配额复用红线）。具体 provider 的响应解析属 L1a；本模块定义中性契约并以桩验证。
  */
 import { createHash } from "node:crypto";
-import { err, ok, type Result } from "../bridge/index.js";
+import { err, ok, type Result } from "../mcp/index.js";
 import { type LlmDecision } from "./provider.js";
 import { type LlmContextEvent } from "../core/session/index.js";
 import { renderGuidanceText } from "../core/blockGuidance.js";

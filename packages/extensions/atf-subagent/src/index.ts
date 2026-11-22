@@ -44,7 +44,7 @@ import { createProviderStreamFn } from "../../../../src/agent/providerStreamFn.j
 import { loadLlmProviderConfig } from "../../../../src/llm/providerConfig.js";
 import { createFauxStreamFn, fauxAssistantMessage } from "../../../../src/agent/fauxStream.js";
 import type { SpikeBridgeTransport } from "../../../../src/agent/atfAgentTools.js";
-import type { BridgeError } from "../../../../src/bridge/index.js";
+import type { BridgeError } from "../../../../src/mcp/index.js";
 import { requestApproval } from "../../atf-tools/src/approvalFace.js";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -105,8 +105,24 @@ const translateParams = (schema: unknown): Record<string, DshPropertySpec> => {
   return out;
 };
 
-/** 通用输出（与 atf-tools 桥接工具同款：loose object＋JSON 文本渲染——几行通用件自带）。 */
-const looseObjectOutput = { type: "object", additionalProperties: true } as const;
+/**
+ * 子任务派发三件（dispatch/parallel/deferred）输出声明面（A4 批清退
+ * 宽松对象常量副本——族并集保守键：SubtaskResult 单发形态、并行
+ * 聚合形态与失败回执的稳定顶层键并集；附加键随工厂产物开放透出）。
+ */
+const subagentOutputSchema = {
+  type: "object",
+  additionalProperties: true,
+  properties: {
+    ok: { type: "boolean", description: "派发/执行成功位（失败回执 false）" },
+    status: { type: "string", description: "子任务终态（completed/failed 等）" },
+    error: { type: "string", description: "失败说明（ok=false 时附）" },
+    answer: { type: "string", description: "子任务答复文本（dispatch 单发形态）" },
+    subtasks: { type: "array", description: "并行子任务逐项结果（parallel 聚合形态）", items: { type: "object", additionalProperties: true } },
+    results: { type: "array", description: "聚合结果清单（deferred 取回形态）", items: { type: "object", additionalProperties: true } },
+    run_id: { type: "string", description: "子任务 run 标识" },
+  },
+} as const;
 const renderAsJsonText = (_args: unknown, value: unknown): Array<{ type: "text"; text: string }> => [
   { type: "text", text: JSON.stringify(value, null, 1) },
 ];
@@ -447,7 +463,7 @@ export async function apply(ctx: unknown, _config: unknown): Promise<void> {
       name: agentTool.name,
       description: agentTool.description,
       parameters: translateParams(agentTool.parameters),
-      output: { schema: looseObjectOutput, render: renderAsJsonText },
+      output: { schema: subagentOutputSchema, render: renderAsJsonText },
       async execute(args: unknown, exec: { agent?: unknown }) {
         const agent = (exec as { agent?: unknown } | undefined)?.agent;
         if (agent !== undefined) executionBox.agent = agent;

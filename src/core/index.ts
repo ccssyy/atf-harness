@@ -13,7 +13,7 @@
  *   src/core/projection  投影订阅面（本文件）
  *
  * 边界纪律（T01 交付判据，tests/core/boundary.test.ts 守卫）：core 不依赖任何外壳
- * （src/ui/ · src/acp/ · src/mcp/ 都是它的消费者）；core 向下可依赖 src/bridge/（内核桥接）
+ * （src/ui/ · src/acp/ · src/mcp/ 都是它的消费者）；core 向下可依赖 src/mcp/（跨进程通道层——G5 起）
  * 与 src/llm/（模型面 provider 接口）。桥接契约与内核 pin 仍以 bridge.contract.yaml 为
  * 唯一真相源，本层零改动。
  */

@@ -1,6 +1,6 @@
 /**
  * 会话层错误模型。SessionError 只作为 Result err 的载荷存在，
- * 永不作为异常抛出（与桥接层同一边界纪律，见 src/bridge/result.ts）。
+ * 永不作为异常抛出（与跨进程通道层同一边界纪律，见 src/mcp/result.ts）。
  */
 
 export type SessionErrorCode =

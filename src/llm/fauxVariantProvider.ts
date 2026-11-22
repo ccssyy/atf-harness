@@ -5,7 +5,7 @@
  * 差异表达，本类提供归属标识与实现区分）。真实 Provider 不在本阶段（C9：B 自管基线）。切片 0 起（保全路径 b）不再实现 LlmProvider
  * （模型面契约），改实现测试供应商接口 ScriptedStepSource（decisionFace = "script"，非模型面）。
  */
-import { ok, type Result } from "../bridge/index.js";
+import { ok, type Result } from "../mcp/index.js";
 import { type LlmContextEvent } from "../core/session/index.js";
 import { type LlmError } from "./provider.js";
 import { type ScriptedStepSource } from "./fauxProvider.js";

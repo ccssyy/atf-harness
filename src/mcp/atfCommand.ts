@@ -1,15 +1,16 @@
 import { execFile } from "node:child_process";
 import { resolve } from "node:path";
-import { bridgeError, stringifyCause, type BridgeError } from "./errors.js";
-import { err, ok, type Result } from "./result.js";
+import { bridgeError, stringifyCause, type BridgeError } from "../core/rpc.js";
+import { err, ok, type Result } from "../core/rpc.js";
 
 /**
- * atf CLI 对接面——与 bridge.contract.yaml 的 atf_cli 段一一对应。
- * ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内不得出现内部绝对路径。
+ * atf CLI 对接面（G5：原 bridge.contract.yaml atf_cli 段的承接位——契约文件已随
+ * 旧桥退役，本文件即唯一源）。ATF 路径一律经 ATF_CLI_PATH 环境变量注入，仓内
+ * 不得出现内部绝对路径。
  */
 
-// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b26，唯一真相源 = bridge.contract.yaml
-// atf_upstream，本文件常量为镜像；变更走 re-pin 三步显式 PR）。
+// 当前 pin（re-pin 契约轴 2026-10-26 窗口：v0.7.25b16 → v0.7.25b26；G5 起唯一真相源=
+// 本文件常量〔bridge.contract.yaml 已退役〕；变更走 re-pin 三步显式 PR）。
 // 本轮 pin 取值＝tag v0.7.25b26（建议采纳入口）：新增 `--targeted-accept` —— 把
 // `--targeted-advice` 的建议（必带字段／字段数区间）原样写入 construction.targeted_rules，
 // 来源标 `advice_accepted`；单独给而不给建议则 fail-closed（targeted_accept_requires_advice）。
@@ -29,6 +30,18 @@ export interface AtfCliInvocation {
   cwd: string;
   env: Record<string, string>;
 }
+
+/** 内核 MCP server 启动命令（G5 后唯一会话对端——`python -m agentic_training_flow.mcp`）。 */
+export const mcpInvocation = (cliPath: string): AtfCliInvocation => ({
+  command: "python3",
+  args: ["-m", "agentic_training_flow.mcp"],
+  cwd: cliPath,
+  env: {
+    PYTHONPATH: `${cliPath}/src`,
+    PYTHONDONTWRITEBYTECODE: "1",
+    ATF_SKILLS_AUTO_INSTALL: "0",
+  },
+});
 
 /** 由 ATF_CLI_PATH 派生一次性调用（不依赖全局安装、不回写内核仓）。 */
 export const deriveAtfCommand = (cliPath: string, args: readonly string[]): AtfCliInvocation => ({

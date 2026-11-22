@@ -12,7 +12,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { atfCliPathFromEnv } from "../../src/bridge/atfCommand.js";
+import { atfCliPathFromEnv } from "../../src/mcp/atfCommand.js";
 import {
   listDocSlots,
   legacyCandidatePath,

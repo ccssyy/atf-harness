@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AtfBridgeConnection } from "../../src/bridge/connection.js";
+import { AtfBridgeConnection } from "../../src/mcp/connection.js";
 import { assembleV1Agent } from "../../src/agent/cli.js";
 import { createApprovalBeforeToolCall, type ApprovalAuditEntry } from "../../src/agent/approvalHook.js";
 import {

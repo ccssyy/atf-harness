@@ -1,13 +1,21 @@
 /**
- * 桥接层错误模型。BridgeError 只作为 Result err 的载荷存在，
- * 永不作为异常抛出（见 result.ts 的边界纪律）。
+ * 跨进程通道层的通用件（Result 边界纪律 + BridgeError 错误模型）——实现内聚
+ * core（core 边界守卫：core 不 import 外壳目录 ui/acp/mcp）；外壳 src/mcp 与
+ * atf-tools/webui 等消费面经 src/mcp/index.js 的 re-export 取用（G5 自 src/bridge
+ * 迁移承接——原文件级边界纪律原文保留）。
  */
+
+export type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
+
+export const ok = <T>(value: T): Result<T, never> => ({ ok: true, value });
+
+export const err = <E>(error: E): Result<never, E> => ({ ok: false, error });
 
 export type BridgeErrorCode =
   | "spawn_failed" // 子进程无法启动（可执行路径不存在、stdio 配置异常等）
-  | "handshake_failed" // 握手未通过（早退、结果 schema 不符、会话协议版本不一致——双轴见 connection.ts 常量注释）
+  | "handshake_failed" // 握手未通过（早退、结果 schema 不符、版本协商失败）
   | "protocol_error" // 线缆协议违规（坏 JSON 行、未知帧型、超限帧、空行）
-  | "request_rejected" // 对端返回 ok=false 的错误响应（应用层错误，如 method_not_found）
+  | "request_rejected" // 对端返回错误响应（应用层错误，如 method_not_found）
   | "timeout" // 请求超时
   | "peer_exit" // 对端意外退出（非优雅关闭）
   | "closed" // 连接已失败/已关闭后仍被使用

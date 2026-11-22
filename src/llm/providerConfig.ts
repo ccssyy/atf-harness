@@ -31,7 +31,7 @@
  * 严禁序列化进事件/载荷/报告。
  */
 import { readFile, stat } from "node:fs/promises";
-import { err, ok, type Result } from "../bridge/index.js";
+import { err, ok, type Result } from "../mcp/index.js";
 
 /**
  * 协议面（批甲-BUILD T4 旧路径删除后收窄单值）：自研 codec 直连（openai-chat /

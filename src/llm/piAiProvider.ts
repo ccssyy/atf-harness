@@ -61,7 +61,7 @@ import {
   type UserMessage as PiUserMessage,
 } from "@earendil-works/pi-ai";
 import { applyPiaiCompatFloor, piaiInputCapabilityLine, piaiProviderFactory } from "./piaiProviders.js";
-import { err, ok, type Result } from "../bridge/index.js";
+import { err, ok, type Result } from "../mcp/index.js";
 import { adaptProjectionToMessages, expandModelResponse, type AdapterMessage, type ModelResponse } from "./adapter.js";
 import { HARNESS_SYSTEM_PROMPT } from "./systemPrompt.js";
 import { PIAI_REASONING_EFFORTS, type ResolvedLlmProviderConfig } from "./providerConfig.js";

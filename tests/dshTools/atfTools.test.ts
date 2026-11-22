@@ -82,7 +82,7 @@ describe("atf-tools 注册面（11 工具清单＝指令要求）", () => {
     const manager = new BridgeManager(["node", mockBridgePath], repoRoot);
     const ctx = noApprovalCtx;
     const registered = [
-      ...toolNames(buildBridgeTools(ctx, manager)),
+      ...toolNames(await buildBridgeTools(ctx, manager)),
       ...toolNames(buildFileTools(tempRoot())),
       ...toolNames([buildPipelineTool(ctx, `node ${mockPipelinePath}`, 30_000)]),
     ];
@@ -96,7 +96,10 @@ describe("atf-tools 注册面（11 工具清单＝指令要求）", () => {
     // atf_rebind_workspace 工作区治理两件投影）→ registered 12→14。
     // ＋F14（2026-10-28）：裁决入口 atf_label_qc_resolve 与 inspect 同面开放——只给 inspect
     // 时会话里"看得到冲突、交不了裁决"，agent 只能重开任务并新增 run 目录 → registered 14→15。
-    expect(registered).toHaveLength(15);
+    // ＋G5（2026-11-22）：MCP 化模型面全量投影——BRIDGE_TOOL_NAMES 十件→十四件
+    //   （atf_fact_scan/atf_data_admission_request/atf_preparation_propose/
+    //    atf_style_cluster_execute 经 MCP tools/list 进 DSH 面）→ registered 15→19。
+    expect(registered).toHaveLength(19);
     await manager.close();
   });
 
@@ -128,7 +131,7 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
   const localRoots = { runsRoot: tempRoot(), kernelDir: join(repoRoot, ".atf-pinned"), execHome: tempRoot() };
 
   it("atf_workspace_status：桥接触发＋canonical 结果序列化（scope_ref 透传）", async () => {
-    const tools = buildBridgeTools(noApprovalCtx, manager, localRoots);
+    const tools = await buildBridgeTools(noApprovalCtx, manager, localRoots);
     const result = (await findTool(tools, "atf_workspace_status").execute({}, fakeExec)) as Record<string, unknown>;
     expect(result).not.toHaveProperty("error");
     // mock 对端的 workspace_status 返回内含 scope_ref（契约 v2）——原样序列化给模型
@@ -136,20 +139,20 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
   }, 20_000);
 
   it("atf_gate query：只读免审批直通桥接（requiresApprovalFor 谓词语义保留）", async () => {
-    const tools = buildBridgeTools(noApprovalCtx, manager, localRoots); // 无审批服务——query 仍应成功（免审批）
+    const tools = await buildBridgeTools(noApprovalCtx, manager, localRoots); // 无审批服务——query 仍应成功（免审批）
     const result = (await findTool(tools, "atf_gate").execute({ gate: "G1（数据准入闸，命名分流）", action: "query" }, fakeExec)) as Record<string, unknown>;
     expect(result).not.toHaveProperty("error");
   }, 20_000);
 
   it("atf_scratch_exec：批㊶-F2 免审后无审批服务也直执行（本地治理径，不再 fail-closed 卡审批）", async () => {
-    const tools = buildBridgeTools(noApprovalCtx, manager, localRoots);
+    const tools = await buildBridgeTools(noApprovalCtx, manager, localRoots);
     const result = (await findTool(tools, "atf_scratch_exec").execute({ argv: ["python3", "-c", "print(1)"] }, fakeExec)) as Record<string, unknown>;
     expect(result).not.toMatchObject({ error: "approval_denied" });
     expect(JSON.stringify(result)).toContain("1");
   }, 20_000);
 
   it("atf_admit_data：chain_advance 直通触桥（审批面 rejected 不再拦截——ADR-0022）", async () => {
-    const tools = buildBridgeTools(approvalCtx("rejected"), manager, localRoots);
+    const tools = await buildBridgeTools(approvalCtx("rejected"), manager, localRoots);
     const result = (await findTool(tools, "atf_admit_data").execute({ source_root: "/tmp/a", split_root: "/tmp/b" }, fakeExec)) as Record<string, unknown>;
     expect(result).not.toMatchObject({ error: "approval_denied" });
     // 触桥实证：mock 对端业务校验结果（invalid_params）回流，而非审批拒绝
@@ -157,20 +160,20 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
   }, 20_000);
 
   it("atf_skill_read：审批放行 → 本地治理径（内核根缺失 → 结构化 rejected 如实回流）", async () => {
-    const tools = buildBridgeTools(approvalCtx("allowed-once"), manager, localRoots);
+    const tools = await buildBridgeTools(approvalCtx("allowed-once"), manager, localRoots);
     const result = (await findTool(tools, "atf_skill_read").execute({}, fakeExec)) as Record<string, unknown>;
     const text = JSON.stringify(result);
     expect(text.length).toBeGreaterThan(0);
   }, 20_000);
 
   it("atf_label_qc_inspect：审批 allowed-once → 触桥（契约参数面）", async () => {
-    const tools = buildBridgeTools(approvalCtx("allowed-once"), manager, localRoots);
+    const tools = await buildBridgeTools(approvalCtx("allowed-once"), manager, localRoots);
     const result = (await findTool(tools, "atf_label_qc_inspect").execute({ dataset_id: "ds-mock" }, fakeExec)) as Record<string, unknown>;
     expect(JSON.stringify(result).length).toBeGreaterThan(0);
   }, 20_000);
 
   it("atf_gate advance：直通触桥（approval unavailable 不再 fail-closed——ADR-0022；对端业务拒绝结构化回流）", async () => {
-    const tools = buildBridgeTools(approvalCtx("unavailable"), manager, localRoots);
+    const tools = await buildBridgeTools(approvalCtx("unavailable"), manager, localRoots);
     const result = (await findTool(tools, "atf_gate").execute({ gate: "G1（数据准入闸，命名分流）", action: "advance", evidence_refs: ["sha256:deadbeef"] }, fakeExec)) as Record<string, unknown>;
     expect(result).not.toMatchObject({ error: "approval_denied" });
     expect(JSON.stringify(result)).toContain("unknown_gate");
@@ -187,7 +190,7 @@ describe("批㊶-P1 S2——exec home 会话子目录化（bridgeFace localHostF
   /** 经 atf_scratch_exec 让子进程把标记文件写进 $HOME（exec env HOME＝host.home——同链实证）。 */
   const writeHomeProbe = async (localRoots: { runsRoot: string; kernelDir: string; execHome: string }, exec: unknown): Promise<Record<string, unknown>> => {
     const manager = new BridgeManager(["node", mockBridgePath], repoRoot);
-    const tools = buildBridgeTools(noApprovalCtx, manager, localRoots);
+    const tools = await buildBridgeTools(noApprovalCtx, manager, localRoots);
     try {
       return (await findTool(tools, "atf_scratch_exec").execute(
         { argv: ["python3", "-c", "import os; open(os.path.join(os.environ['HOME'], 'probe.txt'), 'w').write('x')"] },

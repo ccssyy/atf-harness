@@ -660,13 +660,76 @@ const flowAnchor = (params) => {
   return { ok: true, run_id: resolved.runId, anchor_status: "current", anchor: anchor.document.raw };
 };
 
+// G5 MCP 切换补登（2026-11-22）：mock 缺席的三方法面（内核 15 方法闭集补齐——
+// 旧 JSONL 用例未触达，MCP tools/list/tools/call 面需要；语义为最简诚实形态）。
+const boundWorkspace = { path: null };
+const sessionBindWorkspace = (params) => {
+  const wsPath = isPlainObject(params) ? params.workspace_path : undefined;
+  if (typeof wsPath !== "string" || wsPath.length === 0) {
+    return { error: { code: "invalid_params", message: "atf.bind_workspace 需要非空 workspace_path" } };
+  }
+  boundWorkspace.path = wsPath;
+  return { ok: true, workspace_path: wsPath };
+};
+const toolLabelQcInspect = (params) => {
+  if (!isSafeComponent(params?.dataset_id)) {
+    return { error: { code: "invalid_params", message: "atf_label_qc.inspect 需要合法 dataset_id" } };
+  }
+  const resolved = resolveRun(params ?? {});
+  if (resolved.error !== undefined) return resolved;
+  const pin = isSafeComponent(params?.pin) ? String(params.pin) : "pin000000001";
+  const reportBody = JSON.stringify({ dataset_id: String(params.dataset_id), pin });
+  const sha = sha256Hex(reportBody);
+  return {
+    ok: true,
+    dataset_id: String(params.dataset_id),
+    pin,
+    report_ref: `datasets/${String(params.dataset_id)}@${pin}/label-qc-report.json`,
+    report_file_sha256: sha,
+    report_digest: `sha256:${sha}`,
+    counts: { total_items: 0, pending: 0, resolved: 0, by_check_class: {} },
+    human_summary: {},
+  };
+};
+const toolLabelQcResolve = (params) => {
+  if (!isSafeComponent(params?.dataset_id)) {
+    return { error: { code: "invalid_params", message: "atf_label_qc.resolve 需要合法 dataset_id" } };
+  }
+  if (typeof params?.actor !== "string" || params.actor.length === 0) {
+    return { error: { code: "invalid_params", message: "atf_label_qc.resolve 需要 actor" } };
+  }
+  if (typeof params?.report_digest !== "string" || params.report_digest.length === 0) {
+    return { error: { code: "invalid_params", message: "atf_label_qc.resolve 需要 report_digest" } };
+  }
+  if (!Array.isArray(params?.decisions) || params.decisions.length === 0) {
+    return { error: { code: "invalid_params", message: "atf_label_qc.resolve 需要非空 decisions 批次" } };
+  }
+  const resolved = resolveRun(params ?? {});
+  if (resolved.error !== undefined) return resolved;
+  const pin = isSafeComponent(params?.pin) ? String(params.pin) : "pin000000001";
+  const sha = sha256Hex(JSON.stringify(params.decisions));
+  return {
+    ok: true,
+    dataset_id: String(params.dataset_id),
+    pin,
+    resolved_count: params.decisions.length,
+    pending_count: 0,
+    decisions_ref: `datasets/${String(params.dataset_id)}@${pin}/label-qc-decisions.json`,
+    decisions_sha256: sha,
+    human_summary: {},
+  };
+};
+
 const METHODS = {
   ledger_record: ledgerRecord,
   ledger_query: ledgerQuery,
   ledger_consume: ledgerConsume,
   "atf.bind_run": sessionBindRun,
+  "atf.bind_workspace": sessionBindWorkspace,
   atf_admit_data: toolAdmitData,
   "atf_data_admission.request": toolDataAdmissionRequest,
+  "atf_label_qc.inspect": toolLabelQcInspect,
+  "atf_label_qc.resolve": toolLabelQcResolve,
   atf_gate: toolGate,
   atf_fact_scan: toolFactScan,
   atf_workspace_status: toolWorkspaceStatus,
@@ -736,6 +799,114 @@ const respondTo = (req, servedCount) => {
 };
 
 let served = 0;
+
+// ---------------- G5 MCP 双协议探测（2026-11-22）----------------
+// 首帧判协议：JSON-RPC 形态（jsonrpc/method 在场）→ MCP；旧契约帧（type=request）→ 旧径。
+// 两种形态共享同一 METHODS 方法面与行为注入旗标；MCP 形态是 G5 切换后的对端面。
+const MCP_TOOL_NAMES = [
+  "atf.bind_run",
+  "atf.bind_workspace",
+  "atf_workspace_status",
+  "atf_fact_scan",
+  "atf_gate",
+  "atf_admit_data",
+  "atf_data_admission.request",
+  "atf_preparation.propose",
+  "atf_style_cluster.execute",
+  "atf_label_qc.inspect",
+  "atf_label_qc.resolve",
+  "ledger_query",
+  "ledger_consume",
+  "ledger_record",
+  "atf_flow_anchor",
+];
+const MCP_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+const mcpToolList = () => ({
+  tools: MCP_TOOL_NAMES.map((name) => ({
+    name,
+    description: `mock 承载（${name}）——G5 契约仿真面`,
+    inputSchema: { type: "object", properties: {}, additionalProperties: true },
+    outputSchema: { type: "object", additionalProperties: true },
+  })),
+});
+const mcpToolResult = (payload) => ({
+  content: [{ type: "text", text: JSON.stringify(payload) }],
+  structuredContent: payload,
+});
+const mcpToolError = (error) => ({
+  content: [{ type: "text", text: JSON.stringify(error) }],
+  structuredContent: error,
+  isError: true,
+});
+const mcpSend = (frame) => sendFrame(frame);
+const mcpErrorBody = (code, message, data) => {
+  const error = { code, message };
+  if (data !== undefined) error.data = data;
+  return error;
+};
+
+const handleMcpMessage = (msg, servedCount) => {
+  const method = msg.method;
+  if (typeof method !== "string" || method === "") {
+    mcpSend({ jsonrpc: "2.0", id: msg.id ?? null, error: mcpErrorBody(-32600, "缺 method 字段") });
+    return;
+  }
+  if (method.startsWith("notifications/")) return; // 通知不回帧（含 notifications/initialized）
+  const id = msg.id ?? null;
+  if (method === "ping") {
+    mcpSend({ jsonrpc: "2.0", id, result: {} });
+    return;
+  }
+  if (method === "initialize") {
+    const requested = msg.params?.protocolVersion;
+    const version = MCP_PROTOCOL_VERSIONS.includes(requested) ? requested : MCP_PROTOCOL_VERSIONS[0];
+    mcpSend({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        protocolVersion: version,
+        capabilities: { tools: { listChanged: false } },
+        serverInfo: { name: "atf-mock", version: `v0.2.0b7-mock+${String(contractVersion)}` },
+        instructions: "mock 承载的 ATF 内核 MCP 面（G5 双协议探测）",
+      },
+    });
+    return;
+  }
+  if (method === "tools/list") {
+    mcpSend({ jsonrpc: "2.0", id, result: mcpToolList() });
+    return;
+  }
+  if (method === "tools/call") {
+    const name = msg.params?.name;
+    if (typeof name !== "string" || name === "") {
+      mcpSend({ jsonrpc: "2.0", id, error: mcpErrorBody(-32602, "params.name 必须是非空字符串", { available_tools: MCP_TOOL_NAMES }) });
+      return;
+    }
+    if (rejectMethod !== "" && name === rejectMethod) {
+      mcpSend({ jsonrpc: "2.0", id, result: mcpToolError({ code: "gate_rejected", message: `对端业务拒绝（注入反例）: ${name}` }) });
+      return;
+    }
+    const handler = METHODS[name];
+    if (handler === undefined) {
+      mcpSend({ jsonrpc: "2.0", id, error: mcpErrorBody(-32602, `未注册的工具:${name}`, { available_tools: MCP_TOOL_NAMES }) });
+      return;
+    }
+    const outcome = handler(msg.params?.arguments ?? {});
+    if (outcome.error !== undefined) {
+      mcpSend({ jsonrpc: "2.0", id, result: mcpToolError(outcome.error) });
+      return;
+    }
+    mcpSend({ jsonrpc: "2.0", id, result: mcpToolResult(corrupt(name, outcome)) });
+    return;
+  }
+  mcpSend({
+    jsonrpc: "2.0",
+    id,
+    error: mcpErrorBody(-32601, `Method not found:${method}`, { supported_methods: ["initialize", "tools/list", "tools/call", "ping"] }),
+  });
+};
+
+let protocolMode = null; // null=未定 | "legacy" | "mcp"
 const rl = readline.createInterface({ input: process.stdin });
 rl.on("line", (line) => {
   let request;
@@ -745,14 +916,24 @@ rl.on("line", (line) => {
     process.stderr.write(`mock: 非法请求行: ${line.slice(0, 80)}\n`);
     process.exit(2);
   }
+  if (protocolMode === null) {
+    protocolMode = request !== null && typeof request === "object" && typeof request.method === "string" ? "mcp" : "legacy";
+  }
+  // MCP 通知不计 served（crash 注入按请求数计——通知不是请求）
+  const isNotification = protocolMode === "mcp" && typeof request?.method === "string" && request.method.startsWith("notifications/");
+  if (!isNotification) served += 1;
+  if (crashOnSecond && served >= 2 && !isNotification) {
+    process.stderr.write("mock: crash-on-second-request 触发，进程退出(3)\n");
+    process.exit(3);
+  }
+  if (protocolMode === "mcp") {
+    if (delayResponseMs > 0 && !isNotification) setTimeout(() => handleMcpMessage(request, served), delayResponseMs);
+    else handleMcpMessage(request, served);
+    return;
+  }
   if (request === null || typeof request !== "object" || request.type !== "request" || !Number.isInteger(request.id)) {
     process.stderr.write("mock: 请求帧不符合契约（缺 type=request 或 id）\n");
     process.exit(2);
-  }
-  served += 1;
-  if (crashOnSecond && served >= 2) {
-    process.stderr.write("mock: crash-on-second-request 触发，进程退出(3)\n");
-    process.exit(3);
   }
   const respond = () => {
     respondTo(request, served);

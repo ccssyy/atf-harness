@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { AtfBridgeConnection } from "../../src/bridge/connection.js";
+import { AtfBridgeConnection } from "../../src/mcp/connection.js";
 import { TOOL_NAMES } from "../../src/core/tools/index.js";
 import { buildAtfAgentTools, type SpikeBridgeTransport } from "../../src/agent/atfAgentTools.js";
 import { createApprovalBeforeToolCall, type ApprovalAuditEntry } from "../../src/agent/approvalHook.js";

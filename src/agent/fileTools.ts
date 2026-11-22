@@ -25,7 +25,7 @@ import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
-import { err, ok, type Result } from "../bridge/index.js";
+import { err, ok, type Result } from "../mcp/index.js";
 import { checkSchema, validateCanonicalOutput, type SchemaNode, type ToolDefinition } from "../core/tools/index.js";
 import { LEDGER_ENV, homeLedgerPathOf } from "../core/workspace/approvalLedger.js";
 import { bashEnvOf, CONTROLLED_BASH_ENV_KEYS } from "../core/workspace/controlledEnv.js";

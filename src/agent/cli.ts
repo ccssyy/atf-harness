@@ -28,8 +28,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { Agent, BACKGROUND_CONTEXT, type AgentEvent, type AgentMessage, type QueueMode, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, Model, TranscriptContext, SimpleStreamOptions } from "@earendil-works/pi-ai";
-import { AtfBridgeConnection } from "../bridge/connection.js";
-import { deriveAtfCommand } from "../bridge/atfCommand.js";
+import { AtfBridgeConnection } from "../mcp/connection.js";
+import { deriveAtfCommand, mcpInvocation } from "../mcp/atfCommand.js";
 import { resolveInstanceKernelDir } from "../core/workspace/instancePin.js";
 import { HARNESS_SYSTEM_PROMPT } from "../llm/systemPrompt.js";
 import { loadLlmProviderConfig, type ResolvedLlmProviderConfig } from "../llm/providerConfig.js";
@@ -257,7 +257,8 @@ export const runCli = async (deps: CliDeps): Promise<number> => {
     // 首次真跑暴露——此前该链从未真跑过)。
     bindRunId = headlessBindRunIdOf(new Date());
     await mkdir(join(wsRootResolved, "runs", bindRunId), { recursive: true });
-    const invocation = deriveAtfCommand(kernelDir, ["serve"]);
+    // G5：会话对端=内核 MCP server（旧 serve 子命令随分帧层退役）
+    const invocation = mcpInvocation(kernelDir);
     spawnDescriptor = {
       argv: [invocation.command, ...invocation.args],
       cwd: invocation.cwd,

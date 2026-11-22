@@ -35,7 +35,7 @@
  * 上层可选审计，本包不再提供 `replay`——见交付报告「候裁/风险」段：若 owner 要求保留
  * fail-closed 重建，需 G5 时在 vendor 侧找替代读取面，属跨组决策。
  *
- * **依赖改造**：原实现 import `src/bridge` 的 `Result` 与 `src/core/session` 的类型。
+ * **依赖改造**：原实现经跨进程通道层的 `Result` 与 `src/core/session` 的类型（G5 后通道层在 src/mcp/）。
  * 现在两者都不再依赖——本文件零包外 import（纯 node:path），返回 `T0RefBlock | null`
  * 而不是 Result，避免把「Result 形状」这一 bridge 细节带进迁移后的包。
  */

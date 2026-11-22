@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { type BridgeTransport, requiresUserConfirmationOf, TOOL_DEFINITIONS, ToolExecutor, ToolRegistry } from "../../src/core/tools/index.js";
-import { AtfBridgeConnection, type BridgeError } from "../../src/bridge/index.js";
+import { AtfBridgeConnection, type BridgeError } from "../../src/mcp/index.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const mockPath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");

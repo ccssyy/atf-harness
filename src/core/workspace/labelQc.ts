@@ -15,7 +15,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
-import { err, ok, type Result } from "../../bridge/index.js";
+import { err, ok, type Result } from "../rpc.js";
 
 /** 检查类闭集（与内核 label_qc.py ALL_CHECK_CLASSES 逐字对齐）。 */
 export const LABEL_QC_CHECK_CLASSES = [

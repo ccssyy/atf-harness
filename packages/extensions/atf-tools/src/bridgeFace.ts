@@ -6,20 +6,24 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { AtfBridgeConnection } from "../../../../src/bridge/index.js";
+import { AtfMcpConnection } from "../../../../src/mcp/connection.js";
+import { createMcpToolDefinition } from "@deepseek-ai/dsh-mcp-client";
 import {
   TOOL_DEFINITIONS,
   WORKSPACE_TOOL_DEFINITIONS,
   WORKSPACE_TOOL_HANDLERS,
+  checkSchema,
   requiresUserConfirmationOf,
+  validateCanonicalOutput,
   type LaunchGpuQueueFace,
   type LocalToolHost,
+  type SchemaNode,
   type ToolDefinition,
 } from "../../../../src/core/tools/index.js";
+import { rpcMethodFor } from "../../../../src/core/tools/methodOverrides.js";
 import { appendNotification } from "@atf/dsh-atf-core";
 import { registeredWorkspaceRoots, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { awaitGpuWindow, formatCardTable, gpuQueuePollMsFromEnv } from "./gpuQueueFace.js";
-import { toAtfAgentTool } from "../../../../src/agent/atfAgentTools.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { translateParameters, renderAsJsonText, asToolValue } from "./schemaTranslate.js";
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
@@ -116,8 +120,8 @@ export const BRIDGE_TOOL_NAMES: readonly string[] = [
   "atf_label_qc_inspect",
   // F14（2026-10-28）：裁决入口必须与 inspect 同面开放——只给 inspect 等于"看得到冲突、
   // 提交不了裁决"，agent 只能把任务当新的重开，于是同实验下不断新增 run 目录（现场
-  // run-awb-01/03/04）。内核 `atf_label_qc.resolve` 早已就绪（tools.py:
-  // registry.register("atf_label_qc.resolve", …)），harness 定义与审批文案也在
+  // run-awb-01/03/04）。内核方法 atf_label_qc.resolve 早已就绪（tools.py 的
+  // registry.register 登记位），harness 定义与审批文案也在
   // （toolDefinition.ts:394、approvalCopy.ts:93），缺的只是这张名单。
   "atf_label_qc_resolve",
   "atf_scratch_exec",
@@ -132,6 +136,13 @@ export const BRIDGE_TOOL_NAMES: readonly string[] = [
   // 注册表写入语义（备份/原子落盘/实例重启生效）随工具回执如实携带。
   "atf_create_experiment",
   "atf_rebind_workspace",
+  // G5 阶段 2（D6 基线并集=9 模型面+5 本地治理面）：其余四件模型面工具经 MCP
+  // tools/list 进装配——此前仅在 webui/pi 线可达，MCP 化后与内核 15 方法模型面
+  // 完全对齐（fact_scan/data_admission_request/preparation_propose/style_cluster_execute）。
+  "atf_fact_scan",
+  "atf_data_admission_request",
+  "atf_preparation_propose",
+  "atf_style_cluster_execute",
 ];
 
 /** 定义查找单源：桥接契约面（TOOL_DEFINITIONS）＋工作区治理分册（WORKSPACE_TOOL_DEFINITIONS，
@@ -169,10 +180,12 @@ export const workspacePathOfExec = (exec: unknown): string | null => {
 };
 
 export class BridgeManager {
-  private connection: AtfBridgeConnection | null = null;
-  private connecting: Promise<AtfBridgeConnection> | null = null;
+  /** G5：内部传输已换 MCP stdio 连接器（AtfMcpConnection——request 面 SpikeBridgeTransport
+   *  兼容，消费面零改动）；单连接懒建立、失败/断线丢弃重连语义不变。 */
+  private connection: AtfMcpConnection | null = null;
+  private connecting: Promise<AtfMcpConnection> | null = null;
   /** 工作区分连接池（ci-bl-1103 治理面）：key=工作区绝对路径。 */
-  private readonly scopedConnections = new Map<string, Promise<AtfBridgeConnection>>();
+  private readonly scopedConnections = new Map<string, Promise<AtfMcpConnection>>();
 
   constructor(
     private readonly command: readonly string[],
@@ -181,17 +194,17 @@ export class BridgeManager {
     private readonly childEnv?: Readonly<Record<string, string>>,
   ) {}
 
-  private async get(): Promise<AtfBridgeConnection> {
+  private async get(): Promise<AtfMcpConnection> {
     if (this.connection !== null) return this.connection;
     if (this.connecting === null) {
-      this.connecting = AtfBridgeConnection.spawn({
+      this.connecting = AtfMcpConnection.spawn({
         command: this.command,
         cwd: this.cwd,
         ...(this.childEnv !== undefined ? { env: this.childEnv } : {}),
       }).then((spawned) => {
         if (!spawned.ok) {
           this.connecting = null;
-          throw new Error(`atf 桥 spawn 失败（${spawned.error.code}）: ${spawned.error.message}`);
+          throw new Error(`atf MCP 连接 spawn 失败（${spawned.error.code}）: ${spawned.error.message}`);
         }
         this.connection = spawned.value;
         this.connecting = null;
@@ -201,14 +214,26 @@ export class BridgeManager {
     return this.connecting;
   }
 
-  /** 连接直通（AtfBridgeConnection.request 返回 Result<unknown, BridgeError>——满足 SpikeBridgeTransport）。 */
-  async transport(): Promise<AtfBridgeConnection> {
+  /** 连接直通（AtfMcpConnection.request 返回 Result<unknown, BridgeError>——满足 SpikeBridgeTransport）。 */
+  async transport(): Promise<AtfMcpConnection> {
     try {
       return await this.get();
     } catch (cause: unknown) {
       this.connection = null;
       throw cause;
     }
+  }
+
+  /** MCP tools/list 装配面（懒连接+缓存；失败 fail-closed 抛错——任务书候裁默认②：
+   *  server 启动/列举失败即拒绝装配，不静默降级本地 schema 副本）。 */
+  async mcpTools(): Promise<import("../../../../src/mcp/connection.js").McpToolDescriptor[]> {
+    const connection = await this.transport();
+    const listed = await connection.listTools();
+    if (!listed.ok) {
+      this.connection = null; // 列举失败丢弃连接（下次重 spawn）
+      throw new Error(`MCP tools/list 失败（fail-closed 拒装配）: ${listed.error.message}`);
+    }
+    return listed.value;
   }
 
   /** 批㊶-TRAIN-OBS-FIX2 T1：内核侧会话绑定（atf.bind_run——WebUI 宿主链对齐
@@ -245,16 +270,16 @@ export class BridgeManager {
    *  与 bind_run 的 fail-open 不同：workspace 绑定决定数据落点，绑不上就
    *  fail-closed 抛错（宁可拒绝不可落错根——错根即跨工作区数据事故）。
    *  连接失败不缓存（下次调用重 spawn）；bind 成功后连接按工作区复用。 */
-  async transportForWorkspace(workspacePath: string): Promise<AtfBridgeConnection> {
+  async transportForWorkspace(workspacePath: string): Promise<AtfMcpConnection> {
     const existing = this.scopedConnections.get(workspacePath);
     if (existing !== undefined) return existing;
-    const pending = AtfBridgeConnection.spawn({
+    const pending = AtfMcpConnection.spawn({
       command: this.command,
       cwd: this.cwd,
       ...(this.childEnv !== undefined ? { env: this.childEnv } : {}),
     }).then(async (spawned) => {
       if (!spawned.ok) {
-        throw new Error(`atf 治理面桥 spawn 失败（${spawned.error.code}）: ${spawned.error.message}`);
+        throw new Error(`atf 治理面 MCP spawn 失败（${spawned.error.code}）: ${spawned.error.message}`);
       }
       const bound = await spawned.value.request("atf.bind_workspace", { workspace_path: workspacePath });
       if (!bound.ok) {
@@ -383,16 +408,60 @@ export const createLaunchGpuQueueFace = (
   },
 });
 
-export const buildBridgeTools = (
+/** G5 MCP 工厂装配面门控（阶段 1：atf_workspace_status 先行验证；阶段 2 扩至 9 件）。 */
+const MCP_FACTORY_NAMES: ReadonlySet<string> = new Set([
+  "atf_workspace_status",
+  "atf_fact_scan",
+  "atf_gate",
+  "atf_admit_data",
+  "atf_data_admission_request",
+  "atf_preparation_propose",
+  "atf_style_cluster_execute",
+  "atf_label_qc_inspect",
+  "atf_label_qc_resolve",
+]);
+
+/** MCP 执行径（G5）：checkSchema → tools/call → canonical 校验 → rejected 回填——
+ *  回填形态与 toAtfAgentTool（src/agent/atfAgentTools.ts）逐字对齐，仅传输层换 MCP。 */
+const runKernelViaMcp = async (
+  definition: ToolDefinition,
+  bridge: AtfMcpConnection,
+  args: Record<string, unknown>,
+): Promise<{ rejected: boolean; details: Record<string, unknown> }> => {
+  const paramCheck = checkSchema(args ?? {}, definition.parameters, definition.name);
+  if (paramCheck !== null) {
+    return { rejected: true, details: { error: "schema_violation", tool: definition.name, message: paramCheck } };
+  }
+  const response = await bridge.request(rpcMethodFor(definition.name), args);
+  if (!response.ok) {
+    const { code } = (response.error.detail ?? {}) as { code?: string };
+    if (response.error.code === "request_rejected") {
+      // 对端业务拒绝：结构化回填（isError 结果，模型可转述换路径——与旧径 rejected 语义逐字一致）
+      return { rejected: true, details: { tool: definition.name, reason: code ?? "rejected", detail: response.error.detail } };
+    }
+    throw new Error(`桥接失败（${response.error.code}）: ${response.error.message}`);
+  }
+  const canonicalCheck = validateCanonicalOutput(rpcMethodFor(definition.name), definition.canonical_output as SchemaNode, response.value);
+  if (!canonicalCheck.ok) {
+    throw new Error(`canonical 输出校验失败（${canonicalCheck.error.code}）: ${canonicalCheck.error.message}`);
+  }
+  return { rejected: false, details: response.value as Record<string, unknown> };
+};
+
+
+export const buildBridgeTools = async (
   ctx: { get(service: string): unknown },
   manager: BridgeManager,
   localRoots?: { runsRoot: string; kernelDir: string; execHome: string },
-): unknown[] => {
+): Promise<unknown[]> => {
   const tools: unknown[] = [];
+  // G5：tools/list 装配面拉取（fail-closed——候裁默认②：server 启动/列举失败即拒装配，
+  // 不静默降级本地 schema 副本）。schema 零复制：工厂件三件套全部取自此处。
+  const mcpDescriptors = await manager.mcpTools();
+  const descriptorByRawName = new Map(mcpDescriptors.map((tool) => [tool.name, tool]));
   const definitions = allDefinitions().filter((definition) => BRIDGE_TOOL_NAMES.includes(definition.name));
   for (const definition of definitions) {
-    tools.push(
-      defineTool({
+    const governedTool = defineTool({
         name: definition.name,
         description: definition.description,
         // 参数面单一真相源＝定义处（workspaceTools 的 LAUNCH_EXECUTE_PARAMS 已含
@@ -826,7 +895,7 @@ const launchConfirmCardOf = async (
             // （「执行训练流程操作」+空 target）不可达且属 A 层审批拦截残留形态。
           }
           // 执行径分派（复用面与手搓一致）：工作区治理面（scratch_exec/skill_read）走
-          // WORKSPACE_TOOL_HANDLERS 本地执行；桥接契约面走 toAtfAgentTool 桥接执行径。
+          // WORKSPACE_TOOL_HANDLERS 本地执行；桥接契约面走 runKernelViaMcp（G5 MCP 径）。
           const localHandler = WORKSPACE_TOOL_HANDLERS[definition.name];
           if (localHandler !== undefined) {
             if (localRoots === undefined) throw new Error(`本地治理工具 ${definition.name} 缺 localRoots 装配（runsRoot/kernelDir/execHome）`);
@@ -843,12 +912,14 @@ const launchConfirmCardOf = async (
           // 治理面按会话工作区分连接（ci-bl-1103）：exec cwd 在注册工作区根内 →
           //  该工作区的 scoped serve（首连 bind_workspace）；无 cwd/不在注册表
           //  （CLI 单会话/测试）→ default 连接现状零变更。
+          // G5 阶段 2：执行径换 MCP（toAtfAgentTool 语义逐字对齐——checkSchema/
+          //  rejected 回填/canonical 校验在 runKernelViaMcp；治理链零变化）。
           const sessionWorkspace = workspacePathOfExec(exec);
           const bridge = sessionWorkspace !== null
             ? await manager.transportForWorkspace(sessionWorkspace)
             : await manager.transport();
-          const agentTool = toAtfAgentTool(definition, { bridge, scopeRefBox: { current: undefined } });
-          const result = await agentTool.execute(`dsh-${exec.callId ?? "call"}`, args);
+          const outcome = await runKernelViaMcp(definition, bridge, args);
+          const result: { details: Record<string, unknown> } = { details: outcome.details };
           // 选项类待确认统一走原生提问卡（#13 owner 裁定：提问卡=产品统一问询通道，
           // 聊天框不承载选项问询——此前 agent 拿到 pending_confirmations 后聊天转述，
           // 两套交互并存）。仅 options 在场的选项类出卡；无 options 的纯信息披露不动；
@@ -1016,8 +1087,32 @@ const launchConfirmCardOf = async (
           }
           return asToolValue(result.details);
         },
-      }),
-    );
+      }) as unknown as Record<string, unknown>;
+    if (MCP_FACTORY_NAMES.has(definition.name)) {
+      // —— G5 MCP 工厂装配面（vendor createMcpToolDefinition：name=模型可见名〔D6〕，
+      //    rawName=内核方法名）：description/parameters 覆写为 tools/list 动态拉取
+      //    （schema 零复制——内核 mcp/tools.py 唯一源），output/execute 保持治理面
+      //    （错误回填/回执形态与切换前逐字一致）。工厂 call 不经此径（治理 execute
+      //    直连 runKernelViaMcp），仅满足工厂接口形态。
+      const rawName = rpcMethodFor(definition.name);
+      const descriptor = descriptorByRawName.get(rawName);
+      if (descriptor === undefined) {
+        throw new Error(`MCP tools/list 未含内核方法 ${rawName}（fail-closed 拒装配）`);
+      }
+      const factoryDef = createMcpToolDefinition(ctx as never, {
+        name: definition.name,
+        rawName,
+        description: descriptor.description ?? definition.description,
+        inputSchema: descriptor.inputSchema ?? { type: "object", properties: {}, additionalProperties: true },
+        outputSchema: descriptor.outputSchema,
+        call: async () => {
+          throw new Error(`工厂 call 不经此径（治理 execute 直连 runKernelViaMcp）: ${rawName}`);
+        },
+      }) as unknown as Record<string, unknown>;
+      governedTool["description"] = factoryDef["description"];
+      governedTool["parameters"] = factoryDef["parameters"];
+    }
+    tools.push(governedTool);
   }
   return tools;
 };

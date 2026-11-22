@@ -32,8 +32,9 @@ export const kernelErrorFaceSource = readFileSync(
   join(import.meta.dirname, "../../src/core/workspace/kernelErrorFace.ts"),
   "utf8",
 );
+/** G5：bridge.contract.yaml 已退役——pin 契约面单源=src/mcp/atfCommand.ts 常量段（守卫改锚）。 */
 export const bridgeContractText = readFileSync(
-  join(import.meta.dirname, "../../bridge.contract.yaml"),
+  join(import.meta.dirname, "../../src/mcp/atfCommand.ts"),
   "utf8",
 );
 const mockSource = readFileSync(
