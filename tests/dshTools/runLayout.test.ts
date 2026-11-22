@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildFakeKernelPin } from "../helpers/fakeKernelPin.js";
+import { buildFakeKernelTree } from "../helpers/fakeKernelPin.js";
 import {
   bucketedRunEntries,
   flatRunDirNames,
@@ -222,13 +222,13 @@ describe("批㊶Q增补三 段1③——train.sh 生成面审计注释（幂等�
 
 describe("批㊶Q增补三 段1②——atf-tools apply 启动面（fail-fast 裁决落地；boot 日志同源）", () => {
   let fakeKernelDir: string | null = null;
-  // 存量红#4 隔离：apply 启动闸 preflight 含 pin 一致性检查——测试此前直指真 pin 树
-  // （.atf-pinned），main 前进窗口态（tag≠版本串）下 fatal 先于测试目标逻辑触发=环境耦合。
-  // 修法=fixture 显式注入 pinned 路径：受控假内核树（git tag 与 __version__ 一致）+env
-  // ATF_INSTANCE_PIN_ROOT 显式指入——测试目标（放行账本裁决）不再受部署面 pin 状态摆布。
+  // 存量红#4 隔离（形态随 G7／D9 pin 退役更新）：apply 启动闸 preflight 此前含 pin 一致性
+  // 检查，测试直指真 pin 树时受部署面窗口态拖累=环境耦合。pin 退役后该检查已删，隔离手段
+  // 改为 env ATF_DSH_KERNEL_DIR 显式指入受控假内核树——测试目标（放行账本裁决）仍不受部署面
+  // 内核目录状态摆布。
   const baseConfig = () => ({
     runsRoot: "/tmp/ledger-boot-runs",
-    kernelDir: fakeKernelDir ?? (fakeKernelDir = buildFakeKernelPin()),
+    kernelDir: fakeKernelDir ?? (fakeKernelDir = buildFakeKernelTree()),
     execHome: "/tmp/ledger-boot-exec-home",
     logDir: "/tmp/ledger-boot-logs",
     bridgeCommand: "node /data/sam/ATF-Harness/tests/fixtures/mock_atf.mjs",
@@ -242,9 +242,9 @@ describe("批㊶Q增补三 段1②——atf-tools apply 启动面（fail-fast �
     const blocker = join(home, "blocker");
     wf(blocker, "not-a-dir");
     const { apply } = await import("../../packages/extensions/atf-tools/src/index.js");
-    fakeKernelDir = buildFakeKernelPin();
-    const savedPin = process.env["ATF_INSTANCE_PIN_ROOT"];
-    process.env["ATF_INSTANCE_PIN_ROOT"] = fakeKernelDir;
+    fakeKernelDir = buildFakeKernelTree();
+    const savedPin = process.env["ATF_DSH_KERNEL_DIR"];
+    process.env["ATF_DSH_KERNEL_DIR"] = fakeKernelDir;
     const saved = process.env["ATF_APPROVAL_LEDGER"];
     const savedHome = process.env["HOME"];
     process.env["ATF_APPROVAL_LEDGER"] = join(blocker, "sub", "training-release.jsonl");
@@ -252,16 +252,16 @@ describe("批㊶Q增补三 段1②——atf-tools apply 启动面（fail-fast �
       // G5：apply 改 async（MCP 装配）——fail-fast 由同步 throw 变 rejected Promise（行为不变）
       await expect(apply(ctxStub, baseConfig())).rejects.toThrow(/放行账本目录不可写/);
     } finally {
-      if (savedPin === undefined) delete process.env["ATF_INSTANCE_PIN_ROOT"]; else process.env["ATF_INSTANCE_PIN_ROOT"] = savedPin;
+      if (savedPin === undefined) delete process.env["ATF_DSH_KERNEL_DIR"]; else process.env["ATF_DSH_KERNEL_DIR"] = savedPin;
       if (saved === undefined) delete process.env["ATF_APPROVAL_LEDGER"]; else process.env["ATF_APPROVAL_LEDGER"] = saved;
       if (savedHome !== undefined) process.env["HOME"] = savedHome;
     }
   });
   it("env 缺省回退位 → apply 正常完成（不阻塞；GPU 排队旁路 env 已由文件头设置）", async () => {
     const { apply } = await import("../../packages/extensions/atf-tools/src/index.js");
-    if (!fakeKernelDir) fakeKernelDir = buildFakeKernelPin();
-    const savedPin = process.env["ATF_INSTANCE_PIN_ROOT"];
-    process.env["ATF_INSTANCE_PIN_ROOT"] = fakeKernelDir;
+    if (!fakeKernelDir) fakeKernelDir = buildFakeKernelTree();
+    const savedPin = process.env["ATF_DSH_KERNEL_DIR"];
+    process.env["ATF_DSH_KERNEL_DIR"] = fakeKernelDir;
     const saved = process.env["ATF_APPROVAL_LEDGER"];
     delete process.env["ATF_APPROVAL_LEDGER"];
     try {
@@ -272,7 +272,7 @@ describe("批㊶Q增补三 段1②——atf-tools apply 启动面（fail-fast �
       const message = rejection instanceof Error ? rejection.message : String(rejection ?? "");
       expect(message).not.toMatch(/放行账本目录不可写|账本双轴告警/);
     } finally {
-      if (savedPin === undefined) delete process.env["ATF_INSTANCE_PIN_ROOT"]; else process.env["ATF_INSTANCE_PIN_ROOT"] = savedPin;
+      if (savedPin === undefined) delete process.env["ATF_DSH_KERNEL_DIR"]; else process.env["ATF_DSH_KERNEL_DIR"] = savedPin;
       if (saved !== undefined) process.env["ATF_APPROVAL_LEDGER"] = saved;
     }
   });

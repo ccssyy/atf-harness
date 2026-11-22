@@ -20,10 +20,10 @@
  *     ATF_GPU_REQUIRED=0 只豁免**确定态**（failed／unavailable），**不兜 timeout**
  *     （纯 CPU 部署不必关心 GPU；但探针超时是「没证实」，不是「不需要」，不得静默吞）。
  *   ⑥ 对端命令文件存在性：env 已配置形态下指向的脚本缺席 → L2 fatal。
- *   ⑦ pin 树 worktree 实锚（批㊶-ISO-2 S1）：实例 pin 根在场即校验——`git describe --tags`
- *     可解析（worktree 形态实锚）且 describe tag 与 pin 树版本串（__init__.py __version__）
- *     一致（沿 test_release_version_consistency 语义）；不可解析/不一致 → L2 fatal（附核查
- *     命令）。实例 pin 未配置（回退共享态）→ notes 留痕「pin 路径：回退共享态」。
+ *   ⑦ 内核目录实锚（G7／D9：原 pin 树 worktree 实锚随 pin 退役而消失——pin 不再是
+ *     加载源，`pin_version_consistency` 门（describe tag↔__version__）一并退役。现行
+ *     判据只剩「内核目录可得」：kernelDir 实存且 tools/walkthrough_pipeline.py 在场
+ *     （①② 已覆盖），解析不到＝空串＋L2 fail-fast（指名缺哪个 env）。
  * L1 补齐＝返回值 autoFixed（调用方写回 process.env）＋boot 日志留痕「已自动补齐 X」；
  * L2 fatal 非空 → 调用方抛错拒绝 boot（fail-closed 纪律不变）。
  */
@@ -80,10 +80,6 @@ export interface PreflightProbes {
   listJsonFiles?: (dir: string) => string[];
   /** JSON 文本读取（缺省 readFileSync）。 */
   readText?: (path: string) => string | null;
-  /** 批㊶-ISO-2 S1：pin 树 tag 探测（缺省 execFileSync `git describe --tags`；null＝不可解析）。 */
-  gitDescribe?: (root: string) => string | null;
-  /** D249a：内核仓 HEAD 探测（缺省 execFileSync `git rev-parse HEAD`；null＝不可解析）。 */
-  revParseHead?: (root: string) => string | null;
   /** D88-A：GPU 探针注入面（vitest 假件）——返回归一 ProbeResult，参数为本消费方预算
    *  （缺省 30s／ATF_GPU_PROBE_TIMEOUT_MS）。注入即**不读写缓存**（缓存只服务
    *  defaultCommandWorks 真探路径）。 */
@@ -106,36 +102,6 @@ const defaultCommandWorks = (command: string, args: readonly string[]): boolean 
   } catch {
     return false;
   }
-};
-
-/** 批㊶-ISO-2 S1：pin 树 tag 探测缺省实现（`git describe --tags`；非 worktree/无 tag/超时＝null）。 */
-const defaultGitDescribe = (root: string): string | null => {
-  try {
-    const out = execFileSync("git", ["-C", root, "describe", "--tags"], { timeout: 5_000, stdio: ["ignore", "pipe", "ignore"] });
-    const tag = out.toString("utf8").trim();
-    return tag !== "" ? tag : null;
-  } catch {
-    return null;
-  }
-};
-
-/** D249a：内核仓 HEAD 探测缺省实现（`git rev-parse HEAD`；非 git 检出/超时＝null）。 */
-const defaultRevParseHead = (root: string): string | null => {
-  try {
-    const out = execFileSync("git", ["-C", root, "rev-parse", "HEAD"], { timeout: 5_000, stdio: ["ignore", "pipe", "ignore"] });
-    const commit = out.toString("utf8").trim();
-    return commit !== "" ? commit : null;
-  } catch {
-    return null;
-  }
-};
-
-/** 批㊶-ISO-2 S1：pin 树版本串读取（src/agentic_training_flow/__init__.py `__version__`；缺读＝null）。 */
-export const pinVersionFromTree = (root: string, readText: (path: string) => string | null): string | null => {
-  const text = readText(join(root, "src", "agentic_training_flow", "__init__.py"));
-  if (text === null) return null;
-  const m = /__version__\s*=\s*"([^"]+)"/.exec(text);
-  return m?.[1] ?? null;
 };
 
 /** env-profiles train.env 声明值提取（LD_LIBRARY_PATH 等 env 键——有显式声明才构成自愈源）。 */
@@ -170,15 +136,18 @@ export const declaredLdLibraryPathFromProfiles = (home: string, probes: Prefligh
 };
 
 /** boot 预检主入口（纯逻辑＋可注入探测；调用方＝atf-tools apply）。
- *  kernelDirOverride＝Config 解析后的内核目录（env 缺席时 Config 有实例 pin 根缺省——
- *  预检与装配取同一值，避免「env 面」与「装配面」错位误报）。
- *  pin（批㊶-ISO-2 S1）＝实例 pin 根解析值（resolveInstancePinRoot）——在场即做 worktree
- *  实锚校验＋回退共享态留痕；缺席（旧调用方）＝本项跳过。 */
+ *  kernelDirOverride＝Config 解析后的内核目录（resolveKernelDir 单源——预检与装配取
+ *  同一值，避免「env 面」与「装配面」错位误报）。
+ *  pin 参数已退役（G7／D9）：签名保留为可选位，旧调用方传入时本项不再做任何校验——
+ *  pin 树不是加载源，实锚/版本串一致性门随机制一并消失。 */
 export const runBootPreflight = (
   env: Record<string, string | undefined>,
   probes: PreflightProbes = {},
   kernelDirOverride?: string,
-  pin?: { root: string; explicit: boolean },
+  /** 已退役（G7／D9）：原 pin 根解析值。**本参数恒被忽略**——pin 树不是加载源，
+   *  worktree 实锚与 tag↔版本串一致性门随机制退役。保留参数位的唯一原因：
+   *  packages/extensions/atf-tools 属工具面（本批禁改），仍按原签名调用。 */
+  _retiredPin?: { root: string; explicit: boolean },
 ): PreflightReport => {
   const fileExists = probes.fileExists ?? ((p: string) => existsSync(p));
   const dirExists = probes.dirExists ?? ((p: string) => existsSync(p));
@@ -196,8 +165,8 @@ export const runBootPreflight = (
       fatal.push({
         level: "L2",
         check: "pipeline_command",
-        missing: `${BOOT_PREFLIGHT_PIPELINE_ENV} 未配置且内核目录不可得（ATF_DSH_KERNEL_DIR/ATF_CLI_PATH 均缺席）`,
-        fix: "在实例 env 声明：export ATF_DSH_KERNEL_DIR=<内核 pin 副本目录>",
+        missing: `${BOOT_PREFLIGHT_PIPELINE_ENV} 未配置且内核目录不可得（ATF_DSH_KERNEL_DIR/ATF_CLI_PATH/ATF_KERNEL_SOURCE 均缺席，兄弟目录缺省亦不在场）`,
+        fix: "在实例 env 声明：export ATF_DSH_KERNEL_DIR=<内核仓目录>",
       });
     } else {
       const pipelineScript = join(kernelDir, PIPELINE_SCRIPT_RELPATH);
@@ -206,7 +175,7 @@ export const runBootPreflight = (
           level: "L2",
           check: "pipeline_command",
           missing: `管线对端脚本不存在：${pipelineScript}`,
-          fix: `ls ${pipelineScript}  # 核对内核 pin 副本完整性；或 export ${BOOT_PREFLIGHT_PIPELINE_ENV}=<真管线命令>`,
+          fix: `ls ${pipelineScript}  # 核对内核目录完整性；或 export ${BOOT_PREFLIGHT_PIPELINE_ENV}=<真管线命令>`,
         });
       } else {
         autoFixed.push({
@@ -224,8 +193,8 @@ export const runBootPreflight = (
       fatal.push({
         level: "L2",
         check: "bridge_command",
-        missing: `${BOOT_PREFLIGHT_BRIDGE_ENV} 未配置且内核目录不可得（ATF_DSH_KERNEL_DIR/ATF_CLI_PATH 均缺席）`,
-        fix: "在实例 env 声明：export ATF_DSH_KERNEL_DIR=<内核 pin 副本目录>",
+        missing: `${BOOT_PREFLIGHT_BRIDGE_ENV} 未配置且内核目录不可得（ATF_DSH_KERNEL_DIR/ATF_CLI_PATH/ATF_KERNEL_SOURCE 均缺席，兄弟目录缺省亦不在场）`,
+        fix: "在实例 env 声明：export ATF_DSH_KERNEL_DIR=<内核仓目录>",
       });
     } else {
       autoFixed.push({
@@ -343,55 +312,9 @@ export const runBootPreflight = (
         level: "L2",
         check,
         missing: `${envKey} 指向的脚本不存在：${scriptArg}`,
-        fix: `ls ${scriptArg}  # 核对路径；真内核 pin 副本经 git worktree 检出`,
+        fix: `ls ${scriptArg}  # 核对路径；内核目录须为可用检出`,
       });
     }
-  }
-  // ⑦ pin 树 worktree 实锚（批㊶-ISO-2 S1——回退共享态留痕＋tag↔版本串一致性）
-  if (pin !== undefined) {
-    if (!pin.explicit) {
-      notes.push("pin 路径：回退共享态——实例 pin 未配置（ATF_INSTANCE_PIN_ROOT；ISO-2 生效段切实例 pin 后此留痕消失）");
-    }
-    if (dirExists(pin.root)) {
-      const described = (probes.gitDescribe ?? defaultGitDescribe)(pin.root);
-      const version = pinVersionFromTree(pin.root, probes.readText ?? ((p: string) => { try { return readFileSync(p, "utf8"); } catch { return null; } }));
-      if (described === null) {
-        fatal.push({
-          level: "L2",
-          check: "pin_worktree",
-          missing: `pin 树非 worktree 形态或 tag 不可解析：${pin.root}`,
-          fix: `git -C ${pin.root} describe --tags 2>&1; git -C ${pin.root} worktree list  # 核对 pin 树须为内核仓 worktree 检出在发版 tag`,
-        });
-      } else if (version === null) {
-        fatal.push({
-          level: "L2",
-          check: "pin_version",
-          missing: `pin 树版本串不可读（src/agentic_training_flow/__init__.py __version__ 缺失）：${pin.root}`,
-          fix: `ls ${join(pin.root, "src", "agentic_training_flow", "__init__.py")}  # 核对 pin 树完整性（re-pin 残留）`,
-        });
-      } else if (described.replace(/^v/, "") !== version) {
-        // D249a：合码未发版窗口指纹旁路——describe tag≠版本串时，若 pinned 内容
-        // 指纹（.atf-pin-commit）对齐内核仓 HEAD，视为「内容最新、未发版」，放行
-        // 并留痕。化解「指纹机检要 HEAD、本检要 tag」的窗口互斥必一红（1109 实锚：
-        // 为过本检被迫提前发版）。tag 一致仍是首选实锚；旁路只在两者失配且内容
-        // 可证为 HEAD 时开启——指纹缺席/失配仍 fatal，不静默降级。
-        const pinCommit = (((probes.readText ?? ((pp: string) => { try { return readFileSync(pp, "utf8"); } catch { return null; } }))(join(pin.root, ".atf-pin-commit")) ?? "") as string).trim();
-        const headCommit = (probes.revParseHead ?? defaultRevParseHead)(kernelDir);
-        if (pinCommit !== "" && headCommit !== null && pinCommit === headCommit) {
-          notes.push(`pin 树实锚：${described}（tag≠版本串——合码未发版窗口，内容指纹 ${pinCommit.slice(0, 12)} 对齐仓 HEAD 放行）`);
-        } else {
-          fatal.push({
-            level: "L2",
-            check: "pin_version_consistency",
-            missing: `pin 树 tag 与版本串不一致：describe=${described} vs __version__=${version}（${pin.root}）`,
-            fix: `git -C ${pin.root} log --oneline -1  # tag 与版本串须同指（沿 test_release_version_consistency 语义）——re-pin 残留请重做检出；合码未发版窗口可走指纹旁路：python3 tools/release.py <ver> --repin（写 .atf-pin-commit 对齐 HEAD）`,
-          });
-        }
-      } else {
-        notes.push(`pin 树实锚：${described}（worktree describe＝版本串一致）`);
-      }
-    }
-    // pin.root 不存在 → 不在此处 fatal（①②kernelDir 派生检查已覆盖该面，避免双报）
   }
   // 观察面（不阻塞）
   if (env["ATF_MODEL_ROOT"] === undefined || env["ATF_MODEL_ROOT"]?.trim() === "") {
