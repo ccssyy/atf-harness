@@ -40,7 +40,6 @@ const DECLARED_TOOLS: ReadonlyArray<{ tool: string; file: string }> = [
   { tool: "atf_publish_model", file: "trainingFace.ts" },
   { tool: "atf_evaluate", file: "trainingFace.ts" },
   { tool: "atf_analyze_badcases", file: "trainingFace.ts" },
-  { tool: "atf_hello", file: "index.ts" },
   // ── A1 批清退位（2026-11-22）──
   { tool: "atf_run_list", file: "fileFace.ts" },
   { tool: "atf_report_read", file: "fileFace.ts" },
