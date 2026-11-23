@@ -19,18 +19,9 @@ export {
   proposalContentDigestFromContents,
   scriptTokensFromParams,
   PROPOSAL_CONTENT_BOUND_TOOLS,
-  stableStringify,
-  type ApprovalKey,
   type LedgerRecord,
   type ScopeRef,
 } from "./approvalKey.js";
-export {
-  contentDigestOfFiles,
-  contentDigestPrefix,
-  createProposalContentDigestFor,
-  PROPOSAL_CONTENT_MAX_BYTES,
-  type ProposalContentDigestFor,
-} from "./proposalContent.js";
 export { GATE_LEGAL_IDS, INTEGRITY_GATE_IDS, requiresUserConfirmationOf, TOOL_DEFINITIONS, TOOL_NAMES, toModelVisible, type ModelVisibleTool, type ToolDefinition } from "./toolDefinition.js";
 export { ToolRegistry } from "./registry.js";
 export type { BridgeTransport } from "./executor.js";
@@ -43,13 +34,6 @@ export {
   type ApprovalTrackVerdict,
   type ToolCallOutcome,
 } from "./executor.js";
-export {
-  findExistingCredential,
-  resolveCredentialState,
-  type CredentialContext,
-  type CredentialRef,
-  type CredentialState,
-} from "./credentialState.js";
 export {
   WORKSPACE_TOOL_DEFINITIONS,
   WORKSPACE_TOOL_HANDLERS,
