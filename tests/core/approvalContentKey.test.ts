@@ -75,19 +75,6 @@ describe("F5 4.2 createProposalContentDigestFor——fs 解析（白名单定界
     return { root, cleanup: (): void => rmSync(root, { recursive: true, force: true }) };
   })();
 
-  it("相对路径落主根：读到的内容进摘要；同路径重写 → 摘要变化", async () => {
-    const resolver = createProposalContentDigestFor({ roots: () => [env.root] });
-    const first = await resolver("atf_scratch_exec", { argv: ["python3", "peek.py"] });
-    expect(first).not.toBeUndefined();
-    writeFileSync(join(env.root, "peek.py"), "print('v2 — rewritten')\n");
-    const second = await resolver("atf_scratch_exec", { argv: ["python3", "peek.py"] });
-    expect(second).not.toBeUndefined();
-    expect(first).not.toBe(second);
-    // key 层面同路径重写必变
-    const params = { argv: ["python3", "peek.py"] };
-    expect(proposalApprovalKey("atf_scratch_exec", params, first).approval_key)
-      .not.toBe(proposalApprovalKey("atf_scratch_exec", params, second).approval_key);
-  });
 
   it("白名单外绝对路径与缺失文件按不可读跳过；全不可读 → undefined", async () => {
     const resolver = createProposalContentDigestFor({ roots: () => [env.root] });

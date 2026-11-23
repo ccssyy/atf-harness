@@ -124,7 +124,6 @@ export const BRIDGE_TOOL_NAMES: readonly string[] = [
   // registry.register 登记位），harness 定义与审批文案也在
   // （toolDefinition.ts:394、approvalCopy.ts:93），缺的只是这张名单。
   "atf_label_qc_resolve",
-  "atf_scratch_exec",
   "atf_gate",
   // 批㊶-S4b-T4b（owner 产品裁定 2026-10-15「1甲」）：编排执行点对 DSH 面开放——
   // 桥接面六件→七件；本地治理径（WORKSPACE_TOOL_HANDLERS）经 bridgeFace 既有分派执行，

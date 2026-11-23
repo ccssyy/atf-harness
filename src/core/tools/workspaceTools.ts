@@ -25,7 +25,7 @@ const releaseSubjectShaOf = async (configBytes: Buffer): Promise<string> => {
  * 边界纪律（设计要点《ATF-Harness_批3创作执行面_设计要点_DDL合并门_20260922.md》）：
  * - INV-D：模型发 tool_call（LlmDecision 闭集零改动），工作区动作在 harness 侧本地 handler
  *   执行——脚本指令类型不进模型面；脚本专用步骤轨（scenario.ts）零改动，两轨并存；
- * - 审批策略：atf_scratch_write 免审批（T0 自由区＋路径/体量守卫兜底）；atf_scratch_exec /
+ * - 审批策略：atf_scratch_write / atf_scratch_exec 已退役（B类-A，2026-11-23，改 vendor bash）；
  *   atf_launch_execute 需审批（执行类默认审批；账本轨 CAS 一次性消费 / 问答轨弹窗，不变）；
  *   atf_skill_read 免审批（纯读）；
  * - 产物只经既有晋升闸 A 进 artifacts（本批无模型面 promote，登记 backlog）；
@@ -39,20 +39,15 @@ import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
-  buildScratchExecEnv,
   ensureExecDirs,
   findBash,
-  findPython3,
-  guardScratchArgv,
   guardedScratchWrite,
   LAUNCH_WAIT_MS_DEFAULT,
+  buildScratchExecEnv,
+  findPython3,
   readLaunchState,
-  runLaunchScript,
   runScratchCommand,
-  scanLaunchReady,
-  scanRunTreeLaunchReady,
-  SCRATCH_EXEC_STDOUT_CAP_BYTES,
-  SCRATCH_EXEC_TIMEOUT_MS_DEFAULT,
+  runLaunchScript,
   SCRATCH_WRITE_MAX_BYTES,
   type LaunchReady,
 } from "../workspace/scratchExec.js";
@@ -172,21 +167,6 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 
 // ---------------------------------------------------------------- 工具定义
 
-/** atf_scratch_write 参数（模型可见白名单）。 */
-const SCRATCH_WRITE_PARAMS: SchemaNode = {
-  type: "object",
-  required: ["path", "content"],
-  properties: {
-    path: {
-      type: "string",
-      description: "目标文件路径：scratch 工作区内的相对路径（如 prep/iteration-config.json）；不接受绝对路径、不允许 .. 越界",
-    },
-    content: {
-      type: "string",
-      description: `文件全文（UTF-8 文本；上限 ${String(Math.floor(SCRATCH_WRITE_MAX_BYTES / 1024))} KiB）`,
-    },
-  },
-};
 
 const SCRATCH_WRITE_CANONICAL: SchemaNode = {
   type: "object",
@@ -199,24 +179,6 @@ const SCRATCH_WRITE_CANONICAL: SchemaNode = {
   },
 };
 
-/** atf_scratch_exec 参数。 */
-const SCRATCH_EXEC_PARAMS: SchemaNode = {
-  type: "object",
-  required: ["argv"],
-  properties: {
-    argv: {
-      type: "array",
-      items: { type: "string" },
-      description:
-        "命令 argv（1..32 个非空字符串元素）。argv[0] 只允许 python3 或 .py 脚本（pin 内 skills scripts 的绝对/相对路径，或 scratch 内脚本路径）；不接受 shell。示例：[\"python3\", \"/abs/pin/skills/atf-prepare-training/scripts/generate_train_launch.py\", \"--config\", \"prep/iteration-config.json\", \"--out\", \"launch\"]。产物（--out）一律指向 scratch 内相对路径，工作目录即 scratch。",
-    },
-    timeout_seconds: {
-      type: "integer",
-      optional: true,
-      description: `超时秒数（1..3600，缺省 ${String(Math.floor(SCRATCH_EXEC_TIMEOUT_MS_DEFAULT / 1000))}）；超时进程被终止并如实标注 timed_out`,
-    },
-  },
-};
 
 const SCRATCH_EXEC_CANONICAL: SchemaNode = {
   type: "object",
@@ -264,7 +226,8 @@ const SKILL_READ_CANONICAL: SchemaNode = {
  *  于是判定「没有合法调用方式」并把执行推回 operator。系统知识不得由持有人提示词承载：
  *  形态须在 schema 与错误回流里自陈。
  *    ① run 直调：run_id（+ workspace_path）→ launch_sh 缺席时默认 <run>/launch/launch.sh；
- *    ② scratch 路径：launch_sh＝atf_scratch_exec 返回的 launch_ready.launch_sh。
+ *    ② scratch 路径：已随 atf_scratch_exec 退役（B类-A，2026-11-23）——
+ *       现只有 run 直调形态；scratch 相对路径仍可传但需自陈（见 resolveLaunchShPath）。
  *  launch_sh 自身三形态（绝对＝run 树内守卫／相对＝run 树优先／scratch 回落）见
  *  resolveLaunchShPath；config 省略时按 run 树 canonical→legacy 探测（见 handler）。
  */
@@ -285,7 +248,7 @@ const LAUNCH_EXECUTE_PARAMS: SchemaNode = {
     launch_sh: {
       type: "string",
       optional: true,
-      description: "launch.sh 路径，三形态均可：绝对路径（须在本 run 目录内）／run 树内相对路径（如 launch/launch.sh）／scratch 相对路径（atf_scratch_exec 返回的 launch_ready.launch_sh）。run 直调形态下可省略",
+      description: "launch.sh 路径，两种形态：绝对路径（须在本 run 目录内）／run 树内相对路径（如 launch/launch.sh）。run 直调形态下可省略（默认 <run>/launch/launch.sh）",
     },
     config: {
       type: "string",
@@ -483,26 +446,6 @@ const askUserHandler: LocalToolHandler = async (rawParams, host) => {
 /** 工作区工具面（7 个；与 TOOL_DEFINITIONS 分册——不进桥接方法面，注册走 createWithWorkspaceTools）。ask_user_for_input 为 F5 改动四 4.1 增补（2026-09-26，工具面 4→5）；atf_create_experiment／atf_rebind_workspace 为目录结构 v1 工具链增补（2026-10-16，工具面 5→7——TUI/resume 与 WebUI 桥面同源装配；MCP/ACP 不装配零风险）。 */
 export const WORKSPACE_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
-    name: "atf_scratch_write",
-    description:
-      "在当前 run 工作区的 scratch 区写入文件（T0 自由区，免审批）：用于准备执行内核 skills scripts 所需的输入文件（如 IterationConfig JSON）。path 为 scratch 内相对路径（禁绝对路径与 .. 越界），content 为 UTF-8 全文。写入的文件留在 T0，晋升进 artifacts 只能经既有晋升闸。",
-    parameters: SCRATCH_WRITE_PARAMS,
-    requires_approval: false,
-    canonical_output: SCRATCH_WRITE_CANONICAL,
-  },
-  {
-    name: "atf_scratch_exec",
-    description:
-      "在 scratch 工作区内受控执行 Python（须审批）：工作目录＝scratch、env 白名单（已注入 PYTHONPATH=<内核>/src 与 python3 解释器，可直接 import 内核包）、stdout 上限、超时保护。用途：执行内核 skills 的 scripts/（如 atf-prepare-training 的 generate_train_launch.py、atf-run-training 的 generate_launch_orchestration.py、评估与 badcase 分析脚本）——这些脚本直接 import 内核包、不经 CLI。产物用 --out 指到 scratch 内相对路径。执行结束后 harness 自动检测 scratch 内是否已生成 launch.sh（训练启动就绪信号）。禁止用它执行启动类脚本（launch.sh/train.sh 由 harness 在用户确认后执行）。",
-    parameters: SCRATCH_EXEC_PARAMS,
-    // 批㊶-F2（2026-10-08 转派裁定）：requires_approval true→false——临时目录只写执行非
-    // 治理点（uat 448 弹卡中 59 次误弹根因）；治理语义由既有护栏承载（scratch 区 T0 边界、
-    // env 白名单、禁止启动类脚本条款、launch.sh 仅经 atf_launch_execute 放行）。
-    // description 内「须审批」字样待文案面另批修正。
-    requires_approval: false,
-    canonical_output: SCRATCH_EXEC_CANONICAL,
-  },
-  {
     name: "atf_launch_execute",
     description:
       "训练启动放行与执行（须审批，harness 专执行点）：G5 preview 闭合且 launch.sh 已生成后，由用户确认触发——harness 先按 IterationConfig 登记训练放行记录（--record-training-release，内核审批账本），再执行 launch.sh（其内置 TRAINING_RELEASE 闸核对该记录）。不要自行调用本工具之外的任何方式启动训练；未经用户确认不得发起。",
@@ -545,24 +488,6 @@ const stringParam = (params: Record<string, unknown>, key: string): string | und
   return typeof value === "string" && value !== "" ? value : undefined;
 };
 
-const scratchWriteHandler: LocalToolHandler = async (rawParams, host) => {
-  if (!isPlainObject(rawParams)) return rejected("invalid_input", { message: "参数须为 JSON 对象" });
-  const path = stringParam(rawParams, "path");
-  const content = rawParams["content"];
-  if (path === undefined) return rejected("invalid_input", { message: "path 须为非空字符串" });
-  if (typeof content !== "string") return rejected("invalid_input", { message: "content 须为字符串" });
-  const written = await guardedScratchWrite({
-    scratchDir: host.scratchDir,
-    relPath: path,
-    content,
-    maxBytes: SCRATCH_WRITE_MAX_BYTES,
-  });
-  if (!written.ok) return rejected(written.error.reason, { message: written.error.message, path });
-  return {
-    kind: "executed",
-    result: { ok: true, path: written.value.path, bytes: written.value.bytes, sha256: written.value.sha256 },
-  };
-};
 
 /** D71 scratch 通道内核错误码观测账（scratch 内点目录——G5 扫描跳点、晋升面之外）。
  *  append-only JSONL：已知码命中记 kind=known_code（code+原文），未知码记 kind=unknown_code
@@ -590,79 +515,6 @@ const appendKernelErrorFaceLog = async (scratchDir: string, entry: {
   }
 };
 
-const scratchExecHandler: LocalToolHandler = async (rawParams, host) => {
-  if (!isPlainObject(rawParams)) return rejected("invalid_input", { message: "参数须为 JSON 对象" });
-  const rawArgv = rawParams["argv"];
-  if (!Array.isArray(rawArgv) || rawArgv.some((part) => typeof part !== "string" || part === "")) {
-    return rejected("argv_invalid", { message: "argv 须为 1..32 个非空字符串元素" });
-  }
-  const timeoutParam = rawParams["timeout_seconds"];
-  let timeoutMs = SCRATCH_EXEC_TIMEOUT_MS_DEFAULT;
-  if (timeoutParam !== undefined) {
-    if (typeof timeoutParam !== "number" || !Number.isInteger(timeoutParam) || timeoutParam < 1 || timeoutParam > 3600) {
-      return rejected("timeout_invalid", { message: "timeout_seconds 须为 1..3600 的整数" });
-    }
-    timeoutMs = timeoutParam * 1000;
-  }
-  const pythonPath = findPython3(host.pythonPath);
-  const guard = guardScratchArgv({ argv: rawArgv as string[], scratchDir: host.scratchDir, kernelDir: host.kernelDir, pythonPath });
-  if (!guard.ok) return rejected(guard.reason, { message: guard.message });
-  const dirs = await ensureExecDirs(host.scratchDir);
-  if (!dirs.ok) return rejected(dirs.error.reason, { message: dirs.error.message });
-  const env = buildScratchExecEnv({
-    scratchDir: host.scratchDir,
-    kernelDir: host.kernelDir,
-    baseEnv: { ...host.baseEnv, HOME: host.home },
-    pythonPath,
-  });
-  const ran = await runScratchCommand({ argv: guard.spawnArgv, cwd: host.scratchDir, env, timeoutMs });
-  if (!ran.ok) return rejected(ran.error.reason, { message: ran.error.message });
-  const outcome = ran.value;
-  // G5 就绪检测（确定性；仅成功退出后扫——失败执行可能留半成品）。
-  // D115：台账按 run 刷新——run 树正道落点（<runDir>/launch/launch.sh）优先，scratch
-  // 旧条目不再遮蔽新件（B7 §5.4「生成位置→执行台账」断裂收口；禁滞留旧条目）
-  let launchReady: LaunchReady | null = null;
-  if (outcome.exit_code === 0) {
-    const fromRunTree = host.runDir !== undefined ? await scanRunTreeLaunchReady(host.runDir) : null;
-    launchReady = fromRunTree ?? (await scanLaunchReady(host.scratchDir));
-  }
-  // D71 封口：scratch 直调通道的 model-facing 文本键（stdout/stderr_tail）已知码 → 人话
-  // （复用 kernelErrorFace 闭集单源；扫描不看 exit_code——code==0 但文本含码同样处理）。
-  // 原文只进 scratch 观测账；未知码（内核错误信封 code 位不属闭集）不替换不猜，落观测。
-  const stdoutFace = replaceKernelErrorFace(outcome.stdout);
-  const stderrFace = replaceKernelErrorFace(outcome.stderr_tail);
-  const kernelFaceHit = stdoutFace?.hits[0] ?? stderrFace?.hits[0] ?? null;
-  for (const [key, text, face] of [
-    ["stdout", outcome.stdout, stdoutFace],
-    ["stderr_tail", outcome.stderr_tail, stderrFace],
-  ] as const) {
-    if (face !== null) {
-      await appendKernelErrorFaceLog(host.scratchDir, { kind: "known_code", key, code: face.hits[0]?.code ?? "", raw: text });
-      continue;
-    }
-    const envelope = kernelErrorEnvelopeCode(text);
-    if (envelope !== null && !KERNEL_ERROR_FACE_CODES.has(envelope.base)) {
-      await appendKernelErrorFaceLog(host.scratchDir, { kind: "unknown_code", key, code: envelope.base, raw: text });
-    }
-  }
-  return {
-    kind: "executed",
-    result: {
-      ok: true,
-      ...(outcome.exit_code !== null ? { exit_code: outcome.exit_code } : {}),
-      timed_out: outcome.timed_out,
-      stdout: stdoutFace !== null ? stdoutFace.text : outcome.stdout,
-      stdout_truncated: outcome.stdout_truncated,
-      stderr_tail: stderrFace !== null ? stderrFace.text : outcome.stderr_tail,
-      duration_ms: outcome.duration_ms,
-      ...(launchReady !== null ? { launch_ready: launchReady } : {}),
-      // D71：内核错误码人话回流（与 pipelineFace/trainingFace 接线同形态——note 人话；
-      // 散文零码）。D77：完整码（code:detail）从模型可见返回体移出——模型照抄进散文即
-      // 用户可见（H 复跑实测），对账面＝scratch 观测账（known_code 行 code+raw），非返回体。
-      ...(kernelFaceHit !== null ? { note: kernelFaceHit.note } : {}),
-    },
-  };
-};
 
 
 /** D115：launch_sh 三形态解析——绝对路径＝runDir 树内守卫（越界拒）；相对路径＝runDir 树内
@@ -1028,8 +880,6 @@ const rebindWorkspaceHandler: LocalToolHandler = async (rawParams, host) => {
 
 /** 工具名 → 本地 handler（executor 本地分派表）。 */
 export const WORKSPACE_TOOL_HANDLERS: Readonly<Record<string, LocalToolHandler>> = {
-  atf_scratch_write: scratchWriteHandler,
-  atf_scratch_exec: scratchExecHandler,
   atf_launch_execute: launchExecuteHandler,
   ask_user_for_input: askUserHandler,
   atf_create_experiment: createExperimentHandler,

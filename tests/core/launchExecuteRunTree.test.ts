@@ -140,59 +140,5 @@ describe("D115：atf_launch_execute 接受 run 树启动件（三形态解析）
     expect(outcome.reason).toBe("run_tree_form_disabled");
   });
 
-  it("禁滞留：同相对路径 scratch 旧件与 run 树新件并存 → 执行 run 树新件（旧条目不遮蔽）", { timeout: 30_000 }, async () => {
-    const env = makeEnv(true);
-    seedRunTreeLaunch(env, "new-run-tree");
-    // 旧 scratch 条目：同相对路径 launch/launch.sh（B7 滞留形态——旧会话 exec-home scratch 残留）
-    const staleDir = join(env.host.scratchDir, "launch");
-    mkdirSync(staleDir, { recursive: true });
-    writeFileSync(join(staleDir, "launch.sh"), [
-      "#!/usr/bin/env bash",
-      'SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"',
-      'mkdir -p "$SCRIPT_DIR/launch"',
-      'echo "stale-scratch" > "$SCRIPT_DIR/executed-marker"',
-      'cat > "$SCRIPT_DIR/launch/state.json" <<EOF',
-      '{"state": "started", "run_token": "stale", "pid": 1, "log": "s.log", "launcher_count": 1, "effect_started": true}',
-      "EOF",
-      "",
-    ].join("\n"));
-    const outcome = await runLaunchExecute({ launch_sh: "launch/launch.sh" }, env.host);
-    expect(outcome.kind).toBe("executed");
-    // run 树新件被执行；旧 scratch 件未被触碰
-    expect(readFileSync(join(env.runDir, "launch", "executed-marker"), "utf8")).toContain("new-run-tree");
-    expect(existsSync(join(staleDir, "executed-marker"))).toBe(false);
-  });
 });
 
-describe("D115：launch_ready 台账按 run 刷新（scratch_exec 检测 run 树优先）", () => {
-  it("run 树件在场 → launch_ready.source=run_tree、launch_sh=launch/launch.sh、config 对拍命中", async () => {
-    const env = makeEnv(true);
-    seedRunTreeLaunch(env, "detect");
-    const outcome = await WORKSPACE_TOOL_HANDLERS["atf_scratch_exec"]?.(
-      { argv: ["python3", "-c", "print('ok')"] },
-      env.host,
-    ) as HandlerOutcome;
-    expect(outcome.kind).toBe("executed");
-    const ready = outcome.result?.["launch_ready"] as Record<string, unknown> | undefined;
-    expect(ready).toBeDefined();
-    expect(ready?.["source"]).toBe("run_tree");
-    expect(ready?.["launch_sh"]).toBe("launch/launch.sh");
-    expect(ready?.["config"]).toBe("prep/iteration-config.json");
-    expect(ready?.["run_id"]).toBe("r1");
-  });
-
-  it("run 树无件＋scratch 有件 → source=scratch（存量语义零回归）", async () => {
-    const env = makeEnv(true);
-    // 只在 scratch 放件（既有 exec-home 形态）
-    mkdirSync(join(env.host.scratchDir, "out"), { recursive: true });
-    writeFileSync(join(env.host.scratchDir, "out", "launch.sh"), "#!/bin/bash\nexit 0\n");
-    const outcome = await WORKSPACE_TOOL_HANDLERS["atf_scratch_exec"]?.(
-      { argv: ["python3", "-c", "print('ok')"] },
-      env.host,
-    ) as HandlerOutcome;
-    expect(outcome.kind).toBe("executed");
-    const ready = outcome.result?.["launch_ready"] as Record<string, unknown> | undefined;
-    expect(ready?.["source"]).toBe("scratch");
-    expect(ready?.["launch_sh"]).toBe("out/launch.sh");
-  });
-});

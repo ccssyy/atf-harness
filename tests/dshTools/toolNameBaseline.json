@@ -12,14 +12,11 @@
   "atf_workspace_status"
  ],
  "localWorkspaceTools": [
-  "atf_scratch_exec",
   "atf_launch_execute",
   "atf_create_experiment",
   "atf_rebind_workspace"
  ],
  "workspaceToolsAll": [
-  "atf_scratch_write",
-  "atf_scratch_exec",
   "atf_launch_execute",
   "atf_create_experiment",
   "atf_rebind_workspace"
@@ -29,7 +26,6 @@
   "atf_admit_data",
   "atf_label_qc_inspect",
   "atf_label_qc_resolve",
-  "atf_scratch_exec",
   "atf_skill_read",
   "atf_gate",
   "atf_launch_execute",

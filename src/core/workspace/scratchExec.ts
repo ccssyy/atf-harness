@@ -17,6 +17,31 @@
  *   解析 TRAIN_DIR → 读 launch_manifest.json → 按 iteration_config_sha256 与 scratch 内
  *   IterationConfig/v1 字节级 sha256 对拍（对不上不给 config，fail-honest）。
  *
+ *
+ * ── B 类清理判定（2026-11-23 owner 裁决 C）─────────────────────────────────────
+ * 本文件 580 行，经逐项查证分为两类：
+ *
+ * **领域必需（不动）**：
+ * - `buildScratchExecEnv`：env 传递语义是**黑名单**（传所有 ATF_*，排除 KEY/TOKEN/
+ *   SECRET/PASSWORD/PASSWD），而 vendor 的 `DSH_BASH_PASSTHROUGH_ENV` 是**白名单**
+ *   （只传名单里的变量）。ATF_* 有几十个，逐个列进白名单不现实；换 vendor 会让
+ *   atf_launch_execute 执行 python 时拿不到 ATF_APPROVAL_LEDGER / ATF_KERNEL_SOURCE
+ *   等关键 env，直接失败。→ **语义不匹配，保留**。
+ * - `runLaunchScript`：launch.sh/train.sh 是 harness 专执行点——整个
+ *   atf_launch_execute 存在的意义就是「让 launch.sh 只能从这个审批闸执行」。
+ *   vendor bash 没有这个约束。→ **领域执行点，保留**。
+ * - `readLaunchState`：launch 编排状态（state.json）读取，ATF 领域。
+ *
+ * **理论可换（登记候批，本批未动）**：
+ * - `findPython3` / `runScratchCommand` 的 spawn 部分 → vendor `ctx.shell`
+ *   （`resolve(request)` + `execute(spec)`）。但受上面的 env 阻塞牵连：
+ *   换执行层不同步换 env 传递，launch_execute 会失败。
+ * - 见候批 B-opt：完整迁移需同时把 ATF_* 名单写进
+ *   `DSH_BASH_PASSTHROUGH_ENV`（实例配置）+ 真机重验启动闸。
+ *
+ * 连带说明：`atf_scratch_exec` / `atf_scratch_write` 两工具已退役
+ * （审计清单 10 个待换工具的成员，改 vendor bash）——但本文件的上述能力
+ * 服务的是 `atf_launch_execute`，与该两工具无关，故不能随之删除。
  * 边界声明：OS 级硬隔离不可得（零 npm 运行时依赖），本引擎提供的是「argv 白名单＋env 定向＋
  * cwd 归 scratch、TMPDIR 落全局短路径＋上限」的实用 containment；子进程内部再 spawn 不在本引擎可控面。
  */

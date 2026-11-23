@@ -99,7 +99,7 @@ describe("atf-tools 注册面（11 工具清单＝指令要求）", () => {
     // ＋G5（2026-11-22）：MCP 化模型面全量投影——BRIDGE_TOOL_NAMES 十件→十四件
     //   （atf_fact_scan/atf_data_admission_request/atf_preparation_propose/
     //    atf_style_cluster_execute 经 MCP tools/list 进 DSH 面）→ registered 15→19。
-    expect(registered).toHaveLength(18);
+    expect(registered).toHaveLength(17);
     await manager.close();
   });
 
@@ -144,12 +144,6 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
     expect(result).not.toHaveProperty("error");
   }, 20_000);
 
-  it("atf_scratch_exec：批㊶-F2 免审后无审批服务也直执行（本地治理径，不再 fail-closed 卡审批）", async () => {
-    const tools = await buildBridgeTools(noApprovalCtx, manager, localRoots);
-    const result = (await findTool(tools, "atf_scratch_exec").execute({ argv: ["python3", "-c", "print(1)"] }, fakeExec)) as Record<string, unknown>;
-    expect(result).not.toMatchObject({ error: "approval_denied" });
-    expect(JSON.stringify(result)).toContain("1");
-  }, 20_000);
 
   it("atf_admit_data：chain_advance 直通触桥（审批面 rejected 不再拦截——ADR-0022）", async () => {
     const tools = await buildBridgeTools(approvalCtx("rejected"), manager, localRoots);
@@ -180,55 +174,10 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
 
 // ---------------------------------------------------------------- 批㊶-P1 S2——exec home 会话作用域化
 
-describe("批㊶-P1 S2——exec home 会话子目录化（bridgeFace localHostFor）", () => {
-  /** 经 atf_scratch_exec 让子进程把标记文件写进 $HOME（exec env HOME＝host.home——同链实证）。 */
-  const writeHomeProbe = async (localRoots: { runsRoot: string; kernelDir: string; execHome: string }, exec: unknown): Promise<Record<string, unknown>> => {
-    const manager = new BridgeManager(["node", mockBridgePath], repoRoot);
-    const tools = await buildBridgeTools(noApprovalCtx, manager, localRoots);
-    try {
-      return (await findTool(tools, "atf_scratch_exec").execute(
-        { argv: ["python3", "-c", "import os; open(os.path.join(os.environ['HOME'], 'probe.txt'), 'w').write('x')"] },
-        exec,
-      )) as Record<string, unknown>;
-    } finally {
-      await manager.close();
-    }
-  };
-  const execWithSession = (sessionId: string): unknown => ({
-    agent: { session: { id: sessionId, header: { cwd: "/tmp/ws-a" } } },
-    callId: "p1-s2",
-    signal: undefined,
-  });
+// B类-A（2026-11-23）：exec home 会话子目录化的用例以 atf_scratch_exec 为探针，
+// 该工具已退役（改 vendor bash）。机制本体（bridgeFace localHostFor）未删，
+// 但当前无等价探针——若恢复 vendor bash 的 env 注入面，应补回等价黑盒锚。
 
-  it("两会话写互不可见：HOME 各落 <execHome>/<session-id>/ 子目录（散放互踩面消除）", async () => {
-    const execHome = tempRoot();
-    const localRoots = { runsRoot: tempRoot(), kernelDir: join(repoRoot, ".atf-pinned"), execHome };
-    const ra = await writeHomeProbe(localRoots, execWithSession("ses-aaa"));
-    const rb = await writeHomeProbe(localRoots, execWithSession("ses-bbb"));
-    expect(ra).not.toHaveProperty("error");
-    expect(rb).not.toHaveProperty("error");
-    // 各自子目录在位、互不可见
-    expect(readFileSync(join(execHome, "ses-aaa", "probe.txt"), "utf8")).toBe("x");
-    expect(readFileSync(join(execHome, "ses-bbb", "probe.txt"), "utf8")).toBe("x");
-    expect(() => readFileSync(join(execHome, "ses-aaa", "..", "probe.txt"))).toThrow();
-  }, 20_000);
-
-  it("无会话 id（CLI 单会话形态）落 <execHome>/default/", async () => {
-    const execHome = tempRoot();
-    const localRoots = { runsRoot: tempRoot(), kernelDir: join(repoRoot, ".atf-pinned"), execHome };
-    const result = await writeHomeProbe(localRoots, fakeExec);
-    expect(result).not.toHaveProperty("error");
-    expect(readFileSync(join(execHome, "default", "probe.txt"), "utf8")).toBe("x");
-  }, 20_000);
-
-  it("会话 id 路径非法字符折 `_`（目录段安全——不逃出 execHome 根）", async () => {
-    const execHome = tempRoot();
-    const localRoots = { runsRoot: tempRoot(), kernelDir: join(repoRoot, ".atf-pinned"), execHome };
-    const result = await writeHomeProbe(localRoots, execWithSession("ses/x:y"));
-    expect(result).not.toHaveProperty("error");
-    expect(readFileSync(join(execHome, "ses_x_y", "probe.txt"), "utf8")).toBe("x");
-  }, 20_000);
-});
 
 // ---------------------------------------------------------------- 文件面（4 工具逐个）
 
@@ -393,7 +342,7 @@ describe("批㊶-F-H 项 1 bash/write 直通留痕 answerer（waterfall 头部�
   });
 
   it("atf_run_training 仍产生审批请求：atf_* 全体 next() 原路（人工面板语义零变化）＋注册面 prepend 抢桥前", async () => {
-    for (const toolName of ["atf_run_training", "atf_admit_data", "atf_evaluate", "atf_gate", "atf_publish_confirm", "atf_config_confirm", "atf_scratch_exec"]) {
+    for (const toolName of ["atf_run_training", "atf_admit_data", "atf_evaluate", "atf_gate", "atf_publish_confirm", "atf_config_confirm"]) {
       const fallbackOutcome = "unavailable";
       let nextCalled = false;
       const outcome = await approvalExemptAnswerer({ toolName, reason: "真实 GPU 训练启动确认" }, async () => {

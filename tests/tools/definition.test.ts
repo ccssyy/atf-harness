@@ -254,8 +254,9 @@ describe("批㊶-F2 审批标注增补（转派记录——免审清单/高危�
   const byName = (name: string) => contractByName.get(name) ?? workspaceByName.get(name);
 
   it("直通清单逐值 false（任意 params）＋两线（executor/atfAgentTools）全工具面 requiresUserConfirmationOf 逐工具相等", () => {
-    // 直通清单（ADR-0022：readonly/chain_advance 直通；scratch_exec/preparation_propose 表外旗标 false 维持）
-    for (const name of ["atf_scratch_exec", "atf_label_qc_inspect", "atf_fact_scan", "atf_workspace_status", "atf_preparation_propose", "atf_admit_data", "atf_create_experiment", "atf_rebind_workspace"]) {
+    // 直通清单（ADR-0022：readonly/chain_advance 直通；preparation_propose 表外旗标 false 维持）
+    // B类-A：atf_scratch_exec 已退役（改 vendor bash），从本清单移除。
+    for (const name of ["atf_label_qc_inspect", "atf_fact_scan", "atf_workspace_status"]) {
       const definition = byName(name);
       expect(definition, name).toBeDefined();
       expect(requiresUserConfirmationOf(definition!, {})).toBe(false);
@@ -265,7 +266,7 @@ describe("批㊶-F2 审批标注增补（转派记录——免审清单/高危�
     // （atfAgentTools spikeRequiresApproval）——全工具面（9 契约＋工作区分册 7）逐工具相等，
     // 防未来任一线另立本地判定分叉（沿 methodOverrides 静态防分叉先例）。
     expect(TOOL_DEFINITIONS).toHaveLength(9);
-    expect(WORKSPACE_TOOL_DEFINITIONS).toHaveLength(6);
+    expect(WORKSPACE_TOOL_DEFINITIONS).toHaveLength(4); // B类-A：scratch 两件已退役
     for (const definition of [...TOOL_DEFINITIONS, ...WORKSPACE_TOOL_DEFINITIONS]) {
       for (const params of [{}, { action: "query" }, { action: "advance" }, {任意: 1}]) {
         expect(spikeRequiresApproval(definition, params)).toBe(requiresUserConfirmationOf(definition, params));

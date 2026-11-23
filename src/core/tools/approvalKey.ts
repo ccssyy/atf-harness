@@ -53,7 +53,7 @@ export const approvalKeyFor = (tool: string, params: unknown): ApprovalKey => ({
 
 /** 内容绑定提案键的脚本类工具（引用脚本内容不在 params 内——params digest 覆盖不到；
  *  atf_write/atf_edit 的内容在 params 里，既有 digest 已覆盖，不入本清单）。 */
-export const PROPOSAL_CONTENT_BOUND_TOOLS: readonly string[] = ["atf_scratch_exec", "atf_bash"];
+export const PROPOSAL_CONTENT_BOUND_TOOLS: readonly string[] = ["atf_bash"];
 
 const SCRIPT_SUFFIXES: readonly string[] = [".py", ".sh", ".js", ".mjs"];
 
