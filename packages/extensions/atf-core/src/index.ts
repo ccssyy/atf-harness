@@ -347,3 +347,7 @@ export * from "./registry.js";
 export * from "./executor.js";
 export * from "./toolDefinition.js";
 export * from "./workspaceTools.js";
+
+// ── 从 src/core 迁入（2026-11-23）──
+export * from "./canonicalDigest.js";
+export * from "./confirmRequest.js";

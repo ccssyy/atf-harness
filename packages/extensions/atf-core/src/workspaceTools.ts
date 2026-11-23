@@ -5,7 +5,7 @@
  * ＝sha256(canonicalJson({action, run_id, config_core}))：config_core 剥 generated.at
  * 时钟面——字节 sha 对重生成 config 必漂移（发现 13 三弹卡根因）。 */
 const releaseSubjectShaOf = async (configBytes: Buffer): Promise<string> => {
-  const { canonicalDigestHex } = await import("../../../../src/core/canonicalDigest.js");
+  const { canonicalDigestHex } = await import("@atf/dsh-atf-core");
   const config = JSON.parse(configBytes.toString("utf8")) as Record<string, unknown>;
   const core = JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
   if (core["generated"] !== null && typeof core["generated"] === "object") {
@@ -81,7 +81,7 @@ import {
   resolveDshHome,
   type CreateExperimentOutcome,
 } from "../../../../src/core/workspace/workspaceRegistry.js";
-import { candidateDigestFromText, collectConfirmReport, unproducedFieldsFromCandidateText, type ConfirmRequestBody } from "../../../../src/core/confirmRequest.js";
+import { candidateDigestFromText, collectConfirmReport, unproducedFieldsFromCandidateText, type ConfirmRequestBody } from "@atf/dsh-atf-core";
 import { type SchemaNode } from "./canonical.js";
 import { type ToolDefinition } from "./toolDefinition.js";
 

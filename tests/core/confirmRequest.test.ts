@@ -14,8 +14,8 @@ import {
   unproducedFieldsFromCandidateText,
   type ConfirmRequestBody,
   type ContractConfirmationReport,
-} from "../../src/core/confirmRequest.js";
-import { canonicalDigestHex } from "../../src/core/canonicalDigest.js";
+} from "@atf/dsh-atf-core";
+import { canonicalDigestHex } from "@atf/dsh-atf-core";
 
 const REPORT: ConfirmRequestBody = {
   kind: "confirm",
