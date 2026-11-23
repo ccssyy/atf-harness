@@ -107,7 +107,8 @@ export async function apply(ctx: any, config: AtfToolsConfig): Promise<void> {
   // 可选服务走 `ctx.get()`（vendor 惯例——见 tool-fs-search「optional, read via ctx.get()」）：
   // 直接属性访问在 Cordis 下会因「未 inject」直接抛错，ctx.get() 才是可选读取的正规路径。
   {
-    const workspaces = (ctx as { get(service: string): unknown }).get("workspaces") as
+    // 服务名实为 `workspaceRegistry`（vendor dsh-workspace 的 Service 构造：super(ctx, 'workspaceRegistry')）
+    const workspaces = (ctx as { get(service: string): unknown }).get("workspaceRegistry") as
       | { list(): ReadonlyArray<{ path: string; title?: string }> }
       | undefined;
     if (workspaces !== undefined && typeof workspaces.list === "function") {
