@@ -335,3 +335,15 @@ export * from "./readOnlyTools.js";
 export * from "./settings.js";
 export * from "./storageSettings.js";
 export * from "./configConfirm.js";
+
+// ── 从 src/core/tools 迁入（2026-11-23）──
+export * from "./toolErrors.js";
+export * from "./canonical.js";
+export * from "./approvalKey.js";
+export * from "./approvalCopy.js";
+export * from "./ledgerGate.js";
+export * from "./methodOverrides.js";
+export * from "./registry.js";
+export * from "./executor.js";
+export * from "./toolDefinition.js";
+export * from "./workspaceTools.js";

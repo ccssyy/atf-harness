@@ -2,7 +2,7 @@
 // 该类恒 true）。四验实锚:atf_label_qc_resolve 曾被 chain_advance 兜底免审,确认卡
 // 整段跳过,用户凭据不可达(label_qc 无法闭环)。
 import { describe, expect, it } from "vitest";
-import { APPROVAL_SEMANTICS_BY_TOOL, requiresUserConfirmationOf, TOOL_DEFINITIONS } from "../../src/core/tools/toolDefinition.js";
+import { APPROVAL_SEMANTICS_BY_TOOL, requiresUserConfirmationOf, TOOL_DEFINITIONS } from "@atf/dsh-atf-core";
 
 const resolveDef = TOOL_DEFINITIONS.find((d) => d.name === "atf_label_qc_resolve");
 

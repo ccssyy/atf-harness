@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TOOL_DEFINITIONS } from "../../src/core/tools/toolDefinition.js";
+import { TOOL_DEFINITIONS } from "@atf/dsh-atf-core";
 
 /**
  * D251 对账围栏（无机检不立规；事故来源=1109-2 真机死循环）：桥接层 fail-closed

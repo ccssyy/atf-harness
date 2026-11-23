@@ -5,7 +5,7 @@
  * required + properties + items + pattern。schema 与 bridge.contract.yaml methods 段
  * 对等维护（契约文件为真相源，本模块为实现载体，双侧同步修改）。
  */
-import { toolError, type ToolError } from "./errors.js";
+import { toolError, type ToolError } from "./toolErrors.js";
 
 /** 极简 schema 节点（递归）。与 bridge.contract.yaml 登记的 result/params 结构对等。 */
 export interface SchemaNode {

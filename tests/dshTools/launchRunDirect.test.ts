@@ -12,7 +12,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { WORKSPACE_TOOL_HANDLERS, type LocalToolHost } from "../../src/core/tools/workspaceTools.js";
+import { WORKSPACE_TOOL_HANDLERS, type LocalToolHost } from "@atf/dsh-atf-core";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {

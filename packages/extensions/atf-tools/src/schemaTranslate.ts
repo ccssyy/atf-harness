@@ -4,7 +4,7 @@
  * src/agent/atfAgentTools.ts 执行径与 src/webui/readOnlyTools.ts 纯函数），这里只做
  * 翻译与结果序列化。
  */
-import type { SchemaNode } from "../../../../src/core/tools/canonical.js";
+import type { SchemaNode } from "@atf/dsh-atf-core";
 
 /** DSH 属性 spec 的直译子集（对齐 @deepseek-ai/dsh-tools 0.2.0-rc.2 的 ValueSchemaSpec）。 */
 export type DshPropertySpec =

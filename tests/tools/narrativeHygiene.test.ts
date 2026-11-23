@@ -13,7 +13,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
+// 2026-11-23：产品运行时面已从 src/ 迁入 packages/extensions（领域资产归 packages），
+// 扫描根随之扩展——只扫 src/ 会漏掉绝大多数用户可见文本（工具 description/message/label）。
 const SRC_ROOT = join(REPO_ROOT, "src");
+const PACKAGES_ROOT = join(REPO_ROOT, "packages/extensions");
 
 const NARRATIVE_PATTERN =
   /批[㊀-㊿]|批[0-9]+[A-Z]?|ATF_指令|ATF_执行报告|ATF_会话交接|docs\/_owner|\bP[0-9]{1,2}\b/;
@@ -46,7 +49,7 @@ function stripComments(text: string): string {
 }
 
 describe("用户可见面零开发叙事（批㊶-J 防回潮）", () => {
-  const files = collectTsFiles(SRC_ROOT);
+  const files = [...collectTsFiles(SRC_ROOT), ...collectTsFiles(PACKAGES_ROOT)];
 
   it("扫描面非空（守护有效性）", () => {
     expect(files.length).toBeGreaterThan(20);

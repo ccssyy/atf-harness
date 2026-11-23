@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { WORKSPACE_TOOL_HANDLERS, type LaunchGpuQueueFace, type LocalToolHost } from "../../src/core/tools/workspaceTools.js";
+import { WORKSPACE_TOOL_HANDLERS, type LaunchGpuQueueFace, type LocalToolHost } from "@atf/dsh-atf-core";
 import { createLaunchGpuQueueFace } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
 import { resetResidentBaselineForTest } from "../../packages/extensions/atf-tools/src/gpuQueueFace.js";
 

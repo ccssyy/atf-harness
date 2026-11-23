@@ -4,8 +4,8 @@
  * 批 3：工作区工具面（workspaceTools.ts 分册，现 7 个）经 createWithWorkspaceTools() 装配，
  * 仅 TUI/resume 使用；default 注册表（桥接方法面）不变。
  */
-import { type Result } from "../rpc.js";
-import { toolError, type ToolError } from "./errors.js";
+import { type Result } from "../../../../src/core/rpc.js";
+import { toolError, type ToolError } from "./toolErrors.js";
 import { TOOL_DEFINITIONS, toModelVisible, type ModelVisibleTool, type ToolDefinition } from "./toolDefinition.js";
 import { WORKSPACE_TOOL_DEFINITIONS } from "./workspaceTools.js";
 

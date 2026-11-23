@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { WORKSPACE_TOOL_HANDLERS, type LocalToolHost } from "../../src/core/tools/index.js";
+import { WORKSPACE_TOOL_HANDLERS, type LocalToolHost } from "@atf/dsh-atf-core";
 
 // 桩内核：--record-training-release stub（写 $HOME 账本，stdout JSON——与批 3 测试同形态）
 const makeStubKernel = (): string => {

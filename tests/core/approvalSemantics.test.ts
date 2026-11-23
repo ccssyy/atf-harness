@@ -4,7 +4,7 @@
  * （谓词优先，退基准旗标）。原档位双轴（训练预设×完全权限档）随审批拦截退役。
  */
 import { describe, expect, it } from "vitest";
-import { requiresUserConfirmationOf, TOOL_DEFINITIONS } from "../../src/core/tools/index.js";
+import { requiresUserConfirmationOf, TOOL_DEFINITIONS } from "@atf/dsh-atf-core";
 
 // 分类表按工具名判定;核心 TOOL_DEFINITIONS 之外的扩展面工具(skill_read/pipeline_stage/
 // launch_execute 等)用最小 stub——分类表只消费 name,不依赖定义其余字段。

@@ -15,7 +15,7 @@
  * checkApprovalLedgerStartup fail-fast 兜底）。
  */
 import { appendFile, mkdir } from "node:fs/promises";
-import { APPROVAL_SEMANTICS_BY_TOOL } from "../../../../src/core/tools/toolDefinition.js";
+import { APPROVAL_SEMANTICS_BY_TOOL } from "@atf/dsh-atf-core";
 import { join } from "node:path";
 import { homedir } from "node:os";
 

@@ -17,7 +17,7 @@ describe("B4 指路可达性与单卡形态", () => {
     // 报文引用形态闭集（发现 15 实锚:消歧死指路「带 workspace_path 重试」——schema 当时不收）。
     // 声明面并集=pipelineFace 段工具+toolDefinition 全工具（label_qc_resolve 定义在后者）。
     const toolDefDefinition = readFileSync(
-      resolve(process.cwd(), "src/core/tools/toolDefinition.ts"),
+      resolve(process.cwd(), "packages/extensions/atf-core/src/toolDefinition.ts"),
       "utf-8",
     );
     const declaredAll = toolDefSrc + toolDefDefinition;
@@ -35,7 +35,7 @@ describe("B4 指路可达性与单卡形态", () => {
     // 语义表单源锚:APPROVAL_SEMANTICS_BY_TOOL 映射=单轨判定出口（toolDefinition:60）
     expect(toolDefSrc.includes("atf_label_qc_resolve")).toBe(true);
     const defSrc = readFileSync(
-      resolve(process.cwd(), "src/core/tools/toolDefinition.ts"),
+      resolve(process.cwd(), "packages/extensions/atf-core/src/toolDefinition.ts"),
       "utf-8",
     );
     expect(defSrc).toContain('atf_label_qc_resolve: "user_decision"');

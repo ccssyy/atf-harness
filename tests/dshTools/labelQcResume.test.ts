@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import { MODEL_TOOL_NAMES } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
 import { labelQcResumeHintOf } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
-import { TOOL_DEFINITIONS } from "../../src/core/tools/index.js";
+import { TOOL_DEFINITIONS } from "@atf/dsh-atf-core";
 
 describe("F14 裁决入口在 DSH 面可达", () => {
   it("MODEL_TOOL_NAMES 同时含 inspect 与 resolve（只给 inspect＝只能看不能裁）", () => {

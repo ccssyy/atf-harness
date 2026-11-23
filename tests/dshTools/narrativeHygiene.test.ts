@@ -30,6 +30,9 @@ const SCAN_ROOTS = [
   "packages/extensions/atf-ui/src",
   "packages/extensions/atf-ui/client.js",
   "packages/extensions/atf-tools/src",
+  // 2026-11-23：src/webui 与 src/core/tools 的领域资产迁入 atf-core——
+  // 叙事卫生扫描面随之扩展（产品运行件包括 atf-core 的领域件）。
+  "packages/extensions/atf-core/src",
   "webui",
 ];
 

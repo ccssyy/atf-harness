@@ -79,8 +79,8 @@ describe("A7 resolveToolRun 消歧约束", () => {
   });
 
   it("executor 每 execute 注入 host.sessionId（身份注入面）", async () => {
-    const { ToolExecutor } = await import("../../src/core/tools/executor.js");
-    const { ToolRegistry } = await import("../../src/core/tools/registry.js");
+    const { ToolExecutor } = await import("@atf/dsh-atf-core");
+    const { ToolRegistry } = await import("@atf/dsh-atf-core");
     const host: Record<string, string | undefined> = { scratchDir: "", kernelDir: "", home: "", baseEnv: "" };
     const executor = new ToolExecutor(
       { request: async () => ({ ok: true as const, value: {} }) },

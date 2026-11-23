@@ -17,7 +17,7 @@ import { buildPipelineTool, PIPELINE_STAGES } from "../../packages/extensions/at
 import { STAGE_REGISTRY_ORDER } from "../../src/core/generated/stageOrder.js";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 import { translateParameters } from "../../packages/extensions/atf-tools/src/schemaTranslate.js";
-import { TOOL_DEFINITIONS, WORKSPACE_TOOL_DEFINITIONS } from "../../src/core/tools/index.js";
+import { TOOL_DEFINITIONS, WORKSPACE_TOOL_DEFINITIONS } from "@atf/dsh-atf-core";
 
 const repoRoot = join(import.meta.url.replace("file://", ""), "..", "..", "..");
 const mockBridgePath = join(repoRoot, "tests", "fixtures", "mock_atf.mjs");

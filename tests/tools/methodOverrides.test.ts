@@ -9,8 +9,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { BridgeError } from "../../src/mcp/index.js";
-import { ToolExecutor, ToolRegistry, type BridgeTransport } from "../../src/core/tools/index.js";
-import { TOOL_METHOD_OVERRIDES, rpcMethodFor } from "../../src/core/tools/methodOverrides.js";
+import { ToolExecutor, ToolRegistry, type BridgeTransport } from "@atf/dsh-atf-core";
+import { TOOL_METHOD_OVERRIDES, rpcMethodFor } from "@atf/dsh-atf-core";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -64,7 +64,7 @@ describe("镜像面① 单源真值（TOOL_METHOD_OVERRIDES／rpcMethodFor）", 
 
 describe("镜像面① 静态防再分叉", () => {
   it("两消费文件不再持有本地映射表，均指向单源 methodOverrides.js（重现本地表即红）", () => {
-    for (const rel of ["src/core/tools/executor.ts"]) {
+    for (const rel of ["packages/extensions/atf-core/src/executor.ts"]) {
       const text = readFileSync(join(repoRoot, rel), "utf8");
       expect(text, rel).not.toMatch(/const\s+TOOL_METHOD_OVERRIDES/);
       expect(text, rel).toContain("methodOverrides.js");

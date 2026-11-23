@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { type BridgeTransport, requiresUserConfirmationOf, TOOL_DEFINITIONS, ToolExecutor, ToolRegistry } from "../../src/core/tools/index.js";
+import { type BridgeTransport, requiresUserConfirmationOf, TOOL_DEFINITIONS, ToolExecutor, ToolRegistry } from "@atf/dsh-atf-core";
 import { AtfBridgeConnection, type BridgeError } from "../../src/mcp/index.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));

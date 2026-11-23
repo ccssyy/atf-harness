@@ -5,7 +5,7 @@
  * ＝sha256(canonicalJson({action, run_id, config_core}))：config_core 剥 generated.at
  * 时钟面——字节 sha 对重生成 config 必漂移（发现 13 三弹卡根因）。 */
 const releaseSubjectShaOf = async (configBytes: Buffer): Promise<string> => {
-  const { canonicalDigestHex } = await import("../canonicalDigest.js");
+  const { canonicalDigestHex } = await import("../../../../src/core/canonicalDigest.js");
   const config = JSON.parse(configBytes.toString("utf8")) as Record<string, unknown>;
   const core = JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
   if (core["generated"] !== null && typeof core["generated"] === "object") {
@@ -50,7 +50,7 @@ import {
   runLaunchScript,
   SCRATCH_WRITE_MAX_BYTES,
   type LaunchReady,
-} from "../workspace/scratchExec.js";
+} from "../../../../src/core/workspace/scratchExec.js";
 /** 目标是否在根内（realpath 归一；原 fileRoots 的纯函数，B5 后内联）。 */
 const withinRootOf = (
   path: string,
@@ -80,8 +80,8 @@ import {
   createExperimentInWorkspace,
   resolveDshHome,
   type CreateExperimentOutcome,
-} from "../workspace/workspaceRegistry.js";
-import { candidateDigestFromText, collectConfirmReport, unproducedFieldsFromCandidateText, type ConfirmRequestBody } from "../confirmRequest.js";
+} from "../../../../src/core/workspace/workspaceRegistry.js";
+import { candidateDigestFromText, collectConfirmReport, unproducedFieldsFromCandidateText, type ConfirmRequestBody } from "../../../../src/core/confirmRequest.js";
 import { type SchemaNode } from "./canonical.js";
 import { type ToolDefinition } from "./toolDefinition.js";
 

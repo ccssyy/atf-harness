@@ -23,8 +23,8 @@ import {
   EXPERIMENT_NAME_PATTERN,
 } from "../../src/core/workspace/workspaceRegistry.js";
 import { buildMcpTools, MODEL_TOOL_NAMES } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
-import { TOOL_DEFINITIONS, WORKSPACE_TOOL_DEFINITIONS } from "../../src/core/tools/index.js";
-import { rpcMethodFor } from "../../src/core/tools/methodOverrides.js";
+import { TOOL_DEFINITIONS, WORKSPACE_TOOL_DEFINITIONS } from "@atf/dsh-atf-core";
+import { rpcMethodFor } from "@atf/dsh-atf-core";
 
 const tempRoots: string[] = [];
 const tempRoot = (): string => {

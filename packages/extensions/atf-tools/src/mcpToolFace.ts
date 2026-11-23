@@ -19,8 +19,8 @@ import {
   type LocalToolHost,
   type SchemaNode,
   type ToolDefinition,
-} from "../../../../src/core/tools/index.js";
-import { rpcMethodFor } from "../../../../src/core/tools/methodOverrides.js";
+} from "@atf/dsh-atf-core";
+import { rpcMethodFor } from "@atf/dsh-atf-core";
 import { appendNotification } from "@atf/dsh-atf-core";
 import { registeredWorkspaceRoots, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { awaitGpuWindow, formatCardTable, gpuQueuePollMsFromEnv } from "./gpuQueueFace.js";
@@ -29,7 +29,7 @@ import { translateParameters, renderAsJsonText, asToolValue } from "./schemaTran
 import { approvalDeniedResult, buildApprovalReason, requestApproval } from "./approvalFace.js";
 import { askWithTimeout, ASK_TIMEOUT_MS_DEFAULT, type FormAskService } from "./confirmFace.js";
 import type { ChoiceAskQuestion } from "./confirmFace.js";
-import { APPROVAL_SEMANTICS_BY_TOOL } from "../../../../src/core/tools/toolDefinition.js";
+import { APPROVAL_SEMANTICS_BY_TOOL } from "@atf/dsh-atf-core";
 import { permissionTierOf } from "./permissionTier.js";
 import { appendExemptionRecord } from "./approvalExempt.js";
 import { isTrainingAutopilot } from "./trainingPreset.js";

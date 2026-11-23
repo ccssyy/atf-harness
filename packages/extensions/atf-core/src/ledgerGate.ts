@@ -14,10 +14,10 @@
  * AgentEvent 的既知分叉）按批㊱A 结论维持两线并存。scope_ref 经 getter 逐次取值
  * （丙线 scopeRefBox 逐调用重读语义逐位保持；甲线 readonly 属性等价）。
  */
-import { type BridgeError } from "../rpc.js";
+import { type BridgeError } from "../../../../src/core/rpc.js";
 import { validateCanonicalOutput, type SchemaNode } from "./canonical.js";
 import type { LedgerRecord, ScopeRef } from "./approvalKey.js";
-import type { ToolError } from "./errors.js";
+import type { ToolError } from "./toolErrors.js";
 
 // ledger 方法自身的 canonical output（与 bridge.contract.yaml methods 段 v2 对等）
 /** ledger_query canonical output（MCP 外壳同用，沿用桥接契约不另造）。 */

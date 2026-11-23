@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { checkSchema, validateCanonicalOutput, type SchemaNode } from "../../src/core/tools/canonical.js";
-import { ToolRegistry, toModelVisible, WORKSPACE_TOOL_DEFINITIONS, requiresUserConfirmationOf } from "../../src/core/tools/index.js";
-import { TOOL_DEFINITIONS } from "../../src/core/tools/toolDefinition.js";
-import { approvalParamsDigest, stableStringify } from "../../src/core/tools/approvalKey.js";
+import { checkSchema, validateCanonicalOutput, type SchemaNode } from "@atf/dsh-atf-core";
+import { ToolRegistry, toModelVisible, WORKSPACE_TOOL_DEFINITIONS, requiresUserConfirmationOf } from "@atf/dsh-atf-core";
+import { TOOL_DEFINITIONS } from "@atf/dsh-atf-core";
+import { approvalParamsDigest, stableStringify } from "@atf/dsh-atf-core";
 
 /**
  * S3 验收（schema 用例）——ToolDefinition 序列化后不含 timeout 等内部字段；

@@ -26,14 +26,14 @@ const trainingFaceSrc = readFileSync(
   "utf-8",
 );
 const canonicalSrc = readFileSync(
-  resolve(process.cwd(), "src/core/tools/canonical.ts"),
+  resolve(process.cwd(), "packages/extensions/atf-core/src/canonical.ts"),
   "utf-8",
 );
 
 describe("B1 信息足八子面（CI 全链断言）", () => {
   it("①参数全：会话身份注入面在场（A7——exec.agent.session.id 断点根治）", () => {
     const executorSrc = readFileSync(
-      resolve(process.cwd(), "src/core/tools/executor.ts"),
+      resolve(process.cwd(), "packages/extensions/atf-core/src/executor.ts"),
       "utf-8",
     );
     expect(executorSrc).toContain("options?.sessionId !== undefined");

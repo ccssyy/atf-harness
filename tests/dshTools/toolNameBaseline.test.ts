@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { TOOL_DEFINITIONS } from "../../src/core/tools/toolDefinition.js";
-import { WORKSPACE_TOOL_DEFINITIONS } from "../../src/core/tools/workspaceTools.js";
-import { TOOL_METHOD_OVERRIDES } from "../../src/core/tools/methodOverrides.js";
+import { TOOL_DEFINITIONS } from "@atf/dsh-atf-core";
+import { WORKSPACE_TOOL_DEFINITIONS } from "@atf/dsh-atf-core";
+import { TOOL_METHOD_OVERRIDES } from "@atf/dsh-atf-core";
 import { MODEL_TOOL_NAMES } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
 
 /**

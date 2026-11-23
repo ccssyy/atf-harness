@@ -11,7 +11,7 @@ export {
   type ToolBlockReason,
   type ToolError,
   type ToolErrorCode,
-} from "./errors.js";
+} from "./toolErrors.js";
 export {
   approvalKeyFor,
   approvalParamsDigest,
