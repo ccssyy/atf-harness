@@ -54,7 +54,7 @@ export interface WorkspaceScope {
 const readIdentitySafe = (workspacePath: string): { id: string } | null => {
   try {
     const identity = readWorkspaceIdentity(workspacePath);
-    return identity !== null && identity.id !== "" ? { id: identity.id } : null;
+    return identity !== null && typeof identity.id === "string" && identity.id !== "" ? { id: identity.id } : null;
   } catch {
     return null;
   }

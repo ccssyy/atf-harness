@@ -39,7 +39,9 @@ export const EXPERIMENT_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
 /** 工作区身份文件（.atf/workspace.json）冻结结构。 */
 export interface WorkspaceIdentity {
-  id: string;
+  /** 工作区 id——**已退役**（2026-11-23）：权威 id 是 vendor 注册表的 record key。
+   *  旧身份文件带此字段时读得出（兼容），新写入不再产生。 */
+  id?: string;
   name: string;
   experiments: ExperimentIndexEntry[];
   createdAt: string;
@@ -153,9 +155,12 @@ export const readWorkspaceIdentity = (workspacePath: string): WorkspaceIdentity 
   const identityPath = join(workspacePath, ".atf", "workspace.json");
   if (!existsSync(identityPath)) return null;
   const parsed = JSON.parse(readFileSync(identityPath, "utf8")) as Partial<WorkspaceIdentity>;
-  if (typeof parsed.id !== "string" || parsed.id === "") throw new Error(`身份文件缺 id 字段: ${identityPath}`);
+  // id 不再是身份文件的必填字段（2026-11-23）：工作区权威 id 来自 vendor
+  // `ctx.workspaceRegistry`（storages/workspace.json 的 record key）。身份文件
+  // 只保留「实验索引」这一项 vendor 无对应的领域数据。旧文件带 id 仍读得出来
+  // （兼容），但新写入不再产生。
   return {
-    id: parsed.id,
+    id: typeof parsed.id === "string" ? parsed.id : "",
     name: typeof parsed.name === "string" ? parsed.name : "",
     experiments: Array.isArray(parsed.experiments) ? (parsed.experiments as ExperimentIndexEntry[]) : [],
     createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : "",
@@ -171,6 +176,17 @@ export const readWorkspaceIdentity = (workspacePath: string): WorkspaceIdentity 
  * v3：UI 建实验不再自造日期前缀与 runs 层；已建的历史形态目录只读兼容不迁移。
  */
 export const experimentDirName = (_now: Date, name: string): string => name;
+
+/** 按 canonical 路径查 vendor 注册表的 record key（工作区权威 id）。
+ *
+ * 为什么按路径查而不是读身份文件：vendor `ctx.workspaceRegistry` 的 id 才是
+ * 侧栏/会话归属的唯一真相；身份文件的 id 是重复来源，已停止写入。
+ * 未注册时返回 null——调用方以 `registryStatus: pending_registration` 指示用户。
+ */
+const resolveVendorWorkspaceId = (canonicalPath: string, dshHome: string | undefined): string | null => {
+  const registry = readRegistryFile(registryPathOf(dshHome ?? resolveDshHome()));
+  return registry === null ? null : findRecordIdByPath(registry, canonicalPath);
+};
 
 export interface CreateExperimentOutcome {
   workspacePath: string;
@@ -234,8 +250,9 @@ export const createExperimentInWorkspace = (workspacePath: string, experimentNam
     } catch {
       // 注册表缺席/形态异常按无记录处理——维持自造路径（与既有行为一致）
     }
+    // 身份文件不再写 id（工作区权威 id 由 vendor 注册表持有）；
+    // 实验索引是 vendor 无对应的领域数据，留在这里。
     identity = {
-      id: adoptedId ?? randomUUID(),
       name: basenameOf(canonical),
       experiments: [],
       createdAt,
@@ -258,7 +275,9 @@ export const createExperimentInWorkspace = (workspacePath: string, experimentNam
     id: experimentId,
     name: experimentName,
     createdAt,
-    workspaceId: identity.id,
+    // workspaceId 取 vendor 注册表 record key（按 canonical 路径查）；未注册时留空，
+    // 由 registryStatus=pending_registration 指示用户去 WebUI 添加。
+    workspaceId: resolveVendorWorkspaceId(canonical, dshHome) ?? "",
     datasets: [],
     baseline: null,
   };
@@ -274,7 +293,7 @@ export const createExperimentInWorkspace = (workspacePath: string, experimentNam
 
   return {
     workspacePath: canonical,
-    workspaceId: identity.id,
+    workspaceId: resolveVendorWorkspaceId(canonical, dshHome) ?? identity.id ?? "",
     workspaceName: identity.name,
     experimentDir,
     experimentId,
@@ -517,7 +536,7 @@ export const ensureDefaultWorkspace = (opts: {
   const registryPath = registryPathOf(opts.dshHome);
   const registry = readRegistryFile(registryPath);
   if (registry === null) {
-    return { path: wsPath, id: identity.id, created, registryStatus: "registry_missing", restartRequired: false };
+    return { path: wsPath, id: identity.id ?? "", created, registryStatus: "registry_missing", restartRequired: false };
   }
   const existingId = findRecordIdByPath(registry, wsPath);
   if (existingId !== null) {
@@ -534,11 +553,11 @@ export const ensureDefaultWorkspace = (opts: {
         updateRegistryRecordTitle(registryPath, existingId, DEFAULT_WORKSPACE_TITLE, opts.now);
       }
       return {
-        path: wsPath, id: identity.id, created,
+        path: wsPath, id: identity.id ?? "", created,
         registryStatus: "title_updated", restartRequired: true,
       };
     }
-    return { path: wsPath, id: identity.id, created, registryStatus: "already_registered", restartRequired: false };
+    return { path: wsPath, id: identity.id ?? "", created, registryStatus: "already_registered", restartRequired: false };
   }
   // vendor 端口在场走 `create`（幂等：同 canonical path 返回已有实体）；
   // 否则回落文件写入（测试/无 vendor 场景，行为逐位不变）。
@@ -546,7 +565,9 @@ export const ensureDefaultWorkspace = (opts: {
     void workspaceRegistryPort.create(wsPath, DEFAULT_WORKSPACE_TITLE).catch((cause: unknown) => {
       console.warn(`[workspace-registry] vendor create 失败（回落文件写入）：${cause instanceof Error ? cause.message : String(cause)}`);
       appendRegistryRecord(registryPath, registry, {
-        id: identity.id,
+        // 回落路径（无 vendor 端口）：id 就地生成——注意这会与 vendor 的 id 不同源，
+        // 仅用于测试/无 vendor 场景，生产路径恒走 vendor create。
+        id: identity.id ?? randomUUID(),
         path: wsPath,
         title: DEFAULT_WORKSPACE_TITLE,
         now: opts.now,
@@ -554,13 +575,13 @@ export const ensureDefaultWorkspace = (opts: {
     });
   } else {
     appendRegistryRecord(registryPath, registry, {
-      id: identity.id,
+      id: identity.id ?? randomUUID(),
       path: wsPath,
       title: DEFAULT_WORKSPACE_TITLE,
       now: opts.now,
     });
   }
-  return { path: wsPath, id: identity.id, created, registryStatus: "registered", restartRequired: true };
+  return { path: wsPath, id: identity.id ?? "", created, registryStatus: "registered", restartRequired: true };
 };
 
 
@@ -614,7 +635,8 @@ export const ensureExperimentMeta = (
     id: experimentId,
     name: dirName,
     createdAt,
-    workspaceId: identity.id,
+    // 同 createExperimentInWorkspace：workspaceId 取 vendor 注册表 record key。
+    workspaceId: resolveVendorWorkspaceId(workspacePath, undefined) ?? identity.id ?? "",
     datasets: [],
     baseline: null,
   };
