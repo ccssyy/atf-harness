@@ -111,6 +111,11 @@ def main() -> None:
             sys.exit(1)
 
     import yaml
+    # `!!js` 标签透传（与 generate.py 同源：vendor 应用加载期求值，这里只需能解析）
+    yaml.SafeLoader.add_constructor(
+        "tag:yaml.org,2002:js",
+        lambda loader, node: loader.construct_scalar(node),
+    )
     try:
         expected_rows, actual_rows = yaml.safe_load(expected), yaml.safe_load(actual)
     except Exception:

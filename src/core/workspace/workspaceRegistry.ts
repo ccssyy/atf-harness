@@ -378,6 +378,33 @@ export interface EnsureDefaultWorkspaceOutcome {
   restartRequired: boolean;
 }
 
+/** vendor 工作区注册表端口（`ctx.workspaceRegistry` 的结构子集）。
+ *
+ * 为什么走端口而非直接 ctx：本文件是纯函数模块（可单测、无 ctx 依赖），
+ * 端口由装配方注入；未注入时回落文件写入（测试/无 vendor 场景）。
+ *
+ * 语义差异：vendor `create(path, title)` **幂等**（同 canonical path 返回
+ * 已有实体、不改 title）；`rename` 改的是 title 不是 path。故：
+ * - 登记新记录 → `create`
+ * - title 迁移 → `rename`（vendor 的 rename 语义就是改 title）
+ * - path 迁移 → **vendor 无对应能力**（明写 immutable），已随 rebind 退役放弃
+ */
+export interface WorkspaceRegistryPort {
+  create(path: string, title?: string): Promise<{ readonly id: string; readonly path: string; readonly title: string }>;
+  rename?(id: string, title: string): Promise<unknown>;
+}
+
+let workspaceRegistryPort: WorkspaceRegistryPort | null = null;
+
+/** 装配期注入 vendor 注册表端口（null 撤销→回落文件写入）。 */
+export const setWorkspaceRegistryPort = (port: WorkspaceRegistryPort | null): void => {
+  workspaceRegistryPort = port;
+};
+
+/** 当前是否走 vendor 端口（诊断/测试用）。 */
+export const workspaceRegistryPortKind = (): "vendor" | "file" =>
+  workspaceRegistryPort === null ? "file" : "vendor";
+
 /** 注册表追加 record（写前备份＋tmp 原子落盘；global.workspaceIds 同步追加）。
  *  与 updateRegistryRecordPath 同一落盘纪律（2 空格缩进＋尾换行，diff 最小）。 */
 export const appendRegistryRecord = (
@@ -497,7 +524,15 @@ export const ensureDefaultWorkspace = (opts: {
     const existing = findRecordById(registry, existingId);
     if (existing !== null && existing.title !== DEFAULT_WORKSPACE_TITLE) {
       // 呈现名迁移（旧记录仍是旧名时一次性改写；幂等,二次进 already 分支）
-      updateRegistryRecordTitle(registryPath, existingId, DEFAULT_WORKSPACE_TITLE, opts.now);
+      // vendor 端口在场走 `rename`（vendor 的 rename 语义正是改 title）；否则回落文件写入。
+      if (workspaceRegistryPort !== null && typeof workspaceRegistryPort.rename === "function") {
+        void workspaceRegistryPort.rename(existingId, DEFAULT_WORKSPACE_TITLE).catch((cause: unknown) => {
+          console.warn(`[workspace-registry] vendor rename 失败（回落文件写入）：${cause instanceof Error ? cause.message : String(cause)}`);
+          updateRegistryRecordTitle(registryPath, existingId, DEFAULT_WORKSPACE_TITLE, opts.now);
+        });
+      } else {
+        updateRegistryRecordTitle(registryPath, existingId, DEFAULT_WORKSPACE_TITLE, opts.now);
+      }
       return {
         path: wsPath, id: identity.id, created,
         registryStatus: "title_updated", restartRequired: true,
@@ -505,12 +540,26 @@ export const ensureDefaultWorkspace = (opts: {
     }
     return { path: wsPath, id: identity.id, created, registryStatus: "already_registered", restartRequired: false };
   }
-  appendRegistryRecord(registryPath, registry, {
-    id: identity.id,
-    path: wsPath,
-    title: DEFAULT_WORKSPACE_TITLE,
-    now: opts.now,
-  });
+  // vendor 端口在场走 `create`（幂等：同 canonical path 返回已有实体）；
+  // 否则回落文件写入（测试/无 vendor 场景，行为逐位不变）。
+  if (workspaceRegistryPort !== null) {
+    void workspaceRegistryPort.create(wsPath, DEFAULT_WORKSPACE_TITLE).catch((cause: unknown) => {
+      console.warn(`[workspace-registry] vendor create 失败（回落文件写入）：${cause instanceof Error ? cause.message : String(cause)}`);
+      appendRegistryRecord(registryPath, registry, {
+        id: identity.id,
+        path: wsPath,
+        title: DEFAULT_WORKSPACE_TITLE,
+        now: opts.now,
+      });
+    });
+  } else {
+    appendRegistryRecord(registryPath, registry, {
+      id: identity.id,
+      path: wsPath,
+      title: DEFAULT_WORKSPACE_TITLE,
+      now: opts.now,
+    });
+  }
   return { path: wsPath, id: identity.id, created, registryStatus: "registered", restartRequired: true };
 };
 

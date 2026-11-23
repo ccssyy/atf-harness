@@ -15,14 +15,14 @@ const GENERATE = join(repo, "deploy", "profiles", "web", "generate.py");
 
 /** 模板行经 python3.10+PyYAML 归一为 JSON（本仓零 YAML 依赖——低依赖纪律）。 */
 const templateRows = (): Array<Record<string, unknown>> =>
-  JSON.parse(execFileSync("python3.10", ["-c", "import json,yaml,sys; print(json.dumps(yaml.safe_load(open(sys.argv[1],encoding='utf8'))))", TEMPLATE], { cwd: repo }).toString("utf8")) as Array<Record<string, unknown>>;
+  JSON.parse(execFileSync("python3.10", ["deploy/profiles/web/load-yaml.py", TEMPLATE], { cwd: repo }).toString("utf8")) as Array<Record<string, unknown>>;
 const rowById = (rows: Array<Record<string, unknown>>, id: string): Record<string, unknown> | undefined =>
   rows.find((row) => row["id"] === id);
 /** atf-training 预设已移出模板：走 bundle 层 `- insert:` 声明（profile 层只按 id 覆盖、新增不加载）。 */
 const PRESET_PATCH = join(repo, "packages", "extensions", "atf-ui", "presets", "atf-training.patch.yml");
 const trainingPresetRow = (): Record<string, unknown> => {
   const parsed = JSON.parse(
-    execFileSync("python3.10", ["-c", "import json,yaml,sys; print(json.dumps(yaml.safe_load(open(sys.argv[1],encoding='utf8'))))", PRESET_PATCH], { cwd: repo }).toString("utf8"),
+    execFileSync("python3.10", ["deploy/profiles/web/load-yaml.py", PRESET_PATCH], { cwd: repo }).toString("utf8"),
   ) as Array<{ insert?: Array<Record<string, unknown>> }>;
   const inserted = parsed[0]?.insert?.[0];
   if (!inserted) throw new Error("bundle 预设文件里没有 insert 行");
@@ -148,12 +148,12 @@ describe("批㊶-I 部署模板（产品级单源——审批映射／goal 收�
     execFileSync("python3.10", ["-c", "import yaml,sys; yaml.safe_dump([{'id':'agent-default-model','config':{'provider':'zai-coding-cn','model':'glm-5.3-flash'}}], open(sys.argv[1],'w',encoding='utf8'), allow_unicode=True)", overlay]);
     const out = join(tempRoot(), "cordis.patch.yml");
     execFileSync("python3.10", [GENERATE, "--overlay", overlay, "--out", out], { cwd: repo });
-    const rows = JSON.parse(execFileSync("python3.10", ["-c", "import json,yaml,sys; print(json.dumps(yaml.safe_load(open(sys.argv[1],encoding='utf8'))))", out], { cwd: repo }).toString("utf8")) as Array<Record<string, unknown>>;
+    const rows = JSON.parse(execFileSync("python3.10", ["deploy/profiles/web/load-yaml.py", out], { cwd: repo }).toString("utf8")) as Array<Record<string, unknown>>;
     const model = rowById(rows, "agent-default-model") as { config?: Record<string, unknown> };
     expect(model?.config).toEqual({ provider: "zai-coding-cn", model: "glm-5.3-flash" });
     // 覆写不丢模板其余行（insert 无 id 行原样保留）
     expect(rows.filter((row) => row["id"] === undefined).length).toBeGreaterThan(0);
-    expect(rows.length).toBe(9); // 模板 9 行（preset-atf-training 已移入 bundle 层）
+    expect(rows.length).toBe(14); // 模板 14 行（9 原有 + G7 工作区注册链 5 件：storage/storage-json/storage-domain/session-persistence-jsonl/workspace）
   });
 });
 

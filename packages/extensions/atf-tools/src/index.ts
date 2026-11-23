@@ -22,6 +22,7 @@ import { resolveMcpDeployment } from "../../../../src/mcp/bridgeCommand.js";
 import { checkApprovalLedgerStartup } from "@atf/dsh-atf-core";
 import { runBootPreflight, formatPreflightFatal, BOOT_PREFLIGHT_PIPELINE_ENV, BOOT_PREFLIGHT_BRIDGE_ENV } from "../../../../src/core/workspace/bootPreflight.js";
 import { setWorkspaceRegistrySource } from "../../../../src/core/workspace/workspaceRegistry.js";
+import { setWorkspaceRegistryPort } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { resolveInstanceKernelDir, resolveInstancePinRoot } from "../../../../src/core/workspace/instancePin.js";
 import { scanLocalModels } from "@atf/dsh-atf-core";
 import { registerApprovalExempt } from "./approvalExempt.js";
@@ -109,7 +110,11 @@ export async function apply(ctx: any, config: AtfToolsConfig): Promise<void> {
   // workspace 插件尚未就绪，get() 恒 undefined（G7 部署实锚：装了 workspace 链
   // 仍报「文件回落」）。inject 的回调在依赖就绪后触发；服务永不出现时回调不
   // 执行，工作区源保持 null（文件回落），与既有行为一致。
-  type WorkspaceSource = { list(): ReadonlyArray<{ path: string; title?: string }> };
+  type WorkspaceSource = {
+    list(): ReadonlyArray<{ path: string; title?: string }>;
+    create?(path: string, title?: string): Promise<{ readonly id: string; readonly path: string; readonly title: string }>;
+    rename?(id: string, title: string): Promise<unknown>;
+  };
   const bindWorkspaceSource = (workspaces: WorkspaceSource): void => {
     if (typeof workspaces.list !== "function") {
       console.warn("[atf-tools] 工作区源：workspaceRegistry 形态异常（无 list）——保持文件回落");
@@ -129,6 +134,21 @@ export async function apply(ctx: any, config: AtfToolsConfig): Promise<void> {
         return;
       }
       bindWorkspaceSource(workspaces);
+      // 同一服务兼作注册端口：ensureDefaultWorkspace 的登记/title 迁移走 vendor API
+      // （create 幂等 / rename 改 title），不再手写 storages/workspace.json。
+      const createFn = workspaces.create;
+      const renameFn = workspaces.rename;
+      if (typeof createFn === "function") {
+        setWorkspaceRegistryPort({
+          create: (path: string, title?: string) => createFn.call(workspaces, path, title),
+          ...(typeof renameFn === "function"
+            ? { rename: (id: string, title: string) => renameFn.call(workspaces, id, title) }
+            : {}),
+        });
+      } else {
+        console.warn("[atf-tools] 工作区注册端口：vendor 无 create——保持文件写入");
+      }
+      console.log("[atf-tools] 工作区注册端口：vendor（ensureDefaultWorkspace 走 create/rename）");
     });
   } else {
     console.warn("[atf-tools] 工作区源：ctx.inject 不可用——保持文件回落");
