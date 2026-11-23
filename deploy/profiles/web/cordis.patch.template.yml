@@ -225,3 +225,36 @@
       # 就有确认门）**且**会话使用 atf-training 预设——此时训练链不再逐段确认，仅保留训练
       # 启动与发布确认。单切权限档不产生任何免确认效果（两轴齐备才生效）。
     defaultPreset: danger-full-access
+
+# —— 工作区注册链（G7 双仓收尾，2026-11-23）———————————————————————————————
+# 背景：ATF profile 是独立生成的（不继承 vendor web-app bundle），原先没有挂
+# storage 链与 workspace——所以 atf-tools 的 ctx.get('workspaceRegistry') 恒
+# undefined，工作区源恒回落「手写 storages/workspace.json」。
+#
+# 本次按 base bundle 的同构形态补齐五件（顺序即依赖序：storage → json →
+# domain → session-persistence → workspace）：
+#   - workspace 的 static inject = ['storageDomain', 'sessionPersistence']，
+#     缺任何一个都挂不起来。
+#   - storage-json 的 root 走 dshHomePath('storages')——与 vendor 同落点，
+#     既有 storages/workspace.json（81 条记录）直接被识别，无需迁移。
+- id: storage
+  name: '@deepseek-ai/dsh-storage'
+
+- id: storage-json
+  name: '@deepseek-ai/dsh-storage-json'
+  config:
+    root: !!js dshHomePath('storages')
+
+- id: storage-domain
+  name: '@deepseek-ai/dsh-storage-domain'
+  config:
+    backend: json
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+
+- id: workspace
+  name: '@deepseek-ai/dsh-workspace'
+

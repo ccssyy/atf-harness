@@ -10,6 +10,28 @@ import argparse
 import yaml
 
 
+class _JsTag(str):
+    """YAML `!!js` 标量：**原样透传**，不在生成期求值。
+
+    为什么不在 generate.py 求值：`!!js` 是 vendor 应用加载期的表达式标签
+    （见 vendor `packages/boot/plugin-manager/src/patch.ts` 的 customTags——
+    那里 resolve 成原文，由 boot 侧 `dshHomePath(...)` 执行）。生成器只做
+    「模板＋overlay → 实例文件」的搬运，求值越界会与 vendor 形成双源。
+    """
+
+
+def _js_constructor(loader: yaml.SafeLoader, node: yaml.Node) -> _JsTag:
+    return _JsTag(loader.construct_scalar(node))
+
+
+def _js_representer(dumper: yaml.SafeDumper, value: _JsTag) -> yaml.Node:
+    return dumper.represent_scalar("tag:yaml.org,2002:js", str(value))
+
+
+yaml.SafeLoader.add_constructor("tag:yaml.org,2002:js", _js_constructor)
+yaml.SafeDumper.add_representer(_JsTag, _js_representer)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     here = __file__.rsplit("/", 1)[0]

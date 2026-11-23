@@ -104,20 +104,34 @@ export const Config = z.object({
 export async function apply(ctx: any, config: AtfToolsConfig): Promise<void> {
   // 2026-11-23 裁决 A：工作区注册表优先走 vendor `ctx.workspaces`（同步投影），
   // 不再解析 `<DSH_HOME>/storages/workspace.json`。vendor 未挂/测试环境时自动回落文件解析。
-  // 可选服务走 `ctx.get()`（vendor 惯例——见 tool-fs-search「optional, read via ctx.get()」）：
-  // 直接属性访问在 Cordis 下会因「未 inject」直接抛错，ctx.get() 才是可选读取的正规路径。
-  {
-    // 服务名实为 `workspaceRegistry`（vendor dsh-workspace 的 Service 构造：super(ctx, 'workspaceRegistry')）
-    const workspaces = (ctx as { get(service: string): unknown }).get("workspaceRegistry") as
-      | { list(): ReadonlyArray<{ path: string; title?: string }> }
-      | undefined;
-    if (workspaces !== undefined && typeof workspaces.list === "function") {
-      setWorkspaceRegistrySource(workspaces);
-      console.log(`[atf-tools] 工作区源：vendor ctx.workspaces（${String(workspaces.list().length)} 个）`);
-    } else {
-      setWorkspaceRegistrySource(null);
-      console.log("[atf-tools] 工作区源：文件回落（vendor ctx.workspaces 未挂）");
+  // 工作区源：用 `ctx.inject` 延迟绑定（Cordis 范例见 llm-pi-ai 的
+  // `ctx.inject(['settings'], child => ...)`）。**不能用 ctx.get()**——apply 时
+  // workspace 插件尚未就绪，get() 恒 undefined（G7 部署实锚：装了 workspace 链
+  // 仍报「文件回落」）。inject 的回调在依赖就绪后触发；服务永不出现时回调不
+  // 执行，工作区源保持 null（文件回落），与既有行为一致。
+  type WorkspaceSource = { list(): ReadonlyArray<{ path: string; title?: string }> };
+  const bindWorkspaceSource = (workspaces: WorkspaceSource): void => {
+    if (typeof workspaces.list !== "function") {
+      console.warn("[atf-tools] 工作区源：workspaceRegistry 形态异常（无 list）——保持文件回落");
+      return;
     }
+    setWorkspaceRegistrySource(workspaces);
+    console.log(`[atf-tools] 工作区源：vendor workspaceRegistry（${String(workspaces.list().length)} 个）`);
+  };
+  const injectable = ctx as {
+    inject?: (names: readonly string[], callback: (child: { workspaceRegistry?: WorkspaceSource }) => void) => void;
+  };
+  if (typeof injectable.inject === "function") {
+    injectable.inject(["workspaceRegistry"], (child) => {
+      const workspaces = child.workspaceRegistry;
+      if (workspaces === undefined) {
+        console.warn("[atf-tools] 工作区源：workspaceRegistry 就绪但为空——保持文件回落");
+        return;
+      }
+      bindWorkspaceSource(workspaces);
+    });
+  } else {
+    console.warn("[atf-tools] 工作区源：ctx.inject 不可用——保持文件回落");
   }
 
   console.log(`[atf-tools] apply()——注册 atf_* 工具集（桥接 ${MODEL_TOOL_NAMES.length} 件·含工作区治理两件 create_experiment/rebind_workspace；runsRoot=${config.runsRoot}）`);
