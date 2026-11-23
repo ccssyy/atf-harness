@@ -104,8 +104,12 @@ export const Config = z.object({
 export async function apply(ctx: any, config: AtfToolsConfig): Promise<void> {
   // 2026-11-23 裁决 A：工作区注册表优先走 vendor `ctx.workspaces`（同步投影），
   // 不再解析 `<DSH_HOME>/storages/workspace.json`。vendor 未挂/测试环境时自动回落文件解析。
+  // 可选服务走 `ctx.get()`（vendor 惯例——见 tool-fs-search「optional, read via ctx.get()」）：
+  // 直接属性访问在 Cordis 下会因「未 inject」直接抛错，ctx.get() 才是可选读取的正规路径。
   {
-    const workspaces = (ctx as { workspaces?: { list(): ReadonlyArray<{ path: string; title?: string }> } }).workspaces;
+    const workspaces = (ctx as { get(service: string): unknown }).get("workspaces") as
+      | { list(): ReadonlyArray<{ path: string; title?: string }> }
+      | undefined;
     if (workspaces !== undefined && typeof workspaces.list === "function") {
       setWorkspaceRegistrySource(workspaces);
       console.log(`[atf-tools] 工作区源：vendor ctx.workspaces（${String(workspaces.list().length)} 个）`);

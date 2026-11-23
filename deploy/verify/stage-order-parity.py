@@ -30,13 +30,14 @@ CARRIER_NARRATIVE_FILES = [
 _STALE_NARRATIVE = re.compile("八段")
 
 #: R1 后的消费面文件(六载体):其中任一再出现手写段序字面量=回潮
+#: 2026-11-23 清源：runFacts/segmentFacts 已迁 atf-core，载体路径随迁。
 CARRIER_FILES = [
     "packages/extensions/atf-tools/src/pipelineFace.ts",
     "packages/extensions/atf-ui/src/server.ts",
-    "src/core/workspace/runFacts.ts",
+    "packages/extensions/atf-core/src/runFacts.ts",
     "packages/extensions/atf-ui/src/snapshot.js",
     "packages/extensions/atf-ui/src/panel.ts",
-    "src/core/workspace/segmentFacts.ts",
+    "packages/extensions/atf-core/src/segmentFacts.ts",
 ]
 
 #: 手写回潮特征:连续两个及以上段键的字符串字面量序列(生成物文件除外)
