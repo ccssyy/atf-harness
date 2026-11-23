@@ -451,10 +451,16 @@ export const listRegistryRecords = (dshHome: string): Array<RegistryRecordView &
  *  定位 run 的调用点都必须带本清单（缺省＝只查平铺/桶＝落到 legacy 桶，webui 落错树即由此来）。
  *  只读探测（stat 级），与 listRegistryRecords 同源同口径；dshHome 缺省按 resolveDshHome() 解析。
  */
-export const registeredWorkspaceRoots = (dshHome?: string): string[] =>
-  listRegistryRecords(dshHome ?? resolveDshHome())
+export const registeredWorkspaceRoots = (dshHome?: string): string[] => {
+  // vendor 源在场（装配期注入）→ 直接取投影，不解析存储文件。
+  if (workspaceSource !== null) {
+    return workspaceSource.list().map((workspace) => workspace.path);
+  }
+  // 回落：文件解析（测试/纯函数调用/未注入场景，行为逐位不变）。
+  return listRegistryRecords(dshHome ?? resolveDshHome())
     .filter((record) => record.exists)
     .map((record) => record.path);
+};
 
 
 /** 默认工作区（B3/D-1、D-4）：未指定工作区的会话的确定落点。
@@ -700,3 +706,33 @@ export const syncWorkspaceExperiments = (
   }
   return patched;
 };
+
+
+// ── vendor `ctx.workspaces` 适配（2026-11-23 owner 裁决 A）────────────────────
+// 背景：本文件的读存储部分（readRegistryFile / listRegistryRecords / registryPathOf）
+// 是在直接解析 vendor 写的 `<DSH_HOME>/storages/workspace.json`——那是重复实现。
+// 正解是 `ctx.workspaces.list()`（vendor 提供的同步投影，返回 Workspace[]，带 path/title）。
+//
+// 过渡策略（不一次断链）：
+// - 装配期由宿主调用 `setWorkspaceRegistrySource(ctx.workspaces)` 注入 vendor 服务；
+// - 未注入时（测试、纯函数调用、vendor 未挂）回落到文件解析——行为逐位不变；
+// - 注入后 `registeredWorkspaceRoots` / `listRegistryRecords` 优先走 vendor。
+//
+// 边界：vendor 的 list() 只给"已注册工作区"（含不存在的——它还带 path）；
+// 本文件既有的 `exists` 探测（stat 级）保留在文件路径上，vendor 分支不复制该探测。
+
+/** vendor `ctx.workspaces` 的结构子集（不 import vendor 包，避免包解析耦合）。 */
+export interface WorkspaceRegistrySource {
+  list(): ReadonlyArray<{ readonly path: string; readonly title?: string }>;
+}
+
+let workspaceSource: WorkspaceRegistrySource | null = null;
+
+/** 装配期注入 vendor 工作区服务（idempotent；传 null 撤销）。 */
+export const setWorkspaceRegistrySource = (source: WorkspaceRegistrySource | null): void => {
+  workspaceSource = source;
+};
+
+/** 当前是否走 vendor 源（诊断/测试用）。 */
+export const workspaceRegistrySourceKind = (): "vendor" | "file" =>
+  workspaceSource === null ? "file" : "vendor";

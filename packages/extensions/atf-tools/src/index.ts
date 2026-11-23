@@ -21,6 +21,7 @@ import { kernelVersionSync } from "../../../../src/mcp/bridgeCommand.js";
 import { resolveMcpDeployment } from "../../../../src/mcp/bridgeCommand.js";
 import { checkApprovalLedgerStartup } from "@atf/dsh-atf-core";
 import { runBootPreflight, formatPreflightFatal, BOOT_PREFLIGHT_PIPELINE_ENV, BOOT_PREFLIGHT_BRIDGE_ENV } from "../../../../src/core/workspace/bootPreflight.js";
+import { setWorkspaceRegistrySource } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { resolveInstanceKernelDir, resolveInstancePinRoot } from "../../../../src/core/workspace/instancePin.js";
 import { scanLocalModels } from "@atf/dsh-atf-core";
 import { registerApprovalExempt } from "./approvalExempt.js";
@@ -101,6 +102,19 @@ export const Config = z.object({
 });
 
 export async function apply(ctx: any, config: AtfToolsConfig): Promise<void> {
+  // 2026-11-23 裁决 A：工作区注册表优先走 vendor `ctx.workspaces`（同步投影），
+  // 不再解析 `<DSH_HOME>/storages/workspace.json`。vendor 未挂/测试环境时自动回落文件解析。
+  {
+    const workspaces = (ctx as { workspaces?: { list(): ReadonlyArray<{ path: string; title?: string }> } }).workspaces;
+    if (workspaces !== undefined && typeof workspaces.list === "function") {
+      setWorkspaceRegistrySource(workspaces);
+      console.log(`[atf-tools] 工作区源：vendor ctx.workspaces（${String(workspaces.list().length)} 个）`);
+    } else {
+      setWorkspaceRegistrySource(null);
+      console.log("[atf-tools] 工作区源：文件回落（vendor ctx.workspaces 未挂）");
+    }
+  }
+
   console.log(`[atf-tools] apply()——注册 atf_* 工具集（桥接 ${BRIDGE_TOOL_NAMES.length} 件·含工作区治理两件 create_experiment/rebind_workspace；runsRoot=${config.runsRoot}）`);
   // 批㊶-W：boot 环境预检分级自愈（§五/§6.3——L1 产品写权限内自动补＋留痕；L2 系统级
   // fail-fast 给可复制命令。先于账本校验与工具装配：env 补齐影响后续全部取值链；
