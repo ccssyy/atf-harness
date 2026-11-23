@@ -20,7 +20,7 @@ describe("D170v2 §4.1 确认卡语义分类表（ADR-0022 退役后）", () => 
     }
   });
 
-  it("链内推进直通（原档位审批轴退役——直通留痕由 bridgeFace 分支承载）", () => {
+  it("链内推进直通（原档位审批轴退役——直通留痕由 mcpToolFace 分支承载）", () => {
     expect(requiresUserConfirmationOf(defOf("atf_admit_data"), {})).toBe(false);
     expect(requiresUserConfirmationOf(defOf("atf_pipeline_stage"), { stage: "register" })).toBe(false);
     expect(requiresUserConfirmationOf(defOf("atf_create_experiment"), {})).toBe(false);

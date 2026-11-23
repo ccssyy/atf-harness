@@ -47,7 +47,7 @@ describe("D223——装饰链回执 lossless 出口", () => {
   });
 
   it("源码锚:atf-tools 各 face 不存在裸 return decorated 出口(装饰链出口必须 asToolValue 包裹)", () => {
-    const faces = ["pipelineFace.ts", "trainingFace.ts", "bridgeFace.ts", "constructionGate.ts"] as const;
+    const faces = ["pipelineFace.ts", "trainingFace.ts", "mcpToolFace.ts", "constructionGate.ts"] as const;
     for (const face of faces) {
       const src = readFileSync(join(process.cwd(), "packages/extensions/atf-tools/src", face), "utf8");
       const bare = src.match(/^\s*return decorated;\s*$/m);

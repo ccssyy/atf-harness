@@ -11,7 +11,6 @@ import { describe, expect, it } from "vitest";
 import type { BridgeError } from "../../src/mcp/index.js";
 import { ToolExecutor, ToolRegistry, type BridgeTransport } from "../../src/core/tools/index.js";
 import { TOOL_METHOD_OVERRIDES, rpcMethodFor } from "../../src/core/tools/methodOverrides.js";
-import { buildAtfAgentTools } from "../../src/agent/atfAgentTools.js";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -62,50 +61,10 @@ describe("镜像面① 单源真值（TOOL_METHOD_OVERRIDES／rpcMethodFor）", 
   });
 });
 
-describe("镜像面① 两线发射一致性（防再分叉）", () => {
-  it("全量注册工具名：甲线 executor 与丙线 toAtfAgentTool 发射同一 RPC 方法（＝单源 rpcMethodFor）", async () => {
-    for (const name of ToolRegistry.createDefault().names()) {
-      const params = DRIVE_PARAMS[name];
-      expect(params, `守护测试缺驱动参数: ${name}`).toBeDefined();
-
-      // 甲线：executor.execute（须审批工具由桩账本放行；工具方法调用被记录后桩返回离线错误）
-      const coreMethods: string[] = [];
-      const coreTransport: BridgeTransport = {
-        request: async (method: string) => {
-          coreMethods.push(method);
-          if (method === "ledger_query") {
-            return { ok: true, value: { ok: true, records: [{ record_id: "r-guard", approval_id: "apr-guard", sequence: 1, state: "pending" }] } };
-          }
-          if (method === "ledger_consume") {
-            return { ok: true, value: { ok: true, record_id: "r-guard", state: "consumed" } };
-          }
-          return { ok: false, error: { code: "closed", message: "映射守护桩" } as BridgeError };
-        },
-      };
-      await new ToolExecutor(coreTransport, ToolRegistry.createDefault(), SCOPE_REF).execute(name, params);
-
-      // 丙线：buildAtfAgentTools 装配的 AgentTool execute（工具层无审批——直达桥接调用）
-      const agentMethods: string[] = [];
-      const agentTransport = {
-        request: async (method: string): Promise<{ ok: false; error: BridgeError }> => {
-          agentMethods.push(method);
-          return { ok: false, error: { code: "closed", message: "映射守护桩" } as BridgeError };
-        },
-      };
-      const [tool] = buildAtfAgentTools({ bridge: agentTransport, scopeRefBox: { current: undefined } }, { names: [name] });
-      expect(tool, name).toBeDefined();
-      // 桩返回非 request_rejected 桥接错误 → execute 以 throw 折算 error 工具结果（方法已发射）
-      await expect(tool?.execute("t-guard", params)).rejects.toThrow();
-      const emitted = (methods: string[]): string[] => methods.filter((method) => method !== "ledger_query" && method !== "ledger_consume");
-      expect(emitted(coreMethods), `甲线 ${name}`).toEqual([rpcMethodFor(name)]);
-      expect(emitted(agentMethods), `丙线 ${name}`).toEqual([rpcMethodFor(name)]);
-    }
-  });
-});
 
 describe("镜像面① 静态防再分叉", () => {
   it("两消费文件不再持有本地映射表，均指向单源 methodOverrides.js（重现本地表即红）", () => {
-    for (const rel of ["src/core/tools/executor.ts", "src/agent/atfAgentTools.ts"]) {
+    for (const rel of ["src/core/tools/executor.ts"]) {
       const text = readFileSync(join(repoRoot, rel), "utf8");
       expect(text, rel).not.toMatch(/const\s+TOOL_METHOD_OVERRIDES/);
       expect(text, rel).toContain("methodOverrides.js");

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { checkSchema, validateCanonicalOutput, type SchemaNode } from "../../src/core/tools/canonical.js";
 import { ToolRegistry, toModelVisible, WORKSPACE_TOOL_DEFINITIONS, requiresUserConfirmationOf } from "../../src/core/tools/index.js";
 import { TOOL_DEFINITIONS } from "../../src/core/tools/toolDefinition.js";
-import { spikeRequiresApproval } from "../../src/agent/atfAgentTools.js";
 import { approvalParamsDigest, stableStringify } from "../../src/core/tools/approvalKey.js";
 
 /**
@@ -267,11 +266,8 @@ describe("批㊶-F2 审批标注增补（转派记录——免审清单/高危�
     // 防未来任一线另立本地判定分叉（沿 methodOverrides 静态防分叉先例）。
     expect(TOOL_DEFINITIONS).toHaveLength(9);
     expect(WORKSPACE_TOOL_DEFINITIONS).toHaveLength(4); // B类-A：scratch 两件已退役
-    for (const definition of [...TOOL_DEFINITIONS, ...WORKSPACE_TOOL_DEFINITIONS]) {
-      for (const params of [{}, { action: "query" }, { action: "advance" }, {任意: 1}]) {
-        expect(spikeRequiresApproval(definition, params)).toBe(requiresUserConfirmationOf(definition, params));
-      }
-    }
+    // 两线一致性锚随 atfAgentTools.ts 退役（零生产引用，2026-11-23）——
+    // spikeRequiresApproval 已无第二线，本断言失去对照对象。
   });
 
   it("确认卡清单逐值 true（governance/user_decision＋表外旗标）＋atf_gate 参数分派直通", () => {

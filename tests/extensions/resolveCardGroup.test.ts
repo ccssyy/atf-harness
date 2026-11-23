@@ -1,7 +1,7 @@
 // -*- coding: utf-8 -*-
 /** D277 裁决卡分组摘要测试:resolveCardGroupSummary 三类归组与计数。 */
 import { describe, expect, it } from "vitest";
-import { resolveCardGroupSummary } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
+import { resolveCardGroupSummary } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
 
 describe("resolveCardGroupSummary(D277)", () => {
   it("keep_* 归归属保留类并计数", () => {

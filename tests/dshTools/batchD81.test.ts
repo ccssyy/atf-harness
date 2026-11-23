@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildFileTools, type FileToolScopeDeps } from "../../packages/extensions/atf-tools/src/fileFace.js";
-import { BridgeManager, buildBridgeTools } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
+import { BridgeManager, buildMcpTools } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
 import { collectAllRunGroups, resolveSessionWorkspace } from "../../packages/extensions/atf-tools/src/scopeFace.js";
 
 const tempRoots: string[] = [];
@@ -335,7 +335,7 @@ describe("D81-B 可发现性三面＋atf_workspace_status 附加", () => {
     const repoRoot = join(import.meta.url.replace("file://", ""), "..", "..", "..");
     const manager = new BridgeManager(["node", join(repoRoot, "tests", "fixtures", "mock_atf.mjs")], repoRoot);
     try {
-      const tools = await buildBridgeTools(noApprovalCtx, manager, { runsRoot: fx.runsRoot, kernelDir: fx.base, execHome: fx.base });
+      const tools = await buildMcpTools(noApprovalCtx, manager, { runsRoot: fx.runsRoot, kernelDir: fx.base, execHome: fx.base });
       const hit = (await findTool(tools, "atf_workspace_status").execute({}, execWithCwd(fx.wsMine))) as Record<string, unknown>;
       expect(hit["ok"]).toBe(true);
       expect(hit["workspace_id"]).toBe("ws-mine-uuid");

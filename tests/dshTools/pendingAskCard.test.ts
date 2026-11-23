@@ -5,7 +5,7 @@
  * pending_answers（agent 据此组装重跑参数，不再聊天转述重复提问）。
  */
 import { describe, expect, it } from "vitest";
-import { pendingAnswersOf, pendingChoiceQuestionsOf } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
+import { pendingAnswersOf, pendingChoiceQuestionsOf } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
 
 describe("#13 桥接返回体选项类待确认收编原生卡", () => {
   it("选项类进卡：title/detail/options 逐项映射为原生选项卡问题", () => {

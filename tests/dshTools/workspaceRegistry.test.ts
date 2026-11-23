@@ -1,7 +1,7 @@
 /**
  * 目录结构 v1 工具链测试锚（设计基线 D4/D5/D6）——工作区身份/DSH 注册表/会话桶三面：
- * 纯函数层（workspaceRegistry.ts 逐语义）＋工具 handler 层（经 buildBridgeTools 真装配——
- * 审批 seam/参数折算/结构化回流同链实证）＋投影面护栏（BRIDGE_TOOL_NAMES ⊆ 工作区分册）。
+ * 纯函数层（workspaceRegistry.ts 逐语义）＋工具 handler 层（经 buildMcpTools 真装配——
+ * 审批 seam/参数折算/结构化回流同链实证）＋投影面护栏（MODEL_TOOL_NAMES ⊆ 工作区分册）。
  *
  * 全程临时目录注入（host.dshHome——装配面同源取值链）；注册表写入前备份、其他 record
  * 零触碰、身份 id 永不改变三条红线逐条断言。
@@ -23,7 +23,7 @@ import {
   updateRegistryRecordPath,
   EXPERIMENT_NAME_PATTERN,
 } from "../../src/core/workspace/workspaceRegistry.js";
-import { buildBridgeTools, BRIDGE_TOOL_NAMES } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
+import { buildMcpTools, MODEL_TOOL_NAMES } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
 import { TOOL_DEFINITIONS, WORKSPACE_TOOL_DEFINITIONS } from "../../src/core/tools/index.js";
 import { rpcMethodFor } from "../../src/core/tools/methodOverrides.js";
 
@@ -80,9 +80,9 @@ const seedIdentity = (workspacePath: string, id: string): void => {
 
 const toolExec = async (host: { dshHome?: string }, outcome: string, name: "atf_create_experiment" | "atf_rebind_workspace") => {
   const ctx = { get: (service: string) => (service === "approval" ? { request: async () => outcome } : undefined) };
-  // G5：buildBridgeTools 装配面先拉 MCP tools/list——本地治理件测试不 spawn 真对端，
+  // G5：buildMcpTools 装配面先拉 MCP tools/list——本地治理件测试不 spawn 真对端，
   // 以最小 descriptor 桩供给装配（工厂面〔workspace_status〕不在此测试触达）。
-  const tools = await buildBridgeTools(ctx, { mcpTools: async () => TOOL_DEFINITIONS.map((definition) => ({ name: rpcMethodFor(definition.name), description: definition.description, inputSchema: { type: "object", properties: {}, additionalProperties: true } })), transport: async () => ({ request: async () => ({ ok: true, value: {} }), close: async () => undefined }) } as never, {
+  const tools = await buildMcpTools(ctx, { mcpTools: async () => TOOL_DEFINITIONS.map((definition) => ({ name: rpcMethodFor(definition.name), description: definition.description, inputSchema: { type: "object", properties: {}, additionalProperties: true } })), transport: async () => ({ request: async () => ({ ok: true, value: {} }), close: async () => undefined }) } as never, {
     runsRoot: tempRoot(),
     kernelDir: tempRoot(),
     execHome: tempRoot(),
@@ -301,7 +301,7 @@ describe("workspaceRegistry rebind（按 id 认领/桶零操作/空锚点清理�
   });
 });
 
-// ---------------------------------------------------------------- 工具 handler 层（经 buildBridgeTools 真装配）
+// ---------------------------------------------------------------- 工具 handler 层（经 buildMcpTools 真装配）
 
 describe("工作区治理两工具 handler（WebUI 桥装配同链——审批/折算/回流）", () => {
   it("atf_create_experiment：直通真建（canonical 全键）——审批面 rejected 也放行（ADR-0022 拦截退役）", async () => {
@@ -359,16 +359,16 @@ describe("工作区治理两工具 handler（WebUI 桥装配同链——审批/�
 
 // ---------------------------------------------------------------- 投影面护栏（contract_field_wiring 同族）
 
-describe("投影面护栏：BRIDGE_TOOL_NAMES ⊆ 契约定义单源（G5 后=TOOL_DEFINITIONS ∪ WORKSPACE_TOOL_DEFINITIONS）", () => {
+describe("投影面护栏：MODEL_TOOL_NAMES ⊆ 契约定义单源（G5 后=TOOL_DEFINITIONS ∪ WORKSPACE_TOOL_DEFINITIONS）", () => {
   it("十四件投影名全部能在契约定义单源找到（MCP 模型面 9＋工作区治理分册）", () => {
     const contractNames = [...TOOL_DEFINITIONS, ...WORKSPACE_TOOL_DEFINITIONS].map((definition) => definition.name);
-    for (const name of BRIDGE_TOOL_NAMES) expect(contractNames).toContain(name);
-    expect(BRIDGE_TOOL_NAMES).toContain("atf_create_experiment");
-    expect(BRIDGE_TOOL_NAMES).toContain("atf_rebind_workspace");
+    for (const name of MODEL_TOOL_NAMES) expect(contractNames).toContain(name);
+    expect(MODEL_TOOL_NAMES).toContain("atf_create_experiment");
+    expect(MODEL_TOOL_NAMES).toContain("atf_rebind_workspace");
     // F14：atf_label_qc_resolve 与 inspect 同面开放（决议入口，见 labelQcResume.test.ts）→ 9→10
-    expect(BRIDGE_TOOL_NAMES).toContain("atf_label_qc_resolve");
+    expect(MODEL_TOOL_NAMES).toContain("atf_label_qc_resolve");
     // G5（2026-11-22）：MCP 化模型面全量投影——10→14（fact_scan/data_admission_request/
     // preparation_propose/style_cluster_execute 四件经 MCP tools/list 进 DSH 面）
-    expect(BRIDGE_TOOL_NAMES).toHaveLength(12);
+    expect(MODEL_TOOL_NAMES).toHaveLength(12);
   });
 });

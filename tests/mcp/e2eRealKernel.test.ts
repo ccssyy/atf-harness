@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { AtfMcpConnection } from "../../src/mcp/connection.js";
-import { BridgeManager, buildBridgeTools } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
+import { BridgeManager, buildMcpTools } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
 
 /**
  * G5 真进程链路（装配级端到端）：spawn 真内核 MCP server（G1 手写实现），
@@ -118,12 +118,12 @@ describe("G5 真内核 MCP 链路（ATF_G5_KERNEL_SRC 门控）", () => {
     await spawned.value.close();
   }, 60_000);
 
-  d("装配级：buildBridgeTools 工厂件（atf_workspace_status）真内核链路——schema 零复制+rejected 回填形态", async () => {
+  d("装配级：buildMcpTools 工厂件（atf_workspace_status）真内核链路——schema 零复制+rejected 回填形态", async () => {
     const workspace = makeWorkspace();
     const argv = mcpArgv(workspace);
     const manager = new BridgeManager(argv.command, argv.cwd, argv.env);
     const ctx = { get: () => undefined };
-    const tools = await buildBridgeTools(ctx as never, manager, {
+    const tools = await buildMcpTools(ctx as never, manager, {
       runsRoot: join(workspace, "runs"),
       kernelDir: kernelSrc ?? ".",
       execHome: join(workspace, "exec-home"),

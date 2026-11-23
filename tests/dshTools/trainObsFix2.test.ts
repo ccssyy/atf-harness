@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // D112 训练互斥守卫（语义见 tests/fixtures/trainingLock.ts 头注）
 import { guardTrainingLock } from "../fixtures/trainingLock.js";
 import { buildEvalTools, buildRunTrainingTool } from "../../packages/extensions/atf-tools/src/trainingFace.js";
-import { BridgeManager } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
+import { BridgeManager } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
 import { evalOrchSessionBase, resolveLaunchSessionName, trainingSessionBase } from "@atf/dsh-atf-core";
 import { tmuxTestOk } from "../fixtures/tmuxTestSocket.js";
 

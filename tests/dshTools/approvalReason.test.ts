@@ -14,7 +14,7 @@ import { buildApprovalReason } from "../../packages/extensions/atf-tools/src/app
 const SRC_DIR = join(import.meta.dirname, "../../packages/extensions/atf-tools/src");
 const CALL_SITE_FILES = [
   "recordsFace.ts",
-  "bridgeFace.ts",
+  "mcpToolFace.ts",
   "confirmFace.ts",
   "trainingFace.ts",
   "fileFace.ts",
@@ -86,11 +86,11 @@ describe("调用点全量走模板（源面钉——禁自由文案）", () => {
     }
   });
   it("E8b·H3 D152：桥接通用卡 action 走业务动作名映射（卡面零 atf_* 工具名）", () => {
-    const source = readFileSync(join(SRC_DIR, "bridgeFace.ts"), "utf8");
-    expect(source).toContain("BRIDGE_ACTION_LABELS");
-    // D318：泛化 fallback 消费随泛化审批卡退役（ADR-0022）——bridgeFace 零 fallback
+    const source = readFileSync(join(SRC_DIR, "mcpToolFace.ts"), "utf8");
+    expect(source).toContain("TOOL_ACTION_LABELS");
+    // D318：泛化 fallback 消费随泛化审批卡退役（ADR-0022）——mcpToolFace 零 fallback
     // 消费，映射表由其余消费面（webui gpuQueue）与注释文档承载
-    expect(source).not.toContain('BRIDGE_ACTION_LABELS[definition.name]');
+    expect(source).not.toContain('TOOL_ACTION_LABELS[definition.name]');
     // 卡面构造处不再出现 target 回填工具名形态
     expect(source).not.toContain("target: `（${definition.name}）`");
   });

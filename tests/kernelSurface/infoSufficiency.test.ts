@@ -46,11 +46,12 @@ describe("B1 信息足八子面（CI 全链断言）", () => {
     expect(canonicalSrc).toContain("withHowToFix");
     expect(canonicalSrc).toContain("两条改法");
     // 发射点 details 全量透传（tool/message 到投影层——发现 5 反例=details 只带 error）
-    const atfAgentToolsSrc = readFileSync(
-      resolve(process.cwd(), "src/agent/atfAgentTools.ts"),
+    // atfAgentTools.ts 已退役（零生产引用，2026-11-23）；执行径现只走 MCP 面。
+    const mcpToolFaceSrc = readFileSync(
+      resolve(process.cwd(), "packages/extensions/atf-tools/src/mcpToolFace.ts"),
       "utf-8",
     );
-    expect(atfAgentToolsSrc).toContain('details: { error: "schema_violation", tool: definition.name, message: paramCheck }');
+    expect(mcpToolFaceSrc).toContain('details: { error: "schema_violation", tool: definition.name, message: paramCheck }');
   });
 
   it("③状态真：三态消歧（B5 发现 14 反例=假完成状态/假 checkpoint 清单）", () => {

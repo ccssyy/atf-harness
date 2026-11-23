@@ -77,11 +77,11 @@ const semanticsRequiresConfirmation = (klass: ApprovalSemanticsClass): boolean =
   // 用户决定任何档位都过确认卡,与分类表 D192 注释「免审链不放行」的意图对齐。
   if (klass === "user_decision") return true;
   // chain_advance:ADR-0022 去拦截——原「训练预设+完全权限档双轴免审,其余档位
-  // 逐次审批」随审批拦截退役;直通留痕义务由 bridgeFace 直通分支承载。
+  // 逐次审批」随审批拦截退役;直通留痕义务由 mcpToolFace 直通分支承载。
   return false;
 };
 
-/** 业务确认卡判定单一出口（bridgeFace 消费点唯一;原审批谓词 requiresApprovalFor
+/** 业务确认卡判定单一出口（mcpToolFace 消费点唯一;原审批谓词 requiresApprovalFor
  * 随 ADR-0022 拦截退役改名——语义表优先(atf_gate 的 query/advance 参数分派保留),
  * 未收编工具走既有链——谓词存在以其为准，否则退回基准旗标。 */
 export const requiresUserConfirmationOf = (definition: ToolDefinition, params: unknown): boolean => {

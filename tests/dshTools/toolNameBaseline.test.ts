@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { TOOL_DEFINITIONS } from "../../src/core/tools/toolDefinition.js";
 import { WORKSPACE_TOOL_DEFINITIONS } from "../../src/core/tools/workspaceTools.js";
 import { TOOL_METHOD_OVERRIDES } from "../../src/core/tools/methodOverrides.js";
-import { BRIDGE_TOOL_NAMES } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
+import { MODEL_TOOL_NAMES } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
 
 /**
  * D6 机检（G5 MCP 切换批）：模型可见工具名集合与切换前逐字一致。
@@ -63,7 +63,7 @@ describe("G5 D6 工具名基线机检", () => {
 
   it("基线文件与装配面本地治理件逐字一致", () => {
     const workspaceNames = new Set(WORKSPACE_TOOL_DEFINITIONS.map((d) => d.name));
-    expect(BRIDGE_TOOL_NAMES.filter((n) => workspaceNames.has(n))).toEqual(baseline.localWorkspaceTools);
+    expect(MODEL_TOOL_NAMES.filter((n) => workspaceNames.has(n))).toEqual(baseline.localWorkspaceTools);
   });
 
   it("基线 9 件经 rpcMethodFor 映射 = 内核 15 方法的模型面子集（逐字）", () => {

@@ -96,9 +96,9 @@ describe("D318——user_decision 审批卡双卡冗余修复", () => {
     // 其余 atf_* 契约工具：照旧 null（next()——chainTools 清单命中才直通）
     expect(exemptOutcomeOf({ toolName: "atf_workspace_status" })).toBeNull();
   });
-  it("bridgeFace 卡面终点：user_decision 不落泛化审批卡（源码结构锚）", async () => {
+  it("mcpToolFace 卡面终点：user_decision 不落泛化审批卡（源码结构锚）", async () => {
     const { readFileSync } = await import("node:fs");
-    const face = readFileSync(new URL("../../packages/extensions/atf-tools/src/bridgeFace.ts", import.meta.url), "utf-8");
+    const face = readFileSync(new URL("../../packages/extensions/atf-tools/src/mcpToolFace.ts", import.meta.url), "utf-8");
     expect(face).toContain("user_decision 的卡面");
     expect(face).toContain('} else if (definition.name === "atf_launch_execute") {');
   });

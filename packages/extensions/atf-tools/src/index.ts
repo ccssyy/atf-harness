@@ -27,7 +27,7 @@ import { scanLocalModels } from "@atf/dsh-atf-core";
 import { registerApprovalExempt } from "./approvalExempt.js";
 import { registerUnattendedQuestionGuard } from "./unattendedGuard.js";
 import { asToolValue, renderAsJsonText } from "./schemaTranslate.js";
-import { BridgeManager, buildBridgeTools } from "./bridgeFace.js";
+import { BridgeManager, buildMcpTools } from "./mcpToolFace.js";
 import { buildFileTools } from "./fileFace.js";
 import { buildPipelineTool } from "./pipelineFace.js";
 import { buildPreflightTool, type PreflightDeps } from "./preflightFace.js";
@@ -38,7 +38,7 @@ import { buildAttachmentsTool } from "./attachmentsFace.js";
 import { buildRunTrainingTool, buildEvalTools, buildPublishModelTool, type TrainingToolsConfig } from "./trainingFace.js";
 import { buildJointTrainTool } from "./jointTrainFace.js";
 import { buildRecordsQueryTool } from "./recordsFace.js";
-import { BRIDGE_TOOL_NAMES } from "./bridgeFace.js";
+import { MODEL_TOOL_NAMES } from "./mcpToolFace.js";
 
 /** Cordis 插件名（loader 诊断用）。 */
 export const name = "atf-tools";
@@ -115,7 +115,7 @@ export async function apply(ctx: any, config: AtfToolsConfig): Promise<void> {
     }
   }
 
-  console.log(`[atf-tools] apply()——注册 atf_* 工具集（桥接 ${BRIDGE_TOOL_NAMES.length} 件·含工作区治理两件 create_experiment/rebind_workspace；runsRoot=${config.runsRoot}）`);
+  console.log(`[atf-tools] apply()——注册 atf_* 工具集（桥接 ${MODEL_TOOL_NAMES.length} 件·含工作区治理两件 create_experiment/rebind_workspace；runsRoot=${config.runsRoot}）`);
   // 批㊶-W：boot 环境预检分级自愈（§五/§6.3——L1 产品写权限内自动补＋留痕；L2 系统级
   // fail-fast 给可复制命令。先于账本校验与工具装配：env 补齐影响后续全部取值链；
   // L1 补齐写 preflightEnv 局部束（不写 process.env——并发实例同进程装配互踩面收敛）。
@@ -186,7 +186,7 @@ export async function apply(ctx: any, config: AtfToolsConfig): Promise<void> {
     console.log(`[atf-tools] 直通留痕器已挂（approval/request waterfall 头部，ADR-0022；bash/write 恒留痕；训练链 ${chain.length} 件直通留痕；atf_* 契约工具 next() 走业务确认卡）`);
   }
 
-  for (const tool of await buildBridgeTools(ctx, manager, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, execHome: config.execHome })) ctx.tools.register(tool);
+  for (const tool of await buildMcpTools(ctx, manager, { runsRoot: config.runsRoot, kernelDir: config.kernelDir, execHome: config.execHome })) ctx.tools.register(tool);
   // D81-B 会话作用域隔离：run 面读具缺省只看当前会话归属工作区；跨任务 scope 走审批
   // （approvalFace 既有 seam——ctx 注入是审批服务唯一可达路径）。
   for (const tool of buildFileTools(config.runsRoot, { ctx })) ctx.tools.register(tool);

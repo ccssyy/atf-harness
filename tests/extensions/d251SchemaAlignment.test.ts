@@ -3,7 +3,7 @@ import { TOOL_DEFINITIONS } from "../../src/core/tools/toolDefinition.js";
 
 /**
  * D251 对账围栏（无机检不立规；事故来源=1109-2 真机死循环）：桥接层 fail-closed
- * 校验（bridgeFace D244）要求 atf_label_qc_resolve 必带 run_id+workspace_path，
+ * 校验（mcpToolFace D244）要求 atf_label_qc_resolve 必带 run_id+workspace_path，
  * 但 toolDefinition schema 此前未列 workspace_path——模型侧 strict 校验拒绝传
  * schema 外参数 → 报错要求带参数、schema 不让带的死循环（agent 烧 13 分钟无解）。
  *

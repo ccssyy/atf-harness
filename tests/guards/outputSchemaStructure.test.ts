@@ -28,7 +28,7 @@ const LOOSE_REF_USAGE = /schema:\s*looseObjectOutput\b/g;
 
 /** 本批次结构化声明的工具：output 块内必须带 properties（声明面存在性）。
  *  A1 批（2026-11-22）清退 11 位：9 个字面量 name 工具入本表；fileGuardFace
- *  （FILE_TOOL_DEFINITIONS 循环挂载）与 bridgeFace（BRIDGE_TOOL_NAMES 循环挂载）
+ *  （FILE_TOOL_DEFINITIONS 循环挂载）与 mcpToolFace（MODEL_TOOL_NAMES 循环挂载）
  *  两位的 name 为动态表达式（definition.name），toolDefinitionSlice 锚不到字面量
  *  ——由「循环挂载面」断言单独覆盖。 */
 const DECLARED_TOOLS: ReadonlyArray<{ tool: string; file: string }> = [
@@ -54,7 +54,7 @@ const DECLARED_TOOLS: ReadonlyArray<{ tool: string; file: string }> = [
 
 /** 循环挂载面（一位多工具、name 为动态表达式）：文件级声明面存在性。 */
 const LOOP_MOUNTED_FACES: ReadonlyArray<{ face: string; file: string; note: string }> = [
-  { face: "BRIDGE_TOOL_NAMES 桥接面", file: "bridgeFace.ts", note: "label-qc resolve 卡工具等" },
+  { face: "MODEL_TOOL_NAMES 桥接面", file: "mcpToolFace.ts", note: "label-qc resolve 卡工具等" },
 ];
 
 /** 递归收集 src 下全部 .ts 源文件。 */
@@ -149,7 +149,7 @@ describe("工具面自描述守卫（outputSchemaStructure）", () => {
     for (const { face, file, note } of LOOP_MOUNTED_FACES) {
       const text = readFileSync(join(SRC_ROOT, file), "utf8");
       // 循环挂载面唯一的 output 块即共享 schema 声明——文件级锚定足够
-      // （fileGuardFace/bridgeFace 的 name 为 definition.name 动态表达式，
+      // （fileGuardFace/mcpToolFace 的 name 为 definition.name 动态表达式，
       //  无法按工具名切片；本断言与「inline 裸形态为零」互为犄角）。
       const outputAt = text.indexOf("output: {");
       expect(outputAt, `${face}（${file}）应含 output 块`).toBeGreaterThanOrEqual(0);

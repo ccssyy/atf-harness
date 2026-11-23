@@ -39,7 +39,7 @@ import { resolveRunDir, sessionWorkspaceSlug } from "@atf/dsh-atf-core";
 import { resolvePipelineRunDir } from "./pipelineFace.js";
 import { SCOPE_UNRESOLVED_NOTE, resolveSessionWorkspace, sessionCwdOfExec } from "./scopeFace.js";
 // E8c：业务动作名映射单源（webui GPU 队列卡同表复用——D152 卡面零内部工具名）
-import { BRIDGE_ACTION_LABELS } from "../../../../src/agent/bridgeActionLabels.js";
+import { TOOL_ACTION_LABELS } from "../../../../src/agent/toolActionLabels.js";
 
 /** 批㊶-N N-5：会话身份提取（exec.agent.session.id；取不到＝undefined 如实跳过）。 */
 const sessionIdOfExec = (exec: unknown): string | undefined => {
@@ -114,7 +114,7 @@ export const resolveCardGroupSummary = (ds: Array<Record<string, unknown>>): str
   }
   return [...groups.entries()].map(([k, n]) => `${k} ${String(n)} 项`).join(" · ");
 };
-export const BRIDGE_TOOL_NAMES: readonly string[] = [
+export const MODEL_TOOL_NAMES: readonly string[] = [
   "atf_workspace_status",
   "atf_admit_data",
   "atf_label_qc_inspect",
@@ -126,7 +126,7 @@ export const BRIDGE_TOOL_NAMES: readonly string[] = [
   "atf_label_qc_resolve",
   "atf_gate",
   // 批㊶-S4b-T4b（owner 产品裁定 2026-10-15「1甲」）：编排执行点对 DSH 面开放——
-  // 桥接面六件→七件；本地治理径（WORKSPACE_TOOL_HANDLERS）经 bridgeFace 既有分派执行，
+  // 桥接面六件→七件；本地治理径（WORKSPACE_TOOL_HANDLERS）经 mcpToolFace 既有分派执行，
   // GPU 排队面（createLaunchGpuQueueFace）随 localHandler 注入同场生效。
   "atf_launch_execute",
   // 目录结构 v1 工具链（设计基线 D4/D5/D6）：工作区治理两件对 DSH 面开放——七件→九件。
@@ -447,7 +447,7 @@ const runKernelViaMcp = async (
 };
 
 
-export const buildBridgeTools = async (
+export const buildMcpTools = async (
   ctx: { get(service: string): unknown },
   manager: BridgeManager,
   localRoots?: { runsRoot: string; kernelDir: string; execHome: string },
@@ -457,7 +457,7 @@ export const buildBridgeTools = async (
   // 不静默降级本地 schema 副本）。schema 零复制：工厂件三件套全部取自此处。
   const mcpDescriptors = await manager.mcpTools();
   const descriptorByRawName = new Map(mcpDescriptors.map((tool) => [tool.name, tool]));
-  const definitions = allDefinitions().filter((definition) => BRIDGE_TOOL_NAMES.includes(definition.name));
+  const definitions = allDefinitions().filter((definition) => MODEL_TOOL_NAMES.includes(definition.name));
   for (const definition of definitions) {
     const governedTool = defineTool({
         name: definition.name,
@@ -468,7 +468,7 @@ export const buildBridgeTools = async (
         // 模型照 schema 传了却被 handler 判缺参）。
         parameters: translateParameters(definition.parameters),
         output: {
-          // 声明面（保守——候裁默认动作：族并集共有键）：本位一位多工具（BRIDGE_TOOL_NAMES
+          // 声明面（保守——候裁默认动作：族并集共有键）：本位一位多工具（MODEL_TOOL_NAMES
           // 十一件：workspace_status/admit_data/label_qc_inspect/label_qc_resolve/scratch_exec/
           // skill_read/gate/launch_execute/create_experiment/rebind_workspace），各工具成功
           // details 形态由内核 canonical 各自定义（run_id/admitted_count/counts/scope_ref 等）

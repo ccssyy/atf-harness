@@ -10,7 +10,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
-import { BridgeManager, allDefinitions, BRIDGE_TOOL_NAMES, buildBridgeTools } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
+import { BridgeManager, allDefinitions, MODEL_TOOL_NAMES, buildMcpTools } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
 import { approvalExemptAnswerer, registerApprovalExempt } from "../../packages/extensions/atf-tools/src/approvalExempt.js";
 import { buildFileTools } from "../../packages/extensions/atf-tools/src/fileFace.js";
 import { buildPipelineTool, PIPELINE_STAGES } from "../../packages/extensions/atf-tools/src/pipelineFace.js";
@@ -82,21 +82,21 @@ describe("atf-tools 注册面（11 工具清单＝指令要求）", () => {
     const manager = new BridgeManager(["node", mockBridgePath], repoRoot);
     const ctx = noApprovalCtx;
     const registered = [
-      ...toolNames(await buildBridgeTools(ctx, manager)),
+      ...toolNames(await buildMcpTools(ctx, manager)),
       ...toolNames(buildFileTools(tempRoot())),
       ...toolNames([buildPipelineTool(ctx, `node ${mockPipelinePath}`, 30_000)]),
     ];
-    for (const name of [...BRIDGE_TOOL_NAMES, "atf_run_list", "atf_report_read", "atf_metrics_compare", "atf_gpu_status", "atf_pipeline_stage"]) {
+    for (const name of [...MODEL_TOOL_NAMES, "atf_run_list", "atf_report_read", "atf_metrics_compare", "atf_gpu_status", "atf_pipeline_stage"]) {
       expect(registered).toContain(name);
     }
     // atf_hello 探针由 apply() 注册（不在 build* 工厂面）——工厂面＝指令 11 工具
-    // ＋批㊶-S4b-T4b（owner 产品裁定 2026-10-15「1甲」）：BRIDGE_TOOL_NAMES 六件→七件
+    // ＋批㊶-S4b-T4b（owner 产品裁定 2026-10-15「1甲」）：MODEL_TOOL_NAMES 六件→七件
     // （atf_launch_execute 编排执行点对 DSH 面开放）→ registered 11→12
     // ＋目录结构 v1 工具链（设计基线 D4/D5/D6）：七件→九件（atf_create_experiment／
     // atf_rebind_workspace 工作区治理两件投影）→ registered 12→14。
     // ＋F14（2026-10-28）：裁决入口 atf_label_qc_resolve 与 inspect 同面开放——只给 inspect
     // 时会话里"看得到冲突、交不了裁决"，agent 只能重开任务并新增 run 目录 → registered 14→15。
-    // ＋G5（2026-11-22）：MCP 化模型面全量投影——BRIDGE_TOOL_NAMES 十件→十四件
+    // ＋G5（2026-11-22）：MCP 化模型面全量投影——MODEL_TOOL_NAMES 十件→十四件
     //   （atf_fact_scan/atf_data_admission_request/atf_preparation_propose/
     //    atf_style_cluster_execute 经 MCP tools/list 进 DSH 面）→ registered 15→19。
     expect(registered).toHaveLength(17);
@@ -119,7 +119,7 @@ describe("atf-tools 注册面（11 工具清单＝指令要求）", () => {
     ).toThrow(/无法映射/);
     // 全部 11 工具的定义在手搓契约单源里可找到（桥接 6）；文件 4 与 pipeline 为仓侧新增面
     const contractNames = [...TOOL_DEFINITIONS, ...WORKSPACE_TOOL_DEFINITIONS].map((definition) => definition.name);
-    for (const name of BRIDGE_TOOL_NAMES) expect(contractNames).toContain(name);
+    for (const name of MODEL_TOOL_NAMES) expect(contractNames).toContain(name);
     expect(allDefinitions().length).toBeGreaterThanOrEqual(TOOL_DEFINITIONS.length);
   });
 });
@@ -131,7 +131,7 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
   const localRoots = { runsRoot: tempRoot(), kernelDir: join(repoRoot, ".atf-pinned"), execHome: tempRoot() };
 
   it("atf_workspace_status：桥接触发＋canonical 结果序列化（scope_ref 透传）", async () => {
-    const tools = await buildBridgeTools(noApprovalCtx, manager, localRoots);
+    const tools = await buildMcpTools(noApprovalCtx, manager, localRoots);
     const result = (await findTool(tools, "atf_workspace_status").execute({}, fakeExec)) as Record<string, unknown>;
     expect(result).not.toHaveProperty("error");
     // mock 对端的 workspace_status 返回内含 scope_ref（契约 v2）——原样序列化给模型
@@ -139,14 +139,14 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
   }, 20_000);
 
   it("atf_gate query：只读免审批直通桥接（requiresApprovalFor 谓词语义保留）", async () => {
-    const tools = await buildBridgeTools(noApprovalCtx, manager, localRoots); // 无审批服务——query 仍应成功（免审批）
+    const tools = await buildMcpTools(noApprovalCtx, manager, localRoots); // 无审批服务——query 仍应成功（免审批）
     const result = (await findTool(tools, "atf_gate").execute({ gate: "G1（数据准入闸，命名分流）", action: "query" }, fakeExec)) as Record<string, unknown>;
     expect(result).not.toHaveProperty("error");
   }, 20_000);
 
 
   it("atf_admit_data：chain_advance 直通触桥（审批面 rejected 不再拦截——ADR-0022）", async () => {
-    const tools = await buildBridgeTools(approvalCtx("rejected"), manager, localRoots);
+    const tools = await buildMcpTools(approvalCtx("rejected"), manager, localRoots);
     const result = (await findTool(tools, "atf_admit_data").execute({ source_root: "/tmp/a", split_root: "/tmp/b" }, fakeExec)) as Record<string, unknown>;
     expect(result).not.toMatchObject({ error: "approval_denied" });
     // 触桥实证：mock 对端业务校验结果（invalid_params）回流，而非审批拒绝
@@ -155,13 +155,13 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
 
 
   it("atf_label_qc_inspect：审批 allowed-once → 触桥（契约参数面）", async () => {
-    const tools = await buildBridgeTools(approvalCtx("allowed-once"), manager, localRoots);
+    const tools = await buildMcpTools(approvalCtx("allowed-once"), manager, localRoots);
     const result = (await findTool(tools, "atf_label_qc_inspect").execute({ dataset_id: "ds-mock" }, fakeExec)) as Record<string, unknown>;
     expect(JSON.stringify(result).length).toBeGreaterThan(0);
   }, 20_000);
 
   it("atf_gate advance：直通触桥（approval unavailable 不再 fail-closed——ADR-0022；对端业务拒绝结构化回流）", async () => {
-    const tools = await buildBridgeTools(approvalCtx("unavailable"), manager, localRoots);
+    const tools = await buildMcpTools(approvalCtx("unavailable"), manager, localRoots);
     const result = (await findTool(tools, "atf_gate").execute({ gate: "G1（数据准入闸，命名分流）", action: "advance", evidence_refs: ["sha256:deadbeef"] }, fakeExec)) as Record<string, unknown>;
     expect(result).not.toMatchObject({ error: "approval_denied" });
     expect(JSON.stringify(result)).toContain("unknown_gate");
@@ -175,7 +175,7 @@ describe("atf-tools 桥接面（真 mock 桥——契约忠实对端）", () => 
 // ---------------------------------------------------------------- 批㊶-P1 S2——exec home 会话作用域化
 
 // B类-A（2026-11-23）：exec home 会话子目录化的用例以 atf_scratch_exec 为探针，
-// 该工具已退役（改 vendor bash）。机制本体（bridgeFace localHostFor）未删，
+// 该工具已退役（改 vendor bash）。机制本体（mcpToolFace localHostFor）未删，
 // 但当前无等价探针——若恢复 vendor bash 的 env 注入面，应补回等价黑盒锚。
 
 

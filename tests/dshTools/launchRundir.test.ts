@@ -10,7 +10,7 @@ import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { localHostFor } from "../../packages/extensions/atf-tools/src/bridgeFace.js";
+import { localHostFor } from "../../packages/extensions/atf-tools/src/mcpToolFace.js";
 
 const roots = () => {
   const base = mkdtempSync(join(tmpdir(), "launch-rundir-"));
