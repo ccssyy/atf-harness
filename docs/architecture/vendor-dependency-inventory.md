@@ -80,3 +80,58 @@
 
 - 新增 vendor 消费面（新 alias/新装配点/新 eval 载体）随批入表——盘点闭集只增不减，登记义务由守护测试 LOCK↔patch 明细对账（C2）锚 patch 面，其余面靠本表声明＋评审。
 - 盘点发现未登记消费点：先呈报 owner 确认再入表（闭集纪律，同判读段盘点惯例）。
+
+---
+
+## 面 8 · G7 新增：工作区注册链（2026-11-23）
+
+**为什么新增**：ATF profile 是**独立生成的**（`deploy/profiles/web/generate.py` 从模板＋overlay 产出 `<DSH_HOME>/profiles/web/cordis.patch.yml`），**不继承 vendor `web-app` bundle**。因此 bundle 里挂的 storage 链与 workspace 在 ATF 侧一直不存在。
+
+**后果（G7 部署实锚）**：`atf-tools` 的 `ctx.get('workspaceRegistry')` 恒 `undefined` → 工作区源恒回落「手写 `<DSH_HOME>/storages/workspace.json`」。
+
+### 面 8.1 · 新增装配五件（级 A）
+
+| 消费方式 | 实锚 |
+|---|---|
+| `storage`（KV 中枢）→ `storage-json`（`dshHomePath('storages')`，与 vendor 同落点）→ `storage-domain`（`backend: json`）→ `session-persistence-jsonl`（`dshHomePath('sessions')`）→ `workspace` | `deploy/profiles/web/cordis.patch.template.yml` 的 G7 段（顺序即依赖序；`workspace` 的 `static inject = ['storageDomain','sessionPersistence']`） |
+
+**迁移成本**：零。`storage-json` 的 root 与 vendor 同落点，既有 81 条 `storages/workspace.json` 直接被识别。
+
+### 面 8.2 · `!!js` 标签三方一致（级 B）
+
+| 消费方式 | 实锚 |
+|---|---|
+| 模板解析：`generate.py` 与 `load-yaml.py` 注册 `tag:yaml.org,2002:js` 构造器（**原样透传，不在生成期求值**） | `deploy/profiles/web/generate.py`、`deploy/profiles/web/load-yaml.py` |
+| drift 对账：`check-drift.py` 同注册（原先无构造器 → 落「不可解析」分支导致断言误判） | `deploy/profiles/web/check-drift.py` |
+| 运行时求值：vendor `patch.ts` 的 `customTags` 也只 `resolve: v => v`（返回原文），由 boot 侧 `ctx.provide('dshHomePath', …)` 执行 | `vendor/.../packages/boot/plugin-manager/src/patch.ts` |
+
+**纪律**：生成器**不得**求值 `!!js`——求值会与 vendor 形成双源。
+
+### 面 8.3 · 工作区登记改走 vendor API（级 P，替代手写存储）
+
+| 项 | 改前 | 改后 |
+|---|---|---|
+| 工作区列表 | 手写解析 `storages/workspace.json` | `ctx.inject(['workspaceRegistry'])` 的 `list()`（81 条） |
+| 新记录登记 | `appendRegistryRecord` 手写文件 | vendor `create(path, title)`（幂等） |
+| title 迁移 | `updateRegistryRecordTitle` 手写文件 | vendor `rename(id, title)`（vendor 的 rename 语义即改 title） |
+| path 迁移 | `rebindWorkspaceToPath` 手写文件 | **已退役**（vendor 明写 path immutable；`atf_rebind_workspace` 工具删除） |
+
+**端口设计**：`WorkspaceRegistryPort`（`setWorkspaceRegistryPort`）——本文件保持纯函数可测，端口由 `atf-tools` 装配期注入；未注入时回落文件写入（测试/无 vendor 场景行为逐位不变）。
+
+### 面 8.4 · 工作区 id 单源（级 P）
+
+| 项 | 说明 |
+|---|---|
+| 权威 id | vendor 注册表的 record key（`storages/workspace.json` 的 key） |
+| `.atf/workspace.json` 的 `id` | **已退役**（`WorkspaceIdentity.id` 改可选）——旧文件读得出，新写入不产生 |
+| `experiment.json` 的 `workspaceId` | 取 `resolveVendorWorkspaceId`（按 canonical 路径查注册表） |
+| 保留的领域数据 | `.atf/workspace.json` 的 `experiments[]` 索引（vendor 无实验概念，D4 裁定） |
+
+**关键 API 语义差异（G7 实锚）**：
+
+| 写法 | 行为 |
+|---|---|
+| `ctx.get('svc')` | **立即读**，服务未就绪返回 `undefined` |
+| `ctx.inject(['svc'], cb)` | **等依赖就绪后触发回调**（vendor `llm-pi-ai` 的 `ctx.inject(['settings'], …)` 是同构范例） |
+
+ATF `apply` 早于 workspace 插件就绪——必须用 `inject`。

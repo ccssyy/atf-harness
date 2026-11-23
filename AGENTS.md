@@ -5,10 +5,10 @@
 
 ## 1. 项目定位
 
-本仓实现 **atf-harness**：把 ATF 训练内核变成一个可独立运行的训练 Agent（R2a 路线——TS harness 借鉴 Pi 设计 + Python 内核经 stdio JSONL 桥接）。
+本仓实现 **atf-harness**：把 ATF 训练内核变成一个可独立运行的训练 Agent（重装路线——vendor DSH 为宿主，ATF 只写训练域增量；**内核经 MCP（stdio JSON-RPC 2.0）对接**，G5 起 `src/bridge/` 与 stdio JSONL 分帧层已退役）。
 
 - **本仓（atf-harness）**：L2–L4 层。TypeScript，trunk-based（main + 短命分支）。
-- **内核仓（ATF）**：L1 层，位于 `<ATF_KERNEL_DIR>`。harness 通过 spawn 其 `atf` CLI 子进程驱动它，**不做任何代码级依赖**（无 submodule、无 pip/npm 依赖、不 import）。
+- **内核仓（ATF）**：L1 层，位于 `<ATF_DSH_KERNEL_DIR>`（> `ATF_CLI_PATH` > `ATF_KERNEL_SOURCE` > 兄弟目录，见 `src/core/workspace/instancePin.ts`）。harness 经 **MCP server**（`python3 -m agentic_training_flow.mcp`）驱动它，**不做任何代码级依赖**（无 submodule、无 pip/npm 依赖、不 import）。
 - **长期路线**（**路线轴定义**，详见决策文档 §路线图）：0 决策 ✅ → 1 headless 冒烟 → 2 深水区 → **3+4 合并为 L1「产品本体落地」**。**本轴已按 2026-09-15 owner 裁定 D15-a 修订**：原 Phase 3（宿主嵌入 / ACP server）与原 Phase 4（表面壳，原定语"条件阶段 · 可砍"）自该裁定起**合并为一个阶段**——原因是自有 UI 已确立为**产品本体主入口**（前端一），不再是"若宿主嵌入体验够用则砍掉"的条件阶段；ACP / MCP 是两个集成面（配件）。合并后按批次推进：**L1**（`core/` 抽取 ＋ 自有 UI 最小前端 TUI ＋ ACP 外壳 ＋ MCP 外壳）→ **L1b** → **L1c**（Web UI）→ **L1d**（桌面 app）。最终集成形态 = ACP / skills 双入口，**两仓永不合并**。
 
 ## 2. 权威文档体系（docs/）
@@ -49,31 +49,24 @@
 - 本仓细则：`docs/测试分层与验收判据面.md`（判据面白名单、出件前三问、证据两栏、缺陷分流、本仓落地锚）。
 - 硬规则同源：`~/.zcode/AGENTS.md`「测试分层（硬规则）」；操作清单：`~/.zcode/sop/test-acceptance.md`。
 
-## 4. 契约与 pin 管理
+## 4. 契约与 pin 管理（G7／D9 后：pin 树已退役）
 
-- 仓内 `bridge.contract.yaml` 是 harness 对 ATF 认知的**唯一真相源**：JSONL 帧格式 + atf 子命令签名 + canonical output schema + `atf_upstream` pin（commit + contract_version）。
-- **当前 pin：tag `v0.7.8b0`（commit `d291270cb6af6ada4227c832ac00a2eeea0276af`，2026-09-26；F5 确认凭据与流程顺序强制批＋F1 行动指令段补丁发版，re-pin 2026-09-26）**。pin 只落在 ATF 发版 tag 上，不追 main 中间态。
-- contract tests 运行前提：`ATF_CLI_PATH` 指向一份 **checkout 在 pin 上的 ATF 只读副本**，测试先校验其 HEAD sha 与 pin 一致，不一致直接 fail：
-  ```bash
-  git -C <ATF_KERNEL_DIR> worktree add <HARNESS_DIR>/.atf-pinned v0.6.0b0
-  export ATF_CLI_PATH=<HARNESS_DIR>/.atf-pinned
-  ```
-  （`.atf-pinned/` 加入 .gitignore，不进本仓。）
-- **re-pin 三步**（唯一合法的升级路径，禁止自动追新）：
-  ① 触发：ATF 侧 `contract-breaking` 标记，或 harness 需要内核新能力；
-  ② 执行：worktree 切到目标 tag → 改 contract.yaml pin（pin 的 contract_version 属会话协议版本轴，随内核 bump 同步——双轴口径见 bridge.contract.yaml「版本轴注记」2026-09-13；桥接契约版本轴不随 re-pin 变动）→ 跑 contract tests，红了修 harness 侧适配；
-  ③ 收口：PR 改 pin → owner review → 合入。
-- 契约变更双向纪律：本仓改契约 = 显式 PR + 双仓测试；ATF 侧改坏契约 = contract tests 红，影响面即契约面，运行时永不静默炸。
+- **协议单源＝内核**：MCP `tools/list` 是 harness 对内核能力的唯一真相源（15 个方法，`outputSchema` 由内核对侧声明）。harness **不复制** schema——守卫 `tests/guards/schemaZeroCopy.test.ts` 钉死。
+- **pin 树已退役（2026-11-22 D9）**：`ATF_INSTANCE_PIN_ROOT` 从实例 env 移除；`resolveKernelDir` 取代 `resolveInstancePinDir`——内核目录单一来源，**不再有 pin 副本**。历史 pin `v0.7.8b0` 与 `.atf-pinned/` 用法一并废止。
+- **内核目录解析**（`src/core/workspace/instancePin.ts`）：
+  `ATF_DSH_KERNEL_DIR` > `ATF_CLI_PATH` > `ATF_KERNEL_SOURCE` > 兄弟目录 `../AgenticTrainingFlow` > 空串。
+  两条取舍：缺省兄弟目录须**实存**（`existsSync` 才返回）；都不可得返回**空串而非猜路径**（空串被 boot preflight 判假 → L2 fail-fast 指名缺哪个 env）。
+- **接口变更纪律**：内核侧改 MCP 方法签名/输出 → harness 的契约测试红，影响面即契约面，运行时永不静默炸。harness 侧不向上游提 PR（owner 裁定：独立产品，升级时拉取同步）。
 
 ## 5. 工程约定
 
 - TypeScript strict，Node ≥ 22，测试框架 vitest；Result 类型贯穿一切可能失败的操作，禁止裸 throw 穿过桥接边界。
 - 测试运行分层（测试提速 T2，指令 `edaebcb148f7` §三）：开发批＝触达面子集——按目录 `npx vitest run tests/<dir>`、按改动文件反向定位 `npx vitest related <files>`；全量与 Playwright 产品面验收只在收口批（合并后 main＋统一重启窗口）。smoke 脚本（`npm run smoke:*` 与 `tests/dshUi/smoke_*`）只在对应层验收时跑，不在开发批循环跑（每个全量 build 属预期）。transform 持久缓存已开（vitest `fsModuleCache`，缓存落 `node_modules/.vitest-cache`）。
-- 目录（L1/L1b 落地后，2026-09-16）：`src/core/`（共享中间层：会话事件/审批闸/三层工作区/工具定义与 canonical/run 引擎/投影面）、`src/rpc/`（共享 JSON-RPC 2.0/stdio 传输层，ACP/MCP 共用）、`src/bridge/`（内核 stdio JSONL 桥接）、`src/llm/`（模型面 provider 与假端点）、`src/ui/`（前端一 TUI 主入口）、`src/acp/`（前端二 ACP agent 外壳）、`src/mcp/`（前端三 MCP server 外壳）、`src/cli/`（CLI 挂起应答通道）、`src/session|tools|workspace/`（各层冒烟入口留存位）、`scenarios/`、`tests/`、`docs/`。依赖方向：三外壳 → core → {bridge, llm}（`tests/core/boundary.test.ts` 静态守卫；`dependencies` 恒空）。
+- 目录（重装路线，2026-11-23 实测）：`packages/extensions/`（**产品本体**：`atf-core` 领域资产 38 文件、`atf-tools` 工具面、`atf-ui` 界面、`atf-subagent` 已退役）、`src/mcp/`（MCP 连接器：`connection`/`atfCommand`/`bridgeCommand`）、`src/core/`（`workspace` 4 文件 + `tools` 工具定义与执行管线）、`src/webui/`（纯函数：run 只读面/配置卡/设置）、`src/agent/`（仅 `toolActionLabels` 18 行）。**已删除**：`src/bridge/`、`src/llm/`、`src/core/session/`、自研 loop 全族。依赖方向：`packages/extensions/*` → `@atf/dsh-atf-core` → vendor；`src/` 侧只剩被 packages 引用的领域件。
 - 入口与命令（构建产物 `dist/`）：`node dist/ui/tui.js`（TUI 主入口；多轮续跑）、`node dist/cli/resume.js --list|--answer`（挂起应答通道）、`node dist/acp/main.js`（ACP agent；acpx@0.15.1 对端验收，开发期工具不入库）、`node dist/mcp/main.js`（MCP server，7 细粒度工具）。冒烟八条：`npm run smoke:p2s1|p2s2|p2s3|r2|l1a|l1ui|l1acp|l1mcp`；真端点试用 `trial:l1a-real`。
 - MCP 写类工具预授权（L1b-D1=A）：白名单配置缺省 `~/.atf-harness/mcp-preauth.json`（0600；`ATF_MCP_PREAUTH` 或 `--preauth` 指路径），白名单外写动作默认拒绝；文件缺失/解析失败/权限过宽一律视同空白名单（fail-closed）；`host_id`＝客户端自报身份（非强身份鉴别）。
 - 会话事件 schema（12 事件类型全启用、`domain_refs` 三元组 `{journal_type, fact_id, sha256_digest}`、compaction 白名单、`projection` 预留位）是全仓最重要的 schema，一次定死，细节以对应任务书与 ADR-06 为准。
-- 内核 pin 现状 `v0.6.0b0`（归属与 re-pin 三步见 §4）；re-pin 至含 K4 的内核发版（`.atf-pinned` → `v0.7.0b0`）为登记待办，届时 mock 对端 `ledger_record` wire 形态同步切换（另走变更单）。
+- **内核来源现状**：pin 树已退役（§4）——内核目录经 `resolveKernelDir` 单源解析，dev 实际跑 `<ATF_KERNEL_SOURCE>` 主检出。CI 里由 `ATF_HARNESS_SOURCE`／`ATF_KERNEL_SOURCE` 注入路径，无需 worktree 副本。
 - 提交信息：`feat/fix/test/docs/chore(scope): 中文描述`；trunk-based，slice/PR 粒度合入 main；milestone tag 仅在 phase 验收全过后打（首个 = `v0.1.0`）；commit/merge/push/re-pin 等 repo 写操作执行主体＝zcode（协议 §3.5 铁律五）。
 
 ## 6. 沟通纪律
