@@ -13,7 +13,7 @@ const SERVER_SRC = () => readFileSync(join(import.meta.dirname, "../../packages/
 
 describe("D11-2 数据面——进程 top1 归约（复用钉：解析只在 readOnlyTools 一处）", () => {
   it("gpuProcTopByIndex：多进程取 usedMemory 最大；空/无归属/非数值 → 不归属（不猜）", async () => {
-    const { gpuProcTopByIndex, parseComputeAppsWithIndex } = await import("../../src/webui/readOnlyTools.js");
+    const { gpuProcTopByIndex, parseComputeAppsWithIndex } = await import("@atf/dsh-atf-core");
     // 真解析链端到端：compute-apps 输出 × index,uuid 对表 → top1 归约
     const apps = parseComputeAppsWithIndex(
       "111, python, 42188, UUID-A\n222, python, 28416, UUID-A\n333, python, 9000, UUID-B\n",
@@ -32,7 +32,7 @@ describe("D11-2 数据面——进程 top1 归约（复用钉：解析只在 rea
     expect(gpuProcTopByIndex(bad!).size).toBe(0);
     expect(gpuProcTopByIndex([]).size).toBe(0);
     // 全仓 nvidia-smi 查询串闭集（§一.5 复用钉——无第二套查询串）
-    const tools = readFileSync(join(import.meta.dirname, "../../src/webui/readOnlyTools.ts"), "utf8");
+    const tools = readFileSync(join(import.meta.dirname, "../../packages/extensions/atf-core/src/readOnlyTools.ts"), "utf8");
     const queries = tools.match(/--query-[a-z-]+=[a-z._,]+/g) ?? [];
     expect(queries).toContain("--query-gpu=index,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw");
     // 三条 query-gpu＝All 面（D11-2 扩展）＋单卡面（atf_gpu_status 工具）＋uuid 对表面（进程归属）

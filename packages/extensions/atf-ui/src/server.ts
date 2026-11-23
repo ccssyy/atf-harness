@@ -16,8 +16,8 @@ import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { buildArtifactsSnapshot, buildMonitorSnapshot } from "./snapshot.js";
 import { PANEL_HTML } from "./panel.js";
-import { queryNvidiaSmi, queryNvidiaSmiAll, queryGpuComputeApps, gpuProcTopByIndex } from "../../../../src/webui/readOnlyTools.js";
-import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS, renderPixelPairRows, renderTokenBudgetRows } from "../../../../src/webui/configConfirm.js";
+import { queryNvidiaSmi, queryNvidiaSmiAll, queryGpuComputeApps, gpuProcTopByIndex } from "@atf/dsh-atf-core";
+import { buildConfigConfirmFields, CONFIG_CONFIRM_KEYS, renderPixelPairRows, renderTokenBudgetRows } from "@atf/dsh-atf-core";
 import { resolveMcpDeployment, kernelVersionSync, kernelRootOf, type BridgeDeployment } from "../../../../src/mcp/bridgeCommand.js";
 import { resolveInstanceKernelDir } from "../../../../src/core/workspace/instancePin.js";
 import {
@@ -48,7 +48,7 @@ import {
   type SessionRunBindingRecord, type UnboundReason,
 } from "@atf/dsh-atf-core";
 import { checkApprovalLedgerStartup, ledgerEnvPrefixForShell, homeLedgerPathOf } from "@atf/dsh-atf-core";
-import { EFFORT_CLOSED_IDS, openSettingsStore, type SettingsDoc, type SettingsStore } from "../../../../src/webui/settings.js";
+import { EFFORT_CLOSED_IDS, openSettingsStore, type SettingsDoc, type SettingsStore } from "@atf/dsh-atf-core";
 import {
   instanceSettingsPath,
   effectiveStorageValues,
@@ -56,7 +56,7 @@ import {
   validateVenvPath,
   validateGpuBaseline,
   ensureConventionSubdirs,
-} from "../../../../src/webui/storageSettings.js";
+} from "@atf/dsh-atf-core";
 import { detectAvailableGpuCount, checkTokenBudget } from "@atf/dsh-atf-core";
 import { listRegistryRecords, registeredWorkspaceRoots, resolveDshHome } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { readAlerts } from "@atf/dsh-atf-core";

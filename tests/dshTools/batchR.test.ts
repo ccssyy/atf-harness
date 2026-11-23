@@ -15,7 +15,7 @@ import {
 } from "@atf/dsh-atf-core";
 import { checkStartModelPath } from "../../packages/extensions/atf-tools/src/trainingFace.js";
 import { evalAgentRecommend, RECOMMENDABLE_KEYS } from "@atf/dsh-atf-core";
-import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, parseConfigEditText } from "../../src/webui/configConfirm.js";
+import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, parseConfigEditText } from "@atf/dsh-atf-core";
 import { buildIterationSummary } from "../../packages/extensions/atf-ui/src/server.js";
 
 const tempRoots: string[] = [];

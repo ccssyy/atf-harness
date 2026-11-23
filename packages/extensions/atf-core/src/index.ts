@@ -328,3 +328,10 @@ export * from "./trainProbe.js";
 export * from "./trainingCompletion.js";
 export * from "./trainingPreflight.js";
 export * from "./trainingPromptPreview.js";
+
+// ── 从 src/webui 迁入（2026-11-23：领域资产归 packages，src 清空）──
+export * from "./gpuQueue.js";
+export * from "./readOnlyTools.js";
+export * from "./settings.js";
+export * from "./storageSettings.js";
+export * from "./configConfirm.js";

@@ -52,7 +52,7 @@ import { bindSessionRun, readSessionBinding, resolveActiveRun, resolveBindingsHo
 import { buildRunCandidates } from "@atf/dsh-atf-core";
 import { appendLedgerAuditComment, ledgerEnvPrefixForShell, shellSingleQuoted } from "@atf/dsh-atf-core";
 import { dualStageNote } from "./confirmFace.js";
-import { deriveAtfRoot } from "../../../../src/webui/storageSettings.js";
+import { deriveAtfRoot } from "@atf/dsh-atf-core";
 
 /** 发布库位缺省派生（统一根 models 子目录——env-only 零字面量；未派生＝null）。 */
 export const derivePublishRoot = (env: Readonly<Record<string, string | undefined>>): string | null => {
@@ -63,7 +63,7 @@ import { scanLocalModels } from "@atf/dsh-atf-core";
 import { humanizeKernelError, scanKernelErrorFace } from "@atf/dsh-atf-core";
 // E9a·H2-H5：评估面走 docSlots 唯一路径表（ADR-0017 决定 10/12——禁再自拼槽位路径）
 import { listDocSlots } from "../../atf-ui/src/docSlots.js";
-import { queryNvidiaSmiAll } from "../../../../src/webui/readOnlyTools.js";
+import { queryNvidiaSmiAll } from "@atf/dsh-atf-core";
 import { buildEvalOrchArgs } from "./evalOrchArgs.js";
 
 // ── 批㊶Q增补三 段2：start 探活（终结 started:true 假成功）──

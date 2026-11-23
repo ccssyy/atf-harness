@@ -35,7 +35,7 @@ import {
   runBootPreflight,
   type PreflightProbes,
 } from "../../../src/core/workspace/bootPreflight.js";
-import { gpuOfflinePayload, queryNvidiaSmi, queryNvidiaSmiProbed } from "../../../src/webui/readOnlyTools.js";
+import { gpuOfflinePayload, queryNvidiaSmi, queryNvidiaSmiProbed } from "@atf/dsh-atf-core";
 
 /** 未走 GPU 探针的其余预检项一律静音（只留被测的那一面）。 */
 const quietProbes: PreflightProbes = {

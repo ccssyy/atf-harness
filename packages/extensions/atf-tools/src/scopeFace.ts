@@ -30,7 +30,7 @@ import {
   resolveDshHome,
 } from "../../../../src/core/workspace/workspaceRegistry.js";
 import { flatRunDirNames } from "@atf/dsh-atf-core";
-import { deriveRunEntry } from "../../../../src/webui/readOnlyTools.js";
+import { deriveRunEntry } from "@atf/dsh-atf-core";
 
 /** 会话 cwd 取法（vendor ptc.ts 同款锚：exec.agent.session.header.cwd——会话创建时的
  *  绝对工作目录；取不到＝undefined，调用方 fail-closed）。 */

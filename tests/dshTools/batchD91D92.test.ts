@@ -26,7 +26,7 @@ import {
   CONFIG_CONFIRM_KEYS,
   READONLY_CONFIG_KEYS,
   buildConfigConfirmFields,
-} from "../../src/webui/configConfirm.js";
+} from "@atf/dsh-atf-core";
 import { configFormFieldsOf } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 
 const tempRoots: string[] = [];

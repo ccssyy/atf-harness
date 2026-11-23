@@ -12,7 +12,7 @@
  *   ⑤ amber 卡与 atf_gpu_status 报全卡状态表＋归属（formatCardTable）。
  * 真跑守门不变：命中琥珀再确认卡人工放行（全自动档免再确认——通报化）。
  */
-import { queryNvidiaSmiAll, queryGpuComputeApps, type GpuCardStatus, type GpuComputeApp } from "../../../../src/webui/readOnlyTools.js";
+import { queryNvidiaSmiAll, queryGpuComputeApps, type GpuCardStatus, type GpuComputeApp } from "@atf/dsh-atf-core";
 
 /** 训练进程特征（cmdline/进程名任一命中即训练占用——trainingFace 同源 re-export）。 */
 export const TRAINING_RESIDUE_PATTERN = /torchrun|launcher\.py|llamafactory|deepspeed|pt_elastic/i;

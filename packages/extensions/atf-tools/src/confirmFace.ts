@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows, pixelPairViolationOf, READONLY_CONFIG_KEYS, configFieldPlaceholderOf, configBlockOf, configChoiceValuesOf } from "../../../../src/webui/configConfirm.js";
+import { buildConfigConfirmFields, saveConfigSnapshot, renderTokenBudgetRows, pixelPairViolationOf, READONLY_CONFIG_KEYS, configFieldPlaceholderOf, configBlockOf, configChoiceValuesOf } from "@atf/dsh-atf-core";
 import { buildPipelineTool } from "./pipelineFace.js";
 
 /** 卡面字段（buildConfigConfirmFields 返回形态——本地结构类型；批㊶-Q 增第四态 agent_recommend，
@@ -52,8 +52,8 @@ import { isValidRunId, resolveRunDir, resolveRunFile, resolveRunSubdir, sessionW
 import { registeredWorkspaceRoots } from "../../../../src/core/workspace/workspaceRegistry.js";
 // F1 前置预检共用交互流（循环 import 安全：两侧顶层均零执行对方导出——函数体内引用）
 import { preflightScriptAvailable, runPreflightFlow, resolvePreflightRunDir, type PreflightDeps, type PreflightRunDirSource } from "./preflightFace.js";
-import { openSettingsStore } from "../../../../src/webui/settings.js";
-import { instanceSettingsPath } from "../../../../src/webui/storageSettings.js";
+import { openSettingsStore } from "@atf/dsh-atf-core";
+import { instanceSettingsPath } from "@atf/dsh-atf-core";
 
 /** 批㊶-N N-5：会话身份提取（exec.agent.session.id；取不到＝undefined 如实跳过）。 */
 const sessionIdOfExec = (exec: unknown): string | undefined => {

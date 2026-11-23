@@ -1,3 +1,12 @@
+export const TOOL_ACTION_LABELS: Readonly<Record<string, string>> = {
+  atf_workspace_status: "查看训练工作区状态",
+  atf_admit_data: "登记训练数据集",
+  atf_label_qc_inspect: "抽检标注质量",
+  atf_gate: "调用流程闸门核验",
+  atf_launch_execute: "启动训练编排",
+  atf_create_experiment: "创建训练实验",
+};
+
 /**
  * 批⑯ 增量 A（2026-09-30，指令 f4ef32e2）——GPU 排队语义（产品功能，非运维探测）。
  *
@@ -18,7 +27,7 @@ type ChatEvent = {
   readonly at: string;
 };
 // E8c·D159：确认卡动作名单源（与桥接审批卡同一映射——禁第二套文案表）
-import { TOOL_ACTION_LABELS } from "../agent/toolActionLabels.js";
+
 
 /** 命中阈值（指令口径：利用率 <20% 且显存 <10GB 连续 2 周期）。显存单位 MiB。 */
 export const GPU_HIT_UTILIZATION_PCT = 20;

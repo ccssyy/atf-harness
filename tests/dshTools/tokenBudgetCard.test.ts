@@ -23,7 +23,7 @@ import {
   thousandsOf,
   tokenBudgetSourceNoteOf,
   TOKEN_BUDGET_KEYS,
-} from "../../src/webui/configConfirm.js";
+} from "@atf/dsh-atf-core";
 import { evalAgentRecommend } from "@atf/dsh-atf-core";
 import { configFormFieldsOf, domainHintOf, pixelPairChangeNoteOf, pixelPairViolationNoteOf, tokenBudgetCheckOf, tokenBudgetFaceText, type ConfigConfirmField } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 import { buildConfirmTools } from "../../packages/extensions/atf-tools/src/confirmFace.js";
@@ -152,7 +152,7 @@ describe("批次 R H1-2——别名退役与 65536 退役 grep 锚（源码面�
   /** 配置链源码面（live 文件集——confirmFace 卡面/configConfirm 键表/smartDefaults 单源/
    *  agentRecommend 护栏/atf-ui server web 面/client 渲染/kernelErrorFace 错误回流）。 */
   const faces = [
-    "src/webui/configConfirm.ts",
+    "packages/extensions/atf-core/src/configConfirm.ts",
     "packages/extensions/atf-core/src/smartDefaults.ts",
     "packages/extensions/atf-core/src/agentRecommend.ts",
     "packages/extensions/atf-core/src/kernelErrorFace.ts",

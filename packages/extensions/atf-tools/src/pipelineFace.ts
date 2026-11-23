@@ -158,7 +158,7 @@ import { formAskQuestion, editsFromFormAnswers, visibleDevicesViolationsOf, type
 import { decideConstructionParams } from "./constructionGate.js";
 import { approvalBypassed, permissionTierOf } from "./permissionTier.js";
 import { appendExemptionRecord } from "./approvalExempt.js";
-import { pixelPairViolationOf } from "../../../../src/webui/configConfirm.js";
+import { pixelPairViolationOf } from "@atf/dsh-atf-core";
 // E4-乙：bs 内核缺省分档单源＋accum 派生（training_overrides 桥 convention/derived 兜底）
 import { TRAINING_PIN_CONSTANTS, deriveGradAccum, kernelBsDefaultOf } from "@atf/dsh-atf-core";
 import { fieldNameMapOf, readExperimentGrouping, renderGroupingSection } from "@atf/dsh-atf-core";

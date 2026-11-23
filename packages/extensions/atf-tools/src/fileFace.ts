@@ -11,7 +11,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { listRuns, queryNvidiaSmiProbed, gpuOfflinePayload, queryNvidiaSmiAll, queryGpuComputeApps } from "../../../../src/webui/readOnlyTools.js";
+import { listRuns, queryNvidiaSmiProbed, gpuOfflinePayload, queryNvidiaSmiAll, queryGpuComputeApps } from "@atf/dsh-atf-core";
 import { buildCardOccupancyTable, formatCardTable } from "./gpuQueueFace.js";
 import { resolveRunDir } from "@atf/dsh-atf-core";
 import { registeredWorkspaceRoots } from "../../../../src/core/workspace/workspaceRegistry.js";

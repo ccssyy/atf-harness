@@ -17,7 +17,7 @@ export {
   CONFIG_BLOCK_ORDER,
   configBlockOf,
   type ConfigBlock,
-} from "../../packages/extensions/atf-core/src/configBlocks.js";
+} from "./configBlocks.js";
 
 // ── 六区块（owner 2026-10-26 重排裁定：卡面按「问什么」分组，不按实现键序）──────────
 // 排序理由（owner 明示，改动前先读这段）：

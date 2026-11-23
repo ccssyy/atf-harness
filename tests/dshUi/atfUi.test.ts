@@ -1034,7 +1034,7 @@ describe("批㉛段3.1 右栏监控面（Loss 历史回退＋评估 KPI＋环境
 
 describe("批㉝H GPU 多卡聚合（gpu_all 采集解析＋绑卡声明两态＋快照下发）", () => {
   it("parseNvidiaSmiAll：逐行 index,util,used,total → 逐卡列表；空/坏输出 → null（不猜测）；D11-2 温度/功耗纯增（[N/A]/缺席 → null）", async () => {
-    const { parseNvidiaSmiAll } = await import("../../src/webui/readOnlyTools.js");
+    const { parseNvidiaSmiAll } = await import("@atf/dsh-atf-core");
     // 旧四列输出（无温度/功耗列）→ 新键 null 化（向后兼容，不猜）
     const cards = parseNvidiaSmiAll("0, 0, 0, 81920\n1, 12, 8429, 81920\n");
     expect(cards).toEqual([

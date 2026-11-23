@@ -17,7 +17,7 @@ import {
   configBlockOf,
   configChoiceValuesOf,
   DEEPSPEED_CHOICES,
-} from "../../src/webui/configConfirm.js";
+} from "@atf/dsh-atf-core";
 import { configFormFieldsOf, buildConfigChoiceQuestions, editsFromFormAnswers, domainHintOf } from "../../packages/extensions/atf-tools/src/confirmFace.js";
 
 describe("六区块（标题业务话＋键序单源）", () => {

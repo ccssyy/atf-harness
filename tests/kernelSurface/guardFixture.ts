@@ -12,7 +12,7 @@ import {
 import { SEGMENT_ORDER } from "@atf/dsh-atf-core";
 import { SEGMENT_FACT_BY_KERNEL_STAGE } from "@atf/dsh-atf-core";
 import { KERNEL_ERROR_FACE_CODES } from "@atf/dsh-atf-core";
-import { CONFIG_CONFIRM_KEYS, READONLY_CONFIG_KEYS } from "../../src/webui/configConfirm.js";
+import { CONFIG_CONFIRM_KEYS, READONLY_CONFIG_KEYS } from "@atf/dsh-atf-core";
 import type { HarnessSurfaceFacts, SurfaceSnapshot } from "./guard.js";
 
 const WALKTHROUGH = "skills/atf-admit-training-data/scripts/walkthrough_pipeline.py";

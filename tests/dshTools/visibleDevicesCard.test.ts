@@ -9,7 +9,7 @@
  * 红线：缺省保持「回退 deploy」，校验失败为卡前红字＋业务语言（不出码原文）。
  */
 import { describe, expect, it } from "vitest";
-import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, configFieldPlaceholderOf } from "../../src/webui/configConfirm.js";
+import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields, configFieldPlaceholderOf } from "@atf/dsh-atf-core";
 import {
   confirmedSnapshotOf,
   configFormFieldsOf,

@@ -14,10 +14,10 @@ import {
   validateGpuBaseline,
   ensureConventionSubdirs,
   effectiveStorageValues,
-} from "../../src/webui/storageSettings.js";
-import { openSettingsStore, EMPTY_STORAGE_SETTINGS } from "../../src/webui/settings.js";
+} from "@atf/dsh-atf-core";
+import { openSettingsStore, EMPTY_STORAGE_SETTINGS } from "@atf/dsh-atf-core";
 import { DEFAULT_BASE_MODEL_NAME, defaultBaseModelPath } from "@atf/dsh-atf-core";
-import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields } from "../../src/webui/configConfirm.js";
+import { CONFIG_CONFIRM_KEYS, buildConfigConfirmFields } from "@atf/dsh-atf-core";
 import { evalAgentRecommend, RECOMMENDABLE_KEYS } from "@atf/dsh-atf-core";
 import { buildSettingsReadonlyBlock } from "../../packages/extensions/atf-ui/src/server.js";
 
