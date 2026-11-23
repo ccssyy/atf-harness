@@ -36,6 +36,13 @@
    - **正确形态**：答案原样进 `card_answers` 返回 + 落账留痕；需要结构化值时由 agent 显式传参（如 `requested_group_count`）。
    - **机检**：`tests/dshTools/freeTextNoRegex.test.ts` 的 B3c 事故锚（查表全族不得存在、必有 `card_answers` 字段）。
    - **历史事故**：复验#24（「除 X 外的 N 个都要」被正则静默吞、卡消失凭据不落）+ N5（`"2 倍"` 被吞成「不增强」）+ ci-bl-1103（无视用户组数导致循环确认）。
+9. **vendor 接缝纪律（2026-11-23 G7 实锚）**：ATF 只写**训练域增量**，能力一律走 vendor 接缝。
+   - **服务读取**：可选服务用 `ctx.get(name)`（立即读，未就绪返 `undefined`）；**需要服务就绪才用的，必须 `ctx.inject([name], cb)` 延迟绑定**——`apply` 期的 `ctx.get` 常常拿到 `undefined`（G7 实锚：挂齐 workspace 链仍报「未挂」的根因）。
+   - **禁止手写 vendor 存储**：`storages/*.json` 由 vendor 持有，ATF 只经 `ctx.workspaceRegistry.create/rename` 等 API 写，不自行备份/原子落盘。
+   - **能力缺口先登记不自造**：vendor 没有的能力（如审批内容绑定 TOCTOU、path 迁移）先落缺口登记文档，要补时按 waterfall / service / config 接缝补，不手拆日志。
+   - **机检**：`tests/guards/schemaZeroCopy.test.ts`（协议零复制）+ `tests/dshTools/freeTextNoRegex.test.ts`（B3c 语义不代猜）。
+10. **协议单源（G5 后）**：内核 MCP `tools/list` 是唯一协议真相源（15 方法，`outputSchema` 由内核声明）。harness **零复制** schema；工具定义只写模型可见描述与参数映射。新增/修改工具须同步 D6 基线（`tests/dshTools/toolNameBaseline.json`）。
+
 
 ### 3.8 产品验证纪律（浏览器实操）
 
