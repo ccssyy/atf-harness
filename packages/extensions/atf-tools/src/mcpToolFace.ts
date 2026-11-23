@@ -133,7 +133,6 @@ export const MODEL_TOOL_NAMES: readonly string[] = [
   // 同为本地治理径（WORKSPACE_TOOL_HANDLERS），确定性文件操作单源 workspaceRegistry.ts；
   // 注册表写入语义（备份/原子落盘/实例重启生效）随工具回执如实携带。
   "atf_create_experiment",
-  "atf_rebind_workspace",
   // G5 阶段 2（D6 基线并集=9 模型面+5 本地治理面）：其余四件模型面工具经 MCP
   // tools/list 进装配——此前仅在 webui/pi 线可达，MCP 化后与内核 15 方法模型面
   // 完全对齐（fact_scan/data_admission_request/preparation_propose/style_cluster_execute）。

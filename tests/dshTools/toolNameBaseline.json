@@ -13,13 +13,11 @@
  ],
  "localWorkspaceTools": [
   "atf_launch_execute",
-  "atf_create_experiment",
-  "atf_rebind_workspace"
+  "atf_create_experiment"
  ],
  "workspaceToolsAll": [
   "atf_launch_execute",
-  "atf_create_experiment",
-  "atf_rebind_workspace"
+  "atf_create_experiment"
  ],
  "bridgeToolNamesAtCutover": [
   "atf_workspace_status",
@@ -29,7 +27,6 @@
   "atf_skill_read",
   "atf_gate",
   "atf_launch_execute",
-  "atf_create_experiment",
-  "atf_rebind_workspace"
+  "atf_create_experiment"
  ]
 }

@@ -78,10 +78,8 @@ import {
 } from "@atf/dsh-atf-core";
 import {
   createExperimentInWorkspace,
-  rebindWorkspaceToPath,
   resolveDshHome,
   type CreateExperimentOutcome,
-  type RebindOutcome,
 } from "../workspace/workspaceRegistry.js";
 import { candidateDigestFromText, collectConfirmReport, unproducedFieldsFromCandidateText, type ConfirmRequestBody } from "../confirmRequest.js";
 import { type SchemaNode } from "./canonical.js";
@@ -347,17 +345,6 @@ const CREATE_EXPERIMENT_CANONICAL: SchemaNode = {
   },
 };
 
-/** atf_rebind_workspace 参数（目录迁移后的按 id 认领）。 */
-const REBIND_WORKSPACE_PARAMS: SchemaNode = {
-  type: "object",
-  required: ["workspace_path"],
-  properties: {
-    workspace_path: {
-      type: "string",
-      description: "工作区新位置绝对路径（迁移后的实际目录，须含 .atf/workspace.json 身份文件——认领按 id 不按 path）",
-    },
-  },
-};
 
 const REBIND_WORKSPACE_CANONICAL: SchemaNode = {
   type: "object",
@@ -470,14 +457,6 @@ export const WORKSPACE_TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     parameters: CREATE_EXPERIMENT_PARAMS,
     requires_approval: true,
     canonical_output: CREATE_EXPERIMENT_CANONICAL,
-  },
-  {
-    name: "atf_rebind_workspace",
-    description:
-      "工作区目录迁移后的重新定位（须审批）：读新位置 .atf/workspace.json 的身份 id，在 DSH 注册表按 id 定位原记录并更新 path 字段（其余记录零触碰、id 永不改变）。会话桶零操作（会话归属由会话头 cwd 的 realpath 正典承载——旧路径以符号链接续用时既有会话归属保持，旧路径消失时会话显性入任务桶）；旧位置目录仅在确认为真实空目录时删除。新位置必须已含身份文件（随目录迁移带走）；注册表按 id 无记录时拒绝并指路（先在 WebUI 添加工作区建立记录）。注册表写入在实例重启后进入运行时视野——回执附注该语义。落点纪律：迁移目标应在实例根（<ATF_INSTANCE_ROOT>）内；迁到实例根外可行（回执带 out_of_instance 标记），但该位置不会进文件工具白名单，工具读写会被拒——需由运维在实例声明面登记后方可读写。",
-    parameters: REBIND_WORKSPACE_PARAMS,
-    requires_approval: true,
-    canonical_output: REBIND_WORKSPACE_CANONICAL,
   },
 ];
 
@@ -829,61 +808,12 @@ const createExperimentHandler: LocalToolHandler = async (rawParams, host) => {
   };
 };
 
-const rebindWorkspaceHandler: LocalToolHandler = async (rawParams, host) => {
-  if (!isPlainObject(rawParams)) return rejected("invalid_input", { message: "参数须为 JSON 对象" });
-  const workspacePath = stringParam(rawParams, "workspace_path");
-  if (workspacePath === undefined) return rejected("invalid_params", { message: "workspace_path 须为非空字符串（迁移后新位置绝对路径）" });
-  const dshHome = host.dshHome ?? resolveDshHome();
-  let outcome: RebindOutcome;
-  try {
-    outcome = rebindWorkspaceToPath(workspacePath, dshHome, new Date());
-  } catch (cause) {
-    return rejected("invalid_params", { message: (cause as Error).message });
-  }
-  // 定域 advisory（不阻断）：迁移/认领到实例根外是合法运维动作（换大盘、临时盘），
-  // 但该位置不会进文件工具白名单——如实告知，避免「绑好了却读不了」的黑箱。
-  const instanceRoot = host.instanceRoot?.trim() ?? "";
-  const outOfInstance =
-    instanceRoot !== "" && !withinRootOf(outcome.newPath, instanceRoot, (value) => {
-      try {
-        return realpathSync(value);
-      } catch {
-        return null;
-      }
-    });
-  return {
-    kind: "executed",
-    result: {
-      ok: true,
-      workspace_id: outcome.workspaceId,
-      old_path: outcome.oldPath,
-      new_path: outcome.newPath,
-      registry_updated: outcome.registryUpdated,
-      ...(outOfInstance
-        ? {
-            out_of_instance: true,
-            instance_root: instanceRoot,
-            out_of_instance_note:
-              "该位置不在实例根内——文件与命令工具不会放行此地（实例根外的工作区不进白名单）。" +
-              "要在此读写，须由运维在实例声明面登记目录；否则请把数据移入实例根内的工作区。",
-          }
-        : {}),
-      bucket_disposition: outcome.bucketDisposition,
-      ...(outcome.bucketOldName !== undefined ? { bucket_old_name: outcome.bucketOldName } : {}),
-      bucket_new_name: outcome.bucketNewName,
-      old_anchor_removed: outcome.oldAnchorRemoved,
-      old_anchor_note: outcome.oldAnchorNote,
-      note: "注册表变更已落盘；会话桶零操作（既有会话归属由会话头 cwd 正典承载——旧路径以符号链接续用则归属保持，旧路径消失则会话显性入任务桶）；运行中的 DSH 实例在重启后进入新归属",
-    },
-  };
-};
 
 /** 工具名 → 本地 handler（executor 本地分派表）。 */
 export const WORKSPACE_TOOL_HANDLERS: Readonly<Record<string, LocalToolHandler>> = {
   atf_launch_execute: launchExecuteHandler,
   ask_user_for_input: askUserHandler,
   atf_create_experiment: createExperimentHandler,
-  atf_rebind_workspace: rebindWorkspaceHandler,
 };
 
 /** 装配 helper（TUI/resume 消费）：技能常驻清单 systemSuffix（skillsRoot 缺失 = undefined，装载降级）。 */

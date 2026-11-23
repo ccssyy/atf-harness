@@ -14,5 +14,4 @@ export const TOOL_ACTION_LABELS: Readonly<Record<string, string>> = {
   atf_gate: "调用流程闸门核验",
   atf_launch_execute: "启动训练编排",
   atf_create_experiment: "创建训练实验",
-  atf_rebind_workspace: "变更会话工作区绑定",
 };

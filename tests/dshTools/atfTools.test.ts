@@ -99,7 +99,7 @@ describe("atf-tools 注册面（11 工具清单＝指令要求）", () => {
     // ＋G5（2026-11-22）：MCP 化模型面全量投影——MODEL_TOOL_NAMES 十件→十四件
     //   （atf_fact_scan/atf_data_admission_request/atf_preparation_propose/
     //    atf_style_cluster_execute 经 MCP tools/list 进 DSH 面）→ registered 15→19。
-    expect(registered).toHaveLength(17);
+    expect(registered).toHaveLength(16);
     await manager.close();
   });
 

@@ -16,7 +16,6 @@ import {
   listRegistryRecords,
   readRegistryFile,
   readWorkspaceIdentity,
-  rebindWorkspaceToPath,
   registryPathOf,
   resolveDshHome,
   sessionsRootOf,
@@ -202,104 +201,6 @@ describe("workspaceRegistry 纯函数层（身份/注册表/桶编码）", () =>
 
 // ---------------------------------------------------------------- rebind 纯函数层
 
-describe("workspaceRegistry rebind（按 id 认领/桶零操作/空锚点清理三红线）", () => {
-  const ID = "66666666-6666-4666-8666-666666666666";
-
-  it("全链真做：path 更新＋会话桶零操作（旧桶原样）＋旧空锚点删除；id 不变；其他 record 零触碰", () => {
-    const home = seedDshHome();
-    const oldPath = join(tempRoot(), "old-ws");
-    const newPath = join(tempRoot(), "new-ws");
-    const otherId = "77777777-7777-4777-8777-777777777777";
-    seedRegisteredWorkspace(home, ID, oldPath);
-    seedRegisteredWorkspace(home, otherId, "/data/untouched");
-    // 空锚点迁移形态（存量收编同款）：旧目录内容迁走后旧位重建为空目录，
-    // 身份文件随内容落在新位置
-    mkdirSync(oldPath, { recursive: true });
-    mkdirSync(join(newPath, ".atf"), { recursive: true });
-    const identityJson = JSON.stringify({ id: ID, name: "ws", experiments: [], createdAt: "2026-10-01T00:00:00.000Z" }, null, 2) + "\n";
-    writeFileSync(join(newPath, ".atf", "workspace.json"), identityJson);
-    // 旧桶带两会话——桶零操作红线：rebind 后旧桶原样在位（会话文件零触碰）
-    const oldBucket = join(sessionsRootOf(home), bucketNameForWorkspacePath(oldPath));
-    mkdirSync(join(oldBucket, "session-aaaa"), { recursive: true });
-    mkdirSync(join(oldBucket, "session-bbbb"), { recursive: true });
-
-    const outcome = rebindWorkspaceToPath(newPath, home, new Date("2026-10-16T00:00:00Z"));
-
-    expect(outcome.workspaceId).toBe(ID);
-    expect(outcome.oldPath).toBe(oldPath);
-    expect(outcome.newPath).toBe(newPath);
-    expect(outcome.registryUpdated).toBe(true);
-    expect(outcome.bucketDisposition).toBe("old_bucket_present_kept");
-    expect(outcome.oldAnchorRemoved).toBe(true);
-    expect(existsSync(oldPath)).toBe(false);
-    const registry = readRegistryFile(registryPathOf(home)) as { tables: { workspaces: Record<string, Record<string, unknown>> } };
-    expect(registry.tables.workspaces[ID]!["path"]).toBe(newPath);
-    expect(registry.tables.workspaces[ID]!["sessionIds"]).toEqual(["session-aaaa", "session-bbbb"]);
-    expect(registry.tables.workspaces[otherId]!["path"]).toBe("/data/untouched");
-    // 桶零操作：旧桶目录与会话子目录原样
-    expect(existsSync(join(oldBucket, "session-aaaa"))).toBe(true);
-    expect(existsSync(join(oldBucket, "session-bbbb"))).toBe(true);
-    expect(existsSync(join(sessionsRootOf(home), bucketNameForWorkspacePath(newPath)))).toBe(false);
-    // 身份 id 永不改变
-    expect(readWorkspaceIdentity(newPath)!.id).toBe(ID);
-  });
-
-  it("符号链接旧位＝归属链在用——保留不删（old_anchor_note 说明）", () => {
-    const home = seedDshHome();
-    const oldPath = join(tempRoot(), "link-ws");
-    const newPath = tempRoot();
-    mkdirSync(newPath, { recursive: true });
-    seedIdentity(newPath, ID);
-    seedRegisteredWorkspace(home, ID, oldPath);
-    symlinkSync(newPath, oldPath);
-    const outcome = rebindWorkspaceToPath(newPath, home, new Date());
-    expect(outcome.oldAnchorRemoved).toBe(false);
-    expect(outcome.oldAnchorNote).toContain("符号链接");
-    expect(readlinkSync(oldPath)).toBe(newPath);
-  });
-
-  it("旧桶缺席＝old_bucket_absent 如实盘点；旧目录非空＝不删（old_anchor_removed:false＋说明）", () => {
-    const home = seedDshHome();
-    const oldPath = join(tempRoot(), "gone-ws");
-    const newPath = tempRoot();
-    mkdirSync(newPath, { recursive: true });
-    seedIdentity(newPath, ID);
-    seedRegisteredWorkspace(home, ID, oldPath);
-    writeFileSync(join(newPath, "user-file.txt"), "keep");
-
-    const outcome = rebindWorkspaceToPath(newPath, home, new Date());
-    expect(outcome.bucketDisposition).toBe("old_bucket_absent");
-    expect(outcome.oldAnchorRemoved).toBe(false);
-    expect(outcome.oldAnchorNote).toContain("已不在盘上");
-  });
-
-  it("幂等：path 未变化＝unchanged 不写注册表（registry_updated:false＋无备份落盘）", () => {
-    const home = seedDshHome();
-    const ws = tempRoot();
-    mkdirSync(ws, { recursive: true });
-    seedIdentity(ws, ID);
-    seedRegisteredWorkspace(home, ID, ws);
-    const beforeFiles = readdirSync(join(home, "storages"));
-    const outcome = rebindWorkspaceToPath(ws, home, new Date());
-    expect(outcome.bucketDisposition).toBe("unchanged");
-    expect(outcome.registryUpdated).toBe(false);
-    expect(readdirSync(join(home, "storages"))).toEqual(beforeFiles);
-  });
-
-  it("错误回流三态：新位置缺身份文件／注册表缺文件／按 id 无记录——均指路文案", () => {
-    const home = seedDshHome();
-    const noIdentity = tempRoot();
-    mkdirSync(noIdentity, { recursive: true });
-    expect(() => rebindWorkspaceToPath(noIdentity, home, new Date())).toThrow(/身份文件/);
-    const orphan = tempRoot();
-    mkdirSync(orphan, { recursive: true });
-    seedIdentity(orphan, "88888888-8888-4888-8888-888888888888");
-    expect(() => rebindWorkspaceToPath(orphan, home, new Date())).toThrow(/按 id 无记录/);
-    const emptyHome = tempRoot();
-    mkdirSync(emptyHome, { recursive: true });
-    expect(() => rebindWorkspaceToPath(orphan, emptyHome, new Date())).toThrow(/注册表不存在/);
-  });
-});
 
 // ---------------------------------------------------------------- 工具 handler 层（经 buildMcpTools 真装配）
 
@@ -332,29 +233,6 @@ describe("工作区治理两工具 handler（WebUI 桥装配同链——审批/�
     expect(String((result as { detail?: { message?: string } }).detail?.message)).toContain("不代建顶层工作区目录");
   });
 
-  it("atf_rebind_workspace：放行→真 rebind（registry/bucket/anchor 全链）；无记录→invalid_params 指路", async () => {
-    const home = seedDshHome();
-    const ID = "99999999-9999-4999-8999-999999999999";
-    const oldPath = join(tempRoot(), "h-old");
-    const newPath = join(tempRoot(), "h-new");
-    seedRegisteredWorkspace(home, ID, oldPath);
-    mkdirSync(oldPath, { recursive: true });
-    renameSync(oldPath, newPath);
-    seedIdentity(newPath, ID);
-    const tool = await toolExec({ dshHome: home }, "allowed-once", "atf_rebind_workspace");
-    expect(tool.name).toBe("atf_rebind_workspace");
-    const result = (await tool.execute({ workspace_path: newPath }, fakeExec)) as Record<string, unknown>;
-    expect(result).toMatchObject({ ok: true, workspace_id: ID, registry_updated: true, bucket_disposition: "old_bucket_absent", old_anchor_removed: false });
-    const registry = readRegistryFile(registryPathOf(home)) as { tables: { workspaces: Record<string, Record<string, unknown>> } };
-    expect(registry.tables.workspaces[ID]!["path"]).toBe(newPath);
-
-    const orphan = tempRoot();
-    mkdirSync(orphan, { recursive: true });
-    seedIdentity(orphan, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
-    const miss = (await tool.execute({ workspace_path: orphan }, fakeExec)) as Record<string, unknown>;
-    expect(miss).toMatchObject({ error: "rejected", reason: "invalid_params" });
-    expect(String((miss as { detail?: { message?: string } }).detail?.message)).toContain("按 id 无记录");
-  });
 });
 
 // ---------------------------------------------------------------- 投影面护栏（contract_field_wiring 同族）
@@ -364,11 +242,10 @@ describe("投影面护栏：MODEL_TOOL_NAMES ⊆ 契约定义单源（G5 后=TOO
     const contractNames = [...TOOL_DEFINITIONS, ...WORKSPACE_TOOL_DEFINITIONS].map((definition) => definition.name);
     for (const name of MODEL_TOOL_NAMES) expect(contractNames).toContain(name);
     expect(MODEL_TOOL_NAMES).toContain("atf_create_experiment");
-    expect(MODEL_TOOL_NAMES).toContain("atf_rebind_workspace");
     // F14：atf_label_qc_resolve 与 inspect 同面开放（决议入口，见 labelQcResume.test.ts）→ 9→10
     expect(MODEL_TOOL_NAMES).toContain("atf_label_qc_resolve");
     // G5（2026-11-22）：MCP 化模型面全量投影——10→14（fact_scan/data_admission_request/
     // preparation_propose/style_cluster_execute 四件经 MCP tools/list 进 DSH 面）
-    expect(MODEL_TOOL_NAMES).toHaveLength(12);
+    expect(MODEL_TOOL_NAMES).toHaveLength(11);
   });
 });

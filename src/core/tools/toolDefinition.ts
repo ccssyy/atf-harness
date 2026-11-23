@@ -62,7 +62,6 @@ export const APPROVAL_SEMANTICS_BY_TOOL: Readonly<Record<string, ApprovalSemanti
   // 链内推进(源只读、输出 run 域内可逆)——完全权限档免审,此前未归类走
   // 通用审批面弹卡
   atf_quantize_annotations: "chain_advance",
-  atf_rebind_workspace: "chain_advance",
   atf_pipeline_stage: "chain_advance",
   // 治理点(不可逆/出链)
   atf_launch_execute: "governance",

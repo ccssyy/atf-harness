@@ -24,7 +24,6 @@ describe("D170v2 §4.1 确认卡语义分类表（ADR-0022 退役后）", () => 
     expect(requiresUserConfirmationOf(defOf("atf_admit_data"), {})).toBe(false);
     expect(requiresUserConfirmationOf(defOf("atf_pipeline_stage"), { stage: "register" })).toBe(false);
     expect(requiresUserConfirmationOf(defOf("atf_create_experiment"), {})).toBe(false);
-    expect(requiresUserConfirmationOf(defOf("atf_rebind_workspace"), {})).toBe(false);
   });
 
   it("治理点任何档位走业务确认卡", () => {
