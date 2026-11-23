@@ -39,18 +39,20 @@ REPO="${2:-}"
 EXPECT="${3:-}"
 
 block() { echo "DEPLOY-EVIDENCE-GATE 拦截: $1" >&2; exit 2; }
-[[ -n "$EVIDENCE" && -n "$REPO" ]] || { echo "用法: check-deploy-evidence.sh <evidence.json> <repo根> [期望commit]" >&2; exit 3; }
+[[ -n "$EVIDENCE" && -n "$REPO" ]] || { echo "用法: check-deploy-evidence.sh <evidence.json> <内核仓根> [期望commit] [harness仓根]" >&2; exit 3; }
+HARNESS_REPO="${4:-}"
 [[ -f "$EVIDENCE" ]] || block "证据清单缺席: $EVIDENCE
   改法一: 收口时按 DeployEvidence/v1 写清单（verdict PASS＋变更面→测试形态映射＋证据锚）后重跑本入口;
   改法二: 纯非用户可见改动（测试/文档/内部重构）→ 清单内声明 no_new_code+理由。"
 
-python3 - "$EVIDENCE" "$REPO" "$EXPECT" <<'PYEOF'
+python3 - "$EVIDENCE" "$REPO" "$EXPECT" "$HARNESS_REPO" <<'PYEOF'
 import json
 import os
 import subprocess
 import sys
 
 evidence_path, repo, expect = sys.argv[1], sys.argv[2], (sys.argv[3] or "")
+harness_repo = (sys.argv[4] or "") if len(sys.argv) > 4 else ""
 
 
 def block(msg: str) -> None:
@@ -79,6 +81,20 @@ if probe.returncode != 0:
     block(f"head_commit 不可达: {head}（仓 {repo}）——改法: 回填真实 commit 后重跑")
 if expect and head != expect:
     block(f"head_commit({head[:12]}) 与部署目标 commit({expect[:12]}) 不一致——证据必须对准本次上线 commit")
+
+# ── 双仓支持（2026-11-23 G7）：harness 侧代码（packages/extensions/*）同样是上线内容 ──
+# 设计缺陷实锚：原判据只验内核仓 HEAD（注释「内核仓主检出 HEAD 即上线内容」），
+# 但 G5 后 ATF 插件代码全在 harness 仓——只改 harness 的批次会被误拦「head_commit 不可达」。
+head_harness = doc.get("head_commit_harness") or ""
+if head_harness:
+    if not harness_repo:
+        block("清单声明了 head_commit_harness 但调用方未传 harness 仓根"
+              "——改法: 传参 <内核仓根> <期望commit> <harness仓根>，或移除该字段")
+    hprobe = subprocess.run(["git", "-C", harness_repo, "rev-parse", "--verify", f"{head_harness}^{{commit}}"],
+                            capture_output=True, text=True)
+    if hprobe.returncode != 0:
+        block(f"head_commit_harness 不可达: {head_harness}（仓 {harness_repo}）"
+              "——改法: 回填真实 harness commit 后重跑")
 
 mtime = os.path.getmtime(evidence_path)
 ct_raw = git("log", "-1", "--format=%ct", head).stdout.strip()

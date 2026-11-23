@@ -193,7 +193,11 @@ if [[ "$INSTANCE" == "dev" && "$MODE" == "restart" ]]; then
     echo "  改法二: 确属持证批次 → ATF_DEPLOY_EVIDENCE=<清单json> 后重跑本脚本。" >&2
     exit 2
   fi
-  bash "$(cd "$(dirname "$0")/../verify" && pwd)/check-deploy-evidence.sh" "$ATF_DEPLOY_EVIDENCE" "$GATE_KERNEL_SOURCE" \
+  # G7 双仓（2026-11-23）：harness 侧 packages/extensions/* 同样是上线内容——
+  # 只验内核仓会把「只改 harness」的合规批次误拦。传 harness 仓根供 head_commit_harness 对账。
+  GATE_HARNESS_SOURCE=$(cd "$(dirname "$0")/../.." && pwd)
+  bash "$(cd "$(dirname "$0")/../verify" && pwd)/check-deploy-evidence.sh" \
+    "$ATF_DEPLOY_EVIDENCE" "$GATE_KERNEL_SOURCE" "" "$GATE_HARNESS_SOURCE" \
     || { echo "[instance-restart] FAIL: 证据门未过（见上）" >&2; exit 2; }
 fi
 
